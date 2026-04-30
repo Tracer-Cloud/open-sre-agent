@@ -9,7 +9,7 @@ from typing import Any
 from rich.console import Console
 from rich.markup import escape
 
-from app.cli.repl.session import ReplSession
+from app.cli.interactive_shell.session import ReplSession
 
 _logger = logging.getLogger(__name__)
 

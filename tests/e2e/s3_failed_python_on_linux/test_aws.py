@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 
 from langsmith import traceable
 
-from app.cli.investigate import run_investigation_cli
+from app.cli.investigation import run_investigation_cli
 from tests.e2e.s3_failed_python_on_linux import use_case
 from tests.shared.tracer_ingest import StepTimer, emit_tool_event
 from tests.utils.alert_factory import create_alert

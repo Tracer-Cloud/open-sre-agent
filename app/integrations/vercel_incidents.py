@@ -10,8 +10,8 @@ from typing import Any
 
 import questionary
 
-from app.cli.context import is_json_output
-from app.cli.investigate import run_investigation_cli, run_investigation_cli_streaming
+from app.cli.investigation import run_investigation_cli, run_investigation_cli_streaming
+from app.cli.support.context import is_json_output
 from app.integrations.store import STORE_PATH
 from app.remote.vercel_poller import (
     VercelInvestigationCandidate,

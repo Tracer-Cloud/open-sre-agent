@@ -3,7 +3,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from app.cli.__main__ import main
-from app.cli.repl.config import ReplConfig
+from app.cli.interactive_shell.config import ReplConfig
 
 
 def test_main_runs_health_command(monkeypatch) -> None:
@@ -51,7 +51,7 @@ def test_no_interactive_falls_through_to_landing_page(monkeypatch) -> None:
     # Force disabled interactive config via the loader.  Return a disabled config
     # regardless of how the CLI resolved the flag.
     monkeypatch.setattr(
-        "app.cli.repl.config.ReplConfig.load",
+        "app.cli.interactive_shell.config.ReplConfig.load",
         classmethod(lambda _cls, **_kw: ReplConfig(enabled=False, layout="classic")),
     )
 
@@ -65,7 +65,7 @@ def test_no_interactive_falls_through_to_landing_page(monkeypatch) -> None:
     def _fail_if_called(**_kw: object) -> int:
         raise AssertionError("run_repl must not run when config.enabled=False")
 
-    with patch("app.cli.repl.run_repl", side_effect=_fail_if_called):
+    with patch("app.cli.interactive_shell.run_repl", side_effect=_fail_if_called):
         exit_code = main(["--no-interactive"])
 
     assert exit_code == 0
@@ -93,7 +93,7 @@ def test_default_no_args_enters_repl(monkeypatch) -> None:
         load_calls.append(kw)
         return orig_load(**kw)
 
-    monkeypatch.setattr("app.cli.repl.config.ReplConfig.load", spy_load)
+    monkeypatch.setattr("app.cli.interactive_shell.config.ReplConfig.load", spy_load)
 
     landing_calls: list[int] = []
     monkeypatch.setattr(
@@ -102,8 +102,8 @@ def test_default_no_args_enters_repl(monkeypatch) -> None:
     )
 
     with (
-        patch("app.cli.repl.run_repl", return_value=0),
-        patch("app.cli.repl.loop.run_repl", return_value=0),
+        patch("app.cli.interactive_shell.run_repl", return_value=0),
+        patch("app.cli.interactive_shell.loop.run_repl", return_value=0),
     ):
         exit_code = main([])
 
@@ -135,7 +135,7 @@ def test_agent_subcommand_launches_repl(monkeypatch) -> None:
         load_calls.append(kw)
         return orig_load(**kw)
 
-    monkeypatch.setattr("app.cli.repl.config.ReplConfig.load", spy_load)
+    monkeypatch.setattr("app.cli.interactive_shell.config.ReplConfig.load", spy_load)
 
     run_repl_calls: list[ReplConfig] = []
 
@@ -146,8 +146,8 @@ def test_agent_subcommand_launches_repl(monkeypatch) -> None:
         return 0
 
     with (
-        patch("app.cli.repl.run_repl", side_effect=fake_run_repl),
-        patch("app.cli.repl.loop.run_repl", side_effect=fake_run_repl),
+        patch("app.cli.interactive_shell.run_repl", side_effect=fake_run_repl),
+        patch("app.cli.interactive_shell.loop.run_repl", side_effect=fake_run_repl),
     ):
         exit_code = main(["agent"])
 
@@ -174,8 +174,8 @@ def test_agent_subcommand_accepts_layout(monkeypatch) -> None:
         return 0
 
     with (
-        patch("app.cli.repl.run_repl", side_effect=fake_run_repl),
-        patch("app.cli.repl.loop.run_repl", side_effect=fake_run_repl),
+        patch("app.cli.interactive_shell.run_repl", side_effect=fake_run_repl),
+        patch("app.cli.interactive_shell.loop.run_repl", side_effect=fake_run_repl),
     ):
         exit_code = main(["agent", "--layout", "pinned"])
 
@@ -200,8 +200,8 @@ def test_agent_subcommand_errors_on_non_tty(monkeypatch, capsys) -> None:
         raise AssertionError("run_repl must not run when stdin is not a TTY")
 
     with (
-        patch("app.cli.repl.run_repl", side_effect=_fail_if_called),
-        patch("app.cli.repl.loop.run_repl", side_effect=_fail_if_called),
+        patch("app.cli.interactive_shell.run_repl", side_effect=_fail_if_called),
+        patch("app.cli.interactive_shell.loop.run_repl", side_effect=_fail_if_called),
     ):
         exit_code = main(["agent"])
 

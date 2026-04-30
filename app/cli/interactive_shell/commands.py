@@ -11,8 +11,8 @@ from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
 
-from app.cli.repl.banner import render_banner
-from app.cli.repl.session import ReplSession
+from app.cli.interactive_shell.banner import render_banner
+from app.cli.interactive_shell.session import ReplSession
 
 
 @dataclass(frozen=True)
@@ -255,7 +255,7 @@ def _cmd_model(session: ReplSession, console: Console, args: list[str]) -> bool:
 
 
 def _cmd_health(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    from app.cli.health_view import render_health_report
+    from app.cli.support.health_view import render_health_report
     from app.config import get_environment
     from app.integrations.store import STORE_PATH
     from app.integrations.verify import verify_integrations
@@ -315,8 +315,8 @@ def _cmd_version(session: ReplSession, console: Console, args: list[str]) -> boo
 def _cmd_template(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     import json
 
-    from app.cli.alert_templates import build_alert_template
-    from app.cli.constants import ALERT_TEMPLATE_CHOICES
+    from app.cli.investigation.alert_templates import build_alert_template
+    from app.cli.support.constants import ALERT_TEMPLATE_CHOICES
 
     if not args:
         console.print(
@@ -341,7 +341,7 @@ def _cmd_template(session: ReplSession, console: Console, args: list[str]) -> bo
 def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str]) -> bool:
     from pathlib import Path
 
-    from app.cli.investigate import run_investigation_for_session
+    from app.cli.investigation import run_investigation_for_session
 
     if not args:
         console.print("[red]usage:[/red] /investigate <file>")
@@ -550,7 +550,7 @@ def _cmd_stop(session: ReplSession, console: Console, args: list[str]) -> bool: 
 SLASH_COMMANDS: dict[str, SlashCommand] = {
     "/help": SlashCommand("/help", "show available commands", _cmd_help),
     "/?": SlashCommand("/?", "shortcut for /help", _cmd_help),
-    "/exit": SlashCommand("/exit", "exit the REPL", _cmd_exit),
+    "/exit": SlashCommand("/exit", "exit the interactive shell", _cmd_exit),
     "/quit": SlashCommand("/quit", "alias for /exit", _cmd_exit),
     "/clear": SlashCommand("/clear", "clear the screen and re-render the banner", _cmd_clear),
     "/reset": SlashCommand("/reset", "clear session state (keeps trust mode)", _cmd_reset),

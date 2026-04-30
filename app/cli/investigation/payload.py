@@ -83,7 +83,7 @@ def load_payload(
     if input_path:
         return load_file(input_path)
     if sys.stdin.isatty():
-        from app.cli.investigate_input import prompt_for_input
+        from app.cli.investigation.investigate_input import prompt_for_input
 
         return prompt_for_input()
     return load_stdin()

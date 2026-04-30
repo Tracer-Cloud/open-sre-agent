@@ -11,7 +11,7 @@ import sys
 
 from dotenv import load_dotenv
 
-from app.cli.prompt_support import install_questionary_escape_cancel
+from app.cli.support.prompt_support import install_questionary_escape_cancel
 from app.integrations.cli import (
     SUPPORTED,
     cmd_list,

@@ -19,7 +19,7 @@ import boto3
 import requests
 from langsmith import traceable
 
-from app.cli.investigate import run_investigation_cli
+from app.cli.investigation import run_investigation_cli
 from app.services.grafana import get_grafana_client
 from tests.shared.stack_config import get_prefect_config
 from tests.shared.tracer_ingest import StepTimer, emit_tool_event

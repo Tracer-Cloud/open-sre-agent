@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from app.deployment.provider_config import dry_run_provider_validation, validate_aws_deploy_config
+from app.deployment.operations.provider_config import (
+    dry_run_provider_validation,
+    validate_aws_deploy_config,
+)
 
 
 def test_validate_aws_accepts_role_arn() -> None:

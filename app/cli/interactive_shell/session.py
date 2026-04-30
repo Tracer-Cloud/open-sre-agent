@@ -17,7 +17,7 @@ class ReplSession:
     """
 
     history: list[dict[str, Any]] = field(default_factory=list)
-    """Each entry: {"type": "alert"|"follow_up"|"slash", "text": str, "ok": bool}."""
+    """Each entry: {"type": "alert"|"follow_up"|"slash"|"cli_help"|"cli_agent", "text": str, "ok": bool}."""
 
     last_state: dict[str, Any] | None = None
     """The final AgentState from the most recent investigation, used by follow-ups."""
@@ -32,6 +32,9 @@ class ReplSession:
 
     token_usage: dict[str, int] = field(default_factory=dict)
     """Accumulated token counts: {"input": N, "output": N}. Populated when available."""
+
+    cli_agent_messages: list[tuple[str, str]] = field(default_factory=list)
+    """LangGraph-free terminal assistant history: alternating (\"user\"|\"assistant\", text)."""
 
     # Keys from a completed AgentState that carry reusable infra context into
     # the next investigation.  Kept as a class-level tuple so any caller that
@@ -69,4 +72,5 @@ class ReplSession:
         self.last_state = None
         self.accumulated_context.clear()
         self.token_usage.clear()
+        self.cli_agent_messages.clear()
         # trust_mode is intentionally preserved across /reset

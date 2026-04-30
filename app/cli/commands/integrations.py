@@ -11,7 +11,7 @@ from app.analytics.cli import (
     capture_integration_verified,
     capture_integrations_listed,
 )
-from app.cli.constants import MANAGED_INTEGRATION_SERVICES, SETUP_SERVICES, VERIFY_SERVICES
+from app.cli.support.constants import MANAGED_INTEGRATION_SERVICES, SETUP_SERVICES, VERIFY_SERVICES
 
 
 @click.group(name="integrations")

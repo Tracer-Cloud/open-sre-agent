@@ -29,9 +29,9 @@ from app.analytics.cli import capture_cli_invoked
 )
 def agent_command(layout: str | None) -> None:
     """Launch the interactive SRE agent terminal."""
-    from app.cli.errors import OpenSREError
-    from app.cli.repl import run_repl
-    from app.cli.repl.config import ReplConfig
+    from app.cli.interactive_shell import run_repl
+    from app.cli.interactive_shell.config import ReplConfig
+    from app.cli.support.errors import OpenSREError
 
     capture_cli_invoked()
 

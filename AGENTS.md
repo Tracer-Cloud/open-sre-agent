@@ -51,9 +51,11 @@
 
 - `app/analytics/` — Analytics event plumbing and install helpers used by the onboarding flow.
 - `app/auth/` — JWT and authentication helpers for local and hosted runtime access.
-- `app/cli/` — Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support.
+- `app/cli/` — Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support. Interactive terminal (TTY) loop: `app/cli/interactive_shell/`.
 - `app/constants/` — Shared prompt and other static constants.
-- `app/deployment/` — Deployment configuration and health helpers for hosted runtimes.
+- `app/deployment/` — Single home for “deployment” code, split by concern:
+  - `app/deployment/methods/` — *How* you ship (Railway CLI, LangSmith/LangGraph).
+  - `app/deployment/operations/` — *Runtime / infra* around a deployment (health polling, EC2 output files, provider dry-run validation).
 - `app/entrypoints/` — SDK and MCP entrypoints exposed to external runtimes.
 - `app/guardrails/` — Guardrail rules, evaluation engine, audit helpers, and CLI bindings.
 - `app/integrations/` — Integration config normalization, verification, selectors, store, and catalog logic.

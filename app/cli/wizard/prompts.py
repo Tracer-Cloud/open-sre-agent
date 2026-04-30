@@ -20,7 +20,7 @@ from questionary.prompts.common import (
 from questionary.question import Question
 from questionary.styles import merge_styles_default
 
-from app.cli.prompt_support import _HardQuitInterrupt, _with_ctrl_c_double_exit
+from app.cli.support.prompt_support import _HardQuitInterrupt, _with_ctrl_c_double_exit
 
 
 class _CheckboxControl(InquirerControl):

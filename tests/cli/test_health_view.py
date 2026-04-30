@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 from rich.console import Console
 
-from app.cli.health_view import (
+from app.cli.support.health_view import (
     _summary_counts,
     render_health_json,
     render_health_report,

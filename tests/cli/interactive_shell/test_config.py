@@ -6,7 +6,7 @@ import textwrap
 
 import pytest
 
-from app.cli.repl.config import ReplConfig
+from app.cli.interactive_shell.config import ReplConfig
 
 
 class TestReplConfigDefaults:

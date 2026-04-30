@@ -57,7 +57,7 @@ def main(test_name: str = "demo-pipeline-empty-file-error") -> int:
 
         from langsmith import traceable
 
-        from app.cli.investigate import run_investigation_cli
+        from app.cli.investigation import run_investigation_cli
 
         print("Running investigation...")
 
