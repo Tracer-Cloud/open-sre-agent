@@ -102,14 +102,11 @@ def test_build_uses_stdin_json_output_and_model_flag(mock_which: MagicMock) -> N
 
     assert inv.stdin == "hello"
     assert inv.cwd == "/tmp"
-    assert inv.argv[:7] == (
+    assert inv.argv[:4] == (
         "/usr/bin/gemini",
         "--output-format",
         "json",
-        "--approval-mode",
-        "plan",
-        "--prompt",
-        "",
+        "--yolo",
     )
     assert inv.argv[-2:] == ("-m", "gemini-2.5-flash")
     assert inv.timeout_sec == 300.0

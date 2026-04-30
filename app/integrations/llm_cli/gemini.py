@@ -193,15 +193,9 @@ class GeminiAdapter:
             )
 
         cwd = workspace or os.getcwd()
-        argv: list[str] = [
-            binary,
-            "--output-format",
-            "json",
-            "--approval-mode",
-            "plan",
-            "--prompt",
-            "",
-        ]
+        # Deliver prompt via stdin (piped non-TTY triggers headless mode per official docs).
+        # --yolo suppresses any tool-use approval prompts so the subprocess always exits cleanly.
+        argv: list[str] = [binary, "--output-format", "json", "--yolo"]
 
         resolved_model = (model or "").strip()
         if resolved_model:
