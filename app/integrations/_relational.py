@@ -6,6 +6,10 @@ import os
 from collections.abc import Callable
 from typing import Any
 
+from pydantic import field_validator
+
+from app.strict_config import StrictConfigModel
+
 _TRUE_ENV_VALUES = frozenset({"true", "1", "yes"})
 
 
@@ -18,13 +22,32 @@ def env_bool(name: str, default: bool) -> bool:
 def env_int(name: str, default: int) -> int:
     """Return an integer environment variable, falling back on invalid input."""
     raw = os.getenv(name, "").strip()
-    return int(raw) if raw.isdigit() else default
+    return int(raw) if raw.isdecimal() else default
 
 
 def env_str(name: str, default: str = "") -> str:
     """Return a stripped environment variable with an optional fallback."""
     normalized = os.getenv(name, default).strip()
     return normalized or default
+
+
+class RelationalConfigBase(StrictConfigModel):
+    """Shared field validators for relational DB config models (host, database, username)."""
+
+    @field_validator("host", mode="before", check_fields=False)
+    @classmethod
+    def _normalize_host(cls, value: Any) -> str:
+        return str(value or "").strip()
+
+    @field_validator("database", mode="before", check_fields=False)
+    @classmethod
+    def _normalize_database(cls, value: Any) -> str:
+        return str(value or "").strip()
+
+    @field_validator("username", mode="before", check_fields=False)
+    @classmethod
+    def _normalize_username(cls, value: Any) -> str:
+        return str(value or "").strip()
 
 
 def resolve_stored_or_env_config[ConfigT](

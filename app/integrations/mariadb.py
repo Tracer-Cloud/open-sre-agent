@@ -14,8 +14,7 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
-from app.integrations._relational import env_bool, env_str
-from app.strict_config import StrictConfigModel
+from app.integrations._relational import RelationalConfigBase, env_bool, env_str
 from app.utils.coercion import safe_int
 from app.utils.truncation import truncate
 
@@ -27,7 +26,7 @@ DEFAULT_MARIADB_MAX_RESULTS = 50
 _QUERY_TRUNCATE_LEN = 200
 
 
-class MariaDBConfig(StrictConfigModel):
+class MariaDBConfig(RelationalConfigBase):
     """Normalized MariaDB connection settings."""
 
     host: str = ""
@@ -39,21 +38,6 @@ class MariaDBConfig(StrictConfigModel):
     timeout_seconds: int = Field(default=DEFAULT_MARIADB_TIMEOUT_S, gt=0)
     max_results: int = Field(default=DEFAULT_MARIADB_MAX_RESULTS, gt=0, le=200)
     integration_id: str = ""
-
-    @field_validator("host", mode="before")
-    @classmethod
-    def _normalize_host(cls, value: Any) -> str:
-        return str(value or "").strip()
-
-    @field_validator("database", mode="before")
-    @classmethod
-    def _normalize_database(cls, value: Any) -> str:
-        return str(value or "").strip()
-
-    @field_validator("username", mode="before")
-    @classmethod
-    def _normalize_username(cls, value: Any) -> str:
-        return str(value or "").strip()
 
     @field_validator("password", mode="before")
     @classmethod

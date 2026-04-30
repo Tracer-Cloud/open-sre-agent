@@ -6,10 +6,10 @@ from app.integrations.registry import (
     SKIP_CLASSIFIED_SERVICES,
     SUPPORTED_SETUP_SERVICES,
     SUPPORTED_VERIFY_SERVICES,
-    VERIFIER_REGISTRY,
     family_key,
     service_key,
 )
+from app.integrations.verify import VERIFIER_REGISTRY
 
 
 def test_registry_declares_each_service_once() -> None:

@@ -13,8 +13,12 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
-from app.integrations._relational import env_int, env_str, resolve_stored_or_env_config
-from app.strict_config import StrictConfigModel
+from app.integrations._relational import (
+    RelationalConfigBase,
+    env_int,
+    env_str,
+    resolve_stored_or_env_config,
+)
 
 DEFAULT_POSTGRESQL_PORT = 5432
 DEFAULT_POSTGRESQL_USER = "postgres"
@@ -23,7 +27,7 @@ DEFAULT_POSTGRESQL_TIMEOUT_SECONDS = 10.0
 DEFAULT_POSTGRESQL_MAX_RESULTS = 50
 
 
-class PostgreSQLConfig(StrictConfigModel):
+class PostgreSQLConfig(RelationalConfigBase):
     """Normalized PostgreSQL connection settings."""
 
     host: str = ""
@@ -36,19 +40,9 @@ class PostgreSQLConfig(StrictConfigModel):
     max_results: int = Field(default=DEFAULT_POSTGRESQL_MAX_RESULTS, gt=0, le=200)
     integration_id: str = ""
 
-    @field_validator("host", mode="before")
-    @classmethod
-    def _normalize_host(cls, value: Any) -> str:
-        return str(value or "").strip()
-
-    @field_validator("database", mode="before")
-    @classmethod
-    def _normalize_database(cls, value: Any) -> str:
-        return str(value or "").strip()
-
     @field_validator("username", mode="before")
     @classmethod
-    def _normalize_username(cls, value: Any) -> str:
+    def _normalize_username(cls, value: Any) -> str:  # type: ignore[override]
         normalized = str(value or DEFAULT_POSTGRESQL_USER).strip()
         return normalized or DEFAULT_POSTGRESQL_USER
 

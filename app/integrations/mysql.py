@@ -13,8 +13,12 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
-from app.integrations._relational import env_int, env_str, resolve_stored_or_env_config
-from app.strict_config import StrictConfigModel
+from app.integrations._relational import (
+    RelationalConfigBase,
+    env_int,
+    env_str,
+    resolve_stored_or_env_config,
+)
 from app.utils.truncation import truncate
 
 DEFAULT_MYSQL_PORT = 3306
@@ -26,7 +30,7 @@ DEFAULT_MYSQL_MAX_RESULTS = 50
 _QUERY_TRUNCATE_LEN = 500
 
 
-class MySQLConfig(StrictConfigModel):
+class MySQLConfig(RelationalConfigBase):
     """Normalized MySQL connection settings."""
 
     host: str = ""
@@ -39,19 +43,9 @@ class MySQLConfig(StrictConfigModel):
     max_results: int = Field(default=DEFAULT_MYSQL_MAX_RESULTS, gt=0, le=200)
     integration_id: str = ""
 
-    @field_validator("host", mode="before")
-    @classmethod
-    def _normalize_host(cls, value: Any) -> str:
-        return str(value or "").strip()
-
-    @field_validator("database", mode="before")
-    @classmethod
-    def _normalize_database(cls, value: Any) -> str:
-        return str(value or "").strip()
-
     @field_validator("username", mode="before")
     @classmethod
-    def _normalize_username(cls, value: Any) -> str:
+    def _normalize_username(cls, value: Any) -> str:  # type: ignore[override]
         normalized = str(value or DEFAULT_MYSQL_USER).strip()
         return normalized or DEFAULT_MYSQL_USER
 

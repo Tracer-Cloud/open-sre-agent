@@ -345,10 +345,6 @@ SUPPORTED_SETUP_SERVICES = tuple(
 
 CORE_VERIFY_SERVICES = frozenset(spec.service for spec in INTEGRATION_SPECS if spec.core_verify)
 
-VERIFIER_REGISTRY: dict[str, VerifierFn] = {
-    spec.service: spec.verifier for spec in INTEGRATION_SPECS if spec.verifier is not None
-}
-
 
 def family_key(service_key: str) -> str:
     """Return the family key used for multi-instance sibling buckets."""
