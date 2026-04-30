@@ -14,6 +14,7 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
+from app.integrations._relational import env_bool, env_str
 from app.strict_config import StrictConfigModel
 from app.utils.coercion import safe_int
 from app.utils.truncation import truncate
@@ -84,17 +85,17 @@ def build_mariadb_config(raw: dict[str, Any] | None) -> MariaDBConfig:
 
 def mariadb_config_from_env() -> MariaDBConfig | None:
     """Load a MariaDB config from env vars."""
-    host = os.getenv("MARIADB_HOST", "").strip()
+    host = env_str("MARIADB_HOST")
     if not host:
         return None
     return build_mariadb_config(
         {
             "host": host,
-            "port": os.getenv("MARIADB_PORT", str(DEFAULT_MARIADB_PORT)).strip(),
-            "database": os.getenv("MARIADB_DATABASE", "").strip(),
-            "username": os.getenv("MARIADB_USERNAME", "").strip(),
+            "port": env_str("MARIADB_PORT", str(DEFAULT_MARIADB_PORT)),
+            "database": env_str("MARIADB_DATABASE"),
+            "username": env_str("MARIADB_USERNAME"),
             "password": os.getenv("MARIADB_PASSWORD", "").strip(),
-            "ssl": os.getenv("MARIADB_SSL", "true").strip().lower() in ("true", "1", "yes"),
+            "ssl": env_bool("MARIADB_SSL", True),
         }
     )
 

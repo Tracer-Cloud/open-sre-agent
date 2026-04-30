@@ -15,9 +15,9 @@ from typing import Any
 from urllib.parse import quote
 
 import httpx
-from pydantic import field_validator
 
-from app.strict_config import StrictConfigModel
+from app.integrations.config_models import VercelIntegrationConfig
+from app.integrations.probes import ProbeResult
 
 logger = logging.getLogger(__name__)
 
@@ -157,31 +157,7 @@ def _collect_runtime_logs_from_stream(response: httpx.Response, limit: int) -> l
     return bucket[:limit]
 
 
-class VercelConfig(StrictConfigModel):
-    api_token: str
-    team_id: str = ""
-    integration_id: str = ""
-
-    @field_validator("api_token", mode="before")
-    @classmethod
-    def _normalize_token(cls, value: object) -> str:
-        return str(value or "").strip()
-
-    @field_validator("team_id", mode="before")
-    @classmethod
-    def _normalize_team_id(cls, value: object) -> str:
-        return str(value or "").strip()
-
-    @property
-    def headers(self) -> dict[str, str]:
-        return {
-            "Authorization": f"Bearer {self.api_token}",
-            "Content-Type": "application/json",
-        }
-
-    @property
-    def team_params(self) -> dict[str, str]:
-        return {"teamId": self.team_id} if self.team_id else {}
+VercelConfig = VercelIntegrationConfig
 
 
 class VercelClient:
@@ -215,6 +191,24 @@ class VercelClient:
     @property
     def is_configured(self) -> bool:
         return bool(self.config.api_token)
+
+    def probe_access(self) -> ProbeResult:
+        """Validate Vercel access by listing visible projects."""
+        if not self.config.api_token:
+            return ProbeResult.missing("Missing API token for Vercel access.")
+
+        with self:
+            result = self.list_projects()
+        if not result.get("success"):
+            return ProbeResult.failed(
+                f"Vercel project list failed: {result.get('error', 'unknown error')}"
+            )
+
+        total = int(result.get("total", 0) or 0)
+        return ProbeResult.passed(
+            f"Connected to Vercel API and listed {total} project(s).",
+            total=total,
+        )
 
     def list_projects(self, limit: int = 20) -> dict[str, Any]:
         """List projects accessible to the API token."""

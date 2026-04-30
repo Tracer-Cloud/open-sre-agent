@@ -13,36 +13,15 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
-from pydantic import field_validator
 
-from app.strict_config import StrictConfigModel
+from app.integrations.config_models import DatadogIntegrationConfig
+from app.integrations.probes import ProbeResult
 
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TIMEOUT = 30
 
-
-class DatadogConfig(StrictConfigModel):
-    api_key: str
-    app_key: str
-    site: str = "datadoghq.com"
-
-    @field_validator("site", mode="before")
-    @classmethod
-    def _normalize_site(cls, value: object) -> str:
-        return str(value or "datadoghq.com").strip() or "datadoghq.com"
-
-    @property
-    def base_url(self) -> str:
-        return f"https://api.{self.site}"
-
-    @property
-    def headers(self) -> dict[str, str]:
-        return {
-            "DD-API-KEY": self.api_key,
-            "DD-APPLICATION-KEY": self.app_key,
-            "Content-Type": "application/json",
-        }
+DatadogConfig = DatadogIntegrationConfig
 
 
 class DatadogClient:
@@ -64,6 +43,25 @@ class DatadogClient:
     @property
     def is_configured(self) -> bool:
         return bool(self.config.api_key and self.config.app_key)
+
+    def probe_access(self) -> ProbeResult:
+        """Validate Datadog credentials with a lightweight monitor list call."""
+        if not self.is_configured:
+            return ProbeResult.missing("Missing API key or application key.")
+
+        result = self.list_monitors()
+        if not result.get("success"):
+            return ProbeResult.failed(
+                f"Monitor API check failed: {result.get('error', 'unknown error')}",
+                site=self.config.site,
+            )
+
+        total = int(result.get("total", 0) or 0)
+        return ProbeResult.passed(
+            f"Connected to api.{self.config.site} and listed {total} monitors.",
+            site=self.config.site,
+            total=total,
+        )
 
     def search_logs(
         self,

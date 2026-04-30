@@ -8,6 +8,9 @@ from typing import Any
 
 import httpx
 
+from app.integrations.config_models import SplunkIntegrationConfig
+from app.integrations.probes import ProbeResult
+
 _DEFAULT_TIMEOUT_SECONDS = 30.0
 
 
@@ -47,36 +50,7 @@ def build_splunk_spl_query(
     return f"search {keyword_clause} | head {limit}"
 
 
-class SplunkConfig:
-    def __init__(
-        self,
-        base_url: str,
-        token: str,
-        index: str = "main",
-        verify_ssl: bool = True,
-        ca_bundle: str = "",
-    ) -> None:
-        self.base_url = base_url.rstrip("/")
-        self.token = token
-        self.index = index
-        self.verify_ssl = verify_ssl
-        self.ca_bundle = ca_bundle.strip()
-
-    @property
-    def ssl_verify(self) -> bool | str:
-        """Return the value to pass as httpx's ``verify`` parameter.
-
-        When a CA bundle path is provided it takes precedence over the
-        boolean ``verify_ssl`` flag — httpx accepts either a bool or a
-        path string for the ``verify`` argument.
-        """
-        if self.ca_bundle:
-            return self.ca_bundle
-        return self.verify_ssl
-
-    @property
-    def is_configured(self) -> bool:
-        return bool(self.base_url and self.token)
+SplunkConfig = SplunkIntegrationConfig
 
 
 class SplunkClient:
@@ -198,3 +172,15 @@ class SplunkClient:
             }
         except Exception as exc:  # noqa: BLE001
             return {"success": False, "error": str(exc)}
+
+    def probe_access(self) -> ProbeResult:
+        """Validate Splunk connectivity by calling the server info endpoint."""
+        if not (self.config.base_url and self.config.token):
+            return ProbeResult.missing("Missing base_url or token.")
+
+        result = self.validate_access()
+        if not result.get("success"):
+            return ProbeResult.failed(
+                f"Server info check failed: {result.get('error', 'unknown error')}"
+            )
+        return ProbeResult.passed(result.get("detail", "Connected."))

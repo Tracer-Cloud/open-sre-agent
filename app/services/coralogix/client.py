@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 
 from app.integrations.models import CoralogixIntegrationConfig
+from app.integrations.probes import ProbeResult
 
 _DEFAULT_TIMEOUT_SECONDS = 30.0
 
@@ -240,3 +241,29 @@ class CoralogixClient:
             "total": result.get("total", 0),
             "warnings": result.get("warnings", []),
         }
+
+    def probe_access(self) -> ProbeResult:
+        """Validate Coralogix access using the lightweight direct query probe."""
+        if not self.is_configured:
+            return ProbeResult.missing("Missing Coralogix API key or API URL.")
+
+        result = self.validate_access()
+        if not result.get("success"):
+            return ProbeResult.failed(
+                f"DataPrime check failed: {result.get('error', 'unknown error')}"
+            )
+
+        scope: list[str] = []
+        if self.config.application_name:
+            scope.append(f"application {self.config.application_name}")
+        if self.config.subsystem_name:
+            scope.append(f"subsystem {self.config.subsystem_name}")
+        scope_detail = f" ({', '.join(scope)})" if scope else ""
+        total = int(result.get("total", 0) or 0)
+        return ProbeResult.passed(
+            (
+                f"Connected to {self.config.base_url}{scope_detail}; "
+                f"DataPrime returned {total} row(s)."
+            ),
+            total=total,
+        )

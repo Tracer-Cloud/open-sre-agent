@@ -55,6 +55,26 @@ def test_make_argocd_client_requires_base_url_and_auth() -> None:
     )
 
 
+def test_probe_access_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        ArgoCDClient,
+        "list_applications",
+        lambda _self, **_kwargs: {
+            "success": True,
+            "applications": [{"name": "payments"}],
+            "total": 1,
+        },
+    )
+    client = ArgoCDClient(
+        ArgoCDConfig(base_url="https://argocd.example.com", bearer_token="tok_test")
+    )
+
+    result = client.probe_access()
+
+    assert result.status == "passed"
+    assert "1 application" in result.detail
+
+
 def test_config_rejects_plain_http_except_loopback() -> None:
     with pytest.raises(ValidationError):
         ArgoCDConfig(base_url="http://argocd.example.com", bearer_token="tok")

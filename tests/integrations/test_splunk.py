@@ -232,6 +232,18 @@ def test_validate_access_connection_error() -> None:
     assert "Connection refused" in result["error"]
 
 
+def test_probe_access_success() -> None:
+    client = SplunkClient(SplunkConfig(base_url="https://splunk:8089", token="tok"))
+    client.validate_access = MagicMock(
+        return_value={"success": True, "detail": "Connected to Splunk 9.1.0"}
+    )
+
+    result = client.probe_access()
+
+    assert result.status == "passed"
+    assert "Splunk 9.1.0" in result.detail
+
+
 def test_validate_access_passes_ca_bundle_to_httpx() -> None:
     config = SplunkConfig(
         base_url="https://splunk:8089",

@@ -10,41 +10,14 @@ import logging
 from typing import Any
 
 import httpx
-from pydantic import field_validator
 
-from app.strict_config import StrictConfigModel
+from app.integrations.config_models import OpsGenieIntegrationConfig
+from app.integrations.probes import ProbeResult
 
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TIMEOUT = 30
-
-_REGION_BASE_URLS: dict[str, str] = {
-    "us": "https://api.opsgenie.com",
-    "eu": "https://api.eu.opsgenie.com",
-}
-
-
-class OpsGenieConfig(StrictConfigModel):
-    api_key: str
-    region: str = "us"
-    integration_id: str = ""
-
-    @field_validator("region", mode="before")
-    @classmethod
-    def _normalize_region(cls, value: object) -> str:
-        raw = str(value or "us").strip().lower()
-        return raw if raw in _REGION_BASE_URLS else "us"
-
-    @property
-    def base_url(self) -> str:
-        return _REGION_BASE_URLS.get(self.region, _REGION_BASE_URLS["us"])
-
-    @property
-    def headers(self) -> dict[str, str]:
-        return {
-            "Authorization": f"GenieKey {self.api_key}",
-            "Content-Type": "application/json",
-        }
+OpsGenieConfig = OpsGenieIntegrationConfig
 
 
 class OpsGenieClient:
@@ -66,6 +39,24 @@ class OpsGenieClient:
     @property
     def is_configured(self) -> bool:
         return bool(self.config.api_key)
+
+    def probe_access(self) -> ProbeResult:
+        """Validate OpsGenie credentials with a minimal alert list call."""
+        if not self.is_configured:
+            return ProbeResult.missing("Missing API key.")
+
+        with self:
+            result = self.list_alerts(limit=1)
+        if not result.get("success"):
+            return ProbeResult.failed(
+                f"Alert list check failed: {result.get('error', 'unknown error')}",
+                region=self.config.region,
+            )
+
+        return ProbeResult.passed(
+            f"Connected to OpsGenie ({self.config.region.upper()} region); API key accepted.",
+            region=self.config.region,
+        )
 
     def close(self) -> None:
         if self._client is not None:

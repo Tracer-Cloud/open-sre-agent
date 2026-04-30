@@ -1,8 +1,7 @@
 """python -m app.integrations <command> [service] [options]
 
 Commands: setup, list, show, remove, verify
-Services: aws, coralogix, datadog, github, grafana, honeycomb, mongodb, opensearch,
-rds, sentry, slack, tracer, vercel
+Services: see the supported-service lists in the help output below
 
 Verify options: --send-slack-test
 """

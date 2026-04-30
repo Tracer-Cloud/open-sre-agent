@@ -69,6 +69,19 @@ def test_headers_include_genie_key() -> None:
     assert c.config.headers["Authorization"] == "GenieKey test-genie-key"
 
 
+def test_probe_access_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        OpsGenieClient,
+        "list_alerts",
+        lambda _self, **_kwargs: {"success": True, "alerts": [], "total": 0},
+    )
+
+    result = _client().probe_access()
+
+    assert result.status == "passed"
+    assert "US region" in result.detail
+
+
 # --- list_alerts ---
 
 

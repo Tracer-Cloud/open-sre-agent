@@ -536,7 +536,7 @@ def test_onboard_interactive_smoke_codex(cli_sandbox: CliSandbox) -> None:
             PtyAction(
                 expect="Choose an integration to configure",
                 send=b"\r",
-                stagger_j=19,
+                stagger_j=20,
             ),
         ],
         timeout=60.0,

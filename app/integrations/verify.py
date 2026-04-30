@@ -15,9 +15,7 @@ from app.integrations.betterstack import build_betterstack_config, validate_bett
 from app.integrations.catalog import (
     resolve_effective_integrations as _resolve_effective_integrations,
 )
-from app.integrations.github_mcp import build_github_mcp_config, validate_github_mcp_config
-from app.integrations.mariadb import build_mariadb_config, validate_mariadb_config
-from app.integrations.models import (
+from app.integrations.config_models import (
     AWSIntegrationConfig,
     CoralogixIntegrationConfig,
     DatadogIntegrationConfig,
@@ -27,59 +25,27 @@ from app.integrations.models import (
     SlackWebhookConfig,
     TracerIntegrationConfig,
 )
+from app.integrations.github_mcp import build_github_mcp_config, validate_github_mcp_config
+from app.integrations.mariadb import build_mariadb_config, validate_mariadb_config
 from app.integrations.mongodb import build_mongodb_config, validate_mongodb_config
 from app.integrations.mongodb_atlas import build_mongodb_atlas_config, validate_mongodb_atlas_config
 from app.integrations.mysql import build_mysql_config, validate_mysql_config
 from app.integrations.openclaw import build_openclaw_config, validate_openclaw_config
 from app.integrations.postgresql import build_postgresql_config, validate_postgresql_config
 from app.integrations.rabbitmq import build_rabbitmq_config, validate_rabbitmq_config
+from app.integrations.registry import CORE_VERIFY_SERVICES, SUPPORTED_VERIFY_SERVICES
 from app.integrations.sentry import build_sentry_config, validate_sentry_config
 from app.services.alertmanager import AlertmanagerClient, AlertmanagerConfig
 from app.services.argocd import ArgoCDClient, ArgoCDConfig
 from app.services.coralogix import CoralogixClient
 from app.services.datadog.client import DatadogClient, DatadogConfig
+from app.services.google_docs import GoogleDocsClient
 from app.services.honeycomb import HoneycombClient
 from app.services.opsgenie import OpsGenieClient, OpsGenieConfig
 from app.services.splunk import SplunkClient, SplunkConfig
 from app.services.tracer_client.client import TracerClient
 from app.services.vercel.client import VercelClient, VercelConfig
 
-SUPPORTED_VERIFY_SERVICES = (
-    "alertmanager",
-    "argocd",
-    "grafana",
-    "datadog",
-    "honeycomb",
-    "coralogix",
-    "aws",
-    "slack",
-    "tracer",
-    "github",
-    "sentry",
-    "mongodb",
-    "postgresql",
-    "azure_sql",
-    "mongodb_atlas",
-    "mariadb",
-    "rabbitmq",
-    "betterstack",
-    "google_docs",
-    "vercel",
-    "opsgenie",
-    "kafka",
-    "clickhouse",
-    "bitbucket",
-    "discord",
-    "telegram",
-    "mysql",
-    "openclaw",
-    "snowflake",
-    "azure",
-    "openobserve",
-    "opensearch",
-    "splunk",
-)
-CORE_VERIFY_SERVICES = frozenset({"grafana", "datadog", "honeycomb", "coralogix", "aws"})
 _SUPPORTED_GRAFANA_TYPES = ("loki", "tempo", "prometheus")
 
 
@@ -123,10 +89,10 @@ def _verify_grafana(source: str, config: dict[str, Any]) -> dict[str, str]:
     datasources = payload if isinstance(payload, list) else []
     supported_types = sorted(
         {
-            ds_type
-            for ds in datasources
-            for ds_type in [str(ds.get("type", "")).lower()]
-            if any(keyword in ds_type for keyword in _SUPPORTED_GRAFANA_TYPES)
+            datasource_type
+            for datasource in datasources
+            for datasource_type in [str(datasource.get("type", "")).lower()]
+            if any(keyword in datasource_type for keyword in _SUPPORTED_GRAFANA_TYPES)
         }
     )
     if not supported_types:
@@ -465,8 +431,8 @@ def _verify_rabbitmq(source: str, config: dict[str, Any]) -> dict[str, str]:
 
 
 def _verify_betterstack(source: str, config: dict[str, Any]) -> dict[str, str]:
-    bs_config = build_betterstack_config(config)
-    result = validate_betterstack_config(bs_config)
+    betterstack_config = build_betterstack_config(config)
+    result = validate_betterstack_config(betterstack_config)
     return _result(
         "betterstack",
         source,
@@ -477,8 +443,6 @@ def _verify_betterstack(source: str, config: dict[str, Any]) -> dict[str, str]:
 
 def _verify_google_docs(source: str, config: dict[str, Any]) -> dict[str, str]:
     """Validate Google Docs credentials and folder access."""
-    from app.services.google_docs import GoogleDocsClient
-
     try:
         google_docs_config = GoogleDocsIntegrationConfig.model_validate(config)
     except Exception as err:
@@ -514,10 +478,7 @@ def _verify_google_docs(source: str, config: dict[str, Any]) -> dict[str, str]:
     )
 
 
-def _verify_vercel(
-    source: str,
-    config: dict[str, Any],
-) -> dict[str, str]:
+def _verify_vercel(source: str, config: dict[str, Any]) -> dict[str, str]:
     try:
         vercel_config = VercelConfig.model_validate(config)
     except Exception:
@@ -536,8 +497,12 @@ def _verify_vercel(
                 f"Vercel project list failed: {result.get('error', 'unknown error')}",
             )
 
-        base_detail = f"Connected to Vercel API and listed {result.get('total', 0)} project(s)."
-        return _result("vercel", source, "passed", base_detail)
+    return _result(
+        "vercel",
+        source,
+        "passed",
+        f"Connected to Vercel API and listed {result.get('total', 0)} project(s).",
+    )
 
 
 def _verify_alertmanager(source: str, config: dict[str, Any]) -> dict[str, str]:
@@ -724,7 +689,6 @@ def _verify_discord(source: str, config: dict[str, Any]) -> dict[str, str]:
         )
 
     data = response.json()
-
     username = str(data.get("username", "")).strip()
     bot_id = str(data.get("id", "")).strip()
     return _result(
@@ -741,10 +705,7 @@ def _verify_telegram(source: str, config: dict[str, Any]) -> dict[str, str]:
         return _result("telegram", source, "missing", "Missing bot token.")
 
     try:
-        response = httpx.get(
-            f"https://api.telegram.org/bot{bot_token}/getMe",
-            timeout=10.0,
-        )
+        response = httpx.get(f"https://api.telegram.org/bot{bot_token}/getMe", timeout=10.0)
     except Exception as exc:  # noqa: BLE001
         safe_exc = str(exc).replace(bot_token, "<redacted>") if bot_token else str(exc)
         return _result("telegram", source, "failed", f"Bot token validation failed: {safe_exc}")
@@ -783,8 +744,12 @@ def _verify_openclaw(source: str, config: dict[str, Any]) -> dict[str, str]:
         )
 
     result = validate_openclaw_config(openclaw_config)
-    status = "passed" if result.ok else "failed"
-    return _result("openclaw", source, status, result.detail)
+    return _result(
+        "openclaw",
+        source,
+        "passed" if result.ok else "failed",
+        result.detail,
+    )
 
 
 def _verify_mysql(source: str, config: dict[str, Any]) -> dict[str, str]:
@@ -825,8 +790,7 @@ def _verify_azure(source: str, config: dict[str, Any]) -> dict[str, str]:
         "azure",
         source,
         "passed",
-        f"Azure Log Analytics credentials are configured for workspace "
-        f"{workspace_id} at {endpoint}.",
+        f"Azure Log Analytics credentials are configured for workspace {workspace_id} at {endpoint}.",
     )
 
 
@@ -885,6 +849,43 @@ def _verify_splunk(source: str, config: dict[str, Any]) -> dict[str, str]:
     return _result("splunk", source, "passed", result.get("detail", "Connected."))
 
 
+VERIFIER_REGISTRY = {
+    "alertmanager": _verify_alertmanager,
+    "argocd": _verify_argocd,
+    "grafana": _verify_grafana,
+    "datadog": _verify_datadog,
+    "honeycomb": _verify_honeycomb,
+    "coralogix": _verify_coralogix,
+    "aws": _verify_aws,
+    "slack": lambda source, config: _verify_slack(source, config, send_slack_test=False),
+    "tracer": _verify_tracer,
+    "github": _verify_github,
+    "sentry": _verify_sentry,
+    "mongodb": _verify_mongodb,
+    "postgresql": _verify_postgresql,
+    "azure_sql": _verify_azure_sql,
+    "mongodb_atlas": _verify_mongodb_atlas,
+    "mariadb": _verify_mariadb,
+    "rabbitmq": _verify_rabbitmq,
+    "betterstack": _verify_betterstack,
+    "google_docs": _verify_google_docs,
+    "vercel": _verify_vercel,
+    "opsgenie": _verify_opsgenie,
+    "kafka": _verify_kafka,
+    "clickhouse": _verify_clickhouse,
+    "bitbucket": _verify_bitbucket,
+    "discord": _verify_discord,
+    "telegram": _verify_telegram,
+    "mysql": _verify_mysql,
+    "openclaw": _verify_openclaw,
+    "snowflake": _verify_snowflake,
+    "azure": _verify_azure,
+    "openobserve": _verify_openobserve,
+    "opensearch": _verify_opensearch,
+    "splunk": _verify_splunk,
+}
+
+
 def verify_integrations(
     service: str | None = None,
     *,
@@ -896,6 +897,18 @@ def verify_integrations(
     services = [service] if service else list(SUPPORTED_VERIFY_SERVICES)
     results: list[dict[str, str]] = []
     for current_service in services:
+        verifier = VERIFIER_REGISTRY.get(current_service)
+        if verifier is None:
+            results.append(
+                _result(
+                    current_service,
+                    "-",
+                    "failed",
+                    "Verification is not supported for this service.",
+                )
+            )
+            continue
+
         if current_service == "slack":
             integration = effective_integrations.get("slack")
             if not integration:
@@ -919,72 +932,7 @@ def verify_integrations(
             )
             continue
 
-        source = str(integration["source"])
-        config = dict(integration["config"])
-        if current_service == "grafana":
-            results.append(_verify_grafana(source, config))
-        elif current_service == "datadog":
-            results.append(_verify_datadog(source, config))
-        elif current_service == "honeycomb":
-            results.append(_verify_honeycomb(source, config))
-        elif current_service == "coralogix":
-            results.append(_verify_coralogix(source, config))
-        elif current_service == "aws":
-            results.append(_verify_aws(source, config))
-        elif current_service == "tracer":
-            results.append(_verify_tracer(source, config))
-        elif current_service == "github":
-            results.append(_verify_github(source, config))
-        elif current_service == "sentry":
-            results.append(_verify_sentry(source, config))
-        elif current_service == "mongodb":
-            results.append(_verify_mongodb(source, config))
-        elif current_service == "postgresql":
-            results.append(_verify_postgresql(source, config))
-        elif current_service == "azure_sql":
-            results.append(_verify_azure_sql(source, config))
-        elif current_service == "mongodb_atlas":
-            results.append(_verify_mongodb_atlas(source, config))
-        elif current_service == "mariadb":
-            results.append(_verify_mariadb(source, config))
-        elif current_service == "rabbitmq":
-            results.append(_verify_rabbitmq(source, config))
-        elif current_service == "betterstack":
-            results.append(_verify_betterstack(source, config))
-        elif current_service == "google_docs":
-            results.append(_verify_google_docs(source, config))
-        elif current_service == "vercel":
-            results.append(_verify_vercel(source, config))
-        elif current_service == "opsgenie":
-            results.append(_verify_opsgenie(source, config))
-        elif current_service == "kafka":
-            results.append(_verify_kafka(source, config))
-        elif current_service == "clickhouse":
-            results.append(_verify_clickhouse(source, config))
-        elif current_service == "bitbucket":
-            results.append(_verify_bitbucket(source, config))
-        elif current_service == "discord":
-            results.append(_verify_discord(source, config))
-        elif current_service == "telegram":
-            results.append(_verify_telegram(source, config))
-        elif current_service == "openclaw":
-            results.append(_verify_openclaw(source, config))
-        elif current_service == "mysql":
-            results.append(_verify_mysql(source, config))
-        elif current_service == "alertmanager":
-            results.append(_verify_alertmanager(source, config))
-        elif current_service == "argocd":
-            results.append(_verify_argocd(source, config))
-        elif current_service == "snowflake":
-            results.append(_verify_snowflake(source, config))
-        elif current_service == "azure":
-            results.append(_verify_azure(source, config))
-        elif current_service == "openobserve":
-            results.append(_verify_openobserve(source, config))
-        elif current_service == "opensearch":
-            results.append(_verify_opensearch(source, config))
-        elif current_service == "splunk":
-            results.append(_verify_splunk(source, config))
+        results.append(verifier(str(integration["source"]), dict(integration["config"])))
 
     return results
 
@@ -992,13 +940,8 @@ def verify_integrations(
 def format_verification_results(results: list[dict[str, str]]) -> str:
     """Render verification results as a compact terminal table."""
     lines = ["", "  SERVICE    SOURCE       STATUS      DETAIL"]
-    for result in results:
-        lines.append(
-            f"  {result['service']:<10}"
-            f"{result['source']:<13}"
-            f"{result['status']:<12}"
-            f"{result['detail']}"
-        )
+    for row in results:
+        lines.append(f"  {row['service']:<10}{row['source']:<13}{row['status']:<12}{row['detail']}")
     lines.append("")
     return "\n".join(lines)
 
@@ -1009,13 +952,55 @@ def verification_exit_code(
     requested_service: str | None = None,
 ) -> int:
     """Return a CLI exit code for a verification run."""
-    if any(result["status"] == "failed" for result in results):
+    if any(row["status"] == "failed" for row in results):
         return 1
-
     if requested_service:
-        return 1 if any(result["status"] in {"missing", "failed"} for result in results) else 0
-
-    core_results = [result for result in results if result["service"] in CORE_VERIFY_SERVICES]
-    if not any(result["status"] == "passed" for result in core_results):
+        return 1 if any(row["status"] in {"missing", "failed"} for row in results) else 0
+    core_results = [row for row in results if row["service"] in CORE_VERIFY_SERVICES]
+    if not any(row["status"] == "passed" for row in core_results):
         return 1
     return 0
+
+
+__all__ = [
+    "CORE_VERIFY_SERVICES",
+    "SUPPORTED_VERIFY_SERVICES",
+    "VERIFIER_REGISTRY",
+    "_verify_alertmanager",
+    "_verify_argocd",
+    "_verify_aws",
+    "_verify_azure",
+    "_verify_azure_sql",
+    "_verify_betterstack",
+    "_verify_bitbucket",
+    "_verify_clickhouse",
+    "_verify_coralogix",
+    "_verify_datadog",
+    "_verify_discord",
+    "_verify_github",
+    "_verify_google_docs",
+    "_verify_grafana",
+    "_verify_honeycomb",
+    "_verify_kafka",
+    "_verify_mariadb",
+    "_verify_mongodb",
+    "_verify_mongodb_atlas",
+    "_verify_mysql",
+    "_verify_openclaw",
+    "_verify_openobserve",
+    "_verify_opensearch",
+    "_verify_opsgenie",
+    "_verify_postgresql",
+    "_verify_rabbitmq",
+    "_verify_sentry",
+    "_verify_slack",
+    "_verify_snowflake",
+    "_verify_splunk",
+    "_verify_telegram",
+    "_verify_tracer",
+    "_verify_vercel",
+    "format_verification_results",
+    "resolve_effective_integrations",
+    "verification_exit_code",
+    "verify_integrations",
+]
