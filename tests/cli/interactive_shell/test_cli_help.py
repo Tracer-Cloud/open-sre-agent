@@ -1,8 +1,8 @@
-"""Tests for REPL CLI help assistant (reference text, no LLM calls)."""
+"""Tests for interactive-shell CLI help reference text."""
 
 from __future__ import annotations
 
-from app.cli.interactive_shell.cli_help import build_cli_reference_text
+from app.cli.interactive_shell.cli_reference import build_cli_reference_text
 
 
 def test_build_cli_reference_includes_root_and_subcommands() -> None:

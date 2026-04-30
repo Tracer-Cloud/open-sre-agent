@@ -74,9 +74,10 @@ def is_integration_terminal_intent(text: str) -> bool:
     """True for questions about integrations/configured services, not incidents."""
     if not _INTEGRATION_CONTEXT_RE.search(text):
         return False
-    return bool(mentioned_integration_services(text)) or re.search(
-        r"\b(list|show|tell\s+me|get)\b", text, re.IGNORECASE
-    ) is not None
+    return (
+        bool(mentioned_integration_services(text))
+        or re.search(r"\b(list|show|tell\s+me|get)\b", text, re.IGNORECASE) is not None
+    )
 
 
 def is_cli_agent_operational_intent(text: str) -> bool:

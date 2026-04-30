@@ -1,4 +1,4 @@
-"""Classify REPL input: slash, CLI help, LangGraph-free agent, investigation, or follow-up."""
+"""Classify interactive-shell input: slash, CLI help, agent, investigation, or follow-up."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ InputKind = Literal["slash", "cli_help", "cli_agent", "new_alert", "follow_up"]
 
 _MIN_INVESTIGATION_LINE_LEN = 48
 
-# Bare words that map to slash commands — users often forget the leading slash.
+# Bare words that map to slash commands; users often forget the leading slash.
 _BARE_COMMAND_ALIASES = frozenset(
     {
         "help",
@@ -69,7 +69,7 @@ _INCIDENT_QUESTION_WORDS = frozenset(
     }
 )
 
-# Narrative signals for long pasted text (replaces "any line ≥48 chars" → LangGraph).
+# Narrative signals for long pasted text; replaces "any line >=48 chars" with LangGraph.
 _LONG_LINE_INCIDENT_RE: tuple[re.Pattern[str], ...] = (
     re.compile(r"\b[45]\d{2}\b"),  # HTTP-style status codes
     re.compile(r"\d{1,2}:\d{2}(?::\d{2})?(?:\s*(?:UTC|GMT|Z))?"),
@@ -87,6 +87,7 @@ def _long_line_suggests_incident_narrative(text: str) -> bool:
         return True
     # Plain-language incident narrative without a keyword in _ALERT_CUES
     return any(w in lower for w in ("failures", "failure", "outage", "degraded", "intermittent"))
+
 
 _CLI_HELP_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(
@@ -168,24 +169,24 @@ def _reads_like_investigation_request(text: str) -> bool:
 
 
 def _is_cli_help_intent(text: str) -> bool:
-    """True for meta-questions about how to use OpenSRE / the CLI / the REPL."""
+    """True for meta-questions about how to use OpenSRE, the CLI, or the shell."""
     return any(pattern.search(text) for pattern in _CLI_HELP_PATTERNS)
 
 
 def classify_input(text: str, session: ReplSession) -> InputKind:
-    """Classify a single line of REPL input.
+    """Classify a single line of interactive-shell input.
 
     Rules (in order):
       1. Anything starting with ``/`` is a slash command.
       2. A bare word matching a known slash-command alias routes like slash.
-      3. Procedural CLI questions → ``cli_help`` (reference-grounded; no LangGraph).
-      4. Local setup / health / list-integrations phrasing → ``cli_agent`` (unless
+      3. Procedural CLI questions route to ``cli_help`` (reference-grounded; no LangGraph).
+      4. Local setup / health / list-integrations phrasing routes to ``cli_agent`` (unless
          alert keywords indicate a real incident).
       5. With no prior investigation: if the line reads like an incident / alert /
-         investigation request → ``new_alert`` (LangGraph). Otherwise →
+         investigation request, route to ``new_alert`` (LangGraph). Otherwise route to
          ``cli_agent`` (LLM-only terminal assistant, no LangGraph).
-      6. With a prior investigation: short question-shaped input about the RCA →
-         ``follow_up``. New incident text → ``new_alert``. Otherwise →
+      6. With a prior investigation: short question-shaped input about the RCA routes to
+         ``follow_up``. New incident text routes to ``new_alert``. Otherwise route to
          ``cli_agent`` (chat / CLI help that is not an RCA follow-up).
     """
     stripped = text.strip()

@@ -1,4 +1,4 @@
-"""LangGraph-free assistant for the interactive terminal — CLI guidance and chat."""
+"""LangGraph-free assistant for the interactive terminal - CLI guidance and chat."""
 
 from __future__ import annotations
 
@@ -8,27 +8,27 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.markup import escape
 
-from app.cli.interactive_shell.cli_help import build_cli_reference_text
+from app.cli.interactive_shell.cli_reference import build_cli_reference_text
 from app.cli.interactive_shell.loaders import llm_loader
 from app.cli.interactive_shell.session import ReplSession
 
 # Cap stored (user, assistant) pairs; list holds 2 entries per turn.
 _MAX_CLI_AGENT_TURNS = 12
-_GroundingMode = Literal["reference_only", "conversational"]
+type _GroundingMode = Literal["reference_only", "conversational"]
 
 # Shared, end-user-friendly terminology rule that is appended to every system
-# prompt.  The model otherwise picks up "REPL" from internal docs and surfaces
+# prompt. The model otherwise picks up "REPL" from internal docs and surfaces
 # jargon to the user (#604).
 _TERMINOLOGY_RULE = (
     "Terminology: always call this surface the 'interactive shell' (the "
     "OpenSRE interactive terminal launched via `opensre` or `opensre agent`). "
-    "Never use the word 'REPL' in user-facing answers — it is internal jargon."
+    "Never use the word 'REPL' in user-facing answers - it is internal jargon."
 )
 
 _MARKDOWN_RULE = (
-    "Formatting: respond in concise Markdown.  Markdown will be rendered "
+    "Formatting: respond in concise Markdown. Markdown will be rendered "
     "in the user's terminal, so tables, **bold**, lists, and `code spans` "
-    "will display correctly — do not wrap the whole answer in a code fence."
+    "will display correctly - do not wrap the whole answer in a code fence."
 )
 
 
@@ -62,7 +62,7 @@ def _build_system_prompt(grounding: _GroundingMode, reference: str, history: str
         )
     return (
         "You are the OpenSRE terminal assistant. You help with OpenSRE CLI "
-        "usage, the interactive shell, and onboarding — you do NOT run "
+        "usage, the interactive shell, and onboarding - you do NOT run "
         "incident investigations yourself (those use a separate LangGraph "
         "pipeline).\n"
         "When the user wants to investigate an alert, tell them to paste "

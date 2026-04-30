@@ -165,9 +165,7 @@ class TestLoaderWiring:
             finally:
                 events.append("exit")
 
-        import app.cli.interactive_shell.cli_agent as agent_module
-
-        monkeypatch.setattr(agent_module, "llm_loader", _spy_loader)
+        monkeypatch.setattr(cli_agent, "llm_loader", _spy_loader)
 
         class _Recording:
             def invoke(self, prompt: str) -> _FakeLLMResponse:  # noqa: ARG002
@@ -181,7 +179,7 @@ class TestLoaderWiring:
         console, _ = _capture()
         answer_cli_agent("hi", ReplSession(), console)
 
-        # The LLM call MUST happen inside the loader's context — the order
+        # The LLM call MUST happen inside the loader's context; the order
         # is ``enter -> invoke -> exit``.
         assert events == ["enter:thinking", "invoke", "exit"]
 

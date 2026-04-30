@@ -44,9 +44,7 @@ class TestClassifyInput:
     def test_long_operational_health_question_stays_cli_agent(self) -> None:
         """Long setup questions must not hit LangGraph just because len >= 48."""
         session = ReplSession()
-        text = (
-            "check the health of my opensre and then show me all connected services"
-        )
+        text = "check the health of my opensre and then show me all connected services"
         assert len(text) >= 48
         assert classify_input(text, session) == "cli_agent"
 

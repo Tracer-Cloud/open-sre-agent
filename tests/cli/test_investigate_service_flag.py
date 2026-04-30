@@ -140,9 +140,7 @@ def test_slack_thread_without_bot_token_is_rejected(monkeypatch) -> None:
             "app.remote.runtime_alert.build_runtime_alert_payload",
             return_value=_fake_payload("my-svc"),
         ),
-        patch(
-            "app.cli.investigation.run_investigation_cli", return_value=_fake_result()
-        ),
+        patch("app.cli.investigation.run_investigation_cli", return_value=_fake_result()),
     ):
         result = runner.invoke(
             investigate_command,
@@ -162,9 +160,7 @@ def test_slack_thread_passed_to_payload_builder(monkeypatch) -> None:
             "app.remote.runtime_alert.build_runtime_alert_payload",
             return_value=_fake_payload("my-svc"),
         ) as mock_build,
-        patch(
-            "app.cli.investigation.run_investigation_cli", return_value=_fake_result()
-        ),
+        patch("app.cli.investigation.run_investigation_cli", return_value=_fake_result()),
     ):
         result = runner.invoke(
             investigate_command,
