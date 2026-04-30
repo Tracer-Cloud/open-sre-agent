@@ -216,7 +216,9 @@ class GeminiAdapter:
             if isinstance(payload, dict) and "error" in payload:
                 error = payload["error"]
                 msg = error.get("message", "") if isinstance(error, dict) else str(error)
-                logger.warning("Gemini CLI reported error JSON (returncode=%d): %s", returncode, msg)
+                logger.warning(
+                    "Gemini CLI reported error JSON (returncode=%d): %s", returncode, msg
+                )
                 return ""
             response = _extract_json_response(payload)
         except json.JSONDecodeError:
