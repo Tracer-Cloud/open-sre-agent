@@ -149,6 +149,16 @@ def test_parse_json_response() -> None:
     assert out == "hello from gemini"
 
 
+def test_parse_error_json_returns_empty_and_does_not_surface_as_content() -> None:
+    out = GeminiAdapter().parse(
+        stdout='{"error":{"message":"Quota exceeded"}}',
+        stderr="",
+        returncode=0,
+    )
+
+    assert out == ""
+
+
 def test_explain_failure_redacts_google_api_key(monkeypatch) -> None:
     monkeypatch.setenv("GEMINI_API_KEY", "AIzaThisIsASecretGoogleApiKeyValue")
 
@@ -160,6 +170,17 @@ def test_explain_failure_redacts_google_api_key(monkeypatch) -> None:
 
     assert "AIzaThisIsASecretGoogleApiKeyValue" not in message
     assert "authentication may be missing or expired" in message
+
+
+def test_explain_failure_redacts_key_beyond_2000_chars(monkeypatch) -> None:
+    secret = "AIzaThisIsASecretGoogleApiKeyValue"
+    monkeypatch.setenv("GEMINI_API_KEY", secret)
+    padding = "x" * 2100
+    stderr = padding + secret
+
+    message = GeminiAdapter().explain_failure(stdout="", stderr=stderr, returncode=1)
+
+    assert secret not in message
 
 
 @patch("app.integrations.llm_cli.gemini.subprocess.run")

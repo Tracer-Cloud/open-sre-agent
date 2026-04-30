@@ -108,11 +108,6 @@ def _extract_json_response(payload: Any) -> str | None:
         response = payload.get("response")
         if isinstance(response, str):
             return response.strip()
-        error = payload.get("error")
-        if isinstance(error, dict):
-            message = error.get("message")
-            if isinstance(message, str):
-                return message.strip()
     return None
 
 
@@ -185,6 +180,8 @@ class GeminiAdapter:
         return self._probe_binary(binary)
 
     def build(self, *, prompt: str, model: str | None, workspace: str) -> CLIInvocation:
+        # _resolve_binary() is intentionally called again here (not cached from detect()).
+        # detect() is optional and may not have run; build() must always resolve independently.
         binary = self._resolve_binary()
         if not binary:
             raise RuntimeError(
@@ -211,19 +208,24 @@ class GeminiAdapter:
 
     def parse(self, *, stdout: str, stderr: str, returncode: int) -> str:
         _ = stderr
-        _ = returncode
         out = (stdout or "").strip()
         if not out:
             return ""
         try:
-            response = _extract_json_response(json.loads(out))
+            payload = json.loads(out)
+            if isinstance(payload, dict) and "error" in payload:
+                error = payload["error"]
+                msg = error.get("message", "") if isinstance(error, dict) else str(error)
+                logger.warning("Gemini CLI reported error JSON (returncode=%d): %s", returncode, msg)
+                return ""
+            response = _extract_json_response(payload)
         except json.JSONDecodeError:
             response = None
         return response if response is not None else out
 
     def explain_failure(self, *, stdout: str, stderr: str, returncode: int) -> str:
         combined = "\n".join(part for part in (stderr.strip(), stdout.strip()) if part)
-        safe_tail = _redact_sensitive_values(combined[:2000])
+        safe_tail = _redact_sensitive_values(combined)[:2000]
         lower = combined.lower()
         if any(
             marker in lower
