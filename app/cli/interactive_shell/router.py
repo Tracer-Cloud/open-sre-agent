@@ -7,6 +7,10 @@ import re
 from typing import Literal
 
 from app.cli.interactive_shell.session import ReplSession
+from app.cli.interactive_shell.terminal_intent import (
+    is_cli_agent_operational_intent,
+    mentions_alert_signal,
+)
 
 InputKind = Literal["slash", "cli_help", "cli_agent", "new_alert", "follow_up"]
 
@@ -42,31 +46,6 @@ _FOLLOW_UP_CUES = (
 )
 
 
-# Cues that strongly suggest a fresh incident rather than a follow-up.
-_ALERT_CUES = (
-    "alert",
-    "error",
-    "failure",
-    "failing",
-    "down",
-    "outage",
-    "spiked",
-    "spike",
-    "dropped",
-    "latency",
-    "timeout",
-    "5xx",
-    "500",
-    "503",
-    "crash",
-    "crashed",
-    "cpu",
-    "memory",
-    "disk",
-    "connection",
-    "investigate",
-)
-
 # Extra vocabulary for short questions that describe production symptoms (not greetings).
 _INCIDENT_QUESTION_WORDS = frozenset(
     {
@@ -90,7 +69,25 @@ _INCIDENT_QUESTION_WORDS = frozenset(
     }
 )
 
-# Procedural / usage questions about OpenSRE — not production troubleshooting.
+# Narrative signals for long pasted text (replaces "any line ≥48 chars" → LangGraph).
+_LONG_LINE_INCIDENT_RE: tuple[re.Pattern[str], ...] = (
+    re.compile(r"\b[45]\d{2}\b"),  # HTTP-style status codes
+    re.compile(r"\d{1,2}:\d{2}(?::\d{2})?(?:\s*(?:UTC|GMT|Z))?"),
+    re.compile(r"\d+\s*%"),
+    re.compile(r"\b(?:paged|on-?call|sev-?\d|SLO|SLA)\b", re.IGNORECASE),
+)
+
+
+def _long_line_suggests_incident_narrative(text: str) -> bool:
+    """Long free text that looks like a production incident, not a how-to question."""
+    if mentions_alert_signal(text):
+        return True
+    lower = text.lower()
+    if any(rx.search(text) for rx in _LONG_LINE_INCIDENT_RE):
+        return True
+    # Plain-language incident narrative without a keyword in _ALERT_CUES
+    return any(w in lower for w in ("failures", "failure", "outage", "degraded", "intermittent"))
+
 _CLI_HELP_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(
         r"^\s*how\s+do\s+i\s+run\s+(an?\s+)?(investigation|alert|rca)\b",
@@ -135,11 +132,6 @@ def _is_short_question(text: str) -> bool:
     return any(lower.startswith(cue) for cue in _FOLLOW_UP_CUES)
 
 
-def _mentions_alert_signal(text: str) -> bool:
-    lower = text.lower()
-    return any(cue in lower for cue in _ALERT_CUES)
-
-
 def _looks_like_json_payload(text: str) -> bool:
     stripped = text.strip()
     if not stripped.startswith(("{", "[")):
@@ -171,8 +163,8 @@ def _reads_like_investigation_request(text: str) -> bool:
     if _looks_like_json_payload(stripped):
         return True
     if len(stripped) >= _MIN_INVESTIGATION_LINE_LEN:
-        return True
-    return _mentions_alert_signal(stripped) or _short_question_mentions_incident_vocab(stripped)
+        return _long_line_suggests_incident_narrative(stripped)
+    return mentions_alert_signal(stripped) or _short_question_mentions_incident_vocab(stripped)
 
 
 def _is_cli_help_intent(text: str) -> bool:
@@ -187,10 +179,12 @@ def classify_input(text: str, session: ReplSession) -> InputKind:
       1. Anything starting with ``/`` is a slash command.
       2. A bare word matching a known slash-command alias routes like slash.
       3. Procedural CLI questions → ``cli_help`` (reference-grounded; no LangGraph).
-      4. With no prior investigation: if the line reads like an incident / alert /
+      4. Local setup / health / list-integrations phrasing → ``cli_agent`` (unless
+         alert keywords indicate a real incident).
+      5. With no prior investigation: if the line reads like an incident / alert /
          investigation request → ``new_alert`` (LangGraph). Otherwise →
          ``cli_agent`` (LLM-only terminal assistant, no LangGraph).
-      5. With a prior investigation: short question-shaped input about the RCA →
+      6. With a prior investigation: short question-shaped input about the RCA →
          ``follow_up``. New incident text → ``new_alert``. Otherwise →
          ``cli_agent`` (chat / CLI help that is not an RCA follow-up).
     """
@@ -203,6 +197,9 @@ def classify_input(text: str, session: ReplSession) -> InputKind:
 
     if _is_cli_help_intent(stripped):
         return "cli_help"
+
+    if is_cli_agent_operational_intent(stripped) and not mentions_alert_signal(stripped):
+        return "cli_agent"
 
     if session.last_state is None:
         if _reads_like_investigation_request(stripped):

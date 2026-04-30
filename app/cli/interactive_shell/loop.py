@@ -10,6 +10,7 @@ from prompt_toolkit.formatted_text import ANSI
 from rich.console import Console
 from rich.markup import escape
 
+from app.cli.interactive_shell.agent_actions import execute_cli_actions
 from app.cli.interactive_shell.banner import render_banner
 from app.cli.interactive_shell.cli_agent import answer_cli_agent
 from app.cli.interactive_shell.cli_help import answer_cli_help
@@ -74,6 +75,8 @@ async def _run_one_turn(
         return True
 
     if kind == "cli_agent":
+        if execute_cli_actions(text, session, console):
+            return True
         answer_cli_agent(text, session, console)
         session.record("cli_agent", text)
         return True
@@ -114,8 +117,9 @@ async def _repl_main(initial_input: str | None = None, config: ReplConfig | None
                 answer_cli_help(stripped, session, console)
                 session.record("cli_help", stripped)
             elif kind == "cli_agent":
-                answer_cli_agent(stripped, session, console)
-                session.record("cli_agent", stripped)
+                if not execute_cli_actions(stripped, session, console):
+                    answer_cli_agent(stripped, session, console)
+                    session.record("cli_agent", stripped)
             elif kind == "new_alert":
                 _run_new_alert(stripped, session, console)
             else:

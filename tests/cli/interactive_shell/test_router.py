@@ -41,6 +41,31 @@ class TestClassifyInput:
         assert classify_input("hi", session) == "cli_agent"
         assert classify_input("hello", session) == "cli_agent"
 
+    def test_long_operational_health_question_stays_cli_agent(self) -> None:
+        """Long setup questions must not hit LangGraph just because len >= 48."""
+        session = ReplSession()
+        text = (
+            "check the health of my opensre and then show me all connected services"
+        )
+        assert len(text) >= 48
+        assert classify_input(text, session) == "cli_agent"
+
+    def test_long_integration_question_stays_cli_agent(self) -> None:
+        """Integration inventory/capability questions are terminal work, not alerts."""
+        session = ReplSession()
+        text = (
+            "tell me about what the discord integration can do and then tell me what "
+            "datadog services I have connections to"
+        )
+
+        assert len(text) >= 48
+        assert classify_input(text, session) == "cli_agent"
+
+    def test_connection_substring_in_connections_is_not_alert_signal(self) -> None:
+        session = ReplSession()
+
+        assert classify_input("what datadog connections do I have?", session) == "cli_agent"
+
     def test_no_prior_state_incident_question_is_new_alert(self) -> None:
         session = ReplSession()
         assert classify_input("why is the database slow?", session) == "new_alert"

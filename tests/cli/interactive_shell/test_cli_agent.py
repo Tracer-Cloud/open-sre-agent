@@ -149,6 +149,43 @@ class TestAssistantOutputRendering:
         assert session.cli_agent_messages == []
 
 
+class TestLoaderWiring:
+    """The orange spinner must surround every LLM call from the assistant."""
+
+    def test_llm_invocation_is_wrapped_in_orange_loader(self, monkeypatch: Any) -> None:
+        from contextlib import contextmanager
+
+        events: list[str] = []
+
+        @contextmanager
+        def _spy_loader(_console: Console, label: str = "thinking") -> Any:
+            events.append(f"enter:{label}")
+            try:
+                yield
+            finally:
+                events.append("exit")
+
+        import app.cli.interactive_shell.cli_agent as agent_module
+
+        monkeypatch.setattr(agent_module, "llm_loader", _spy_loader)
+
+        class _Recording:
+            def invoke(self, prompt: str) -> _FakeLLMResponse:  # noqa: ARG002
+                events.append("invoke")
+                return _FakeLLMResponse("ok")
+
+        import app.services.llm_client as llm_module
+
+        monkeypatch.setattr(llm_module, "get_llm_for_reasoning", lambda: _Recording())
+
+        console, _ = _capture()
+        answer_cli_agent("hi", ReplSession(), console)
+
+        # The LLM call MUST happen inside the loader's context — the order
+        # is ``enter -> invoke -> exit``.
+        assert events == ["enter:thinking", "invoke", "exit"]
+
+
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
