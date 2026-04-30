@@ -151,10 +151,26 @@ CODEX_MODELS = (
 )
 
 
+GEMINI_CLI_MODELS = (
+    ModelOption(
+        value="",
+        label="CLI default (no -m; use Gemini CLI configured model)",
+    ),
+    ModelOption(value="gemini-2.5-pro", label="gemini-2.5-pro"),
+    ModelOption(value="gemini-2.5-flash", label="gemini-2.5-flash"),
+)
+
+
 def _codex_adapter_factory() -> LLMCLIAdapter:
     from app.integrations.llm_cli.codex import CodexAdapter
 
     return CodexAdapter()
+
+
+def _gemini_cli_adapter_factory() -> LLMCLIAdapter:
+    from app.integrations.llm_cli.gemini import GeminiAdapter
+
+    return GeminiAdapter()
 
 
 SUPPORTED_PROVIDERS = (
@@ -219,6 +235,18 @@ SUPPORTED_PROVIDERS = (
         credential_kind="cli",
         credential_secret=False,
         adapter_factory=_codex_adapter_factory,
+    ),
+    ProviderOption(
+        value="gemini-cli",
+        label="Google Gemini CLI",
+        group="Local CLI providers",
+        api_key_env="",
+        model_env="GEMINI_CLI_MODEL",
+        default_model="",
+        models=GEMINI_CLI_MODELS,
+        credential_kind="cli",
+        credential_secret=False,
+        adapter_factory=_gemini_cli_adapter_factory,
     ),
     ProviderOption(
         value="ollama",

@@ -102,3 +102,17 @@ def test_minimax_llm_client_temperature_is_set(monkeypatch) -> None:
         temperature=1.0,
     )
     assert client._temperature == 1.0
+
+
+def test_create_llm_client_gemini_cli_provider(monkeypatch) -> None:
+    from app.integrations.llm_cli.runner import CLIBackedLLMClient
+
+    monkeypatch.setenv("LLM_PROVIDER", "gemini-cli")
+    monkeypatch.setenv("GEMINI_CLI_MODEL", "gemini-2.5-flash")
+    monkeypatch.setenv("OPENSRE_DISABLE_KEYRING", "1")
+
+    client = llm_client._create_llm_client(model_type="reasoning")
+
+    assert isinstance(client, CLIBackedLLMClient)
+    assert client._adapter.name == "gemini"
+    assert client._model == "gemini-2.5-flash"

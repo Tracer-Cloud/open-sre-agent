@@ -646,6 +646,63 @@ def test_run_wizard_codex_skips_api_key_and_runs_cli_onboarding(monkeypatch, tmp
     assert "CODEX_MODEL=\n" in env_values
 
 
+def test_run_wizard_gemini_cli_skips_api_key_and_runs_cli_onboarding(monkeypatch, tmp_path) -> None:
+    select_responses = iter(["quickstart", "gemini-cli", "skip"])
+    saved_llm_keys: list[tuple[str, str]] = []
+    cli_onboarding_providers: list[str] = []
+
+    def _mock_select(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(select_responses)
+        return m
+
+    def _cli_onboarding(provider):
+        cli_onboarding_providers.append(provider.value)
+        return "ok"
+
+    store_path = tmp_path / "opensre.json"
+    env_path = tmp_path / ".env"
+
+    monkeypatch.setattr(flow, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow, "get_store_path", lambda: store_path)
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "_run_cli_llm_onboarding", _cli_onboarding)
+    monkeypatch.setattr(
+        flow,
+        "build_demo_action_response",
+        lambda: {"success": True, "topics": [], "guidance": []},
+    )
+    monkeypatch.setattr(
+        flow,
+        "save_local_config",
+        lambda **kwargs: wizard_store.save_local_config(path=store_path, **kwargs),
+    )
+    monkeypatch.setattr(
+        flow,
+        "sync_provider_env",
+        lambda **kwargs: sync_provider_env(env_path=env_path, **kwargs),
+    )
+    monkeypatch.setattr(
+        flow,
+        "save_llm_api_key",
+        lambda env_var, value: saved_llm_keys.append((env_var, value)),
+    )
+
+    exit_code = flow.run_wizard()
+
+    assert exit_code == 0
+    assert cli_onboarding_providers == ["gemini-cli"]
+    assert saved_llm_keys == []
+
+    payload = json.loads(store_path.read_text(encoding="utf-8"))
+    env_values = env_path.read_text(encoding="utf-8")
+    assert payload["targets"]["local"]["provider"] == "gemini-cli"
+    assert payload["targets"]["local"]["api_key_env"] == ""
+    assert payload["targets"]["local"]["model_env"] == "GEMINI_CLI_MODEL"
+    assert "LLM_PROVIDER=gemini-cli\n" in env_values
+    assert "GEMINI_CLI_MODEL=\n" in env_values
+
+
 def test_run_cli_llm_onboarding_ok_when_logged_in(monkeypatch) -> None:
     adapter = MagicMock()
     adapter.name = "codex"
@@ -762,6 +819,26 @@ def test_run_cli_llm_onboarding_ok_after_unclear_auth_retry(monkeypatch) -> None
     result = flow._run_cli_llm_onboarding(provider)
     assert result == "ok"
     assert len(detect_calls) == 2
+
+
+def test_run_cli_llm_onboarding_can_continue_when_auth_status_unclear(monkeypatch) -> None:
+    adapter = MagicMock()
+    adapter.name = "gemini"
+    adapter.binary_env_key = "GEMINI_BIN"
+    adapter.install_hint = "npm install -g @google/gemini-cli"
+    adapter.auth_hint = "Run: gemini, or set GEMINI_API_KEY for headless use"
+    adapter.detect.return_value = MagicMock(
+        installed=True,
+        logged_in=None,
+        detail="Auth status unknown.",
+    )
+    provider = MagicMock()
+    provider.label = "Google Gemini CLI"
+    provider.adapter_factory = lambda: adapter
+
+    monkeypatch.setattr(flow, "_choose", lambda *_args, **_kwargs: "continue")
+    result = flow._run_cli_llm_onboarding(provider)
+    assert result == "ok"
 
 
 def test_run_cli_llm_onboarding_repick_when_user_chooses_repick(monkeypatch) -> None:

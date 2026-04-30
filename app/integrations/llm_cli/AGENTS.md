@@ -13,11 +13,12 @@ Use this package when adding a new **non-interactive** LLM that shells out to a 
 | `runner.py`          | `CLIBackedLLMClient`: guardrails, `detect()`, `subprocess.run`, ANSI strip, `LLMResponse`.  |
 | `text.py`            | `flatten_messages_to_prompt` for stdin from chat-style payloads.                            |
 | `codex.py`           | Reference adapter: binary resolution, `codex exec`, probe via `--version` + `login status`. |
+| `gemini.py`          | Gemini CLI adapter: binary resolution, `gemini --prompt ""`, probe via `--version` + env auth hints. |
 
 
 ## Wiring a new provider
 
-**Before merging**, read **[Subprocess environment allowlist](#subprocess-environment-allowlist)** below: if your CLI reads vendor-specific env vars, you must extend `_SAFE_SUBPROCESS_ENV_PREFIXES` in `runner.py` or the subprocess will not see them (auth and config will break silently).
+**Before merging**, read **[Subprocess environment allowlist](#subprocess-environment-allowlist)** below: if your CLI reads vendor-specific env vars, you must declare them on the adapter or the subprocess will not see them (auth and config will break silently).
 
 1. **Adapter** — Implement `LLMCLIAdapter`: `detect()` must not raise; `build()` returns argv + optional stdin; `parse` / `explain_failure` for success and non-zero exits. Put prompt text on stdin and/or in argv as appropriate — the runner does not branch on a separate “delivery mode”; `CLIInvocation` carries what `build()` produced.
 2. **Registry** — Add an entry to `CLI_PROVIDER_REGISTRY` in `registry.py` (`adapter_factory`, `model_env_key`). The dict key must match `LLM_PROVIDER` / `ProviderOption.value` / `LLMProvider` in `app/config.py`. `_create_llm_client` picks up registered CLI providers automatically (no new `elif` in `llm_client.py` for normal cases).
@@ -57,7 +58,7 @@ Notes:
 | `<PROVIDER>_BIN` | Optional explicit path to the vendor executable. Pass the same name as `explicit_env_key` to `resolve_cli_binary(...)`. Missing, blank, or invalid paths are ignored; PATH + fallbacks still run. |
 | `<PROVIDER>_MODEL` | Optional model override. Register as `model_env_key` on `CLIProviderRegistration` in `registry.py`. Empty or unset → runner omits the flag and the CLI uses its default. |
 
-**Naming:** derive `<PROVIDER>` from the registry / `LLM_PROVIDER` string: **uppercase**, then `_BIN` / `_MODEL`. Examples: `codex` → `CODEX_BIN`, `CODEX_MODEL`; a future `gemini` → `GEMINI_BIN`, `GEMINI_MODEL`.
+**Naming:** derive `<PROVIDER>` from the registry / `LLM_PROVIDER` string: **uppercase**, with hyphens converted to underscores, then `_BIN` / `_MODEL`. Examples: `codex` → `CODEX_BIN`, `CODEX_MODEL`; `gemini-cli` → `GEMINI_CLI_MODEL` plus `GEMINI_BIN` for the executable. Long-running CLIs may also expose `<PROVIDER>_TIMEOUT_SECONDS`.
 
 Document both vars in the adapter module docstring or a one-line comment near `binary_env_key` / the registration entry so users and wizard copy stay aligned.
 
@@ -86,14 +87,15 @@ See `_classify_codex_auth` in `codex.py` for a complete reference implementation
 ## Subprocess environment allowlist
 
 `CLIBackedLLMClient` in `runner.py` passes only a safe subset of env vars to the
-subprocess (`_SAFE_SUBPROCESS_ENV_KEYS` + `_SAFE_SUBPROCESS_ENV_PREFIXES`).
+subprocess (`_SAFE_SUBPROCESS_ENV_KEYS` + `_SAFE_SUBPROCESS_ENV_PREFIXES`) plus
+adapter-specific `env_passthrough_keys` / `env_passthrough_prefixes`.
 
-The current prefix allowlist is `("LC_", "CODEX_")`.
+The shared prefix allowlist is intentionally minimal: `("LC_",)`.
 
 **If your CLI reads custom env vars** (e.g. `CLAUDE_*`, `GEMINI_*`) you must add the
-relevant prefix to `_SAFE_SUBPROCESS_ENV_PREFIXES` in `runner.py`, otherwise the
-subprocess will not receive those vars and authentication or configuration will silently
-fail. Add a test that asserts the required keys are forwarded.
+relevant key or prefix to the adapter, otherwise the subprocess will not receive
+those vars and authentication or configuration will silently fail. Add a test that
+asserts the required keys are forwarded.
 
 ## Codex binary resolution (reference)
 
@@ -121,7 +123,7 @@ CODEX_BIN=
 - Define `<PROVIDER>_BIN` + `<PROVIDER>_MODEL` per [Per-provider env vars](#per-provider-env-vars-required-for-every-new-cli); reuse `resolve_cli_binary(..., explicit_env_key=...)` for `_resolve_binary`.
 - Implement `detect()` with `--version` + auth status checks; follow the three-state `logged_in` pattern above.
 - Write `_classify_<name>_auth` — test against a real logged-in **and** logged-out session before merging.
-- If the CLI reads custom env vars (e.g. `CLAUDE_*`), add the prefix to `_SAFE_SUBPROCESS_ENV_PREFIXES` in `runner.py`.
+- If the CLI reads custom env vars (e.g. `CLAUDE_*`), add adapter `env_passthrough_keys` / `env_passthrough_prefixes`.
 - Register the provider in `registry.py` and add the same `LLM_PROVIDER` value in `app/config.py`.
 - (Optional) Add wizard onboarding option in `app/cli/wizard/config.py`.
 - Add tests under `tests/integrations/llm_cli/` for detect/build/failure paths, including env forwarding.
@@ -131,4 +133,3 @@ CODEX_BIN=
 - `tests/integrations/llm_cli/` — adapter and runner unit tests; mock `subprocess` / `shutil.which` as needed.
 - Platform-specific assertions must patch `app.integrations.llm_cli.binary_resolver.sys.platform` (not `codex.sys.platform`), because resolution lives in `binary_resolver.py`.
 - `npm_prefix_bin_dirs` is `@lru_cache`d; tests that vary env or platform should call `npm_prefix_bin_dirs.cache_clear()` before each case (or use a shared autouse fixture) to avoid stale cache across tests.
-

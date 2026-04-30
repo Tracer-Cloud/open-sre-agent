@@ -1,4 +1,4 @@
-"""Subprocess-backed LLM providers (Codex CLI, future Gemini/Claude CLIs)."""
+"""Subprocess-backed LLM providers (Codex CLI, Gemini CLI, future CLIs)."""
 
 from __future__ import annotations
 

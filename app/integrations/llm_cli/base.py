@@ -39,6 +39,8 @@ class LLMCLIAdapter(Protocol):
     auth_hint: str
     min_version: str | None
     default_exec_timeout_sec: float
+    env_passthrough_keys: tuple[str, ...]
+    env_passthrough_prefixes: tuple[str, ...]
 
     def detect(self) -> CLIProbe:
         """Resolve binary, version, and auth. Never raises; returns a structured probe."""

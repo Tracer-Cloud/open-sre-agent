@@ -21,6 +21,17 @@ def test_llm_settings_require_api_key_for_selected_provider() -> None:
         LLMSettings.model_validate({"provider": "openai"})
 
 
+def test_llm_settings_accept_gemini_cli_without_api_key() -> None:
+    settings = LLMSettings.model_validate({"provider": "gemini-cli"})
+
+    assert settings.provider == "gemini-cli"
+
+
+def test_llm_settings_hosted_gemini_still_requires_api_key() -> None:
+    with pytest.raises(ValidationError, match="GEMINI_API_KEY"):
+        LLMSettings.model_validate({"provider": "gemini"})
+
+
 def test_llm_settings_from_env_uses_secure_local_api_key(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)

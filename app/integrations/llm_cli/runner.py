@@ -56,19 +56,31 @@ _SAFE_SUBPROCESS_ENV_KEYS = frozenset(
         "XDG_STATE_HOME",
     }
 )
-_SAFE_SUBPROCESS_ENV_PREFIXES = ("LC_", "CODEX_")
+_SAFE_SUBPROCESS_ENV_PREFIXES = ("LC_",)
 
 
 def _strip_ansi(text: str) -> str:
     return _ANSI_ESCAPE.sub("", text)
 
 
-def _build_subprocess_env(overrides: dict[str, str] | None) -> dict[str, str]:
+def _tuple_attr(value: Any, attr: str) -> tuple[str, ...]:
+    raw = getattr(value, attr, ())
+    if isinstance(raw, tuple) and all(isinstance(item, str) for item in raw):
+        return raw
+    return ()
+
+
+def _build_subprocess_env(
+    overrides: dict[str, str] | None,
+    *,
+    passthrough_keys: tuple[str, ...] = (),
+    passthrough_prefixes: tuple[str, ...] = (),
+) -> dict[str, str]:
     env: dict[str, str] = {}
+    safe_keys = _SAFE_SUBPROCESS_ENV_KEYS | frozenset(passthrough_keys)
+    safe_prefixes = _SAFE_SUBPROCESS_ENV_PREFIXES + passthrough_prefixes
     for key, value in os.environ.items():
-        if key in _SAFE_SUBPROCESS_ENV_KEYS or any(
-            key.startswith(prefix) for prefix in _SAFE_SUBPROCESS_ENV_PREFIXES
-        ):
+        if key in safe_keys or any(key.startswith(prefix) for prefix in safe_prefixes):
             env[key] = value
     if overrides:
         env.update(overrides)
@@ -149,7 +161,11 @@ class CLIBackedLLMClient:
             )
 
         invocation = self._adapter.build(prompt=flat, model=self._model, workspace="")
-        merged_env = _build_subprocess_env(invocation.env)
+        merged_env = _build_subprocess_env(
+            invocation.env,
+            passthrough_keys=_tuple_attr(self._adapter, "env_passthrough_keys"),
+            passthrough_prefixes=_tuple_attr(self._adapter, "env_passthrough_prefixes"),
+        )
 
         try:
             proc = subprocess.run(

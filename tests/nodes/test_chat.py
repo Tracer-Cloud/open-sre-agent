@@ -83,3 +83,18 @@ def test_general_node_returns_user_facing_message_for_codex_provider(
     assert (
         "Interactive chat requires LLM_PROVIDER=anthropic or openai." in out["messages"][0].content
     )
+
+
+def test_general_node_returns_user_facing_message_for_gemini_cli_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "gemini-cli")
+    chat_mod._chat_llm_cache.clear()
+    state = {"messages": [{"role": "user", "content": "hello"}]}
+
+    out = chat_mod.general_node(state, {"configurable": {}})
+
+    assert out["messages"]
+    assert (
+        "LLM_PROVIDER=gemini-cli only supports `opensre investigate`" in out["messages"][0].content
+    )

@@ -90,6 +90,8 @@ class CodexAdapter:
     auth_hint = "Run: codex login"
     min_version: str | None = None
     default_exec_timeout_sec = 120.0
+    env_passthrough_keys: tuple[str, ...] = ()
+    env_passthrough_prefixes: tuple[str, ...] = ("CODEX_",)
 
     def _resolve_binary(self) -> str | None:
         return resolve_cli_binary(

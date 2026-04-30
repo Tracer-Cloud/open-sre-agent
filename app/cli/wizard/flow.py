@@ -1652,22 +1652,31 @@ def _run_cli_llm_onboarding(provider: ProviderOption) -> Literal["ok", "abort", 
                 if probe.logged_in is False
                 else f"Could not verify {provider.label} login. What next?"
             )
-            action = _choose(
-                status_prompt,
-                [
+            choices = [
+                Choice(
+                    value="retry",
+                    label="Re-detect after logging in",
+                    hint=auth_hint,
+                )
+            ]
+            if probe.logged_in is None:
+                choices.append(
                     Choice(
-                        value="retry",
-                        label="Re-detect after logging in",
-                        hint=auth_hint,
-                    ),
-                    Choice(
-                        value="repick",
-                        label="Pick a different LLM provider",
+                        value="continue",
+                        label="Continue and verify during investigation",
                         hint=None,
-                    ),
-                ],
-                default="retry",
+                    )
+                )
+            choices.append(
+                Choice(
+                    value="repick",
+                    label="Pick a different LLM provider",
+                    hint=None,
+                )
             )
+            action = _choose(status_prompt, choices, default="retry")
+            if action == "continue":
+                return "ok"
             if action == "repick":
                 return "repick"
             continue

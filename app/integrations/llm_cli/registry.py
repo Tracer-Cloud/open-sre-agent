@@ -23,8 +23,18 @@ def _codex_factory() -> LLMCLIAdapter:
     return CodexAdapter()
 
 
+def _gemini_factory() -> LLMCLIAdapter:
+    from app.integrations.llm_cli.gemini import GeminiAdapter
+
+    return GeminiAdapter()
+
+
 CLI_PROVIDER_REGISTRY: dict[str, CLIProviderRegistration] = {
     "codex": CLIProviderRegistration(adapter_factory=_codex_factory, model_env_key="CODEX_MODEL"),
+    "gemini-cli": CLIProviderRegistration(
+        adapter_factory=_gemini_factory,
+        model_env_key="GEMINI_CLI_MODEL",
+    ),
 }
 
 
