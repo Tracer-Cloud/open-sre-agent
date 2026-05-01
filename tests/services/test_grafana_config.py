@@ -22,8 +22,8 @@ def test_grafana_config_normalizes_instance_url() -> None:
         ("http://127.0.0.1:3000", "", True),
         ("http://0.0.0.0:3000", "", True),
         ("http://localhost:3000", "has-token", False),  # Token presence disables anon auth
-        ("https://grafana.example.com", "", False),      # External host requires token
-        ("", "", False),                                # Empty URL
+        ("https://grafana.example.com", "", False),  # External host requires token
+        ("", "", False),  # Empty URL
     ],
 )
 def test_grafana_config_uses_local_anonymous_auth(url: str, token: str, expected: bool) -> None:
@@ -39,11 +39,11 @@ def test_grafana_config_uses_local_anonymous_auth(url: str, token: str, expected
 @pytest.mark.parametrize(
     "url, token, expected",
     [
-        ("https://grafana.com", "token", True),          # Standard config
-        ("http://localhost:3000", "", True),            # Local anon config
-        ("https://grafana.com", "", False),             # Hosted without token
-        ("", "token", False),                            # Missing URL
-        ("", "", False),                                 # Fully unconfigured
+        ("https://grafana.com", "token", True),  # Standard config
+        ("http://localhost:3000", "", True),  # Local anon config
+        ("https://grafana.com", "", False),  # Hosted without token
+        ("", "token", False),  # Missing URL
+        ("", "", False),  # Fully unconfigured
     ],
 )
 def test_grafana_config_is_configured(url: str, token: str, expected: bool) -> None:
