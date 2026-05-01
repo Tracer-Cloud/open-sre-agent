@@ -65,8 +65,6 @@ def extract_judge_json_from_response(text: str) -> dict[str, Any]:
                 msg = "Judge response JSON must be an object"
                 raise ValueError(msg)
 
-    # 🔥 burada artık startswith("[") yok
-    # önce parse etmeye çalışıyoruz
     try:
         raw = json.loads(text)
         if isinstance(raw, dict):
@@ -77,7 +75,6 @@ def extract_judge_json_from_response(text: str) -> dict[str, Any]:
     except json.JSONDecodeError:
         pass
 
-    # salvage path (prose + {...})
     start = text.find("{")
     end = text.rfind("}")
     if start == -1 or end == -1 or end <= start:
