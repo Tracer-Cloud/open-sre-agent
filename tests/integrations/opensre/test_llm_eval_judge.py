@@ -81,3 +81,10 @@ def test_extract_judge_json_picks_last_valid_fence_with_multiple_fences() -> Non
 
     assert out["overall_pass"] is True
     assert out["score_0_100"] == 90
+
+
+def test_extract_judge_json_raises_for_prose_wrapped_array() -> None:
+    with pytest.raises(ValueError, match="JSON must be an object"):
+        extract_judge_json_from_response(
+            'Here is the result: [{"overall_pass": true}] Thanks'
+        )

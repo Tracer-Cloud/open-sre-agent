@@ -75,6 +75,23 @@ def extract_judge_json_from_response(text: str) -> dict[str, Any]:
     if isinstance(raw, list):
         msg = "Judge response JSON must be an object"
         raise ValueError(msg)
+    
+    array_start = text.find("[")
+    array_end = text.rfind("]")
+
+    if array_start != -1 and array_end != -1 and array_end > array_start:
+        object_start = text.find("{")
+
+        if object_start == -1 or array_start < object_start:
+            try:
+                candidate = text[array_start : array_end + 1]
+                parsed = json.loads(candidate)
+            except json.JSONDecodeError:
+                parsed = None
+
+            if isinstance(parsed, list):
+                msg = "Judge response JSON must be an object"
+                raise ValueError(msg)
 
     start = text.find("{")
     end = text.rfind("}")
