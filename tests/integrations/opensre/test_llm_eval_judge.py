@@ -65,3 +65,19 @@ def test_extract_judge_json_raises_for_fenced_json_array() -> None:
 def test_extract_judge_json_raises_for_whitespace_json_array() -> None:
     with pytest.raises(ValueError, match="JSON must be an object"):
         extract_judge_json_from_response('   \n  [{"overall_pass": true}]')
+
+
+def test_extract_judge_json_picks_last_valid_fence_with_multiple_fences() -> None:
+    out = extract_judge_json_from_response(
+        "Example shape:\n"
+        "```json\n"
+        '{"old": 1}\n'
+        "```\n\n"
+        "Actual answer:\n"
+        "```json\n"
+        '{"overall_pass": true, "score_0_100": 90, "rubric_items": [], "summary": "ok"}\n'
+        "```"
+    )
+
+    assert out["overall_pass"] is True
+    assert out["score_0_100"] == 90

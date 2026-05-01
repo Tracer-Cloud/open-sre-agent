@@ -47,14 +47,37 @@ def _claims_lines(claims: list[Any], key: str = "claim") -> str:
 
 def extract_judge_json_from_response(text: str) -> dict[str, Any]:
     text = text.strip()
-    fence = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text, re.DOTALL)
-    if fence:
-        text = fence.group(1).strip()
 
-    if text.lstrip().startswith("["):
-        msg = "Judge response JSON must be an object"
-        raise ValueError(msg)
+    fences = re.findall(r"```(?:json)?\s*([\s\S]*?)\s*```", text, re.DOTALL)
+    if fences:
+        for candidate in reversed(fences):
+            candidate = candidate.strip()
 
+            try:
+                raw = json.loads(candidate)
+            except json.JSONDecodeError:
+                continue
+
+            if isinstance(raw, dict):
+                return cast(dict[str, Any], raw)
+
+            if isinstance(raw, list):
+                msg = "Judge response JSON must be an object"
+                raise ValueError(msg)
+
+    # 🔥 burada artık startswith("[") yok
+    # önce parse etmeye çalışıyoruz
+    try:
+        raw = json.loads(text)
+        if isinstance(raw, dict):
+            return cast(dict[str, Any], raw)
+        if isinstance(raw, list):
+            msg = "Judge response JSON must be an object"
+            raise ValueError(msg)
+    except json.JSONDecodeError:
+        pass
+
+    # salvage path (prose + {...})
     start = text.find("{")
     end = text.rfind("}")
     if start == -1 or end == -1 or end <= start:
@@ -65,6 +88,7 @@ def extract_judge_json_from_response(text: str) -> dict[str, Any]:
     if not isinstance(raw, dict):
         msg = "Judge response JSON must be an object"
         raise ValueError(msg)
+
     return cast(dict[str, Any], raw)
 
 
