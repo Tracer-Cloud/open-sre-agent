@@ -46,6 +46,7 @@ def test_legacy_integration_health_import_surface_still_exports_validators() -> 
         "validate_opsgenie_integration",
         "validate_sentry_integration",
         "validate_slack_webhook",
+        "validate_splunk_integration",
         "validate_vercel_integration",
     }
 

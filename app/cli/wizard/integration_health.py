@@ -14,6 +14,7 @@ from app.cli.wizard.integration_validators.client_validators import (
     validate_honeycomb_integration,
     validate_opsgenie_integration,
     validate_sentry_integration,
+    validate_splunk_integration,
     validate_vercel_integration,
 )
 from app.cli.wizard.integration_validators.http_probe_validators import (
@@ -47,5 +48,6 @@ __all__ = [
     "validate_opsgenie_integration",
     "validate_sentry_integration",
     "validate_slack_webhook",
+    "validate_splunk_integration",
     "validate_vercel_integration",
 ]

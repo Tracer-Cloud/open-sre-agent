@@ -48,6 +48,16 @@ opensre investigate -i tests/fixtures/openclaw_test_alert.json
 
 Once that works, you can call OpenSRE from OpenClaw through the `run_rca` MCP tool.
 
+## Verify before investigating
+
+Before debugging issues, quickly validate your setup:
+
+- Run `opensre integrations verify openclaw`
+- Ensure the bridge command is `openclaw mcp serve`
+- Confirm the OpenClaw Gateway is running when using the stdio bridge
+
+If any of these checks fail, fix them first before investigating further.
+
 ## Optional: let OpenSRE call OpenClaw
 
 If you want the OpenSRE investigation pipeline to query OpenClaw during RCA runs, use the OpenClaw stdio bridge:

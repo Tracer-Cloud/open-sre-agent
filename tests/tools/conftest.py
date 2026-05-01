@@ -143,6 +143,16 @@ def mock_agent_state(overrides: dict | None = None) -> dict[str, Any]:
             "password": "test123",
             "ssl_mode": "preferred",
         },
+        "splunk": {
+            "connection_verified": True,
+            "base_url": "https://splunk.test.corp.com:8089",
+            "token": "splunk_test_bearer_token",
+            "index": "main",
+            "verify_ssl": False,
+            "ca_bundle": "/etc/ssl/certs/corp-ca.pem",
+            "default_query": 'index=main "NullPointerException" | head 50',
+            "time_range_minutes": 60,
+        },
     }
     if overrides:
         for key, value in overrides.items():

@@ -1,6 +1,6 @@
 """Run the OpenSRE quickstart wizard."""
 
-from app.cli.prompt_support import install_questionary_escape_cancel
+from app.cli.support.prompt_support import install_questionary_escape_cancel
 from app.cli.wizard.flow import run_wizard
 
 if __name__ == "__main__":

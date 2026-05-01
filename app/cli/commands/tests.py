@@ -13,8 +13,8 @@ from app.analytics.cli import (
     capture_tests_listed,
     capture_tests_picker_opened,
 )
-from app.cli.context import is_json_output, is_yes
-from app.cli.errors import OpenSREError
+from app.cli.support.context import is_json_output, is_yes
+from app.cli.support.errors import OpenSREError
 
 _TEST_CATEGORIES: tuple[str, ...] = ("all", "rca", "synthetic", "demo", "infra-heavy", "ci-safe")
 

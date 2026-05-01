@@ -15,55 +15,15 @@ import logging
 from typing import Any
 
 import httpx
-from pydantic import field_validator, model_validator
 
-from app.strict_config import StrictConfigModel
+from app.integrations.config_models import AlertmanagerIntegrationConfig
+from app.integrations.probes import ProbeResult
 
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TIMEOUT = 30
 
-
-class AlertmanagerConfig(StrictConfigModel):
-    """Normalized Alertmanager connection settings."""
-
-    base_url: str
-    bearer_token: str = ""
-    username: str = ""
-    password: str = ""
-    integration_id: str = ""
-
-    @field_validator("base_url", mode="before")
-    @classmethod
-    def _normalize_base_url(cls, value: object) -> str:
-        return str(value or "").strip().rstrip("/")
-
-    @field_validator("bearer_token", "username", "password", mode="before")
-    @classmethod
-    def _normalize_str(cls, value: object) -> str:
-        return str(value or "").strip()
-
-    @model_validator(mode="after")
-    def _no_dual_auth(self) -> AlertmanagerConfig:
-        if self.bearer_token and self.username:
-            raise ValueError(
-                "Alertmanager config has both bearer_token and username set; "
-                "use one auth method only."
-            )
-        return self
-
-    @property
-    def headers(self) -> dict[str, str]:
-        headers: dict[str, str] = {"Content-Type": "application/json"}
-        if self.bearer_token:
-            headers["Authorization"] = f"Bearer {self.bearer_token}"
-        return headers
-
-    @property
-    def basic_auth(self) -> tuple[str, str] | None:
-        if self.username and self.password:
-            return (self.username, self.password)
-        return None
+AlertmanagerConfig = AlertmanagerIntegrationConfig
 
 
 class AlertmanagerClient:
@@ -86,6 +46,28 @@ class AlertmanagerClient:
     @property
     def is_configured(self) -> bool:
         return bool(self.config.base_url)
+
+    def probe_access(self) -> ProbeResult:
+        """Validate Alertmanager connectivity via the status endpoint."""
+        if not self.is_configured:
+            return ProbeResult.missing("Missing base_url.")
+
+        result = self.get_status()
+        if not result.get("success"):
+            return ProbeResult.failed(
+                f"Status check failed: {result.get('error', 'unknown error')}"
+            )
+
+        status_data = result.get("status", {})
+        cluster_status = (
+            status_data.get("cluster", {}).get("status", "unknown")
+            if isinstance(status_data, dict)
+            else "ok"
+        )
+        return ProbeResult.passed(
+            f"Connected to Alertmanager at {self.config.base_url}; cluster status: {cluster_status}.",
+            cluster_status=cluster_status,
+        )
 
     def close(self) -> None:
         if self._client is not None:

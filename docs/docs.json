@@ -39,22 +39,32 @@
             "group": "First steps",
             "pages": [
               "quickstart",
+              "deployment",
               "faq"
             ]
           }
         ]
       },
       {
-        "tab": "Install",
+        "tab": "Installation",
         "icon": "download",
         "groups": [
           {
-            "group": "Investigation workflow",
+            "group": "Overview",
             "pages": [
-              "investigation-overview",
-              "remote-runtime-investigation",
-              "masking",
-              "multi-instance-integrations"
+              "install"
+            ]
+          },
+          {
+            "group": "Local",
+            "pages": [
+              "install-local"
+            ]
+          },
+          {
+            "group": "Enterprise",
+            "pages": [
+              "install-enterprise"
             ]
           }
         ]
@@ -66,7 +76,10 @@
           {
             "group": "Overview",
             "pages": [
-              "integrations-overview"
+              "integrations-overview",
+              "remote-runtime-investigation",
+              "masking",
+              "multi-instance-integrations"
             ]
           },
           {
@@ -81,7 +94,8 @@
               "grafana",
               "honeycomb",
               "opsgenie",
-              "sentry"
+              "sentry",
+              "splunk"
             ]
           },
           {

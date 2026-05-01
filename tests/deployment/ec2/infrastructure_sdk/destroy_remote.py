@@ -7,7 +7,7 @@ import time
 
 from botocore.exceptions import ClientError
 
-from app.deployment.ec2_config import delete_remote_outputs, load_remote_outputs
+from app.deployment.operations.ec2_config import delete_remote_outputs, load_remote_outputs
 from tests.deployment.ec2.infrastructure_sdk.instance import (
     delete_instance_profile,
     terminate_instance,

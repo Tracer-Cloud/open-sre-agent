@@ -35,9 +35,9 @@ concurrency:
 # Kubernetes local tests here run on push to main or PR titles containing k8s/kubernetes.
 # ---------------------------------------------------------------
 jobs:
-# ---------------------------------------------------------------
-# QUALITY CHECKS (lint + format)
-# ---------------------------------------------------------------
+  # ---------------------------------------------------------------
+  # QUALITY CHECKS (lint + format)
+  # ---------------------------------------------------------------
   quality:
     name: quality (${{ matrix.os }})
     strategy:
@@ -72,9 +72,9 @@ jobs:
       - name: Format check
         run: python -m ruff format --check app/ tests/
 
-# ---------------------------------------------------------------
-# TYPECHECK
-# ---------------------------------------------------------------
+  # ---------------------------------------------------------------
+  # TYPECHECK
+  # ---------------------------------------------------------------
   typecheck:
     name: typecheck (${{ matrix.os }})
     strategy:
@@ -106,9 +106,9 @@ jobs:
       - name: Typecheck
         run: python -m mypy app/
 
-# ---------------------------------------------------------------
-# TESTS (MAIN CI GATE)
-# ---------------------------------------------------------------
+  # ---------------------------------------------------------------
+  # TESTS (MAIN CI GATE)
+  # ---------------------------------------------------------------
   test:
     name: test (${{ matrix.os }})
     needs: [quality, typecheck]
@@ -186,9 +186,9 @@ jobs:
             .coverage
           retention-days: 7
 
-# ---------------------------------------------------------------
-# KUBERNETES TESTS
-# ---------------------------------------------------------------
+  # ---------------------------------------------------------------
+  # KUBERNETES TESTS
+  # ---------------------------------------------------------------
   test-kubernetes:
     runs-on: ubuntu-latest
     needs: [quality, typecheck]
@@ -229,9 +229,9 @@ jobs:
           AWS_DEFAULT_REGION: us-east-1
         run: python -m tests.e2e.kubernetes.test_local
 
-# ---------------------------------------------------------------
-# THOROUGH E2E (MAIN ONLY)
-# ---------------------------------------------------------------
+  # ---------------------------------------------------------------
+  # THOROUGH E2E (MAIN ONLY)
+  # ---------------------------------------------------------------
   test-thorough:
     runs-on: ubuntu-latest
     needs: [test]
@@ -244,8 +244,6 @@ jobs:
         include:
           - name: cloudwatch-demo
             command: python3 -m tests.e2e.cloudwatch_demo.test_aws
-          - name: s3-failed-python
-            command: python3 -m tests.e2e.s3_failed_python_on_linux.test_aws
           - name: upstream-lambda
             command: python3 -m tests.e2e.upstream_lambda.test_agent_e2e
           - name: prefect-ecs-fargate

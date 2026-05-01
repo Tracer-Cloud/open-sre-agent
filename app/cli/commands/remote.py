@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING, Any
 import click
 
 from app.cli.commands.remote_health import _save_remote_base_url, run_remote_health_check
-from app.cli.context import is_json_output, is_yes
-from app.cli.errors import OpenSREError
+from app.cli.support.context import is_json_output, is_yes
+from app.cli.support.errors import OpenSREError
 
 if TYPE_CHECKING:
     from app.remote.client import PreflightResult, RemoteAgentClient

@@ -132,6 +132,17 @@ OLLAMA_MODELS = (
     ModelOption(value="qwen2.5:7b", label="Qwen 2.5 (7B)"),
 )
 
+# Empty value means "no --model" so Claude Code uses its configured default.
+CLAUDE_CODE_MODELS = (
+    ModelOption(
+        value="",
+        label="CLI default (no --model; use Claude Code configured model)",
+    ),
+    ModelOption(value="claude-opus-4-7", label="Claude Opus 4.7 — most capable"),
+    ModelOption(value="claude-sonnet-4-6", label="Claude Sonnet 4.6 — balanced"),
+    ModelOption(value="claude-haiku-4-5-20251001", label="Claude Haiku 4.5 — fast, cost-efficient"),
+)
+
 # Empty value means "no -m" so the Codex CLI uses its configured default/current model.
 CODEX_MODELS = (
     ModelOption(
@@ -173,6 +184,12 @@ def _cursor_adapter_factory() -> LLMCLIAdapter:
     from app.integrations.llm_cli.cursor import CursorAdapter
 
     return CursorAdapter()
+
+
+def _claude_code_adapter_factory() -> LLMCLIAdapter:
+    from app.integrations.llm_cli.claude_code import ClaudeCodeAdapter
+
+    return ClaudeCodeAdapter()
 
 
 SUPPORTED_PROVIDERS = (
@@ -249,6 +266,18 @@ SUPPORTED_PROVIDERS = (
         credential_kind="cli",
         credential_secret=False,
         adapter_factory=_cursor_adapter_factory,
+    ),
+    ProviderOption(
+        value="claude-code",
+        label="Anthropic Claude Code CLI",
+        group="Local CLI providers",
+        api_key_env="",
+        model_env="CLAUDE_CODE_MODEL",
+        default_model="",
+        models=CLAUDE_CODE_MODELS,
+        credential_kind="cli",
+        credential_secret=False,
+        adapter_factory=_claude_code_adapter_factory,
     ),
     ProviderOption(
         value="ollama",

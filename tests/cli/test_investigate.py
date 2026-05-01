@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.cli.investigate import (
+from app.cli.investigation import (
     resolve_investigation_context,
     run_investigation_cli,
     stream_investigation_cli,
@@ -49,8 +49,10 @@ def test_run_investigation_cli_shapes_agent_state(monkeypatch) -> None:
             "root_cause": "bad deploy",
         }
 
-    monkeypatch.setattr("app.cli.investigate.LLMSettings.from_env", object)
-    monkeypatch.setattr("app.cli.investigate._call_run_investigation", fake_run_investigation)
+    monkeypatch.setattr("app.cli.investigation.investigate.LLMSettings.from_env", object)
+    monkeypatch.setattr(
+        "app.cli.investigation.investigate._call_run_investigation", fake_run_investigation
+    )
 
     result = run_investigation_cli(
         raw_alert={"alert_name": "PayloadAlert"},
@@ -91,8 +93,8 @@ def test_run_investigation_cli_evaluate_reports_skip_when_no_rubric(monkeypatch)
             "opensre_llm_eval": {},
         }
 
-    monkeypatch.setattr("app.cli.investigate.LLMSettings.from_env", object)
-    monkeypatch.setattr("app.cli.investigate._call_run_investigation", fake_run)
+    monkeypatch.setattr("app.cli.investigation.investigate.LLMSettings.from_env", object)
+    monkeypatch.setattr("app.cli.investigation.investigate._call_run_investigation", fake_run)
 
     result = run_investigation_cli(
         raw_alert={"alert_name": "A"},
@@ -103,7 +105,7 @@ def test_run_investigation_cli_evaluate_reports_skip_when_no_rubric(monkeypatch)
 
 
 def test_parse_args_evaluate_flag() -> None:
-    from app.cli.args import parse_args
+    from app.cli.support.args import parse_args
 
     assert parse_args(["--input", "a.json"]).evaluate is False
     assert parse_args(["--input", "a.json", "--evaluate"]).evaluate is True
@@ -113,7 +115,7 @@ def test_run_investigation_cli_fails_fast_for_invalid_llm_config(monkeypatch) ->
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setattr(
-        "app.cli.investigate._call_run_investigation",
+        "app.cli.investigation.investigate._call_run_investigation",
         lambda *_args, **_kwargs: pytest.fail("investigation should not start"),
     )
 
@@ -128,7 +130,7 @@ def test_stream_investigation_cli_raises_queued_exception_immediately(
         yield StreamEvent("metadata", data={"run_id": "run-123"})
         raise RuntimeError("stream failed")
 
-    monkeypatch.setattr("app.cli.investigate.LLMSettings.from_env", object)
+    monkeypatch.setattr("app.cli.investigation.investigate.LLMSettings.from_env", object)
     monkeypatch.setattr(
         "app.pipeline.runners.astream_investigation",
         fake_astream_investigation,

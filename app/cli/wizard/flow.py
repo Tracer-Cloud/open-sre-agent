@@ -167,6 +167,12 @@ def validate_openclaw_integration(**kwargs):
     return _validate(**kwargs)
 
 
+def validate_splunk_integration(**kwargs):
+    from app.cli.wizard.integration_health import validate_splunk_integration as _validate
+
+    return _validate(**kwargs)
+
+
 def get_sentry_auth_recommendations():
     from app.integrations.sentry import get_sentry_auth_recommendations as _get
 
@@ -1372,6 +1378,68 @@ def _configure_discord() -> tuple[str, str]:
         _console.print("[dim]Try again or press Ctrl+C to cancel.[/]")
 
 
+def _configure_splunk() -> tuple[str, str]:
+    _, credentials = _integration_defaults("splunk")
+    while True:
+        base_url = _prompt_value(
+            "Splunk REST API base URL (e.g. https://splunk.corp.com:8089)",
+            default=_string_value(credentials.get("base_url")),
+        )
+        token = _prompt_value(
+            "Splunk API bearer token",
+            default=_string_value(credentials.get("token")),
+            secret=True,
+        )
+        index = _prompt_value(
+            "Default Splunk index to search",
+            default=_string_value(credentials.get("index"), "main"),
+        )
+        verify_ssl = _confirm(
+            "Verify SSL certificate?",
+            default=bool(credentials.get("verify_ssl", True)),
+        )
+        ca_bundle = ""
+        if verify_ssl:
+            ca_bundle = _prompt_value(
+                "Path to CA bundle for SSL verification (leave empty to use system defaults)",
+                default=_string_value(credentials.get("ca_bundle")),
+                allow_empty=True,
+            )
+        with _console.status("Validating Splunk integration...", spinner="dots"):
+            result = validate_splunk_integration(
+                base_url=base_url,
+                token=token,
+                index=index,
+                verify_ssl=verify_ssl,
+                ca_bundle=ca_bundle,
+            )
+        _render_integration_result("Splunk", result)
+        if result.ok:
+            upsert_integration(
+                "splunk",
+                {
+                    "credentials": {
+                        "base_url": base_url,
+                        "token": token,
+                        "index": index,
+                        "verify_ssl": verify_ssl,
+                        "ca_bundle": ca_bundle,
+                    }
+                },
+            )
+            env_values: dict[str, str] = {
+                "SPLUNK_URL": base_url,
+                "SPLUNK_INDEX": index,
+                "SPLUNK_VERIFY_SSL": "true" if verify_ssl else "false",
+                # Do NOT write SPLUNK_TOKEN to .env — it goes to the credential store only
+            }
+            if ca_bundle:
+                env_values["SPLUNK_CA_BUNDLE"] = ca_bundle
+            env_path = sync_env_values(env_values)
+            return "Splunk", str(env_path)
+        _console.print("[dim]Try again or press Ctrl+C to cancel.[/]")
+
+
 def _configure_selected_integrations() -> tuple[list[str], str | None]:
     configured: list[str] = []
     last_env_path: str | None = None
@@ -1449,6 +1517,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
             label="OpenClaw",
             hint="Connect OpenSRE to OpenClaw so your AI coding assistant can trigger investigations",
         ),
+        Choice(value="splunk", label="Splunk", hint="Query logs from Splunk"),
         Choice(
             value="skip",
             label="Skip for now",
@@ -1483,6 +1552,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "opsgenie": _configure_opsgenie,
         "notion": _configure_notion,
         "openclaw": _configure_openclaw,
+        "splunk": _configure_splunk,
     }
     _SERVICE_LABELS = {
         "grafana_local": "grafana local",

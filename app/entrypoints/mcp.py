@@ -5,7 +5,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, Field, ValidationError
 
-from app.cli.investigate import run_investigation_cli
+from app.cli.investigation import run_investigation_cli
 
 
 class RunRCAInput(BaseModel):

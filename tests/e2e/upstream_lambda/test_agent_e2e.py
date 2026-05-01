@@ -13,7 +13,7 @@ import boto3
 import requests
 from langsmith import traceable
 
-from app.cli.investigate import run_investigation_cli
+from app.cli.investigation import run_investigation_cli
 from tests.utils.alert_factory import create_alert
 from tests.utils.conftest import UPSTREAM_DOWNSTREAM_CONFIG
 

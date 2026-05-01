@@ -69,11 +69,11 @@ def test_create_investigation_page_http_error(client: NotionClient) -> None:
     assert "401" in result["error"]
 
 
-def test_notion_compatibility_import() -> None:
-    """Verify that the old import path still works through __init__."""
-    from app.integrations.clients.notion import NotionClient as LegacyClient
-    from app.integrations.clients.notion import NotionConfig as LegacyConfig
+def test_notion_service_package_exports() -> None:
+    """Verify the service package re-exports Notion client types."""
+    from app.services.notion import NotionClient as ExportedClient
+    from app.services.notion import NotionConfig as ExportedConfig
     from app.services.notion.client import NotionClient, NotionConfig
 
-    assert LegacyClient is NotionClient
-    assert LegacyConfig is NotionConfig
+    assert ExportedClient is NotionClient
+    assert ExportedConfig is NotionConfig

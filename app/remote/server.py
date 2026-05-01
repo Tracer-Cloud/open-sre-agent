@@ -379,7 +379,7 @@ async def investigate_stream(req: InvestigateRequest) -> Response:
     as a ``.md`` file once the stream completes, matching the behaviour of
     the blocking ``/investigate`` endpoint.
     """
-    from app.cli.investigate import resolve_investigation_context
+    from app.cli.investigation import resolve_investigation_context
     from app.config import LLMSettings
     from app.pipeline.runners import astream_investigation
 
@@ -724,7 +724,7 @@ def _execute_investigation(
     severity: str | None,
 ) -> tuple[dict[str, Any], str, str, str]:
     """Run the RCA pipeline and return both the result and resolved metadata."""
-    from app.cli.investigate import resolve_investigation_context, run_investigation_cli
+    from app.cli.investigation import resolve_investigation_context, run_investigation_cli
 
     resolved_alert_name, resolved_pipeline_name, resolved_severity = resolve_investigation_context(
         raw_alert=raw_alert,

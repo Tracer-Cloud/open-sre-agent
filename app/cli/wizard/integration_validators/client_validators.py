@@ -20,6 +20,7 @@ from app.services.datadog import DatadogClient, DatadogConfig
 from app.services.grafana import get_grafana_client_from_credentials
 from app.services.honeycomb import HoneycombClient
 from app.services.opsgenie import OpsGenieClient, OpsGenieConfig
+from app.services.splunk import SplunkClient, SplunkConfig
 from app.services.vercel import VercelClient, VercelConfig
 
 from .shared import IntegrationHealthResult
@@ -420,3 +421,30 @@ def validate_opsgenie_integration(
             ok=False,
             detail=f"OpsGenie validation failed: {err}",
         )
+
+
+def validate_splunk_integration(
+    *,
+    base_url: str,
+    token: str,
+    index: str = "main",
+    verify_ssl: bool = True,
+    ca_bundle: str = "",
+) -> IntegrationHealthResult:
+    """Validate Splunk credentials by calling the server info endpoint."""
+    client = SplunkClient(
+        SplunkConfig(
+            base_url=base_url,
+            token=token,
+            index=index,
+            verify_ssl=verify_ssl,
+            ca_bundle=ca_bundle,
+        )
+    )
+    result = client.validate_access()
+    if result.get("success"):
+        return IntegrationHealthResult(ok=True, detail=result.get("detail", "Splunk connected."))
+    return IntegrationHealthResult(
+        ok=False,
+        detail=f"Splunk validation failed: {result.get('error', 'unknown error')}",
+    )

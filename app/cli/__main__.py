@@ -19,8 +19,8 @@ from dotenv import load_dotenv
 from app.analytics.cli import capture_cli_invoked
 from app.analytics.provider import capture_first_run_if_needed, shutdown_analytics
 from app.cli.commands import register_commands
-from app.cli.layout import RichGroup, render_landing
-from app.cli.prompt_support import (
+from app.cli.support.layout import RichGroup, render_landing
+from app.cli.support.prompt_support import (
     handle_ctrl_c_press,
     install_questionary_ctrl_c_double_exit,
     install_questionary_escape_cancel,
@@ -43,14 +43,14 @@ from app.version import get_version
 @click.option(
     "--interactive/--no-interactive",
     default=True,
-    help="Disable the interactive REPL and print the landing page instead.",
+    help="Disable the interactive shell and print the landing page instead.",
 )
 @click.option(
     "--layout",
     type=click.Choice(["classic", "pinned"]),
     default=None,
-    help="REPL layout: 'classic' (scrolling) or 'pinned' (fixed input bar). "
-    "Overrides OPENSRE_LAYOUT env var and ~/.opensre/config.yml.",
+    help="Interactive-shell layout: 'classic' (scrolling) or 'pinned' (fixed "
+    "input bar). Overrides OPENSRE_LAYOUT env var and ~/.opensre/config.yml.",
 )
 @click.pass_context
 def cli(
@@ -75,8 +75,8 @@ def cli(
     if ctx.invoked_subcommand is None:
         capture_cli_invoked()
         if sys.stdin.isatty() and sys.stdout.isatty():
-            from app.cli.repl import run_repl
-            from app.cli.repl.config import ReplConfig
+            from app.cli.interactive_shell import run_repl
+            from app.cli.interactive_shell.config import ReplConfig
 
             config = ReplConfig.load(
                 cli_enabled=interactive,

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import pytest
 
 from app.integrations.catalog import classify_integrations, resolve_effective_integrations
@@ -158,21 +156,14 @@ def test_argocd_multi_instance_env_is_propagated(monkeypatch: pytest.MonkeyPatch
 
 
 def test_verify_argocd_passes_with_reachable_api(monkeypatch: pytest.MonkeyPatch) -> None:
-    class _FakeArgoCDClient:
-        def __init__(self, config: Any) -> None:
-            assert config.base_url == "https://argocd.example.com"
-            assert config.bearer_token == "tok_test"
+    from app.integrations.probes import ProbeResult
+    from app.services.argocd.client import ArgoCDClient
 
-        def __enter__(self) -> _FakeArgoCDClient:
-            return self
-
-        def __exit__(self, *_: object) -> None:
-            return None
-
-        def list_applications(self, **_: Any) -> dict[str, Any]:
-            return {"success": True, "applications": [{"name": "payments"}], "total": 1}
-
-    monkeypatch.setattr("app.integrations.verify.ArgoCDClient", _FakeArgoCDClient)
+    monkeypatch.setattr(
+        ArgoCDClient,
+        "probe_access",
+        lambda _self: ProbeResult.passed("Connected to Argo CD and listed 1 application.", total=1),
+    )
 
     result = _verify_argocd(
         "local env",
@@ -191,20 +182,16 @@ def test_verify_argocd_reports_missing_auth() -> None:
 
 
 def test_verify_integrations_dispatches_to_argocd(monkeypatch: pytest.MonkeyPatch) -> None:
-    class _FakeArgoCDClient:
-        def __init__(self, config: Any) -> None:
-            pass
+    from app.integrations.probes import ProbeResult
+    from app.services.argocd.client import ArgoCDClient
 
-        def __enter__(self) -> _FakeArgoCDClient:
-            return self
-
-        def __exit__(self, *_: object) -> None:
-            return None
-
-        def list_applications(self, **_: Any) -> dict[str, Any]:
-            return {"success": True, "applications": [], "total": 0}
-
-    monkeypatch.setattr("app.integrations.verify.ArgoCDClient", _FakeArgoCDClient)
+    monkeypatch.setattr(
+        ArgoCDClient,
+        "probe_access",
+        lambda _self: ProbeResult.passed(
+            "Connected to Argo CD and listed 0 applications.", total=0
+        ),
+    )
     monkeypatch.setattr(
         "app.integrations.catalog.load_integrations",
         lambda: [

@@ -1,0 +1,89 @@
+---
+title: "Local and on-prem setup"
+description: "Run OpenSRE locally with the CLI binary and onboard integrations from your environment"
+---
+
+This guide is for teams running OpenSRE with the local `opensre` binary on developer machines, VMs, or on-prem
+hosts.
+
+## What mode should I use?
+
+Use the mode that matches where your workloads and alerts live:
+
+- **Local laptop mode** for fast setup, testing, and debugging
+- **On-prem VM/server mode** for shared internal environments
+- **Container mode** for reproducible deployments in Docker
+
+Environment-specific install steps live under the `Installation` tab:
+
+- [macOS](/environments/macos)
+- [Linux (local)](/environments/linux-local)
+- [Windows (local)](/environments/windows-local)
+- [Docker](/environments/docker)
+
+## Local setup workflow
+
+### 1) Install the OpenSRE CLI
+
+```bash
+brew install Tracer-Cloud/opensre/opensre
+# or
+curl -fsSL https://install.opensre.com | bash
+```
+
+### 2) Enter the OpenSRE shell
+
+```bash
+opensre
+```
+
+### 3) Run onboarding
+
+From inside the OpenSRE shell:
+
+```bash
+onboard
+```
+
+`onboard` helps you configure:
+
+- LLM provider (for investigation reasoning)
+- integration credentials
+- optional communication/reporting integrations
+
+### 4) Verify integration health
+
+From inside the OpenSRE shell:
+
+```bash
+integrations verify
+```
+
+To verify one integration:
+
+```bash
+integrations verify <integration-name>
+```
+
+### 5) Run your first investigation
+
+From inside the OpenSRE shell:
+
+```bash
+investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
+```
+
+## Integration catalog
+
+The full integration catalog is maintained under the `Integrations` tab, not the `Installation` tab.
+
+Start here:
+
+- [Integrations overview](/integrations-overview)
+
+Then open each provider page for credentials, minimum permissions, and setup examples.
+
+## Related guides
+
+- [Quickstart](/quickstart)
+- [Investigations overview](/investigation-overview)

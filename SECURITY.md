@@ -1,6 +1,6 @@
 # Security Policy
 
-Tracer is designed for security-sensitive compute environments. We prioritize transparency, least privilege, and minimizing data exposure.
+OpenSRE is designed for security-sensitive compute environments. We prioritize transparency, least privilege, and minimizing data exposure.
 
 ## Trust Center
 

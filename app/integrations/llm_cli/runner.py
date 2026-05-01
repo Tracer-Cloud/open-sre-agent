@@ -24,6 +24,10 @@ _PROBE_CACHE_TTL_SEC = 45.0
 _SAFE_SUBPROCESS_ENV_KEYS = frozenset(
     {
         "HOME",
+        # macOS Keychain item lookup (where `claude login` stores OAuth on darwin)
+        # requires USER. LOGNAME is the POSIX/Linux equivalent kept for parity.
+        "USER",
+        "LOGNAME",
         "USERPROFILE",
         "APPDATA",
         "LOCALAPPDATA",
@@ -56,7 +60,7 @@ _SAFE_SUBPROCESS_ENV_KEYS = frozenset(
         "XDG_STATE_HOME",
     }
 )
-_SAFE_SUBPROCESS_ENV_PREFIXES = ("LC_", "CODEX_", "CURSOR_")
+_SAFE_SUBPROCESS_ENV_PREFIXES = ("LC_", "CODEX_", "CURSOR_", "CLAUDE_")
 
 
 def _strip_ansi(text: str) -> str:

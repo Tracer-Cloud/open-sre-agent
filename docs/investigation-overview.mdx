@@ -2,63 +2,51 @@
 title: "Investigations overview"
 ---
 
-1. **Investigations overview**. This page shows all past investigations, sorted by date. Click into an investigation for more detail. 
+Use this workflow when running OpenSRE via the local `opensre` binary.
 
-   <Frame>
-     ![Investigations](/images/investigations.png)
-   </Frame>
-2. **Investigation summary**. Click into an investigation for a breakdown of what happened. 
+## 1) Start an investigation
 
-   <Frame>
-     ![Investigation](/images/investigation.png)
-   </Frame>
-3. **Reports**. On the right hand side of an investigation page, you’ll find a minimum of 3 investigation reports. 
-   1. [<u>problem.md</u>](http://problem.md) - This report includes a description of the problem as understood and preliminary investigation.
-   2. theory/hypothesis\_[x.md](http://x.md) - This report shows the root cause hypothesis that was tested following dependency investigation. Depending on how many root cause hypotheses were tested, you may see multiple reports. 
-   3. [<u>report.md</u>](http://report.md) - This report shows you a summary of the investigation.
+Pass an alert payload to `opensre investigate`:
 
-   <Frame>
-     ![Reports](/images/reports.png)
-   </Frame>
-4. **Summary**. On the left hand side of an investigation page, you’ll see the full summary of the investigation including:
-   1. Alert - The original alert
+```bash
+opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
+```
 
-   <Frame>
-     ![Screenshot2026 02 24at14 27 02](/images/Screenshot2026-02-24at14.27.02.png)
-   </Frame>
-5. Description - A description of the issue in plain English.
+You can also use `--interactive` to pick an input file from your terminal UI.
 
-   <Frame>
-     ![Screenshot2026 02 24at14 27 47](/images/Screenshot2026-02-24at14.27.47.png)
-   </Frame>
-6. Process - The process OpenSRE followed to investigate the issue including:
-   1. Runbooks and artifacts consulted by the AI agent
+## 2) Review investigation artifacts
 
-      <Frame>
-        ![Screenshot2026 02 24at14 28 25](/images/Screenshot2026-02-24at14.28.25.png)
-      </Frame>
-   2. Plan - the steps the AI agent(s) took to investigate the issue
+A local run produces structured RCA artifacts such as:
 
-      <Frame>
-        ![Screenshot2026 02 24at14 29 01](/images/Screenshot2026-02-24at14.29.01.png)
-      </Frame>
-   3. Investigation summary and recommended next steps
+- `problem.md` for incident framing and initial hypothesis
+- `theory/hypothesis_*.md` for each hypothesis tested during the run
+- `report.md` for final root-cause summary and next steps
 
-      <Frame>
-        ![Screenshot2026 02 24at14 29 35](/images/Screenshot2026-02-24at14.29.35.png)
-      </Frame>
+If you want a single machine-readable output file, pass:
+
+```bash
+opensre investigate -i <alert-file> --output ./rca.json
+```
+
+## 3) Understand what OpenSRE analyzed
+
+Each run captures:
+
+- the original alert payload
+- extracted context and normalized evidence
+- tool outputs collected from connected integrations
+- final diagnosis and recommended remediation steps
 
 ## Chat
 
-You also have the option to chat with the report if you want to dig deeper. 
-
-<Frame>
-  ![Chat](/images/chat.png)
-</Frame>
+For local binary usage, the primary workflow is file-based (`problem.md`, `report.md`, and optional JSON output).
+You can open these artifacts in your editor and iterate from there (for example, by asking your editor's AI chat
+to drill into specific hypotheses or evidence sections).
 
 ## Slack reports
 
-If you’ve set up the Slack integration, OpenSRE will send a concise investigation summary into Slack. 
+If you've configured the Slack integration, OpenSRE can publish a concise incident summary into Slack after the
+local investigation completes.
 
 <Frame>
   ![Slack Alert](/images/slack_alert.png)

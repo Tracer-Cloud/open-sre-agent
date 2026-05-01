@@ -48,7 +48,7 @@
 - [Why OpenSRE?](#why-opensre)
 - [Install](#install)
 - [Quick Start](#quick-start)
-- [Railway Deployment](#railway-deployment)
+- [Official Deployment (LangGraph)](#official-deployment-langgraph-platform)
 - [Development](#development)
 - [How OpenSRE Works](#how-opensre-works)
 - [Benchmark](#benchmark)
@@ -144,12 +144,37 @@ Slash commands: `/help`, `/status`, `/clear`, `/reset`, `/trust`, `/exit`. Ctrl+
 
 ---
 
-## Railway Deployment
+## Official Deployment: LangGraph Platform
+
+OpenSRE's official deployment path is LangGraph Platform.
+
+1. Create a deployment on LangGraph Platform and connect this repository.
+2. Keep `langgraph.json` at the repo root so LangGraph can load the graph entrypoint.
+3. Add your model provider in environment variables (for example `LLM_PROVIDER=anthropic`).
+4. Add the matching API key for your provider (for example `ANTHROPIC_API_KEY` or
+   `OPENAI_API_KEY`).
+5. Add any additional runtime env vars your deployment needs (for example integration
+   credentials and optional storage settings).
+
+Minimum LLM env setup:
+
+```bash
+LLM_PROVIDER=anthropic
+ANTHROPIC_API_KEY=...
+```
+
+For other providers, set the same `LLM_PROVIDER` plus the matching key from
+`.env.example` (for example `OPENAI_API_KEY`, `GEMINI_API_KEY`, or
+`OPENROUTER_API_KEY`).
+
+## Railway Deployment (Self-Hosted Alternative)
+
+If you prefer a self-hosted path, you can still deploy to Railway.
 
 Before running `opensre deploy railway`, make sure the target Railway project has
 both Postgres and Redis services, and that your OpenSRE service has `DATABASE_URI`
-and `REDIS_URI` set to those connection strings. The containerized LangGraph
-runtime will not boot without those backing services wired in.
+and `REDIS_URI` set to those connection strings. The containerized LangGraph runtime
+will not boot without those backing services wired in.
 
 ```bash
 # create/link Railway Postgres and Redis first, then set DATABASE_URI and REDIS_URI
@@ -1072,6 +1097,64 @@ Thanks goes to these amazing people:
             <img src="https://avatars.githubusercontent.com/u/180868061?v=4" width="100" alt="Yajush-afk"/>
             <br />
             <sub><b>Yajush-afk</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/Aaryan-549">
+            <img src="https://avatars.githubusercontent.com/u/165829168?v=4" width="100" alt="Aaryan-549"/>
+            <br />
+            <sub><b>Aaryan-549</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/CoderHariswar">
+            <img src="https://avatars.githubusercontent.com/u/113418253?v=4" width="100" alt="CoderHariswar"/>
+            <br />
+            <sub><b>CoderHariswar</b></sub>
+        </a>
+    </td>
+		</tr>
+		<tr>
+            <td align="center">
+        <a href="https://github.com/zeesshhh0">
+            <img src="https://avatars.githubusercontent.com/u/87911619?v=4" width="100" alt="zeesshhh0"/>
+            <br />
+            <sub><b>zeesshhh0</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/PrakharJain345">
+            <img src="https://avatars.githubusercontent.com/u/171273173?v=4" width="100" alt="PrakharJain345"/>
+            <br />
+            <sub><b>PrakharJain345</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/Bhavarth7">
+            <img src="https://avatars.githubusercontent.com/u/76651028?v=4" width="100" alt="Bhavarth7"/>
+            <br />
+            <sub><b>Bhavarth7</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/emefienem">
+            <img src="https://avatars.githubusercontent.com/u/122095740?v=4" width="100" alt="emefienem"/>
+            <br />
+            <sub><b>emefienem</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/TejasS1233">
+            <img src="https://avatars.githubusercontent.com/u/145673356?v=4" width="100" alt="TejasS1233"/>
+            <br />
+            <sub><b>TejasS1233</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/DsThakurRawat">
+            <img src="https://avatars.githubusercontent.com/u/186957976?v=4" width="100" alt="DsThakurRawat"/>
+            <br />
+            <sub><b>DsThakurRawat</b></sub>
         </a>
     </td>
 		</tr>

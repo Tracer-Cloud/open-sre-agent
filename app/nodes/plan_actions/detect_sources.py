@@ -14,6 +14,7 @@ from app.integrations.azure_sql import DEFAULT_AZURE_SQL_PORT
 from app.integrations.opensre.csv_grafana_backend import OpenSRECsvGrafanaBackend
 from app.integrations.opensre.inject import inject_opensre_into_resolved_integrations
 from app.services.coralogix import build_coralogix_logs_query
+from app.services.splunk import build_splunk_spl_query
 from app.tools.GrafanaLogsTool import _map_pipeline_to_service_name
 from app.utils.coercion import safe_int
 
@@ -1391,5 +1392,50 @@ def detect_sources(
             "database": azure_sql_database,
             "connection_verified": True,
         }
+
+    splunk_int = (resolved_integrations or {}).get("splunk")
+    if splunk_int:
+        splunk_base_url = str(splunk_int.get("base_url", "")).strip()
+        splunk_token = str(splunk_int.get("token", "")).strip()
+        splunk_index = str(splunk_int.get("index", "main")).strip() or "main"
+        splunk_verify_ssl = splunk_int.get("verify_ssl", True)
+        splunk_ca_bundle = str(splunk_int.get("ca_bundle", "")).strip()
+
+        if splunk_base_url and splunk_token:
+            # 1. Check if operator supplied a verbatim SPL in alert annotations
+            raw_query = str(
+                annotations.get("splunk_query", "")
+                or annotations.get("query", "")
+                or annotations.get("log_query", "")
+                or raw_alert.get("splunk_query", "")
+                or raw_alert.get("log_query", "")
+            ).strip()
+
+            # 2. If no raw SPL, build a keyword search from alert signals
+            error_message = str(
+                raw_alert.get("error_message", "")
+                or annotations.get("summary", "")
+                or raw_alert.get("alert_name", "")
+            ).strip()
+
+            default_query = build_splunk_spl_query(
+                raw_query=raw_query,
+                index=splunk_index,
+                error_message=error_message,
+                alert_name=str(raw_alert.get("alert_name", "")).strip(),
+                trace_id=trace_id,
+                limit=50,
+            )
+
+            sources["splunk"] = {
+                "base_url": splunk_base_url,
+                "token": splunk_token,
+                "index": splunk_index,
+                "verify_ssl": splunk_verify_ssl,
+                "ca_bundle": splunk_ca_bundle,
+                "default_query": default_query,
+                "time_range_minutes": alert_time_range_minutes,
+                "connection_verified": True,
+            }
 
     return sources

@@ -6,8 +6,6 @@ Usage:
     python -m app.integrations show <service>
     python -m app.integrations remove <service>
     python -m app.integrations verify [service] [--send-slack-test]
-
-Supported services: alertmanager, aws, azure_sql, coralogix, datadog, grafana, honeycomb, mariadb, discord, mongodb, mongodb_atlas, postgresql, slack, opensearch, rds, tracer, github, sentry, vercel
 """
 
 from __future__ import annotations
@@ -22,6 +20,7 @@ if TYPE_CHECKING:
     from app.integrations.github_mcp import GitHubMcpDisplayDetailLevel
 
 from app.integrations.gitlab import DEFAULT_GITLAB_BASE_URL
+from app.integrations.registry import SUPPORTED_SETUP_SERVICES
 from app.integrations.store import (
     STORE_PATH,
     get_integration,
@@ -728,8 +727,10 @@ def _setup_azure_sql() -> None:
 
 _HANDLERS["azure_sql"] = _setup_azure_sql
 
+_SETUP_SERVICES = tuple(service for service in SUPPORTED_SETUP_SERVICES if service in _HANDLERS)
 
-SUPPORTED = ", ".join(_HANDLERS)
+
+SUPPORTED = ", ".join(_SETUP_SERVICES)
 SUPPORTED_VERIFY = ", ".join(SUPPORTED_VERIFY_SERVICES)
 
 
@@ -738,13 +739,13 @@ def cmd_setup(service: str | None) -> str:
         try:
             service = questionary.select(
                 "Which service would you like to set up?",
-                choices=sorted(_HANDLERS),
+                choices=list(_SETUP_SERVICES),
                 instruction="(use arrow keys)",
             ).ask()
         except (EOFError, KeyboardInterrupt):
             print("\nAborted.")
             sys.exit(1)
-    if not service or service not in _HANDLERS:
+    if not service or service not in _SETUP_SERVICES:
         _die(f"Usage: setup <service>. Supported: {SUPPORTED}")
     print(f"\n  Setting up {_B}{service}{_R}\n")
     _HANDLERS[service]()
@@ -753,7 +754,7 @@ def cmd_setup(service: str | None) -> str:
 
 
 def cmd_list() -> None:
-    from app.cli.context import is_json_output
+    from app.cli.support.context import is_json_output
 
     items = list_integrations()
 
@@ -782,7 +783,7 @@ def cmd_show(service: str | None) -> None:
 
 
 def cmd_remove(service: str | None) -> None:
-    from app.cli.context import is_yes
+    from app.cli.support.context import is_yes
 
     if not service:
         _die("Usage: remove <service>")
@@ -802,7 +803,7 @@ def cmd_remove(service: str | None) -> None:
 
 
 def cmd_verify(service: str | None, *, send_slack_test: bool = False) -> int:
-    from app.cli.context import is_json_output
+    from app.cli.support.context import is_json_output
 
     if service and service not in SUPPORTED_VERIFY_SERVICES:
         _die(f"Usage: verify [service]. Supported: {SUPPORTED_VERIFY}")

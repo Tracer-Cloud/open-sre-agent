@@ -90,6 +90,19 @@ def test_is_configured_without_token() -> None:
     assert c.is_configured is False
 
 
+def test_probe_access_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        VercelClient,
+        "list_projects",
+        lambda _self: {"success": True, "projects": [{"id": "p1"}], "total": 1},
+    )
+
+    result = _client().probe_access()
+
+    assert result.status == "passed"
+    assert "1 project" in result.detail
+
+
 def test_list_projects_success(monkeypatch: pytest.MonkeyPatch) -> None:
     payload = {
         "projects": [

@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
 authors = [
-  { name = "Tracer Cloud", email = "support@tracer.cloud" },
+  { name = "OpenSRE", email = "support@opensre.com" },
 ]
 keywords = ["sre", "devops", "incident", "rca", "llm", "ai", "agent", "observability"]
 dependencies = [

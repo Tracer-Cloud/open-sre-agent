@@ -88,6 +88,19 @@ def test_validate_access_generic_exception(client: HoneycombClient) -> None:
     assert "Connection refused" in result["error"]
 
 
+def test_probe_access_success(client: HoneycombClient) -> None:
+    client.validate_access = MagicMock(
+        return_value={"success": True, "environment": {"slug": "prod"}}
+    )
+    client.run_query = MagicMock(return_value={"success": True, "results": [{}]})
+
+    result = client.probe_access()
+
+    assert result.status == "passed"
+    assert "prod" in result.detail
+    assert "test-dataset" in result.detail
+
+
 def test_create_query_success(client: HoneycombClient) -> None:
     query_spec = {"calculations": [{"op": "COUNT"}]}
     mock_response = MagicMock()

@@ -14,12 +14,12 @@ slug: "quickstart"
         ```
 
         ```bash
-        curl -fsSL https://raw.githubusercontent.com/Tracer-Cloud/opensre/main/install.sh | bash
+        curl -fsSL https://install.opensre.com | bash
         ```
       </Tab>
       <Tab title="Windows">
         ```powershell
-        irm https://raw.githubusercontent.com/Tracer-Cloud/opensre/main/install.ps1 | iex
+        irm https://install.opensre.com | iex
         ```
       </Tab>
     </Tabs>
@@ -52,3 +52,9 @@ slug: "quickstart"
     ```
   </Step>
 </Steps>
+
+## Troubleshooting
+
+- **Docker is not running**: Start Docker Desktop, OrbStack, or Colima before running setup.
+- **`make` is missing**: Install it via your package manager (`brew install make` on macOS, `choco install make` on Windows).
+- **No local LLM provider is configured**: Run `opensre onboard` to select and configure your LLM credentials.

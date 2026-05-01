@@ -13,7 +13,12 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
-from app.strict_config import StrictConfigModel
+from app.integrations._relational import (
+    RelationalConfigBase,
+    env_int,
+    env_str,
+    resolve_stored_or_env_config,
+)
 from app.utils.truncation import truncate
 
 DEFAULT_MYSQL_PORT = 3306
@@ -25,7 +30,7 @@ DEFAULT_MYSQL_MAX_RESULTS = 50
 _QUERY_TRUNCATE_LEN = 500
 
 
-class MySQLConfig(StrictConfigModel):
+class MySQLConfig(RelationalConfigBase):
     """Normalized MySQL connection settings."""
 
     host: str = ""
@@ -38,19 +43,9 @@ class MySQLConfig(StrictConfigModel):
     max_results: int = Field(default=DEFAULT_MYSQL_MAX_RESULTS, gt=0, le=200)
     integration_id: str = ""
 
-    @field_validator("host", mode="before")
-    @classmethod
-    def _normalize_host(cls, value: Any) -> str:
-        return str(value or "").strip()
-
-    @field_validator("database", mode="before")
-    @classmethod
-    def _normalize_database(cls, value: Any) -> str:
-        return str(value or "").strip()
-
     @field_validator("username", mode="before")
     @classmethod
-    def _normalize_username(cls, value: Any) -> str:
+    def _normalize_username(cls, value: Any) -> str:  # type: ignore[override]
         normalized = str(value or DEFAULT_MYSQL_USER).strip()
         return normalized or DEFAULT_MYSQL_USER
 
@@ -80,22 +75,18 @@ def build_mysql_config(raw: dict[str, Any] | None) -> MySQLConfig:
 
 def mysql_config_from_env() -> MySQLConfig | None:
     """Load a MySQL config from environment variables."""
-    host = os.getenv("MYSQL_HOST", "").strip()
-    database = os.getenv("MYSQL_DATABASE", "").strip()
+    host = env_str("MYSQL_HOST")
+    database = env_str("MYSQL_DATABASE")
     if not host or not database:
         return None
     return build_mysql_config(
         {
             "host": host,
-            "port": int(_mysql_port)
-            if (_mysql_port := os.getenv("MYSQL_PORT", "").strip()).isdigit()
-            else DEFAULT_MYSQL_PORT,
+            "port": env_int("MYSQL_PORT", DEFAULT_MYSQL_PORT),
             "database": database,
-            "username": os.getenv("MYSQL_USERNAME", DEFAULT_MYSQL_USER).strip()
-            or DEFAULT_MYSQL_USER,
+            "username": env_str("MYSQL_USERNAME", DEFAULT_MYSQL_USER),
             "password": os.getenv("MYSQL_PASSWORD", ""),
-            "ssl_mode": os.getenv("MYSQL_SSL_MODE", DEFAULT_MYSQL_SSL_MODE).strip()
-            or DEFAULT_MYSQL_SSL_MODE,
+            "ssl_mode": env_str("MYSQL_SSL_MODE", DEFAULT_MYSQL_SSL_MODE),
         }
     )
 
@@ -107,36 +98,24 @@ def resolve_mysql_config(host: str, database: str, port: int = DEFAULT_MYSQL_POR
     Credentials (username, password, ssl_mode) are resolved from the stored
     integration or environment variables so they never appear in tool signatures.
     """
-    from app.integrations.store import get_integration
-
-    stored = get_integration("mysql")
-    if stored:
-        creds = stored.get("credentials", {})
-        return build_mysql_config(
-            {
-                "host": host,
-                "port": creds.get("port", port),
-                "database": database,
-                "username": creds.get("username", DEFAULT_MYSQL_USER),
-                "password": creds.get("password", ""),
-                "ssl_mode": creds.get("ssl_mode", DEFAULT_MYSQL_SSL_MODE),
-            }
-        )
-
-    env_cfg = mysql_config_from_env()
-    if env_cfg:
-        return build_mysql_config(
-            {
-                "host": host,
-                "port": port,
-                "database": database,
-                "username": env_cfg.username,
-                "password": env_cfg.password,
-                "ssl_mode": env_cfg.ssl_mode,
-            }
-        )
-
-    return build_mysql_config({"host": host, "port": port, "database": database})
+    return resolve_stored_or_env_config(
+        "mysql",
+        host=host,
+        database=database,
+        port=port,
+        build_config=build_mysql_config,
+        env_loader=mysql_config_from_env,
+        extra_from_credentials=lambda credentials: {
+            "username": credentials.get("username", DEFAULT_MYSQL_USER),
+            "password": credentials.get("password", ""),
+            "ssl_mode": credentials.get("ssl_mode", DEFAULT_MYSQL_SSL_MODE),
+        },
+        extra_from_env=lambda config: {
+            "username": config.username,
+            "password": config.password,
+            "ssl_mode": config.ssl_mode,
+        },
+    )
 
 
 def _build_ssl_context(ssl_mode: str) -> Any:

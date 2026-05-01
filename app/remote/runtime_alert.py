@@ -9,9 +9,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.cli.errors import OpenSREError
+from app.cli.support.errors import OpenSREError
 from app.cli.wizard.store import load_named_remotes, load_remote_ops_config
-from app.deployment.health import poll_deployment_health
+from app.deployment.operations.health import poll_deployment_health
 from app.remote.ops import (
     RemoteOpsError,
     RemoteServiceScope,

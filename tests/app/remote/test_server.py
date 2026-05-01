@@ -1,15 +1,26 @@
 from __future__ import annotations
 
 import asyncio
+import collections
+import shutil
+import urllib.error
 from typing import Any
 
 import pytest
+
+# Named tuple matching shutil.disk_usage's return shape — constructed without
+# touching the real filesystem, so tests are fully isolated from host disk state.
+_DiskUsage = collections.namedtuple("usage", ["total", "used", "free"])
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.remote import server as remote_server
 from app.remote.server import (
+    DeepHealthCheck,
     InvestigateRequest,
+    _check_disk_health,
+    _imds_get,
+    _imds_token,
     _lifespan,
     investigate,
     investigate_stream,
@@ -157,7 +168,7 @@ async def test_investigate_stream_persists_state_on_disconnect(
 
     monkeypatch.setattr("app.config.LLMSettings.from_env", object)
     monkeypatch.setattr(
-        "app.cli.investigate.resolve_investigation_context",
+        "app.cli.investigation.resolve_investigation_context",
         lambda **_kwargs: ("test-alert", "etl_daily_orders", "critical"),
     )
     monkeypatch.setattr(
@@ -206,9 +217,145 @@ async def test_lifespan_starts_and_cancels_vercel_poller(
     monkeypatch.setenv("VERCEL_POLL_ENABLED", "true")
     monkeypatch.setenv("VERCEL_POLL_PROJECT_IDS", "proj_123")
     monkeypatch.setattr("app.remote.server.INVESTIGATIONS_DIR", tmp_path)
-    monkeypatch.setattr("app.remote.server.VercelPoller.run_forever", _run_forever)
+    monkeypatch.setattr("app.remote.vercel_poller.VercelPoller.run_forever", _run_forever)
 
     async with _lifespan(object()):
         await asyncio.wait_for(started.wait(), timeout=1)
 
     assert cancelled.is_set()
+
+
+# ---------------------------------------------------------------------------
+# _id_to_iso tests
+# ---------------------------------------------------------------------------
+
+
+def test_id_to_iso_converts_valid_id_to_utc_iso_string() -> None:
+    # Valid format: YYYYMMDD_HHMMSS_slug
+    inv_id = "20260430_120001_alert-name"
+    iso_string = remote_server._id_to_iso(inv_id)
+    # Should convert to standard ISO format with +00:00 (UTC)
+    assert iso_string == "2026-04-30T12:00:01+00:00"
+
+
+@pytest.mark.parametrize(
+    "malformed_id",
+    [
+        "",
+        "invalid",
+        "20260430-120001-alert",  # wrong separator
+        "abc_def_ghi",  # non-numeric date part
+    ],
+)
+def test_id_to_iso_returns_empty_string_for_malformed_input(malformed_id: str) -> None:
+    # Function should fail quietly and return an empty string, not crash
+    assert remote_server._id_to_iso(malformed_id) == ""
+
+
+# ---------------------------------------------------------------------------
+# _check_disk_health tests
+# ---------------------------------------------------------------------------
+
+
+def test_check_disk_health_returns_passed_when_below_warn_threshold(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Disk usage below 85% should return status='passed'."""
+    # 50 GiB used out of 100 GiB total = 50%
+    fake_usage = _DiskUsage(total=100 * 1024**3, used=50 * 1024**3, free=50 * 1024**3)
+    monkeypatch.setattr(shutil, "disk_usage", lambda _path: fake_usage)
+
+    result = _check_disk_health()
+
+    assert isinstance(result, DeepHealthCheck)
+    assert result.name == "Disk"
+    assert result.status == "passed"
+    assert "50% used" in result.detail
+    assert "50GiB / 100GiB" in result.detail
+
+
+def test_check_disk_health_returns_warn_when_at_or_above_threshold(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Disk usage at or above 85% should return status='warn'."""
+    # 90 GiB used out of 100 GiB total = 90%
+    fake_usage = _DiskUsage(total=100 * 1024**3, used=90 * 1024**3, free=10 * 1024**3)
+    monkeypatch.setattr(shutil, "disk_usage", lambda _path: fake_usage)
+
+    result = _check_disk_health()
+
+    assert isinstance(result, DeepHealthCheck)
+    assert result.name == "Disk"
+    assert result.status == "warn"
+    assert "90% used" in result.detail
+    assert "90GiB / 100GiB" in result.detail
+
+
+def test_check_disk_health_returns_missing_when_total_is_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When disk_usage reports total=0 (e.g. some container environments),
+    status should be 'missing' rather than raising a ZeroDivisionError."""
+    fake_usage = _DiskUsage(total=0, used=0, free=0)
+    monkeypatch.setattr(shutil, "disk_usage", lambda _path: fake_usage)
+
+    result = _check_disk_health()
+
+    assert isinstance(result, DeepHealthCheck)
+    assert result.name == "Disk"
+    assert result.status == "missing"
+    assert "Unable to determine disk size" in result.detail
+
+
+def test_imds_token_returns_none_on_url_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _raise_url_error(*args: object, **kwargs: object) -> None:
+        raise urllib.error.URLError("connection refused")
+
+    monkeypatch.setattr("urllib.request.urlopen", _raise_url_error)
+
+    assert _imds_token() is None
+
+
+def test_imds_token_returns_none_on_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _raise_timeout(*args: object, **kwargs: object) -> None:
+        raise TimeoutError("timed out")
+
+    monkeypatch.setattr("urllib.request.urlopen", _raise_timeout)
+
+    assert _imds_token() is None
+
+
+def test_imds_token_returns_none_on_os_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _raise_os_error(*args: object, **kwargs: object) -> None:
+        raise OSError("network unreachable")
+
+    monkeypatch.setattr("urllib.request.urlopen", _raise_os_error)
+
+    assert _imds_token() is None
+
+
+def test_imds_get_returns_none_on_url_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _raise_url_error(*args: object, **kwargs: object) -> None:
+        raise urllib.error.URLError("connection refused")
+
+    monkeypatch.setattr("urllib.request.urlopen", _raise_url_error)
+
+    assert _imds_get("latest/meta-data/instance-id", token="test-token") is None
+
+
+def test_imds_get_returns_none_on_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _raise_timeout(*args: object, **kwargs: object) -> None:
+        raise TimeoutError("timed out")
+
+    monkeypatch.setattr("urllib.request.urlopen", _raise_timeout)
+
+    assert _imds_get("latest/meta-data/instance-id", token="test-token") is None
+
+
+def test_imds_get_returns_none_on_os_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _raise_os_error(*args: object, **kwargs: object) -> None:
+        raise OSError("network unreachable")
+
+    monkeypatch.setattr("urllib.request.urlopen", _raise_os_error)
+
+    assert _imds_get("latest/meta-data/instance-id", token="test-token") is None
