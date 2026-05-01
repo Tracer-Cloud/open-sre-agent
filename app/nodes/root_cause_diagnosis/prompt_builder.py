@@ -1,6 +1,7 @@
 """Prompt construction for root cause diagnosis."""
 
 import json
+import datetime
 from typing import Any
 
 from app.state import InvestigationState
