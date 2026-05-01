@@ -67,13 +67,14 @@ def extract_judge_json_from_response(text: str) -> dict[str, Any]:
 
     try:
         raw = json.loads(text)
-        if isinstance(raw, dict):
-            return cast(dict[str, Any], raw)
-        if isinstance(raw, list):
-            msg = "Judge response JSON must be an object"
-            raise ValueError(msg)
     except json.JSONDecodeError:
-        pass
+        raw = None
+
+    if isinstance(raw, dict):
+        return cast(dict[str, Any], raw)
+    if isinstance(raw, list):
+        msg = "Judge response JSON must be an object"
+        raise ValueError(msg)
 
     start = text.find("{")
     end = text.rfind("}")
