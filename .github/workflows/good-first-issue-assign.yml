@@ -1,0 +1,41 @@
+# When someone with zero merged PRs in this repo (and not OWNER/MEMBER/COLLABORATOR) comments
+# on an open issue labeled `good first issue`, assign them and reply.
+name: Good first issue — auto-assign
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  assign:
+    name: Assign new contributor on good first issue
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.issue.state == 'open' &&
+      github.event.comment.user.type != 'Bot'
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Decide assign + notice body
+        id: decide
+        env:
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 .github/scripts/good_first_issue_assign.py
+
+      - name: Add assignee and notify
+        if: steps.decide.outputs.should_assign == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          gh issue edit "${{ github.event.issue.number }}"
+          --repo "${{ github.repository }}"
+          --add-assignee "${{ github.event.comment.user.login }}"
+          && gh issue comment "${{ github.event.issue.number }}"
+          --repo "${{ github.repository }}"
+          --body-file assign_comment.md
