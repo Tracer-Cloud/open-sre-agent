@@ -149,7 +149,7 @@ def test_verify_datadog_reports_api_failure(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(
         DatadogClient,
         "probe_access",
-        lambda self: ProbeResult.failed("HTTP 403: forbidden"),
+        lambda _self: ProbeResult.failed("HTTP 403: forbidden"),
     )
 
     result = _verify_datadog(
@@ -198,7 +198,7 @@ def test_verify_honeycomb_uses_auth_and_query(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(
         HoneycombClient,
         "probe_access",
-        lambda self: ProbeResult.passed(
+        lambda _self: ProbeResult.passed(
             "Connected to Honeycomb dataset prod-api.", dataset="prod-api"
         ),
     )
@@ -219,7 +219,7 @@ def test_verify_coralogix_reports_api_failure(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(
         CoralogixClient,
         "probe_access",
-        lambda self: ProbeResult.failed("HTTP 401: unauthorized"),
+        lambda _self: ProbeResult.failed("HTTP 401: unauthorized"),
     )
 
     result = _verify_coralogix(
@@ -307,7 +307,22 @@ def test_verify_tracer_passes_with_env_jwt(monkeypatch: pytest.MonkeyPatch) -> N
     assert "2 integrations" in result["detail"]
 
 
-def test_verify_github_passes_with_valid_streamable_http_config() -> None:
+def test_verify_github_passes_with_valid_streamable_http_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.integrations._verification_adapters as _adapters
+
+    monkeypatch.setattr(
+        _adapters,
+        "_verify_with_validation_result",
+        lambda service, source, _config, **_kw: {
+            "service": service,
+            "source": source,
+            "status": "passed",
+            "detail": "GitHub MCP ok",
+        },
+    )
+
     result = _verify_github(
         "local env",
         {
@@ -321,7 +336,20 @@ def test_verify_github_passes_with_valid_streamable_http_config() -> None:
     assert result["service"] == "github"
 
 
-def test_verify_sentry_passes_with_valid_config() -> None:
+def test_verify_sentry_passes_with_valid_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.integrations._verification_adapters as _adapters
+
+    monkeypatch.setattr(
+        _adapters,
+        "_verify_with_validation_result",
+        lambda service, source, _config, **_kw: {
+            "service": service,
+            "source": source,
+            "status": "passed",
+            "detail": "Sentry ok",
+        },
+    )
+
     result = _verify_sentry(
         "local env",
         {
@@ -414,7 +442,7 @@ def test_verify_vercel_passes_with_valid_token(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(
         VercelClient,
         "probe_access",
-        lambda self: ProbeResult.passed(
+        lambda _self: ProbeResult.passed(
             "Connected to Vercel API and listed 2 project(s).", total=2
         ),
     )
@@ -432,7 +460,7 @@ def test_verify_vercel_fails_on_api_error(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr(
         VercelClient,
         "probe_access",
-        lambda self: ProbeResult.failed("HTTP 401: unauthorized"),
+        lambda _self: ProbeResult.failed("HTTP 401: unauthorized"),
     )
 
     result = _verify_vercel("local env", {"api_token": "bad_token", "team_id": ""})
@@ -453,7 +481,7 @@ def test_verify_integrations_dispatches_to_vercel(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(
         VercelClient,
         "probe_access",
-        lambda self: ProbeResult.passed(
+        lambda _self: ProbeResult.passed(
             "Connected to Vercel API and listed 0 project(s).", total=0
         ),
     )

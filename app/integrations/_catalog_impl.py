@@ -15,9 +15,6 @@ from app.integrations.airflow import (
 )
 from app.integrations.azure_sql import build_azure_sql_config
 from app.integrations.betterstack import build_betterstack_config
-from app.integrations.github_mcp import build_github_mcp_config
-from app.integrations.gitlab import DEFAULT_GITLAB_BASE_URL, build_gitlab_config
-from app.integrations.mariadb import build_mariadb_config
 from app.integrations.config_models import (
     AlertmanagerIntegrationConfig,
     ArgoCDIntegrationConfig,
@@ -34,6 +31,9 @@ from app.integrations.config_models import (
     TelegramBotConfig,
 )
 from app.integrations.effective_models import EffectiveIntegrations
+from app.integrations.github_mcp import build_github_mcp_config
+from app.integrations.gitlab import DEFAULT_GITLAB_BASE_URL, build_gitlab_config
+from app.integrations.mariadb import build_mariadb_config
 from app.integrations.mongodb import build_mongodb_config
 from app.integrations.mongodb_atlas import build_mongodb_atlas_config
 from app.integrations.mysql import build_mysql_config

@@ -8,9 +8,6 @@ from urllib.parse import urlparse
 from pydantic import Field, field_validator, model_validator
 
 from app.config import get_tracer_base_url
-from app.strict_config import StrictConfigModel
-from app.utils.url_validation import validate_https_or_loopback_http_url
-
 from app.integrations._validators import (
     normalize_bearer,
     normalize_bool_str,
@@ -18,6 +15,8 @@ from app.integrations._validators import (
     normalize_url,
     normalize_with_default,
 )
+from app.strict_config import StrictConfigModel
+from app.utils.url_validation import validate_https_or_loopback_http_url
 
 _LOCAL_GRAFANA_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0"}
 DEFAULT_HONEYCOMB_BASE_URL = "https://api.honeycomb.io"
@@ -148,6 +147,17 @@ class VercelIntegrationConfig(StrictConfigModel):
 
     _normalize_api_token = field_validator("api_token", mode="before")(normalize_str())
     _normalize_team_id = field_validator("team_id", mode="before")(normalize_str())
+
+    @property
+    def headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.api_token}",
+            "Content-Type": "application/json",
+        }
+
+    @property
+    def team_params(self) -> dict[str, str]:
+        return {"teamId": self.team_id} if self.team_id else {}
 
 
 # ---------------------------------------------------------------------------

@@ -162,7 +162,7 @@ def test_verify_argocd_passes_with_reachable_api(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(
         ArgoCDClient,
         "probe_access",
-        lambda self: ProbeResult.passed("Connected to Argo CD and listed 1 application.", total=1),
+        lambda _self: ProbeResult.passed("Connected to Argo CD and listed 1 application.", total=1),
     )
 
     result = _verify_argocd(
@@ -188,7 +188,9 @@ def test_verify_integrations_dispatches_to_argocd(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(
         ArgoCDClient,
         "probe_access",
-        lambda self: ProbeResult.passed("Connected to Argo CD and listed 0 applications.", total=0),
+        lambda _self: ProbeResult.passed(
+            "Connected to Argo CD and listed 0 applications.", total=0
+        ),
     )
     monkeypatch.setattr(
         "app.integrations.catalog.load_integrations",

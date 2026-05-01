@@ -5,10 +5,10 @@ This shim exists only so existing callers don't need a mass update.
 """
 
 from app.integrations.config_models import (
-    AWSIntegrationConfig,
-    AWSStaticCredentials,
     AlertmanagerIntegrationConfig,
     ArgoCDIntegrationConfig,
+    AWSIntegrationConfig,
+    AWSStaticCredentials,
     AzureSQLIntegrationConfig,
     BetterStackIntegrationConfig,
     CoralogixIntegrationConfig,
