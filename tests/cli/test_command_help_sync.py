@@ -7,7 +7,7 @@ versa) this test will fail and name exactly which command is out of sync.
 from __future__ import annotations
 
 from app.cli.commands import _COMMANDS
-from app.cli.layout import _HELP_COMMANDS
+from app.cli.support.layout import _HELP_COMMANDS
 
 
 def test_registered_commands_match_help_table() -> None:

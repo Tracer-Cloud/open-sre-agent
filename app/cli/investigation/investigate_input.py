@@ -7,9 +7,9 @@ from typing import Any
 import questionary
 from rich.console import Console
 
-from app.cli.alert_templates import build_alert_template
-from app.cli.constants import SAMPLE_ALERT_OPTIONS
-from app.cli.payload import load_file, load_interactive
+from app.cli.investigation.alert_templates import build_alert_template
+from app.cli.investigation.payload import load_file, load_interactive
+from app.cli.support.constants import SAMPLE_ALERT_OPTIONS
 
 _console = Console()
 

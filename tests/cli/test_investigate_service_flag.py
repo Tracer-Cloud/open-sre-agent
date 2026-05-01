@@ -40,7 +40,7 @@ def test_service_flag_invokes_runtime_investigation(monkeypatch) -> None:
             return_value=_fake_payload("my-svc"),
         ) as mock_build,
         patch(
-            "app.cli.investigate.run_investigation_cli",
+            "app.cli.investigation.run_investigation_cli",
             return_value=_fake_result(),
         ) as mock_run,
     ):
@@ -65,7 +65,7 @@ def test_service_flag_writes_output_file(tmp_path, monkeypatch) -> None:
             return_value=_fake_payload("my-svc"),
         ),
         patch(
-            "app.cli.investigate.run_investigation_cli",
+            "app.cli.investigation.run_investigation_cli",
             return_value=_fake_result(),
         ),
     ):
@@ -97,7 +97,7 @@ def test_service_flag_rejects_other_input_modes(conflict_flag, conflict_value) -
 
     with (
         patch("app.remote.runtime_alert.build_runtime_alert_payload"),
-        patch("app.cli.investigate.run_investigation_cli"),
+        patch("app.cli.investigation.run_investigation_cli"),
     ):
         result = runner.invoke(investigate_command, args)
 
@@ -106,7 +106,7 @@ def test_service_flag_rejects_other_input_modes(conflict_flag, conflict_value) -
 
 
 def test_service_flag_surfaces_errors_from_payload_builder() -> None:
-    from app.cli.errors import OpenSREError
+    from app.cli.support.errors import OpenSREError
 
     runner = CliRunner()
     with (
@@ -114,7 +114,7 @@ def test_service_flag_surfaces_errors_from_payload_builder() -> None:
             "app.remote.runtime_alert.build_runtime_alert_payload",
             side_effect=OpenSREError("unknown service", suggestion="add it"),
         ),
-        patch("app.cli.investigate.run_investigation_cli"),
+        patch("app.cli.investigation.run_investigation_cli"),
     ):
         result = runner.invoke(investigate_command, ["--service", "missing"])
 
@@ -140,7 +140,7 @@ def test_slack_thread_without_bot_token_is_rejected(monkeypatch) -> None:
             "app.remote.runtime_alert.build_runtime_alert_payload",
             return_value=_fake_payload("my-svc"),
         ),
-        patch("app.cli.investigate.run_investigation_cli", return_value=_fake_result()),
+        patch("app.cli.investigation.run_investigation_cli", return_value=_fake_result()),
     ):
         result = runner.invoke(
             investigate_command,
@@ -160,7 +160,7 @@ def test_slack_thread_passed_to_payload_builder(monkeypatch) -> None:
             "app.remote.runtime_alert.build_runtime_alert_payload",
             return_value=_fake_payload("my-svc"),
         ) as mock_build,
-        patch("app.cli.investigate.run_investigation_cli", return_value=_fake_result()),
+        patch("app.cli.investigation.run_investigation_cli", return_value=_fake_result()),
     ):
         result = runner.invoke(
             investigate_command,

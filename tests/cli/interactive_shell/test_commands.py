@@ -6,8 +6,8 @@ import io
 
 from rich.console import Console
 
-from app.cli.repl.commands import SLASH_COMMANDS, dispatch_slash
-from app.cli.repl.session import ReplSession
+from app.cli.interactive_shell.commands import SLASH_COMMANDS, dispatch_slash
+from app.cli.interactive_shell.session import ReplSession
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -95,7 +95,7 @@ class TestListCommand:
 
     def _patch_verify(self, monkeypatch: object) -> None:
         # Import inside test to match the lazy-import used by the handler.
-        from app.cli.repl import commands as cmd_module
+        from app.cli.interactive_shell import commands as cmd_module
 
         monkeypatch.setattr(  # type: ignore[attr-defined]
             cmd_module,
@@ -131,7 +131,7 @@ class TestListCommand:
 
     def _patch_llm(self, monkeypatch: object) -> None:
         """Provide a stable fake LLMSettings so the test doesn't depend on env."""
-        from app.cli.repl import commands as cmd_module
+        from app.cli.interactive_shell import commands as cmd_module
 
         class _FakeLLM:
             provider = "anthropic"
@@ -153,7 +153,7 @@ class TestListCommand:
         assert "anthropic" in output
 
     def test_list_models_handles_missing_env_gracefully(self, monkeypatch: object) -> None:
-        from app.cli.repl import commands as cmd_module
+        from app.cli.interactive_shell import commands as cmd_module
 
         monkeypatch.setattr(  # type: ignore[attr-defined]
             cmd_module, "_load_llm_settings", lambda: None
@@ -181,7 +181,7 @@ class TestListCommand:
         assert "/list integrations" in output
 
     def test_list_empty_integrations_prints_onboarding_hint(self, monkeypatch: object) -> None:
-        from app.cli.repl import commands as cmd_module
+        from app.cli.interactive_shell import commands as cmd_module
 
         monkeypatch.setattr(  # type: ignore[attr-defined]
             cmd_module,
@@ -206,7 +206,7 @@ class TestIntegrationsCommand:
     ]
 
     def _patch(self, monkeypatch: object) -> None:
-        from app.cli.repl import commands as m
+        from app.cli.interactive_shell import commands as m
 
         monkeypatch.setattr(m, "_load_verified_integrations", lambda: list(self._FAKE))  # type: ignore[attr-defined]
 
@@ -230,7 +230,7 @@ class TestIntegrationsCommand:
         assert "need attention" in buf.getvalue()
 
     def test_verify_all_ok(self, monkeypatch: object) -> None:
-        from app.cli.repl import commands as m
+        from app.cli.interactive_shell import commands as m
 
         monkeypatch.setattr(
             m,
@@ -275,7 +275,7 @@ class TestMcpCommand:
     ]
 
     def _patch(self, monkeypatch: object) -> None:
-        from app.cli.repl import commands as m
+        from app.cli.interactive_shell import commands as m
 
         monkeypatch.setattr(m, "_load_verified_integrations", lambda: list(self._FAKE))  # type: ignore[attr-defined]
 
@@ -310,7 +310,7 @@ class TestMcpCommand:
 
 class TestModelCommand:
     def _patch_llm(self, monkeypatch: object) -> None:
-        from app.cli.repl import commands as m
+        from app.cli.interactive_shell import commands as m
 
         class _Fake:
             provider = "anthropic"
@@ -382,8 +382,6 @@ class TestInvestigateFileCommand:
         assert "file not found" in buf.getvalue()
 
     def test_valid_file_runs_investigation(self, tmp_path: object, monkeypatch: object) -> None:
-        import app.cli.investigate as inv_module
-
         alert_file = tmp_path / "alert.json"  # type: ignore[operator]
         alert_file.write_text('{"alert_name": "test"}', encoding="utf-8")  # type: ignore[union-attr]
 
@@ -393,7 +391,8 @@ class TestInvestigateFileCommand:
             captured.append(alert_text)
             return {"root_cause": "test cause"}
 
-        monkeypatch.setattr(inv_module, "run_investigation_for_session", _fake)  # type: ignore[attr-defined]
+        # Patch package re-export: slash handler does `from app.cli.investigation import ...`.
+        monkeypatch.setattr("app.cli.investigation.run_investigation_for_session", _fake)
         session = ReplSession()
         console, _ = _capture()
         dispatch_slash(f"/investigate {alert_file}", session, console)
@@ -407,7 +406,6 @@ class TestInvestigateFileCommand:
         the context-accumulation step that `loop._run_new_alert` does after a
         free-text investigation, so subsequent follow-up alerts lost the infra
         hints (service / cluster / region) that /investigate just discovered."""
-        import app.cli.investigate as inv_module
 
         alert_file = tmp_path / "alert.json"  # type: ignore[operator]
         alert_file.write_text('{"alert_name": "test"}', encoding="utf-8")  # type: ignore[union-attr]
@@ -420,7 +418,7 @@ class TestInvestigateFileCommand:
                 "region": "us-east-1",
             }
 
-        monkeypatch.setattr(inv_module, "run_investigation_for_session", _fake)  # type: ignore[attr-defined]
+        monkeypatch.setattr("app.cli.investigation.run_investigation_for_session", _fake)
 
         session = ReplSession()
         console, _ = _capture()

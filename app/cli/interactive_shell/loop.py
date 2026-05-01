@@ -10,17 +10,20 @@ from prompt_toolkit.formatted_text import ANSI
 from rich.console import Console
 from rich.markup import escape
 
-from app.cli.repl.banner import render_banner
-from app.cli.repl.commands import dispatch_slash
-from app.cli.repl.config import ReplConfig
-from app.cli.repl.follow_up import answer_follow_up
-from app.cli.repl.router import classify_input
-from app.cli.repl.session import ReplSession
+from app.cli.interactive_shell.agent_actions import execute_cli_actions
+from app.cli.interactive_shell.banner import render_banner
+from app.cli.interactive_shell.cli_agent import answer_cli_agent
+from app.cli.interactive_shell.cli_help import answer_cli_help
+from app.cli.interactive_shell.commands import dispatch_slash
+from app.cli.interactive_shell.config import ReplConfig
+from app.cli.interactive_shell.follow_up import answer_follow_up
+from app.cli.interactive_shell.router import classify_input
+from app.cli.interactive_shell.session import ReplSession
 
 
 def _run_new_alert(text: str, session: ReplSession, console: Console) -> None:
     """Dispatch a free-text alert description to the streaming pipeline."""
-    from app.cli.investigate import run_investigation_for_session
+    from app.cli.investigation import run_investigation_for_session
 
     try:
         final_state = run_investigation_for_session(
@@ -66,6 +69,18 @@ async def _run_one_turn(
         session.record("slash", cmd_text)
         return dispatch_slash(cmd_text, session, console)
 
+    if kind == "cli_help":
+        answer_cli_help(text, session, console)
+        session.record("cli_help", text)
+        return True
+
+    if kind == "cli_agent":
+        if execute_cli_actions(text, session, console):
+            return True
+        answer_cli_agent(text, session, console)
+        session.record("cli_agent", text)
+        return True
+
     if kind == "new_alert":
         _run_new_alert(text, session, console)
         return True
@@ -98,6 +113,13 @@ async def _repl_main(initial_input: str | None = None, config: ReplConfig | None
                 session.record("slash", cmd_text)
                 if not dispatch_slash(cmd_text, session, console):
                     return 0
+            elif kind == "cli_help":
+                answer_cli_help(stripped, session, console)
+                session.record("cli_help", stripped)
+            elif kind == "cli_agent":
+                if not execute_cli_actions(stripped, session, console):
+                    answer_cli_agent(stripped, session, console)
+                    session.record("cli_agent", stripped)
             elif kind == "new_alert":
                 _run_new_alert(stripped, session, console)
             else:

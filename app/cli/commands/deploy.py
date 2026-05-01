@@ -13,9 +13,9 @@ from app.analytics.cli import (
     capture_deploy_failed,
     capture_deploy_started,
 )
-from app.cli.context import is_json_output, is_yes
-from app.cli.errors import OpenSREError
-from app.cli.langsmith_deploy import (
+from app.cli.support.context import is_json_output, is_yes
+from app.cli.support.errors import OpenSREError
+from app.deployment.methods.langsmith import (
     extract_deployment_url,
     is_langgraph_cli_installed,
     persist_langsmith_env,
@@ -24,8 +24,8 @@ from app.cli.langsmith_deploy import (
     run_langsmith_deploy,
     validate_langsmith_api_key,
 )
-from app.deployment.ec2_config import load_remote_outputs
-from app.deployment.health import poll_deployment_health
+from app.deployment.operations.ec2_config import load_remote_outputs
+from app.deployment.operations.health import poll_deployment_health
 
 
 def _deploy_style(questionary: Any) -> Any:
@@ -387,7 +387,7 @@ def deploy_railway(
     yes: bool,
 ) -> None:
     """Deploy OpenSRE to Railway."""
-    from app.cli.deploy import run_deploy
+    from app.deployment.methods.railway import run_deploy
 
     capture_cli_invoked()
     capture_deploy_started(target="railway", dry_run=dry_run)

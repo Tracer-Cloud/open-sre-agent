@@ -7,12 +7,12 @@ from unittest.mock import MagicMock
 
 from rich.console import Console
 
-from app.cli.repl.follow_up import (
+from app.cli.interactive_shell.follow_up import (
     _summarize_evidence,
     _summarize_last_state,
     answer_follow_up,
 )
-from app.cli.repl.session import ReplSession
+from app.cli.interactive_shell.session import ReplSession
 
 
 class TestSummarizeEvidence:

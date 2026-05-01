@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import importlib
 
-from app.deployment.health import HealthPollStatus
+from app.deployment.operations.health import HealthPollStatus
 
 deploy_module = importlib.import_module("app.cli.commands.deploy")
 

@@ -7,7 +7,7 @@ import questionary
 from prompt_toolkit.input.defaults import create_pipe_input  # type: ignore[import-not-found]
 from prompt_toolkit.output import DummyOutput  # type: ignore[import-not-found]
 
-from app.cli.prompt_support import (
+from app.cli.support.prompt_support import (
     _last_ctrl_c,
     handle_ctrl_c_press,
     install_questionary_ctrl_c_double_exit,

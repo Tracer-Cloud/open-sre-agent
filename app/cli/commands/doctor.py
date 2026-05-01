@@ -11,8 +11,8 @@ from typing import Any
 
 import click
 
-from app.cli.context import is_json_output
-from app.cli.exit_codes import ERROR, SUCCESS
+from app.cli.support.context import is_json_output
+from app.cli.support.exit_codes import ERROR, SUCCESS
 from app.version import get_version
 
 
@@ -79,7 +79,7 @@ def _check_integrations() -> tuple[bool, str]:
 def _check_version_freshness() -> tuple[bool, str]:
     current = get_version()
     try:
-        from app.cli.update import _fetch_latest_version, _is_update_available
+        from app.cli.support.update import _fetch_latest_version, _is_update_available
 
         latest = _fetch_latest_version()
         if _is_update_available(current, latest):

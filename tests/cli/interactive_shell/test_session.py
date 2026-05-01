@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.cli.repl.session import ReplSession
+from app.cli.interactive_shell.session import ReplSession
 
 
 class TestReplSession:
@@ -28,12 +28,14 @@ class TestReplSession:
         session.accumulated_context["service"] = "api"
         session.record("alert", "something")
         session.last_state = {"foo": "bar"}
+        session.cli_agent_messages.append(("user", "hey"))
 
         session.clear()
 
         assert session.history == []
         assert session.last_state is None
         assert session.accumulated_context == {}
+        assert session.cli_agent_messages == []
         assert session.trust_mode is True  # preserved intentionally
 
     def test_accumulate_from_state_extracts_known_keys(self) -> None:

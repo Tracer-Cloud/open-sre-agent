@@ -5,8 +5,8 @@ from io import StringIO
 
 import pytest
 
-from app.cli.alert_templates import build_alert_template
-from app.cli.payload import load_file, load_payload, parse_payload_text
+from app.cli.investigation.alert_templates import build_alert_template
+from app.cli.investigation.payload import load_file, load_payload, parse_payload_text
 
 
 def test_parse_payload_text_rejects_invalid_json() -> None:

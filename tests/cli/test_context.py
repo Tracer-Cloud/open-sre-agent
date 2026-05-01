@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import click
 
-from app.cli.context import is_debug, is_json_output, is_verbose, is_yes
+from app.cli.support.context import is_debug, is_json_output, is_verbose, is_yes
 
 
 def test_is_json_output_true() -> None:

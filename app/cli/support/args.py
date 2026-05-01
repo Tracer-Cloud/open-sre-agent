@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from app.cli.constants import ALERT_TEMPLATE_CHOICES
+from app.cli.support.constants import ALERT_TEMPLATE_CHOICES
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

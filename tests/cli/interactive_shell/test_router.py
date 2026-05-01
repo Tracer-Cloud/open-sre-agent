@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from app.cli.repl.router import classify_input
-from app.cli.repl.session import ReplSession
+from app.cli.interactive_shell.router import classify_input
+from app.cli.interactive_shell.session import ReplSession
 
 
 class TestClassifyInput:
@@ -35,9 +35,57 @@ class TestClassifyInput:
         assert classify_input("HELP", session) == "slash"
         assert classify_input("Exit", session) == "slash"
 
-    def test_no_prior_state_is_new_alert(self) -> None:
+    def test_no_prior_greeting_routes_to_cli_agent_not_investigation(self) -> None:
+        session = ReplSession()
+        assert classify_input("hey", session) == "cli_agent"
+        assert classify_input("hi", session) == "cli_agent"
+        assert classify_input("hello", session) == "cli_agent"
+
+    def test_long_operational_health_question_stays_cli_agent(self) -> None:
+        """Long setup questions must not hit LangGraph just because len >= 48."""
+        session = ReplSession()
+        text = "check the health of my opensre and then show me all connected services"
+        assert len(text) >= 48
+        assert classify_input(text, session) == "cli_agent"
+
+    def test_long_integration_question_stays_cli_agent(self) -> None:
+        """Integration inventory/capability questions are terminal work, not alerts."""
+        session = ReplSession()
+        text = (
+            "tell me about what the discord integration can do and then tell me what "
+            "datadog services I have connections to"
+        )
+
+        assert len(text) >= 48
+        assert classify_input(text, session) == "cli_agent"
+
+    def test_connection_substring_in_connections_is_not_alert_signal(self) -> None:
+        session = ReplSession()
+
+        assert classify_input("what datadog connections do I have?", session) == "cli_agent"
+
+    def test_no_prior_state_incident_question_is_new_alert(self) -> None:
         session = ReplSession()
         assert classify_input("why is the database slow?", session) == "new_alert"
+
+    def test_no_prior_long_line_is_new_alert(self) -> None:
+        session = ReplSession()
+        long_text = "the checkout API returns 502s for 15% of requests since 14:00 UTC"
+        assert len(long_text) >= 48
+        assert classify_input(long_text, session) == "new_alert"
+
+    def test_no_prior_state_cli_help_patterns(self) -> None:
+        session = ReplSession()
+        assert classify_input("How do I run an investigation?", session) == "cli_help"
+        assert classify_input("what command do I use for investigate?", session) == "cli_help"
+        assert classify_input("which command should I use?", session) == "cli_help"
+        assert classify_input("what does opensre onboard do?", session) == "cli_help"
+
+    def test_cli_help_takes_priority_over_follow_up(self) -> None:
+        """Procedural questions must not be grounded on the last investigation."""
+        session = ReplSession()
+        session.last_state = {"root_cause": "disk full"}
+        assert classify_input("How do I run an investigation?", session) == "cli_help"
 
     def test_short_question_with_prior_state_is_follow_up(self) -> None:
         session = ReplSession()
@@ -81,3 +129,9 @@ class TestClassifyInput:
             "two hours and we just paged the on-call engineer — what changed?"
         )
         assert classify_input(long_question, session) == "new_alert"
+
+    def test_prior_state_small_talk_routes_to_cli_agent(self) -> None:
+        session = ReplSession()
+        session.last_state = {"root_cause": "disk full"}
+        assert classify_input("thanks", session) == "cli_agent"
+        assert classify_input("ok cool", session) == "cli_agent"

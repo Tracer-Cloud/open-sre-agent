@@ -165,7 +165,7 @@ async def test_investigate_stream_persists_state_on_disconnect(
 
     monkeypatch.setattr("app.config.LLMSettings.from_env", object)
     monkeypatch.setattr(
-        "app.cli.investigate.resolve_investigation_context",
+        "app.cli.investigation.resolve_investigation_context",
         lambda **_kwargs: ("test-alert", "etl_daily_orders", "critical"),
     )
     monkeypatch.setattr(

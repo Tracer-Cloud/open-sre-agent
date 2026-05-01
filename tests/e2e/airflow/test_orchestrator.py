@@ -170,7 +170,7 @@ def test_airflow_investigation_e2e():
     """
     base_url, dag_id, auth_token, username, password = _require_env()
 
-    from app.cli.investigate import run_investigation_cli
+    from app.cli.investigation import run_investigation_cli
 
     fixture_path = FIXTURES_DIR / "airflow_task_failure_alert.json"
     raw_alert = json.loads(fixture_path.read_text())

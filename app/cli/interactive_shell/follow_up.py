@@ -9,7 +9,8 @@ from typing import Any
 from rich.console import Console
 from rich.markup import escape
 
-from app.cli.repl.session import ReplSession
+from app.cli.interactive_shell.loaders import llm_loader
+from app.cli.interactive_shell.session import ReplSession
 
 _logger = logging.getLogger(__name__)
 
@@ -93,8 +94,9 @@ def answer_follow_up(question: str, session: ReplSession, console: Console) -> N
     )
 
     try:
-        client = get_llm_for_reasoning()
-        response = client.invoke(prompt)
+        with llm_loader(console):
+            client = get_llm_for_reasoning()
+            response = client.invoke(prompt)
     except Exception as exc:  # noqa: BLE001
         console.print(f"[red]follow-up failed:[/red] {escape(str(exc))}")
         return
