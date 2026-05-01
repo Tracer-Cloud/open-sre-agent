@@ -413,18 +413,14 @@ Planning rules:
    Prefer actions that reveal these mechanisms when relevant signals (CPU, connections, storage) are elevated.
 
 11. For RDS/Postgres incidents where BOTH CPU and storage pressure are observed:
-
    - Assume a possible compositional failure unless proven otherwise
    - Explicitly investigate whether there are TWO independent workloads:
      (1) analytics/aggregation queries causing CPU saturation
      (2) write-heavy workloads causing storage exhaustion (e.g. audit_log INSERT, WAL growth, or table bloat depending on the system)
-
-   - Prefer query-level or workload-level evidence when available (for example AWS Performance Insights, database logs, slow query logs, pg_stat_activity, or equivalent provider telemetry) to identify:
+   - Prefer query-level or workload-level evidence when available (for example provider-specific query telemetry such as AWS Performance Insights, database logs, slow query logs, pg_stat_activity, or equivalent provider telemetry) to identify:
      - the CPU-driving SQL query or workload
      - the write/storage-driving workload
-
    - Do not rely only on high-level metrics when more specific workload-level evidence is available. If query-level evidence is unavailable or exhausted, use the best available provider telemetry and clearly state what evidence is missing.
-
    - Prefer actions that surface SQL-level evidence rather than only system-level metrics
 
 When selecting actions, optimize for:
@@ -436,7 +432,7 @@ When selecting actions, optimize for:
 
 Additionally:
 - When connection counts are high, explicitly evaluate whether idle connections are contributing to the issue and include this explicitly in your reasoning if relevant.
-- When storage pressure is observed, explicitly consider audit logs or database-specific logging mechanisms (e.g. audit_log for PostgreSQL/Aurora)
+- When storage pressure is observed, explicitly consider database-specific write or storage growth mechanisms based on the evidence (e.g. logging systems, WAL growth, table bloat, or temp-file usage)
 
 Avoid:
 - collecting general context that does not help separate hypotheses
