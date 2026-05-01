@@ -92,10 +92,6 @@ CLAIM_EVIDENCE_KEYS = INVESTIGATED_EVIDENCE_KEYS | frozenset(
         "datadog_error_logs",
         "datadog_events",
         "datadog_failed_pods",
-        # Other observability stacks
-        "honeycomb_traces",
-        "coralogix_logs",
-        "coralogix_error_logs",
         # Diagnostic code sandbox
         "diagnostic_executions",
         # Vercel
@@ -111,9 +107,7 @@ CLAIM_EVIDENCE_KEYS = INVESTIGATED_EVIDENCE_KEYS | frozenset(
         "github_commits",
         "git_deploy_timeline",
         # Alertmanager
-        "alertmanager_alerts",
         "alertmanager_firing_alerts",
-        "alertmanager_silences",
         "alertmanager_active_silences",
         # EKS adjacent
         "eks_failing_pods",
