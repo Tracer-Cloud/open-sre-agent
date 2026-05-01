@@ -23,6 +23,8 @@ _DEFAULT_TIMEOUT = 30
 class ElasticsearchConfig:
     url: str
     api_key: str | None = None
+    username: str | None = None
+    password: str | None = None
     index_pattern: str = field(default="*")
 
     @property
@@ -31,9 +33,24 @@ class ElasticsearchConfig:
 
     @property
     def headers(self) -> dict[str, str]:
+        """Build auth headers.
+
+        Priority order:
+        1. API key (``ApiKey`` scheme) — Elasticsearch native and OpenSearch serverless.
+        2. HTTP Basic Auth (``username`` + ``password``) — standard OpenSearch and
+           self-hosted Elasticsearch clusters.
+        3. No auth — clusters with security disabled.
+        """
+        import base64
+
         h: dict[str, str] = {"Content-Type": "application/json"}
         if self.api_key:
             h["Authorization"] = f"ApiKey {self.api_key}"
+        elif self.username and self.password:
+            encoded = base64.b64encode(
+                f"{self.username}:{self.password}".encode()
+            ).decode()
+            h["Authorization"] = f"Basic {encoded}"
         return h
 
 

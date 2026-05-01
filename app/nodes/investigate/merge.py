@@ -1,5 +1,6 @@
 """Merge node for parallel hypothesis execution results."""
 
+import copy
 import logging
 from typing import Any, cast
 
@@ -51,7 +52,13 @@ def merge_hypothesis_results(state: InvestigationState) -> dict:
     input_data = InvestigateInput.from_state(state).model_copy(update={"evidence": base_evidence})
 
     plan_rationale = state.get("plan_rationale", "")
-    available_sources = cast(dict[str, dict[str, object]], state.get("available_sources", {}))
+    # Deep-copy before mutation so LangGraph state transitions remain immutable.
+    # Previously available_sources was cast directly from state (not copied), meaning
+    # in-place writes like available_sources["grafana"]["service_name"] = ... would
+    # corrupt the parent state object and break LangSmith replay / audit trails.
+    available_sources = copy.deepcopy(
+        cast(dict[str, dict[str, object]], state.get("available_sources", {}))
+    )
 
     hypothesis_results = state.get("hypothesis_results", [])
 

@@ -89,6 +89,46 @@ class HoneycombIntegrationConfig(StrictConfigModel):
     )
 
 
+
+class OpenSearchIntegrationConfig(StrictConfigModel):
+    """Normalized OpenSearch credentials.
+
+    Supports two auth modes:
+    - API key (``api_key``) — for OpenSearch serverless or clusters configured with
+      fine-grained access control using API keys.
+    - HTTP Basic Auth (``username`` + ``password``) — for standard self-hosted
+      OpenSearch clusters. This is the most common auth method for OpenSearch.
+
+    At least one auth mode must be provided for secured clusters. Both fields are
+    optional to support clusters with security disabled (dev/test environments).
+    """
+
+    url: str
+    api_key: str = ""
+    username: str = ""
+    password: str = ""
+    index_pattern: str = "*"
+    integration_id: str = ""
+
+    _normalize_url = field_validator("url", mode="before")(normalize_url())
+
+    @model_validator(mode="after")
+    def _validate_auth(self) -> "OpenSearchIntegrationConfig":
+        """Warn when no auth is configured (cluster may require credentials)."""
+        import logging
+        _log = logging.getLogger(__name__)
+        has_apikey = bool(self.api_key)
+        has_basic = bool(self.username and self.password)
+        if not has_apikey and not has_basic:
+            _log.warning(
+                "[opensearch] No credentials configured for %s. "
+                "If the cluster has security enabled, queries will fail with HTTP 401. "
+                "Set api_key or username+password.",
+                self.url,
+            )
+        return self
+
+
 class CoralogixIntegrationConfig(StrictConfigModel):
     """Normalized Coralogix credentials used by resolution and verification flows."""
 

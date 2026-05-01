@@ -123,8 +123,12 @@ def _format_raw_alert(raw_alert: str | dict[str, Any]) -> str:
     if isinstance(raw_alert, dict):
         if _alert_dict_needs_full_json_for_llm(raw_alert):
             return json.dumps(raw_alert, indent=2, sort_keys=True)
-        # Slack-style payloads: prefer human-readable text when no structured routing fields.
+        # Slack-style payloads: pass the full JSON so the LLM retains timestamps,
+        # labels, channels and other structured fields alongside the human-readable text.
+        # Previously only raw_alert["text"] was forwarded, silently discarding all
+        # other fields (including "ts", "channel", "labels") which broke time-window
+        # anchoring and service routing downstream.
         if raw_alert.get("text"):
-            return str(raw_alert["text"])
+            return json.dumps(raw_alert, indent=2, sort_keys=True)
         return json.dumps(raw_alert, indent=2, sort_keys=True)
     return json.dumps(raw_alert, indent=2, sort_keys=True)

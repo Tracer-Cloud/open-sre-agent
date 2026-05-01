@@ -187,7 +187,6 @@ def _apply_guardrails_to_messages(msgs: list[Any]) -> list[Any]:
 
     Operates on copies to avoid mutating shared LangGraph state objects.
     """
-    import copy
 
     from app.guardrails.engine import get_guardrail_engine
 

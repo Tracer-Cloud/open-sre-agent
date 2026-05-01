@@ -31,16 +31,30 @@ logger = logging.getLogger(__name__)
 
 
 def _decode_org_id_from_token(token: str) -> str:
-    import base64
-    import json as _json
+    """Extract org ID from a JWT token using verified claims.
+
+    Previously this function decoded the JWT payload directly via base64 without
+    verifying the signature, making it possible for an attacker to forge any
+    ``organization`` claim. Now delegates to ``extract_org_id_from_jwt`` which
+    uses JWKS-based signature verification (see ``app/auth/jwt_auth.py``).
+
+    Falls back to empty string on any verification failure so callers that treat
+    a missing org as "anonymous" continue to work correctly.
+    """
+    # Validate token structure before delegating — jwt_auth also validates this
+    # but an early check gives a cleaner debug log for obviously malformed tokens.
+    if not token or token.count(".") != 2:
+        logger.debug(
+            "Malformed JWT token (expected 3 dot-separated segments, got %d)",
+            token.count(".") + 1 if token else 0,
+        )
+        return ""
 
     try:
-        payload_b64 = token.split(".")[1]
-        payload_b64 += "=" * (4 - len(payload_b64) % 4)
-        claims = _json.loads(base64.urlsafe_b64decode(payload_b64))
-        return claims.get("organization") or claims.get("org_id") or ""
+        from app.auth.jwt_auth import extract_org_id_from_jwt
+        return extract_org_id_from_jwt(token) or ""
     except Exception:
-        logger.debug("Failed to decode org_id from JWT token", exc_info=True)
+        logger.debug("Failed to extract org_id from JWT token", exc_info=True)
         return ""
 
 

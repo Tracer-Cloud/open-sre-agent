@@ -68,14 +68,14 @@ ANTHROPIC_MODELS = (
 
 OPENAI_MODELS = (
     ModelOption(value=OPENAI_REASONING_MODEL, label="GPT-5.4"),
-    ModelOption(value="gpt-5.4-mini", label="GPT-5.4 mini"),
-    ModelOption(value="gpt-5.4-nano", label="GPT-5.4 nano"),
-    ModelOption(value="gpt-5.3-codex", label="GPT-5.3-Codex"),
+    ModelOption(value="gpt-4.1-mini", label="GPT-4.1 mini"),
+    ModelOption(value="gpt-4.1-nano", label="GPT-4.1 nano"),
+    ModelOption(value="gpt-4.5-preview", label="GPT-4.5 preview"),
 )
 
 OPENROUTER_MODELS = (
     ModelOption(value=OPENROUTER_REASONING_MODEL, label="OpenRouter Auto (smart routing)"),
-    ModelOption(value="openai/gpt-5.2", label="GPT-5.2 (via OpenRouter)"),
+    ModelOption(value="openai/gpt-4.1", label="GPT-4.1 (via OpenRouter)"),
     ModelOption(value="anthropic/claude-opus-4.6", label="Claude Opus 4.6 (via OpenRouter)"),
     ModelOption(value="anthropic/claude-sonnet-4.5", label="Claude Sonnet 4.5 (via OpenRouter)"),
     ModelOption(value="anthropic/claude-haiku-4.5", label="Claude Haiku 4.5 (via OpenRouter)"),
@@ -149,16 +149,16 @@ CODEX_MODELS = (
         value="",
         label="CLI default (no -m; use Codex configured model)",
     ),
-    ModelOption(value="gpt-5.4", label="gpt-5.4 — strong default for everyday coding"),
-    ModelOption(value="gpt-5.2-codex", label="gpt-5.2-codex — frontier agentic coding"),
+    ModelOption(value="gpt-4.1", label="gpt-4.1 — strong default for everyday coding"),
+    ModelOption(value="o4-mini", label="o4-mini — frontier agentic coding"),
     ModelOption(
-        value="gpt-5.1-codex-max",
-        label="gpt-5.1-codex-max — deep / fast reasoning",
+        value="o3",
+        label="o3 — deep / fast reasoning",
     ),
-    ModelOption(value="gpt-5.4-mini", label="gpt-5.4-mini — fast, cost-efficient"),
-    ModelOption(value="gpt-5.3-codex", label="gpt-5.3-codex — coding-optimized"),
-    ModelOption(value="gpt-5.2", label="gpt-5.2 — long-running agents"),
-    ModelOption(value="gpt-5.1-codex-mini", label="gpt-5.1-codex-mini"),
+    ModelOption(value="gpt-4.1-mini", label="gpt-4.1-mini — fast, cost-efficient"),
+    ModelOption(value="gpt-4.5-preview", label="gpt-4.5-preview — coding-optimized"),
+    ModelOption(value="gpt-4.1", label="gpt-4.1 — long-running agents"),
+    ModelOption(value="o4-mini", label="o4-mini — fast reasoning"),
 )
 
 
