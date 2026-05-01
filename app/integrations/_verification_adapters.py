@@ -41,6 +41,7 @@ from app.services.opsgenie import OpsGenieClient, OpsGenieConfig
 from app.services.splunk import SplunkClient, SplunkConfig
 from app.services.tracer_client.client import TracerClient
 from app.services.vercel.client import VercelClient, VercelConfig
+from app.services.victoria_logs import VictoriaLogsClient, VictoriaLogsConfig
 
 VerifierFn = Callable[[str, dict[str, Any]], dict[str, str]]
 
@@ -546,6 +547,11 @@ _verify_splunk = build_probe_verifier(
     build_config=SplunkConfig.model_validate,
     client_factory=SplunkClient,
 )
+_verify_victoria_logs = build_probe_verifier(
+    "victoria_logs",
+    build_config=VictoriaLogsConfig.model_validate,
+    client_factory=VictoriaLogsClient,
+)
 
 
 def _verify_slack_without_test(source: str, config: dict[str, Any]) -> dict[str, str]:
@@ -588,6 +594,7 @@ __all__ = [
     "_verify_telegram",
     "_verify_tracer",
     "_verify_vercel",
+    "_verify_victoria_logs",
     "build_probe_verifier",
     "build_validation_verifier",
     "result",
