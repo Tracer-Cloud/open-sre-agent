@@ -155,3 +155,22 @@ class TestEvidenceAvailabilityArgoCD:
         assert has_tracer is None
         assert has_vendor is True
         assert has_alert is False
+
+
+class TestEvidenceAvailabilityObservabilityStacks:
+    @pytest.mark.parametrize(
+        "evidence_key",
+        [
+            "alertmanager_alerts",
+            "alertmanager_silences",
+            "coralogix_logs",
+            "coralogix_error_logs",
+            "honeycomb_traces",
+        ],
+    )
+    def test_observability_evidence_counts_as_vendor_evidence(self, evidence_key: str) -> None:
+        has_tracer, has_vendor, has_alert = check_evidence_availability({}, {evidence_key: []}, {})
+
+        assert has_tracer is None
+        assert has_vendor is True
+        assert has_alert is False
