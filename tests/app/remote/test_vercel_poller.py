@@ -397,7 +397,7 @@ def test_sort_deployment_stubs_handles_malformed_timestamps() -> None:
     ordered = _sort_deployment_stubs_newest_first(stubs)
     ids = [s["id"] for s in ordered]
     
-    # 'new' should be first, 'old' second.
+    #'new' should be first, 'old' second.
     # Others are treated as 1970 and should be at the end.
     assert ids[0] == "new"
     assert ids[1] == "old"
