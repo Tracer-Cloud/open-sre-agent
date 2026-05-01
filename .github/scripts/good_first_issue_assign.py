@@ -6,6 +6,9 @@ not GitHub's ``FIRST_TIME_CONTRIBUTOR`` / ``FIRST_TIMER`` flags.
 Also skips repo insiders (OWNER / MEMBER / COLLABORATOR), bots, closed issues,
 comments on **pull request** threads (``issue_comment`` fires for PRs too; those
 use ``issue.pull_request``), and commenters already listed as assignees.
+
+At most **one** auto-assignment per issue: if anyone else is already an assignee,
+further eligible commenters are skipped (manual pre-assignments count).
 """
 
 from __future__ import annotations
@@ -53,9 +56,13 @@ def screen_event_without_api(event: dict[str, Any]) -> str | None:
 
     assignees = issue.get("assignees") or []
     if isinstance(assignees, list):
-        for a in assignees:
-            if isinstance(a, dict) and a.get("login") == c_login:
-                return "already_assignee"
+        assigned_logins = {
+            a.get("login") for a in assignees if isinstance(a, dict) and a.get("login")
+        }
+        if c_login in assigned_logins:
+            return "already_assignee"
+        if assigned_logins:
+            return "issue_already_claimed"
 
     return None
 
