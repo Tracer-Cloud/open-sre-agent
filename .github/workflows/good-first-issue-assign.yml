@@ -1,10 +1,15 @@
 # When someone with zero merged PRs in this repo (and not OWNER/MEMBER/COLLABORATOR) comments
 # on an open issue labeled `good first issue`, assign them and reply.
+# issue_comment also fires for PR review threads; those payloads include issue.pull_request.
 name: Good first issue — auto-assign
 
 on:
   issue_comment:
     types: [created]
+
+concurrency:
+  group: good-first-issue-assign-${{ github.repository }}-${{ github.event.issue.number }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -16,7 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     if: >-
       github.event.issue.state == 'open' &&
-      github.event.comment.user.type != 'Bot'
+      github.event.comment.user.type != 'Bot' &&
+      !github.event.issue.pull_request
     steps:
       - uses: actions/checkout@v5
 
@@ -32,10 +38,13 @@ jobs:
         if: steps.decide.outputs.should_assign == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: >
-          gh issue edit "${{ github.event.issue.number }}"
-          --repo "${{ github.repository }}"
-          --add-assignee "${{ github.event.comment.user.login }}"
-          && gh issue comment "${{ github.event.issue.number }}"
-          --repo "${{ github.repository }}"
-          --body-file assign_comment.md
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPO_FULL: ${{ github.repository }}
+          COMMENTER_LOGIN: ${{ github.event.comment.user.login }}
+        run: |
+          gh issue edit "${ISSUE_NUMBER}" \
+            --repo "${REPO_FULL}" \
+            --add-assignee "${COMMENTER_LOGIN}"
+          gh issue comment "${ISSUE_NUMBER}" \
+            --repo "${REPO_FULL}" \
+            --body-file assign_comment.md

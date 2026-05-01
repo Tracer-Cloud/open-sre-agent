@@ -4,7 +4,8 @@ Here *new* means **zero merged PRs** in this repo authored by the commenter (Sea
 not GitHub's ``FIRST_TIME_CONTRIBUTOR`` / ``FIRST_TIMER`` flags.
 
 Also skips repo insiders (OWNER / MEMBER / COLLABORATOR), bots, closed issues,
-and commenters already listed as assignees.
+comments on **pull request** threads (``issue_comment`` fires for PRs too; those
+use ``issue.pull_request``), and commenters already listed as assignees.
 """
 
 from __future__ import annotations
@@ -28,6 +29,8 @@ def screen_event_without_api(event: dict[str, Any]) -> str | None:
     """Return a skip reason before calling the GitHub API, or None if checks should continue."""
     issue = event.get("issue") or {}
     comment = event.get("comment") or {}
+    if issue.get("pull_request") is not None:
+        return "comment_on_pull_request"
     if issue.get("state") != "open":
         return "issue_not_open"
     labels = issue.get("labels") or []

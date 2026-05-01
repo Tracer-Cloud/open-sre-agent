@@ -23,6 +23,23 @@ def _label(name: str) -> dict:
     return {"name": name}
 
 
+def test_screen_skips_pull_request_comment_thread(gfi):
+    event = {
+        "issue": {
+            "state": "open",
+            "labels": [_label(gfi.GOOD_FIRST_LABEL)],
+            "assignees": [],
+            "user": {"login": "alice"},
+            "pull_request": {"url": "https://api.github.com/repos/o/r/pulls/1"},
+        },
+        "comment": {
+            "user": {"login": "bob", "type": "User"},
+            "author_association": "NONE",
+        },
+    }
+    assert gfi.screen_event_without_api(event) == "comment_on_pull_request"
+
+
 def test_screen_skips_without_label(gfi):
     event = {
         "issue": {
