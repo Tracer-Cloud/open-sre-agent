@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import copy
 from importlib import import_module
 from typing import Any, TypeAlias, cast
 
