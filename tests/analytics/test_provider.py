@@ -73,9 +73,6 @@ def test_install_main_reuses_shared_install_guard(monkeypatch) -> None:
     assert captured == [{"install_source": "make_install", "entrypoint": "make install"}]
 
 
-from app.analytics import provider
-from app.analytics.events import Event
-
 def test_analytics_disabled_via_opensre_env_var(monkeypatch) -> None:
     # 1. Add a test for OPENSRE_ANALYTICS_DISABLED=1
     monkeypatch.setenv("OPENSRE_ANALYTICS_DISABLED", "1")
