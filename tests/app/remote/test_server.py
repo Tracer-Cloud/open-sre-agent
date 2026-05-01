@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import collections
 import shutil
+import urllib.error
 from typing import Any
 
 import pytest
@@ -18,6 +19,8 @@ from app.remote.server import (
     DeepHealthCheck,
     InvestigateRequest,
     _check_disk_health,
+    _imds_get,
+    _imds_token,
     _lifespan,
     investigate,
     investigate_stream,
@@ -302,3 +305,57 @@ def test_check_disk_health_returns_missing_when_total_is_zero(
     assert result.name == "Disk"
     assert result.status == "missing"
     assert "Unable to determine disk size" in result.detail
+
+
+def test_imds_token_returns_none_on_url_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _raise_url_error(*args: object, **kwargs: object) -> None:
+        raise urllib.error.URLError("connection refused")
+
+    monkeypatch.setattr("urllib.request.urlopen", _raise_url_error)
+
+    assert _imds_token() is None
+
+
+def test_imds_token_returns_none_on_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _raise_timeout(*args: object, **kwargs: object) -> None:
+        raise TimeoutError("timed out")
+
+    monkeypatch.setattr("urllib.request.urlopen", _raise_timeout)
+
+    assert _imds_token() is None
+
+
+def test_imds_token_returns_none_on_os_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _raise_os_error(*args: object, **kwargs: object) -> None:
+        raise OSError("network unreachable")
+
+    monkeypatch.setattr("urllib.request.urlopen", _raise_os_error)
+
+    assert _imds_token() is None
+
+
+def test_imds_get_returns_none_on_url_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _raise_url_error(*args: object, **kwargs: object) -> None:
+        raise urllib.error.URLError("connection refused")
+
+    monkeypatch.setattr("urllib.request.urlopen", _raise_url_error)
+
+    assert _imds_get("latest/meta-data/instance-id", token="test-token") is None
+
+
+def test_imds_get_returns_none_on_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _raise_timeout(*args: object, **kwargs: object) -> None:
+        raise TimeoutError("timed out")
+
+    monkeypatch.setattr("urllib.request.urlopen", _raise_timeout)
+
+    assert _imds_get("latest/meta-data/instance-id", token="test-token") is None
+
+
+def test_imds_get_returns_none_on_os_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _raise_os_error(*args: object, **kwargs: object) -> None:
+        raise OSError("network unreachable")
+
+    monkeypatch.setattr("urllib.request.urlopen", _raise_os_error)
+
+    assert _imds_get("latest/meta-data/instance-id", token="test-token") is None
