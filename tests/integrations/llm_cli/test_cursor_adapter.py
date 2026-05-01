@@ -36,7 +36,7 @@ def _fallback_proc() -> MagicMock:
 
 @patch("app.integrations.llm_cli.cursor.subprocess.run")
 @patch("app.integrations.llm_cli.binary_resolver.shutil.which")
-def test_detect_logged_in_via_env(mock_which: MagicMock, mock_run: MagicMock) -> None:
+def test_detect_does_not_use_env_for_auth(mock_which: MagicMock, mock_run: MagicMock) -> None:
     mock_which.return_value = "agent"
 
     def side_effect(args, **kwargs):
@@ -48,13 +48,13 @@ def test_detect_logged_in_via_env(mock_which: MagicMock, mock_run: MagicMock) ->
 
     with patch.dict(
         os.environ,
-        {"CURSOR_API_KEY": "cursor-test", "CURSOR_BIN": "agent"},
+        {"CURSOR_BIN": "agent"},
         clear=False,
     ):
         probe = CursorAdapter().detect()
 
     assert probe.installed is True
-    assert probe.logged_in is True
+    assert probe.logged_in is None
     assert probe.version is not None
 
 

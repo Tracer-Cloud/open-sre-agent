@@ -30,7 +30,7 @@ class CursorAdapter:
     name = "cursor"
     binary_env_key = "CURSOR_BIN"
     install_hint = "Install Cursor Agent with: curl https://cursor.com/install -fsS | bash"
-    auth_hint = "Run: agent login, or set CURSOR_API_KEY."
+    auth_hint = "Run: agent login."
     min_version: str | None = None
     default_exec_timeout_sec = 300.0
 
@@ -92,15 +92,6 @@ class CursorAdapter:
                 logged_in=None,
                 bin_path=None,
                 detail="Binary found but does not appear to be Cursor Agent CLI.",
-            )
-
-        if os.environ.get("CURSOR_API_KEY"):
-            return CLIProbe(
-                installed=True,
-                version=version,
-                logged_in=True,
-                bin_path=binary,
-                detail="Authenticated via CURSOR_API_KEY environment variable.",
             )
 
         try:
@@ -190,7 +181,7 @@ class CursorAdapter:
         bits = [f"cursor agent exited with code {returncode}"]
 
         if "Authentication required" in text or "Not logged in" in text:
-            bits.append("Not logged in. Run: agent login, or set CURSOR_API_KEY.")
+            bits.append("Not logged in. Run: agent login.")
         elif "Workspace Trust Required" in text:
             bits.append("Workspace trust required. The adapter uses --trust for headless runs.")
         elif "Named models unavailable" in text:
