@@ -419,11 +419,11 @@ Planning rules:
      (1) analytics/aggregation queries causing CPU saturation
      (2) write-heavy workloads causing storage exhaustion (e.g. audit_log INSERT, WAL growth, or table bloat depending on the system)
 
-   - Prioritize AWS Performance Insights to identify:
-     - the CPU-driving SQL query
+   - Prefer query-level or workload-level evidence when available (for example AWS Performance Insights, database logs, slow query logs, pg_stat_activity, or equivalent provider telemetry) to identify:
+     - the CPU-driving SQL query or workload
      - the write/storage-driving workload
 
-   - Do NOT rely only on Grafana metrics/logs for final RCA when query-level evidence is required
+   - Do not rely only on high-level metrics when more specific workload-level evidence is available. If query-level evidence is unavailable or exhausted, use the best available provider telemetry and clearly state what evidence is missing.
 
    - Prefer actions that surface SQL-level evidence rather than only system-level metrics
 
