@@ -111,8 +111,17 @@ make test-cov      # pytest: run tests with coverage report
 ```
 
 All four must pass. **CI will block merging if any fail.**
+### Run one focused test
 
-### 5. Open a Pull Request
+Replace the placeholders with your actual file or test name:
+
+```bash
+pytest tests/cli/test_.py                                       # single file
+pytest tests/cli/test_.py::test_                                # single function
+pytest tests/tools/ -k "test_registry"                          # tools example
+pytest tests/synthetic/ -k "test_scenario"                      # no live infra needed
+
+
 
 Follow the PR template (see below). Link the relevant issue and describe what changed and why.
 
