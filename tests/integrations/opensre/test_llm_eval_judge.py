@@ -90,6 +90,4 @@ def test_extract_judge_json_raises_for_prose_wrapped_array() -> None:
 
 def test_extract_judge_json_raises_for_info_prefixed_array() -> None:
     with pytest.raises(ValueError, match="JSON must be an object"):
-        extract_judge_json_from_response(
-            '[INFO] result: [{"overall_pass": true}]'
-        )
+        extract_judge_json_from_response('[INFO] result: [{"overall_pass": true}]')
