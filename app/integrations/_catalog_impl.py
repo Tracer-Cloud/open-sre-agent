@@ -8,7 +8,6 @@ import os
 from typing import Any
 
 from app.config import get_tracer_base_url
-from app.integrations._catalog_services import should_publish_instance_siblings
 from app.integrations.airflow import (
     DEFAULT_AIRFLOW_BASE_URL,
     airflow_config_from_env,
@@ -19,14 +18,13 @@ from app.integrations.betterstack import build_betterstack_config
 from app.integrations.github_mcp import build_github_mcp_config
 from app.integrations.gitlab import DEFAULT_GITLAB_BASE_URL, build_gitlab_config
 from app.integrations.mariadb import build_mariadb_config
-from app.integrations.models import (
+from app.integrations.config_models import (
     AlertmanagerIntegrationConfig,
     ArgoCDIntegrationConfig,
     AWSIntegrationConfig,
     CoralogixIntegrationConfig,
     DatadogIntegrationConfig,
     DiscordBotConfig,
-    EffectiveIntegrations,
     GrafanaIntegrationConfig,
     HoneycombIntegrationConfig,
     JiraIntegrationConfig,
@@ -35,6 +33,7 @@ from app.integrations.models import (
     SplunkIntegrationConfig,
     TelegramBotConfig,
 )
+from app.integrations.effective_models import EffectiveIntegrations
 from app.integrations.mongodb import build_mongodb_config
 from app.integrations.mongodb_atlas import build_mongodb_atlas_config
 from app.integrations.mysql import build_mysql_config
@@ -53,6 +52,15 @@ from app.services.vercel import VercelConfig
 from app.utils.coercion import safe_int
 
 logger = logging.getLogger(__name__)
+
+
+def _should_publish_instance_siblings(instances: object) -> bool:
+    """Return whether an effective integration should expose its ``instances`` list."""
+    if not isinstance(instances, list) or not instances:
+        return False
+    if len(instances) > 1:
+        return True
+    return str(instances[0].get("name", "default")) != "default"
 
 
 def _record_instances(record: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1499,7 +1507,7 @@ def _publish_classified_effective_service(
         resolved_integration,
     )
     all_instances = classified_integrations.get(f"_all_{service}_instances")
-    if should_publish_instance_siblings(all_instances):
+    if _should_publish_instance_siblings(all_instances):
         effective[service]["instances"] = all_instances
 
 

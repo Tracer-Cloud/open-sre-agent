@@ -1,10 +1,14 @@
-"""Compatibility re-exports for integration models."""
+"""Backward-compatible re-exports for integration models.
+
+Import directly from config_models or effective_models in new code.
+This shim exists only so existing callers don't need a mass update.
+"""
 
 from app.integrations.config_models import (
-    AlertmanagerIntegrationConfig,
-    ArgoCDIntegrationConfig,
     AWSIntegrationConfig,
     AWSStaticCredentials,
+    AlertmanagerIntegrationConfig,
+    ArgoCDIntegrationConfig,
     AzureSQLIntegrationConfig,
     BetterStackIntegrationConfig,
     CoralogixIntegrationConfig,
