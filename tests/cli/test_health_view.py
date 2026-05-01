@@ -55,19 +55,52 @@ def test_summary_counts() -> None:
         {"status": "missing"},
         {"status": "failed"},
         {"status": "unknown"},
-        {"status": "error"},  # This should be 'other' according to current implementation
+        {"status": "error"},
     ]
-    # Note: _summary_counts only matches "passed", "missing", "failed" exactly (after lower/strip)
-    # "error" or "unhealthy" are mapped to "other" in _summary_counts logic even if status_badge handles them.
-    # Looking at health_view.py:
-    # if status in counts: counts[status] += 1 else: counts["other"] += 1
-    # where counts = {"passed": 0, "missing": 0, "failed": 0, "other": 0}
-
     counts = _summary_counts(results)
     assert counts["passed"] == 2
     assert counts["missing"] == 1
-    assert counts["failed"] == 1
-    assert counts["other"] == 2  # 'unknown' and 'error'
+    assert counts["failed"] == 2
+    assert counts["other"] == 1
+
+
+def test_summary_counts_normalizes_failure_aliases() -> None:
+    results = [
+        {"status": "failed"},
+        {"status": "fail"},
+        {"status": "error"},
+        {"status": "unhealthy"},
+        {"status": "FAILED"},
+    ]
+    counts = _summary_counts(results)
+    assert counts["failed"] == 5
+    assert counts["other"] == 0
+
+
+def test_summary_counts_normalizes_passed_aliases() -> None:
+    results = [
+        {"status": "passed"},
+        {"status": "pass"},
+        {"status": "ok"},
+        {"status": "healthy"},
+    ]
+    counts = _summary_counts(results)
+    assert counts["passed"] == 4
+    assert counts["other"] == 0
+
+
+def test_summary_counts_unknown_stays_other() -> None:
+    results = [
+        {"status": "warn"},
+        {"status": "degraded"},
+        {"status": "weird"},
+        {"status": ""},
+    ]
+    counts = _summary_counts(results)
+    assert counts["other"] == 4
+    assert counts["passed"] == 0
+    assert counts["failed"] == 0
+    assert counts["missing"] == 0
 
 
 def test_render_health_json(capsys) -> None:
