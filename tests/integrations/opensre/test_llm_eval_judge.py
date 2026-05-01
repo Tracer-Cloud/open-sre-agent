@@ -86,3 +86,10 @@ def test_extract_judge_json_picks_last_valid_fence_with_multiple_fences() -> Non
 def test_extract_judge_json_raises_for_prose_wrapped_array() -> None:
     with pytest.raises(ValueError, match="JSON must be an object"):
         extract_judge_json_from_response('Here is the result: [{"overall_pass": true}] Thanks')
+
+
+def test_extract_judge_json_raises_for_info_prefixed_array() -> None:
+    with pytest.raises(ValueError, match="JSON must be an object"):
+        extract_judge_json_from_response(
+            '[INFO] result: [{"overall_pass": true}]'
+        )
