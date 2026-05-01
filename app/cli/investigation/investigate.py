@@ -198,21 +198,12 @@ def run_investigation_cli_streaming(
     }
 
 
-def run_investigation_for_session(
+def _run_session_alert_payload(
     *,
-    alert_text: str,
+    raw_alert: dict[str, Any],
     context_overrides: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Run a streaming investigation from a free-text alert description.
-
-    Used by the REPL loop: wraps the user's text as the alert payload, runs
-    the full pipeline with live streaming, and returns the final state so
-    follow-ups and context accumulation can reference it.
-
-    KeyboardInterrupt in the main thread is forwarded to the background
-    asyncio loop as a task cancel, so Ctrl+C unwinds the in-flight LangGraph
-    run cleanly instead of leaving it orphaned.
-    """
+    """Run a streaming investigation from an already-structured session alert."""
     import queue
     import threading
 
@@ -220,7 +211,6 @@ def run_investigation_for_session(
     from app.remote.renderer import StreamRenderer
 
     LLMSettings.from_env()
-    raw_alert: dict[str, Any] = {"alert_name": "Interactive session", "message": alert_text}
     if context_overrides:
         raw_alert.setdefault("annotations", {}).update(context_overrides)
 
@@ -300,3 +290,36 @@ def run_investigation_for_session(
                 "an LLM call may still be in flight"
             )
     return dict(final_state)
+
+
+def run_investigation_for_session(
+    *,
+    alert_text: str,
+    context_overrides: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Run a streaming investigation from a free-text alert description.
+
+    Used by the REPL loop: wraps the user's text as the alert payload, runs
+    the full pipeline with live streaming, and returns the final state so
+    follow-ups and context accumulation can reference it.
+
+    KeyboardInterrupt in the main thread is forwarded to the background
+    asyncio loop as a task cancel, so Ctrl+C unwinds the in-flight LangGraph
+    run cleanly instead of leaving it orphaned.
+    """
+    raw_alert: dict[str, Any] = {"alert_name": "Interactive session", "message": alert_text}
+    return _run_session_alert_payload(raw_alert=raw_alert, context_overrides=context_overrides)
+
+
+def run_sample_alert_for_session(
+    *,
+    template_name: str = "generic",
+    context_overrides: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Run a streaming investigation for a built-in sample alert."""
+    from app.cli.investigation.alert_templates import build_alert_template
+
+    return _run_session_alert_payload(
+        raw_alert=build_alert_template(template_name),
+        context_overrides=context_overrides,
+    )

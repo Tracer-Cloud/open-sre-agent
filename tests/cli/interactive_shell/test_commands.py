@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import io
+from pathlib import Path
 
+import pytest
+from prompt_toolkit.history import FileHistory
 from rich.console import Console
 
 from app.cli.interactive_shell.commands import SLASH_COMMANDS, dispatch_slash
@@ -39,6 +42,16 @@ class TestDispatchSlash:
         # Any slash command name suffices as proof the help table rendered.
         assert "/help" in output
         assert "/list" in output
+
+    def test_bare_slash_previews_all_commands(self) -> None:
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/", session, console) is True
+        output = buf.getvalue()
+        assert "Slash commands" in output
+        assert "/help" in output
+        assert "/list" in output
+        assert "unknown command" not in output
 
     def test_trust_toggle(self) -> None:
         session = ReplSession()
@@ -77,10 +90,37 @@ class TestDispatchSlash:
         assert dispatch_slash("/made-up", session, console) is True
         assert "unknown command" in buf.getvalue()
 
+    def test_local_llm_is_not_a_builtin_slash_action(self) -> None:
+        assert "/local-llm" not in SLASH_COMMANDS
+        assert "/local_llm" not in SLASH_COMMANDS
+
     def test_empty_input_is_noop(self) -> None:
         session = ReplSession()
         console, _ = _capture()
         assert dispatch_slash("   ", session, console) is True
+
+    def test_history_shows_persisted_prompt_history(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        import app.constants as const_module
+
+        monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        history = FileHistory(str(tmp_path / "interactive_history"))
+        history.store_string("opensre health")
+        history.store_string("/list integrations")
+
+        session = ReplSession()
+        session.record("alert", "current session only")
+        console, buf = _capture()
+
+        assert dispatch_slash("/history", session, console) is True
+        output = buf.getvalue()
+        assert "Command history" in output
+        assert "opensre health" in output
+        assert "/list integrations" in output
+        assert "current session only" not in output
 
 
 class TestListCommand:
@@ -151,6 +191,23 @@ class TestListCommand:
         assert "reasoning model" in output
         assert "toolcall model" in output
         assert "anthropic" in output
+
+    def test_list_models_shows_ollama_model(self, monkeypatch: object) -> None:
+        from app.cli.interactive_shell import commands as cmd_module
+
+        class _FakeLLM:
+            provider = "ollama"
+            ollama_model = "qwen2.5:7b"
+
+        monkeypatch.setattr(  # type: ignore[attr-defined]
+            cmd_module, "_load_llm_settings", lambda: _FakeLLM()
+        )
+        console, buf = _capture()
+        dispatch_slash("/list models", ReplSession(), console)
+        output = buf.getvalue()
+        assert "ollama" in output
+        assert "qwen2.5:7b" in output
+        assert "default" not in output
 
     def test_list_models_handles_missing_env_gracefully(self, monkeypatch: object) -> None:
         from app.cli.interactive_shell import commands as cmd_module
@@ -331,10 +388,41 @@ class TestModelCommand:
         dispatch_slash("/model", ReplSession(), console)
         assert "anthropic" in buf.getvalue()
 
-    def test_set_prints_not_supported_message(self) -> None:
+    def test_set_switches_provider(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        self._patch_llm(monkeypatch)
+        import app.cli.wizard.env_sync as env_sync
+
+        monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
         console, buf = _capture()
-        dispatch_slash("/model set claude-haiku", ReplSession(), console)
-        assert "not yet supported" in buf.getvalue()
+        dispatch_slash("/model set anthropic", ReplSession(), console)
+
+        output = buf.getvalue()
+        assert "switched LLM provider" in output
+        assert "anthropic" in output
+        assert "LLM_PROVIDER=anthropic" in (tmp_path / ".env").read_text(encoding="utf-8")
+
+    def test_set_missing_provider_prints_usage(self) -> None:
+        console, buf = _capture()
+        dispatch_slash("/model set", ReplSession(), console)
+        assert "usage" in buf.getvalue()
+
+    def test_switch_alias_switches_provider(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        self._patch_llm(monkeypatch)
+        import app.cli.wizard.env_sync as env_sync
+
+        monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
+        console, buf = _capture()
+        dispatch_slash("/model switch anthropic", ReplSession(), console)
+
+        assert "switched LLM provider" in buf.getvalue()
 
     def test_unknown_subcommand(self, monkeypatch: object) -> None:
         self._patch_llm(monkeypatch)
@@ -438,28 +526,52 @@ class TestInvestigateFileCommand:
 
 
 class TestHistoryCommand:
-    def test_empty_history_says_so(self) -> None:
+    def test_empty_history_says_so(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        import app.constants as const_module
+
+        monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
         console, buf = _capture()
         dispatch_slash("/history", ReplSession(), console)
         assert "no history" in buf.getvalue()
 
-    def test_history_shows_entries(self) -> None:
-        session = ReplSession()
-        session.record("alert", "pod crash in prod")
-        session.record("slash", "/status")
-        console, buf = _capture()
-        dispatch_slash("/history", session, console)
-        output = buf.getvalue()
-        assert "alert" in output
-        assert "slash" in output
-        assert "pod crash in prod" in output
+    def test_history_shows_entries(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        import app.constants as const_module
 
-    def test_failed_entry_shows_x_marker(self) -> None:
+        monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        history = FileHistory(str(tmp_path / "interactive_history"))
+        history.store_string("pod crash in prod")
+        history.store_string("/status")
+
+        console, buf = _capture()
+        dispatch_slash("/history", ReplSession(), console)
+        output = buf.getvalue()
+        assert "Command history" in output
+        assert "pod crash in prod" in output
+        assert "/status" in output
+
+    def test_history_ignores_session_only_entries(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        import app.constants as const_module
+
+        monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
         session = ReplSession()
         session.record("alert", "bad input", ok=False)
         console, buf = _capture()
         dispatch_slash("/history", session, console)
-        assert "✗" in buf.getvalue()
+        output = buf.getvalue()
+        assert "no history" in output
+        assert "bad input" not in output
 
 
 class TestLastCommand:

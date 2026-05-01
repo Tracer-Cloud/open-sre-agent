@@ -17,7 +17,7 @@ class ReplSession:
     """
 
     history: list[dict[str, Any]] = field(default_factory=list)
-    """Each entry: {"type": "alert"|"follow_up"|"slash"|"cli_help"|"cli_agent", "text": str, "ok": bool}."""
+    """Each entry has type, text, and ok fields for shell, slash, alert, and chat turns."""
 
     last_state: dict[str, Any] | None = None
     """The final AgentState from the most recent investigation, used by follow-ups."""

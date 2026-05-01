@@ -11,8 +11,10 @@ from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
 
-from app.cli.interactive_shell.banner import render_banner
+from app.cli.interactive_shell.banner import render_banner, resolve_provider_models
+from app.cli.interactive_shell.history import load_command_history_entries
 from app.cli.interactive_shell.session import ReplSession
+from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
 
 
 @dataclass(frozen=True)
@@ -23,7 +25,7 @@ class SlashCommand:
 
 
 def _cmd_help(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    table = Table(title="Slash commands", title_style="bold cyan", show_header=False)
+    table = Table(title="Slash commands", title_style=TERMINAL_ACCENT_BOLD, show_header=False)
     table.add_column("name", style="bold")
     table.add_column("description", style="dim")
     for cmd in SLASH_COMMANDS.values():
@@ -60,7 +62,7 @@ def _cmd_trust(session: ReplSession, console: Console, args: list[str]) -> bool:
 
 
 def _cmd_status(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    table = Table(title="Session status", title_style="bold cyan", show_header=False)
+    table = Table(title="Session status", title_style=TERMINAL_ACCENT_BOLD, show_header=False)
     table.add_column("key", style="bold")
     table.add_column("value")
     table.add_row("interactions", str(len(session.history)))
@@ -110,7 +112,7 @@ def _render_integrations_table(console: Console, results: list[dict[str, str]]) 
     if not rows:
         console.print("[dim]no integrations configured.  try `opensre onboard` to add one.[/dim]")
         return
-    table = Table(title="Integrations", title_style="bold cyan")
+    table = Table(title="Integrations", title_style=TERMINAL_ACCENT_BOLD)
     table.add_column("service", style="bold")
     table.add_column("source", style="dim")
     table.add_column("status")
@@ -131,7 +133,7 @@ def _render_mcp_table(console: Console, results: list[dict[str, str]]) -> None:
     if not rows:
         console.print("[dim]no MCP servers configured.[/dim]")
         return
-    table = Table(title="MCP servers", title_style="bold cyan")
+    table = Table(title="MCP servers", title_style=TERMINAL_ACCENT_BOLD)
     table.add_column("server", style="bold")
     table.add_column("source", style="dim")
     table.add_column("status")
@@ -153,15 +155,45 @@ def _render_models_table(console: Console) -> None:
         console.print("[red]LLM settings unavailable[/red] — check provider env vars.")
         return
     provider = str(getattr(settings, "provider", "unknown"))
-    reasoning_attr = f"{provider}_reasoning_model"
-    toolcall_attr = f"{provider}_toolcall_model"
-    table = Table(title="LLM connection", title_style="bold cyan", show_header=False)
+    reasoning_model, toolcall_model = resolve_provider_models(settings, provider)
+    table = Table(title="LLM connection", title_style=TERMINAL_ACCENT_BOLD, show_header=False)
     table.add_column("key", style="bold")
     table.add_column("value")
     table.add_row("provider", provider)
-    table.add_row("reasoning model", str(getattr(settings, reasoning_attr, "—")))
-    table.add_row("toolcall model", str(getattr(settings, toolcall_attr, "—")))
+    table.add_row("reasoning model", reasoning_model)
+    table.add_row("toolcall model", toolcall_model)
     console.print(table)
+
+
+def switch_llm_provider(provider_name: str, console: Console, model: str | None = None) -> bool:
+    from app.cli.wizard.config import PROVIDER_BY_VALUE
+    from app.cli.wizard.env_sync import sync_env_values
+
+    provider_key = provider_name.strip().lower()
+    provider = PROVIDER_BY_VALUE.get(provider_key)
+    if provider is None:
+        choices = ", ".join(sorted(PROVIDER_BY_VALUE))
+        console.print(
+            f"[red]unknown LLM provider:[/red] {escape(provider_name)} "
+            f"[dim](choices: {choices})[/dim]"
+        )
+        return False
+
+    selected_model = model.strip() if model else provider.default_model
+    values = {"LLM_PROVIDER": provider.value, provider.model_env: selected_model}
+    if provider.legacy_model_env:
+        values[provider.legacy_model_env] = selected_model
+
+    env_path = sync_env_values(values)
+    os.environ.update(values)
+
+    console.print(
+        f"[green]switched LLM provider:[/green] {provider.value} "
+        f"[dim]({selected_model or 'provider default'})[/dim]"
+    )
+    console.print(f"[dim]updated {env_path}[/dim]")
+    _render_models_table(console)
+    return True
 
 
 def _cmd_integrations(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
@@ -191,7 +223,11 @@ def _cmd_integrations(session: ReplSession, console: Console, args: list[str]) -
         if match is None:
             console.print(f"[red]service not found:[/red] {escape(service)}")
             return True
-        table = Table(title=f"Integration: {service}", title_style="bold cyan", show_header=False)
+        table = Table(
+            title=f"Integration: {service}",
+            title_style=TERMINAL_ACCENT_BOLD,
+            show_header=False,
+        )
         table.add_column("key", style="bold")
         table.add_column("value")
         for k, v in match.items():
@@ -240,16 +276,16 @@ def _cmd_model(session: ReplSession, console: Console, args: list[str]) -> bool:
         _render_models_table(console)
         return True
 
-    if sub == "set":
-        console.print(
-            "[yellow]model switching mid-session is not yet supported.[/yellow]\n"
-            "[dim]set LLM_PROVIDER / model env vars and restart opensre.[/dim]"
-        )
+    if sub in ("set", "use", "switch"):
+        if len(args) < 2:
+            console.print("[red]usage:[/red] /model set <provider> [model]")
+            return True
+        switch_llm_provider(args[1], console, model=args[2] if len(args) > 2 else None)
         return True
 
     console.print(
         f"[red]unknown subcommand:[/red] {escape(sub)}  "
-        "(try [bold]/model show[/bold] or [bold]/model set <id>[/bold])"
+        "(try [bold]/model show[/bold] or [bold]/model set <provider> [model][/bold])"
     )
     return True
 
@@ -275,7 +311,7 @@ def _cmd_doctor(session: ReplSession, console: Console, args: list[str]) -> bool
     from app.cli.commands.doctor import _CHECKS, _check
 
     _STATUS_STYLES: dict[str, str] = {"ok": "green", "warn": "yellow", "error": "red"}
-    table = Table(title="OpenSRE Doctor", title_style="bold cyan")
+    table = Table(title="OpenSRE Doctor", title_style=TERMINAL_ACCENT_BOLD)
     table.add_column("check", style="bold")
     table.add_column("status")
     table.add_column("detail", style="dim", overflow="fold")
@@ -302,7 +338,7 @@ def _cmd_version(session: ReplSession, console: Console, args: list[str]) -> boo
 
     from app.version import get_version
 
-    table = Table(title="Version info", title_style="bold cyan", show_header=False)
+    table = Table(title="Version info", title_style=TERMINAL_ACCENT_BOLD, show_header=False)
     table.add_column("key", style="bold")
     table.add_column("value")
     table.add_row("opensre", get_version())
@@ -414,26 +450,17 @@ def _cmd_list(session: ReplSession, console: Console, args: list[str]) -> bool: 
 
 
 def _cmd_history(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    if not session.history:
+    entries = load_command_history_entries()
+    if not entries:
         console.print("[dim]no history yet.[/dim]")
         return True
 
-    table = Table(title="Session history", title_style="bold cyan")
+    table = Table(title="Command history", title_style=TERMINAL_ACCENT_BOLD)
     table.add_column("#", style="dim", justify="right")
-    table.add_column("type", style="bold")
-    table.add_column("ok")
     table.add_column("text", overflow="fold")
 
-    for i, entry in enumerate(session.history, start=1):
-        ok_flag = entry.get("ok", True)
-        ok_style = "green" if ok_flag else "red"
-        ok_label = "✓" if ok_flag else "✗"
-        table.add_row(
-            str(i),
-            entry.get("type", "?"),
-            f"[{ok_style}]{ok_label}[/{ok_style}]",
-            escape(str(entry.get("text", ""))),
-        )
+    for i, entry in enumerate(entries, start=1):
+        table.add_row(str(i), escape(entry))
     console.print(table)
     return True
 
@@ -447,7 +474,9 @@ def _cmd_last(session: ReplSession, console: Console, args: list[str]) -> bool: 
     report = session.last_state.get("problem_md") or session.last_state.get("slack_message") or ""
 
     if root_cause:
-        console.print(f"[bold cyan]root cause:[/bold cyan] {escape(str(root_cause))}")
+        console.print(
+            f"[{TERMINAL_ACCENT_BOLD}]root cause:[/] {escape(str(root_cause))}"
+        )
     if report:
         console.print(escape(str(report)))
     if not root_cause and not report:
@@ -495,7 +524,7 @@ def _cmd_context(session: ReplSession, console: Console, args: list[str]) -> boo
         console.print("[dim]no infra context accumulated yet.[/dim]")
         return True
 
-    table = Table(title="Accumulated context", title_style="bold cyan", show_header=False)
+    table = Table(title="Accumulated context", title_style=TERMINAL_ACCENT_BOLD, show_header=False)
     table.add_column("key", style="bold")
     table.add_column("value")
     for k, v in sorted(session.accumulated_context.items()):
@@ -505,7 +534,7 @@ def _cmd_context(session: ReplSession, console: Console, args: list[str]) -> boo
 
 
 def _cmd_cost(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    table = Table(title="Session cost", title_style="bold cyan", show_header=False)
+    table = Table(title="Session cost", title_style=TERMINAL_ACCENT_BOLD, show_header=False)
     table.add_column("key", style="bold")
     table.add_column("value")
     table.add_row("interactions", str(len(session.history)))
@@ -590,7 +619,7 @@ SLASH_COMMANDS: dict[str, SlashCommand] = {
         "run an RCA investigation from a file ('/investigate <file>')",
         _cmd_investigate_file,
     ),
-    "/history": SlashCommand("/history", "show session interaction history", _cmd_history),
+    "/history": SlashCommand("/history", "show persisted command history", _cmd_history),
     "/last": SlashCommand("/last", "reprint the most recent investigation report", _cmd_last),
     "/save": SlashCommand("/save", "save last investigation to a file ('/save <path>')", _cmd_save),
     "/context": SlashCommand("/context", "show accumulated infra context", _cmd_context),
@@ -608,7 +637,11 @@ SLASH_COMMANDS: dict[str, SlashCommand] = {
 
 def dispatch_slash(command_line: str, session: ReplSession, console: Console) -> bool:
     """Dispatch a slash command line. Returns False iff the REPL should exit."""
-    parts = command_line.strip().split()
+    stripped = command_line.strip()
+    if stripped == "/":
+        return _cmd_help(session, console, [])
+
+    parts = stripped.split()
     if not parts:
         return True
     name = parts[0].lower()

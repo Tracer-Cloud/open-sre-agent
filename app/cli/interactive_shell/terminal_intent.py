@@ -47,6 +47,12 @@ _CLI_AGENT_OPERATIONAL_PATTERNS: tuple[re.Pattern[str], ...] = (
     ),
 )
 
+_SAMPLE_ALERT_LAUNCH_RE = re.compile(
+    r"\b(?:try|run|start|launch|fire|send|trigger)\b.{0,60}?"
+    r"\b(?:sample|simple|test|demo)\s+(?:alert|event)\b",
+    re.IGNORECASE,
+)
+
 _INTEGRATION_CONTEXT_RE = re.compile(
     r"\b(integrations?|services?|connections?|connected|configured|credentials?)\b",
     re.IGNORECASE,
@@ -87,9 +93,15 @@ def is_cli_agent_operational_intent(text: str) -> bool:
     )
 
 
+def is_sample_alert_launch_intent(text: str) -> bool:
+    """True when the user asks the shell to launch a built-in test alert."""
+    return _SAMPLE_ALERT_LAUNCH_RE.search(text) is not None
+
+
 __all__ = [
     "is_cli_agent_operational_intent",
     "is_integration_terminal_intent",
+    "is_sample_alert_launch_intent",
     "mentioned_integration_services",
     "mentions_alert_signal",
 ]

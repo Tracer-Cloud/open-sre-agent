@@ -48,6 +48,12 @@ class TestClassifyInput:
         assert len(text) >= 48
         assert classify_input(text, session) == "cli_agent"
 
+    def test_local_llama_connect_stays_cli_agent_with_prior_state(self) -> None:
+        session = ReplSession()
+        session.last_state = {"root_cause": "disk full"}
+
+        assert classify_input("please connect to local llama", session) == "cli_agent"
+
     def test_long_integration_question_stays_cli_agent(self) -> None:
         """Integration inventory/capability questions are terminal work, not alerts."""
         session = ReplSession()
@@ -67,6 +73,11 @@ class TestClassifyInput:
     def test_no_prior_state_incident_question_is_new_alert(self) -> None:
         session = ReplSession()
         assert classify_input("why is the database slow?", session) == "new_alert"
+
+    def test_sample_alert_launch_routes_to_cli_agent(self) -> None:
+        session = ReplSession()
+        assert classify_input("okay launch a simple alert", session) == "cli_agent"
+        assert classify_input("try a sample alert", session) == "cli_agent"
 
     def test_no_prior_long_line_is_new_alert(self) -> None:
         session = ReplSession()

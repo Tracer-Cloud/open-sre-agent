@@ -492,7 +492,13 @@ async def _open_github_mcp_session(config: GitHubMCPConfig) -> AsyncIterator[Cli
 
 
 def _run_async(coro: Any) -> Any:
-    return asyncio.run(coro)
+    try:
+        return asyncio.run(coro)
+    except BaseException:
+        close = getattr(coro, "close", None)
+        if callable(close):
+            close()
+        raise
 
 
 def _root_cause_message(exc: BaseException) -> str:

@@ -11,6 +11,7 @@ from rich.markup import escape
 
 from app.cli.interactive_shell.loaders import llm_loader
 from app.cli.interactive_shell.session import ReplSession
+from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
 
 _logger = logging.getLogger(__name__)
 
@@ -106,7 +107,7 @@ def answer_follow_up(question: str, session: ReplSession, console: Console) -> N
     # timestamps, service names) that Rich would interpret as markup tags and
     # silently drop.  Escape everything that isn't our own markup.
     console.print()
-    console.print(f"[bold cyan]answer:[/bold cyan] {escape(text)}")
+    console.print(f"[{TERMINAL_ACCENT_BOLD}]answer:[/] {escape(text)}")
     console.print()
 
 

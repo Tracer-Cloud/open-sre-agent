@@ -9,6 +9,7 @@ from typing import Literal
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.terminal_intent import (
     is_cli_agent_operational_intent,
+    is_sample_alert_launch_intent,
     mentions_alert_signal,
 )
 
@@ -180,7 +181,8 @@ def classify_input(text: str, session: ReplSession) -> InputKind:
       1. Anything starting with ``/`` is a slash command.
       2. A bare word matching a known slash-command alias routes like slash.
       3. Procedural CLI questions route to ``cli_help`` (reference-grounded; no LangGraph).
-      4. Local setup / health / list-integrations phrasing routes to ``cli_agent`` (unless
+      4. Sample-alert launch requests and local setup / health / list-integrations
+         phrasing route to ``cli_agent`` (unless
          alert keywords indicate a real incident).
       5. With no prior investigation: if the line reads like an incident / alert /
          investigation request, route to ``new_alert`` (LangGraph). Otherwise route to
@@ -198,6 +200,9 @@ def classify_input(text: str, session: ReplSession) -> InputKind:
 
     if _is_cli_help_intent(stripped):
         return "cli_help"
+
+    if is_sample_alert_launch_intent(stripped):
+        return "cli_agent"
 
     if is_cli_agent_operational_intent(stripped) and not mentions_alert_signal(stripped):
         return "cli_agent"
