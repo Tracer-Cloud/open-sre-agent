@@ -67,7 +67,7 @@ ANTHROPIC_MODELS = (
 )
 
 OPENAI_MODELS = (
-    ModelOption(value=OPENAI_REASONING_MODEL, label="GPT-5.4"),
+    ModelOption(value=OPENAI_REASONING_MODEL, label="GPT-4.1"),
     ModelOption(value="gpt-4.1-mini", label="GPT-4.1 mini"),
     ModelOption(value="gpt-4.1-nano", label="GPT-4.1 nano"),
     ModelOption(value="gpt-4.5-preview", label="GPT-4.5 preview"),
@@ -157,8 +157,6 @@ CODEX_MODELS = (
     ),
     ModelOption(value="gpt-4.1-mini", label="gpt-4.1-mini — fast, cost-efficient"),
     ModelOption(value="gpt-4.5-preview", label="gpt-4.5-preview — coding-optimized"),
-    ModelOption(value="gpt-4.1", label="gpt-4.1 — long-running agents"),
-    ModelOption(value="o4-mini", label="o4-mini — fast reasoning"),
 )
 
 
