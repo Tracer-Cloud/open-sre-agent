@@ -34,6 +34,11 @@ class VictoriaLogsTool(BaseTool):
         "Filtering structured log streams by service, level, or trace ID",
         "Correlating recent log volume changes with an incident timeline",
     ]
+    # Expose the tool to both surfaces. The registry's default for class-based
+    # tools without an explicit ``surfaces`` is investigation-only, which would
+    # hide this from chat-mode investigations where log queries are a common
+    # follow-up. Mirrors SplunkSearchTool, the closest log-query analog.
+    surfaces = ("investigation", "chat")
     requires = ["base_url"]
     input_schema = {
         "type": "object",
