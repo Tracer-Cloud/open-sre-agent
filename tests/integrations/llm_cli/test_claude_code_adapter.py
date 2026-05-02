@@ -8,11 +8,11 @@ from unittest.mock import MagicMock, patch
 
 from app.integrations.llm_cli.binary_resolver import npm_prefix_bin_dirs
 from app.integrations.llm_cli.claude_code import (
+    _PROBE_TIMEOUT_SEC,
     ClaudeCodeAdapter,
     _classify_claude_code_auth,
     _fallback_claude_code_paths,
     _probe_keychain_auth,
-    _PROBE_TIMEOUT_SEC,
 )
 
 
@@ -101,16 +101,29 @@ def test_classify_auth_credentials_file_unreadable() -> None:
 def test_probe_keychain_auth_success(mock_run: MagicMock) -> None:
     m = MagicMock()
     m.returncode = 0
-    m.stdout = "ok\n"
+    m.stdout = '{"loggedIn": true, "email": "user@example.com"}\n'
     m.stderr = ""
     mock_run.return_value = m
     logged_in, detail = _probe_keychain_auth("/usr/bin/claude")
     assert logged_in is True
     assert "Keychain" in detail
+    assert "user@example.com" in detail
 
 
 @patch("app.integrations.llm_cli.claude_code.subprocess.run")
-def test_probe_keychain_auth_failure(mock_run: MagicMock) -> None:
+def test_probe_keychain_auth_logged_in_false(mock_run: MagicMock) -> None:
+    m = MagicMock()
+    m.returncode = 0
+    m.stdout = '{"loggedIn": false}\n'
+    m.stderr = ""
+    mock_run.return_value = m
+    logged_in, detail = _probe_keychain_auth("/usr/bin/claude")
+    assert logged_in is False
+    assert "not logged in" in detail
+
+
+@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+def test_probe_keychain_auth_nonzero_exit(mock_run: MagicMock) -> None:
     m = MagicMock()
     m.returncode = 1
     m.stdout = ""
@@ -125,7 +138,9 @@ def test_probe_keychain_auth_failure(mock_run: MagicMock) -> None:
 def test_probe_keychain_auth_timeout(mock_run: MagicMock) -> None:
     import subprocess
 
-    mock_run.side_effect = subprocess.TimeoutExpired(cmd=["/usr/bin/claude", "-p"], timeout=_PROBE_TIMEOUT_SEC)
+    mock_run.side_effect = subprocess.TimeoutExpired(
+        cmd=["/usr/bin/claude", "auth", "status"], timeout=_PROBE_TIMEOUT_SEC
+    )
     logged_in, detail = _probe_keychain_auth("/usr/bin/claude")
     assert logged_in is False
     assert "timed out" in detail
@@ -140,16 +155,29 @@ def test_probe_keychain_auth_os_error(mock_run: MagicMock) -> None:
 
 
 @patch("app.integrations.llm_cli.claude_code.subprocess.run")
+def test_probe_keychain_auth_non_json_exit_zero(mock_run: MagicMock) -> None:
+    """Older CLI versions that output non-JSON on exit 0 are treated as authenticated."""
+    m = MagicMock()
+    m.returncode = 0
+    m.stdout = "Logged in\n"
+    m.stderr = ""
+    mock_run.return_value = m
+    logged_in, detail = _probe_keychain_auth("/usr/bin/claude")
+    assert logged_in is True
+    assert "Keychain" in detail
+
+
+@patch("app.integrations.llm_cli.claude_code.subprocess.run")
 @patch("app.integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_macos_keychain_authenticated(mock_which: MagicMock, mock_run: MagicMock) -> None:
-    """On macOS with Keychain auth, detect() returns logged_in=True via live ping."""
+    """On macOS with Keychain auth, detect() returns logged_in=True via auth status."""
     mock_which.return_value = "/usr/bin/claude"
 
-    ping_proc = MagicMock()
-    ping_proc.returncode = 0
-    ping_proc.stdout = "ok\n"
-    ping_proc.stderr = ""
-    mock_run.side_effect = [_version_proc(), ping_proc]
+    auth_proc = MagicMock()
+    auth_proc.returncode = 0
+    auth_proc.stdout = '{"loggedIn": true, "email": "user@example.com"}\n'
+    auth_proc.stderr = ""
+    mock_run.side_effect = [_version_proc(), auth_proc]
 
     with (
         patch.dict(os.environ, {"ANTHROPIC_API_KEY": ""}, clear=False),

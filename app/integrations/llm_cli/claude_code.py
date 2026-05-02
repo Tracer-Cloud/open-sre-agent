@@ -44,10 +44,10 @@ def _parse_semver(text: str) -> str | None:
 
 
 def _probe_keychain_auth(binary_path: str) -> tuple[bool, str]:
-    """Live-probe Claude Code auth via subprocess (macOS Keychain path)."""
+    """Check Claude Code auth via `claude auth status` (local, no API call)."""
     try:
         proc = subprocess.run(
-            [binary_path, "-p", "ping", "--output-format", "text"],
+            [binary_path, "auth", "status"],
             capture_output=True,
             text=True,
             timeout=_PROBE_TIMEOUT_SEC,
@@ -57,14 +57,24 @@ def _probe_keychain_auth(binary_path: str) -> tuple[bool, str]:
     except subprocess.TimeoutExpired:
         return (
             False,
-            f"claude invocation timed out after {_PROBE_TIMEOUT_SEC:.0f} s — auth state unknown.",
+            f"claude auth status timed out after {_PROBE_TIMEOUT_SEC:.0f} s — auth state unknown.",
         )
     except OSError as exc:
-        return False, f"Could not spawn claude for Keychain probe: {exc}"
-    if proc.returncode == 0:
+        return False, f"Could not spawn claude for auth probe: {exc}"
+    if proc.returncode != 0:
+        err = (proc.stderr or proc.stdout or "").strip()[:500]
+        return False, f"claude auth status failed: {err or 'unknown error'}"
+    try:
+        import json
+
+        data = json.loads(proc.stdout)
+        if data.get("loggedIn"):
+            email = data.get("email", "")
+            return True, f"Authenticated via macOS Keychain{f' ({email})' if email else ''}."
+        return False, "claude auth status: not logged in. Run: claude auth login"
+    except (json.JSONDecodeError, AttributeError):
+        # Older CLI versions may not output JSON — treat exit 0 as authenticated.
         return True, "Authenticated via macOS Keychain."
-    err = (proc.stderr or proc.stdout or "").strip()[:500]
-    return False, f"claude invocation failed: {err or 'unknown error'}"
 
 
 def _classify_claude_code_auth(binary_path: str | None = None) -> tuple[bool | None, str]:
