@@ -5,6 +5,7 @@ import collections
 import shutil
 import urllib.error
 from typing import Any
+from pathlib import Path
 
 import pytest
 
@@ -24,6 +25,7 @@ from app.remote.server import (
     _lifespan,
     investigate,
     investigate_stream,
+    _check_memory_health
 )
 from app.remote.stream import StreamEvent
 from app.remote.vercel_poller import VercelResolutionError
@@ -359,3 +361,45 @@ def test_imds_get_returns_none_on_os_error(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr("urllib.request.urlopen", _raise_os_error)
 
     assert _imds_get("latest/meta-data/instance-id", token="test-token") is None
+
+
+def test_check_memory_health_returns_missing_when_proc_file_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(Path, "exists", lambda self: False)
+    result = _check_memory_health()
+
+    assert isinstance(result, DeepHealthCheck)
+    assert result.name == "Memory"
+    assert result.status == "missing"
+    assert "/proc/meminfo unavailable on this platform." in result.detail
+
+
+def test_check_memory_health_returns_missing_when_memavailable_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(Path, "exists", lambda self: True)
+    monkeypatch.setattr(Path, "read_text", lambda self, **kwargs: "MemTotal:       16384 kB\n")
+    result = _check_memory_health()
+
+    assert isinstance(result, DeepHealthCheck)
+    assert result.name == "Memory"
+    assert result.status == "missing"
+    assert "Incomplete /proc/meminfo data." in result.detail
+
+
+def test_check_memory_health_returns_missing_on_oserror(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(Path, "exists", lambda self: True)
+
+    def fake_read_text(self, **kwargs):
+        raise OSError("permission denied")
+    
+    monkeypatch.setattr(Path, "read_text",fake_read_text)
+    result = _check_memory_health()
+
+    assert isinstance(result, DeepHealthCheck)
+    assert result.name == "Memory"
+    assert result.status == "missing"
+    assert "Unable to read meminfo:" in result.detail
