@@ -1180,6 +1180,13 @@ Thanks goes to these amazing people:
             <sub><b>AniketR10</b></sub>
         </a>
     </td>
+            <td align="center">
+        <a href="https://github.com/Jai0401">
+            <img src="https://avatars.githubusercontent.com/u/112328542?v=4" width="100" alt="Jai0401"/>
+            <br />
+            <sub><b>Jai0401</b></sub>
+        </a>
+    </td>
 		</tr>
 	</tbody>
 </table>
