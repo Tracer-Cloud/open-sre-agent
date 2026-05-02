@@ -5,7 +5,6 @@ import collections
 import shutil
 import urllib.error
 from typing import Any
-from pathlib import Path
 
 import pytest
 
@@ -366,7 +365,7 @@ def test_imds_get_returns_none_on_os_error(monkeypatch: pytest.MonkeyPatch) -> N
 def test_check_memory_health_returns_missing_when_proc_file_absent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(Path, "exists", lambda self: False)
+    monkeypatch.setattr(remote_server.Path, "exists", lambda self: False)
     result = _check_memory_health()
 
     assert isinstance(result, DeepHealthCheck)
@@ -378,8 +377,8 @@ def test_check_memory_health_returns_missing_when_proc_file_absent(
 def test_check_memory_health_returns_missing_when_memavailable_absent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(Path, "exists", lambda self: True)
-    monkeypatch.setattr(Path, "read_text", lambda self, **kwargs: "MemTotal:       16384 kB\n")
+    monkeypatch.setattr(remote_server.Path, "exists", lambda self: True)
+    monkeypatch.setattr(remote_server.Path, "read_text", lambda self, **kwargs: "MemTotal:       16384 kB\n")
     result = _check_memory_health()
 
     assert isinstance(result, DeepHealthCheck)
@@ -391,12 +390,12 @@ def test_check_memory_health_returns_missing_when_memavailable_absent(
 def test_check_memory_health_returns_missing_on_oserror(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(Path, "exists", lambda self: True)
+    monkeypatch.setattr(remote_server.Path, "exists", lambda self: True)
 
     def fake_read_text(self, **kwargs):
         raise OSError("permission denied")
     
-    monkeypatch.setattr(Path, "read_text",fake_read_text)
+    monkeypatch.setattr(remote_server.Path, "read_text", fake_read_text)
     result = _check_memory_health()
 
     assert isinstance(result, DeepHealthCheck)
