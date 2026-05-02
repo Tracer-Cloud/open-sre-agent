@@ -365,7 +365,13 @@ def test_imds_get_returns_none_on_os_error(monkeypatch: pytest.MonkeyPatch) -> N
 def test_check_memory_health_returns_missing_when_proc_file_absent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(remote_server.Path, "exists", lambda _self: False)
+
+    class _FakeMeminfoPath:
+        def __init__(self, *_args, **_kwargs) -> None: ...
+        def exists(self) -> bool:
+            return False
+
+    monkeypatch.setattr("app.remote.server.Path", _FakeMeminfoPath)
     result = _check_memory_health()
 
     assert isinstance(result, DeepHealthCheck)
@@ -377,8 +383,16 @@ def test_check_memory_health_returns_missing_when_proc_file_absent(
 def test_check_memory_health_returns_missing_when_memavailable_absent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(remote_server.Path, "exists", lambda _self: True)
-    monkeypatch.setattr(remote_server.Path, "read_text", lambda _self, **_kwargs: "MemTotal:       16384 kB\n")
+
+    class _FakeIncompletePath:
+        def __init__(self, *_args: object, **_kwargs: object) -> None: ...
+        def exists(self) -> bool:
+            return True
+
+        def read_text(self, **_kwargs: object) -> str:
+            return "MemTotal:       16384 kB\n"
+
+    monkeypatch.setattr("app.remote.server.Path", _FakeIncompletePath)
     result = _check_memory_health()
 
     assert isinstance(result, DeepHealthCheck)
@@ -390,12 +404,15 @@ def test_check_memory_health_returns_missing_when_memavailable_absent(
 def test_check_memory_health_returns_missing_on_oserror(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(remote_server.Path, "exists", lambda _self: True)
+    class _FakeOsErrorPath:
+        def __init__(self, *_args: object, **_kwargs: object) -> None: ...
+        def exists(self) -> bool:
+            return True
 
-    def fake_read_text(self, **kwargs):
-        raise OSError("permission denied")
+        def read_text(self, **_kwargs: object) -> str:
+            raise OSError("permission denied")
 
-    monkeypatch.setattr(remote_server.Path, "read_text", fake_read_text)
+    monkeypatch.setattr("app.remote.server.Path", _FakeOsErrorPath)
     result = _check_memory_health()
 
     assert isinstance(result, DeepHealthCheck)
