@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 from importlib import import_module
 from typing import Any, TypeAlias, cast
@@ -184,11 +185,8 @@ def router_node(state: AgentState) -> dict[str, Any]:
 
 def _apply_guardrails_to_messages(msgs: list[Any]) -> list[Any]:
     """Return a copy of *msgs* with redacted content, leaving originals untouched.
-
     Operates on copies to avoid mutating shared LangGraph state objects.
     """
-    import copy
-
     from app.guardrails.engine import get_guardrail_engine
 
     engine = get_guardrail_engine()
