@@ -187,7 +187,7 @@ class TestCmdAudit:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         audit = AuditLogger(path=tmp_path / "audit.jsonl")
-        audit.log(rule_name="r1", action="redact", matched_text_preview="secret")
+        audit.log(rule_name="r1", action="redact", matched_text="secret")
         monkeypatch.setattr("app.guardrails.cli.AuditLogger", lambda: audit)
 
         cmd_audit(limit=10)

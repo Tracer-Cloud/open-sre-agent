@@ -171,13 +171,20 @@ class TestApply:
         out = engine.apply("data super_secret_token_value end")
         # Single merged redaction in output
         assert out == "data [REDACTED:long] end"
-        # But both matches recorded in audit
+        # But both matches recorded in audit. Matched text is not persisted
+        # in cleartext post-#1197 — fingerprint by ``match_length`` instead,
+        # which still proves both distinct keywords were recorded (one
+        # 12-char "secret_token", one 24-char "super_secret_token_value").
         entries = audit.read_entries()
         assert len(entries) == 2
         recorded_rules = sorted(e["rule_name"] for e in entries)
         assert recorded_rules == ["long", "short"]
-        previews = sorted(e["matched_text_preview"] for e in entries)
-        assert previews == ["secret_token", "super_secret_token_value"]
+        recorded_lengths = sorted(e["match_length"] for e in entries)
+        assert recorded_lengths == [len("secret_token"), len("super_secret_token_value")]
+        # And the literal matched text must NOT appear anywhere on disk.
+        contents = (tmp_path / "audit.jsonl").read_text(encoding="utf-8")
+        assert "super_secret_token_value" not in contents
+        assert "secret_token" not in contents
 
 
 class TestEdgeCases:

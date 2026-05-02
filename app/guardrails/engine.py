@@ -143,7 +143,7 @@ class GuardrailEngine:
                 self._audit.log(
                     rule_name=match.rule_name,
                     action=match.action.value,
-                    matched_text_preview=match.matched_text,
+                    matched_text=match.matched_text,
                 )
 
         if result.blocked:
