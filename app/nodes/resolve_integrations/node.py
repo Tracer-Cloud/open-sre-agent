@@ -12,6 +12,7 @@ from typing import Any, Optional
 from langchain_core.runnables import RunnableConfig
 from langsmith import traceable
 
+from app.auth.jwt_auth import extract_org_id_from_jwt
 from app.integrations.catalog import (
     classify_integrations as _classify_integrations,
 )
@@ -28,20 +29,6 @@ from app.output import get_tracker
 from app.state import InvestigationState
 
 logger = logging.getLogger(__name__)
-
-
-def _decode_org_id_from_token(token: str) -> str:
-    import base64
-    import json as _json
-
-    try:
-        payload_b64 = token.split(".")[1]
-        payload_b64 += "=" * (4 - len(payload_b64) % 4)
-        claims = _json.loads(base64.urlsafe_b64decode(payload_b64))
-        return claims.get("organization") or claims.get("org_id") or ""
-    except Exception:
-        logger.debug("Failed to decode org_id from JWT token", exc_info=True)
-        return ""
 
 
 def _strip_bearer(token: str) -> str:
@@ -76,7 +63,7 @@ def node_resolve_integrations(
     )
     if webhook_token:
         if not org_id:
-            org_id = _decode_org_id_from_token(webhook_token)
+            org_id = extract_org_id_from_jwt(webhook_token) or ""
         if not org_id:
             logger.warning("_auth_token present but could not decode org_id")
             tracker.complete(
@@ -103,7 +90,7 @@ def node_resolve_integrations(
         env_token = _strip_bearer(os.getenv("JWT_TOKEN", "").strip())
         if env_token:
             if not org_id:
-                org_id = _decode_org_id_from_token(env_token)
+                org_id = extract_org_id_from_jwt(env_token) or ""
             if not org_id:
                 return _resolve_from_local_sources(tracker)
             try:
