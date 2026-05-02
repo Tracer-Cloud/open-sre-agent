@@ -137,7 +137,8 @@
             "group": "Getting started",
             "pages": [
               "introduction-monitoring",
-              "quickstart-monitoring"
+              "quickstart-monitoring",
+              "tracer-faq"
             ]
           },
           {
@@ -162,7 +163,7 @@
           {
             "group": "Frameworks",
             "pages": [
-              "integrations/overview",
+              "integrations/integration-workflow",
               "integrations/nextflow",
               "integrations/wdl",
               "integrations/bash",
@@ -315,6 +316,6 @@
   },
   "logo": {
     "light": "/images/opensre-logo-black.svg",
-    "dark": "/images/opensre-logo-black.svg"
+    "dark": "/images/opensre-logo-white.svg"
   }
 }

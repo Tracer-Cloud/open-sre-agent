@@ -1,0 +1,54 @@
+---
+title: "Daily Update — 2026-05-01"
+description: "OpenSRE engineering daily update for 2026-05-01 (Europe/London)"
+---
+
+Thanks to everyone who contributed yesterday:
+
+akshat1074, Aniket Rawat, Anwesh, Awokoya Olawale Davidson, Divyansh Rawat, Diwansu-Pilania, Mayank Bharati, Prakhar Jain, Ryjen1, S. B. | Software Developer, Tejas, Vaibhav Upreti, vignesh Gopikrishnan, and vincenthus 🙏🚀
+
+## Main updates shipped (May 1, 2026)
+
+- chore: refactor integrations — Vaibhav Upreti
+- feat(cli): interactive shell UX improvements — vincenthus
+- feat(cli): improve interactive shell automation — vincenthus
+- feat(llm_cli): integrate Claude Code CLI as LLM_PROVIDER — Awokoya Olawale Davidson
+- fix(guardrails): redact union of overlapping spans, never leak sensitive bookends — Mayank Bharati
+- feat(alerts): normalize incoming payloads to OpenSRE canonical format — vignesh Gopikrishnan
+- feat(ci): auto-assign good first issues for new contributors — Anwesh
+- fix(ci): single assignee per good first issue — Anwesh
+- test(output): add direct unit tests for app/output.py (#871) — Awokoya Olawale Davidson
+- feat: print onboarding hint after successful install (#1153) — Maryjane Okafor
+- API Response Test: direct unit tests for app/services/datadog/client.py — S. B. | Software Developer
+- Fix/1114 health summary failure aliases — Aniket Rawat
+- test: add failure path coverage for IMDS helpers — Tejas
+- tests: add Escape-cancel coverage for confirm, text, and path prompts — Divyansh Rawat
+- test: add _id_to_iso helper coverage in remote server tests — Prakhar Jain
+- test: add Vercel deployment sort regression tests for bad timestamps — Dark_Pheonix
+- docs: add 'Run one focused test' section to CONTRIBUTING.md — akshat1074
+
+## Source pull requests
+
+- [#1159](https://github.com/Tracer-Cloud/opensre/pull/1159) feat(cli): interactive shell UX improvements (author: vincenthus; contributors: vincenthus; labels: _none_; files: `AGENTS.md`, `app/cli/__init__.py`, `app/cli/__main__.py`, `app/cli/commands/agent.py`, `app/cli/commands/deploy.py`, `app/cli/commands/doctor.py`, `app/cli/commands/general.py`, `app/cli/commands/integrations.py`, `app/cli/commands/remote.py`, `app/cli/commands/remote_health.py`, and 93 more)
+- [#1165](https://github.com/Tracer-Cloud/opensre/pull/1165) chore: refactor integrations (author: Vaibhav Upreti; contributors: Vaibhav Upreti; labels: _none_; files: `app/integrations/__main__.py`, `app/integrations/_catalog_impl.py`, `app/integrations/_relational.py`, `app/integrations/_validators.py`, `app/integrations/_verification_adapters.py`, `app/integrations/catalog.py`, `app/integrations/cli.py`, `app/integrations/config_models.py`, `app/integrations/effective_models.py`, `app/integrations/mariadb.py`, and 26 more)
+- [#1167](https://github.com/Tracer-Cloud/opensre/pull/1167) feat(cli): improve interactive shell automation (author: vincenthus; contributors: vincenthus; labels: _none_; files: `app/cli/interactive_shell/agent_actions.py`, `app/cli/interactive_shell/banner.py`, `app/cli/interactive_shell/cli_agent.py`, `app/cli/interactive_shell/commands.py`, `app/cli/interactive_shell/follow_up.py`, `app/cli/interactive_shell/history.py`, `app/cli/interactive_shell/loop.py`, `app/cli/interactive_shell/router.py`, `app/cli/interactive_shell/session.py`, `app/cli/interactive_shell/terminal_intent.py`, and 11 more)
+- [#1168](https://github.com/Tracer-Cloud/opensre/pull/1168) feat(llm_cli): integrate Claude Code CLI as LLM_PROVIDER (author: Awokoya Olawale Davidson; contributors: Awokoya Olawale Davidson; labels: _none_; files: `.env.example`, `app/cli/wizard/config.py`, `app/config.py`, `app/integrations/llm_cli/claude_code.py`, `app/integrations/llm_cli/registry.py`, `app/integrations/llm_cli/runner.py`, `tests/integrations/llm_cli/test_claude_code_adapter.py`)
+- [#1169](https://github.com/Tracer-Cloud/opensre/pull/1169) test(output): add direct unit tests for app/output.py (#871) (author: Awokoya Olawale Davidson; contributors: Awokoya Olawale Davidson; labels: _none_; files: `tests/test_output.py`)
+- [#1158](https://github.com/Tracer-Cloud/opensre/pull/1158) test: add _id_to_iso helper coverage in remote server tests (author: Prakhar Jain; contributors: Prakhar Jain; labels: _none_; files: `tests/app/remote/test_server.py`)
+- [#1157](https://github.com/Tracer-Cloud/opensre/pull/1157) feat: print onboarding hint after successful install (#1153) (author: Maryjane Okafor; contributors: Maryjane Okafor and Ryjen1; labels: _none_; files: `install.ps1`, `install.sh`, `tests/cli/test_install_sh_path.py`)
+- [#1154](https://github.com/Tracer-Cloud/opensre/pull/1154) test: add failure path coverage for IMDS helpers (author: Tejas; contributors: Tejas; labels: _none_; files: `tests/app/remote/test_server.py`)
+- [#1170](https://github.com/Tracer-Cloud/opensre/pull/1170) tests: add Escape-cancel coverage for confirm, text, and path prompts (author: Divyansh Rawat; contributors: Divyansh Rawat; labels: _none_; files: `tests/cli/test_prompt_support.py`)
+- [#977](https://github.com/Tracer-Cloud/opensre/pull/977) feat(alerts): normalize incoming payloads to OpenSRE canonical format (author: vignesh Gopikrishnan; contributors: vignesh Gopikrishnan; labels: _none_; files: `app/alerts/__init__.py`, `app/alerts/normalize.py`, `app/state/factory.py`, `tests/test_state.py`)
+- [#1177](https://github.com/Tracer-Cloud/opensre/pull/1177) docs: add 'Run one focused test' section to CONTRIBUTING.md (author: akshat1074; contributors: akshat1074; labels: _none_; files: `CONTRIBUTING.md`)
+- [#780](https://github.com/Tracer-Cloud/opensre/pull/780) fix(guardrails): redact union of overlapping spans, never leak sensitive bookends (author: Mayank Bharati; contributors: Mayank Bharati; labels: _none_; files: `app/guardrails/engine.py`, `tests/test_guardrails/test_engine.py`, `tests/test_guardrails/test_llm_integration.py`)
+- [#1179](https://github.com/Tracer-Cloud/opensre/pull/1179) feat(ci): auto-assign good first issues for new contributors (author: Anwesh; contributors: Anwesh; labels: _none_; files: `.github/scripts/good_first_issue_assign.py`, `.github/workflows/good-first-issue-assign.yml`, `tests/github/test_good_first_issue_assign.py`)
+- [#1178](https://github.com/Tracer-Cloud/opensre/pull/1178) test: add Vercel deployment sort regression tests for bad timestamps (author: Dark_Pheonix; contributors: Dark_Pheonix and Diwansu-Pilania; labels: _none_; files: `tests/app/remote/test_vercel_poller.py`)
+- [#1104](https://github.com/Tracer-Cloud/opensre/pull/1104) API Response Test: direct unit tests for app/services/datadog/client.py (author: S. B. | Software Developer; contributors: S. B. | Software Developer; labels: _none_; files: `tests/services/test_datadog_async_client.py`, `tests/services/test_datadog_client.py`)
+- [#1183](https://github.com/Tracer-Cloud/opensre/pull/1183) fix(ci): single assignee per good first issue (author: Anwesh; contributors: Anwesh; labels: _none_; files: `.github/scripts/good_first_issue_assign.py`, `.github/workflows/good-first-issue-assign.yml`, `tests/github/test_good_first_issue_assign.py`)
+- [#1184](https://github.com/Tracer-Cloud/opensre/pull/1184) Fix/1114 health summary failure aliases (author: Aniket Rawat; contributors: Aniket Rawat; labels: _none_; files: `app/cli/support/health_view.py`, `tests/cli/test_health_view.py`)
+
+## Generation metadata
+
+- Generator version: `opensre 2026.4.5`
+- Fallback summary used: `no`
+- UTC window: `2026-04-30T23:00:00+00:00` to `2026-05-01T23:00:00+00:00`

@@ -146,3 +146,55 @@ class TestClassifyInput:
         session.last_state = {"root_cause": "disk full"}
         assert classify_input("thanks", session) == "cli_agent"
         assert classify_input("ok cool", session) == "cli_agent"
+
+    def test_documentation_style_questions_route_to_cli_help(self) -> None:
+        """Docs-style how-to questions must route to the documentation-aware
+        cli_help handler (#1166), not be mistaken for incidents or chat."""
+        session = ReplSession()
+        # Configuration / setup questions for an integration.
+        assert classify_input("How do I configure Datadog?", session) == "cli_help"
+        assert classify_input("how do i set up grafana", session) == "cli_help"
+        assert classify_input("how to integrate with slack", session) == "cli_help"
+        # Deployment questions.
+        assert classify_input("how do I deploy this?", session) == "cli_help"
+        assert classify_input("How to deploy OpenSRE on Railway?", session) == "cli_help"
+        # Generic docs / feature inventory questions.
+        assert (
+            classify_input("what does the documentation say about masking?", session) == "cli_help"
+        )
+        assert classify_input("does opensre support honeycomb?", session) == "cli_help"
+        assert classify_input("can opensre integrate with bitbucket?", session) == "cli_help"
+        assert classify_input("what are the supported integrations?", session) == "cli_help"
+        # Explicit references to the docs route to docs-grounded help.
+        assert classify_input("check the docs for datadog setup", session) == "cli_help"
+        assert classify_input("according to the docs, what env do I need?", session) == "cli_help"
+
+    def test_incident_text_mentioning_docs_still_routes_to_new_alert(self) -> None:
+        """The bare word 'docs' inside an incident description must NOT be
+        mistaken for a documentation question (#1166). An incident narrative
+        about a service named 'docs' should still run LangGraph investigation."""
+        session = ReplSession()
+        text = (
+            "the database docs service started returning 502 errors at 14:00 UTC "
+            "for 25% of requests"
+        )
+        assert classify_input(text, session) == "new_alert"
+
+    def test_short_incident_with_in_docs_phrase_routes_to_new_alert(self) -> None:
+        """'in (the) docs' on its own is too broad to be a help signal — an
+        incident description that mentions errors happening "in docs" must
+        still reach the investigation pipeline (#1166 review feedback).
+
+        Only counts as a docs question when the surrounding clause is
+        question-shaped (covered by ``test_in_the_docs_question_routes_to_cli_help``).
+        """
+        session = ReplSession()
+        text = "the API errors are happening in docs"
+        assert classify_input(text, session) == "new_alert"
+
+    def test_in_the_docs_question_routes_to_cli_help(self) -> None:
+        """The "in (the) docs" phrasing IS a docs signal when the surrounding
+        clause is question-shaped — verifies the targeted pattern still
+        catches legitimate docs questions (#1166)."""
+        session = ReplSession()
+        assert classify_input("in the docs, where is the OAuth flow?", session) == "cli_help"

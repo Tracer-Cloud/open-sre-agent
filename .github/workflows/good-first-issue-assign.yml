@@ -1,5 +1,6 @@
 # When someone with zero merged PRs in this repo (and not OWNER/MEMBER/COLLABORATOR) comments
-# on an open issue labeled `good first issue`, assign them and reply.
+# on an open issue labeled `good first issue`, assign them and reply — only if the issue has no
+# assignees yet (first eligible commenter wins; includes when a human pre-assigned someone).
 # issue_comment also fires for PR review threads; those payloads include issue.pull_request.
 name: Good first issue — auto-assign
 

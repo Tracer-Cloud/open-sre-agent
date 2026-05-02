@@ -106,6 +106,22 @@ def test_screen_skips_already_assignee(gfi):
     assert gfi.screen_event_without_api(event) == "already_assignee"
 
 
+def test_screen_skips_when_issue_claimed_by_other(gfi):
+    event = {
+        "issue": {
+            "state": "open",
+            "labels": [_label(gfi.GOOD_FIRST_LABEL)],
+            "assignees": [{"login": "alice"}],
+            "user": {"login": "maintainer"},
+        },
+        "comment": {
+            "user": {"login": "bob", "type": "User"},
+            "author_association": "NONE",
+        },
+    }
+    assert gfi.screen_event_without_api(event) == "issue_already_claimed"
+
+
 def test_screen_allows_none_association(gfi):
     event = {
         "issue": {

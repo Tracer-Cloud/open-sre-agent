@@ -98,27 +98,72 @@ _CLI_HELP_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"^\s*how\s+do\s+i\s+investigate\b", re.IGNORECASE),
     re.compile(
         r"^\s*how\s+do\s+i\s+(use|start|call|get|add|install|configure|invoke|check|list|"
-        r"show|paste|submit|send|onboard|launch|open|set\s+up)\b",
+        r"show|paste|submit|send|onboard|launch|open|deploy|integrate|connect|"
+        r"set\s+up)\b",
         re.IGNORECASE,
     ),
     re.compile(
-        r"^\s*how\s+to\s+(run|use|start|install|onboard|investigate|call|invoke)\b",
+        r"^\s*how\s+to\s+(run|use|start|install|onboard|investigate|call|invoke|"
+        r"configure|deploy|integrate|connect|set\s+up)\b",
         re.IGNORECASE,
     ),
     re.compile(r"\bwhat\s+command\b", re.IGNORECASE),
     re.compile(r"\bwhich\s+command\b", re.IGNORECASE),
     re.compile(
-        r"^\s*where\s+do\s+i\s+(run|find|get|start)\b",
+        r"^\s*where\s+do\s+i\s+(run|find|get|start|configure)\b",
         re.IGNORECASE,
     ),
     re.compile(r"\bwalk\s+me\s+through\b", re.IGNORECASE),
     re.compile(
-        r"\bshow\s+me\s+how\s+to\s+(run|use|start|install|onboard)\b",
+        r"\bshow\s+me\s+how\s+to\s+(run|use|start|install|onboard|configure|deploy|integrate)\b",
         re.IGNORECASE,
     ),
     re.compile(r"\bwhat\s+does\s+opensre\b", re.IGNORECASE),
     re.compile(r"\b(list|available)\s+(of\s+)?commands\b", re.IGNORECASE),
     re.compile(r"\bsubcommand\b", re.IGNORECASE),
+    # Documentation-style questions about features, integrations, and concepts.
+    # These should ground in docs/ rather than relying on model memory (#1166).
+    # The docs/documentation token is only a help signal when it appears with
+    # question phrasing — bare mentions inside an incident description must
+    # still route to the investigation pipeline.
+    re.compile(
+        r"\b(check|read|see|find|search|show|reference|consult|look\s+at)\s+"
+        r"(the\s+)?(docs|documentation)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(what|where|which)\s+(do|does|are|is)\s+(the\s+)?(docs|documentation)\b",
+        re.IGNORECASE,
+    ),
+    # "according to the docs" / "per the docs" are citation phrasings — almost
+    # exclusively used in docs questions, so no question-shape requirement.
+    re.compile(
+        r"\b(according\s+to|per)\s+(the\s+)?(docs|documentation)\b",
+        re.IGNORECASE,
+    ),
+    # Bare "in (the) docs" is too broad on its own — incident text like
+    # "the API errors are happening in docs" would otherwise short-circuit
+    # the investigation pipeline. Only count it when the surrounding clause
+    # is question-shaped (a `?` reachable without crossing a sentence
+    # boundary).
+    re.compile(
+        r"\bin\s+(the\s+)?(docs|documentation)\b[^.!\n]*\?",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^\s*what\s+(is|are)\s+(\w+\s+){0,3}?(opensre|tracer|docs|documentation|"
+        r"integrations?|features?|guardrails?|deployment|installation)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^\s*does\s+opensre\s+(support|have|integrate|work)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^\s*can\s+(opensre|i)\s+(support|use|connect|integrate|configure|"
+        r"deploy|install|run)\b",
+        re.IGNORECASE,
+    ),
 )
 
 

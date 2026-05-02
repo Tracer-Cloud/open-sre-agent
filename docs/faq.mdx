@@ -1,26 +1,60 @@
 ---
 title: "FAQ"
-description: "Frequently asked questions about OpenSRE and Tracer Cloud"
+description: "Frequently asked questions about OpenSRE"
 ---
 
 <AccordionGroup>
-  <Accordion title="Does Tracer Cloud handle multi-cloud scenarios?">
-    Yes. In most cases, this is not a problem because observability platforms like Grafana and Datadog already aggregate data across multiple cloud environments, and Tracer works on top of that information.
+  <Accordion title="What is OpenSRE?">
+    OpenSRE is an open-source framework for building AI SRE agents that investigate production
+    incidents using your existing observability stack, cloud context, and runbooks.
   </Accordion>
 
-  <Accordion title="What if a team does not want to send all logs or telemetry to an observability vendor?">
-    Tracer also supports direct cloud integrations for teams that want more control, lower cost, or a more self-hosted setup.
-  </Accordion>
+<Accordion title="How do I get started quickly?">
+    Install OpenSRE, run onboarding, then investigate a sample alert:
+    <br />
+    <code>opensre onboard</code>
+    <br />
+    <code>
+        opensre investigate -i
+        tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
+    </code>
+</Accordion>
 
-  <Accordion title="Which direct cloud integrations do you support today?">
-    Currently, we support AWS connectors.
-  </Accordion>
+<Accordion title="Which deployment path is recommended?">
+    The official deployment path is LangGraph Platform. Keep{" "}
+    <code>langgraph.json</code> at the repo root, set <code>LLM_PROVIDER</code>,
+    add the matching provider API key, and then deploy.
+</Accordion>
 
-  <Accordion title="Is Tracer only for data pipelines?">
-    No. We started in data pipelines, and Tracer is still very strong there, but we have already expanded to a much broader set of use cases, including Kubernetes and web applications.
-  </Accordion>
+<Accordion title="Can I self-host OpenSRE?">
+    Yes. OpenSRE is based on LangGraph, so you can self-host it on your own
+    infrastructure using the LangGraph runtime. Before deploying, set{" "}
+    <code>LLM_PROVIDER</code> and the matching provider key (for example{" "}
+    <code>ANTHROPIC_API_KEY</code> when <code>LLM_PROVIDER=anthropic</code>).
+</Accordion>
 
-  <Accordion title="Are more cloud-provider connectors planned?">
-    Yes. We plan to add more direct cloud-provider connectors over time.
+<Accordion title="Which model providers are supported?">
+    OpenSRE supports multiple providers, including Anthropic, OpenAI,
+    OpenRouter, and Gemini via
+    <code>LLM_PROVIDER</code> plus the matching API key. Additional providers
+    and overrides are documented in <code>.env.example</code>.
+</Accordion>
+
+<Accordion title="Does OpenSRE work with our existing tools?">
+    Usually yes. OpenSRE integrates with 60+ systems across observability,
+    cloud, incident management, data platforms, and collaboration tools. See the
+    Integrations section in docs for connector-specific setup steps.
+</Accordion>
+
+<Accordion title="What happens when I run OpenSRE with no command?">
+    Running <code>opensre</code> starts an interactive incident-response shell
+    where you can describe issues in plain language, stream investigations live,
+    and ask grounded follow-up questions in the same session.
+</Accordion>
+
+  <Accordion title="How is security and telemetry handled?">
+    OpenSRE is designed for security-sensitive environments and uses structured, auditable workflows.
+    Anonymous telemetry can be disabled with <code>OPENSRE_NO_TELEMETRY=1</code>. For vulnerability
+    reports, email <code>support@opensre.com</code>.
   </Accordion>
 </AccordionGroup>
