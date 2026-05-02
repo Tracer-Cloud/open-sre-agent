@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -91,6 +92,22 @@ def test_classify_auth_credentials_file_unreadable() -> None:
     assert logged_in is None
 
 
+def test_classify_auth_api_key_not_blocked_by_unreadable_creds() -> None:
+    """ANTHROPIC_API_KEY must succeed even when credentials file raises OSError."""
+    with (
+        patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-test"}, clear=False),
+        patch("app.integrations.llm_cli.claude_code.Path") as mock_path,
+    ):
+        mock_creds = MagicMock()
+        mock_creds.exists.return_value = True
+        mock_creds.stat.side_effect = OSError("permission denied")
+        mock_path.home.return_value.__truediv__.return_value.__truediv__.return_value = mock_creds
+        logged_in, detail = _classify_claude_code_auth()
+
+    assert logged_in is True
+    assert "ANTHROPIC_API_KEY" in detail
+
+
 # ---------------------------------------------------------------------------
 # CLI auth probe (_probe_cli_auth)
 # ---------------------------------------------------------------------------
@@ -137,14 +154,15 @@ def test_probe_cli_auth_not_logged_in(mock_run: MagicMock) -> None:
 
 @patch("app.integrations.llm_cli.claude_code.subprocess.run")
 def test_probe_cli_auth_nonzero_exit(mock_run: MagicMock) -> None:
+    """Non-zero exit → None (probe failure, not confirmed unauthenticated)."""
     m = MagicMock()
     m.returncode = 1
     m.stdout = ""
-    m.stderr = "Not authenticated"
+    m.stderr = "unknown command 'auth'"
     mock_run.return_value = m
     logged_in, detail = _probe_cli_auth("/usr/bin/claude")
-    assert logged_in is False
-    assert "Not authenticated" in detail
+    assert logged_in is None
+    assert "failed" in detail
 
 
 @patch("app.integrations.llm_cli.claude_code.subprocess.run")
@@ -234,8 +252,6 @@ def _version_proc() -> MagicMock:
 
 
 def _auth_status_proc(logged_in: bool, api_key_source: str = "", email: str = "") -> MagicMock:
-    import json
-
     m = MagicMock()
     m.returncode = 0
     data: dict = {"loggedIn": logged_in}

@@ -15,6 +15,7 @@ stored in ``~/.claude/.credentials.json`` after ``claude login``.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -43,14 +44,12 @@ def _parse_semver(text: str) -> str | None:
     return m.group(1) if m else None
 
 
-def _probe_cli_auth(binary_path: str) -> tuple[bool, str]:
+def _probe_cli_auth(binary_path: str) -> tuple[bool | None, str]:
     """Check Claude Code auth via `claude auth status` (local, no API call).
 
     Covers both subscription login and ANTHROPIC_API_KEY; subscription takes
     priority as reported by the CLI itself.
     """
-    import json
-
     try:
         proc = subprocess.run(
             [binary_path, "auth", "status"],
@@ -69,7 +68,7 @@ def _probe_cli_auth(binary_path: str) -> tuple[bool, str]:
         return False, f"Could not spawn claude for auth probe: {exc}"
     if proc.returncode != 0:
         err = (proc.stderr or proc.stdout or "").strip()[:500]
-        return False, f"claude auth status failed: {err or 'unknown error'}"
+        return None, f"claude auth status failed: {err or 'unknown error'}"
     try:
         data = json.loads(proc.stdout)
         if not data.get("loggedIn"):
@@ -90,21 +89,21 @@ def _classify_claude_code_auth(binary_path: str | None = None) -> tuple[bool | N
     Resolution order:
     1. Binary available → `claude auth status` is the source of truth for all
        platforms; covers both subscription login and ANTHROPIC_API_KEY.
-    2. No binary, credentials file present → True (OAuth login).
-    3. No binary, ANTHROPIC_API_KEY set → True (API key fallback).
+    2. No binary, ANTHROPIC_API_KEY set → True (filesystem-independent fallback).
+    3. No binary, credentials file present → True (OAuth login).
     4. No binary, macOS → None (Keychain may hold credentials; invocation will verify).
     5. No binary, Linux/Windows → False.
     """
     if binary_path:
         return _probe_cli_auth(binary_path)
+    if os.environ.get("ANTHROPIC_API_KEY", "").strip():
+        return True, "Authenticated via ANTHROPIC_API_KEY."
     creds_path = Path.home() / ".claude" / ".credentials.json"
     try:
         if creds_path.exists() and creds_path.stat().st_size > 2:
             return True, "Authenticated via ~/.claude/.credentials.json (OAuth login)."
     except OSError:
         return None, "Could not read ~/.claude/.credentials.json; auth state unclear."
-    if os.environ.get("ANTHROPIC_API_KEY", "").strip():
-        return True, "Authenticated via ANTHROPIC_API_KEY."
     if sys.platform == "darwin":
         return None, (
             "Auth state unclear — binary unavailable for verification. "
