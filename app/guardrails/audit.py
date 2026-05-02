@@ -87,6 +87,25 @@ def _atomic_open_append(path: Path, mode: int) -> int:
     return fd
 
 
+def _write_all(fd: int, data: bytes) -> None:
+    """Write ``data`` to ``fd`` retrying on partial writes.
+
+    POSIX ``write(2)`` is allowed to return fewer bytes than requested even
+    on regular files (e.g. interrupted by a signal, ENOSPC near full disk).
+    For 32-byte writes this is essentially never observed in practice, but
+    a partial write to the audit-key file would silently leave a truncated
+    key on disk that subsequent reads would reject — only to re-trigger
+    the create-or-read path and look as if the key was missing. Loop until
+    the buffer is drained.
+    """
+    view = memoryview(data)
+    while view:
+        written = os.write(fd, view)
+        if written <= 0:
+            raise OSError("os.write returned non-positive count")
+        view = view[written:]
+
+
 class _AuditKey:
     """Per-machine HMAC key persisted at ``~/.opensre/.audit_key``.
 
@@ -96,6 +115,13 @@ class _AuditKey:
     fingerprints. An attacker who exfiltrates ``guardrail_audit.jsonl``
     without also obtaining ``.audit_key`` cannot recompute fingerprints
     even for a known candidate secret.
+
+    Concurrent processes that both find the key file missing and try to
+    create it race-safely via ``O_CREAT | O_EXCL``: whichever process wins
+    the create-exclusive call writes its key; the loser sees ``FileExistsError``,
+    falls through to read the winner's key, and both processes end up using
+    the same key. The dedup property is preserved across the race window
+    rather than broken by it.
     """
 
     def __init__(self, path: Path) -> None:
@@ -105,42 +131,72 @@ class _AuditKey:
     def get(self) -> bytes:
         if self._key is not None:
             return self._key
-        # Try to read an existing key first. If anything goes wrong (file
-        # missing, perms wrong, truncated content) generate a fresh key.
+        key = self._read_existing() or self._create_or_inherit()
+        self._key = key
+        return key
+
+    def _read_existing(self) -> bytes | None:
+        """Return the persisted key if it exists and is the expected size,
+        otherwise ``None``. A truncated / oversized file is treated as
+        missing so the next step regenerates."""
         try:
             existing = self._path.read_bytes()
-            if len(existing) == _KEY_BYTES:
-                self._key = existing
-                return self._key
         except OSError:
-            pass
-        # Generate, persist atomically with 0o600, cache.
+            return None
+        return existing if len(existing) == _KEY_BYTES else None
+
+    def _create_or_inherit(self) -> bytes:
+        """Atomically create-and-write a fresh key, OR read the key another
+        process just created. Either way return a key that matches what's
+        on disk.
+
+        Concurrency model: ``O_CREAT | O_EXCL`` is the POSIX primitive for
+        "create only if it doesn't exist." Exactly one racing process can
+        succeed; every other gets ``FileExistsError``. The losers re-read
+        the file the winner just wrote.
+        """
         new_key = secrets.token_bytes(_KEY_BYTES)
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True, mode=_AUDIT_DIR_MODE)
             with contextlib.suppress(OSError):
                 os.chmod(self._path.parent, _AUDIT_DIR_MODE)
-            fd = _atomic_open_append(self._path, _AUDIT_FILE_MODE)
             try:
-                # Write the key bytes via the fd we just opened. Using
-                # ``os.write`` rather than fdopen keeps this short and
-                # avoids buffering questions for a one-shot write.
-                # First truncate in case ``existing`` was partial — without
-                # this a 16-byte stale file would corrupt the new 32-byte key.
-                os.ftruncate(fd, 0)
-                os.write(fd, new_key)
-            finally:
-                os.close(fd)
+                fd = os.open(
+                    os.fspath(self._path),
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                    _AUDIT_FILE_MODE,
+                )
+            except FileExistsError:
+                # A racing process won the create. Read its key.
+                inherited = self._read_existing()
+                if inherited is not None:
+                    return inherited
+                # Race+corrupt: another process created the file but wrote
+                # something invalid. Truncate and overwrite with our key
+                # via the non-exclusive path.
+                fd = _atomic_open_append(self._path, _AUDIT_FILE_MODE)
+                try:
+                    os.ftruncate(fd, 0)
+                    _write_all(fd, new_key)
+                    return new_key
+                finally:
+                    os.close(fd)
+            else:
+                try:
+                    _write_all(fd, new_key)
+                finally:
+                    os.close(fd)
+                return new_key
         except OSError:
-            # If we cannot persist the key, fall back to an in-memory key
-            # so at least *this* process's audit entries are HMAC'd. The
-            # cost is that fingerprint dedup won't survive a restart.
+            # If we cannot persist the key (read-only $HOME, AppArmor denial,
+            # disk full, etc.) fall back to an in-memory key so at least
+            # *this* process's audit entries are HMAC'd. The cost is that
+            # fingerprint dedup won't survive a restart.
             logger.warning(
                 "Could not persist guardrail audit key to %s; using process-local key",
                 self._path,
             )
-        self._key = new_key
-        return self._key
+            return new_key
 
 
 class AuditLogger:

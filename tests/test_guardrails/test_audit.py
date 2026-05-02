@@ -258,6 +258,99 @@ class TestHMACKeyedFingerprint:
         # Should have been regenerated to the full size.
         assert len(key_path.read_bytes()) == 32
 
+    def test_concurrent_key_creation_is_race_safe(self, tmp_path: Path) -> None:
+        """If two processes start simultaneously and both find the key file
+        missing, ``O_CREAT | O_EXCL`` must guarantee they end up with the
+        SAME persisted key — otherwise the fingerprint dedup property
+        breaks during the race window.
+
+        Simulates the race by hooking ``os.open`` so the *first* call to
+        ``O_CREAT|O_EXCL`` plants a competing key on disk before our
+        own create call would have run, then lets our code path proceed.
+        Our process must observe ``FileExistsError``, fall through to
+        the read path, and inherit the racing key — not stomp it."""
+        from app.guardrails import audit as audit_mod
+
+        key_path = tmp_path / ".audit_key"
+        racing_key = b"R" * 32  # Distinct from anything secrets.token_bytes might produce.
+        real_open = os.open
+        triggered = {"hit": False}
+
+        def _race_then_open(path: object, flags: int, mode: int = 0o777) -> int:  # noqa: ANN001
+            # First time we see an O_EXCL create against the key path,
+            # plant a competing file before letting the real syscall fire.
+            if (
+                not triggered["hit"]
+                and flags & os.O_EXCL
+                and os.fspath(path) == os.fspath(key_path)
+            ):
+                triggered["hit"] = True
+                key_path.parent.mkdir(parents=True, exist_ok=True)
+                # Atomic create-write of the racing key.
+                rfd = real_open(
+                    os.fspath(key_path),
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                    0o600,
+                )
+                try:
+                    os.write(rfd, racing_key)
+                finally:
+                    os.close(rfd)
+            return real_open(path, flags, mode)
+
+        with patch("app.guardrails.audit.os.open", side_effect=_race_then_open):
+            inherited = audit_mod._AuditKey(key_path).get()
+
+        assert triggered["hit"], "race injection never fired; test wiring is wrong"
+        assert inherited == racing_key, (
+            "loser of the race must inherit the winner's key, not stomp it"
+        )
+        assert key_path.read_bytes() == racing_key
+
+    def test_short_writes_are_retried_until_buffer_drained(self) -> None:
+        """``os.write`` is allowed to write fewer bytes than requested even
+        on regular files. A naive single-call write that returned half the
+        key would leave a 16-byte file on disk, which subsequent reads
+        would correctly reject as truncated — but only after one wasted
+        re-generation. The ``_write_all`` helper retries until the buffer
+        is drained, eliminating the silent truncation possibility entirely."""
+        from app.guardrails.audit import _write_all
+
+        # Build a fake fd-style sink that records every write. We can't use
+        # a real fd because ``os.write`` is a syscall, so mock the syscall
+        # itself to return half the requested bytes the first call and the
+        # remainder the second.
+        sink: list[bytes] = []
+        call_n = {"i": 0}
+
+        def _half_then_full(fd: int, data: bytes) -> int:
+            call_n["i"] += 1
+            chunk = data[: len(data) // 2] if call_n["i"] == 1 else data
+            sink.append(bytes(chunk))
+            return len(chunk)
+
+        with patch("app.guardrails.audit.os.write", side_effect=_half_then_full):
+            _write_all(0, b"AAAAAAAAAAAAAAAA" + b"BBBBBBBBBBBBBBBB")
+
+        # The helper should have called write twice and the concatenation
+        # of the chunks must reconstruct the input exactly.
+        assert call_n["i"] == 2, f"expected 2 writes, got {call_n['i']}"
+        assert b"".join(sink) == b"AAAAAAAAAAAAAAAA" + b"BBBBBBBBBBBBBBBB"
+
+    def test_short_write_zero_count_raises(self) -> None:
+        """A 0-byte return from ``os.write`` is not partial progress —
+        it's "no progress can be made", and looping forever on it would
+        deadlock. ``_write_all`` must surface it as ``OSError`` so the
+        outer ``try/except`` can degrade gracefully to the in-memory
+        key fallback."""
+        from app.guardrails.audit import _write_all
+
+        with (
+            patch("app.guardrails.audit.os.write", return_value=0),
+            pytest.raises(OSError, match="non-positive"),
+        ):
+            _write_all(0, b"x" * 32)
+
 
 class TestAuditLogPermissions:
     @pytest.mark.skipif(sys.platform == "win32", reason="POSIX permission bits N/A on Windows")
