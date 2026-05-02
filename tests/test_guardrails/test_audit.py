@@ -276,7 +276,7 @@ class TestHMACKeyedFingerprint:
         real_open = os.open
         triggered = {"hit": False}
 
-        def _race_then_open(path: object, flags: int, mode: int = 0o777) -> int:  # noqa: ANN001
+        def _race_then_open(path: object, flags: int, mode: int = 0o600) -> int:  # noqa: ANN001
             # First time we see an O_EXCL create against the key path,
             # plant a competing file before letting the real syscall fire.
             if (
