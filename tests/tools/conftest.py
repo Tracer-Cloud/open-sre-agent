@@ -41,6 +41,14 @@ def mock_agent_state(overrides: dict | None = None) -> dict[str, Any]:
             "pipeline_name": "my-pipeline",
             "time_range_minutes": 60,
         },
+        "kafka": {
+            "connection_verified": True,
+            "bootstrap_servers": "broker:9092",
+            "security_protocol": "PLAINTEXT",
+            "sasl_mechanism": "",
+            "sasl_username": "",
+            "sasl_password": "",
+        },
         "eks": {
             "connection_verified": True,
             "cluster_name": "my-cluster",
