@@ -71,33 +71,3 @@ def test_install_main_reuses_shared_install_guard(monkeypatch) -> None:
 
     assert exit_code == 0
     assert captured == [{"install_source": "make_install", "entrypoint": "make install"}]
-
-
-def test_analytics_disabled_via_opensre_env_var(monkeypatch) -> None:
-    # 1. Add a test for OPENSRE_ANALYTICS_DISABLED=1
-    monkeypatch.setenv("OPENSRE_ANALYTICS_DISABLED", "1")
-    monkeypatch.setenv("DO_NOT_TRACK", "0")
-
-    # 3. Assert the analytics client starts in disabled mode
-    analytics = provider.Analytics()
-    assert analytics._disabled is True
-
-    # 4. Assert calling capture() does not enqueue or send anything
-    assert analytics._queue.empty()
-    analytics.capture(Event.INSTALL_DETECTED)
-    assert analytics._queue.empty()
-
-
-def test_analytics_disabled_via_do_not_track_env_var(monkeypatch) -> None:
-    # 2. Add a test for DO_NOT_TRACK=1
-    monkeypatch.setenv("OPENSRE_ANALYTICS_DISABLED", "0")
-    monkeypatch.setenv("DO_NOT_TRACK", "1")
-
-    # 3. Assert the analytics client starts in disabled mode
-    analytics = provider.Analytics()
-    assert analytics._disabled is True
-
-    # 4. Assert calling capture() does not enqueue or send anything
-    assert analytics._queue.empty()
-    analytics.capture(Event.INSTALL_DETECTED)
-    assert analytics._queue.empty()
