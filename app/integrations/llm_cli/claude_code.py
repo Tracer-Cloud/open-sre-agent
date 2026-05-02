@@ -43,8 +43,14 @@ def _parse_semver(text: str) -> str | None:
     return m.group(1) if m else None
 
 
-def _probe_keychain_auth(binary_path: str) -> tuple[bool, str]:
-    """Check Claude Code auth via `claude auth status` (local, no API call)."""
+def _probe_cli_auth(binary_path: str) -> tuple[bool, str]:
+    """Check Claude Code auth via `claude auth status` (local, no API call).
+
+    Covers both subscription login and ANTHROPIC_API_KEY; subscription takes
+    priority as reported by the CLI itself.
+    """
+    import json
+
     try:
         proc = subprocess.run(
             [binary_path, "auth", "status"],
@@ -65,46 +71,48 @@ def _probe_keychain_auth(binary_path: str) -> tuple[bool, str]:
         err = (proc.stderr or proc.stdout or "").strip()[:500]
         return False, f"claude auth status failed: {err or 'unknown error'}"
     try:
-        import json
-
         data = json.loads(proc.stdout)
-        if data.get("loggedIn"):
-            email = data.get("email", "")
-            return True, f"Authenticated via macOS Keychain{f' ({email})' if email else ''}."
-        return False, "claude auth status: not logged in. Run: claude auth login"
+        if not data.get("loggedIn"):
+            return False, "Not authenticated. Run: claude auth login  or set ANTHROPIC_API_KEY."
+        api_key_source = data.get("apiKeySource", "")
+        if api_key_source:
+            return True, f"Authenticated via {api_key_source}."
+        email = data.get("email", "")
+        return True, f"Authenticated via Claude subscription{f' ({email})' if email else ''}."
     except (json.JSONDecodeError, AttributeError):
         # Older CLI versions may not output JSON — treat exit 0 as authenticated.
-        return True, "Authenticated via macOS Keychain."
+        return True, "Authenticated via Claude CLI."
 
 
 def _classify_claude_code_auth(binary_path: str | None = None) -> tuple[bool | None, str]:
-    """Return (logged_in, detail) without spawning a subprocess (unless macOS Keychain path).
+    """Return (logged_in, detail) for Claude Code auth.
 
     Resolution order:
-    1. ANTHROPIC_API_KEY in env → True (definitive; build() forwards it).
-    2. ~/.claude/.credentials.json present and non-empty → True (OAuth login).
-    3. macOS without either → if binary_path given, live-ping to verify Keychain;
-       otherwise None (caller has no binary yet).
-    4. Otherwise → False (Linux/Windows: file is the canonical credential store).
+    1. Binary available → `claude auth status` is the source of truth for all
+       platforms; covers both subscription login and ANTHROPIC_API_KEY.
+    2. No binary, credentials file present → True (OAuth login).
+    3. No binary, ANTHROPIC_API_KEY set → True (API key fallback).
+    4. No binary, macOS → None (Keychain may hold credentials; invocation will verify).
+    5. No binary, Linux/Windows → False.
     """
-    if os.environ.get("ANTHROPIC_API_KEY", "").strip():
-        return True, "Authenticated via ANTHROPIC_API_KEY."
+    if binary_path:
+        return _probe_cli_auth(binary_path)
     creds_path = Path.home() / ".claude" / ".credentials.json"
     try:
         if creds_path.exists() and creds_path.stat().st_size > 2:
             return True, "Authenticated via ~/.claude/.credentials.json (OAuth login)."
     except OSError:
         return None, "Could not read ~/.claude/.credentials.json; auth state unclear."
+    if os.environ.get("ANTHROPIC_API_KEY", "").strip():
+        return True, "Authenticated via ANTHROPIC_API_KEY."
     if sys.platform == "darwin":
-        if binary_path:
-            return _probe_keychain_auth(binary_path)
         return None, (
-            "ANTHROPIC_API_KEY not set and ~/.claude/.credentials.json absent; "
-            "macOS may use Keychain — auth state unclear, invocation will verify."
+            "Auth state unclear — binary unavailable for verification. "
+            "Run: claude auth login  or set ANTHROPIC_API_KEY."
         )
     return (
         False,
-        "Not authenticated. Run: claude login  or set ANTHROPIC_API_KEY.",
+        "Not authenticated. Run: claude auth login  or set ANTHROPIC_API_KEY.",
     )
 
 
