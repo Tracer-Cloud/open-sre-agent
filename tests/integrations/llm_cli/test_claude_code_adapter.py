@@ -173,7 +173,7 @@ def test_probe_cli_auth_timeout(mock_run: MagicMock) -> None:
         cmd=["/usr/bin/claude", "auth", "status"], timeout=_PROBE_TIMEOUT_SEC
     )
     logged_in, detail = _probe_cli_auth("/usr/bin/claude")
-    assert logged_in is False
+    assert logged_in is None
     assert "timed out" in detail
 
 
@@ -181,7 +181,7 @@ def test_probe_cli_auth_timeout(mock_run: MagicMock) -> None:
 def test_probe_cli_auth_os_error(mock_run: MagicMock) -> None:
     mock_run.side_effect = OSError("permission denied")
     logged_in, detail = _probe_cli_auth("/usr/bin/claude")
-    assert logged_in is False
+    assert logged_in is None
     assert "permission denied" in detail
 
 

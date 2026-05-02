@@ -61,11 +61,11 @@ def _probe_cli_auth(binary_path: str) -> tuple[bool | None, str]:
         )
     except subprocess.TimeoutExpired:
         return (
-            False,
+            None,
             f"claude auth status timed out after {_PROBE_TIMEOUT_SEC:.0f} s — auth state unknown.",
         )
     except OSError as exc:
-        return False, f"Could not spawn claude for auth probe: {exc}"
+        return None, f"Could not spawn claude for auth probe: {exc}"
     if proc.returncode != 0:
         err = (proc.stderr or proc.stdout or "").strip()[:500]
         return None, f"claude auth status failed: {err or 'unknown error'}"
