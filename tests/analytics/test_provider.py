@@ -71,3 +71,59 @@ def test_install_main_reuses_shared_install_guard(monkeypatch) -> None:
 
     assert exit_code == 0
     assert captured == [{"install_source": "make_install", "entrypoint": "make install"}]
+
+
+def test_analytics_disabled_when_opensre_analytics_disabled_opt_out(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("OPENSRE_ANALYTICS_DISABLED", "1")
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(provider, "_ANONYMOUS_ID_PATH", tmp_path / "anonymous_id")
+
+    client_inits = 0
+
+    class _FailIfConstructedClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            nonlocal client_inits
+            client_inits += 1
+            raise AssertionError(
+                "httpx client should not be constructed when analytics is disabled"
+            )
+
+    monkeypatch.setattr(provider.httpx, "Client", _FailIfConstructedClient)
+    analytics = provider.Analytics()
+    analytics.capture(Event.INSTALL_DETECTED, {"install_source": "make_install"})
+
+    assert analytics._disabled is True
+    assert analytics._worker is None
+    assert analytics._pending == 0
+    assert analytics._queue.qsize() == 0
+    assert client_inits == 0
+
+
+def test_analytics_disabled_when_do_not_track_opt_out(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("DO_NOT_TRACK", "1")
+    monkeypatch.delenv("OPENSRE_ANALYTICS_DISABLED", raising=False)
+    monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(provider, "_ANONYMOUS_ID_PATH", tmp_path / "anonymous_id")
+
+    client_inits = 0
+
+    class _FailIfConstructedClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            nonlocal client_inits
+            client_inits += 1
+            raise AssertionError(
+                "httpx client should not be constructed when analytics is disabled"
+            )
+
+    monkeypatch.setattr(provider.httpx, "Client", _FailIfConstructedClient)
+    analytics = provider.Analytics()
+    analytics.capture(Event.INSTALL_DETECTED, {"install_source": "make_install"})
+
+    assert analytics._disabled is True
+    assert analytics._worker is None
+    assert analytics._pending == 0
+    assert analytics._queue.qsize() == 0
+    assert client_inits == 0
