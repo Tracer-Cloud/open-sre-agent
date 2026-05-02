@@ -43,14 +43,38 @@ def _parse_semver(text: str) -> str | None:
     return m.group(1) if m else None
 
 
-def _classify_claude_code_auth() -> tuple[bool | None, str]:
-    """Return (logged_in, detail) without spawning a subprocess.
+def _probe_keychain_auth(binary_path: str) -> tuple[bool, str]:
+    """Live-probe Claude Code auth via subprocess (macOS Keychain path)."""
+    try:
+        proc = subprocess.run(
+            [binary_path, "-p", "ping", "--output-format", "text"],
+            capture_output=True,
+            text=True,
+            timeout=_PROBE_TIMEOUT_SEC,
+            check=False,
+            env={**os.environ, "NO_COLOR": "1"},
+        )
+    except subprocess.TimeoutExpired:
+        return (
+            False,
+            f"claude invocation timed out after {_PROBE_TIMEOUT_SEC:.0f} s — auth state unknown.",
+        )
+    except OSError as exc:
+        return False, f"Could not spawn claude for Keychain probe: {exc}"
+    if proc.returncode == 0:
+        return True, "Authenticated via macOS Keychain."
+    err = (proc.stderr or proc.stdout or "").strip()[:500]
+    return False, f"claude invocation failed: {err or 'unknown error'}"
+
+
+def _classify_claude_code_auth(binary_path: str | None = None) -> tuple[bool | None, str]:
+    """Return (logged_in, detail) without spawning a subprocess (unless macOS Keychain path).
 
     Resolution order:
     1. ANTHROPIC_API_KEY in env → True (definitive; build() forwards it).
     2. ~/.claude/.credentials.json present and non-empty → True (OAuth login).
-    3. macOS without either → None: Claude Code stores OAuth in Keychain on
-       darwin, so file absence is not proof of no-auth — let invocation reveal.
+    3. macOS without either → if binary_path given, live-ping to verify Keychain;
+       otherwise None (caller has no binary yet).
     4. Otherwise → False (Linux/Windows: file is the canonical credential store).
     """
     if os.environ.get("ANTHROPIC_API_KEY", "").strip():
@@ -62,6 +86,8 @@ def _classify_claude_code_auth() -> tuple[bool | None, str]:
     except OSError:
         return None, "Could not read ~/.claude/.credentials.json; auth state unclear."
     if sys.platform == "darwin":
+        if binary_path:
+            return _probe_keychain_auth(binary_path)
         return None, (
             "ANTHROPIC_API_KEY not set and ~/.claude/.credentials.json absent; "
             "macOS may use Keychain — auth state unclear, invocation will verify."
@@ -122,7 +148,7 @@ class ClaudeCodeAdapter:
             )
 
         version = _parse_semver(ver_proc.stdout + ver_proc.stderr)
-        logged_in, auth_detail = _classify_claude_code_auth()
+        logged_in, auth_detail = _classify_claude_code_auth(binary_path=binary_path)
         return CLIProbe(
             installed=True,
             version=version,

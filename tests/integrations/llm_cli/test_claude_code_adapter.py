@@ -11,6 +11,8 @@ from app.integrations.llm_cli.claude_code import (
     ClaudeCodeAdapter,
     _classify_claude_code_auth,
     _fallback_claude_code_paths,
+    _probe_keychain_auth,
+    _PROBE_TIMEOUT_SEC,
 )
 
 
@@ -88,6 +90,80 @@ def test_classify_auth_credentials_file_unreadable() -> None:
         logged_in, _detail = _classify_claude_code_auth()
 
     assert logged_in is None
+
+
+# ---------------------------------------------------------------------------
+# Keychain live-probe
+# ---------------------------------------------------------------------------
+
+
+@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+def test_probe_keychain_auth_success(mock_run: MagicMock) -> None:
+    m = MagicMock()
+    m.returncode = 0
+    m.stdout = "ok\n"
+    m.stderr = ""
+    mock_run.return_value = m
+    logged_in, detail = _probe_keychain_auth("/usr/bin/claude")
+    assert logged_in is True
+    assert "Keychain" in detail
+
+
+@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+def test_probe_keychain_auth_failure(mock_run: MagicMock) -> None:
+    m = MagicMock()
+    m.returncode = 1
+    m.stdout = ""
+    m.stderr = "Not authenticated"
+    mock_run.return_value = m
+    logged_in, detail = _probe_keychain_auth("/usr/bin/claude")
+    assert logged_in is False
+    assert "Not authenticated" in detail
+
+
+@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+def test_probe_keychain_auth_timeout(mock_run: MagicMock) -> None:
+    import subprocess
+
+    mock_run.side_effect = subprocess.TimeoutExpired(cmd=["/usr/bin/claude", "-p"], timeout=_PROBE_TIMEOUT_SEC)
+    logged_in, detail = _probe_keychain_auth("/usr/bin/claude")
+    assert logged_in is False
+    assert "timed out" in detail
+
+
+@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+def test_probe_keychain_auth_os_error(mock_run: MagicMock) -> None:
+    mock_run.side_effect = OSError("permission denied")
+    logged_in, detail = _probe_keychain_auth("/usr/bin/claude")
+    assert logged_in is False
+    assert "permission denied" in detail
+
+
+@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+def test_detect_macos_keychain_authenticated(mock_which: MagicMock, mock_run: MagicMock) -> None:
+    """On macOS with Keychain auth, detect() returns logged_in=True via live ping."""
+    mock_which.return_value = "/usr/bin/claude"
+
+    ping_proc = MagicMock()
+    ping_proc.returncode = 0
+    ping_proc.stdout = "ok\n"
+    ping_proc.stderr = ""
+    mock_run.side_effect = [_version_proc(), ping_proc]
+
+    with (
+        patch.dict(os.environ, {"ANTHROPIC_API_KEY": ""}, clear=False),
+        patch("app.integrations.llm_cli.claude_code.sys.platform", "darwin"),
+        patch("app.integrations.llm_cli.claude_code.Path") as mock_path,
+    ):
+        mock_creds = MagicMock()
+        mock_creds.exists.return_value = False
+        mock_path.home.return_value.__truediv__.return_value.__truediv__.return_value = mock_creds
+        probe = ClaudeCodeAdapter().detect()
+
+    assert probe.installed is True
+    assert probe.logged_in is True
+    assert "Keychain" in probe.detail
 
 
 # ---------------------------------------------------------------------------
