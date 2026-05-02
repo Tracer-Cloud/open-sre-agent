@@ -52,7 +52,6 @@ def extract_judge_json_from_response(text: str) -> dict[str, Any]:
     if fences:
         for candidate in reversed(fences):
             candidate = candidate.strip()
-
             try:
                 raw = json.loads(candidate)
             except json.JSONDecodeError:
@@ -60,7 +59,6 @@ def extract_judge_json_from_response(text: str) -> dict[str, Any]:
 
             if isinstance(raw, dict):
                 return cast(dict[str, Any], raw)
-
             if isinstance(raw, list):
                 msg = "Judge response JSON must be an object"
                 raise ValueError(msg)
@@ -76,32 +74,25 @@ def extract_judge_json_from_response(text: str) -> dict[str, Any]:
         msg = "Judge response JSON must be an object"
         raise ValueError(msg)
 
-    array_start = text.find("[")
-    array_end = text.rfind("]")
+    obj_start = text.find("{")
+    obj_end = text.rfind("}")
+    arr_start = text.find("[")
+    arr_end = text.rfind("]")
 
-    if array_start != -1 and array_end != -1 and array_end > array_start:
-        object_start = text.find("{")
+    has_obj = obj_start != -1 and obj_end != -1 and obj_end > obj_start
+    has_arr = arr_start != -1 and arr_end != -1 and arr_end > arr_start
 
-        if object_start == -1 or array_start < object_start:
-            for i in range(array_start, array_end + 1):
-                if text[i] == "[":
-                    candidate = text[i : array_end + 1]
-                    try:
-                        parsed = json.loads(candidate)
-                    except json.JSONDecodeError:
-                        continue
+    # If an array span exists and fully contains the object span,
+    # the top-level value is an array — reject it.
+    if has_arr and has_obj and arr_start < obj_start and arr_end > obj_end:
+        msg = "Judge response JSON must be an object"
+        raise ValueError(msg)
 
-                    if isinstance(parsed, list):
-                        msg = "Judge response JSON must be an object"
-                        raise ValueError(msg)
-
-    start = text.find("{")
-    end = text.rfind("}")
-    if start == -1 or end == -1 or end <= start:
+    if not has_obj:
         msg = "Judge response did not contain a JSON object"
         raise ValueError(msg)
 
-    raw = json.loads(text[start : end + 1])
+    raw = json.loads(text[obj_start : obj_end + 1])
     if not isinstance(raw, dict):
         msg = "Judge response JSON must be an object"
         raise ValueError(msg)

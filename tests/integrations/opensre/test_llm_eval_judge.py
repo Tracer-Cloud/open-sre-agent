@@ -91,3 +91,13 @@ def test_extract_judge_json_raises_for_prose_wrapped_array() -> None:
 def test_extract_judge_json_raises_for_info_prefixed_array() -> None:
     with pytest.raises(ValueError, match="JSON must be an object"):
         extract_judge_json_from_response('[INFO] result: [{"overall_pass": true}]')
+
+
+def test_extract_judge_json_allows_log_prefix_with_nested_array() -> None:
+    out = extract_judge_json_from_response(
+        '[INFO] result: {"overall_pass": true, "score_0_100": 90, "rubric_items": [], "summary": "ok"}'
+    )
+
+    assert out["overall_pass"] is True
+    assert out["score_0_100"] == 90
+    assert out["rubric_items"] == []
