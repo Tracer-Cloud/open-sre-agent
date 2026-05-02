@@ -4,6 +4,7 @@ required_keywords:
   - write-heavy workload
   - replica
   - wal
+  - replay
 required_evidence_sources:
   - aws_cloudwatch_metrics
   - aws_performance_insights
