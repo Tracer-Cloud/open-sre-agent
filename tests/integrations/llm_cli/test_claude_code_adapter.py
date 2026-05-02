@@ -252,7 +252,10 @@ def _auth_status_proc(logged_in: bool, api_key_source: str = "", email: str = ""
 @patch("app.integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_logged_in_via_api_key(mock_which: MagicMock, mock_run: MagicMock) -> None:
     mock_which.return_value = "/usr/bin/claude"
-    mock_run.side_effect = [_version_proc(), _auth_status_proc(True, api_key_source="ANTHROPIC_API_KEY")]
+    mock_run.side_effect = [
+        _version_proc(),
+        _auth_status_proc(True, api_key_source="ANTHROPIC_API_KEY"),
+    ]
 
     with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-test"}, clear=False):
         probe = ClaudeCodeAdapter().detect()
