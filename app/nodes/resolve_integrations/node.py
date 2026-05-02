@@ -63,7 +63,11 @@ def node_resolve_integrations(
     )
     if webhook_token:
         if not org_id:
-            org_id = extract_org_id_from_jwt(webhook_token) or ""
+            try:
+                org_id = extract_org_id_from_jwt(webhook_token) or ""
+            except Exception:
+                logger.debug("JWT verification failed for webhook token", exc_info=True)
+                org_id = ""
         if not org_id:
             logger.warning("_auth_token present but could not decode org_id")
             tracker.complete(
@@ -90,7 +94,14 @@ def node_resolve_integrations(
         env_token = _strip_bearer(os.getenv("JWT_TOKEN", "").strip())
         if env_token:
             if not org_id:
-                org_id = extract_org_id_from_jwt(env_token) or ""
+                try:
+                    org_id = extract_org_id_from_jwt(env_token) or ""
+                except Exception:
+                    logger.debug(
+                        "JWT verification failed for env token, falling back to local",
+                        exc_info=True,
+                    )
+                    return _resolve_from_local_sources(tracker)
             if not org_id:
                 return _resolve_from_local_sources(tracker)
             try:
