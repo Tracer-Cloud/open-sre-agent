@@ -205,18 +205,9 @@ def _looks_like_direct_shell_command(text: str) -> bool:
         return False
     if first.lower() in _NON_COMMAND_STARTS:
         return False
-    if first.lower() in COMMON_SHELL_COMMANDS:
-        return True
     if first.startswith(("./", "../", "/")):
         return Path(first).exists()
     return shutil.which(first) is not None
-
-
-COMMON_SHELL_COMMANDS = {
-    "pwd", "ls", "cd", "echo", "cat", "touch",
-    "mkdir", "rm", "cp", "mv", "grep", "find",
-    "kubectl", "docker", "git"
-}
 
 
 def _extract_shell_command(clause: PromptClause) -> PlannedAction | None:
