@@ -429,7 +429,7 @@ def test_execute_cli_actions_cd_preserves_windows_paths(monkeypatch: object) -> 
     def _fake_chdir(target: Path) -> None:
         changed_directories.append(target)
 
-    monkeypatch.setattr(agent_actions.os, "name", "nt")
+    monkeypatch.setattr(agent_actions, "_IS_WINDOWS", True)
     monkeypatch.setattr(agent_actions.os, "chdir", _fake_chdir)
 
     session = ReplSession()
@@ -450,7 +450,7 @@ def test_execute_cli_actions_cd_strips_quotes_on_windows(monkeypatch: object) ->
     def _fake_chdir(target: Path) -> None:
         changed_directories.append(target)
 
-    monkeypatch.setattr(agent_actions.os, "name", "nt")
+    monkeypatch.setattr(agent_actions, "_IS_WINDOWS", True)
     monkeypatch.setattr(agent_actions.os, "chdir", _fake_chdir)
 
     session = ReplSession()

@@ -149,6 +149,7 @@ _NON_COMMAND_STARTS = frozenset(
 _SHELL_COMMAND_TIMEOUT_SECONDS = 120
 _SYNTHETIC_TEST_TIMEOUT_SECONDS = 1800
 _MAX_COMMAND_OUTPUT_CHARS = 24_000
+_IS_WINDOWS = os.name == "nt"
 
 
 def _slash_action(command: str, position: int) -> PlannedAction:
@@ -434,9 +435,8 @@ def _run_cd_command(command: str, session: ReplSession, console: Console) -> Non
         return value
 
     try:
-        is_windows = os.name == "nt"
-        tokens = shlex.split(command, posix=not is_windows)
-        if is_windows:
+        tokens = shlex.split(command, posix=not _IS_WINDOWS)
+        if _IS_WINDOWS:
             tokens = [_strip_outer_quotes(token) for token in tokens]
     except ValueError as exc:
         console.print(f"[red]cd failed:[/red] {escape(str(exc))}")
