@@ -504,5 +504,7 @@ def test_check_memory_health_skips_malformed_lines(
 
     result = _check_memory_health()
 
+    assert isinstance(result, DeepHealthCheck)
+    assert result.name == "Memory"
     assert result.status == "passed"
     assert "50% used" in result.detail
