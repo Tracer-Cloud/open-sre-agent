@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
+from unittest.mock import MagicMock
 
 from app.analytics import install, provider
 from app.analytics.events import Event
@@ -55,6 +57,45 @@ def test_get_or_create_anonymous_id_reuses_persisted_value(monkeypatch, tmp_path
 
     assert first == second
     assert anonymous_id_path.read_text(encoding="utf-8") == first
+
+
+def test_get_or_create_anonymous_id_falls_back_on_oserror(monkeypatch, tmp_path: Path) -> None:
+    anonymous_id_path = tmp_path / "anonymous_id"
+
+    monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(provider, "_ANONYMOUS_ID_PATH", anonymous_id_path)
+
+    def _raise_oserror(*_args, **_kwargs):  # noqa: ANN002, ANN003
+        raise OSError("boom")
+
+    monkeypatch.setattr(provider.Path, "write_text", _raise_oserror)
+
+    anonymous_id = provider._get_or_create_anonymous_id()
+
+    assert anonymous_id
+    uuid.UUID(anonymous_id)
+
+
+def test_capture_install_detected_if_needed_returns_false_on_marker_write_failure(
+    monkeypatch, tmp_path: Path
+) -> None:
+    marker_path = tmp_path / "installed"
+
+    monkeypatch.setattr(provider, "_FIRST_RUN_PATH", marker_path)
+    monkeypatch.setattr(
+        provider,
+        "get_analytics",
+        lambda: (_ for _ in ()).throw(AssertionError("get_analytics should not be called")),
+    )
+
+    def _raise_oserror(*_args, **_kwargs):  # noqa: ANN002, ANN003
+        raise OSError("boom")
+
+    monkeypatch.setattr(provider.Path, "touch", _raise_oserror)
+
+    captured = provider.capture_install_detected_if_needed({"install_source": "make_install"})
+
+    assert captured is False
 
 
 def test_install_main_reuses_shared_install_guard(monkeypatch) -> None:
@@ -127,3 +168,36 @@ def test_analytics_disabled_when_do_not_track_opt_out(monkeypatch, tmp_path: Pat
     assert analytics._pending == 0
     assert analytics._queue.qsize() == 0
     assert client_inits == 0
+
+
+def test_shutdown_is_idempotent_and_capture_is_noop_after_shutdown(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("OPENSRE_ANALYTICS_DISABLED", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(provider, "_ANONYMOUS_ID_PATH", tmp_path / "anonymous_id")
+    monkeypatch.setattr(provider, "_get_or_create_anonymous_id", lambda: "anon")
+    monkeypatch.setattr(provider.atexit, "register", lambda *_args, **_kwargs: None)
+
+    def _noop_ensure_worker(self) -> None:
+        self._worker = MagicMock()
+
+    monkeypatch.setattr(provider.Analytics, "_ensure_worker", _noop_ensure_worker)
+
+    analytics = provider.Analytics()
+
+    analytics.shutdown(flush=False)
+    pending_before = analytics._pending
+    queued_before = analytics._queue.qsize()
+
+    analytics.capture(Event.INSTALL_DETECTED, {"install_source": "make_install"})
+    analytics.shutdown(flush=False)
+
+    assert analytics._pending == pending_before
+    assert analytics._queue.qsize() == queued_before
+
+
+def test_shutdown_analytics_is_noop_when_singleton_never_initialized(monkeypatch) -> None:
+    monkeypatch.setattr(provider, "_instance", None)
+    provider.shutdown_analytics(flush=False)
