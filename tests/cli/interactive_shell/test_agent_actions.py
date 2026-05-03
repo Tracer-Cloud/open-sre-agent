@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import subprocess
+from pathlib import Path
 
 from rich.console import Console
 
@@ -196,6 +197,7 @@ def test_explicit_shell_command_plans_shell_action() -> None:
 
 def test_direct_shell_command_plans_shell_action() -> None:
     assert plan_terminal_tasks("pwd") == ["shell"]
+    assert plan_terminal_tasks("cd /tmp") == ["shell"]
 
 
 def test_sample_alert_launch_plans_sample_alert_action() -> None:
@@ -392,26 +394,16 @@ def test_execute_cli_actions_falls_through_for_chat() -> None:
     assert session.history == []
 
 
-def test_execute_cli_actions_runs_shell_command(monkeypatch: object) -> None:
-    completed = subprocess.CompletedProcess(
-        args="pwd",
-        returncode=0,
-        stdout="/tmp/project\n",
-        stderr="",
-    )
-    calls: list[str] = []
+def test_execute_cli_actions_runs_pwd_builtin(monkeypatch: object) -> None:
+    def _fail_run(*_args: object, **_kwargs: object) -> None:  # pragma: no cover
+        raise AssertionError("subprocess.run should not be used for pwd")
 
-    def _fake_run(command: str, **_kwargs: object) -> subprocess.CompletedProcess[str]:
-        calls.append(command)
-        return completed
-
-    monkeypatch.setattr(agent_actions.subprocess, "run", _fake_run)
+    monkeypatch.setattr(agent_actions.subprocess, "run", _fail_run)
 
     session = ReplSession()
     console, buf = _capture()
 
     assert execute_cli_actions("run `pwd`", session, console) is True
-    assert calls == ["pwd"]
     assert session.history == [
         {"type": "cli_agent", "text": "run `pwd`", "ok": True},
         {"type": "shell", "text": "pwd", "ok": True},
@@ -419,7 +411,26 @@ def test_execute_cli_actions_runs_shell_command(monkeypatch: object) -> None:
     output = buf.getvalue()
     assert "Running requested actions" in output
     assert "$ pwd" in output
-    assert "/tmp/project" in output
+    assert str(Path.cwd()) in output.replace("\n", "").replace("\r", "")
+
+
+def test_execute_cli_actions_routes_cd_case_insensitive(monkeypatch: object) -> None:
+    cd_calls: list[str] = []
+
+    def _fake_cd(command: str, _session: ReplSession, _console: Console) -> None:
+        cd_calls.append(command)
+
+    def _fail_run(*_args: object, **_kwargs: object) -> None:  # pragma: no cover
+        raise AssertionError("subprocess.run should not be used for cd")
+
+    monkeypatch.setattr(agent_actions, "_run_cd_command", _fake_cd)
+    monkeypatch.setattr(agent_actions.subprocess, "run", _fail_run)
+
+    session = ReplSession()
+    console, _ = _capture()
+
+    assert execute_cli_actions("CD /tmp", session, console) is True
+    assert cd_calls == ["CD /tmp"]
 
 
 def test_execute_cli_actions_records_shell_failure(monkeypatch: object) -> None:

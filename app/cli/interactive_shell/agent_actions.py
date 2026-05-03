@@ -146,6 +146,8 @@ _NON_COMMAND_STARTS = frozenset(
         "why",
     }
 )
+# Shell builtins that may not be discoverable via `shutil.which()` on all platforms.
+# Keep this list intentionally small and add tests when extending it.
 _SHELL_BUILTINS = frozenset({"cd", "pwd"})
 _SHELL_COMMAND_TIMEOUT_SECONDS = 120
 _SYNTHETIC_TEST_TIMEOUT_SECONDS = 1800
@@ -399,6 +401,9 @@ def _run_shell_command(command: str, session: ReplSession, console: Console) -> 
     if token is not None and token.lower() == "cd":
         _run_cd_command(command, session, console)
         return
+    if token is not None and token.lower() == "pwd":
+        _run_pwd_command(command, session, console)
+        return
 
     try:
         completed = subprocess.run(
@@ -449,6 +454,23 @@ def _run_cd_command(command: str, session: ReplSession, console: Console) -> Non
         os.chdir(target)
     except Exception as exc:  # noqa: BLE001
         console.print(f"[red]cd failed:[/red] {escape(str(exc))}")
+        session.record("shell", command, ok=False)
+        return
+
+    console.print(Text(str(Path.cwd())))
+    session.record("shell", command)
+
+
+def _run_pwd_command(command: str, session: ReplSession, console: Console) -> None:
+    try:
+        tokens = shlex.split(command, posix=True)
+    except ValueError as exc:
+        console.print(f"[red]pwd failed:[/red] {escape(str(exc))}")
+        session.record("shell", command, ok=False)
+        return
+
+    if len(tokens) != 1:
+        console.print("[red]pwd failed:[/red] too many arguments")
         session.record("shell", command, ok=False)
         return
 
