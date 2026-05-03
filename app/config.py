@@ -199,6 +199,7 @@ class LLMSettings(StrictConfigModel):
             "anthropic": self.anthropic_api_key,
             "openai": self.openai_api_key,
             "openrouter": self.openrouter_api_key,
+            "requesty": self.requesty_api_key,
             "gemini": self.gemini_api_key,
             "nvidia": self.nvidia_api_key,
             "minimax": self.minimax_api_key,
@@ -210,6 +211,7 @@ class LLMSettings(StrictConfigModel):
             "anthropic": "ANTHROPIC_API_KEY",
             "openai": "OPENAI_API_KEY",
             "openrouter": "OPENROUTER_API_KEY",
+            "requesty": "REQUESTY_API_KEY",
             "gemini": "GEMINI_API_KEY",
             "nvidia": "NVIDIA_API_KEY",
             "minimax": "MINIMAX_API_KEY",
@@ -254,6 +256,17 @@ class LLMSettings(StrictConfigModel):
                     os.getenv("OPENROUTER_MODEL", OPENROUTER_TOOLCALL_MODEL),
                 ).strip()
                 or OPENROUTER_TOOLCALL_MODEL,
+                "requesty_api_key": resolve_llm_api_key("REQUESTY_API_KEY"),
+                "requesty_reasoning_model": os.getenv(
+                    "REQUESTY_REASONING_MODEL",
+                    os.getenv("REQUESTY_MODEL", REQUESTY_REASONING_MODEL),
+                ).strip()
+                or REQUESTY_REASONING_MODEL,
+                "requesty_toolcall_model": os.getenv(
+                    "REQUESTY_TOOLCALL_MODEL",
+                    os.getenv("REQUESTY_MODEL", REQUESTY_TOOLCALL_MODEL),
+                ).strip()
+                or REQUESTY_TOOLCALL_MODEL,
                 "gemini_reasoning_model": os.getenv(
                     "GEMINI_REASONING_MODEL",
                     os.getenv("GEMINI_MODEL", GEMINI_REASONING_MODEL),
