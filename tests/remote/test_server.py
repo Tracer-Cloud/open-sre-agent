@@ -419,3 +419,90 @@ def test_check_memory_health_returns_missing_on_oserror(
     assert result.name == "Memory"
     assert result.status == "missing"
     assert "Unable to read meminfo:" in result.detail
+
+
+def _patch_meminfo(monkeypatch: pytest.MonkeyPatch, content: str) -> None:
+    """Replace ``app.remote.server.Path`` with a stub that yields ``content``.
+
+    Keeps each threshold test isolated from the host's real /proc/meminfo so
+    the assertions are deterministic across Linux, macOS, and Windows runners.
+    """
+
+    class _FakeMeminfoPath:
+        def __init__(self, *_args: object, **_kwargs: object) -> None: ...
+        def exists(self) -> bool:
+            return True
+
+        def read_text(self, **_kwargs: object) -> str:
+            return content
+
+    monkeypatch.setattr("app.remote.server.Path", _FakeMeminfoPath)
+
+
+def test_check_memory_health_returns_passed_when_below_warn_threshold(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Memory usage below 90% should return status='passed'."""
+    # MemTotal = 16,000 MiB (16384000 kB); MemAvailable = 8,000 MiB => 50% used
+    meminfo = "MemTotal:       16384000 kB\nMemAvailable:    8192000 kB\n"
+    _patch_meminfo(monkeypatch, meminfo)
+
+    result = _check_memory_health()
+
+    assert isinstance(result, DeepHealthCheck)
+    assert result.name == "Memory"
+    assert result.status == "passed"
+    assert "50% used" in result.detail
+    assert "8000MiB / 16000MiB" in result.detail
+
+
+def test_check_memory_health_returns_warn_when_at_or_above_threshold(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Memory usage at or above 90% should return status='warn' at the boundary."""
+    # MemTotal = 16,000 MiB (16384000 kB); MemAvailable = 1,600 MiB => 90% used exactly
+    meminfo = "MemTotal:       16384000 kB\nMemAvailable:    1638400 kB\n"
+    _patch_meminfo(monkeypatch, meminfo)
+
+    result = _check_memory_health()
+
+    assert isinstance(result, DeepHealthCheck)
+    assert result.name == "Memory"
+    assert result.status == "warn"
+    assert "90% used" in result.detail
+    assert "14400MiB / 16000MiB" in result.detail
+
+
+def test_check_memory_health_returns_missing_when_memtotal_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Missing MemTotal should be treated as incomplete data, not crash."""
+    # MemAvailable present but MemTotal absent — exercises the ``not total_kb`` guard
+    meminfo = "MemAvailable:    8388608 kB\nBuffers:           65536 kB\n"
+    _patch_meminfo(monkeypatch, meminfo)
+
+    result = _check_memory_health()
+
+    assert isinstance(result, DeepHealthCheck)
+    assert result.name == "Memory"
+    assert result.status == "missing"
+    assert "Incomplete /proc/meminfo data." in result.detail
+
+
+def test_check_memory_health_skips_malformed_lines(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Lines without a colon, with non-numeric values, or with stray text are ignored."""
+    # First line lacks ':', second has a non-digit value, MemTotal/MemAvailable still parse
+    meminfo = (
+        "Garbage line without colon\n"
+        "MemFree:        not-a-number kB\n"
+        "MemTotal:       16384000 kB\n"
+        "MemAvailable:    8192000 kB\n"
+    )
+    _patch_meminfo(monkeypatch, meminfo)
+
+    result = _check_memory_health()
+
+    assert result.status == "passed"
+    assert "50% used" in result.detail
