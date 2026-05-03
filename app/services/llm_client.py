@@ -501,6 +501,22 @@ def _create_llm_client(model_type: str) -> _LLMClientType:
             base_url=OPENROUTER_BASE_URL,
             api_key_env="OPENROUTER_API_KEY",
         )
+    elif provider == "requesty":
+        from app.config import REQUESTY_BASE_URL, REQUESTY_LLM_CONFIG
+
+        config = REQUESTY_LLM_CONFIG
+        model = (
+            settings.requesty_reasoning_model
+            if model_type == "reasoning"
+            else settings.requesty_toolcall_model
+        )
+        return OpenAILLMClient(
+            model=model,
+            max_tokens=config.max_tokens,
+            base_url=REQUESTY_BASE_URL,
+            api_key_env="REQUESTY_API_KEY",
+            default_headers={"X-Title": "OpenSRE"},
+        )
     elif provider == "gemini":
         from app.config import GEMINI_LLM_CONFIG
 
