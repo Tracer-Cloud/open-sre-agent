@@ -58,9 +58,13 @@ def get_keyring_setup_instructions(env_var: str) -> tuple[str, ...]:
                 "Install it first: sudo apt update && sudo apt install -y gnome-keyring dbus-user-session"
             )
         elif not os.getenv("DBUS_SESSION_BUS_ADDRESS", "").strip():
-            lines.append("GNOME Keyring is installed, but this shell is not running inside a D-Bus session.")
+            lines.append(
+                "GNOME Keyring is installed, but this shell is not running inside a D-Bus session."
+            )
         else:
-            lines.append("This shell has D-Bus available, but the login keyring is still locked or not initialized.")
+            lines.append(
+                "This shell has D-Bus available, but the login keyring is still locked or not initialized."
+            )
 
         lines.extend(
             [
@@ -90,7 +94,9 @@ def save_llm_api_key(env_var: str, value: str) -> None:
     try:
         keyring.set_password(_KEYRING_SERVICE, env_var, normalized)
     except keyring.errors.KeyringError as exc:
-        raise RuntimeError("Secure local credential storage is unavailable on this machine.") from exc
+        raise RuntimeError(
+            "Secure local credential storage is unavailable on this machine."
+        ) from exc
 
 
 def delete_llm_api_key(env_var: str) -> None:

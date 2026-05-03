@@ -336,7 +336,9 @@ def _persist_llm_api_key(env_var: str, value: str) -> bool:
         save_llm_api_key(env_var, value)
     except RuntimeError as exc:
         _console.print(f"[red]{exc}[/]")
-        _console.print("[yellow]OpenSRE could not save your API key to the local system keychain.[/]")
+        _console.print(
+            "[yellow]OpenSRE could not save your API key to the local system keychain.[/]"
+        )
         for line in get_keyring_setup_instructions(env_var):
             _console.print(f"[dim]{line}[/]")
         return False

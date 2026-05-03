@@ -17,7 +17,10 @@ def test_get_keyring_setup_instructions_for_linux_without_gnome_keyring(monkeypa
 
     assert lines[0] == "Current keyring backend: keyring.backends.fail.Keyring."
     assert "missing the GNOME Keyring daemon" in lines[1]
-    assert any("sudo apt update && sudo apt install -y gnome-keyring dbus-user-session" in line for line in lines)
+    assert any(
+        "sudo apt update && sudo apt install -y gnome-keyring dbus-user-session" in line
+        for line in lines
+    )
     assert any("dbus-run-session -- sh" in line for line in lines)
 
 
