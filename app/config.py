@@ -84,7 +84,7 @@ OPENROUTER_TOOLCALL_MODEL = "openrouter/auto"
 
 # Requesty model constants (OpenAI-compatible gateway; uses provider/model naming)
 REQUESTY_REASONING_MODEL = "anthropic/claude-sonnet-4-6"
-REQUESTY_TOOLCALL_MODEL = "anthropic/claude-haiku-4-5"
+REQUESTY_TOOLCALL_MODEL = "anthropic/claude-sonnet-4-6"
 
 # Gemini model constants (Google AI preview IDs; OpenAI-compatible endpoint)
 # UNVERIFIED PLACEHOLDER — gemini-3.1-pro-preview / gemini-3.1-flash-lite-preview are
