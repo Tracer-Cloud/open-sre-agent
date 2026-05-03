@@ -31,11 +31,19 @@ class _FakeOpenAI:
     last_api_key: str | None = None
     last_base_url: str | None = None
 
-    def __init__(self, *, api_key: str, base_url: str | None = None, timeout: float) -> None:
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        base_url: str | None = None,
+        timeout: float,
+        default_headers: dict[str, str] | None = None,
+    ) -> None:
         _FakeOpenAI.last_api_key = api_key
         _FakeOpenAI.last_base_url = base_url
         self.base_url = base_url
         self.timeout = timeout
+        self.default_headers = default_headers
         self.chat = _FakeOpenAIChat()
 
 
