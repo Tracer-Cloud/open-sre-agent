@@ -112,8 +112,10 @@ OPENROUTER_MODELS = (
 
 REQUESTY_MODELS = (
     ModelOption(value=REQUESTY_REASONING_MODEL, label="Claude Sonnet 4.6 (via Requesty)"),
-    ModelOption(value="bedrock/claude-opus-4-7", label="Claude Opus 4.7 (via Requesty)"),
-    ModelOption(value="bedrock/claude-sonnet-4-6", label="Claude Sonnet 4.6 (via Requesty)"),
+    ModelOption(value="bedrock/claude-opus-4-7", label="Claude Opus 4.7 Bedrock (via Requesty)"),
+    ModelOption(
+        value="bedrock/claude-sonnet-4-6", label="Claude Sonnet 4.6 Bedrock (via Requesty)"
+    ),
     ModelOption(value="openai/gpt-5.5", label="GPT-5.5 (via Requesty)"),
     ModelOption(
         value="vertex/gemini-3.1-pro-preview", label="Gemini 3.1 Pro (preview, via Requesty)"

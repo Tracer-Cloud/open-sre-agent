@@ -227,6 +227,7 @@ class LLMSettings(StrictConfigModel):
                 "anthropic_api_key": resolve_llm_api_key("ANTHROPIC_API_KEY"),
                 "openai_api_key": resolve_llm_api_key("OPENAI_API_KEY"),
                 "openrouter_api_key": resolve_llm_api_key("OPENROUTER_API_KEY"),
+                "requesty_api_key": resolve_llm_api_key("REQUESTY_API_KEY"),
                 "gemini_api_key": resolve_llm_api_key("GEMINI_API_KEY"),
                 "nvidia_api_key": resolve_llm_api_key("NVIDIA_API_KEY"),
                 "minimax_api_key": resolve_llm_api_key("MINIMAX_API_KEY"),
@@ -256,7 +257,6 @@ class LLMSettings(StrictConfigModel):
                     os.getenv("OPENROUTER_MODEL", OPENROUTER_TOOLCALL_MODEL),
                 ).strip()
                 or OPENROUTER_TOOLCALL_MODEL,
-                "requesty_api_key": resolve_llm_api_key("REQUESTY_API_KEY"),
                 "requesty_reasoning_model": os.getenv(
                     "REQUESTY_REASONING_MODEL",
                     os.getenv("REQUESTY_MODEL", REQUESTY_REASONING_MODEL),
