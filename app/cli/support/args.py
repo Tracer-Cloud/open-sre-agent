@@ -45,6 +45,24 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "(rubric is stripped from the agent copy of the alert)."
         ),
     )
+    parser.add_argument(
+        "--benchmark",
+        action="store_true",
+        help="Emit Cloud-OpsBench-style ranked predictions instead of the default report.",
+    )
+    parser.add_argument("--case-name", default="", help="Benchmark case identifier.")
+    parser.add_argument("--case-path", default="", help="Benchmark case directory path.")
+    parser.add_argument(
+        "--fault-category", default="", help="Benchmark fault category label (e.g. 'scheduling')."
+    )
+    parser.add_argument(
+        "--prompt-strategy", default="base", help="Prompt strategy label recorded in benchmark output."
+    )
+    parser.add_argument(
+        "--model",
+        default="",
+        help="Model identifier recorded in benchmark output. Defaults to the configured provider model.",
+    )
     return parser.parse_args(argv)
 
 
