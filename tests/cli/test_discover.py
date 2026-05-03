@@ -5,7 +5,9 @@ from pathlib import Path
 
 import pytest
 
+from app.cli.tests.catalog import TestRequirement as Requirement
 from app.cli.tests.discover import (
+    _comment_map_for_makefile,
     _discover_rds_synthetic_scenarios,
     discover_make_targets,
     discover_rca_files,
@@ -41,6 +43,85 @@ def test_discover_make_targets_finds_target_at_line_one() -> None:
 
     ids = [item.id for item in items]
     assert "make:test-cov" in ids
+
+
+def test_comment_map_for_makefile_collects_preceding_comments(tmp_path: Path) -> None:
+    makefile = tmp_path / "Makefile"
+    makefile.write_text(
+        "\n".join(
+            [
+                "# Fast unit tests",
+                "# and quick smoke checks",
+                "test:",
+                "\tpytest -q",
+                "",
+                "# Deploy infra",
+                "deploy:",
+                "\t@echo deploy",
+                "",
+                "# Comment separated by a blank line should not attach",
+                "",
+                "test-full:",
+                "\tpytest -q",
+                "",
+                "phony: test",
+                "\t@echo phony",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    comment_map = _comment_map_for_makefile(makefile)
+
+    assert comment_map["test"] == "Fast unit tests and quick smoke checks"
+    assert comment_map["deploy"] == "Deploy infra"
+    assert comment_map["test-full"] == ""
+    assert comment_map["phony"] == ""
+
+
+def test_discover_make_targets_skips_missing_targets_and_applies_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    makefile = tmp_path / "Makefile"
+    makefile.write_text(
+        "\n".join(
+            [
+                "# Fast unit tests",
+                "test:",
+                "\tpytest -q",
+                "",
+                "# A custom target not in discover metadata",
+                "my-custom-target:",
+                "\t@echo ok",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr("app.cli.tests.discover.MAKEFILE_PATH", makefile)
+    monkeypatch.setattr(
+        "app.cli.tests.discover._TARGETS_TO_INDEX",
+        ("test", "test-grafana", "my-custom-target"),
+    )
+
+    items = discover_make_targets()
+    items_by_id = {item.id: item for item in items}
+
+    assert set(items_by_id.keys()) == {"make:test", "make:my-custom-target"}
+
+    test_item = items_by_id["make:test"]
+    assert test_item.display_name == "Fast Unit + Prefect E2E"
+    assert test_item.description == "Fast unit tests"
+    assert test_item.tags == ("ci-safe", "test", "pytest")
+    assert test_item.requirements == Requirement()
+    assert test_item.source_path == str(makefile)
+
+    custom_item = items_by_id["make:my-custom-target"]
+    assert custom_item.display_name == "my-custom-target"
+    assert custom_item.description == "A custom target not in discover metadata"
+    assert custom_item.tags == ("make",)
+    assert custom_item.requirements == Requirement()
+    assert custom_item.source_path == str(makefile)
 
 
 # ---------------------------------------------------------------------------
