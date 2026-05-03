@@ -26,6 +26,24 @@ def test_is_operation_allowed_allows_readonly_operations() -> None:
 @pytest.mark.parametrize(
     "operation_name",
     [
+        "describe_instances",
+        "get_caller_identity",
+        "list_buckets",
+        "head_bucket",
+        "batch_get_item",
+        "query",
+        "scan",
+    ],
+)
+def test_is_operation_allowed_allows_expected_patterns(operation_name: str) -> None:
+    allowed, reason = _is_operation_allowed(operation_name)
+    assert allowed is True
+    assert "allowed" in reason.lower()
+
+
+@pytest.mark.parametrize(
+    "operation_name",
+    [
         "delete_table",
         "remove_bucket",
         "update_item",
@@ -131,6 +149,22 @@ def test_execute_aws_sdk_call_happy_path_sanitizes_response() -> None:
     client.describe_instances.assert_called_once_with(InstanceIds=["i-123"])
 
 
+def test_execute_aws_sdk_call_passes_region_to_boto3_client() -> None:
+    client = MagicMock()
+    client.meta.region_name = "us-west-2"
+    client.describe_instances.return_value = {}
+
+    with patch("app.services.aws_sdk_client.boto3.client", return_value=client) as mock_boto3:
+        result = execute_aws_sdk_call(
+            service_name="ec2",
+            operation_name="describe_instances",
+            region="us-west-2",
+        )
+
+    assert result["success"] is True
+    mock_boto3.assert_called_once_with("ec2", region_name="us-west-2")
+
+
 def test_execute_aws_sdk_call_no_credentials_error() -> None:
     with patch("app.services.aws_sdk_client.boto3.client", side_effect=NoCredentialsError()):
         result = execute_aws_sdk_call(service_name="ec2", operation_name="describe_instances")
@@ -168,3 +202,15 @@ def test_execute_aws_sdk_call_client_error_formats_message() -> None:
     assert "nope" in result["error"]
     assert result["metadata"]["error_type"] == "client_error"
     assert result["metadata"]["status_code"] == 403
+
+
+def test_execute_aws_sdk_call_unexpected_exception_sets_error_type() -> None:
+    client = MagicMock()
+    client.meta.region_name = "us-east-1"
+    client.describe_instances.side_effect = RuntimeError("boom")
+
+    with patch("app.services.aws_sdk_client.boto3.client", return_value=client):
+        result = execute_aws_sdk_call(service_name="ec2", operation_name="describe_instances")
+
+    assert result["success"] is False
+    assert result["metadata"]["error_type"] == "unexpected"
