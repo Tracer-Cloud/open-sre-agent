@@ -245,14 +245,16 @@ class OpenAILLMClient:
         base_url: str | None = None,
         api_key_env: str = "OPENAI_API_KEY",
         api_key_default: str = "",
+        default_headers: dict[str, str] | None = None,
     ) -> None:
         api_key = resolve_llm_api_key(api_key_env) or api_key_default
         self._api_key = api_key
         self._api_key_default = api_key_default
         self._base_url = base_url
         self._api_key_env = api_key_env
+        self._default_headers = default_headers
         self._provider_label = api_key_env.removesuffix("_API_KEY").replace("_", " ").title()
-        self._client = OpenAI(api_key=api_key, base_url=base_url, timeout=60.0)
+        self._client = OpenAI(api_key=api_key, base_url=base_url, timeout=60.0, default_headers=default_headers)
         self._model = model
         self._max_tokens = max_tokens
         self._temperature = temperature
@@ -274,7 +276,7 @@ class OpenAILLMClient:
             )
         if api_key != self._api_key:
             self._api_key = api_key
-            self._client = OpenAI(api_key=api_key, base_url=self._base_url, timeout=60.0)
+            self._client = OpenAI(api_key=api_key, base_url=self._base_url, timeout=60.0, default_headers=self._default_headers)
 
     def invoke(self, prompt_or_messages: Any) -> LLMResponse:
         self._ensure_client()
