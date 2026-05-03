@@ -94,6 +94,9 @@ def test_discover_make_targets_skips_missing_targets_and_applies_metadata(
                 "test-grafana:",
                 "\tpytest -q -m grafana",
                 "",
+                "bare-target:",
+                "\t@echo bare",
+                "",
                 "# A custom target not in discover metadata",
                 "my-custom-target:",
                 "\t@echo ok",
@@ -105,7 +108,7 @@ def test_discover_make_targets_skips_missing_targets_and_applies_metadata(
     monkeypatch.setattr("app.cli.tests.discover.MAKEFILE_PATH", makefile)
     monkeypatch.setattr(
         "app.cli.tests.discover._TARGETS_TO_INDEX",
-        ("test", "test-grafana", "my-custom-target", "demo"),
+        ("test", "test-grafana", "bare-target", "my-custom-target", "demo"),
     )
 
     items = discover_make_targets()
@@ -114,6 +117,7 @@ def test_discover_make_targets_skips_missing_targets_and_applies_metadata(
     assert set(items_by_id.keys()) == {
         "make:test",
         "make:test-grafana",
+        "make:bare-target",
         "make:my-custom-target",
     }
 
@@ -132,6 +136,13 @@ def test_discover_make_targets_skips_missing_targets_and_applies_metadata(
         env_vars=("ANTHROPIC_API_KEY", "OPENAI_API_KEY")
     )
     assert grafana_item.source_path == str(makefile)
+
+    bare_item = items_by_id["make:bare-target"]
+    assert bare_item.display_name == "bare-target"
+    assert bare_item.description == "Run `bare-target` from the Makefile."
+    assert bare_item.tags == ("make",)
+    assert bare_item.requirements == Requirement()
+    assert bare_item.source_path == str(makefile)
 
     custom_item = items_by_id["make:my-custom-target"]
     assert custom_item.display_name == "my-custom-target"
