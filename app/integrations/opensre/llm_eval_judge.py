@@ -50,8 +50,6 @@ def extract_judge_json_from_response(text: str) -> dict[str, Any]:
 
     fences = re.findall(r"```(?:json)?\s*([\s\S]*?)\s*```", text, re.DOTALL)
     if fences:
-        saw_array_fence = False
-
         for fence_candidate in reversed(fences):
             fence_candidate = fence_candidate.strip()
             try:
@@ -63,12 +61,7 @@ def extract_judge_json_from_response(text: str) -> dict[str, Any]:
                 return cast(dict[str, Any], parsed_fence)
 
             if isinstance(parsed_fence, list):
-                saw_array_fence = True
                 continue
-
-        if saw_array_fence:
-            msg = "Judge response JSON must be an object"
-            raise ValueError(msg)
 
     try:
         raw = json.loads(text)

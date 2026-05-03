@@ -124,3 +124,17 @@ def test_extract_judge_json_allows_bracketed_prose_around_object() -> None:
     )
     assert out["overall_pass"] is True
     assert out["score_0_100"] == 90
+
+
+def test_extract_judge_json_prefers_inline_dict_over_array_fence() -> None:
+    out = extract_judge_json_from_response(
+        "For reference:\n"
+        "```json\n"
+        '["item1", "item2"]\n'
+        "```\n\n"
+        "Actual result:\n"
+        '{"overall_pass": true, "score_0_100": 90, "rubric_items": [], "summary": "ok"}'
+    )
+
+    assert out["overall_pass"] is True
+    assert out["score_0_100"] == 90
