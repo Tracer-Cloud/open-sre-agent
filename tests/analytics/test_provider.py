@@ -181,7 +181,8 @@ def test_shutdown_is_idempotent_and_capture_is_noop_after_shutdown(
     monkeypatch.setattr(provider.atexit, "register", lambda *_args, **_kwargs: None)
 
     def _noop_ensure_worker(self) -> None:
-        self._worker = MagicMock()
+        if self._worker is None:
+            self._worker = MagicMock()
 
     monkeypatch.setattr(provider.Analytics, "_ensure_worker", _noop_ensure_worker)
 
