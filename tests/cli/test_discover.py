@@ -90,6 +90,10 @@ def test_discover_make_targets_skips_missing_targets_and_applies_metadata(
                 "test:",
                 "\tpytest -q",
                 "",
+                "# Grafana integration tests",
+                "test-grafana:",
+                "\tpytest -q -m grafana",
+                "",
                 "# A custom target not in discover metadata",
                 "my-custom-target:",
                 "\t@echo ok",
@@ -101,13 +105,17 @@ def test_discover_make_targets_skips_missing_targets_and_applies_metadata(
     monkeypatch.setattr("app.cli.tests.discover.MAKEFILE_PATH", makefile)
     monkeypatch.setattr(
         "app.cli.tests.discover._TARGETS_TO_INDEX",
-        ("test", "test-grafana", "my-custom-target"),
+        ("test", "test-grafana", "my-custom-target", "demo"),
     )
 
     items = discover_make_targets()
     items_by_id = {item.id: item for item in items}
 
-    assert set(items_by_id.keys()) == {"make:test", "make:my-custom-target"}
+    assert set(items_by_id.keys()) == {
+        "make:test",
+        "make:test-grafana",
+        "make:my-custom-target",
+    }
 
     test_item = items_by_id["make:test"]
     assert test_item.display_name == "Fast Unit + Prefect E2E"
@@ -115,6 +123,15 @@ def test_discover_make_targets_skips_missing_targets_and_applies_metadata(
     assert test_item.tags == ("ci-safe", "test", "pytest")
     assert test_item.requirements == Requirement()
     assert test_item.source_path == str(makefile)
+
+    grafana_item = items_by_id["make:test-grafana"]
+    assert grafana_item.display_name == "Grafana Integration Tests"
+    assert grafana_item.description == "Grafana integration tests"
+    assert grafana_item.tags == ("test", "grafana")
+    assert grafana_item.requirements == Requirement(
+        env_vars=("ANTHROPIC_API_KEY", "OPENAI_API_KEY")
+    )
+    assert grafana_item.source_path == str(makefile)
 
     custom_item = items_by_id["make:my-custom-target"]
     assert custom_item.display_name == "my-custom-target"
