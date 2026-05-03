@@ -85,6 +85,7 @@ _LLM_PROVIDER_NAMES = frozenset(
         "anthropic",
         "openai",
         "openrouter",
+        "requesty",
         "gemini",
         "nvidia",
         "ollama",

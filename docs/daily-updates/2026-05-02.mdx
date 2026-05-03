@@ -1,0 +1,44 @@
+---
+title: "Daily Update — 2026-05-02"
+description: "OpenSRE engineering daily update for 2026-05-02 (Europe/London)"
+---
+
+Thanks to everyone who contributed yesterday:
+
+Anwesh, Awokoya Olawale Davidson, Diwansu-Pilania, Jaimin Godhani, Just Harold, Krish Srivastava, Prakhar Jain, S. B. | Software Developer, Shivam Behl, and Turan Buyukkamaci 🙏🚀
+
+## Main updates shipped (May 2, 2026)
+
+- feat(cli): make interactive shell documentation-aware (#1166) — Awokoya Olawale Davidson
+- refactor: Ingest flow cleanup & Fix ingest duplication streamline investigation URL handling — S. B. | Software Developer
+- test: add unit tests for AlertmanagerClient (#876) — Turan Buyukkamaci
+- Fix: keep CLI analytics disabled when users opt out (#1118) — Shivam Behl
+- Fix: Integrations overview pages — Just Harold
+- test: add direct unit tests for grafana config normalization and auth… — Prakhar Jain
+- fix: move stdlib imports to module level in hot-path functions — Jaimin Godhani
+- test: consolidate remote-runtime tests under tests/remote/ (#872) — Awokoya Olawale Davidson
+- Revert "feat: Add analytics opt-out environment variable tests (#1118)" — Anwesh
+- test(cli): use dummy app session in prompt-session tests so they pass… — Awokoya Olawale Davidson
+- docs: add quick-start commands for testing in tests/README.md — Krish Srivastava
+- feat: Add analytics opt-out environment variable tests (#1118) — Dark_Pheonix
+
+## Source pull requests
+
+- [#1172](https://github.com/Tracer-Cloud/opensre/pull/1172) feat(cli): make interactive shell documentation-aware (#1166) (author: Awokoya Olawale Davidson; contributors: Awokoya Olawale Davidson; labels: _none_; files: `app/cli/interactive_shell/cli_help.py`, `app/cli/interactive_shell/docs_reference.py`, `app/cli/interactive_shell/router.py`, `tests/cli/interactive_shell/test_cli_help.py`, `tests/cli/interactive_shell/test_docs_reference.py`, `tests/cli/interactive_shell/test_router.py`)
+- [#1186](https://github.com/Tracer-Cloud/opensre/pull/1186) test: add direct unit tests for grafana config normalization and auth… (author: Prakhar Jain; contributors: Prakhar Jain; labels: _none_; files: `tests/services/test_grafana_config.py`)
+- [#1191](https://github.com/Tracer-Cloud/opensre/pull/1191) refactor: Ingest flow cleanup & Fix ingest duplication streamline investigation URL handling (author: S. B. | Software Developer; contributors: S. B. | Software Developer; labels: _none_; files: `app/nodes/publish_findings/formatters/report.py`, `app/nodes/publish_findings/node.py`, `app/utils/ingest_delivery.py`, `tests/nodes/publish_findings/test_masking_unmask.py`, `tests/nodes/publish_findings/test_node.py`, `tests/utils/test_ingest_delivery.py`)
+- [#1193](https://github.com/Tracer-Cloud/opensre/pull/1193) Fix: Integrations overview pages (author: Just Harold; contributors: Just Harold; labels: _none_; files: `docs/docs.json`, `docs/integrations/integration-workflow.mdx`)
+- [#1194](https://github.com/Tracer-Cloud/opensre/pull/1194) test: add unit tests for AlertmanagerClient (#876) (author: Turan Buyukkamaci; contributors: Turan Buyukkamaci; labels: _none_; files: `tests/services/test_alertmanager_client.py`)
+- [#1189](https://github.com/Tracer-Cloud/opensre/pull/1189) feat: Add analytics opt-out environment variable tests (#1118) (author: Dark_Pheonix; contributors: Dark_Pheonix and Diwansu-Pilania; labels: _none_; files: `tests/analytics/test_provider.py`)
+- [#1195](https://github.com/Tracer-Cloud/opensre/pull/1195) Revert "feat: Add analytics opt-out environment variable tests (#1118)" (author: Anwesh; contributors: Anwesh; labels: _none_; files: `tests/analytics/test_provider.py`)
+- [#1216](https://github.com/Tracer-Cloud/opensre/pull/1216) fix: move stdlib imports to module level in hot-path functions (author: Jaimin Godhani; contributors: Jaimin Godhani; labels: _none_; files: `app/nodes/chat.py`, `app/nodes/root_cause_diagnosis/prompt_builder.py`)
+- [#1215](https://github.com/Tracer-Cloud/opensre/pull/1215) test: consolidate remote-runtime tests under tests/remote/ (#872) (author: Awokoya Olawale Davidson; contributors: Awokoya Olawale Davidson; labels: `ci:windows`; files: `tests/app/remote/__init__.py`, `tests/remote/test_client.py`, `tests/remote/test_reasoning.py`, `tests/remote/test_renderer.py`, `tests/remote/test_server.py`, `tests/remote/test_stream.py`, `tests/remote/test_system_metrics.py`, `tests/remote/test_vercel_poller.py`)
+- [#1224](https://github.com/Tracer-Cloud/opensre/pull/1224) test(cli): use dummy app session in prompt-session tests so they pass… (author: Awokoya Olawale Davidson; contributors: Awokoya Olawale Davidson; labels: `ci:windows`; files: `tests/cli/interactive_shell/test_loop.py`)
+- [#1225](https://github.com/Tracer-Cloud/opensre/pull/1225) Fix: keep CLI analytics disabled when users opt out (#1118) (author: Shivam Behl; contributors: Shivam Behl; labels: _none_; files: `tests/analytics/test_provider.py`)
+- [#1171](https://github.com/Tracer-Cloud/opensre/pull/1171) docs: add quick-start commands for testing in tests/README.md (author: Krish Srivastava; contributors: Krish Srivastava; labels: _none_; files: `tests/README.md`)
+
+## Generation metadata
+
+- Generator version: `opensre 2026.4.5`
+- Fallback summary used: `no`
+- UTC window: `2026-05-01T23:00:00+00:00` to `2026-05-02T23:00:00+00:00`
