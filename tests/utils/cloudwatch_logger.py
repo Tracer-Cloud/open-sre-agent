@@ -101,7 +101,7 @@ def log_error_to_cloudwatch(
         error_traceback: Full traceback
         pipeline_name: Pipeline name
         run_id: Run identifier
-        test_name: Test/demo name (constructs log group: /tracer/ai-investigations/{test_name})
+        test_name: Test/demo name (constructs log group: /opensre/ai-investigations/{test_name})
         region: AWS region
 
     Returns:
@@ -109,7 +109,7 @@ def log_error_to_cloudwatch(
     """
     error_message = str(error)
     log_stream = run_id
-    log_group = f"/tracer/ai-investigations/{test_name}"
+    log_group = f"/opensre/ai-investigations/{test_name}"
 
     log_message = build_error_log_message(
         error_message=error_message,

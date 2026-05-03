@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from app.constants import OPENSRE_HOME_DIR, TRACER_HOME_DIR
+from app.constants import LEGACY_TRACER_HOME_DIR, OPENSRE_HOME_DIR
 from app.version import PACKAGE_NAME
 
 
@@ -40,7 +40,7 @@ def _pip_uninstall() -> int:
 
 
 def _data_dirs() -> list[Path]:
-    return [TRACER_HOME_DIR, OPENSRE_HOME_DIR]
+    return [OPENSRE_HOME_DIR, LEGACY_TRACER_HOME_DIR]
 
 
 def run_uninstall(*, yes: bool = False) -> int:

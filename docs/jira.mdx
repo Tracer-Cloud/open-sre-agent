@@ -22,7 +22,7 @@ Select **Jira** when prompted and provide your base URL, email, API token, and p
 
 ### Option 2: Persistent store
 
-Add to `~/.tracer/integrations.json`:
+Add to `~/.opensre/integrations.json`:
 
 ```json
 {
@@ -72,5 +72,5 @@ For Jira Data Center/Server, use a personal access token from **Profile** → **
 ## Security best practices
 
 - Use a **dedicated Jira user** for OpenSRE with only the permissions it needs (create and comment on issues).
-- Store credentials in `~/.tracer/integrations.json`, not in source code or environment variables.
+- Store credentials in `~/.opensre/integrations.json`, not in source code or environment variables.
 - Rotate the API token periodically.

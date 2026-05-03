@@ -60,7 +60,7 @@ VERIFIER_REGISTRY: dict[str, VerifierFn] = {
 
 
 def resolve_effective_integrations() -> dict[str, dict[str, Any]]:
-    """Resolve effective local integrations from ~/.tracer and environment variables."""
+    """Resolve effective local integrations from ~/.opensre and environment variables."""
     return _resolve_effective_integrations()
 
 

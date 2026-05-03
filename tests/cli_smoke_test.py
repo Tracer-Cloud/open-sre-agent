@@ -85,7 +85,7 @@ class CliSandbox:
 
     @property
     def integration_store_path(self) -> Path:
-        return self.home / ".tracer" / "integrations.json"
+        return self.home / ".opensre" / "integrations.json"
 
     @property
     def wizard_store_path(self) -> Path:

@@ -52,7 +52,7 @@ OpenSRE rejects ambiguous auth configuration. Do not set a bearer token and user
 
 ### Option 2: Persistent store
 
-You can also add Argo CD to `~/.tracer/integrations.json`:
+You can also add Argo CD to `~/.opensre/integrations.json`:
 
 ```json
 {
@@ -180,7 +180,7 @@ Fetches Argo CD server-side diff output for one application.
 ## Security best practices
 
 - Use a dedicated read-only Argo CD account or token for OpenSRE.
-- Store credentials in `.env` or `~/.tracer/integrations.json`, not in source code.
+- Store credentials in `.env` or `~/.opensre/integrations.json`, not in source code.
 - Use `https://` for remote Argo CD URLs. Plain `http://` is accepted only for loopback or localhost development URLs.
 - Do not disable `ARGOCD_VERIFY_SSL` for production instances.
 - OpenSRE redacts bearer tokens, passwords, token-like strings, and Kubernetes `Secret` diffs before surfacing Argo CD errors or diff evidence.

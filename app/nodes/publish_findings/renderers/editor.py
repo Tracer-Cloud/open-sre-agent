@@ -3,10 +3,10 @@
 import os
 import shutil
 import subprocess
-import tempfile
-from pathlib import Path
 
-REPORT_PATH = Path(tempfile.gettempdir()) / "tracer_last_report.md"
+from app.constants import OPENSRE_TMP_DIR
+
+REPORT_PATH = OPENSRE_TMP_DIR / "opensre_last_report.md"
 
 
 def open_in_editor(content: str) -> None:
@@ -18,6 +18,7 @@ def open_in_editor(content: str) -> None:
     """
     if not os.environ.get("VSCODE_IPC_HOOK_CLI"):
         return
+    REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
     REPORT_PATH.write_text(content, encoding="utf-8")
     for cmd in ("cursor", "code"):
         if shutil.which(cmd):
