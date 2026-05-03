@@ -4,6 +4,9 @@
 .env.local
 .env.*.local
 
+# Claude Code runtime artifacts
+.claude/
+
 # Python
 __pycache__/
 *.py[cod]
