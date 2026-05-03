@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import subprocess
+from pathlib import Path
 
 from rich.console import Console
 
@@ -420,6 +421,44 @@ def test_execute_cli_actions_runs_shell_command(monkeypatch: object) -> None:
     assert "Running requested actions" in output
     assert "$ pwd" in output
     assert "/tmp/project" in output
+
+
+def test_execute_cli_actions_cd_preserves_windows_paths(monkeypatch: object) -> None:
+    changed_directories: list[Path] = []
+
+    def _fake_chdir(target: Path) -> None:
+        changed_directories.append(target)
+
+    monkeypatch.setattr(agent_actions.os, "name", "nt")
+    monkeypatch.setattr(agent_actions.os, "chdir", _fake_chdir)
+
+    session = ReplSession()
+    console, _ = _capture()
+
+    message = r"run `cd C:\Users\Alice`"
+    assert execute_cli_actions(message, session, console) is True
+    assert changed_directories == [Path(r"C:\Users\Alice")]
+    assert session.history == [
+        {"type": "cli_agent", "text": message, "ok": True},
+        {"type": "shell", "text": r"cd C:\Users\Alice", "ok": True},
+    ]
+
+
+def test_execute_cli_actions_cd_strips_quotes_on_windows(monkeypatch: object) -> None:
+    changed_directories: list[Path] = []
+
+    def _fake_chdir(target: Path) -> None:
+        changed_directories.append(target)
+
+    monkeypatch.setattr(agent_actions.os, "name", "nt")
+    monkeypatch.setattr(agent_actions.os, "chdir", _fake_chdir)
+
+    session = ReplSession()
+    console, _ = _capture()
+
+    message = r'run `cd "C:\Users\Alice"`'
+    assert execute_cli_actions(message, session, console) is True
+    assert changed_directories == [Path(r"C:\Users\Alice")]
 
 
 def test_execute_cli_actions_records_shell_failure(monkeypatch: object) -> None:

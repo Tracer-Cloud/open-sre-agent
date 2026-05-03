@@ -428,8 +428,16 @@ def _run_shell_command(command: str, session: ReplSession, console: Console) -> 
 
 
 def _run_cd_command(command: str, session: ReplSession, console: Console) -> None:
+    def _strip_outer_quotes(value: str) -> str:
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            return value[1:-1]
+        return value
+
     try:
-        tokens = shlex.split(command, posix=True)
+        is_windows = os.name == "nt"
+        tokens = shlex.split(command, posix=not is_windows)
+        if is_windows:
+            tokens = [_strip_outer_quotes(token) for token in tokens]
     except ValueError as exc:
         console.print(f"[red]cd failed:[/red] {escape(str(exc))}")
         session.record("shell", command, ok=False)
