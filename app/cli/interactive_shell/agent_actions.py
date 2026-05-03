@@ -146,6 +146,7 @@ _NON_COMMAND_STARTS = frozenset(
         "why",
     }
 )
+_SHELL_BUILTINS = frozenset({"cd", "pwd"})
 _SHELL_COMMAND_TIMEOUT_SECONDS = 120
 _SYNTHETIC_TEST_TIMEOUT_SECONDS = 1800
 _MAX_COMMAND_OUTPUT_CHARS = 24_000
@@ -204,6 +205,8 @@ def _looks_like_direct_shell_command(text: str) -> bool:
         return False
     if first.lower() in _NON_COMMAND_STARTS:
         return False
+    if first.lower() in _SHELL_BUILTINS:
+        return True
     if first.startswith(("./", "../", "/")):
         return Path(first).exists()
     return shutil.which(first) is not None
@@ -392,7 +395,8 @@ def _print_planned_actions(console: Console, actions: list[PlannedAction]) -> No
 
 def _run_shell_command(command: str, session: ReplSession, console: Console) -> None:
     console.print(f"[bold]$ {escape(command)}[/bold]")
-    if _first_command_token(command) == "cd":
+    token = _first_command_token(command)
+    if token is not None and token.lower() == "cd":
         _run_cd_command(command, session, console)
         return
 
