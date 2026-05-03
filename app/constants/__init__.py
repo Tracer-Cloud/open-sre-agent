@@ -29,6 +29,7 @@ def ensure_opensre_tmp_dir() -> Path:
         OPENSRE_TMP_DIR.chmod(0o700)
     return OPENSRE_TMP_DIR
 
+
 __all__ = [
     "DEFAULT_POSTHOG_BOUNCE_THRESHOLD",
     "DEFAULT_POSTHOG_BOUNCE_WINDOW",
