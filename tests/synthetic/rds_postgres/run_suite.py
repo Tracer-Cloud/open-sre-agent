@@ -340,7 +340,9 @@ def score_result(
                 state_key = _EVIDENCE_KEY_MAP.get(source_key, source_key)
 
                 has_state_evidence = bool(evidence.get(state_key))
-                has_pi_signal = any(token in normalized_output for token in performance_insights_tokens)
+                has_pi_signal = any(
+                    token in normalized_output for token in performance_insights_tokens
+                )
 
                 if not (has_state_evidence and has_pi_signal):
                     failure_reason = f"required evidence not gathered: {source_key!r}"
