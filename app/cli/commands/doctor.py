@@ -49,6 +49,7 @@ def _check_llm_provider() -> tuple[bool, str]:
         "anthropic": "ANTHROPIC_API_KEY",
         "openai": "OPENAI_API_KEY",
         "openrouter": "OPENROUTER_API_KEY",
+        "requesty": "REQUESTY_API_KEY",
         "gemini": "GEMINI_API_KEY",
         "nvidia": "NVIDIA_API_KEY",
         "bedrock": "AWS_DEFAULT_REGION",
