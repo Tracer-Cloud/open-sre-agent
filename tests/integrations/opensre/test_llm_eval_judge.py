@@ -101,3 +101,26 @@ def test_extract_judge_json_allows_log_prefix_with_nested_array() -> None:
     assert out["overall_pass"] is True
     assert out["score_0_100"] == 90
     assert out["rubric_items"] == []
+
+
+def test_extract_judge_json_skips_array_fence_and_returns_earlier_dict() -> None:
+    out = extract_judge_json_from_response(
+        "Result:\n"
+        "```json\n"
+        '{"overall_pass": true, "score_0_100": 90, "rubric_items": [], "summary": "ok"}\n'
+        "```\n\n"
+        "Examples:\n"
+        "```json\n"
+        '["item1", "item2"]\n'
+        "```"
+    )
+    assert out["overall_pass"] is True
+    assert out["score_0_100"] == 90
+
+
+def test_extract_judge_json_allows_bracketed_prose_around_object() -> None:
+    out = extract_judge_json_from_response(
+        '[INFO] here is the result: {"overall_pass": true, "score_0_100": 90, "rubric_items": [], "summary": "ok"} [end]'
+    )
+    assert out["overall_pass"] is True
+    assert out["score_0_100"] == 90

@@ -57,9 +57,23 @@ def extract_judge_json_from_response(text: str) -> dict[str, Any]:
             except json.JSONDecodeError:
                 continue
 
-            if isinstance(raw, dict):
-                return cast(dict[str, Any], raw)
-            if isinstance(raw, list):
+            saw_array_fence = False
+
+            for candidate in reversed(fences):
+                candidate = candidate.strip()
+                try:
+                    raw = json.loads(candidate)
+                except json.JSONDecodeError:
+                    continue
+
+                if isinstance(raw, dict):
+                    return cast(dict[str, Any], raw)
+
+                if isinstance(raw, list):
+                    saw_array_fence = True
+                    continue
+
+            if saw_array_fence:
                 msg = "Judge response JSON must be an object"
                 raise ValueError(msg)
 
@@ -85,8 +99,28 @@ def extract_judge_json_from_response(text: str) -> dict[str, Any]:
     # If an array span exists and fully contains the object span,
     # the top-level value is an array — reject it.
     if has_arr and has_obj and arr_start < obj_start and arr_end > obj_end:
-        msg = "Judge response JSON must be an object"
-        raise ValueError(msg)
+        try:
+            arr_candidate = json.loads(text[arr_start : arr_end + 1])
+        except json.JSONDecodeError:
+            arr_candidate = None
+
+        if isinstance(arr_candidate, list):
+            msg = "Judge response JSON must be an object"
+            raise ValueError(msg)
+
+        if arr_candidate is None:
+            for i, ch in enumerate(text):
+                if ch == "[" and i < obj_start:
+                    inner_arr_end = text.rfind("]", obj_end)
+                    if inner_arr_end == -1:
+                        continue
+                    try:
+                        inner = json.loads(text[i : inner_arr_end + 1])
+                    except json.JSONDecodeError:
+                        continue
+                    if isinstance(inner, list):
+                        msg = "Judge response JSON must be an object"
+                        raise ValueError(msg)
 
     if not has_obj:
         msg = "Judge response did not contain a JSON object"
