@@ -240,4 +240,4 @@ def test_uninstall_help_describes_command() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["uninstall", "--help"])
     assert result.exit_code == 0
-    assert "Uninstall" in result.output
+    assert "Remove opensre and all local data from this machine." in result.output

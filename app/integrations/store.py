@@ -94,6 +94,9 @@ def _migrate_legacy_store_if_needed() -> None:
     """Move the legacy ~/.tracer store into ~/.opensre on first access."""
     if STORE_PATH.exists() or not LEGACY_STORE_PATH.exists():
         return
+    # Tests often patch only STORE_PATH. If LEGACY_STORE_PATH still points at the
+    # real default location, skip the move so an isolated test cannot relocate a
+    # developer's actual legacy store into the patched destination.
     if (
         STORE_PATH != INTEGRATIONS_STORE_PATH
         and LEGACY_STORE_PATH == LEGACY_INTEGRATIONS_STORE_PATH

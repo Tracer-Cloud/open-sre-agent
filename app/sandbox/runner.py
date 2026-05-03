@@ -12,7 +12,7 @@ import textwrap
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.constants import OPENSRE_TMP_DIR
+from app.constants import OPENSRE_TMP_DIR, ensure_opensre_tmp_dir
 
 DEFAULT_TIMEOUT: int = 30
 MAX_TIMEOUT: int = 60
@@ -133,7 +133,7 @@ def run_python_sandbox(
 
     tmp_path: str | None = None
     try:
-        OPENSRE_TMP_DIR.mkdir(parents=True, exist_ok=True)
+        ensure_opensre_tmp_dir()
         with tempfile.NamedTemporaryFile(
             mode="w",
             suffix=".py",

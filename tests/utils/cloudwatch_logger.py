@@ -16,6 +16,12 @@ from tests.utils.cloudwatch_helpers import (
 )
 
 
+def _log_group_prefix() -> str:
+    """Return the CloudWatch log group prefix, allowing staged migration overrides."""
+    value = os.getenv("CLOUDWATCH_LOG_GROUP_PREFIX", "/opensre/ai-investigations").strip()
+    return value.rstrip("/") or "/opensre/ai-investigations"
+
+
 def _build_logs_client(region: str):
     timeout_raw = os.getenv("CLOUDWATCH_TIMEOUT_SECONDS", "5")
     attempts_raw = os.getenv("CLOUDWATCH_MAX_ATTEMPTS", "2")
@@ -101,7 +107,7 @@ def log_error_to_cloudwatch(
         error_traceback: Full traceback
         pipeline_name: Pipeline name
         run_id: Run identifier
-        test_name: Test/demo name (constructs log group: /opensre/ai-investigations/{test_name})
+        test_name: Test/demo name (constructs log group: <prefix>/{test_name})
         region: AWS region
 
     Returns:
@@ -109,7 +115,7 @@ def log_error_to_cloudwatch(
     """
     error_message = str(error)
     log_stream = run_id
-    log_group = f"/opensre/ai-investigations/{test_name}"
+    log_group = f"{_log_group_prefix()}/{test_name}"
 
     log_message = build_error_log_message(
         error_message=error_message,

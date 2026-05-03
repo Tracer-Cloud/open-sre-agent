@@ -19,7 +19,7 @@ import botocore.credentials
 import botocore.session
 from kubernetes import client as k8s_client
 
-from app.constants import OPENSRE_TMP_DIR
+from app.constants import OPENSRE_TMP_DIR, ensure_opensre_tmp_dir
 from app.services.eks.utils import stored_credentials_to_aws_creds
 
 logger = logging.getLogger(__name__)
@@ -149,7 +149,7 @@ def build_k8s_clients(
     )
 
     ca_bytes = base64.b64decode(ca_data)
-    OPENSRE_TMP_DIR.mkdir(parents=True, exist_ok=True)
+    ensure_opensre_tmp_dir()
     with tempfile.NamedTemporaryFile(delete=False, suffix=".crt", dir=OPENSRE_TMP_DIR) as ca_file:
         ca_file.write(ca_bytes)
         ca_file.flush()
