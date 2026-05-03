@@ -12,23 +12,7 @@ from typing import Any
 import pytest
 
 from app.tools.SnowflakeQueryHistoryTool import query_snowflake_history
-from tests.tools.conftest import BaseToolContract
-
-
-class _MockResponse:
-    """Minimal stand-in for an httpx.Response — only what the tool touches."""
-
-    def __init__(self, payload: dict[str, Any], *, raise_for_status_error: Exception | None = None):
-        self._payload = payload
-        self._error = raise_for_status_error
-
-    def raise_for_status(self) -> None:
-        if self._error is not None:
-            raise self._error
-
-    def json(self) -> dict[str, Any]:
-        return self._payload
-
+from tests.tools.conftest import BaseToolContract, MockHttpxResponse
 
 # ---------------------------------------------------------------------------
 # Contract — metadata, is_available, extract_params surface
@@ -161,7 +145,7 @@ def test_default_query_used_when_query_blank(monkeypatch: pytest.MonkeyPatch) ->
         captured["url"] = url
         captured["statement"] = json["statement"]
         captured["headers"] = headers
-        return _MockResponse({"data": []})
+        return MockHttpxResponse({"data": []})
 
     monkeypatch.setattr("app.tools.SnowflakeQueryHistoryTool.httpx.post", _fake_post)
 
@@ -186,7 +170,7 @@ def test_user_query_gets_limit_appended_if_missing(monkeypatch: pytest.MonkeyPat
 
     def _fake_post(url: str, headers: dict[str, str], json: dict[str, Any], timeout: float):
         captured["statement"] = json["statement"]
-        return _MockResponse({"data": []})
+        return MockHttpxResponse({"data": []})
 
     monkeypatch.setattr("app.tools.SnowflakeQueryHistoryTool.httpx.post", _fake_post)
 
@@ -209,7 +193,7 @@ def test_user_query_with_existing_limit_is_left_untouched(
 
     def _fake_post(url: str, headers: dict[str, str], json: dict[str, Any], timeout: float):
         captured["statement"] = json["statement"]
-        return _MockResponse({"data": []})
+        return MockHttpxResponse({"data": []})
 
     monkeypatch.setattr("app.tools.SnowflakeQueryHistoryTool.httpx.post", _fake_post)
 
@@ -233,7 +217,7 @@ def test_optional_session_params_only_included_when_set(
 
     def _fake_post(url: str, headers: dict[str, str], json: dict[str, Any], timeout: float):
         captured["payload"] = json
-        return _MockResponse({"data": []})
+        return MockHttpxResponse({"data": []})
 
     monkeypatch.setattr("app.tools.SnowflakeQueryHistoryTool.httpx.post", _fake_post)
 
@@ -262,7 +246,7 @@ def test_optional_session_params_omitted_when_blank(
 
     def _fake_post(url: str, headers: dict[str, str], json: dict[str, Any], timeout: float):
         captured["payload"] = json
-        return _MockResponse({"data": []})
+        return MockHttpxResponse({"data": []})
 
     monkeypatch.setattr("app.tools.SnowflakeQueryHistoryTool.httpx.post", _fake_post)
 
@@ -281,7 +265,7 @@ def test_bounded_limit_caps_caller_request(monkeypatch: pytest.MonkeyPatch) -> N
 
     def _fake_post(url: str, headers: dict[str, str], json: dict[str, Any], timeout: float):
         # Server returns 20 rows — tool must trim to effective_limit (6)
-        return _MockResponse({"data": [{"id": idx} for idx in range(20)]})
+        return MockHttpxResponse({"data": [{"id": idx} for idx in range(20)]})
 
     monkeypatch.setattr("app.tools.SnowflakeQueryHistoryTool.httpx.post", _fake_post)
 
@@ -306,8 +290,8 @@ def test_bounded_limit_caps_caller_request(monkeypatch: pytest.MonkeyPatch) -> N
 def test_normalizes_dict_rows_passthrough(monkeypatch: pytest.MonkeyPatch) -> None:
     """When the API returns ``data=[{...}, ...]``, rows are passed through as-is."""
 
-    def _fake_post(*_args: Any, **_kwargs: Any) -> _MockResponse:
-        return _MockResponse(
+    def _fake_post(*_args: Any, **_kwargs: Any) -> MockHttpxResponse:
+        return MockHttpxResponse(
             {
                 "data": [
                     {"query_id": "q1", "user_name": "alice"},
@@ -334,8 +318,8 @@ def test_normalizes_tabular_rows_using_result_set_metadata(
 ) -> None:
     """When the API returns lists of values + rowType metadata, rows are zipped to dicts."""
 
-    def _fake_post(*_args: Any, **_kwargs: Any) -> _MockResponse:
-        return _MockResponse(
+    def _fake_post(*_args: Any, **_kwargs: Any) -> MockHttpxResponse:
+        return MockHttpxResponse(
             {
                 "data": [
                     ["q1", "alice"],
@@ -368,8 +352,8 @@ def test_normalizes_to_empty_when_payload_unrecognized(
 ) -> None:
     """Unknown response shapes degrade gracefully to an empty rows list, not an exception."""
 
-    def _fake_post(*_args: Any, **_kwargs: Any) -> _MockResponse:
-        return _MockResponse({"unexpected": "shape"})
+    def _fake_post(*_args: Any, **_kwargs: Any) -> MockHttpxResponse:
+        return MockHttpxResponse({"unexpected": "shape"})
 
     monkeypatch.setattr("app.tools.SnowflakeQueryHistoryTool.httpx.post", _fake_post)
 
@@ -389,8 +373,8 @@ def test_normalizes_to_empty_when_payload_unrecognized(
 
 
 def test_returns_unavailable_on_http_error_status(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _fake_post(*_args: Any, **_kwargs: Any) -> _MockResponse:
-        return _MockResponse(
+    def _fake_post(*_args: Any, **_kwargs: Any) -> MockHttpxResponse:
+        return MockHttpxResponse(
             {"error": "boom"},
             raise_for_status_error=RuntimeError("HTTP 500 from Snowflake"),
         )

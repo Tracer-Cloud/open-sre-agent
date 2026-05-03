@@ -7,6 +7,7 @@ on the tool side (non-dict items dropped), and propagation of client errors.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -14,6 +15,44 @@ import pytest
 from app.services.elasticsearch import ElasticsearchConfig
 from app.tools.OpenSearchAnalyticsTool import query_opensearch_analytics
 from tests.tools.conftest import BaseToolContract
+
+# ---------------------------------------------------------------------------
+# Test helpers — keep ElasticsearchClient stubbing consistent
+# ---------------------------------------------------------------------------
+
+
+def _install_es_stubs(
+    monkeypatch: pytest.MonkeyPatch,
+    search_impl: Callable[..., dict[str, Any]],
+) -> dict[str, Any]:
+    """Patch ``ElasticsearchClient.__init__`` AND ``search_logs`` together.
+
+    Returns a dict that captures the ``ElasticsearchConfig`` the tool builds,
+    accessible as ``captured["config"]`` after the tool is invoked. Patching
+    both methods keeps every test isolated from the real client even if
+    ``__init__`` ever stops being lazy (e.g. starts validating URL reachability).
+    """
+    captured: dict[str, Any] = {}
+
+    def _fake_init(self: Any, config: ElasticsearchConfig) -> None:
+        captured["config"] = config
+        self.config = config
+
+    monkeypatch.setattr(
+        "app.tools.OpenSearchAnalyticsTool.ElasticsearchClient.__init__",
+        _fake_init,
+    )
+    monkeypatch.setattr(
+        "app.tools.OpenSearchAnalyticsTool.ElasticsearchClient.search_logs",
+        search_impl,
+    )
+    return captured
+
+
+def _ok_search(_self: Any, **_kwargs: Any) -> dict[str, Any]:
+    """Default ``search_logs`` stub — succeeds with an empty result set."""
+    return {"success": True, "logs": []}
+
 
 # ---------------------------------------------------------------------------
 # Contract — metadata, is_available, extract_params surface
@@ -117,23 +156,7 @@ def test_returns_missing_url_when_url_blank() -> None:
 def test_client_config_normalizes_url_api_key_and_index(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    captured: dict[str, Any] = {}
-
-    def _fake_init(self: Any, config: ElasticsearchConfig) -> None:
-        captured["config"] = config
-        self.config = config
-
-    def _fake_search(self: Any, **_kwargs: Any) -> dict[str, Any]:
-        return {"success": True, "logs": []}
-
-    monkeypatch.setattr(
-        "app.tools.OpenSearchAnalyticsTool.ElasticsearchClient.__init__",
-        _fake_init,
-    )
-    monkeypatch.setattr(
-        "app.tools.OpenSearchAnalyticsTool.ElasticsearchClient.search_logs",
-        _fake_search,
-    )
+    captured = _install_es_stubs(monkeypatch, _ok_search)
 
     query_opensearch_analytics(
         url="  https://os.example.invalid/  ",  # trailing slash + spaces stripped
@@ -148,23 +171,7 @@ def test_client_config_normalizes_url_api_key_and_index(
 
 
 def test_client_config_treats_blank_api_key_as_none(monkeypatch: pytest.MonkeyPatch) -> None:
-    captured: dict[str, Any] = {}
-
-    def _fake_init(self: Any, config: ElasticsearchConfig) -> None:
-        captured["config"] = config
-        self.config = config
-
-    def _fake_search(self: Any, **_kwargs: Any) -> dict[str, Any]:
-        return {"success": True, "logs": []}
-
-    monkeypatch.setattr(
-        "app.tools.OpenSearchAnalyticsTool.ElasticsearchClient.__init__",
-        _fake_init,
-    )
-    monkeypatch.setattr(
-        "app.tools.OpenSearchAnalyticsTool.ElasticsearchClient.search_logs",
-        _fake_search,
-    )
+    captured = _install_es_stubs(monkeypatch, _ok_search)
 
     query_opensearch_analytics(
         url="https://os.example.invalid",
@@ -175,28 +182,17 @@ def test_client_config_treats_blank_api_key_as_none(monkeypatch: pytest.MonkeyPa
 
 
 def test_blank_index_pattern_becomes_star(monkeypatch: pytest.MonkeyPatch) -> None:
-    captured: dict[str, Any] = {}
+    search_kwargs: dict[str, Any] = {}
 
-    def _fake_init(self: Any, config: ElasticsearchConfig) -> None:
-        captured["config"] = config
-        self.config = config
-
-    def _fake_search(self: Any, **kwargs: Any) -> dict[str, Any]:
-        captured["search_kwargs"] = kwargs
+    def _impl(_self: Any, **kwargs: Any) -> dict[str, Any]:
+        search_kwargs.update(kwargs)
         return {"success": True, "logs": []}
 
-    monkeypatch.setattr(
-        "app.tools.OpenSearchAnalyticsTool.ElasticsearchClient.__init__",
-        _fake_init,
-    )
-    monkeypatch.setattr(
-        "app.tools.OpenSearchAnalyticsTool.ElasticsearchClient.search_logs",
-        _fake_search,
-    )
+    captured = _install_es_stubs(monkeypatch, _impl)
 
     result = query_opensearch_analytics(url="https://os.example.invalid", index_pattern="")
     assert captured["config"].index_pattern == "*"
-    assert captured["search_kwargs"]["index_pattern"] == "*"
+    assert search_kwargs["index_pattern"] == "*"
     assert result["index_pattern"] == "*"
 
 
@@ -208,14 +204,11 @@ def test_blank_index_pattern_becomes_star(monkeypatch: pytest.MonkeyPatch) -> No
 def test_search_query_defaults_to_star_when_blank(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, Any] = {}
 
-    def _fake_search(self: Any, **kwargs: Any) -> dict[str, Any]:
+    def _impl(_self: Any, **kwargs: Any) -> dict[str, Any]:
         captured.update(kwargs)
         return {"success": True, "logs": []}
 
-    monkeypatch.setattr(
-        "app.tools.OpenSearchAnalyticsTool.ElasticsearchClient.search_logs",
-        _fake_search,
-    )
+    _install_es_stubs(monkeypatch, _impl)
 
     result = query_opensearch_analytics(
         url="https://os.example.invalid",
@@ -228,14 +221,11 @@ def test_search_query_defaults_to_star_when_blank(monkeypatch: pytest.MonkeyPatc
 def test_time_range_minutes_floor_one(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, Any] = {}
 
-    def _fake_search(self: Any, **kwargs: Any) -> dict[str, Any]:
+    def _impl(_self: Any, **kwargs: Any) -> dict[str, Any]:
         captured.update(kwargs)
         return {"success": True, "logs": []}
 
-    monkeypatch.setattr(
-        "app.tools.OpenSearchAnalyticsTool.ElasticsearchClient.search_logs",
-        _fake_search,
-    )
+    _install_es_stubs(monkeypatch, _impl)
 
     query_opensearch_analytics(
         url="https://os.example.invalid",
@@ -248,7 +238,7 @@ def test_time_range_minutes_floor_one(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_bounded_limit_caps_caller_request(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, Any] = {}
 
-    def _fake_search(self: Any, **kwargs: Any) -> dict[str, Any]:
+    def _impl(_self: Any, **kwargs: Any) -> dict[str, Any]:
         captured["limit"] = kwargs["limit"]
         # Server returns more than the cap — tool must trim to effective_limit
         return {
@@ -256,10 +246,7 @@ def test_bounded_limit_caps_caller_request(monkeypatch: pytest.MonkeyPatch) -> N
             "logs": [{"message": f"log-{idx}"} for idx in range(20)],
         }
 
-    monkeypatch.setattr(
-        "app.tools.OpenSearchAnalyticsTool.ElasticsearchClient.search_logs",
-        _fake_search,
-    )
+    _install_es_stubs(monkeypatch, _impl)
 
     result = query_opensearch_analytics(
         url="https://os.example.invalid",
@@ -275,14 +262,11 @@ def test_bounded_limit_capped_by_hard_max(monkeypatch: pytest.MonkeyPatch) -> No
     """Caller may not request more than _MAX_HARD_LIMIT (200), even via max_results."""
     captured: dict[str, Any] = {}
 
-    def _fake_search(self: Any, **kwargs: Any) -> dict[str, Any]:
+    def _impl(_self: Any, **kwargs: Any) -> dict[str, Any]:
         captured["limit"] = kwargs["limit"]
         return {"success": True, "logs": []}
 
-    monkeypatch.setattr(
-        "app.tools.OpenSearchAnalyticsTool.ElasticsearchClient.search_logs",
-        _fake_search,
-    )
+    _install_es_stubs(monkeypatch, _impl)
 
     query_opensearch_analytics(
         url="https://os.example.invalid",
@@ -298,7 +282,7 @@ def test_bounded_limit_capped_by_hard_max(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def test_filters_non_dict_log_entries(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _fake_search(self: Any, **_kwargs: Any) -> dict[str, Any]:
+    def _impl(_self: Any, **_kwargs: Any) -> dict[str, Any]:
         return {
             "success": True,
             "logs": [
@@ -310,10 +294,7 @@ def test_filters_non_dict_log_entries(monkeypatch: pytest.MonkeyPatch) -> None:
             ],
         }
 
-    monkeypatch.setattr(
-        "app.tools.OpenSearchAnalyticsTool.ElasticsearchClient.search_logs",
-        _fake_search,
-    )
+    _install_es_stubs(monkeypatch, _impl)
 
     result = query_opensearch_analytics(
         url="https://os.example.invalid",
@@ -325,13 +306,10 @@ def test_filters_non_dict_log_entries(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_handles_missing_logs_field(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _fake_search(self: Any, **_kwargs: Any) -> dict[str, Any]:
+    def _impl(_self: Any, **_kwargs: Any) -> dict[str, Any]:
         return {"success": True}  # no 'logs' key at all
 
-    monkeypatch.setattr(
-        "app.tools.OpenSearchAnalyticsTool.ElasticsearchClient.search_logs",
-        _fake_search,
-    )
+    _install_es_stubs(monkeypatch, _impl)
 
     result = query_opensearch_analytics(url="https://os.example.invalid")
     assert result["available"] is True
@@ -339,13 +317,10 @@ def test_handles_missing_logs_field(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_handles_non_list_logs_field(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _fake_search(self: Any, **_kwargs: Any) -> dict[str, Any]:
+    def _impl(_self: Any, **_kwargs: Any) -> dict[str, Any]:
         return {"success": True, "logs": "should-be-a-list-but-isnt"}
 
-    monkeypatch.setattr(
-        "app.tools.OpenSearchAnalyticsTool.ElasticsearchClient.search_logs",
-        _fake_search,
-    )
+    _install_es_stubs(monkeypatch, _impl)
 
     result = query_opensearch_analytics(url="https://os.example.invalid")
     assert result["available"] is True
@@ -358,13 +333,10 @@ def test_handles_non_list_logs_field(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_propagates_client_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _fake_search(self: Any, **_kwargs: Any) -> dict[str, Any]:
+    def _impl(_self: Any, **_kwargs: Any) -> dict[str, Any]:
         return {"success": False, "error": "auth failed"}
 
-    monkeypatch.setattr(
-        "app.tools.OpenSearchAnalyticsTool.ElasticsearchClient.search_logs",
-        _fake_search,
-    )
+    _install_es_stubs(monkeypatch, _impl)
 
     result = query_opensearch_analytics(url="https://os.example.invalid")
     assert result["available"] is False
@@ -373,13 +345,10 @@ def test_propagates_client_failure(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_propagates_unknown_client_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _fake_search(self: Any, **_kwargs: Any) -> dict[str, Any]:
+    def _impl(_self: Any, **_kwargs: Any) -> dict[str, Any]:
         return {"success": False}  # no 'error' field
 
-    monkeypatch.setattr(
-        "app.tools.OpenSearchAnalyticsTool.ElasticsearchClient.search_logs",
-        _fake_search,
-    )
+    _install_es_stubs(monkeypatch, _impl)
 
     result = query_opensearch_analytics(url="https://os.example.invalid")
     assert result["available"] is False

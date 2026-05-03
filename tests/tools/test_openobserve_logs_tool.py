@@ -15,23 +15,7 @@ from typing import Any
 import pytest
 
 from app.tools.OpenObserveLogsTool import query_openobserve_logs
-from tests.tools.conftest import BaseToolContract
-
-
-class _MockResponse:
-    """Minimal stand-in for an httpx.Response — only what the tool touches."""
-
-    def __init__(self, payload: dict[str, Any], *, raise_for_status_error: Exception | None = None):
-        self._payload = payload
-        self._error = raise_for_status_error
-
-    def raise_for_status(self) -> None:
-        if self._error is not None:
-            raise self._error
-
-    def json(self) -> dict[str, Any]:
-        return self._payload
-
+from tests.tools.conftest import BaseToolContract, MockHttpxResponse
 
 # ---------------------------------------------------------------------------
 # Contract — metadata, is_available, extract_params surface
@@ -194,7 +178,7 @@ def test_uses_bearer_authorization_when_api_token_present(
 
     def _fake_post(url: str, headers: dict[str, str], json: dict[str, Any], timeout: float):
         captured["headers"] = headers
-        return _MockResponse({"hits": []})
+        return MockHttpxResponse({"hits": []})
 
     monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
@@ -213,7 +197,7 @@ def test_uses_basic_authorization_when_only_username_password_present(
 
     def _fake_post(url: str, headers: dict[str, str], json: dict[str, Any], timeout: float):
         captured["headers"] = headers
-        return _MockResponse({"hits": []})
+        return MockHttpxResponse({"hits": []})
 
     monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
@@ -231,7 +215,7 @@ def test_bearer_takes_precedence_over_basic(monkeypatch: pytest.MonkeyPatch) -> 
 
     def _fake_post(url: str, headers: dict[str, str], json: dict[str, Any], timeout: float):
         captured["headers"] = headers
-        return _MockResponse({"hits": []})
+        return MockHttpxResponse({"hits": []})
 
     monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
@@ -255,7 +239,7 @@ def test_endpoint_uses_default_org_when_blank(monkeypatch: pytest.MonkeyPatch) -
 
     def _fake_post(url: str, headers: dict[str, str], json: dict[str, Any], timeout: float):
         captured["url"] = url
-        return _MockResponse({"hits": []})
+        return MockHttpxResponse({"hits": []})
 
     monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
@@ -272,7 +256,7 @@ def test_endpoint_includes_provided_org(monkeypatch: pytest.MonkeyPatch) -> None
 
     def _fake_post(url: str, headers: dict[str, str], json: dict[str, Any], timeout: float):
         captured["url"] = url
-        return _MockResponse({"hits": []})
+        return MockHttpxResponse({"hits": []})
 
     monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
@@ -289,7 +273,7 @@ def test_default_sql_used_when_query_blank(monkeypatch: pytest.MonkeyPatch) -> N
 
     def _fake_post(url: str, headers: dict[str, str], json: dict[str, Any], timeout: float):
         captured["payload"] = json
-        return _MockResponse({"hits": []})
+        return MockHttpxResponse({"hits": []})
 
     monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
@@ -307,7 +291,7 @@ def test_provided_query_is_passed_through(monkeypatch: pytest.MonkeyPatch) -> No
 
     def _fake_post(url: str, headers: dict[str, str], json: dict[str, Any], timeout: float):
         captured["payload"] = json
-        return _MockResponse({"hits": []})
+        return MockHttpxResponse({"hits": []})
 
     monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
@@ -326,7 +310,7 @@ def test_payload_includes_size_and_time_window(monkeypatch: pytest.MonkeyPatch) 
 
     def _fake_post(url: str, headers: dict[str, str], json: dict[str, Any], timeout: float):
         captured["payload"] = json
-        return _MockResponse({"hits": []})
+        return MockHttpxResponse({"hits": []})
 
     monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
@@ -348,7 +332,7 @@ def test_stream_name_only_included_when_provided(monkeypatch: pytest.MonkeyPatch
 
     def _fake_post(url: str, headers: dict[str, str], json: dict[str, Any], timeout: float):
         captured.append(json)
-        return _MockResponse({"hits": []})
+        return MockHttpxResponse({"hits": []})
 
     monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
@@ -374,7 +358,7 @@ def test_bounded_limit_caps_caller_request(monkeypatch: pytest.MonkeyPatch) -> N
 
     def _fake_post(url: str, headers: dict[str, str], json: dict[str, Any], timeout: float):
         captured["size"] = json["size"]
-        return _MockResponse({"hits": [{"message": f"m{idx}"} for idx in range(50)]})
+        return MockHttpxResponse({"hits": [{"message": f"m{idx}"} for idx in range(50)]})
 
     monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
@@ -396,8 +380,8 @@ def test_bounded_limit_caps_caller_request(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 def test_records_from_top_level_hits_list(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _fake_post(*_args: Any, **_kwargs: Any) -> _MockResponse:
-        return _MockResponse({"hits": [{"a": 1}, {"a": 2}]})
+    def _fake_post(*_args: Any, **_kwargs: Any) -> MockHttpxResponse:
+        return MockHttpxResponse({"hits": [{"a": 1}, {"a": 2}]})
 
     monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
@@ -409,8 +393,8 @@ def test_records_from_top_level_hits_list(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def test_records_from_elastic_style_nested_hits(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _fake_post(*_args: Any, **_kwargs: Any) -> _MockResponse:
-        return _MockResponse(
+    def _fake_post(*_args: Any, **_kwargs: Any) -> MockHttpxResponse:
+        return MockHttpxResponse(
             {
                 "hits": {
                     "hits": [
@@ -431,8 +415,8 @@ def test_records_from_elastic_style_nested_hits(monkeypatch: pytest.MonkeyPatch)
 
 
 def test_records_from_records_field(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _fake_post(*_args: Any, **_kwargs: Any) -> _MockResponse:
-        return _MockResponse({"records": [{"x": 1}, "ignore-me", {"x": 2}]})
+    def _fake_post(*_args: Any, **_kwargs: Any) -> MockHttpxResponse:
+        return MockHttpxResponse({"records": [{"x": 1}, "ignore-me", {"x": 2}]})
 
     monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
@@ -445,8 +429,8 @@ def test_records_from_records_field(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_records_from_data_field(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _fake_post(*_args: Any, **_kwargs: Any) -> _MockResponse:
-        return _MockResponse({"data": [{"y": 9}]})
+    def _fake_post(*_args: Any, **_kwargs: Any) -> MockHttpxResponse:
+        return MockHttpxResponse({"data": [{"y": 9}]})
 
     monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
@@ -458,8 +442,8 @@ def test_records_from_data_field(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_records_empty_on_unrecognized_shape(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _fake_post(*_args: Any, **_kwargs: Any) -> _MockResponse:
-        return _MockResponse({"unrelated": True})
+    def _fake_post(*_args: Any, **_kwargs: Any) -> MockHttpxResponse:
+        return MockHttpxResponse({"unrelated": True})
 
     monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
@@ -477,8 +461,8 @@ def test_records_empty_on_unrecognized_shape(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_returns_unavailable_on_http_error_status(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _fake_post(*_args: Any, **_kwargs: Any) -> _MockResponse:
-        return _MockResponse(
+    def _fake_post(*_args: Any, **_kwargs: Any) -> MockHttpxResponse:
+        return MockHttpxResponse(
             {"err": "boom"},
             raise_for_status_error=RuntimeError("HTTP 502 from OpenObserve"),
         )
