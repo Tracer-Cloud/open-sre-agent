@@ -34,6 +34,17 @@ ALLOWED_EVIDENCE_SOURCES = [
     "github",
 ]
 
+_GRAFANA_SOURCE_TYPE_LABELS = {
+    "aws_performance_insights": "Performance Insights",
+    "aws_rds_events": "RDS Events",
+    "cloudwatch_logs": "CloudWatch Logs",
+    "datadog_logs": "Datadog Logs",
+    "db-instance": "RDS Event",
+    "grafana_loki": "Grafana Logs",
+    "opensre_log": "OpenSRE Log",
+    "rds_enhanced_monitoring": "RDS Enhanced Monitoring",
+}
+
 
 def build_diagnosis_prompt(
     state: InvestigationState, evidence: dict[str, Any], memory_context: str = ""
@@ -734,9 +745,10 @@ def _format_grafana_log_entry(log: Any) -> str:
 
     message = str(log.get("message") or "")[:300]
     source_type = str(log.get("source_type") or "").strip()
-    if source_type == "aws_performance_insights":
-        source_type = "Performance Insights"
-    source_parts = [source_type, str(log.get("source_identifier") or "").strip()]
+    source_parts = [
+        _GRAFANA_SOURCE_TYPE_LABELS.get(source_type, ""),
+        str(log.get("source_identifier") or "").strip(),
+    ]
     source = " ".join(part for part in source_parts if part)
     if not source:
         return message

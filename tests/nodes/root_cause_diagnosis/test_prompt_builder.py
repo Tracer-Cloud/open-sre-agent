@@ -76,6 +76,39 @@ def test_grafana_logs_show_performance_insights_source() -> None:
     assert "SELECT * FROM orders WHERE status = $1" in prompt
 
 
+def test_grafana_error_logs_show_performance_insights_source() -> None:
+    evidence = {
+        "grafana_error_logs": [
+            {
+                "message": "Top Wait Event: CPU:user | db_load_avg: 6.2 AAS",
+                "source_type": "aws_performance_insights",
+                "source_identifier": "catalog-prod",
+            }
+        ]
+    }
+
+    prompt = build_diagnosis_prompt(_rds_state(), evidence)
+
+    assert "[Performance Insights catalog-prod] Top Wait Event" in prompt
+
+
+def test_unknown_grafana_source_type_is_not_rendered() -> None:
+    evidence = {
+        "grafana_logs": [
+            {
+                "message": "Internal telemetry event",
+                "source_type": "custom_internal_source",
+                "source_identifier": "catalog-prod",
+            }
+        ]
+    }
+
+    prompt = build_diagnosis_prompt(_rds_state(), evidence)
+
+    assert "[catalog-prod] Internal telemetry event" in prompt
+    assert "custom_internal_source" not in prompt
+
+
 def test_database_directive_requires_exact_bad_query_reasoning() -> None:
     prompt = build_diagnosis_prompt(_rds_state(), {"grafana_logs": []})
 
