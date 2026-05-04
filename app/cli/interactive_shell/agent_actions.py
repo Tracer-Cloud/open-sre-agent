@@ -146,6 +146,9 @@ _NON_COMMAND_STARTS = frozenset(
         "why",
     }
 )
+# Shell builtins that may not be discoverable via `shutil.which()` on all platforms.
+# Keep this list intentionally small and add tests when extending it.
+_SHELL_BUILTINS = frozenset({"cd", "pwd"})
 _SHELL_COMMAND_TIMEOUT_SECONDS = 120
 _SYNTHETIC_TEST_TIMEOUT_SECONDS = 1800
 _MAX_COMMAND_OUTPUT_CHARS = 24_000
@@ -191,9 +194,14 @@ def _normalize_shell_command(command: str) -> str | None:
 
 def _first_command_token(command: str) -> str | None:
     try:
-        tokens = shlex.split(command, posix=True)
+        tokens = shlex.split(command, posix=not _IS_WINDOWS)
     except ValueError:
-        return None
+        # `shlex` in POSIX mode treats `\` as an escape character, which breaks
+        # common Windows paths such as `cd C:\` (trailing backslash).
+        try:
+            tokens = shlex.split(command, posix=False)
+        except ValueError:
+            return None
     if not tokens:
         return None
     return tokens[0]
@@ -205,6 +213,8 @@ def _looks_like_direct_shell_command(text: str) -> bool:
         return False
     if first.lower() in _NON_COMMAND_STARTS:
         return False
+    if first.lower() in _SHELL_BUILTINS:
+        return True
     if first.startswith(("./", "../", "/")):
         return Path(first).exists()
     return shutil.which(first) is not None
@@ -393,8 +403,12 @@ def _print_planned_actions(console: Console, actions: list[PlannedAction]) -> No
 
 def _run_shell_command(command: str, session: ReplSession, console: Console) -> None:
     console.print(f"[bold]$ {escape(command)}[/bold]")
-    if _first_command_token(command) == "cd":
+    token = _first_command_token(command)
+    if token is not None and token.lower() == "cd":
         _run_cd_command(command, session, console)
+        return
+    if token is not None and token.lower() == "pwd":
+        _run_pwd_command(command, session, console)
         return
 
     try:
@@ -436,8 +450,8 @@ def _run_cd_command(command: str, session: ReplSession, console: Console) -> Non
 
     try:
         tokens = shlex.split(command, posix=not _IS_WINDOWS)
-        if _IS_WINDOWS:
-            tokens = [_strip_outer_quotes(token) for token in tokens]
+        if _IS_WINDOWS and len(tokens) > 1:
+            tokens = [tokens[0], *(_strip_outer_quotes(token) for token in tokens[1:])]
     except ValueError as exc:
         console.print(f"[red]cd failed:[/red] {escape(str(exc))}")
         session.record("shell", command, ok=False)
@@ -453,6 +467,23 @@ def _run_cd_command(command: str, session: ReplSession, console: Console) -> Non
         os.chdir(target)
     except Exception as exc:  # noqa: BLE001
         console.print(f"[red]cd failed:[/red] {escape(str(exc))}")
+        session.record("shell", command, ok=False)
+        return
+
+    console.print(Text(str(Path.cwd())))
+    session.record("shell", command)
+
+
+def _run_pwd_command(command: str, session: ReplSession, console: Console) -> None:
+    try:
+        tokens = shlex.split(command, posix=True)
+    except ValueError as exc:
+        console.print(f"[red]pwd failed:[/red] {escape(str(exc))}")
+        session.record("shell", command, ok=False)
+        return
+
+    if len(tokens) != 1:
+        console.print("[red]pwd failed:[/red] too many arguments")
         session.record("shell", command, ok=False)
         return
 
