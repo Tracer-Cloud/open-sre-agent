@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 import httpx
 
 from app.integrations.config_models import IncidentIoIntegrationConfig
-from app.services.incident_io.client import  make_incident_io_client
+from app.services.incident_io.client import make_incident_io_client
 
 
 def test_incident_io_config_normalization():

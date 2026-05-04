@@ -7,6 +7,7 @@ Credentials come from the user's incident.io integration stored locally or via e
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -164,14 +165,13 @@ class IncidentIoClient:
         self, incident_id: str, title: str, description: str = ""
     ) -> dict[str, Any]:
         """Add a custom event to an incident's timeline (findings write-back)."""
-        try:
 
         try:
             payload = {
                 "event_type": "custom",
                 "title": title,
                 "description": description,
-                "occurred_at": datetime.datetime.now(datetime.UTC).isoformat(),
+                "occurred_at": datetime.now(datetime.UTC).isoformat(),
             }
             resp = self._get_client().post(
                 f"/v2/incidents/{incident_id}/timeline_entries",
