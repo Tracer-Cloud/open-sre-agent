@@ -197,7 +197,9 @@ class TestKafkaConsumerGroupRun:
         assert result["available"] is True
         assert result["total_lag"] == 0
         assert result["partitions"][0]["lag"] == 0
-        assert result["partitions"][0]["committed_offset"] == result["partitions"][0]["high_watermark"]
+        assert (
+            result["partitions"][0]["committed_offset"] == result["partitions"][0]["high_watermark"]
+        )
 
     def test_happy_path_forwards_group_id_to_integration(self) -> None:
         with patch(
@@ -244,7 +246,9 @@ class TestKafkaConsumerGroupRun:
             "available": False,
             "error": "Group 'stale-consumer' does not exist.",
         }
-        with patch("app.tools.KafkaConsumerGroupTool.get_consumer_group_lag", return_value=fake_error):
+        with patch(
+            "app.tools.KafkaConsumerGroupTool.get_consumer_group_lag", return_value=fake_error
+        ):
             result = get_kafka_consumer_group_lag(
                 bootstrap_servers="broker1:9092",
                 group_id="stale-consumer",
@@ -257,10 +261,13 @@ class TestKafkaConsumerGroupRun:
     def test_error_path_propagates_exception_from_integration(self) -> None:
         # If the integration ever raises instead of returning an error dict,
         # the tool should let the exception propagate (no silent swallowing).
-        with patch(
-            "app.tools.KafkaConsumerGroupTool.get_consumer_group_lag",
-            side_effect=RuntimeError("consumer group timeout"),
-        ), pytest.raises(RuntimeError, match="consumer group timeout"):
+        with (
+            patch(
+                "app.tools.KafkaConsumerGroupTool.get_consumer_group_lag",
+                side_effect=RuntimeError("consumer group timeout"),
+            ),
+            pytest.raises(RuntimeError, match="consumer group timeout"),
+        ):
             get_kafka_consumer_group_lag(
                 bootstrap_servers="broker1:9092",
                 group_id="payments-consumer",

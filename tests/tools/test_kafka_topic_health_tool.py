@@ -184,12 +184,7 @@ class TestKafkaTopicHealthRun:
         ):
             result = get_kafka_topic_health(bootstrap_servers="broker1:9092")
 
-        under_rep = [
-            p
-            for t in result["topics"]
-            for p in t["partitions"]
-            if p["under_replicated"]
-        ]
+        under_rep = [p for t in result["topics"] for p in t["partitions"] if p["under_replicated"]]
         assert len(under_rep) == 1
         assert under_rep[0]["id"] == 2
 
@@ -282,10 +277,13 @@ class TestKafkaTopicHealthRun:
     def test_error_path_propagates_exception_from_integration(self) -> None:
         # If the integration ever raises instead of returning an error dict,
         # the tool should let the exception propagate (no silent swallowing).
-        with patch(
-            "app.tools.KafkaTopicHealthTool.get_topic_health",
-            side_effect=RuntimeError("broker timeout"),
-        ), pytest.raises(RuntimeError, match="broker timeout"):
+        with (
+            patch(
+                "app.tools.KafkaTopicHealthTool.get_topic_health",
+                side_effect=RuntimeError("broker timeout"),
+            ),
+            pytest.raises(RuntimeError, match="broker timeout"),
+        ):
             get_kafka_topic_health(bootstrap_servers="broker1:9092")
 
     def test_not_configured_returns_unavailable_without_broker_contact(self) -> None:
