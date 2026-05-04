@@ -254,9 +254,7 @@ class OpenAILLMClient:
         self._api_key_env = api_key_env
         self._default_headers = default_headers
         self._provider_label = api_key_env.removesuffix("_API_KEY").replace("_", " ").title()
-        self._client = OpenAI(
-            api_key=api_key, base_url=base_url, timeout=60.0, default_headers=default_headers
-        )
+        self._client: OpenAI | None = None
         self._model = model
         self._max_tokens = max_tokens
         self._temperature = temperature
@@ -276,7 +274,7 @@ class OpenAILLMClient:
             raise RuntimeError(
                 f"Missing {self._api_key_env}. Set it in your environment, .env, or secure local keychain before running LLM steps."
             )
-        if api_key != self._api_key:
+        if self._client is None or api_key != self._api_key:
             self._api_key = api_key
             self._client = OpenAI(
                 api_key=api_key,
@@ -310,9 +308,11 @@ class OpenAILLMClient:
         backoff_seconds = 1.0
         max_attempts = 3
         last_err: Exception | None = None
+        client = self._client
+        assert client is not None
         for attempt in range(max_attempts):
             try:
-                response = self._client.chat.completions.create(**kwargs)
+                response = client.chat.completions.create(**kwargs)
                 break
             except OpenAIAuthError as err:
                 raise RuntimeError(

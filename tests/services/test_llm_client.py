@@ -49,6 +49,17 @@ class _FakeOpenAI:
         self.chat = _FakeOpenAIChat()
 
 
+def test_openai_llm_client_defers_openai_until_ensure(monkeypatch) -> None:
+    """Avoid constructing OpenAI in __init__: sdk 2.34+ rejects empty api_key."""
+    _FakeOpenAI.last_api_key = None  # class-level cache from other tests
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env_var: "")
+    monkeypatch.setattr(llm_client, "OpenAI", _FakeOpenAI)
+
+    llm_client.OpenAILLMClient(model="gpt-4.1-mini")
+
+    assert _FakeOpenAI.last_api_key is None
+
+
 def test_openai_llm_client_reads_secure_local_api_key(monkeypatch) -> None:
     monkeypatch.setattr(
         llm_client,
