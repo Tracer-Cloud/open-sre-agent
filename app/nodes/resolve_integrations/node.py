@@ -60,7 +60,7 @@ def node_resolve_integrations(
     Priority:
       1. _auth_token from state (Slack webhook / inbound request) - remote API only, no local fallback
       2. JWT_TOKEN env var - remote API, with local store/env filling missing services
-      3. Local sources: ~/.tracer/integrations.json, plus env-based integrations for standalone use
+      3. Local sources: ~/.opensre/integrations.json, plus env-based integrations for standalone use
     """
     if state.get("resolved_integrations"):
         return {}

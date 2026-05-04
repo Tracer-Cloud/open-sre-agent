@@ -113,7 +113,7 @@ Shows recent entries from the audit log at `~/.opensre/guardrail_audit.jsonl`.
 ```
 CLI
   environment: development
-  integration store: ~/.tracer/integrations.json
+  integration store: ~/.opensre/integrations.json
   guardrails: 5 rules active (~/.opensre/guardrails.yml)
 ```
 

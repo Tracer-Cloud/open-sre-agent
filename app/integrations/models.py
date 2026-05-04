@@ -33,6 +33,7 @@ from app.integrations.config_models import (
     TelegramBotConfig,
     TracerIntegrationConfig,
     VercelIntegrationConfig,
+    VictoriaLogsIntegrationConfig,
 )
 from app.integrations.effective_models import (
     EffectiveIntegrationEntry,
@@ -72,4 +73,5 @@ __all__ = [
     "TelegramBotConfig",
     "TracerIntegrationConfig",
     "VercelIntegrationConfig",
+    "VictoriaLogsIntegrationConfig",
 ]

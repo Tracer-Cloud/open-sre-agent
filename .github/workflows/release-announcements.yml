@@ -1,0 +1,139 @@
+name: Release Announcements
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  announce-discord:
+    name: Announce on Discord
+    if: ${{ !github.event.repository.fork && !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send release announcement to Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL_UPDATE }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+          RELEASE_URL: ${{ github.event.release.html_url }}
+          REPO_STARS: ${{ github.event.repository.stargazers_count }}
+          REPO_FORKS: ${{ github.event.repository.forks_count }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${DISCORD_WEBHOOK_URL:-}" ]; then
+            echo "DISCORD_WEBHOOK_URL is not set; skipping Discord announcement."
+            exit 0
+          fi
+
+          NOTES="${RELEASE_BODY:-No release notes provided.}"
+          NOTES="$(printf '%s' "$NOTES" | tr -d '\r')"
+          MAX_NOTES_LENGTH=1700
+          if [ "${#NOTES}" -gt "$MAX_NOTES_LENGTH" ]; then
+            NOTES="${NOTES:0:$((MAX_NOTES_LENGTH-3))}..."
+          fi
+
+          payload="$(jq -n \
+            --arg tag "$RELEASE_TAG" \
+            --arg notes "$NOTES" \
+            --arg url "$RELEASE_URL" \
+            --arg stars "${REPO_STARS:-0}" \
+            --arg forks "${REPO_FORKS:-0}" \
+            '{
+              content: ("🚀 **New opensre release: `" + $tag + "`**\n\n📝 **Release Notes**\n" + $notes + "\n\n📊 **Repo Stats**\n⭐ Stars: " + $stars + "\n🍴 Forks: " + $forks + "\n\n🔗 **Release URL:** " + $url)
+            }'
+          )"
+
+          curl --fail --silent --show-error --max-time 30 \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d "$payload" \
+            "$DISCORD_WEBHOOK_URL"
+
+  announce-x:
+    name: Announce on X (Twitter)
+    if: ${{ !github.event.repository.fork && !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Compose tweet (<= 280 chars)
+        id: compose_tweet
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+          RELEASE_URL: ${{ github.event.release.html_url }}
+          REPO_STARS: ${{ github.event.repository.stargazers_count }}
+          REPO_FORKS: ${{ github.event.repository.forks_count }}
+          TWITTER_CONSUMER_API_KEY: ${{ secrets.TWITTER_CONSUMER_API_KEY }}
+          TWITTER_CONSUMER_API_SECRET: ${{ secrets.TWITTER_CONSUMER_API_SECRET }}
+          TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
+          TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${TWITTER_CONSUMER_API_KEY:-}" ] || [ -z "${TWITTER_CONSUMER_API_SECRET:-}" ] || [ -z "${TWITTER_ACCESS_TOKEN:-}" ] || [ -z "${TWITTER_ACCESS_TOKEN_SECRET:-}" ]; then
+            echo "Twitter secrets missing; skipping X announcement."
+            echo "should_tweet=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "message<<EOF"
+              echo ""
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          major_feature=""
+          while IFS= read -r line; do
+            if [[ "$line" =~ ^[[:space:]]*[Mm]ajor[[:space:]]feature:[[:space:]]*(.+)$ ]]; then
+              major_feature="${BASH_REMATCH[1]}"
+              break
+            fi
+          done <<< "${RELEASE_BODY:-}"
+
+          if [ -z "$major_feature" ]; then
+            major_feature="Major improvements shipped"
+          fi
+
+          major_feature="$(printf '%s' "$major_feature" | tr '\n' ' ' | tr -s ' ')"
+          prefix="New opensre release ${RELEASE_TAG}: Major feature: "
+          stats_suffix=" ⭐${REPO_STARS:-0} 🍴${REPO_FORKS:-0}"
+          suffix=" ${RELEASE_URL}${stats_suffix}"
+          max=280
+
+          available=$((max - ${#prefix} - ${#suffix}))
+          if [ "$available" -lt 1 ]; then
+            message="opensre ${RELEASE_TAG} ${RELEASE_URL}"
+          else
+            snippet="$major_feature"
+            if [ -n "$snippet" ] && [ "${#snippet}" -gt "$available" ]; then
+              snippet="${snippet:0:$((available-1))}…"
+            fi
+
+            if [ -n "$snippet" ]; then
+              message="${prefix}${snippet}${suffix}"
+            else
+              message="New opensre release ${RELEASE_TAG}: ${RELEASE_URL}"
+            fi
+          fi
+
+          # Final safety fallback: keep tag + URL if still too long
+          if [ "${#message}" -gt 280 ]; then
+            message="New opensre release ${RELEASE_TAG}: ${RELEASE_URL}"
+          fi
+
+          echo "should_tweet=true" >> "$GITHUB_OUTPUT"
+          {
+            echo "message<<EOF"
+            echo "$message"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Post tweet
+        if: ${{ steps.compose_tweet.outputs.should_tweet == 'true' }}
+        uses: Eomm/why-don-t-you-tweet@54e11450e21479faa5db172b9f2c10a29aedfc62
+        with:
+          tweet-message: ${{ steps.compose_tweet.outputs.message }}
+        env:
+          TWITTER_CONSUMER_API_KEY: ${{ secrets.TWITTER_CONSUMER_API_KEY }}
+          TWITTER_CONSUMER_API_SECRET: ${{ secrets.TWITTER_CONSUMER_API_SECRET }}
+          TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
+          TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}

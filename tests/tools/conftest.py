@@ -182,6 +182,39 @@ def mock_http_response(status: int, json_body: Any) -> MagicMock:
     return response
 
 
+class MockHttpxResponse:
+    """Typed stand-in for an httpx.Response — only the surface tests touch.
+
+    Lets a single helper cover both response shapes the tools must handle:
+    a successful JSON body returned via ``json()``, OR an HTTP error raised
+    inside ``raise_for_status()`` (the tools wrap the call in ``try/except``
+    and treat both as the same failure path).
+
+    Use this from any tool test that mocks ``httpx.post``:
+
+        def _fake_post(url, headers, json, timeout):
+            return MockHttpxResponse({"data": []})
+
+        monkeypatch.setattr("app.tools.MyTool.httpx.post", _fake_post)
+    """
+
+    def __init__(
+        self,
+        payload: Any,
+        *,
+        raise_for_status_error: Exception | None = None,
+    ) -> None:
+        self._payload = payload
+        self._error = raise_for_status_error
+
+    def raise_for_status(self) -> None:
+        if self._error is not None:
+            raise self._error
+
+    def json(self) -> Any:
+        return self._payload
+
+
 # ---------------------------------------------------------------------------
 # BaseToolContract mixin
 # ---------------------------------------------------------------------------

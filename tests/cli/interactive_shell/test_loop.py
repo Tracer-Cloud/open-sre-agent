@@ -5,10 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from prompt_toolkit.application import create_app_session
 from prompt_toolkit.completion import CompleteEvent
 from prompt_toolkit.document import Document
 from prompt_toolkit.history import FileHistory, InMemoryHistory
+from prompt_toolkit.input import DummyInput
 from prompt_toolkit.keys import Keys
+from prompt_toolkit.output import DummyOutput
 
 from app.cli.interactive_shell import loop
 
@@ -21,7 +24,8 @@ def test_build_prompt_session_uses_persistent_history(
 
     monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
 
-    prompt = loop._build_prompt_session()
+    with create_app_session(input=DummyInput(), output=DummyOutput()):
+        prompt = loop._build_prompt_session()
 
     assert isinstance(prompt.history, FileHistory)
     assert prompt.history.filename == str(tmp_path / "interactive_history")
@@ -40,7 +44,8 @@ def test_build_prompt_session_falls_back_to_memory_history(
     blocked_home.write_text("", encoding="utf-8")
     monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", blocked_home)
 
-    prompt = loop._build_prompt_session()
+    with create_app_session(input=DummyInput(), output=DummyOutput()):
+        prompt = loop._build_prompt_session()
 
     assert isinstance(prompt.history, InMemoryHistory)
 

@@ -1,6 +1,6 @@
 """Local integration credential store.
 
-Integrations are stored in ~/.tracer/integrations.json.
+Integrations are stored in ~/.opensre/integrations.json.
 
 File format (v2 — see ``_migrate_record_v1_to_v2`` for the v1 shape):
 {
@@ -34,16 +34,18 @@ rewritten with ``version: 2`` on first load.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import uuid
 from typing import Any
 
-from app.constants import INTEGRATIONS_STORE_PATH
+from app.constants import INTEGRATIONS_STORE_PATH, LEGACY_INTEGRATIONS_STORE_PATH
 
 logger = logging.getLogger(__name__)
 
 STORE_PATH = INTEGRATIONS_STORE_PATH
+LEGACY_STORE_PATH = LEGACY_INTEGRATIONS_STORE_PATH
 _VERSION = 2
 
 # Structural fields on an integration record — everything else at the top
@@ -88,7 +90,47 @@ def _migrate_if_needed(data: dict[str, Any]) -> tuple[dict[str, Any], bool]:
     return {"version": _VERSION, "integrations": migrated_records}, True
 
 
+def _migrate_legacy_store_if_needed() -> None:
+    """Move the legacy ~/.tracer store into ~/.opensre on first access."""
+    if STORE_PATH.exists() or not LEGACY_STORE_PATH.exists():
+        return
+    # Tests often patch only STORE_PATH. If LEGACY_STORE_PATH still points at the
+    # real default location, skip the move so an isolated test cannot relocate a
+    # developer's actual legacy store into the patched destination.
+    if (
+        STORE_PATH != INTEGRATIONS_STORE_PATH
+        and LEGACY_STORE_PATH == LEGACY_INTEGRATIONS_STORE_PATH
+    ):
+        return
+
+    STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        LEGACY_STORE_PATH.replace(STORE_PATH)
+    except OSError:
+        try:
+            STORE_PATH.write_bytes(LEGACY_STORE_PATH.read_bytes())
+            LEGACY_STORE_PATH.unlink()
+        except OSError:
+            logger.warning(
+                "Failed to migrate legacy integrations store from %s to %s",
+                LEGACY_STORE_PATH,
+                STORE_PATH,
+                exc_info=True,
+            )
+            return
+
+    with contextlib.suppress(OSError):
+        STORE_PATH.chmod(0o600)
+
+    logger.info(
+        "Migrated legacy integrations store from %s to %s",
+        LEGACY_STORE_PATH,
+        STORE_PATH,
+    )
+
+
 def _load_raw() -> dict[str, Any]:
+    _migrate_legacy_store_if_needed()
     if not STORE_PATH.exists():
         return {"version": _VERSION, "integrations": []}
     try:

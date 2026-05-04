@@ -15,6 +15,7 @@ stored in ``~/.claude/.credentials.json`` after ``claude login``.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -43,16 +44,58 @@ def _parse_semver(text: str) -> str | None:
     return m.group(1) if m else None
 
 
-def _classify_claude_code_auth() -> tuple[bool | None, str]:
-    """Return (logged_in, detail) without spawning a subprocess.
+def _probe_cli_auth(binary_path: str) -> tuple[bool | None, str]:
+    """Check Claude Code auth via `claude auth status` (local, no API call).
+
+    Covers both subscription login and ANTHROPIC_API_KEY; subscription takes
+    priority as reported by the CLI itself.
+    """
+    try:
+        proc = subprocess.run(
+            [binary_path, "auth", "status"],
+            capture_output=True,
+            text=True,
+            timeout=_PROBE_TIMEOUT_SEC,
+            check=False,
+            env={**os.environ, "NO_COLOR": "1"},
+        )
+    except subprocess.TimeoutExpired:
+        return (
+            None,
+            f"claude auth status timed out after {_PROBE_TIMEOUT_SEC:.0f} s — auth state unknown.",
+        )
+    except OSError as exc:
+        return None, f"Could not spawn claude for auth probe: {exc}"
+    if proc.returncode != 0:
+        err = (proc.stderr or proc.stdout or "").strip()[:500]
+        return None, f"claude auth status failed: {err or 'unknown error'}"
+    try:
+        data = json.loads(proc.stdout)
+        if not data.get("loggedIn"):
+            return False, "Not authenticated. Run: claude auth login  or set ANTHROPIC_API_KEY."
+        api_key_source = data.get("apiKeySource", "")
+        if api_key_source:
+            return True, f"Authenticated via {api_key_source}."
+        email = data.get("email", "")
+        return True, f"Authenticated via Claude subscription{f' ({email})' if email else ''}."
+    except (json.JSONDecodeError, AttributeError):
+        # Older CLI versions may not output JSON — treat exit 0 as authenticated.
+        return True, "Authenticated via Claude CLI."
+
+
+def _classify_claude_code_auth(binary_path: str | None = None) -> tuple[bool | None, str]:
+    """Return (logged_in, detail) for Claude Code auth.
 
     Resolution order:
-    1. ANTHROPIC_API_KEY in env → True (definitive; build() forwards it).
-    2. ~/.claude/.credentials.json present and non-empty → True (OAuth login).
-    3. macOS without either → None: Claude Code stores OAuth in Keychain on
-       darwin, so file absence is not proof of no-auth — let invocation reveal.
-    4. Otherwise → False (Linux/Windows: file is the canonical credential store).
+    1. Binary available → `claude auth status` is the source of truth for all
+       platforms; covers both subscription login and ANTHROPIC_API_KEY.
+    2. No binary, ANTHROPIC_API_KEY set → True (filesystem-independent fallback).
+    3. No binary, credentials file present → True (OAuth login).
+    4. No binary, macOS → None (Keychain may hold credentials; invocation will verify).
+    5. No binary, Linux/Windows → False.
     """
+    if binary_path:
+        return _probe_cli_auth(binary_path)
     if os.environ.get("ANTHROPIC_API_KEY", "").strip():
         return True, "Authenticated via ANTHROPIC_API_KEY."
     creds_path = Path.home() / ".claude" / ".credentials.json"
@@ -63,12 +106,12 @@ def _classify_claude_code_auth() -> tuple[bool | None, str]:
         return None, "Could not read ~/.claude/.credentials.json; auth state unclear."
     if sys.platform == "darwin":
         return None, (
-            "ANTHROPIC_API_KEY not set and ~/.claude/.credentials.json absent; "
-            "macOS may use Keychain — auth state unclear, invocation will verify."
+            "Auth state unclear — binary unavailable for verification. "
+            "Run: claude auth login  or set ANTHROPIC_API_KEY."
         )
     return (
         False,
-        "Not authenticated. Run: claude login  or set ANTHROPIC_API_KEY.",
+        "Not authenticated. Run: claude auth login  or set ANTHROPIC_API_KEY.",
     )
 
 
@@ -122,7 +165,7 @@ class ClaudeCodeAdapter:
             )
 
         version = _parse_semver(ver_proc.stdout + ver_proc.stderr)
-        logged_in, auth_detail = _classify_claude_code_auth()
+        logged_in, auth_detail = _classify_claude_code_auth(binary_path=binary_path)
         return CLIProbe(
             installed=True,
             version=version,

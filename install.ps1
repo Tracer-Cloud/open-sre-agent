@@ -236,7 +236,7 @@ function Get-OpenSreReleaseMetadata {
     }
 
     $releaseUri = if ($Channel -eq "main") {
-        "https://api.github.com/repos/$Repo/releases/tags/main"
+        "https://api.github.com/repos/$Repo/releases/tags/nightly"
     }
     elseif ($normalizedVersion) {
         "https://api.github.com/repos/$Repo/releases/tags/v$normalizedVersion"

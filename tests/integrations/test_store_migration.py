@@ -126,6 +126,38 @@ def test_missing_file_yields_empty_v2_store(tmp_path: Path) -> None:
     assert data == {"version": _VERSION, "integrations": []}
 
 
+def test_legacy_store_is_moved_to_opensre_path(tmp_path: Path) -> None:
+    store_file = tmp_path / ".opensre" / "integrations.json"
+    legacy_store_file = tmp_path / ".tracer" / "integrations.json"
+    _write_store(
+        legacy_store_file,
+        {
+            "version": 1,
+            "integrations": [
+                {
+                    "id": "g",
+                    "service": "grafana",
+                    "status": "active",
+                    "credentials": {"endpoint": "https://example.com", "api_key": "k"},
+                }
+            ],
+        },
+    )
+
+    with (
+        patch("app.integrations.store.STORE_PATH", store_file),
+        patch("app.integrations.store.LEGACY_STORE_PATH", legacy_store_file),
+    ):
+        data = _load_raw()
+
+    assert data["version"] == _VERSION
+    assert store_file.exists()
+    assert not legacy_store_file.exists()
+    on_disk = json.loads(store_file.read_text())
+    assert on_disk["version"] == _VERSION
+    assert on_disk["integrations"][0]["instances"][0]["credentials"]["api_key"] == "k"
+
+
 @pytest.mark.skipif(os.name == "nt", reason="POSIX file mode not portable to Windows")
 def test_permissions_preserved_after_migration(tmp_path: Path) -> None:
     store_file = tmp_path / "integrations.json"

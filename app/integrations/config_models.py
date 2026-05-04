@@ -268,6 +268,31 @@ class SplunkIntegrationConfig(StrictConfigModel):
         return bool(self.base_url and self.token)
 
 
+class VictoriaLogsIntegrationConfig(StrictConfigModel):
+    """Normalized VictoriaLogs credentials used by resolution and verification flows."""
+
+    base_url: str
+    tenant_id: str | None = None
+    integration_id: str = ""
+
+    _normalize_base_url = field_validator("base_url", mode="before")(normalize_url())
+    _normalize_integration_id = field_validator("integration_id", mode="before")(normalize_str())
+
+    @field_validator("tenant_id", mode="before")
+    @classmethod
+    def _normalize_tenant_id(cls, value: object) -> str | None:
+        # Treat empty / blank / None uniformly as "not configured" so the
+        # AccountID header is only sent when the user explicitly opts in.
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.base_url)
+
+
 # ---------------------------------------------------------------------------
 # Source Control & CI/CD
 # ---------------------------------------------------------------------------

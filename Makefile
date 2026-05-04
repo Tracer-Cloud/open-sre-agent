@@ -9,8 +9,8 @@ ifneq ($(wildcard .venv/bin/python),)
     PIP = .venv/bin/python -m pip
 else ifeq ($(OS),Windows_NT)
     ifneq ($(wildcard .venv/Scripts/python.exe),)
-        PYTHON = .venv\\Scripts\\python.exe
-        PIP = .venv\\Scripts\\python.exe -m pip
+        PYTHON = .venv/Scripts/python.exe
+        PIP = .venv/Scripts/python.exe -m pip
     else
         PYTHON = python
         PIP = python -m pip
