@@ -12,12 +12,14 @@ OpenSRE is provider-agnostic: bring your own model. Selection is controlled by t
 | Anthropic    | `anthropic`    | `ANTHROPIC_API_KEY`             | `claude-sonnet-4-6`                           | `claude-haiku-4-5-20251001`                     |
 | OpenAI       | `openai`       | `OPENAI_API_KEY`                | `gpt-5.4`                                     | `gpt-5.4-mini`                                  |
 | OpenRouter   | `openrouter`   | `OPENROUTER_API_KEY`            | `openrouter/auto`                             | `openrouter/auto`                               |
+| Requesty     | `requesty`     | `REQUESTY_API_KEY`              | `anthropic/claude-sonnet-4-6`                 | `anthropic/claude-sonnet-4-6`                   |
 | Google Gemini| `gemini`       | `GEMINI_API_KEY`                | `gemini-3.1-pro-preview`                      | `gemini-3.1-flash-lite-preview`                 |
 | NVIDIA NIM   | `nvidia`       | `NVIDIA_API_KEY`                | `meta/llama-3.1-405b-instruct`                | `meta/llama-3.1-8b-instruct`                    |
 | MiniMax      | `minimax`      | `MINIMAX_API_KEY`               | `MiniMax-M2.7`                                | `MiniMax-M2.7-highspeed`                        |
 | Amazon Bedrock| `bedrock`     | AWS IAM (`AWS_REGION`)          | `us.anthropic.claude-sonnet-4-6`              | `us.anthropic.claude-haiku-4-5-20251001-v1:0`   |
 | Ollama (local)| `ollama`     | None (local daemon)             | `llama3.2`                                    | `llama3.2`                                      |
 | OpenAI Codex CLI| `codex`    | `codex login` (CLI)             | Codex CLI default                             | Codex CLI default                               |
+| Claude Code CLI| `claude-code`| `claude login` (CLI)            | Claude Code CLI default                       | Claude Code CLI default                         |
 
 OpenSRE distinguishes two model slots per provider:
 
@@ -88,6 +90,20 @@ export OPENROUTER_TOOLCALL_MODEL=openai/gpt-4o-mini
 
 OpenAI-compatible proxy — pick any model on [openrouter.ai/models](https://openrouter.ai/models). Base URL: `https://openrouter.ai/api/v1`.
 
+### Requesty
+
+```bash
+export LLM_PROVIDER=requesty
+export REQUESTY_API_KEY=...
+# Optional override (single value applies to both slots if set):
+export REQUESTY_MODEL=anthropic/claude-sonnet-4-6
+# Or per-slot:
+export REQUESTY_REASONING_MODEL=anthropic/claude-sonnet-4-6
+export REQUESTY_TOOLCALL_MODEL=anthropic/claude-sonnet-4-6
+```
+
+OpenAI-compatible gateway at `https://router.requesty.ai/v1`. Sends an `X-Title: OpenSRE` header for usage attribution. Browse models on [requesty.ai](https://requesty.ai/).
+
 ### Google Gemini
 
 ```bash
@@ -121,8 +137,11 @@ Uses NVIDIA's OpenAI-compatible API at `https://integrate.api.nvidia.com/v1`. Br
 ```bash
 export LLM_PROVIDER=minimax
 export MINIMAX_API_KEY=...
-# Optional override:
+# Optional override (single value applies to both slots if set):
 export MINIMAX_MODEL=MiniMax-M2.7
+# Or per-slot:
+export MINIMAX_REASONING_MODEL=MiniMax-M2.7
+export MINIMAX_TOOLCALL_MODEL=MiniMax-M2.7-highspeed
 ```
 
 OpenAI-compatible endpoint at `https://api.minimax.io/v1`. Temperature is fixed to `1.0` to match MiniMax recommendations.
@@ -166,6 +185,19 @@ export CODEX_BIN=
 ```
 
 Requires the [OpenAI Codex CLI](https://github.com/openai/codex). If `CODEX_MODEL` is unset, OpenSRE omits `-m` so `codex exec` uses the CLI's currently configured model. If `CODEX_BIN` is unset, the binary is resolved via `PATH` and known install locations.
+
+### Claude Code
+
+```bash
+export LLM_PROVIDER=claude-code
+# Authenticate the Claude Code CLI separately:
+claude login
+# Optional overrides (all blank-by-default):
+export CLAUDE_CODE_MODEL=
+export CLAUDE_CODE_BIN=
+```
+
+Requires the [Claude Code CLI](https://github.com/anthropics/claude-code) (`npm i -g @anthropic-ai/claude-code`). If `CLAUDE_CODE_MODEL` is unset, OpenSRE omits the `--model` flag and the CLI uses its configured default. If `CLAUDE_CODE_BIN` is unset, the binary is resolved via `PATH` and known install locations.
 
 See [`app/integrations/llm_cli/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/app/integrations/llm_cli/AGENTS.md) for the adapter pattern used to add new CLI providers.
 
