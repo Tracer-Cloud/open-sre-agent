@@ -1158,6 +1158,29 @@ Thanks goes to these amazing people:
         </a>
     </td>
 		</tr>
+		<tr>
+            <td align="center">
+        <a href="https://github.com/akshat1074">
+            <img src="https://avatars.githubusercontent.com/u/138868940?v=4" width="100" alt="akshat1074"/>
+            <br />
+            <sub><b>akshat1074</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/Diwansu-pilania">
+            <img src="https://avatars.githubusercontent.com/u/192974860?v=4" width="100" alt="Diwansu-pilania"/>
+            <br />
+            <sub><b>Diwansu-pilania</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/AniketR10">
+            <img src="https://avatars.githubusercontent.com/u/169879837?v=4" width="100" alt="AniketR10"/>
+            <br />
+            <sub><b>AniketR10</b></sub>
+        </a>
+    </td>
+		</tr>
 	</tbody>
 </table>
 <!-- readme: contributors -end -->

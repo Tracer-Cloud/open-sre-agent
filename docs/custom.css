@@ -1297,70 +1297,70 @@ html.dark [class*="Icon"] {
 
 /* Replace black logos with white logos in dark mode - match CDN URLs */
 html.dark img[src*="AWS-Black.png"] {
-    content: url("/docs/images/other_logos/AWS-White.png") !important;
+    content: url("/images/other_logos/AWS-White.png") !important;
 }
 html.dark img[src*="AWS-Batch-Black.png"] {
-    content: url("/docs/images/other_logos/AWS-Batch-White.png") !important;
+    content: url("/images/other_logos/AWS-Batch-White.png") !important;
 }
 html.dark img[src*="Apple-Black.png"] {
-    content: url("/docs/images/other_logos/Apple-White.png") !important;
+    content: url("/images/other_logos/Apple-White.png") !important;
 }
 html.dark img[src*="Bash-Black.png"] {
-    content: url("/docs/images/other_logos/Bash-White.png") !important;
+    content: url("/images/other_logos/Bash-White.png") !important;
 }
 html.dark img[src*="Dagster-Black.png"] {
-    content: url("/docs/images/other_logos/Dagster-White.png") !important;
+    content: url("/images/other_logos/Dagster-White.png") !important;
 }
 html.dark img[src*="Docker-Black.png"] {
-    content: url("/docs/images/other_logos/Docker-White.png") !important;
+    content: url("/images/other_logos/Docker-White.png") !important;
 }
 html.dark img[src*="Grafana-Black.png"] {
-    content: url("/docs/images/other_logos/Grafana-White.png") !important;
+    content: url("/images/other_logos/Grafana-White.png") !important;
 }
 html.dark img[src*="GitHub-Black.png"] {
-    content: url("/docs/images/other_logos/GitHub-White.png") !important;
+    content: url("/images/other_logos/GitHub-White.png") !important;
 }
 html.dark img[src*="Linux-Black.png"] {
-    content: url("/docs/images/other_logos/Linux-White.png") !important;
+    content: url("/images/other_logos/Linux-White.png") !important;
 }
 html.dark img[src*="Nextflow-Black.png"] {
-    content: url("/docs/images/other_logos/Nextflow-White.png") !important;
+    content: url("/images/other_logos/Nextflow-White.png") !important;
 }
 html.dark img[src*="Prefect-Black.png"] {
-    content: url("/docs/images/other_logos/Prefect-White.png") !important;
+    content: url("/images/other_logos/Prefect-White.png") !important;
 }
 html.dark img[src*="Seqera-Black.png"] {
-    content: url("/docs/images/other_logos/Seqera-White.png") !important;
+    content: url("/images/other_logos/Seqera-White.png") !important;
 }
 html.dark img[src*="Ubuntu-Black.png"] {
-    content: url("/docs/images/other_logos/Ubuntu-White.png") !important;
+    content: url("/images/other_logos/Ubuntu-White.png") !important;
 }
 html.dark img[src*="WLD-Black.png"] {
-    content: url("/docs/images/other_logos/WLD-White.png") !important;
+    content: url("/images/other_logos/WLD-White.png") !important;
 }
 html.dark img[src*="Windows-Black.png"] {
-    content: url("/docs/images/other_logos/Windows-White.png") !important;
+    content: url("/images/other_logos/Windows-White.png") !important;
 }
 html.dark img[src*="Tracer-Head-Black.png"] {
-    content: url("/docs/images/logo/tracer/Tracer-Head-White.png") !important;
+    content: url("/images/logo/tracer/Tracer-Head-White.png") !important;
 }
 html.dark img[src*="Tracer-Full-Body-and-Text-Black.png"] {
-    content: url("/docs/images/logo/tracer/Tracer-Full-Body-and-Text-White.png") !important;
+    content: url("/images/logo/tracer/Tracer-Full-Body-and-Text-White.png") !important;
 }
 html.dark img[src*="eBPF-Black.png"] {
-    content: url("/docs/images/other_logos/eBPF-White.png") !important;
+    content: url("/images/other_logos/eBPF-White.png") !important;
 }
 html.dark img[src*="Snakemake-Black.png"] {
-    content: url("/docs/images/other_logos/Snakemake-White.png") !important;
+    content: url("/images/other_logos/Snakemake-White.png") !important;
 }
 html.dark img[src*="Slurm-Black.png"] {
-    content: url("/docs/images/other_logos/Slurm-White.png") !important;
+    content: url("/images/other_logos/Slurm-White.png") !important;
 }
 html.dark img[src*="EC2-Black.png"] {
-    content: url("/docs/images/other_logos/EC2-White.png") !important;
+    content: url("/images/other_logos/EC2-White.png") !important;
 }
 html.dark img[src*="Google-Cloud-Dark.png"] {
-    content: url("/docs/images/other_logos/Google-Cloud-White.png") !important;
+    content: url("/images/other_logos/Google-Cloud-White.png") !important;
 }
 
 /* SVG fill color control for light/dark mode */

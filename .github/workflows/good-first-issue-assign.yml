@@ -1,0 +1,51 @@
+# When someone with zero merged PRs in this repo (and not OWNER/MEMBER/COLLABORATOR) comments
+# on an open issue labeled `good first issue`, assign them and reply — only if the issue has no
+# assignees yet (first eligible commenter wins; includes when a human pre-assigned someone).
+# issue_comment also fires for PR review threads; those payloads include issue.pull_request.
+name: Good first issue — auto-assign
+
+on:
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: good-first-issue-assign-${{ github.repository }}-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  assign:
+    name: Assign new contributor on good first issue
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.issue.state == 'open' &&
+      github.event.comment.user.type != 'Bot' &&
+      !github.event.issue.pull_request
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Decide assign + notice body
+        id: decide
+        env:
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 .github/scripts/good_first_issue_assign.py
+
+      - name: Add assignee and notify
+        if: steps.decide.outputs.should_assign == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPO_FULL: ${{ github.repository }}
+          COMMENTER_LOGIN: ${{ github.event.comment.user.login }}
+        run: |
+          gh issue edit "${ISSUE_NUMBER}" \
+            --repo "${REPO_FULL}" \
+            --add-assignee "${COMMENTER_LOGIN}"
+          gh issue comment "${ISSUE_NUMBER}" \
+            --repo "${REPO_FULL}" \
+            --body-file assign_comment.md
