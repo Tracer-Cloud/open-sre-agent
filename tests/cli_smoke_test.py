@@ -342,7 +342,13 @@ class _ReleaseHandler(BaseHTTPRequestHandler):
 
 @pytest.fixture()
 def release_api_url() -> str:
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _ReleaseHandler)
+    try:
+        server = ThreadingHTTPServer(("127.0.0.1", 0), _ReleaseHandler)
+    except OSError as exc:
+        if exc.errno in {errno.EPERM, errno.EACCES}:
+            pytest.skip("localhost HTTP server binding is not permitted in this environment")
+        raise
+
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:

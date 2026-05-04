@@ -47,6 +47,10 @@ class ProviderOption:
     models: tuple[ModelOption, ...]
     #: If set, ``sync_provider_env`` also writes this key (same value) for legacy .env files.
     legacy_model_env: str | None = None
+    #: Env var that holds the *toolcall* model for this provider. ``None`` for
+    #: providers that don't expose a separate toolcall model (e.g. CLI-backed
+    #: providers like ``codex``/``claude-code``, or Ollama).
+    toolcall_model_env: str | None = None
     #: Human-readable name for the credential requested during onboarding. Most
     #: providers want an API key; Ollama wants a host URL. Used as the wizard
     #: prompt label, e.g. ``{label} {credential_label} ({api_key_env})``.
@@ -201,6 +205,7 @@ SUPPORTED_PROVIDERS = (
         default_model=ANTHROPIC_REASONING_MODEL,
         models=ANTHROPIC_MODELS,
         legacy_model_env="ANTHROPIC_MODEL",
+        toolcall_model_env="ANTHROPIC_TOOLCALL_MODEL",
     ),
     ProviderOption(
         value="openai",
@@ -211,6 +216,7 @@ SUPPORTED_PROVIDERS = (
         default_model=OPENAI_REASONING_MODEL,
         models=OPENAI_MODELS,
         legacy_model_env="OPENAI_MODEL",
+        toolcall_model_env="OPENAI_TOOLCALL_MODEL",
     ),
     ProviderOption(
         value="openrouter",
@@ -221,6 +227,7 @@ SUPPORTED_PROVIDERS = (
         default_model=OPENROUTER_REASONING_MODEL,
         models=OPENROUTER_MODELS,
         legacy_model_env="OPENROUTER_MODEL",
+        toolcall_model_env="OPENROUTER_TOOLCALL_MODEL",
     ),
     ProviderOption(
         value="requesty",
@@ -241,6 +248,7 @@ SUPPORTED_PROVIDERS = (
         default_model=GEMINI_REASONING_MODEL,
         models=GEMINI_MODELS,
         legacy_model_env="GEMINI_MODEL",
+        toolcall_model_env="GEMINI_TOOLCALL_MODEL",
     ),
     ProviderOption(
         value="nvidia",
@@ -251,6 +259,7 @@ SUPPORTED_PROVIDERS = (
         default_model=NVIDIA_REASONING_MODEL,
         models=NVIDIA_MODELS,
         legacy_model_env="NVIDIA_MODEL",
+        toolcall_model_env="NVIDIA_TOOLCALL_MODEL",
     ),
     ProviderOption(
         value="codex",
