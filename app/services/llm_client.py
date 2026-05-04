@@ -259,6 +259,14 @@ class OpenAILLMClient:
         self._max_tokens = max_tokens
         self._temperature = temperature
 
+    def _build_client(self, api_key: str) -> OpenAI:
+        return OpenAI(
+            api_key=api_key,
+            base_url=self._base_url,
+            timeout=60.0,
+            default_headers=self._default_headers,
+        )
+
     def with_config(self, **_kwargs) -> OpenAILLMClient:
         return self
 
@@ -276,12 +284,7 @@ class OpenAILLMClient:
             )
         if self._client is None or api_key != self._api_key:
             self._api_key = api_key
-            self._client = OpenAI(
-                api_key=api_key,
-                base_url=self._base_url,
-                timeout=60.0,
-                default_headers=self._default_headers,
-            )
+            self._client = self._build_client(api_key)
 
     def invoke(self, prompt_or_messages: Any) -> LLMResponse:
         self._ensure_client()
@@ -309,7 +312,8 @@ class OpenAILLMClient:
         max_attempts = 3
         last_err: Exception | None = None
         client = self._client
-        assert client is not None
+        if client is None:
+            raise RuntimeError("OpenAI client was not initialized after credential validation.")
         for attempt in range(max_attempts):
             try:
                 response = client.chat.completions.create(**kwargs)
