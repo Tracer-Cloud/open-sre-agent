@@ -54,9 +54,12 @@ def test_validate_access_success(client: HoneycombClient) -> None:
     }
     mock_response.raise_for_status = MagicMock()
 
-    with patch("httpx.Client.get", return_value=mock_response) as mock_get:
-        result = client.validate_access()
-        mock_get.assert_called_once_with("/1/auth")
+    mock_http = MagicMock()
+    mock_http.get.return_value = mock_response
+    client._client = mock_http
+
+    result = client.validate_access()
+    mock_http.get.assert_called_once_with("/1/auth")
 
     assert result["success"] is True
     assert result["environment"] == {"name": "prod"}
@@ -73,16 +76,22 @@ def test_validate_access_http_error(client: HoneycombClient) -> None:
     error = httpx.HTTPStatusError("Auth failed", request=MagicMock(), response=mock_response)
     mock_response.raise_for_status.side_effect = error
 
-    with patch("httpx.Client.get", return_value=mock_response):
-        result = client.validate_access()
+    mock_http = MagicMock()
+    mock_http.get.return_value = mock_response
+    client._client = mock_http
+
+    result = client.validate_access()
 
     assert result["success"] is False
     assert "HTTP 401: Unauthorized" in result["error"]
 
 
 def test_validate_access_generic_exception(client: HoneycombClient) -> None:
-    with patch("httpx.Client.get", side_effect=Exception("Connection refused")):
-        result = client.validate_access()
+    mock_http = MagicMock()
+    mock_http.get.side_effect = Exception("Connection refused")
+    client._client = mock_http
+
+    result = client.validate_access()
 
     assert result["success"] is False
     assert "Connection refused" in result["error"]
@@ -107,9 +116,12 @@ def test_create_query_success(client: HoneycombClient) -> None:
     mock_response.json.return_value = {"id": "query-123", "calculations": []}
     mock_response.raise_for_status = MagicMock()
 
-    with patch("httpx.Client.post", return_value=mock_response) as mock_post:
-        result = client.create_query(query_spec)
-        mock_post.assert_called_once_with("/1/queries/test-dataset", json=query_spec)
+    mock_http = MagicMock()
+    mock_http.post.return_value = mock_response
+    client._client = mock_http
+
+    result = client.create_query(query_spec)
+    mock_http.post.assert_any_call("/1/queries/test-dataset", json=query_spec)
 
     assert result["success"] is True
     assert result["query_id"] == "query-123"
@@ -121,8 +133,11 @@ def test_create_query_no_id(client: HoneycombClient) -> None:
     mock_response.json.return_value = {"something": "else"}
     mock_response.raise_for_status = MagicMock()
 
-    with patch("httpx.Client.post", return_value=mock_response):
-        result = client.create_query({})
+    mock_http = MagicMock()
+    mock_http.post.return_value = mock_response
+    client._client = mock_http
+
+    result = client.create_query({})
 
     assert result["success"] is False
     assert "returned no query ID" in result["error"]
@@ -135,8 +150,11 @@ def test_create_query_http_error(client: HoneycombClient) -> None:
     error = httpx.HTTPStatusError("Err", request=MagicMock(), response=mock_response)
     mock_response.raise_for_status.side_effect = error
 
-    with patch("httpx.Client.post", return_value=mock_response):
-        result = client.create_query({})
+    mock_http = MagicMock()
+    mock_http.post.return_value = mock_response
+    client._client = mock_http
+
+    result = client.create_query({})
 
     assert result["success"] is False
     assert "HTTP 400: Bad Request" in result["error"]
@@ -147,13 +165,16 @@ def test_create_query_result_success(client: HoneycombClient) -> None:
     mock_response.json.return_value = {"id": "result-456", "complete": False}
     mock_response.raise_for_status = MagicMock()
 
-    with patch("httpx.Client.post", return_value=mock_response) as mock_post:
-        result = client.create_query_result("query-123", limit=10)
-        # Check payload
-        args, kwargs = mock_post.call_args
-        assert args[0] == "/1/query_results/test-dataset"
-        assert kwargs["json"]["query_id"] == "query-123"
-        assert kwargs["json"]["limit"] == 10
+    mock_http = MagicMock()
+    mock_http.post.return_value = mock_response
+    client._client = mock_http
+
+    result = client.create_query_result("query-123", limit=10)
+    # Check payload
+    args, kwargs = mock_http.post.call_args
+    assert args[0] == "/1/query_results/test-dataset"
+    assert kwargs["json"]["query_id"] == "query-123"
+    assert kwargs["json"]["limit"] == 10
 
     assert result["success"] is True
     assert result["result"]["id"] == "result-456"
@@ -166,8 +187,11 @@ def test_create_query_result_http_error(client: HoneycombClient) -> None:
     error = httpx.HTTPStatusError("Err", request=MagicMock(), response=mock_response)
     mock_response.raise_for_status.side_effect = error
 
-    with patch("httpx.Client.post", return_value=mock_response):
-        result = client.create_query_result("q", limit=1)
+    mock_http = MagicMock()
+    mock_http.post.return_value = mock_response
+    client._client = mock_http
+
+    result = client.create_query_result("q", limit=1)
 
     assert result["success"] is False
     assert "HTTP 500: Internal Server Error" in result["error"]
@@ -182,9 +206,12 @@ def test_get_query_result_success(client: HoneycombClient) -> None:
     }
     mock_response.raise_for_status = MagicMock()
 
-    with patch("httpx.Client.get", return_value=mock_response) as mock_get:
-        result = client.get_query_result("result-456")
-        mock_get.assert_called_once_with("/1/query_results/test-dataset/result-456")
+    mock_http = MagicMock()
+    mock_http.get.return_value = mock_response
+    client._client = mock_http
+
+    result = client.get_query_result("result-456")
+    mock_http.get.assert_called_once_with("/1/query_results/test-dataset/result-456")
 
     assert result["success"] is True
     assert result["result"]["complete"] is True
@@ -197,16 +224,22 @@ def test_get_query_result_http_error(client: HoneycombClient) -> None:
     error = httpx.HTTPStatusError("Err", request=MagicMock(), response=mock_response)
     mock_response.raise_for_status.side_effect = error
 
-    with patch("httpx.Client.get", return_value=mock_response):
-        result = client.get_query_result("missing")
+    mock_http = MagicMock()
+    mock_http.get.return_value = mock_response
+    client._client = mock_http
+
+    result = client.get_query_result("missing")
 
     assert result["success"] is False
     assert "HTTP 404: Not Found" in result["error"]
 
 
 def test_get_query_result_generic_exception(client: HoneycombClient) -> None:
-    with patch("httpx.Client.get", side_effect=Exception("Timeout")):
-        result = client.get_query_result("result-id")
+    mock_http = MagicMock()
+    mock_http.get.side_effect = Exception("Timeout")
+    client._client = mock_http
+
+    result = client.get_query_result("result-id")
 
     assert result["success"] is False
     assert "Timeout" in result["error"]

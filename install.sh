@@ -138,7 +138,7 @@ fetch_release_json() {
   local api_url
 
   if [ "$INSTALL_CHANNEL" = "main" ]; then
-    api_url="https://api.github.com/repos/${REPO}/releases/tags/main"
+    api_url="https://api.github.com/repos/${REPO}/releases/tags/nightly"
   elif [ -n "$version" ]; then
     api_url="https://api.github.com/repos/${REPO}/releases/tags/v${version}"
   else

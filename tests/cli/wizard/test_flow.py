@@ -106,6 +106,52 @@ def test_run_wizard_no_saved_provider_shows_selection(monkeypatch, tmp_path) -> 
     assert exit_code == 0
 
 
+def test_run_wizard_shows_keyring_fix_steps_when_secure_storage_is_unavailable(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    select_responses = iter(["quickstart", "anthropic"])
+
+    def _mock_select(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(select_responses)
+        return m
+
+    def _mock_password(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = "secret-key"
+        return m
+
+    monkeypatch.setattr(flow, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(flow, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(
+        flow,
+        "save_llm_api_key",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("Secure local credential storage is unavailable on this machine.")
+        ),
+    )
+    monkeypatch.setattr(
+        flow,
+        "get_keyring_setup_instructions",
+        lambda _env_var: (
+            "Current keyring backend: keyring.backends.fail.Keyring.",
+            "Install it first: sudo apt update && sudo apt install -y gnome-keyring dbus-user-session",
+            "Start a D-Bus shell: dbus-run-session -- sh",
+        ),
+    )
+
+    exit_code = flow.run_wizard()
+
+    assert exit_code == 1
+    output = capsys.readouterr().out
+    assert "OpenSRE could not save your API key to the local system keychain." in output
+    assert "Install it first: sudo apt update && sudo apt install -y gnome-keyring" in output
+    assert "dbus-user-session" in output
+    assert "Start a D-Bus shell: dbus-run-session -- sh" in output
+
+
 def test_run_wizard_configures_optional_integrations(monkeypatch, tmp_path, capsys) -> None:
     select_responses = iter(["quickstart", "anthropic", "grafana"])
     saved_integrations: list[tuple[str, dict]] = []

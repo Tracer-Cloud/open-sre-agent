@@ -85,7 +85,7 @@ class CliSandbox:
 
     @property
     def integration_store_path(self) -> Path:
-        return self.home / ".tracer" / "integrations.json"
+        return self.home / ".opensre" / "integrations.json"
 
     @property
     def wizard_store_path(self) -> Path:
@@ -140,6 +140,17 @@ def _opensre_executable() -> Path:
     raise AssertionError("pytest.skip should have interrupted control flow")
 
 
+def _is_python_script(path: Path) -> bool:
+    """Return True when an executable should be launched via Python."""
+    if path.suffix in {".py", ".pyw"}:
+        return True
+    try:
+        first_line = path.read_text(encoding="utf-8", errors="ignore").splitlines()[0]
+    except (OSError, IndexError):
+        return False
+    return first_line.startswith("#!") and "python" in first_line.lower()
+
+
 def _cli_env(home: Path, project_env_path: Path) -> dict[str, str]:
     env = os.environ.copy()
     for key in _CLEARED_ENV_KEYS:
@@ -185,7 +196,7 @@ def _run_cli(
 ) -> CliResult:
     executable = _opensre_executable()
     command = [str(executable), *args]
-    if executable.suffix != ".exe":
+    if executable.suffix != ".exe" and _is_python_script(executable):
         command = [sys.executable, str(executable), *args]
 
     env = sandbox.env.copy()
@@ -259,7 +270,7 @@ def _run_cli_pty(
 ) -> CliResult:
     executable = _opensre_executable()
     command = [str(executable), *args]
-    if executable.suffix != ".exe":
+    if executable.suffix != ".exe" and _is_python_script(executable):
         command = [sys.executable, str(executable), *args]
 
     master_fd, slave_fd = os.openpty()
@@ -515,7 +526,7 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
 def test_onboard_interactive_smoke_codex(cli_sandbox: CliSandbox) -> None:
     """End-to-end PTY: quickstart → Codex CLI path → repick when unauthenticated.
 
-    Selects ``OpenAI Codex CLI`` (five ``j`` presses). With a fresh HOME the CLI
+    Selects ``OpenAI Codex CLI`` (six ``j`` presses). With a fresh HOME the CLI
     is not logged in, so the wizard repicks the default provider (Anthropic) and
     uses a placeholder API key. Requires ``codex`` on PATH; skips when absent.
     """
@@ -524,7 +535,7 @@ def test_onboard_interactive_smoke_codex(cli_sandbox: CliSandbox) -> None:
         "onboard",
         actions=[
             PtyAction(expect="How do you want to get started?", send=b"\r"),
-            PtyAction(expect="Choose your LLM provider", send=b"\r", stagger_j=5),
+            PtyAction(expect="Choose your LLM provider", send=b"\r", stagger_j=6),
             # Fresh HOME in CliSandbox has no Codex auth: repick to Anthropic to finish onboarding.
             PtyAction(
                 expect="OpenAI Codex CLI requires login. What next?",

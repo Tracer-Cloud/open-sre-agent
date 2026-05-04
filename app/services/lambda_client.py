@@ -1,6 +1,7 @@
 """Lambda client for function inspection and log retrieval."""
 
 import base64
+import json
 from contextlib import suppress
 from io import BytesIO
 from typing import Any
@@ -324,8 +325,6 @@ def invoke_function(
     credentials_error = require_aws_credentials(context="lambda_client.invoke_function")
     if credentials_error:
         return credentials_error
-
-    import json
 
     try:
         kwargs = {

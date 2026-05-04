@@ -9,11 +9,18 @@ from datetime import UTC, datetime
 
 import boto3
 from botocore.config import Config
+from botocore.exceptions import ClientError
 
 from tests.utils.cloudwatch_helpers import (
     build_cloudwatch_console_url,
     verify_logs_in_cloudwatch,
 )
+
+
+def _log_group_prefix() -> str:
+    """Return the CloudWatch log group prefix, allowing staged migration overrides."""
+    value = os.getenv("CLOUDWATCH_LOG_GROUP_PREFIX", "/opensre/ai-investigations").strip()
+    return value.rstrip("/") or "/opensre/ai-investigations"
 
 
 def _build_logs_client(region: str):
@@ -47,24 +54,31 @@ def send_to_cloudwatch(
     message: str,
     region: str = "us-east-1",
     client=None,
-) -> None:
+) -> bool:
     """Send log message to AWS CloudWatch Logs (stateless)."""
     from contextlib import suppress
 
     cw_client = client or _build_logs_client(region)
 
-    with suppress(cw_client.exceptions.ResourceAlreadyExistsException):
-        cw_client.create_log_group(logGroupName=log_group)
+    try:
+        with suppress(cw_client.exceptions.ResourceAlreadyExistsException):
+            cw_client.create_log_group(logGroupName=log_group)
 
-    with suppress(cw_client.exceptions.ResourceAlreadyExistsException):
-        cw_client.create_log_stream(logGroupName=log_group, logStreamName=log_stream)
+        with suppress(cw_client.exceptions.ResourceAlreadyExistsException):
+            cw_client.create_log_stream(logGroupName=log_group, logStreamName=log_stream)
 
-    timestamp_ms = int(datetime.now(UTC).timestamp() * 1000)
-    cw_client.put_log_events(
-        logGroupName=log_group,
-        logStreamName=log_stream,
-        logEvents=[{"timestamp": timestamp_ms, "message": message}],
-    )
+        timestamp_ms = int(datetime.now(UTC).timestamp() * 1000)
+        cw_client.put_log_events(
+            logGroupName=log_group,
+            logStreamName=log_stream,
+            logEvents=[{"timestamp": timestamp_ms, "message": message}],
+        )
+        return True
+    except ClientError as err:
+        error_code = err.response.get("Error", {}).get("Code", "")
+        if error_code in {"AccessDenied", "AccessDeniedException", "UnauthorizedOperation"}:
+            return False
+        raise
 
 
 def build_error_log_message(
@@ -101,7 +115,7 @@ def log_error_to_cloudwatch(
         error_traceback: Full traceback
         pipeline_name: Pipeline name
         run_id: Run identifier
-        test_name: Test/demo name (constructs log group: /tracer/ai-investigations/{test_name})
+        test_name: Test/demo name (constructs log group: <prefix>/{test_name})
         region: AWS region
 
     Returns:
@@ -109,7 +123,7 @@ def log_error_to_cloudwatch(
     """
     error_message = str(error)
     log_stream = run_id
-    log_group = f"/tracer/ai-investigations/{test_name}"
+    log_group = f"{_log_group_prefix()}/{test_name}"
 
     log_message = build_error_log_message(
         error_message=error_message,
@@ -119,10 +133,10 @@ def log_error_to_cloudwatch(
     )
 
     cw_client = _build_logs_client(region)
-    send_to_cloudwatch(log_group, log_stream, log_message, region, client=cw_client)
+    logs_written = send_to_cloudwatch(log_group, log_stream, log_message, region, client=cw_client)
 
     logs_present = False
-    if _verify_logs_enabled():
+    if logs_written and _verify_logs_enabled():
         logs_present = verify_logs_in_cloudwatch(cw_client, log_group, log_stream)
 
     cloudwatch_url = build_cloudwatch_console_url(log_group, log_stream, region)
@@ -132,5 +146,6 @@ def log_error_to_cloudwatch(
         "log_stream": log_stream,
         "cloudwatch_url": cloudwatch_url,
         "error_message": error_message,
+        "logs_written": logs_written,
         "logs_verified": logs_present,
     }

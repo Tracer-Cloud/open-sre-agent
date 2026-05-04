@@ -47,18 +47,76 @@ def _claims_lines(claims: list[Any], key: str = "claim") -> str:
 
 def extract_judge_json_from_response(text: str) -> dict[str, Any]:
     text = text.strip()
-    fence = re.search(r"```(?:json)?\s*(\{.*\})\s*```", text, re.DOTALL)
-    if fence:
-        text = fence.group(1)
-    start = text.find("{")
-    end = text.rfind("}")
-    if start == -1 or end == -1 or end <= start:
+
+    fences = re.findall(r"```(?:json)?\s*([\s\S]*?)\s*```", text, re.DOTALL)
+    if fences:
+        for fence_candidate in reversed(fences):
+            fence_candidate = fence_candidate.strip()
+            try:
+                parsed_fence = json.loads(fence_candidate)
+            except json.JSONDecodeError:
+                continue
+
+            if isinstance(parsed_fence, dict):
+                return cast(dict[str, Any], parsed_fence)
+
+            if isinstance(parsed_fence, list):
+                continue
+
+    try:
+        raw = json.loads(text)
+    except json.JSONDecodeError:
+        raw = None
+
+    if isinstance(raw, dict):
+        return cast(dict[str, Any], raw)
+    if isinstance(raw, list):
+        msg = "Judge response JSON must be an object"
+        raise ValueError(msg)
+
+    obj_start = text.find("{")
+    obj_end = text.rfind("}")
+    arr_start = text.find("[")
+    arr_end = text.rfind("]")
+
+    has_obj = obj_start != -1 and obj_end != -1 and obj_end > obj_start
+    has_arr = arr_start != -1 and arr_end != -1 and arr_end > arr_start
+
+    # If an array span exists and fully contains the object span,
+    # the top-level value is an array — reject it.
+    if has_arr and has_obj and arr_start < obj_start and arr_end > obj_end:
+        try:
+            arr_candidate = json.loads(text[arr_start : arr_end + 1])
+        except json.JSONDecodeError:
+            arr_candidate = None
+
+        if isinstance(arr_candidate, list):
+            msg = "Judge response JSON must be an object"
+            raise ValueError(msg)
+
+        if arr_candidate is None:
+            for i, ch in enumerate(text):
+                if ch == "[" and i < obj_start:
+                    inner_arr_end = text.rfind("]", obj_end)
+                    if inner_arr_end == -1:
+                        continue
+                    try:
+                        inner = json.loads(text[i : inner_arr_end + 1])
+                    except json.JSONDecodeError:
+                        continue
+                    if isinstance(inner, list):
+                        msg = "Judge response JSON must be an object"
+                        raise ValueError(msg)
+
+    if not has_obj:
         msg = "Judge response did not contain a JSON object"
         raise ValueError(msg)
-    raw = json.loads(text[start : end + 1])
+
+    raw = json.loads(text[obj_start : obj_end + 1])
     if not isinstance(raw, dict):
         msg = "Judge response JSON must be an object"
         raise ValueError(msg)
+
     return cast(dict[str, Any], raw)
 
 

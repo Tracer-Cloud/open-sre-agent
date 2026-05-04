@@ -21,7 +21,11 @@ from app.cli.wizard.prompts import select as select_prompt
 from app.cli.wizard.store import get_store_path, load_local_config, save_local_config
 from app.integrations.llm_cli.binary_resolver import diagnose_binary_path
 from app.integrations.store import get_integration, remove_integration, upsert_integration
-from app.llm_credentials import has_llm_api_key, save_llm_api_key
+from app.llm_credentials import (
+    get_keyring_setup_instructions,
+    has_llm_api_key,
+    save_llm_api_key,
+)
 
 _console = Console()
 DEFAULT_GITHUB_MCP_URL = "https://api.githubcopilot.com/mcp/"
@@ -332,6 +336,11 @@ def _persist_llm_api_key(env_var: str, value: str) -> bool:
         save_llm_api_key(env_var, value)
     except RuntimeError as exc:
         _console.print(f"[red]{exc}[/]")
+        _console.print(
+            "[yellow]OpenSRE could not save your API key to the local system keychain.[/]"
+        )
+        for line in get_keyring_setup_instructions(env_var):
+            _console.print(f"[dim]{line}[/]")
         return False
     return True
 

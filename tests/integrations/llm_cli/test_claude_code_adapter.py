@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from app.integrations.llm_cli.binary_resolver import npm_prefix_bin_dirs
 from app.integrations.llm_cli.claude_code import (
+    _PROBE_TIMEOUT_SEC,
     ClaudeCodeAdapter,
     _classify_claude_code_auth,
     _fallback_claude_code_paths,
+    _probe_cli_auth,
 )
 
 
@@ -45,7 +48,7 @@ def test_classify_auth_no_credentials_linux() -> None:
 
 
 def test_classify_auth_no_credentials_macos_returns_none() -> None:
-    """On macOS, no env var and no file → None (Keychain may still hold OAuth)."""
+    """On macOS with no binary, no file, no API key → None (can't verify without binary)."""
     with (
         patch.dict(os.environ, {"ANTHROPIC_API_KEY": ""}, clear=False),
         patch("app.integrations.llm_cli.claude_code.sys.platform", "darwin"),
@@ -56,7 +59,6 @@ def test_classify_auth_no_credentials_macos_returns_none() -> None:
         mock_path.home.return_value.__truediv__.return_value.__truediv__.return_value = mock_creds
         logged_in, detail = _classify_claude_code_auth()
     assert logged_in is None
-    assert "Keychain" in detail
 
 
 def test_classify_auth_credentials_file_present(tmp_path: Path) -> None:
@@ -90,6 +92,152 @@ def test_classify_auth_credentials_file_unreadable() -> None:
     assert logged_in is None
 
 
+def test_classify_auth_api_key_not_blocked_by_unreadable_creds() -> None:
+    """ANTHROPIC_API_KEY must succeed even when credentials file raises OSError."""
+    with (
+        patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-test"}, clear=False),
+        patch("app.integrations.llm_cli.claude_code.Path") as mock_path,
+    ):
+        mock_creds = MagicMock()
+        mock_creds.exists.return_value = True
+        mock_creds.stat.side_effect = OSError("permission denied")
+        mock_path.home.return_value.__truediv__.return_value.__truediv__.return_value = mock_creds
+        logged_in, detail = _classify_claude_code_auth()
+
+    assert logged_in is True
+    assert "ANTHROPIC_API_KEY" in detail
+
+
+# ---------------------------------------------------------------------------
+# CLI auth probe (_probe_cli_auth)
+# ---------------------------------------------------------------------------
+
+
+@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+def test_probe_cli_auth_subscription(mock_run: MagicMock) -> None:
+    """Subscription login: loggedIn=true, no apiKeySource → subscription detail."""
+    m = MagicMock()
+    m.returncode = 0
+    m.stdout = '{"loggedIn": true, "email": "user@example.com"}\n'
+    m.stderr = ""
+    mock_run.return_value = m
+    logged_in, detail = _probe_cli_auth("/usr/bin/claude")
+    assert logged_in is True
+    assert "subscription" in detail
+    assert "user@example.com" in detail
+
+
+@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+def test_probe_cli_auth_api_key(mock_run: MagicMock) -> None:
+    """API key auth: loggedIn=true, apiKeySource present → API key detail."""
+    m = MagicMock()
+    m.returncode = 0
+    m.stdout = '{"loggedIn": true, "apiKeySource": "ANTHROPIC_API_KEY"}\n'
+    m.stderr = ""
+    mock_run.return_value = m
+    logged_in, detail = _probe_cli_auth("/usr/bin/claude")
+    assert logged_in is True
+    assert "ANTHROPIC_API_KEY" in detail
+
+
+@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+def test_probe_cli_auth_not_logged_in(mock_run: MagicMock) -> None:
+    m = MagicMock()
+    m.returncode = 0
+    m.stdout = '{"loggedIn": false}\n'
+    m.stderr = ""
+    mock_run.return_value = m
+    logged_in, detail = _probe_cli_auth("/usr/bin/claude")
+    assert logged_in is False
+    assert "Not authenticated" in detail
+
+
+@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+def test_probe_cli_auth_nonzero_exit(mock_run: MagicMock) -> None:
+    """Non-zero exit → None (probe failure, not confirmed unauthenticated)."""
+    m = MagicMock()
+    m.returncode = 1
+    m.stdout = ""
+    m.stderr = "unknown command 'auth'"
+    mock_run.return_value = m
+    logged_in, detail = _probe_cli_auth("/usr/bin/claude")
+    assert logged_in is None
+    assert "failed" in detail
+
+
+@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+def test_probe_cli_auth_timeout(mock_run: MagicMock) -> None:
+    import subprocess
+
+    mock_run.side_effect = subprocess.TimeoutExpired(
+        cmd=["/usr/bin/claude", "auth", "status"], timeout=_PROBE_TIMEOUT_SEC
+    )
+    logged_in, detail = _probe_cli_auth("/usr/bin/claude")
+    assert logged_in is None
+    assert "timed out" in detail
+
+
+@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+def test_probe_cli_auth_os_error(mock_run: MagicMock) -> None:
+    mock_run.side_effect = OSError("permission denied")
+    logged_in, detail = _probe_cli_auth("/usr/bin/claude")
+    assert logged_in is None
+    assert "permission denied" in detail
+
+
+@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+def test_probe_cli_auth_non_json_exit_zero(mock_run: MagicMock) -> None:
+    """Older CLI versions that output non-JSON on exit 0 are treated as authenticated."""
+    m = MagicMock()
+    m.returncode = 0
+    m.stdout = "Logged in\n"
+    m.stderr = ""
+    mock_run.return_value = m
+    logged_in, detail = _probe_cli_auth("/usr/bin/claude")
+    assert logged_in is True
+    assert "CLI" in detail
+
+
+@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+def test_detect_subscription_authenticated(mock_which: MagicMock, mock_run: MagicMock) -> None:
+    """detect() returns logged_in=True via subscription when binary is available."""
+    mock_which.return_value = "/usr/bin/claude"
+
+    auth_proc = MagicMock()
+    auth_proc.returncode = 0
+    auth_proc.stdout = '{"loggedIn": true, "email": "user@example.com"}\n'
+    auth_proc.stderr = ""
+    mock_run.side_effect = [_version_proc(), auth_proc]
+
+    with patch.dict(os.environ, {"ANTHROPIC_API_KEY": ""}, clear=False):
+        probe = ClaudeCodeAdapter().detect()
+
+    assert probe.installed is True
+    assert probe.logged_in is True
+    assert "subscription" in probe.detail
+
+
+@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+def test_detect_api_key_authenticated(mock_which: MagicMock, mock_run: MagicMock) -> None:
+    """detect() returns logged_in=True via API key when binary reports apiKeySource."""
+    mock_which.return_value = "/usr/bin/claude"
+
+    auth_proc = MagicMock()
+    auth_proc.returncode = 0
+    auth_proc.stdout = '{"loggedIn": true, "apiKeySource": "ANTHROPIC_API_KEY"}\n'
+    auth_proc.stderr = ""
+    mock_run.side_effect = [_version_proc(), auth_proc]
+
+    with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-test"}, clear=False):
+        probe = ClaudeCodeAdapter().detect()
+
+    assert probe.installed is True
+    assert probe.logged_in is True
+    assert "ANTHROPIC_API_KEY" in probe.detail
+
+
 # ---------------------------------------------------------------------------
 # detect()
 # ---------------------------------------------------------------------------
@@ -103,11 +251,27 @@ def _version_proc() -> MagicMock:
     return m
 
 
+def _auth_status_proc(logged_in: bool, api_key_source: str = "", email: str = "") -> MagicMock:
+    m = MagicMock()
+    m.returncode = 0
+    data: dict = {"loggedIn": logged_in}
+    if api_key_source:
+        data["apiKeySource"] = api_key_source
+    if email:
+        data["email"] = email
+    m.stdout = json.dumps(data) + "\n"
+    m.stderr = ""
+    return m
+
+
 @patch("app.integrations.llm_cli.claude_code.subprocess.run")
 @patch("app.integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_logged_in_via_api_key(mock_which: MagicMock, mock_run: MagicMock) -> None:
     mock_which.return_value = "/usr/bin/claude"
-    mock_run.return_value = _version_proc()
+    mock_run.side_effect = [
+        _version_proc(),
+        _auth_status_proc(True, api_key_source="ANTHROPIC_API_KEY"),
+    ]
 
     with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-test"}, clear=False):
         probe = ClaudeCodeAdapter().detect()
@@ -120,19 +284,12 @@ def test_detect_logged_in_via_api_key(mock_which: MagicMock, mock_run: MagicMock
 
 @patch("app.integrations.llm_cli.claude_code.subprocess.run")
 @patch("app.integrations.llm_cli.binary_resolver.shutil.which")
-def test_detect_not_authenticated_linux(mock_which: MagicMock, mock_run: MagicMock) -> None:
-    """On Linux, missing creds file with no env var produces definitive logged_in=False."""
+def test_detect_not_authenticated(mock_which: MagicMock, mock_run: MagicMock) -> None:
+    """When claude auth status reports not logged in, detect() returns logged_in=False."""
     mock_which.return_value = "/usr/bin/claude"
-    mock_run.return_value = _version_proc()
+    mock_run.side_effect = [_version_proc(), _auth_status_proc(False)]
 
-    with (
-        patch.dict(os.environ, {"ANTHROPIC_API_KEY": ""}, clear=False),
-        patch("app.integrations.llm_cli.claude_code.sys.platform", "linux"),
-        patch("app.integrations.llm_cli.claude_code.Path") as mock_path,
-    ):
-        mock_creds = MagicMock()
-        mock_creds.exists.return_value = False
-        mock_path.home.return_value.__truediv__.return_value.__truediv__.return_value = mock_creds
+    with patch.dict(os.environ, {"ANTHROPIC_API_KEY": ""}, clear=False):
         probe = ClaudeCodeAdapter().detect()
 
     assert probe.installed is True

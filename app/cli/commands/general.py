@@ -21,6 +21,16 @@ from app.cli.support.exit_codes import ERROR, SUCCESS
 from app.version import get_version
 
 
+@click.command(name="uninstall")
+@click.option("--yes", "-y", "local_yes", is_flag=True, help="Skip the confirmation prompt.")
+def uninstall_command(local_yes: bool) -> None:
+    """Remove opensre and all local data from this machine."""
+    from app.cli.support.uninstall import run_uninstall
+
+    capture_cli_invoked()
+    raise SystemExit(run_uninstall(yes=local_yes or is_yes()))
+
+
 @click.command(name="update")
 @click.option(
     "--check",

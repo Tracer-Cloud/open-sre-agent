@@ -104,7 +104,8 @@ curl -fsSL https://install.opensre.com | bash -s -- --main
 ```
 
 ```bash
-brew install Tracer-Cloud/opensre/opensre
+brew tap tracer-cloud/tap
+brew install tracer-cloud/tap/opensre
 ```
 
 ```powershell
@@ -124,6 +125,7 @@ pipx install opensre
 opensre onboard
 opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
 opensre update
+opensre uninstall   # remove opensre and all local data
 ```
 
 ### Interactive mode
@@ -1178,6 +1180,80 @@ Thanks goes to these amazing people:
             <img src="https://avatars.githubusercontent.com/u/169879837?v=4" width="100" alt="AniketR10"/>
             <br />
             <sub><b>AniketR10</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/Jai0401">
+            <img src="https://avatars.githubusercontent.com/u/112328542?v=4" width="100" alt="Jai0401"/>
+            <br />
+            <sub><b>Jai0401</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/shivambehl">
+            <img src="https://avatars.githubusercontent.com/u/41379568?v=4" width="100" alt="shivambehl"/>
+            <br />
+            <sub><b>shivambehl</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/retr0-kernel">
+            <img src="https://avatars.githubusercontent.com/u/82054542?v=4" width="100" alt="retr0-kernel"/>
+            <br />
+            <sub><b>retr0-kernel</b></sub>
+        </a>
+    </td>
+		</tr>
+		<tr>
+            <td align="center">
+        <a href="https://github.com/IsaacOdeimor">
+            <img src="https://avatars.githubusercontent.com/u/218982227?v=4" width="100" alt="IsaacOdeimor"/>
+            <br />
+            <sub><b>IsaacOdeimor</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/RajGajjar-01">
+            <img src="https://avatars.githubusercontent.com/u/153660066?v=4" width="100" alt="RajGajjar-01"/>
+            <br />
+            <sub><b>RajGajjar-01</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/4arjun">
+            <img src="https://avatars.githubusercontent.com/u/144534911?v=4" width="100" alt="4arjun"/>
+            <br />
+            <sub><b>4arjun</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/cloudenochcsis">
+            <img src="https://avatars.githubusercontent.com/u/155973884?v=4" width="100" alt="cloudenochcsis"/>
+            <br />
+            <sub><b>cloudenochcsis</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/Thibault00">
+            <img src="https://avatars.githubusercontent.com/u/84420566?v=4" width="100" alt="Thibault00"/>
+            <br />
+            <sub><b>Thibault00</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/umeraamir09">
+            <img src="https://avatars.githubusercontent.com/u/130839691?v=4" width="100" alt="umeraamir09"/>
+            <br />
+            <sub><b>umeraamir09</b></sub>
+        </a>
+    </td>
+		</tr>
+		<tr>
+            <td align="center">
+        <a href="https://github.com/aksKrIITK">
+            <img src="https://avatars.githubusercontent.com/u/196282905?v=4" width="100" alt="aksKrIITK"/>
+            <br />
+            <sub><b>aksKrIITK</b></sub>
         </a>
     </td>
 		</tr>

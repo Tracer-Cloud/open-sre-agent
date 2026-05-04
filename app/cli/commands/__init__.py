@@ -10,6 +10,7 @@ from app.cli.commands.doctor import doctor_command
 from app.cli.commands.general import (
     health_command,
     investigate_command,
+    uninstall_command,
     update_command,
     version_command,
 )
@@ -31,6 +32,7 @@ _COMMANDS: tuple[click.Command, ...] = (
     health_command,
     doctor_command,
     update_command,
+    uninstall_command,
     version_command,
 )
 

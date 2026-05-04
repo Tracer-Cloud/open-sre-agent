@@ -15,22 +15,7 @@ _ASCII_HEADER = """\
 | |_| |  __/| |___| |\\  |___) |  _ <| |___
  \\___/|_|   |_____|_| \\_|____/|_| \\_\\_____|"""
 
-_HELP_COMMANDS: tuple[tuple[str, str], ...] = (
-    ("agent", "Launch the interactive SRE agent terminal."),
-    ("onboard", "Run the interactive onboarding wizard."),
-    ("investigate", "Run an RCA investigation against an alert payload."),
-    ("deploy", "Deploy OpenSRE to a cloud environment (EC2)."),
-    ("remote", "Connect to remote agents and hosted service ops."),
-    ("tests", "Browse and run inventoried tests from the terminal."),
-    ("integrations", "Manage local integration credentials."),
-    ("guardrails", "Manage sensitive information guardrail rules."),
-    ("health", "Check integration and agent setup status."),
-    ("doctor", "Run a full environment diagnostic."),
-    ("update", "Check for a newer version and update if one is available."),
-    ("version", "Print detailed version, Python and OS info."),
-)
-
-_LANDING_COMMANDS: tuple[tuple[str, str], ...] = (
+_LANDING_EXAMPLES: tuple[tuple[str, str], ...] = (
     ("opensre agent", "Launch the interactive SRE agent terminal"),
     ("opensre onboard", "Configure LLM provider and integrations"),
     ("opensre investigate -i alert.json", "Run RCA against an alert payload"),
@@ -56,6 +41,16 @@ _SHORT_OPTIONS: tuple[tuple[str, str], ...] = (
 )
 
 
+def _commands_from_group(group: click.Group) -> tuple[tuple[str, str], ...]:
+    ctx = click.Context(group)
+    rows = []
+    for name in group.list_commands(ctx):
+        cmd = group.get_command(ctx, name)
+        if cmd is not None and not cmd.hidden:
+            rows.append((name, cmd.get_short_help_str(limit=200)))
+    return tuple(rows)
+
+
 def _render_usage(console: Console) -> None:
     console.print(
         Text.assemble(("  Usage: "), ("opensre", "bold white"), (" [OPTIONS] COMMAND [ARGS]..."))
@@ -74,13 +69,14 @@ def _render_rows(
         console.print(Text.assemble(("    ", ""), (f"{label:<{width}}", "bold cyan"), description))
 
 
-def render_help() -> None:
-    """Render the root help view."""
+def render_help(group: click.Group) -> None:
+    """Render the root help view, deriving the command list from the live Click group."""
     console = Console(highlight=False)
+    commands = _commands_from_group(group)
     console.print()
     _render_usage(console)
     console.print()
-    _render_rows(console, title="Commands", rows=_HELP_COMMANDS, width=16)
+    _render_rows(console, title="Commands", rows=commands, width=16)
     console.print()
     _render_rows(console, title="Options", rows=_SHORT_OPTIONS, width=16)
     console.print()
@@ -102,7 +98,7 @@ def render_landing() -> None:
     console.print()
     _render_usage(console)
     console.print()
-    _render_rows(console, title="Quick start", rows=_LANDING_COMMANDS, width=42)
+    _render_rows(console, title="Quick start", rows=_LANDING_EXAMPLES, width=42)
     console.print()
     _render_rows(console, title="Options", rows=_SHORT_OPTIONS, width=42)
     console.print()
@@ -111,5 +107,6 @@ def render_landing() -> None:
 class RichGroup(click.Group):
     """Click group with a custom Rich-powered help screen."""
 
-    def format_help(self, _ctx: click.Context, _formatter: click.HelpFormatter) -> None:
-        render_help()
+    def format_help(self, ctx: click.Context, _formatter: click.HelpFormatter) -> None:
+        assert isinstance(ctx.command, click.Group)
+        render_help(ctx.command)

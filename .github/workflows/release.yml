@@ -71,7 +71,7 @@ jobs:
             fi
 
             echo "channel=main" >> "$GITHUB_OUTPUT"
-            echo "tag_name=main" >> "$GITHUB_OUTPUT"
+            echo "tag_name=nightly" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -395,7 +395,8 @@ jobs:
             echo "### Homebrew (macOS / Linux)"
             echo
             echo '```bash'
-            echo "brew install ${{ github.repository }}/opensre"
+            echo 'brew tap tracer-cloud/tap'
+            echo 'brew install tracer-cloud/tap/opensre'
             echo '```'
             echo
             echo "### PowerShell (Windows)"
@@ -496,14 +497,14 @@ jobs:
             echo '```'
           } > MAIN_RELEASE_NOTES.md
 
-      - name: Move main tag to the latest commit
+      - name: Move nightly tag to the latest commit
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -f main "$GITHUB_SHA"
-          git push origin refs/tags/main --force
+          git tag -f nightly "$GITHUB_SHA"
+          git push origin refs/tags/nightly --force
 
       - name: Publish rolling main release
         env:
@@ -512,16 +513,16 @@ jobs:
         run: |
           set -euo pipefail
 
-          if gh release view main --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            gh release upload main main-release-assets/* --repo "${{ github.repository }}" --clobber
-            gh release edit main \
+          if gh release view nightly --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release upload nightly main-release-assets/* --repo "${{ github.repository }}" --clobber
+            gh release edit nightly \
               --repo "${{ github.repository }}" \
               --title "Main" \
               --notes-file MAIN_RELEASE_NOTES.md
             exit 0
           fi
 
-          gh release create main \
+          gh release create nightly \
             main-release-assets/* \
             --repo "${{ github.repository }}" \
             --target "$GITHUB_SHA" \

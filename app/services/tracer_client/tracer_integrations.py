@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass
 from typing import Any
@@ -65,8 +66,6 @@ class TracerIntegrationsMixin(TracerClientBase):
         for integration in integrations:
             creds = integration.get("credentials", {})
             if isinstance(creds, str):
-                import json
-
                 try:
                     integration["credentials"] = json.loads(creds)
                 except (json.JSONDecodeError, TypeError):
@@ -98,8 +97,6 @@ class TracerIntegrationsMixin(TracerClientBase):
 
         credentials = integration.get("credentials", {})
         if isinstance(credentials, str):
-            import json
-
             try:
                 credentials = json.loads(credentials)
             except (json.JSONDecodeError, TypeError):

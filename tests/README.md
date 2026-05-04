@@ -1,5 +1,16 @@
 # Tests Catalog Naming Conventions
 
+## Quick-start commands
+
+| Goal | Command | When to use it |
+|---|---|---|
+| Run the default unit suite with coverage | `make test-cov` | First thing to run locally; no live infrastructure required. |
+| Verify all integration configs and clients | `make verify-integrations` | After adding or changing an integration. |
+| Run a live RCA end-to-end test | `make test-rca` | When you need to validate a full investigation against real services. |
+| Run a single RCA fixture | `make test-rca FILE=<name>` | When iterating on one specific alert scenario. |
+| Run the full suite including e2e | `make test-full` | Pre-release or CI; requires live infrastructure. |
+| Run synthetic scenarios (no live infra) | `make test-synthetic` | When testing scenario logic without external service dependencies. |
+
 This document defines semantic naming for the test catalog so test type and environment boundaries are obvious at a glance.
 
 ## Top-level taxonomy

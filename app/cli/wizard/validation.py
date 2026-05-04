@@ -54,6 +54,10 @@ def _get_provider_base_url(provider_value: str) -> str | None:
         from app.config import OPENROUTER_BASE_URL
 
         return OPENROUTER_BASE_URL
+    if provider_value == "requesty":
+        from app.config import REQUESTY_BASE_URL
+
+        return REQUESTY_BASE_URL
     if provider_value == "gemini":
         from app.config import GEMINI_BASE_URL
 
