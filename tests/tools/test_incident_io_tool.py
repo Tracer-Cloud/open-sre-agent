@@ -43,7 +43,7 @@ def test_incident_io_tool_run_list(tool, monkeypatch):
     result = tool.run(api_key="test-key", action="list", status="open")
 
     mock_make_client.assert_called_once_with("test-key")
-    mock_client.list_incidents.assert_called_once_with(status="open")
+    mock_client.list_incidents.assert_called_once_with(status="open", page_size=None, after=None)
     assert result["success"] is True
     assert result["action"] == "list"
     assert result["total"] == 1

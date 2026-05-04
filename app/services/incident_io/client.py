@@ -70,6 +70,8 @@ class IncidentIoClient:
     def list_incidents(
         self,
         status: str = "open",
+        page_size: int | None = None,
+        after: str | None = None,
     ) -> dict[str, Any]:
         """List incident.io incidents, optionally filtered by status.
         Status can be e.g. open, closed, or omitted.
@@ -77,6 +79,10 @@ class IncidentIoClient:
         params: dict[str, Any] = {}
         if status:
             params["status[in]"] = status
+        if page_size is not None:
+            params["page_size"] = page_size
+        if after:
+            params["after"] = after
 
         try:
             resp = self._get_client().get("/v2/incidents", params=params)
@@ -104,7 +110,10 @@ class IncidentIoClient:
                     }
                 )
 
-            return {"success": True, "incidents": incidents, "total": len(incidents)}
+            result = {"success": True, "incidents": incidents, "total": len(incidents)}
+            if "pagination_meta" in data:
+                result["pagination_meta"] = data["pagination_meta"]
+            return result
         except httpx.HTTPStatusError as e:
             logger.warning(
                 "[incident_io] List incidents HTTP failure status=%s",

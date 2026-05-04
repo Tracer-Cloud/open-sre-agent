@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import httpx
 import pytest
 
 from app.services.incident_io.client import make_incident_io_client

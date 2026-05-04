@@ -39,6 +39,14 @@ class IncidentIoIncidentsTool(BaseTool):
                 "default": "open",
                 "description": "Incident status filter for 'list' action (e.g. open, closed, or empty for all)",
             },
+            "page_size": {
+                "type": "integer",
+                "description": "Number of incidents to return per page (for 'list' action)",
+            },
+            "after": {
+                "type": "string",
+                "description": "Pagination cursor to fetch the next page of incidents (for 'list' action)",
+            },
             "incident_id": {
                 "type": "string",
                 "description": "Incident ID required for 'add_timeline' or 'get' actions",
@@ -77,6 +85,8 @@ class IncidentIoIncidentsTool(BaseTool):
         incident_id: str = "",
         title: str = "",
         comment: str = "",
+        page_size: int | None = None,
+        after: str | None = None,
         **_kwargs: Any,
     ) -> dict[str, Any]:
         client = make_incident_io_client(api_key)
@@ -108,7 +118,7 @@ class IncidentIoIncidentsTool(BaseTool):
 
             else:
                 # default action == "list"
-                result = client.list_incidents(status=status)
+                result = client.list_incidents(status=status, page_size=page_size, after=after)
                 result["action"] = action
                 return result
 
