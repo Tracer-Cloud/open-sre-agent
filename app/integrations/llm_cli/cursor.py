@@ -124,9 +124,7 @@ class CursorAdapter:
 
         elif cursor_api_key_set:
             logged_in = True
-            detail = (
-                "Auth status unclear, headless auth via environment is configured."
-            )
+            detail = "Auth status unclear, headless auth via environment is configured."
 
         else:
             logged_in = None
