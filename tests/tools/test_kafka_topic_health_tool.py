@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
+
 from app.tools.KafkaTopicHealthTool import get_kafka_topic_health
 from tests.tools.conftest import BaseToolContract
 
@@ -191,6 +193,16 @@ class TestKafkaTopicHealthRun:
         assert len(under_rep) == 1
         assert under_rep[0]["id"] == 2
 
+    def test_happy_path_forwards_limit_arg(self) -> None:
+        with patch(
+            "app.tools.KafkaTopicHealthTool.get_topic_health",
+            return_value=_TOPIC_HEALTH_RESPONSE,
+        ) as mock_fn:
+            get_kafka_topic_health(bootstrap_servers="broker1:9092", limit=5)
+
+        _, call_kwargs = mock_fn.call_args
+        assert call_kwargs.get("limit") == 5
+
     def test_happy_path_specific_topic_forwards_topic_arg(self) -> None:
         single_topic_response = {
             "source": "kafka",
@@ -233,7 +245,7 @@ class TestKafkaTopicHealthRun:
         with patch(
             "app.tools.KafkaTopicHealthTool.get_topic_health",
             return_value=_TOPIC_HEALTH_RESPONSE,
-        ):
+        ) as mock_fn:
             result = get_kafka_topic_health(
                 bootstrap_servers="broker1:9093",
                 security_protocol="SASL_SSL",
@@ -243,6 +255,12 @@ class TestKafkaTopicHealthRun:
             )
 
         assert result["available"] is True
+        # Verify SASL credentials were wired into the KafkaConfig forwarded to the integration.
+        config_arg = mock_fn.call_args[0][0]
+        assert config_arg.security_protocol == "SASL_SSL"
+        assert config_arg.sasl_mechanism == "PLAIN"
+        assert config_arg.sasl_username == "alice"
+        assert config_arg.sasl_password == "s3cr3t"
 
     # ---------------------------------------------------------------------------
     # run — error / not-configured paths
@@ -261,9 +279,28 @@ class TestKafkaTopicHealthRun:
         assert "error" in result
         assert result["source"] == "kafka"
 
+    def test_error_path_propagates_exception_from_integration(self) -> None:
+        # If the integration ever raises instead of returning an error dict,
+        # the tool should let the exception propagate (no silent swallowing).
+        with patch(
+            "app.tools.KafkaTopicHealthTool.get_topic_health",
+            side_effect=RuntimeError("broker timeout"),
+        ), pytest.raises(RuntimeError, match="broker timeout"):
+            get_kafka_topic_health(bootstrap_servers="broker1:9092")
+
     def test_not_configured_returns_unavailable_without_broker_contact(self) -> None:
-        # Empty bootstrap_servers makes KafkaConfig.is_configured == False.
-        # get_topic_health returns early before any confluent_kafka import.
-        result = get_kafka_topic_health(bootstrap_servers="")
+        # Empty bootstrap_servers → KafkaConfig.is_configured is False.
+        # The integration short-circuits before touching confluent_kafka.
+        with patch(
+            "app.tools.KafkaTopicHealthTool.get_topic_health",
+            wraps=__import__(
+                "app.integrations.kafka", fromlist=["get_topic_health"]
+            ).get_topic_health,
+        ) as mock_fn:
+            result = get_kafka_topic_health(bootstrap_servers="")
+
         assert result["available"] is False
         assert result["source"] == "kafka"
+        # Confirm the integration was entered but never reached broker contact
+        # (is_configured check returns early inside the integration).
+        mock_fn.assert_called_once()

@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
+
 from app.tools.KafkaConsumerGroupTool import get_kafka_consumer_group_lag
 from tests.tools.conftest import BaseToolContract
 
@@ -214,7 +216,7 @@ class TestKafkaConsumerGroupRun:
         with patch(
             "app.tools.KafkaConsumerGroupTool.get_consumer_group_lag",
             return_value=_CONSUMER_GROUP_LAG_RESPONSE,
-        ):
+        ) as mock_fn:
             result = get_kafka_consumer_group_lag(
                 bootstrap_servers="broker1:9093",
                 group_id="payments-consumer",
@@ -225,6 +227,12 @@ class TestKafkaConsumerGroupRun:
             )
 
         assert result["available"] is True
+        # Verify SASL credentials were wired into the KafkaConfig forwarded to the integration.
+        config_arg = mock_fn.call_args[0][0]
+        assert config_arg.security_protocol == "SASL_SSL"
+        assert config_arg.sasl_mechanism == "PLAIN"
+        assert config_arg.sasl_username == "alice"
+        assert config_arg.sasl_password == "s3cr3t"
 
     # ---------------------------------------------------------------------------
     # run — error / not-configured paths
@@ -246,12 +254,33 @@ class TestKafkaConsumerGroupRun:
         assert "error" in result
         assert result["source"] == "kafka"
 
+    def test_error_path_propagates_exception_from_integration(self) -> None:
+        # If the integration ever raises instead of returning an error dict,
+        # the tool should let the exception propagate (no silent swallowing).
+        with patch(
+            "app.tools.KafkaConsumerGroupTool.get_consumer_group_lag",
+            side_effect=RuntimeError("consumer group timeout"),
+        ), pytest.raises(RuntimeError, match="consumer group timeout"):
+            get_kafka_consumer_group_lag(
+                bootstrap_servers="broker1:9092",
+                group_id="payments-consumer",
+            )
+
     def test_not_configured_returns_unavailable_without_broker_contact(self) -> None:
-        # Empty bootstrap_servers makes KafkaConfig.is_configured == False.
-        # get_consumer_group_lag returns early before any confluent_kafka import.
-        result = get_kafka_consumer_group_lag(
-            bootstrap_servers="",
-            group_id="payments-consumer",
-        )
+        # Empty bootstrap_servers → KafkaConfig.is_configured is False.
+        # The integration short-circuits before touching confluent_kafka.
+        with patch(
+            "app.tools.KafkaConsumerGroupTool.get_consumer_group_lag",
+            wraps=__import__(
+                "app.integrations.kafka", fromlist=["get_consumer_group_lag"]
+            ).get_consumer_group_lag,
+        ) as mock_fn:
+            result = get_kafka_consumer_group_lag(
+                bootstrap_servers="",
+                group_id="payments-consumer",
+            )
+
         assert result["available"] is False
         assert result["source"] == "kafka"
+        # Confirm the integration was entered but short-circuited before broker contact.
+        mock_fn.assert_called_once()
