@@ -5,6 +5,8 @@ integration credentials available for all downstream nodes. This replaces
 per-node credential fetching with a single upfront resolution.
 """
 
+import base64
+import json
 import logging
 import os
 from typing import Any, Optional
@@ -31,13 +33,10 @@ logger = logging.getLogger(__name__)
 
 
 def _decode_org_id_from_token(token: str) -> str:
-    import base64
-    import json as _json
-
     try:
         payload_b64 = token.split(".")[1]
         payload_b64 += "=" * (4 - len(payload_b64) % 4)
-        claims = _json.loads(base64.urlsafe_b64decode(payload_b64))
+        claims = json.loads(base64.urlsafe_b64decode(payload_b64))
         return claims.get("organization") or claims.get("org_id") or ""
     except Exception:
         logger.debug("Failed to decode org_id from JWT token", exc_info=True)
