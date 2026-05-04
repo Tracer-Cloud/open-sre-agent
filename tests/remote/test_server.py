@@ -425,3 +425,55 @@ def test_check_memory_health_returns_missing_on_oserror(
     assert result.name == "Memory"
     assert result.status == "missing"
     assert "Unable to read meminfo:" in result.detail
+
+
+def test_check_memory_health_returns_passed_when_below_90_percent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Memory usage below 90% should return status='passed'."""
+
+    class _FakeMeminfoPath:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            pass
+
+        def exists(self) -> bool:
+            return True
+
+        def read_text(self, **_kwargs: object) -> str:
+            # 16000 - 8800 = 7200 used / 16000 total = 45% used
+            return "MemTotal:       16000 kB\nMemAvailable:    8800 kB\n"
+
+    monkeypatch.setattr("app.remote.server.Path", _FakeMeminfoPath)
+    result = _check_memory_health()
+
+    assert isinstance(result, DeepHealthCheck)
+    assert result.name == "Memory"
+    assert result.status == "passed"
+    assert "45% used" in result.detail
+    assert "7MiB / 15MiB" in result.detail
+
+
+def test_check_memory_health_returns_warn_when_at_or_above_90_percent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Memory usage at or above 90% should return status='warn'."""
+
+    class _FakeMeminfoPath:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            pass
+
+        def exists(self) -> bool:
+            return True
+
+        def read_text(self, **_kwargs: object) -> str:
+            # 16000 - 1000 = 15000 used / 16000 total = 93.75% used
+            return "MemTotal:       16000 kB\nMemAvailable:    1000 kB\n"
+
+    monkeypatch.setattr("app.remote.server.Path", _FakeMeminfoPath)
+    result = _check_memory_health()
+
+    assert isinstance(result, DeepHealthCheck)
+    assert result.name == "Memory"
+    assert result.status == "warn"
+    assert "93% used" in result.detail
+    assert "14MiB / 15MiB" in result.detail
