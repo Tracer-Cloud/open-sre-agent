@@ -28,7 +28,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies (latest resolves from pyproject)
-        run: uv pip install --system -e ".[dev]"
+        run: uv pip install --python "$(which python)" -e ".[dev]"
 
       - name: Guardrails + LLM client tests
         run: >-
