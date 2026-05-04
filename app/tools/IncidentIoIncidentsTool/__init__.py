@@ -94,18 +94,18 @@ class IncidentIoIncidentsTool(BaseTool):
                     return {"success": False, "error": "incident_id is required for add_timeline"}
                 if not title:
                     return {"success": False, "error": "title is required for add_timeline"}
-                
+
                 result = client.add_timeline_event(incident_id, title=title, description=comment)
                 result["action"] = action
                 return result
-            
+
             elif action == "get":
                 if not incident_id:
                     return {"success": False, "error": "incident_id is required for get"}
                 result = client.get_incident(incident_id)
                 result["action"] = action
                 return result
-            
+
             else:
                 # default action == "list"
                 result = client.list_incidents(status=status)

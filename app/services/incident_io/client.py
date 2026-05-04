@@ -151,15 +151,18 @@ class IncidentIoClient:
             logger.warning("[incident_io] Get incident error: %s", e)
             return {"success": False, "error": str(e)}
 
-    def add_timeline_event(self, incident_id: str, title: str, description: str = "") -> dict[str, Any]:
+    def add_timeline_event(
+        self, incident_id: str, title: str, description: str = ""
+    ) -> dict[str, Any]:
         """Add a custom event to an incident's timeline (findings write-back)."""
         import datetime
+
         try:
             payload = {
                 "event_type": "custom",
                 "title": title,
                 "description": description,
-                "occurred_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "occurred_at": datetime.datetime.now(datetime.UTC).isoformat(),
             }
             resp = self._get_client().post(
                 f"/v2/incidents/{incident_id}/timeline_entries",
@@ -169,7 +172,9 @@ class IncidentIoClient:
             return {"success": True}
         except httpx.HTTPStatusError as e:
             logger.warning(
-                "[incident_io] Add timeline event HTTP failure status=%s id=%r", e.response.status_code, incident_id
+                "[incident_io] Add timeline event HTTP failure status=%s id=%r",
+                e.response.status_code,
+                incident_id,
             )
             return {
                 "success": False,

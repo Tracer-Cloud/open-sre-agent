@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import httpx
 import pytest
-from unittest.mock import MagicMock
 
 from app.services.incident_io.client import make_incident_io_client
 from app.tools.IncidentIoIncidentsTool import IncidentIoIncidentsTool
@@ -54,7 +55,10 @@ def test_incident_io_e2e_investigation_flow(monkeypatch: pytest.MonkeyPatch) -> 
     mock_httpx_client.post = lambda url, **kwargs: fake_request("POST", url, **kwargs)
 
     # We patch _get_client so the IncidentIoClient uses our mock
-    monkeypatch.setattr("app.services.incident_io.client.IncidentIoClient._get_client", lambda _self: mock_httpx_client)
+    monkeypatch.setattr(
+        "app.services.incident_io.client.IncidentIoClient._get_client",
+        lambda _self: mock_httpx_client,
+    )
 
     tool = IncidentIoIncidentsTool()
 
@@ -75,7 +79,7 @@ def test_incident_io_e2e_investigation_flow(monkeypatch: pytest.MonkeyPatch) -> 
         action="add_timeline",
         incident_id="inc-123",
         title="RCA Update",
-        comment="Found the root cause in the DB replication lag."
+        comment="Found the root cause in the DB replication lag.",
     )
     assert update_result["success"] is True
 
