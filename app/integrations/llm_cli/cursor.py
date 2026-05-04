@@ -112,12 +112,22 @@ class CursorAdapter:
             )
 
         status_text = (status_proc.stdout + status_proc.stderr).strip()
+        cursor_api_key_set = bool(os.environ.get("CURSOR_API_KEY"))
+
         if status_proc.returncode == 0 and "Logged in as" in status_text:
             logged_in: bool | None = True
             detail = status_text
+
         elif "Not logged in" in status_text or "Authentication required" in status_text:
             logged_in = False
-            detail = "Not logged in. Run: agent login, or set CURSOR_API_KEY."
+            detail = "Not logged in. Run: agent login."
+
+        elif cursor_api_key_set:
+            logged_in = True
+            detail = (
+                "Auth status unclear, headless auth via environment is configured."
+            )
+
         else:
             logged_in = None
             detail = status_text or "Could not determine Cursor Agent auth status."

@@ -36,26 +36,85 @@ def _fallback_proc() -> MagicMock:
 
 @patch("app.integrations.llm_cli.cursor.subprocess.run")
 @patch("app.integrations.llm_cli.binary_resolver.shutil.which")
-def test_detect_does_not_use_env_for_auth(mock_which: MagicMock, mock_run: MagicMock) -> None:
+def test_detect_not_logged_in_status_with_cursor_key_stays_not_logged_in(
+    mock_which: MagicMock, mock_run: MagicMock
+) -> None:
     mock_which.return_value = "agent"
 
     def side_effect(args, **kwargs):
         if "--version" in args:
             return _version_proc()
+        if "status" in args:
+            return _status_proc("Not logged in\n", returncode=1)
         return _fallback_proc()
 
     mock_run.side_effect = side_effect
 
     with patch.dict(
         os.environ,
-        {"CURSOR_BIN": "agent"},
-        clear=False,
+        {"CURSOR_BIN": "agent", "CURSOR_API_KEY": "cursor-key", "USERPROFILE": r"C:\Users\test"},
+        clear=True,
     ):
         probe = CursorAdapter().detect()
 
     assert probe.installed is True
-    assert probe.logged_in is None
-    assert probe.version is not None
+    assert probe.logged_in is False
+    assert "agent login" in probe.detail
+
+
+@patch("app.integrations.llm_cli.cursor.subprocess.run")
+@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+def test_detect_unclear_status_with_cursor_key_returns_logged_in(
+    mock_which: MagicMock, mock_run: MagicMock
+) -> None:
+    mock_which.return_value = "agent"
+
+    def side_effect(args, **kwargs):
+        if "--version" in args:
+            return _version_proc()
+        if "status" in args:
+            return _status_proc("", returncode=0)
+        return _fallback_proc()
+
+    mock_run.side_effect = side_effect
+
+    with patch.dict(
+        os.environ,
+        {"CURSOR_BIN": "agent", "CURSOR_API_KEY": "cursor-key", "USERPROFILE": r"C:\Users\test"},
+        clear=True,
+    ):
+        probe = CursorAdapter().detect()
+
+    assert probe.installed is True
+    assert probe.logged_in is True
+
+
+@patch("app.integrations.llm_cli.cursor.subprocess.run")
+@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+def test_detect_logged_in_status_ignores_cursor_key(
+    mock_which: MagicMock, mock_run: MagicMock
+) -> None:
+    mock_which.return_value = "agent"
+
+    def side_effect(args, **kwargs):
+        if "--version" in args:
+            return _version_proc()
+        if "status" in args:
+            return _status_proc("✓ Logged in as user@example.com\n")
+        return _fallback_proc()
+
+    mock_run.side_effect = side_effect
+
+    with patch.dict(
+        os.environ,
+        {"CURSOR_BIN": "agent", "CURSOR_API_KEY": "cursor-key", "USERPROFILE": r"C:\Users\test"},
+        clear=True,
+    ):
+        probe = CursorAdapter().detect()
+
+    assert probe.installed is True
+    assert probe.logged_in is True
+    assert "Logged in as" in probe.detail
 
 
 @patch("app.integrations.llm_cli.cursor.subprocess.run")
