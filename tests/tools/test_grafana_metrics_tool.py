@@ -5,6 +5,9 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from app.tools.GrafanaMetricsTool import query_grafana_metrics
+from app.tools.utils.metric_summary import summarize_prometheus_metrics
+from tests.synthetic.mock_grafana_backend.backend import FixtureGrafanaBackend
+from tests.synthetic.rds_postgres.scenario_loader import SUITE_DIR, load_scenario
 from tests.tools.conftest import BaseToolContract, mock_agent_state
 
 
@@ -36,6 +39,27 @@ def test_run_with_backend() -> None:
     result = query_grafana_metrics(metric_name="pipeline_runs_total", grafana_backend=mock_backend)
     assert result["available"] is True
     assert result["total_series"] == 1
+
+
+def test_rds_storage_fixture_metrics_have_compact_summaries() -> None:
+    fixture = load_scenario(SUITE_DIR / "003-storage-full")
+    backend = FixtureGrafanaBackend(fixture)
+
+    result = query_grafana_metrics(
+        metric_name="pipeline_runs_total",
+        service_name="rds-postgres-synthetic",
+        grafana_backend=backend,
+    )
+    summaries = summarize_prometheus_metrics(result["metrics"])
+
+    by_name = {summary["metric_name"]: summary for summary in summaries}
+    assert "FreeStorageSpace" in by_name
+    assert "WriteIOPS" in by_name
+    assert "orders-prod" in by_name["FreeStorageSpace"]["summary"]
+    assert "decreased" in by_name["FreeStorageSpace"]["trend"]
+    assert "orders-prod" in by_name["WriteIOPS"]["summary"]
+    assert "8100" in by_name["WriteIOPS"]["summary"]
+    assert "peak_to_latest" in by_name["WriteIOPS"]["summary"]
 
 
 def test_run_no_client() -> None:
