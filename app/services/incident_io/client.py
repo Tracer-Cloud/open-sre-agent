@@ -155,7 +155,7 @@ class IncidentIoClient:
         self, incident_id: str, title: str, description: str = ""
     ) -> dict[str, Any]:
         """Add a custom event to an incident's timeline (findings write-back)."""
-        import datetime
+        try:
 
         try:
             payload = {
