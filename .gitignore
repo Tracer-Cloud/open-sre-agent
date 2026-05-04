@@ -1,0 +1,135 @@
+# Environment variables
+*.env
+.env
+.env.local
+.env.*.local
+.secrets
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+.venv-devcontainer/
+virtualenv/
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# uv
+uv.lock
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# ruff
+.ruff_cache/
+
+# Pyre type checker
+.pyre/
+
+# MacOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# IDE / Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
+*.code-workspace
+
+# Wrangler local state
+**/.wrangler/
+
+# Project specific
+output/
+.langgraph_api/
+
+# Vendorized packages in api_ingester
+tests/test_case_upstream_downstream_pipeline/pipeline_code/api_ingester/certifi/
+tests/test_case_upstream_downstream_pipeline/pipeline_code/api_ingester/certifi-*/
+tests/test_case_upstream_downstream_pipeline/pipeline_code/api_ingester/charset_normalizer/
+tests/test_case_upstream_downstream_pipeline/pipeline_code/api_ingester/charset_normalizer-*/
+tests/test_case_upstream_downstream_pipeline/pipeline_code/api_ingester/idna/
+tests/test_case_upstream_downstream_pipeline/pipeline_code/api_ingester/idna-*/
+tests/test_case_upstream_downstream_pipeline/pipeline_code/api_ingester/requests/
+tests/test_case_upstream_downstream_pipeline/pipeline_code/api_ingester/requests-*/
+tests/test_case_upstream_downstream_pipeline/pipeline_code/api_ingester/urllib3/
+tests/test_case_upstream_downstream_pipeline/pipeline_code/api_ingester/urllib3-*/
+tests/test_case_upstream_downstream_pipeline/pipeline_code/api_ingester/bin/
+
+# CDK build artifacts
+**/cdk.out/
+
+CLAUDE_PERSONAL.md
+tasks/
+app/memories
+.aider*
