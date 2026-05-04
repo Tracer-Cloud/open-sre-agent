@@ -180,6 +180,26 @@ class SlackWebhookConfig(StrictConfigModel):
         return self
 
 
+class IncidentIoIntegrationConfig(StrictConfigModel):
+    """Normalized Incident.io credentials used by resolution and verification flows."""
+
+    api_key: str
+    base_url: str = "https://api.incident.io"
+    integration_id: str = ""
+
+    _normalize_base_url = field_validator("base_url", mode="before")(
+        normalize_url("https://api.incident.io")
+    )
+    _normalize_api_key = field_validator("api_key", mode="before")(normalize_str())
+
+    @property
+    def headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+
 class OpsGenieIntegrationConfig(StrictConfigModel):
     """Normalized OpsGenie credentials used by resolution and verification flows."""
 
