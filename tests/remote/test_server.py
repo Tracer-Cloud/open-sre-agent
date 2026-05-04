@@ -362,6 +362,52 @@ def test_imds_get_returns_none_on_os_error(monkeypatch: pytest.MonkeyPatch) -> N
     assert _imds_get("latest/meta-data/instance-id", token="test-token") is None
 
 
+def test_check_memory_health_returns_passed_when_below_warn_threshold(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeHealthyMeminfoPath:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            pass
+
+        def exists(self) -> bool:
+            return True
+
+        def read_text(self, **_kwargs: object) -> str:
+            return "NoiseWithoutSeparator\nMemTotal:       102400 kB\nMemAvailable:    51200 kB\n"
+
+    monkeypatch.setattr("app.remote.server.Path", _FakeHealthyMeminfoPath)
+    result = _check_memory_health()
+
+    assert isinstance(result, DeepHealthCheck)
+    assert result.name == "Memory"
+    assert result.status == "passed"
+    assert "50% used" in result.detail
+    assert "50MiB / 100MiB" in result.detail
+
+
+def test_check_memory_health_returns_warn_when_at_threshold(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeHighUsageMeminfoPath:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            pass
+
+        def exists(self) -> bool:
+            return True
+
+        def read_text(self, **_kwargs: object) -> str:
+            return "MemTotal:       102400 kB\nMemAvailable:    10240 kB\n"
+
+    monkeypatch.setattr("app.remote.server.Path", _FakeHighUsageMeminfoPath)
+    result = _check_memory_health()
+
+    assert isinstance(result, DeepHealthCheck)
+    assert result.name == "Memory"
+    assert result.status == "warn"
+    assert "90% used" in result.detail
+    assert "90MiB / 100MiB" in result.detail
+
+
 def test_check_memory_health_returns_missing_when_proc_file_absent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -380,6 +426,28 @@ def test_check_memory_health_returns_missing_when_proc_file_absent(
     assert result.name == "Memory"
     assert result.status == "missing"
     assert "/proc/meminfo unavailable on this platform." in result.detail
+
+
+def test_check_memory_health_returns_missing_when_memtotal_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeIncompletePath:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            pass
+
+        def exists(self) -> bool:
+            return True
+
+        def read_text(self, **_kwargs: object) -> str:
+            return "MemAvailable:    8192 kB\n"
+
+    monkeypatch.setattr("app.remote.server.Path", _FakeIncompletePath)
+    result = _check_memory_health()
+
+    assert isinstance(result, DeepHealthCheck)
+    assert result.name == "Memory"
+    assert result.status == "missing"
+    assert "Incomplete /proc/meminfo data." in result.detail
 
 
 def test_check_memory_health_returns_missing_when_memavailable_absent(
