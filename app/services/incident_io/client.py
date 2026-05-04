@@ -7,7 +7,7 @@ Credentials come from the user's incident.io integration stored locally or via e
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -171,7 +171,7 @@ class IncidentIoClient:
                 "event_type": "custom",
                 "title": title,
                 "description": description,
-                "occurred_at": datetime.now(datetime.UTC).isoformat(),
+                "occurred_at": datetime.now(UTC).strftime("%Y%m%d-%H%M%S"),
             }
             resp = self._get_client().post(
                 f"/v2/incidents/{incident_id}/timeline_entries",
