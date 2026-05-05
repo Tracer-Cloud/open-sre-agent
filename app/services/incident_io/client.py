@@ -72,12 +72,12 @@ class IncidentIoClient:
 
     def list_incidents(
         self,
-        status: str = "open",
+        status: str = "live",
         page_size: int | None = None,
         after: str | None = None,
     ) -> dict[str, Any]:
         """List incident.io incidents, optionally filtered by status.
-        Status can be e.g. open, closed, or omitted.
+        Status can be e.g. live, resolved, or omitted.
         """
         params: dict[str, Any] = {}
         if status:
@@ -206,5 +206,6 @@ def make_incident_io_client(api_key: str | None) -> IncidentIoClient | None:
         return None
     try:
         return IncidentIoClient(IncidentIoConfig(api_key=token))
-    except Exception:
+    except Exception as e:
+        logger.warning("[incident_io] Failed to build IncidentIoClient from config: %s", e)
         return None

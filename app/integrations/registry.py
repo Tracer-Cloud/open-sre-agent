@@ -186,6 +186,7 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         aliases=("incident.io", "incidentio"),
         verifier=_verify_incident_io,
         direct_effective=True,
+        setup_order=22,
         verify_order=34,
     ),
     IntegrationSpec(
