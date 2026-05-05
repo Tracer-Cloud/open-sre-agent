@@ -136,9 +136,7 @@ def _classify_claude_code_auth(binary_path: str | None = None) -> tuple[bool | N
     except OSError:
         return None, "Could not read ~/.claude/.credentials.json; auth state unclear."
     if sys.platform == "darwin":
-        return None, (
-            f"Auth state unclear — binary unavailable for verification. {_AUTH_HINT}"
-        )
+        return None, (f"Auth state unclear — binary unavailable for verification. {_AUTH_HINT}")
     return (
         False,
         f"Not authenticated. {_AUTH_HINT}",

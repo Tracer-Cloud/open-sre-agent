@@ -178,15 +178,15 @@ class CLIBackedLLMClient:
         err = _strip_ansi(proc.stderr or "")
 
         if proc.returncode != 0:
-            message = self._adapter.explain_failure(stdout=out, stderr=err, returncode=proc.returncode)
+            message = self._adapter.explain_failure(
+                stdout=out, stderr=err, returncode=proc.returncode
+            )
             if auth_probe_unclear:
                 message = (
                     f"{message}. Auth status could not be verified before invocation. "
                     f"{self._adapter.auth_hint} ({probe.detail})"
                 )
-            raise RuntimeError(
-                message
-            )
+            raise RuntimeError(message)
 
         content = self._adapter.parse(stdout=out, stderr=err, returncode=proc.returncode)
         content = _strip_ansi(content).strip()
