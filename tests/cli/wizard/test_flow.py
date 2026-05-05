@@ -670,11 +670,6 @@ def test_run_wizard_claude_code_skips_api_key_and_runs_cli_onboarding(
     monkeypatch.setattr(flow, "_run_cli_llm_onboarding", _cli_onboarding)
     monkeypatch.setattr(
         flow,
-        "build_demo_action_response",
-        lambda: {"success": True, "topics": [], "guidance": []},
-    )
-    monkeypatch.setattr(
-        flow,
         "save_local_config",
         lambda **kwargs: wizard_store.save_local_config(path=store_path, **kwargs),
     )
