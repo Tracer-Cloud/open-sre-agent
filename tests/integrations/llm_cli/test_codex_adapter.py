@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 from app.integrations.llm_cli.binary_resolver import diagnose_binary_path, npm_prefix_bin_dirs
 from app.integrations.llm_cli.codex import CodexAdapter, _fallback_codex_paths
 from app.integrations.llm_cli.text import flatten_messages_to_prompt
+from tests.integrations.llm_cli.testing_helpers import write_fake_runnable_cli_bin
 
 
 def _posix_path_set(paths: list[str]) -> set[str]:
@@ -286,9 +287,7 @@ def test_cli_backed_client_unclear_auth_no_double_period_when_explain_failure_tr
 
 
 def test_detect_uses_codex_bin_env_file(tmp_path) -> None:
-    fake_bin = tmp_path / "my-codex"
-    fake_bin.write_bytes(b"")
-    os.chmod(fake_bin, 0o700)
+    fake_bin = write_fake_runnable_cli_bin(tmp_path, "my-codex")
 
     with (
         patch.dict(os.environ, {"CODEX_BIN": str(fake_bin)}, clear=False),
@@ -460,9 +459,7 @@ def test_diagnose_binary_path_missing_file(tmp_path: Path) -> None:
 
 
 def test_diagnose_binary_path_valid_executable(tmp_path: Path) -> None:
-    exe = tmp_path / "my-bin"
-    exe.write_bytes(b"")
-    os.chmod(exe, 0o700)
+    exe = write_fake_runnable_cli_bin(tmp_path, "my-bin")
     assert diagnose_binary_path(str(exe)) is None
 
 

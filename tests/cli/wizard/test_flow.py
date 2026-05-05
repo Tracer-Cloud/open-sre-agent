@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import os
 from unittest.mock import MagicMock
 
 from app.cli.wizard import flow
 from app.cli.wizard import store as wizard_store
 from app.cli.wizard.env_sync import sync_provider_env
 from app.cli.wizard.probes import ProbeResult
+from tests.integrations.llm_cli.testing_helpers import write_fake_runnable_cli_bin
 
 
 def test_run_wizard_advanced_remote_falls_back_to_local(monkeypatch, tmp_path, capsys) -> None:
@@ -890,12 +892,7 @@ def test_run_cli_llm_onboarding_repick_when_user_chooses_repick(monkeypatch) -> 
 
 
 def test_run_cli_llm_onboarding_path_override_then_ok(monkeypatch, tmp_path) -> None:
-    # Create a real executable so diagnose_binary_path accepts it.
-    fake_bin = tmp_path / "codex"
-    fake_bin.write_bytes(b"")
-    import os as _os
-
-    _os.chmod(fake_bin, 0o700)
+    fake_bin = write_fake_runnable_cli_bin(tmp_path, "codex")
 
     adapter = MagicMock()
     adapter.name = "codex"
@@ -920,7 +917,7 @@ def test_run_cli_llm_onboarding_path_override_then_ok(monkeypatch, tmp_path) -> 
     monkeypatch.setattr(flow, "_prompt_value", lambda *_args, **_kwargs: str(fake_bin))
     monkeypatch.setattr(flow, "sync_env_values", lambda *_args, **_kwargs: None)
 
-    original_codex_bin = _os.environ.get("CODEX_BIN")
+    original_codex_bin = os.environ.get("CODEX_BIN")
     try:
         result = flow._run_cli_llm_onboarding(provider)
 
@@ -928,12 +925,12 @@ def test_run_cli_llm_onboarding_path_override_then_ok(monkeypatch, tmp_path) -> 
         assert len(detect_calls) == 2
         # os.environ must be updated in-process so the next detect() call in the
         # retry loop resolves the new binary without a process restart.
-        assert _os.environ.get("CODEX_BIN") == str(fake_bin)
+        assert os.environ.get("CODEX_BIN") == str(fake_bin)
     finally:
         if original_codex_bin is None:
-            _os.environ.pop("CODEX_BIN", None)
+            os.environ.pop("CODEX_BIN", None)
         else:
-            _os.environ["CODEX_BIN"] = original_codex_bin
+            os.environ["CODEX_BIN"] = original_codex_bin
 
 
 def test_run_cli_llm_onboarding_abort_after_max_retries(monkeypatch) -> None:

@@ -15,6 +15,7 @@ from app.integrations.llm_cli.claude_code import (
     _fallback_claude_code_paths,
     _probe_cli_auth,
 )
+from tests.integrations.llm_cli.testing_helpers import write_fake_runnable_cli_bin
 
 
 def _posix_path_set(paths: list[str]) -> set[str]:
@@ -494,9 +495,7 @@ def test_auth_hint_uses_claude_auth_login() -> None:
 
 
 def test_detect_uses_claude_code_bin_env(tmp_path: Path) -> None:
-    fake_bin = tmp_path / "my-claude"
-    fake_bin.write_bytes(b"")
-    os.chmod(fake_bin, 0o700)
+    fake_bin = write_fake_runnable_cli_bin(tmp_path, "my-claude")
 
     with (
         patch.dict(
