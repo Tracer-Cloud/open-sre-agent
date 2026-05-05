@@ -34,6 +34,7 @@ def test_incident_io_tool_extract_params(tool):
     assert params["region"] == "eu"
     assert params["status"] == "triage"
     assert params["incident_id"] == "inc-456"
+    assert params["description"] == ""
 
 
 def test_incident_io_tool_run_list(tool, monkeypatch):
@@ -75,7 +76,7 @@ def test_incident_io_tool_run_add_timeline(tool, monkeypatch):
         action="add_timeline",
         incident_id="inc-123",
         title="Test Update",
-        comment="This is a test.",
+        description="This is a test.",
     )
 
     mock_client.add_timeline_event.assert_called_once_with(
