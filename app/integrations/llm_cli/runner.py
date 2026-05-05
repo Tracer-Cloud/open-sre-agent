@@ -133,15 +133,11 @@ class CLIBackedLLMClient:
                 stdout=out, stderr=err, returncode=proc.returncode
             ).strip()
             if auth_probe_unclear:
-                suffix = (
+                message = (
+                    f"{base}\n\n"
                     f"Auth status could not be verified before invocation. "
                     f"{self._adapter.auth_hint} ({probe.detail})"
                 )
-                # Avoid \"..\" when explain_failure already ends with sentence punctuation.
-                if base.endswith((".", "!", "?")):
-                    message = f"{base} {suffix}"
-                else:
-                    message = f"{base}. {suffix}"
             else:
                 message = base
             raise RuntimeError(message)

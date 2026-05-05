@@ -283,7 +283,8 @@ def test_cli_backed_client_unclear_auth_no_double_period_when_explain_failure_tr
 
     msg = str(exc_info.value)
     assert ".." not in msg
-    assert "code 1. Auth status could not be verified" in msg
+    assert "code 1." in msg
+    assert "Auth status could not be verified" in msg
 
 
 def test_detect_uses_codex_bin_env_file(tmp_path) -> None:

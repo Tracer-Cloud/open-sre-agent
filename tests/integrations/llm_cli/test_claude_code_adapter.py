@@ -451,8 +451,9 @@ def test_build_omits_model_flag_when_none(_mock_which: MagicMock) -> None:
 
 @patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/claude")
 def test_build_uses_provided_workspace(_mock_which: MagicMock) -> None:
-    inv = ClaudeCodeAdapter().build(prompt="p", model=None, workspace="/my/project")
-    assert inv.cwd == "/my/project"
+    workspace = "/my/project"
+    inv = ClaudeCodeAdapter().build(prompt="p", model=None, workspace=workspace)
+    assert Path(inv.cwd) == Path(workspace)
 
 
 @patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/claude")
