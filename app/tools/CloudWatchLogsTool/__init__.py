@@ -8,6 +8,7 @@ from typing import Any
 import boto3
 
 from app.tools.tool_decorator import tool
+from app.tools.utils.log_compaction import build_error_taxonomy, deduplicate_logs
 
 
 def _cloudwatch_logs_available(sources: dict[str, dict]) -> bool:
@@ -112,13 +113,39 @@ def get_cloudwatch_logs(
                 "message": "No log events found",
             }
 
-        log_messages = [event.get("message", "") for event in events]
+        log_dicts = [
+            {"message": event.get("message", ""), "timestamp": str(event.get("timestamp", ""))}
+            for event in events
+        ]
+        total_raw_logs = len(log_dicts)
+
+        # Separate error logs using the same keywords as GrafanaLogsTool
+        error_keywords = ("error", "fail", "exception", "traceback")
+        error_logs_dicts = [
+            log
+            for log in log_dicts
+            if any(kw in log.get("message", "").lower() for kw in error_keywords)
+        ]
+
+        # Phase 1: deduplicate + count-group so bursts don't steal all slots
+        compacted_logs = deduplicate_logs(log_dicts, max_output=50)
+        compacted_error_logs = deduplicate_logs(error_logs_dicts, max_output=20)
+
+        # Phase 2: structured error taxonomy across the *full* error set
+        error_taxonomy = build_error_taxonomy(error_logs_dicts)
+
+        # Extract message strings from compacted results for backward-compatible error_logs field
+        error_log_messages = [log["message"] for log in compacted_error_logs]
+        compacted_log_messages = [log["message"] for log in compacted_logs]
+
         result: dict[str, Any] = {
             "found": True,
             "log_group": log_group,
             "event_count": len(events),
-            "error_logs": log_messages,
-            "latest_error": log_messages[0] if log_messages else None,
+            "total_raw_logs": total_raw_logs,
+            "error_logs": error_log_messages,
+            "error_taxonomy": error_taxonomy,
+            "latest_error": compacted_log_messages[0] if compacted_log_messages else None,
         }
         if filter_pattern:
             result["filter_pattern"] = filter_pattern
