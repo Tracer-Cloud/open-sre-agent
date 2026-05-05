@@ -8,6 +8,7 @@ non-terminal consoles so captured logs stay clean.
 
 from __future__ import annotations
 
+import time
 from collections.abc import Iterator
 
 from rich.console import Console
@@ -24,6 +25,12 @@ from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
 _SPINNER_NAME = "dots12"
 _SPINNER_COLOR = "orange1"
 _SPINNER_LABEL = "thinking"
+
+# Rich.Live redraw rate. 20fps gives a Claude-CLI-like smoothness during
+# token streaming — the default 10fps reads as visibly choppy on long
+# answers, while going much higher just burns CPU re-parsing Markdown
+# without a perceptible UX gain.
+_LIVE_REFRESH_PER_SECOND = 20
 
 
 def stream_to_console(
@@ -95,8 +102,14 @@ def stream_to_console(
     console.print()
     console.print(f"[{TERMINAL_ACCENT_BOLD}]{label}:[/]")
 
+    started = time.monotonic()
     try:
-        with Live(spinner, console=console, refresh_per_second=10, transient=False) as live:
+        with Live(
+            spinner,
+            console=console,
+            refresh_per_second=_LIVE_REFRESH_PER_SECOND,
+            transient=False,
+        ) as live:
             if buffer:
                 live.update(Markdown("".join(buffer)))
             for chunk in chunks_iter:
@@ -110,6 +123,13 @@ def stream_to_console(
                 live.update(Text(""))
     finally:
         console.print()
+
+    # Tiny dim footer so the user sees the stream actually finished and
+    # gets a rough sense of cost — same idea as Claude CLI's per-turn
+    # timing line. Skipped on empty streams so we don't print a footer
+    # under nothing.
+    if buffer:
+        console.print(f"[dim]· {time.monotonic() - started:.1f}s[/dim]")
 
     return "".join(buffer)
 

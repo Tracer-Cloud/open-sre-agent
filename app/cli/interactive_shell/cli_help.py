@@ -103,6 +103,11 @@ def answer_cli_help(question: str, session: ReplSession, console: Console) -> No
             label="assistant",
             chunks=client.invoke_stream(prompt),
         )
+    except KeyboardInterrupt:
+        # Cancel just this response and stay in the REPL. A second Ctrl+C
+        # at the prompt exits the shell.
+        console.print("[dim]· cancelled[/dim]")
+        return
     except Exception as exc:  # noqa: BLE001
         console.print(f"[red]assistant failed:[/red] {escape(str(exc))}")
         return

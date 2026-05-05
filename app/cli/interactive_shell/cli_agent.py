@@ -285,6 +285,11 @@ def answer_cli_agent(
             # would otherwise leak raw braces to the user (#1263).
             suppress_if_starts_with="{",
         )
+    except KeyboardInterrupt:
+        # Cancel just this response and stay in the REPL. A second Ctrl+C
+        # at the prompt exits the shell.
+        console.print("[dim]· cancelled[/dim]")
+        return
     except Exception as exc:  # noqa: BLE001
         console.print(f"[red]assistant failed:[/red] {escape(str(exc))}")
         return

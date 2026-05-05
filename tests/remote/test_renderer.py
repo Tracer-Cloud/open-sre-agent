@@ -347,3 +347,158 @@ class TestStreamRendererCleanupOnException:
         assert renderer.final_state.get("alert_name") == "partial-alert", (
             "accumulated state from before the failure must be retained"
         )
+
+
+def _diagnose_streaming_events() -> Iterator[StreamEvent]:
+    """Simulate the diagnose node emitting token deltas before chain end."""
+    yield _make_event("metadata", data={"run_id": "r-d"})
+    yield _make_event(
+        "events",
+        "diagnose",
+        {"name": "diagnose", "data": {}, "metadata": {"langgraph_node": "diagnose"}},
+        kind="on_chain_start",
+        tags=["graph:step:1"],
+    )
+    yield _make_event(
+        "events",
+        "diagnose",
+        {
+            "name": "diagnose",
+            "data": {"chunk": {"content": "OpenSRE "}},
+            "metadata": {"langgraph_node": "diagnose"},
+        },
+        kind="on_chat_model_stream",
+        tags=[],
+    )
+    yield _make_event(
+        "events",
+        "diagnose",
+        {
+            "name": "diagnose",
+            "data": {"chunk": {"content": "identified the schema mismatch."}},
+            "metadata": {"langgraph_node": "diagnose"},
+        },
+        kind="on_chat_model_stream",
+        tags=[],
+    )
+    yield _make_event(
+        "events",
+        "diagnose",
+        {
+            "name": "diagnose",
+            "data": {"output": {"root_cause": "Schema mismatch", "validity_score": 0.85}},
+            "metadata": {"langgraph_node": "diagnose"},
+        },
+        kind="on_chain_end",
+        tags=["graph:step:1"],
+    )
+    yield _make_event("end")
+
+
+class TestStreamRendererDiagnoseStreaming:
+    """The diagnose node streams the LLM's reasoning live as Markdown.
+
+    Other nodes keep the compact spinner UX from ``ProgressTracker``; only
+    diagnose is special-cased because it is where user-facing root-cause
+    reasoning is generated (#1263).
+    """
+
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "text"})
+    def test_diagnose_token_chunks_accumulate_into_buffer(self) -> None:
+        """Each on_chat_model_stream chunk for diagnose appends to the buffer."""
+        renderer = StreamRenderer()
+        renderer.render_stream(_diagnose_streaming_events())
+
+        assert "diagnose_root_cause" in renderer.node_names_seen
+        # Final state still picks up the chain_end output.
+        assert renderer.final_state.get("root_cause") == "Schema mismatch"
+        assert renderer.final_state.get("validity_score") == 0.85
+        assert renderer.stream_completed is True
+
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "text"})
+    def test_diagnose_text_mode_replays_buffer_at_finish(self, capfd) -> None:
+        """In text mode the buffered token text is printed when the node ends."""
+        renderer = StreamRenderer()
+        renderer.render_stream(_diagnose_streaming_events())
+
+        out, _ = capfd.readouterr()
+        # Tokens are visible verbatim — not truncated to the 60-char preview
+        # the spinner subtext path would use.
+        assert "OpenSRE identified the schema mismatch." in out
+        # The resolved-dot line uses the canonical node name and timing.
+        assert "diagnose_root_cause" in out
+
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "text"})
+    def test_other_nodes_bypass_diagnose_streaming(self) -> None:
+        """Non-diagnose nodes go through the tracker; diagnose buffer stays empty."""
+        renderer = StreamRenderer()
+        renderer.render_stream(_events_mode_stream())
+
+        assert renderer._diagnose_buffer == []
+        assert renderer._diagnose_live is None
+        assert "diagnose_root_cause" not in renderer.node_names_seen
+
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "text"})
+    def test_root_cause_section_suppressed_when_diagnose_streamed(self, capfd) -> None:
+        """When the user has seen the diagnose reasoning stream live, the
+        condensed Root Cause one-liner is redundant and gets dropped."""
+        renderer = StreamRenderer()
+        renderer.render_stream(_diagnose_streaming_events())
+
+        out, _ = capfd.readouterr()
+        # Root Cause header is suppressed; the streamed body and final state
+        # carry the same information.
+        assert "Root Cause" not in out
+        # State is still populated so callers (tests, programmatic users)
+        # can read it from final_state.
+        assert renderer.final_state.get("root_cause") == "Schema mismatch"
+
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "text"})
+    def test_root_cause_section_printed_when_diagnose_did_not_stream(self, capfd) -> None:
+        """Updates-mode (no events stream) keeps the Root Cause section as before."""
+        renderer = StreamRenderer()
+        renderer.render_stream(_investigation_events())
+
+        out, _ = capfd.readouterr()
+        # Updates mode never populates _diagnose_buffer, so the section prints.
+        assert "Root Cause" in out
+        assert "Schema mismatch" in out
+
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "text"})
+    def test_diagnose_live_closed_on_mid_stream_exception(self) -> None:
+        """If the stream raises during diagnose, the cleanup finish runs."""
+
+        def diagnose_then_raise() -> Iterator[StreamEvent]:
+            yield _make_event("metadata", data={"run_id": "r-x"})
+            yield _make_event(
+                "events",
+                "diagnose",
+                {"name": "diagnose", "data": {}, "metadata": {"langgraph_node": "diagnose"}},
+                kind="on_chain_start",
+                tags=["graph:step:1"],
+            )
+            yield _make_event(
+                "events",
+                "diagnose",
+                {
+                    "name": "diagnose",
+                    "data": {"chunk": {"content": "partial reasoning..."}},
+                    "metadata": {"langgraph_node": "diagnose"},
+                },
+                kind="on_chat_model_stream",
+                tags=[],
+            )
+            raise RuntimeError("LLM quota exhausted")
+
+        renderer = StreamRenderer()
+        try:
+            renderer.render_stream(diagnose_then_raise())
+            raise AssertionError("expected RuntimeError to propagate")
+        except RuntimeError as exc:
+            assert "LLM quota exhausted" in str(exc)
+
+        # _finish_active_node runs in the finally block and routes diagnose
+        # through _finish_diagnose_streaming, which closes the Live region
+        # and clears _active_node.
+        assert renderer._diagnose_live is None
+        assert renderer._active_node is None

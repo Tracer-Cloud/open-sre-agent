@@ -100,6 +100,11 @@ def answer_follow_up(question: str, session: ReplSession, console: Console) -> N
             label="answer",
             chunks=client.invoke_stream(prompt),
         )
+    except KeyboardInterrupt:
+        # Cancel just this response and stay in the REPL. A second Ctrl+C
+        # at the prompt exits the shell.
+        console.print("[dim]· cancelled[/dim]")
+        return
     except Exception as exc:  # noqa: BLE001
         console.print(f"[red]follow-up failed:[/red] {escape(str(exc))}")
         return

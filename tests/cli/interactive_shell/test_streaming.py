@@ -126,6 +126,66 @@ class TestMidStreamError:
         output = _strip_ansi(buf.getvalue())
         assert "partial answer" in output
 
+    def test_keyboard_interrupt_propagates_with_partial_visible(self) -> None:
+        """Ctrl+C mid-stream surfaces partial text so the caller can report cancellation."""
+
+        def _interrupted_stream() -> Iterator[str]:
+            yield "partial "
+            yield "answer"
+            raise KeyboardInterrupt
+
+        console, buf = _tty_console()
+
+        with pytest.raises(KeyboardInterrupt):
+            stream_to_console(
+                console,
+                label="assistant",
+                chunks=_interrupted_stream(),
+            )
+
+        output = _strip_ansi(buf.getvalue())
+        assert "partial answer" in output
+
+
+class TestTimingFooter:
+    """A small dim ``· Ns`` footer appears after a rendered live response."""
+
+    def test_footer_printed_after_streamed_response(self) -> None:
+        console, buf = _tty_console()
+        stream_to_console(
+            console,
+            label="assistant",
+            chunks=_yield_chunks(["hello"]),
+        )
+
+        output = _strip_ansi(buf.getvalue())
+        assert re.search(r"·\s+\d+\.\d+s", output) is not None
+
+    def test_footer_skipped_when_stream_is_empty(self) -> None:
+        """Empty stream must not print a timing footer under nothing."""
+        console, buf = _tty_console()
+        stream_to_console(
+            console,
+            label="assistant",
+            chunks=_yield_chunks([]),
+        )
+
+        output = _strip_ansi(buf.getvalue())
+        assert re.search(r"·\s+\d+\.\d+s", output) is None
+
+    def test_footer_skipped_when_response_is_suppressed(self) -> None:
+        """Suppressed JSON action plans should not get a timing footer either."""
+        console, buf = _tty_console()
+        stream_to_console(
+            console,
+            label="assistant",
+            chunks=_yield_chunks(['{"actions"', ":[]}"]),
+            suppress_if_starts_with="{",
+        )
+
+        output = _strip_ansi(buf.getvalue())
+        assert re.search(r"·\s+\d+\.\d+s", output) is None
+
 
 class TestSuppressionPeek:
     """``suppress_if_starts_with`` skips live rendering for content the caller will handle."""
