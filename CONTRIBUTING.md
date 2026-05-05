@@ -27,8 +27,8 @@ See **[SETUP.md](SETUP.md)** for detailed setup instructions including Windows-s
 
 **Quick start:**
 
-1. Clone the repo and create a virtual environment
-2. Install dependencies: `pip install -e ".[dev]"`
+1. Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and clone the repository (see [SETUP.md](SETUP.md) for Windows and alternatives)
+2. Install dependencies: `make install`
 3. Run checks: `make lint && make format-check && make typecheck && make test-cov`
 4. Build release artifacts when needed: `make build`
 

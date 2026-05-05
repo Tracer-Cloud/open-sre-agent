@@ -218,6 +218,8 @@ opensre remote ops logs --follow
 
 > **New to OpenSRE?** See [SETUP.md](SETUP.md) for detailed platform-specific setup instructions, including Windows setup, environment configuration, and more.
 
+Local development installs use [uv](https://docs.astral.sh/uv/getting-started/installation/) and a committed `uv.lock` (`make install` runs `uv sync --frozen --extra dev`). Install uv first, then:
+
 ```bash
 git clone https://github.com/Tracer-Cloud/opensre
 cd opensre
