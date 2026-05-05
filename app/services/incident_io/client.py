@@ -7,6 +7,7 @@ Credentials come from the user's incident.io integration stored locally or via e
 from __future__ import annotations
 
 import logging
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -14,12 +15,21 @@ import httpx
 
 from app.integrations.config_models import IncidentIoIntegrationConfig
 from app.integrations.probes import ProbeResult
-from app.masking import redact_credentials
 
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TIMEOUT = 30
 _MAX_RETRIES = 3
+
+_GENERIC_SECRET_VALUE_RE = re.compile(
+    r"(?i)(bearer\s+[A-Za-z0-9._~+/=-]{6,}"
+    r"|authorization\s*[:=]\s*\S+"
+    r"|xox[baprs]-[A-Za-z0-9-]{8,}"
+    r"|gh[pousr]_[A-Za-z0-9_]{20,}"
+    r"|AKIA[0-9A-Z]{16}"
+    r"|-----BEGIN [A-Z ]*PRIVATE KEY-----"
+    r"|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})"
+)
 
 
 class IncidentIoClient:
@@ -66,6 +76,13 @@ class IncidentIoClient:
         if self._client is not None:
             self._client.close()
             self._client = None
+
+    def _redact(self, value: object) -> str:
+        """Redact the API key and generic secrets from surfaced text."""
+        text = str(value)
+        if self.config.api_key:
+            text = text.replace(self.config.api_key, "[REDACTED]")
+        return _GENERIC_SECRET_VALUE_RE.sub("[REDACTED]", text)
 
     def __enter__(self) -> IncidentIoClient:
         return self
@@ -120,7 +137,7 @@ class IncidentIoClient:
             return result
         except httpx.HTTPStatusError as e:
             # Redact response text to avoid leaking tokens in logs
-            err_text = redact_credentials(e.response.text[:200])
+            err_text = self._redact(e.response.text[:200])
             logger.warning(
                 "[incident_io] List incidents HTTP failure status=%s error=%r",
                 e.response.status_code,
@@ -154,7 +171,7 @@ class IncidentIoClient:
 
             return {"success": True, "incident": incident}
         except httpx.HTTPStatusError as e:
-            err_text = redact_credentials(e.response.text[:200])
+            err_text = self._redact(e.response.text[:200])
             logger.warning(
                 "[incident_io] Get incident HTTP failure status=%s id=%r error=%r",
                 e.response.status_code,
@@ -189,7 +206,7 @@ class IncidentIoClient:
             resp.raise_for_status()
             return {"success": True}
         except httpx.HTTPStatusError as e:
-            err_text = redact_credentials(e.response.text[:200])
+            err_text = self._redact(e.response.text[:200])
             logger.warning(
                 "[incident_io] Add timeline event HTTP failure status=%s id=%r error=%r",
                 e.response.status_code,
