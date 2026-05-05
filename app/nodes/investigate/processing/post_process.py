@@ -1,18 +1,34 @@
 """Post-processing: merge evidence and track hypotheses."""
 
 import json
+import re
 from collections.abc import Callable
+from datetime import UTC, datetime
 
 from app.nodes.investigate.execution.execute_actions import ActionExecutionResult
 from app.nodes.investigate.types import ExecutedHypothesis, FailedAction, PlanAudit
+from app.tools.utils.metric_summary import summarize_prometheus_metrics
 
 MAX_RETRYABLE_ACTION_FAILURES = 2
 _NON_RETRYABLE_FAILURE_INDICATORS = (
     "typeerror",
+    "command not found",
     "missing required",
     "unknown action",
     "action not available",
     "invalid response",
+    "not configured",
+)
+_OPENCLAW_NON_RETRYABLE_FAILURE_INDICATORS = (
+    "connection closed",
+    "could not connect",
+    "connect failed",
+    "econnrefused",
+    "gateway status",
+    "gateway run",
+    "gateway install",
+    "install the openclaw cli",
+    "tool_name is required",
 )
 _RETRYABLE_FAILURE_INDICATORS = (
     "timeout",
@@ -23,6 +39,9 @@ _RETRYABLE_FAILURE_INDICATORS = (
     "internal error",
     "500",
     "503",
+)
+_OPENCLAW_ACTION_NAMES = frozenset(
+    {"call_openclaw_tool", "list_openclaw_tools", "search_openclaw_conversations"}
 )
 
 
@@ -54,9 +73,13 @@ def _map_failed_tools(data: dict) -> dict:
     }
 
 
-def _classify_action_failure(error: str | None) -> str:
+def _classify_action_failure(action_name: str, error: str | None) -> str:
     error_text = (error or "").lower()
     if any(indicator in error_text for indicator in _NON_RETRYABLE_FAILURE_INDICATORS):
+        return "non_retryable"
+    if action_name in _OPENCLAW_ACTION_NAMES and any(
+        indicator in error_text for indicator in _OPENCLAW_NON_RETRYABLE_FAILURE_INDICATORS
+    ):
         return "non_retryable"
     if any(indicator in error_text for indicator in _RETRYABLE_FAILURE_INDICATORS):
         return "retryable"
@@ -89,7 +112,7 @@ def _build_failed_action_records(
             {
                 "action": action_name,
                 "error": result.error or "unknown",
-                "failure_kind": _classify_action_failure(result.error),
+                "failure_kind": _classify_action_failure(action_name, result.error),
                 "failure_count": failure_count,
                 "loop_count": investigation_loop_count,
             }
@@ -219,13 +242,106 @@ def _map_s3_object(data: dict) -> dict:
     }
 
 
-def _map_grafana_logs(data: dict) -> dict:
+def _timestamp_from_loki_ns(value: object) -> str:
+    try:
+        timestamp = int(float(str(value))) / 1_000_000_000
+    except (TypeError, ValueError):
+        return str(value or "")
+    return datetime.fromtimestamp(timestamp, tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _derive_rds_events_from_grafana_logs(logs: list) -> list[dict]:
+    events: list[dict] = []
+    for log in logs:
+        if not isinstance(log, dict):
+            continue
+        source_type = str(log.get("source_type", "")).lower()
+        message = str(log.get("message", ""))
+        if source_type != "db-instance" and "db instance" not in message.lower():
+            continue
+        events.append(
+            {
+                "timestamp": _timestamp_from_loki_ns(log.get("timestamp")),
+                "message": message,
+                "source_type": log.get("source_type"),
+                "source_identifier": log.get("source_identifier"),
+            }
+        )
+    return events
+
+
+def _derive_performance_insights_from_grafana_logs(logs: list) -> dict:
+    observations: list[str] = []
+    top_sql: list[dict] = []
+    wait_events: list[dict] = []
+
+    for log in logs:
+        if not isinstance(log, dict):
+            continue
+        source_type = str(log.get("source_type", "")).lower()
+        message = str(log.get("message", ""))
+        is_pi = source_type == "aws_performance_insights" or message.startswith(
+            ("Top SQL Activity:", "Top Wait Event:")
+        )
+        if not is_pi:
+            continue
+        observations.append(message)
+
+        sql_match = re.match(
+            r"Top SQL Activity:\s*(?P<sql>.*?)\s*\|\s*Avg Load:\s*"
+            r"(?P<load>[0-9.]+)\s*AAS\s*\|\s*Waits:\s*(?P<waits>.*)",
+            message,
+        )
+        if sql_match:
+            top_sql.append(
+                {
+                    "sql": sql_match.group("sql"),
+                    "db_load": float(sql_match.group("load")),
+                    "wait_event": sql_match.group("waits"),
+                }
+            )
+            continue
+
+        wait_match = re.match(
+            r"Top Wait Event:\s*(?P<name>.*?)\s*\|\s*db_load_avg:\s*"
+            r"(?P<load>[0-9.]+)\s*AAS",
+            message,
+        )
+        if wait_match:
+            wait_events.append(
+                {
+                    "name": wait_match.group("name"),
+                    "db_load": float(wait_match.group("load")),
+                }
+            )
+
+    if not observations:
+        return {}
     return {
+        "observations": observations,
+        "top_sql": top_sql,
+        "wait_events": wait_events,
+    }
+
+
+def _map_grafana_logs(data: dict) -> dict:
+    logs = data.get("logs", [])
+    mapped: dict[str, object] = {
         "grafana_logs": data.get("logs", []),
         "grafana_error_logs": data.get("error_logs", []),
         "grafana_logs_query": data.get("query", ""),
         "grafana_logs_service": data.get("service_name", ""),
     }
+
+    rds_events = _derive_rds_events_from_grafana_logs(logs)
+    if rds_events:
+        mapped["aws_rds_events"] = rds_events
+
+    performance_insights = _derive_performance_insights_from_grafana_logs(logs)
+    if performance_insights:
+        mapped["aws_performance_insights"] = performance_insights
+
+    return mapped
 
 
 def _map_grafana_traces(data: dict) -> dict:
@@ -236,12 +352,60 @@ def _map_grafana_traces(data: dict) -> dict:
     }
 
 
-def _map_grafana_metrics(data: dict) -> dict:
+def _build_rds_cloudwatch_metrics(summaries: list[dict]) -> dict:
+    rds_summaries = [
+        summary
+        for summary in summaries
+        if str(summary.get("raw_metric_name", "")).startswith("aws_rds_")
+    ]
+    if not rds_summaries:
+        return {}
+
+    db_instance = ""
+    metrics: list[dict] = []
+    observations: list[str] = []
+    for summary in rds_summaries:
+        labels = summary.get("labels", {})
+        if isinstance(labels, dict) and not db_instance:
+            db_instance = str(
+                labels.get("dbinstanceidentifier")
+                or labels.get("db_instance_identifier")
+                or labels.get("db_instance")
+                or ""
+            )
+        metrics.append(
+            {
+                "metric_name": summary.get("metric_name", "unknown"),
+                "summary": summary.get("summary", ""),
+                "labels": labels if isinstance(labels, dict) else {},
+                "datapoint_count": summary.get("datapoint_count", 0),
+            }
+        )
+        if summary.get("summary"):
+            observations.append(str(summary["summary"]))
+
     return {
-        "grafana_metrics": data.get("metrics", []),
+        "db_instance_identifier": db_instance,
+        "metrics": metrics,
+        "observations": observations,
+    }
+
+
+def _map_grafana_metrics(data: dict) -> dict:
+    metrics = data.get("metrics", [])
+    summaries = summarize_prometheus_metrics(metrics)
+    mapped: dict[str, object] = {
+        "grafana_metrics": metrics,
+        "grafana_metric_summaries": summaries,
         "grafana_metric_name": data.get("metric_name", ""),
         "grafana_metrics_service": data.get("service_name", ""),
     }
+
+    rds_metrics = _build_rds_cloudwatch_metrics(summaries)
+    if rds_metrics:
+        mapped["aws_cloudwatch_metrics"] = rds_metrics
+
+    return mapped
 
 
 def _map_grafana_alert_rules(data: dict) -> dict:

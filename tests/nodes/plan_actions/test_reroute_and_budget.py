@@ -20,6 +20,7 @@ from app.nodes.plan_actions.plan_actions import (
 from app.tools.investigation_registry.prioritization import DETERMINISTIC_FALLBACK_REASON
 
 plan_actions_module = importlib.import_module("app.nodes.plan_actions.plan_actions")
+detect_sources_module = importlib.import_module("app.nodes.plan_actions.detect_sources")
 
 
 class MockAction:
@@ -322,6 +323,11 @@ def test_plan_actions_keeps_openclaw_seeded_when_budget_is_full(monkeypatch):
         "plan_actions_with_llm",
         _mock_plan_actions_with_llm,
     )
+    monkeypatch.setattr(
+        detect_sources_module,
+        "openclaw_runtime_unavailable_reason",
+        lambda _config: None,
+    )
 
     input_data = InvestigateInput(
         raw_alert={"alert_name": "Checkout API error rate spike", "service": "checkout-api"},
@@ -433,8 +439,8 @@ def test_plan_actions_keeps_deterministic_fallback_when_budget_is_full(monkeypat
 def test_summarize_execution_results_tracks_retryable_failure_without_exhausting():
     """Retryable failures are audited but remain available before the retry limit."""
     execution_results = {
-        "search_openclaw_conversations": ActionExecutionResult(
-            action_name="search_openclaw_conversations",
+        "query_grafana_logs": ActionExecutionResult(
+            action_name="query_grafana_logs",
             success=False,
             data={},
             error="Connection closed",
@@ -446,16 +452,40 @@ def test_summarize_execution_results_tracks_retryable_failure_without_exhausting
         current_evidence={},
         executed_hypotheses=[],
         investigation_loop_count=0,
-        rationale="Try OpenClaw first",
+        rationale="Try Grafana first",
         plan_audit={},
     )
 
     assert evidence == {}
     assert executed_hypotheses[0]["actions"] == []
-    assert executed_hypotheses[0]["failed_actions"][0]["action"] == "search_openclaw_conversations"
+    assert executed_hypotheses[0]["failed_actions"][0]["action"] == "query_grafana_logs"
     assert executed_hypotheses[0]["failed_actions"][0]["failure_kind"] == "retryable"
     assert "exhausted_actions" not in executed_hypotheses[0]
     assert "FAILED" in evidence_summary
+
+
+def test_openclaw_connectivity_failure_is_exhausted_immediately():
+    execution_results = {
+        "search_openclaw_conversations": ActionExecutionResult(
+            action_name="search_openclaw_conversations",
+            success=False,
+            data={},
+            error="Connection closed",
+        )
+    }
+
+    _evidence, executed_hypotheses, _evidence_summary = summarize_execution_results(
+        execution_results=execution_results,
+        current_evidence={},
+        executed_hypotheses=[],
+        investigation_loop_count=0,
+        rationale="Try OpenClaw first",
+        plan_audit={},
+    )
+
+    failed_action = executed_hypotheses[0]["failed_actions"][0]
+    assert failed_action["failure_kind"] == "non_retryable"
+    assert executed_hypotheses[0]["exhausted_actions"] == ["search_openclaw_conversations"]
 
 
 def test_non_retryable_failed_action_is_not_reselected_after_summarize():

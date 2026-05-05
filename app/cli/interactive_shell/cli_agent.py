@@ -40,7 +40,7 @@ _ACTION_RULE = (
     "action object schemas: "
     '`{"action":"switch_llm_provider","provider":"anthropic","model":"","toolcall_model":""}` '
     "where provider is one of anthropic, openai, openrouter, gemini, nvidia, "
-    "ollama, codex; both `model` (reasoning) and `toolcall_model` are optional; "
+    "ollama, codex, claude-code; both `model` (reasoning) and `toolcall_model` are optional; "
     '`{"action":"switch_toolcall_model","model":"claude-opus-4-7"}` '
     "to change ONLY the toolcall model on the currently active provider; "
     '`{"action":"slash","command":"/model show"}` where command is one of '
@@ -153,6 +153,36 @@ def _parse_action_plan(text: str) -> list[dict[str, object]]:
         for normalized in [_normalize_action(action)]
         if normalized is not None
     ]
+
+
+def _response_text(response: object) -> str:
+    """Extract text from heterogeneous LLM response content payloads."""
+    content = getattr(response, "content", None)
+    if content is None:
+        return str(response)
+    if isinstance(content, str):
+        return content
+    if isinstance(content, dict):
+        text_value = content.get("text")
+        return text_value if isinstance(text_value, str) else str(content)
+    if isinstance(content, list):
+        blocks: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                blocks.append(item)
+                continue
+            if isinstance(item, dict):
+                text_value = item.get("text")
+                blocks.append(text_value if isinstance(text_value, str) else str(item))
+                continue
+            text_value = getattr(item, "text", None)
+            blocks.append(text_value if isinstance(text_value, str) else str(item))
+        joined = "\n".join(part for part in blocks if part.strip()).strip()
+        return joined or str(content)
+    text_value = getattr(content, "text", None)
+    if isinstance(text_value, str):
+        return text_value
+    return str(content)
 
 
 def _execute_action_plan(
@@ -282,8 +312,7 @@ def answer_cli_agent(
         console.print(f"[red]assistant failed:[/red] {escape(str(exc))}")
         return
 
-    text = getattr(response, "content", None) or str(response)
-    text_str = str(text)
+    text_str = _response_text(response)
     actions = _parse_action_plan(text_str)
     if _execute_action_plan(actions, session, console):
         session.cli_agent_messages.append(("user", message))

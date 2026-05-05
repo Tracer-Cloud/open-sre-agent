@@ -1270,6 +1270,13 @@ Thanks goes to these amazing people:
             <sub><b>Powlisher</b></sub>
         </a>
     </td>
+            <td align="center">
+        <a href="https://github.com/vidhishah2209">
+            <img src="https://avatars.githubusercontent.com/u/179381557?v=4" width="100" alt="vidhishah2209"/>
+            <br />
+            <sub><b>vidhishah2209</b></sub>
+        </a>
+    </td>
 		</tr>
 	</tbody>
 </table>

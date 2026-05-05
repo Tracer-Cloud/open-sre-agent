@@ -83,6 +83,12 @@
             ]
           },
           {
+            "group": "LLM providers",
+            "pages": [
+              "llm-providers"
+            ]
+          },
+          {
             "group": "Observability and incidents",
             "expanded": true,
             "pages": [

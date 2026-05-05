@@ -1,4 +1,9 @@
-"""OpenAI Codex CLI adapter (`codex exec`, non-interactive)."""
+"""OpenAI Codex CLI adapter (`codex exec`, non-interactive).
+
+OpenAI Platform env vars (``OPENAI_API_KEY``, ``OPENAI_ORG_ID``, ``OPENAI_PROJECT_ID``,
+``OPENAI_BASE_URL``) are forwarded on invoke when set, so Codex runs work with
+usage-based API key auth as well as ``codex login`` sessions.
+"""
 
 from __future__ import annotations
 
@@ -81,6 +86,31 @@ def _fallback_codex_paths() -> list[str]:
     return _default_cli_fallback_paths("codex")
 
 
+def _openai_platform_env_overrides() -> dict[str, str]:
+    """Copy OpenAI Platform env vars into the Codex subprocess (invoke path only).
+
+    `build_cli_subprocess_env` does not forward `OPENAI_*` globally, so other CLI
+    adapters do not see them. Codex can authenticate via API key (usage billing)
+    in addition to `codex login` / ChatGPT subscription sessions.
+    """
+    keys = (
+        "OPENAI_API_KEY",
+        "OPENAI_ORG_ID",
+        "OPENAI_PROJECT_ID",
+        "OPENAI_BASE_URL",
+    )
+    out: dict[str, str] = {}
+    for key in keys:
+        val = os.environ.get(key, "").strip()
+        if val:
+            out[key] = val
+    return out
+
+
+def _has_openai_api_key() -> bool:
+    return bool(os.environ.get("OPENAI_API_KEY", "").strip())
+
+
 class CodexAdapter:
     """Non-interactive Codex CLI (`codex exec` with read-only sandbox)."""
 
@@ -150,6 +180,11 @@ class CodexAdapter:
                 auth_proc.returncode, auth_proc.stdout, auth_proc.stderr
             )
 
+        if logged_in is not True and _has_openai_api_key():
+            # Allow API-key auth when ChatGPT/session login is absent or unclear.
+            logged_in = True
+            auth_detail = "Authenticated via OPENAI_API_KEY fallback."
+
         detail = auth_detail + upgrade_note
         return CLIProbe(
             installed=True,
@@ -202,11 +237,12 @@ class CodexAdapter:
 
         argv.append("-")
 
+        oai = _openai_platform_env_overrides()
         return CLIInvocation(
             argv=tuple(argv),
             stdin=prompt,
             cwd=ws,
-            env=None,
+            env=oai or None,
             timeout_sec=self.default_exec_timeout_sec,
         )
 
