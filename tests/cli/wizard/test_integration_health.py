@@ -159,11 +159,12 @@ def test_validate_coralogix_integration_fails(monkeypatch) -> None:
 
 
 def test_validate_incident_io_integration_succeeds(monkeypatch) -> None:
-    mock_client = types.SimpleNamespace(
-        __enter__=lambda s: s,
-        __exit__=lambda *_: None,
-        list_incidents=lambda **_: {"success": True},
-    )
+    from unittest.mock import MagicMock
+
+    mock_client = MagicMock()
+    mock_client.__enter__.return_value = mock_client
+    mock_client.list_incidents.return_value = {"success": True}
+
     monkeypatch.setattr(
         "app.services.incident_io.client.IncidentIoClient",
         lambda _config: mock_client,
@@ -176,11 +177,12 @@ def test_validate_incident_io_integration_succeeds(monkeypatch) -> None:
 
 
 def test_validate_incident_io_integration_fails(monkeypatch) -> None:
-    mock_client = types.SimpleNamespace(
-        __enter__=lambda s: s,
-        __exit__=lambda *_: None,
-        list_incidents=lambda **_: {"success": False, "error": "Unauthorized"},
-    )
+    from unittest.mock import MagicMock
+
+    mock_client = MagicMock()
+    mock_client.__enter__.return_value = mock_client
+    mock_client.list_incidents.return_value = {"success": False, "error": "Unauthorized"}
+
     monkeypatch.setattr(
         "app.services.incident_io.client.IncidentIoClient",
         lambda _config: mock_client,
