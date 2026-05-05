@@ -165,7 +165,7 @@ def test_validate_incident_io_integration_succeeds(monkeypatch) -> None:
         list_incidents=lambda **_: {"success": True},
     )
     monkeypatch.setattr(
-        "app.cli.wizard.integration_validators.client_validators.IncidentIoClient",
+        "app.services.incident_io.client.IncidentIoClient",
         lambda _config: mock_client,
     )
 
@@ -182,7 +182,7 @@ def test_validate_incident_io_integration_fails(monkeypatch) -> None:
         list_incidents=lambda **_: {"success": False, "error": "Unauthorized"},
     )
     monkeypatch.setattr(
-        "app.cli.wizard.integration_validators.client_validators.IncidentIoClient",
+        "app.services.incident_io.client.IncidentIoClient",
         lambda _config: mock_client,
     )
 
