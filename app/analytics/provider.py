@@ -367,9 +367,14 @@ def _format_property(key: str, value: PropertyValue) -> str:
     return f"{key}={rendered}"
 
 
+@dataclass(slots=True)
+class _EventLogState:
+    initialized: bool = False
+    lines_written: int = 0
+
+
 _event_log_lock = threading.Lock()
-_event_log_state_initialized = False
-_event_log_lines_written = 0
+_event_log_state = _EventLogState()
 
 
 def _event_log_path() -> Path:
@@ -392,14 +397,13 @@ def _initialize_event_log_state(log_path: Path) -> None:
     whose file already had 1500 lines from a previous process would write a
     further 1000 before the first rotation, growing the file to 2500 lines.
     """
-    global _event_log_state_initialized, _event_log_lines_written  # noqa: PLW0603
-    if _event_log_state_initialized:
+    if _event_log_state.initialized:
         return
-    _event_log_state_initialized = True
+    _event_log_state.initialized = True
     with contextlib.suppress(OSError):
         if log_path.exists():
             with log_path.open("r", encoding="utf-8") as fh:
-                _event_log_lines_written = sum(1 for _ in fh)
+                _event_log_state.lines_written = sum(1 for _ in fh)
 
 
 def _rotate_event_log(log_path: Path) -> None:
@@ -423,7 +427,6 @@ def _append_log_line(line: str) -> None:
     interleave a write with a rename. Failures (e.g. read-only filesystem) are
     swallowed — the event log is a best-effort developer aid, not a guarantee.
     """
-    global _event_log_lines_written  # noqa: PLW0603
     log_path = _event_log_path()
     with _event_log_lock:
         _initialize_event_log_state(log_path)
@@ -434,10 +437,10 @@ def _append_log_line(line: str) -> None:
             log_path.parent.mkdir(parents=True, exist_ok=True)
         with contextlib.suppress(OSError), log_path.open("a", encoding="utf-8") as fh:
             fh.write(line)
-        _event_log_lines_written += 1
-        if _event_log_lines_written >= _EVENT_LOG_MAX_LINES:
+        _event_log_state.lines_written += 1
+        if _event_log_state.lines_written >= _EVENT_LOG_MAX_LINES:
             _rotate_event_log(log_path)
-            _event_log_lines_written = 0
+            _event_log_state.lines_written = 0
 
 
 def _log_event_line(event: str, properties: Properties) -> None:

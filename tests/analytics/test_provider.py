@@ -684,8 +684,7 @@ def test_event_log_writes_to_config_dir_not_cwd(monkeypatch, tmp_path: Path) -> 
 
     monkeypatch.setenv("OPENSRE_ANALYTICS_LOG_EVENTS", "1")
     monkeypatch.setattr(provider, "_CONFIG_DIR", config_dir)
-    monkeypatch.setattr(provider, "_event_log_state_initialized", False)
-    monkeypatch.setattr(provider, "_event_log_lines_written", 0)
+    monkeypatch.setattr(provider, "_event_log_state", provider._EventLogState())
     monkeypatch.chdir(cwd)
 
     provider._log_debug_line("event")
@@ -701,8 +700,7 @@ def test_event_log_creates_config_dir_on_first_write(monkeypatch, tmp_path: Path
 
     monkeypatch.setenv("OPENSRE_ANALYTICS_LOG_EVENTS", "1")
     monkeypatch.setattr(provider, "_CONFIG_DIR", config_dir)
-    monkeypatch.setattr(provider, "_event_log_state_initialized", False)
-    monkeypatch.setattr(provider, "_event_log_lines_written", 0)
+    monkeypatch.setattr(provider, "_event_log_state", provider._EventLogState())
 
     provider._log_debug_line("first line")
 
