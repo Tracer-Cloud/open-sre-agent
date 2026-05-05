@@ -39,6 +39,7 @@ dependencies = [
     # AWS
     "boto3>=1.42.88",
     # Utilities
+    "filelock>=3.13.0",
     "python-dotenv>=1.2.2",
     "click>=8.1.0",
     "rich>=15.0.0",

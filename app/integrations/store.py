@@ -37,8 +37,13 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
+import os
+import tempfile
 import uuid
+from pathlib import Path
 from typing import Any
+
+from filelock import FileLock
 
 from app.constants import INTEGRATIONS_STORE_PATH, LEGACY_INTEGRATIONS_STORE_PATH
 
@@ -51,6 +56,11 @@ _VERSION = 2
 # Structural fields on an integration record — everything else at the top
 # level of a v1 record is migrated into the default instance's credentials.
 _STRUCTURAL_RECORD_FIELDS = frozenset({"id", "service", "status", "instances"})
+
+
+def _lock_path(store_path: Path) -> Path:
+    """Return the path to the advisory lock file for *store_path*."""
+    return store_path.parent / (store_path.name + ".lock")
 
 
 def _migrate_record_v1_to_v2(record: dict[str, Any]) -> dict[str, Any]:
@@ -129,8 +139,8 @@ def _migrate_legacy_store_if_needed() -> None:
     )
 
 
-def _load_raw() -> dict[str, Any]:
-    _migrate_legacy_store_if_needed()
+def _load_raw_unlocked() -> dict[str, Any]:
+    """Read and parse the store file. Caller must hold the file lock."""
     if not STORE_PATH.exists():
         return {"version": _VERSION, "integrations": []}
     try:
@@ -140,23 +150,58 @@ def _load_raw() -> dict[str, Any]:
         return {"version": _VERSION, "integrations": []}
     if not isinstance(data, dict) or "integrations" not in data:
         return {"version": _VERSION, "integrations": []}
+    return data
 
-    data, did_migrate = _migrate_if_needed(data)
-    if did_migrate:
-        try:
-            _save(data)  # write-through; idempotent on future loads
-        except OSError:
-            logger.warning(
-                "Failed to persist v2 migration; continuing with in-memory v2",
-                exc_info=True,
-            )
+
+def _save_unlocked(data: dict[str, Any]) -> None:
+    """Atomically write *data* to the store. Caller must hold the file lock.
+
+    Writes to a sibling temp file in the same directory, fsyncs it, then
+    replaces the store file atomically via ``os.replace``. This ensures:
+
+    - A concurrent reader always sees a complete file (never a partial write).
+    - A crash mid-write leaves the previous file intact.
+    - File permissions are set to ``0o600`` before the rename so the window
+      during which the file is world-readable is eliminated.
+    """
+    STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(data, indent=2) + "\n"
+    fd, tmp_path = tempfile.mkstemp(dir=STORE_PATH.parent, prefix=".integrations-")
+    try:
+        with os.fdopen(fd, "w") as fh:
+            fh.write(payload)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.chmod(tmp_path, 0o600)
+        os.replace(tmp_path, STORE_PATH)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp_path)
+        raise
+
+
+def _load_raw() -> dict[str, Any]:
+    """Load the store, acquiring the advisory lock for the full read."""
+    _migrate_legacy_store_if_needed()
+    with FileLock(str(_lock_path(STORE_PATH))):
+        data = _load_raw_unlocked()
+        data, did_migrate = _migrate_if_needed(data)
+        if did_migrate:
+            try:
+                _save_unlocked(data)  # write-through; idempotent on future loads
+            except OSError:
+                logger.warning(
+                    "Failed to persist v2 migration; continuing with in-memory v2",
+                    exc_info=True,
+                )
     return data
 
 
 def _save(data: dict[str, Any]) -> None:
+    """Write *data* to the store, acquiring the advisory lock first."""
     STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    STORE_PATH.write_text(json.dumps(data, indent=2) + "\n")
-    STORE_PATH.chmod(0o600)
+    with FileLock(str(_lock_path(STORE_PATH))):
+        _save_unlocked(data)
 
 
 def load_integrations() -> list[dict[str, Any]]:
@@ -222,33 +267,48 @@ def upsert_integration(service: str, entry: dict[str, Any]) -> None:
     Accepts v1-shaped entries (``{"credentials": {...}}``) and v2-shaped
     entries (``{"instances": [...]}``) transparently. v1 entries are
     wrapped into a single ``default`` instance.
+
+    The full read-modify-write is performed under a single file lock so
+    concurrent callers cannot overwrite each other's changes.
     """
-    data = _load_raw()
-    integrations: list[dict[str, Any]] = data.get("integrations", [])
+    STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with FileLock(str(_lock_path(STORE_PATH))):
+        data = _load_raw_unlocked()
+        data, _ = _migrate_if_needed(data)
+        integrations: list[dict[str, Any]] = data.get("integrations", [])
 
-    # Remove existing entry for the same service
-    integrations = [i for i in integrations if i.get("service") != service]
+        # Remove existing entry for the same service
+        integrations = [i for i in integrations if i.get("service") != service]
 
-    record: dict[str, Any] = {
-        "id": entry.get("id") or f"{service}-{uuid.uuid4().hex[:8]}",
-        "service": service,
-        "status": entry.get("status", "active"),
-        "instances": _wrap_as_instances(entry),
-    }
-    integrations.append(record)
+        record: dict[str, Any] = {
+            "id": entry.get("id") or f"{service}-{uuid.uuid4().hex[:8]}",
+            "service": service,
+            "status": entry.get("status", "active"),
+            "instances": _wrap_as_instances(entry),
+        }
+        integrations.append(record)
 
-    data["integrations"] = integrations
-    _save(data)
+        data["integrations"] = integrations
+        _save_unlocked(data)
 
 
 def remove_integration(service: str) -> bool:
-    """Remove integration for a service. Returns True if something was removed."""
-    data = _load_raw()
-    before = len(data.get("integrations", []))
-    data["integrations"] = [i for i in data.get("integrations", []) if i.get("service") != service]
-    removed = len(data["integrations"]) < before
-    if removed:
-        _save(data)
+    """Remove integration for a service. Returns True if something was removed.
+
+    The full read-modify-write is performed under a single file lock so
+    concurrent callers cannot overwrite each other's changes.
+    """
+    STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with FileLock(str(_lock_path(STORE_PATH))):
+        data = _load_raw_unlocked()
+        data, _ = _migrate_if_needed(data)
+        before = len(data.get("integrations", []))
+        data["integrations"] = [
+            i for i in data.get("integrations", []) if i.get("service") != service
+        ]
+        removed = len(data["integrations"]) < before
+        if removed:
+            _save_unlocked(data)
     return removed
 
 
@@ -336,52 +396,58 @@ def upsert_instance(
     If ``record_id`` matches an existing record for ``service``, the instance
     is appended or updated by name within that record. Otherwise, a new
     record is created containing only this instance.
+
+    The full read-modify-write is performed under a single file lock so
+    concurrent callers cannot overwrite each other's changes.
     """
-    data = _load_raw()
-    integrations: list[dict[str, Any]] = data.get("integrations", [])
-    target: dict[str, Any] | None = None
-    for record in integrations:
-        if record.get("service") != service:
-            continue
-        if record_id is not None and record.get("id") != record_id:
-            continue
-        target = record
-        break
+    STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with FileLock(str(_lock_path(STORE_PATH))):
+        data = _load_raw_unlocked()
+        data, _ = _migrate_if_needed(data)
+        integrations: list[dict[str, Any]] = data.get("integrations", [])
+        target: dict[str, Any] | None = None
+        for record in integrations:
+            if record.get("service") != service:
+                continue
+            if record_id is not None and record.get("id") != record_id:
+                continue
+            target = record
+            break
 
-    normalized_instance = {
-        "name": str(instance.get("name", "default")).strip().lower() or "default",
-        "tags": instance.get("tags", {}) or {},
-        "credentials": instance.get("credentials", {}) or {},
-    }
+        normalized_instance = {
+            "name": str(instance.get("name", "default")).strip().lower() or "default",
+            "tags": instance.get("tags", {}) or {},
+            "credentials": instance.get("credentials", {}) or {},
+        }
 
-    if target is None:
-        integrations.append(
-            {
-                "id": record_id or f"{service}-{uuid.uuid4().hex[:8]}",
-                "service": service,
-                "status": "active",
-                "instances": [normalized_instance],
-            }
-        )
-    else:
-        existing_instances = target.get("instances", [])
-        if not isinstance(existing_instances, list):
-            existing_instances = []
-        replaced = False
-        for idx, existing in enumerate(existing_instances):
-            if (
-                isinstance(existing, dict)
-                and existing.get("name", "").lower() == normalized_instance["name"]
-            ):
-                existing_instances[idx] = normalized_instance
-                replaced = True
-                break
-        if not replaced:
-            existing_instances.append(normalized_instance)
-        target["instances"] = existing_instances
+        if target is None:
+            integrations.append(
+                {
+                    "id": record_id or f"{service}-{uuid.uuid4().hex[:8]}",
+                    "service": service,
+                    "status": "active",
+                    "instances": [normalized_instance],
+                }
+            )
+        else:
+            existing_instances = target.get("instances", [])
+            if not isinstance(existing_instances, list):
+                existing_instances = []
+            replaced = False
+            for idx, existing in enumerate(existing_instances):
+                if (
+                    isinstance(existing, dict)
+                    and existing.get("name", "").lower() == normalized_instance["name"]
+                ):
+                    existing_instances[idx] = normalized_instance
+                    replaced = True
+                    break
+            if not replaced:
+                existing_instances.append(normalized_instance)
+            target["instances"] = existing_instances
 
-    data["integrations"] = integrations
-    _save(data)
+        data["integrations"] = integrations
+        _save_unlocked(data)
 
 
 def remove_instance(service: str, name: str) -> bool:
@@ -391,41 +457,47 @@ def remove_instance(service: str, name: str) -> bool:
     is removed. Always persists the change when something was removed
     (PR #527 P2 regression fix).
 
+    The full read-modify-write is performed under a single file lock so
+    concurrent callers cannot overwrite each other's changes.
+
     Returns True if something was removed.
     """
     normalized_name = name.strip().lower()
     if not normalized_name:
         return False
 
-    data = _load_raw()
-    integrations: list[dict[str, Any]] = data.get("integrations", [])
-    changed = False
-    remaining: list[dict[str, Any]] = []
+    STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with FileLock(str(_lock_path(STORE_PATH))):
+        data = _load_raw_unlocked()
+        data, _ = _migrate_if_needed(data)
+        integrations: list[dict[str, Any]] = data.get("integrations", [])
+        changed = False
+        remaining: list[dict[str, Any]] = []
 
-    for record in integrations:
-        if record.get("service") != service:
+        for record in integrations:
+            if record.get("service") != service:
+                remaining.append(record)
+                continue
+            instances = record.get("instances", [])
+            if not isinstance(instances, list):
+                remaining.append(record)
+                continue
+            kept = [
+                inst
+                for inst in instances
+                if isinstance(inst, dict) and inst.get("name", "").lower() != normalized_name
+            ]
+            if len(kept) == len(instances):
+                remaining.append(record)
+                continue
+            changed = True
+            if not kept:
+                continue  # drop the whole record
+            record = dict(record)
+            record["instances"] = kept
             remaining.append(record)
-            continue
-        instances = record.get("instances", [])
-        if not isinstance(instances, list):
-            remaining.append(record)
-            continue
-        kept = [
-            inst
-            for inst in instances
-            if isinstance(inst, dict) and inst.get("name", "").lower() != normalized_name
-        ]
-        if len(kept) == len(instances):
-            remaining.append(record)
-            continue
-        changed = True
-        if not kept:
-            continue  # drop the whole record
-        record = dict(record)
-        record["instances"] = kept
-        remaining.append(record)
 
-    if changed:
-        data["integrations"] = remaining
-        _save(data)
+        if changed:
+            data["integrations"] = remaining
+            _save_unlocked(data)
     return changed
