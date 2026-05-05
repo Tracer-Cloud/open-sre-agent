@@ -24,9 +24,31 @@ for concrete details they can share (alert text, error snippets, timelines) or u
 
 Always respond in clear markdown."""
 
-ROUTER_PROMPT = """Classify the user message:
+ROUTER_PROMPT = """Classify the user message into one of two routes.
 
-- "tracer_data" if the user is asking to investigate an alert/incident or requesting analysis that likely requires querying data (e.g., logs, metrics, traces, failed runs/tasks/jobs, error messages, service health, Sentry issues, GitHub code/history).
-- "general" for general questions, greetings, or best practices
+Route to "tracer_data" when the user is asking you to investigate an actual
+incident, triage an alert, or analyze production behavior — anything that
+needs you to query their connected systems (Tracer runs, logs, metrics,
+traces, failed jobs, Sentry, GitHub). Strong signals:
+- Pasted alert payloads (JSON with fields like alertname, severity, state,
+  service, db_instance, namespace) or paraphrased alert text
+- Concrete infra references: pod, deployment, cluster, RDS instance, run_id,
+  job_id, host, service name
+- A problem signal alongside those references: error, failing, crashloop,
+  oomkilled, lag, exhaustion, saturated, 5xx, "is down", "isn't working"
+
+Route to "general" for everything else: greetings, conceptual SRE questions,
+how-to/explain/define/compare requests, best-practice discussions, and
+hypotheticals with no specific system to investigate. Strong signals:
+"what is", "how do I", "explain", "best practice", "in general", "should we".
+
+Tie-breaker: if the message names a specific running system AND describes a
+problem with it, choose "tracer_data" even if the wording is brief.
+
+Examples:
+- {"alertname": "RDSReplicationLagHigh", "severity": "critical", ...} -> tracer_data
+- "payments-api crashloop on x7gr9, can you look?" -> tracer_data
+- "what is a circuit breaker?" -> general
+- "what should our SLO target be for a payment API?" -> general
 
 Respond with ONLY: tracer_data or general"""
