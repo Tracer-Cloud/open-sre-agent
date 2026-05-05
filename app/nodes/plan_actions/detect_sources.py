@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 from app.integrations.azure_sql import DEFAULT_AZURE_SQL_PORT
 from app.integrations.opensre.csv_grafana_backend import OpenSRECsvGrafanaBackend
 from app.integrations.opensre.inject import inject_opensre_into_resolved_integrations
+from app.integrations.rds import DEFAULT_RDS_REGION
 from app.services.coralogix import build_coralogix_logs_query
 from app.services.splunk import build_splunk_spl_query
 from app.tools.GrafanaLogsTool import _map_pipeline_to_service_name
@@ -1213,6 +1214,14 @@ def detect_sources(
             "ssl": rabbitmq_int.get("ssl", False),
             "verify_ssl": rabbitmq_int.get("verify_ssl", True),
             "connection_verified": True,
+        }
+
+    rds_int = (resolved_integrations or {}).get("rds")
+    if rds_int and str(rds_int.get("db_instance_identifier", "")).strip():
+        sources["rds"] = {
+            "db_instance_identifier": str(rds_int.get("db_instance_identifier", "")).strip(),
+            "region": str(rds_int.get("region") or DEFAULT_RDS_REGION).strip()
+            or DEFAULT_RDS_REGION,
         }
 
     betterstack_int = (resolved_integrations or {}).get("betterstack")
