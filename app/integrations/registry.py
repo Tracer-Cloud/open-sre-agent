@@ -22,6 +22,7 @@ from app.integrations._verification_adapters import (
     _verify_google_docs,
     _verify_grafana,
     _verify_honeycomb,
+    _verify_incident_io,
     _verify_kafka,
     _verify_mariadb,
     _verify_mongodb,
@@ -179,6 +180,13 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         direct_effective=True,
         setup_order=13,
         verify_order=20,
+    ),
+    IntegrationSpec(
+        service="incident_io",
+        aliases=("incident.io", "incidentio"),
+        verifier=_verify_incident_io,
+        direct_effective=True,
+        verify_order=34,
     ),
     IntegrationSpec(
         service="opsgenie",
