@@ -272,16 +272,14 @@ def run_suite(argv: list[str] | None = None) -> list[CloudOpsCaseScore]:
             )
         print(json.dumps(summary["metrics"], ensure_ascii=False, indent=2))
 
+    if args.strict_parity and any(score.error for score in scores):
+        raise SystemExit(1)
+
     return scores
 
 
 def main(argv: list[str] | None = None) -> int:
-    scores = run_suite(argv)
-    if not scores:
-        return 0
-    args = parse_args(argv)
-    if args.strict_parity and any(score.error for score in scores):
-        return 1
+    run_suite(argv)
     return 0
 
 

@@ -102,9 +102,17 @@ def _extract_describe_resource(sources: dict[str, dict]) -> dict[str, Any]:
 
 def _extract_service(sources: dict[str, dict]) -> dict[str, Any]:
     backend = _cloudops_backend(sources)
-    parts = _process_parts_for_action(backend, "GetErrorLogs") or _process_parts_for_action(
-        backend, "GetRecentLogs"
-    )
+    parts = _process_parts_for_action(backend, "GetErrorLogs")
+    return {
+        "cloudops_backend": backend,
+        "namespace": _default_namespace(backend, sources),
+        "service_name": parts[1] if len(parts) >= 2 else _service_from_process(backend),
+    }
+
+
+def _extract_recent_logs(sources: dict[str, dict]) -> dict[str, Any]:
+    backend = _cloudops_backend(sources)
+    parts = _process_parts_for_action(backend, "GetRecentLogs")
     return {
         "cloudops_backend": backend,
         "namespace": _default_namespace(backend, sources),
@@ -272,7 +280,7 @@ def get_error_logs(
     use_cases=["Inspect recent service logs recorded in raw_data/logs.json."],
     requires=["cluster_name"],
     is_available=_cloudops_available,
-    extract_params=_extract_service,
+    extract_params=_extract_recent_logs,
 )
 def get_recent_logs(
     cloudops_backend: Any,
