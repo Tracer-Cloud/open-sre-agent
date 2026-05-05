@@ -9,8 +9,10 @@ CLAUDE_CODE_MODEL Optional model override (e.g. ``claude-opus-4-7``).
 
 Auth
 ----
-Claude Code authenticates via ``ANTHROPIC_API_KEY`` (env var) or OAuth credentials
-stored in ``~/.claude/.credentials.json`` after ``claude login``.
+When the ``claude`` binary is available, OpenSRE probes ``claude auth status``
+and treats Claude subscription login as first-class auth. ``ANTHROPIC_API_KEY``
+and ``~/.claude/.credentials.json`` are used as fallbacks when the binary is
+unavailable.
 """
 
 from __future__ import annotations
@@ -44,6 +46,16 @@ def _parse_semver(text: str) -> str | None:
     return m.group(1) if m else None
 
 
+def _anthropic_env_overrides() -> dict[str, str]:
+    """Build Claude subprocess auth/config overrides used by probe and invoke."""
+    env: dict[str, str] = {"NO_COLOR": "1"}
+    for key in ("ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN"):
+        val = os.environ.get(key, "").strip()
+        if val:
+            env[key] = val
+    return env
+
+
 def _probe_cli_auth(binary_path: str) -> tuple[bool | None, str]:
     """Check Claude Code auth via `claude auth status` (local, no API call).
 
@@ -51,13 +63,15 @@ def _probe_cli_auth(binary_path: str) -> tuple[bool | None, str]:
     priority as reported by the CLI itself.
     """
     try:
+        from app.integrations.llm_cli.runner import _build_subprocess_env
+
         proc = subprocess.run(
             [binary_path, "auth", "status"],
             capture_output=True,
             text=True,
             timeout=_PROBE_TIMEOUT_SEC,
             check=False,
-            env={**os.environ, "NO_COLOR": "1"},
+            env=_build_subprocess_env(_anthropic_env_overrides()),
         )
     except subprocess.TimeoutExpired:
         return (
@@ -79,7 +93,17 @@ def _probe_cli_auth(binary_path: str) -> tuple[bool | None, str]:
         email = data.get("email", "")
         return True, f"Authenticated via Claude subscription{f' ({email})' if email else ''}."
     except (json.JSONDecodeError, AttributeError):
-        # Older CLI versions may not output JSON — treat exit 0 as authenticated.
+        # Older CLI versions may not output JSON; classify explicit negative
+        # phrases first to avoid false positives like "Not logged in" (exit 0).
+        plain = (proc.stdout or proc.stderr or "").strip().lower()
+        negative_markers = (
+            "not logged in",
+            "not authenticated",
+            "login required",
+            "unauthenticated",
+        )
+        if any(marker in plain for marker in negative_markers):
+            return False, "Not authenticated. Run: claude auth login  or set ANTHROPIC_API_KEY."
         return True, "Authenticated via Claude CLI."
 
 
@@ -125,7 +149,7 @@ class ClaudeCodeAdapter:
     name = "claude-code"
     binary_env_key = "CLAUDE_CODE_BIN"
     install_hint = "npm i -g @anthropic-ai/claude-code"
-    auth_hint = "Run: claude login  or set ANTHROPIC_API_KEY"
+    auth_hint = "Run: claude auth login  or set ANTHROPIC_API_KEY"
     min_version: str | None = None
     default_exec_timeout_sec = 120.0
 
@@ -212,11 +236,7 @@ class ClaudeCodeAdapter:
 
         # Forward Anthropic auth vars explicitly rather than relying on a blanket
         # prefix allowlist, so they don't leak into other CLI adapters (e.g. Codex).
-        env: dict[str, str] = {"NO_COLOR": "1"}
-        for key in ("ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN"):
-            val = os.environ.get(key, "").strip()
-            if val:
-                env[key] = val
+        env = _anthropic_env_overrides()
 
         return CLIInvocation(
             argv=tuple(argv),

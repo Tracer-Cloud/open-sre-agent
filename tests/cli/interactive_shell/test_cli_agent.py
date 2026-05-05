@@ -93,6 +93,7 @@ class TestSystemPromptTerminology:
         assert _ACTION_RULE in prompt
         assert "switch_llm_provider" in prompt
         assert '"action":"switch_llm_provider"' in prompt
+        assert "claude-code" in prompt
 
 
 class TestActionPlanParsing:

@@ -199,6 +199,50 @@ def test_probe_cli_auth_non_json_exit_zero(mock_run: MagicMock) -> None:
 
 
 @patch("app.integrations.llm_cli.claude_code.subprocess.run")
+def test_probe_cli_auth_non_json_not_logged_in_exit_zero(mock_run: MagicMock) -> None:
+    """Plain-text 'not logged in' on exit 0 must not be misclassified as authenticated."""
+    m = MagicMock()
+    m.returncode = 0
+    m.stdout = "Not logged in\n"
+    m.stderr = ""
+    mock_run.return_value = m
+    logged_in, detail = _probe_cli_auth("/usr/bin/claude")
+    assert logged_in is False
+    assert "Not authenticated" in detail
+
+
+@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+def test_probe_cli_auth_uses_filtered_subprocess_env(mock_run: MagicMock) -> None:
+    """Auth probe should use the same filtered env shape as runtime invocation."""
+    m = MagicMock()
+    m.returncode = 0
+    m.stdout = '{"loggedIn": true, "apiKeySource": "ANTHROPIC_API_KEY"}\n'
+    m.stderr = ""
+    mock_run.return_value = m
+
+    with patch.dict(
+        os.environ,
+        {
+            "PATH": "/usr/bin",
+            "OPENAI_API_KEY": "should-not-leak",
+            "RANDOM_SECRET": "should-not-leak",
+            "CLAUDE_CODE_MODEL": "claude-opus-4-7",
+            "ANTHROPIC_API_KEY": "sk-visible",
+        },
+        clear=False,
+    ):
+        logged_in, _detail = _probe_cli_auth("/usr/bin/claude")
+
+    assert logged_in is True
+    env = mock_run.call_args.kwargs["env"]
+    assert env["PATH"] == "/usr/bin"
+    assert env["CLAUDE_CODE_MODEL"] == "claude-opus-4-7"
+    assert env["ANTHROPIC_API_KEY"] == "sk-visible"
+    assert "OPENAI_API_KEY" not in env
+    assert "RANDOM_SECRET" not in env
+
+
+@patch("app.integrations.llm_cli.claude_code.subprocess.run")
 @patch("app.integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_subscription_authenticated(mock_which: MagicMock, mock_run: MagicMock) -> None:
     """detect() returns logged_in=True via subscription when binary is available."""
@@ -436,6 +480,11 @@ def test_explain_failure_falls_back_to_stdout() -> None:
     adapter = ClaudeCodeAdapter()
     msg = adapter.explain_failure(stdout="some output", stderr="", returncode=2)
     assert "some output" in msg
+
+
+def test_auth_hint_uses_claude_auth_login() -> None:
+    adapter = ClaudeCodeAdapter()
+    assert "claude auth login" in adapter.auth_hint
 
 
 # ---------------------------------------------------------------------------
