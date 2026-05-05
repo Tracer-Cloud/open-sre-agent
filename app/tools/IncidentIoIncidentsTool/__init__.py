@@ -75,11 +75,18 @@ class IncidentIoIncidentsTool(BaseTool):
         integration = sources.get("incident_io", {})
         return {
             "api_key": integration.get("api_key", ""),
+            "region": integration.get("region", "us"),
+            "action": integration.get("action", "list"),
+            "status": integration.get("status", "live"),
+            "incident_id": integration.get("incident_id", ""),
+            "title": integration.get("title", ""),
+            "comment": integration.get("comment", ""),
         }
 
     def run(
         self,
         api_key: str,
+        region: str = "us",
         action: str = "list",
         status: str = "live",
         incident_id: str = "",
@@ -89,37 +96,54 @@ class IncidentIoIncidentsTool(BaseTool):
         after: str | None = None,
         **_kwargs: Any,
     ) -> dict[str, Any]:
-        client = make_incident_io_client(api_key)
+        client = make_incident_io_client(api_key, region)
         if client is None:
             return {
                 "source": "incident_io",
                 "available": False,
                 "error": "Incident.io integration is not configured.",
                 "success": False,
+                "incidents": [],
+                "total": 0,
             }
 
         with client:
             if action == "add_timeline":
                 if not incident_id:
-                    return {"success": False, "error": "incident_id is required for add_timeline"}
+                    return {
+                        "source": "incident_io",
+                        "available": True,
+                        "success": False,
+                        "error": "incident_id is required for add_timeline",
+                    }
                 if not title:
-                    return {"success": False, "error": "title is required for add_timeline"}
+                    return {
+                        "source": "incident_io",
+                        "available": True,
+                        "success": False,
+                        "error": "title is required for add_timeline",
+                    }
 
                 result = client.add_timeline_event(incident_id, title=title, description=comment)
-                result["action"] = action
+                result.update({"source": "incident_io", "available": True, "action": action})
                 return result
 
             elif action == "get":
                 if not incident_id:
-                    return {"success": False, "error": "incident_id is required for get"}
+                    return {
+                        "source": "incident_io",
+                        "available": True,
+                        "success": False,
+                        "error": "incident_id is required for get",
+                    }
                 result = client.get_incident(incident_id)
-                result["action"] = action
+                result.update({"source": "incident_io", "available": True, "action": action})
                 return result
 
             else:
                 # default action == "list"
                 result = client.list_incidents(status=status, page_size=page_size, after=after)
-                result["action"] = action
+                result.update({"source": "incident_io", "available": True, "action": action})
                 return result
 
 

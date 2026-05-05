@@ -21,9 +21,19 @@ def test_incident_io_tool_is_available(tool):
 
 def test_incident_io_tool_extract_params(tool):
     """Test param extraction."""
-    sources = {"incident_io": {"api_key": "test-key"}}
+    sources = {
+        "incident_io": {
+            "api_key": "test-key",
+            "region": "eu",
+            "status": "triage",
+            "incident_id": "inc-456",
+        }
+    }
     params = tool.extract_params(sources)
     assert params["api_key"] == "test-key"
+    assert params["region"] == "eu"
+    assert params["status"] == "triage"
+    assert params["incident_id"] == "inc-456"
 
 
 def test_incident_io_tool_run_list(tool, monkeypatch):
@@ -40,9 +50,9 @@ def test_incident_io_tool_run_list(tool, monkeypatch):
         "app.tools.IncidentIoIncidentsTool.make_incident_io_client", mock_make_client
     )
 
-    result = tool.run(api_key="test-key", action="list", status="live")
+    result = tool.run(api_key="test-key", region="us", action="list", status="live")
 
-    mock_make_client.assert_called_once_with("test-key")
+    mock_make_client.assert_called_once_with("test-key", "us")
     mock_client.list_incidents.assert_called_once_with(status="live", page_size=None, after=None)
     assert result["success"] is True
     assert result["action"] == "list"
@@ -61,6 +71,7 @@ def test_incident_io_tool_run_add_timeline(tool, monkeypatch):
 
     result = tool.run(
         api_key="test-key",
+        region="us",
         action="add_timeline",
         incident_id="inc-123",
         title="Test Update",
@@ -84,7 +95,7 @@ def test_incident_io_tool_run_get(tool, monkeypatch):
         "app.tools.IncidentIoIncidentsTool.make_incident_io_client", mock_make_client
     )
 
-    result = tool.run(api_key="test-key", action="get", incident_id="inc-123")
+    result = tool.run(api_key="test-key", region="us", action="get", incident_id="inc-123")
 
     mock_client.get_incident.assert_called_once_with("inc-123")
     assert result["success"] is True

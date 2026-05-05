@@ -422,6 +422,37 @@ def validate_opsgenie_integration(
         )
 
 
+def validate_incident_io_integration(
+    *,
+    api_key: str,
+    region: str = "us",
+) -> IntegrationHealthResult:
+    """Validate Incident.io connectivity by listing incidents."""
+    from app.integrations.config_models import IncidentIoIntegrationConfig
+    from app.services.incident_io.client import IncidentIoClient
+
+    if not api_key:
+        return IntegrationHealthResult(ok=False, detail="Incident.io API key is required.")
+    try:
+        config = IncidentIoIntegrationConfig(api_key=api_key, region=region)
+        with IncidentIoClient(config) as client:
+            result = client.list_incidents(status="", page_size=1)
+        if result.get("success"):
+            return IntegrationHealthResult(
+                ok=True,
+                detail=f"Incident.io validated ({config.region.upper()} region); API key accepted.",
+            )
+        return IntegrationHealthResult(
+            ok=False,
+            detail=f"Incident.io validation failed: {result.get('error', 'unknown error')}",
+        )
+    except Exception as err:
+        return IntegrationHealthResult(
+            ok=False,
+            detail=f"Incident.io validation failed: {err}",
+        )
+
+
 def validate_splunk_integration(
     *,
     base_url: str,

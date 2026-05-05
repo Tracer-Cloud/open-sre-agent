@@ -277,6 +277,12 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         verify_order=33,
     ),
     IntegrationSpec(
+        service="incident_io",
+        verifier=_verify_incident_io,
+        direct_effective=True,
+        verify_order=34,
+    ),
+    IntegrationSpec(
         service="airflow",
         aliases=("apache airflow",),
         verifier=None,

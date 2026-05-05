@@ -14,26 +14,30 @@ import httpx
 
 from app.integrations.config_models import IncidentIoIntegrationConfig
 from app.integrations.probes import ProbeResult
+from app.masking import redact_credentials
 
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TIMEOUT = 30
-IncidentIoConfig = IncidentIoIntegrationConfig
+_MAX_RETRIES = 3
 
 
 class IncidentIoClient:
     """Synchronous client for querying the incident.io API."""
 
-    def __init__(self, config: IncidentIoConfig) -> None:
+    def __init__(self, config: IncidentIoIntegrationConfig) -> None:
         self.config = config
         self._client: httpx.Client | None = None
 
     def _get_client(self) -> httpx.Client:
         if self._client is None:
+            # Add retry transport for transient 5xx and 429s
+            transport = httpx.HTTPTransport(retries=_MAX_RETRIES)
             self._client = httpx.Client(
                 base_url=self.config.base_url,
                 headers=self.config.headers,
                 timeout=_DEFAULT_TIMEOUT,
+                transport=transport,
             )
         return self._client
 
@@ -42,20 +46,21 @@ class IncidentIoClient:
         return bool(self.config.api_key)
 
     def probe_access(self) -> ProbeResult:
-        """Validate incident.io credentials with a minimal incidents list call."""
+        """Validate incident.io credentials with a minimal incidents list check."""
         if not self.is_configured:
             return ProbeResult.missing("Missing API key.")
 
-        with self:
-            result = self.list_incidents(status="", page_size=1)
-            # We don't mind if there are no open incidents, just need a successful HTTP response
+        try:
+            # Use direct GET call to avoid internal helper dependencies in the probe
+            resp = self._get_client().get("/v2/incidents", params={"page_size": 1})
+            resp.raise_for_status()
+        except Exception as e:
+            return ProbeResult.failed(f"Connection failed: {e}", region=self.config.region)
 
-        if not result.get("success"):
-            return ProbeResult.failed(
-                f"Incident list check failed: {result.get('error', 'unknown error')}"
-            )
-
-        return ProbeResult.passed("Connected to incident.io; API key accepted.")
+        return ProbeResult.passed(
+            f"Connected to incident.io ({self.config.region.upper()} region); API key accepted.",
+            region=self.config.region,
+        )
 
     def close(self) -> None:
         if self._client is not None:
@@ -74,9 +79,7 @@ class IncidentIoClient:
         page_size: int | None = None,
         after: str | None = None,
     ) -> dict[str, Any]:
-        """List incident.io incidents, optionally filtered by status.
-        Status can be e.g. live, resolved, or omitted.
-        """
+        """List incident.io incidents, optionally filtered by status."""
         params: dict[str, Any] = {}
         if status:
             params["status[in]"] = status
@@ -116,13 +119,16 @@ class IncidentIoClient:
                 result["pagination_meta"] = data["pagination_meta"]
             return result
         except httpx.HTTPStatusError as e:
+            # Redact response text to avoid leaking tokens in logs
+            err_text = redact_credentials(e.response.text[:200])
             logger.warning(
-                "[incident_io] List incidents HTTP failure status=%s",
+                "[incident_io] List incidents HTTP failure status=%s error=%r",
                 e.response.status_code,
+                err_text,
             )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {e.response.status_code}: {err_text}",
             }
         except Exception as e:
             logger.warning("[incident_io] List incidents error: %s", e)
@@ -148,14 +154,16 @@ class IncidentIoClient:
 
             return {"success": True, "incident": incident}
         except httpx.HTTPStatusError as e:
+            err_text = redact_credentials(e.response.text[:200])
             logger.warning(
-                "[incident_io] Get incident HTTP failure status=%s id=%r",
+                "[incident_io] Get incident HTTP failure status=%s id=%r error=%r",
                 e.response.status_code,
                 incident_id,
+                err_text,
             )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {e.response.status_code}: {err_text}",
             }
         except Exception as e:
             logger.warning("[incident_io] Get incident error: %s", e)
@@ -172,9 +180,7 @@ class IncidentIoClient:
                 "event_type": "custom",
                 "title": title,
                 "description": description,
-                "occurred_at": datetime.now(UTC)
-                .isoformat(timespec="milliseconds")
-                .replace("+00:00", "Z"),
+                "occurred_at": datetime.now(UTC).isoformat(timespec="milliseconds"),
             }
             resp = self._get_client().post(
                 "/v2/incident_timeline_events",
@@ -183,27 +189,31 @@ class IncidentIoClient:
             resp.raise_for_status()
             return {"success": True}
         except httpx.HTTPStatusError as e:
+            err_text = redact_credentials(e.response.text[:200])
             logger.warning(
-                "[incident_io] Add timeline event HTTP failure status=%s id=%r",
+                "[incident_io] Add timeline event HTTP failure status=%s id=%r error=%r",
                 e.response.status_code,
                 incident_id,
+                err_text,
             )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {e.response.status_code}: {err_text}",
             }
         except Exception as e:
             logger.warning("[incident_io] Add timeline event error: %s", e)
             return {"success": False, "error": str(e)}
 
 
-def make_incident_io_client(api_key: str | None) -> IncidentIoClient | None:
+def make_incident_io_client(
+    api_key: str | None, region: str | None = "us"
+) -> IncidentIoClient | None:
     """Create an IncidentIoClient if a valid API key is provided."""
     token = (api_key or "").strip()
     if not token:
         return None
     try:
-        return IncidentIoClient(IncidentIoConfig(api_key=token))
+        return IncidentIoClient(IncidentIoIntegrationConfig(api_key=token, region=region or "us"))
     except Exception as e:
         logger.warning("[incident_io] Failed to build IncidentIoClient from config: %s", e)
         return None
