@@ -58,13 +58,10 @@ def _check_llm_provider() -> tuple[bool, str]:
     if provider == "not set":
         return False, "LLM_PROVIDER env var is not set"
 
-    if provider in {"codex", "claude-code"}:
-        from app.integrations.llm_cli.registry import get_cli_provider_registration
+    from app.integrations.llm_cli.registry import get_cli_provider_registration
 
-        cli_reg = get_cli_provider_registration(provider)
-        if cli_reg is None:
-            return False, f"provider={provider}, CLI adapter not registered"
-
+    cli_reg = get_cli_provider_registration(provider)
+    if cli_reg is not None:
         probe = cli_reg.adapter_factory().detect()
         if not probe.installed or not probe.bin_path:
             return False, f"provider={provider}, CLI not installed ({probe.detail})"
