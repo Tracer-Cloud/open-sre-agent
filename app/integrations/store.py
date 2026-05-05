@@ -37,8 +37,14 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
+import os
+import tempfile
 import uuid
+from collections.abc import Callable
+from pathlib import Path
 from typing import Any
+
+from filelock import FileLock, Timeout
 
 from app.constants import INTEGRATIONS_STORE_PATH, LEGACY_INTEGRATIONS_STORE_PATH
 
@@ -47,6 +53,7 @@ logger = logging.getLogger(__name__)
 STORE_PATH = INTEGRATIONS_STORE_PATH
 LEGACY_STORE_PATH = LEGACY_INTEGRATIONS_STORE_PATH
 _VERSION = 2
+_LOCK_TIMEOUT_SECONDS = 10.0
 
 # Structural fields on an integration record — everything else at the top
 # level of a v1 record is migrated into the default instance's credentials.
@@ -90,8 +97,55 @@ def _migrate_if_needed(data: dict[str, Any]) -> tuple[dict[str, Any], bool]:
     return {"version": _VERSION, "integrations": migrated_records}, True
 
 
-def _migrate_legacy_store_if_needed() -> None:
-    """Move the legacy ~/.tracer store into ~/.opensre on first access."""
+def _lock_path() -> Path:
+    """Return the file lock path derived from the current STORE_PATH."""
+    return STORE_PATH.with_suffix(".lock")
+
+
+def _acquire_lock() -> FileLock:
+    """Create and return a FileLock for the current STORE_PATH."""
+    return FileLock(str(_lock_path()), timeout=_LOCK_TIMEOUT_SECONDS)
+
+
+def _atomic_write(dest: Path, data: dict[str, Any]) -> None:
+    """Write ``data`` to ``dest`` atomically via a temp file + fsync + replace."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    serialized = json.dumps(data, indent=2) + "\n"
+    fd: int | None = None
+    tmp_path_str: str | None = None
+    try:
+        fd, tmp_path_str = tempfile.mkstemp(
+            dir=dest.parent,
+            prefix=dest.name + ".tmp",
+        )
+        with os.fdopen(fd, "w") as f:
+            f.write(serialized)
+            f.flush()
+            os.fsync(f.fileno())
+        # os.replace is atomic on POSIX and Windows (Python >=3.3)
+        os.replace(tmp_path_str, dest)
+    except Exception:
+        if tmp_path_str:
+            with contextlib.suppress(OSError):
+                os.unlink(tmp_path_str)
+        raise
+    with contextlib.suppress(OSError):
+        dest.chmod(0o600)
+
+
+def _save_unlocked(data: dict[str, Any]) -> None:
+    """Persist ``data`` to STORE_PATH without acquiring a lock.
+
+    Callers must already hold the store lock.
+    """
+    _atomic_write(STORE_PATH, data)
+
+
+def _migrate_legacy_store_unlocked() -> None:
+    """Move the legacy ~/.tracer store into ~/.opensre on first access.
+
+    Must be called while holding the store lock.
+    """
     if STORE_PATH.exists() or not LEGACY_STORE_PATH.exists():
         return
     # Tests often patch only STORE_PATH. If LEGACY_STORE_PATH still points at the
@@ -107,8 +161,28 @@ def _migrate_legacy_store_if_needed() -> None:
     try:
         LEGACY_STORE_PATH.replace(STORE_PATH)
     except OSError:
+        # Fallback: atomic copy via temp file
         try:
-            STORE_PATH.write_bytes(LEGACY_STORE_PATH.read_bytes())
+            legacy_bytes = LEGACY_STORE_PATH.read_bytes()
+            fd: int | None = None
+            tmp_path_str: str | None = None
+            try:
+                fd, tmp_path_str = tempfile.mkstemp(
+                    dir=STORE_PATH.parent,
+                    prefix=STORE_PATH.name + ".tmp",
+                )
+                with os.fdopen(fd, "wb") as f:
+                    f.write(legacy_bytes)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(tmp_path_str, STORE_PATH)
+            except Exception:
+                if tmp_path_str:
+                    with contextlib.suppress(OSError):
+                        os.unlink(tmp_path_str)
+                raise
+            with contextlib.suppress(OSError):
+                STORE_PATH.chmod(0o600)
             LEGACY_STORE_PATH.unlink()
         except OSError:
             logger.warning(
@@ -129,34 +203,91 @@ def _migrate_legacy_store_if_needed() -> None:
     )
 
 
-def _load_raw() -> dict[str, Any]:
-    _migrate_legacy_store_if_needed()
+def _load_raw_unlocked() -> tuple[dict[str, Any], bool]:
+    """Read the store from disk and migrate in memory.
+
+    Returns ``(data, did_migrate)``.  This helper does **not** write back
+    migrations and does **not** acquire any lock.
+    """
     if not STORE_PATH.exists():
-        return {"version": _VERSION, "integrations": []}
+        return {"version": _VERSION, "integrations": []}, False
     try:
-        data = json.loads(STORE_PATH.read_text())
+        text = STORE_PATH.read_text()
+        data = json.loads(text)
     except (json.JSONDecodeError, OSError):
         logger.warning("Failed to read integrations store at %s", STORE_PATH, exc_info=True)
-        return {"version": _VERSION, "integrations": []}
+        return {"version": _VERSION, "integrations": []}, False
     if not isinstance(data, dict) or "integrations" not in data:
-        return {"version": _VERSION, "integrations": []}
+        return {"version": _VERSION, "integrations": []}, False
 
-    data, did_migrate = _migrate_if_needed(data)
+    return _migrate_if_needed(data)
+
+
+def _load_raw() -> dict[str, Any]:
+    """Read the store, migrating on disk if necessary.
+
+    Lock-free for the common v2 path; acquires the store lock only when a
+    legacy move or v1 migration needs to be persisted.
+    """
+    # Legacy store migration check — cheap path when nothing to do
+    if not STORE_PATH.exists() and LEGACY_STORE_PATH.exists():
+        try:
+            with _acquire_lock():
+                _migrate_legacy_store_unlocked()
+        except Timeout as exc:
+            raise RuntimeError(
+                f"Integration store locked: {_lock_path()} (store: {STORE_PATH})"
+            ) from exc
+
+    data, did_migrate = _load_raw_unlocked()
     if did_migrate:
         try:
-            _save(data)  # write-through; idempotent on future loads
-        except OSError:
-            logger.warning(
-                "Failed to persist v2 migration; continuing with in-memory v2",
-                exc_info=True,
-            )
+            with _acquire_lock():
+                # Re-read under lock in case another process already migrated
+                data2, did_migrate2 = _load_raw_unlocked()
+                if did_migrate2:
+                    _save_unlocked(data2)
+                return data2
+        except Timeout as exc:
+            raise RuntimeError(
+                f"Integration store locked: {_lock_path()} (store: {STORE_PATH})"
+            ) from exc
     return data
 
 
 def _save(data: dict[str, Any]) -> None:
-    STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    STORE_PATH.write_text(json.dumps(data, indent=2) + "\n")
-    STORE_PATH.chmod(0o600)
+    """Persist ``data`` to STORE_PATH, acquiring the store lock."""
+    try:
+        with _acquire_lock():
+            _save_unlocked(data)
+    except Timeout as exc:
+        raise RuntimeError(
+            f"Integration store locked: {_lock_path()} (store: {STORE_PATH})"
+        ) from exc
+
+
+def _locked_update(mutator: Callable[[dict[str, Any]], bool]) -> tuple[dict[str, Any], bool]:
+    """Acquire the store lock, load, mutate, and save atomically.
+
+    The mutator receives the current store data and must return ``True``
+    when it actually modified the data so the change is persisted.
+
+    Returns ``(data, changed)``.
+    """
+    try:
+        with _acquire_lock():
+            _migrate_legacy_store_unlocked()
+            data, _ = _load_raw_unlocked()
+            if data.get("version") != _VERSION:
+                data, _ = _migrate_if_needed(data)
+            changed = mutator(data)
+            if changed:
+                _save_unlocked(data)
+            return data, changed
+    except Timeout as exc:
+        raise RuntimeError(
+            f"Integration store locked: {_lock_path()} (store: {STORE_PATH})"
+        ) from exc
 
 
 def load_integrations() -> list[dict[str, Any]]:
@@ -223,32 +354,34 @@ def upsert_integration(service: str, entry: dict[str, Any]) -> None:
     entries (``{"instances": [...]}``) transparently. v1 entries are
     wrapped into a single ``default`` instance.
     """
-    data = _load_raw()
-    integrations: list[dict[str, Any]] = data.get("integrations", [])
 
-    # Remove existing entry for the same service
-    integrations = [i for i in integrations if i.get("service") != service]
+    def _mutate(data: dict[str, Any]) -> bool:
+        integrations: list[dict[str, Any]] = data.get("integrations", [])
+        integrations = [i for i in integrations if i.get("service") != service]
+        record: dict[str, Any] = {
+            "id": entry.get("id") or f"{service}-{uuid.uuid4().hex[:8]}",
+            "service": service,
+            "status": entry.get("status", "active"),
+            "instances": _wrap_as_instances(entry),
+        }
+        integrations.append(record)
+        data["integrations"] = integrations
+        return True
 
-    record: dict[str, Any] = {
-        "id": entry.get("id") or f"{service}-{uuid.uuid4().hex[:8]}",
-        "service": service,
-        "status": entry.get("status", "active"),
-        "instances": _wrap_as_instances(entry),
-    }
-    integrations.append(record)
-
-    data["integrations"] = integrations
-    _save(data)
+    _locked_update(_mutate)
 
 
 def remove_integration(service: str) -> bool:
     """Remove integration for a service. Returns True if something was removed."""
-    data = _load_raw()
-    before = len(data.get("integrations", []))
-    data["integrations"] = [i for i in data.get("integrations", []) if i.get("service") != service]
-    removed = len(data["integrations"]) < before
-    if removed:
-        _save(data)
+
+    def _mutate(data: dict[str, Any]) -> bool:
+        before = len(data.get("integrations", []))
+        data["integrations"] = [
+            i for i in data.get("integrations", []) if i.get("service") != service
+        ]
+        return len(data["integrations"]) < before
+
+    _, removed = _locked_update(_mutate)
     return removed
 
 
@@ -337,51 +470,54 @@ def upsert_instance(
     is appended or updated by name within that record. Otherwise, a new
     record is created containing only this instance.
     """
-    data = _load_raw()
-    integrations: list[dict[str, Any]] = data.get("integrations", [])
-    target: dict[str, Any] | None = None
-    for record in integrations:
-        if record.get("service") != service:
-            continue
-        if record_id is not None and record.get("id") != record_id:
-            continue
-        target = record
-        break
 
-    normalized_instance = {
-        "name": str(instance.get("name", "default")).strip().lower() or "default",
-        "tags": instance.get("tags", {}) or {},
-        "credentials": instance.get("credentials", {}) or {},
-    }
+    def _mutate(data: dict[str, Any]) -> bool:
+        integrations: list[dict[str, Any]] = data.get("integrations", [])
+        target: dict[str, Any] | None = None
+        for record in integrations:
+            if record.get("service") != service:
+                continue
+            if record_id is not None and record.get("id") != record_id:
+                continue
+            target = record
+            break
 
-    if target is None:
-        integrations.append(
-            {
-                "id": record_id or f"{service}-{uuid.uuid4().hex[:8]}",
-                "service": service,
-                "status": "active",
-                "instances": [normalized_instance],
-            }
-        )
-    else:
-        existing_instances = target.get("instances", [])
-        if not isinstance(existing_instances, list):
-            existing_instances = []
-        replaced = False
-        for idx, existing in enumerate(existing_instances):
-            if (
-                isinstance(existing, dict)
-                and existing.get("name", "").lower() == normalized_instance["name"]
-            ):
-                existing_instances[idx] = normalized_instance
-                replaced = True
-                break
-        if not replaced:
-            existing_instances.append(normalized_instance)
-        target["instances"] = existing_instances
+        normalized_instance = {
+            "name": str(instance.get("name", "default")).strip().lower() or "default",
+            "tags": instance.get("tags", {}) or {},
+            "credentials": instance.get("credentials", {}) or {},
+        }
 
-    data["integrations"] = integrations
-    _save(data)
+        if target is None:
+            integrations.append(
+                {
+                    "id": record_id or f"{service}-{uuid.uuid4().hex[:8]}",
+                    "service": service,
+                    "status": "active",
+                    "instances": [normalized_instance],
+                }
+            )
+        else:
+            existing_instances = target.get("instances", [])
+            if not isinstance(existing_instances, list):
+                existing_instances = []
+            replaced = False
+            for idx, existing in enumerate(existing_instances):
+                if (
+                    isinstance(existing, dict)
+                    and existing.get("name", "").lower() == normalized_instance["name"]
+                ):
+                    existing_instances[idx] = normalized_instance
+                    replaced = True
+                    break
+            if not replaced:
+                existing_instances.append(normalized_instance)
+            target["instances"] = existing_instances
+
+        data["integrations"] = integrations
+        return True
+
+    _locked_update(_mutate)
 
 
 def remove_instance(service: str, name: str) -> bool:
@@ -397,35 +533,36 @@ def remove_instance(service: str, name: str) -> bool:
     if not normalized_name:
         return False
 
-    data = _load_raw()
-    integrations: list[dict[str, Any]] = data.get("integrations", [])
-    changed = False
-    remaining: list[dict[str, Any]] = []
+    def _mutate(data: dict[str, Any]) -> bool:
+        integrations: list[dict[str, Any]] = data.get("integrations", [])
+        remaining: list[dict[str, Any]] = []
+        changed = False
 
-    for record in integrations:
-        if record.get("service") != service:
+        for record in integrations:
+            if record.get("service") != service:
+                remaining.append(record)
+                continue
+            instances = record.get("instances", [])
+            if not isinstance(instances, list):
+                remaining.append(record)
+                continue
+            kept = [
+                inst
+                for inst in instances
+                if isinstance(inst, dict) and inst.get("name", "").lower() != normalized_name
+            ]
+            if len(kept) == len(instances):
+                remaining.append(record)
+                continue
+            changed = True
+            if not kept:
+                continue  # drop the whole record
+            record = dict(record)
+            record["instances"] = kept
             remaining.append(record)
-            continue
-        instances = record.get("instances", [])
-        if not isinstance(instances, list):
-            remaining.append(record)
-            continue
-        kept = [
-            inst
-            for inst in instances
-            if isinstance(inst, dict) and inst.get("name", "").lower() != normalized_name
-        ]
-        if len(kept) == len(instances):
-            remaining.append(record)
-            continue
-        changed = True
-        if not kept:
-            continue  # drop the whole record
-        record = dict(record)
-        record["instances"] = kept
-        remaining.append(record)
 
-    if changed:
         data["integrations"] = remaining
-        _save(data)
+        return changed
+
+    _, changed = _locked_update(_mutate)
     return changed

@@ -64,6 +64,8 @@ dependencies = [
     "PyNaCl>=1.5.0",
     # MariaDB
     "pymysql>=1.1.0,<2.0.0",
+    # File locking for atomic store operations
+    "filelock>=3.29.0",
 ]
 
 [project.urls]
