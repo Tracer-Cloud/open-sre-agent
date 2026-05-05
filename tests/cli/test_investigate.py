@@ -192,3 +192,23 @@ def test_stream_investigation_cli_maps_cli_auth_to_opensre_error(
     assert next(events).event_type == "metadata"
     with pytest.raises(OpenSREError, match="not authenticated"):
         next(events)
+
+
+def test_reraise_cli_runtime_error_maps_cli_auth() -> None:
+    import pytest
+
+    from app.cli.support.cli_error_mapping import reraise_cli_runtime_error
+    from app.cli.support.errors import OpenSREError
+    from app.integrations.llm_cli.errors import CLIAuthenticationRequired
+
+    exc = CLIAuthenticationRequired(
+        provider="opencode",
+        auth_hint="Run: opencode auth login",
+        detail="not logged in",
+    )
+
+    with pytest.raises(OpenSREError) as raised:
+        reraise_cli_runtime_error(exc)
+
+    assert str(raised.value) == "opencode CLI is not authenticated."
+    assert raised.value.suggestion == "Run: opencode auth login (not logged in)"

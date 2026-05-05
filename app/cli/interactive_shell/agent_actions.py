@@ -20,6 +20,7 @@ from app.cli.interactive_shell.commands import dispatch_slash, switch_llm_provid
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.terminal_intent import mentioned_integration_services
 from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
+from app.cli.support.errors import OpenSREError
 
 
 @dataclass(frozen=True)
@@ -464,6 +465,12 @@ def _run_sample_alert(template_name: str, session: ReplSession, console: Console
         )
     except KeyboardInterrupt:
         console.print("[yellow]investigation cancelled.[/yellow]")
+        session.record("alert", f"sample:{template_name}", ok=False)
+        return
+    except OpenSREError as exc:
+        console.print(f"[red]investigation failed:[/red] {escape(str(exc))}")
+        if exc.suggestion:
+            console.print(f"[yellow]suggestion:[/yellow] {escape(exc.suggestion)}")
         session.record("alert", f"sample:{template_name}", ok=False)
         return
     except Exception as exc:  # noqa: BLE001

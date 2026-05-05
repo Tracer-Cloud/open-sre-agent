@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, NoReturn
 
 from langsmith import traceable
 
+from app.cli.support.cli_error_mapping import reraise_cli_runtime_error
 from app.config import LLMSettings
 
 if TYPE_CHECKING:
@@ -19,16 +20,8 @@ _logger = logging.getLogger(__name__)
 
 
 def _reraise_investigation_failure(exc: BaseException) -> NoReturn:
-    """Map CLI auth probe failures to structured CLI errors; re-raise anything else."""
-    from app.cli.support.errors import OpenSREError
-    from app.integrations.llm_cli.errors import CLIAuthenticationRequired
-
-    if isinstance(exc, CLIAuthenticationRequired):
-        raise OpenSREError(
-            f"{exc.provider} CLI is not authenticated.",
-            suggestion=f"{exc.auth_hint} ({exc.detail})",
-        ) from exc
-    raise exc
+    """Map investigation runtime failures to structured CLI errors."""
+    reraise_cli_runtime_error(exc)
 
 
 def _call_run_investigation(

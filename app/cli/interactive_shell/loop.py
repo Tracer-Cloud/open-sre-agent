@@ -32,6 +32,7 @@ from app.cli.interactive_shell.theme import (
     OPENCLAW_ORANGE,
     PROMPT_ACCENT_ANSI,
 )
+from app.cli.support.errors import OpenSREError
 
 
 class SlashCommandCompleter(Completer):
@@ -111,9 +112,13 @@ def _run_new_alert(text: str, session: ReplSession, console: Console) -> None:
         console.print("[yellow]investigation cancelled.[/yellow]")
         session.record("alert", text, ok=False)
         return
+    except OpenSREError as exc:
+        console.print(f"[red]investigation failed:[/red] {escape(str(exc))}")
+        if exc.suggestion:
+            console.print(f"[yellow]suggestion:[/yellow] {escape(exc.suggestion)}")
+        session.record("alert", text, ok=False)
+        return
     except Exception as exc:  # noqa: BLE001
-        # Exception repr may contain brackets (stack frame refs, config
-        # dicts) that Rich would eat as markup tags — escape before printing.
         console.print(f"[red]investigation failed:[/red] {escape(str(exc))}")
         session.record("alert", text, ok=False)
         return

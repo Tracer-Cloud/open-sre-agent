@@ -44,6 +44,7 @@ from nacl.signing import VerifyKey
 from pydantic import BaseModel
 from starlette.responses import JSONResponse, StreamingResponse
 
+from app.cli.support.errors import OpenSREError
 from app.remote.vercel_poller import (
     VercelInvestigationCandidate,
     VercelPoller,
@@ -345,6 +346,12 @@ def investigate(req: InvestigateRequest) -> InvestigateResponse:
         )
     except VercelResolutionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except OpenSREError as exc:
+        logger.warning("Investigation failed due to CLI runtime error: %s", exc)
+        detail = str(exc)
+        if exc.suggestion:
+            detail = f"{detail} Suggestion: {exc.suggestion}"
+        raise HTTPException(status_code=400, detail=detail) from exc
     except Exception as exc:
         logger.exception("Investigation failed")
         raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
@@ -414,6 +421,10 @@ async def investigate_stream(req: InvestigateRequest) -> Response:
                 payload = _json.dumps(event.data, default=str)
                 yield f"event: {event.event_type}\ndata: {payload}\n\n"
             yield "event: end\ndata: {}\n\n"
+        except OpenSREError as exc:
+            logger.warning("Streaming investigation failed due to CLI runtime error: %s", exc)
+            payload = {"detail": str(exc), "suggestion": exc.suggestion}
+            yield f"event: error\ndata: {_json.dumps(payload)}\n\n"
         except Exception:
             logger.exception("Streaming investigation failed")
             yield 'event: error\ndata: {"detail": "internal error"}\n\n'

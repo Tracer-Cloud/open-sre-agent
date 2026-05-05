@@ -15,6 +15,7 @@ from app.cli.interactive_shell.banner import render_banner, resolve_provider_mod
 from app.cli.interactive_shell.history import load_command_history_entries
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
+from app.cli.support.errors import OpenSREError
 
 
 @dataclass(frozen=True)
@@ -564,6 +565,12 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
         )
     except KeyboardInterrupt:
         console.print("[yellow]investigation cancelled.[/yellow]")
+        session.record("alert", args[0], ok=False)
+        return True
+    except OpenSREError as exc:
+        console.print(f"[red]investigation failed:[/red] {escape(str(exc))}")
+        if exc.suggestion:
+            console.print(f"[yellow]suggestion:[/yellow] {escape(exc.suggestion)}")
         session.record("alert", args[0], ok=False)
         return True
     except Exception as exc:  # noqa: BLE001
