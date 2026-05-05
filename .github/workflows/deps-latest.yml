@@ -47,7 +47,7 @@ jobs:
             --state open \
             --search 'in:title "Dependency resolution (latest) canary failed"' \
             --json number \
-            --jq '.[0].number')"
+            --jq '.[0].number // ""')"
           if [ -n "$EXISTING" ]; then
             echo "Failure issue already open: #$EXISTING"
             exit 0
