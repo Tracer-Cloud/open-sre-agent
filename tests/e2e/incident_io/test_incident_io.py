@@ -21,7 +21,11 @@ def test_incident_io_e2e_investigation_flow(monkeypatch: pytest.MonkeyPatch) -> 
         calls.append((method, str(url)))
         mock_resp = MagicMock()
         mock_resp.raise_for_status = MagicMock()
-        if method == "GET" and "/v2/incidents" in str(url) and "/timeline_entries" not in str(url):
+        if (
+            method == "GET"
+            and "/v2/incidents" in str(url)
+            and "/incident_timeline_events" not in str(url)
+        ):
             if str(url).endswith("/v2/incidents/inc-123"):
                 mock_resp.json.return_value = {
                     "incident": {
@@ -42,7 +46,7 @@ def test_incident_io_e2e_investigation_flow(monkeypatch: pytest.MonkeyPatch) -> 
                 }
             return mock_resp
 
-        if method == "POST" and "/timeline_entries" in str(url):
+        if method == "POST" and "/incident_timeline_events" in str(url):
             mock_resp.json.return_value = {}
             return mock_resp
 
@@ -85,5 +89,5 @@ def test_incident_io_e2e_investigation_flow(monkeypatch: pytest.MonkeyPatch) -> 
     assert calls == [
         ("GET", "/v2/incidents"),
         ("GET", "/v2/incidents/inc-123"),
-        ("POST", "/v2/incidents/inc-123/timeline_entries"),
+        ("POST", "/v2/incident_timeline_events"),
     ]

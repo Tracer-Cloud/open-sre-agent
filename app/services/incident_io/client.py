@@ -172,7 +172,9 @@ class IncidentIoClient:
                 "event_type": "custom",
                 "title": title,
                 "description": description,
-                "occurred_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                "occurred_at": datetime.now(UTC)
+                .isoformat(timespec="milliseconds")
+                .replace("+00:00", "Z"),
             }
             resp = self._get_client().post(
                 "/v2/incident_timeline_events",
