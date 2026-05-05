@@ -11,8 +11,16 @@ Auth
 ----
 When the ``claude`` binary is available, OpenSRE probes ``claude auth status``
 and treats Claude subscription login as first-class auth. ``ANTHROPIC_API_KEY``
-and ``~/.claude/.credentials.json`` are used as fallbacks when the binary is
-unavailable.
+and ``~/.claude/.credentials.json`` (under ``Path.home()`` on all platforms)
+are used as fallbacks when the binary is unavailable.
+
+Platforms
+---------
+Binary resolution uses ``shutil.which`` with ``claude.cmd`` / ``claude.exe`` /
+``.bat`` / ``.ps1`` on Windows, plus npm / Volta / pnpm style fallback dirs
+(see ``default_cli_fallback_paths``). Without the CLI binary, macOS Keychain
+may still hold OAuth credentials, so auth is reported as unclear until the
+binary runs; Linux and Windows without env or creds file → not authenticated.
 """
 
 from __future__ import annotations
@@ -218,7 +226,8 @@ class ClaudeCodeAdapter:
                 " or set CLAUDE_CODE_BIN to the full binary path."
             )
 
-        cwd = workspace or os.getcwd()
+        ws = (workspace or "").strip()
+        cwd = str(Path(ws).expanduser()) if ws else os.getcwd()
 
         argv: list[str] = [
             binary,

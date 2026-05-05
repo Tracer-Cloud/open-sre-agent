@@ -138,6 +138,16 @@ def default_cli_fallback_paths(binary_name: str) -> list[str]:
             Path(os.getenv("LOCALAPPDATA", "")) / "Programs" / binary_name,
             names,
         )
+        # Match Unix branch: Volta / pnpm globals are common on Windows dev machines too.
+        localappdata = os.getenv("LOCALAPPDATA", "").strip()
+        volta_home = os.getenv("VOLTA_HOME", "").strip()
+        if volta_home:
+            _append_candidate_paths(candidates, Path(volta_home) / "bin", names)
+        elif localappdata:
+            _append_candidate_paths(candidates, Path(localappdata) / "Volta" / "bin", names)
+        _append_candidate_paths(candidates, os.getenv("PNPM_HOME", ""), names)
+        if localappdata:
+            _append_candidate_paths(candidates, Path(localappdata) / "pnpm", names)
     else:
         if sys.platform == "darwin":
             _append_candidate_paths(candidates, "/opt/homebrew/bin", names)
