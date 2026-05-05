@@ -1,7 +1,9 @@
 """Real-API gated E2E tests for incident.io."""
 
 import os
+
 import pytest
+
 from app.services.incident_io.client import make_incident_io_client
 
 
