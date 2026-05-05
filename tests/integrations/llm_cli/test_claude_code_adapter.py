@@ -185,6 +185,14 @@ def test_probe_cli_auth_os_error(mock_run: MagicMock) -> None:
     assert "permission denied" in detail
 
 
+@patch("app.integrations.llm_cli.claude_code.importlib.import_module")
+def test_probe_cli_auth_import_error(mock_import_module: MagicMock) -> None:
+    mock_import_module.side_effect = ImportError("runner import failed")
+    logged_in, detail = _probe_cli_auth("/usr/bin/claude")
+    assert logged_in is None
+    assert "prepare claude auth probe environment" in detail
+
+
 @patch("app.integrations.llm_cli.claude_code.subprocess.run")
 def test_probe_cli_auth_non_json_exit_zero(mock_run: MagicMock) -> None:
     """Older CLI versions that output non-JSON on exit 0 are treated as authenticated."""
@@ -485,6 +493,7 @@ def test_explain_failure_falls_back_to_stdout() -> None:
 def test_auth_hint_uses_claude_auth_login() -> None:
     adapter = ClaudeCodeAdapter()
     assert "claude auth login" in adapter.auth_hint
+    assert "  " not in adapter.auth_hint
 
 
 # ---------------------------------------------------------------------------

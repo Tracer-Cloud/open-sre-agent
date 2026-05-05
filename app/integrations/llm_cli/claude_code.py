@@ -17,6 +17,7 @@ unavailable.
 
 from __future__ import annotations
 
+import importlib
 import json
 import os
 import re
@@ -39,6 +40,7 @@ _CLAUDE_VERSION_RE = re.compile(r"(\d+\.\d+\.\d+)")
 # Claude Code's `--version` does config/cache init that can spike past Codex's 3s
 # budget on cold starts or when another claude process holds shared state.
 _PROBE_TIMEOUT_SEC = 8.0
+_AUTH_HINT = "Run: claude auth login or set ANTHROPIC_API_KEY."
 
 
 def _parse_semver(text: str) -> str | None:
@@ -63,15 +65,20 @@ def _probe_cli_auth(binary_path: str) -> tuple[bool | None, str]:
     priority as reported by the CLI itself.
     """
     try:
-        from app.integrations.llm_cli.runner import _build_subprocess_env
-
+        runner_module = importlib.import_module("app.integrations.llm_cli.runner")
+        build_subprocess_env = getattr(runner_module, "_build_subprocess_env", None)
+        if not callable(build_subprocess_env):
+            return None, "Could not prepare claude auth probe environment."
+    except ImportError as exc:
+        return None, f"Could not prepare claude auth probe environment: {exc}"
+    try:
         proc = subprocess.run(
             [binary_path, "auth", "status"],
             capture_output=True,
             text=True,
             timeout=_PROBE_TIMEOUT_SEC,
             check=False,
-            env=_build_subprocess_env(_anthropic_env_overrides()),
+            env=build_subprocess_env(_anthropic_env_overrides()),
         )
     except subprocess.TimeoutExpired:
         return (
@@ -86,7 +93,7 @@ def _probe_cli_auth(binary_path: str) -> tuple[bool | None, str]:
     try:
         data = json.loads(proc.stdout)
         if not data.get("loggedIn"):
-            return False, "Not authenticated. Run: claude auth login  or set ANTHROPIC_API_KEY."
+            return False, f"Not authenticated. {_AUTH_HINT}"
         api_key_source = data.get("apiKeySource", "")
         if api_key_source:
             return True, f"Authenticated via {api_key_source}."
@@ -103,7 +110,7 @@ def _probe_cli_auth(binary_path: str) -> tuple[bool | None, str]:
             "unauthenticated",
         )
         if any(marker in plain for marker in negative_markers):
-            return False, "Not authenticated. Run: claude auth login  or set ANTHROPIC_API_KEY."
+            return False, f"Not authenticated. {_AUTH_HINT}"
         return True, "Authenticated via Claude CLI."
 
 
@@ -130,12 +137,11 @@ def _classify_claude_code_auth(binary_path: str | None = None) -> tuple[bool | N
         return None, "Could not read ~/.claude/.credentials.json; auth state unclear."
     if sys.platform == "darwin":
         return None, (
-            "Auth state unclear — binary unavailable for verification. "
-            "Run: claude auth login  or set ANTHROPIC_API_KEY."
+            f"Auth state unclear — binary unavailable for verification. {_AUTH_HINT}"
         )
     return (
         False,
-        "Not authenticated. Run: claude auth login  or set ANTHROPIC_API_KEY.",
+        f"Not authenticated. {_AUTH_HINT}",
     )
 
 
@@ -149,7 +155,7 @@ class ClaudeCodeAdapter:
     name = "claude-code"
     binary_env_key = "CLAUDE_CODE_BIN"
     install_hint = "npm i -g @anthropic-ai/claude-code"
-    auth_hint = "Run: claude auth login  or set ANTHROPIC_API_KEY"
+    auth_hint = _AUTH_HINT.removesuffix(".")
     min_version: str | None = None
     default_exec_timeout_sec = 120.0
 
@@ -208,7 +214,7 @@ class ClaudeCodeAdapter:
                 bin_path=None,
                 detail=(
                     "Claude Code CLI not found on PATH or known install locations. "
-                    f"Install with: {self.install_hint}  or set CLAUDE_CODE_BIN."
+                    f"Install with: {self.install_hint} or set CLAUDE_CODE_BIN."
                 ),
             )
         return self._probe_binary(binary)
