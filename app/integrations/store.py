@@ -60,6 +60,16 @@ _LOCK_TIMEOUT_SECONDS = 10.0
 _STRUCTURAL_RECORD_FIELDS = frozenset({"id", "service", "status", "instances"})
 
 
+class IntegrationStoreLockTimeout(TimeoutError):
+    """Raised when the integration store lock cannot be acquired in time."""
+
+
+def _lock_timeout_error() -> IntegrationStoreLockTimeout:
+    return IntegrationStoreLockTimeout(
+        f"Integration store locked: {_lock_path()} (store: {STORE_PATH})"
+    )
+
+
 def _migrate_record_v1_to_v2(record: dict[str, Any]) -> dict[str, Any]:
     """Migrate a single integration record from v1 shape to v2.
 
@@ -118,7 +128,7 @@ def _atomic_write(dest: Path, data: dict[str, Any]) -> None:
             dir=dest.parent,
             prefix=dest.name + ".tmp",
         )
-        with os.fdopen(fd, "w") as f:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(serialized)
             f.flush()
             os.fsync(f.fileno())
@@ -212,7 +222,7 @@ def _load_raw_unlocked() -> tuple[dict[str, Any], bool]:
     if not STORE_PATH.exists():
         return {"version": _VERSION, "integrations": []}, False
     try:
-        text = STORE_PATH.read_text()
+        text = STORE_PATH.read_text(encoding="utf-8")
         data = json.loads(text)
     except (json.JSONDecodeError, OSError):
         logger.warning("Failed to read integrations store at %s", STORE_PATH, exc_info=True)
@@ -235,9 +245,7 @@ def _load_raw() -> dict[str, Any]:
             with _acquire_lock():
                 _migrate_legacy_store_unlocked()
         except Timeout as exc:
-            raise RuntimeError(
-                f"Integration store locked: {_lock_path()} (store: {STORE_PATH})"
-            ) from exc
+            raise _lock_timeout_error() from exc
 
     data, did_migrate = _load_raw_unlocked()
     if did_migrate:
@@ -255,9 +263,7 @@ def _load_raw() -> dict[str, Any]:
                         )
                 return data2
         except Timeout as exc:
-            raise RuntimeError(
-                f"Integration store locked: {_lock_path()} (store: {STORE_PATH})"
-            ) from exc
+            raise _lock_timeout_error() from exc
     return data
 
 
@@ -267,9 +273,7 @@ def _save(data: dict[str, Any]) -> None:
         with _acquire_lock():
             _save_unlocked(data)
     except Timeout as exc:
-        raise RuntimeError(
-            f"Integration store locked: {_lock_path()} (store: {STORE_PATH})"
-        ) from exc
+        raise _lock_timeout_error() from exc
 
 
 def _locked_update(mutator: Callable[[dict[str, Any]], bool]) -> tuple[dict[str, Any], bool]:
@@ -290,9 +294,7 @@ def _locked_update(mutator: Callable[[dict[str, Any]], bool]) -> tuple[dict[str,
                 _save_unlocked(data)
             return data, changed
     except Timeout as exc:
-        raise RuntimeError(
-            f"Integration store locked: {_lock_path()} (store: {STORE_PATH})"
-        ) from exc
+        raise _lock_timeout_error() from exc
 
 
 def load_integrations() -> list[dict[str, Any]]:
