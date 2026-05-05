@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Callable
+from typing import Any, Protocol, cast
 
 from app.tools.tool_decorator import tool
+
+
+class _CloudOpsBenchBackend(Protocol):
+    is_cloudopsbench_backend: bool
+    case: Any
+    default_namespace: str
 
 
 def _cloudops_backend(sources: dict[str, dict]) -> Any:
@@ -151,7 +158,7 @@ def _run_backend(cloudops_backend: Any, method_name: str, **kwargs: Any) -> dict
             "available": False,
             "error": "CloudOpsBench replay backend is not available.",
         }
-    method = getattr(cloudops_backend, method_name)
+    method = cast(Callable[..., dict[str, Any]], getattr(cloudops_backend, method_name))
     return method(**kwargs)
 
 

@@ -2,7 +2,7 @@
 
 import json
 import os
-from typing import Optional
+from typing import Any, Optional, Protocol
 
 from langchain_core.runnables import RunnableConfig
 from langsmith import traceable
@@ -46,10 +46,17 @@ def _short_circuit_enabled() -> bool:
     return os.getenv("HEALTHY_SHORT_CIRCUIT", "true").lower() == "true"
 
 
-def _cloudopsbench_backend(state: InvestigationState) -> object | None:
+class _CloudOpsBenchBackend(Protocol):
+    is_cloudopsbench_backend: bool
+    case: Any
+
+
+def _cloudopsbench_backend(state: InvestigationState) -> _CloudOpsBenchBackend | None:
     aws = state.get("resolved_integrations", {}).get("aws", {})
     backend = aws.get("_backend") if isinstance(aws, dict) else None
-    return backend if getattr(backend, "is_cloudopsbench_backend", False) else None
+    if getattr(backend, "is_cloudopsbench_backend", False):
+        return backend
+    return None
 
 
 _CLOUDOPSBENCH_ROOT_CAUSES = """
