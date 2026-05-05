@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Python 3.11 or later (see `.python-version` / `pyproject.toml`; CI uses 3.13)
+- Python 3.13 or later (see `.tool-versions` / `pyproject.toml`; CI uses 3.13)
 - Git
 - [uv](https://docs.astral.sh/uv/getting-started/installation/) — required for `make install` (creates `.venv`, installs locked deps from `uv.lock`)
 - Make (standard on macOS/Linux; see Windows section below)
@@ -49,7 +49,7 @@ If you use VS Code, you can skip the manual Python setup and use the repo's devc
    make lint && make typecheck && make test-cov
   ```
 
-The devcontainer uses Python 3.13 to match CI and `.tool-versions`. Manual host-based setup continues to work with any supported Python version (`>=3.11`).
+The devcontainer uses Python 3.13 to match CI and `.tool-versions`. Manual host-based setup requires any supported Python version (`>=3.13`).
 
 ---
 
@@ -119,7 +119,7 @@ uv run pytest --cov=app tests/
 
 ### Command not found: python
 
-- Make sure Python 3.11+ is installed and in your PATH
+- Make sure Python 3.13+ is installed and in your PATH
 - Verify with: `python --version`
 
 ### Command not found: uv
@@ -231,4 +231,3 @@ Verify:
 ```bash
 opensre integrations verify openclaw
 ```
-
