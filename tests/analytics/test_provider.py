@@ -17,9 +17,7 @@ from app.analytics.events import Event
 
 
 @pytest.fixture(autouse=True)
-def _reset_anonymous_id_cache(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> Iterator[None]:
+def _reset_anonymous_id_cache(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[None]:
     provider.shutdown_analytics(flush=False)
     provider._instance = None
     monkeypatch.delenv("OPENSRE_NO_TELEMETRY", raising=False)
