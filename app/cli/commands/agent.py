@@ -5,7 +5,7 @@ prefer an explicit subcommand — it reads better in scripts, composes with
 ``--layout``, and avoids ambiguity with the landing-page fallback path.
 
 ``opensre agent`` overrides ``OPENSRE_INTERACTIVE`` and
-``~/.opensre/config.yml`` — the user typed the command; they want the
+``~/.config/opensre/config.yml`` — the user typed the command; they want the
 terminal. A real TTY is still required; on piped/CI stdin we surface a
 clear error instead of silently no-op'ing.
 """
@@ -25,7 +25,7 @@ from app.analytics.cli import capture_cli_invoked
     type=click.Choice(["classic", "pinned"]),
     default=None,
     help="REPL layout: 'classic' (scrolling) or 'pinned' (fixed input bar). "
-    "Overrides OPENSRE_LAYOUT env var and ~/.opensre/config.yml.",
+    "Overrides OPENSRE_LAYOUT env var and ~/.config/opensre/config.yml.",
 )
 def agent_command(layout: str | None) -> None:
     """Launch the interactive SRE agent terminal."""

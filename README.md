@@ -1331,24 +1331,32 @@ command-specific metadata such as which subcommand ran. For `opensre onboard`
 and `opensre investigate`, we may also collect the selected model/provider and
 whether the command used flags such as `--interactive` or `--input`.
 
-A randomly generated anonymous ID is created on first run and stored in
-`~/.config/opensre/`. We never collect alert contents, file contents,
-hostnames, credentials, or any personally identifiable information.
+A randomly generated anonymous install ID is created on first run and stored in
+`~/.config/opensre/anonymous_id`. PostHog `distinct_id` values are scoped to
+that install ID, so unique-user counts represent unique CLI installs/devices
+rather than command invocations. One-time lifecycle events use deterministic
+event IDs to avoid duplicate rows if they are retried.
+
+We never collect alert contents, file contents, hostnames, credentials, or any
+personally identifiable information.
 
 Telemetry is automatically disabled in GitHub Actions and pytest runs.
 
-To opt out locally, set the environment variable before running:
+To opt out locally, set an environment variable before running:
 
 ```bash
-export OPENSRE_NO_TELEMETRY=1
+export OPENSRE_ANALYTICS_DISABLED=1
+# or
+export DO_NOT_TRACK=1
 ```
 
-The legacy alias `OPENSRE_ANALYTICS_DISABLED=1` also still works.
-
-To inspect the payload locally without sending anything, use:
+To inspect what `opensre` is sending, every event is also appended to
+`~/.config/opensre/posthog_events.txt` by default. The file rotates at
+1000 lines (older lines move to `posthog_events.txt.1`, overwriting any
+prior backup) so it never grows unbounded. To disable local logging:
 
 ```bash
-export OPENSRE_TELEMETRY_DEBUG=1
+export OPENSRE_ANALYTICS_LOG_EVENTS=0
 ```
 
 ## License

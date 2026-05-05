@@ -127,7 +127,7 @@ def test_missing_file_yields_empty_v2_store(tmp_path: Path) -> None:
 
 
 def test_legacy_store_is_moved_to_opensre_path(tmp_path: Path) -> None:
-    store_file = tmp_path / ".opensre" / "integrations.json"
+    store_file = tmp_path / ".config" / "opensre" / "integrations.json"
     legacy_store_file = tmp_path / ".tracer" / "integrations.json"
     _write_store(
         legacy_store_file,
