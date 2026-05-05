@@ -423,8 +423,8 @@ async def investigate_stream(req: InvestigateRequest) -> Response:
             yield "event: end\ndata: {}\n\n"
         except OpenSREError as exc:
             logger.warning("Streaming investigation failed due to CLI runtime error: %s", exc)
-            payload = {"detail": str(exc), "suggestion": exc.suggestion}
-            yield f"event: error\ndata: {_json.dumps(payload)}\n\n"
+            error_payload = {"detail": str(exc), "suggestion": exc.suggestion}
+            yield f"event: error\ndata: {_json.dumps(error_payload)}\n\n"
         except Exception:
             logger.exception("Streaming investigation failed")
             yield 'event: error\ndata: {"detail": "internal error"}\n\n'
