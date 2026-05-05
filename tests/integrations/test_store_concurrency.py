@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import multiprocessing
+import os
 import stat
 import threading
 from pathlib import Path
@@ -19,6 +20,7 @@ import pytest
 from app.integrations.store import (
     _load_raw,
     _save,
+    remove_integration,
     upsert_instance,
     upsert_integration,
 )
@@ -183,6 +185,56 @@ def test_atomic_write_failure_cleanup(tmp_store: Path) -> None:
     assert not temps, f"Orphaned temp files: {temps}"
 
 
+def test_v1_load_returns_migrated_data_when_persist_fails(tmp_store: Path) -> None:
+    """Read-time v1 migration should not fail just because write-through failed."""
+    v1_data = {
+        "version": 1,
+        "integrations": [
+            {
+                "id": "grafana-abc",
+                "service": "grafana",
+                "status": "active",
+                "credentials": {"endpoint": "https://example.com", "api_key": "k"},
+            }
+        ],
+    }
+    tmp_store.write_text(json.dumps(v1_data) + "\n")
+
+    def failing_replace(src: str, dst: str) -> None:
+        raise OSError("simulated replace failure")
+
+    with patch("app.integrations.store.os.replace", side_effect=failing_replace):
+        data = _load_raw()
+
+    assert data["version"] == 2
+    assert data["integrations"][0]["instances"][0]["credentials"]["api_key"] == "k"
+    assert json.loads(tmp_store.read_text())["version"] == 1
+    temps = list(tmp_store.parent.glob(tmp_store.name + ".tmp*"))
+    assert not temps, f"Orphaned temp files: {temps}"
+
+
+def test_v1_migration_persists_when_locked_update_is_noop(tmp_store: Path) -> None:
+    """A no-op remove should still persist an in-memory v1-to-v2 migration."""
+    v1_data = {
+        "version": 1,
+        "integrations": [
+            {
+                "id": "grafana-abc",
+                "service": "grafana",
+                "status": "active",
+                "credentials": {"endpoint": "https://example.com", "api_key": "k"},
+            }
+        ],
+    }
+    tmp_store.write_text(json.dumps(v1_data) + "\n")
+
+    assert remove_integration("missing-service") is False
+
+    data = json.loads(tmp_store.read_text())
+    assert data["version"] == 2
+    assert data["integrations"][0]["instances"][0]["credentials"]["api_key"] == "k"
+
+
 def test_permissions_preserved_after_concurrent_replace(tmp_store: Path) -> None:
     """After concurrent writes, the store file must still have 0o600."""
     num_threads = 4
@@ -204,6 +256,9 @@ def test_permissions_preserved_after_concurrent_replace(tmp_store: Path) -> None
 
     assert not errors
     mode = stat.S_IMODE(tmp_store.stat().st_mode)
+    if os.name == "nt":
+        assert mode & stat.S_IWRITE
+        return
     assert mode == 0o600, f"Expected 0o600, got 0o{mode:o}"
 
 

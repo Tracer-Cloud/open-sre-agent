@@ -246,7 +246,13 @@ def _load_raw() -> dict[str, Any]:
                 # Re-read under lock in case another process already migrated
                 data2, did_migrate2 = _load_raw_unlocked()
                 if did_migrate2:
-                    _save_unlocked(data2)
+                    try:
+                        _save_unlocked(data2)
+                    except OSError:
+                        logger.warning(
+                            "Failed to persist v2 migration; continuing with in-memory v2",
+                            exc_info=True,
+                        )
                 return data2
         except Timeout as exc:
             raise RuntimeError(
@@ -270,18 +276,17 @@ def _locked_update(mutator: Callable[[dict[str, Any]], bool]) -> tuple[dict[str,
     """Acquire the store lock, load, mutate, and save atomically.
 
     The mutator receives the current store data and must return ``True``
-    when it actually modified the data so the change is persisted.
+    when it actually modified the data so the change is persisted. A v1-to-v2
+    migration is persisted even when the mutator itself is a no-op.
 
     Returns ``(data, changed)``.
     """
     try:
         with _acquire_lock():
             _migrate_legacy_store_unlocked()
-            data, _ = _load_raw_unlocked()
-            if data.get("version") != _VERSION:
-                data, _ = _migrate_if_needed(data)
+            data, did_migrate = _load_raw_unlocked()
             changed = mutator(data)
-            if changed:
+            if changed or did_migrate:
                 _save_unlocked(data)
             return data, changed
     except Timeout as exc:
