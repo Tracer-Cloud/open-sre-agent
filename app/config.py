@@ -73,8 +73,9 @@ ANTHROPIC_REASONING_MODEL = "claude-sonnet-4-6"
 ANTHROPIC_TOOLCALL_MODEL = "claude-haiku-4-5-20251001"
 
 # OpenAI model constants
-# UNVERIFIED PLACEHOLDER — gpt-5.4 / gpt-5.4-mini do not exist as of 2026-04.
-# Update to a real model ID once OpenAI releases it, or override via OPENAI_REASONING_MODEL env var.
+# gpt-5.4 (released 2026-03-05) and gpt-5.4-mini are the current defaults.
+# gpt-5.5 (released 2026-04-23) is available for users who want the latest frontier model.
+# Override via OPENAI_REASONING_MODEL / OPENAI_TOOLCALL_MODEL env vars if needed.
 OPENAI_REASONING_MODEL = "gpt-5.4"
 OPENAI_TOOLCALL_MODEL = "gpt-5.4-mini"
 

@@ -72,6 +72,7 @@ ANTHROPIC_MODELS = (
 )
 
 OPENAI_MODELS = (
+    ModelOption(value="gpt-5.5", label="GPT-5.5 — frontier, released 2026-04-23"),
     ModelOption(value=OPENAI_REASONING_MODEL, label="GPT-5.4"),
     ModelOption(value="gpt-5.4-mini", label="GPT-5.4 mini"),
     ModelOption(value="gpt-5.4-nano", label="GPT-5.4 nano"),
@@ -80,6 +81,7 @@ OPENAI_MODELS = (
 
 OPENROUTER_MODELS = (
     ModelOption(value=OPENROUTER_REASONING_MODEL, label="OpenRouter Auto (smart routing)"),
+    ModelOption(value="openai/gpt-5.5", label="GPT-5.5 (via OpenRouter)"),
     ModelOption(value="openai/gpt-5.2", label="GPT-5.2 (via OpenRouter)"),
     ModelOption(value="anthropic/claude-opus-4.6", label="Claude Opus 4.6 (via OpenRouter)"),
     ModelOption(value="anthropic/claude-sonnet-4.5", label="Claude Sonnet 4.5 (via OpenRouter)"),
@@ -165,21 +167,18 @@ CLAUDE_CODE_MODELS = (
 )
 
 # Empty value means "no -m" so the Codex CLI uses its configured default/current model.
+# gpt-5.2-codex, gpt-5.1-codex-max, and gpt-5.1-codex-mini were retired from the
+# Codex CLI on 2026-04-14 and have been removed from this list.
 CODEX_MODELS = (
     ModelOption(
         value="",
         label="CLI default (no -m; use Codex configured model)",
     ),
+    ModelOption(value="gpt-5.5", label="gpt-5.5 — frontier, recommended default since 2026-04-23"),
     ModelOption(value="gpt-5.4", label="gpt-5.4 — strong default for everyday coding"),
-    ModelOption(value="gpt-5.2-codex", label="gpt-5.2-codex — frontier agentic coding"),
-    ModelOption(
-        value="gpt-5.1-codex-max",
-        label="gpt-5.1-codex-max — deep / fast reasoning",
-    ),
     ModelOption(value="gpt-5.4-mini", label="gpt-5.4-mini — fast, cost-efficient"),
     ModelOption(value="gpt-5.3-codex", label="gpt-5.3-codex — coding-optimized"),
     ModelOption(value="gpt-5.2", label="gpt-5.2 — long-running agents"),
-    ModelOption(value="gpt-5.1-codex-mini", label="gpt-5.1-codex-mini"),
 )
 
 
