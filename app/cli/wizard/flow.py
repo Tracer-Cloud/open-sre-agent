@@ -44,12 +44,6 @@ _ASCII_HEADER = """\
  \\___/|_|   |_____|_| \\_|____/|_| \\_\\_____|"""
 
 
-def build_demo_action_response():
-    from app.cli.wizard.validation import build_demo_action_response as _build
-
-    return _build()
-
-
 def validate_grafana_integration(**kwargs):
     from app.cli.wizard.integration_health import validate_grafana_integration as _validate
 
@@ -1600,7 +1594,6 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         )
 
     return configured, last_env_path
-
 
 
 def _render_next_steps() -> None:
