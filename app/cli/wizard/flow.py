@@ -1602,23 +1602,6 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
     return configured, last_env_path
 
 
-def _render_demo_response(demo_response: dict) -> None:
-    topics = ", ".join(demo_response.get("topics", [])) or "none"
-    guidance = demo_response.get("guidance") or []
-    summary = [
-        f"demo      {'ready' if demo_response.get('success') else 'failed'}",
-        f"topics    {topics}",
-    ]
-    if guidance:
-        first = guidance[0]
-        summary.append(f"sample    {first.get('topic', 'unknown')}")
-        content = str(first.get("content", "")).strip().splitlines()
-        if content:
-            summary.append(f"preview   {content[0][:140]}")
-    _console.print("\n[bold]summary[/]")
-    for line in summary:
-        _console.print(f"[dim]{line}[/]")
-
 
 def _render_next_steps() -> None:
     _console.print("\n[bold]next[/]")
@@ -1879,7 +1862,5 @@ def run_wizard(_argv: list[str] | None = None) -> int:
         configured_integrations=configured_integrations,
         credential_line=_credential_line_for_saved_summary(provider),
     )
-    demo_response = build_demo_action_response()
-    _render_demo_response(demo_response)
     _render_next_steps()
     return 0
