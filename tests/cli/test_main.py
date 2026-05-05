@@ -34,6 +34,51 @@ def test_main_runs_health_command(monkeypatch) -> None:
     assert exit_code == 0
 
 
+def test_main_does_not_capture_analytics_for_help(monkeypatch, capsys) -> None:
+    captured: list[str] = []
+    monkeypatch.setattr(
+        "app.cli.__main__.capture_first_run_if_needed", lambda: captured.append("install")
+    )
+    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda: captured.append("cli"))
+    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
+
+    exit_code = main(["--help"])
+
+    assert exit_code == 0
+    assert "Usage:" in capsys.readouterr().out
+    assert captured == []
+
+
+def test_main_does_not_capture_analytics_for_parse_error(monkeypatch, capsys) -> None:
+    captured: list[str] = []
+    monkeypatch.setattr(
+        "app.cli.__main__.capture_first_run_if_needed", lambda: captured.append("install")
+    )
+    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda: captured.append("cli"))
+    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
+
+    exit_code = main(["not-a-command"])
+
+    assert exit_code != 0
+    assert "No such command" in capsys.readouterr().err
+    assert captured == []
+
+
+def test_main_captures_analytics_once_for_accepted_command(monkeypatch, capsys) -> None:
+    captured: list[str] = []
+    monkeypatch.setattr(
+        "app.cli.__main__.capture_first_run_if_needed", lambda: captured.append("install")
+    )
+    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda: captured.append("cli"))
+    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
+
+    exit_code = main(["version"])
+
+    assert exit_code == 0
+    assert "opensre" in capsys.readouterr().out
+    assert captured == ["install", "cli"]
+
+
 def test_no_interactive_falls_through_to_landing_page(monkeypatch) -> None:
     """Regression for Greptile P1 (PR #591): --no-interactive previously ran
     `raise SystemExit(run_repl(...))` unconditionally on a TTY, returning 0 but
@@ -123,7 +168,7 @@ def test_agent_subcommand_launches_repl(monkeypatch) -> None:
     """
     monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("app.cli.commands.agent.capture_cli_invoked", lambda: None)
+    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda: None)
     monkeypatch.setattr("app.cli.commands.agent.sys.stdin.isatty", lambda: True)
     monkeypatch.setenv("OPENSRE_INTERACTIVE", "0")
 
@@ -162,7 +207,7 @@ def test_agent_subcommand_accepts_layout(monkeypatch) -> None:
     """`opensre agent --layout pinned` must forward layout into ReplConfig."""
     monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("app.cli.commands.agent.capture_cli_invoked", lambda: None)
+    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda: None)
     monkeypatch.setattr("app.cli.commands.agent.sys.stdin.isatty", lambda: True)
 
     run_repl_calls: list[ReplConfig] = []
@@ -193,7 +238,7 @@ def test_agent_subcommand_errors_on_non_tty(monkeypatch, capsys) -> None:
     """
     monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("app.cli.commands.agent.capture_cli_invoked", lambda: None)
+    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda: None)
     monkeypatch.setattr("app.cli.commands.agent.sys.stdin.isatty", lambda: False)
 
     def _fail_if_called(**_kw: object) -> int:

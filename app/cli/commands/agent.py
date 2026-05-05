@@ -16,8 +16,6 @@ import sys
 
 import click
 
-from app.analytics.cli import capture_cli_invoked
-
 
 @click.command(name="agent")
 @click.option(
@@ -32,8 +30,6 @@ def agent_command(layout: str | None) -> None:
     from app.cli.interactive_shell import run_repl
     from app.cli.interactive_shell.config import ReplConfig
     from app.cli.support.errors import OpenSREError
-
-    capture_cli_invoked()
 
     if not sys.stdin.isatty():
         raise OpenSREError(

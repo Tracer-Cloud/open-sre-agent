@@ -8,7 +8,6 @@ from typing import Any
 import click
 
 from app.analytics.cli import (
-    capture_cli_invoked,
     capture_deploy_completed,
     capture_deploy_failed,
     capture_deploy_started,
@@ -200,7 +199,6 @@ def _run_deploy_interactive(ctx: click.Context) -> None:
         # 6. Persist to .env
         persist_langsmith_env(api_key, deployment_name)
 
-        capture_cli_invoked()
         capture_deploy_started(target="langsmith", dry_run=False)
 
         # 7. Deploy
@@ -389,7 +387,6 @@ def deploy_railway(
     """Deploy OpenSRE to Railway."""
     from app.deployment.methods.railway import run_deploy
 
-    capture_cli_invoked()
     capture_deploy_started(target="railway", dry_run=dry_run)
     exit_code = run_deploy(
         target="railway",

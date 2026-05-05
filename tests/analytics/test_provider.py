@@ -771,3 +771,47 @@ def test_event_log_creates_config_dir_on_first_write(monkeypatch, tmp_path: Path
     log_path = config_dir / "posthog_events.txt"
     assert log_path.exists()
     assert "first line" in log_path.read_text(encoding="utf-8")
+
+
+def test_event_log_counter_does_not_drift_when_writes_are_suppressed(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """Regression guard for the rotation-spam bug.
+
+    A naive ``contextlib.suppress(OSError)`` around the write would still
+    increment ``lines_written`` on failure, causing a phantom rotation after
+    ``_EVENT_LOG_MAX_LINES`` failed attempts. ``_append_log_line`` must bail
+    out before the counter touches the cap on a write that didn't succeed.
+    """
+    monkeypatch.setenv("OPENSRE_ANALYTICS_LOG_EVENTS", "1")
+    monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(provider, "_EVENT_LOG_MAX_LINES", 3)
+    monkeypatch.setattr(provider, "_event_log_state", provider._EventLogState())
+
+    def _raise_oserror(*_args, **_kwargs) -> NoReturn:
+        raise OSError("disk write failed")
+
+    monkeypatch.setattr(Path, "open", _raise_oserror)
+
+    for _ in range(10):
+        provider._log_debug_line("event")
+
+    assert provider._event_log_state.lines_written == 0
+    assert not (tmp_path / "posthog_events.txt.1").exists()
+
+
+def test_event_log_counter_increments_only_on_successful_write(monkeypatch, tmp_path: Path) -> None:
+    """Companion to the suppression test: counter must track real writes 1:1.
+
+    Without this assertion, a future refactor that re-introduces the unsafe
+    ``contextlib.suppress`` pattern around the write could silently regress
+    the counter-drift fix even with the no-write guard above passing.
+    """
+    monkeypatch.setenv("OPENSRE_ANALYTICS_LOG_EVENTS", "1")
+    monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(provider, "_event_log_state", provider._EventLogState())
+
+    for _ in range(7):
+        provider._log_debug_line("event")
+
+    assert provider._event_log_state.lines_written == 7

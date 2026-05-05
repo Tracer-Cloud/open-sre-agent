@@ -80,14 +80,15 @@ def tests(ctx: click.Context) -> None:
     from app.cli.tests.discover import load_test_catalog
     from app.cli.tests.interactive import run_interactive_picker
 
+    catalog = load_test_catalog()
+    capture_tests_picker_opened()
     try:
-        exit_code = run_interactive_picker(load_test_catalog())
+        exit_code = run_interactive_picker(catalog)
     except RuntimeError as exc:
         raise OpenSREError(
             str(exc),
             suggestion="Run 'opensre tests list' or 'opensre tests run <test_id>'.",
         ) from exc
-    capture_tests_picker_opened()
     raise SystemExit(exit_code)
 
 

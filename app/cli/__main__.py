@@ -27,6 +27,19 @@ from app.cli.support.prompt_support import (
 )
 from app.version import get_version
 
+_CAPTURE_CLI_ANALYTICS = "capture_cli_analytics"
+_CLI_ANALYTICS_CAPTURED = "cli_analytics_captured"
+
+
+def _capture_accepted_cli_invocation(ctx: click.Context) -> None:
+    if not ctx.obj.get(_CAPTURE_CLI_ANALYTICS, False):
+        return
+    if ctx.obj.get(_CLI_ANALYTICS_CAPTURED, False):
+        return
+    ctx.obj[_CLI_ANALYTICS_CAPTURED] = True
+    capture_first_run_if_needed()
+    capture_cli_invoked()
+
 
 @click.group(
     cls=RichGroup,
@@ -72,8 +85,9 @@ def cli(
     if verbose or debug:
         os.environ["TRACER_VERBOSE"] = "1"
 
+    _capture_accepted_cli_invocation(ctx)
+
     if ctx.invoked_subcommand is None:
-        capture_cli_invoked()
         if sys.stdin.isatty() and sys.stdout.isatty():
             from app.cli.interactive_shell import run_repl
             from app.cli.interactive_shell.config import ReplConfig
@@ -112,10 +126,9 @@ def main(argv: list[str] | None = None) -> int:
     install_questionary_escape_cancel()
     install_questionary_ctrl_c_double_exit()
     _install_sigint_handler()
-    capture_first_run_if_needed()
 
     try:
-        cli(args=argv, standalone_mode=True)
+        cli(args=argv, standalone_mode=True, obj={_CAPTURE_CLI_ANALYTICS: True})
     except KeyboardInterrupt:
         # A KeyboardInterrupt that escapes cli() was not handled by our
         # double-exit logic (e.g. click.prompt, an unpatched library prompt).

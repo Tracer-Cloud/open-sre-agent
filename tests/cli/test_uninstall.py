@@ -211,7 +211,6 @@ def test_uninstall_command_yes_flag_skips_prompt() -> None:
     runner = CliRunner()
 
     with (
-        patch("app.cli.commands.general.capture_cli_invoked"),
         patch("app.cli.support.uninstall._data_dirs", return_value=[]),
         patch("app.cli.support.uninstall._is_binary_install", return_value=False),
         patch("app.cli.support.uninstall._pip_uninstall", return_value=0),
@@ -226,7 +225,6 @@ def test_uninstall_command_short_yes_flag() -> None:
     runner = CliRunner()
 
     with (
-        patch("app.cli.commands.general.capture_cli_invoked"),
         patch("app.cli.support.uninstall._data_dirs", return_value=[]),
         patch("app.cli.support.uninstall._is_binary_install", return_value=False),
         patch("app.cli.support.uninstall._pip_uninstall", return_value=0),
