@@ -74,11 +74,17 @@ def describe_rds_events(
     )
 
     if not result.get("success"):
+        logger.error(
+            "[rds] describe_events failed for db=%s region=%s: %s",
+            db_instance_identifier,
+            region,
+            result.get("error"),
+        )
         return {
             "source": "rds",
             "available": False,
             "db_instance_identifier": db_instance_identifier,
-            "error": result.get("error"),
+            "error": "Failed to describe RDS events. Check server logs for details.",
         }
 
     raw_events = (result.get("data") or {}).get("Events") or []

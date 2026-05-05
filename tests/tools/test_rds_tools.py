@@ -55,7 +55,7 @@ def test_describe_rds_instance_aws_failure(mock_call) -> None:
 
     result = describe_rds_instance("prod-db")
     assert result["available"] is False
-    assert result["error"] == "AccessDenied"
+    assert result["error"] == "Failed to describe the RDS instance. Check server logs for details."
 
 
 @patch("app.tools.RDSEventsTool.execute_aws_sdk_call")
@@ -96,4 +96,4 @@ def test_describe_rds_events_failure(mock_call) -> None:
 
     result = describe_rds_events("prod-db")
     assert result["available"] is False
-    assert result["error"] == "ThrottlingException"
+    assert result["error"] == "Failed to describe RDS events. Check server logs for details."

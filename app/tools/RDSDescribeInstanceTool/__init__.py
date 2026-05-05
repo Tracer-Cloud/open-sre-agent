@@ -60,11 +60,17 @@ def describe_rds_instance(
     )
 
     if not result.get("success"):
+        logger.error(
+            "[rds] describe_db_instances failed for db=%s region=%s: %s",
+            db_instance_identifier,
+            region,
+            result.get("error"),
+        )
         return {
             "source": "rds",
             "available": False,
             "db_instance_identifier": db_instance_identifier,
-            "error": result.get("error"),
+            "error": "Failed to describe the RDS instance. Check server logs for details.",
         }
 
     instances = (result.get("data") or {}).get("DBInstances") or []
@@ -75,6 +81,14 @@ def describe_rds_instance(
             "db_instance_identifier": db_instance_identifier,
             "error": "No RDS instance found with the given identifier.",
         }
+
+    if len(instances) > 1:
+        logger.warning(
+            "[rds] describe_db_instances returned %d instances for db=%s; "
+            "using the first result only.",
+            len(instances),
+            db_instance_identifier,
+        )
 
     instance = instances[0]
     endpoint = instance.get("Endpoint") or {}
