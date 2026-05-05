@@ -68,3 +68,28 @@ def test_rds_extract_params_falls_back_to_env_region() -> None:
     with patch.dict(os.environ, {"AWS_REGION": "ap-south-1"}, clear=True):
         params = rds_extract_params(sources)
         assert params["region"] == "ap-south-1"
+
+
+def test_rds_extract_params_falls_back_to_rds_region_when_aws_region_unset() -> None:
+    sources = {"rds": {"db_instance_identifier": "prod-db"}}
+    with patch.dict(os.environ, {"RDS_REGION": "ca-central-1"}, clear=True):
+        params = rds_extract_params(sources)
+        assert params["region"] == "ca-central-1"
+
+
+def test_rds_extract_params_defaults_when_no_env_or_source_region() -> None:
+    sources = {"rds": {"db_instance_identifier": "prod-db"}}
+    with patch.dict(os.environ, {}, clear=True):
+        params = rds_extract_params(sources)
+        assert params["region"] == DEFAULT_RDS_REGION
+
+
+def test_rds_config_from_env_uses_rds_region_when_aws_region_unset() -> None:
+    env = {
+        "RDS_DB_INSTANCE_IDENTIFIER": "staging-db",
+        "RDS_REGION": "ap-northeast-1",
+    }
+    with patch.dict(os.environ, env, clear=True):
+        config = rds_config_from_env()
+        assert config is not None
+        assert config.region == "ap-northeast-1"

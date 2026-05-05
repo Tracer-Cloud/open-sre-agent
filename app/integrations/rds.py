@@ -7,7 +7,6 @@ read-only and routed through the shared aws_sdk_client allowlist.
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 from app.integrations._relational import env_str
@@ -41,8 +40,9 @@ def rds_config_from_env() -> RDSConfig | None:
     return build_rds_config(
         {
             "db_instance_identifier": db_id,
-            "region": env_str("AWS_REGION", DEFAULT_RDS_REGION)
-            or env_str("RDS_REGION", DEFAULT_RDS_REGION),
+            "region": env_str("AWS_REGION")
+            or env_str("RDS_REGION")
+            or DEFAULT_RDS_REGION,
         }
     )
 
@@ -56,7 +56,13 @@ def rds_is_available(sources: dict[str, dict]) -> bool:
 def rds_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     """Extract RDS identifying params (db_instance_identifier, region)."""
     rds = sources.get("rds", {})
+    region = (
+        str(rds.get("region") or "").strip()
+        or env_str("AWS_REGION")
+        or env_str("RDS_REGION")
+        or DEFAULT_RDS_REGION
+    )
     return {
         "db_instance_identifier": str(rds.get("db_instance_identifier", "")).strip(),
-        "region": str(rds.get("region") or os.getenv("AWS_REGION", DEFAULT_RDS_REGION)).strip(),
+        "region": region,
     }
