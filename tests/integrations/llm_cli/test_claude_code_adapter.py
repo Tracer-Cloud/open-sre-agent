@@ -185,14 +185,6 @@ def test_probe_cli_auth_os_error(mock_run: MagicMock) -> None:
     assert "permission denied" in detail
 
 
-@patch("app.integrations.llm_cli.claude_code.importlib.import_module")
-def test_probe_cli_auth_import_error(mock_import_module: MagicMock) -> None:
-    mock_import_module.side_effect = ImportError("runner import failed")
-    logged_in, detail = _probe_cli_auth("/usr/bin/claude")
-    assert logged_in is None
-    assert "prepare claude auth probe environment" in detail
-
-
 @patch("app.integrations.llm_cli.claude_code.subprocess.run")
 def test_probe_cli_auth_non_json_exit_zero(mock_run: MagicMock) -> None:
     """Older CLI versions that output non-JSON on exit 0 are treated as authenticated."""
@@ -636,23 +628,23 @@ def test_anthropic_key_forwarded_via_build() -> None:
 
 def test_anthropic_key_not_in_blanket_subprocess_env() -> None:
     """ANTHROPIC_API_KEY must NOT be forwarded via the global prefix allowlist (would leak to Codex)."""
-    from app.integrations.llm_cli.runner import _build_subprocess_env
+    from app.integrations.llm_cli.subprocess_env import build_cli_subprocess_env
 
     with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-secret"}, clear=False):
-        env = _build_subprocess_env(None)
+        env = build_cli_subprocess_env(None)
 
     assert "ANTHROPIC_API_KEY" not in env
 
 
 def test_claude_prefix_forwarded_to_subprocess() -> None:
-    from app.integrations.llm_cli.runner import _build_subprocess_env
+    from app.integrations.llm_cli.subprocess_env import build_cli_subprocess_env
 
     with patch.dict(
         os.environ,
         {"CLAUDE_CODE_MODEL": "claude-opus-4-7", "CLAUDE_CODE_BIN": "/usr/bin/claude"},
         clear=False,
     ):
-        env = _build_subprocess_env(None)
+        env = build_cli_subprocess_env(None)
 
     assert env["CLAUDE_CODE_MODEL"] == "claude-opus-4-7"
     assert env["CLAUDE_CODE_BIN"] == "/usr/bin/claude"

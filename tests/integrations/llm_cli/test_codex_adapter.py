@@ -243,6 +243,48 @@ def test_cli_backed_client_failure_mentions_unclear_auth_probe(mock_run: MagicMo
             client.invoke("hello")
 
 
+@patch("app.integrations.llm_cli.runner.subprocess.run")
+def test_cli_backed_client_unclear_auth_no_double_period_when_explain_failure_trailing_period(
+    mock_run: MagicMock,
+) -> None:
+    """When explain_failure ends with '.', avoid composing '..'."""
+    from app.integrations.llm_cli.runner import CLIBackedLLMClient
+
+    mock_adapter = MagicMock()
+    mock_adapter.name = "claude-code"
+    mock_adapter.auth_hint = "Run: claude auth login"
+    mock_adapter.binary_env_key = "CLAUDE_CODE_BIN"
+    mock_adapter.install_hint = "npm i -g @anthropic-ai/claude-code"
+    mock_adapter.detect.return_value = MagicMock(
+        installed=True,
+        bin_path="/usr/bin/claude",
+        logged_in=None,
+        detail="probe unclear",
+    )
+    mock_adapter.build.return_value = MagicMock(
+        argv=["/usr/bin/claude", "-p"],
+        stdin="hello",
+        cwd="/tmp",
+        env=None,
+        timeout_sec=30.0,
+    )
+    mock_adapter.explain_failure.return_value = "claude -p exited with code 1."
+
+    mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="unauthorized")
+
+    with patch("app.guardrails.engine.get_guardrail_engine") as gr:
+        gr.return_value.is_active = False
+        client = CLIBackedLLMClient(mock_adapter, model="claude-code", max_tokens=256)
+        import pytest
+
+        with pytest.raises(RuntimeError) as exc_info:
+            client.invoke("hello")
+
+    msg = str(exc_info.value)
+    assert ".." not in msg
+    assert "code 1. Auth status could not be verified" in msg
+
+
 def test_detect_uses_codex_bin_env_file(tmp_path) -> None:
     fake_bin = tmp_path / "my-codex"
     fake_bin.write_bytes(b"")

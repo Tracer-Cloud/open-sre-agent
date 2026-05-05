@@ -17,7 +17,6 @@ unavailable.
 
 from __future__ import annotations
 
-import importlib
 import json
 import os
 import re
@@ -35,6 +34,7 @@ from app.integrations.llm_cli.binary_resolver import (
 from app.integrations.llm_cli.binary_resolver import (
     resolve_cli_binary,
 )
+from app.integrations.llm_cli.subprocess_env import build_cli_subprocess_env
 
 _CLAUDE_VERSION_RE = re.compile(r"(\d+\.\d+\.\d+)")
 # Claude Code's `--version` does config/cache init that can spike past Codex's 3s
@@ -65,20 +65,13 @@ def _probe_cli_auth(binary_path: str) -> tuple[bool | None, str]:
     priority as reported by the CLI itself.
     """
     try:
-        runner_module = importlib.import_module("app.integrations.llm_cli.runner")
-        build_subprocess_env = getattr(runner_module, "_build_subprocess_env", None)
-        if not callable(build_subprocess_env):
-            return None, "Could not prepare claude auth probe environment."
-    except ImportError as exc:
-        return None, f"Could not prepare claude auth probe environment: {exc}"
-    try:
         proc = subprocess.run(
             [binary_path, "auth", "status"],
             capture_output=True,
             text=True,
             timeout=_PROBE_TIMEOUT_SEC,
             check=False,
-            env=build_subprocess_env(_anthropic_env_overrides()),
+            env=build_cli_subprocess_env(_anthropic_env_overrides()),
         )
     except subprocess.TimeoutExpired:
         return (
