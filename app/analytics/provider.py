@@ -58,7 +58,6 @@ Properties: TypeAlias = dict[str, PropertyValue]  # noqa: UP040
 class _Envelope:
     event: str
     properties: Properties
-    insert_id: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -325,10 +324,6 @@ def _event_insert_id(event: str, distinct_id: str) -> str | None:
     return f"{event}:{distinct_id}"
 
 
-def _new_insert_id() -> str:
-    return str(uuid.uuid4())
-
-
 def _touch_once(path: Path) -> bool:
     global _first_run_marker_created_this_process  # noqa: PLW0603
     try:
@@ -390,7 +385,7 @@ def _event_log_path() -> Path:
 
 
 def _initialize_event_log_state(log_path: Path) -> None:
-    """Seed ``_event_log_lines_written`` from the existing file on disk.
+    """Seed the event-log line count from the existing file on disk.
 
     Called once per process under ``_event_log_lock``. Honoring pre-existing
     content keeps the cap meaningful across runs — without this seed, a user
@@ -435,8 +430,11 @@ def _append_log_line(line: str) -> None:
         # already non-fatal — see ``_append_log_line`` docstring.
         with contextlib.suppress(OSError):
             log_path.parent.mkdir(parents=True, exist_ok=True)
-        with contextlib.suppress(OSError), log_path.open("a", encoding="utf-8") as fh:
-            fh.write(line)
+        try:
+            with log_path.open("a", encoding="utf-8") as fh:
+                fh.write(line)
+        except OSError:
+            return
         _event_log_state.lines_written += 1
         if _event_log_state.lines_written >= _EVENT_LOG_MAX_LINES:
             _rotate_event_log(log_path)
@@ -579,7 +577,6 @@ class Analytics:
         envelope = _Envelope(
             event=event.value,
             properties=_BASE_PROPERTIES | (properties or {}),
-            insert_id=_new_insert_id(),
         )
         self._ensure_worker()
         try:
@@ -652,6 +649,7 @@ class Analytics:
         insert_id = _event_insert_id(item.event, self._anonymous_id)
         if insert_id is not None:
             properties["$insert_id"] = insert_id
+        _log_event_line(item.event, properties)
         payload = {
             "api_key": POSTHOG_CAPTURE_API_KEY,
             "event": item.event,

@@ -21,6 +21,7 @@ def _reset_anonymous_id_cache(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
     provider._cached_identity_persistence = "unknown"
     provider._first_run_marker_created_this_process = False
     provider._pending_user_id_load_failures.clear()
+    monkeypatch.setattr(provider, "_event_log_state", provider._EventLogState())
     legacy_dir = tmp_path / "legacy-opensre"
     monkeypatch.setattr(provider, "_LEGACY_CONFIG_DIR", legacy_dir)
     monkeypatch.setattr(provider, "_LEGACY_ANONYMOUS_ID_PATH", legacy_dir / "anonymous_id")
@@ -123,6 +124,10 @@ def test_analytics_events_from_same_instance_share_exact_distinct_id(
     distinct_ids = [payload["json"]["properties"]["distinct_id"] for payload in posted_payloads]
     assert distinct_ids == [analytics._anonymous_id] * 3
     assert len(set(distinct_ids)) == 1
+    log_lines = (tmp_path / "posthog_events.txt").read_text(encoding="utf-8").splitlines()
+    assert len(log_lines) == 3
+    assert Event.CLI_INVOKED.value in log_lines[0]
+    assert f'distinct_id="{analytics._anonymous_id}"' in log_lines[0]
 
 
 def test_existing_install_missing_anonymous_id_captures_posthog_error(
@@ -311,7 +316,6 @@ def test_insert_id_is_stable_for_same_one_time_event(
     envelope = provider._Envelope(
         event=Event.INSTALL_DETECTED.value,
         properties={},
-        insert_id=provider._new_insert_id(),
     )
     posted_payloads = _stub_httpx_client(monkeypatch)
     client = provider.httpx.Client()
