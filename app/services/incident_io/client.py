@@ -46,9 +46,11 @@ class IncidentIoClient:
         if not self.is_configured:
             return ProbeResult.missing("Missing API key.")
 
-        with self:
+        try:
             result = self.list_incidents(status="")
             # We don't mind if there are no open incidents, just need a successful HTTP response
+        finally:
+            self.close()
 
         if not result.get("success"):
             return ProbeResult.failed(
