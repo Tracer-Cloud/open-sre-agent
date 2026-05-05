@@ -55,7 +55,7 @@ class IncidentIoIncidentsTool(BaseTool):
                 "type": "string",
                 "description": "Short title for the timeline event (required for 'add_timeline')",
             },
-            "comment": {
+            "description": {
                 "type": "string",
                 "description": "Detailed description/comment for the timeline event (used in 'add_timeline')",
             },
@@ -80,7 +80,7 @@ class IncidentIoIncidentsTool(BaseTool):
             "status": integration.get("status", "live"),
             "incident_id": integration.get("incident_id", ""),
             "title": integration.get("title", ""),
-            "comment": integration.get("comment", ""),
+            "description": integration.get("comment", "") or integration.get("description", ""),
         }
 
     def run(
@@ -91,7 +91,7 @@ class IncidentIoIncidentsTool(BaseTool):
         status: str = "live",
         incident_id: str = "",
         title: str = "",
-        comment: str = "",
+        description: str = "",
         page_size: int | None = None,
         after: str | None = None,
         **_kwargs: Any,
@@ -124,7 +124,9 @@ class IncidentIoIncidentsTool(BaseTool):
                         "error": "title is required for add_timeline",
                     }
 
-                result = client.add_timeline_event(incident_id, title=title, description=comment)
+                result = client.add_timeline_event(
+                    incident_id, title=title, description=description
+                )
                 result.update({"source": "incident_io", "available": True, "action": action})
                 return result
 

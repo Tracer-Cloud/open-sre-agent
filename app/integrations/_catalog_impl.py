@@ -1510,6 +1510,25 @@ def load_env_integrations() -> list[dict[str, Any]]:
         except Exception:
             logger.debug("Failed to load VictoriaLogs config from env", exc_info=True)
 
+    incident_io_api_key = os.getenv("INCIDENT_IO_API_KEY", "").strip()
+    if incident_io_api_key:
+        try:
+            incident_io_config = IncidentIoIntegrationConfig.model_validate(
+                {
+                    "api_key": incident_io_api_key,
+                    "region": os.getenv("INCIDENT_IO_REGION", "us").strip(),
+                    "base_url": os.getenv("INCIDENT_IO_BASE_URL", "").strip(),
+                }
+            )
+            integrations.append(
+                _active_env_record(
+                    "incident_io",
+                    incident_io_config.model_dump(exclude={"integration_id"}),
+                )
+            )
+        except Exception:
+            logger.debug("Failed to load Incident.io config from env", exc_info=True)
+
     splunk_multi = _parse_instances_env("SPLUNK_INSTANCES", "splunk")
     if splunk_multi is not None:
         integrations.append(splunk_multi)

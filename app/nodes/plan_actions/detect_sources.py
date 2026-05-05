@@ -896,6 +896,33 @@ def detect_sources(
                 "connection_verified": True,
             }
 
+    incident_io_int = (resolved_integrations or {}).get("incident_io")
+    if incident_io_int and str(incident_io_int.get("api_key", "")).strip():
+        incident_id = str(
+            annotations.get("incident_io_incident_id")
+            or annotations.get("incident_id")
+            or raw_alert.get("incident_id", "")
+        ).strip()
+        if not incident_id:
+            incident_url = str(annotations.get("incident_url") or "").strip()
+            if "incident.io/incidents/" in incident_url:
+                incident_id = incident_url.split("/incidents/")[-1].split("?")[0].strip()
+
+        sources["incident_io"] = {
+            "api_key": str(incident_io_int.get("api_key", "")).strip(),
+            "region": str(incident_io_int.get("region", "us")).strip(),
+            "base_url": str(incident_io_int.get("base_url", "")).strip(),
+            "incident_id": incident_id,
+            "title": str(
+                annotations.get("incident_title") or raw_alert.get("alert_name", "")
+            ).strip(),
+            "comment": str(
+                annotations.get("incident_comment") or annotations.get("summary") or ""
+            ).strip(),
+            "connection_verified": True,
+            "integration_id": str(incident_io_int.get("integration_id", "")).strip(),
+        }
+
     github_int = (resolved_integrations or {}).get("github")
     if github_int:
         repo_url = str(
@@ -1337,26 +1364,6 @@ def detect_sources(
             "region": str(opsgenie_int.get("region", "us")).strip(),
             "alert_id": alert_id,
             "query": opsgenie_query,
-            "connection_verified": True,
-        }
-
-    incident_io_int = (resolved_integrations or {}).get("incident_io")
-    if incident_io_int and str(incident_io_int.get("api_key", "")).strip():
-        incident_id = str(
-            annotations.get("incident_io_incident_id")
-            or annotations.get("incident_id")
-            or raw_alert.get("incident_id", "")
-        ).strip()
-        # Fallback: extract from URL if present
-        if not incident_id:
-            incident_url = str(annotations.get("incident_url") or "").strip()
-            if "incident.io/incidents/" in incident_url:
-                incident_id = incident_url.split("/incidents/")[-1].split("?")[0].strip()
-
-        sources["incident_io"] = {
-            "api_key": str(incident_io_int.get("api_key", "")).strip(),
-            "region": str(incident_io_int.get("region", "us")).strip(),
-            "incident_id": incident_id,
             "connection_verified": True,
         }
 
