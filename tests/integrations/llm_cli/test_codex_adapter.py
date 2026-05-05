@@ -114,6 +114,38 @@ def test_detect_not_logged_in_exit_zero(mock_which: MagicMock, mock_run: MagicMo
 
 
 @patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/codex")
+def test_build_forwards_openai_platform_env(mock_which: MagicMock) -> None:
+    with patch.dict(
+        os.environ,
+        {
+            "OPENAI_API_KEY": "sk-test",
+            "OPENAI_ORG_ID": "org-x",
+            "OPENAI_PROJECT_ID": "proj-y",
+            "OPENAI_BASE_URL": "https://example.invalid/v1",
+        },
+        clear=False,
+    ):
+        inv = CodexAdapter().build(prompt="p", model=None, workspace="")
+
+    mock_which.assert_called()
+    assert inv.env is not None
+    assert inv.env["OPENAI_API_KEY"] == "sk-test"
+    assert inv.env["OPENAI_ORG_ID"] == "org-x"
+    assert inv.env["OPENAI_PROJECT_ID"] == "proj-y"
+    assert inv.env["OPENAI_BASE_URL"] == "https://example.invalid/v1"
+
+
+@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/codex")
+def test_build_omits_env_without_openai_platform_vars(mock_which: MagicMock) -> None:
+    """Strip OPENAI_* so build() does not attach env overrides from the real shell."""
+    base = {k: v for k, v in os.environ.items() if not k.startswith("OPENAI_")}
+    with patch.dict(os.environ, base, clear=True):
+        inv = CodexAdapter().build(prompt="p", model=None, workspace="")
+    mock_which.assert_called()
+    assert inv.env is None
+
+
+@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/codex")
 def test_build_adds_model_flag_when_not_default(mock_which: MagicMock) -> None:
     inv = CodexAdapter().build(prompt="p", model="o3", workspace="")
     assert inv.stdin == "p"
@@ -172,6 +204,47 @@ def test_cli_backed_client_invoke(mock_run: MagicMock) -> None:
     assert env["CODEX_BIN"] == "/custom/codex"
     assert "ANTHROPIC_API_KEY" not in env
     assert "OPENAI_API_KEY" not in env
+
+
+@patch("app.integrations.llm_cli.runner.subprocess.run")
+@patch.object(CodexAdapter, "_probe_binary")
+@patch.object(CodexAdapter, "_resolve_binary", return_value="/usr/bin/codex")
+def test_cli_backed_client_codex_merge_openai_platform_env(
+    _mock_resolve: MagicMock,
+    mock_probe_binary: MagicMock,
+    mock_run: MagicMock,
+) -> None:
+    """Codex invoke merges OPENAI_* from the adapter into the filtered subprocess env."""
+    from app.integrations.llm_cli.runner import CLIBackedLLMClient
+
+    mock_probe_binary.return_value = MagicMock(
+        installed=True,
+        bin_path="/usr/bin/codex",
+        logged_in=True,
+        detail="ok",
+    )
+    mock_run.return_value = MagicMock(returncode=0, stdout="ok\n", stderr="")
+
+    with (
+        patch("app.guardrails.engine.get_guardrail_engine") as gr,
+        patch.dict(
+            os.environ,
+            {
+                "OPENAI_API_KEY": "sk-from-env",
+                "OPENAI_BASE_URL": "https://proxy.example/v1",
+                "PATH": "/usr/bin",
+            },
+            clear=False,
+        ),
+    ):
+        gr.return_value.is_active = False
+        client = CLIBackedLLMClient(CodexAdapter(), model=None, max_tokens=256)
+        client.invoke("hello")
+
+    merged = mock_run.call_args.kwargs["env"]
+    assert merged["OPENAI_API_KEY"] == "sk-from-env"
+    assert merged["OPENAI_BASE_URL"] == "https://proxy.example/v1"
+    assert "ANTHROPIC_API_KEY" not in merged
 
 
 @patch("app.integrations.llm_cli.runner.subprocess.run")
