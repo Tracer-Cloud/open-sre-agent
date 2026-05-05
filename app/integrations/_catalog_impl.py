@@ -1510,7 +1510,6 @@ def load_env_integrations() -> list[dict[str, Any]]:
         except Exception:
             logger.debug("Failed to load VictoriaLogs config from env", exc_info=True)
 
-
     splunk_multi = _parse_instances_env("SPLUNK_INSTANCES", "splunk")
     if splunk_multi is not None:
         integrations.append(splunk_multi)
