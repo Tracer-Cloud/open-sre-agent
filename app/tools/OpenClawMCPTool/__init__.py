@@ -8,6 +8,7 @@ from app.integrations.openclaw import (
     build_openclaw_config,
     describe_openclaw_error,
     openclaw_config_from_env,
+    openclaw_runtime_unavailable_reason,
 )
 from app.integrations.openclaw import (
     call_openclaw_tool as invoke_openclaw_mcp_tool,
@@ -74,9 +75,7 @@ def _resolve_config(
 
 
 def _openclaw_available(sources: dict[str, dict]) -> bool:
-    return bool(
-        sources.get("openclaw", {}).get("connection_verified") or openclaw_config_from_env()
-    )
+    return bool(sources.get("openclaw", {}).get("connection_verified"))
 
 
 def _openclaw_extract_params(sources: dict[str, dict]) -> OpenClawParams:
@@ -174,6 +173,12 @@ def list_openclaw_bridge_tools(
         payload["tools"] = []
         return payload
 
+    runtime_error = openclaw_runtime_unavailable_reason(config)
+    if runtime_error is not None:
+        payload = _openclaw_unavailable_response(runtime_error)
+        payload["tools"] = []
+        return payload
+
     try:
         tools = list_openclaw_mcp_tools(config)
     except Exception as err:  # noqa: BLE001
@@ -238,6 +243,12 @@ def search_openclaw_conversations(
         payload["conversations"] = []
         return payload
 
+    runtime_error = openclaw_runtime_unavailable_reason(config)
+    if runtime_error is not None:
+        payload = _openclaw_unavailable_response(runtime_error)
+        payload["conversations"] = []
+        return payload
+
     arguments: OpenClawParams = {
         "limit": max(1, min(limit, 25)),
         "includeDerivedTitles": True,
@@ -286,7 +297,7 @@ def search_openclaw_conversations(
     extract_params=_openclaw_extract_params,
 )
 def call_openclaw_bridge_tool(
-    tool_name: str,
+    tool_name: str | None = None,
     arguments: OpenClawParams | None = None,
     openclaw_url: str | None = None,
     openclaw_mode: str | None = None,
@@ -296,6 +307,13 @@ def call_openclaw_bridge_tool(
     **_kwargs: object,
 ) -> OpenClawBridgeResponse:
     """Call a specific OpenClaw MCP bridge tool."""
+    normalized_tool_name = (tool_name or "").strip()
+    if not normalized_tool_name:
+        return _openclaw_unavailable_response(
+            "tool_name is required to call an OpenClaw MCP tool.",
+            arguments=arguments or {},
+        )
+
     config = _resolve_config(
         openclaw_url,
         openclaw_mode,
@@ -306,16 +324,24 @@ def call_openclaw_bridge_tool(
     if config is None:
         return _openclaw_unavailable_response(
             "OpenClaw MCP integration is not configured.",
-            tool_name=tool_name,
+            tool_name=normalized_tool_name or None,
+            arguments=arguments or {},
+        )
+
+    runtime_error = openclaw_runtime_unavailable_reason(config)
+    if runtime_error is not None:
+        return _openclaw_unavailable_response(
+            runtime_error,
+            tool_name=normalized_tool_name,
             arguments=arguments or {},
         )
 
     try:
-        result = invoke_openclaw_mcp_tool(config, tool_name, arguments or {})
+        result = invoke_openclaw_mcp_tool(config, normalized_tool_name, arguments or {})
     except Exception as err:  # noqa: BLE001
         return _openclaw_unavailable_response(
             describe_openclaw_error(err, config),
-            tool_name=tool_name,
+            tool_name=normalized_tool_name,
             arguments=arguments or {},
         )
 

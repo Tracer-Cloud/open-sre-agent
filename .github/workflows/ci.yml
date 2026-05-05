@@ -8,6 +8,7 @@ on:
       - "app/**"
       - "tests/**"
       - "pyproject.toml"
+      - "uv.lock"
       - "pytest.ini"
       - "Makefile"
       - ".github/workflows/ci.yml"
@@ -18,6 +19,7 @@ on:
       - "app/**"
       - "tests/**"
       - "pyproject.toml"
+      - "uv.lock"
       - "pytest.ini"
       - "Makefile"
       - ".github/workflows/ci.yml"
@@ -56,7 +58,9 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          cache-dependency-glob: "pyproject.toml"
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -64,13 +68,13 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies
-        run: uv pip install --system -e ".[dev]"
+        run: uv sync --frozen --extra dev
 
       - name: Lint
-        run: python -m ruff check app/ tests/
+        run: uv run python -m ruff check app/ tests/
 
       - name: Format check
-        run: python -m ruff format --check app/ tests/
+        run: uv run python -m ruff format --check app/ tests/
 
   # ---------------------------------------------------------------
   # TYPECHECK
@@ -93,7 +97,9 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          cache-dependency-glob: "pyproject.toml"
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -101,10 +107,10 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies
-        run: uv pip install --system -e ".[dev]"
+        run: uv sync --frozen --extra dev
 
       - name: Typecheck
-        run: python -m mypy app/
+        run: uv run python -m mypy app/
 
   # ---------------------------------------------------------------
   # TESTS (MAIN CI GATE)
@@ -147,7 +153,9 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          cache-dependency-glob: "pyproject.toml"
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -155,20 +163,13 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies
-        run: uv pip install --system -e ".[dev]"
+        run: uv sync --frozen --extra dev
 
-      - name: Run safe tests (fork PRs)
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == true
+      # Fork PRs previously ran a narrower pytest set; run the same suite as main pushes
+      # so merge does not surface failures only seen on push.
+      - name: Run tests
         run: >-
-          python -m pytest -n auto -v
-          --ignore=tests/e2e
-          --ignore=tests/synthetic
-          -m "not synthetic"
-
-      - name: Run full tests
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
-        run: >-
-          python -m pytest -n auto -v
+          uv run python -m pytest -n auto -v
           --cov=app
           --cov-report=term-missing
           --cov-report=html
@@ -177,7 +178,9 @@ jobs:
           -m "${{ matrix.os == 'windows-latest' && 'not synthetic and not integration' || 'not synthetic' }}"
 
       - name: Upload coverage
-        if: always() && matrix.os == 'ubuntu-latest' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false)
+        if: >-
+          always() && matrix.os == 'ubuntu-latest' &&
+          (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false)
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report-${{ matrix.os }}
@@ -212,7 +215,9 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          cache-dependency-glob: "pyproject.toml"
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -220,14 +225,14 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies
-        run: uv pip install --system -e ".[dev]"
+        run: uv sync --frozen --extra dev
 
       - name: Run Kubernetes tests
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-east-1
-        run: python -m tests.e2e.kubernetes.test_local
+        run: uv run python -m tests.e2e.kubernetes.test_local
 
   # ---------------------------------------------------------------
   # THOROUGH E2E (MAIN ONLY)
@@ -285,7 +290,9 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          cache-dependency-glob: "pyproject.toml"
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -293,7 +300,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies
-        run: uv pip install --system -e ".[dev]"
+        run: uv sync --frozen --extra dev
 
       - name: Install tracer CLI
         run: |
@@ -306,5 +313,5 @@ jobs:
         timeout-minutes: 2
 
       - name: Run test
-        run: ${{ matrix.command }}
+        run: uv run ${{ matrix.command }}
         timeout-minutes: 30

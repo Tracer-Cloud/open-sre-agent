@@ -1,0 +1,93 @@
+# Scheduled / manual: (1) synthetic RCA scenarios with lockfile-pinned deps;
+# (2) latest-PyPI canary (unpinned resolve) — former deps-latest.yml.
+
+name: Synthetic tests & dependency canary
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"  # Monday 9 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-synthetic:
+    name: synthetic tests (levels 1-4)
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev
+
+      - name: Run synthetic tests (levels 1-2)
+        run: uv run python -m pytest -m synthetic -k "level1 or level2" -v tests/synthetic/
+
+      - name: Run synthetic tests (levels 3-4)
+        run: uv run python -m pytest -m synthetic -k "level3 or level4" -v tests/synthetic/
+
+  dependency-resolution-latest:
+    name: dependency resolution (latest PyPI)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies (latest resolves from pyproject)
+        run: uv pip install --python "$(which python)" --system -e ".[dev]"
+
+      - name: Guardrails + LLM client tests
+        run: >-
+          python -m pytest -q
+          tests/test_guardrails/test_llm_integration.py::TestOpenAIClientGuardrails::test_redacts_before_api_call
+          tests/services/test_llm_client.py
+
+      - name: Create issue when scheduled canary fails
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          EXISTING="$(gh issue list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --search 'in:title "Dependency resolution (latest) canary failed"' \
+            --json number \
+            --jq '.[0].number // ""')"
+          if [ -n "$EXISTING" ]; then
+            echo "Failure issue already open: #$EXISTING"
+            exit 0
+          fi
+          gh issue create \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Dependency resolution (latest) canary failed" \
+            --body "Scheduled run failed in workflow **Synthetic tests & dependency canary**: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"

@@ -41,18 +41,33 @@ def _capture() -> tuple[Console, io.StringIO]:
 
 
 class _FakeLLMClient:
-    """Streaming-aware fake: ``invoke_stream`` yields the canned content as one chunk."""
+    """Streaming-aware fake.
 
-    def __init__(self, content: str) -> None:
+    ``invoke_stream`` yields the canned content as a single chunk. ``content``
+    accepts either a plain string or an Anthropic-style list of content blocks
+    (objects with ``.text`` or dicts with a ``"text"`` key); blocks are flattened
+    to the same text the real SDK's ``text_stream`` would surface.
+    """
+
+    def __init__(self, content: Any) -> None:
         self._content = content
         self.last_prompt: str | None = None
 
     def invoke_stream(self, prompt: str) -> Iterator[str]:
         self.last_prompt = prompt
-        yield self._content
+        if isinstance(self._content, list):
+            parts: list[str] = []
+            for block in self._content:
+                if isinstance(block, dict):
+                    parts.append(block.get("text", ""))
+                elif hasattr(block, "text"):
+                    parts.append(block.text)
+            yield "\n".join(parts)
+            return
+        yield str(self._content)
 
 
-def _patch_llm(monkeypatch: Any, content: str) -> _FakeLLMClient:
+def _patch_llm(monkeypatch: Any, content: Any) -> _FakeLLMClient:
     client = _FakeLLMClient(content)
     # ``answer_cli_agent`` imports ``get_llm_for_reasoning`` lazily from
     # ``app.services.llm_client``, so we patch the symbol on that module.
@@ -91,6 +106,7 @@ class TestSystemPromptTerminology:
         assert _ACTION_RULE in prompt
         assert "switch_llm_provider" in prompt
         assert '"action":"switch_llm_provider"' in prompt
+        assert "claude-code" in prompt
 
 
 class TestActionPlanParsing:
@@ -177,6 +193,20 @@ class TestAssistantOutputRendering:
             ("user", "hello"),
             ("assistant", "Sure thing."),
         ]
+
+    def test_structured_content_blocks_are_rendered(self, monkeypatch: Any) -> None:
+        class _Block:
+            def __init__(self, text: str) -> None:
+                self.text = text
+
+        _patch_llm(monkeypatch, [_Block("First line"), {"text": "Second line"}])
+        session = ReplSession()
+        console, buf = _capture()
+        answer_cli_agent("hello", session, console)
+        output = _strip_ansi(buf.getvalue())
+        assert "First line" in output
+        assert "Second line" in output
+        assert session.cli_agent_messages[-1] == ("assistant", "First line\nSecond line")
 
     def test_llm_failure_prints_red_error_and_does_not_record(self, monkeypatch: Any) -> None:
         class _Boom:

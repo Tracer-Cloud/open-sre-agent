@@ -13,6 +13,7 @@ jobs:
       - name: Send release announcement to Discord
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL_UPDATE }}
+          DISCORD_RELEASES_ROLE_ID: ${{ secrets.DISCORD_RELEASES_ROLE_ID }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
           RELEASE_BODY: ${{ github.event.release.body }}
           RELEASE_URL: ${{ github.event.release.html_url }}
@@ -24,6 +25,11 @@ jobs:
           if [ -z "${DISCORD_WEBHOOK_URL:-}" ]; then
             echo "DISCORD_WEBHOOK_URL is not set; skipping Discord announcement."
             exit 0
+          fi
+
+          role_mention=""
+          if [ -n "${DISCORD_RELEASES_ROLE_ID:-}" ]; then
+            role_mention="<@&${DISCORD_RELEASES_ROLE_ID}>"$'\n'
           fi
 
           NOTES="${RELEASE_BODY:-No release notes provided.}"
@@ -39,8 +45,9 @@ jobs:
             --arg url "$RELEASE_URL" \
             --arg stars "${REPO_STARS:-0}" \
             --arg forks "${REPO_FORKS:-0}" \
+            --arg mention "$role_mention" \
             '{
-              content: ("🚀 **New opensre release: `" + $tag + "`**\n\n📝 **Release Notes**\n" + $notes + "\n\n📊 **Repo Stats**\n⭐ Stars: " + $stars + "\n🍴 Forks: " + $forks + "\n\n🔗 **Release URL:** " + $url)
+              content: ($mention + "🚀 **New opensre release: `" + $tag + "`**\n\n📝 **Release Notes**\n" + $notes + "\n\n📊 **Repo Stats**\n⭐ Stars: " + $stars + "\n🍴 Forks: " + $forks + "\n\n🔗 **Release URL:** " + $url)
             }'
           )"
 

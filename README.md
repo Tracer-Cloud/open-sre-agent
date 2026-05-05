@@ -218,6 +218,8 @@ opensre remote ops logs --follow
 
 > **New to OpenSRE?** See [SETUP.md](SETUP.md) for detailed platform-specific setup instructions, including Windows setup, environment configuration, and more.
 
+Local development installs use [uv](https://docs.astral.sh/uv/getting-started/installation/) and a committed `uv.lock` (`make install` runs `uv sync --frozen --extra dev`). Install uv first, then:
+
 ```bash
 git clone https://github.com/Tracer-Cloud/opensre
 cd opensre
@@ -1268,6 +1270,36 @@ Thanks goes to these amazing people:
             <img src="https://avatars.githubusercontent.com/u/200061014?v=4" width="100" alt="Powlisher"/>
             <br />
             <sub><b>Powlisher</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/vidhishah2209">
+            <img src="https://avatars.githubusercontent.com/u/179381557?v=4" width="100" alt="vidhishah2209"/>
+            <br />
+            <sub><b>vidhishah2209</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/aayushprsingh">
+            <img src="https://avatars.githubusercontent.com/u/172073271?v=4" width="100" alt="aayushprsingh"/>
+            <br />
+            <sub><b>aayushprsingh</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/shubh586">
+            <img src="https://avatars.githubusercontent.com/u/176175004?v=4" width="100" alt="shubh586"/>
+            <br />
+            <sub><b>shubh586</b></sub>
+        </a>
+    </td>
+		</tr>
+		<tr>
+            <td align="center">
+        <a href="https://github.com/mazenessam77">
+            <img src="https://avatars.githubusercontent.com/u/184118745?v=4" width="100" alt="mazenessam77"/>
+            <br />
+            <sub><b>mazenessam77</b></sub>
         </a>
     </td>
 		</tr>

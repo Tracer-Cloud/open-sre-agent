@@ -5,9 +5,8 @@ Welcome to OpenSRE
 ## Quick Links
 
 - **GitHub:** [https://github.com/Tracer-Cloud/opensre](https://github.com/Tracer-Cloud/opensre)
-- **Vision:** `[VISION.md](VISION.md)`
 - **Discord:** [https://discord.gg/opensre](https://discord.gg/opensre)
-- **X/Twitter:** §[@open_sre](https://x.com/open_sre)
+- **X/Twitter:** [@open_sre](https://x.com/open_sre)
 
 ## How to Contribute
 
@@ -27,12 +26,12 @@ See **[SETUP.md](SETUP.md)** for detailed setup instructions including Windows-s
 
 **Quick start:**
 
-1. Clone the repo and create a virtual environment
-2. Install dependencies: `pip install -e ".[dev]"`
+1. Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and clone the repository (see [SETUP.md](SETUP.md) for Windows and alternatives)
+2. Install dependencies: `make install`
 3. Run checks: `make lint && make format-check && make typecheck && make test-cov`
 4. Build release artifacts when needed: `make build`
 
-If you prefer VS Code, you can use the repo's devcontainer at `[.devcontainer/devcontainer.json](.devcontainer/devcontainer.json)` instead of setting up Python manually.
+If you prefer VS Code, you can use the repo's devcontainer at [.devcontainer/devcontainer.json](.devcontainer/devcontainer.json) instead of setting up Python manually.
 
 ---
 

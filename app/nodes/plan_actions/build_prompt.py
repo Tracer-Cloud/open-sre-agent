@@ -116,6 +116,7 @@ def _build_available_sources_hint(available_sources: dict[str, dict]) -> str:
 - Service Name: {grafana.get("service_name")}
 - Pipeline: {grafana.get("pipeline_name")}
 - Use query_grafana_logs to search Loki for pipeline errors, or to fetch AWS Performance Insights and RDS events for database diagnostics{traces_hint}
+- Use query_grafana_metrics for database resource metrics such as FreeStorageSpace, WriteIOPS, CPU, connections, and latency
 - Use query_grafana_alert_rules to inspect alert configuration"""
         )
 
@@ -161,7 +162,7 @@ def _build_available_sources_hint(available_sources: dict[str, dict]) -> str:
 - Use search_github_code and get_github_file_contents to trace the failure into code"""
         )
 
-    if "openclaw" in available_sources:
+    if available_sources.get("openclaw", {}).get("connection_verified"):
         openclaw = available_sources["openclaw"]
         endpoint = openclaw.get("openclaw_command") or openclaw.get("openclaw_url") or "unknown"
         hints.append(
@@ -432,6 +433,7 @@ When selecting actions, optimize for:
 Additionally:
 - When connection counts are high, explicitly evaluate whether idle connections are contributing to the issue and include this explicitly in your reasoning if relevant.
 - When storage pressure is observed, explicitly consider audit logs or database-specific logging mechanisms (e.g. audit_log for PostgreSQL/Aurora)
+- For RDS/Postgres storage alerts, collect metrics, logs/events, and alert rules together when Grafana is available so the final RCA can connect FreeStorageSpace, WriteIOPS, RDS events, and the triggering alert.
 
 Avoid:
 - collecting general context that does not help separate hypotheses

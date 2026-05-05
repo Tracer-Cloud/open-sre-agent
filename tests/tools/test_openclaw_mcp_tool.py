@@ -104,6 +104,7 @@ def test_list_openclaw_tools_happy_path() -> None:
     with (
         patch("app.tools.OpenClawMCPTool.openclaw_config_from_env", return_value=None),
         patch("app.tools.OpenClawMCPTool.build_openclaw_config", return_value=mock_config),
+        patch("app.tools.OpenClawMCPTool.openclaw_runtime_unavailable_reason", return_value=None),
         patch(
             "app.tools.OpenClawMCPTool.list_openclaw_mcp_tools",
             return_value=[{"name": "messages_read", "description": "", "input_schema": {}}],
@@ -126,6 +127,7 @@ def test_call_openclaw_tool_happy_path() -> None:
     with (
         patch("app.tools.OpenClawMCPTool.openclaw_config_from_env", return_value=None),
         patch("app.tools.OpenClawMCPTool.build_openclaw_config", return_value=mock_config),
+        patch("app.tools.OpenClawMCPTool.openclaw_runtime_unavailable_reason", return_value=None),
         patch(
             "app.tools.OpenClawMCPTool.invoke_openclaw_mcp_tool",
             return_value={
@@ -157,6 +159,7 @@ def test_call_openclaw_tool_returns_error_payload() -> None:
     with (
         patch("app.tools.OpenClawMCPTool.openclaw_config_from_env", return_value=None),
         patch("app.tools.OpenClawMCPTool.build_openclaw_config", return_value=mock_config),
+        patch("app.tools.OpenClawMCPTool.openclaw_runtime_unavailable_reason", return_value=None),
         patch(
             "app.tools.OpenClawMCPTool.invoke_openclaw_mcp_tool",
             return_value={
@@ -179,12 +182,20 @@ def test_call_openclaw_tool_returns_error_payload() -> None:
     assert "route missing" in result["error"]
 
 
+def test_call_openclaw_tool_requires_tool_name() -> None:
+    result = call_openclaw_bridge_tool(arguments={"session_key": "abc"})
+
+    assert result["available"] is False
+    assert "tool_name is required" in result["error"]
+
+
 def test_search_openclaw_conversations_happy_path() -> None:
     mock_config = MagicMock()
 
     with (
         patch("app.tools.OpenClawMCPTool.openclaw_config_from_env", return_value=None),
         patch("app.tools.OpenClawMCPTool.build_openclaw_config", return_value=mock_config),
+        patch("app.tools.OpenClawMCPTool.openclaw_runtime_unavailable_reason", return_value=None),
         patch(
             "app.tools.OpenClawMCPTool.invoke_openclaw_mcp_tool",
             return_value={

@@ -96,3 +96,14 @@ def test_llm_settings_from_env_max_tokens_default(monkeypatch) -> None:
     settings = LLMSettings.from_env()
 
     assert settings.max_tokens == DEFAULT_MAX_TOKENS
+
+
+def test_llm_settings_from_env_claude_code_without_api_key(monkeypatch) -> None:
+    """CLI-backed Claude Code: onboard writes LLM_PROVIDER only; no hosted API key."""
+    monkeypatch.setenv("LLM_PROVIDER", "claude-code")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setattr("app.config.resolve_llm_api_key", lambda _: "")
+
+    settings = LLMSettings.from_env()
+
+    assert settings.provider == "claude-code"

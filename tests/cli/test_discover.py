@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import unittest.mock
 from pathlib import Path
 
 import pytest
 
 from app.cli.tests.discover import (
+    _comment_map_for_makefile,
     _discover_rds_synthetic_scenarios,
     discover_make_targets,
     discover_rca_files,
@@ -27,20 +27,73 @@ def test_load_test_catalog_excludes_synthetic_suite_for_now() -> None:
     assert catalog.find("suite:rds_postgres") is None
 
 
-def test_discover_make_targets_finds_target_at_line_one() -> None:
+def test_comment_map_for_makefile_parses_comments_and_resets_buffers(tmp_path: Path) -> None:
+    makefile = tmp_path / "Makefile"
+    makefile.write_text(
+        "# first line\n"
+        "# second line\n"
+        "test-cov:\n"
+        "\tpytest\n"
+        "\n"
+        "# this should be ignored\n"
+        "SHELL := /bin/bash\n"
+        "# cloudwatch description\n"
+        "cloudwatch-demo:\n"
+        "\tpytest\n"
+        "test-full:\n"
+        "\tpytest\n",
+        encoding="utf-8",
+    )
+
+    comments = _comment_map_for_makefile(makefile)
+    assert comments["test-cov"] == "first line second line"
+    assert comments["cloudwatch-demo"] == "cloudwatch description"
+    assert comments["test-full"] == ""
+
+
+def test_discover_make_targets_finds_target_at_line_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Regression guard: re.MULTILINE regex must match a target with no preceding newline."""
-    fake_makefile = "test-cov:\n\tpytest\n\ntest-full:\n\tpytest --full\n"
-    with unittest.mock.patch(
-        "app.cli.tests.discover.MAKEFILE_PATH",
-        new=unittest.mock.MagicMock(
-            read_text=unittest.mock.Mock(return_value=fake_makefile),
-            __str__=unittest.mock.Mock(return_value="Makefile"),
-        ),
-    ):
-        items = discover_make_targets()
+    makefile = tmp_path / "Makefile"
+    makefile.write_text("test-cov:\n\tpytest\n\ntest-full:\n\tpytest --full\n", encoding="utf-8")
+    monkeypatch.setattr("app.cli.tests.discover.MAKEFILE_PATH", makefile)
+
+    items = discover_make_targets()
 
     ids = [item.id for item in items]
     assert "make:test-cov" in ids
+
+
+def test_discover_make_targets_skips_targets_missing_from_makefile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    makefile = tmp_path / "Makefile"
+    makefile.write_text("test-cov:\n\tpytest\n\ndeploy:\n\tpython deploy.py\n", encoding="utf-8")
+    monkeypatch.setattr("app.cli.tests.discover.MAKEFILE_PATH", makefile)
+
+    ids = [item.id for item in discover_make_targets()]
+    assert set(ids) == {"make:test-cov", "make:deploy"}
+    assert "make:test-full" not in ids
+
+
+def test_discover_make_targets_applies_comment_and_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    makefile = tmp_path / "Makefile"
+    makefile.write_text(
+        "# Grafana integration checks\ntest-grafana:\n\tpytest tests/integrations\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("app.cli.tests.discover.MAKEFILE_PATH", makefile)
+
+    items = discover_make_targets()
+    assert len(items) == 1
+    item = items[0]
+    assert item.id == "make:test-grafana"
+    assert item.description == "Grafana integration checks"
+    assert item.tags == ("test", "grafana")
+    assert item.requirements.env_vars == ("ANTHROPIC_API_KEY", "OPENAI_API_KEY")
 
 
 # ---------------------------------------------------------------------------

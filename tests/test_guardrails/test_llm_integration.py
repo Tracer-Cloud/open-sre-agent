@@ -84,7 +84,7 @@ def openai_capture(monkeypatch: pytest.MonkeyPatch) -> tuple[Any, dict[str, Any]
     monkeypatch.setenv("TEST_KEY", "fake-key")
     client = OpenAILLMClient(model="test", max_tokens=10, api_key_env="TEST_KEY")
     monkeypatch.setattr(client, "_client", _FakeClient())
-    monkeypatch.setattr(client, "_ensure_client", lambda: None)
+    monkeypatch.setattr(client, "_ensure_client", lambda: client._client)
     return client, captured
 
 
@@ -238,10 +238,10 @@ class TestOpenAIClientGuardrails:
 
         from app.services.llm_client import OpenAILLMClient
 
-        client = OpenAILLMClient(model="test", max_tokens=10, api_key_env="TEST_KEY")
         monkeypatch.setenv("TEST_KEY", "fake-key")
+        client = OpenAILLMClient(model="test", max_tokens=10, api_key_env="TEST_KEY")
         monkeypatch.setattr(client, "_client", _FakeClient())
-        monkeypatch.setattr(client, "_ensure_client", lambda: None)
+        monkeypatch.setattr(client, "_ensure_client", lambda: client._client)
 
         client.invoke("My key is AKIAIOSFODNN7EXAMPLE")
 

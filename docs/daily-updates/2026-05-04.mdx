@@ -1,0 +1,46 @@
+---
+title: "Daily Update — 2026-05-04"
+description: "OpenSRE engineering daily update for 2026-05-04 (Europe/London)"
+---
+
+Thanks to everyone who contributed yesterday:
+
+Aniket Rawat, Anwesh, Awokoya Olawale Davidson, Devesh, DevNinja, Enoch, Kevin Espiñeira, Paul Demarecaux, Powlisher, Sundaram Kumar Jha, Yash Kumar Saini, Yash Kumar Saini, and zerone0x 🙏🚀
+
+## Main updates shipped (May 4, 2026)
+
+- feat(cli): allow switching toolcall model at runtime (#1182) — Awokoya Olawale Davidson
+- refactor: improve RDS storage-full RCA evidence handling — Sundaram Kumar Jha
+- test(tools): add dedicated unit tests for Snowflake, OpenObserve, OpenSearch tools (#790) — Paul Demarecaux
+- tests(kafka): add unit tests for KafkaTopicHealthTool and KafkaConsumerGroupTool — Yash Kumar Saini
+- docs: add LLM providers reference page — DevNinja
+- test(coralogix): add direct unit tests for CoralogixClient — Aniket Rawat
+- test: cover _check_memory_health threshold branches — Kevin Espiñeira
+- clearing backlogs -unit tests for app/cli/tests/discover.py — Devesh
+- clearing backloag -test: add shutdown analytics tests for idempotency… — Devesh
+- fix: move stdlib base64 and json imports to module level in resolve_integrations node — Enoch
+- fix: make test-cov use shell-safe Windows venv path — Sundaram Kumar Jha
+- fix(test): set TEST_KEY before OpenAILLMClient in guardrail test — Anwesh
+- fix(tests): skip localhost-bound update smoke test when sockets are blocked — zerone0x
+
+## Source pull requests
+
+- [#1257](https://github.com/Tracer-Cloud/opensre/pull/1257) fix(tests): skip localhost-bound update smoke test when sockets are blocked (author: zerone0x; contributors: zerone0x; labels: _none_; files: `tests/cli_smoke_test.py`)
+- [#1238](https://github.com/Tracer-Cloud/opensre/pull/1238) test(tools): add dedicated unit tests for Snowflake, OpenObserve, OpenSearch tools (#790) (author: Powlisher; contributors: Paul Demarecaux and Powlisher; labels: _none_; files: `tests/tools/conftest.py`, `tests/tools/test_openobserve_logs_tool.py`, `tests/tools/test_opensearch_analytics_tool.py`, `tests/tools/test_snowflake_query_history_tool.py`)
+- [#1236](https://github.com/Tracer-Cloud/opensre/pull/1236) fix: make test-cov use shell-safe Windows venv path (author: Sundaram Kumar Jha; contributors: Sundaram Kumar Jha; labels: _none_; files: `Makefile`)
+- [#1192](https://github.com/Tracer-Cloud/opensre/pull/1192) feat(cli): allow switching toolcall model at runtime (#1182) (author: Awokoya Olawale Davidson; contributors: Awokoya Olawale Davidson; labels: _none_; files: `app/cli/interactive_shell/cli_agent.py`, `app/cli/interactive_shell/commands.py`, `app/cli/wizard/config.py`, `tests/cli/interactive_shell/test_cli_agent.py`, `tests/cli/interactive_shell/test_commands.py`)
+- [#1262](https://github.com/Tracer-Cloud/opensre/pull/1262) test: cover _check_memory_health threshold branches (author: Kevin Espiñeira; contributors: Kevin Espiñeira; labels: _none_; files: `tests/remote/test_server.py`)
+- [#1266](https://github.com/Tracer-Cloud/opensre/pull/1266) fix: move stdlib base64 and json imports to module level in resolve_integrations node (author: Enoch; contributors: Enoch; labels: _none_; files: `app/nodes/resolve_integrations/node.py`)
+- [#1270](https://github.com/Tracer-Cloud/opensre/pull/1270) clearing backlogs -unit tests for app/cli/tests/discover.py (author: Devesh; contributors: Devesh; labels: _none_; files: `tests/cli/test_discover.py`)
+- [#1271](https://github.com/Tracer-Cloud/opensre/pull/1271) clearing backloag -test: add shutdown analytics tests for idempotency… (author: Devesh; contributors: Devesh; labels: _none_; files: `tests/analytics/test_provider.py`)
+- [#1264](https://github.com/Tracer-Cloud/opensre/pull/1264) tests(kafka): add unit tests for KafkaTopicHealthTool and KafkaConsumerGroupTool (author: Yash Kumar Saini; contributors: Yash Kumar Saini and Yash Kumar Saini; labels: _none_; files: `tests/tools/test_kafka_consumer_group_tool.py`, `tests/tools/test_kafka_topic_health_tool.py`)
+- [#1279](https://github.com/Tracer-Cloud/opensre/pull/1279) refactor: improve RDS storage-full RCA evidence handling (author: Sundaram Kumar Jha; contributors: Sundaram Kumar Jha; labels: _none_; files: `app/nodes/investigate/processing/post_process.py`, `app/nodes/plan_actions/build_prompt.py`, `app/nodes/root_cause_diagnosis/prompt_builder.py`, `app/tools/GrafanaAlertRulesTool/__init__.py`, `app/tools/utils/metric_summary.py`, `tests/nodes/root_cause_diagnosis/test_rds_grafana_evidence.py`, `tests/tools/test_grafana_alert_rules_tool.py`, `tests/tools/test_grafana_metrics_tool.py`)
+- [#1280](https://github.com/Tracer-Cloud/opensre/pull/1280) fix(test): set TEST_KEY before OpenAILLMClient in guardrail test (author: Anwesh; contributors: Anwesh; labels: _none_; files: `tests/test_guardrails/test_llm_integration.py`)
+- [#1261](https://github.com/Tracer-Cloud/opensre/pull/1261) docs: add LLM providers reference page (author: DevNinja; contributors: DevNinja; labels: `pending triage`; files: `docs/docs.json`, `docs/llm-providers.mdx`)
+- [#1282](https://github.com/Tracer-Cloud/opensre/pull/1282) test(coralogix): add direct unit tests for CoralogixClient (author: Aniket Rawat; contributors: Aniket Rawat; labels: _none_; files: `tests/services/test_coralogix_client.py`)
+
+## Generation metadata
+
+- Generator version: `opensre 2026.4.5`
+- Fallback summary used: `no`
+- UTC window: `2026-05-03T23:00:00+00:00` to `2026-05-04T23:00:00+00:00`

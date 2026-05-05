@@ -30,7 +30,9 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          cache-dependency-glob: "pyproject.toml"
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -38,13 +40,13 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies
-        run: uv pip install --system -e ".[dev]"
+        run: uv sync --frozen --extra dev
 
       - name: Lint
-        run: python -m ruff check app/ tests/
+        run: uv run python -m ruff check app/ tests/
 
       - name: Format check
-        run: python -m ruff format --check app/ tests/
+        run: uv run python -m ruff format --check app/ tests/
 
   windows-typecheck:
     if: contains(github.event.pull_request.labels.*.name, 'ci:windows')
@@ -61,7 +63,9 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          cache-dependency-glob: "pyproject.toml"
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -69,10 +73,10 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies
-        run: uv pip install --system -e ".[dev]"
+        run: uv sync --frozen --extra dev
 
       - name: Typecheck
-        run: python -m mypy app/
+        run: uv run python -m mypy app/
 
   windows-test:
     if: contains(github.event.pull_request.labels.*.name, 'ci:windows')
@@ -108,7 +112,9 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          cache-dependency-glob: "pyproject.toml"
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -116,11 +122,11 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies
-        run: uv pip install --system -e ".[dev]"
+        run: uv sync --frozen --extra dev
 
       - name: Run full tests
         run: >-
-          python -m pytest -n auto -v
+          uv run python -m pytest -n auto -v
           --cov=app
           --cov-report=term-missing
           --cov-report=html
