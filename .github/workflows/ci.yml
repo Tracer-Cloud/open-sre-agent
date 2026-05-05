@@ -170,7 +170,9 @@ jobs:
           -m "${{ matrix.os == 'windows-latest' && 'not synthetic and not integration' || 'not synthetic' }}"
 
       - name: Upload coverage
-        if: always() && matrix.os == 'ubuntu-latest'
+        if: >-
+          always() && matrix.os == 'ubuntu-latest' &&
+          (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false)
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report-${{ matrix.os }}
