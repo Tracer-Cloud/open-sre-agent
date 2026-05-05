@@ -185,7 +185,6 @@ class IncidentIoIntegrationConfig(StrictConfigModel):
 
     api_key: str
     base_url: str = "https://api.incident.io"
-    integration_id: str = ""
 
     _normalize_base_url = field_validator("base_url", mode="before")(
         normalize_url("https://api.incident.io")

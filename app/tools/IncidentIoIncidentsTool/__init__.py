@@ -15,11 +15,11 @@ class IncidentIoIncidentsTool(BaseTool):
     source = "incident_io"
     description = (
         "Interact with incident.io to list active incidents or post investigation timeline updates. "
-        "Provide action='list' to search for incidents (e.g. status=open) or action='add_timeline' "
+        "Provide action='list' to search for incidents (e.g. status=live) or action='add_timeline' "
         "to add a new timeline event (requires incident_id and comment)."
     )
     use_cases = [
-        "Listing open incidents to understand current context",
+        "Listing live incidents to understand current context",
         "Finding an incident by status",
         "Adding a timeline event with RCA findings to an ongoing incident",
     ]
@@ -36,8 +36,8 @@ class IncidentIoIncidentsTool(BaseTool):
             },
             "status": {
                 "type": "string",
-                "default": "open",
-                "description": "Incident status filter for 'list' action (e.g. open, closed, or empty for all)",
+                "default": "live",
+                "description": "Incident status category filter for 'list' action (e.g. live, triage, learning, or empty for all)",
             },
             "page_size": {
                 "type": "integer",
@@ -81,7 +81,7 @@ class IncidentIoIncidentsTool(BaseTool):
         self,
         api_key: str,
         action: str = "list",
-        status: str = "open",
+        status: str = "live",
         incident_id: str = "",
         title: str = "",
         comment: str = "",

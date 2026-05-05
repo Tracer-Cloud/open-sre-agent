@@ -31,7 +31,7 @@ def test_incident_io_e2e_investigation_flow(monkeypatch: pytest.MonkeyPatch) -> 
                     "incident": {
                         "id": "inc-123",
                         "name": "Database Outage",
-                        "status": "open",
+                        "status": "live",
                     }
                 }
             else:
@@ -40,7 +40,7 @@ def test_incident_io_e2e_investigation_flow(monkeypatch: pytest.MonkeyPatch) -> 
                         {
                             "id": "inc-123",
                             "name": "Database Outage",
-                            "status": "open",
+                            "status": "live",
                         }
                     ]
                 }
@@ -65,8 +65,8 @@ def test_incident_io_e2e_investigation_flow(monkeypatch: pytest.MonkeyPatch) -> 
 
     tool = IncidentIoIncidentsTool()
 
-    # Step 1: Agent lists open incidents
-    list_result = tool.run(api_key="e2e-test-key", action="list", status="open")
+    # Step 1: Agent lists live incidents
+    list_result = tool.run(api_key="e2e-test-key", action="list", status="live")
     assert list_result["success"] is True
     assert len(list_result["incidents"]) == 1
     assert list_result["incidents"][0]["id"] == "inc-123"
