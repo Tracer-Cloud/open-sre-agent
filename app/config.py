@@ -72,11 +72,12 @@ DEFAULT_MAX_TOKENS = 4096
 ANTHROPIC_REASONING_MODEL = "claude-sonnet-4-6"
 ANTHROPIC_TOOLCALL_MODEL = "claude-haiku-4-5-20251001"
 
-# OpenAI model constants
-# UNVERIFIED PLACEHOLDER — gpt-5.4 / gpt-5.4-mini do not exist as of 2026-04.
-# Update to a real model ID once OpenAI releases it, or override via OPENAI_REASONING_MODEL env var.
-OPENAI_REASONING_MODEL = "gpt-5.4"
-OPENAI_TOOLCALL_MODEL = "gpt-5.4-mini"
+# OpenAI model constants (verified May 2026 — https://platform.openai.com/docs/models)
+# gpt-4.1: latest flagship, best for multi-step reasoning and long-context tasks.
+# gpt-4.1-mini: fast and cost-efficient, ideal for high-frequency tool-call loops.
+# Override via OPENAI_REASONING_MODEL / OPENAI_TOOLCALL_MODEL env vars.
+OPENAI_REASONING_MODEL = "gpt-4.1"
+OPENAI_TOOLCALL_MODEL = "gpt-4.1-mini"
 
 # OpenRouter model constants
 OPENROUTER_REASONING_MODEL = "openrouter/auto"
