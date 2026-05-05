@@ -276,7 +276,7 @@ class OpenAILLMClient:
     def bind_tools(self, _tools: list) -> OpenAILLMClient:
         return self
 
-    def _ensure_client(self) -> None:
+    def _ensure_client(self) -> OpenAI:
         api_key = resolve_llm_api_key(self._api_key_env) or self._api_key_default
         if not api_key:
             raise RuntimeError(
@@ -285,9 +285,10 @@ class OpenAILLMClient:
         if self._client is None or api_key != self._api_key:
             self._api_key = api_key
             self._client = self._build_client(api_key)
+        return self._client
 
     def invoke(self, prompt_or_messages: Any) -> LLMResponse:
-        self._ensure_client()
+        client = self._ensure_client()
         messages = _normalize_messages_openai(prompt_or_messages)
 
         from app.guardrails.engine import GuardrailBlockedError, get_guardrail_engine
@@ -311,9 +312,6 @@ class OpenAILLMClient:
         backoff_seconds = 1.0
         max_attempts = 3
         last_err: Exception | None = None
-        client = self._client
-        if client is None:
-            raise RuntimeError("OpenAI client was not initialized after credential validation.")
         for attempt in range(max_attempts):
             try:
                 response = client.chat.completions.create(**kwargs)

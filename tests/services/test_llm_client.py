@@ -53,10 +53,16 @@ class _FakeOpenAI:
         self.chat = _FakeOpenAIChat()
 
 
+@pytest.fixture(autouse=True)
+def _reset_fake_openai_state() -> None:
+    _FakeOpenAI.last_api_key = None
+    _FakeOpenAI.last_base_url = None
+    _FakeOpenAI.last_default_headers = None
+    _FakeOpenAI.init_api_keys = []
+
+
 def test_openai_llm_client_defers_openai_until_ensure(monkeypatch) -> None:
     """Avoid constructing OpenAI in __init__: sdk 2.34+ rejects empty api_key."""
-    _FakeOpenAI.last_api_key = None  # class-level cache from other tests
-    _FakeOpenAI.init_api_keys = []
     monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env_var: "")
     monkeypatch.setattr(llm_client, "OpenAI", _FakeOpenAI)
 
@@ -67,7 +73,6 @@ def test_openai_llm_client_defers_openai_until_ensure(monkeypatch) -> None:
 
 
 def test_openai_llm_client_reads_secure_local_api_key(monkeypatch) -> None:
-    _FakeOpenAI.init_api_keys = []
     monkeypatch.setattr(
         llm_client,
         "resolve_llm_api_key",
@@ -91,7 +96,6 @@ def test_openai_llm_client_invoke_fails_when_key_missing(monkeypatch) -> None:
 
 
 def test_openai_llm_client_rebuilds_client_when_key_rotates(monkeypatch) -> None:
-    _FakeOpenAI.init_api_keys = []
     state = {"key": "first-key"}
     monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env_var: state["key"])
     monkeypatch.setattr(llm_client, "OpenAI", _FakeOpenAI)
