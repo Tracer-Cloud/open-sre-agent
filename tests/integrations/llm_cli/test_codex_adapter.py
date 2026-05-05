@@ -370,6 +370,36 @@ def test_cli_backed_client_failure_mentions_unclear_auth_probe(mock_run: MagicMo
 
 
 @patch("app.integrations.llm_cli.runner.subprocess.run")
+def test_cli_backed_client_invoke_raises_cli_authentication_required_when_logged_out(
+    mock_run: MagicMock,
+) -> None:
+    import pytest
+
+    from app.integrations.llm_cli.errors import CLIAuthenticationRequired
+    from app.integrations.llm_cli.runner import CLIBackedLLMClient
+
+    mock_adapter = MagicMock()
+    mock_adapter.name = "cursor"
+    mock_adapter.auth_hint = "Run: agent login."
+    mock_adapter.binary_env_key = "CURSOR_BIN"
+    mock_adapter.install_hint = "install cursor"
+    mock_adapter.detect.return_value = MagicMock(
+        installed=True,
+        bin_path="/usr/bin/agent",
+        logged_in=False,
+        detail="Not logged in.",
+    )
+
+    with patch("app.guardrails.engine.get_guardrail_engine") as gr:
+        gr.return_value.is_active = False
+        client = CLIBackedLLMClient(mock_adapter, model=None, max_tokens=256)
+        with pytest.raises(CLIAuthenticationRequired, match="not authenticated"):
+            client.invoke("hello")
+
+    mock_run.assert_not_called()
+
+
+@patch("app.integrations.llm_cli.runner.subprocess.run")
 def test_cli_backed_client_unclear_auth_no_double_period_when_explain_failure_trailing_period(
     mock_run: MagicMock,
 ) -> None:

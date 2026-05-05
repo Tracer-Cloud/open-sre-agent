@@ -12,6 +12,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from app.integrations.llm_cli.base import CLIProbe, LLMCLIAdapter
+from app.integrations.llm_cli.errors import CLIAuthenticationRequired
 from app.integrations.llm_cli.subprocess_env import build_cli_subprocess_env
 from app.integrations.llm_cli.text import flatten_messages_to_prompt
 from app.services.llm_client import LLMResponse
@@ -98,9 +99,10 @@ class CLIBackedLLMClient:
                 f"({probe.detail})"
             )
         if probe.logged_in is False:
-            raise RuntimeError(
-                f"{self._adapter.name} is not authenticated. {self._adapter.auth_hint} "
-                f"({probe.detail})"
+            raise CLIAuthenticationRequired(
+                provider=self._adapter.name,
+                auth_hint=self._adapter.auth_hint,
+                detail=probe.detail,
             )
         auth_probe_unclear = probe.logged_in is None
 
