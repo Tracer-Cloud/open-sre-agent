@@ -52,7 +52,7 @@ def test_incident_io_client_probe_failure(monkeypatch):
 
     result = client.probe_access()
     assert result.status == "failed"
-    assert "Incident list check failed" in result.detail
+    assert "Connection failed" in result.detail
 
 
 def test_make_incident_io_client_empty():

@@ -189,6 +189,7 @@ DEFAULT_INCIDENT_IO_BASE_URLS = {
 class IncidentIoIntegrationConfig(StrictConfigModel):
     """Normalized Incident.io credentials used by resolution and verification flows."""
 
+    integration_id: str = ""
     api_key: str
     region: str = "us"
     base_url: str = ""
