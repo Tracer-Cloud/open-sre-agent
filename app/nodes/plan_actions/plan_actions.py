@@ -287,7 +287,8 @@ def plan_actions(
         available_actions = [
             action_by_name[action_name]
             for action_name in requested_names
-            if action_name in action_by_name and action_by_name[action_name].is_available(available_sources)
+            if action_name in action_by_name
+            and action_by_name[action_name].is_available(available_sources)
         ][:tool_budget]
         available_action_names = [action.name for action in available_actions]
         plan = plan_model(

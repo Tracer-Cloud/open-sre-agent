@@ -671,7 +671,9 @@ def _build_cloudopsbench_evidence_section(entries: list[dict[str, Any]]) -> str:
         output = entry.get("output", "")
         if not isinstance(output, str):
             output = json.dumps(output, ensure_ascii=False, default=str)
-        section += f"- {action_name}({json.dumps(action_input, ensure_ascii=False)}) [{cache_hit}]\n"
+        section += (
+            f"- {action_name}({json.dumps(action_input, ensure_ascii=False)}) [{cache_hit}]\n"
+        )
         section += f"  {output[:1200]}\n"
     section += (
         "\nCloud-OpsBench final-answer requirement: when evidence is sufficient, include the "
