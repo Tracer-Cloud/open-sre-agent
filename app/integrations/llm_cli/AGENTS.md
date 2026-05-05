@@ -90,7 +90,7 @@ See `_classify_codex_auth` in `codex.py` for a complete reference implementation
 `build_cli_subprocess_env` in `subprocess_env.py` (`_SAFE_SUBPROCESS_ENV_KEYS` +
 `_SAFE_SUBPROCESS_ENV_PREFIXES`).
 
-The current prefix allowlist includes `CODEX_`, `CLAUDE_`, and locale keys (`LC_`).
+The current prefix allowlist includes `CODEX_`, `CURSOR_`, `CLAUDE_`, and locale keys (`LC_`).
 
 **If your CLI reads custom env vars** (e.g. `GEMINI_*`) you must add the
 relevant prefix to `_SAFE_SUBPROCESS_ENV_PREFIXES` in `subprocess_env.py`, otherwise the

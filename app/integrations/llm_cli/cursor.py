@@ -24,8 +24,39 @@ def _parse_version(text: str) -> str | None:
     return match.group(1) if match else None
 
 
+def _has_cursor_api_key() -> bool:
+    return bool(os.environ.get("CURSOR_API_KEY", "").strip())
+
+
+def _classify_cursor_auth(returncode: int, stdout: str, stderr: str) -> tuple[bool | None, str]:
+    """Map ``agent status`` output to ``logged_in`` + detail (negative phrases first)."""
+    text = (stdout + "\n" + stderr).lower()
+    # Negative phrases first: "logged in" is a substring of "not logged in".
+    if "not logged in" in text or "authentication required" in text:
+        return False, "Not logged in. Run: agent login."
+    if returncode == 0 and "logged in as" in text:
+        line = (stdout.strip() or stderr.strip() or "Logged in.").splitlines()[0]
+        return True, line
+    if "network" in text or "unreachable" in text or "dns" in text or "connection refused" in text:
+        return None, "Network error while checking auth; try again or verify connectivity."
+    if returncode != 0:
+        tail = (stderr or stdout).strip()[:200]
+        return (
+            None,
+            f"Auth status unclear (exit {returncode}): {tail}"
+            if tail
+            else f"Auth status unclear (exit {returncode}).",
+        )
+    combined = stdout.strip() or stderr.strip()
+    return None, combined or "Could not determine Cursor Agent auth status."
+
+
 class CursorAdapter:
-    """Non-interactive Cursor Agent CLI adapter."""
+    """Non-interactive Cursor Agent CLI adapter (`agent --print`).
+
+    Optional env (see registry ``CURSOR_MODEL``): ``CURSOR_BIN`` explicit binary path,
+    ``CURSOR_MODEL`` model override. Headless auth may use ``CURSOR_API_KEY``.
+    """
 
     name = "cursor"
     binary_env_key = "CURSOR_BIN"
@@ -111,24 +142,13 @@ class CursorAdapter:
                 detail=f"Could not verify auth status with `{binary} status`: {exc}",
             )
 
-        status_text = (status_proc.stdout + status_proc.stderr).strip()
-        cursor_api_key_set = bool(os.environ.get("CURSOR_API_KEY"))
-
-        if status_proc.returncode == 0 and "Logged in as" in status_text:
-            logged_in: bool | None = True
-            detail = status_text
-
-        elif "Not logged in" in status_text or "Authentication required" in status_text:
-            logged_in = False
-            detail = "Not logged in. Run: agent login."
-
-        elif cursor_api_key_set:
+        logged_in, detail = _classify_cursor_auth(
+            status_proc.returncode, status_proc.stdout, status_proc.stderr
+        )
+        if logged_in is None and _has_cursor_api_key():
+            # Allow API-key auth only when session status is unclear — not when CLI says logged out.
             logged_in = True
             detail = "Auth status unclear, headless auth via environment is configured."
-
-        else:
-            logged_in = None
-            detail = status_text or "Could not determine Cursor Agent auth status."
 
         return CLIProbe(
             installed=True,
