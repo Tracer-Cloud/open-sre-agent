@@ -157,12 +157,9 @@ def run_case(case: CloudOpsCase, output_dir: Path) -> tuple[dict[str, Any], Clou
         "final_answer": final_state_dict.get("final_answer") or final_state_dict.get("report"),
         "root_cause": final_state_dict.get("root_cause"),
         "report": final_state_dict.get("report"),
-<<<<<<< Updated upstream:tests/benchmarks/cloudopsbench/run_suite.py
         "standardized_agent_steps": list(
             case.process.get("path1") or case.process.get("path2") or []
         ),
-=======
->>>>>>> Stashed changes:tests/synthetic/cloudopsbench/run_suite.py
         "steps": _steps_from_backend(backend),
         "final_state": final_state_dict,
     }
