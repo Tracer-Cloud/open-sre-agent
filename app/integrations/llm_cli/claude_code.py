@@ -66,6 +66,16 @@ def _anthropic_env_overrides() -> dict[str, str]:
     return env
 
 
+def _anthropic_auth_env_source() -> str | None:
+    """Return the active Anthropic auth env key, if present."""
+    env = _anthropic_env_overrides()
+    if env.get("ANTHROPIC_API_KEY"):
+        return "ANTHROPIC_API_KEY"
+    if env.get("ANTHROPIC_AUTH_TOKEN"):
+        return "ANTHROPIC_AUTH_TOKEN"
+    return None
+
+
 def _probe_cli_auth(binary_path: str) -> tuple[bool | None, str]:
     """Check Claude Code auth via `claude auth status` (local, no API call).
 
@@ -128,8 +138,9 @@ def _classify_claude_code_auth(binary_path: str | None = None) -> tuple[bool | N
     """
     if binary_path:
         return _probe_cli_auth(binary_path)
-    if os.environ.get("ANTHROPIC_API_KEY", "").strip():
-        return True, "Authenticated via ANTHROPIC_API_KEY."
+    auth_env_source = _anthropic_auth_env_source()
+    if auth_env_source:
+        return True, f"Authenticated via {auth_env_source}."
     creds_path = Path.home() / ".claude" / ".credentials.json"
     try:
         if creds_path.exists() and creds_path.stat().st_size > 2:
@@ -195,6 +206,10 @@ class ClaudeCodeAdapter:
 
         version = _parse_semver(ver_proc.stdout + ver_proc.stderr)
         logged_in, auth_detail = _classify_claude_code_auth(binary_path=binary_path)
+        auth_env_source = _anthropic_auth_env_source()
+        if logged_in is not True and auth_env_source:
+            logged_in = True
+            auth_detail = f"Authenticated via {auth_env_source} fallback."
         return CLIProbe(
             installed=True,
             version=version,

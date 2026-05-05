@@ -92,6 +92,32 @@ def test_detect_not_logged_in(mock_which: MagicMock, mock_run: MagicMock) -> Non
 
 @patch("app.integrations.llm_cli.codex.subprocess.run")
 @patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+def test_detect_not_logged_in_uses_openai_api_key_fallback(
+    mock_which: MagicMock, mock_run: MagicMock
+) -> None:
+    mock_which.return_value = "/usr/bin/codex"
+
+    def side_effect(args: list[str], **kwargs: object) -> MagicMock:
+        if len(args) >= 2 and args[1] == "--version":
+            return _version_proc()
+        if len(args) >= 3 and args[1] == "login":
+            m = MagicMock()
+            m.returncode = 1
+            m.stdout = ""
+            m.stderr = "Not logged in\n"
+            return m
+        raise AssertionError(args)
+
+    mock_run.side_effect = side_effect
+    with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-fallback"}, clear=False):
+        probe = CodexAdapter().detect()
+    assert probe.installed is True
+    assert probe.logged_in is True
+    assert "OPENAI_API_KEY fallback" in probe.detail
+
+
+@patch("app.integrations.llm_cli.codex.subprocess.run")
+@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_not_logged_in_exit_zero(mock_which: MagicMock, mock_run: MagicMock) -> None:
     """Some Codex versions may exit 0 while printing 'Not logged in' — must not match 'logged in'."""
     mock_which.return_value = "/usr/bin/codex"
@@ -111,6 +137,32 @@ def test_detect_not_logged_in_exit_zero(mock_which: MagicMock, mock_run: MagicMo
     probe = CodexAdapter().detect()
     assert probe.installed is True
     assert probe.logged_in is False
+
+
+@patch("app.integrations.llm_cli.codex.subprocess.run")
+@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+def test_detect_unclear_auth_uses_openai_api_key_fallback(
+    mock_which: MagicMock, mock_run: MagicMock
+) -> None:
+    mock_which.return_value = "/usr/bin/codex"
+
+    def side_effect(args: list[str], **kwargs: object) -> MagicMock:
+        if len(args) >= 2 and args[1] == "--version":
+            return _version_proc()
+        if len(args) >= 3 and args[1] == "login":
+            m = MagicMock()
+            m.returncode = 2
+            m.stdout = ""
+            m.stderr = "network unreachable"
+            return m
+        raise AssertionError(args)
+
+    mock_run.side_effect = side_effect
+    with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-fallback"}, clear=False):
+        probe = CodexAdapter().detect()
+    assert probe.installed is True
+    assert probe.logged_in is True
+    assert "OPENAI_API_KEY fallback" in probe.detail
 
 
 @patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/codex")

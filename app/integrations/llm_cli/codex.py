@@ -107,6 +107,10 @@ def _openai_platform_env_overrides() -> dict[str, str]:
     return out
 
 
+def _has_openai_api_key() -> bool:
+    return bool(os.environ.get("OPENAI_API_KEY", "").strip())
+
+
 class CodexAdapter:
     """Non-interactive Codex CLI (`codex exec` with read-only sandbox)."""
 
@@ -175,6 +179,11 @@ class CodexAdapter:
             logged_in, auth_detail = _classify_codex_auth(
                 auth_proc.returncode, auth_proc.stdout, auth_proc.stderr
             )
+
+        if logged_in is not True and _has_openai_api_key():
+            # Allow API-key auth when ChatGPT/session login is absent or unclear.
+            logged_in = True
+            auth_detail = "Authenticated via OPENAI_API_KEY fallback."
 
         detail = auth_detail + upgrade_note
         return CLIProbe(

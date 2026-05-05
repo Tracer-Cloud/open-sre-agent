@@ -34,6 +34,17 @@ def test_classify_auth_api_key_set() -> None:
     assert "ANTHROPIC_API_KEY" in detail
 
 
+def test_classify_auth_auth_token_set() -> None:
+    with patch.dict(
+        os.environ,
+        {"ANTHROPIC_AUTH_TOKEN": "tok-test", "ANTHROPIC_API_KEY": ""},
+        clear=False,
+    ):
+        logged_in, detail = _classify_claude_code_auth()
+    assert logged_in is True
+    assert "ANTHROPIC_AUTH_TOKEN" in detail
+
+
 def test_classify_auth_no_credentials_linux() -> None:
     """On Linux, no env var and no credentials file → definitive False."""
     with (
@@ -353,6 +364,62 @@ def test_detect_not_authenticated(mock_which: MagicMock, mock_run: MagicMock) ->
 
     assert probe.installed is True
     assert probe.logged_in is False
+
+
+@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+def test_detect_not_authenticated_uses_api_key_fallback(
+    mock_which: MagicMock, mock_run: MagicMock
+) -> None:
+    mock_which.return_value = "/usr/bin/claude"
+    mock_run.side_effect = [_version_proc(), _auth_status_proc(False)]
+
+    with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-fallback"}, clear=False):
+        probe = ClaudeCodeAdapter().detect()
+
+    assert probe.installed is True
+    assert probe.logged_in is True
+    assert "ANTHROPIC_API_KEY fallback" in probe.detail
+
+
+@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+def test_detect_not_authenticated_uses_auth_token_fallback(
+    mock_which: MagicMock, mock_run: MagicMock
+) -> None:
+    mock_which.return_value = "/usr/bin/claude"
+    mock_run.side_effect = [_version_proc(), _auth_status_proc(False)]
+
+    with patch.dict(
+        os.environ,
+        {"ANTHROPIC_AUTH_TOKEN": "tok-fallback", "ANTHROPIC_API_KEY": ""},
+        clear=False,
+    ):
+        probe = ClaudeCodeAdapter().detect()
+
+    assert probe.installed is True
+    assert probe.logged_in is True
+    assert "ANTHROPIC_AUTH_TOKEN fallback" in probe.detail
+
+
+@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+def test_detect_unclear_auth_uses_api_key_fallback(
+    mock_which: MagicMock, mock_run: MagicMock
+) -> None:
+    mock_which.return_value = "/usr/bin/claude"
+    auth_proc = MagicMock()
+    auth_proc.returncode = 1
+    auth_proc.stdout = ""
+    auth_proc.stderr = "unknown command 'auth'"
+    mock_run.side_effect = [_version_proc(), auth_proc]
+
+    with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-fallback"}, clear=False):
+        probe = ClaudeCodeAdapter().detect()
+
+    assert probe.installed is True
+    assert probe.logged_in is True
+    assert "ANTHROPIC_API_KEY fallback" in probe.detail
 
 
 @patch("app.integrations.llm_cli.claude_code._fallback_claude_code_paths", return_value=[])
