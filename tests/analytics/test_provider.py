@@ -104,6 +104,64 @@ def test_get_or_create_anonymous_id_reuses_persisted_value(monkeypatch, tmp_path
     assert anonymous_id_path.read_text(encoding="utf-8") == first
 
 
+def test_composite_fingerprint_hashes_stable_local_and_ci_signals(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(provider.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(provider.platform, "machine", lambda: "arm64")
+    monkeypatch.setattr(provider.platform, "node", lambda: "Build-Host-01")
+    monkeypatch.setattr(provider.Path, "home", lambda: tmp_path / "jan")
+    monkeypatch.setenv("USER", "jan")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "opensre/tracer-agent")
+
+    first = provider._build_composite_fingerprint()
+    second = provider._build_composite_fingerprint()
+
+    assert first == second
+    assert first.components == "ci,host,platform,user"
+    assert len(first.value) == 32
+    assert "jan" not in first.value
+    assert "Build-Host-01" not in first.value
+    assert "opensre/tracer-agent" not in first.value
+
+
+def test_composite_fingerprint_changes_when_stable_machine_identity_changes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(provider.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(provider.platform, "machine", lambda: "arm64")
+    monkeypatch.setattr(provider.platform, "node", lambda: "Build-Host-01")
+    monkeypatch.setattr(provider.Path, "home", lambda: tmp_path / "jan")
+    monkeypatch.setenv("USER", "jan")
+    first = provider._build_composite_fingerprint()
+
+    monkeypatch.setattr(provider.platform, "node", lambda: "Build-Host-02")
+    second = provider._build_composite_fingerprint()
+
+    assert second.value != first.value
+
+
+def test_analytics_reuses_disk_identity_across_process_cache_resets(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(provider, "_ANONYMOUS_ID_PATH", tmp_path / "anonymous_id")
+    monkeypatch.setattr(provider.atexit, "register", lambda _func: None)
+
+    first = provider.Analytics()
+    first_id = first._anonymous_id
+    first.shutdown(flush=False)
+
+    provider._cached_anonymous_id = None
+    provider._cached_identity_persistence = "unknown"
+
+    second = provider.Analytics()
+    second.shutdown(flush=False)
+
+    assert second._anonymous_id == first_id
+    assert second._identity_persistence == "disk"
+
+
 def test_analytics_events_from_same_instance_share_exact_distinct_id(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -540,7 +598,9 @@ def test_recurring_events_do_not_get_insert_id(monkeypatch, tmp_path: Path) -> N
     assert "$insert_id" not in posted_payloads[0]["json"]["properties"]
 
 
-def test_identity_persistence_property_marks_memory_fallback(monkeypatch, tmp_path: Path) -> None:
+def test_identity_persistence_property_marks_none_when_disk_unavailable(
+    monkeypatch, tmp_path: Path
+) -> None:
     monkeypatch.delenv("OPENSRE_ANALYTICS_DISABLED", raising=False)
     monkeypatch.delenv("DO_NOT_TRACK", raising=False)
     monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
@@ -558,7 +618,7 @@ def test_identity_persistence_property_marks_memory_fallback(monkeypatch, tmp_pa
     analytics.shutdown(flush=True)
 
     assert len(posted_payloads) == 1
-    assert posted_payloads[0]["json"]["properties"]["identity_persistence"] == "memory_fallback"
+    assert posted_payloads[0]["json"]["properties"]["identity_persistence"] == "none"
 
 
 def test_capture_install_detected_if_needed_returns_false_when_marker_write_fails(

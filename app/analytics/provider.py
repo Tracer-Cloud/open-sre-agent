@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import atexit
 import contextlib
+import hashlib
 import json
 import os
 import platform
@@ -49,6 +50,21 @@ _FAILURE_LOG_MAX_BYTES: Final[int] = 64 * 1024
 _FALLBACK_FAILURE_LOG_PATH: Path = Path(tempfile.gettempdir()) / _FAILURE_LOG_FILENAME
 _HOME_PATH_RE: Final[re.Pattern[str]] = re.compile(r"/(?:Users|home)/[^/\s]+")
 _FAILURE_MESSAGE_MAX_LEN: Final[int] = 240
+_COMPOSITE_FINGERPRINT_VERSION: Final[str] = "hashed-local-v1"
+_COMPOSITE_FINGERPRINT_NAMESPACE: Final[str] = "opensre-cli-analytics-fingerprint"
+_CI_FINGERPRINT_ENV_KEYS: Final[tuple[str, ...]] = (
+    "GITHUB_REPOSITORY",
+    "GITHUB_RUNNER_NAME",
+    "GITHUB_WORKFLOW",
+    "GITLAB_PROJECT_PATH",
+    "CI_PROJECT_PATH",
+    "CIRCLE_PROJECT_USERNAME",
+    "CIRCLE_PROJECT_REPONAME",
+    "BUILDKITE_ORGANIZATION_SLUG",
+    "BUILDKITE_PIPELINE_SLUG",
+    "JENKINS_URL",
+    "JOB_NAME",
+)
 
 PropertyValue: TypeAlias = str | bool  # noqa: UP040
 Properties: TypeAlias = dict[str, PropertyValue]  # noqa: UP040
@@ -64,6 +80,12 @@ class _Envelope:
 class _AnonymousIdentity:
     distinct_id: str
     persistence: str
+
+
+@dataclass(frozen=True, slots=True)
+class _CompositeFingerprint:
+    value: str
+    components: str
 
 
 _anonymous_id_lock = threading.Lock()
@@ -234,11 +256,11 @@ def _write_new_anonymous_id(
                 if existing is not None:
                     return _AnonymousIdentity(existing, "disk")
                 if not replace_existing_invalid:
-                    return _AnonymousIdentity(new_id, "memory_fallback")
+                    return _AnonymousIdentity(new_id, "none")
             _write_text_atomic(_ANONYMOUS_ID_PATH, new_id)
         return _AnonymousIdentity(new_id, "disk")
     except OSError:
-        return _AnonymousIdentity(new_id, "memory_fallback")
+        return _AnonymousIdentity(new_id, "none")
 
 
 def _compute_anonymous_identity() -> _AnonymousIdentity:
@@ -295,7 +317,7 @@ def _compute_anonymous_identity() -> _AnonymousIdentity:
             legacy_install_marker_existed=legacy_install_marker_existed,
             legacy_anonymous_id_path_existed=legacy_anonymous_id_path_existed,
         )
-        return _AnonymousIdentity(str(uuid.uuid4()), "memory_fallback")
+        return _AnonymousIdentity(str(uuid.uuid4()), "none")
 
 
 def _compute_anonymous_id() -> str:
@@ -343,6 +365,67 @@ def _touch_once(path: Path) -> bool:
 
 def _cli_version() -> str:
     return get_version()
+
+
+def _normalized_fingerprint_value(value: object) -> str | None:
+    normalized = str(value).strip().casefold()
+    return normalized or None
+
+
+def _add_fingerprint_component(
+    components: dict[str, str],
+    component_sources: set[str],
+    key: str,
+    value: object,
+    source: str,
+) -> None:
+    if normalized := _normalized_fingerprint_value(value):
+        components[key] = normalized
+        component_sources.add(source)
+
+
+def _env_first(*keys: str) -> str | None:
+    for key in keys:
+        if value := _normalized_fingerprint_value(os.getenv(key, "")):
+            return value
+    return None
+
+
+def _build_composite_fingerprint() -> _CompositeFingerprint:
+    components: dict[str, str] = {}
+    component_sources: set[str] = set()
+
+    _add_fingerprint_component(
+        components, component_sources, "os_family", platform.system(), "platform"
+    )
+    _add_fingerprint_component(
+        components, component_sources, "machine", platform.machine(), "platform"
+    )
+    _add_fingerprint_component(components, component_sources, "host", platform.node(), "host")
+    if user := _env_first("USER", "LOGNAME", "USERNAME"):
+        _add_fingerprint_component(components, component_sources, "user", user, "user")
+    with contextlib.suppress(RuntimeError, OSError):
+        _add_fingerprint_component(
+            components, component_sources, "home_name", Path.home().name, "user"
+        )
+    for key in _CI_FINGERPRINT_ENV_KEYS:
+        if value := _normalized_fingerprint_value(os.getenv(key, "")):
+            components[f"env:{key.casefold()}"] = value
+            component_sources.add("ci")
+
+    # Do not emit raw host/user/CI data. Hash sorted key-value pairs so the
+    # fingerprint is stable while staying one-way in analytics.
+    payload = "\n".join(
+        [
+            _COMPOSITE_FINGERPRINT_NAMESPACE,
+            *(f"{key}={components[key]}" for key in sorted(components)),
+        ]
+    )
+    fingerprint = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:32]
+    return _CompositeFingerprint(
+        value=fingerprint,
+        components=",".join(sorted(component_sources)) or "none",
+    )
 
 
 def _event_logging_enabled() -> bool:
@@ -543,11 +626,16 @@ class _QueueOverflow(RuntimeError):
     """Synthetic exception used so ``queue.Full`` produces a useful breadcrumb."""
 
 
+_COMPOSITE_FINGERPRINT = _build_composite_fingerprint()
+
 _BASE_PROPERTIES: Final[Properties] = {
     "cli_version": _cli_version(),
     "python_version": platform.python_version(),
     "os_family": platform.system().lower(),
     "os_version": platform.release(),
+    "composite_fingerprint": _COMPOSITE_FINGERPRINT.value,
+    "composite_fingerprint_version": _COMPOSITE_FINGERPRINT_VERSION,
+    "composite_fingerprint_components": _COMPOSITE_FINGERPRINT.components,
     "$process_person_profile": False,
 }
 
