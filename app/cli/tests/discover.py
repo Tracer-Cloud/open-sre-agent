@@ -12,7 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 MAKEFILE_PATH = REPO_ROOT / "Makefile"
 RCA_DIR = REPO_ROOT / "tests" / "e2e" / "rca"
 SYNTHETIC_SCENARIOS_DIR = REPO_ROOT / "tests" / "synthetic" / "rds_postgres"
-CLOUDOPSBENCH_DIR = REPO_ROOT / "tests" / "synthetic" / "cloudopsbench"
+CLOUDOPSBENCH_DIR = REPO_ROOT / "tests" / "benchmarks" / "cloudopsbench"
 
 _TARGETS_TO_INDEX = (
     "test",
@@ -29,6 +29,7 @@ _TARGETS_TO_INDEX = (
     "test-k8s",
     "test-k8s-datadog",
     "test-k8s-eks",
+    "download-cloudopsbench-hf",
     "test-cloudopsbench",
     "trigger-alert",
     "trigger-alert-verify",
@@ -133,9 +134,14 @@ _TARGET_METADATA: dict[str, _TargetMetadata] = {
         ),
     },
     "test-cloudopsbench": {
-        "display_name": "Cloud-OpsBench Synthetic RCA",
+        "display_name": "Cloud-OpsBench RCA Benchmark",
         "tags": ("synthetic", "cloudopsbench", "k8s", "benchmark"),
         "requirements": TestRequirement(env_vars=("ANTHROPIC_API_KEY",)),
+    },
+    "download-cloudopsbench-hf": {
+        "display_name": "Download Cloud-OpsBench Dataset",
+        "tags": ("cloudopsbench", "benchmark", "huggingface"),
+        "requirements": TestRequirement(notes=("Hugging Face CLI",)),
     },
     "trigger-alert": {
         "display_name": "Trigger K8s Alert",
@@ -370,7 +376,7 @@ def _discover_cloudopsbench_suite() -> list[TestCatalogItem]:
             id="synthetic:cloudopsbench",
             kind="cli_command",
             display_name="Cloud-OpsBench RCA Benchmark",
-            description="Run the copied Cloud-OpsBench corpus through the OpenSRE runner.",
+            description="Run the downloaded Cloud-OpsBench corpus through the OpenSRE runner.",
             command=("opensre", "tests", "cloudopsbench"),
             tags=("synthetic", "cloudopsbench", "k8s", "benchmark"),
             source_path=str(CLOUDOPSBENCH_DIR),

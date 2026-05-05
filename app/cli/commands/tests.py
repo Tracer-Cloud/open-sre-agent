@@ -191,8 +191,8 @@ def _cloudopsbench_suite_not_bundled_error() -> OpenSREError:
     return OpenSREError(
         "The Cloud-OpsBench suite is not available in this build.",
         suggestion=(
-            "Install from source with the copied corpus under "
-            "'tests/synthetic/cloudopsbench/benchmark/' and re-run "
+            "Download the corpus with 'make download-cloudopsbench-hf' under "
+            "'tests/benchmarks/cloudopsbench/benchmark/' and re-run "
             "'opensre tests cloudopsbench'."
         ),
     )
@@ -215,10 +215,10 @@ def run_cloudopsbench_suite(
 ) -> None:
     """Run the Cloud-OpsBench RCA benchmark through OpenSRE."""
     try:
-        from tests.synthetic.cloudopsbench.case_loader import BENCHMARK_DIR
-        from tests.synthetic.cloudopsbench.run_suite import main as run_suite_main
+        from tests.benchmarks.cloudopsbench.case_loader import BENCHMARK_DIR
+        from tests.benchmarks.cloudopsbench.run_suite import main as run_suite_main
     except ModuleNotFoundError as exc:
-        if exc.name is None or not exc.name.startswith("tests.synthetic.cloudopsbench"):
+        if exc.name is None or not exc.name.startswith("tests.benchmarks.cloudopsbench"):
             raise
         raise _cloudopsbench_suite_not_bundled_error() from exc
 
