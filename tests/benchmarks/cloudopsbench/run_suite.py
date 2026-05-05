@@ -116,21 +116,6 @@ def _action_input_from_step(step: str, namespace: str) -> dict[str, Any]:
 
 
 def _steps_from_backend(backend: CloudOpsBenchReplayBackend) -> list[dict[str, Any]]:
-    case = backend.case
-    expert_steps = case.process.get("path1") or case.process.get("path2") or []
-    if expert_steps:
-        return [
-            {
-                "step_id": idx,
-                "action_type": "tool",
-                "action_name": step.split("::", 1)[0],
-                "action_input": _action_input_from_step(step, case.namespace),
-                "error": None,
-                "tool_latency": 0.0,
-            }
-            for idx, step in enumerate(expert_steps, start=1)
-        ]
-
     steps: list[dict[str, Any]] = []
     for idx, entry in enumerate(backend.action_log, start=1):
         steps.append(
@@ -172,9 +157,12 @@ def run_case(case: CloudOpsCase, output_dir: Path) -> tuple[dict[str, Any], Clou
         "final_answer": final_state_dict.get("final_answer") or final_state_dict.get("report"),
         "root_cause": final_state_dict.get("root_cause"),
         "report": final_state_dict.get("report"),
+<<<<<<< Updated upstream:tests/benchmarks/cloudopsbench/run_suite.py
         "standardized_agent_steps": list(
             case.process.get("path1") or case.process.get("path2") or []
         ),
+=======
+>>>>>>> Stashed changes:tests/synthetic/cloudopsbench/run_suite.py
         "steps": _steps_from_backend(backend),
         "final_state": final_state_dict,
     }
