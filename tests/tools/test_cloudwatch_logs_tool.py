@@ -106,7 +106,6 @@ def test_run_applies_log_compaction() -> None:
         result = get_cloudwatch_logs(log_group="/my/group", log_stream="stream-x")
     assert result["found"] is True
     assert result["event_count"] == 10
-    assert result["total_raw_logs"] == 10
     # error_logs should be deduplicated list of message strings
     assert isinstance(result["error_logs"], list)
     assert len(result["error_logs"]) <= 20
@@ -114,10 +113,12 @@ def test_run_applies_log_compaction() -> None:
     assert "error_taxonomy" in result
     assert isinstance(result["error_taxonomy"], dict)
     assert "error_taxonomy" in result["error_taxonomy"]
+    # latest_error should come from error logs, not all logs
+    assert "error" in result.get("latest_error", "").lower()
 
 
-def test_run_compaction_limits_error_logs_to_50() -> None:
-    """Error logs capped at 50 after deduplication."""
+def test_run_compaction_limits_error_logs() -> None:
+    """Error logs capped at 20 after deduplication."""
     events = [
         {"message": f"Error: fail {i}", "timestamp": 2000 + i}
         for i in range(60)
@@ -128,9 +129,8 @@ def test_run_compaction_limits_error_logs_to_50() -> None:
         mock_boto3.client.return_value = mock_client
         result = get_cloudwatch_logs(log_group="/my/group", log_stream="stream-x")
     # All 60 are errors (contain 'error')
-    assert result["total_raw_logs"] == 60
-    # compacted to max 50
-    assert len(result["error_logs"]) <= 50
+    # Deduplicated, then capped at 20
+    assert len(result["error_logs"]) <= 20
 
 
 def test_run_error_taxonomy_classifies_error_types() -> None:

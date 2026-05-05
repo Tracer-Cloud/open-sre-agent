@@ -117,7 +117,6 @@ def get_cloudwatch_logs(
             {"message": event.get("message", ""), "timestamp": str(event.get("timestamp", ""))}
             for event in events
         ]
-        total_raw_logs = len(log_dicts)
 
         # Separate error logs using the same keywords as GrafanaLogsTool
         error_keywords = ("error", "fail", "exception", "traceback")
@@ -127,8 +126,7 @@ def get_cloudwatch_logs(
             if any(kw in log.get("message", "").lower() for kw in error_keywords)
         ]
 
-        # Phase 1: deduplicate + count-group so bursts don't steal all slots
-        compacted_logs = deduplicate_logs(log_dicts, max_output=50)
+        # Phase 1: deduplicate error logs so bursts don't steal all slots
         compacted_error_logs = deduplicate_logs(error_logs_dicts, max_output=20)
 
         # Phase 2: structured error taxonomy across the *full* error set
@@ -136,16 +134,14 @@ def get_cloudwatch_logs(
 
         # Extract message strings from compacted results for backward-compatible error_logs field
         error_log_messages = [log["message"] for log in compacted_error_logs]
-        compacted_log_messages = [log["message"] for log in compacted_logs]
 
         result: dict[str, Any] = {
             "found": True,
             "log_group": log_group,
             "event_count": len(events),
-            "total_raw_logs": total_raw_logs,
             "error_logs": error_log_messages,
             "error_taxonomy": error_taxonomy,
-            "latest_error": compacted_log_messages[0] if compacted_log_messages else None,
+            "latest_error": error_log_messages[0] if error_log_messages else None,
         }
         if filter_pattern:
             result["filter_pattern"] = filter_pattern
