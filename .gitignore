@@ -111,6 +111,7 @@ Temporary Items
 # Project specific
 output/
 .langgraph_api/
+.cloudopsbench-results/
 tests/benchmarks/cloudopsbench/benchmark/
 tests/benchmarks/cloudopsbench/.cache/
 
