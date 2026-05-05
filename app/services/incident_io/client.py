@@ -47,7 +47,7 @@ class IncidentIoClient:
             return ProbeResult.missing("Missing API key.")
 
         with self:
-            result = self.list_incidents(status="open")
+            result = self.list_incidents(status="")
             # We don't mind if there are no open incidents, just need a successful HTTP response
 
         if not result.get("success"):
@@ -168,13 +168,14 @@ class IncidentIoClient:
 
         try:
             payload = {
+                "incident_id": incident_id,
                 "event_type": "custom",
                 "title": title,
                 "description": description,
-                "occurred_at": datetime.now(UTC).strftime("%Y%m%d-%H%M%S"),
+                "occurred_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
             }
             resp = self._get_client().post(
-                f"/v2/incidents/{incident_id}/timeline_entries",
+                "/v2/incident_timeline_events",
                 json=payload,
             )
             resp.raise_for_status()
