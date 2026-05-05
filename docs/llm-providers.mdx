@@ -1,0 +1,213 @@
+---
+title: "LLM Providers"
+description: "Supported LLM APIs and CLIs, environment variables, and how to switch between them."
+---
+
+OpenSRE is provider-agnostic: bring your own model. Selection is controlled by the `LLM_PROVIDER` environment variable, with per-provider API key and model overrides. Defaults are tracked in [`app/config.py`](https://github.com/Tracer-Cloud/opensre/blob/main/app/config.py) and routing lives in [`app/services/llm_client.py`](https://github.com/Tracer-Cloud/opensre/blob/main/app/services/llm_client.py).
+
+## Quick reference
+
+| Provider     | `LLM_PROVIDER` | Auth                            | Reasoning model default                       | Toolcall model default                          |
+| ------------ | -------------- | ------------------------------- | --------------------------------------------- | ----------------------------------------------- |
+| Anthropic    | `anthropic`    | `ANTHROPIC_API_KEY`             | `claude-sonnet-4-6`                           | `claude-haiku-4-5-20251001`                     |
+| OpenAI       | `openai`       | `OPENAI_API_KEY`                | `gpt-5.4`                                     | `gpt-5.4-mini`                                  |
+| OpenRouter   | `openrouter`   | `OPENROUTER_API_KEY`            | `openrouter/auto`                             | `openrouter/auto`                               |
+| Requesty     | `requesty`     | `REQUESTY_API_KEY`              | `anthropic/claude-sonnet-4-6`                 | `anthropic/claude-sonnet-4-6`                   |
+| Google Gemini| `gemini`       | `GEMINI_API_KEY`                | `gemini-3.1-pro-preview`                      | `gemini-3.1-flash-lite-preview`                 |
+| NVIDIA NIM   | `nvidia`       | `NVIDIA_API_KEY`                | `meta/llama-3.1-405b-instruct`                | `meta/llama-3.1-8b-instruct`                    |
+| MiniMax      | `minimax`      | `MINIMAX_API_KEY`               | `MiniMax-M2.7`                                | `MiniMax-M2.7-highspeed`                        |
+| Amazon Bedrock| `bedrock`     | AWS IAM (`AWS_REGION`)          | `us.anthropic.claude-sonnet-4-6`              | `us.anthropic.claude-haiku-4-5-20251001-v1:0`   |
+| Ollama (local)| `ollama`     | None (local daemon)             | `llama3.2`                                    | `llama3.2`                                      |
+| OpenAI Codex CLI| `codex`    | `codex login` (CLI)             | Codex CLI default                             | Codex CLI default                               |
+| Claude Code CLI| `claude-code`| `claude login` (CLI)            | Claude Code CLI default                       | Claude Code CLI default                         |
+
+OpenSRE distinguishes two model slots per provider:
+
+- **Reasoning model** — full-capability model used for diagnosis, claim validation, and multi-step analysis.
+- **Toolcall model** — lightweight, lower-cost model used for tool selection and routing.
+
+## Selecting a provider
+
+Set `LLM_PROVIDER` (default: `anthropic`) in your environment or `.env` file:
+
+```bash
+export LLM_PROVIDER=openai
+export OPENAI_API_KEY=sk-...
+```
+
+Or run the onboarding wizard, which writes the same values to `.env`:
+
+```bash
+opensre onboard
+```
+
+Override the default model for a slot via env vars:
+
+```bash
+export OPENAI_REASONING_MODEL=gpt-5.4
+export OPENAI_TOOLCALL_MODEL=gpt-5.4-mini
+```
+
+A shared `LLM_MAX_TOKENS` (default `4096`) controls the response token budget for every provider.
+
+## API providers
+
+### Anthropic
+
+```bash
+export LLM_PROVIDER=anthropic
+export ANTHROPIC_API_KEY=sk-ant-...
+# Optional overrides:
+export ANTHROPIC_REASONING_MODEL=claude-sonnet-4-6
+export ANTHROPIC_TOOLCALL_MODEL=claude-haiku-4-5-20251001
+```
+
+The default. Uses the Anthropic Python SDK directly. Get an API key at [console.anthropic.com](https://console.anthropic.com/).
+
+### OpenAI
+
+```bash
+export LLM_PROVIDER=openai
+export OPENAI_API_KEY=sk-...
+# Optional overrides:
+export OPENAI_REASONING_MODEL=gpt-5.4
+export OPENAI_TOOLCALL_MODEL=gpt-5.4-mini
+```
+
+Uses the OpenAI SDK. Reasoning models (`o1`, `o3`, `o4`, `gpt-5*`) automatically use `max_completion_tokens` instead of `max_tokens`.
+
+### OpenRouter
+
+```bash
+export LLM_PROVIDER=openrouter
+export OPENROUTER_API_KEY=sk-or-...
+# Optional override (single value applies to both slots if set):
+export OPENROUTER_MODEL=openrouter/auto
+# Or per-slot:
+export OPENROUTER_REASONING_MODEL=anthropic/claude-sonnet-4-6
+export OPENROUTER_TOOLCALL_MODEL=openai/gpt-4o-mini
+```
+
+OpenAI-compatible proxy — pick any model on [openrouter.ai/models](https://openrouter.ai/models). Base URL: `https://openrouter.ai/api/v1`.
+
+### Requesty
+
+```bash
+export LLM_PROVIDER=requesty
+export REQUESTY_API_KEY=...
+# Optional override (single value applies to both slots if set):
+export REQUESTY_MODEL=anthropic/claude-sonnet-4-6
+# Or per-slot:
+export REQUESTY_REASONING_MODEL=anthropic/claude-sonnet-4-6
+export REQUESTY_TOOLCALL_MODEL=anthropic/claude-sonnet-4-6
+```
+
+OpenAI-compatible gateway at `https://router.requesty.ai/v1`. Sends an `X-Title: OpenSRE` header for usage attribution. Browse models on [requesty.ai](https://requesty.ai/).
+
+### Google Gemini
+
+```bash
+export LLM_PROVIDER=gemini
+export GEMINI_API_KEY=...
+# Optional override:
+export GEMINI_MODEL=gemini-3.1-pro-preview
+# Or per-slot:
+export GEMINI_REASONING_MODEL=gemini-3.1-pro-preview
+export GEMINI_TOOLCALL_MODEL=gemini-3.1-flash-lite-preview
+```
+
+Uses Google's OpenAI-compatible endpoint at `https://generativelanguage.googleapis.com/v1beta/openai/`. Get an API key at [aistudio.google.com](https://aistudio.google.com/app/apikey).
+
+### NVIDIA NIM
+
+```bash
+export LLM_PROVIDER=nvidia
+export NVIDIA_API_KEY=nvapi-...
+# Optional override:
+export NVIDIA_MODEL=meta/llama-3.1-405b-instruct
+# Or per-slot:
+export NVIDIA_REASONING_MODEL=meta/llama-3.1-405b-instruct
+export NVIDIA_TOOLCALL_MODEL=meta/llama-3.1-8b-instruct
+```
+
+Uses NVIDIA's OpenAI-compatible API at `https://integrate.api.nvidia.com/v1`. Browse available models on [build.nvidia.com](https://build.nvidia.com/).
+
+### MiniMax
+
+```bash
+export LLM_PROVIDER=minimax
+export MINIMAX_API_KEY=...
+# Optional override (single value applies to both slots if set):
+export MINIMAX_MODEL=MiniMax-M2.7
+# Or per-slot:
+export MINIMAX_REASONING_MODEL=MiniMax-M2.7
+export MINIMAX_TOOLCALL_MODEL=MiniMax-M2.7-highspeed
+```
+
+OpenAI-compatible endpoint at `https://api.minimax.io/v1`. Temperature is fixed to `1.0` to match MiniMax recommendations.
+
+### Amazon Bedrock
+
+```bash
+export LLM_PROVIDER=bedrock
+export AWS_REGION=us-east-1
+# Optional overrides:
+export BEDROCK_REASONING_MODEL=us.anthropic.claude-sonnet-4-6
+export BEDROCK_TOOLCALL_MODEL=us.anthropic.claude-haiku-4-5-20251001-v1:0
+```
+
+No API key — auth uses the AWS credential chain (env vars, shared credentials file, or IAM role). Defaults are US cross-region inference profile IDs for Anthropic models on Bedrock; override with the inference profile or model ID available in your region.
+
+### Ollama (local)
+
+```bash
+export LLM_PROVIDER=ollama
+# Optional overrides:
+export OLLAMA_HOST=http://localhost:11434
+export OLLAMA_MODEL=llama3.2
+```
+
+Run any local model exposed by an [Ollama](https://ollama.com/) daemon. No API key required — OpenSRE talks to Ollama's OpenAI-compatible endpoint at `${OLLAMA_HOST}/v1`.
+
+## CLI providers (subprocess)
+
+CLI-backed providers shell out to a vendor CLI instead of an HTTP API. They authenticate via the vendor's own login command; OpenSRE detects the binary on `PATH` (or via an explicit env var) and reuses the existing session.
+
+### OpenAI Codex
+
+```bash
+export LLM_PROVIDER=codex
+# Authenticate the Codex CLI separately:
+codex login
+# Optional overrides (all blank-by-default):
+export CODEX_MODEL=
+export CODEX_BIN=
+```
+
+Requires the [OpenAI Codex CLI](https://github.com/openai/codex). If `CODEX_MODEL` is unset, OpenSRE omits `-m` so `codex exec` uses the CLI's currently configured model. If `CODEX_BIN` is unset, the binary is resolved via `PATH` and known install locations.
+
+### Claude Code
+
+```bash
+export LLM_PROVIDER=claude-code
+# Authenticate the Claude Code CLI separately:
+claude login
+# Optional overrides (all blank-by-default):
+export CLAUDE_CODE_MODEL=
+export CLAUDE_CODE_BIN=
+```
+
+Requires the [Claude Code CLI](https://github.com/anthropics/claude-code) (`npm i -g @anthropic-ai/claude-code`). If `CLAUDE_CODE_MODEL` is unset, OpenSRE omits the `--model` flag and the CLI uses its configured default. If `CLAUDE_CODE_BIN` is unset, the binary is resolved via `PATH` and known install locations.
+
+See [`app/integrations/llm_cli/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/app/integrations/llm_cli/AGENTS.md) for the adapter pattern used to add new CLI providers.
+
+## Switching providers at runtime
+
+OpenSRE caches LLM clients on first use. To switch providers within a single process (tests, benchmarks), call `reset_llm_singletons()` from `app.services.llm_client` after updating the env vars; otherwise a fresh process picks up the new `LLM_PROVIDER` automatically.
+
+## Where this lives in the code
+
+- Provider literals and defaults: [`app/config.py`](https://github.com/Tracer-Cloud/opensre/blob/main/app/config.py) (`LLMProvider`, `LLMSettings`).
+- Runtime routing: [`app/services/llm_client.py`](https://github.com/Tracer-Cloud/opensre/blob/main/app/services/llm_client.py) (`_create_llm_client`).
+- API-backed provider guide: [`app/services/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/app/services/AGENTS.md).
+- CLI-backed provider guide: [`app/integrations/llm_cli/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/app/integrations/llm_cli/AGENTS.md).

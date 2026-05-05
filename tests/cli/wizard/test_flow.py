@@ -40,15 +40,6 @@ def test_run_wizard_advanced_remote_falls_back_to_local(monkeypatch, tmp_path, c
     monkeypatch.setattr(
         flow, "probe_remote_target", lambda: ProbeResult("remote", True, "remote ok")
     )
-    monkeypatch.setattr(
-        flow,
-        "build_demo_action_response",
-        lambda: {
-            "success": True,
-            "topics": ["recovery_remediation"],
-            "guidance": [{"topic": "recovery_remediation"}],
-        },
-    )
 
     def _save_local_config(**kwargs):
         saved.update(kwargs)
@@ -71,7 +62,7 @@ def test_run_wizard_advanced_remote_falls_back_to_local(monkeypatch, tmp_path, c
     assert saved_llm_keys == [("ANTHROPIC_API_KEY", "secret-key")]
 
     output = capsys.readouterr().out
-    assert "summary" in output
+    assert "next" in output
     assert "Done." in output
 
 
@@ -96,11 +87,6 @@ def test_run_wizard_no_saved_provider_shows_selection(monkeypatch, tmp_path) -> 
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
     monkeypatch.setattr(flow, "save_llm_api_key", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(
-        flow,
-        "build_demo_action_response",
-        lambda: {"success": True, "topics": [], "guidance": []},
-    )
 
     exit_code = flow.run_wizard()
     assert exit_code == 0
@@ -209,11 +195,6 @@ def test_run_wizard_configures_optional_integrations(monkeypatch, tmp_path, caps
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
-    monkeypatch.setattr(
-        flow,
-        "build_demo_action_response",
-        lambda: {"success": True, "topics": ["recovery_remediation"], "guidance": []},
-    )
 
     exit_code = flow.run_wizard()
 
@@ -283,11 +264,6 @@ def test_run_wizard_configures_honeycomb(monkeypatch, tmp_path) -> None:
         flow,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
-    )
-    monkeypatch.setattr(
-        flow,
-        "build_demo_action_response",
-        lambda: {"success": True, "topics": [], "guidance": []},
     )
 
     exit_code = flow.run_wizard()
@@ -364,11 +340,6 @@ def test_run_wizard_configures_coralogix(monkeypatch, tmp_path) -> None:
         flow,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
-    )
-    monkeypatch.setattr(
-        flow,
-        "build_demo_action_response",
-        lambda: {"success": True, "topics": [], "guidance": []},
     )
 
     exit_code = flow.run_wizard()
@@ -466,11 +437,6 @@ def test_run_wizard_configures_github_mcp_and_sentry(monkeypatch, tmp_path, caps
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
-    monkeypatch.setattr(
-        flow,
-        "build_demo_action_response",
-        lambda: {"success": True, "topics": ["recovery_remediation"], "guidance": []},
-    )
 
     exit_code = flow.run_wizard()
 
@@ -547,11 +513,6 @@ def test_run_wizard_reuses_saved_defaults_when_user_keeps_provider(monkeypatch, 
     )
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(flow, "has_llm_api_key", lambda _env: False)
-    monkeypatch.setattr(
-        flow,
-        "build_demo_action_response",
-        lambda: {"success": True, "topics": [], "guidance": []},
-    )
 
     def _save_local_config(**kwargs):
         saved.update(kwargs)
@@ -596,11 +557,6 @@ def test_run_wizard_persists_matching_local_config_and_env(monkeypatch, tmp_path
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
     monkeypatch.setattr(flow, "get_store_path", lambda: store_path)
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
-    monkeypatch.setattr(
-        flow,
-        "build_demo_action_response",
-        lambda: {"success": True, "topics": [], "guidance": []},
-    )
     monkeypatch.setattr(
         flow,
         "save_local_config",
@@ -656,11 +612,6 @@ def test_run_wizard_codex_skips_api_key_and_runs_cli_onboarding(monkeypatch, tmp
     monkeypatch.setattr(flow, "get_store_path", lambda: store_path)
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(flow, "_run_cli_llm_onboarding", _cli_onboarding)
-    monkeypatch.setattr(
-        flow,
-        "build_demo_action_response",
-        lambda: {"success": True, "topics": [], "guidance": []},
-    )
     monkeypatch.setattr(
         flow,
         "save_local_config",
@@ -975,11 +926,6 @@ def test_run_wizard_configures_gitlab(monkeypatch, tmp_path) -> None:
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
-    monkeypatch.setattr(
-        flow,
-        "build_demo_action_response",
-        lambda: {"success": True, "topics": [], "guidance": []},
-    )
 
     exit_code = flow.run_wizard()
 
@@ -1061,11 +1007,6 @@ def test_run_wizard_gitlab_retries_on_validation_failure(monkeypatch, tmp_path) 
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
-    monkeypatch.setattr(
-        flow,
-        "build_demo_action_response",
-        lambda: {"success": True, "topics": [], "guidance": []},
-    )
 
     exit_code = flow.run_wizard()
 
@@ -1139,11 +1080,6 @@ def test_run_wizard_switches_provider_and_keeps_store_and_env_in_sync(
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
     monkeypatch.setattr(flow, "get_store_path", lambda: store_path)
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
-    monkeypatch.setattr(
-        flow,
-        "build_demo_action_response",
-        lambda: {"success": True, "topics": [], "guidance": []},
-    )
     monkeypatch.setattr(
         flow,
         "save_local_config",

@@ -157,16 +157,9 @@ jobs:
       - name: Install dependencies
         run: uv pip install --system -e ".[dev]"
 
-      - name: Run safe tests (fork PRs)
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == true
-        run: >-
-          python -m pytest -n auto -v
-          --ignore=tests/e2e
-          --ignore=tests/synthetic
-          -m "not synthetic"
-
-      - name: Run full tests
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
+      # Fork PRs previously ran a narrower pytest set; run the same suite as main pushes
+      # so merge does not surface failures only seen on push.
+      - name: Run tests
         run: >-
           python -m pytest -n auto -v
           --cov=app
@@ -177,7 +170,9 @@ jobs:
           -m "${{ matrix.os == 'windows-latest' && 'not synthetic and not integration' || 'not synthetic' }}"
 
       - name: Upload coverage
-        if: always() && matrix.os == 'ubuntu-latest' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false)
+        if: >-
+          always() && matrix.os == 'ubuntu-latest' &&
+          (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false)
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report-${{ matrix.os }}

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from app.services import llm_client
 
 
@@ -31,6 +33,7 @@ class _FakeOpenAI:
     last_api_key: str | None = None
     last_base_url: str | None = None
     last_default_headers: dict[str, str] | None = None
+    init_api_keys: list[str] = []
 
     def __init__(
         self,
@@ -43,10 +46,30 @@ class _FakeOpenAI:
         _FakeOpenAI.last_api_key = api_key
         _FakeOpenAI.last_base_url = base_url
         _FakeOpenAI.last_default_headers = default_headers
+        _FakeOpenAI.init_api_keys.append(api_key)
         self.base_url = base_url
         self.timeout = timeout
         self.default_headers = default_headers
         self.chat = _FakeOpenAIChat()
+
+
+@pytest.fixture(autouse=True)
+def _reset_fake_openai_state() -> None:
+    _FakeOpenAI.last_api_key = None
+    _FakeOpenAI.last_base_url = None
+    _FakeOpenAI.last_default_headers = None
+    _FakeOpenAI.init_api_keys = []
+
+
+def test_openai_llm_client_defers_openai_until_ensure(monkeypatch) -> None:
+    """Avoid constructing OpenAI in __init__: sdk 2.34+ rejects empty api_key."""
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env_var: "")
+    monkeypatch.setattr(llm_client, "OpenAI", _FakeOpenAI)
+
+    llm_client.OpenAILLMClient(model="gpt-4.1-mini")
+
+    assert _FakeOpenAI.last_api_key is None
+    assert _FakeOpenAI.init_api_keys == []
 
 
 def test_openai_llm_client_reads_secure_local_api_key(monkeypatch) -> None:
@@ -61,6 +84,28 @@ def test_openai_llm_client_reads_secure_local_api_key(monkeypatch) -> None:
     client._ensure_client()
 
     assert _FakeOpenAI.last_api_key == "stored-openai-key"
+    assert _FakeOpenAI.init_api_keys == ["stored-openai-key"]
+
+
+def test_openai_llm_client_invoke_fails_when_key_missing(monkeypatch) -> None:
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env_var: "")
+    client = llm_client.OpenAILLMClient(model="gpt-4.1-mini")
+
+    with pytest.raises(RuntimeError, match="Missing OPENAI_API_KEY"):
+        client.invoke("hello")
+
+
+def test_openai_llm_client_rebuilds_client_when_key_rotates(monkeypatch) -> None:
+    state = {"key": "first-key"}
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env_var: state["key"])
+    monkeypatch.setattr(llm_client, "OpenAI", _FakeOpenAI)
+    client = llm_client.OpenAILLMClient(model="gpt-4.1-mini")
+
+    client._ensure_client()
+    state["key"] = "second-key"
+    client._ensure_client()
+
+    assert _FakeOpenAI.init_api_keys == ["first-key", "second-key"]
 
 
 def test_anthropic_llm_client_reads_secure_local_api_key(monkeypatch) -> None:

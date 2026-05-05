@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
+from typing import NoReturn
 
 from app.analytics import install, provider
 from app.analytics.events import Event
@@ -127,6 +129,45 @@ def test_analytics_disabled_when_do_not_track_opt_out(monkeypatch, tmp_path: Pat
     assert analytics._pending == 0
     assert analytics._queue.qsize() == 0
     assert client_inits == 0
+
+
+def test_get_or_create_anonymous_id_returns_uuid_when_write_fails(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """Test that _get_or_create_anonymous_id returns a UUID when file write fails."""
+    anonymous_id_path = tmp_path / "anonymous_id"
+    monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(provider, "_ANONYMOUS_ID_PATH", anonymous_id_path)
+
+    def _raise_oserror(*_args, **_kwargs) -> NoReturn:
+        raise OSError("disk write failed")
+
+    monkeypatch.setattr(Path, "write_text", _raise_oserror)
+
+    value = provider._get_or_create_anonymous_id()
+    assert isinstance(value, str)
+    assert value.strip() != ""
+    # Verify it's a valid UUID
+    uuid.UUID(value)
+
+
+def test_capture_install_detected_if_needed_returns_false_when_marker_write_fails(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """Test that capture_install_detected_if_needed returns False when marker file write fails."""
+    stub = _StubAnalytics()
+    marker_path = tmp_path / "installed"
+    monkeypatch.setattr(provider, "_FIRST_RUN_PATH", marker_path)
+    monkeypatch.setattr(provider, "get_analytics", lambda: stub)
+
+    def _raise_oserror(*_args, **_kwargs) -> NoReturn:
+        raise OSError("touch failed")
+
+    monkeypatch.setattr(Path, "touch", _raise_oserror)
+
+    captured = provider.capture_install_detected_if_needed({"install_source": "make_install"})
+    assert captured is False
+    assert stub.events == []
 
 
 def test_shutdown_is_idempotent_and_capture_after_shutdown_is_noop(

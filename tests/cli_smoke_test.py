@@ -517,7 +517,7 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
 
     assert result.exit_code == 0
     assert "Done." in result.stdout
-    assert "summary" in result.stdout
+    assert "next" in result.stdout
 
     store = cli_sandbox.read_wizard_store()
     assert store["targets"]["local"]["provider"] == "anthropic"
@@ -561,7 +561,7 @@ def test_onboard_interactive_smoke_codex(cli_sandbox: CliSandbox) -> None:
 
     assert result.exit_code == 0
     assert "Done." in result.stdout
-    assert "summary" in result.stdout
+    assert "next" in result.stdout
 
     store = cli_sandbox.read_wizard_store()
     assert store["targets"]["local"]["provider"] == "anthropic"
