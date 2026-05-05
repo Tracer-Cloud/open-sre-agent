@@ -351,7 +351,7 @@ def investigate(req: InvestigateRequest) -> InvestigateResponse:
         detail = str(exc)
         if exc.suggestion:
             detail = f"{detail} Suggestion: {exc.suggestion}"
-        raise HTTPException(status_code=400, detail=detail) from exc
+        raise HTTPException(status_code=503, detail=detail) from exc
     except Exception as exc:
         logger.exception("Investigation failed")
         raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc

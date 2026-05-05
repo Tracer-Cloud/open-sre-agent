@@ -212,3 +212,18 @@ def test_reraise_cli_runtime_error_maps_cli_auth() -> None:
 
     assert str(raised.value) == "opencode CLI is not authenticated."
     assert raised.value.suggestion == "Run: opencode auth login (not logged in)"
+
+
+def test_reraise_cli_runtime_error_maps_cli_not_found() -> None:
+    import pytest
+
+    from app.cli.support.cli_error_mapping import reraise_cli_runtime_error
+    from app.cli.support.errors import OpenSREError
+
+    exc = RuntimeError("codex CLI not found on PATH")
+
+    with pytest.raises(OpenSREError) as raised:
+        reraise_cli_runtime_error(exc)
+
+    assert str(raised.value) == "CLI tool is not installed or not found."
+    assert raised.value.suggestion == "codex CLI not found on PATH"
