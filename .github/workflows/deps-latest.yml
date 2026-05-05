@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   sdk-init-canary:
@@ -28,10 +29,30 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies (latest resolves from pyproject)
-        run: uv pip install --python "$(which python)" -e ".[dev]"
+        run: uv pip install --python "$(which python)" --system -e ".[dev]"
 
       - name: Guardrails + LLM client tests
         run: >-
           python -m pytest -q
           tests/test_guardrails/test_llm_integration.py::TestOpenAIClientGuardrails::test_redacts_before_api_call
           tests/services/test_llm_client.py
+
+      - name: Create issue when scheduled canary fails
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          EXISTING="$(gh issue list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --search 'in:title "Dependency resolution (latest) canary failed"' \
+            --json number \
+            --jq '.[0].number')"
+          if [ -n "$EXISTING" ]; then
+            echo "Failure issue already open: #$EXISTING"
+            exit 0
+          fi
+          gh issue create \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Dependency resolution (latest) canary failed" \
+            --body "Scheduled canary failed in run https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
