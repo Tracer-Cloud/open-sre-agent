@@ -40,9 +40,7 @@ def rds_config_from_env() -> RDSConfig | None:
     return build_rds_config(
         {
             "db_instance_identifier": db_id,
-            "region": env_str("AWS_REGION")
-            or env_str("RDS_REGION")
-            or DEFAULT_RDS_REGION,
+            "region": env_str("AWS_REGION") or env_str("RDS_REGION") or DEFAULT_RDS_REGION,
         }
     )
 

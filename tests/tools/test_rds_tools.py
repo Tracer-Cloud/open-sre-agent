@@ -5,7 +5,6 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from app.tools.RDSDescribeInstanceTool import describe_rds_instance
-
 from app.tools.RDSEventsTool import describe_rds_events
 
 
