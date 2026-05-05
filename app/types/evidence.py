@@ -46,4 +46,5 @@ EvidenceSource = Literal[
     "airflow",
     "argocd",
     "victoria_logs",
+    "rds",
 ]
