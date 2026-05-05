@@ -1548,11 +1548,6 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
             hint="Investigate alerts and triage state from OpsGenie",
         ),
         Choice(
-            value="incident_io",
-            label="Incident.io",
-            hint="Investigate incidents and timeline events from Incident.io",
-        ),
-        Choice(
             value="notion",
             label="Notion",
             hint="Post investigation reports to a Notion database",
@@ -1567,6 +1562,11 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
             value="skip",
             label="Skip for now",
             hint="Finish onboarding without configuring an integration",
+        ),
+        Choice(
+            value="incident_io",
+            label="Incident.io",
+            hint="Investigate incidents and timeline events from Incident.io",
         ),
     ]
     selected_service = _choose(
