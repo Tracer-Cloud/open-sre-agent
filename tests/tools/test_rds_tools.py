@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import patch
 
 from app.tools.RDSDescribeInstanceTool import describe_rds_instance
@@ -56,6 +57,39 @@ def test_describe_rds_instance_aws_failure(mock_call) -> None:
     result = describe_rds_instance("prod-db")
     assert result["available"] is False
     assert result["error"] == "Failed to describe the RDS instance. Check server logs for details."
+
+
+@patch("app.tools.RDSDescribeInstanceTool.execute_aws_sdk_call")
+def test_describe_rds_instance_multiple_instances_warns(mock_call, caplog) -> None:
+    """When AWS returns >1 instance, use the first and emit a warning."""
+    mock_call.return_value = {
+        "success": True,
+        "data": {
+            "DBInstances": [
+                {
+                    "DBInstanceStatus": "available",
+                    "Engine": "postgres",
+                    "EngineVersion": "15.4",
+                    "DBInstanceClass": "db.t4g.micro",
+                    "Endpoint": {"Address": "prod.abc.rds.aws", "Port": 5432},
+                },
+                {
+                    "DBInstanceStatus": "available",
+                    "Engine": "mysql",
+                    "EngineVersion": "8.0",
+                    "DBInstanceClass": "db.r6g.large",
+                    "Endpoint": {"Address": "replica.abc.rds.aws", "Port": 3306},
+                },
+            ]
+        },
+    }
+
+    with caplog.at_level(logging.WARNING):
+        result = describe_rds_instance("prod-db")
+
+    assert result["available"] is True
+    assert result["engine"] == "postgres"  # first instance used
+    assert "returned 2 instances" in caplog.text
 
 
 @patch("app.tools.RDSEventsTool.execute_aws_sdk_call")
