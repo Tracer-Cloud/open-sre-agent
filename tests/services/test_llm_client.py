@@ -157,3 +157,32 @@ def test_minimax_llm_client_temperature_is_set(monkeypatch) -> None:
         temperature=1.0,
     )
     assert client._temperature == 1.0
+
+
+def test_create_llm_client_claude_code_wires_cli_adapter(monkeypatch) -> None:
+    """Investigation uses ``_create_llm_client`` → registry → ``CLIBackedLLMClient``."""
+    monkeypatch.setenv("LLM_PROVIDER", "claude-code")
+    monkeypatch.delenv("CLAUDE_CODE_MODEL", raising=False)
+    llm_client.reset_llm_singletons()
+    try:
+        from app.integrations.llm_cli.claude_code import ClaudeCodeAdapter
+        from app.integrations.llm_cli.runner import CLIBackedLLMClient
+
+        client = llm_client._create_llm_client("reasoning")
+
+        assert isinstance(client, CLIBackedLLMClient)
+        assert isinstance(client._adapter, ClaudeCodeAdapter)
+    finally:
+        llm_client.reset_llm_singletons()
+
+
+def test_create_llm_client_claude_code_reads_optional_model_env(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "claude-code")
+    monkeypatch.setenv("CLAUDE_CODE_MODEL", "claude-opus-4-7")
+    llm_client.reset_llm_singletons()
+    try:
+        client = llm_client._create_llm_client("reasoning")
+
+        assert client._model == "claude-opus-4-7"
+    finally:
+        llm_client.reset_llm_singletons()
