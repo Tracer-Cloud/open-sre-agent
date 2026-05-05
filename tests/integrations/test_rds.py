@@ -136,3 +136,91 @@ def test_rds_env_discovery_to_sources_pipeline() -> None:
     assert "rds" in sources, "detect_sources must propagate rds into the sources dict"
     assert sources["rds"]["db_instance_identifier"] == "prod-orders-db"
     assert sources["rds"]["region"] == "eu-west-1"
+
+
+def test_load_env_integrations_skips_rds_when_db_id_missing() -> None:
+    """Gap #1 — negative: with no RDS_DB_INSTANCE_IDENTIFIER, no rds record."""
+    from app.integrations._catalog_impl import load_env_integrations
+
+    with patch.dict(os.environ, {"AWS_REGION": "us-west-2"}, clear=True):
+        env_records = load_env_integrations()
+
+    assert not [r for r in env_records if r.get("service") == "rds"]
+
+
+def test_classify_service_instance_rds_remote_store_returns_flat_shape() -> None:
+    """Gap #2 — remote-store path: a stored RDS record must classify to a flat
+    shape, not the generic {credentials: ...} fallback that broke rds_is_available."""
+    from app.integrations._catalog_impl import _classify_service_instance
+
+    credentials = {
+        "db_instance_identifier": "remote-db",
+        "region": "ap-southeast-2",
+    }
+    flat, resolved_key = _classify_service_instance("rds", credentials, record_id="store-record-42")
+
+    assert resolved_key == "rds"
+    assert flat is not None
+    assert flat["db_instance_identifier"] == "remote-db"
+    assert flat["region"] == "ap-southeast-2"
+    assert flat["integration_id"] == "store-record-42"
+    assert "credentials" not in flat, (
+        "remote-store rds must NOT nest fields under 'credentials' — "
+        "rds_is_available reads sources['rds']['db_instance_identifier'] directly"
+    )
+
+
+def test_classify_service_instance_rds_skips_when_db_id_missing() -> None:
+    """Gap #2 — negative: an unconfigured rds record must classify to (None, None)."""
+    from app.integrations._catalog_impl import _classify_service_instance
+
+    flat, resolved_key = _classify_service_instance(
+        "rds", {"region": "us-east-1"}, record_id="incomplete"
+    )
+
+    assert flat is None and resolved_key is None
+
+
+def test_detect_sources_propagates_rds_into_sources() -> None:
+    """Gap #3 — propagation: a resolved 'rds' integration must land in sources."""
+    from app.nodes.plan_actions.detect_sources import detect_sources
+
+    sources = detect_sources(
+        raw_alert={},
+        context={},
+        resolved_integrations={
+            "rds": {
+                "db_instance_identifier": "prod-orders-db",
+                "region": "eu-west-1",
+                "integration_id": "env-rds",
+            }
+        },
+    )
+
+    assert sources.get("rds") == {
+        "db_instance_identifier": "prod-orders-db",
+        "region": "eu-west-1",
+    }
+
+
+def test_detect_sources_skips_rds_when_not_in_resolved_integrations() -> None:
+    """Gap #3 — negative: no rds in resolved means no rds in sources."""
+    from app.nodes.plan_actions.detect_sources import detect_sources
+
+    sources = detect_sources(raw_alert={}, context={}, resolved_integrations={})
+
+    assert "rds" not in sources
+
+
+def test_detect_sources_skips_rds_when_db_id_blank() -> None:
+    """Gap #3 — negative: a resolved rds entry with empty db_instance_identifier
+    must not produce a sources['rds'] entry that would mislead rds_is_available."""
+    from app.nodes.plan_actions.detect_sources import detect_sources
+
+    sources = detect_sources(
+        raw_alert={},
+        context={},
+        resolved_integrations={"rds": {"db_instance_identifier": "  ", "region": "us-east-1"}},
+    )
+
+    assert "rds" not in sources
