@@ -15,6 +15,8 @@ class SlashCommand:
     name: str
     help_text: str
     handler: Callable[[ReplSession, Console, list[str]], bool]
+    #: Tab-completion hints for the first argument after the command name (keyword, meta text).
+    first_arg_completions: tuple[tuple[str, str], ...] = ()
 
 
 __all__ = ["SlashCommand"]

@@ -144,12 +144,21 @@ def _cmd_save(session: ReplSession, console: Console, args: list[str]) -> bool:
     return True
 
 
+_TEMPLATE_FIRST_ARGS: tuple[tuple[str, str], ...] = (
+    ("generic", "generic alert JSON template"),
+    ("datadog", "Datadog monitor alert template"),
+    ("grafana", "Grafana alert template"),
+    ("honeycomb", "Honeycomb trigger template"),
+    ("coralogix", "Coralogix alert template"),
+)
+
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
         "/template",
         "print a starter alert JSON template "
         "('/template generic|datadog|grafana|honeycomb|coralogix')",
         _cmd_template,
+        first_arg_completions=_TEMPLATE_FIRST_ARGS,
     ),
     SlashCommand(
         "/investigate",

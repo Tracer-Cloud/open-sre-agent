@@ -120,14 +120,34 @@ def _cmd_context(session: ReplSession, console: Console, args: list[str]) -> boo
     return True
 
 
+_TRUST_FIRST_ARGS: tuple[tuple[str, str], ...] = (
+    ("on", "enable trust mode (skip approval prompts)"),
+    ("off", "disable trust mode"),
+)
+
+_VERBOSE_FIRST_ARGS: tuple[tuple[str, str], ...] = (
+    ("on", "enable verbose logging"),
+    ("off", "disable verbose logging"),
+)
+
 COMMANDS: list[SlashCommand] = [
     SlashCommand("/clear", "clear the screen and re-render the banner", _cmd_clear),
     SlashCommand("/reset", "clear session state (keeps trust mode)", _cmd_reset),
-    SlashCommand("/trust", "toggle trust mode ('/trust off' to disable)", _cmd_trust),
+    SlashCommand(
+        "/trust",
+        "toggle trust mode ('/trust off' to disable)",
+        _cmd_trust,
+        first_arg_completions=_TRUST_FIRST_ARGS,
+    ),
     SlashCommand("/status", "show session status", _cmd_status),
     SlashCommand("/context", "show accumulated infra context", _cmd_context),
     SlashCommand("/cost", "show token usage and session cost", _cmd_cost),
-    SlashCommand("/verbose", "toggle verbose logging ('/verbose off' to disable)", _cmd_verbose),
+    SlashCommand(
+        "/verbose",
+        "toggle verbose logging ('/verbose off' to disable)",
+        _cmd_verbose,
+        first_arg_completions=_VERBOSE_FIRST_ARGS,
+    ),
     SlashCommand("/compact", "trim old session history to free memory", _cmd_compact),
 ]
 

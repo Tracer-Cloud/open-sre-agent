@@ -122,47 +122,9 @@ class ShellCompleter(Completer):
     Completion levels:
       1. Bare-word aliases (``help``, ``exit``, …) — no leading slash, no spaces.
       2. Top-level slash command names (``/hel`` → ``/help``).
-      3. Subcommand keywords  (``/model `` → ``show / set / toolcall``).
+      3. First-arg keywords from each command's registry metadata (e.g. ``/model `` → hints).
       4. File-path completion for ``/investigate`` and ``/save``.
     """
-
-    _SUBCOMMANDS: dict[str, list[tuple[str, str]]] = {
-        "/model": [
-            ("show", "show active provider and models"),
-            ("set", "switch provider  ·  /model set <provider> [model]"),
-            ("toolcall", "manage toolcall model for the active provider"),
-        ],
-        "/integrations": [
-            ("list", "list all configured integrations"),
-            ("verify", "run health checks on all integrations"),
-            ("show", "show details for a single integration"),
-        ],
-        "/list": [
-            ("integrations", "alert-source integrations"),
-            ("models", "active LLM models"),
-            ("mcp", "connected MCP servers"),
-        ],
-        "/mcp": [
-            ("list", "list connected MCP servers"),
-            ("connect", "add an MCP server via opensre integrations setup"),
-            ("disconnect", "remove an MCP server"),
-        ],
-        "/template": [
-            ("generic", "generic alert JSON template"),
-            ("datadog", "Datadog monitor alert template"),
-            ("grafana", "Grafana alert template"),
-            ("honeycomb", "Honeycomb trigger template"),
-            ("coralogix", "Coralogix alert template"),
-        ],
-        "/trust": [
-            ("on", "enable trust mode (skip approval prompts)"),
-            ("off", "disable trust mode"),
-        ],
-        "/verbose": [
-            ("on", "enable verbose logging"),
-            ("off", "disable verbose logging"),
-        ],
-    }
 
     def get_completions(
         self,
@@ -220,8 +182,10 @@ class ShellCompleter(Completer):
                 )
                 return
 
+            entry = SLASH_COMMANDS.get(cmd_name)
+            hints = entry.first_arg_completions if entry is not None else ()
             sub_prefix = raw_arg.lower()
-            for sub, meta in self._SUBCOMMANDS.get(cmd_name, []):
+            for sub, meta in hints:
                 if sub.startswith(sub_prefix):
                     yield Completion(
                         sub,
