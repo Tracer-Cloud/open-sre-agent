@@ -9,6 +9,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from dataclasses import dataclass
@@ -163,6 +164,8 @@ _SHELL_COMMAND_TIMEOUT_SECONDS = 120
 _SYNTHETIC_TEST_TIMEOUT_SECONDS = 1800
 _SYNTHETIC_POLL_SECONDS = 0.25
 _MAX_COMMAND_OUTPUT_CHARS = 24_000
+_SYNTHETIC_DIAG_CHARS = 2_000  # max stderr bytes captured from a failing synthetic run
+_SIGTERM_GRACE_SECONDS = 10  # wait for clean exit after SIGTERM before escalating to SIGKILL
 _IS_WINDOWS = os.name == "nt"
 
 
@@ -416,17 +419,21 @@ def _terminate_child_process(proc: subprocess.Popen[Any]) -> None:
     """Best-effort SIGTERM → wait → SIGKILL → wait without blocking forever."""
     if proc.poll() is not None:
         return
-    _grace_s = 45
-    _post_kill_wait_s = 5
     with contextlib.suppress(OSError):
         proc.terminate()
     try:
-        proc.wait(timeout=_grace_s)
+        proc.wait(timeout=_SIGTERM_GRACE_SECONDS)
     except subprocess.TimeoutExpired:
         with contextlib.suppress(OSError):
             proc.kill()
         with contextlib.suppress(subprocess.TimeoutExpired):
-            proc.wait(timeout=_post_kill_wait_s)
+            proc.wait(timeout=5)
+
+
+def _read_diag(buf: tempfile.SpooledTemporaryFile[bytes]) -> str:  # type: ignore[type-arg]
+    """Read up to ``_SYNTHETIC_DIAG_CHARS`` bytes from a captured stderr buffer."""
+    buf.seek(0)
+    return buf.read(_SYNTHETIC_DIAG_CHARS).decode("utf-8", errors="replace").strip()
 
 
 def _watch_synthetic_subprocess(
@@ -434,6 +441,7 @@ def _watch_synthetic_subprocess(
     proc: subprocess.Popen[Any],
     session: ReplSession,
     suite_name: str,
+    stderr_buf: tempfile.SpooledTemporaryFile[bytes],  # type: ignore[type-arg]
 ) -> None:
     def _history_text() -> str:
         return f"{suite_name} task:{task.task_id}"
@@ -448,39 +456,53 @@ def _watch_synthetic_subprocess(
     def _run() -> None:
         started = time.monotonic()
         timed_out = False
+        # Track whether *we* explicitly terminated the process so we can
+        # distinguish a cancel-driven exit from a natural exit that happened
+        # to race with a concurrent /cancel.
+        terminated_by_watcher = False
         while proc.poll() is None:
             if time.monotonic() - started > _SYNTHETIC_TEST_TIMEOUT_SECONDS:
                 timed_out = True
                 task.request_cancel()
                 _terminate_child_process(proc)
+                terminated_by_watcher = True
                 break
             if task.cancel_requested.is_set():
                 _terminate_child_process(proc)
+                terminated_by_watcher = True
                 break
             time.sleep(_SYNTHETIC_POLL_SECONDS)
 
-        if timed_out:
-            task.mark_failed(f"timed out after {_SYNTHETIC_TEST_TIMEOUT_SECONDS}s")
-            _record_synthetic_if_current_session(ok=False)
-            return
+        try:
+            if timed_out:
+                task.mark_failed(f"timed out after {_SYNTHETIC_TEST_TIMEOUT_SECONDS}s")
+                _record_synthetic_if_current_session(ok=False)
+                return
 
-        code = proc.returncode
-        if code is None:
-            task.mark_failed("subprocess did not report exit code")
-            _record_synthetic_if_current_session(ok=False)
-            return
+            code = proc.returncode
+            if code is None:
+                task.mark_failed("subprocess did not report exit code")
+                _record_synthetic_if_current_session(ok=False)
+                return
 
-        if task.cancel_requested.is_set():
-            task.mark_cancelled()
-            _record_synthetic_if_current_session(ok=False)
-            return
+            # Honour the real exit code when the process exited on its own.
+            # Only treat as CANCELLED when *we* killed it after a cancel request;
+            # a natural exit that races with /cancel should be recorded by its code.
+            if terminated_by_watcher and task.cancel_requested.is_set():
+                task.mark_cancelled()
+                _record_synthetic_if_current_session(ok=False)
+                return
 
-        if code == 0:
-            task.mark_completed(result="ok")
-            _record_synthetic_if_current_session(ok=True)
-        else:
-            task.mark_failed(f"exit code {code}")
-            _record_synthetic_if_current_session(ok=False)
+            if code == 0:
+                task.mark_completed(result="ok")
+                _record_synthetic_if_current_session(ok=True)
+            else:
+                diag = _read_diag(stderr_buf)
+                error_msg = f"exit code {code}" + (f": {diag}" if diag else "")
+                task.mark_failed(error_msg)
+                _record_synthetic_if_current_session(ok=False)
+        finally:
+            stderr_buf.close()
 
     threading.Thread(target=_run, daemon=True, name=f"synthetic-{task.task_id}").start()
 
@@ -645,20 +667,25 @@ def _run_synthetic_test(suite_name: str, session: ReplSession, console: Console)
     console.print(f"[bold]$ {display_command}[/bold]")
     task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
     task.mark_running()
+    # Lifetime managed by the watcher thread's finally block. noqa: SIM115
+    stderr_buf: tempfile.SpooledTemporaryFile[bytes] = tempfile.SpooledTemporaryFile(  # type: ignore[type-arg] # noqa: SIM115
+        max_size=_SYNTHETIC_DIAG_CHARS * 2
+    )
     try:
         proc = subprocess.Popen(  # noqa: S603 - argv is trusted interpreter path + module
             [sys.executable, "-m", "app.cli", "tests", "synthetic"],
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=stderr_buf,
         )
     except Exception as exc:  # noqa: BLE001
+        stderr_buf.close()
         task.mark_failed(str(exc))
         console.print(f"[red]synthetic test failed to start:[/red] {escape(str(exc))}")
         session.record("synthetic_test", suite_name, ok=False)
         return
 
     task.attach_process(proc)
-    _watch_synthetic_subprocess(task, proc, session, suite_name)
+    _watch_synthetic_subprocess(task, proc, session, suite_name, stderr_buf)
     console.print(
         f"[dim]synthetic test started — task[/dim] [bold]{escape(task.task_id)}[/bold]. "
         f"[dim]/tasks[/dim] [dim]to monitor,[/dim] [bold]/cancel {escape(task.task_id)}[/bold] "

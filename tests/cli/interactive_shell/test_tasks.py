@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import tempfile
 from collections.abc import Callable
 from unittest.mock import MagicMock
 
@@ -206,15 +207,23 @@ class TestSyntheticSubprocessWatcher:
         task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
         task.mark_running()
         task.attach_process(proc)
-        aa._watch_synthetic_subprocess(task, proc, session, "rds_postgres")
+        stderr_buf: tempfile.SpooledTemporaryFile[bytes] = tempfile.SpooledTemporaryFile()  # type: ignore[type-arg]  # noqa: SIM115
+        aa._watch_synthetic_subprocess(task, proc, session, "rds_postgres", stderr_buf)
         assert task.status == TaskStatus.COMPLETED
         hist = session.history[-1]
         assert hist["type"] == "synthetic_test"
         assert hist["ok"] is True
         assert "task:" in hist["text"]
 
-    def test_watch_marks_cancelled_when_requested(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """First poll waits; synthetic sleep fires cancel_request; poll then returns exit code."""
+    def test_watch_honours_exit_code_when_cancel_races_loop_exit(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Process exits naturally (code 0) in the same poll tick that /cancel fires.
+
+        The poll loop exits because proc.poll() returns non-None *before* the
+        cancel_requested branch runs, so terminated_by_watcher stays False.
+        The task must be COMPLETED, not CANCELLED — the process succeeded.
+        """
         import app.cli.interactive_shell.agent_actions as aa
 
         monkeypatch.setattr(aa.threading, "Thread", _ImmediateThread)
@@ -224,10 +233,12 @@ class TestSyntheticSubprocessWatcher:
         task.mark_running()
         proc = MagicMock()
 
+        # poll() returns None once (enter loop body), then cancel fires via
+        # sleep, which also makes poll return 0 — loop exits via while condition.
         pending: list[int | None] = [None]
 
         def _poll_side() -> int | None:
-            return pending[0] if task.cancel_requested.is_set() else None
+            return pending[0]
 
         proc.poll.side_effect = _poll_side
         proc.returncode = 0
@@ -237,15 +248,92 @@ class TestSyntheticSubprocessWatcher:
         def _fake_sleep(_secs: float) -> None:
             sleeps.append(_secs)
             task.cancel_requested.set()
-            pending[0] = 0
+            pending[0] = 0  # process finishes naturally in the same window
 
         monkeypatch.setattr(aa.time, "sleep", _fake_sleep)
-        aa._watch_synthetic_subprocess(task, proc, session, "rds_postgres")
-        assert task.status == TaskStatus.CANCELLED
+        stderr_buf: tempfile.SpooledTemporaryFile[bytes] = tempfile.SpooledTemporaryFile()  # type: ignore[type-arg]  # noqa: SIM115
+        aa._watch_synthetic_subprocess(task, proc, session, "rds_postgres", stderr_buf)
+        # terminated_by_watcher is False → honour exit code 0 → COMPLETED
+        assert task.status == TaskStatus.COMPLETED
         assert sleeps
+
+    def test_watch_marks_cancelled_when_watcher_kills_process(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """cancel_requested is set while proc is still running; watcher terminates it."""
+        import app.cli.interactive_shell.agent_actions as aa
+
+        monkeypatch.setattr(aa.threading, "Thread", _ImmediateThread)
+
+        session = ReplSession()
+        task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
+        task.mark_running()
+        proc = MagicMock()
+
+        # poll() always returns None so the watcher's cancel branch runs and
+        # calls _terminate_child_process; returncode is set after that.
+        proc.poll.return_value = None
+        proc.returncode = -15
+
+        task.cancel_requested.set()  # cancel already set before first loop check
+
+        # Skip the sleep so the loop iterates immediately to the cancel branch.
+        monkeypatch.setattr(aa.time, "sleep", lambda _: None)
+
+        stderr_buf: tempfile.SpooledTemporaryFile[bytes] = tempfile.SpooledTemporaryFile()  # type: ignore[type-arg]  # noqa: SIM115
+        aa._watch_synthetic_subprocess(task, proc, session, "rds_postgres", stderr_buf)
+        assert task.status == TaskStatus.CANCELLED
         hist = session.history[-1]
         assert hist["type"] == "synthetic_test"
         assert hist["ok"] is False
+
+    def test_watch_honours_exit_code_when_cancel_races_natural_exit(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Process exits naturally (code 0) while /cancel fires concurrently.
+
+        The watcher should mark the task COMPLETED, not CANCELLED, because we
+        never called _terminate_child_process — the process was already gone.
+        """
+        import app.cli.interactive_shell.agent_actions as aa
+
+        monkeypatch.setattr(aa.threading, "Thread", _ImmediateThread)
+
+        session = ReplSession()
+        task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
+        task.mark_running()
+        proc = MagicMock()
+        # Process already finished; poll returns non-None immediately so the
+        # while-loop body never executes — terminated_by_watcher stays False.
+        proc.poll.return_value = 0
+        proc.returncode = 0
+
+        # Simulate /cancel arriving just as the watcher reads poll()
+        task.cancel_requested.set()
+
+        stderr_buf: tempfile.SpooledTemporaryFile[bytes] = tempfile.SpooledTemporaryFile()  # type: ignore[type-arg]  # noqa: SIM115
+        aa._watch_synthetic_subprocess(task, proc, session, "rds_postgres", stderr_buf)
+        assert task.status == TaskStatus.COMPLETED
+
+    def test_watch_captures_stderr_on_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Diagnostic stderr output is included in mark_failed message."""
+        import app.cli.interactive_shell.agent_actions as aa
+
+        monkeypatch.setattr(aa.threading, "Thread", _ImmediateThread)
+
+        session = ReplSession()
+        task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
+        task.mark_running()
+        proc = MagicMock()
+        proc.poll.return_value = 1
+        proc.returncode = 1
+
+        stderr_buf: tempfile.SpooledTemporaryFile[bytes] = tempfile.SpooledTemporaryFile()  # type: ignore[type-arg]  # noqa: SIM115
+        stderr_buf.write(b"ConnectionError: database unreachable\n")
+        aa._watch_synthetic_subprocess(task, proc, session, "rds_postgres", stderr_buf)
+        assert task.status == TaskStatus.FAILED
+        assert "exit code 1" in (task.error or "")
+        assert "ConnectionError" in (task.error or "")
 
     def test_watch_skips_synthetic_history_after_reset(
         self, monkeypatch: pytest.MonkeyPatch
@@ -263,7 +351,8 @@ class TestSyntheticSubprocessWatcher:
         task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
         task.mark_running()
         task.attach_process(proc)
-        aa._watch_synthetic_subprocess(task, proc, session, "rds_postgres")
+        stderr_buf: tempfile.SpooledTemporaryFile[bytes] = tempfile.SpooledTemporaryFile()  # type: ignore[type-arg]  # noqa: SIM115
+        aa._watch_synthetic_subprocess(task, proc, session, "rds_postgres", stderr_buf)
         assert len(_DeferredSyntheticThread.pending) == 1
         session.clear()
         _DeferredSyntheticThread.pending[0]()
@@ -286,7 +375,8 @@ class TestSyntheticSubprocessWatcher:
         task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
         task.mark_running()
         task.attach_process(proc)
-        aa._watch_synthetic_subprocess(task, proc, session, "rds_postgres")
+        stderr_buf: tempfile.SpooledTemporaryFile[bytes] = tempfile.SpooledTemporaryFile()  # type: ignore[type-arg]  # noqa: SIM115
+        aa._watch_synthetic_subprocess(task, proc, session, "rds_postgres", stderr_buf)
         _DeferredSyntheticThread.pending[0]()
         assert session.history[-1]["type"] == "synthetic_test"
         _DeferredSyntheticThread.pending.clear()
