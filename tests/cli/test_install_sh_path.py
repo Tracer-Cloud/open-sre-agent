@@ -38,7 +38,7 @@ def _run(
     idir = install_dir if install_dir is not None else str(fake_home / _LOCAL_BIN)
 
     script = textwrap.dedent(f"""\
-        __fn=$(awk 'p&&/^}}$/{{print;exit}} /^configure_path\\(\\)/{{p=1}} p{{print}}' {INSTALL_SH})
+        __fn=$(awk 'p&&/^}}$/{{print;exit}} /^(function[[:space:]]+)?configure_path[[:space:]]*\\(\\)[[:space:]]*\\{{/{{p=1}} p{{print}}' {INSTALL_SH})
         if [ -z "$__fn" ]; then
             echo "configure_path not found in install.sh" >&2
             exit 1
@@ -47,6 +47,46 @@ def _run(
         warn() {{ printf 'Warning: %s\\n' "$*" >&2; }}
         eval "$__fn"
         INSTALL_DIR="{idir}" platform="{platform}" HOME="{fake_home}" SHELL="{shell}" configure_path
+    """)
+    return subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+
+
+def _run_output_helpers(
+    *,
+    stdout_colors_enabled: int | None,
+    stderr_colors_enabled: int | None,
+) -> subprocess.CompletedProcess[str]:
+    stdout_setup = (
+        f"STDOUT_COLORS_ENABLED={stdout_colors_enabled}"
+        if stdout_colors_enabled is not None
+        else ""
+    )
+    stderr_setup = (
+        f"STDERR_COLORS_ENABLED={stderr_colors_enabled}"
+        if stderr_colors_enabled is not None
+        else ""
+    )
+
+    script = textwrap.dedent(f"""\
+        eval "$(awk '
+            /^(function[[:space:]]+)?[a-z_][a-z_]*[[:space:]]*\\(\\)[[:space:]]*\\{{/ {{ in_fn=1 }}
+            in_fn {{ print }}
+            in_fn && /^\\}}$/ {{ in_fn=0 }}
+        ' {INSTALL_SH})"
+
+        {stdout_setup}
+        {stderr_setup}
+        ANSI_RESET='[reset]'
+        ANSI_BOLD='[bold]'
+        ANSI_GREEN='[green]'
+        ANSI_YELLOW='[yellow]'
+        ANSI_RED='[red]'
+        ANSI_CYAN='[cyan]'
+
+        log_step "1/4" "Fetching latest release version..."
+        log_success "OpenSRE install complete."
+        print_separator
+        warn "Using fallback asset."
     """)
     return subprocess.run(["bash", "-c", script], capture_output=True, text=True)
 
@@ -124,6 +164,37 @@ def test_marker_comment_present(tmp_path: Path) -> None:
     _run(tmp_path, shell="/bin/zsh")
     content = (tmp_path / "home" / ".zshrc").read_text()
     assert "# Added by opensre installer" in content
+
+
+def test_output_helpers_fall_back_to_plain_text_without_color() -> None:
+    result = _run_output_helpers(stdout_colors_enabled=0, stderr_colors_enabled=0)
+    assert result.returncode == 0, result.stderr
+    assert "[1/4] Fetching latest release version..." in result.stdout
+    assert "OpenSRE install complete." in result.stdout
+    assert "----------------------------------------" in result.stdout
+    assert "Warning: Using fallback asset." in result.stderr
+    assert "[cyan]" not in result.stdout
+    assert "[green]" not in result.stdout
+    assert "[yellow]" not in result.stderr
+
+
+def test_output_helpers_default_to_plain_text_when_flags_are_unset() -> None:
+    result = _run_output_helpers(stdout_colors_enabled=None, stderr_colors_enabled=None)
+    assert result.returncode == 0, result.stderr
+    assert "[1/4] Fetching latest release version..." in result.stdout
+    assert "OpenSRE install complete." in result.stdout
+    assert "Warning: Using fallback asset." in result.stderr
+    assert "[reset]" not in result.stdout
+    assert "[reset]" not in result.stderr
+
+
+def test_output_helpers_emit_styled_output_when_color_enabled() -> None:
+    result = _run_output_helpers(stdout_colors_enabled=1, stderr_colors_enabled=1)
+    assert result.returncode == 0, result.stderr
+    assert "[cyan][bold][1/4] Fetching latest release version...[reset]" in result.stdout
+    assert "[green][bold]OpenSRE install complete.[reset]" in result.stdout
+    assert "[cyan]----------------------------------------[reset]" in result.stdout
+    assert "[yellow][bold]Warning: Using fallback asset.[reset]" in result.stderr
 
 
 def test_post_install_message_mentions_source(tmp_path: Path) -> None:
@@ -213,7 +284,7 @@ def _run_post_install(
     script = textwrap.dedent(f"""\
         # 1. Load every function definition from install.sh
         eval "$(awk '
-            /^[a-z_][a-z_]*\\(\\)/ {{ in_fn=1 }}
+            /^(function[[:space:]]+)?[a-z_][a-z_]*[[:space:]]*\\(\\)[[:space:]]*\\{{/ {{ in_fn=1 }}
             in_fn {{ print }}
             in_fn && /^\\}}$/ {{ in_fn=0 }}
         ' {INSTALL_SH})"
@@ -318,3 +389,16 @@ def test_onboarding_hint_appears_after_version_line(tmp_path: Path) -> None:
     assert onboard_pos > installed_pos, (
         "Onboarding hint must come after the install confirmation line"
     )
+
+
+def test_post_install_success_block_includes_next_steps(tmp_path: Path) -> None:
+    result = _run_post_install(tmp_path, shell="/bin/zsh", installed_version="2026.4.1")
+    assert result.returncode == 0, result.stderr
+    output = result.stdout + result.stderr
+    assert "[4/4] Installed opensre v2026.4.1" in output
+    assert "OpenSRE v2026.4.1 installed successfully." in output
+    assert "Next steps:" in output
+    assert "opensre onboard" in output
+    assert "opensre investigate -i <alert.json>" in output
+    assert "Docs: https://www.opensre.com/docs" in output
+    assert output.count("----------------------------------------") == 2

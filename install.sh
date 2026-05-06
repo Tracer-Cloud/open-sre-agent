@@ -17,22 +17,95 @@ INSTALL_CHANNEL="${OPENSRE_INSTALL_CHANNEL:-release}"
 BIN_NAME="opensre"
 INSTALL_WITH_SUDO=0
 requested_version="${OPENSRE_VERSION:-}"
+STDOUT_COLORS_ENABLED=0
+STDERR_COLORS_ENABLED=0
+ANSI_RESET=""
+ANSI_BOLD=""
+ANSI_GREEN=""
+ANSI_YELLOW=""
+ANSI_RED=""
+ANSI_CYAN=""
 
 [ -n "$INSTALL_DIR" ] && INSTALL_DIR_OVERRIDE=1
 requested_version="${requested_version#v}"
+
+init_output_styles() {
+  if [ "${TERM:-}" != "dumb" ] && [ -t 1 ]; then
+    STDOUT_COLORS_ENABLED=1
+  fi
+
+  if [ "${TERM:-}" != "dumb" ] && [ -t 2 ]; then
+    STDERR_COLORS_ENABLED=1
+  fi
+
+  if [ "$STDOUT_COLORS_ENABLED" -eq 1 ] || [ "$STDERR_COLORS_ENABLED" -eq 1 ]; then
+    ANSI_RESET="$(printf '\033[0m')"
+    ANSI_BOLD="$(printf '\033[1m')"
+    ANSI_GREEN="$(printf '\033[32m')"
+    ANSI_YELLOW="$(printf '\033[33m')"
+    ANSI_RED="$(printf '\033[31m')"
+    ANSI_CYAN="$(printf '\033[36m')"
+  fi
+}
+
+stdout_line() {
+  local style="$1"
+  shift
+  local message="$*"
+  local colors_enabled="${STDOUT_COLORS_ENABLED:-0}"
+
+  if [ "$colors_enabled" -eq 1 ] && [ -n "$style" ]; then
+    printf '%s%s%s\n' "$style" "$message" "$ANSI_RESET"
+  else
+    printf '%s\n' "$message"
+  fi
+}
+
+stderr_line() {
+  local style="$1"
+  shift
+  local message="$*"
+  local colors_enabled="${STDERR_COLORS_ENABLED:-0}"
+
+  if [ "$colors_enabled" -eq 1 ] && [ -n "$style" ]; then
+    printf '%s%s%s\n' "$style" "$message" "$ANSI_RESET" >&2
+  else
+    printf '%s\n' "$message" >&2
+  fi
+}
 
 log() {
   printf '%s\n' "$*"
 }
 
+log_step() {
+  local step="$1"
+  shift
+  stdout_line "${ANSI_CYAN}${ANSI_BOLD}" "[${step}] $*"
+}
+
+log_success() {
+  stdout_line "${ANSI_GREEN}${ANSI_BOLD}" "$*"
+}
+
+log_highlight() {
+  stdout_line "${ANSI_BOLD}" "$*"
+}
+
+print_separator() {
+  stdout_line "${ANSI_CYAN}" "----------------------------------------"
+}
+
 warn() {
-  printf 'Warning: %s\n' "$*" >&2
+  stderr_line "${ANSI_YELLOW}${ANSI_BOLD}" "Warning: $*"
 }
 
 die() {
-  printf 'Error: %s\n' "$*" >&2
+  stderr_line "${ANSI_RED}${ANSI_BOLD}" "Error: $*"
   exit 1
 }
+
+init_output_styles
 
 usage() {
   cat <<'EOF'
@@ -549,25 +622,18 @@ print_success_screen() {
   local version="$1"
   local sep="────────────────────────────────────────────"
 
-  if [ ! -t 1 ]; then
-    sep="--------------------------------------------"
-  fi
-
   log ""
-  log "$sep"
+  print_separator
   if [ "$version" = "main" ]; then
-    log "  opensre (main build) installed successfully"
+    log_success "OpenSRE main build installed successfully."
   else
-    log "  opensre v${version} installed successfully"
+    log_success "OpenSRE v${version} installed successfully."
   fi
-  log "$sep"
-  log ""
-  log "Next steps:"
-  log "  1. Run:  opensre onboard"
-  log "  2. Then: opensre investigate -i <alert.json>"
-  log ""
+  log_highlight "Next steps:"
+  log "  1. Run 'opensre onboard' to complete setup."
+  log "  2. Then run 'opensre investigate -i <alert.json>' with a real alert."
   log "Docs: https://www.opensre.com/docs"
-  log ""
+  print_separator
 }
 
 os="$(uname -s)"
@@ -608,9 +674,9 @@ version="$requested_version"
 release_tag=""
 
 if [ "$INSTALL_CHANNEL" = "main" ]; then
-  log "Fetching latest main build metadata..."
+  log_step "1/4" "Fetching latest main build metadata..."
 elif [ -z "$version" ]; then
-  log "Fetching latest release version..."
+  log_step "1/4" "Fetching latest release version..."
 fi
 
 release_json="$(fetch_release_json "$version")" || {
@@ -662,14 +728,14 @@ checksum_asset="${archive}.sha256"
 checksum_url="${download_url}.sha256"
 
 if [ "$INSTALL_CHANNEL" = "main" ]; then
-  log "Installing opensre main build (${platform}/${target_arch})..."
+  log_step "2/4" "Installing opensre main build (${platform}/${target_arch})..."
 else
-  log "Installing opensre v${version} (${platform}/${target_arch})..."
+  log_step "2/4" "Installing opensre v${version} (${platform}/${target_arch})..."
 fi
 if [ "$asset_arch" != "$target_arch" ]; then
   log "Using release asset built for ${platform}/${asset_arch}."
 fi
-log "Downloading ${download_url}"
+log_step "3/4" "Downloading ${download_url}"
 
 need_cmd mktemp
 tmp_dir="$(mktemp -d)"
@@ -714,12 +780,12 @@ install_binary "$binary_path" "${INSTALL_DIR}/${BIN_NAME}"
 
 if [ "$INSTALL_CHANNEL" = "main" ]; then
   if [ "$installed_version" = "main" ]; then
-    log "Installed ${BIN_NAME} main build to ${INSTALL_DIR}/${BIN_NAME}"
+    log_step "4/4" "Installed ${BIN_NAME} main build to ${INSTALL_DIR}/${BIN_NAME}"
   else
-    log "Installed ${BIN_NAME} main build (${installed_version}) to ${INSTALL_DIR}/${BIN_NAME}"
+    log_step "4/4" "Installed ${BIN_NAME} main build (${installed_version}) to ${INSTALL_DIR}/${BIN_NAME}"
   fi
 else
-  log "Installed ${BIN_NAME} v${installed_version} to ${INSTALL_DIR}/${BIN_NAME}"
+  log_step "4/4" "Installed ${BIN_NAME} v${installed_version} to ${INSTALL_DIR}/${BIN_NAME}"
 fi
 
 configure_path
