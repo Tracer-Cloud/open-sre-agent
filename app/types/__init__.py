@@ -2,6 +2,16 @@
 
 from app.types.config import Configurable, NodeConfig, get_configurable
 from app.types.evidence import EvidenceSource
+from app.types.messages import (
+    SREMessage,
+    SREMessageList,
+    from_lc_message,
+    make_assistant,
+    make_system,
+    make_tool,
+    make_user,
+    to_lc_messages,
+)
 from app.types.retrieval import (
     AggregationSpec,
     FieldSelection,
@@ -17,6 +27,8 @@ __all__ = [
     "Configurable",
     "EvidenceSource",
     "NodeConfig",
+    "SREMessage",
+    "SREMessageList",
     "ToolSurface",
     "RetrievalIntent",
     "RetrievalControls",
@@ -25,5 +37,11 @@ __all__ = [
     "FilterCondition",
     "FieldSelection",
     "AggregationSpec",
+    "from_lc_message",
     "get_configurable",
+    "make_assistant",
+    "make_system",
+    "make_tool",
+    "make_user",
+    "to_lc_messages",
 ]
