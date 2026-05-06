@@ -86,24 +86,10 @@ jobs:
             paths: tests/cli/ tests/nodes/
           - shard: 3-rest
             paths: >-
-              tests/integrations/ tests/services/ tests/remote/
-              tests/utils/ tests/test_guardrails/ tests/app/
-              tests/masking/ tests/pipeline/ tests/types/
-              tests/analytics/ tests/benchmarks/ tests/entrypoints/
-              tests/sandbox/ tests/github/
-              tests/test_auth.py tests/test_aws_urls.py
-              tests/test_bug_fixes_e2e.py tests/test_chaos_engineering_paths.py
-              tests/test_config.py tests/test_deployment_health.py
-              tests/test_devcontainer.py tests/test_dockerfile.py
-              tests/test_ec2_deploy.py tests/test_ec2_instance.py
-              tests/test_elasticsearch_client.py tests/test_google_docs.py
-              tests/test_kill_switch_matrix.py tests/test_llm_credentials.py
-              tests/test_main.py tests/test_mariadb_integration.py
-              tests/test_mongodb_atlas_integration.py tests/test_mongodb_integration.py
-              tests/test_naming_conventions.py tests/test_openclaw_integration.py
-              tests/test_output.py tests/test_sentry_init.py
-              tests/test_state.py tests/test_version.py tests/test_webapp.py
-              tests/chaos_engineering/ tests/deployment/ tests/cli_smoke_test.py
+              tests/
+              --ignore=tests/tools/
+              --ignore=tests/cli/
+              --ignore=tests/nodes/
 
     runs-on: ubuntu-latest
     timeout-minutes: 15
