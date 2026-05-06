@@ -30,6 +30,7 @@ from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.shell_execution import execute_shell_command
 from app.cli.interactive_shell.shell_policy import parse_shell_command
 from app.cli.interactive_shell.tasks import TaskKind, TaskRecord
+from app.cli.interactive_shell.theme import TERMINAL_ERROR
 from app.cli.support.errors import OpenSREError
 
 SHELL_COMMAND_TIMEOUT_SECONDS = 120
@@ -199,10 +200,14 @@ def run_shell_command(
     print_command_output(console, result.stdout)
     print_command_output(console, result.stderr, style="red")
     ok = result.exit_code == 0
-    if not ok:
-        console.print(f"[red]exit code:[/red] {result.exit_code}")
-    elif not result.stdout and not result.stderr:
-        console.print("[dim]exit code: 0[/dim]")
+    had_stdout = bool((result.stdout or "").strip())
+    had_stderr = bool((result.stderr or "").strip())
+    if ok:
+        if not had_stdout and not had_stderr:
+            console.print("[dim]✓[/dim]")
+    else:
+        code = result.exit_code if result.exit_code is not None else "?"
+        console.print(f"[{TERMINAL_ERROR}]✗[/] exit {code}")
     session.record("shell", command, ok=ok)
 
 

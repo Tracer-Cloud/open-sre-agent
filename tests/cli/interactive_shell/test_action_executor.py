@@ -19,6 +19,7 @@ from app.cli.interactive_shell.action_executor import (
     terminate_child_process,
 )
 from app.cli.interactive_shell.session import ReplSession
+from app.cli.interactive_shell.shell_execution import ShellExecutionResult
 from app.cli.interactive_shell.shell_policy import PolicyDecision
 
 
@@ -105,6 +106,62 @@ def test_run_shell_command_records_when_policy_blocks(monkeypatch: pytest.Monkey
     assert "test block" in buf.getvalue()
     assert "cancelled" in buf.getvalue().lower()
     assert session.history[-1] == {"type": "shell", "text": "rm -rf /nope", "ok": False}
+
+
+def test_run_shell_command_silent_success_prints_checkmark(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _fake_execute(**_kwargs: object) -> ShellExecutionResult:
+        return ShellExecutionResult(
+            command="true",
+            argv=["true"],
+            stdout="",
+            stderr="",
+            exit_code=0,
+            timed_out=False,
+            truncated=False,
+            executed_with_shell=False,
+        )
+
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.action_executor.execute_shell_command",
+        _fake_execute,
+    )
+
+    session = ReplSession()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    run_shell_command("true", session, console)
+    assert "✓" in buf.getvalue()
+    assert session.history[-1] == {"type": "shell", "text": "true", "ok": True}
+
+
+def test_run_shell_command_failure_prints_exit_line(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _fake_execute(**_kwargs: object) -> ShellExecutionResult:
+        return ShellExecutionResult(
+            command="false",
+            argv=["false"],
+            stdout="",
+            stderr="",
+            exit_code=7,
+            timed_out=False,
+            truncated=False,
+            executed_with_shell=False,
+        )
+
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.action_executor.execute_shell_command",
+        _fake_execute,
+    )
+
+    session = ReplSession()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    run_shell_command("false", session, console)
+    out = buf.getvalue()
+    assert "✗" in out
+    assert "exit 7" in out
+    assert session.history[-1] == {"type": "shell", "text": "false", "ok": False}
 
 
 def test_run_synthetic_test_unknown_suite_records_failure() -> None:

@@ -637,7 +637,7 @@ def test_execute_cli_actions_records_shell_failure(monkeypatch: object) -> None:
     assert session.history[-1] == {"type": "shell", "text": "false", "ok": False}
     output = buf.getvalue()
     assert "nope" in output
-    assert "exit code" in output
+    assert "exit 2" in output
 
 
 def test_execute_cli_actions_runs_passthrough_with_shell_true(monkeypatch: object) -> None:
