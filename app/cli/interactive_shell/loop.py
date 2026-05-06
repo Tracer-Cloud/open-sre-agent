@@ -27,7 +27,7 @@ from app.cli.interactive_shell.commands import SLASH_COMMANDS, dispatch_slash
 from app.cli.interactive_shell.config import ReplConfig
 from app.cli.interactive_shell.follow_up import answer_follow_up
 from app.cli.interactive_shell.history import load_prompt_history
-from app.cli.interactive_shell.router import _BARE_COMMAND_ALIASES, classify_input
+from app.cli.interactive_shell.router import BARE_COMMAND_ALIASES, classify_input
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.theme import (
     ANSI_RESET,
@@ -77,14 +77,14 @@ class ReplInputLexer(Lexer):
             parts = stripped.split(maxsplit=1)
             first = parts[0]
             tail = stripped[len(first) :]
-            if first.lower() in _BARE_COMMAND_ALIASES:
-                out: StyleAndTextTuples = []
+            if first.lower() in BARE_COMMAND_ALIASES:
+                bare_line: StyleAndTextTuples = []
                 if lead:
-                    out.append(("", lead))
-                out.append((self._CMD_STYLE, first))
+                    bare_line.append(("", lead))
+                bare_line.append((self._CMD_STYLE, first))
                 if tail:
-                    out.append(("", tail))
-                return out
+                    bare_line.append(("", tail))
+                return bare_line
 
             return [("", line)]
 
@@ -177,7 +177,7 @@ class ShellCompleter(Completer):
             if " " in text:
                 return
             needle = text.lower()
-            for alias in sorted(_BARE_COMMAND_ALIASES):
+            for alias in sorted(BARE_COMMAND_ALIASES):
                 if alias.startswith(needle) and alias != needle:
                     yield Completion(
                         alias,
@@ -207,22 +207,22 @@ class ShellCompleter(Completer):
         # Level 1: /command [partial] → subcommand keywords or file paths
         if len(parts) <= 2:
             cmd_name = parts[0].lower()
-            sub_prefix = "" if trailing_space or len(parts) < 2 else parts[1].lower()
+            raw_arg = "" if trailing_space or len(parts) < 2 else parts[1]
 
             # File-path completion for commands that take a path argument
             if cmd_name in ("/investigate", "/save"):
-                typed = sub_prefix
+                typed = raw_arg
                 yield from PathCompleter(expanduser=True).get_completions(
                     Document(typed, len(typed)), complete_event
                 )
                 return
 
-            # Keyword subcommand completion
+            sub_prefix = raw_arg.lower()
             for sub, meta in self._SUBCOMMANDS.get(cmd_name, []):
                 if sub.startswith(sub_prefix):
                     yield Completion(
                         sub,
-                        start_position=-len(sub_prefix),
+                        start_position=-len(raw_arg),
                         display=sub,
                         display_meta=meta,
                     )

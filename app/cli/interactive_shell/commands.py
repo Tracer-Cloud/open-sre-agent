@@ -677,9 +677,7 @@ def _cmd_save(session: ReplSession, console: Console, args: list[str]) -> bool:
         return True
 
     if not args:
-        console.print(
-            "[dim]usage:[/dim] /save <path>  (e.g. /save report.md or /save out.json)"
-        )
+        console.print("[dim]usage:[/dim] /save <path>  (e.g. /save report.md or /save out.json)")
         return True
 
     dest = Path(args[0])
@@ -710,7 +708,9 @@ def _cmd_context(session: ReplSession, console: Console, args: list[str]) -> boo
         console.print("[dim]no infra context accumulated yet.[/dim]")
         return True
 
-    table = _repl_table(title="Accumulated context", title_style=TERMINAL_ACCENT_BOLD, show_header=False)
+    table = _repl_table(
+        title="Accumulated context", title_style=TERMINAL_ACCENT_BOLD, show_header=False
+    )
     table.add_column("key", style="bold")
     table.add_column("value")
     for k, v in sorted(session.accumulated_context.items()):
