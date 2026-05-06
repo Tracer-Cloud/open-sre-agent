@@ -6,7 +6,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from app.cli.interactive_shell.command_registry import repl_data
-from app.cli.interactive_shell.command_registry.types import SlashCommand
+from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
 from app.cli.interactive_shell.rendering import (
     render_integrations_table,
     render_mcp_table,
@@ -145,6 +145,7 @@ COMMANDS: list[SlashCommand] = [
         "('/list integrations', '/list models', '/list mcp')",
         _cmd_list,
         first_arg_completions=_LIST_FIRST_ARGS,
+        execution_tier=ExecutionTier.SAFE,
     ),
     SlashCommand(
         "/integrations",
@@ -152,12 +153,14 @@ COMMANDS: list[SlashCommand] = [
         "'/integrations show <service>')",
         _cmd_integrations,
         first_arg_completions=_INTEGRATIONS_FIRST_ARGS,
+        execution_tier=ExecutionTier.SAFE,
     ),
     SlashCommand(
         "/mcp",
         "manage MCP servers ('/mcp list', '/mcp connect', '/mcp disconnect')",
         _cmd_mcp,
         first_arg_completions=_MCP_FIRST_ARGS,
+        execution_tier=ExecutionTier.SAFE,
     ),
 ]
 

@@ -29,8 +29,7 @@ class ReplSession:
     earlier investigations that should seed future ones."""
 
     trust_mode: bool = False
-    """If True, skip any future [Y/n] confirmation prompts for read-only tools.
-    (No destructive tools exist today; reserved for forward compatibility.)"""
+    """When True, confirmation prompts for elevated REPL actions are skipped."""
 
     token_usage: dict[str, int] = field(default_factory=dict)
     """Accumulated token counts: {"input": N, "output": N}. Populated when available."""

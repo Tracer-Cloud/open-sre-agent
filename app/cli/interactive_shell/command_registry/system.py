@@ -6,7 +6,7 @@ import platform
 
 from rich.console import Console
 
-from app.cli.interactive_shell.command_registry.types import SlashCommand
+from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
 from app.cli.interactive_shell.rendering import repl_table
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
@@ -74,8 +74,10 @@ def _cmd_version(session: ReplSession, console: Console, args: list[str]) -> boo
 
 
 COMMANDS: list[SlashCommand] = [
-    SlashCommand("/exit", "exit the interactive shell", _cmd_exit),
-    SlashCommand("/quit", "alias for /exit", _cmd_exit),
+    SlashCommand(
+        "/exit", "exit the interactive shell", _cmd_exit, execution_tier=ExecutionTier.EXEMPT
+    ),
+    SlashCommand("/quit", "alias for /exit", _cmd_exit, execution_tier=ExecutionTier.EXEMPT),
     SlashCommand("/health", "show integration and agent health", _cmd_health),
     SlashCommand("/doctor", "run full environment diagnostic", _cmd_doctor),
     SlashCommand("/version", "print version, Python and OS info", _cmd_version),

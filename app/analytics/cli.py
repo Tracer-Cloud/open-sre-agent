@@ -110,6 +110,10 @@ def capture_cli_invoked(properties: Properties | None = None) -> None:
     _capture(Event.CLI_INVOKED, properties)
 
 
+def capture_repl_execution_policy_decision(properties: Properties | None = None) -> None:
+    _capture(Event.REPL_EXECUTION_POLICY_DECISION, properties)
+
+
 def capture_onboard_started() -> None:
     _capture(Event.ONBOARD_STARTED)
 

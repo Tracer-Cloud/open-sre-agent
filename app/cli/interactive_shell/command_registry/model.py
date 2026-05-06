@@ -8,7 +8,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from app.cli.interactive_shell.command_registry import repl_data
-from app.cli.interactive_shell.command_registry.types import SlashCommand
+from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
 from app.cli.interactive_shell.rendering import render_models_table
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.theme import TERMINAL_ERROR
@@ -239,6 +239,7 @@ COMMANDS: list[SlashCommand] = [
         "'/model toolcall set <model>')",
         _cmd_model,
         first_arg_completions=_MODEL_FIRST_ARGS,
+        execution_tier=ExecutionTier.SAFE,
     ),
 ]
 

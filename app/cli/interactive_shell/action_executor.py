@@ -10,6 +10,7 @@ import sys
 import tempfile
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -18,10 +19,16 @@ from rich.markup import escape
 from rich.text import Text
 
 import app.cli.interactive_shell.intent_parser as _intent_parser
+from app.cli.interactive_shell.execution_policy import (
+    evaluate_investigation_launch,
+    evaluate_shell_from_parsed,
+    evaluate_synthetic_test_launch,
+    execution_allowed,
+)
 from app.cli.interactive_shell.rendering import print_command_output
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.shell_execution import execute_shell_command
-from app.cli.interactive_shell.shell_policy import evaluate_policy, parse_shell_command
+from app.cli.interactive_shell.shell_policy import parse_shell_command
 from app.cli.interactive_shell.tasks import TaskKind, TaskRecord
 from app.cli.support.errors import OpenSREError
 
@@ -125,18 +132,28 @@ def watch_synthetic_subprocess(
     threading.Thread(target=_run, daemon=True, name=f"synthetic-{task.task_id}").start()
 
 
-def run_shell_command(command: str, session: ReplSession, console: Console) -> None:
-    console.print(f"[bold]$ {escape(command)}[/bold]")
+def run_shell_command(
+    command: str,
+    session: ReplSession,
+    console: Console,
+    *,
+    confirm_fn: Callable[[str], str] | None = None,
+    is_tty: bool | None = None,
+) -> None:
     parsed = parse_shell_command(command, is_windows=_intent_parser.IS_WINDOWS)
-    decision = evaluate_policy(parsed=parsed)
-    if not decision.allow:
-        console.print(
-            f"[yellow]command blocked:[/yellow] {escape(decision.reason or 'not allowed')}"
-        )
-        if decision.hint:
-            console.print(f"[dim]{escape(decision.hint)}[/dim]")
+    policy = evaluate_shell_from_parsed(parsed)
+    if not execution_allowed(
+        policy,
+        session=session,
+        console=console,
+        action_summary=f"$ {command}",
+        confirm_fn=confirm_fn,
+        is_tty=is_tty,
+    ):
         session.record("shell", command, ok=False)
         return
+
+    console.print(f"[bold]$ {escape(command)}[/bold]")
 
     argv_builtin = parsed.argv
     if argv_builtin is None and parsed.passthrough and parsed.command.strip():
@@ -236,8 +253,27 @@ def run_pwd_command(command: str, session: ReplSession, console: Console) -> Non
     session.record("shell", command)
 
 
-def run_sample_alert(template_name: str, session: ReplSession, console: Console) -> None:
+def run_sample_alert(
+    template_name: str,
+    session: ReplSession,
+    console: Console,
+    *,
+    confirm_fn: Callable[[str], str] | None = None,
+    is_tty: bool | None = None,
+) -> None:
     from app.cli.investigation import run_sample_alert_for_session
+
+    policy = evaluate_investigation_launch(action_type="sample_alert")
+    if not execution_allowed(
+        policy,
+        session=session,
+        console=console,
+        action_summary=f"sample alert investigation ({template_name})",
+        confirm_fn=confirm_fn,
+        is_tty=is_tty,
+    ):
+        session.record("alert", f"sample:{template_name}", ok=False)
+        return
 
     console.print(f"[bold]sample alert:[/bold] {escape(template_name)}")
     task = session.task_registry.create(TaskKind.INVESTIGATION)
@@ -273,9 +309,28 @@ def run_sample_alert(template_name: str, session: ReplSession, console: Console)
     session.record("alert", f"sample:{template_name}")
 
 
-def run_synthetic_test(suite_name: str, session: ReplSession, console: Console) -> None:
+def run_synthetic_test(
+    suite_name: str,
+    session: ReplSession,
+    console: Console,
+    *,
+    confirm_fn: Callable[[str], str] | None = None,
+    is_tty: bool | None = None,
+) -> None:
     if suite_name != "rds_postgres":
         console.print(f"[red]unknown synthetic suite:[/red] {escape(suite_name)}")
+        session.record("synthetic_test", suite_name, ok=False)
+        return
+
+    policy = evaluate_synthetic_test_launch()
+    if not execution_allowed(
+        policy,
+        session=session,
+        console=console,
+        action_summary="opensre tests synthetic",
+        confirm_fn=confirm_fn,
+        is_tty=is_tty,
+    ):
         session.record("synthetic_test", suite_name, ok=False)
         return
 

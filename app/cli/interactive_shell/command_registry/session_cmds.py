@@ -8,7 +8,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from app.cli.interactive_shell.banner import render_banner
-from app.cli.interactive_shell.command_registry.types import SlashCommand
+from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
 from app.cli.interactive_shell.rendering import repl_table
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
@@ -138,6 +138,7 @@ COMMANDS: list[SlashCommand] = [
         "toggle trust mode ('/trust off' to disable)",
         _cmd_trust,
         first_arg_completions=_TRUST_FIRST_ARGS,
+        execution_tier=ExecutionTier.EXEMPT,
     ),
     SlashCommand("/status", "show session status", _cmd_status),
     SlashCommand("/context", "show accumulated infra context", _cmd_context),

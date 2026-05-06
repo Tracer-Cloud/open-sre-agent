@@ -81,7 +81,7 @@ def test_run_cd_command_chdirs_to_target(monkeypatch: pytest.MonkeyPatch) -> Non
 
 def test_run_shell_command_records_when_policy_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "app.cli.interactive_shell.action_executor.evaluate_policy",
+        "app.cli.interactive_shell.execution_policy.evaluate_policy",
         lambda **_: PolicyDecision(
             allow=False,
             classification="mutating",
@@ -94,10 +94,16 @@ def test_run_shell_command_records_when_policy_blocks(monkeypatch: pytest.Monkey
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
-    run_shell_command("rm -rf /nope", session, console)
+    run_shell_command(
+        "rm -rf /nope",
+        session,
+        console,
+        confirm_fn=lambda _p: "n",
+        is_tty=True,
+    )
 
     assert "test block" in buf.getvalue()
-    assert "use !" in buf.getvalue().lower() or "passthrough" in buf.getvalue().lower()
+    assert "cancelled" in buf.getvalue().lower()
     assert session.history[-1] == {"type": "shell", "text": "rm -rf /nope", "ok": False}
 
 

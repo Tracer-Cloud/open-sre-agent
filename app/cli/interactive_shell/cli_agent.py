@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 
 from rich.console import Console
 from rich.markdown import Markdown
@@ -168,6 +169,9 @@ def _execute_action_plan(
     actions: list[dict[str, object]],
     session: ReplSession,
     console: Console,
+    *,
+    confirm_fn: Callable[[str], str] | None = None,
+    is_tty: bool | None = None,
 ) -> bool:
     if not actions:
         return False
@@ -176,6 +180,10 @@ def _execute_action_plan(
         dispatch_slash,
         switch_llm_provider,
         switch_toolcall_model,
+    )
+    from app.cli.interactive_shell.execution_policy import (
+        evaluate_llm_runtime_switch,
+        execution_allowed,
     )
 
     console.print()
@@ -221,6 +229,16 @@ def _execute_action_plan(
             if requested_toolcall:
                 slash_label += f" --toolcall-model {requested_toolcall}"
             console.print(f"[bold]$ {escape(slash_label)}[/bold]")
+            pol = evaluate_llm_runtime_switch(action_type="switch_llm_provider")
+            if not execution_allowed(
+                pol,
+                session=session,
+                console=console,
+                action_summary=slash_label,
+                confirm_fn=confirm_fn,
+                is_tty=is_tty,
+            ):
+                continue
             switch_llm_provider(
                 provider,
                 console,
@@ -236,6 +254,16 @@ def _execute_action_plan(
                 console.print("[red]missing model for switch_toolcall_model action[/red]")
                 continue
             console.print(f"[bold]$ /model toolcall set {escape(requested_model)}[/bold]")
+            pol = evaluate_llm_runtime_switch(action_type="switch_toolcall_model")
+            if not execution_allowed(
+                pol,
+                session=session,
+                console=console,
+                action_summary=f"/model toolcall set {requested_model}",
+                confirm_fn=confirm_fn,
+                is_tty=is_tty,
+            ):
+                continue
             switch_toolcall_model(requested_model, console)
             session.record("slash", f"/model toolcall set {requested_model}")
             continue
@@ -245,9 +273,14 @@ def _execute_action_plan(
             if command not in _ALLOWED_SLASH_ACTIONS:
                 console.print(f"[red]unsupported action command:[/red] {escape(command)}")
                 continue
-            session.record("slash", command)
             console.print(f"[bold]$ {escape(command)}[/bold]")
-            dispatch_slash(command, session, console)
+            dispatch_slash(
+                command,
+                session,
+                console,
+                confirm_fn=confirm_fn,
+                is_tty=is_tty,
+            )
             continue
 
         console.print(f"[red]unsupported action:[/red] {escape(kind or '?')}")

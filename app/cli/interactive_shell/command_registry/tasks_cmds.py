@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from rich.console import Console
 from rich.markup import escape
 
-from app.cli.interactive_shell.command_registry.types import SlashCommand
+from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
 from app.cli.interactive_shell.history import load_command_history_entries
 from app.cli.interactive_shell.rendering import repl_table
 from app.cli.interactive_shell.session import ReplSession
@@ -134,6 +134,7 @@ COMMANDS: list[SlashCommand] = [
         "/cancel",
         "cancel a running task by id ('/cancel <task_id>' — see /tasks)",
         _cmd_cancel,
+        execution_tier=ExecutionTier.ELEVATED,
     ),
 ]
 
