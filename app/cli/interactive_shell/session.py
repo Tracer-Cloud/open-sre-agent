@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from prompt_toolkit.history import History
 
 
 @dataclass
@@ -35,6 +38,13 @@ class ReplSession:
 
     cli_agent_messages: list[tuple[str, str]] = field(default_factory=list)
     """LangGraph-free terminal assistant history: alternating (\"user\"|\"assistant\", text)."""
+
+    prompt_history_backend: History | None = None
+    """The live ``prompt_toolkit.History`` object backing the input prompt.
+
+    Stored here so ``/history`` and ``/privacy`` slash commands can mutate
+    its ``paused`` flag (when it is a ``RedactingFileHistory``) without
+    needing access to the ``PromptSession``."""
 
     # Keys from a completed AgentState that carry reusable infra context into
     # the next investigation.  Kept as a class-level tuple so any caller that

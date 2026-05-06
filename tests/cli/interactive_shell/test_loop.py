@@ -14,6 +14,7 @@ from prompt_toolkit.keys import Keys
 from prompt_toolkit.output import DummyOutput
 
 from app.cli.interactive_shell import loop
+from app.cli.interactive_shell.session import ReplSession
 
 
 def test_build_prompt_session_uses_persistent_history(
@@ -23,15 +24,17 @@ def test_build_prompt_session_uses_persistent_history(
     import app.constants as const_module
 
     monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+    session = ReplSession()
 
     with create_app_session(input=DummyInput(), output=DummyOutput()):
-        prompt = loop._build_prompt_session()
+        prompt = loop._build_prompt_session(session)
 
     assert isinstance(prompt.history, FileHistory)
     assert prompt.history.filename == str(tmp_path / "interactive_history")
     assert tmp_path.exists()
     assert isinstance(prompt.completer, loop.SlashCommandCompleter)
     assert prompt.app.key_bindings is not None
+    assert session.prompt_history_backend is prompt.history
 
 
 def test_build_prompt_session_falls_back_to_memory_history(
@@ -43,11 +46,13 @@ def test_build_prompt_session_falls_back_to_memory_history(
     blocked_home = tmp_path / "not-a-directory"
     blocked_home.write_text("", encoding="utf-8")
     monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", blocked_home)
+    session = ReplSession()
 
     with create_app_session(input=DummyInput(), output=DummyOutput()):
-        prompt = loop._build_prompt_session()
+        prompt = loop._build_prompt_session(session)
 
     assert isinstance(prompt.history, InMemoryHistory)
+    assert session.prompt_history_backend is prompt.history
 
 
 def test_slash_completer_previews_all_commands() -> None:

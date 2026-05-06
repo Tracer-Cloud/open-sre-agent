@@ -57,11 +57,13 @@ class SlashCommandCompleter(Completer):
                 )
 
 
-def _build_prompt_session() -> PromptSession[str]:
+def _build_prompt_session(session: ReplSession) -> PromptSession[str]:
+    backend = load_prompt_history()
+    session.prompt_history_backend = backend
     return PromptSession(
         completer=SlashCommandCompleter(),
         complete_while_typing=True,
-        history=load_prompt_history(),
+        history=backend,
         key_bindings=_build_prompt_key_bindings(),
         style=_build_prompt_style(),
     )
@@ -176,7 +178,7 @@ async def _repl_main(initial_input: str | None = None, config: ReplConfig | None
     console = Console(highlight=False, force_terminal=True, color_system="truecolor")
     render_banner(console)
     session = ReplSession()
-    prompt = _build_prompt_session()
+    prompt = _build_prompt_session(session)
 
     # Allow a single pre-seeded input for test harnesses
     if initial_input:
