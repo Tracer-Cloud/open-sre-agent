@@ -630,7 +630,11 @@ class TestInvestigateFileCommand:
 
         captured: list[str] = []
 
-        def _fake(alert_text: str, context_overrides: object = None) -> dict:
+        def _fake(
+            alert_text: str,
+            context_overrides: object = None,
+            cancel_requested: object = None,
+        ) -> dict:
             captured.append(alert_text)
             return {"root_cause": "test cause"}
 
@@ -653,7 +657,11 @@ class TestInvestigateFileCommand:
         alert_file = tmp_path / "alert.json"  # type: ignore[operator]
         alert_file.write_text('{"alert_name": "test"}', encoding="utf-8")  # type: ignore[union-attr]
 
-        def _fake(alert_text: str, context_overrides: object = None) -> dict:
+        def _fake(
+            alert_text: str,
+            context_overrides: object = None,
+            cancel_requested: object = None,
+        ) -> dict:
             return {
                 "root_cause": "disk full",
                 "service": "orders-api",
@@ -873,12 +881,18 @@ class TestCompactCommand:
 
 
 class TestStopCommand:
-    def test_prints_ctrl_c_hint(self) -> None:
+    def test_prints_stop_hints(self) -> None:
         console, buf = _capture()
         dispatch_slash("/stop", ReplSession(), console)
-        assert "Ctrl+C" in buf.getvalue()
+        out = buf.getvalue()
+        assert "Ctrl+C" in out
+        assert "/tasks" in out
+        assert "/cancel" in out
 
-    def test_cancel_alias_same_as_stop(self) -> None:
+
+class TestCancelCommand:
+    def test_usage_without_task_id(self) -> None:
         console, buf = _capture()
         dispatch_slash("/cancel", ReplSession(), console)
-        assert "Ctrl+C" in buf.getvalue()
+        assert "usage" in buf.getvalue().lower()
+        assert "/tasks" in buf.getvalue()

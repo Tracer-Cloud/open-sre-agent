@@ -1,0 +1,217 @@
+"""Tests for REPL task registry and /tasks · /cancel."""
+
+from __future__ import annotations
+
+import io
+from collections.abc import Callable
+from unittest.mock import MagicMock
+
+import pytest
+from rich.console import Console
+
+from app.cli.interactive_shell.commands import dispatch_slash
+from app.cli.interactive_shell.session import ReplSession
+from app.cli.interactive_shell.tasks import TaskKind, TaskRegistry, TaskStatus
+
+
+def _capture() -> tuple[Console, io.StringIO]:
+    buf = io.StringIO()
+    return Console(file=buf, force_terminal=False, highlight=False), buf
+
+
+class TestTaskRecord:
+    def test_lifecycle_completed(self) -> None:
+        reg = TaskRegistry()
+        t = reg.create(TaskKind.INVESTIGATION)
+        assert t.status == TaskStatus.PENDING
+        t.mark_running()
+        assert t.status == TaskStatus.RUNNING
+        t.mark_completed(result="done")
+        assert t.status == TaskStatus.COMPLETED
+        assert t.result == "done"
+        assert t.ended_at is not None
+        t.mark_failed("x")
+        assert t.status == TaskStatus.COMPLETED
+
+    def test_mark_cancelled_idempotent_after_terminal(self) -> None:
+        reg = TaskRegistry()
+        t = reg.create(TaskKind.INVESTIGATION)
+        t.mark_running()
+        t.mark_cancelled()
+        assert t.status == TaskStatus.CANCELLED
+        t.mark_completed(result="nope")
+        assert t.status == TaskStatus.CANCELLED
+
+    def test_request_cancel_sets_event_even_when_pending(self) -> None:
+        reg = TaskRegistry()
+        t = reg.create(TaskKind.INVESTIGATION)
+        assert t.request_cancel() is False
+        assert t.cancel_requested.is_set()
+        assert t.status == TaskStatus.PENDING
+
+    def test_request_cancel_sets_event_and_terminates_process(self) -> None:
+        reg = TaskRegistry()
+        t = reg.create(TaskKind.SYNTHETIC_TEST)
+        t.mark_running()
+        proc = MagicMock()
+        proc.poll.return_value = None
+        t.attach_process(proc)
+        assert t.request_cancel() is True
+        proc.terminate.assert_called_once()
+        assert t.cancel_requested.is_set()
+
+
+class TestTaskRegistry:
+    def test_get_single_prefix_match(self) -> None:
+        reg = TaskRegistry()
+        t = reg.create(TaskKind.INVESTIGATION)
+        assert reg.get(t.task_id[:4]) == t
+        assert reg.get("") is None
+
+    def test_candidates_ambiguous_prefix(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _ids = iter(["11111111", "11112222"])
+
+        def _fake_hex(_nbytes: int) -> str:
+            return next(_ids)
+
+        monkeypatch.setattr("app.cli.interactive_shell.tasks.secrets.token_hex", _fake_hex)
+        session = ReplSession()
+        session.task_registry.create(TaskKind.INVESTIGATION)
+        session.task_registry.create(TaskKind.INVESTIGATION)
+        console, buf = _capture()
+        dispatch_slash("/cancel 1111", session, console)
+        assert "ambiguous" in buf.getvalue().lower()
+
+    def test_ring_buffer_drops_oldest(self) -> None:
+        reg = TaskRegistry(max_tasks=3)
+        first = reg.create(TaskKind.INVESTIGATION)
+        reg.create(TaskKind.INVESTIGATION)
+        reg.create(TaskKind.INVESTIGATION)
+        reg.create(TaskKind.INVESTIGATION)
+        recent_ids = [t.task_id for t in reg.list_recent(10)]
+        assert first.task_id not in recent_ids
+        assert len(recent_ids) == 3
+
+
+class TestSlashTaskCommands:
+    def test_tasks_empty_message(self) -> None:
+        session = ReplSession()
+        console, buf = _capture()
+        dispatch_slash("/tasks", session, console)
+        assert "no tasks" in buf.getvalue().lower()
+
+    def test_tasks_shows_recent_rows(self) -> None:
+        session = ReplSession()
+        t = session.task_registry.create(TaskKind.INVESTIGATION)
+        t.mark_running()
+        t.mark_completed(result="rc")
+        console, buf = _capture()
+        dispatch_slash("/tasks", session, console)
+        out = buf.getvalue()
+        assert t.task_id in out
+        assert "investigation" in out
+        assert "completed" in out
+
+    def test_cancel_usage_without_id(self) -> None:
+        session = ReplSession()
+        console, buf = _capture()
+        dispatch_slash("/cancel", session, console)
+        assert "usage" in buf.getvalue().lower()
+
+    def test_cancel_unknown_id(self) -> None:
+        session = ReplSession()
+        console, buf = _capture()
+        dispatch_slash("/cancel deadbeef", session, console)
+        assert "no task" in buf.getvalue().lower()
+
+    def test_cancel_completed_task_message(self) -> None:
+        session = ReplSession()
+        t = session.task_registry.create(TaskKind.INVESTIGATION)
+        t.mark_running()
+        t.mark_completed(result="x")
+        console, buf = _capture()
+        dispatch_slash(f"/cancel {t.task_id}", session, console)
+        assert "already finished" in buf.getvalue().lower()
+
+    def test_cancel_running_investigation_signals(self) -> None:
+        session = ReplSession()
+        t = session.task_registry.create(TaskKind.INVESTIGATION)
+        t.mark_running()
+        console, buf = _capture()
+        dispatch_slash(f"/cancel {t.task_id}", session, console)
+        out = buf.getvalue()
+        assert "cancellation" in out.lower()
+        assert "Ctrl+C" in out
+
+
+class _ImmediateThread:
+    """Run ``target`` synchronously inside ``start()`` (for deterministic tests)."""
+
+    def __init__(
+        self,
+        group: object = None,
+        target: Callable[[], None] | None = None,
+        name: object = None,
+        args: tuple[object, ...] = (),
+        kwargs: dict[str, object] | None = None,
+        *,
+        daemon: object = None,
+    ) -> None:  # noqa: ARG002 - mimic threading.Thread ctor
+        del group, args, kwargs, daemon, name  # threaded API baggage
+        if target is None:
+            raise TypeError("target required")
+        self._target = target
+
+    def start(self) -> None:
+        self._target()
+
+
+class TestSyntheticSubprocessWatcher:
+    def test_watch_marks_completed_when_process_already_done(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import app.cli.interactive_shell.agent_actions as aa
+
+        monkeypatch.setattr(aa.threading, "Thread", _ImmediateThread)
+
+        proc = MagicMock()
+        proc.poll.return_value = 0
+        proc.returncode = 0
+
+        session = ReplSession()
+        task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
+        task.mark_running()
+        task.attach_process(proc)
+        aa._watch_synthetic_subprocess(task, proc)
+        assert task.status == TaskStatus.COMPLETED
+
+    def test_watch_marks_cancelled_when_requested(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """First poll waits; synthetic sleep fires cancel_request; poll then returns exit code."""
+        import app.cli.interactive_shell.agent_actions as aa
+
+        monkeypatch.setattr(aa.threading, "Thread", _ImmediateThread)
+
+        session = ReplSession()
+        task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
+        task.mark_running()
+        proc = MagicMock()
+
+        pending: list[int | None] = [None]
+
+        def _poll_side() -> int | None:
+            return pending[0] if task.cancel_requested.is_set() else None
+
+        proc.poll.side_effect = _poll_side
+        proc.returncode = 0
+
+        sleeps: list[float] = []
+
+        def _fake_sleep(_secs: float) -> None:
+            sleeps.append(_secs)
+            task.cancel_requested.set()
+            pending[0] = 0
+
+        monkeypatch.setattr(aa.time, "sleep", _fake_sleep)
+        aa._watch_synthetic_subprocess(task, proc)
+        assert task.status == TaskStatus.CANCELLED
+        assert sleeps

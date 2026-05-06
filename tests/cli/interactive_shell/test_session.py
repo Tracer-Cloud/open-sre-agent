@@ -12,6 +12,7 @@ class TestReplSession:
         assert session.last_state is None
         assert session.accumulated_context == {}
         assert session.trust_mode is False
+        assert session.task_registry.list_recent() == []
 
     def test_record_appends_entry(self) -> None:
         session = ReplSession()
@@ -36,6 +37,7 @@ class TestReplSession:
         assert session.last_state is None
         assert session.accumulated_context == {}
         assert session.cli_agent_messages == []
+        assert session.task_registry.list_recent() == []
         assert session.trust_mode is True  # preserved intentionally
 
     def test_accumulate_from_state_extracts_known_keys(self) -> None:

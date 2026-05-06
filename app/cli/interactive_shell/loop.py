@@ -100,24 +100,32 @@ def _build_prompt_style() -> Style:
 
 def _run_new_alert(text: str, session: ReplSession, console: Console) -> None:
     """Dispatch a free-text alert description to the streaming pipeline."""
+    from app.cli.interactive_shell.tasks import TaskKind
     from app.cli.investigation import run_investigation_for_session
 
+    task = session.task_registry.create(TaskKind.INVESTIGATION)
+    task.mark_running()
     try:
         final_state = run_investigation_for_session(
             alert_text=text,
             context_overrides=session.accumulated_context or None,
+            cancel_requested=task.cancel_requested,
         )
     except KeyboardInterrupt:
+        task.mark_cancelled()
         console.print("[yellow]investigation cancelled.[/yellow]")
         session.record("alert", text, ok=False)
         return
     except Exception as exc:  # noqa: BLE001
+        task.mark_failed(str(exc))
         # Exception repr may contain brackets (stack frame refs, config
         # dicts) that Rich would eat as markup tags — escape before printing.
         console.print(f"[red]investigation failed:[/red] {escape(str(exc))}")
         session.record("alert", text, ok=False)
         return
 
+    root = final_state.get("root_cause")
+    task.mark_completed(result=str(root) if root is not None else "")
     session.last_state = final_state
     session.accumulate_from_state(final_state)
     session.record("alert", text)

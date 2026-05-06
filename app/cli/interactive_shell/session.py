@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.cli.interactive_shell.tasks import TaskRegistry
+
 
 @dataclass
 class ReplSession:
@@ -35,6 +37,9 @@ class ReplSession:
 
     cli_agent_messages: list[tuple[str, str]] = field(default_factory=list)
     """LangGraph-free terminal assistant history: alternating (\"user\"|\"assistant\", text)."""
+
+    task_registry: TaskRegistry = field(default_factory=TaskRegistry)
+    """Recent in-flight and completed shell tasks for /tasks and /cancel."""
 
     # Keys from a completed AgentState that carry reusable infra context into
     # the next investigation.  Kept as a class-level tuple so any caller that
@@ -73,4 +78,5 @@ class ReplSession:
         self.accumulated_context.clear()
         self.token_usage.clear()
         self.cli_agent_messages.clear()
+        self.task_registry = TaskRegistry()
         # trust_mode is intentionally preserved across /reset
