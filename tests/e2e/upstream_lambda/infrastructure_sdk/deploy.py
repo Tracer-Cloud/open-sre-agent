@@ -27,7 +27,11 @@ from tests.shared.infrastructure_sdk.resources import api_gateway, iam, lambda_,
 from tests.shared.infrastructure_sdk.resources.iam import get_account_id, put_role_policy
 from tests.shared.infrastructure_sdk.resources.secrets import get_secret_value
 
-project_root = Path(__file__).resolve().parents[3]
+REPO_ROOT = Path(__file__).resolve().parents[4]
+SHARED_TESTS_DIR = REPO_ROOT / "tests" / "shared"
+E2E_CASE_DIR = REPO_ROOT / "tests" / "e2e" / "upstream_lambda"
+MOCK_API_CODE_DIR = SHARED_TESTS_DIR / "external_vendor_api"
+PIPELINE_CODE_DIR = E2E_CASE_DIR / "pipeline_code"
 
 STACK_NAME = "tracer-lambda"
 REGION = "us-east-1"
@@ -185,8 +189,8 @@ def create_lambda_functions(
     print("Creating Lambda functions...")
 
     # Paths
-    shared_dir = project_root / "tests" / "shared" / "external_vendor_api"
-    pipeline_dir = project_root / "tests" / "upstream_lambda" / "pipeline_code"
+    shared_dir = MOCK_API_CODE_DIR
+    pipeline_dir = PIPELINE_CODE_DIR
 
     # Bundle code
     print("  Bundling MockApi Lambda code...")
@@ -403,7 +407,7 @@ def deploy() -> dict:
 
     # 3. Create MockApi Lambda and API Gateway first (for URL)
     print("Creating MockApi Lambda...")
-    shared_dir = project_root / "tests" / "shared" / "external_vendor_api"
+    shared_dir = MOCK_API_CODE_DIR
     mock_api_zip = lambda_.bundle_code(shared_dir)
 
     mock_api_lambda = lambda_.create_function(
@@ -431,7 +435,7 @@ def deploy() -> dict:
 
     # 4. Create pipeline Lambdas with correct URLs
     print("Creating pipeline Lambda functions...")
-    pipeline_dir = project_root / "tests" / "upstream_lambda" / "pipeline_code"
+    pipeline_dir = PIPELINE_CODE_DIR
 
     print("  Bundling pipeline code (dependencies already vendored)...")
     # Use custom bundling that puts vendored deps at root level

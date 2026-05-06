@@ -23,7 +23,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-project_root = Path(__file__).resolve().parents[3]
+REPO_ROOT = Path(__file__).resolve().parents[4]
 
 from app.utils.config import load_env
 from tests.shared.infrastructure_sdk import save_outputs
@@ -57,19 +57,13 @@ MOCK_API_LAMBDA_NAME = "tracer-prefect-ecs-mock-api"
 TRIGGER_LAMBDA_NAME = "tracer-prefect-ecs-trigger"
 
 # Paths
-TESTS_DIR = project_root / "tests"
-PREFECT_DOCKERFILE = (
-    TESTS_DIR
-    / "upstream_prefect_ecs_fargate"
-    / "infrastructure_code"
-    / "prefect_image"
-    / "Dockerfile"
-)
-ALLOY_CONFIG_DIR = TESTS_DIR / "shared" / "infrastructure_code" / "alloy_config"
-MOCK_API_CODE = TESTS_DIR / "shared" / "external_vendor_api"
-TRIGGER_LAMBDA_CODE = (
-    TESTS_DIR / "upstream_prefect_ecs_fargate" / "pipeline_code" / "trigger_lambda"
-)
+TESTS_DIR = REPO_ROOT / "tests"
+SHARED_TESTS_DIR = TESTS_DIR / "shared"
+E2E_CASE_DIR = TESTS_DIR / "e2e" / "upstream_prefect_ecs_fargate"
+PREFECT_DOCKERFILE = E2E_CASE_DIR / "infrastructure_code" / "prefect_image" / "Dockerfile"
+ALLOY_CONFIG_DIR = SHARED_TESTS_DIR / "infrastructure_code" / "alloy_config"
+MOCK_API_CODE_DIR = SHARED_TESTS_DIR / "external_vendor_api"
+TRIGGER_LAMBDA_CODE_DIR = E2E_CASE_DIR / "pipeline_code" / "trigger_lambda"
 
 GRAFANA_ENV_KEYS = [
     "GCLOUD_HOSTED_METRICS_URL",
@@ -240,7 +234,7 @@ def _build_and_push_prefect_image(repo_uri: str) -> str:
         "-f",
         str(PREFECT_DOCKERFILE),
         "--push",
-        str(project_root),
+        str(REPO_ROOT),
     ]
 
     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -289,7 +283,7 @@ def deploy_phase3_ecs(foundation: dict, images: dict) -> dict:
     print_step("Phase 3: ECS Task Definitions & Service")
     results = {}
 
-    grafana_env = _load_grafana_env(project_root / ".env")
+    grafana_env = _load_grafana_env(REPO_ROOT / ".env")
 
     # Build Prefect container definition
     prefect_container = ecs.build_container_definition(
@@ -440,7 +434,7 @@ def deploy_phase4_lambdas(foundation: dict, ecs_resources: dict) -> dict:
     results = {}
 
     # Bundle mock API code
-    mock_api_zip = lambda_.bundle_code(MOCK_API_CODE)
+    mock_api_zip = lambda_.bundle_code(MOCK_API_CODE_DIR)
 
     # Create mock API lambda
     mock_api_lambda = lambda_.create_function(
@@ -513,8 +507,8 @@ def deploy_phase4_lambdas(foundation: dict, ecs_resources: dict) -> dict:
 
     # Bundle trigger lambda code with dependencies
     trigger_zip = lambda_.bundle_code(
-        TRIGGER_LAMBDA_CODE,
-        TRIGGER_LAMBDA_CODE / "requirements.txt",
+        TRIGGER_LAMBDA_CODE_DIR,
+        TRIGGER_LAMBDA_CODE_DIR / "requirements.txt",
     )
 
     # Create trigger lambda
