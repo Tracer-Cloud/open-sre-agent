@@ -9,6 +9,9 @@ Also skips repo insiders (OWNER / MEMBER / COLLABORATOR), bots, closed issues,
 comments on **pull request** threads (``issue_comment`` fires for PRs too; those
 use ``issue.pull_request``), and commenters already listed as assignees.
 
+**One open assignment per eligible new contributor** in this repo: if they already
+have another **open** issue assigned (Search API), they cannot be auto-assigned here.
+
 At most **one** auto-assignment per issue: if anyone else is already an assignee,
 further eligible commenters are skipped (manual pre-assignments count).
 """
@@ -75,11 +78,14 @@ def assign_decision(
     skip_reason_pre_api: str | None,
     merged_pr_count_for_commenter: int,
     open_pr_count_for_commenter: int,
+    open_assigned_issue_count_for_commenter: int,
 ) -> tuple[bool, str]:
     """Return (should_assign_and_comment, skip_reason_or_empty).
 
     Eligible "new contributor" means ``merged_pr_count_for_commenter == 0`` and
     ``open_pr_count_for_commenter == 0`` (PR author in this repo, via Search API).
+    They must also have no other open issues assigned in this repo
+    (``open_assigned_issue_count_for_commenter == 0``).
     """
     if skip_reason_pre_api is not None:
         return False, skip_reason_pre_api
@@ -87,6 +93,8 @@ def assign_decision(
         return False, "has_open_prs"
     if merged_pr_count_for_commenter > 0:
         return False, "has_merged_prs"
+    if open_assigned_issue_count_for_commenter > 0:
+        return False, "already_has_open_assigned_issue"
     return True, ""
 
 
@@ -128,10 +136,14 @@ def fetch_open_pr_count(owner: str, repo: str, login: str, token: str) -> int:
     return _search_issue_total_count(q, token)
 
 
+def fetch_open_assigned_issue_count(owner: str, repo: str, login: str, token: str) -> int:
+    """Count open issues in this repo where ``login`` is an assignee."""
+    q = f"repo:{owner}/{repo} is:issue is:open assignee:{login}"
+    return _search_issue_total_count(q, token)
+
+
 def build_assign_notice_body(*, assignee_login: str) -> str:
-    return (
-        f"@{assignee_login} You've been **assigned** to this issue. Thanks for picking it up."
-    )
+    return f"@{assignee_login} You've been **assigned** to this issue. Thanks for picking it up."
 
 
 def set_github_output(name: str, value: str) -> None:
@@ -156,6 +168,7 @@ def main() -> int:
     pre = screen_event_without_api(event)
     merged_count = 0
     open_count = 0
+    open_assigned_issue_count = 0
 
     if pre is None:
         owner, _, repo = repository.partition("/")
@@ -167,6 +180,7 @@ def main() -> int:
         try:
             merged_count = fetch_merged_pr_count(owner, repo, c_login, token)
             open_count = fetch_open_pr_count(owner, repo, c_login, token)
+            open_assigned_issue_count = fetch_open_assigned_issue_count(owner, repo, c_login, token)
         except urllib.error.URLError as exc:
             print(f"GitHub API request failed: {exc}", file=sys.stderr)
             return 1
@@ -175,6 +189,7 @@ def main() -> int:
         skip_reason_pre_api=pre,
         merged_pr_count_for_commenter=merged_count,
         open_pr_count_for_commenter=open_count,
+        open_assigned_issue_count_for_commenter=open_assigned_issue_count,
     )
 
     if not should:
