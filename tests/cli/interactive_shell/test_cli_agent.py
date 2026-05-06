@@ -40,7 +40,7 @@ def _capture() -> tuple[Console, io.StringIO]:
 
 
 class _FakeLLMResponse:
-    def __init__(self, content: str) -> None:
+    def __init__(self, content: Any) -> None:
         self.content = content
 
 
@@ -93,6 +93,8 @@ class TestSystemPromptTerminology:
         assert _ACTION_RULE in prompt
         assert "switch_llm_provider" in prompt
         assert '"action":"switch_llm_provider"' in prompt
+        assert "claude-code" in prompt
+        assert "gemini-cli" in prompt
 
 
 class TestActionPlanParsing:
@@ -180,6 +182,20 @@ class TestAssistantOutputRendering:
             ("assistant", "Sure thing."),
         ]
 
+    def test_structured_content_blocks_are_rendered(self, monkeypatch: Any) -> None:
+        class _Block:
+            def __init__(self, text: str) -> None:
+                self.text = text
+
+        _patch_llm(monkeypatch, [_Block("First line"), {"text": "Second line"}])
+        session = ReplSession()
+        console, buf = _capture()
+        answer_cli_agent("hello", session, console)
+        output = _strip_ansi(buf.getvalue())
+        assert "First line" in output
+        assert "Second line" in output
+        assert session.cli_agent_messages[-1] == ("assistant", "First line\nSecond line")
+
     def test_llm_failure_prints_red_error_and_does_not_record(self, monkeypatch: Any) -> None:
         class _Boom:
             def invoke(self, prompt: str) -> Any:  # noqa: ARG002
@@ -209,8 +225,8 @@ class TestAssistantOutputRendering:
             '{"actions":[{"action":"switch_llm_provider","provider":"anthropic"}]}',
         )
 
-        import app.cli.interactive_shell.commands as command_module
         import app.cli.wizard.env_sync as env_sync
+        from app.cli.interactive_shell.command_registry import repl_data as repl_data_module
 
         class _Fake:
             provider = "anthropic"
@@ -218,7 +234,10 @@ class TestAssistantOutputRendering:
             anthropic_toolcall_model = "claude-haiku-4-5-20251001"
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
-        monkeypatch.setattr(command_module, "_load_llm_settings", lambda: _Fake())
+        monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: _Fake())
+        # /model set now requires the target provider's credential to exist;
+        # provide one so the cli-agent's planned switch actually runs.
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
 
         session = ReplSession()
         console, buf = _capture()
@@ -252,8 +271,8 @@ class TestAssistantOutputRendering:
             """,
         )
 
-        import app.cli.interactive_shell.commands as command_module
         import app.cli.wizard.env_sync as env_sync
+        from app.cli.interactive_shell.command_registry import repl_data as repl_data_module
 
         class _Fake:
             provider = "anthropic"
@@ -261,7 +280,8 @@ class TestAssistantOutputRendering:
             anthropic_toolcall_model = "claude-haiku-4-5-20251001"
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
-        monkeypatch.setattr(command_module, "_load_llm_settings", lambda: _Fake())
+        monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: _Fake())
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
 
         session = ReplSession()
         console, buf = _capture()

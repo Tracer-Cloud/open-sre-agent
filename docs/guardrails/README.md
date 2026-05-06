@@ -18,20 +18,20 @@ opensre guardrails rules
 
 ## How it works
 
-1. Rules are loaded from `~/.opensre/guardrails.yml` on first LLM call
+1. Rules are loaded from `~/.config/opensre/guardrails.yml` on first LLM call
 2. Before every LLM API request, all message content is scanned against the rules
 3. Depending on the rule action:
    - **redact**: matched text is replaced with `[REDACTED:<rule_name>]`
    - **block**: the request is rejected with a `GuardrailBlockedError`
    - **audit**: the match is logged but text passes through unchanged
-4. All matches are written to `~/.opensre/guardrail_audit.jsonl`
+4. All matches are written to `~/.config/opensre/guardrail_audit.jsonl`
 
 If no `guardrails.yml` exists, all content passes through unchanged with zero
 overhead.
 
 ## Configuration
 
-The config file lives at `~/.opensre/guardrails.yml`. Each rule can use
+The config file lives at `~/.config/opensre/guardrails.yml`. Each rule can use
 regex patterns, keyword lists, or both.
 
 ```yaml
@@ -82,7 +82,7 @@ rules:
 
 ### `opensre guardrails init`
 
-Creates a starter `~/.opensre/guardrails.yml` with common patterns for AWS
+Creates a starter `~/.config/opensre/guardrails.yml` with common patterns for AWS
 keys, credit cards, private keys, and API tokens. Does not overwrite an
 existing config.
 
@@ -104,7 +104,7 @@ Lists all configured rules with their action and status.
 
 ### `opensre guardrails audit`
 
-Shows recent entries from the audit log at `~/.opensre/guardrail_audit.jsonl`.
+Shows recent entries from the audit log at `~/.config/opensre/guardrail_audit.jsonl`.
 
 ## Health check
 
@@ -113,8 +113,8 @@ Shows recent entries from the audit log at `~/.opensre/guardrail_audit.jsonl`.
 ```
 CLI
   environment: development
-  integration store: ~/.tracer/integrations.json
-  guardrails: 5 rules active (~/.opensre/guardrails.yml)
+  integration store: ~/.config/opensre/integrations.json
+  guardrails: 5 rules active (~/.config/opensre/guardrails.yml)
 ```
 
 ## Coverage

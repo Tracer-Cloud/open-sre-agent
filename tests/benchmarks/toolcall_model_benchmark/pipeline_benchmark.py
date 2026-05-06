@@ -14,11 +14,10 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
-from langchain_core.runnables import RunnableConfig
-
 from app.pipeline import graph as graph_pipeline
 from app.services import llm_client as llm_mod
 from app.state import AgentState, make_initial_state
+from app.types.config import NodeConfig
 from tests.benchmarks.toolcall_model_benchmark.pricing import estimate_run_cost_usd
 from tests.synthetic.rds_postgres.run_suite import _build_resolved_integrations
 from tests.synthetic.rds_postgres.scenario_loader import (
@@ -240,7 +239,7 @@ def run_langgraph_investigation_bench(
     llm_calls: list[LLMCallRecord] = []
     initial = make_investigation_state(fixture)
     run_id = uuid.uuid4().hex[:8]
-    config: RunnableConfig = {
+    config: NodeConfig = {
         "configurable": {
             "thread_id": f"bench-{run_id}",
             "run_id": run_id,

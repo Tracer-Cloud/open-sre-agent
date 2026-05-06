@@ -104,7 +104,8 @@ curl -fsSL https://install.opensre.com | bash -s -- --main
 ```
 
 ```bash
-brew install Tracer-Cloud/opensre/opensre
+brew tap tracer-cloud/tap
+brew install tracer-cloud/tap/opensre
 ```
 
 ```powershell
@@ -124,6 +125,7 @@ pipx install opensre
 opensre onboard
 opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
 opensre update
+opensre uninstall   # remove opensre and all local data
 ```
 
 ### Interactive mode
@@ -215,6 +217,8 @@ opensre remote ops logs --follow
 ## Development
 
 > **New to OpenSRE?** See [SETUP.md](SETUP.md) for detailed platform-specific setup instructions, including Windows setup, environment configuration, and more.
+
+Local development installs use [uv](https://docs.astral.sh/uv/getting-started/installation/) and a committed `uv.lock` (`make install` runs `uv sync --frozen --extra dev`). Install uv first, then:
 
 ```bash
 git clone https://github.com/Tracer-Cloud/opensre
@@ -1173,6 +1177,152 @@ Thanks goes to these amazing people:
             <sub><b>Diwansu-pilania</b></sub>
         </a>
     </td>
+            <td align="center">
+        <a href="https://github.com/AniketR10">
+            <img src="https://avatars.githubusercontent.com/u/169879837?v=4" width="100" alt="AniketR10"/>
+            <br />
+            <sub><b>AniketR10</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/Jai0401">
+            <img src="https://avatars.githubusercontent.com/u/112328542?v=4" width="100" alt="Jai0401"/>
+            <br />
+            <sub><b>Jai0401</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/shivambehl">
+            <img src="https://avatars.githubusercontent.com/u/41379568?v=4" width="100" alt="shivambehl"/>
+            <br />
+            <sub><b>shivambehl</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/retr0-kernel">
+            <img src="https://avatars.githubusercontent.com/u/82054542?v=4" width="100" alt="retr0-kernel"/>
+            <br />
+            <sub><b>retr0-kernel</b></sub>
+        </a>
+    </td>
+		</tr>
+		<tr>
+            <td align="center">
+        <a href="https://github.com/IsaacOdeimor">
+            <img src="https://avatars.githubusercontent.com/u/218982227?v=4" width="100" alt="IsaacOdeimor"/>
+            <br />
+            <sub><b>IsaacOdeimor</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/RajGajjar-01">
+            <img src="https://avatars.githubusercontent.com/u/153660066?v=4" width="100" alt="RajGajjar-01"/>
+            <br />
+            <sub><b>RajGajjar-01</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/4arjun">
+            <img src="https://avatars.githubusercontent.com/u/144534911?v=4" width="100" alt="4arjun"/>
+            <br />
+            <sub><b>4arjun</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/cloudenochcsis">
+            <img src="https://avatars.githubusercontent.com/u/155973884?v=4" width="100" alt="cloudenochcsis"/>
+            <br />
+            <sub><b>cloudenochcsis</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/Thibault00">
+            <img src="https://avatars.githubusercontent.com/u/84420566?v=4" width="100" alt="Thibault00"/>
+            <br />
+            <sub><b>Thibault00</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/umeraamir09">
+            <img src="https://avatars.githubusercontent.com/u/130839691?v=4" width="100" alt="umeraamir09"/>
+            <br />
+            <sub><b>umeraamir09</b></sub>
+        </a>
+    </td>
+		</tr>
+		<tr>
+            <td align="center">
+        <a href="https://github.com/aksKrIITK">
+            <img src="https://avatars.githubusercontent.com/u/196282905?v=4" width="100" alt="aksKrIITK"/>
+            <br />
+            <sub><b>aksKrIITK</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/zerone0x">
+            <img src="https://avatars.githubusercontent.com/u/39543393?v=4" width="100" alt="zerone0x"/>
+            <br />
+            <sub><b>zerone0x</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/Powlisher">
+            <img src="https://avatars.githubusercontent.com/u/200061014?v=4" width="100" alt="Powlisher"/>
+            <br />
+            <sub><b>Powlisher</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/vidhishah2209">
+            <img src="https://avatars.githubusercontent.com/u/179381557?v=4" width="100" alt="vidhishah2209"/>
+            <br />
+            <sub><b>vidhishah2209</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/aayushprsingh">
+            <img src="https://avatars.githubusercontent.com/u/172073271?v=4" width="100" alt="aayushprsingh"/>
+            <br />
+            <sub><b>aayushprsingh</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/shubh586">
+            <img src="https://avatars.githubusercontent.com/u/176175004?v=4" width="100" alt="shubh586"/>
+            <br />
+            <sub><b>shubh586</b></sub>
+        </a>
+    </td>
+		</tr>
+		<tr>
+            <td align="center">
+        <a href="https://github.com/mazenessam77">
+            <img src="https://avatars.githubusercontent.com/u/184118745?v=4" width="100" alt="mazenessam77"/>
+            <br />
+            <sub><b>mazenessam77</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/mstejas610">
+            <img src="https://avatars.githubusercontent.com/u/116860222?v=4" width="100" alt="mstejas610"/>
+            <br />
+            <sub><b>mstejas610</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/jeetjawale">
+            <img src="https://avatars.githubusercontent.com/u/112877983?v=4" width="100" alt="jeetjawale"/>
+            <br />
+            <sub><b>jeetjawale</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/rudra496">
+            <img src="https://avatars.githubusercontent.com/u/78224940?v=4" width="100" alt="rudra496"/>
+            <br />
+            <sub><b>rudra496</b></sub>
+        </a>
+    </td>
 		</tr>
 	</tbody>
 </table>
@@ -1192,34 +1342,42 @@ See [SECURITY.md](SECURITY.md) for responsible disclosure.
 
 ---
 
-## Telemetry
+## Telemetry & privacy
 
-`opensre` collects anonymous usage statistics with Posthog to help us understand adoption
-and demonstrate traction to sponsors and investors who fund the project.
-What we collect: command name, success/failure, rough runtime, CLI version,
-Python version, OS family, machine architecture, and a small amount of
-command-specific metadata such as which subcommand ran. For `opensre onboard`
-and `opensre investigate`, we may also collect the selected model/provider and
-whether the command used flags such as `--interactive` or `--input`.
+`opensre` ships with two telemetry stacks, both opt-out:
 
-A randomly generated anonymous ID is created on first run and stored in
-`~/.config/opensre/`. We never collect alert contents, file contents,
-hostnames, credentials, or any personally identifiable information.
+- **PostHog** for anonymous product analytics (which commands are used, success/failure, rough runtime, CLI version, Python version, OS family, machine architecture, and a small amount of command-specific metadata such as which subcommand ran). For `opensre onboard` and `opensre investigate`, we may also collect the selected model/provider and whether the command used flags such as `--interactive` or `--input`.
+- **Sentry** for crash and error reports (stack traces, environment, release tag). Stack traces are scrubbed for home-directory paths; auth headers, cookies, query strings on HTTP breadcrumbs, and obvious secret keys (`*_token`, `*_key`, `*_secret`, `*_password`) are filtered before transport.
 
-Telemetry is automatically disabled in GitHub Actions and pytest runs.
+A randomly generated anonymous install ID is created on first run and stored in `~/.config/opensre/anonymous_id`. PostHog `distinct_id` values are scoped to that install ID, so unique-user counts represent unique CLI installs/devices rather than command invocations. One-time lifecycle events use deterministic event IDs to avoid duplicate rows if they are retried.
 
-To opt out locally, set the environment variable before running:
+We never collect alert contents, file contents, hostnames, credentials, raw command arguments, or any other personally identifiable information. Telemetry is automatically disabled in GitHub Actions and pytest runs.
+
+### Kill-switch matrix
+
+| Env var | PostHog | Sentry |
+| --- | --- | --- |
+| `OPENSRE_NO_TELEMETRY=1` | disabled | disabled |
+| `DO_NOT_TRACK=1` | disabled | disabled |
+| `OPENSRE_ANALYTICS_DISABLED=1` | disabled | unaffected |
+| `OPENSRE_SENTRY_DISABLED=1` | unaffected | disabled |
+
+For full opt-out:
 
 ```bash
 export OPENSRE_NO_TELEMETRY=1
 ```
 
-The legacy alias `OPENSRE_ANALYTICS_DISABLED=1` also still works.
+### Overriding the Sentry DSN
 
-To inspect the payload locally without sending anything, use:
+Self-hosted users can route errors to their own Sentry project by setting `SENTRY_DSN` in the environment before invoking `opensre`. Leaving it unset uses the bundled default DSN. Setting `SENTRY_DSN=` (empty) drops all events at the `before_send` hook.
+
+### Inspecting outbound events
+
+To inspect what `opensre` is sending to PostHog, every event is also appended to `~/.config/opensre/posthog_events.txt` by default. The file rotates at 1000 lines (older lines move to `posthog_events.txt.1`, overwriting any prior backup) so it never grows unbounded. To disable local logging:
 
 ```bash
-export OPENSRE_TELEMETRY_DEBUG=1
+export OPENSRE_ANALYTICS_LOG_EVENTS=0
 ```
 
 ## License

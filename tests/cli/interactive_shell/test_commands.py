@@ -9,8 +9,10 @@ import pytest
 from prompt_toolkit.history import FileHistory
 from rich.console import Console
 
+from app.cli.interactive_shell.command_registry import repl_data as repl_data_module
 from app.cli.interactive_shell.commands import SLASH_COMMANDS, dispatch_slash
 from app.cli.interactive_shell.session import ReplSession
+from app.cli.interactive_shell.tasks import TaskKind, TaskStatus
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -83,6 +85,8 @@ class TestDispatchSlash:
         output = buf.getvalue()
         assert "interactions" in output
         assert "trust mode" in output
+        assert "grounding cli cache" in output
+        assert "grounding docs cache" in output
 
     def test_unknown_command_does_not_exit(self) -> None:
         session = ReplSession()
@@ -134,12 +138,9 @@ class TestListCommand:
     ]
 
     def _patch_verify(self, monkeypatch: object) -> None:
-        # Import inside test to match the lazy-import used by the handler.
-        from app.cli.interactive_shell import commands as cmd_module
-
-        monkeypatch.setattr(  # type: ignore[attr-defined]
-            cmd_module,
-            "_load_verified_integrations",
+        monkeypatch.setattr(
+            repl_data_module,
+            "load_verified_integrations",
             lambda: list(self._FAKE_INTEGRATIONS),
         )
 
@@ -171,16 +172,13 @@ class TestListCommand:
 
     def _patch_llm(self, monkeypatch: object) -> None:
         """Provide a stable fake LLMSettings so the test doesn't depend on env."""
-        from app.cli.interactive_shell import commands as cmd_module
 
         class _FakeLLM:
             provider = "anthropic"
             anthropic_reasoning_model = "claude-opus-4"
             anthropic_toolcall_model = "claude-haiku-4"
 
-        monkeypatch.setattr(  # type: ignore[attr-defined]
-            cmd_module, "_load_llm_settings", lambda: _FakeLLM()
-        )
+        monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: _FakeLLM())
 
     def test_list_models_shows_provider_and_models(self, monkeypatch: object) -> None:
         self._patch_llm(monkeypatch)
@@ -193,15 +191,11 @@ class TestListCommand:
         assert "anthropic" in output
 
     def test_list_models_shows_ollama_model(self, monkeypatch: object) -> None:
-        from app.cli.interactive_shell import commands as cmd_module
-
         class _FakeLLM:
             provider = "ollama"
             ollama_model = "qwen2.5:7b"
 
-        monkeypatch.setattr(  # type: ignore[attr-defined]
-            cmd_module, "_load_llm_settings", lambda: _FakeLLM()
-        )
+        monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: _FakeLLM())
         console, buf = _capture()
         dispatch_slash("/list models", ReplSession(), console)
         output = buf.getvalue()
@@ -210,11 +204,7 @@ class TestListCommand:
         assert "default" not in output
 
     def test_list_models_handles_missing_env_gracefully(self, monkeypatch: object) -> None:
-        from app.cli.interactive_shell import commands as cmd_module
-
-        monkeypatch.setattr(  # type: ignore[attr-defined]
-            cmd_module, "_load_llm_settings", lambda: None
-        )
+        monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: None)
         console, buf = _capture()
         dispatch_slash("/list models", ReplSession(), console)
         assert "LLM settings unavailable" in buf.getvalue()
@@ -238,11 +228,9 @@ class TestListCommand:
         assert "/list integrations" in output
 
     def test_list_empty_integrations_prints_onboarding_hint(self, monkeypatch: object) -> None:
-        from app.cli.interactive_shell import commands as cmd_module
-
-        monkeypatch.setattr(  # type: ignore[attr-defined]
-            cmd_module,
-            "_load_verified_integrations",
+        monkeypatch.setattr(
+            repl_data_module,
+            "load_verified_integrations",
             list,  # callable returning []
         )
         console, buf = _capture()
@@ -263,9 +251,11 @@ class TestIntegrationsCommand:
     ]
 
     def _patch(self, monkeypatch: object) -> None:
-        from app.cli.interactive_shell import commands as m
-
-        monkeypatch.setattr(m, "_load_verified_integrations", lambda: list(self._FAKE))  # type: ignore[attr-defined]
+        monkeypatch.setattr(
+            repl_data_module,
+            "load_verified_integrations",
+            lambda: list(self._FAKE),
+        )
 
     def test_list_shows_non_mcp_services(self, monkeypatch: object) -> None:
         self._patch(monkeypatch)
@@ -287,12 +277,10 @@ class TestIntegrationsCommand:
         assert "need attention" in buf.getvalue()
 
     def test_verify_all_ok(self, monkeypatch: object) -> None:
-        from app.cli.interactive_shell import commands as m
-
         monkeypatch.setattr(
-            m,
-            "_load_verified_integrations",
-            lambda: [  # type: ignore[attr-defined]
+            repl_data_module,
+            "load_verified_integrations",
+            lambda: [
                 {"service": "datadog", "source": "env", "status": "ok", "detail": "ok"},
             ],
         )
@@ -332,9 +320,11 @@ class TestMcpCommand:
     ]
 
     def _patch(self, monkeypatch: object) -> None:
-        from app.cli.interactive_shell import commands as m
-
-        monkeypatch.setattr(m, "_load_verified_integrations", lambda: list(self._FAKE))  # type: ignore[attr-defined]
+        monkeypatch.setattr(
+            repl_data_module,
+            "load_verified_integrations",
+            lambda: list(self._FAKE),
+        )
 
     def test_list_shows_mcp_services(self, monkeypatch: object) -> None:
         self._patch(monkeypatch)
@@ -367,14 +357,12 @@ class TestMcpCommand:
 
 class TestModelCommand:
     def _patch_llm(self, monkeypatch: object) -> None:
-        from app.cli.interactive_shell import commands as m
-
         class _Fake:
             provider = "anthropic"
             anthropic_reasoning_model = "claude-opus-4"
             anthropic_toolcall_model = "claude-haiku-4"
 
-        monkeypatch.setattr(m, "_load_llm_settings", lambda: _Fake())  # type: ignore[attr-defined]
+        monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: _Fake())
 
     def test_show_displays_model_info(self, monkeypatch: object) -> None:
         self._patch_llm(monkeypatch)
@@ -397,18 +385,172 @@ class TestModelCommand:
         import app.cli.wizard.env_sync as env_sync
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
+        # /model set now refuses to half-update .env when the target provider
+        # has no usable credential; supply one so the happy path still runs.
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
         console, buf = _capture()
         dispatch_slash("/model set anthropic", ReplSession(), console)
 
         output = buf.getvalue()
         assert "switched LLM provider" in output
         assert "anthropic" in output
+        # Reviewer (#1192) couldn't tell from "anthropic (X)" which slot the
+        # model went into; the success message must now explicitly label the
+        # reasoning slot and name the env var it lands in.
+        assert "reasoning model:" in output
+        assert "ANTHROPIC_REASONING_MODEL" in output
         assert "LLM_PROVIDER=anthropic" in (tmp_path / ".env").read_text(encoding="utf-8")
+
+    def test_set_refuses_when_credential_missing(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """Reviewer ask (#1192): if the target provider has no API key in env
+        or keyring, /model set must NOT touch .env or os.environ — otherwise
+        the user lands in a broken half-state where LLM_PROVIDER points at a
+        provider with no usable credential and the next /model show prints
+        'LLM settings unavailable'."""
+        self._patch_llm(monkeypatch)
+        import app.cli.wizard.env_sync as env_sync
+
+        env_path = tmp_path / ".env"
+        monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        # Keyring lookups in CI / sandboxes are flaky; force the helper into
+        # the env-only path so the test is deterministic.
+        monkeypatch.setenv("OPENSRE_DISABLE_KEYRING", "1")
+        # LLM_PROVIDER must not be rewritten by a rejected switch — capture
+        # what it was before so we can assert it is unchanged.
+        monkeypatch.setenv("LLM_PROVIDER", "gemini")
+
+        console, buf = _capture()
+        dispatch_slash("/model set anthropic", ReplSession(), console)
+
+        output = buf.getvalue()
+        assert "missing credential for anthropic" in output
+        assert "ANTHROPIC_API_KEY" in output
+        assert "switched LLM provider" not in output
+        # No .env should have been written.
+        assert not env_path.exists()
+        # And the live LLM_PROVIDER must be untouched.
+        import os
+
+        assert os.environ.get("LLM_PROVIDER") == "gemini"
 
     def test_set_missing_provider_prints_usage(self) -> None:
         console, buf = _capture()
         dispatch_slash("/model set", ReplSession(), console)
         assert "usage" in buf.getvalue()
+
+    def test_set_with_toolcall_flag_writes_both_env_vars(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """`/model set <provider> [model] --toolcall-model <m>` must persist both."""
+        self._patch_llm(monkeypatch)
+        import app.cli.wizard.env_sync as env_sync
+
+        env_path = tmp_path / ".env"
+        monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+        console, buf = _capture()
+        dispatch_slash(
+            "/model set anthropic claude-opus-4-7 --toolcall-model claude-opus-4-7",
+            ReplSession(),
+            console,
+        )
+
+        output = buf.getvalue()
+        assert "switched LLM provider" in output
+        assert "toolcall model" in output
+        contents = env_path.read_text(encoding="utf-8")
+        assert "LLM_PROVIDER=anthropic" in contents
+        assert "ANTHROPIC_REASONING_MODEL=claude-opus-4-7" in contents
+        assert "ANTHROPIC_TOOLCALL_MODEL=claude-opus-4-7" in contents
+
+    def test_set_unknown_flag_prints_usage(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        self._patch_llm(monkeypatch)
+        import app.cli.wizard.env_sync as env_sync
+
+        monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+        console, buf = _capture()
+        dispatch_slash("/model set anthropic --made-up-flag x", ReplSession(), console)
+        output = buf.getvalue()
+        assert "unknown flag" in output
+        assert "--made-up-flag" in output
+        assert "usage" in output
+
+    def test_set_toolcall_flag_without_value_prints_specific_error(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """Reviewer ask: a missing flag value must say *which* flag, not just
+        echo the generic usage line."""
+        self._patch_llm(monkeypatch)
+        import app.cli.wizard.env_sync as env_sync
+
+        env_path = tmp_path / ".env"
+        monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+        console, buf = _capture()
+        dispatch_slash("/model set anthropic --toolcall-model", ReplSession(), console)
+        output = buf.getvalue()
+        assert "missing value for --toolcall-model" in output
+        # And we must not have written anything to .env on a parse failure.
+        assert not env_path.exists() or "ANTHROPIC_TOOLCALL_MODEL" not in env_path.read_text()
+
+    def test_toolcall_set_updates_only_toolcall_model(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """`/model toolcall set <m>` must persist only the toolcall env var."""
+        self._patch_llm(monkeypatch)
+        import app.cli.wizard.env_sync as env_sync
+
+        env_path = tmp_path / ".env"
+        monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setenv("LLM_PROVIDER", "anthropic")
+
+        console, buf = _capture()
+        dispatch_slash("/model toolcall set claude-opus-4-7", ReplSession(), console)
+
+        output = buf.getvalue()
+        assert "toolcall model set to" in output
+        contents = env_path.read_text(encoding="utf-8")
+        assert "ANTHROPIC_TOOLCALL_MODEL=claude-opus-4-7" in contents
+        # Reasoning model is left untouched.
+        assert "ANTHROPIC_REASONING_MODEL" not in contents
+        # LLM_PROVIDER must not be rewritten by a toolcall-only switch.
+        assert "LLM_PROVIDER=" not in contents
+
+    def test_toolcall_set_missing_arg_prints_usage(self) -> None:
+        console, buf = _capture()
+        dispatch_slash("/model toolcall set", ReplSession(), console)
+        assert "usage" in buf.getvalue()
+
+    def test_toolcall_set_for_codex_provider_is_rejected(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """Providers without a separate toolcall model (codex/claude-code/gemini-cli/ollama)
+        must not silently accept toolcall overrides."""
+        import app.cli.wizard.env_sync as env_sync
+
+        monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
+        monkeypatch.setenv("LLM_PROVIDER", "codex")
+        console, buf = _capture()
+        dispatch_slash("/model toolcall set gpt-5.4", ReplSession(), console)
+        assert "does not expose a separate toolcall model" in buf.getvalue()
 
     def test_switch_alias_switches_provider(
         self,
@@ -419,6 +561,7 @@ class TestModelCommand:
         import app.cli.wizard.env_sync as env_sync
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
         console, buf = _capture()
         dispatch_slash("/model switch anthropic", ReplSession(), console)
 
@@ -475,7 +618,11 @@ class TestInvestigateFileCommand:
 
         captured: list[str] = []
 
-        def _fake(alert_text: str, context_overrides: object = None) -> dict:
+        def _fake(
+            alert_text: str,
+            context_overrides: object = None,
+            cancel_requested: object = None,
+        ) -> dict:
             captured.append(alert_text)
             return {"root_cause": "test cause"}
 
@@ -498,7 +645,11 @@ class TestInvestigateFileCommand:
         alert_file = tmp_path / "alert.json"  # type: ignore[operator]
         alert_file.write_text('{"alert_name": "test"}', encoding="utf-8")  # type: ignore[union-attr]
 
-        def _fake(alert_text: str, context_overrides: object = None) -> dict:
+        def _fake(
+            alert_text: str,
+            context_overrides: object = None,
+            cancel_requested: object = None,
+        ) -> dict:
             return {
                 "root_cause": "disk full",
                 "service": "orders-api",
@@ -519,8 +670,33 @@ class TestInvestigateFileCommand:
             "region": "us-east-1",
         }
 
+    def test_investigate_opensre_error_marks_task_failed(
+        self, tmp_path: object, monkeypatch: object
+    ) -> None:
+        from app.cli.support.errors import OpenSREError
 
-# ---------------------------------------------------------------------------
+        alert_file = tmp_path / "alert.json"  # type: ignore[operator]
+        alert_file.write_text('{"alert_name": "test"}', encoding="utf-8")  # type: ignore[union-attr]
+
+        def _raise(
+            alert_text: str,
+            context_overrides: object = None,
+            cancel_requested: object = None,
+        ) -> dict[str, object]:
+            raise OpenSREError("bad config")
+
+        monkeypatch.setattr("app.cli.investigation.run_investigation_for_session", _raise)
+        session = ReplSession()
+        console, _ = _capture()
+        dispatch_slash(f"/investigate {alert_file}", session, console)
+        inv_tasks = [
+            t for t in session.task_registry.list_recent(10) if t.kind == TaskKind.INVESTIGATION
+        ]
+        assert len(inv_tasks) == 1
+        assert inv_tasks[0].status == TaskStatus.FAILED
+        assert inv_tasks[0].error == "bad config"
+
+
 # Task 4 — Session-state commands
 # ---------------------------------------------------------------------------
 
@@ -717,13 +893,9 @@ class TestCompactCommand:
         assert "compacted" in buf.getvalue()
 
 
-class TestStopCommand:
-    def test_prints_ctrl_c_hint(self) -> None:
-        console, buf = _capture()
-        dispatch_slash("/stop", ReplSession(), console)
-        assert "Ctrl+C" in buf.getvalue()
-
-    def test_cancel_alias_same_as_stop(self) -> None:
+class TestCancelCommand:
+    def test_usage_without_task_id(self) -> None:
         console, buf = _capture()
         dispatch_slash("/cancel", ReplSession(), console)
-        assert "Ctrl+C" in buf.getvalue()
+        assert "usage" in buf.getvalue().lower()
+        assert "/tasks" in buf.getvalue()

@@ -373,7 +373,8 @@ def validate_alertmanager_integration(
     if client is None:
         return IntegrationHealthResult(ok=False, detail="Invalid Alertmanager URL.")
     try:
-        result = client.get_status()
+        with client:
+            result = client.get_status()
         if result.get("success"):
             status_data = result.get("status", {})
             cluster_status = (
@@ -391,8 +392,6 @@ def validate_alertmanager_integration(
         )
     except Exception as err:
         return IntegrationHealthResult(ok=False, detail=f"Alertmanager validation failed: {err}")
-    finally:
-        client.close()
 
 
 def validate_opsgenie_integration(

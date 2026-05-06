@@ -27,14 +27,25 @@ def status_badge(status: str) -> Text:
     return Text(normalized.upper() or "UNKNOWN", style="bold")
 
 
+_STATUS_BUCKETS: dict[str, str] = {
+    "passed": "passed",
+    "pass": "passed",
+    "ok": "passed",
+    "healthy": "passed",
+    "missing": "missing",
+    "failed": "failed",
+    "fail": "failed",
+    "error": "failed",
+    "unhealthy": "failed",
+}
+
+
 def _summary_counts(results: list[dict[str, str]]) -> dict[str, int]:
     counts = {"passed": 0, "missing": 0, "failed": 0, "other": 0}
     for result in results:
         status = str(result.get("status", "")).strip().lower()
-        if status in counts:
-            counts[status] += 1
-        else:
-            counts["other"] += 1
+        bucket = _STATUS_BUCKETS.get(status, "other")
+        counts[bucket] += 1
     return counts
 
 

@@ -17,6 +17,7 @@ def _is_runtime_submodule(module_name: str) -> bool:
 
 
 hiddenimports = collect_submodules("app", filter=_is_runtime_submodule)
+hiddenimports += collect_submodules("sentry_sdk")
 datas = collect_data_files("app")
 
 block_cipher = None

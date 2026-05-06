@@ -4,7 +4,6 @@ import json
 import os
 from typing import Any, Optional, Protocol
 
-from langchain_core.runnables import RunnableConfig
 from langsmith import traceable
 
 from app.investigation_constants import MAX_INVESTIGATION_LOOPS
@@ -12,6 +11,7 @@ from app.masking import MaskingContext
 from app.output import debug_print, get_tracker
 from app.services import get_llm_for_reasoning, parse_root_cause
 from app.state import InvestigationState
+from app.types.config import NodeConfig
 
 from .claim_validator import calculate_validity_score, validate_and_categorize_claims
 from .evidence_checker import (
@@ -405,7 +405,7 @@ def _handle_insufficient_evidence(state: InvestigationState, tracker) -> dict:
 @traceable(name="node_diagnose_root_cause")
 def node_diagnose_root_cause(
     state: InvestigationState,
-    config: Optional[RunnableConfig] = None,  # noqa: ARG001,UP007,UP045
+    config: NodeConfig | None = None,  # noqa: ARG001
 ) -> dict:
     """LangGraph node wrapper with LangSmith tracking."""
     return diagnose_root_cause(state)

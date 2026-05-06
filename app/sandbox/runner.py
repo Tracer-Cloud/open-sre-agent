@@ -12,15 +12,17 @@ import textwrap
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.constants import OPENSRE_TMP_DIR, ensure_opensre_tmp_dir
+
 DEFAULT_TIMEOUT: int = 30
 MAX_TIMEOUT: int = 60
+_SANDBOX_TMP_ROOT = os.path.realpath(os.fspath(OPENSRE_TMP_DIR))
 
 # Preamble injected before user code: blocks network and restricts filesystem writes.
-_SANDBOX_PREAMBLE = textwrap.dedent("""\
+_SANDBOX_PREAMBLE = textwrap.dedent(f"""\
     import socket as _socket_module
     import builtins as _builtins_module
     import os as _os_module
-    import tempfile as _tempfile_module
 
     class _BlockedSocket:
         def __init__(self, *args, **kwargs):
@@ -37,10 +39,7 @@ _SANDBOX_PREAMBLE = textwrap.dedent("""\
     _socket_module.create_connection = _blocked_create_connection
     _socket_module.getaddrinfo = _blocked_getaddrinfo
 
-    _ALLOWED_WRITE_ROOTS = (
-        _os_module.path.realpath(_tempfile_module.gettempdir()),
-        _os_module.path.realpath(_os_module.sep + "tmp"),
-    )
+    _ALLOWED_WRITE_ROOTS = ({_SANDBOX_TMP_ROOT!r},)
 
     _original_open = _builtins_module.open
 
@@ -49,9 +48,12 @@ _SANDBOX_PREAMBLE = textwrap.dedent("""\
             mode_str = str(mode)
             if any(c in mode_str for c in ("w", "a", "x")):
                 abs_path = _os_module.path.realpath(_os_module.fspath(file))
-                if not any(abs_path.startswith(root) for root in _ALLOWED_WRITE_ROOTS):
+                if not any(
+                    abs_path == root or abs_path.startswith(root + _os_module.sep)
+                    for root in _ALLOWED_WRITE_ROOTS
+                ):
                     raise PermissionError(
-                        f"Write access denied outside temp directories: {file}"
+                        f"Write access denied outside the OpenSRE temp directory: {{file}}"
                     )
         return _original_open(file, mode, *args, **kwargs)
 
@@ -101,9 +103,10 @@ def run_python_sandbox(
     """Run Python code in a sandboxed subprocess with timeout and access restrictions.
 
     Network access is blocked by replacing ``socket.socket`` and related helpers
-    with a class that raises ``PermissionError``.  Filesystem writes are restricted
-    to paths under ``/tmp``; any attempt to open a file outside that directory for
-    writing raises ``PermissionError``.  Execution is capped at *timeout* seconds.
+    with a class that raises ``PermissionError``. Filesystem writes are restricted
+    to the OpenSRE temp directory, so any attempt to open a file outside that
+    directory for writing raises ``PermissionError``. Execution is capped at
+    *timeout* seconds.
 
     Args:
         code: Python source code to execute.
@@ -130,7 +133,13 @@ def run_python_sandbox(
 
     tmp_path: str | None = None
     try:
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as tmp:
+        ensure_opensre_tmp_dir()
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".py",
+            delete=False,
+            dir=OPENSRE_TMP_DIR,
+        ) as tmp:
             tmp.write(full_code)
             tmp_path = tmp.name
 

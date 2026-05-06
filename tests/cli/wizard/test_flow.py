@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import os
 from unittest.mock import MagicMock
 
 from app.cli.wizard import flow
 from app.cli.wizard import store as wizard_store
 from app.cli.wizard.env_sync import sync_provider_env
 from app.cli.wizard.probes import ProbeResult
+from tests.integrations.llm_cli.testing_helpers import write_fake_runnable_cli_bin
 
 
 def test_run_wizard_advanced_remote_falls_back_to_local(monkeypatch, tmp_path, capsys) -> None:
@@ -40,15 +42,6 @@ def test_run_wizard_advanced_remote_falls_back_to_local(monkeypatch, tmp_path, c
     monkeypatch.setattr(
         flow, "probe_remote_target", lambda: ProbeResult("remote", True, "remote ok")
     )
-    monkeypatch.setattr(
-        flow,
-        "build_demo_action_response",
-        lambda: {
-            "success": True,
-            "topics": ["recovery_remediation"],
-            "guidance": [{"topic": "recovery_remediation"}],
-        },
-    )
 
     def _save_local_config(**kwargs):
         saved.update(kwargs)
@@ -71,7 +64,7 @@ def test_run_wizard_advanced_remote_falls_back_to_local(monkeypatch, tmp_path, c
     assert saved_llm_keys == [("ANTHROPIC_API_KEY", "secret-key")]
 
     output = capsys.readouterr().out
-    assert "summary" in output
+    assert "next" in output
     assert "Done." in output
 
 
@@ -96,14 +89,55 @@ def test_run_wizard_no_saved_provider_shows_selection(monkeypatch, tmp_path) -> 
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
     monkeypatch.setattr(flow, "save_llm_api_key", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(
-        flow,
-        "build_demo_action_response",
-        lambda: {"success": True, "topics": [], "guidance": []},
-    )
 
     exit_code = flow.run_wizard()
     assert exit_code == 0
+
+
+def test_run_wizard_shows_keyring_fix_steps_when_secure_storage_is_unavailable(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    select_responses = iter(["quickstart", "anthropic"])
+
+    def _mock_select(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(select_responses)
+        return m
+
+    def _mock_password(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = "secret-key"
+        return m
+
+    monkeypatch.setattr(flow, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(flow, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(
+        flow,
+        "save_llm_api_key",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("Secure local credential storage is unavailable on this machine.")
+        ),
+    )
+    monkeypatch.setattr(
+        flow,
+        "get_keyring_setup_instructions",
+        lambda _env_var: (
+            "Current keyring backend: keyring.backends.fail.Keyring.",
+            "Install it first: sudo apt update && sudo apt install -y gnome-keyring dbus-user-session",
+            "Start a D-Bus shell: dbus-run-session -- sh",
+        ),
+    )
+
+    exit_code = flow.run_wizard()
+
+    assert exit_code == 1
+    output = capsys.readouterr().out
+    assert "OpenSRE could not save your API key to the local system keychain." in output
+    assert "Install it first: sudo apt update && sudo apt install -y gnome-keyring" in output
+    assert "dbus-user-session" in output
+    assert "Start a D-Bus shell: dbus-run-session -- sh" in output
 
 
 def test_run_wizard_configures_optional_integrations(monkeypatch, tmp_path, capsys) -> None:
@@ -162,11 +196,6 @@ def test_run_wizard_configures_optional_integrations(monkeypatch, tmp_path, caps
         flow,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
-    )
-    monkeypatch.setattr(
-        flow,
-        "build_demo_action_response",
-        lambda: {"success": True, "topics": ["recovery_remediation"], "guidance": []},
     )
 
     exit_code = flow.run_wizard()
@@ -237,11 +266,6 @@ def test_run_wizard_configures_honeycomb(monkeypatch, tmp_path) -> None:
         flow,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
-    )
-    monkeypatch.setattr(
-        flow,
-        "build_demo_action_response",
-        lambda: {"success": True, "topics": [], "guidance": []},
     )
 
     exit_code = flow.run_wizard()
@@ -318,11 +342,6 @@ def test_run_wizard_configures_coralogix(monkeypatch, tmp_path) -> None:
         flow,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
-    )
-    monkeypatch.setattr(
-        flow,
-        "build_demo_action_response",
-        lambda: {"success": True, "topics": [], "guidance": []},
     )
 
     exit_code = flow.run_wizard()
@@ -420,11 +439,6 @@ def test_run_wizard_configures_github_mcp_and_sentry(monkeypatch, tmp_path, caps
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
-    monkeypatch.setattr(
-        flow,
-        "build_demo_action_response",
-        lambda: {"success": True, "topics": ["recovery_remediation"], "guidance": []},
-    )
 
     exit_code = flow.run_wizard()
 
@@ -501,11 +515,6 @@ def test_run_wizard_reuses_saved_defaults_when_user_keeps_provider(monkeypatch, 
     )
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(flow, "has_llm_api_key", lambda _env: False)
-    monkeypatch.setattr(
-        flow,
-        "build_demo_action_response",
-        lambda: {"success": True, "topics": [], "guidance": []},
-    )
 
     def _save_local_config(**kwargs):
         saved.update(kwargs)
@@ -550,11 +559,6 @@ def test_run_wizard_persists_matching_local_config_and_env(monkeypatch, tmp_path
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
     monkeypatch.setattr(flow, "get_store_path", lambda: store_path)
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
-    monkeypatch.setattr(
-        flow,
-        "build_demo_action_response",
-        lambda: {"success": True, "topics": [], "guidance": []},
-    )
     monkeypatch.setattr(
         flow,
         "save_local_config",
@@ -612,11 +616,6 @@ def test_run_wizard_codex_skips_api_key_and_runs_cli_onboarding(monkeypatch, tmp
     monkeypatch.setattr(flow, "_run_cli_llm_onboarding", _cli_onboarding)
     monkeypatch.setattr(
         flow,
-        "build_demo_action_response",
-        lambda: {"success": True, "topics": [], "guidance": []},
-    )
-    monkeypatch.setattr(
-        flow,
         "save_local_config",
         lambda **kwargs: wizard_store.save_local_config(path=store_path, **kwargs),
     )
@@ -644,6 +643,112 @@ def test_run_wizard_codex_skips_api_key_and_runs_cli_onboarding(monkeypatch, tmp
     assert payload["targets"]["local"]["model_env"] == "CODEX_MODEL"
     assert "LLM_PROVIDER=codex\n" in env_values
     assert "CODEX_MODEL=\n" in env_values
+
+
+def test_run_wizard_claude_code_skips_api_key_and_runs_cli_onboarding(
+    monkeypatch, tmp_path
+) -> None:
+    select_responses = iter(["quickstart", "claude-code", "skip"])
+    saved_llm_keys: list[tuple[str, str]] = []
+    cli_onboarding_providers: list[str] = []
+
+    def _mock_select(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(select_responses)
+        return m
+
+    def _cli_onboarding(provider):
+        cli_onboarding_providers.append(provider.value)
+        return "ok"
+
+    store_path = tmp_path / "opensre.json"
+    env_path = tmp_path / ".env"
+
+    monkeypatch.setattr(flow, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow, "get_store_path", lambda: store_path)
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "_run_cli_llm_onboarding", _cli_onboarding)
+    monkeypatch.setattr(
+        flow,
+        "save_local_config",
+        lambda **kwargs: wizard_store.save_local_config(path=store_path, **kwargs),
+    )
+    monkeypatch.setattr(
+        flow,
+        "sync_provider_env",
+        lambda **kwargs: sync_provider_env(env_path=env_path, **kwargs),
+    )
+    monkeypatch.setattr(
+        flow,
+        "save_llm_api_key",
+        lambda env_var, value: saved_llm_keys.append((env_var, value)),
+    )
+
+    exit_code = flow.run_wizard()
+
+    assert exit_code == 0
+    assert cli_onboarding_providers == ["claude-code"]
+    assert saved_llm_keys == []
+
+    payload = json.loads(store_path.read_text(encoding="utf-8"))
+    env_values = env_path.read_text(encoding="utf-8")
+    assert payload["targets"]["local"]["provider"] == "claude-code"
+    assert payload["targets"]["local"]["api_key_env"] == ""
+    assert payload["targets"]["local"]["model_env"] == "CLAUDE_CODE_MODEL"
+    assert "LLM_PROVIDER=claude-code\n" in env_values
+    assert "CLAUDE_CODE_MODEL=\n" in env_values
+
+
+def test_run_wizard_gemini_cli_skips_api_key_and_runs_cli_onboarding(monkeypatch, tmp_path) -> None:
+    select_responses = iter(["quickstart", "gemini-cli", "skip"])
+    saved_llm_keys: list[tuple[str, str]] = []
+    cli_onboarding_providers: list[str] = []
+
+    def _mock_select(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(select_responses)
+        return m
+
+    def _cli_onboarding(provider):
+        cli_onboarding_providers.append(provider.value)
+        return "ok"
+
+    store_path = tmp_path / "opensre.json"
+    env_path = tmp_path / ".env"
+
+    monkeypatch.setattr(flow, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow, "get_store_path", lambda: store_path)
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "_run_cli_llm_onboarding", _cli_onboarding)
+    monkeypatch.setattr(
+        flow,
+        "save_local_config",
+        lambda **kwargs: wizard_store.save_local_config(path=store_path, **kwargs),
+    )
+    monkeypatch.setattr(
+        flow,
+        "sync_provider_env",
+        lambda **kwargs: sync_provider_env(env_path=env_path, **kwargs),
+    )
+    monkeypatch.setattr(
+        flow,
+        "save_llm_api_key",
+        lambda env_var, value: saved_llm_keys.append((env_var, value)),
+    )
+
+    exit_code = flow.run_wizard()
+
+    assert exit_code == 0
+    assert cli_onboarding_providers == ["gemini-cli"]
+    assert saved_llm_keys == []
+
+    payload = json.loads(store_path.read_text(encoding="utf-8"))
+    env_values = env_path.read_text(encoding="utf-8")
+    assert payload["targets"]["local"]["provider"] == "gemini-cli"
+    assert payload["targets"]["local"]["api_key_env"] == ""
+    assert payload["targets"]["local"]["model_env"] == "GEMINI_CLI_MODEL"
+    assert "LLM_PROVIDER=gemini-cli\n" in env_values
+    assert "GEMINI_CLI_MODEL=\n" in env_values
 
 
 def test_run_cli_llm_onboarding_ok_when_logged_in(monkeypatch) -> None:
@@ -785,12 +890,7 @@ def test_run_cli_llm_onboarding_repick_when_user_chooses_repick(monkeypatch) -> 
 
 
 def test_run_cli_llm_onboarding_path_override_then_ok(monkeypatch, tmp_path) -> None:
-    # Create a real executable so diagnose_binary_path accepts it.
-    fake_bin = tmp_path / "codex"
-    fake_bin.write_bytes(b"")
-    import os as _os
-
-    _os.chmod(fake_bin, 0o700)
+    fake_bin = write_fake_runnable_cli_bin(tmp_path, "codex")
 
     adapter = MagicMock()
     adapter.name = "codex"
@@ -815,7 +915,7 @@ def test_run_cli_llm_onboarding_path_override_then_ok(monkeypatch, tmp_path) -> 
     monkeypatch.setattr(flow, "_prompt_value", lambda *_args, **_kwargs: str(fake_bin))
     monkeypatch.setattr(flow, "sync_env_values", lambda *_args, **_kwargs: None)
 
-    original_codex_bin = _os.environ.get("CODEX_BIN")
+    original_codex_bin = os.environ.get("CODEX_BIN")
     try:
         result = flow._run_cli_llm_onboarding(provider)
 
@@ -823,12 +923,12 @@ def test_run_cli_llm_onboarding_path_override_then_ok(monkeypatch, tmp_path) -> 
         assert len(detect_calls) == 2
         # os.environ must be updated in-process so the next detect() call in the
         # retry loop resolves the new binary without a process restart.
-        assert _os.environ.get("CODEX_BIN") == str(fake_bin)
+        assert os.environ.get("CODEX_BIN") == str(fake_bin)
     finally:
         if original_codex_bin is None:
-            _os.environ.pop("CODEX_BIN", None)
+            os.environ.pop("CODEX_BIN", None)
         else:
-            _os.environ["CODEX_BIN"] = original_codex_bin
+            os.environ["CODEX_BIN"] = original_codex_bin
 
 
 def test_run_cli_llm_onboarding_abort_after_max_retries(monkeypatch) -> None:
@@ -857,6 +957,24 @@ def test_credential_line_for_saved_summary_cli_codex() -> None:
 
     codex = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "codex")
     assert flow._credential_line_for_saved_summary(codex) == ("OpenAI Codex CLI (Run: codex login)")
+
+
+def test_credential_line_for_saved_summary_cli_claude_code() -> None:
+    from app.cli.wizard import config as wizard_config
+
+    claude_code = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "claude-code")
+    assert flow._credential_line_for_saved_summary(claude_code) == (
+        "Anthropic Claude Code CLI (Run: claude auth login or set ANTHROPIC_API_KEY)"
+    )
+
+
+def test_credential_line_for_saved_summary_cli_gemini_cli() -> None:
+    from app.cli.wizard import config as wizard_config
+
+    gemini_cli = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "gemini-cli")
+    assert flow._credential_line_for_saved_summary(gemini_cli) == (
+        "Google Gemini CLI (Run: gemini (interactive login) or set GEMINI_API_KEY)"
+    )
 
 
 def test_credential_line_for_saved_summary_anthropic() -> None:
@@ -928,11 +1046,6 @@ def test_run_wizard_configures_gitlab(monkeypatch, tmp_path) -> None:
         flow,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
-    )
-    monkeypatch.setattr(
-        flow,
-        "build_demo_action_response",
-        lambda: {"success": True, "topics": [], "guidance": []},
     )
 
     exit_code = flow.run_wizard()
@@ -1015,11 +1128,6 @@ def test_run_wizard_gitlab_retries_on_validation_failure(monkeypatch, tmp_path) 
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
-    monkeypatch.setattr(
-        flow,
-        "build_demo_action_response",
-        lambda: {"success": True, "topics": [], "guidance": []},
-    )
 
     exit_code = flow.run_wizard()
 
@@ -1093,11 +1201,6 @@ def test_run_wizard_switches_provider_and_keeps_store_and_env_in_sync(
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
     monkeypatch.setattr(flow, "get_store_path", lambda: store_path)
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
-    monkeypatch.setattr(
-        flow,
-        "build_demo_action_response",
-        lambda: {"success": True, "topics": [], "guidance": []},
-    )
     monkeypatch.setattr(
         flow,
         "save_local_config",

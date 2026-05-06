@@ -82,8 +82,11 @@ def _patch_generate_report_deps(monkeypatch: pytest.MonkeyPatch) -> None:
         lambda _ctx: [],
     )
     monkeypatch.setattr(
-        "app.nodes.publish_findings.node.get_investigation_url",
-        lambda _slug, _inv_id: "https://app.example.com/inv/1",
+        "app.nodes.publish_findings.node.create_investigation_and_attach_url",
+        lambda _state, _msg, _summary: (
+            "inv-id-123",
+            "https://app.example.com/inv/1",
+        ),
     )
     monkeypatch.setattr(
         "app.nodes.publish_findings.node.render_report",
@@ -92,10 +95,6 @@ def _patch_generate_report_deps(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "app.nodes.publish_findings.node.open_in_editor",
         lambda _msg: None,
-    )
-    monkeypatch.setattr(
-        "app.nodes.publish_findings.node.send_ingest",
-        lambda _state: "inv-id-123",
     )
 
 

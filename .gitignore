@@ -3,6 +3,7 @@
 .env
 .env.local
 .env.*.local
+.secrets
 
 # Python
 __pycache__/
@@ -59,8 +60,7 @@ coverage.xml
 # pyenv
 .python-version
 
-# uv
-uv.lock
+# uv (uv.lock is committed)
 
 # mypy
 .mypy_cache/

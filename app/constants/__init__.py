@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import tempfile
 from pathlib import Path
 
 from app.constants.posthog import (
@@ -12,11 +14,27 @@ from app.constants.posthog import (
     POSTHOG_CAPTURE_API_KEY,
     POSTHOG_HOST,
 )
+from app.constants.sentry import (
+    SENTRY_DSN,
+    SENTRY_ERROR_SAMPLE_RATE,
+    SENTRY_TRACES_SAMPLE_RATE,
+)
 
-TRACER_HOME_DIR: Path = Path.home() / ".tracer"
-INTEGRATIONS_STORE_PATH: Path = TRACER_HOME_DIR / "integrations.json"
+OPENSRE_HOME_DIR: Path = Path.home() / ".config" / "opensre"
+LEGACY_OPENSRE_HOME_DIR: Path = Path.home() / ".opensre"
+LEGACY_TRACER_HOME_DIR: Path = Path.home() / ".tracer"
+INTEGRATIONS_STORE_PATH: Path = OPENSRE_HOME_DIR / "integrations.json"
+LEGACY_INTEGRATIONS_STORE_PATH: Path = LEGACY_TRACER_HOME_DIR / "integrations.json"
+OPENSRE_TMP_DIR: Path = Path(tempfile.gettempdir()) / "opensre"
 
-OPENSRE_HOME_DIR: Path = Path.home() / ".opensre"
+
+def ensure_opensre_tmp_dir() -> Path:
+    """Create the OpenSRE temp directory with owner-only permissions when possible."""
+    OPENSRE_TMP_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with contextlib.suppress(OSError):
+        OPENSRE_TMP_DIR.chmod(0o700)
+    return OPENSRE_TMP_DIR
+
 
 __all__ = [
     "DEFAULT_POSTHOG_BOUNCE_THRESHOLD",
@@ -24,8 +42,15 @@ __all__ = [
     "DEFAULT_POSTHOG_TIMEOUT_SECONDS",
     "DEFAULT_POSTHOG_URL",
     "INTEGRATIONS_STORE_PATH",
+    "LEGACY_OPENSRE_HOME_DIR",
+    "LEGACY_INTEGRATIONS_STORE_PATH",
+    "LEGACY_TRACER_HOME_DIR",
+    "ensure_opensre_tmp_dir",
     "OPENSRE_HOME_DIR",
+    "OPENSRE_TMP_DIR",
     "POSTHOG_CAPTURE_API_KEY",
     "POSTHOG_HOST",
-    "TRACER_HOME_DIR",
+    "SENTRY_DSN",
+    "SENTRY_ERROR_SAMPLE_RATE",
+    "SENTRY_TRACES_SAMPLE_RATE",
 ]

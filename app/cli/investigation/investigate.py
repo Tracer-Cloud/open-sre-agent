@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 from collections.abc import Iterator
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NoReturn
 
 from langsmith import traceable
 
+from app.cli.support.cli_error_mapping import reraise_cli_runtime_error
 from app.config import LLMSettings
 
 if TYPE_CHECKING:
@@ -16,6 +18,11 @@ if TYPE_CHECKING:
     from app.state import AgentState
 
 _logger = logging.getLogger(__name__)
+
+
+def _reraise_investigation_failure(exc: BaseException) -> NoReturn:
+    """Map investigation runtime failures to structured CLI errors."""
+    reraise_cli_runtime_error(exc)
 
 
 def _call_run_investigation(
@@ -70,13 +77,16 @@ def run_investigation_cli(
         pipeline_name=pipeline_name,
         severity=severity,
     )
-    state = _call_run_investigation(
-        resolved_alert_name,
-        resolved_pipeline_name,
-        resolved_severity,
-        raw_alert=raw_alert,
-        opensre_evaluate=opensre_evaluate,
-    )
+    try:
+        state = _call_run_investigation(
+            resolved_alert_name,
+            resolved_pipeline_name,
+            resolved_severity,
+            raw_alert=raw_alert,
+            opensre_evaluate=opensre_evaluate,
+        )
+    except Exception as exc:
+        _reraise_investigation_failure(exc)
     slack_message = state["slack_message"]
     out: dict[str, Any] = {
         "report": slack_message,
@@ -160,7 +170,7 @@ def stream_investigation_cli(
         item = event_queue.get()
         if isinstance(item, Exception):
             thread.join()
-            raise item
+            _reraise_investigation_failure(item)
         if item is None:
             break
         yield item
@@ -198,14 +208,17 @@ def run_investigation_cli_streaming(
     }
 
 
+_SESSION_EVENT_POLL_S = 0.25
+
+
 def _run_session_alert_payload(
     *,
     raw_alert: dict[str, Any],
     context_overrides: dict[str, Any] | None = None,
+    cancel_requested: threading.Event | None = None,
 ) -> dict[str, Any]:
     """Run a streaming investigation from an already-structured session alert."""
     import queue
-    import threading
 
     from app.pipeline.runners import astream_investigation
     from app.remote.renderer import StreamRenderer
@@ -264,9 +277,15 @@ def _run_session_alert_payload(
     def _events() -> Iterator[StreamEvent]:
         try:
             while True:
-                item = event_queue.get()
+                if cancel_requested is not None and cancel_requested.is_set():
+                    _cancel_pump()
+                    raise KeyboardInterrupt
+                try:
+                    item = event_queue.get(timeout=_SESSION_EVENT_POLL_S)
+                except queue.Empty:
+                    continue
                 if isinstance(item, BaseException):
-                    raise item
+                    _reraise_investigation_failure(item)
                 if item is None:
                     return
                 yield item
@@ -296,6 +315,7 @@ def run_investigation_for_session(
     *,
     alert_text: str,
     context_overrides: dict[str, Any] | None = None,
+    cancel_requested: threading.Event | None = None,
 ) -> dict[str, Any]:
     """Run a streaming investigation from a free-text alert description.
 
@@ -306,15 +326,27 @@ def run_investigation_for_session(
     KeyboardInterrupt in the main thread is forwarded to the background
     asyncio loop as a task cancel, so Ctrl+C unwinds the in-flight LangGraph
     run cleanly instead of leaving it orphaned.
+
+    When ``cancel_requested`` is set, the streaming loop polls it and cancels
+    the pump the same way (used by the interactive shell task table).
+
+    While this function runs, the synchronous REPL cannot process ``/cancel`` —
+    Ctrl+C remains the interactive cancel path; the event wiring exists for a
+    future non-blocking investigation driver or tooling that sets the flag.
     """
     raw_alert: dict[str, Any] = {"alert_name": "Interactive session", "message": alert_text}
-    return _run_session_alert_payload(raw_alert=raw_alert, context_overrides=context_overrides)
+    return _run_session_alert_payload(
+        raw_alert=raw_alert,
+        context_overrides=context_overrides,
+        cancel_requested=cancel_requested,
+    )
 
 
 def run_sample_alert_for_session(
     *,
     template_name: str = "generic",
     context_overrides: dict[str, Any] | None = None,
+    cancel_requested: threading.Event | None = None,
 ) -> dict[str, Any]:
     """Run a streaming investigation for a built-in sample alert."""
     from app.cli.investigation.alert_templates import build_alert_template
@@ -322,4 +354,5 @@ def run_sample_alert_for_session(
     return _run_session_alert_payload(
         raw_alert=build_alert_template(template_name),
         context_overrides=context_overrides,
+        cancel_requested=cancel_requested,
     )

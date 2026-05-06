@@ -40,6 +40,7 @@ from app.integrations._verification_adapters import (
     _verify_telegram,
     _verify_tracer,
     _verify_vercel,
+    _verify_victoria_logs,
 )
 
 
@@ -278,6 +279,13 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         verifier=_verify_argocd,
         direct_effective=True,
         verify_order=1,
+    ),
+    IntegrationSpec(
+        service="victoria_logs",
+        aliases=("victorialogs",),
+        verifier=_verify_victoria_logs,
+        direct_effective=True,
+        verify_order=2,
     ),
     IntegrationSpec(
         service="slack",

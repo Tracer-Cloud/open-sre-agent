@@ -19,6 +19,7 @@ from app.remote.server import (
     DeepHealthCheck,
     InvestigateRequest,
     _check_disk_health,
+    _check_memory_health,
     _imds_get,
     _imds_token,
     _lifespan,
@@ -148,6 +149,23 @@ def test_investigate_returns_bad_request_for_invalid_vercel_url(
     assert exc_info.value.detail == "invalid vercel url"
 
 
+def test_investigate_captures_unexpected_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured_errors: list[BaseException] = []
+    expected_error = RuntimeError("pipeline exploded")
+
+    def fake_execute_investigation(**_kwargs: Any) -> tuple[dict[str, Any], str, str, str]:
+        raise expected_error
+
+    monkeypatch.setattr(remote_server, "_execute_investigation", fake_execute_investigation)
+    monkeypatch.setattr(remote_server, "capture_exception", captured_errors.append)
+
+    with pytest.raises(HTTPException) as exc_info:
+        investigate(InvestigateRequest(raw_alert={"alert_name": "PayloadAlert"}))
+
+    assert exc_info.value.status_code == 500
+    assert captured_errors == [expected_error]
+
+
 @pytest.mark.asyncio
 async def test_investigate_stream_persists_state_on_disconnect(
     monkeypatch: pytest.MonkeyPatch,
@@ -196,6 +214,39 @@ async def test_investigate_stream_persists_state_on_disconnect(
     assert persisted["severity"] == "critical"
     assert persisted["state"]["root_cause"] == "Schema mismatch"
     assert persisted["state"]["report"] == "Fix upstream"
+
+
+@pytest.mark.asyncio
+async def test_investigate_stream_captures_streaming_exception(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_errors: list[BaseException] = []
+    expected_error = RuntimeError("stream failed")
+
+    async def fake_astream_investigation(*args: object, **kwargs: object):
+        _ = (args, kwargs)
+        raise expected_error
+        yield StreamEvent("events", data={})
+
+    monkeypatch.setattr("app.config.LLMSettings.from_env", object)
+    monkeypatch.setattr(
+        "app.cli.investigation.resolve_investigation_context",
+        lambda **_kwargs: ("test-alert", "etl_daily_orders", "critical"),
+    )
+    monkeypatch.setattr(
+        "app.pipeline.runners.astream_investigation",
+        fake_astream_investigation,
+    )
+    monkeypatch.setattr(remote_server, "capture_exception", captured_errors.append)
+    monkeypatch.setattr(remote_server, "_persist_streamed_result", lambda **_kwargs: None)
+
+    response = await investigate_stream(
+        InvestigateRequest(raw_alert={"alert_name": "PayloadAlert"})
+    )
+    chunks = [chunk async for chunk in response.body_iterator]
+
+    assert any("event: error" in chunk for chunk in chunks)
+    assert captured_errors == [expected_error]
 
 
 @pytest.mark.asyncio
@@ -359,3 +410,134 @@ def test_imds_get_returns_none_on_os_error(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr("urllib.request.urlopen", _raise_os_error)
 
     assert _imds_get("latest/meta-data/instance-id", token="test-token") is None
+
+
+def test_check_memory_health_returns_passed_when_below_warn_threshold(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeHealthyMeminfoPath:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            pass
+
+        def exists(self) -> bool:
+            return True
+
+        def read_text(self, **_kwargs: object) -> str:
+            return "NoiseWithoutSeparator\nMemTotal:       102400 kB\nMemAvailable:    51200 kB\n"
+
+    monkeypatch.setattr("app.remote.server.Path", _FakeHealthyMeminfoPath)
+    result = _check_memory_health()
+
+    assert isinstance(result, DeepHealthCheck)
+    assert result.name == "Memory"
+    assert result.status == "passed"
+    assert "50% used" in result.detail
+    assert "50MiB / 100MiB" in result.detail
+
+
+def test_check_memory_health_returns_warn_when_at_threshold(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeHighUsageMeminfoPath:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            pass
+
+        def exists(self) -> bool:
+            return True
+
+        def read_text(self, **_kwargs: object) -> str:
+            return "MemTotal:       102400 kB\nMemAvailable:    10240 kB\n"
+
+    monkeypatch.setattr("app.remote.server.Path", _FakeHighUsageMeminfoPath)
+    result = _check_memory_health()
+
+    assert isinstance(result, DeepHealthCheck)
+    assert result.name == "Memory"
+    assert result.status == "warn"
+    assert "90% used" in result.detail
+    assert "90MiB / 100MiB" in result.detail
+
+
+def test_check_memory_health_returns_missing_when_proc_file_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeMeminfoPath:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def exists(self) -> bool:
+            return False
+
+    monkeypatch.setattr("app.remote.server.Path", _FakeMeminfoPath)
+    result = _check_memory_health()
+
+    assert isinstance(result, DeepHealthCheck)
+    assert result.name == "Memory"
+    assert result.status == "missing"
+    assert "/proc/meminfo unavailable on this platform." in result.detail
+
+
+def test_check_memory_health_returns_missing_when_memtotal_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeIncompletePath:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            pass
+
+        def exists(self) -> bool:
+            return True
+
+        def read_text(self, **_kwargs: object) -> str:
+            return "MemAvailable:    8192 kB\n"
+
+    monkeypatch.setattr("app.remote.server.Path", _FakeIncompletePath)
+    result = _check_memory_health()
+
+    assert isinstance(result, DeepHealthCheck)
+    assert result.name == "Memory"
+    assert result.status == "missing"
+    assert "Incomplete /proc/meminfo data." in result.detail
+
+
+def test_check_memory_health_returns_missing_when_memavailable_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeIncompletePath:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            pass
+
+        def exists(self) -> bool:
+            return True
+
+        def read_text(self, **_kwargs: object) -> str:
+            return "MemTotal:       16384 kB\n"
+
+    monkeypatch.setattr("app.remote.server.Path", _FakeIncompletePath)
+    result = _check_memory_health()
+
+    assert isinstance(result, DeepHealthCheck)
+    assert result.name == "Memory"
+    assert result.status == "missing"
+    assert "Incomplete /proc/meminfo data." in result.detail
+
+
+def test_check_memory_health_returns_missing_on_oserror(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeOsErrorPath:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            pass
+
+        def exists(self) -> bool:
+            return True
+
+        def read_text(self, **_kwargs: object) -> str:
+            raise OSError("permission denied")
+
+    monkeypatch.setattr("app.remote.server.Path", _FakeOsErrorPath)
+    result = _check_memory_health()
+
+    assert isinstance(result, DeepHealthCheck)
+    assert result.name == "Memory"
+    assert result.status == "missing"
+    assert "Unable to read meminfo:" in result.detail

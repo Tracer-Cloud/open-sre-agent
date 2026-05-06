@@ -49,6 +49,7 @@ def _check_llm_provider() -> tuple[bool, str]:
         "anthropic": "ANTHROPIC_API_KEY",
         "openai": "OPENAI_API_KEY",
         "openrouter": "OPENROUTER_API_KEY",
+        "requesty": "REQUESTY_API_KEY",
         "gemini": "GEMINI_API_KEY",
         "nvidia": "NVIDIA_API_KEY",
         "bedrock": "AWS_DEFAULT_REGION",
@@ -56,6 +57,19 @@ def _check_llm_provider() -> tuple[bool, str]:
     }
     if provider == "not set":
         return False, "LLM_PROVIDER env var is not set"
+
+    from app.integrations.llm_cli.registry import get_cli_provider_registration
+
+    cli_reg = get_cli_provider_registration(provider)
+    if cli_reg is not None:
+        probe = cli_reg.adapter_factory().detect()
+        if not probe.installed or not probe.bin_path:
+            return False, f"provider={provider}, CLI not installed ({probe.detail})"
+        if probe.logged_in is False:
+            return False, f"provider={provider}, CLI not authenticated ({probe.detail})"
+        if probe.logged_in is None:
+            return False, f"provider={provider}, CLI auth status unclear ({probe.detail})"
+        return True, f"provider={provider}, CLI ready ({probe.detail})"
 
     expected_key = key_vars.get(provider)
     if expected_key and not os.getenv(expected_key):

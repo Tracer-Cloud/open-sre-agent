@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from app.services import llm_client
 
 
@@ -30,13 +32,44 @@ class _FakeOpenAIChat:
 class _FakeOpenAI:
     last_api_key: str | None = None
     last_base_url: str | None = None
+    last_default_headers: dict[str, str] | None = None
+    init_api_keys: list[str] = []
 
-    def __init__(self, *, api_key: str, base_url: str | None = None, timeout: float) -> None:
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        base_url: str | None = None,
+        timeout: float,
+        default_headers: dict[str, str] | None = None,
+    ) -> None:
         _FakeOpenAI.last_api_key = api_key
         _FakeOpenAI.last_base_url = base_url
+        _FakeOpenAI.last_default_headers = default_headers
+        _FakeOpenAI.init_api_keys.append(api_key)
         self.base_url = base_url
         self.timeout = timeout
+        self.default_headers = default_headers
         self.chat = _FakeOpenAIChat()
+
+
+@pytest.fixture(autouse=True)
+def _reset_fake_openai_state() -> None:
+    _FakeOpenAI.last_api_key = None
+    _FakeOpenAI.last_base_url = None
+    _FakeOpenAI.last_default_headers = None
+    _FakeOpenAI.init_api_keys = []
+
+
+def test_openai_llm_client_defers_openai_until_ensure(monkeypatch) -> None:
+    """Avoid constructing OpenAI in __init__: sdk 2.34+ rejects empty api_key."""
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env_var: "")
+    monkeypatch.setattr(llm_client, "OpenAI", _FakeOpenAI)
+
+    llm_client.OpenAILLMClient(model="gpt-4.1-mini")
+
+    assert _FakeOpenAI.last_api_key is None
+    assert _FakeOpenAI.init_api_keys == []
 
 
 def test_openai_llm_client_reads_secure_local_api_key(monkeypatch) -> None:
@@ -51,6 +84,152 @@ def test_openai_llm_client_reads_secure_local_api_key(monkeypatch) -> None:
     client._ensure_client()
 
     assert _FakeOpenAI.last_api_key == "stored-openai-key"
+    assert _FakeOpenAI.init_api_keys == ["stored-openai-key"]
+
+
+def test_openai_llm_client_invoke_fails_when_key_missing(monkeypatch) -> None:
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env_var: "")
+    client = llm_client.OpenAILLMClient(model="gpt-4.1-mini")
+
+    with pytest.raises(RuntimeError, match="Missing OPENAI_API_KEY"):
+        client.invoke("hello")
+
+
+def test_openai_llm_client_rebuilds_client_when_key_rotates(monkeypatch) -> None:
+    state = {"key": "first-key"}
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env_var: state["key"])
+    monkeypatch.setattr(llm_client, "OpenAI", _FakeOpenAI)
+    client = llm_client.OpenAILLMClient(model="gpt-4.1-mini")
+
+    client._ensure_client()
+    state["key"] = "second-key"
+    client._ensure_client()
+
+    assert _FakeOpenAI.init_api_keys == ["first-key", "second-key"]
+
+
+class _InactiveGuardrailEngine:
+    is_active = False
+
+    def apply(self, content: str) -> str:
+        return content
+
+
+class _RecordingBedrockRuntime:
+    def __init__(self, response: dict) -> None:
+        self.response = response
+        self.converse_calls: list[dict] = []
+
+    def converse(self, **kwargs) -> dict:
+        self.converse_calls.append(kwargs)
+        return self.response
+
+
+def test_is_anthropic_bedrock_model_claude_ids() -> None:
+    assert llm_client._is_anthropic_bedrock_model("anthropic.claude-3-haiku-20240307-v1:0")
+    assert llm_client._is_anthropic_bedrock_model(
+        "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+    )
+
+
+def test_is_anthropic_bedrock_model_foundation_model_arn() -> None:
+    arn = "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0"
+    assert llm_client._is_anthropic_bedrock_model(arn)
+
+
+def test_is_anthropic_bedrock_model_non_anthropic() -> None:
+    assert not llm_client._is_anthropic_bedrock_model(
+        "mistral.mistral-large-2402-v1:0",
+    )
+
+
+def test_is_anthropic_bedrock_model_application_inference_profile_arn() -> None:
+    profile_arn = (
+        "arn:aws:bedrock:us-east-2:012345678901:application-inference-profile/a1b2c3profile"
+    )
+    assert not llm_client._is_anthropic_bedrock_model(profile_arn)
+
+
+def test_bedrock_client_routes_mistral_to_converse(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.guardrails.engine.get_guardrail_engine",
+        _InactiveGuardrailEngine,
+    )
+    runtime = _RecordingBedrockRuntime(
+        {"output": {"message": {"role": "assistant", "content": [{"text": "ok"}]}}},
+    )
+    monkeypatch.setattr(llm_client.boto3, "client", lambda *_a, **_k: runtime)
+
+    client = llm_client.BedrockLLMClient(model="mistral.mistral-large-2402-v1:0")
+    assert client._use_anthropic is False
+
+    resp = client.invoke([{"role": "user", "content": "hi"}])
+    assert resp.content == "ok"
+    assert len(runtime.converse_calls) == 1
+    call = runtime.converse_calls[0]
+    assert call["modelId"] == "mistral.mistral-large-2402-v1:0"
+    assert call["messages"] == [
+        {"role": "user", "content": [{"text": "hi"}]},
+    ]
+    assert "system" not in call
+
+
+def test_invoke_converse_includes_optional_system_temperature(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.guardrails.engine.get_guardrail_engine",
+        _InactiveGuardrailEngine,
+    )
+    runtime = _RecordingBedrockRuntime(
+        {"output": {"message": {"role": "assistant", "content": [{"text": ""}, {"text": "x"}]}}},
+    )
+    monkeypatch.setattr(llm_client.boto3, "client", lambda *_a, **_k: runtime)
+
+    client = llm_client.BedrockLLMClient(model="mistral.mini", temperature=0.4)
+    client.invoke(
+        [
+            {"role": "system", "content": "context"},
+            {"role": "user", "content": "q"},
+        ],
+    )
+
+    kwargs = runtime.converse_calls[0]
+    assert kwargs["system"] == [{"text": "context"}]
+    assert kwargs["inferenceConfig"]["temperature"] == 0.4
+
+
+def test_invoke_converse_raises_when_no_text_blocks(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.guardrails.engine.get_guardrail_engine",
+        _InactiveGuardrailEngine,
+    )
+    runtime = _RecordingBedrockRuntime(
+        {
+            "stopReason": "tool_use",
+            "output": {"message": {"role": "assistant", "content": [{"toolUse": {"name": "x"}}]}},
+        },
+    )
+    monkeypatch.setattr(llm_client.boto3, "client", lambda *_a, **_k: runtime)
+
+    client = llm_client.BedrockLLMClient(model="mistral.mini")
+    with pytest.raises(RuntimeError, match="no text content"):
+        client.invoke("hello")
+
+
+def test_bedrock_application_inference_profile_arn_uses_converse(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.guardrails.engine.get_guardrail_engine",
+        _InactiveGuardrailEngine,
+    )
+    runtime = _RecordingBedrockRuntime(
+        {"output": {"message": {"role": "assistant", "content": [{"text": "via-converse"}]}}},
+    )
+    monkeypatch.setattr(llm_client.boto3, "client", lambda *_a, **_k: runtime)
+
+    arn = "arn:aws:bedrock:us-west-2:123:application-inference-profile/p2"
+    client = llm_client.BedrockLLMClient(model=arn)
+
+    assert client._use_anthropic is False
+    assert client.invoke("hi").content == "via-converse"
 
 
 def test_anthropic_llm_client_reads_secure_local_api_key(monkeypatch) -> None:
@@ -102,3 +281,60 @@ def test_minimax_llm_client_temperature_is_set(monkeypatch) -> None:
         temperature=1.0,
     )
     assert client._temperature == 1.0
+
+
+def test_create_llm_client_claude_code_wires_cli_adapter(monkeypatch) -> None:
+    """Investigation uses ``_create_llm_client`` → registry → ``CLIBackedLLMClient``."""
+    monkeypatch.setenv("LLM_PROVIDER", "claude-code")
+    monkeypatch.delenv("CLAUDE_CODE_MODEL", raising=False)
+    llm_client.reset_llm_singletons()
+    try:
+        from app.integrations.llm_cli.claude_code import ClaudeCodeAdapter
+        from app.integrations.llm_cli.runner import CLIBackedLLMClient
+
+        client = llm_client._create_llm_client("reasoning")
+
+        assert isinstance(client, CLIBackedLLMClient)
+        assert isinstance(client._adapter, ClaudeCodeAdapter)
+    finally:
+        llm_client.reset_llm_singletons()
+
+
+def test_create_llm_client_claude_code_reads_optional_model_env(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "claude-code")
+    monkeypatch.setenv("CLAUDE_CODE_MODEL", "claude-opus-4-7")
+    llm_client.reset_llm_singletons()
+    try:
+        client = llm_client._create_llm_client("reasoning")
+
+        assert client._model == "claude-opus-4-7"
+    finally:
+        llm_client.reset_llm_singletons()
+
+
+def test_create_llm_client_gemini_cli_wires_cli_adapter(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "gemini-cli")
+    monkeypatch.delenv("GEMINI_CLI_MODEL", raising=False)
+    llm_client.reset_llm_singletons()
+    try:
+        from app.integrations.llm_cli.gemini_cli import GeminiCLIAdapter
+        from app.integrations.llm_cli.runner import CLIBackedLLMClient
+
+        client = llm_client._create_llm_client("reasoning")
+
+        assert isinstance(client, CLIBackedLLMClient)
+        assert isinstance(client._adapter, GeminiCLIAdapter)
+    finally:
+        llm_client.reset_llm_singletons()
+
+
+def test_create_llm_client_gemini_cli_reads_optional_model_env(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "gemini-cli")
+    monkeypatch.setenv("GEMINI_CLI_MODEL", "gemini-2.5-pro")
+    llm_client.reset_llm_singletons()
+    try:
+        client = llm_client._create_llm_client("reasoning")
+
+        assert client._model == "gemini-2.5-pro"
+    finally:
+        llm_client.reset_llm_singletons()

@@ -5,11 +5,12 @@ integration credentials available for all downstream nodes. This replaces
 per-node credential fetching with a single upfront resolution.
 """
 
+import base64
+import json
 import logging
 import os
-from typing import Any, Optional
+from typing import Any
 
-from langchain_core.runnables import RunnableConfig
 from langsmith import traceable
 
 from app.integrations.catalog import (
@@ -26,18 +27,16 @@ from app.integrations.catalog import (
 )
 from app.output import get_tracker
 from app.state import InvestigationState
+from app.types.config import NodeConfig, get_configurable
 
 logger = logging.getLogger(__name__)
 
 
 def _decode_org_id_from_token(token: str) -> str:
-    import base64
-    import json as _json
-
     try:
         payload_b64 = token.split(".")[1]
         payload_b64 += "=" * (4 - len(payload_b64) % 4)
-        claims = _json.loads(base64.urlsafe_b64decode(payload_b64))
+        claims = json.loads(base64.urlsafe_b64decode(payload_b64))
         return claims.get("organization") or claims.get("org_id") or ""
     except Exception:
         logger.debug("Failed to decode org_id from JWT token", exc_info=True)
@@ -53,14 +52,14 @@ def _strip_bearer(token: str) -> str:
 @traceable(name="node_resolve_integrations")
 def node_resolve_integrations(
     state: InvestigationState,
-    config: Optional[RunnableConfig] = None,  # noqa: UP007,UP045
+    config: NodeConfig | None = None,
 ) -> dict:
     """Fetch all org integrations and classify them by service.
 
     Priority:
       1. _auth_token from state (Slack webhook / inbound request) - remote API only, no local fallback
       2. JWT_TOKEN env var - remote API, with local store/env filling missing services
-      3. Local sources: ~/.tracer/integrations.json, plus env-based integrations for standalone use
+      3. Local sources: ~/.config/opensre/integrations.json, plus env-based integrations for standalone use
     """
     if state.get("resolved_integrations"):
         return {}
@@ -69,7 +68,7 @@ def node_resolve_integrations(
     tracker.start("resolve_integrations", "Fetching org integrations")
     org_id = state.get("org_id", "")
 
-    configurable = (config or {}).get("configurable", {})
+    configurable = get_configurable(config)
     auth_user = configurable.get("langgraph_auth_user", {})
     webhook_token = _strip_bearer(
         (auth_user.get("token", "") or state.get("_auth_token", "")).strip()

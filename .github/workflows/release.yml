@@ -71,7 +71,7 @@ jobs:
             fi
 
             echo "channel=main" >> "$GITHUB_OUTPUT"
-            echo "tag_name=main" >> "$GITHUB_OUTPUT"
+            echo "tag_name=nightly" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -395,7 +395,8 @@ jobs:
             echo "### Homebrew (macOS / Linux)"
             echo
             echo '```bash'
-            echo "brew install ${{ github.repository }}/opensre"
+            echo 'brew tap tracer-cloud/tap'
+            echo 'brew install tracer-cloud/tap/opensre'
             echo '```'
             echo
             echo "### PowerShell (Windows)"
@@ -436,6 +437,71 @@ jobs:
             --target "$target_sha" \
             --title "Latest" \
             --notes-file RELEASE_NOTES.md
+
+      - name: Sync Homebrew tap formula
+        env:
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "${HOMEBREW_TAP_GITHUB_TOKEN:-}" ]; then
+            echo "::error::HOMEBREW_TAP_GITHUB_TOKEN is required to sync Tracer-Cloud/homebrew-tap."
+            exit 1
+          fi
+
+          TAG_NAME="${{ needs.prepare.outputs.tag_name }}"
+          VERSION="${TAG_NAME#v}"
+          ASSET_DIR="release-assets"
+
+          linux_x64_sha="$(awk '{print $1}' "${ASSET_DIR}/opensre_${VERSION}_linux-x64.tar.gz.sha256")"
+          linux_arm64_sha="$(awk '{print $1}' "${ASSET_DIR}/opensre_${VERSION}_linux-arm64.tar.gz.sha256")"
+          darwin_x64_sha="$(awk '{print $1}' "${ASSET_DIR}/opensre_${VERSION}_darwin-x64.tar.gz.sha256")"
+          darwin_arm64_sha="$(awk '{print $1}' "${ASSET_DIR}/opensre_${VERSION}_darwin-arm64.tar.gz.sha256")"
+
+          tap_dir="$(mktemp -d)/homebrew-tap"
+          git clone "https://x-access-token:${HOMEBREW_TAP_GITHUB_TOKEN}@github.com/Tracer-Cloud/homebrew-tap.git" "$tap_dir"
+
+          python - "$tap_dir/Formula/opensre.rb" "$VERSION" "$darwin_arm64_sha" "$darwin_x64_sha" "$linux_arm64_sha" "$linux_x64_sha" <<'PY'
+          from __future__ import annotations
+
+          import re
+          import sys
+          from pathlib import Path
+
+          formula_path = Path(sys.argv[1])
+          version = sys.argv[2]
+          darwin_arm64_sha = sys.argv[3]
+          darwin_x64_sha = sys.argv[4]
+          linux_arm64_sha = sys.argv[5]
+          linux_x64_sha = sys.argv[6]
+
+          text = formula_path.read_text()
+          text = re.sub(r'version "[^"]+"', f'version "{version}"', text, count=1)
+          replacements = {
+              r'(opensre_#\{version\}_darwin-arm64\.tar\.gz"\n\s*sha256 ")[^"]+(")': darwin_arm64_sha,
+              r'(opensre_#\{version\}_darwin-x64\.tar\.gz"\n\s*sha256 ")[^"]+(")': darwin_x64_sha,
+              r'(opensre_#\{version\}_linux-arm64\.tar\.gz"\n\s*sha256 ")[^"]+(")': linux_arm64_sha,
+              r'(opensre_#\{version\}_linux-x64\.tar\.gz"\n\s*sha256 ")[^"]+(")': linux_x64_sha,
+          }
+          for pattern, sha in replacements.items():
+              text, count = re.subn(pattern, rf'\g<1>{sha}\g<2>', text, count=1)
+              if count != 1:
+                  raise SystemExit(f"Failed to update checksum with pattern: {pattern}")
+          formula_path.write_text(text)
+          PY
+
+          cd "$tap_dir"
+          if git diff --quiet -- Formula/opensre.rb; then
+            echo "Homebrew tap formula already up to date."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/opensre.rb
+          git commit -m "chore: update opensre formula to ${VERSION}"
+          git push origin HEAD:main
 
   publish-main-release:
     if: needs.prepare.outputs.channel == 'main'
@@ -496,14 +562,14 @@ jobs:
             echo '```'
           } > MAIN_RELEASE_NOTES.md
 
-      - name: Move main tag to the latest commit
+      - name: Move nightly tag to the latest commit
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -f main "$GITHUB_SHA"
-          git push origin refs/tags/main --force
+          git tag -f nightly "$GITHUB_SHA"
+          git push origin refs/tags/nightly --force
 
       - name: Publish rolling main release
         env:
@@ -512,16 +578,16 @@ jobs:
         run: |
           set -euo pipefail
 
-          if gh release view main --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            gh release upload main main-release-assets/* --repo "${{ github.repository }}" --clobber
-            gh release edit main \
+          if gh release view nightly --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release upload nightly main-release-assets/* --repo "${{ github.repository }}" --clobber
+            gh release edit nightly \
               --repo "${{ github.repository }}" \
               --title "Main" \
               --notes-file MAIN_RELEASE_NOTES.md
             exit 0
           fi
 
-          gh release create main \
+          gh release create nightly \
             main-release-assets/* \
             --repo "${{ github.repository }}" \
             --target "$GITHUB_SHA" \

@@ -11,8 +11,10 @@ from typing import Any
 from urllib.parse import urlparse
 
 from app.integrations.azure_sql import DEFAULT_AZURE_SQL_PORT
+from app.integrations.openclaw import build_openclaw_config, openclaw_runtime_unavailable_reason
 from app.integrations.opensre.csv_grafana_backend import OpenSRECsvGrafanaBackend
 from app.integrations.opensre.inject import inject_opensre_into_resolved_integrations
+from app.integrations.rds import DEFAULT_RDS_REGION
 from app.services.coralogix import build_coralogix_logs_query
 from app.services.splunk import build_splunk_spl_query
 from app.tools.GrafanaLogsTool import _map_pipeline_to_service_name
@@ -971,9 +973,27 @@ def detect_sources(
 
     openclaw_int = (resolved_integrations or {}).get("openclaw")
     if openclaw_int:
-        openclaw_url = str(openclaw_int.get("url", "")).strip()
-        openclaw_command = str(openclaw_int.get("command", "")).strip()
-        if openclaw_url or openclaw_command:
+        try:
+            openclaw_config = build_openclaw_config(
+                {
+                    "url": openclaw_int.get("url", ""),
+                    "mode": openclaw_int.get("mode", "streamable-http"),
+                    "command": openclaw_int.get("command", ""),
+                    "args": openclaw_int.get("args", []),
+                    "auth_token": openclaw_int.get("auth_token", ""),
+                }
+            )
+        except Exception:
+            openclaw_config = None
+
+        runtime_error = (
+            openclaw_runtime_unavailable_reason(openclaw_config)
+            if openclaw_config is not None
+            else "OpenClaw config could not be normalized."
+        )
+        connection_verified = bool(openclaw_int.get("connection_verified", True))
+
+        if openclaw_config is not None and connection_verified and runtime_error is None:
             openclaw_search_query = str(
                 annotations.get("openclaw_search")
                 or raw_alert.get("openclaw_search", "")
@@ -984,15 +1004,16 @@ def detect_sources(
                 or annotations.get("summary", "")
             ).strip()
             sources["openclaw"] = {
-                "openclaw_url": openclaw_url,
-                "openclaw_mode": str(openclaw_int.get("mode", "streamable-http")).strip()
-                or "streamable-http",
-                "openclaw_token": str(openclaw_int.get("auth_token", "")).strip(),
-                "openclaw_command": openclaw_command,
-                "openclaw_args": openclaw_int.get("args", []),
+                "openclaw_url": openclaw_config.url,
+                "openclaw_mode": openclaw_config.mode,
+                "openclaw_token": openclaw_config.auth_token,
+                "openclaw_command": openclaw_config.command,
+                "openclaw_args": list(openclaw_config.args),
                 "openclaw_search_query": openclaw_search_query,
                 "connection_verified": True,
             }
+        elif runtime_error is not None:
+            logger.debug("Skipping OpenClaw source because it is not usable: %s", runtime_error)
 
     gitlab_int = (resolved_integrations or {}).get("gitlab")
     if gitlab_int:
@@ -1215,6 +1236,14 @@ def detect_sources(
             "connection_verified": True,
         }
 
+    rds_int = (resolved_integrations or {}).get("rds")
+    if rds_int and str(rds_int.get("db_instance_identifier", "")).strip():
+        sources["rds"] = {
+            "db_instance_identifier": str(rds_int.get("db_instance_identifier", "")).strip(),
+            "region": str(rds_int.get("region") or DEFAULT_RDS_REGION).strip()
+            or DEFAULT_RDS_REGION,
+        }
+
     betterstack_int = (resolved_integrations or {}).get("betterstack")
     if (
         betterstack_int
@@ -1313,6 +1342,14 @@ def detect_sources(
             "username": str(alertmanager_int.get("username", "")).strip(),
             "password": str(alertmanager_int.get("password", "")).strip(),
             "filter_labels": filter_labels,
+            "connection_verified": True,
+        }
+
+    victoria_logs_int = (resolved_integrations or {}).get("victoria_logs")
+    if victoria_logs_int and str(victoria_logs_int.get("base_url", "")).strip():
+        sources["victoria_logs"] = {
+            "base_url": str(victoria_logs_int.get("base_url", "")).strip().rstrip("/"),
+            "tenant_id": victoria_logs_int.get("tenant_id"),
             "connection_verified": True,
         }
 

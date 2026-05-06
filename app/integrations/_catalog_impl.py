@@ -29,6 +29,7 @@ from app.integrations.config_models import (
     SlackWebhookConfig,
     SplunkIntegrationConfig,
     TelegramBotConfig,
+    VictoriaLogsIntegrationConfig,
 )
 from app.integrations.effective_models import EffectiveIntegrations
 from app.integrations.github_mcp import build_github_mcp_config
@@ -40,6 +41,11 @@ from app.integrations.mysql import build_mysql_config
 from app.integrations.openclaw import build_openclaw_config
 from app.integrations.postgresql import build_postgresql_config
 from app.integrations.rabbitmq import build_rabbitmq_config
+from app.integrations.rds import (
+    DEFAULT_RDS_REGION,
+    build_rds_config,
+    rds_config_from_env,
+)
 from app.integrations.registry import (
     DIRECT_CLASSIFIED_EFFECTIVE_SERVICES,
     SKIP_CLASSIFIED_SERVICES,
@@ -518,6 +524,20 @@ def _classify_service_instance(
             }, "rabbitmq"
         return None, None
 
+    if key == "rds":
+        try:
+            rds_config = build_rds_config(
+                {
+                    "db_instance_identifier": credentials.get("db_instance_identifier", ""),
+                    "region": credentials.get("region", DEFAULT_RDS_REGION),
+                }
+            )
+        except Exception:
+            return None, None
+        if rds_config.is_configured:
+            return {**rds_config.model_dump(), "integration_id": record_id}, "rds"
+        return None, None
+
     if key == "airflow":
         try:
             airflow_config = build_airflow_config(
@@ -620,6 +640,21 @@ def _classify_service_instance(
             argocd_config.bearer_token or (argocd_config.username and argocd_config.password)
         ):
             return argocd_config.model_dump(), "argocd"
+        return None, None
+
+    if key == "victoria_logs":
+        try:
+            victoria_logs_config = VictoriaLogsIntegrationConfig.model_validate(
+                {
+                    "base_url": credentials.get("base_url", ""),
+                    "tenant_id": credentials.get("tenant_id"),
+                    "integration_id": record_id,
+                }
+            )
+        except Exception:
+            return None, None
+        if victoria_logs_config.base_url:
+            return victoria_logs_config.model_dump(), "victoria_logs"
         return None, None
 
     if key == "bitbucket":
@@ -1257,6 +1292,19 @@ def load_env_integrations() -> list[dict[str, Any]]:
         except Exception:
             logger.debug("Failed to load RabbitMQ config from env", exc_info=True)
 
+    try:
+        rds_config = rds_config_from_env()
+    except Exception:
+        rds_config = None
+        logger.debug("Failed to load RDS config from env", exc_info=True)
+    if rds_config is not None and rds_config.is_configured:
+        integrations.append(
+            _active_env_record(
+                "rds",
+                rds_config.model_dump(exclude={"integration_id"}),
+            )
+        )
+
     bs_endpoint = os.getenv("BETTERSTACK_QUERY_ENDPOINT", "").strip()
     bs_username = os.getenv("BETTERSTACK_USERNAME", "").strip()
     if bs_endpoint and bs_username:
@@ -1440,6 +1488,24 @@ def load_env_integrations() -> list[dict[str, Any]]:
         except Exception:
             logger.debug("Failed to load Alertmanager config from env", exc_info=True)
 
+    victoria_logs_url = os.getenv("VICTORIA_LOGS_URL", "").strip().rstrip("/")
+    if victoria_logs_url:
+        try:
+            victoria_logs_config = VictoriaLogsIntegrationConfig.model_validate(
+                {
+                    "base_url": victoria_logs_url,
+                    "tenant_id": os.getenv("VICTORIA_LOGS_TENANT_ID"),
+                }
+            )
+            integrations.append(
+                _active_env_record(
+                    "victoria_logs",
+                    victoria_logs_config.model_dump(exclude={"integration_id"}),
+                )
+            )
+        except Exception:
+            logger.debug("Failed to load VictoriaLogs config from env", exc_info=True)
+
     splunk_multi = _parse_instances_env("SPLUNK_INSTANCES", "splunk")
     if splunk_multi is not None:
         integrations.append(splunk_multi)
@@ -1542,7 +1608,7 @@ def resolve_effective_integrations(
     store_integrations: list[dict[str, Any]] | None = None,
     env_integrations: list[dict[str, Any]] | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """Resolve effective local integrations from ~/.tracer and environment variables."""
+    """Resolve effective local integrations from ~/.config/opensre and environment variables."""
     store_records = (
         list(store_integrations) if store_integrations is not None else load_integrations()
     )

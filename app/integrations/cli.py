@@ -1,4 +1,4 @@
-"""Interactive CLI for managing local integrations (~/.tracer/integrations.json).
+"""Interactive CLI for managing local integrations (~/.config/opensre/integrations.json).
 
 Usage:
     python -m app.integrations setup <service>

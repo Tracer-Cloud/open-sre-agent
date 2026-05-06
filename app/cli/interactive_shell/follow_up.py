@@ -11,7 +11,7 @@ from rich.markup import escape
 
 from app.cli.interactive_shell.loaders import llm_loader
 from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
+from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD, TERMINAL_ERROR
 
 _logger = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ def answer_follow_up(question: str, session: ReplSession, console: Console) -> N
     try:
         from app.services.llm_client import get_llm_for_reasoning
     except Exception as exc:  # noqa: BLE001
-        console.print(f"[red]LLM client unavailable:[/red] {exc}")
+        console.print(f"[{TERMINAL_ERROR}]LLM client unavailable:[/] {escape(str(exc))}")
         return
 
     context = _summarize_last_state(session.last_state)
@@ -99,7 +99,7 @@ def answer_follow_up(question: str, session: ReplSession, console: Console) -> N
             client = get_llm_for_reasoning()
             response = client.invoke(prompt)
     except Exception as exc:  # noqa: BLE001
-        console.print(f"[red]follow-up failed:[/red] {escape(str(exc))}")
+        console.print(f"[{TERMINAL_ERROR}]follow-up failed:[/] {escape(str(exc))}")
         return
 
     text = getattr(response, "content", None) or str(response)

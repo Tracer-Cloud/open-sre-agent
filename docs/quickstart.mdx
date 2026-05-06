@@ -10,7 +10,8 @@ slug: "quickstart"
         Choose one install method:
 
         ```bash
-        brew install Tracer-Cloud/opensre/opensre
+        brew tap tracer-cloud/tap
+        brew install tracer-cloud/tap/opensre
         ```
 
         ```bash
@@ -52,6 +53,20 @@ slug: "quickstart"
     ```
   </Step>
 </Steps>
+
+## Uninstall
+
+To remove opensre and all its local data from your machine:
+
+```bash
+opensre uninstall
+```
+
+Pass `--yes` to skip the confirmation prompt:
+
+```bash
+opensre uninstall --yes
+```
 
 ## Troubleshooting
 

@@ -16,6 +16,7 @@ from app.config import (
     NVIDIA_REASONING_MODEL,
     OPENAI_REASONING_MODEL,
     OPENROUTER_REASONING_MODEL,
+    REQUESTY_REASONING_MODEL,
 )
 from app.integrations.llm_cli.base import LLMCLIAdapter
 
@@ -46,6 +47,10 @@ class ProviderOption:
     models: tuple[ModelOption, ...]
     #: If set, ``sync_provider_env`` also writes this key (same value) for legacy .env files.
     legacy_model_env: str | None = None
+    #: Env var that holds the *toolcall* model for this provider. ``None`` for
+    #: providers that don't expose a separate toolcall model (e.g. CLI-backed
+    #: providers like ``codex``/``claude-code``, or Ollama).
+    toolcall_model_env: str | None = None
     #: Human-readable name for the credential requested during onboarding. Most
     #: providers want an API key; Ollama wants a host URL. Used as the wizard
     #: prompt label, e.g. ``{label} {credential_label} ({api_key_env})``.
@@ -109,6 +114,22 @@ OPENROUTER_MODELS = (
     ModelOption(value="qwen/qwen-3.6-plus-preview", label="Qwen 3.6 Plus (via OpenRouter)"),
 )
 
+REQUESTY_MODELS = (
+    ModelOption(value=REQUESTY_REASONING_MODEL, label="Claude Sonnet 4.6 (via Requesty)"),
+    ModelOption(value="bedrock/claude-opus-4-7", label="Claude Opus 4.7 Bedrock (via Requesty)"),
+    ModelOption(
+        value="bedrock/claude-sonnet-4-6", label="Claude Sonnet 4.6 Bedrock (via Requesty)"
+    ),
+    ModelOption(value="openai/gpt-5.5", label="GPT-5.5 (via Requesty)"),
+    ModelOption(
+        value="vertex/gemini-3.1-pro-preview", label="Gemini 3.1 Pro (preview, via Requesty)"
+    ),
+    ModelOption(
+        value="vertex/gemini-3.1-flash-lite-preview",
+        label="Gemini 3.1 Flash-Lite (preview, via Requesty)",
+    ),
+)
+
 GEMINI_MODELS = (
     ModelOption(value=GEMINI_REASONING_MODEL, label="Gemini 3.1 Pro (preview)"),
     ModelOption(value="gemini-3-flash-preview", label="Gemini 3 Flash (preview)"),
@@ -161,6 +182,51 @@ CODEX_MODELS = (
     ModelOption(value="gpt-5.1-codex-mini", label="gpt-5.1-codex-mini"),
 )
 
+# Empty value means "no --model" so Gemini CLI uses its configured/default model.
+GEMINI_CLI_MODELS = (
+    ModelOption(
+        value="",
+        label="CLI default (no --model; use Gemini CLI configured model)",
+    ),
+    ModelOption(value="gemini-2.5-pro", label="gemini-2.5-pro — strongest reasoning"),
+    ModelOption(value="gemini-2.5-flash", label="gemini-2.5-flash — fast and balanced"),
+)
+
+OPENCODE_MODELS = (
+    ModelOption(
+        value="",
+        label="CLI default (no -m; use OpenCode configured model)",
+    ),
+    ModelOption(
+        value="anthropic/claude-opus-4.7", label="Claude Opus 4.7 (via OpenCode) — most capable"
+    ),
+    ModelOption(
+        value="anthropic/claude-sonnet-4.6", label="Claude Sonnet 4.6 (via OpenCode) - balanced"
+    ),
+    ModelOption(
+        value="anthropic/claude-haiku-4-5-20251001",
+        label="Claude Haiku 4.5 (via OpenCode)— fast, cost-efficient",
+    ),
+    ModelOption(value="openai/gpt-5.4", label="GPT-5.4 (via OpenCode)"),
+    ModelOption(value="openai/gpt-5.4-mini", label="GPT-5.4 mini (via OpenCode)"),
+    ModelOption(value="openai/gpt-5.3-codex", label="GPT-5.3 Codex (via OpenCode)"),
+    ModelOption(value="google/gemini-3.1-pro-preview", label="Gemini 3.1 Pro (via OpenCode)"),
+    ModelOption(value="meta-llama/llama-4-maverick", label="Llama 4 Maverick (via OpenCode)"),
+    ModelOption(value="mistralai/mistral-large-2512", label="Mistral Large 3 (via OpenCode)"),
+)
+
+
+CURSOR_MODELS = (
+    ModelOption(
+        value="",
+        label="CLI default (no --model; use Cursor configured model)",
+    ),
+    ModelOption(value="auto", label="auto"),
+    ModelOption(value="gpt-5", label="gpt-5"),
+    ModelOption(value="sonnet-4", label="sonnet-4"),
+    ModelOption(value="sonnet-4-thinking", label="sonnet-4-thinking"),
+)
+
 
 def _codex_adapter_factory() -> LLMCLIAdapter:
     from app.integrations.llm_cli.codex import CodexAdapter
@@ -168,10 +234,45 @@ def _codex_adapter_factory() -> LLMCLIAdapter:
     return CodexAdapter()
 
 
+def _cursor_adapter_factory() -> LLMCLIAdapter:
+    from app.integrations.llm_cli.cursor import CursorAdapter
+
+    return CursorAdapter()
+
+
 def _claude_code_adapter_factory() -> LLMCLIAdapter:
     from app.integrations.llm_cli.claude_code import ClaudeCodeAdapter
 
     return ClaudeCodeAdapter()
+
+
+def _gemini_cli_adapter_factory() -> LLMCLIAdapter:
+    from app.integrations.llm_cli.gemini_cli import GeminiCLIAdapter
+
+    return GeminiCLIAdapter()
+
+
+def _opencode_adapter_factory() -> LLMCLIAdapter:
+    from app.integrations.llm_cli.opencode import OpenCodeAdapter
+
+    return OpenCodeAdapter()
+
+
+def _kimi_adapter_factory() -> LLMCLIAdapter:
+    from app.integrations.llm_cli.kimi import KimiAdapter
+
+    return KimiAdapter()
+
+
+KIMI_MODELS = (
+    ModelOption(
+        value="",
+        label="CLI default (no -m; use Kimi configured model)",
+    ),
+    ModelOption(value="kimi-k2-thinking-turbo", label="kimi-k2-thinking-turbo"),
+    ModelOption(value="kimi-k2.5", label="kimi-k2.5"),
+    ModelOption(value="kimi-k2.6", label="kimi-k2.6"),
+)
 
 
 SUPPORTED_PROVIDERS = (
@@ -184,6 +285,7 @@ SUPPORTED_PROVIDERS = (
         default_model=ANTHROPIC_REASONING_MODEL,
         models=ANTHROPIC_MODELS,
         legacy_model_env="ANTHROPIC_MODEL",
+        toolcall_model_env="ANTHROPIC_TOOLCALL_MODEL",
     ),
     ProviderOption(
         value="openai",
@@ -194,6 +296,7 @@ SUPPORTED_PROVIDERS = (
         default_model=OPENAI_REASONING_MODEL,
         models=OPENAI_MODELS,
         legacy_model_env="OPENAI_MODEL",
+        toolcall_model_env="OPENAI_TOOLCALL_MODEL",
     ),
     ProviderOption(
         value="openrouter",
@@ -204,6 +307,17 @@ SUPPORTED_PROVIDERS = (
         default_model=OPENROUTER_REASONING_MODEL,
         models=OPENROUTER_MODELS,
         legacy_model_env="OPENROUTER_MODEL",
+        toolcall_model_env="OPENROUTER_TOOLCALL_MODEL",
+    ),
+    ProviderOption(
+        value="requesty",
+        label="Requesty",
+        group="Hosted providers",
+        api_key_env="REQUESTY_API_KEY",
+        model_env="REQUESTY_REASONING_MODEL",
+        default_model=REQUESTY_REASONING_MODEL,
+        models=REQUESTY_MODELS,
+        legacy_model_env="REQUESTY_MODEL",
     ),
     ProviderOption(
         value="gemini",
@@ -214,6 +328,7 @@ SUPPORTED_PROVIDERS = (
         default_model=GEMINI_REASONING_MODEL,
         models=GEMINI_MODELS,
         legacy_model_env="GEMINI_MODEL",
+        toolcall_model_env="GEMINI_TOOLCALL_MODEL",
     ),
     ProviderOption(
         value="nvidia",
@@ -224,6 +339,7 @@ SUPPORTED_PROVIDERS = (
         default_model=NVIDIA_REASONING_MODEL,
         models=NVIDIA_MODELS,
         legacy_model_env="NVIDIA_MODEL",
+        toolcall_model_env="NVIDIA_TOOLCALL_MODEL",
     ),
     ProviderOption(
         value="codex",
@@ -238,6 +354,18 @@ SUPPORTED_PROVIDERS = (
         adapter_factory=_codex_adapter_factory,
     ),
     ProviderOption(
+        value="cursor",
+        label="Cursor Agent CLI",
+        group="Local CLI providers",
+        api_key_env="",
+        model_env="CURSOR_MODEL",
+        default_model="auto",
+        models=CURSOR_MODELS,
+        credential_kind="cli",
+        credential_secret=False,
+        adapter_factory=_cursor_adapter_factory,
+    ),
+    ProviderOption(
         value="claude-code",
         label="Anthropic Claude Code CLI",
         group="Local CLI providers",
@@ -248,6 +376,42 @@ SUPPORTED_PROVIDERS = (
         credential_kind="cli",
         credential_secret=False,
         adapter_factory=_claude_code_adapter_factory,
+    ),
+    ProviderOption(
+        value="gemini-cli",
+        label="Google Gemini CLI",
+        group="Local CLI providers",
+        api_key_env="",
+        model_env="GEMINI_CLI_MODEL",
+        default_model="",
+        models=GEMINI_CLI_MODELS,
+        credential_kind="cli",
+        credential_secret=False,
+        adapter_factory=_gemini_cli_adapter_factory,
+    ),
+    ProviderOption(
+        value="opencode",
+        label="OpenCode CLI",
+        group="Local CLI providers",
+        api_key_env="",
+        model_env="OPENCODE_MODEL",
+        default_model="",
+        models=OPENCODE_MODELS,
+        credential_kind="cli",
+        credential_secret=False,
+        adapter_factory=_opencode_adapter_factory,
+    ),
+    ProviderOption(
+        value="kimi",
+        label="Kimi Code CLI",
+        group="Local CLI providers",
+        api_key_env="",
+        model_env="KIMI_MODEL",
+        default_model="",
+        models=KIMI_MODELS,
+        credential_kind="cli",
+        credential_secret=False,
+        adapter_factory=_kimi_adapter_factory,
     ),
     ProviderOption(
         value="ollama",

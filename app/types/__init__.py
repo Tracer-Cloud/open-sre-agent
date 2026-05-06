@@ -1,5 +1,6 @@
 """Shared domain types — decoupled from any single module."""
 
+from app.types.config import Configurable, NodeConfig, get_configurable
 from app.types.evidence import EvidenceSource
 from app.types.retrieval import (
     AggregationSpec,
@@ -13,7 +14,9 @@ from app.types.retrieval import (
 from app.types.tools import ToolSurface
 
 __all__ = [
+    "Configurable",
     "EvidenceSource",
+    "NodeConfig",
     "ToolSurface",
     "RetrievalIntent",
     "RetrievalControls",
@@ -22,4 +25,5 @@ __all__ = [
     "FilterCondition",
     "FieldSelection",
     "AggregationSpec",
+    "get_configurable",
 ]

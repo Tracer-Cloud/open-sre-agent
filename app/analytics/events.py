@@ -9,6 +9,8 @@ class Event(StrEnum):
     # Lifecycle
     CLI_INVOKED = "cli_invoked"
     INSTALL_DETECTED = "install_detected"
+    USER_ID_LOAD_FAILED = "user_id_load_failed"
+    SENTRY_INIT_SKIPPED = "sentry_init_skipped"
 
     # Onboarding
     ONBOARD_STARTED = "onboard_started"
@@ -23,7 +25,6 @@ class Event(StrEnum):
     # Integrations
     INTEGRATION_SETUP_STARTED = "integration_setup_started"
     INTEGRATION_SETUP_COMPLETED = "integration_setup_completed"
-    INTEGRATION_ADDED = "integration_added"
     INTEGRATION_REMOVED = "integration_removed"
     INTEGRATION_VERIFIED = "integration_verified"
     INTEGRATIONS_LISTED = "integrations_listed"
