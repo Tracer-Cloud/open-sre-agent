@@ -88,7 +88,7 @@ class TestEC2Streaming:
         )
 
     def test_saved_url_matches_deployment(self, ec2_deployment: dict[str, Any]) -> None:
-        """The deploy step should persist the deployed remote URL to ~/.opensre."""
+        """The deploy step should persist the deployed remote URL to ~/.config/opensre."""
         ip = ec2_deployment["PublicIpAddress"]
 
         assert load_remote_url() == normalize_url(ip)

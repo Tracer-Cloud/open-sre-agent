@@ -33,7 +33,8 @@ def setup_integration(service: str | None) -> None:
     if resolved_service in VERIFY_SERVICES:
         click.echo(f"  Verifying {resolved_service}...\n")
         exit_code = cmd_verify(resolved_service)
-        capture_integration_verified(resolved_service)
+        if exit_code == 0:
+            capture_integration_verified(resolved_service)
         raise SystemExit(exit_code)
 
 
@@ -81,5 +82,6 @@ def verify_integration(
         service,
         send_slack_test=send_slack_test,
     )
-    capture_integration_verified(service or "all")
+    if exit_code == 0:
+        capture_integration_verified(service or "all")
     raise SystemExit(exit_code)

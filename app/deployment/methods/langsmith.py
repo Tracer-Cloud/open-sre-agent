@@ -100,7 +100,7 @@ def _read_env_value(env_path: Path, key: str) -> str | None:
 
 
 def _load_opensre_store() -> dict[str, Any]:
-    """Load ~/.opensre/opensre.json, returning an empty dict on failure."""
+    """Load ~/.config/opensre/opensre.json, returning an empty dict on failure."""
     store_path = get_store_path()
     if not store_path.exists():
         return {}

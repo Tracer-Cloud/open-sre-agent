@@ -1,26 +1,20 @@
-"""Forward Streamable HTTP MCP transport to the current ``mcp`` SDK.
-
-Older code paths used the deprecated ``streamablehttp_client(..., httpx_client_factory=...)``
-with a factory that returned a context-manager stand-in. That pattern breaks with current
-``mcp`` because ``async with client`` does not rebind ``client`` to the inner
-``httpx.AsyncClient``, so the transport received ``_DetachExitAsyncClientCM`` instead of a
-real client (``AttributeError: ... has no attribute 'stream'``).
-
-The supported API is ``streamable_http_client(url, http_client=prebuilt_client)``.
-Extra kwargs below are accepted for call-site compatibility but are ignored: configure
-timeouts and headers on ``httpx.AsyncClient`` before calling.
-"""
+"""Forward Streamable HTTP MCP transport across ``mcp`` SDK API shapes."""
 
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from importlib import import_module
 from typing import Any
 
 import httpx
-from mcp.client.streamable_http import (  # type: ignore[import-not-found]
-    streamable_http_client as _mcp_streamable_http_client,
-)
+
+_streamable_http_module = import_module("mcp.client.streamable_http")
+_mcp_streamable_http_client: Any = getattr(_streamable_http_module, "streamable_http_client", None)
+_mcp_streamablehttp_client: Any = getattr(_streamable_http_module, "streamablehttp_client", None)
+
+if _mcp_streamable_http_client is None and _mcp_streamablehttp_client is None:
+    raise ImportError("mcp.client.streamable_http has no streamable HTTP client")
 
 
 @asynccontextmanager
@@ -33,10 +27,22 @@ async def streamable_http_client(
     sse_read_timeout: float = 300.0,
     terminate_on_close: bool = True,
 ) -> AsyncGenerator[tuple[Any, Any, Any]]:
-    del headers, timeout, sse_read_timeout
-    async with _mcp_streamable_http_client(
+    if _mcp_streamable_http_client is not None:
+        del headers, timeout, sse_read_timeout
+        async with _mcp_streamable_http_client(
+            url,
+            http_client=http_client,
+            terminate_on_close=terminate_on_close,
+        ) as triple:
+            yield triple
+        return
+
+    del http_client
+    async with _mcp_streamablehttp_client(
         url,
-        http_client=http_client,
+        headers=headers,
+        timeout=timeout,
+        sse_read_timeout=sse_read_timeout,
         terminate_on_close=terminate_on_close,
     ) as triple:
         yield triple

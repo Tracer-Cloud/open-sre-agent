@@ -110,6 +110,8 @@ def npm_prefix_bin_dirs() -> tuple[str, ...]:
             ["npm", "config", "get", "prefix"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=2.0,
             check=False,
         )

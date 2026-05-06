@@ -1,7 +1,9 @@
 """Assign and notify **new** contributors on `good first issue` threads.
 
-Here *new* means **zero merged PRs** in this repo authored by the commenter (Search API),
-not GitHub's ``FIRST_TIME_CONTRIBUTOR`` / ``FIRST_TIMER`` flags.
+Here *new* means the commenter has **no merged PRs and no open PRs** in this repo where
+they are the PR author (GitHub Search API). **One or more merged PRs** means they are not
+treated as a first-time contributor for this automation (GitHub's ``FIRST_TIME_CONTRIBUTOR``
+/ ``FIRST_TIMER`` flags are not used).
 
 Also skips repo insiders (OWNER / MEMBER / COLLABORATOR), bots, closed issues,
 comments on **pull request** threads (``issue_comment`` fires for PRs too; those
@@ -23,7 +25,8 @@ from pathlib import Path
 from typing import Any
 
 GOOD_FIRST_LABEL = "good first issue"
-# Do not auto-assign maintainers/collaborators; eligibility is 0 merged PRs + not insider.
+# Do not auto-assign maintainers/collaborators;
+# eligibility is 0 merged + 0 open PRs as author + not insider.
 EXCLUDED_COMMENTER_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
 GITHUB_API = "https://api.github.com"
 
@@ -71,13 +74,17 @@ def assign_decision(
     *,
     skip_reason_pre_api: str | None,
     merged_pr_count_for_commenter: int,
+    open_pr_count_for_commenter: int,
 ) -> tuple[bool, str]:
     """Return (should_assign_and_comment, skip_reason_or_empty).
 
-    Eligible "new contributor" means ``merged_pr_count_for_commenter == 0`` (enforced here).
+    Eligible "new contributor" means ``merged_pr_count_for_commenter == 0`` and
+    ``open_pr_count_for_commenter == 0`` (PR author in this repo, via Search API).
     """
     if skip_reason_pre_api is not None:
         return False, skip_reason_pre_api
+    if open_pr_count_for_commenter > 0:
+        return False, "has_open_prs"
     if merged_pr_count_for_commenter > 0:
         return False, "has_merged_prs"
     return True, ""
@@ -97,19 +104,28 @@ def _request_json(url: str, token: str) -> Any:
         return json.loads(resp.read().decode("utf-8"))
 
 
-def fetch_merged_pr_count(owner: str, repo: str, login: str, token: str) -> int:
-    q = f"repo:{owner}/{repo} is:pr is:merged author:{login}"
-    params = urllib.parse.urlencode({"q": q})
+def _search_issue_total_count(query: str, token: str) -> int:
+    params = urllib.parse.urlencode({"q": query})
     url = f"{GITHUB_API}/search/issues?{params}"
     try:
         data = _request_json(url, token)
-    except urllib.error.HTTPError as exc:
+    except urllib.error.URLError as exc:
         print(f"GitHub search failed: {exc}", file=sys.stderr)
         raise
     total = data.get("total_count")
     if not isinstance(total, int):
         return 0
     return total
+
+
+def fetch_merged_pr_count(owner: str, repo: str, login: str, token: str) -> int:
+    q = f"repo:{owner}/{repo} is:pr is:merged author:{login}"
+    return _search_issue_total_count(q, token)
+
+
+def fetch_open_pr_count(owner: str, repo: str, login: str, token: str) -> int:
+    q = f"repo:{owner}/{repo} is:pr is:open author:{login}"
+    return _search_issue_total_count(q, token)
 
 
 def build_assign_notice_body(*, assignee_login: str) -> str:
@@ -139,6 +155,7 @@ def main() -> int:
 
     pre = screen_event_without_api(event)
     merged_count = 0
+    open_count = 0
 
     if pre is None:
         owner, _, repo = repository.partition("/")
@@ -149,12 +166,15 @@ def main() -> int:
         c_login = (comment.get("user") or {}).get("login") or ""
         try:
             merged_count = fetch_merged_pr_count(owner, repo, c_login, token)
-        except urllib.error.HTTPError:
+            open_count = fetch_open_pr_count(owner, repo, c_login, token)
+        except urllib.error.URLError as exc:
+            print(f"GitHub API request failed: {exc}", file=sys.stderr)
             return 1
 
     should, reason = assign_decision(
         skip_reason_pre_api=pre,
         merged_pr_count_for_commenter=merged_count,
+        open_pr_count_for_commenter=open_count,
     )
 
     if not should:

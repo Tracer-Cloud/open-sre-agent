@@ -15,6 +15,8 @@ Use this package when adding a new **non-interactive** LLM that shells out to a 
 | `runner.py`          | `CLIBackedLLMClient`: guardrails, `detect()`, `subprocess.run`, ANSI strip, `LLMResponse`.  |
 | `text.py`            | `flatten_messages_to_prompt` for stdin from chat-style payloads.                            |
 | `codex.py`           | Reference adapter: binary resolution, `codex exec`, probe via `--version` + `login status`. |
+| `opencode.py`        | Multi-provider CLI: `--version`, then `opencode auth list` (see `_parse_opencode_auth_list_output`). |
+| `kimi.py`            | `kimi --print` path: `--version`, `kimi login status`, then env/config.toml fallback (`KIMI_API_KEY`). |
 
 
 ## Wiring a new provider
@@ -89,6 +91,12 @@ See `_classify_codex_auth` in `codex.py` for a complete reference implementation
 Run `opencode auth list` after `--version` and parse the reported credential/environment
 counts so detection matches the CLI (do not infer auth from the JSON file alone).
 
+**Kimi** uses `kimi login status` after `--version`, then `_check_kimi_auth_fallback()` when the
+CLI did not positively confirm auth (`logged_in` not `True`): check `KIMI_API_KEY`, then API keys in
+``~/.kimi/config.toml`` (or `KIMI_SHARE_DIR`). API-key-only installs may omit “logged in” phrasing in
+`login status`, so the fallback mirrors real usage. The same fallback runs when `login status` times
+out or fails to spawn (`logged_in=None`), so a configured API key still counts as authenticated.
+
 ## Subprocess environment allowlist
 
 `CLIBackedLLMClient` passes only a safe subset of env vars to the subprocess via
@@ -100,7 +108,9 @@ Shared HTTP/API overrides live in `env_overrides.py`: use `nonempty_env_values(.
 `ANTHROPIC_CLI_ENV_KEYS` (Claude Code), or `CURSOR_CLI_ENV_KEYS` (Cursor Agent headless API key).
 Extend those tuples when you add a matching API-key env to `LLMSettings`.
 
-The current prefix allowlist includes `CODEX_`, `CURSOR_`, `CLAUDE_`, `OPENCODE_`, and locale keys (`LC_`).
+**Kimi** does not use those tuples today: OAuth/API material is covered by forwarding any `KIMI_*` keys via `_SAFE_SUBPROCESS_ENV_PREFIXES`; `KimiAdapter.build()` uses `CLIInvocation(env=None)` and relies on that allowlist.
+
+The current prefix allowlist includes `CODEX_`, `CURSOR_`, `CLAUDE_`, `OPENCODE_`, `KIMI_`, and locale keys (`LC_`).
 
 **If your CLI reads custom env vars** (e.g. `GEMINI_*`) you must add the
 relevant prefix to `_SAFE_SUBPROCESS_ENV_PREFIXES` in `subprocess_env.py`, otherwise the

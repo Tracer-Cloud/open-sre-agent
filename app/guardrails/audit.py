@@ -8,9 +8,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from app.constants import OPENSRE_HOME_DIR
+
 logger = logging.getLogger(__name__)
 
-_DEFAULT_AUDIT_PATH = Path.home() / ".opensre" / "guardrail_audit.jsonl"
+_DEFAULT_AUDIT_PATH = OPENSRE_HOME_DIR / "guardrail_audit.jsonl"
 
 
 class AuditLogger:

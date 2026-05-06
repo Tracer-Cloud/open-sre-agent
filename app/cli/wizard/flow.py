@@ -489,6 +489,8 @@ def _configure_grafana_local() -> tuple[str, str]:
         ["docker", "info"],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
     )
     if ping.returncode != 0:
         _console.print("[red]Docker is not running.[/]")
@@ -501,6 +503,8 @@ def _configure_grafana_local() -> tuple[str, str]:
             ["docker", "compose", "-f", compose_file, "up", "-d"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
     if result.returncode != 0:
         _console.print("[red]Docker compose failed.[/]")

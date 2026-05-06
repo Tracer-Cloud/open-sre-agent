@@ -1608,7 +1608,7 @@ def resolve_effective_integrations(
     store_integrations: list[dict[str, Any]] | None = None,
     env_integrations: list[dict[str, Any]] | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """Resolve effective local integrations from ~/.opensre and environment variables."""
+    """Resolve effective local integrations from ~/.config/opensre and environment variables."""
     store_records = (
         list(store_integrations) if store_integrations is not None else load_integrations()
     )

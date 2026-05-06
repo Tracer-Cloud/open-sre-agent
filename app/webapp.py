@@ -6,7 +6,10 @@ from fastapi import FastAPI, Response, status
 from pydantic import BaseModel, ValidationError
 
 from app.config import LLMSettings, get_environment
+from app.utils.sentry_sdk import init_sentry
 from app.version import get_version
+
+init_sentry()
 
 
 class HealthResponse(BaseModel):

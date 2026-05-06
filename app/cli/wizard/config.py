@@ -242,6 +242,23 @@ def _opencode_adapter_factory() -> LLMCLIAdapter:
     return OpenCodeAdapter()
 
 
+def _kimi_adapter_factory() -> LLMCLIAdapter:
+    from app.integrations.llm_cli.kimi import KimiAdapter
+
+    return KimiAdapter()
+
+
+KIMI_MODELS = (
+    ModelOption(
+        value="",
+        label="CLI default (no -m; use Kimi configured model)",
+    ),
+    ModelOption(value="kimi-k2-thinking-turbo", label="kimi-k2-thinking-turbo"),
+    ModelOption(value="kimi-k2.5", label="kimi-k2.5"),
+    ModelOption(value="kimi-k2.6", label="kimi-k2.6"),
+)
+
+
 SUPPORTED_PROVIDERS = (
     ProviderOption(
         value="anthropic",
@@ -355,6 +372,18 @@ SUPPORTED_PROVIDERS = (
         credential_kind="cli",
         credential_secret=False,
         adapter_factory=_opencode_adapter_factory,
+    ),
+    ProviderOption(
+        value="kimi",
+        label="Kimi Code CLI",
+        group="Local CLI providers",
+        api_key_env="",
+        model_env="KIMI_MODEL",
+        default_model="",
+        models=KIMI_MODELS,
+        credential_kind="cli",
+        credential_secret=False,
+        adapter_factory=_kimi_adapter_factory,
     ),
     ProviderOption(
         value="ollama",

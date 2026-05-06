@@ -16,6 +16,7 @@ from app.cli.interactive_shell.history import load_command_history_entries
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
 from app.cli.support.errors import OpenSREError
+from app.utils.sentry_sdk import capture_exception
 
 
 @dataclass(frozen=True)
@@ -574,6 +575,7 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
         session.record("alert", args[0], ok=False)
         return True
     except Exception as exc:  # noqa: BLE001
+        capture_exception(exc)
         console.print(f"[red]investigation failed:[/red] {escape(str(exc))}")
         session.record("alert", args[0], ok=False)
         return True

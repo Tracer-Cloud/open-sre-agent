@@ -1,6 +1,7 @@
 """Post-processing: merge evidence and track hypotheses."""
 
 import json
+import logging
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -8,6 +9,8 @@ from datetime import UTC, datetime
 from app.nodes.investigate.execution.execute_actions import ActionExecutionResult
 from app.nodes.investigate.types import ExecutedHypothesis, FailedAction, PlanAudit
 from app.tools.utils.metric_summary import summarize_prometheus_metrics
+
+logger = logging.getLogger(__name__)
 
 MAX_RETRYABLE_ACTION_FAILURES = 2
 _NON_RETRYABLE_FAILURE_INDICATORS = (
@@ -920,7 +923,7 @@ def build_evidence_summary(execution_results: dict[str, ActionExecutionResult]) 
             # Log action failures for debugging
             error_msg = f"{action_name}:FAILED({result.error[:50] if result.error else 'unknown'})"
             errors.append(error_msg)
-            print(f"[WARNING] Action failed: {error_msg}")
+            logger.warning("Action failed: %s", error_msg)
 
     if errors:
         summary = ", ".join(summary_parts) if summary_parts else "No evidence collected"

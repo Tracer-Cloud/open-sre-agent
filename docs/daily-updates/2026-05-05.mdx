@@ -1,0 +1,77 @@
+---
+title: "Daily Update — 2026-05-05"
+description: "OpenSRE engineering daily update for 2026-05-05 (Europe/London)"
+---
+
+Thanks to everyone who contributed yesterday:
+
+Aayush Pratap Singh, Aayush Pratap Singh, Anwesh, Aryan Jain, Awokoya Olawale Davidson, Ceren Camkiran, Devesh, igor-berger, Jet, MAREDDY SAI TEJAS, mazenessam77, Richard Coker, Rohit Rajan, Rohit Rajan, Shubham Solanke, Sundaram Kumar Jha, vidhishah2209, vincenthus, and yashksaini-coder 🙏🚀
+
+## Main updates shipped (May 5, 2026)
+
+- feat(integrations): support Cursor Agent CLI as non-interactive LLM backend — Ceren Camkiran
+- feat(opencode-cli): add opencode cli as llm cli provider — Richard Coker
+- feat(rds): RDS integration with describe instance and events tools — mazenessam77
+- feat(integrations): support Kimi Code CLI as non-interactive LLM backend — Aryan Jain
+- fix(analytics): persist unique CLI install IDs — vincenthus
+- fix(llm-cli): harden codex and claude-code auth probe paths — Anwesh
+- fix(claude-code): parse auth status JSON before exit code; use authMethod (#1260) — Awokoya Olawale Davidson
+- fix/added universal Bedrock model support using Converse API. fixes #1306 — Shubham Solanke
+- fix(rca): surface bad-query Performance Insights evidence — Sundaram Kumar Jha
+- fix(analytics): honour OPENSRE_NO_TELEMETRY to prevent CLI smoke test timeouts — MAREDDY SAI TEJAS
+- chore(deps): commit uv.lock and lock CI to uv sync — Anwesh
+- fix(llm): lazy OpenAI client init fix regression tests and Run full tests in PR CI — Anwesh
+- fix(cli): remove summary block from onboard completion output — Rohit Rajan
+- fix: improve WAL-driven replication lag RCA (scenario 001) + add QA validation — Ceren Camkiran
+- fix(release-announcements): include role mention in Discord release announcement — Devesh
+- test(airflow-routing): require connection_verified on openclaw fixture — Awokoya Olawale Davidson
+- test: add filesystem fallback tests for analytics provider (#1119) — vidhishah2209
+- docs: fix contributing guide links — Aayush Pratap Singh
+- revert(ci): skip coverage artifact upload on fork PRs — Anwesh
+- test(wizard): fix Claude Code flow test after demo step removal — Anwesh
+
+## Source pull requests
+
+- [#1291](https://github.com/Tracer-Cloud/opensre/pull/1291) fix(llm): lazy OpenAI client init fix regression tests and Run full tests in PR CI (author: Anwesh; contributors: Anwesh; labels: `ci:windows`; files: `.github/workflows/ci.yml`, `app/services/llm_client.py`, `tests/services/test_llm_client.py`, `tests/test_guardrails/test_llm_integration.py`)
+- [#1276](https://github.com/Tracer-Cloud/opensre/pull/1276) test: add filesystem fallback tests for analytics provider (#1119) (author: vidhishah2209; contributors: Anwesh and vidhishah2209; labels: _none_; files: `tests/analytics/test_provider.py`)
+- [#1296](https://github.com/Tracer-Cloud/opensre/pull/1296) revert(ci): skip coverage artifact upload on fork PRs (author: Anwesh; contributors: Anwesh; labels: _none_; files: `.github/workflows/ci.yml`)
+- [#1293](https://github.com/Tracer-Cloud/opensre/pull/1293) fix(cli): remove summary block from onboard completion output (author: Rohit Rajan; contributors: Rohit Rajan and Rohit Rajan; labels: _none_; files: `app/cli/wizard/flow.py`, `tests/cli/wizard/test_flow.py`, `tests/cli_smoke_test.py`)
+- [#1295](https://github.com/Tracer-Cloud/opensre/pull/1295) fix(llm-cli): harden codex and claude-code auth probe paths (author: Anwesh; contributors: Anwesh; labels: `ci:windows`; files: `app/cli/commands/doctor.py`, `app/cli/interactive_shell/cli_agent.py`, `app/integrations/llm_cli/AGENTS.md`, `app/integrations/llm_cli/binary_resolver.py`, `app/integrations/llm_cli/claude_code.py`, `app/integrations/llm_cli/codex.py`, `app/integrations/llm_cli/runner.py`, `app/integrations/llm_cli/subprocess_env.py`, `tests/cli/interactive_shell/test_cli_agent.py`, `tests/cli/test_doctor.py`, and 6 more)
+- [#1297](https://github.com/Tracer-Cloud/opensre/pull/1297) test(wizard): fix Claude Code flow test after demo step removal (author: Anwesh; contributors: Anwesh; labels: _none_; files: `tests/cli/wizard/test_flow.py`)
+- [#1303](https://github.com/Tracer-Cloud/opensre/pull/1303) test(airflow-routing): require connection_verified on openclaw fixture (author: Awokoya Olawale Davidson; contributors: Awokoya Olawale Davidson; labels: _none_; files: `tests/nodes/plan_actions/test_airflow_routing.py`)
+- [#1302](https://github.com/Tracer-Cloud/opensre/pull/1302) fix(claude-code): parse auth status JSON before exit code; use authMethod (#1260) (author: Awokoya Olawale Davidson; contributors: Awokoya Olawale Davidson; labels: _none_; files: `app/integrations/llm_cli/claude_code.py`, `tests/integrations/llm_cli/test_claude_code_adapter.py`)
+- [#1149](https://github.com/Tracer-Cloud/opensre/pull/1149) feat(integrations): support Cursor Agent CLI as non-interactive LLM backend (author: Ceren Camkiran; contributors: Anwesh and Ceren Camkiran; labels: `llm-cli`; files: `.env.example`, `app/cli/investigation/investigate.py`, `app/cli/wizard/config.py`, `app/config.py`, `app/integrations/llm_cli/AGENTS.md`, `app/integrations/llm_cli/__init__.py`, `app/integrations/llm_cli/cursor.py`, `app/integrations/llm_cli/errors.py`, `app/integrations/llm_cli/registry.py`, `app/integrations/llm_cli/runner.py`, and 4 more)
+- [#1310](https://github.com/Tracer-Cloud/opensre/pull/1310) fix(release-announcements): include role mention in Discord release announcement (author: Devesh; contributors: Devesh; labels: _none_; files: `.github/workflows/release-announcements.yml`)
+- [#1312](https://github.com/Tracer-Cloud/opensre/pull/1312) docs: fix contributing guide links (author: Aayush Pratap Singh; contributors: Aayush Pratap Singh and Aayush Pratap Singh; labels: _none_; files: `CONTRIBUTING.md`)
+- [#1196](https://github.com/Tracer-Cloud/opensre/pull/1196) feat(opencode-cli): add opencode cli as llm cli provider (author: Richard Coker; contributors: Anwesh and Richard Coker; labels: `llm-cli`, `needs-work`; files: `.env.example`, `app/cli/wizard/config.py`, `app/cli/wizard/flow.py`, `app/config.py`, `app/integrations/llm_cli/AGENTS.md`, `app/integrations/llm_cli/claude_code.py`, `app/integrations/llm_cli/codex.py`, `app/integrations/llm_cli/cursor.py`, `app/integrations/llm_cli/env_overrides.py`, `app/integrations/llm_cli/opencode.py`, and 6 more)
+- [#1292](https://github.com/Tracer-Cloud/opensre/pull/1292) chore(deps): commit uv.lock and lock CI to uv sync (author: Anwesh; contributors: Anwesh; labels: `ci:windows`, `pending triage`; files: `.github/dependabot.yml`, `.github/workflows/ci-labels-windows.yml`, `.github/workflows/ci.yml`, `.github/workflows/synthetic-tests.yml`, `.github/workflows/weekly-synthetic-and-deps-canary.yml`, `.gitignore`, `CONTRIBUTING.md`, `Makefile`, `README.md`, `SETUP.md`, and 1 more)
+- [#1321](https://github.com/Tracer-Cloud/opensre/pull/1321) chore(deps): bump types-requests from 2.33.0.20260408 to 2.33.0.20260503 (author: dependabot[bot]; contributors: no human contributors recorded in merged PRs today; labels: `dependencies`, `python:uv`; files: `uv.lock`)
+- [#1331](https://github.com/Tracer-Cloud/opensre/pull/1331) chore(deps): bump ruff from 0.15.11 to 0.15.12 (author: dependabot[bot]; contributors: no human contributors recorded in merged PRs today; labels: `dependencies`, `python:uv`; files: `uv.lock`)
+- [#1327](https://github.com/Tracer-Cloud/opensre/pull/1327) chore(deps): bump opentelemetry-instrumentation from 0.62b0 to 0.62b1 (author: dependabot[bot]; contributors: no human contributors recorded in merged PRs today; labels: `dependencies`, `python:uv`; files: `uv.lock`)
+- [#1322](https://github.com/Tracer-Cloud/opensre/pull/1322) chore(deps): bump google-api-python-client from 2.194.0 to 2.195.0 (author: dependabot[bot]; contributors: no human contributors recorded in merged PRs today; labels: `dependencies`, `python:uv`; files: `uv.lock`)
+- [#1333](https://github.com/Tracer-Cloud/opensre/pull/1333) chore(deps): bump langchain-anthropic from 1.4.1 to 1.4.3 (author: dependabot[bot]; contributors: no human contributors recorded in merged PRs today; labels: `dependencies`, `python:uv`; files: `uv.lock`)
+- [#1332](https://github.com/Tracer-Cloud/opensre/pull/1332) chore(deps): bump google-auth from 2.49.2 to 2.50.0 (author: dependabot[bot]; contributors: no human contributors recorded in merged PRs today; labels: `dependencies`, `python:uv`; files: `uv.lock`)
+- [#1330](https://github.com/Tracer-Cloud/opensre/pull/1330) chore(deps): bump tzdata from 2026.1 to 2026.2 (author: dependabot[bot]; contributors: no human contributors recorded in merged PRs today; labels: `dependencies`, `python:uv`; files: `uv.lock`)
+- [#1329](https://github.com/Tracer-Cloud/opensre/pull/1329) chore(deps): bump langsmith from 0.7.33 to 0.8.0 (author: dependabot[bot]; contributors: no human contributors recorded in merged PRs today; labels: `dependencies`, `python:uv`; files: `uv.lock`)
+- [#1328](https://github.com/Tracer-Cloud/opensre/pull/1328) chore(deps): bump langchain-core from 1.3.0 to 1.3.2 (author: dependabot[bot]; contributors: no human contributors recorded in merged PRs today; labels: `dependencies`, `python:uv`; files: `uv.lock`)
+- [#1326](https://github.com/Tracer-Cloud/opensre/pull/1326) chore(deps): bump cryptography from 46.0.7 to 48.0.0 (author: dependabot[bot]; contributors: no human contributors recorded in merged PRs today; labels: `dependencies`, `python:uv`; files: `uv.lock`)
+- [#1325](https://github.com/Tracer-Cloud/opensre/pull/1325) chore(deps): bump boto3 from 1.42.94 to 1.43.3 (author: dependabot[bot]; contributors: no human contributors recorded in merged PRs today; labels: `dependencies`, `python:uv`; files: `uv.lock`)
+- [#1324](https://github.com/Tracer-Cloud/opensre/pull/1324) chore(deps): bump opentelemetry-api from 1.41.0 to 1.41.1 (author: dependabot[bot]; contributors: no human contributors recorded in merged PRs today; labels: `dependencies`, `python:uv`; files: `uv.lock`)
+- [#1323](https://github.com/Tracer-Cloud/opensre/pull/1323) chore(deps): bump fastapi from 0.136.0 to 0.136.1 (author: dependabot[bot]; contributors: no human contributors recorded in merged PRs today; labels: `dependencies`, `python:uv`; files: `uv.lock`)
+- [#1337](https://github.com/Tracer-Cloud/opensre/pull/1337) chore(deps): bump opentelemetry-instrumentation-requests from 0.62b0 to 0.62b1 (author: dependabot[bot]; contributors: no human contributors recorded in merged PRs today; labels: `dependencies`, `python:uv`; files: `uv.lock`)
+- [#1336](https://github.com/Tracer-Cloud/opensre/pull/1336) chore(deps): bump opentelemetry-instrumentation-botocore from 0.62b0 to 0.62b1 (author: dependabot[bot]; contributors: no human contributors recorded in merged PRs today; labels: `dependencies`, `python:uv`; files: `uv.lock`)
+- [#1335](https://github.com/Tracer-Cloud/opensre/pull/1335) chore(deps): bump anthropic from 0.96.0 to 0.99.0 (author: dependabot[bot]; contributors: no human contributors recorded in merged PRs today; labels: `dependencies`, `python:uv`; files: `uv.lock`)
+- [#1334](https://github.com/Tracer-Cloud/opensre/pull/1334) chore(deps): bump langchain-openai from 1.2.0 to 1.2.1 (author: dependabot[bot]; contributors: no human contributors recorded in merged PRs today; labels: `dependencies`, `python:uv`; files: `uv.lock`)
+- [#1214](https://github.com/Tracer-Cloud/opensre/pull/1214) fix: improve WAL-driven replication lag RCA (scenario 001) + add QA validation (author: Ceren Camkiran; contributors: Ceren Camkiran; labels: `pending triage`; files: `tests/synthetic/rds_postgres/001-replication-lag/QA_VALIDATION.md`, `tests/synthetic/rds_postgres/001-replication-lag/answer.yml`, `tests/synthetic/rds_postgres/run_suite.py`)
+- [#1268](https://github.com/Tracer-Cloud/opensre/pull/1268) fix(rca): surface bad-query Performance Insights evidence (author: Sundaram Kumar Jha; contributors: Sundaram Kumar Jha; labels: `pending triage`; files: `app/nodes/root_cause_diagnosis/prompt_builder.py`, `tests/nodes/root_cause_diagnosis/test_prompt_builder.py`)
+- [#1308](https://github.com/Tracer-Cloud/opensre/pull/1308) fix/added universal Bedrock model support using Converse API. fixes #1306 (author: Shubham Solanke; contributors: Anwesh and Shubham Solanke; labels: `needs-work`; files: `.env.example`, `app/services/llm_client.py`, `docs/llm-providers.mdx`, `tests/services/test_llm_client.py`)
+- [#1287](https://github.com/Tracer-Cloud/opensre/pull/1287) feat(rds): RDS integration with describe instance and events tools (author: mazenessam77; contributors: igor-berger and mazenessam77; labels: `pending triage`; files: `app/integrations/_catalog_impl.py`, `app/integrations/rds.py`, `app/nodes/plan_actions/detect_sources.py`, `app/tools/RDSDescribeInstanceTool/__init__.py`, `app/tools/RDSEventsTool/__init__.py`, `app/types/evidence.py`, `docs/docs.json`, `docs/rds.mdx`, `tests/integrations/test_rds.py`, `tests/tools/test_rds_tools.py`)
+- [#1139](https://github.com/Tracer-Cloud/opensre/pull/1139) feat(integrations): support Kimi Code CLI as non-interactive LLM backend (author: Aryan Jain; contributors: Anwesh, Aryan Jain, and yashksaini-coder; labels: `llm-cli`, `needs-work`; files: `.env.example`, `app/cli/wizard/config.py`, `app/cli/wizard/flow.py`, `app/config.py`, `app/integrations/llm_cli/AGENTS.md`, `app/integrations/llm_cli/binary_resolver.py`, `app/integrations/llm_cli/kimi.py`, `app/integrations/llm_cli/registry.py`, `app/integrations/llm_cli/runner.py`, `app/integrations/llm_cli/subprocess_env.py`, and 2 more)
+- [#1348](https://github.com/Tracer-Cloud/opensre/pull/1348) fix(analytics): persist unique CLI install IDs (author: vincenthus; contributors: vincenthus; labels: _none_; files: `.env.example`, `README.md`, `app/analytics/events.py`, `app/analytics/provider.py`, `app/cli/__main__.py`, `app/cli/commands/agent.py`, `app/cli/commands/deploy.py`, `app/cli/commands/general.py`, `app/cli/commands/integrations.py`, `app/cli/commands/tests.py`, and 32 more)
+- [#1350](https://github.com/Tracer-Cloud/opensre/pull/1350) fix(analytics): honour OPENSRE_NO_TELEMETRY to prevent CLI smoke test timeouts (author: MAREDDY SAI TEJAS; contributors: Jet, MAREDDY SAI TEJAS, and vincenthus; labels: _none_; files: `app/analytics/provider.py`, `tests/analytics/test_provider.py`, `tests/cli/test_main.py`)
+
+## Generation metadata
+
+- Generator version: `opensre 2026.4.5`
+- Fallback summary used: `no`
+- UTC window: `2026-05-04T23:00:00+00:00` to `2026-05-05T23:00:00+00:00`
