@@ -39,11 +39,11 @@ Usage:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class MemoryMode(str, Enum):
+class MemoryMode(StrEnum):
     """Classification of whether memory injection helped, hurt, or no-op'd a run."""
 
     MEMORY_HELPED = "memory_helped"

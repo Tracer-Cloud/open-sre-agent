@@ -18,7 +18,6 @@ from tests.synthetic.rds_postgres.axis_memory.scoring import (
     summarize_annotations,
 )
 
-
 # ---------------------------------------------------------------------------
 # Test fixtures
 # ---------------------------------------------------------------------------

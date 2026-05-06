@@ -140,9 +140,7 @@ def run(argv: list[str] | None = None) -> list[PairAnnotation]:
         baseline_score = _run_baseline(sibling_id, fixtures_by_id, args.mock_grafana)
         memory_score = None
         if args.memory:
-            memory_score = _run_with_memory(
-                base_id, sibling_id, fixtures_by_id, args.mock_grafana
-            )
+            memory_score = _run_with_memory(base_id, sibling_id, fixtures_by_id, args.mock_grafana)
 
         annotations.append(
             annotate_pair(
