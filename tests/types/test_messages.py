@@ -10,13 +10,11 @@ These tests verify:
 from __future__ import annotations
 
 import ast
-import os
 from pathlib import Path
 
 import pytest
 
 from app.types.messages import (
-    SREMessage,
     SREMessageList,
     from_lc_message,
     make_assistant,
