@@ -172,6 +172,37 @@ def test_check_integrations_reports_configured_services(monkeypatch, tmp_path) -
     assert detail == "2 configured: grafana, datadog"
 
 
+def test_check_langgraph_graph_success() -> None:
+    called = False
+
+    def _build_graph() -> object:
+        nonlocal called
+        called = True
+        return object()
+
+    ok, detail = doctor._check_langgraph_graph(_build_graph)
+
+    assert ok is True
+    assert detail == "LangGraph agent graph compiles"
+    assert called is True
+
+
+def test_check_langgraph_graph_compile_failure() -> None:
+    def _build_graph() -> object:
+        raise RuntimeError("unknown node target")
+
+    ok, detail = doctor._check_langgraph_graph(_build_graph)
+
+    assert ok is False
+    assert detail == "LangGraph graph compile failed: unknown node target"
+
+
+def test_doctor_checks_include_langgraph_graph() -> None:
+    check_names = [name for name, _fn in doctor._CHECKS]
+
+    assert "langgraph_graph" in check_names
+
+
 def test_check_version_freshness_up_to_date(monkeypatch) -> None:
     fetch_latest_version = MagicMock(return_value="1.2.3")
     is_update_available = MagicMock(return_value=False)

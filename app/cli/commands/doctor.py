@@ -6,6 +6,7 @@ import json
 import os
 import platform
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -90,6 +91,20 @@ def _check_integrations() -> tuple[bool, str]:
     return True, f"{len(items)} configured: {', '.join(names)}"
 
 
+def _check_langgraph_graph(
+    build_graph_fn: Callable[[], Any] | None = None,
+) -> tuple[bool, str]:
+    try:
+        if build_graph_fn is None:
+            from app.pipeline.graph import build_graph
+
+            build_graph_fn = build_graph
+        build_graph_fn()
+    except Exception as exc:  # noqa: BLE001
+        return False, f"LangGraph graph compile failed: {exc}"
+    return True, "LangGraph agent graph compiles"
+
+
 def _check_version_freshness() -> tuple[bool, str]:
     current = get_version()
     try:
@@ -118,6 +133,7 @@ _CHECKS = [
     ("env_file", _check_env_file),
     ("llm_provider", _check_llm_provider),
     ("integrations", _check_integrations),
+    ("langgraph_graph", _check_langgraph_graph),
     ("version", _check_version_freshness),
     ("network", _check_network),
 ]
