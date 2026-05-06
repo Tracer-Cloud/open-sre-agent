@@ -182,14 +182,23 @@ def _install_sigint_handler() -> None:
     signal.signal(signal.SIGINT, _handler)
 
 
+def _is_update_invocation(argv: list[str]) -> bool:
+    command_parts = _resolve_command_parts(cli, argv)
+    return bool(command_parts) and command_parts[0] == "update"
+
+
 def main(argv: list[str] | None = None) -> int:
     """Entry point for the ``opensre`` console script."""
     load_dotenv(override=False)
-    init_sentry()
+    cli_argv = list(sys.argv[1:] if argv is None else argv)
+    try:
+        init_sentry()
+    except ModuleNotFoundError as exc:
+        if exc.name != "sentry_sdk" or not _is_update_invocation(cli_argv):
+            raise
     install_questionary_escape_cancel()
     install_questionary_ctrl_c_double_exit()
     _install_sigint_handler()
-    cli_argv = list(sys.argv[1:] if argv is None else argv)
 
     try:
         cli(

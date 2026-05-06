@@ -73,6 +73,36 @@ def test_main_runs_health_command(monkeypatch) -> None:
     assert exit_code == 0
 
 
+def test_main_allows_update_when_sentry_sdk_missing(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
+
+    def _raise_missing_sentry() -> None:
+        raise ModuleNotFoundError("No module named 'sentry_sdk'", name="sentry_sdk")
+
+    monkeypatch.setattr("app.cli.__main__.init_sentry", _raise_missing_sentry)
+    monkeypatch.setattr("app.cli.support.update._fetch_latest_version", lambda: "9999.0.0")
+    monkeypatch.setattr("app.cli.support.update._is_update_available", lambda _c, _l: False)
+
+    exit_code = main(["update", "--check"])
+
+    assert exit_code == 0
+    assert "already up to date" in capsys.readouterr().out
+
+
+def test_main_non_update_still_raises_when_sentry_sdk_missing(monkeypatch) -> None:
+    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
+
+    def _raise_missing_sentry() -> None:
+        raise ModuleNotFoundError("No module named 'sentry_sdk'", name="sentry_sdk")
+
+    monkeypatch.setattr("app.cli.__main__.init_sentry", _raise_missing_sentry)
+
+    with pytest.raises(ModuleNotFoundError):
+        main(["version"])
+
+
 def test_main_does_not_capture_analytics_for_help(monkeypatch, capsys) -> None:
     captured: list[str] = []
     monkeypatch.setattr(
