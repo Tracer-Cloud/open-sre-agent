@@ -11,6 +11,7 @@ from rich.console import Console
 
 from app.cli.interactive_shell.commands import SLASH_COMMANDS, dispatch_slash
 from app.cli.interactive_shell.session import ReplSession
+from app.cli.interactive_shell.tasks import TaskKind, TaskStatus
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -682,8 +683,33 @@ class TestInvestigateFileCommand:
             "region": "us-east-1",
         }
 
+    def test_investigate_opensre_error_marks_task_failed(
+        self, tmp_path: object, monkeypatch: object
+    ) -> None:
+        from app.cli.support.errors import OpenSREError
 
-# ---------------------------------------------------------------------------
+        alert_file = tmp_path / "alert.json"  # type: ignore[operator]
+        alert_file.write_text('{"alert_name": "test"}', encoding="utf-8")  # type: ignore[union-attr]
+
+        def _raise(
+            alert_text: str,
+            context_overrides: object = None,
+            cancel_requested: object = None,
+        ) -> dict[str, object]:
+            raise OpenSREError("bad config")
+
+        monkeypatch.setattr("app.cli.investigation.run_investigation_for_session", _raise)
+        session = ReplSession()
+        console, _ = _capture()
+        dispatch_slash(f"/investigate {alert_file}", session, console)
+        inv_tasks = [
+            t for t in session.task_registry.list_recent(10) if t.kind == TaskKind.INVESTIGATION
+        ]
+        assert len(inv_tasks) == 1
+        assert inv_tasks[0].status == TaskStatus.FAILED
+        assert inv_tasks[0].error == "bad config"
+
+
 # Task 4 — Session-state commands
 # ---------------------------------------------------------------------------
 

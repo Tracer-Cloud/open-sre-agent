@@ -575,6 +575,7 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
         session.record("alert", args[0], ok=False)
         return True
     except OpenSREError as exc:
+        task.mark_failed(str(exc))
         console.print(f"[red]investigation failed:[/red] {escape(str(exc))}")
         if exc.suggestion:
             console.print(f"[yellow]suggestion:[/yellow] {escape(exc.suggestion)}")

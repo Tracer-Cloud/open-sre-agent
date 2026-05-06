@@ -323,6 +323,34 @@ def test_execute_cli_actions_runs_sample_alert(monkeypatch: object) -> None:
     assert "generic" in output
 
 
+def test_execute_cli_actions_sample_alert_opensre_error_marks_task_failed(
+    monkeypatch: object,
+) -> None:
+    from app.cli.support.errors import OpenSREError
+
+    def _raise(
+        *,
+        template_name: str = "generic",
+        context_overrides: dict[str, object] | None = None,
+        cancel_requested: object | None = None,
+    ) -> dict[str, object]:
+        raise OpenSREError("sample pipeline blocked")
+
+    import app.cli.investigation as investigation_module
+
+    monkeypatch.setattr(investigation_module, "run_sample_alert_for_session", _raise)
+
+    session = ReplSession()
+    console, _ = _capture()
+    assert execute_cli_actions("okay launch a simple alert", session, console) is True
+    inv_tasks = [
+        t for t in session.task_registry.list_recent(10) if t.kind == TaskKind.INVESTIGATION
+    ]
+    assert len(inv_tasks) == 1
+    assert inv_tasks[0].status == TaskStatus.FAILED
+    assert inv_tasks[0].error == "sample pipeline blocked"
+
+
 def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch: object) -> None:
     dispatched: list[str] = []
     popen_calls: list[tuple[list[str], dict[str, object]]] = []

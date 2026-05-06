@@ -616,6 +616,7 @@ def _run_sample_alert(template_name: str, session: ReplSession, console: Console
         session.record("alert", f"sample:{template_name}", ok=False)
         return
     except OpenSREError as exc:
+        task.mark_failed(str(exc))
         console.print(f"[red]investigation failed:[/red] {escape(str(exc))}")
         if exc.suggestion:
             console.print(f"[yellow]suggestion:[/yellow] {escape(exc.suggestion)}")

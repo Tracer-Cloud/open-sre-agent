@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 from pathlib import Path
 
 import pytest
@@ -103,3 +104,29 @@ def test_completion_menu_current_item_uses_subtle_highlight() -> None:
     assert attrs.bgcolor == "241913"
     assert attrs.reverse is False
     assert attrs.bold is False
+
+
+def test_run_new_alert_marks_task_failed_on_opensre_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    from rich.console import Console
+
+    from app.cli.interactive_shell.session import ReplSession
+    from app.cli.interactive_shell.tasks import TaskKind, TaskStatus
+    from app.cli.support.errors import OpenSREError
+
+    def _raise(
+        alert_text: str,
+        context_overrides: object = None,
+        cancel_requested: object = None,
+    ) -> dict[str, object]:
+        raise OpenSREError("integration misconfigured", suggestion="run /doctor")
+
+    monkeypatch.setattr("app.cli.investigation.run_investigation_for_session", _raise)
+    session = ReplSession()
+    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
+    loop._run_new_alert("High CPU alert", session, console)
+    inv_tasks = [
+        t for t in session.task_registry.list_recent(10) if t.kind == TaskKind.INVESTIGATION
+    ]
+    assert len(inv_tasks) == 1
+    assert inv_tasks[0].status == TaskStatus.FAILED
+    assert inv_tasks[0].error == "integration misconfigured"
