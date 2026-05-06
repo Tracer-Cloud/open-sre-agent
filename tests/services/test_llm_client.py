@@ -390,6 +390,91 @@ def test_anthropic_invoke_stream_applies_guardrails_to_input(monkeypatch) -> Non
     assert captured["kwargs"]["messages"][0]["content"] == "share my [REDACTED]"
 
 
+def test_anthropic_invoke_stream_retries_when_no_chunk_emitted(monkeypatch) -> None:
+    """Transient failure before any chunk yields → retry succeeds, caller sees recovered text."""
+    attempts: list[bool] = []
+
+    class _SuccessStream:
+        def __init__(self) -> None:
+            self.text_stream = iter(["recovered"])
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    class _Messages:
+        def stream(self, **_kwargs):
+            attempts.append(True)
+            if len(attempts) == 1:
+                raise RuntimeError("Overloaded")
+            return _SuccessStream()
+
+    class _Anthropic:
+        def __init__(self, **_kwargs) -> None:
+            self.messages = _Messages()
+
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "Anthropic", _Anthropic)
+    # Skip the real backoff sleep so the test is fast.
+    monkeypatch.setattr(llm_client.time, "sleep", lambda _seconds: None)
+
+    client = llm_client.LLMClient(model="claude-test")
+    chunks = list(client.invoke_stream("hi"))
+
+    assert chunks == ["recovered"]
+    assert len(attempts) == 2  # First call raised; retry succeeded
+
+
+def test_anthropic_invoke_stream_does_not_retry_after_yielding(monkeypatch) -> None:
+    """Mid-stream failure must propagate; retrying would duplicate visible output."""
+    attempts: list[bool] = []
+
+    def _yield_then_raise():
+        yield "partial"
+        raise RuntimeError("connection dropped")
+
+    class _Stream:
+        def __init__(self) -> None:
+            self.text_stream = _yield_then_raise()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    class _Messages:
+        def stream(self, **_kwargs):
+            attempts.append(True)
+            return _Stream()
+
+    class _Anthropic:
+        def __init__(self, **_kwargs) -> None:
+            self.messages = _Messages()
+
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "Anthropic", _Anthropic)
+    monkeypatch.setattr(llm_client.time, "sleep", lambda _seconds: None)
+
+    client = llm_client.LLMClient(model="claude-test")
+    iterator = client.invoke_stream("hi")
+
+    # First chunk reaches the caller — visible on the user's screen.
+    assert next(iterator) == "partial"
+
+    raised = False
+    try:
+        next(iterator)
+    except RuntimeError as exc:
+        raised = True
+        assert "connection dropped" in str(exc)
+
+    assert raised, "RuntimeError should have propagated"
+    assert len(attempts) == 1, "Must not retry after emitting any chunk"
+
+
 # ---------------------------------------------------------------------------
 # OpenAILLMClient.invoke / invoke_stream — kwargs builder + streaming behavior
 # ---------------------------------------------------------------------------
@@ -496,6 +581,101 @@ def test_openai_invoke_stream_skips_empty_deltas_and_choiceless_chunks(monkeypat
     chunks = list(client.invoke_stream("hi"))
 
     assert chunks == ["Hi", " there"]
+
+
+def test_openai_invoke_stream_retries_when_no_chunk_emitted(monkeypatch) -> None:
+    """Transient failure before any chunk yields → retry succeeds."""
+    attempts: list[bool] = []
+
+    class _Delta:
+        def __init__(self, content: str) -> None:
+            self.content = content
+
+    class _Choice:
+        def __init__(self, content: str) -> None:
+            self.delta = _Delta(content)
+
+    class _Chunk:
+        def __init__(self, content: str) -> None:
+            self.choices = [_Choice(content)]
+
+    class _Completions:
+        def create(self, **_kwargs):
+            attempts.append(True)
+            if len(attempts) == 1:
+                raise RuntimeError("Overloaded")
+            return iter([_Chunk("recovered")])
+
+    class _Chat:
+        def __init__(self) -> None:
+            self.completions = _Completions()
+
+    class _OpenAI:
+        def __init__(self, **_kwargs) -> None:
+            self.chat = _Chat()
+
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "OpenAI", _OpenAI)
+    monkeypatch.setattr(llm_client.time, "sleep", lambda _seconds: None)
+
+    client = llm_client.OpenAILLMClient(model="gpt-test")
+    chunks = list(client.invoke_stream("hi"))
+
+    assert chunks == ["recovered"]
+    assert len(attempts) == 2
+
+
+def test_openai_invoke_stream_does_not_retry_after_yielding(monkeypatch) -> None:
+    """Mid-stream failure must propagate; retry would duplicate visible chunks."""
+    attempts: list[bool] = []
+
+    class _Delta:
+        def __init__(self, content: str) -> None:
+            self.content = content
+
+    class _Choice:
+        def __init__(self, content: str) -> None:
+            self.delta = _Delta(content)
+
+    class _Chunk:
+        def __init__(self, content: str) -> None:
+            self.choices = [_Choice(content)]
+
+    def _yield_then_raise():
+        yield _Chunk("partial")
+        raise RuntimeError("connection dropped")
+
+    class _Completions:
+        def create(self, **_kwargs):
+            attempts.append(True)
+            return _yield_then_raise()
+
+    class _Chat:
+        def __init__(self) -> None:
+            self.completions = _Completions()
+
+    class _OpenAI:
+        def __init__(self, **_kwargs) -> None:
+            self.chat = _Chat()
+
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "OpenAI", _OpenAI)
+    monkeypatch.setattr(llm_client.time, "sleep", lambda _seconds: None)
+
+    client = llm_client.OpenAILLMClient(model="gpt-test")
+    iterator = client.invoke_stream("hi")
+
+    assert next(iterator) == "partial"
+
+    raised = False
+    try:
+        next(iterator)
+    except RuntimeError as exc:
+        raised = True
+        assert "connection dropped" in str(exc)
+
+    assert raised
+    assert len(attempts) == 1, "Must not retry after emitting any chunk"
 
 
 # ---------------------------------------------------------------------------
