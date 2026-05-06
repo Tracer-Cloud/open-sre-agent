@@ -58,11 +58,22 @@ def dispatch_slash(
     *,
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
+    policy_precleared: bool = False,
 ) -> bool:
-    """Dispatch a slash command line. Returns False iff the REPL should exit."""
+    """Dispatch a slash command line. Returns False iff the REPL should exit.
+
+    When ``policy_precleared`` is True, skip the execution gate (caller already ran
+    :func:`execution_allowed`) and run the handler directly. Only valid for lines
+    the registry resolves to a known command, or bare ``/`` after an equivalent
+    gate for help.
+    """
     stripped = command_line.strip()
     if stripped == "/":
         from app.cli.interactive_shell.command_registry.help import _cmd_help
+
+        if policy_precleared:
+            session.record("slash", stripped, ok=True)
+            return _cmd_help(session, console, [])
 
         help_cmd = SLASH_COMMANDS["/help"]
         gate = evaluate_slash_tier(
@@ -94,6 +105,9 @@ def dispatch_slash(
             f"[{TERMINAL_ERROR}]unknown command:[/] {escape(name)}  (type [bold]/help[/bold])"
         )
         return True
+    if policy_precleared:
+        session.record("slash", stripped, ok=True)
+        return cmd.handler(session, console, args)
     tier = resolve_slash_execution_tier(name, args, cmd.execution_tier)
     policy = evaluate_slash_tier(tier)
     if not execution_allowed(

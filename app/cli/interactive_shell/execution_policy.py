@@ -74,6 +74,7 @@ def _emit_decision(
     outcome: str,
     trust_mode: bool,
     reason: str | None,
+    user_prompted: bool = False,
 ) -> None:
     props: dict[str, str | bool] = {
         "action_type": action_type,
@@ -83,6 +84,8 @@ def _emit_decision(
     }
     if reason:
         props["reason"] = reason[:240]
+    if user_prompted:
+        props["user_prompted"] = True
     capture_repl_execution_policy_decision(props)
 
 
@@ -153,14 +156,6 @@ def execution_allowed(
         f"[yellow]Confirm:[/yellow] {escape(result.reason or 'this action')} "
         f"[dim](reply y or yes)[/dim]"
     )
-    console.print(f"[dim]{escape(action_summary)}[/dim]")
-    _emit_decision(
-        action_type=result.action_type,
-        policy_verdict="ask",
-        outcome="prompted",
-        trust_mode=trust_mode,
-        reason=result.reason,
-    )
     answer = confirm("Proceed? [y/N] ").strip().lower()
     if answer not in {"y", "yes"}:
         _emit_decision(
@@ -169,6 +164,7 @@ def execution_allowed(
             outcome="aborted",
             trust_mode=trust_mode,
             reason="user_declined",
+            user_prompted=True,
         )
         console.print("[dim]cancelled.[/dim]")
         return False
@@ -179,6 +175,7 @@ def execution_allowed(
         outcome="allowed",
         trust_mode=trust_mode,
         reason="user_confirmed",
+        user_prompted=True,
     )
     return True
 

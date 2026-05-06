@@ -177,13 +177,16 @@ def _execute_action_plan(
         return False
 
     from app.cli.interactive_shell.commands import (
+        SLASH_COMMANDS,
         dispatch_slash,
         switch_llm_provider,
         switch_toolcall_model,
     )
     from app.cli.interactive_shell.execution_policy import (
         evaluate_llm_runtime_switch,
+        evaluate_slash_tier,
         execution_allowed,
+        resolve_slash_execution_tier,
     )
 
     console.print()
@@ -228,7 +231,6 @@ def _execute_action_plan(
                 slash_label += f" {requested_model}"
             if requested_toolcall:
                 slash_label += f" --toolcall-model {requested_toolcall}"
-            console.print(f"[bold]$ {escape(slash_label)}[/bold]")
             pol = evaluate_llm_runtime_switch(action_type="switch_llm_provider")
             if not execution_allowed(
                 pol,
@@ -239,6 +241,7 @@ def _execute_action_plan(
                 is_tty=is_tty,
             ):
                 continue
+            console.print(f"[bold]$ {escape(slash_label)}[/bold]")
             switch_llm_provider(
                 provider,
                 console,
@@ -253,7 +256,6 @@ def _execute_action_plan(
             if not requested_model:
                 console.print("[red]missing model for switch_toolcall_model action[/red]")
                 continue
-            console.print(f"[bold]$ /model toolcall set {escape(requested_model)}[/bold]")
             pol = evaluate_llm_runtime_switch(action_type="switch_toolcall_model")
             if not execution_allowed(
                 pol,
@@ -264,6 +266,7 @@ def _execute_action_plan(
                 is_tty=is_tty,
             ):
                 continue
+            console.print(f"[bold]$ /model toolcall set {escape(requested_model)}[/bold]")
             switch_toolcall_model(requested_model, console)
             session.record("slash", f"/model toolcall set {requested_model}")
             continue
@@ -273,6 +276,32 @@ def _execute_action_plan(
             if command not in _ALLOWED_SLASH_ACTIONS:
                 console.print(f"[red]unsupported action command:[/red] {escape(command)}")
                 continue
+            stripped = command.strip()
+            parts = stripped.split()
+            name = parts[0].lower()
+            args = parts[1:]
+            cmd_slash = SLASH_COMMANDS.get(name)
+            if cmd_slash is None:
+                dispatch_slash(
+                    command,
+                    session,
+                    console,
+                    confirm_fn=confirm_fn,
+                    is_tty=is_tty,
+                )
+                continue
+            tier = resolve_slash_execution_tier(name, args, cmd_slash.execution_tier)
+            policy = evaluate_slash_tier(tier)
+            if not execution_allowed(
+                policy,
+                session=session,
+                console=console,
+                action_summary=stripped,
+                confirm_fn=confirm_fn,
+                is_tty=is_tty,
+            ):
+                session.record("slash", stripped, ok=False)
+                continue
             console.print(f"[bold]$ {escape(command)}[/bold]")
             dispatch_slash(
                 command,
@@ -280,6 +309,7 @@ def _execute_action_plan(
                 console,
                 confirm_fn=confirm_fn,
                 is_tty=is_tty,
+                policy_precleared=True,
             )
             continue
 

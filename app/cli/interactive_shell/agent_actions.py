@@ -17,10 +17,16 @@ from app.cli.interactive_shell.action_planner import (
     plan_cli_actions,
     plan_terminal_tasks,
 )
-from app.cli.interactive_shell.command_registry import dispatch_slash, switch_llm_provider
+from app.cli.interactive_shell.command_registry import (
+    SLASH_COMMANDS,
+    dispatch_slash,
+    switch_llm_provider,
+)
 from app.cli.interactive_shell.execution_policy import (
     evaluate_llm_runtime_switch,
+    evaluate_slash_tier,
     execution_allowed,
+    resolve_slash_execution_tier,
 )
 from app.cli.interactive_shell.rendering import print_planned_actions
 from app.cli.interactive_shell.session import ReplSession
@@ -55,6 +61,43 @@ def execute_cli_actions(
     for action in actions:
         console.print()
         if action.kind == "slash":
+            stripped = action.content.strip()
+            parts = stripped.split()
+            if stripped == "/" or not parts:
+                if not dispatch_slash(
+                    action.content,
+                    session,
+                    console,
+                    confirm_fn=confirm_fn,
+                    is_tty=is_tty,
+                ):
+                    return True
+                continue
+            name = parts[0].lower()
+            args = parts[1:]
+            cmd = SLASH_COMMANDS.get(name)
+            if cmd is None:
+                if not dispatch_slash(
+                    action.content,
+                    session,
+                    console,
+                    confirm_fn=confirm_fn,
+                    is_tty=is_tty,
+                ):
+                    return True
+                continue
+            tier = resolve_slash_execution_tier(name, args, cmd.execution_tier)
+            policy = evaluate_slash_tier(tier)
+            if not execution_allowed(
+                policy,
+                session=session,
+                console=console,
+                action_summary=stripped,
+                confirm_fn=confirm_fn,
+                is_tty=is_tty,
+            ):
+                session.record("slash", stripped, ok=False)
+                continue
             console.print(f"[bold]$ {escape(action.content)}[/bold]")
             if not dispatch_slash(
                 action.content,
@@ -62,10 +105,10 @@ def execute_cli_actions(
                 console,
                 confirm_fn=confirm_fn,
                 is_tty=is_tty,
+                policy_precleared=True,
             ):
                 return True
         elif action.kind == "llm_provider":
-            console.print(f"[bold]$ /model set {escape(action.content)}[/bold]")
             pol = evaluate_llm_runtime_switch(action_type="switch_llm_provider")
             if not execution_allowed(
                 pol,
@@ -76,6 +119,7 @@ def execute_cli_actions(
                 is_tty=is_tty,
             ):
                 continue
+            console.print(f"[bold]$ /model set {escape(action.content)}[/bold]")
             switch_llm_provider(action.content, console)
             session.record("slash", f"/model set {action.content}")
         elif action.kind == "shell":
