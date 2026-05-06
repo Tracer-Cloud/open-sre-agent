@@ -9,9 +9,8 @@ import base64
 import json
 import logging
 import os
-from typing import Any, Optional
+from typing import Any
 
-from langchain_core.runnables import RunnableConfig
 from langsmith import traceable
 
 from app.integrations.catalog import (
@@ -28,6 +27,7 @@ from app.integrations.catalog import (
 )
 from app.output import get_tracker
 from app.state import InvestigationState
+from app.types.config import NodeConfig, get_configurable
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ def _strip_bearer(token: str) -> str:
 @traceable(name="node_resolve_integrations")
 def node_resolve_integrations(
     state: InvestigationState,
-    config: Optional[RunnableConfig] = None,  # noqa: UP007,UP045
+    config: NodeConfig | None = None,
 ) -> dict:
     """Fetch all org integrations and classify them by service.
 
@@ -68,7 +68,7 @@ def node_resolve_integrations(
     tracker.start("resolve_integrations", "Fetching org integrations")
     org_id = state.get("org_id", "")
 
-    configurable = (config or {}).get("configurable", {})
+    configurable = get_configurable(config)
     auth_user = configurable.get("langgraph_auth_user", {})
     webhook_token = _strip_bearer(
         (auth_user.get("token", "") or state.get("_auth_token", "")).strip()

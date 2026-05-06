@@ -6,11 +6,10 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any, cast
 
-from langchain_core.runnables import RunnableConfig
-
 from app.nodes.chat import chat_agent_node, general_node, router_node
 from app.remote.stream import StreamEvent
 from app.state import AgentState, make_initial_state
+from app.types.config import NodeConfig
 from app.utils.sentry_sdk import capture_exception, init_sentry
 
 
@@ -27,7 +26,7 @@ def _merge_state(state: AgentState, updates: dict[str, Any]) -> None:
         state_any[key] = value
 
 
-def run_chat(state: AgentState, config: RunnableConfig | None = None) -> AgentState:
+def run_chat(state: AgentState, config: NodeConfig | None = None) -> AgentState:
     """Run chat routing + response without LangGraph (for testing)."""
     init_sentry()
     cfg = config or {"configurable": {}}
@@ -138,13 +137,13 @@ def _map_langgraph_event(event: dict[str, Any]) -> StreamEvent:
 
 @dataclass
 class SimpleAgent:
-    def invoke(self, state: AgentState, config: RunnableConfig | None = None) -> AgentState:
+    def invoke(self, state: AgentState, config: NodeConfig | None = None) -> AgentState:
         init_sentry()
         from app.pipeline.graph import graph as compiled_graph  # lazy to avoid circular import
 
         cfg = config or {"configurable": {}}
         try:
-            return cast(AgentState, compiled_graph.invoke(state, cfg))
+            return cast(AgentState, compiled_graph.invoke(state, cast(Any, cfg)))
         except Exception as exc:
             capture_exception(exc)
             raise
