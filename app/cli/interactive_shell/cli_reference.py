@@ -13,6 +13,18 @@ _logger = logging.getLogger(__name__)
 
 _MAX_REFERENCE_CHARS = 28_000
 
+# Heuristic: truncated or failed CliRunner output must not be cached or the
+# assistant would keep an empty reference for the whole process.
+_MIN_CACHEABLE_CLI_REFERENCE_CHARS = 80
+_CLI_REFERENCE_SENTINEL = "=== opensre --help ==="
+
+
+def _is_cacheable_cli_reference(text: str) -> bool:
+    stripped = text.strip()
+    if len(stripped) < _MIN_CACHEABLE_CLI_REFERENCE_CHARS:
+        return False
+    return _CLI_REFERENCE_SENTINEL in text
+
 
 @dataclass
 class _CliReferenceCache:
@@ -99,6 +111,8 @@ def invalidate_cli_reference_cache() -> None:
     _cli_reference_cache.signature = None
     _cli_reference_cache.text = None
     _cli_reference_cache.created_at_monotonic = 0.0
+    _cli_reference_cache.hits = 0
+    _cli_reference_cache.misses = 0
 
 
 def get_cli_reference_cache_stats() -> dict[str, Any]:
@@ -124,9 +138,18 @@ def build_cli_reference_text() -> str:
 
     _cli_reference_cache.misses += 1
     text = _build_cli_reference_text_uncached()
-    _cli_reference_cache.signature = sig
-    _cli_reference_cache.text = text
-    _cli_reference_cache.created_at_monotonic = time.monotonic()
+    if _is_cacheable_cli_reference(text):
+        _cli_reference_cache.signature = sig
+        _cli_reference_cache.text = text
+        _cli_reference_cache.created_at_monotonic = time.monotonic()
+    else:
+        _cli_reference_cache.signature = None
+        _cli_reference_cache.text = None
+        _cli_reference_cache.created_at_monotonic = 0.0
+        _logger.warning(
+            "CLI reference build produced non-cacheable output (%d chars); skipping cache",
+            len(text),
+        )
     return text
 
 

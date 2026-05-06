@@ -125,6 +125,11 @@ class TestQueryTokens:
         assert "opensre" not in tokens
         assert "install" in tokens
 
+    def test_keeps_two_letter_tokens(self) -> None:
+        tokens = _query_tokens("how do I tune ai vm sizing")
+        assert "ai" in tokens
+        assert "vm" in tokens
+
 
 class TestFindRelevantDocs:
     def test_empty_query_returns_empty(self, tmp_path: Path) -> None:
@@ -246,6 +251,10 @@ class TestDocPageDataclass:
 
 
 class TestDocsGroundingCache:
+    def test_cache_maxsize_matches_implementation(self) -> None:
+        stats = get_docs_cache_stats()
+        assert stats["maxsize"] == 32
+
     def test_repeated_discover_hits_parse_cache(self, tmp_path: Path) -> None:
         _seed_docs(tmp_path)
         discover_docs(tmp_path)
@@ -254,6 +263,17 @@ class TestDocsGroundingCache:
         info2 = get_docs_cache_stats()
         assert info2["hits"] == info1["hits"] + 1
         assert info2["misses"] == info1["misses"]
+
+    def test_invalidate_resets_stats(self, tmp_path: Path) -> None:
+        _seed_docs(tmp_path)
+        discover_docs(tmp_path)
+        discover_docs(tmp_path)
+        assert get_docs_cache_stats()["hits"] >= 1
+        invalidate_docs_cache()
+        cleared = get_docs_cache_stats()
+        assert cleared["hits"] == 0
+        assert cleared["misses"] == 0
+        assert cleared["currsize"] == 0
 
     def test_file_edit_invalidates_and_refreshes_content(self, tmp_path: Path) -> None:
         _write_doc(
@@ -272,3 +292,22 @@ class TestDocsGroundingCache:
         pages2 = discover_docs(tmp_path)
         assert any("New refreshed content" in p.body for p in pages2)
         assert not any("Old content" in p.body for p in pages2)
+
+    def test_single_tree_walk_per_discover_call(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Regression: avoid a second full walk inside the parse path on a miss."""
+        _seed_docs(tmp_path)
+        calls = 0
+        real_iter = docs_reference._iter_doc_files
+
+        def _spy(root: Path) -> list[Path]:
+            nonlocal calls
+            calls += 1
+            return real_iter(root)
+
+        monkeypatch.setattr(docs_reference, "_iter_doc_files", _spy)
+        discover_docs(tmp_path)
+        assert calls == 1
+        discover_docs(tmp_path)
+        assert calls == 2

@@ -22,6 +22,13 @@ the fingerprint and trigger a re-parse on the next grounding call. There is no
 on-disk cache. Use :func:`invalidate_docs_cache` in tests to clear the parse
 cache between cases.
 
+Each :func:`discover_docs` call walks the docs tree once to compute the
+fingerprint and (on cache miss) parse files in that same walk result. A prior
+``lru_cache`` on the root path alone avoided that walk but could not detect
+in-file edits during a session; the trade-off is intentional. Between
+fingerprinting and ``read_text``, a file may change (TOCTOU); the next call
+picks up the new ``st_mtime_ns`` and re-parses.
+
 When docs are missing
 ---------------------
 For non-editable installs that do not ship the ``docs/`` directory the
@@ -34,8 +41,8 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections import OrderedDict
 from dataclasses import dataclass
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -204,15 +211,15 @@ def _iter_doc_files(root: Path) -> list[Path]:
     return sorted(files)
 
 
-def _fingerprint_docs_tree(root: Path) -> str:
-    """Digest of docs file set + mtimes/sizes for cache invalidation."""
+def _fingerprint_from_paths(root: Path, files: list[Path]) -> str:
+    """Digest of tracked docs files using paths from a single tree walk."""
     digest = hashlib.sha256()
     if not root.exists() or not root.is_dir():
         digest.update(b"nodir")
         digest.update(str(root.resolve() if root.exists() else root).encode())
         return digest.hexdigest()
 
-    for path in _iter_doc_files(root):
+    for path in files:
         rel = path.relative_to(root).as_posix()
         try:
             st = path.stat()
@@ -224,18 +231,11 @@ def _fingerprint_docs_tree(root: Path) -> str:
     return digest.hexdigest()
 
 
-@lru_cache(maxsize=4)
-def _load_docs_pages(root_str: str, _fingerprint: str) -> tuple[DocPage, ...]:
-    """Parse all docs under ``root_str``; cache bounded by (root, fingerprint).
-
-    ``_fingerprint`` is part of the :func:`functools.lru_cache` key so edits to
-    tracked files force a new parse without clearing the whole cache.
-    """
-    pages: list[DocPage] = []
-    root = Path(root_str)
+def _parse_doc_files(root: Path, files: list[Path]) -> tuple[DocPage, ...]:
     if not root.exists() or not root.is_dir():
         return ()
-    for path in _iter_doc_files(root):
+    pages: list[DocPage] = []
+    for path in files:
         try:
             text = path.read_text(encoding="utf-8")
         except OSError:
@@ -254,33 +254,62 @@ def _load_docs_pages(root_str: str, _fingerprint: str) -> tuple[DocPage, ...]:
     return tuple(pages)
 
 
+# Distinct (root_key, fingerprint) entries retained under churn. Eviction drops
+# oldest keys; a reverted doc tree re-parses once then stays hot again.
+_MAX_DOCS_FP_CACHE_ENTRIES = 32
+
+_DOCS_PARSE_CACHE: OrderedDict[tuple[str, str], tuple[DocPage, ...]] = OrderedDict()
+_docs_cache_hits = 0
+_docs_cache_misses = 0
+
+
 def discover_docs(root: Path | None = None) -> list[DocPage]:
     """Walk the docs root, parse each MDX page, return them as :class:`DocPage` records."""
+    global _docs_cache_hits, _docs_cache_misses
+
     target = root if root is not None else _DOCS_ROOT
     resolved = target.resolve() if target.exists() else target
     root_key = str(resolved)
-    fp = _fingerprint_docs_tree(resolved)
-    return list(_load_docs_pages(root_key, fp))
+
+    files = _iter_doc_files(resolved)
+    fp = _fingerprint_from_paths(resolved, files)
+    cache_key = (root_key, fp)
+
+    cached = _DOCS_PARSE_CACHE.get(cache_key)
+    if cached is not None:
+        _docs_cache_hits += 1
+        _DOCS_PARSE_CACHE.move_to_end(cache_key)
+        return list(cached)
+
+    _docs_cache_misses += 1
+    pages_tuple = _parse_doc_files(resolved, files)
+
+    while len(_DOCS_PARSE_CACHE) >= _MAX_DOCS_FP_CACHE_ENTRIES:
+        _DOCS_PARSE_CACHE.popitem(last=False)
+    _DOCS_PARSE_CACHE[cache_key] = pages_tuple
+    return list(pages_tuple)
 
 
 def invalidate_docs_cache() -> None:
     """Clear the bounded parse cache (tests, forced refresh)."""
-    _load_docs_pages.cache_clear()
+    global _docs_cache_hits, _docs_cache_misses
+    _DOCS_PARSE_CACHE.clear()
+    _docs_cache_hits = 0
+    _docs_cache_misses = 0
 
 
 def get_docs_cache_stats() -> dict[str, Any]:
-    """Debug metrics for docs grounding cache (LruCache hit/miss/size)."""
-    info = _load_docs_pages.cache_info()
+    """Debug metrics for docs grounding cache (hits/misses/size)."""
     return {
-        "hits": info.hits,
-        "misses": info.misses,
-        "currsize": info.currsize,
-        "maxsize": info.maxsize,
+        "hits": _docs_cache_hits,
+        "misses": _docs_cache_misses,
+        "currsize": len(_DOCS_PARSE_CACHE),
+        "maxsize": _MAX_DOCS_FP_CACHE_ENTRIES,
     }
 
 
 def _tokenize(text: str) -> set[str]:
-    return {tok for tok in _TOKEN_RE.findall(text.lower()) if len(tok) >= 3}
+    return {tok for tok in _TOKEN_RE.findall(text.lower()) if len(tok) >= 2}
 
 
 def _query_tokens(query: str) -> set[str]:

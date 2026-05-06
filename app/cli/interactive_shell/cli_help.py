@@ -20,23 +20,18 @@ from app.cli.interactive_shell.cli_reference import build_cli_reference_text
 from app.cli.interactive_shell.docs_reference import build_docs_reference_text
 from app.cli.interactive_shell.grounding_diagnostics import log_grounding_cache_diagnostics
 from app.cli.interactive_shell.loaders import llm_loader
+from app.cli.interactive_shell.prompt_rules import (
+    CLI_ASSISTANT_MARKDOWN_RULE,
+    INTERACTIVE_SHELL_TERMINOLOGY_RULE,
+)
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
 from app.utils.sentry_sdk import capture_exception
 
 # Match the cli_agent terminology / formatting rules so docs answers feel
 # consistent with the rest of the interactive shell.
-_TERMINOLOGY_RULE = (
-    "Terminology: always call this surface the 'interactive shell' (the "
-    "OpenSRE interactive terminal launched via `opensre` or `opensre agent`). "
-    "Never use the word 'REPL' in user-facing answers - it is internal jargon."
-)
-
-_MARKDOWN_RULE = (
-    "Formatting: respond in concise Markdown. Markdown will be rendered "
-    "in the user's terminal, so tables, **bold**, lists, and `code spans` "
-    "will display correctly - do not wrap the whole answer in a code fence."
-)
+_TERMINOLOGY_RULE = INTERACTIVE_SHELL_TERMINOLOGY_RULE
+_MARKDOWN_RULE = CLI_ASSISTANT_MARKDOWN_RULE
 
 
 def _build_grounded_prompt(question: str, cli_reference: str, docs_reference: str) -> str:
@@ -81,7 +76,7 @@ def _build_grounded_prompt(question: str, cli_reference: str, docs_reference: st
     return f"{system}\n{user_block}"
 
 
-def answer_cli_help(question: str, session: ReplSession, console: Console) -> None:  # noqa: ARG001
+def answer_cli_help(question: str, _session: ReplSession, console: Console) -> None:
     """Run one turn of the documentation-aware procedural assistant.
 
     Pulls the top-N relevant docs pages for ``question``, combines them with
@@ -89,6 +84,9 @@ def answer_cli_help(question: str, session: ReplSession, console: Console) -> No
     the assembled grounding. Behaves as a no-op for the session's action
     history (stateless across turns) so it never interferes with follow-up
     routing on a prior investigation.
+
+    ``_session`` is accepted for API symmetry with :func:`answer_cli_agent` and
+    input routing; this path does not read session state today.
     """
     try:
         from app.services.llm_client import get_llm_for_reasoning

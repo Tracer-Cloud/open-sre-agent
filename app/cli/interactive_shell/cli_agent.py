@@ -12,6 +12,10 @@ from rich.markup import escape
 from app.cli.interactive_shell.cli_reference import build_cli_reference_text
 from app.cli.interactive_shell.grounding_diagnostics import log_grounding_cache_diagnostics
 from app.cli.interactive_shell.loaders import llm_loader
+from app.cli.interactive_shell.prompt_rules import (
+    CLI_ASSISTANT_MARKDOWN_RULE,
+    INTERACTIVE_SHELL_TERMINOLOGY_RULE,
+)
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
 
@@ -19,20 +23,8 @@ from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
 _MAX_CLI_AGENT_TURNS = 12
 type _GroundingMode = Literal["reference_only", "conversational"]
 
-# Shared, end-user-friendly terminology rule that is appended to every system
-# prompt. The model otherwise picks up "REPL" from internal docs and surfaces
-# jargon to the user (#604).
-_TERMINOLOGY_RULE = (
-    "Terminology: always call this surface the 'interactive shell' (the "
-    "OpenSRE interactive terminal launched via `opensre`). "
-    "Never use the word 'REPL' in user-facing answers - it is internal jargon."
-)
-
-_MARKDOWN_RULE = (
-    "Formatting: respond in concise Markdown. Markdown will be rendered "
-    "in the user's terminal, so tables, **bold**, lists, and `code spans` "
-    "will display correctly - do not wrap the whole answer in a code fence."
-)
+_TERMINOLOGY_RULE = INTERACTIVE_SHELL_TERMINOLOGY_RULE
+_MARKDOWN_RULE = CLI_ASSISTANT_MARKDOWN_RULE
 
 _ACTION_RULE = (
     "Action planning: if the user asks you to change OpenSRE runtime state, "
@@ -277,6 +269,14 @@ def _execute_action_plan(
     return True
 
 
+def _record_cli_agent_turn(session: ReplSession, message: str, assistant_text: str) -> None:
+    session.cli_agent_messages.append(("user", message))
+    session.cli_agent_messages.append(("assistant", assistant_text))
+    cap = _MAX_CLI_AGENT_TURNS * 2
+    if len(session.cli_agent_messages) > cap:
+        session.cli_agent_messages[:] = session.cli_agent_messages[-cap:]
+
+
 def answer_cli_agent(
     message: str,
     session: ReplSession,
@@ -317,18 +317,10 @@ def answer_cli_agent(
     text_str = _response_text(response)
     actions = _parse_action_plan(text_str)
     if _execute_action_plan(actions, session, console):
-        session.cli_agent_messages.append(("user", message))
-        session.cli_agent_messages.append(("assistant", text_str))
-        cap = _MAX_CLI_AGENT_TURNS * 2
-        if len(session.cli_agent_messages) > cap:
-            session.cli_agent_messages[:] = session.cli_agent_messages[-cap:]
+        _record_cli_agent_turn(session, message, text_str)
         return
 
-    session.cli_agent_messages.append(("user", message))
-    session.cli_agent_messages.append(("assistant", text_str))
-    cap = _MAX_CLI_AGENT_TURNS * 2
-    if len(session.cli_agent_messages) > cap:
-        session.cli_agent_messages[:] = session.cli_agent_messages[-cap:]
+    _record_cli_agent_turn(session, message, text_str)
 
     console.print()
     console.print(f"[{TERMINAL_ACCENT_BOLD}]assistant:[/]")
