@@ -136,10 +136,10 @@ def _render_integrations_table(console: Console, results: list[dict[str, str]]) 
     for row in rows:
         status = row.get("status", "unknown")
         table.add_row(
-            row.get("service", "?"),
-            row.get("source", "?"),
-            f"[{_status_style(status)}]{status}[/{_status_style(status)}]",
-            row.get("detail", ""),
+            escape(row.get("service", "?")),
+            escape(row.get("source", "?")),
+            f"[{_status_style(status)}]{escape(status)}[/{_status_style(status)}]",
+            escape(row.get("detail", "")),
         )
     console.print(table)
 
@@ -157,10 +157,10 @@ def _render_mcp_table(console: Console, results: list[dict[str, str]]) -> None:
     for row in rows:
         status = row.get("status", "unknown")
         table.add_row(
-            row.get("service", "?"),
-            row.get("source", "?"),
-            f"[{_status_style(status)}]{status}[/{_status_style(status)}]",
-            row.get("detail", ""),
+            escape(row.get("service", "?")),
+            escape(row.get("source", "?")),
+            f"[{_status_style(status)}]{escape(status)}[/{_status_style(status)}]",
+            escape(row.get("detail", "")),
         )
     console.print(table)
 
@@ -794,7 +794,7 @@ def _cmd_tasks(session: ReplSession, console: Console, args: list[str]) -> bool:
         console.print("[dim]no tasks recorded this session.[/dim]")
         return True
 
-    table = Table(title="Tasks", title_style=TERMINAL_ACCENT_BOLD)
+    table = _repl_table(title="Tasks", title_style=TERMINAL_ACCENT_BOLD)
     table.add_column("id", style="bold")
     table.add_column("kind")
     table.add_column("status")
@@ -825,17 +825,19 @@ def _cmd_tasks(session: ReplSession, console: Console, args: list[str]) -> bool:
 
 def _cmd_cancel(session: ReplSession, console: Console, args: list[str]) -> bool:
     if not args:
-        console.print("[red]usage:[/red] /cancel <task_id>  — use [bold]/tasks[/bold] to list ids")
+        console.print(
+            f"[{TERMINAL_ERROR}]usage:[/] /cancel <task_id>  — use [bold]/tasks[/bold] to list ids"
+        )
         return True
 
     needle = args[0]
     candidates = session.task_registry.candidates(needle)
     if not candidates:
-        console.print(f"[red]no task matches id:[/red] {escape(needle)}")
+        console.print(f"[{TERMINAL_ERROR}]no task matches id:[/] {escape(needle)}")
         return True
     if len(candidates) > 1:
         console.print(
-            f"[red]ambiguous id prefix:[/red] {escape(needle)} "
+            f"[{TERMINAL_ERROR}]ambiguous id prefix:[/] {escape(needle)} "
             f"[dim]({len(candidates)} matches — use a longer prefix)[/dim]"
         )
         return True

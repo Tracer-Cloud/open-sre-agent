@@ -376,7 +376,14 @@ async def _run_one_turn(
         # Rewrite bare-word commands to their slash form before dispatch.
         cmd_text = text if text.startswith("/") else f"/{text}"
         session.record("slash", cmd_text)
-        should_continue = dispatch_slash(cmd_text, session, console)
+        try:
+            should_continue = dispatch_slash(cmd_text, session, console)
+        except Exception as exc:  # noqa: BLE001
+            console.print(
+                f"[{TERMINAL_ERROR}]command error:[/] {escape(str(exc))}"
+                " [dim](the REPL is still running)[/dim]"
+            )
+            should_continue = True
         console.print()
         return should_continue
 

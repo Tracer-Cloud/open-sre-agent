@@ -81,7 +81,7 @@ def answer_follow_up(question: str, session: ReplSession, console: Console) -> N
     try:
         from app.services.llm_client import get_llm_for_reasoning
     except Exception as exc:  # noqa: BLE001
-        console.print(f"[red]LLM client unavailable:[/red] {exc}")
+        console.print(f"[red]LLM client unavailable:[/red] {escape(str(exc))}")
         return
 
     context = _summarize_last_state(session.last_state)
