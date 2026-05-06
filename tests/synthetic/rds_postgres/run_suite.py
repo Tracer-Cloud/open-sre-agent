@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from typing import Any
 
 from app.pipeline.runners import run_investigation
@@ -62,6 +62,23 @@ class ScenarioScore:
     failure_reason: str = ""
     trajectory: TrajectoryScore | None = None
     reasoning: ReasoningScore | None = None
+    # Optional axis-memory annotation set by the axis-memory runner
+    # (tests/synthetic/rds_postgres/axis_memory/, issue #1234) when a sibling
+    # scenario is run as part of an axis pair. One of: "memory_helped",
+    # "memory_hurt", "memory_neutral", "pre_existing", "not_run". None when
+    # the scenario was not run via the axis-memory runner.
+    memory_mode: str | None = None
+
+
+def annotate_with_memory_mode(score: ScenarioScore, memory_mode: str) -> ScenarioScore:
+    """Return a new ScenarioScore with memory_mode set.
+
+    ScenarioScore is frozen, so this uses dataclasses.replace to produce a new
+    instance. Used by the axis-memory runner to tag sibling scenario scores
+    with the memory-anchoring classification produced by
+    axis_memory.scoring.annotate_pair (see issue #1234).
+    """
+    return replace(score, memory_mode=memory_mode)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -514,6 +531,8 @@ def run_suite(argv: list[str] | None = None) -> list[ScenarioScore]:
                 if result.failure_reason
                 else f"category={result.actual_category}"
             )
+            if result.memory_mode is not None:
+                detail = f"{detail} memory_mode={result.memory_mode}"
             print(f"{status} {result.scenario_id} {detail}")
 
         passed_count = sum(1 for result in results if result.passed)
