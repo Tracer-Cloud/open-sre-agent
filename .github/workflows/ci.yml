@@ -88,7 +88,6 @@ jobs:
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       JWT_TOKEN: ${{ secrets.JWT_TOKEN }}
-      TRACER_ORG_ID: ${{ secrets.TRACER_ORG_ID }}
       LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
       LANGSMITH_ENDPOINT: ${{ secrets.LANGSMITH_ENDPOINT }}
       LANGSMITH_PROJECT: ${{ secrets.LANGSMITH_PROJECT }}
@@ -210,8 +209,6 @@ jobs:
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       JWT_TOKEN: ${{ secrets.JWT_TOKEN }}
-      TRACER_ORG_ID: ${{ secrets.TRACER_ORG_ID }}
-      TRACER_WEB_APP_URL: ${{ secrets.TRACER_WEB_APP_URL }}
       TRACER_API_URL: ${{ secrets.TRACER_API_URL }}
       TRACER_INGEST_TOKEN: ${{ secrets.TRACER_INGEST_TOKEN }}
       LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
@@ -228,8 +225,6 @@ jobs:
       GCLOUD_HOSTED_LOGS_ID: ${{ secrets.GCLOUD_HOSTED_LOGS_ID }}
       GCLOUD_HOSTED_LOGS_URL: ${{ secrets.GCLOUD_HOSTED_LOGS_URL }}
       GCLOUD_RW_API_KEY: ${{ secrets.GCLOUD_RW_API_KEY }}
-      GCLOUD_OTLP_ENDPOINT: ""
-      OTEL_EXPORTER_OTLP_ENDPOINT: ""
       CLOUDWATCH_VERIFY_LOGS: ${{ matrix.name == 'cloudwatch-demo' && '0' || '1' }}
 
     steps:
