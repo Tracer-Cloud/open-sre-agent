@@ -12,10 +12,23 @@ from app.tools.utils.metric_summary import summarize_prometheus_metrics
 MAX_RETRYABLE_ACTION_FAILURES = 2
 _NON_RETRYABLE_FAILURE_INDICATORS = (
     "typeerror",
+    "command not found",
     "missing required",
     "unknown action",
     "action not available",
     "invalid response",
+    "not configured",
+)
+_OPENCLAW_NON_RETRYABLE_FAILURE_INDICATORS = (
+    "connection closed",
+    "could not connect",
+    "connect failed",
+    "econnrefused",
+    "gateway status",
+    "gateway run",
+    "gateway install",
+    "install the openclaw cli",
+    "tool_name is required",
 )
 _RETRYABLE_FAILURE_INDICATORS = (
     "timeout",
@@ -26,6 +39,9 @@ _RETRYABLE_FAILURE_INDICATORS = (
     "internal error",
     "500",
     "503",
+)
+_OPENCLAW_ACTION_NAMES = frozenset(
+    {"call_openclaw_tool", "list_openclaw_tools", "search_openclaw_conversations"}
 )
 
 
@@ -57,9 +73,13 @@ def _map_failed_tools(data: dict) -> dict:
     }
 
 
-def _classify_action_failure(error: str | None) -> str:
+def _classify_action_failure(action_name: str, error: str | None) -> str:
     error_text = (error or "").lower()
     if any(indicator in error_text for indicator in _NON_RETRYABLE_FAILURE_INDICATORS):
+        return "non_retryable"
+    if action_name in _OPENCLAW_ACTION_NAMES and any(
+        indicator in error_text for indicator in _OPENCLAW_NON_RETRYABLE_FAILURE_INDICATORS
+    ):
         return "non_retryable"
     if any(indicator in error_text for indicator in _RETRYABLE_FAILURE_INDICATORS):
         return "retryable"
@@ -92,7 +112,7 @@ def _build_failed_action_records(
             {
                 "action": action_name,
                 "error": result.error or "unknown",
-                "failure_kind": _classify_action_failure(result.error),
+                "failure_kind": _classify_action_failure(action_name, result.error),
                 "failure_count": failure_count,
                 "loop_count": investigation_loop_count,
             }

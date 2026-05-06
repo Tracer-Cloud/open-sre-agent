@@ -60,8 +60,7 @@ coverage.xml
 # pyenv
 .python-version
 
-# uv
-uv.lock
+# uv (uv.lock is committed)
 
 # mypy
 .mypy_cache/

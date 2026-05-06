@@ -130,7 +130,8 @@
               "openclaw",
               "postgresql",
               "prefect",
-              "rabbitmq"
+              "rabbitmq",
+              "rds"
             ]
           }
         ]

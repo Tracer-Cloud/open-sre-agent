@@ -15,6 +15,7 @@ from app.integrations.openclaw import (
     describe_openclaw_error,
     list_openclaw_tools,
     openclaw_config_from_env,
+    openclaw_runtime_unavailable_reason,
     validate_openclaw_config,
 )
 from app.nodes.resolve_integrations.node import _classify_integrations
@@ -279,11 +280,27 @@ class TestValidateOpenClawConfig:
         config = OpenClawConfig(mode="stdio", command="openclaw-mcp")
         mock_tools = [{"name": "run_rca"}]
 
-        with patch("app.integrations.openclaw.list_openclaw_tools", return_value=mock_tools):
+        with (
+            patch("app.integrations.openclaw.shutil.which", return_value="/tmp/openclaw-mcp"),
+            patch("app.integrations.openclaw.list_openclaw_tools", return_value=mock_tools),
+        ):
             result = validate_openclaw_config(config)
 
         assert result.ok is True
         assert "openclaw-mcp" in result.detail
+
+    def test_stdio_missing_binary_fails_before_listing_tools(self) -> None:
+        config = OpenClawConfig(mode="stdio", command="openclaw")
+
+        with (
+            patch("app.integrations.openclaw.shutil.which", return_value=None),
+            patch("app.integrations.openclaw.list_openclaw_tools") as mock_list_tools,
+        ):
+            result = validate_openclaw_config(config)
+
+        assert result.ok is False
+        assert "Command not found" in result.detail
+        mock_list_tools.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -347,6 +364,15 @@ class TestDescribeOpenClawError:
 
         assert "openclaw gateway status" in detail
         assert "openclaw gateway run" in detail
+
+    def test_runtime_unavailable_reason_detects_missing_stdio_command(self) -> None:
+        config = OpenClawConfig(mode="stdio", command="openclaw")
+
+        with patch("app.integrations.openclaw.shutil.which", return_value=None):
+            detail = openclaw_runtime_unavailable_reason(config)
+
+        assert detail is not None
+        assert "Command not found" in detail
 
 
 # ---------------------------------------------------------------------------

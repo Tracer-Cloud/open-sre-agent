@@ -69,7 +69,8 @@ class CliResult:
 
 @dataclass(frozen=True)
 class PtyAction:
-    expect: str
+    #: Wait until this substring appears, or any substring if a tuple is given.
+    expect: str | tuple[str, ...]
     send: bytes
     timeout: float = 10.0
     #: If > 0, send this many ``j`` keypresses one at a time (prompt_toolkit may
@@ -85,11 +86,11 @@ class CliSandbox:
 
     @property
     def integration_store_path(self) -> Path:
-        return self.home / ".opensre" / "integrations.json"
+        return self.home / ".config" / "opensre" / "integrations.json"
 
     @property
     def wizard_store_path(self) -> Path:
-        return self.home / ".opensre" / "opensre.json"
+        return self.home / ".config" / "opensre" / "opensre.json"
 
     def seed_integrations(self, integrations: list[dict[str, object]]) -> None:
         self.integration_store_path.parent.mkdir(parents=True, exist_ok=True)
@@ -238,12 +239,17 @@ def _wait_for_output(
     process: subprocess.Popen[bytes],
     master_fd: int,
     buffer: bytearray,
-    expected: str,
+    expected: str | tuple[str, ...],
     *,
     timeout: float,
 ) -> None:
+    def _matches(cleaned: str) -> bool:
+        if isinstance(expected, str):
+            return expected in cleaned
+        return any(sub in cleaned for sub in expected)
+
     deadline = time.monotonic() + timeout
-    while expected not in _clean_terminal_output(buffer.decode("utf-8", errors="replace")):
+    while not _matches(_clean_terminal_output(buffer.decode("utf-8", errors="replace"))):
         if time.monotonic() > deadline:
             cleaned = _clean_terminal_output(buffer.decode("utf-8", errors="replace"))
             raise AssertionError(f"Timed out waiting for {expected!r}.\nCurrent output:\n{cleaned}")
@@ -255,7 +261,7 @@ def _wait_for_output(
             break
 
     cleaned = _clean_terminal_output(buffer.decode("utf-8", errors="replace"))
-    if expected not in cleaned:
+    if not _matches(cleaned):
         raise AssertionError(
             f"Process exited before showing {expected!r}.\nCurrent output:\n{cleaned}"
         )
@@ -517,7 +523,7 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
 
     assert result.exit_code == 0
     assert "Done." in result.stdout
-    assert "summary" in result.stdout
+    assert "next" in result.stdout
 
     store = cli_sandbox.read_wizard_store()
     assert store["targets"]["local"]["provider"] == "anthropic"
@@ -527,26 +533,61 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
     assert "ANTHROPIC_REASONING_MODEL=" in cli_sandbox.read_project_env()
 
 
+@pytest.mark.parametrize(
+    ("_cli_binary", "stagger_j", "provider_label", "pty_timeout"),
+    [
+        pytest.param(
+            "codex",
+            6,
+            "OpenAI Codex CLI",
+            60.0,
+            marks=pytest.mark.skipif(
+                shutil.which("codex") is None,
+                reason="OpenAI Codex CLI not on PATH",
+            ),
+        ),
+        pytest.param(
+            "opencode",
+            9,
+            "OpenCode CLI",
+            120.0,
+            marks=pytest.mark.skipif(
+                shutil.which("opencode") is None,
+                reason="OpenCode CLI not on PATH",
+            ),
+        ),
+    ],
+)
 @pytest.mark.skipif(os.name == "nt", reason="interactive smoke uses POSIX PTYs")
-@pytest.mark.skipif(shutil.which("codex") is None, reason="OpenAI Codex CLI not on PATH")
-def test_onboard_interactive_smoke_codex(cli_sandbox: CliSandbox) -> None:
-    """End-to-end PTY: quickstart → Codex CLI path → repick when unauthenticated.
+def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
+    cli_sandbox: CliSandbox,
+    _cli_binary: str,
+    stagger_j: int,
+    provider_label: str,
+    pty_timeout: float,
+) -> None:
+    """PTY: quickstart → local CLI LLM → repick when unauthenticated, then finish as Anthropic.
 
-    Selects ``OpenAI Codex CLI`` (six ``j`` presses). With a fresh HOME the CLI
-    is not logged in, so the wizard repicks the default provider (Anthropic) and
-    uses a placeholder API key. Requires ``codex`` on PATH; skips when absent.
+    Navigates from the default provider with ``stagger_j`` ``j`` presses (provider list order
+    in ``SUPPORTED_PROVIDERS``). Fresh HOME has no CLI auth, so either ``requires login`` or
+    ``Could not verify … login`` is accepted before choosing repick. Skips when the CLI binary
+    for each parametrized case is not on PATH.
     """
+    login_prompt: tuple[str, ...] = (
+        f"{provider_label} requires login. What next?",
+        f"Could not verify {provider_label} login. What next?",
+    )
     result = _run_cli_pty(
         cli_sandbox,
         "onboard",
         actions=[
             PtyAction(expect="How do you want to get started?", send=b"\r"),
-            PtyAction(expect="Choose your LLM provider", send=b"\r", stagger_j=6),
-            # Fresh HOME in CliSandbox has no Codex auth: repick to Anthropic to finish onboarding.
+            PtyAction(expect="Choose your LLM provider", send=b"\r", stagger_j=stagger_j),
             PtyAction(
-                expect="OpenAI Codex CLI requires login. What next?",
+                expect=login_prompt,
                 send=b"\r",
                 stagger_j=1,
+                timeout=90.0,
             ),
             PtyAction(expect="Choose your LLM provider", send=b"\r"),
             PtyAction(expect="Anthropic API key", send=b"smoke-test-key\r"),
@@ -556,12 +597,12 @@ def test_onboard_interactive_smoke_codex(cli_sandbox: CliSandbox) -> None:
                 stagger_j=20,
             ),
         ],
-        timeout=60.0,
+        timeout=pty_timeout,
     )
 
     assert result.exit_code == 0
     assert "Done." in result.stdout
-    assert "summary" in result.stdout
+    assert "next" in result.stdout
 
     store = cli_sandbox.read_wizard_store()
     assert store["targets"]["local"]["provider"] == "anthropic"

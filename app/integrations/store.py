@@ -1,6 +1,6 @@
 """Local integration credential store.
 
-Integrations are stored in ~/.opensre/integrations.json.
+Integrations are stored in ~/.config/opensre/integrations.json.
 
 File format (v2 — see ``_migrate_record_v1_to_v2`` for the v1 shape):
 {
@@ -91,7 +91,7 @@ def _migrate_if_needed(data: dict[str, Any]) -> tuple[dict[str, Any], bool]:
 
 
 def _migrate_legacy_store_if_needed() -> None:
-    """Move the legacy ~/.tracer store into ~/.opensre on first access."""
+    """Move the legacy ~/.tracer store into ~/.config/opensre on first access."""
     if STORE_PATH.exists() or not LEGACY_STORE_PATH.exists():
         return
     # Tests often patch only STORE_PATH. If LEGACY_STORE_PATH still points at the
