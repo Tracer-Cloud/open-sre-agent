@@ -47,6 +47,11 @@ _NODE_END_KINDS = frozenset(
     }
 )
 
+# LangGraph emits this kind for every text-token delta from a chat model
+# inside a node. Held as a constant alongside the lifecycle kinds above so
+# the events-mode handler doesn't carry a magic string.
+_TOKEN_STREAM_KIND = "on_chat_model_stream"
+
 # Diagnose is the only node where the LLM's reasoning is visible enough to
 # warrant streaming the raw token deltas live as Markdown. Other nodes keep
 # the compact spinner UX from ``_LiveSpinner`` in app.output.
@@ -183,15 +188,16 @@ class StreamRenderer:
                 self._start_diagnose_streaming(canonical)
                 return
             if kind in _NODE_END_KINDS and self._is_graph_node_event(event):
-                output = event.data.get("data", {}).get("output", {})
-                if isinstance(output, dict):
-                    self._merge_state(output)
+                self._merge_chain_end_output(event)
                 if self._active_node == canonical:
                     self._finish_diagnose_streaming()
                 return
-            if kind == "on_chat_model_stream" and self._active_node == canonical:
+            if kind == _TOKEN_STREAM_KIND and self._active_node == canonical:
                 self._append_diagnose_chunk(event)
                 return
+            # Other diagnose-related callbacks (tool starts, sub-chain
+            # events, etc.) intentionally don't fall through to the
+            # spinner-subtext path — diagnose owns its own Rich.Live region.
             return
 
         if kind in _NODE_START_KINDS and self._is_graph_node_event(event):
@@ -204,9 +210,7 @@ class StreamRenderer:
             return
 
         if kind in _NODE_END_KINDS and self._is_graph_node_event(event):
-            output = event.data.get("data", {}).get("output", {})
-            if isinstance(output, dict):
-                self._merge_state(output)
+            self._merge_chain_end_output(event)
             if canonical == self._active_node:
                 self._finish_active_node()
             return
@@ -327,6 +331,17 @@ class StreamRenderer:
     def _merge_state(self, update: Any) -> None:
         if isinstance(update, dict):
             self._final_state.update(update)
+
+    def _merge_chain_end_output(self, event: StreamEvent) -> None:
+        """Pull the ``output`` payload from a chain-end event into ``_final_state``.
+
+        Both the diagnose-streaming branch and the default-spinner branch
+        unwrap ``event.data["data"]["output"]`` the same way; sharing one
+        helper keeps the unwrapping shape in one place.
+        """
+        output = event.data.get("data", {}).get("output", {})
+        if isinstance(output, dict):
+            self._merge_state(output)
 
     def _build_node_message(self, node: str) -> str | None:
         if node == "plan_actions":
