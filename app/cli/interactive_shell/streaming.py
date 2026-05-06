@@ -32,6 +32,12 @@ _SPINNER_LABEL = "thinking"
 # without a perceptible UX gain.
 _LIVE_REFRESH_PER_SECOND = 20
 
+# Header labels printed above streamed responses. Centralized so the four
+# call sites (cli_help / cli_agent / follow_up + the action-card renderer)
+# stay in sync if the brand naming ever changes.
+STREAM_LABEL_ASSISTANT = "assistant"
+STREAM_LABEL_ANSWER = "answer"
+
 
 def stream_to_console(
     console: Console,
@@ -134,4 +140,4 @@ def stream_to_console(
     return "".join(buffer)
 
 
-__all__ = ["stream_to_console"]
+__all__ = ["STREAM_LABEL_ANSWER", "STREAM_LABEL_ASSISTANT", "stream_to_console"]

@@ -15,7 +15,7 @@ from app.cli.interactive_shell.prompt_rules import (
     INTERACTIVE_SHELL_TERMINOLOGY_RULE,
 )
 from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.streaming import stream_to_console
+from app.cli.interactive_shell.streaming import STREAM_LABEL_ASSISTANT, stream_to_console
 from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
 
 # Cap stored (user, assistant) pairs; list holds 2 entries per turn.
@@ -149,7 +149,7 @@ def _execute_action_plan(
     )
 
     console.print()
-    console.print(f"[{TERMINAL_ACCENT_BOLD}]assistant:[/]")
+    console.print(f"[{TERMINAL_ACCENT_BOLD}]{STREAM_LABEL_ASSISTANT}:[/]")
     console.print("[dim]Requested actions:[/dim]")
     for index, action in enumerate(actions, start=1):
         kind = str(action.get("action", "")).strip()
@@ -260,7 +260,7 @@ def answer_cli_agent(
         client = get_llm_for_reasoning()
         text_str = stream_to_console(
             console,
-            label="assistant",
+            label=STREAM_LABEL_ASSISTANT,
             chunks=client.invoke_stream(prompt),
             # Suppress the live render if the model is emitting a JSON action
             # plan: that payload is consumed by ``_execute_action_plan`` and
@@ -288,7 +288,7 @@ def answer_cli_agent(
     # something. The non-suppressed path was already rendered live.
     if text_str.lstrip().startswith("{") and text_str.strip():
         console.print()
-        console.print(f"[{TERMINAL_ACCENT_BOLD}]assistant:[/]")
+        console.print(f"[{TERMINAL_ACCENT_BOLD}]{STREAM_LABEL_ASSISTANT}:[/]")
         console.print(Markdown(text_str))
         console.print()
 

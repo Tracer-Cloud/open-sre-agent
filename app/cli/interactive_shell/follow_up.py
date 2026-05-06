@@ -10,7 +10,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.streaming import stream_to_console
+from app.cli.interactive_shell.streaming import STREAM_LABEL_ANSWER, stream_to_console
 from app.cli.interactive_shell.theme import TERMINAL_ERROR
 
 _logger = logging.getLogger(__name__)
@@ -98,7 +98,7 @@ def answer_follow_up(question: str, session: ReplSession, console: Console) -> N
         client = get_llm_for_reasoning()
         stream_to_console(
             console,
-            label="answer",
+            label=STREAM_LABEL_ANSWER,
             chunks=client.invoke_stream(prompt),
         )
     except KeyboardInterrupt:

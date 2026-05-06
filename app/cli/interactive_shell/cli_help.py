@@ -23,7 +23,7 @@ from app.cli.interactive_shell.prompt_rules import (
     INTERACTIVE_SHELL_TERMINOLOGY_RULE,
 )
 from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.streaming import stream_to_console
+from app.cli.interactive_shell.streaming import STREAM_LABEL_ASSISTANT, stream_to_console
 from app.utils.sentry_sdk import capture_exception
 
 # Match the cli_agent terminology / formatting rules so docs answers feel
@@ -102,7 +102,7 @@ def answer_cli_help(question: str, _session: ReplSession, console: Console) -> N
         client = get_llm_for_reasoning()
         stream_to_console(
             console,
-            label="assistant",
+            label=STREAM_LABEL_ASSISTANT,
             chunks=client.invoke_stream(prompt),
         )
     except KeyboardInterrupt:
