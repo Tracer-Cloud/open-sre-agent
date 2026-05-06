@@ -4,6 +4,18 @@ slug: "quickstart"
 ---
 
 <Steps>
+  <Step title="Requirements">
+    OpenSRE runs on macOS, Linux, and Windows. The Linux release currently requires **glibc 2.38 or newer**.
+
+    | Platform | Supported |
+    |---|---|
+    | macOS | Any recent version |
+    | Linux | Ubuntu 24.04+, Fedora 39+, Amazon Linux 2023+, Arch / rolling distros (recent) |
+    | Windows | Windows 10+ |
+
+    On older Linux (Ubuntu 22.04, Debian 11/12, RHEL/CentOS 8, Amazon Linux 2), the curl one-liner will print the supported-OS list and exit cleanly. Track [issue #1284](https://github.com/Tracer-Cloud/opensre/issues/1284) for the planned `manylinux_2_28` rebuild that lowers this floor.
+  </Step>
+
   <Step title="Install OpenSRE">
     <Tabs>
       <Tab title="macOS / Linux">

@@ -34,6 +34,8 @@ INSTALL_DIR_OVERRIDE=0
 INSTALL_CHANNEL="${OPENSRE_INSTALL_CHANNEL:-release}"
 BIN_NAME="opensre"
 INSTALL_WITH_SUDO=0
+SMOKE_TEST_FAILED=0
+PRESERVED_BINARY_PATH=""
 requested_version="${OPENSRE_VERSION:-}"
 
 [ -n "$INSTALL_DIR" ] && INSTALL_DIR_OVERRIDE=1
@@ -481,6 +483,14 @@ verify_binary_version() {
   local actual_version
 
   if ! version_output="$("$binary_path" --version 2>&1)"; then
+    SMOKE_TEST_FAILED=1
+    PRESERVED_BINARY_PATH="${HOME}/.opensre/failed-install/${BIN_NAME}"
+    if mkdir -p "${PRESERVED_BINARY_PATH%/*}" 2>/dev/null && cp "$binary_path" "$PRESERVED_BINARY_PATH" 2>/dev/null; then
+      die "Failed to execute '${binary_path##*/} --version': ${version_output}
+The downloaded binary has been preserved at ${PRESERVED_BINARY_PATH} for debugging.
+On Linux, run 'ldd ${PRESERVED_BINARY_PATH}' to inspect missing libraries.
+See https://github.com/${REPO}/issues/1284 for the most common cause (glibc < 2.38)."
+    fi
     die "Failed to execute '${binary_path##*/} --version': ${version_output}"
   fi
 
@@ -508,6 +518,54 @@ verify_binary_version() {
       printf '%s\n' "$actual_version"
       ;;
   esac
+}
+
+check_glibc_floor() {
+  # Linux-only: verify glibc version is at or above the published floor.
+  # Returns silently if check is not applicable or passes; dies with a clear
+  # message and supported-OS list if the floor is not met.
+  [ "${platform:-}" = "linux" ] || return 0
+  command -v ldd >/dev/null 2>&1 || return 0
+
+  local ldd_output detected_version detected_major detected_minor
+  local required_major=2 required_minor=38
+
+  ldd_output="$(ldd --version 2>&1 | head -n 1 || true)"
+  detected_version="$(printf '%s\n' "$ldd_output" | sed -n 's/.*[^0-9.]\([0-9]\+\.[0-9]\+\).*/\1/p' | head -n 1)"
+  [ -n "$detected_version" ] || return 0
+
+  detected_major="${detected_version%.*}"
+  detected_minor="${detected_version#*.}"
+
+  # Pass if detected >= required
+  if [ "$detected_major" -gt "$required_major" ]; then
+    return 0
+  fi
+  if [ "$detected_major" -eq "$required_major" ] && [ "$detected_minor" -ge "$required_minor" ]; then
+    return 0
+  fi
+
+  cat >&2 <<EOF
+Error: detected glibc ${detected_version}, but the OpenSRE Linux release requires glibc ${required_major}.${required_minor} or newer.
+
+Supported Linux distributions (glibc >= 2.38):
+  - Ubuntu 24.04+
+  - Fedora 39+
+  - Amazon Linux 2023
+  - Arch / rolling distros (recent)
+
+Affected distributions (glibc < 2.38):
+  - Ubuntu 22.04 / 20.04
+  - Debian 11 / 12
+  - RHEL / CentOS 8 family
+  - Amazon Linux 2
+
+Workarounds:
+  1. Upgrade to a supported distribution.
+  2. Install from source. see https://github.com/${REPO}/blob/main/docs/development.md
+  3. Track https://github.com/${REPO}/issues/1284 for the manylinux_2_28 rebuild that lowers this floor.
+EOF
+  exit 1
 }
 
 configure_path() {
@@ -636,6 +694,8 @@ case "$arch" in
     ;;
 esac
 
+check_glibc_floor
+
 resolve_install_dir
 
 version="$requested_version"
@@ -712,6 +772,9 @@ need_cmd mktemp
 tmp_dir="$(mktemp -d)"
 
 cleanup() {
+  if [ "$SMOKE_TEST_FAILED" -eq 1 ] && [ -n "$PRESERVED_BINARY_PATH" ] && [ -e "$PRESERVED_BINARY_PATH" ]; then
+    printf 'Smoke test failed. Binary preserved at: %s\n' "$PRESERVED_BINARY_PATH" >&2
+  fi
   if [ -n "${tmp_dir:-}" ] && [ -d "$tmp_dir" ]; then
     rm -rf "$tmp_dir"
   fi
