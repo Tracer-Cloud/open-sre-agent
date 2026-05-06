@@ -172,7 +172,7 @@ jobs:
           merge-multiple: true
 
       - name: Combine coverage
-        run: coverage combine --data-file=.coverage
+        run: coverage combine --data-file=.coverage .coverage.shard-1-tools .coverage.shard-2-cli-nodes .coverage.shard-3-rest
 
       - name: Coverage report
         run: coverage report --show-missing | tee -a $GITHUB_STEP_SUMMARY
