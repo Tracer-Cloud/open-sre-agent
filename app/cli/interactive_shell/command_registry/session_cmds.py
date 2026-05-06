@@ -37,6 +37,9 @@ def _cmd_trust(session: ReplSession, console: Console, args: list[str]) -> bool:
 
 
 def _cmd_status(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+    from app.cli.interactive_shell.cli_reference import get_cli_reference_cache_stats
+    from app.cli.interactive_shell.docs_reference import get_docs_cache_stats
+
     table = repl_table(title="Session status", title_style=TERMINAL_ACCENT_BOLD, show_header=False)
     table.add_column("key", style="bold")
     table.add_column("value")
@@ -44,6 +47,18 @@ def _cmd_status(session: ReplSession, console: Console, args: list[str]) -> bool
     table.add_row("last investigation", "yes" if session.last_state else "none")
     table.add_row("trust mode", "on" if session.trust_mode else "off")
     table.add_row("provider", os.getenv("LLM_PROVIDER", "anthropic"))
+    cli_stats = get_cli_reference_cache_stats()
+    doc_stats = get_docs_cache_stats()
+    table.add_row(
+        "grounding cli cache",
+        f"hits={cli_stats['hits']} misses={cli_stats['misses']} "
+        f"cached={'yes' if cli_stats['cached'] else 'no'}",
+    )
+    table.add_row(
+        "grounding docs cache",
+        f"hits={doc_stats['hits']} misses={doc_stats['misses']} "
+        f"entries={doc_stats['currsize']}/{doc_stats['maxsize']}",
+    )
     acc = session.accumulated_context
     if acc:
         table.add_row("accumulated context", ", ".join(sorted(acc.keys())))

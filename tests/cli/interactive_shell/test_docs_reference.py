@@ -10,22 +10,23 @@ import pytest
 from app.cli.interactive_shell import docs_reference
 from app.cli.interactive_shell.docs_reference import (
     DocPage,
-    _discover_docs_cached,
     _excerpt,
     _query_tokens,
     build_docs_index,
     build_docs_reference_text,
     discover_docs,
     find_relevant_docs,
+    get_docs_cache_stats,
+    invalidate_docs_cache,
 )
 
 
 @pytest.fixture(autouse=True)
 def _clear_doc_cache() -> Iterator[None]:
     """Reset the per-process docs cache so each test sees a fresh tree."""
-    _discover_docs_cached.cache_clear()
+    invalidate_docs_cache()
     yield
-    _discover_docs_cached.cache_clear()
+    invalidate_docs_cache()
 
 
 def _write_doc(root: Path, relpath: str, content: str) -> None:
@@ -242,3 +243,32 @@ class TestDocPageDataclass:
         page = DocPage(slug="x", relpath="x.mdx", title="X", body="hello")
         # frozen dataclasses are hashable, so they can be stored in sets.
         assert page in {page}
+
+
+class TestDocsGroundingCache:
+    def test_repeated_discover_hits_parse_cache(self, tmp_path: Path) -> None:
+        _seed_docs(tmp_path)
+        discover_docs(tmp_path)
+        info1 = get_docs_cache_stats()
+        discover_docs(tmp_path)
+        info2 = get_docs_cache_stats()
+        assert info2["hits"] == info1["hits"] + 1
+        assert info2["misses"] == info1["misses"]
+
+    def test_file_edit_invalidates_and_refreshes_content(self, tmp_path: Path) -> None:
+        _write_doc(
+            tmp_path,
+            "datadog.mdx",
+            '---\ntitle: "Datadog"\n---\n\nOld content.\n',
+        )
+        pages1 = discover_docs(tmp_path)
+        assert any("Old content" in p.body for p in pages1)
+
+        datadog = tmp_path / "datadog.mdx"
+        datadog.write_text(
+            '---\ntitle: "Datadog"\n---\n\nNew refreshed content.\n',
+            encoding="utf-8",
+        )
+        pages2 = discover_docs(tmp_path)
+        assert any("New refreshed content" in p.body for p in pages2)
+        assert not any("Old content" in p.body for p in pages2)

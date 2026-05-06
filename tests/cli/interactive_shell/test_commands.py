@@ -85,6 +85,8 @@ class TestDispatchSlash:
         output = buf.getvalue()
         assert "interactions" in output
         assert "trust mode" in output
+        assert "grounding cli cache" in output
+        assert "grounding docs cache" in output
 
     def test_unknown_command_does_not_exit(self) -> None:
         session = ReplSession()

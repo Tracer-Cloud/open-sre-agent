@@ -15,14 +15,12 @@ plus subdirectories like ``tutorials/`` and ``use-cases/``.
 
 How docs stay fresh
 -------------------
-Pages are parsed lazily on first use and memoized for the lifetime of the
-process via an :func:`functools.lru_cache` on :func:`_discover_docs_cached`.
-That means there is no build step and no on-disk cache file: a fresh
-``opensre`` invocation always reads the current ``docs/`` tree. Edits made
-to ``docs/*.mdx`` while a long-running shell is open are NOT picked up
-until the next process restart. To extend coverage, drop a new ``.mdx``
-file under ``docs/`` and it will be discovered automatically the next time
-the shell starts.
+Pages are parsed lazily and cached in-process keyed by the resolved docs root
+and a lightweight fingerprint of each tracked file (relative path, size,
+``st_mtime_ns``). Edits under ``docs/`` during a long-running shell invalidate
+the fingerprint and trigger a re-parse on the next grounding call. There is no
+on-disk cache. Use :func:`invalidate_docs_cache` in tests to clear the parse
+cache between cases.
 
 When docs are missing
 ---------------------
@@ -34,10 +32,12 @@ CLI reference and avoid inventing setup steps.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 # Docs live at the repository root, three levels above this file
 # (.../app/cli/interactive_shell/docs_reference.py -> repo root).
@@ -204,16 +204,37 @@ def _iter_doc_files(root: Path) -> list[Path]:
     return sorted(files)
 
 
-@lru_cache(maxsize=1)
-def _discover_docs_cached(root_str: str) -> tuple[DocPage, ...]:
-    """Cached version of :func:`discover_docs` keyed on the resolved root.
+def _fingerprint_docs_tree(root: Path) -> str:
+    """Digest of docs file set + mtimes/sizes for cache invalidation."""
+    digest = hashlib.sha256()
+    if not root.exists() or not root.is_dir():
+        digest.update(b"nodir")
+        digest.update(str(root.resolve() if root.exists() else root).encode())
+        return digest.hexdigest()
 
-    The cache is process-local; re-launching the interactive shell picks up
-    any docs edits made since startup. Within one shell session, repeated
-    docs queries reuse the parsed pages.
+    for path in _iter_doc_files(root):
+        rel = path.relative_to(root).as_posix()
+        try:
+            st = path.stat()
+            digest.update(rel.encode())
+            digest.update(str(st.st_size).encode())
+            digest.update(str(st.st_mtime_ns).encode())
+        except OSError:
+            continue
+    return digest.hexdigest()
+
+
+@lru_cache(maxsize=4)
+def _load_docs_pages(root_str: str, _fingerprint: str) -> tuple[DocPage, ...]:
+    """Parse all docs under ``root_str``; cache bounded by (root, fingerprint).
+
+    ``_fingerprint`` is part of the :func:`functools.lru_cache` key so edits to
+    tracked files force a new parse without clearing the whole cache.
     """
     pages: list[DocPage] = []
     root = Path(root_str)
+    if not root.exists() or not root.is_dir():
+        return ()
     for path in _iter_doc_files(root):
         try:
             text = path.read_text(encoding="utf-8")
@@ -236,7 +257,26 @@ def _discover_docs_cached(root_str: str) -> tuple[DocPage, ...]:
 def discover_docs(root: Path | None = None) -> list[DocPage]:
     """Walk the docs root, parse each MDX page, return them as :class:`DocPage` records."""
     target = root if root is not None else _DOCS_ROOT
-    return list(_discover_docs_cached(str(target.resolve() if target.exists() else target)))
+    resolved = target.resolve() if target.exists() else target
+    root_key = str(resolved)
+    fp = _fingerprint_docs_tree(resolved)
+    return list(_load_docs_pages(root_key, fp))
+
+
+def invalidate_docs_cache() -> None:
+    """Clear the bounded parse cache (tests, forced refresh)."""
+    _load_docs_pages.cache_clear()
+
+
+def get_docs_cache_stats() -> dict[str, Any]:
+    """Debug metrics for docs grounding cache (LruCache hit/miss/size)."""
+    info = _load_docs_pages.cache_info()
+    return {
+        "hits": info.hits,
+        "misses": info.misses,
+        "currsize": info.currsize,
+        "maxsize": info.maxsize,
+    }
 
 
 def _tokenize(text: str) -> set[str]:
@@ -376,4 +416,6 @@ __all__ = [
     "build_docs_reference_text",
     "discover_docs",
     "find_relevant_docs",
+    "get_docs_cache_stats",
+    "invalidate_docs_cache",
 ]

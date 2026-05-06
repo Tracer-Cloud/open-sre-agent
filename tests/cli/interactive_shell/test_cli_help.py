@@ -17,15 +17,15 @@ from app.cli.interactive_shell.cli_help import (
     answer_cli_help,
 )
 from app.cli.interactive_shell.cli_reference import build_cli_reference_text
-from app.cli.interactive_shell.docs_reference import _discover_docs_cached
+from app.cli.interactive_shell.docs_reference import invalidate_docs_cache
 from app.cli.interactive_shell.session import ReplSession
 
 
 @pytest.fixture(autouse=True)
 def _clear_doc_cache() -> Iterator[None]:
-    _discover_docs_cached.cache_clear()
+    invalidate_docs_cache()
     yield
-    _discover_docs_cached.cache_clear()
+    invalidate_docs_cache()
 
 
 def _capture() -> tuple[Console, io.StringIO]:

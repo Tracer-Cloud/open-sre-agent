@@ -10,6 +10,7 @@ from rich.markdown import Markdown
 from rich.markup import escape
 
 from app.cli.interactive_shell.cli_reference import build_cli_reference_text
+from app.cli.interactive_shell.grounding_diagnostics import log_grounding_cache_diagnostics
 from app.cli.interactive_shell.loaders import llm_loader
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
@@ -295,6 +296,7 @@ def answer_cli_agent(
         return
 
     reference = build_cli_reference_text()
+    log_grounding_cache_diagnostics("cli_agent_grounding")
     history = _format_history_for_prompt(session)
     system = _build_system_prompt(grounding, reference, history)
     user_block = (

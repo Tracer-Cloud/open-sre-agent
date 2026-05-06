@@ -18,6 +18,7 @@ from rich.markup import escape
 
 from app.cli.interactive_shell.cli_reference import build_cli_reference_text
 from app.cli.interactive_shell.docs_reference import build_docs_reference_text
+from app.cli.interactive_shell.grounding_diagnostics import log_grounding_cache_diagnostics
 from app.cli.interactive_shell.loaders import llm_loader
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
@@ -98,6 +99,7 @@ def answer_cli_help(question: str, session: ReplSession, console: Console) -> No
 
     cli_reference = build_cli_reference_text()
     docs_reference = build_docs_reference_text(question)
+    log_grounding_cache_diagnostics("cli_help_grounding")
     prompt = _build_grounded_prompt(question, cli_reference, docs_reference)
 
     try:
