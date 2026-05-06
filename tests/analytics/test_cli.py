@@ -40,3 +40,51 @@ def test_capture_cli_invoked_reports_analytics_failures_to_sentry(
     cli.capture_cli_invoked()
 
     assert captured_errors == [expected_error]
+
+
+def test_build_cli_invoked_properties_includes_full_command_path() -> None:
+    properties = cli.build_cli_invoked_properties(
+        entrypoint="opensre",
+        command_parts=["remote", "ops", "status"],
+        debug=True,
+    )
+
+    assert properties == {
+        "entrypoint": "opensre",
+        "command_path": "opensre remote ops status",
+        "command_family": "remote",
+        "json_output": False,
+        "verbose": False,
+        "debug": True,
+        "yes": False,
+        "interactive": True,
+        "subcommand": "ops",
+        "command_leaf": "status",
+    }
+
+
+def test_build_cli_invoked_properties_handles_root_invocation() -> None:
+    properties = cli.build_cli_invoked_properties(
+        entrypoint="opensre",
+        command_parts=[],
+    )
+
+    assert properties["command_path"] == "opensre"
+    assert properties["command_family"] == "root"
+    assert "subcommand" not in properties
+    assert "command_leaf" not in properties
+
+
+def test_capture_update_helpers_emit_expected_events(monkeypatch: pytest.MonkeyPatch) -> None:
+    stub = _StubAnalytics()
+    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+
+    cli.capture_update_started(check_only=True)
+    cli.capture_update_completed(check_only=False, updated=True)
+    cli.capture_update_failed(check_only=False, reason="RuntimeError")
+
+    assert stub.events == [
+        (Event.UPDATE_STARTED, {"check_only": True}),
+        (Event.UPDATE_COMPLETED, {"check_only": False, "updated": True}),
+        (Event.UPDATE_FAILED, {"check_only": False, "reason": "RuntimeError"}),
+    ]
