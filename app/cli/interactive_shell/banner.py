@@ -56,7 +56,7 @@ def render_banner(console: Console | None = None) -> None:
 
     The panel expands to the full terminal width, leaving only Rich's
     default 1-char margin on each side. Content inside is padded and
-    centered for a clean Claude-Code-style welcome.
+    centered for a clean, information-dense welcome.
     """
     console = console or Console(highlight=False)
     provider, model = detect_provider_model()
@@ -68,21 +68,25 @@ def render_banner(console: Console | None = None) -> None:
     title.append(f"v{get_version()}", style=BANNER_TERTIARY)
 
     info = Text()
-    info.append("model  ", style="dim")
-    info.append(f"{provider} · {model}", style=BANNER_SECONDARY)
+    info.append("  model   ", style="dim")
+    info.append(f"{provider}", style=f"bold {BANNER_SECONDARY}")
+    info.append("  ·  ", style="dim")
+    info.append(model, style=BANNER_SECONDARY)
     info.append("\n")
-    info.append("mode   ", style="dim")
-    info.append("interactive · read-only tools", style="")
+    info.append("  mode    ", style="dim")
+    info.append("interactive", style="")
+    info.append("  ·  ", style="dim")
+    info.append("read-only tools", style="dim")
 
     hints = Text()
+    hints.append("  Tab", style=f"bold {BANNER_TERTIARY}")
+    hints.append(" complete  ", style="dim")
+    hints.append("↑↓", style=f"bold {BANNER_TERTIARY}")
+    hints.append(" history  ", style="dim")
     hints.append("/help", style=f"bold {BANNER_SECONDARY}")
-    hints.append(" for commands", style="dim")
-    hints.append("   ·   ", style="dim")
-    hints.append("/status", style=f"bold {BANNER_PRIMARY}")
-    hints.append(" for setup", style="dim")
-    hints.append("   ·   ", style="dim")
-    hints.append("/exit", style=f"bold {BANNER_SECONDARY}")
-    hints.append(" to quit", style="dim")
+    hints.append(" commands  ", style="dim")
+    hints.append("/exit", style=f"bold {BANNER_PRIMARY}")
+    hints.append(" quit", style="dim")
 
     body = Group(
         Align.center(title),
@@ -97,7 +101,7 @@ def render_banner(console: Console | None = None) -> None:
         Panel(
             body,
             border_style=BANNER_BORDER,
-            padding=(1, 2),
+            padding=(1, 4),
             expand=True,
         )
     )

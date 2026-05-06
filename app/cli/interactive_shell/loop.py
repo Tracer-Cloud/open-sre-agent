@@ -7,7 +7,7 @@ import sys
 from collections.abc import Iterable
 
 from prompt_toolkit import PromptSession
-from prompt_toolkit.completion import CompleteEvent, Completer, Completion
+from prompt_toolkit.completion import CompleteEvent, Completer, Completion, PathCompleter
 from prompt_toolkit.document import Document
 from prompt_toolkit.filters import has_completions
 from prompt_toolkit.formatted_text import ANSI
@@ -24,19 +24,70 @@ from app.cli.interactive_shell.commands import SLASH_COMMANDS, dispatch_slash
 from app.cli.interactive_shell.config import ReplConfig
 from app.cli.interactive_shell.follow_up import answer_follow_up
 from app.cli.interactive_shell.history import load_prompt_history
-from app.cli.interactive_shell.router import classify_input
+from app.cli.interactive_shell.router import _BARE_COMMAND_ALIASES, classify_input
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.theme import (
     ANSI_RESET,
     OPENCLAW_AMBER,
+    OPENCLAW_CORAL,
     OPENCLAW_ORANGE,
     PROMPT_ACCENT_ANSI,
 )
 from app.cli.support.errors import OpenSREError
 
 
-class SlashCommandCompleter(Completer):
-    """Show slash-command previews as soon as the user types `/`."""
+def _short_meta(text: str, max_len: int = 54) -> str:
+    """Trim completion help text to fit the meta column."""
+    return text if len(text) <= max_len else text[: max_len - 1] + "…"
+
+
+class ShellCompleter(Completer):
+    """Tab-completion for slash commands, subcommands, file paths, and bare-word aliases.
+
+    Completion levels:
+      1. Bare-word aliases (``help``, ``exit``, …) — no leading slash, no spaces.
+      2. Top-level slash command names (``/hel`` → ``/help``).
+      3. Subcommand keywords  (``/model `` → ``show / set / toolcall``).
+      4. File-path completion for ``/investigate`` and ``/save``.
+    """
+
+    _SUBCOMMANDS: dict[str, list[tuple[str, str]]] = {
+        "/model": [
+            ("show", "show active provider and models"),
+            ("set", "switch provider  ·  /model set <provider> [model]"),
+            ("toolcall", "manage toolcall model for the active provider"),
+        ],
+        "/integrations": [
+            ("list", "list all configured integrations"),
+            ("verify", "run health checks on all integrations"),
+            ("show", "show details for a single integration"),
+        ],
+        "/list": [
+            ("integrations", "alert-source integrations"),
+            ("models", "active LLM models"),
+            ("mcp", "connected MCP servers"),
+        ],
+        "/mcp": [
+            ("list", "list connected MCP servers"),
+            ("connect", "add an MCP server via opensre integrations setup"),
+            ("disconnect", "remove an MCP server"),
+        ],
+        "/template": [
+            ("generic", "generic alert JSON template"),
+            ("datadog", "Datadog monitor alert template"),
+            ("grafana", "Grafana alert template"),
+            ("honeycomb", "Honeycomb trigger template"),
+            ("coralogix", "Coralogix alert template"),
+        ],
+        "/trust": [
+            ("on", "enable trust mode (skip approval prompts)"),
+            ("off", "disable trust mode"),
+        ],
+        "/verbose": [
+            ("on", "enable verbose logging"),
+            ("off", "disable verbose logging"),
+        ],
+    }
 
     def get_completions(
         self,
@@ -44,36 +95,94 @@ class SlashCommandCompleter(Completer):
         complete_event: CompleteEvent,  # noqa: ARG002 - required by prompt_toolkit protocol
     ) -> Iterable[Completion]:
         text = document.text_before_cursor
-        if not text.startswith("/") or any(char.isspace() for char in text):
+        if not text:
             return
 
-        needle = text.lower()
-        for command in SLASH_COMMANDS.values():
-            if command.name.lower().startswith(needle):
-                yield Completion(
-                    command.name,
-                    start_position=-len(text),
-                    display=command.name,
-                    display_meta=command.help_text,
+        # ── Bare-word alias (no slash, no spaces) ───────────────────────────────
+        if not text.startswith("/"):
+            if " " in text:
+                return
+            needle = text.lower()
+            for alias in sorted(_BARE_COMMAND_ALIASES):
+                if alias.startswith(needle) and alias != needle:
+                    yield Completion(
+                        alias,
+                        start_position=-len(text),
+                        display=alias,
+                        display_meta="command shortcut",
+                    )
+            return
+
+        # ── Slash-prefixed input ─────────────────────────────────────────────────
+        parts = text.split()
+        trailing_space = text != text.rstrip(" ")
+
+        # Level 0: /[partial] → match top-level command names
+        if len(parts) == 1 and not trailing_space:
+            needle = parts[0].lower()
+            for cmd in SLASH_COMMANDS.values():
+                if cmd.name.lower().startswith(needle):
+                    yield Completion(
+                        cmd.name,
+                        start_position=-len(parts[0]),
+                        display=cmd.name,
+                        display_meta=_short_meta(cmd.help_text),
+                    )
+            return
+
+        # Level 1: /command [partial] → subcommand keywords or file paths
+        if len(parts) <= 2:
+            cmd_name = parts[0].lower()
+            sub_prefix = "" if trailing_space or len(parts) < 2 else parts[1].lower()
+
+            # File-path completion for commands that take a path argument
+            if cmd_name in ("/investigate", "/save"):
+                typed = sub_prefix
+                yield from PathCompleter(expanduser=True).get_completions(
+                    Document(typed, len(typed)), complete_event
                 )
+                return
+
+            # Keyword subcommand completion
+            for sub, meta in self._SUBCOMMANDS.get(cmd_name, []):
+                if sub.startswith(sub_prefix):
+                    yield Completion(
+                        sub,
+                        start_position=-len(sub_prefix),
+                        display=sub,
+                        display_meta=meta,
+                    )
 
 
 def _build_prompt_session() -> PromptSession[str]:
     return PromptSession(
-        completer=SlashCommandCompleter(),
+        completer=ShellCompleter(),
         complete_while_typing=True,
+        reserve_space_for_menu=8,
         history=load_prompt_history(),
         key_bindings=_build_prompt_key_bindings(),
         style=_build_prompt_style(),
     )
 
 
-def _build_slash_completer() -> SlashCommandCompleter:
-    return SlashCommandCompleter()
-
-
 def _build_prompt_key_bindings() -> KeyBindings:
     bindings = KeyBindings()
+
+    @bindings.add("tab")
+    def _tab_complete(event: object) -> None:
+        buff = event.current_buffer  # type: ignore[attr-defined]
+        if buff.complete_state:
+            buff.complete_next()
+        else:
+            buff.start_completion(select_first=True)
+
+    @bindings.add("s-tab")
+    def _shift_tab_complete(event: object) -> None:
+        buff = event.current_buffer  # type: ignore[attr-defined]
+        if buff.complete_state:
+            buff.complete_previous()
+        else:
+            buff.start_completion(select_first=False)
 
     @bindings.add("down", filter=has_completions)
     def _next_completion(event: object) -> None:
@@ -89,12 +198,14 @@ def _build_prompt_key_bindings() -> KeyBindings:
 def _build_prompt_style() -> Style:
     return Style.from_dict(
         {
-            "completion-menu.completion": "#c7c2bd bg:#141210",
-            "completion-menu.completion.current": f"{OPENCLAW_ORANGE} bg:#241913",
-            "completion-menu.meta.completion": "#7f7770 bg:#141210",
-            "completion-menu.meta.completion.current": f"{OPENCLAW_AMBER} bg:#241913",
-            "scrollbar.background": "bg:#141210",
-            "scrollbar.button": "bg:#3a2a22",
+            "completion-menu": "bg:#1c1917",
+            "completion-menu.completion": "#d6d0ca bg:#1c1917",
+            "completion-menu.completion.current": f"bold {OPENCLAW_ORANGE} bg:#2c1e14",
+            "completion-menu.meta.completion": "#6b6561 bg:#1c1917",
+            "completion-menu.meta.completion.current": f"{OPENCLAW_AMBER} bg:#2c1e14",
+            "completion-menu.border": OPENCLAW_CORAL,
+            "scrollbar.background": "bg:#1c1917",
+            "scrollbar.button": "bg:#4a3020",
         }
     )
 
