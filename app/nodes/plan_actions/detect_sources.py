@@ -906,7 +906,9 @@ def detect_sources(
         if not incident_id:
             incident_url = str(annotations.get("incident_url") or "").strip()
             if "incident.io/incidents/" in incident_url:
-                incident_id = incident_url.split("/incidents/")[-1].split("?")[0].strip()
+                incident_id = (
+                    incident_url.split("/incidents/")[-1].split("?")[0].split("/")[0].strip()
+                )
 
         sources["incident_io"] = {
             "api_key": str(incident_io_int.get("api_key", "")).strip(),
@@ -916,7 +918,7 @@ def detect_sources(
             "title": str(
                 annotations.get("incident_title") or raw_alert.get("alert_name", "")
             ).strip(),
-            "comment": str(
+            "description": str(
                 annotations.get("incident_comment") or annotations.get("summary") or ""
             ).strip(),
             "connection_verified": True,
