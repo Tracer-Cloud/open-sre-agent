@@ -625,5 +625,6 @@ def summarize_scores(scores: list[CloudOpsCaseScore]) -> dict[str, Any]:
             "Mean Time to Identify": round(averages["mtti"], 4),
             "Invalid Action Count": round(averages["iac"], 2),
             "Redundant Action Rate": averages["rar"],
+            "Zero-Tool Direct Resolution": averages["ztdr"],
         },
     }

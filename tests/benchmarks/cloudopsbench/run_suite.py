@@ -157,9 +157,10 @@ def run_case(case: CloudOpsCase, output_dir: Path) -> tuple[dict[str, Any], Clou
         "final_answer": final_state_dict.get("final_answer") or final_state_dict.get("report"),
         "root_cause": final_state_dict.get("root_cause"),
         "report": final_state_dict.get("report"),
-        "standardized_agent_steps": list(
-            case.process.get("path1") or case.process.get("path2") or []
-        ),
+        "expert_steps": {
+            "path1": list(case.process.get("path1") or []),
+            "path2": list(case.process.get("path2") or []),
+        },
         "steps": _steps_from_backend(backend),
         "final_state": final_state_dict,
     }

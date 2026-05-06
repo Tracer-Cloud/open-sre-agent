@@ -100,7 +100,7 @@ def _extract_describe_resource(sources: dict[str, dict]) -> dict[str, Any]:
     }
 
 
-def _extract_service(sources: dict[str, dict]) -> dict[str, Any]:
+def _extract_error_logs(sources: dict[str, dict]) -> dict[str, Any]:
     backend = _cloudops_backend(sources)
     parts = _process_parts_for_action(backend, "GetErrorLogs")
     return {
@@ -258,7 +258,7 @@ def get_alerts(cloudops_backend: Any) -> dict[str, Any]:
     use_cases=["Inspect service error-log summaries recorded in the snapshot."],
     requires=["cluster_name"],
     is_available=_cloudops_available,
-    extract_params=_extract_service,
+    extract_params=_extract_error_logs,
 )
 def get_error_logs(
     cloudops_backend: Any,
