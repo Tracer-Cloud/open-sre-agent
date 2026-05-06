@@ -8,16 +8,24 @@ from importlib import import_module
 from typing import Any, Protocol, cast
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 from langchain_core.tools import StructuredTool
 
 from app.config import ANTHROPIC_LLM_CONFIG, DEFAULT_MAX_TOKENS, OPENAI_LLM_CONFIG
 from app.constants.prompts import GENERAL_SYSTEM_PROMPT, ROUTER_PROMPT, SYSTEM_PROMPT
 from app.services import get_llm_for_tools
-from app.state import AgentState, ChatMessage
+from app.state import AgentState
 from app.tools.registered_tool import RegisteredTool
 from app.tools.registry import get_registered_tools
-from app.types.config import NodeConfig
+from app.types import (
+    NodeConfig,
+    SREMessage,
+    SREMessageList,
+    from_lc_message,
+    make_assistant,
+    make_system,
+    make_tool,
+    to_lc_messages,
+)
 from app.utils.cfg_helpers import CfgHelpers
 
 
@@ -35,34 +43,9 @@ def get_chat_tools() -> list[StructuredTool]:
     return [_to_structured_tool(tool) for tool in get_registered_tools("chat")]
 
 
-# LangChain type -> ChatMessage role mapping
-_TYPE_TO_ROLE: dict[str, str] = {
-    "human": "user",
-    "ai": "assistant",
-    "system": "system",
-    "tool": "tool",
-}
-
-
-def _normalize_messages(msgs: list[Any]) -> list[ChatMessage]:
-    """Normalize messages from LangChain format to plain ChatMessage dicts."""
-    result: list[ChatMessage] = []
-    for m in msgs:
-        if hasattr(m, "type") and hasattr(m, "content"):
-            role = _TYPE_TO_ROLE.get(m.type, "user")
-            result.append({"role": role, "content": str(m.content)})  # type: ignore[typeddict-item]
-            continue
-        if not isinstance(m, dict):
-            continue
-        if "role" in m:
-            result.append(m)  # type: ignore[arg-type]
-            continue
-        if "type" in m:
-            role = _TYPE_TO_ROLE.get(m["type"], "user")
-            result.append({"role": role, "content": str(m.get("content", ""))})  # type: ignore[typeddict-item]
-            continue
-        result.append(m)  # type: ignore[arg-type]
-    return result
+def _normalize_messages(msgs: list[Any]) -> SREMessageList:
+    """Normalize messages from LangChain format to plain SREMessage dicts."""
+    return [from_lc_message(m) for m in msgs]
 
 
 # ── Chat LLM ─────────────────────────────────────────────────────────────
@@ -187,11 +170,12 @@ def router_node(state: AgentState) -> dict[str, Any]:
     return {"route": route if route in ("tracer_data", "general") else "general"}
 
 
-def _apply_guardrails_to_messages(msgs: list[Any]) -> list[Any]:
+def _apply_guardrails_to_messages(msgs: list[Any]) -> SREMessageList:
     """Return a copy of *msgs* with redacted content, leaving originals untouched.
 
     Operates on copies to avoid mutating shared LangGraph state objects.
     """
+    msgs = [from_lc_message(m) for m in msgs]
     from app.guardrails.engine import get_guardrail_engine
 
     engine = get_guardrail_engine()
@@ -199,12 +183,12 @@ def _apply_guardrails_to_messages(msgs: list[Any]) -> list[Any]:
         return msgs
     result = []
     for msg in msgs:
-        content = getattr(msg, "content", None)
+        content = msg.get("content")
         if isinstance(content, str) and content:
             redacted = engine.apply(content)
             if redacted != content:
                 msg = copy.copy(msg)
-                msg.content = redacted
+                msg["content"] = redacted
         result.append(msg)
     return result
 
@@ -215,65 +199,58 @@ def chat_agent_node(state: AgentState, _config: NodeConfig | None = None) -> dic
     Uses the configured provider with bound tools. The LLM can make tool calls
     which will be executed by the tool_executor node.
     """
-    msgs = list(state.get("messages", []))
+    msgs = _normalize_messages(list(state.get("messages", [])))
 
-    has_system = any(
-        (hasattr(m, "type") and m.type == "system")
-        or (isinstance(m, dict) and m.get("type") == "system")
-        for m in msgs
-    )
+    has_system = any(m["role"] == "system" for m in msgs)
     if not has_system:
-        msgs = [SystemMessage(content=SYSTEM_PROMPT), *msgs]
+        msgs = [make_system(SYSTEM_PROMPT), *msgs]
 
     msgs = _apply_guardrails_to_messages(msgs)
     try:
         llm = _get_chat_llm(with_tools=True)
     except UnsupportedChatProviderError as exc:
-        return {"messages": [AIMessage(content=str(exc))]}
-    response = llm.invoke(msgs)
-    return {"messages": [response]}
+        return {"messages": [make_assistant(str(exc))]}
+    response = llm.invoke(to_lc_messages(msgs))
+    return {"messages": [from_lc_message(response)]}
 
 
 def general_node(state: AgentState, _config: NodeConfig | None = None) -> dict[str, Any]:
     """Direct LLM response without tools for general questions."""
-    msgs = list(state.get("messages", []))
+    msgs = _normalize_messages(list(state.get("messages", [])))
 
-    has_system = any(
-        (hasattr(m, "type") and m.type == "system")
-        or (isinstance(m, dict) and m.get("type") == "system")
-        for m in msgs
-    )
+    has_system = any(m["role"] == "system" for m in msgs)
     if not has_system:
-        msgs = [SystemMessage(content=GENERAL_SYSTEM_PROMPT), *msgs]
+        msgs = [make_system(GENERAL_SYSTEM_PROMPT), *msgs]
 
     msgs = _apply_guardrails_to_messages(msgs)
     try:
         llm = _get_chat_llm(with_tools=False)
     except UnsupportedChatProviderError as exc:
-        return {"messages": [AIMessage(content=str(exc))]}
-    response = llm.invoke(msgs)
-    return {"messages": [response]}
+        return {"messages": [make_assistant(str(exc))]}
+    response = llm.invoke(to_lc_messages(msgs))
+    return {"messages": [from_lc_message(response)]}
 
 
 def tool_executor_node(state: AgentState) -> dict[str, Any]:
     """Execute tool calls from the last AI message and return ToolMessages."""
-    msgs = list(state.get("messages", []))
+    msgs = _normalize_messages(list(state.get("messages", [])))
     if not msgs:
         return {"messages": []}
 
-    last_ai = None
+    last_ai: SREMessage | None = None
     for m in reversed(msgs):
-        if hasattr(m, "tool_calls") and getattr(m, "tool_calls", None):
+        if m.get("role") == "assistant" and m.get("tool_calls"):
             last_ai = m
             break
 
-    if not last_ai or not last_ai.tool_calls:
+    if not last_ai or not last_ai.get("tool_calls"):
         return {"messages": []}
 
     tool_map = {tool.name: tool for tool in get_chat_tools()}
 
     tool_messages = []
-    for tc in last_ai.tool_calls:
+    tool_calls = last_ai.get("tool_calls") or []
+    for tc in tool_calls:
         tool_name = tc["name"]
         tool_args = tc.get("args", {})
         tool_id = tc["id"]
@@ -289,6 +266,6 @@ def tool_executor_node(state: AgentState) -> dict[str, Any]:
         except (RuntimeError, ValueError, TypeError, KeyError) as e:
             result = json.dumps({"error": str(e)})
 
-        tool_messages.append(ToolMessage(content=result, tool_call_id=tool_id, name=tool_name))
+        tool_messages.append(make_tool(content=result, tool_call_id=tool_id, name=tool_name))
 
     return {"messages": tool_messages}

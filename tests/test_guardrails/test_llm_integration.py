@@ -281,9 +281,9 @@ class TestChatNodeGuardrails:
         ]
         result = _apply_guardrails_to_messages(msgs)
 
-        assert result[0].content == "hello"
-        assert "AKIA" not in str(result[1].content)
-        assert "[REDACTED:aws_key]" in str(result[1].content)
+        assert result[0]["content"] == "hello"
+        assert "AKIA" not in str(result[1]["content"])
+        assert "[REDACTED:aws_key]" in str(result[1]["content"])
         # Original should be untouched
         assert msgs[1].content == "key is AKIAIOSFODNN7EXAMPLE"
 
@@ -342,7 +342,7 @@ class TestChatNodeGuardrails:
 
         msgs: list[Any] = [_FakeMessage("AKIAIOSFODNN7EXAMPLE")]
         result = _apply_guardrails_to_messages(msgs)
-        assert result[0].content == "AKIAIOSFODNN7EXAMPLE"
+        assert result[0]["content"] == "AKIAIOSFODNN7EXAMPLE"
 
 
 # Production-grade configs exercising every reachable overlap shape the fix
@@ -465,7 +465,7 @@ class TestOverlappingRedactionReachesDownstream:
         msgs: list[Any] = [_FakeMessage(original)]
         result = _apply_guardrails_to_messages(msgs)
 
-        redacted = str(result[0].content)
+        redacted = str(result[0]["content"])
         assert "api_key=" not in redacted
         assert "AKIA" not in redacted
         assert "[REDACTED:generic_api_token]" in redacted
