@@ -173,36 +173,34 @@ def test_check_integrations_reports_configured_services(monkeypatch, tmp_path) -
 
 
 def test_check_version_freshness_up_to_date(monkeypatch) -> None:
-    def _is_update_available(current: str, latest: str) -> bool:
-        assert current == "1.2.3"
-        assert latest == "1.2.3"
-        return False
-
+    fetch_latest_version = MagicMock(return_value="1.2.3")
+    is_update_available = MagicMock(return_value=False)
     monkeypatch.setattr(doctor, "get_version", lambda: "1.2.3")
-    monkeypatch.setattr("app.cli.support.update._fetch_latest_version", lambda: "1.2.3")
-    monkeypatch.setattr("app.cli.support.update._is_update_available", _is_update_available)
+    monkeypatch.setattr("app.cli.support.update._fetch_latest_version", fetch_latest_version)
+    monkeypatch.setattr("app.cli.support.update._is_update_available", is_update_available)
 
     ok, detail = doctor._check_version_freshness()
 
     assert ok is True
     assert detail == "1.2.3 (up to date)"
+    fetch_latest_version.assert_called_once_with()
+    is_update_available.assert_called_once_with("1.2.3", "1.2.3")
 
 
 def test_check_version_freshness_update_available(monkeypatch) -> None:
-    def _is_update_available(current: str, latest: str) -> bool:
-        assert current == "1.2.3"
-        assert latest == "1.3.0"
-        return True
-
+    fetch_latest_version = MagicMock(return_value="1.3.0")
+    is_update_available = MagicMock(return_value=True)
     monkeypatch.setattr(doctor, "get_version", lambda: "1.2.3")
-    monkeypatch.setattr("app.cli.support.update._fetch_latest_version", lambda: "1.3.0")
-    monkeypatch.setattr("app.cli.support.update._is_update_available", _is_update_available)
+    monkeypatch.setattr("app.cli.support.update._fetch_latest_version", fetch_latest_version)
+    monkeypatch.setattr("app.cli.support.update._is_update_available", is_update_available)
 
     ok, detail = doctor._check_version_freshness()
 
     assert ok is False
     assert "current=1.2.3, latest=1.3.0" in detail
     assert "opensre update" in detail
+    fetch_latest_version.assert_called_once_with()
+    is_update_available.assert_called_once_with("1.2.3", "1.3.0")
 
 
 def test_check_version_freshness_soft_fails_on_fetch_error(monkeypatch) -> None:
