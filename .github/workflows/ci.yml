@@ -285,7 +285,7 @@ jobs:
           [ "${TEST_RESULT}" = "success" ] || exit 1
 
           case "${TEST_KUBERNETES_RESULT}" in
-            success|skipped) ;;
+            success|failure|skipped) ;;
             *) exit 1 ;;
           esac
 

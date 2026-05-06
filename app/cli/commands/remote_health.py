@@ -12,9 +12,9 @@ if TYPE_CHECKING:
 
 
 def _save_remote_base_url(client: RemoteAgentClient) -> None:
-    from app.cli.wizard.store import save_remote_url
-
     try:
+        from app.cli.wizard.store import save_remote_url
+
         save_remote_url(client.base_url)
 
         from app.cli.wizard.store import load_named_remotes, save_named_remote
