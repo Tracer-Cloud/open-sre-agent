@@ -302,7 +302,11 @@ def _build_remote_url(outputs: Mapping[str, object]) -> str | None:
     return f"http://{ip}:{port}"
 
 
-@click.group(name="deploy", invoke_without_command=True)
+@click.group(
+    name="deploy",
+    context_settings={"help_option_names": ["-h", "--help"]},
+    invoke_without_command=True,
+)
 @click.pass_context
 def deploy(ctx: click.Context) -> None:
     """Deploy OpenSRE to a cloud environment."""
