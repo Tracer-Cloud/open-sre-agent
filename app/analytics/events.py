@@ -24,7 +24,6 @@ class Event(StrEnum):
     # Integrations
     INTEGRATION_SETUP_STARTED = "integration_setup_started"
     INTEGRATION_SETUP_COMPLETED = "integration_setup_completed"
-    INTEGRATION_ADDED = "integration_added"
     INTEGRATION_REMOVED = "integration_removed"
     INTEGRATION_VERIFIED = "integration_verified"
     INTEGRATIONS_LISTED = "integrations_listed"

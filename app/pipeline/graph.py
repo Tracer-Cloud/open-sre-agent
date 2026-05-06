@@ -32,13 +32,11 @@ from app.pipeline.routing import (
     should_call_tools,
 )
 from app.state import AgentState
-from app.utils.sentry_sdk import init_sentry
 
 
 def build_graph(config: None = None) -> CompiledStateGraph:
     """Build and compile the LangGraph agent."""
     _ = config
-    init_sentry()
     graph = StateGraph(AgentState)
 
     graph.add_node("inject_auth", inject_auth_node)

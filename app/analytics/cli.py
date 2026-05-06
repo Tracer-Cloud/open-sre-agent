@@ -73,6 +73,39 @@ def _capture(event: Event, properties: Properties | None = None) -> None:
         capture_exception(exc)
 
 
+def build_cli_invoked_properties(
+    *,
+    entrypoint: str,
+    command_parts: list[str],
+    json_output: bool = False,
+    verbose: bool = False,
+    debug: bool = False,
+    yes: bool = False,
+    interactive: bool = True,
+) -> Properties:
+    """Build a structured ``cli_invoked`` payload for any CLI surface.
+
+    Used by ``opensre`` (Click-driven) and the ``python -m app.*`` entrypoints
+    so all three end up with the same property names. Records command names
+    only — never raw argv values, option values, paths, URLs, or secrets.
+    """
+    properties: Properties = {
+        "entrypoint": entrypoint,
+        "command_path": " ".join((entrypoint, *command_parts)),
+        "command_family": command_parts[0] if command_parts else "root",
+        "json_output": json_output,
+        "verbose": verbose,
+        "debug": debug,
+        "yes": yes,
+        "interactive": interactive,
+    }
+    if len(command_parts) > 1:
+        properties["subcommand"] = command_parts[1]
+    if command_parts:
+        properties["command_leaf"] = command_parts[-1]
+    return properties
+
+
 def capture_cli_invoked(properties: Properties | None = None) -> None:
     _capture(Event.CLI_INVOKED, properties)
 
@@ -133,10 +166,6 @@ def capture_integration_verified(service: str) -> None:
     _capture(Event.INTEGRATION_VERIFIED, {"service": service})
 
 
-def capture_integration_added(service: str) -> None:
-    _capture(Event.INTEGRATION_ADDED, {"service": service})
-
-
 def capture_tests_picker_opened() -> None:
     _capture(Event.TESTS_PICKER_OPENED)
 
@@ -166,3 +195,15 @@ def capture_deploy_completed(*, target: str, dry_run: bool) -> None:
 
 def capture_deploy_failed(*, target: str, dry_run: bool) -> None:
     _capture(Event.DEPLOY_FAILED, {"target": target, "dry_run": dry_run})
+
+
+def capture_update_started(*, check_only: bool) -> None:
+    _capture(Event.UPDATE_STARTED, {"check_only": check_only})
+
+
+def capture_update_completed(*, check_only: bool, updated: bool) -> None:
+    _capture(Event.UPDATE_COMPLETED, {"check_only": check_only, "updated": updated})
+
+
+def capture_update_failed(*, check_only: bool, reason: str) -> None:
+    _capture(Event.UPDATE_FAILED, {"check_only": check_only, "reason": reason})

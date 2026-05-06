@@ -16,7 +16,7 @@ import sys
 import click
 from dotenv import load_dotenv
 
-from app.analytics.cli import capture_cli_invoked
+from app.analytics.cli import build_cli_invoked_properties, capture_cli_invoked
 from app.analytics.provider import Properties, capture_first_run_if_needed, shutdown_analytics
 from app.cli.commands import register_commands
 from app.cli.support.layout import RichGroup, render_landing
@@ -33,30 +33,43 @@ _CLI_ANALYTICS_CAPTURED = "cli_analytics_captured"
 _CLI_ARGV = "cli_argv"
 
 
+def _option_value_count(command: click.Command, token: str) -> int:
+    for param in command.params:
+        if not isinstance(param, click.Option):
+            continue
+        if token not in (*param.opts, *param.secondary_opts):
+            continue
+        if param.is_flag or param.count:
+            return 0
+        return max(param.nargs, 1)
+    return 0
+
+
 def _resolve_command_parts(command: click.Command, argv: list[str]) -> list[str]:
     """Resolve nested Click command names without recording option values."""
     parts: list[str] = []
     current = command
-    remaining_args = argv
+    skip_values = 0
 
-    while isinstance(current, click.Group):
-        parse_ctx = current.make_context(
-            current.name or "opensre",
-            remaining_args,
-            resilient_parsing=True,
-        )
-        protected_args = list(getattr(parse_ctx, "_protected_args", ()))
-        if not protected_args:
+    for token in argv:
+        if skip_values:
+            skip_values -= 1
+            continue
+        if token == "--":
             break
+        if token.startswith("-") and token != "-":
+            if "=" not in token:
+                skip_values = _option_value_count(current, token)
+            continue
+        if not isinstance(current, click.Group):
+            continue
 
-        command_name = protected_args[0]
-        subcommand = current.get_command(parse_ctx, command_name)
+        subcommand = current.get_command(click.Context(current), token)
         if subcommand is None:
-            break
+            continue
 
-        parts.append(command_name)
+        parts.append(token)
         current = subcommand
-        remaining_args = list(parse_ctx.args)
 
     return parts
 
@@ -67,21 +80,16 @@ def _cli_invoked_properties(ctx: click.Context) -> Properties:
         ctx.command,
         raw_argv if isinstance(raw_argv, list) else [],
     )
-    properties: Properties = {
-        "entrypoint": "opensre",
-        "command_path": " ".join(("opensre", *command_parts)),
-        "command_family": command_parts[0] if command_parts else "root",
-        "json_output": bool(ctx.obj.get("json", False)) if ctx.obj else False,
-        "verbose": bool(ctx.obj.get("verbose", False)) if ctx.obj else False,
-        "debug": bool(ctx.obj.get("debug", False)) if ctx.obj else False,
-        "yes": bool(ctx.obj.get("yes", False)) if ctx.obj else False,
-        "interactive": bool(ctx.obj.get("interactive", True)) if ctx.obj else True,
-    }
-    if len(command_parts) > 1:
-        properties["subcommand"] = command_parts[1]
-    if command_parts:
-        properties["command_leaf"] = command_parts[-1]
-    return properties
+    obj = ctx.obj if ctx.obj else {}
+    return build_cli_invoked_properties(
+        entrypoint="opensre",
+        command_parts=command_parts,
+        json_output=bool(obj.get("json", False)),
+        verbose=bool(obj.get("verbose", False)),
+        debug=bool(obj.get("debug", False)),
+        yes=bool(obj.get("yes", False)),
+        interactive=bool(obj.get("interactive", True)),
+    )
 
 
 def _capture_accepted_cli_invocation(ctx: click.Context) -> None:

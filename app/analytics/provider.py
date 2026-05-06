@@ -637,6 +637,46 @@ class _QueueOverflow(RuntimeError):
     """Synthetic exception used so ``queue.Full`` produces a useful breadcrumb."""
 
 
+class _InvalidPropertyValue(TypeError):
+    """Raised internally when a caller submits a property value we cannot serialize."""
+
+
+def _coerce_properties(
+    event: str,
+    properties: Properties | None,
+) -> Properties:
+    """Return a sanitized copy of ``properties`` enforcing the ``str | bool`` contract.
+
+    PostHog event values are typed as ``str | bool``; a buggy caller could still
+    pass a number, ``None``, or an arbitrary object. We accept ``str | bool``
+    as-is, drop ``None`` silently, coerce ``int`` and ``float`` to ``str``, and
+    drop anything else with a ``_log_failure`` breadcrumb so the misuse stays
+    observable without crashing capture.
+    """
+    if not properties:
+        return {}
+
+    coerced: Properties = {}
+    for key, value in properties.items():
+        if isinstance(value, bool | str):
+            coerced[key] = value
+        elif value is None:
+            continue
+        elif isinstance(value, int | float):
+            coerced[key] = str(value)
+        else:
+            _log_failure(
+                "invalid_property",
+                _InvalidPropertyValue(
+                    f"property {key!r} has unsupported type {type(value).__name__}"
+                ),
+                event=event,
+                property_key=key,
+                value_type=type(value).__name__,
+            )
+    return coerced
+
+
 _COMPOSITE_FINGERPRINT = _build_composite_fingerprint()
 
 _BASE_PROPERTIES: Final[Properties] = {
@@ -675,7 +715,7 @@ class Analytics:
             return
         envelope = _Envelope(
             event=event.value,
-            properties=_BASE_PROPERTIES | (properties or {}),
+            properties=_BASE_PROPERTIES | _coerce_properties(event.value, properties),
         )
         pending_registered = False
         try:
