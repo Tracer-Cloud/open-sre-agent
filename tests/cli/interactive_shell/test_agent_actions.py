@@ -371,11 +371,6 @@ def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch:
         },
         {"type": "slash", "text": "/list integrations", "ok": True},
     ]
-    synthetic_entry = session.history[-1]
-    assert synthetic_entry["type"] == "synthetic_test"
-    assert synthetic_entry["ok"] is True
-    assert "rds_postgres" in synthetic_entry["text"]
-    assert "task:" in synthetic_entry["text"]
 
     for _ in range(100):
         recent = session.task_registry.list_recent(1)
@@ -384,6 +379,12 @@ def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch:
         time.sleep(0.01)
     finished = session.task_registry.list_recent(1)[0]
     assert finished.status == TaskStatus.COMPLETED
+
+    synthetic_entry = session.history[-1]
+    assert synthetic_entry["type"] == "synthetic_test"
+    assert synthetic_entry["ok"] is True
+    assert "rds_postgres" in synthetic_entry["text"]
+    assert "task:" in synthetic_entry["text"]
 
     output = buf.getvalue()
     assert output.index("1.") < output.index("$ /list integrations")

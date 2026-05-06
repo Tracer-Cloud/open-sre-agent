@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from rich.console import Console
@@ -744,7 +744,7 @@ def _cmd_compact(session: ReplSession, console: Console, args: list[str]) -> boo
 
 
 def _task_started_label(task: TaskRecord) -> str:
-    return datetime.fromtimestamp(task.started_at).strftime("%Y-%m-%d %H:%M:%S")
+    return datetime.fromtimestamp(task.started_at, tz=UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
 
 
 def _task_duration_label(task: TaskRecord) -> str:

@@ -182,8 +182,12 @@ class TestSyntheticSubprocessWatcher:
         task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
         task.mark_running()
         task.attach_process(proc)
-        aa._watch_synthetic_subprocess(task, proc)
+        aa._watch_synthetic_subprocess(task, proc, session, "rds_postgres")
         assert task.status == TaskStatus.COMPLETED
+        hist = session.history[-1]
+        assert hist["type"] == "synthetic_test"
+        assert hist["ok"] is True
+        assert "task:" in hist["text"]
 
     def test_watch_marks_cancelled_when_requested(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """First poll waits; synthetic sleep fires cancel_request; poll then returns exit code."""
@@ -212,6 +216,9 @@ class TestSyntheticSubprocessWatcher:
             pending[0] = 0
 
         monkeypatch.setattr(aa.time, "sleep", _fake_sleep)
-        aa._watch_synthetic_subprocess(task, proc)
+        aa._watch_synthetic_subprocess(task, proc, session, "rds_postgres")
         assert task.status == TaskStatus.CANCELLED
         assert sleeps
+        hist = session.history[-1]
+        assert hist["type"] == "synthetic_test"
+        assert hist["ok"] is False

@@ -412,6 +412,7 @@ def _terminate_child_process(proc: subprocess.Popen[Any]) -> None:
     if proc.poll() is not None:
         return
     _grace_s = 45
+    _post_kill_wait_s = 5
     with contextlib.suppress(OSError):
         proc.terminate()
     try:
@@ -420,10 +421,18 @@ def _terminate_child_process(proc: subprocess.Popen[Any]) -> None:
         with contextlib.suppress(OSError):
             proc.kill()
         with contextlib.suppress(subprocess.TimeoutExpired):
-            proc.wait(timeout=_grace_s)
+            proc.wait(timeout=_post_kill_wait_s)
 
 
-def _watch_synthetic_subprocess(task: TaskRecord, proc: subprocess.Popen[Any]) -> None:
+def _watch_synthetic_subprocess(
+    task: TaskRecord,
+    proc: subprocess.Popen[Any],
+    session: ReplSession,
+    suite_name: str,
+) -> None:
+    def _history_text() -> str:
+        return f"{suite_name} task:{task.task_id}"
+
     def _run() -> None:
         started = time.monotonic()
         timed_out = False
@@ -440,21 +449,26 @@ def _watch_synthetic_subprocess(task: TaskRecord, proc: subprocess.Popen[Any]) -
 
         if timed_out:
             task.mark_failed(f"timed out after {_SYNTHETIC_TEST_TIMEOUT_SECONDS}s")
+            session.record("synthetic_test", _history_text(), ok=False)
             return
 
         code = proc.returncode
         if code is None:
             task.mark_failed("subprocess did not report exit code")
+            session.record("synthetic_test", _history_text(), ok=False)
             return
 
         if task.cancel_requested.is_set():
             task.mark_cancelled()
+            session.record("synthetic_test", _history_text(), ok=False)
             return
 
         if code == 0:
             task.mark_completed(result="ok")
+            session.record("synthetic_test", _history_text(), ok=True)
         else:
             task.mark_failed(f"exit code {code}")
+            session.record("synthetic_test", _history_text(), ok=False)
 
     threading.Thread(target=_run, daemon=True, name=f"synthetic-{task.task_id}").start()
 
@@ -602,13 +616,12 @@ def _run_synthetic_test(suite_name: str, session: ReplSession, console: Console)
         return
 
     task.attach_process(proc)
-    _watch_synthetic_subprocess(task, proc)
+    _watch_synthetic_subprocess(task, proc, session, suite_name)
     console.print(
         f"[dim]synthetic test started — task[/dim] [bold]{escape(task.task_id)}[/bold]. "
         f"[dim]/tasks[/dim] [dim]to monitor,[/dim] [bold]/cancel {escape(task.task_id)}[/bold] "
         f"[dim]to stop.[/dim]"
     )
-    session.record("synthetic_test", f"{suite_name} task:{task.task_id}")
 
 
 def execute_cli_actions(message: str, session: ReplSession, console: Console) -> bool:
