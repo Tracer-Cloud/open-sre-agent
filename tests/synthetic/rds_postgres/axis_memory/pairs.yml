@@ -1,0 +1,54 @@
+# Axis pairs for memory anchoring evaluation.
+#
+# Each pair lists two existing scenarios that share an external alert signature
+# (alertname / commonLabels) but resolve to different ground-truth outcomes.
+# Running both scenarios in sequence with a memory layer primed from the first
+# is the test for whether the planner anchors on the prior diagnosis when the
+# new alert actually has a different root cause.
+#
+# When Contextual Memory (issue #1234) ships, this same file drives the
+# memory-primed comparison run. Until then it drives the baseline correctness
+# check across pairs (each scenario is run independently, no memory).
+#
+# Field reference:
+#   id            : human-readable pair identifier, used in scoring output
+#   alert_signal  : the alertname both scenarios share (for visibility)
+#   base          : the scenario whose memory would be primed first
+#   sibling       : the scenario whose investigation is at risk of anchoring
+#   anchor_risk   : short description of what failure mode memory might cause
+#   active        : if false, the pair is recorded but skipped at runtime
+
+pairs:
+  - id: connection-pressure-real-vs-noisy
+    alert_signal: RDSDatabaseConnectionsHigh
+    base: 002-connection-exhaustion
+    sibling: 007-connection-pressure-noisy-healthy
+    anchor_risk: |
+      Memory of 002's connection-exhaustion diagnosis could anchor the planner
+      to find a connection fault on 007 when 007 is in fact healthy.
+      This is the strongest pair in the suite because the ground-truth
+      categories differ (resource_exhaustion vs healthy).
+    active: true
+
+  - id: cpu-bad-query-vs-checkpoint-storm
+    alert_signal: RDSCPUUtilizationHigh
+    base: 004-cpu-saturation-bad-query
+    sibling: 014-checkpoint-storm-cpu-saturation
+    anchor_risk: |
+      Both scenarios resolve to the resource_exhaustion category, but the
+      underlying mechanism differs: 004 is sustained bad-query CPU load,
+      014 is checkpoint-storm bursts. Memory of 004's diagnosis could
+      cause the planner to skip the checkpoint-behaviour evidence path
+      that 014 requires.
+    active: true
+
+  - id: replication-lag-vs-cpu-redherring
+    alert_signal: RDSReplicationLagHigh
+    base: 001-replication-lag
+    sibling: 006-replication-lag-cpu-redherring
+    anchor_risk: |
+      Both scenarios resolve to replication_lag (resource_exhaustion category),
+      but 006 layers a CPU red herring that the planner must rule out.
+      Memory of 001's clean replication-lag diagnosis could weaken the
+      ruling-out behaviour 006 was designed to test.
+    active: true
