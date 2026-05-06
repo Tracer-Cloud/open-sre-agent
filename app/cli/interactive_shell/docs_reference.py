@@ -211,12 +211,21 @@ def _iter_doc_files(root: Path) -> list[Path]:
     return sorted(files)
 
 
+# Delimiters keep SHA-256 input unambiguous across (relpath, size, mtime) tuple
+# boundaries — concatenating decimal digits without separators is only
+# heuristic-safe, not injective in general.
+_FP_FIELD_SEP = b"\x00"
+_FP_RECORD_SEP = b"\xff"
+
+
 def _fingerprint_from_paths(root: Path, files: list[Path]) -> str:
     """Digest of tracked docs files using paths from a single tree walk."""
     digest = hashlib.sha256()
     if not root.exists() or not root.is_dir():
         digest.update(b"nodir")
+        digest.update(_FP_FIELD_SEP)
         digest.update(str(root.resolve() if root.exists() else root).encode())
+        digest.update(_FP_FIELD_SEP)
         return digest.hexdigest()
 
     for path in files:
@@ -224,8 +233,11 @@ def _fingerprint_from_paths(root: Path, files: list[Path]) -> str:
         try:
             st = path.stat()
             digest.update(rel.encode())
+            digest.update(_FP_FIELD_SEP)
             digest.update(str(st.st_size).encode())
+            digest.update(_FP_FIELD_SEP)
             digest.update(str(st.st_mtime_ns).encode())
+            digest.update(_FP_RECORD_SEP)
         except OSError:
             continue
     return digest.hexdigest()
