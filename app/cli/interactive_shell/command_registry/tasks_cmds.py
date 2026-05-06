@@ -129,8 +129,9 @@ def _cmd_cancel(session: ReplSession, console: Console, args: list[str]) -> bool
 
 def _cmd_stop(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     console.print(
-        "[dim]in-flight work: press[/dim] [bold]Ctrl+C[/bold] [dim]during a streaming investigation, "
-        "or run[/dim] [bold]/tasks[/bold] [dim]then[/dim] [bold]/cancel <id>[/bold] [dim]for background tasks."
+        "[dim]in-flight work: press[/dim] [bold]Ctrl+C[/bold] "
+        "[dim]during a streaming investigation, or run[/dim] [bold]/tasks[/bold] "
+        "[dim]then[/dim] [bold]/cancel <id>[/bold] [dim]for background tasks.[/dim]"
     )
     return True
 

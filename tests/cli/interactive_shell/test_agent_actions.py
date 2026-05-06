@@ -588,7 +588,7 @@ def test_execute_cli_actions_records_shell_failure(monkeypatch: object) -> None:
                 "shell": False,
                 "capture_output": True,
                 "text": True,
-                "timeout": agent_actions._SHELL_COMMAND_TIMEOUT_SECONDS,
+                "timeout": action_executor.SHELL_COMMAND_TIMEOUT_SECONDS,
                 "check": False,
             },
         )
@@ -625,7 +625,7 @@ def test_execute_cli_actions_runs_passthrough_with_shell_true(monkeypatch: objec
                 "executable": shell_execution.os.environ.get("SHELL") or None,
                 "capture_output": True,
                 "text": True,
-                "timeout": agent_actions._SHELL_COMMAND_TIMEOUT_SECONDS,
+                "timeout": action_executor.SHELL_COMMAND_TIMEOUT_SECONDS,
                 "check": False,
             },
         )

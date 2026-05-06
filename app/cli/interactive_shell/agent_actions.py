@@ -6,7 +6,6 @@ from rich.console import Console
 from rich.markup import escape
 
 from app.cli.interactive_shell.action_executor import (
-    SHELL_COMMAND_TIMEOUT_SECONDS,
     run_sample_alert,
     run_shell_command,
     run_synthetic_test,
@@ -17,14 +16,9 @@ from app.cli.interactive_shell.action_planner import (
     plan_terminal_tasks,
 )
 from app.cli.interactive_shell.command_registry import dispatch_slash, switch_llm_provider
-from app.cli.interactive_shell.intent_parser import IS_WINDOWS
 from app.cli.interactive_shell.rendering import print_planned_actions
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
-
-# Backwards-compat names for interactive shell regression tests (see ``test_agent_actions``).
-_IS_WINDOWS = IS_WINDOWS
-_SHELL_COMMAND_TIMEOUT_SECONDS = SHELL_COMMAND_TIMEOUT_SECONDS
 
 
 def execute_cli_actions(message: str, session: ReplSession, console: Console) -> bool:

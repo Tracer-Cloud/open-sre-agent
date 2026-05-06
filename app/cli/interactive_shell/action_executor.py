@@ -221,7 +221,7 @@ def run_cd_command(command: str, session: ReplSession, console: Console) -> None
 
 def run_pwd_command(command: str, session: ReplSession, console: Console) -> None:
     try:
-        tokens = shlex.split(command, posix=True)
+        tokens = shlex.split(command, posix=not _intent_parser.IS_WINDOWS)
     except ValueError as exc:
         console.print(f"[red]pwd failed:[/red] {escape(str(exc))}")
         session.record("shell", command, ok=False)
