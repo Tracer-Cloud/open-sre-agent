@@ -7,6 +7,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path, PurePosixPath
+from typing import NoReturn
 from unittest.mock import MagicMock
 
 import pytest
@@ -641,9 +642,7 @@ def test_execute_cli_actions_records_shell_failure(monkeypatch: object) -> None:
 
 
 def test_execute_cli_actions_shell_command_times_out(monkeypatch: object) -> None:
-    def _timeout(
-        cmd: object, **kwargs: object
-    ) -> subprocess.CompletedProcess[str]:  # pragma: no cover
+    def _timeout(cmd: object, **kwargs: object) -> NoReturn:  # pragma: no cover
         raise subprocess.TimeoutExpired(
             cmd=cmd,
             timeout=1,
@@ -661,6 +660,7 @@ def test_execute_cli_actions_shell_command_times_out(monkeypatch: object) -> Non
     output = buf.getvalue().lower()
     assert "timed out" in output
     assert "partial out" in output
+    assert "partial err" in output
 
 
 def test_execute_cli_actions_runs_passthrough_with_shell_true(monkeypatch: object) -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+from typing import NoReturn
 
 import pytest
 
@@ -10,9 +11,7 @@ from app.cli.interactive_shell.shell_execution import ShellExecutionResult, exec
 
 
 def test_execute_shell_command_reports_timeout_argv_mode(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _raise(
-        *_args: object, **_kwargs: object
-    ) -> subprocess.CompletedProcess[str]:  # pragma: no cover
+    def _raise(*_args: object, **_kwargs: object) -> NoReturn:  # pragma: no cover
         raise subprocess.TimeoutExpired(
             cmd=["sleep", "999"],
             timeout=1,
@@ -43,9 +42,7 @@ def test_execute_shell_command_reports_timeout_argv_mode(monkeypatch: pytest.Mon
 
 
 def test_execute_shell_command_reports_timeout_shell_mode(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _raise(
-        *_args: object, **_kwargs: object
-    ) -> subprocess.CompletedProcess[str]:  # pragma: no cover
+    def _raise(*_args: object, **_kwargs: object) -> NoReturn:  # pragma: no cover
         raise subprocess.TimeoutExpired(
             cmd="sleep 999",
             timeout=1,
@@ -63,7 +60,13 @@ def test_execute_shell_command_reports_timeout_shell_mode(monkeypatch: pytest.Mo
         max_output_chars=10_000,
     )
 
-    assert result.timed_out is True
-    assert result.exit_code is None
-    assert result.executed_with_shell is True
-    assert result.argv is None
+    assert result == ShellExecutionResult(
+        command="sleep 999",
+        argv=None,
+        stdout="out\n",
+        stderr="err\n",
+        exit_code=None,
+        timed_out=True,
+        truncated=False,
+        executed_with_shell=True,
+    )
