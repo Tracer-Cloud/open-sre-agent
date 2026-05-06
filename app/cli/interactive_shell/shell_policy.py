@@ -59,6 +59,7 @@ _MUTATING_COMMANDS = frozenset(
         "awk",
         "tee",
         "xargs",
+        "sort",
         "make",
         "pip",
         "pip3",
@@ -95,7 +96,6 @@ _READ_ONLY_COMMANDS = frozenset(
         "head",
         "tail",
         "wc",
-        "sort",
         "uniq",
         "cut",
         "rg",
@@ -129,7 +129,7 @@ _READ_ONLY_HELM_SUBCOMMANDS = frozenset(
     {"list", "status", "history", "get", "search", "show", "env"}
 )
 
-# AWS CLI positional args (approximately: drop `-`/`--` tokens and their bundled values).
+# AWS CLI: flags that consume the next argv token as a value.
 _AWS_TWO_ARG_FLAGS = frozenset(
     {
         "--region",
@@ -141,7 +141,17 @@ _AWS_TWO_ARG_FLAGS = frozenset(
         "--output",
         "--query",
         "--color",
+    }
+)
+
+# AWS CLI: boolean / no-argument long flags (must not skip a following positional).
+_AWS_BOOLEAN_FLAGS = frozenset(
+    {
         "--no-sign-request",
+        "--no-paginate",
+        "--no-verify-ssl",
+        "--debug",
+        "--no-cli-pager",
     }
 )
 
@@ -170,6 +180,9 @@ def _aws_cli_positional_args(argv: list[str]) -> list[str]:
             index += 1
             continue
         lower_name = lower.split("=", maxsplit=1)[0]
+        if lower_name in _AWS_BOOLEAN_FLAGS:
+            index += 1
+            continue
         if lower_name in _AWS_TWO_ARG_FLAGS or (
             lower.startswith("--")
             and "=" not in lower

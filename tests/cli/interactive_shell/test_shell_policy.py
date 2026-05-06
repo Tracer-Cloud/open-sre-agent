@@ -117,3 +117,19 @@ def test_aws_cli_positional_handles_double_dash_equals_form() -> None:
 
     assert decision.allow is True
     assert decision.classification == "read_only"
+
+
+def test_classify_command_sort_is_mutating_for_file_output_flags() -> None:
+    assert classify_command(["sort", "-o", "/etc/cron.d/out", "in.txt"]) == "mutating"
+
+
+def test_aws_no_sign_request_preserves_s3_ls_positional_pair() -> None:
+    assert classify_command(["aws", "--no-sign-request", "s3", "ls"]) == "read_only"
+
+
+def test_evaluate_policy_blocks_sort_even_without_shell_redirection() -> None:
+    parsed = parse_shell_command("sort -o /tmp/out /tmp/in", is_windows=False)
+    decision = evaluate_policy(parsed=parsed)
+
+    assert decision.allow is False
+    assert decision.classification == "mutating"
