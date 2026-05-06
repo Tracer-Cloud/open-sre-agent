@@ -433,6 +433,13 @@ def _watch_synthetic_subprocess(
     def _history_text() -> str:
         return f"{suite_name} task:{task.task_id}"
 
+    history_gen_when_watch_started = session.history_generation
+
+    def _record_synthetic_if_current_session(ok: bool) -> None:
+        if session.history_generation != history_gen_when_watch_started:
+            return
+        session.record("synthetic_test", _history_text(), ok=ok)
+
     def _run() -> None:
         started = time.monotonic()
         timed_out = False
@@ -449,26 +456,26 @@ def _watch_synthetic_subprocess(
 
         if timed_out:
             task.mark_failed(f"timed out after {_SYNTHETIC_TEST_TIMEOUT_SECONDS}s")
-            session.record("synthetic_test", _history_text(), ok=False)
+            _record_synthetic_if_current_session(ok=False)
             return
 
         code = proc.returncode
         if code is None:
             task.mark_failed("subprocess did not report exit code")
-            session.record("synthetic_test", _history_text(), ok=False)
+            _record_synthetic_if_current_session(ok=False)
             return
 
         if task.cancel_requested.is_set():
             task.mark_cancelled()
-            session.record("synthetic_test", _history_text(), ok=False)
+            _record_synthetic_if_current_session(ok=False)
             return
 
         if code == 0:
             task.mark_completed(result="ok")
-            session.record("synthetic_test", _history_text(), ok=True)
+            _record_synthetic_if_current_session(ok=True)
         else:
             task.mark_failed(f"exit code {code}")
-            session.record("synthetic_test", _history_text(), ok=False)
+            _record_synthetic_if_current_session(ok=False)
 
     threading.Thread(target=_run, daemon=True, name=f"synthetic-{task.task_id}").start()
 

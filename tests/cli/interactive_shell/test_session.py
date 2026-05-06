@@ -31,7 +31,9 @@ class TestReplSession:
         session.last_state = {"foo": "bar"}
         session.cli_agent_messages.append(("user", "hey"))
 
+        assert session.history_generation == 0
         session.clear()
+        assert session.history_generation == 1
 
         assert session.history == []
         assert session.last_state is None

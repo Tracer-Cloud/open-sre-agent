@@ -166,6 +166,30 @@ class _ImmediateThread:
         self._target()
 
 
+class _DeferredSyntheticThread:
+    """Queue ``target`` via ``start()``; tests invoke queued callables explicitly."""
+
+    pending: list[Callable[[], None]] = []
+
+    def __init__(
+        self,
+        group: object = None,
+        target: Callable[[], None] | None = None,
+        name: object = None,
+        args: tuple[object, ...] = (),
+        kwargs: dict[str, object] | None = None,
+        *,
+        daemon: object = None,
+    ) -> None:  # noqa: ARG002 - mimic threading.Thread ctor
+        del group, args, kwargs, daemon, name
+        if target is None:
+            raise TypeError("target required")
+        self._target = target
+
+    def start(self) -> None:
+        _DeferredSyntheticThread.pending.append(self._target)
+
+
 class TestSyntheticSubprocessWatcher:
     def test_watch_marks_completed_when_process_already_done(
         self, monkeypatch: pytest.MonkeyPatch
@@ -222,3 +246,45 @@ class TestSyntheticSubprocessWatcher:
         hist = session.history[-1]
         assert hist["type"] == "synthetic_test"
         assert hist["ok"] is False
+
+    def test_watch_skips_synthetic_history_after_reset(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import app.cli.interactive_shell.agent_actions as aa
+
+        _DeferredSyntheticThread.pending.clear()
+        monkeypatch.setattr(aa.threading, "Thread", _DeferredSyntheticThread)
+
+        proc = MagicMock()
+        proc.poll.return_value = 0
+        proc.returncode = 0
+
+        session = ReplSession()
+        task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
+        task.mark_running()
+        task.attach_process(proc)
+        aa._watch_synthetic_subprocess(task, proc, session, "rds_postgres")
+        assert len(_DeferredSyntheticThread.pending) == 1
+        session.clear()
+        _DeferredSyntheticThread.pending[0]()
+        assert session.history == []
+        _DeferredSyntheticThread.pending.clear()
+
+    def test_deferred_watcher_writes_history_when_no_reset(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import app.cli.interactive_shell.agent_actions as aa
+
+        _DeferredSyntheticThread.pending.clear()
+        monkeypatch.setattr(aa.threading, "Thread", _DeferredSyntheticThread)
+
+        proc = MagicMock()
+        proc.poll.return_value = 0
+        proc.returncode = 0
+
+        session = ReplSession()
+        task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
+        task.mark_running()
+        task.attach_process(proc)
+        aa._watch_synthetic_subprocess(task, proc, session, "rds_postgres")
+        _DeferredSyntheticThread.pending[0]()
+        assert session.history[-1]["type"] == "synthetic_test"
+        _DeferredSyntheticThread.pending.clear()

@@ -41,6 +41,9 @@ class ReplSession:
     task_registry: TaskRegistry = field(default_factory=TaskRegistry)
     """Recent in-flight and completed shell tasks for /tasks and /cancel."""
 
+    history_generation: int = 0
+    """Incremented on /reset so background synthetic watchers can skip stale history writes."""
+
     # Keys from a completed AgentState that carry reusable infra context into
     # the next investigation.  Kept as a class-level tuple so any caller that
     # wants to know "what counts as accumulated context" has a single source.
@@ -73,6 +76,7 @@ class ReplSession:
 
     def clear(self) -> None:
         """Reset the session to a fresh state (used by /reset)."""
+        self.history_generation += 1
         self.history.clear()
         self.last_state = None
         self.accumulated_context.clear()
