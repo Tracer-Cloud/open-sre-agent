@@ -14,13 +14,18 @@ if TYPE_CHECKING:
 def _save_remote_base_url(client: RemoteAgentClient) -> None:
     from app.cli.wizard.store import save_remote_url
 
-    save_remote_url(client.base_url)
+    try:
+        save_remote_url(client.base_url)
 
-    from app.cli.wizard.store import load_named_remotes, save_named_remote
+        from app.cli.wizard.store import load_named_remotes, save_named_remote
 
-    remotes = load_named_remotes()
-    if client.base_url not in remotes.values():
-        save_named_remote("custom", client.base_url, set_active=True, source="cli")
+        remotes = load_named_remotes()
+        if client.base_url not in remotes.values():
+            save_named_remote("custom", client.base_url, set_active=True, source="cli")
+    except OSError:
+        # Health and investigation commands should still succeed when local
+        # config persistence is unavailable (for example in read-only envs).
+        return
 
 
 def _human_duration(seconds: int | None) -> str:
