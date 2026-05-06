@@ -225,8 +225,8 @@ class TestAssistantOutputRendering:
             '{"actions":[{"action":"switch_llm_provider","provider":"anthropic"}]}',
         )
 
-        import app.cli.interactive_shell.commands as command_module
         import app.cli.wizard.env_sync as env_sync
+        from app.cli.interactive_shell.command_registry import repl_data as repl_data_module
 
         class _Fake:
             provider = "anthropic"
@@ -234,7 +234,7 @@ class TestAssistantOutputRendering:
             anthropic_toolcall_model = "claude-haiku-4-5-20251001"
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
-        monkeypatch.setattr(command_module, "_load_llm_settings", lambda: _Fake())
+        monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: _Fake())
         # /model set now requires the target provider's credential to exist;
         # provide one so the cli-agent's planned switch actually runs.
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
@@ -271,8 +271,8 @@ class TestAssistantOutputRendering:
             """,
         )
 
-        import app.cli.interactive_shell.commands as command_module
         import app.cli.wizard.env_sync as env_sync
+        from app.cli.interactive_shell.command_registry import repl_data as repl_data_module
 
         class _Fake:
             provider = "anthropic"
@@ -280,7 +280,7 @@ class TestAssistantOutputRendering:
             anthropic_toolcall_model = "claude-haiku-4-5-20251001"
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
-        monkeypatch.setattr(command_module, "_load_llm_settings", lambda: _Fake())
+        monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: _Fake())
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
 
         session = ReplSession()

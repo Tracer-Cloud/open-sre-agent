@@ -9,6 +9,7 @@ import pytest
 from prompt_toolkit.history import FileHistory
 from rich.console import Console
 
+from app.cli.interactive_shell.command_registry import repl_data as repl_data_module
 from app.cli.interactive_shell.commands import SLASH_COMMANDS, dispatch_slash
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.tasks import TaskKind, TaskStatus
@@ -135,12 +136,9 @@ class TestListCommand:
     ]
 
     def _patch_verify(self, monkeypatch: object) -> None:
-        # Import inside test to match the lazy-import used by the handler.
-        from app.cli.interactive_shell import commands as cmd_module
-
-        monkeypatch.setattr(  # type: ignore[attr-defined]
-            cmd_module,
-            "_load_verified_integrations",
+        monkeypatch.setattr(
+            repl_data_module,
+            "load_verified_integrations",
             lambda: list(self._FAKE_INTEGRATIONS),
         )
 
@@ -172,16 +170,13 @@ class TestListCommand:
 
     def _patch_llm(self, monkeypatch: object) -> None:
         """Provide a stable fake LLMSettings so the test doesn't depend on env."""
-        from app.cli.interactive_shell import commands as cmd_module
 
         class _FakeLLM:
             provider = "anthropic"
             anthropic_reasoning_model = "claude-opus-4"
             anthropic_toolcall_model = "claude-haiku-4"
 
-        monkeypatch.setattr(  # type: ignore[attr-defined]
-            cmd_module, "_load_llm_settings", lambda: _FakeLLM()
-        )
+        monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: _FakeLLM())
 
     def test_list_models_shows_provider_and_models(self, monkeypatch: object) -> None:
         self._patch_llm(monkeypatch)
@@ -194,15 +189,11 @@ class TestListCommand:
         assert "anthropic" in output
 
     def test_list_models_shows_ollama_model(self, monkeypatch: object) -> None:
-        from app.cli.interactive_shell import commands as cmd_module
-
         class _FakeLLM:
             provider = "ollama"
             ollama_model = "qwen2.5:7b"
 
-        monkeypatch.setattr(  # type: ignore[attr-defined]
-            cmd_module, "_load_llm_settings", lambda: _FakeLLM()
-        )
+        monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: _FakeLLM())
         console, buf = _capture()
         dispatch_slash("/list models", ReplSession(), console)
         output = buf.getvalue()
@@ -211,11 +202,7 @@ class TestListCommand:
         assert "default" not in output
 
     def test_list_models_handles_missing_env_gracefully(self, monkeypatch: object) -> None:
-        from app.cli.interactive_shell import commands as cmd_module
-
-        monkeypatch.setattr(  # type: ignore[attr-defined]
-            cmd_module, "_load_llm_settings", lambda: None
-        )
+        monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: None)
         console, buf = _capture()
         dispatch_slash("/list models", ReplSession(), console)
         assert "LLM settings unavailable" in buf.getvalue()
@@ -239,11 +226,9 @@ class TestListCommand:
         assert "/list integrations" in output
 
     def test_list_empty_integrations_prints_onboarding_hint(self, monkeypatch: object) -> None:
-        from app.cli.interactive_shell import commands as cmd_module
-
-        monkeypatch.setattr(  # type: ignore[attr-defined]
-            cmd_module,
-            "_load_verified_integrations",
+        monkeypatch.setattr(
+            repl_data_module,
+            "load_verified_integrations",
             list,  # callable returning []
         )
         console, buf = _capture()
@@ -264,9 +249,11 @@ class TestIntegrationsCommand:
     ]
 
     def _patch(self, monkeypatch: object) -> None:
-        from app.cli.interactive_shell import commands as m
-
-        monkeypatch.setattr(m, "_load_verified_integrations", lambda: list(self._FAKE))  # type: ignore[attr-defined]
+        monkeypatch.setattr(
+            repl_data_module,
+            "load_verified_integrations",
+            lambda: list(self._FAKE),
+        )
 
     def test_list_shows_non_mcp_services(self, monkeypatch: object) -> None:
         self._patch(monkeypatch)
@@ -288,12 +275,10 @@ class TestIntegrationsCommand:
         assert "need attention" in buf.getvalue()
 
     def test_verify_all_ok(self, monkeypatch: object) -> None:
-        from app.cli.interactive_shell import commands as m
-
         monkeypatch.setattr(
-            m,
-            "_load_verified_integrations",
-            lambda: [  # type: ignore[attr-defined]
+            repl_data_module,
+            "load_verified_integrations",
+            lambda: [
                 {"service": "datadog", "source": "env", "status": "ok", "detail": "ok"},
             ],
         )
@@ -333,9 +318,11 @@ class TestMcpCommand:
     ]
 
     def _patch(self, monkeypatch: object) -> None:
-        from app.cli.interactive_shell import commands as m
-
-        monkeypatch.setattr(m, "_load_verified_integrations", lambda: list(self._FAKE))  # type: ignore[attr-defined]
+        monkeypatch.setattr(
+            repl_data_module,
+            "load_verified_integrations",
+            lambda: list(self._FAKE),
+        )
 
     def test_list_shows_mcp_services(self, monkeypatch: object) -> None:
         self._patch(monkeypatch)
@@ -368,14 +355,12 @@ class TestMcpCommand:
 
 class TestModelCommand:
     def _patch_llm(self, monkeypatch: object) -> None:
-        from app.cli.interactive_shell import commands as m
-
         class _Fake:
             provider = "anthropic"
             anthropic_reasoning_model = "claude-opus-4"
             anthropic_toolcall_model = "claude-haiku-4"
 
-        monkeypatch.setattr(m, "_load_llm_settings", lambda: _Fake())  # type: ignore[attr-defined]
+        monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: _Fake())
 
     def test_show_displays_model_info(self, monkeypatch: object) -> None:
         self._patch_llm(monkeypatch)

@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import io
 import subprocess
+import sys
 import time
 from pathlib import Path, PurePosixPath
 from unittest.mock import MagicMock
 
 from rich.console import Console
 
-from app.cli.interactive_shell import agent_actions
+from app.cli.interactive_shell import action_executor, agent_actions, shell_execution
+from app.cli.interactive_shell import intent_parser as intent_parser_module
 from app.cli.interactive_shell.agent_actions import (
     execute_cli_actions,
     plan_cli_actions,
@@ -368,7 +370,7 @@ def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch:
         return proc
 
     monkeypatch.setattr(agent_actions, "dispatch_slash", _fake_dispatch)  # type: ignore[attr-defined]
-    monkeypatch.setattr(agent_actions.subprocess, "Popen", _fake_popen)
+    monkeypatch.setattr(action_executor.subprocess, "Popen", _fake_popen)
 
     session = ReplSession()
     console, buf = _capture()
@@ -382,7 +384,7 @@ def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch:
     assert dispatched == ["/list integrations"]
     assert len(popen_calls) == 1
     assert popen_calls[0][0] == [
-        agent_actions.sys.executable,
+        sys.executable,
         "-m",
         "app.cli",
         "tests",
@@ -455,8 +457,8 @@ def test_execute_cli_actions_runs_shell_command(monkeypatch: object) -> None:
     def _fail_run(*_args: object, **_kwargs: object) -> None:  # pragma: no cover
         raise AssertionError("subprocess.run should not be used for pwd")
 
-    monkeypatch.setattr(agent_actions.Path, "cwd", classmethod(_fake_cwd))
-    monkeypatch.setattr(agent_actions.subprocess, "run", _fail_run)
+    monkeypatch.setattr(action_executor.Path, "cwd", classmethod(_fake_cwd))
+    monkeypatch.setattr(shell_execution.subprocess, "run", _fail_run)
 
     session = ReplSession()
     console, buf = _capture()
@@ -478,8 +480,8 @@ def test_execute_cli_actions_cd_preserves_windows_paths(monkeypatch: object) -> 
     def _fake_chdir(target: Path) -> None:
         changed_directories.append(target)
 
-    monkeypatch.setattr(agent_actions, "_IS_WINDOWS", True)
-    monkeypatch.setattr(agent_actions.os, "chdir", _fake_chdir)
+    monkeypatch.setattr(intent_parser_module, "IS_WINDOWS", True)
+    monkeypatch.setattr(action_executor.os, "chdir", _fake_chdir)
 
     session = ReplSession()
     console, _ = _capture()
@@ -502,9 +504,9 @@ def test_execute_cli_actions_cd_routes_case_insensitively(monkeypatch: object) -
     def _fail_run(*_args: object, **_kwargs: object) -> None:  # pragma: no cover
         raise AssertionError("subprocess.run should not be used for CD")
 
-    monkeypatch.setattr(agent_actions, "_IS_WINDOWS", True)
-    monkeypatch.setattr(agent_actions.os, "chdir", _fake_chdir)
-    monkeypatch.setattr(agent_actions.subprocess, "run", _fail_run)
+    monkeypatch.setattr(intent_parser_module, "IS_WINDOWS", True)
+    monkeypatch.setattr(action_executor.os, "chdir", _fake_chdir)
+    monkeypatch.setattr(shell_execution.subprocess, "run", _fail_run)
 
     session = ReplSession()
     console, _ = _capture()
@@ -524,8 +526,8 @@ def test_execute_cli_actions_cd_handles_trailing_backslash_on_windows(monkeypatc
     def _fake_chdir(target: Path) -> None:
         changed_directories.append(target)
 
-    monkeypatch.setattr(agent_actions, "_IS_WINDOWS", True)
-    monkeypatch.setattr(agent_actions.os, "chdir", _fake_chdir)
+    monkeypatch.setattr(intent_parser_module, "IS_WINDOWS", True)
+    monkeypatch.setattr(action_executor.os, "chdir", _fake_chdir)
 
     session = ReplSession()
     console, _ = _capture()
@@ -545,8 +547,8 @@ def test_execute_cli_actions_cd_strips_quotes_on_windows(monkeypatch: object) ->
     def _fake_chdir(target: Path) -> None:
         changed_directories.append(target)
 
-    monkeypatch.setattr(agent_actions, "_IS_WINDOWS", True)
-    monkeypatch.setattr(agent_actions.os, "chdir", _fake_chdir)
+    monkeypatch.setattr(intent_parser_module, "IS_WINDOWS", True)
+    monkeypatch.setattr(action_executor.os, "chdir", _fake_chdir)
 
     session = ReplSession()
     console, _ = _capture()
@@ -573,7 +575,7 @@ def test_execute_cli_actions_records_shell_failure(monkeypatch: object) -> None:
         calls.append((command, kwargs))
         return completed
 
-    monkeypatch.setattr(agent_actions.subprocess, "run", _fake_run)
+    monkeypatch.setattr(shell_execution.subprocess, "run", _fake_run)
 
     session = ReplSession()
     console, buf = _capture()
@@ -609,7 +611,7 @@ def test_execute_cli_actions_runs_passthrough_with_shell_true(monkeypatch: objec
             stderr="",
         )
 
-    monkeypatch.setattr(agent_actions.subprocess, "run", _fake_run)
+    monkeypatch.setattr(shell_execution.subprocess, "run", _fake_run)
 
     session = ReplSession()
     console, buf = _capture()
@@ -620,7 +622,7 @@ def test_execute_cli_actions_runs_passthrough_with_shell_true(monkeypatch: objec
             "echo hello",
             {
                 "shell": True,
-                "executable": agent_actions.os.environ.get("SHELL") or None,
+                "executable": shell_execution.os.environ.get("SHELL") or None,
                 "capture_output": True,
                 "text": True,
                 "timeout": agent_actions._SHELL_COMMAND_TIMEOUT_SECONDS,
@@ -643,8 +645,8 @@ def test_execute_cli_actions_routes_bang_cd_through_builtin(monkeypatch: object)
     def _boom(*_args: object, **_kwargs: object) -> None:  # pragma: no cover
         raise AssertionError("subprocess.run should not be used for !cd builtin routing")
 
-    monkeypatch.setattr(agent_actions.os, "chdir", _fake_chdir)
-    monkeypatch.setattr(agent_actions.subprocess, "run", _boom)
+    monkeypatch.setattr(action_executor.os, "chdir", _fake_chdir)
+    monkeypatch.setattr(shell_execution.subprocess, "run", _boom)
 
     session = ReplSession()
     console, buf = _capture()
@@ -664,8 +666,8 @@ def test_execute_cli_actions_routes_bang_pwd_through_builtin(monkeypatch: object
     def _boom(*_args: object, **_kwargs: object) -> None:  # pragma: no cover
         raise AssertionError("subprocess.run should not be used for !pwd builtin routing")
 
-    monkeypatch.setattr(agent_actions.Path, "cwd", classmethod(_fake_cwd))
-    monkeypatch.setattr(agent_actions.subprocess, "run", _boom)
+    monkeypatch.setattr(action_executor.Path, "cwd", classmethod(_fake_cwd))
+    monkeypatch.setattr(shell_execution.subprocess, "run", _boom)
 
     session = ReplSession()
     console, buf = _capture()
@@ -712,7 +714,7 @@ def test_execute_cli_actions_handles_path_with_spaces(monkeypatch: object) -> No
             stderr="",
         )
 
-    monkeypatch.setattr(agent_actions.subprocess, "run", _fake_run)
+    monkeypatch.setattr(shell_execution.subprocess, "run", _fake_run)
 
     session = ReplSession()
     console, _ = _capture()
