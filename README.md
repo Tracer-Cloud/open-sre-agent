@@ -1358,5 +1358,5 @@ Apache 2.0 - see [LICENSE](LICENSE) for details.
 ## Citations
 
 <sup>1</sup> https://arxiv.org/abs/2310.06770
-
+Looking for a safe first contribution? See [good first issues](docs/good-first-issues/README.md).
 <!-- No visible change: test for post-merge PR comment workflow. -->

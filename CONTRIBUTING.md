@@ -263,5 +263,5 @@ Use the **[improvement template](https://github.com/Tracer-Cloud/opensre/issues/
 - **Have an idea?** Start a Discussion to gauge interest before opening an issue
 
 ## Licensing
-
+Looking for a safe first contribution? See [good first issues](docs/good-first-issues/README.md).
 By contributing, you agree that your contributions will be licensed under the project's license (see `LICENSE`).
