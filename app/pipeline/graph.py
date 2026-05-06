@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 from collections.abc import Callable
 from typing import Any, cast
 
@@ -42,7 +43,6 @@ NodeWithConfig = Callable[[AgentState, NodeConfig | None], dict[str, Any]]
 
 def _accept_langgraph_config(func: NodeWithConfig) -> Callable[..., dict[str, Any]]:
     """Expose an unannotated config kwarg for LangGraph runtime injection."""
-    import functools
 
     @functools.wraps(func)
     def _wrapped(state: AgentState, config=None) -> dict[str, Any]:
