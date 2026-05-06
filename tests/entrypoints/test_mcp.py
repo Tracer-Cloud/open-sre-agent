@@ -69,10 +69,13 @@ def test_run_rca_happy_path(monkeypatch: MonkeyPatch) -> None:
 
 
 def test_run_rca_unexpected_exception_includes_error_type(monkeypatch: MonkeyPatch) -> None:
+    captured_errors: list[BaseException] = []
+
     def fake_run_cli(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
         raise RuntimeError("something went wrong")
 
     monkeypatch.setattr("app.entrypoints.mcp._run_cli", fake_run_cli)
+    monkeypatch.setattr("app.entrypoints.mcp.capture_exception", captured_errors.append)
 
     payload: dict[str, Any] = {"title": "test", "state": "firing", "alert_source": "grafana"}
     result = run_rca(alert_payload=payload)
@@ -81,6 +84,8 @@ def test_run_rca_unexpected_exception_includes_error_type(monkeypatch: MonkeyPat
     assert result["error"] == "something went wrong"
     assert result["error_type"] == "RuntimeError"
     assert result["result"] is None
+    assert len(captured_errors) == 1
+    assert isinstance(captured_errors[0], RuntimeError)
 
 
 def test_run_rca_error_type_reflects_actual_exception_class(monkeypatch: MonkeyPatch) -> None:

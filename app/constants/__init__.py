@@ -14,6 +14,11 @@ from app.constants.posthog import (
     POSTHOG_CAPTURE_API_KEY,
     POSTHOG_HOST,
 )
+from app.constants.sentry import (
+    SENTRY_DSN,
+    SENTRY_ERROR_SAMPLE_RATE,
+    SENTRY_TRACES_SAMPLE_RATE,
+)
 
 OPENSRE_HOME_DIR: Path = Path.home() / ".config" / "opensre"
 LEGACY_OPENSRE_HOME_DIR: Path = Path.home() / ".opensre"
@@ -45,4 +50,7 @@ __all__ = [
     "OPENSRE_TMP_DIR",
     "POSTHOG_CAPTURE_API_KEY",
     "POSTHOG_HOST",
+    "SENTRY_DSN",
+    "SENTRY_ERROR_SAMPLE_RATE",
+    "SENTRY_TRACES_SAMPLE_RATE",
 ]

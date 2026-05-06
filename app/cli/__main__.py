@@ -25,6 +25,7 @@ from app.cli.support.prompt_support import (
     install_questionary_ctrl_c_double_exit,
     install_questionary_escape_cancel,
 )
+from app.utils.sentry_sdk import init_sentry
 from app.version import get_version
 
 _CAPTURE_CLI_ANALYTICS = "capture_cli_analytics"
@@ -123,6 +124,7 @@ def _install_sigint_handler() -> None:
 def main(argv: list[str] | None = None) -> int:
     """Entry point for the ``opensre`` console script."""
     load_dotenv(override=False)
+    init_sentry()
     install_questionary_escape_cancel()
     install_questionary_ctrl_c_double_exit()
     _install_sigint_handler()

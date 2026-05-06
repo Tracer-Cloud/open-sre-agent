@@ -64,6 +64,7 @@ dependencies = [
     "PyNaCl>=1.5.0",
     # MariaDB
     "pymysql>=1.1.0,<2.0.0",
+    "sentry-sdk>=2.59.0",
 ]
 
 [project.urls]
