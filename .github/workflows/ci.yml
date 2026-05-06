@@ -164,21 +164,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v8.1.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: |
-            pyproject.toml
-            uv.lock
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
-
-      - name: Install dependencies
-        run: uv sync --frozen --extra dev
+      - name: Install coverage
+        run: pip install "coverage[toml]==7.13.5"
 
       - name: Download coverage fragments
         uses: actions/download-artifact@v4
@@ -187,13 +174,13 @@ jobs:
           merge-multiple: true
 
       - name: Combine coverage
-        run: uv run coverage combine --data-file=.coverage .coverage.shard-1-tools .coverage.shard-2-cli-nodes .coverage.shard-3-rest
+        run: coverage combine --data-file=.coverage .coverage.shard-1-tools .coverage.shard-2-cli-nodes .coverage.shard-3-rest
 
       - name: Coverage report
-        run: uv run coverage report --show-missing | tee -a $GITHUB_STEP_SUMMARY
+        run: coverage report --show-missing | tee -a $GITHUB_STEP_SUMMARY
 
       - name: Coverage HTML
-        run: uv run coverage html
+        run: coverage html
 
       - name: Upload combined coverage report
         uses: actions/upload-artifact@v4
