@@ -30,5 +30,7 @@ def test_install_sh_success_block_lists_next_steps() -> None:
     assert 'log_success "OpenSRE v${version} installed successfully."' in source
     assert 'log_highlight "Next steps:"' in source
     assert "log \"  1. Run 'opensre onboard' to complete setup.\"" in source
-    assert "log \"  2. Then run 'opensre investigate -i <alert.json>' with a real alert.\"" in source
+    assert (
+        "log \"  2. Then run 'opensre investigate -i <alert.json>' with a real alert.\"" in source
+    )
     assert 'log "Docs: https://www.opensre.com/docs"' in source
