@@ -109,7 +109,7 @@ def _search_issue_total_count(query: str, token: str) -> int:
     url = f"{GITHUB_API}/search/issues?{params}"
     try:
         data = _request_json(url, token)
-    except urllib.error.HTTPError as exc:
+    except urllib.error.URLError as exc:
         print(f"GitHub search failed: {exc}", file=sys.stderr)
         raise
     total = data.get("total_count")
@@ -167,7 +167,8 @@ def main() -> int:
         try:
             merged_count = fetch_merged_pr_count(owner, repo, c_login, token)
             open_count = fetch_open_pr_count(owner, repo, c_login, token)
-        except urllib.error.HTTPError:
+        except urllib.error.URLError as exc:
+            print(f"GitHub API request failed: {exc}", file=sys.stderr)
             return 1
 
     should, reason = assign_decision(

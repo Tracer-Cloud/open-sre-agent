@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import importlib.util
+import urllib.parse
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -166,6 +168,38 @@ def test_assign_decision_ok_zero_merges(gfi):
     )
     assert ok is True
     assert reason == ""
+
+
+def test_assign_decision_open_wins_over_merged(gfi):
+    """When both counts are non-zero, open PR check fires first."""
+    ok, reason = gfi.assign_decision(
+        skip_reason_pre_api=None,
+        merged_pr_count_for_commenter=2,
+        open_pr_count_for_commenter=1,
+    )
+    assert ok is False
+    assert reason == "has_open_prs"
+
+
+def test_fetch_open_pr_count_query_string(gfi):
+    """fetch_open_pr_count must search is:pr is:open for the correct author."""
+    captured: list[str] = []
+
+    def fake_request_json(url: str, token: str) -> dict:  # noqa: ARG001
+        captured.append(url)
+        return {"total_count": 0}
+
+    with patch.object(gfi, "_request_json", fake_request_json):
+        result = gfi.fetch_open_pr_count("myorg", "myrepo", "alice", "tok")
+
+    assert result == 0
+    assert len(captured) == 1
+    parsed = urllib.parse.urlparse(captured[0])
+    q = urllib.parse.parse_qs(parsed.query)["q"][0]
+    assert "is:pr" in q
+    assert "is:open" in q
+    assert "author:alice" in q
+    assert "repo:myorg/myrepo" in q
 
 
 def test_build_notice_short(gfi):
