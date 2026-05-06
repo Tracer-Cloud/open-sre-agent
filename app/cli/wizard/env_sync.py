@@ -86,6 +86,7 @@ def sync_provider_env(
     provider: ProviderOption,
     model: str,
     env_path: Path | None = None,
+    llm_api_key_plaintext: str | None = None,
 ) -> Path:
     """Write non-secret provider settings into the project .env.
 
@@ -93,6 +94,10 @@ def sync_provider_env(
     is in the keyring, or when switching LLM provider. If the user still has
     the active provider's key only in ``.env`` (same ``LLM_PROVIDER``), that
     line is kept until they save to the keyring.
+
+    When *llm_api_key_plaintext* is set (no working keychain, e.g. headless
+    Linux), the active provider's API key is written to ``.env`` and is not
+    stripped by the cleanup pass.
     """
     from app.cli.wizard.config import SUPPORTED_PROVIDERS
 
@@ -125,11 +130,16 @@ def sync_provider_env(
     ):
         keys_to_remove.discard(provider.api_key_env)
 
+    if llm_api_key_plaintext and provider.api_key_env:
+        keys_to_remove.discard(provider.api_key_env)
+
     lines = _remove_keys(existing, keys_to_remove)
 
     values: dict[str, str] = {"LLM_PROVIDER": provider.value, provider.model_env: model}
     if provider.legacy_model_env:
         values[provider.legacy_model_env] = model
+    if llm_api_key_plaintext and provider.api_key_env:
+        values[provider.api_key_env] = llm_api_key_plaintext.strip()
 
     for key, value in values.items():
         lines = _set_env_value(lines, key, value)

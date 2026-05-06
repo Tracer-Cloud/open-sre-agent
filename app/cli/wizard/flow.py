@@ -325,7 +325,7 @@ def _prompt_value(
         _console.print("[red]Required.[/]")
 
 
-def _persist_llm_api_key(env_var: str, value: str) -> bool:
+def _persist_llm_api_key(env_var: str, value: str) -> Literal["keychain", "env"] | None:
     try:
         save_llm_api_key(env_var, value)
     except RuntimeError as exc:
@@ -335,8 +335,19 @@ def _persist_llm_api_key(env_var: str, value: str) -> bool:
         )
         for line in get_keyring_setup_instructions(env_var):
             _console.print(f"[dim]{line}[/]")
-        return False
-    return True
+
+        if sys.stdin.isatty() and not _confirm(
+            "Save the API key to your project .env file instead? "
+            "[dim](Common on SSH / headless servers; use chmod 600 on .env)[/]",
+            default=True,
+        ):
+            return None
+        _console.print(
+            "[yellow]Storing API key in .env. Restrict access: "
+            "[bold]chmod 600 .env[/] (or move the key to a keychain later).[/]"
+        )
+        return "env"
+    return "keychain"
 
 
 def _parse_csv_values(raw_value: str) -> list[str]:
@@ -1608,9 +1619,13 @@ def _render_next_steps() -> None:
     )
 
 
-def _credential_line_for_saved_summary(provider: ProviderOption) -> str:
+def _credential_line_for_saved_summary(
+    provider: ProviderOption, *, llm_key_in_env_file: bool = False
+) -> str:
     """One-line credential description for the post-wizard saved summary."""
     if provider.credential_kind != "cli":
+        if llm_key_in_env_file and provider.api_key_env:
+            return f"project .env ({provider.api_key_env})"
         return "system keychain"
     if provider.adapter_factory is None:
         return f"{provider.label} (CLI)"
@@ -1752,6 +1767,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
     force_repick = False
     provider: ProviderOption
     model: str
+    llm_api_key_plaintext_for_env: str | None = None
     while True:
         _step("LLM Provider")
         saved_provider = (
@@ -1792,8 +1808,11 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                 except KeyboardInterrupt:
                     _console.print("\n[yellow]Setup cancelled.[/]")
                     return 1
-                if not _persist_llm_api_key(provider.api_key_env, api_key):
+                persist_kind = _persist_llm_api_key(provider.api_key_env, api_key)
+                if persist_kind is None:
                     return 1
+                if persist_kind == "env":
+                    llm_api_key_plaintext_for_env = api_key
         else:
             assert saved_provider is not None
             provider = saved_provider
@@ -1802,8 +1821,11 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                 has_api_key = bool(defaults["has_api_key"])
                 legacy_api_key = str(defaults["legacy_api_key"] or "").strip()
                 if not has_api_key and legacy_api_key:
-                    if not _persist_llm_api_key(provider.api_key_env, legacy_api_key):
+                    persist_kind = _persist_llm_api_key(provider.api_key_env, legacy_api_key)
+                    if persist_kind is None:
                         return 1
+                    if persist_kind == "env":
+                        llm_api_key_plaintext_for_env = legacy_api_key
                     has_api_key = True
                 if not has_api_key:
                     _step(provider.credential_label.title())
@@ -1816,8 +1838,11 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                     except KeyboardInterrupt:
                         _console.print("\n[yellow]Setup cancelled.[/]")
                         return 1
-                    if not _persist_llm_api_key(provider.api_key_env, api_key):
+                    persist_kind = _persist_llm_api_key(provider.api_key_env, api_key)
+                    if persist_kind is None:
                         return 1
+                    if persist_kind == "env":
+                        llm_api_key_plaintext_for_env = api_key
 
         if provider.credential_kind == "cli":
             cli_out = _run_cli_llm_onboarding(provider)
@@ -1840,7 +1865,13 @@ def run_wizard(_argv: list[str] | None = None) -> int:
         model_env=provider.model_env,
         probes=probes,
     )
-    env_path = sync_provider_env(provider=provider, model=model)
+    env_path = sync_provider_env(
+        provider=provider,
+        model=model,
+        llm_api_key_plaintext=llm_api_key_plaintext_for_env,
+    )
+    if llm_api_key_plaintext_for_env and provider.api_key_env:
+        os.environ[provider.api_key_env] = llm_api_key_plaintext_for_env.strip()
 
     _step("Integrations")
     try:
@@ -1858,7 +1889,9 @@ def run_wizard(_argv: list[str] | None = None) -> int:
         saved_path=str(saved_path),
         env_path=summary_env_path,
         configured_integrations=configured_integrations,
-        credential_line=_credential_line_for_saved_summary(provider),
+        credential_line=_credential_line_for_saved_summary(
+            provider, llm_key_in_env_file=llm_api_key_plaintext_for_env is not None
+        ),
     )
     _render_next_steps()
     return 0

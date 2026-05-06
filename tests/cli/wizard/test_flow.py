@@ -129,6 +129,8 @@ def test_run_wizard_shows_keyring_fix_steps_when_secure_storage_is_unavailable(
             "Start a D-Bus shell: dbus-run-session -- sh",
         ),
     )
+    monkeypatch.setattr(flow.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(flow, "_confirm", lambda *_a, **_k: False)
 
     exit_code = flow.run_wizard()
 
@@ -138,6 +140,48 @@ def test_run_wizard_shows_keyring_fix_steps_when_secure_storage_is_unavailable(
     assert "Install it first: sudo apt update && sudo apt install -y gnome-keyring" in output
     assert "dbus-user-session" in output
     assert "Start a D-Bus shell: dbus-run-session -- sh" in output
+
+
+def test_run_wizard_saves_llm_key_to_env_when_keyring_unavailable(monkeypatch, tmp_path) -> None:
+    """Headless Linux (e.g. EC2): keychain missing — user can persist API key in .env."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    select_responses = iter(["quickstart", "anthropic", "skip"])
+
+    def _mock_select(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(select_responses)
+        return m
+
+    def _mock_password(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = "sk-env-fallback"
+        return m
+
+    monkeypatch.setattr(flow, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(flow, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(
+        flow,
+        "save_llm_api_key",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("Secure local credential storage is unavailable on this machine.")
+        ),
+    )
+    monkeypatch.setattr(flow, "_confirm", lambda *_a, **_k: True)
+    env_path = tmp_path / ".env"
+    monkeypatch.setattr(
+        flow,
+        "sync_provider_env",
+        lambda **kwargs: sync_provider_env(env_path=env_path, **kwargs),
+    )
+
+    exit_code = flow.run_wizard()
+    assert exit_code == 0
+    text = env_path.read_text(encoding="utf-8")
+    assert "ANTHROPIC_API_KEY=sk-env-fallback\n" in text
+    assert os.environ["ANTHROPIC_API_KEY"] == "sk-env-fallback"
 
 
 def test_run_wizard_configures_optional_integrations(monkeypatch, tmp_path, capsys) -> None:
@@ -982,6 +1026,15 @@ def test_credential_line_for_saved_summary_anthropic() -> None:
 
     anthropic = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "anthropic")
     assert flow._credential_line_for_saved_summary(anthropic) == "system keychain"
+
+
+def test_credential_line_for_saved_summary_anthropic_env_file() -> None:
+    from app.cli.wizard import config as wizard_config
+
+    anthropic = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "anthropic")
+    assert flow._credential_line_for_saved_summary(anthropic, llm_key_in_env_file=True) == (
+        "project .env (ANTHROPIC_API_KEY)"
+    )
 
 
 def test_credential_line_for_saved_summary_cli_without_factory() -> None:

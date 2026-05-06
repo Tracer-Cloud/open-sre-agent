@@ -65,6 +65,21 @@ def test_sync_provider_env_codex_writes_codex_model(tmp_path) -> None:
     assert "CODEX_MODEL=\n" in content
 
 
+def test_sync_provider_env_writes_llm_api_key_when_plaintext_passed(tmp_path) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text("LLM_PROVIDER=openai\nOPENAI_API_KEY=old\n", encoding="utf-8")
+    sync_provider_env(
+        provider=PROVIDER_BY_VALUE["anthropic"],
+        model=PROVIDER_BY_VALUE["anthropic"].default_model,
+        env_path=env_path,
+        llm_api_key_plaintext="sk-in-env",
+    )
+    content = env_path.read_text(encoding="utf-8")
+    assert "LLM_PROVIDER=anthropic\n" in content
+    assert "ANTHROPIC_API_KEY=sk-in-env\n" in content
+    assert "OPENAI_API_KEY=" not in content
+
+
 def test_sync_provider_env_gemini_cli_writes_model(tmp_path) -> None:
     env_path = tmp_path / ".env"
     env_path.write_text("LLM_PROVIDER=anthropic\n", encoding="utf-8")
