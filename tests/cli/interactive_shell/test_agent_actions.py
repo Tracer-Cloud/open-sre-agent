@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import subprocess
+from pathlib import Path, PurePosixPath
 
 from rich.console import Console
 
@@ -196,6 +197,8 @@ def test_explicit_shell_command_plans_shell_action() -> None:
 
 def test_direct_shell_command_plans_shell_action() -> None:
     assert plan_terminal_tasks("pwd") == ["shell"]
+    assert plan_terminal_tasks("cd /tmp") == ["shell"]
+    assert plan_terminal_tasks("CD /tmp") == ["shell"]
 
 
 def test_sample_alert_launch_plans_sample_alert_action() -> None:
@@ -393,25 +396,19 @@ def test_execute_cli_actions_falls_through_for_chat() -> None:
 
 
 def test_execute_cli_actions_runs_shell_command(monkeypatch: object) -> None:
-    completed = subprocess.CompletedProcess(
-        args="pwd",
-        returncode=0,
-        stdout="/tmp/project\n",
-        stderr="",
-    )
-    calls: list[str] = []
+    def _fake_cwd(_: type[Path]) -> PurePosixPath:
+        return PurePosixPath("/tmp/project")
 
-    def _fake_run(command: str, **_kwargs: object) -> subprocess.CompletedProcess[str]:
-        calls.append(command)
-        return completed
+    def _fail_run(*_args: object, **_kwargs: object) -> None:  # pragma: no cover
+        raise AssertionError("subprocess.run should not be used for pwd")
 
-    monkeypatch.setattr(agent_actions.subprocess, "run", _fake_run)
+    monkeypatch.setattr(agent_actions.Path, "cwd", classmethod(_fake_cwd))
+    monkeypatch.setattr(agent_actions.subprocess, "run", _fail_run)
 
     session = ReplSession()
     console, buf = _capture()
 
     assert execute_cli_actions("run `pwd`", session, console) is True
-    assert calls == ["pwd"]
     assert session.history == [
         {"type": "cli_agent", "text": "run `pwd`", "ok": True},
         {"type": "shell", "text": "pwd", "ok": True},
@@ -420,6 +417,94 @@ def test_execute_cli_actions_runs_shell_command(monkeypatch: object) -> None:
     assert "Running requested actions" in output
     assert "$ pwd" in output
     assert "/tmp/project" in output
+
+
+def test_execute_cli_actions_cd_preserves_windows_paths(monkeypatch: object) -> None:
+    changed_directories: list[Path] = []
+
+    def _fake_chdir(target: Path) -> None:
+        changed_directories.append(target)
+
+    monkeypatch.setattr(agent_actions, "_IS_WINDOWS", True)
+    monkeypatch.setattr(agent_actions.os, "chdir", _fake_chdir)
+
+    session = ReplSession()
+    console, _ = _capture()
+
+    message = r"run `cd C:\Users\Alice`"
+    assert execute_cli_actions(message, session, console) is True
+    assert changed_directories == [Path(r"C:\Users\Alice")]
+    assert session.history == [
+        {"type": "cli_agent", "text": message, "ok": True},
+        {"type": "shell", "text": r"cd C:\Users\Alice", "ok": True},
+    ]
+
+
+def test_execute_cli_actions_cd_routes_case_insensitively(monkeypatch: object) -> None:
+    changed_directories: list[Path] = []
+
+    def _fake_chdir(target: Path) -> None:
+        changed_directories.append(target)
+
+    def _fail_run(*_args: object, **_kwargs: object) -> None:  # pragma: no cover
+        raise AssertionError("subprocess.run should not be used for CD")
+
+    monkeypatch.setattr(agent_actions, "_IS_WINDOWS", True)
+    monkeypatch.setattr(agent_actions.os, "chdir", _fake_chdir)
+    monkeypatch.setattr(agent_actions.subprocess, "run", _fail_run)
+
+    session = ReplSession()
+    console, _ = _capture()
+
+    message = r"run `CD C:\Users\Alice`"
+    assert execute_cli_actions(message, session, console) is True
+    assert changed_directories == [Path(r"C:\Users\Alice")]
+    assert session.history == [
+        {"type": "cli_agent", "text": message, "ok": True},
+        {"type": "shell", "text": r"CD C:\Users\Alice", "ok": True},
+    ]
+
+
+def test_execute_cli_actions_cd_handles_trailing_backslash_on_windows(monkeypatch: object) -> None:
+    changed_directories: list[Path] = []
+
+    def _fake_chdir(target: Path) -> None:
+        changed_directories.append(target)
+
+    monkeypatch.setattr(agent_actions, "_IS_WINDOWS", True)
+    monkeypatch.setattr(agent_actions.os, "chdir", _fake_chdir)
+
+    session = ReplSession()
+    console, _ = _capture()
+
+    message = r"run `cd C:\`"
+    assert execute_cli_actions(message, session, console) is True
+    assert changed_directories == [Path("C:\\")]
+    assert session.history == [
+        {"type": "cli_agent", "text": message, "ok": True},
+        {"type": "shell", "text": "cd C:\\", "ok": True},
+    ]
+
+
+def test_execute_cli_actions_cd_strips_quotes_on_windows(monkeypatch: object) -> None:
+    changed_directories: list[Path] = []
+
+    def _fake_chdir(target: Path) -> None:
+        changed_directories.append(target)
+
+    monkeypatch.setattr(agent_actions, "_IS_WINDOWS", True)
+    monkeypatch.setattr(agent_actions.os, "chdir", _fake_chdir)
+
+    session = ReplSession()
+    console, _ = _capture()
+
+    message = r'run `cd "C:\Users\Alice"`'
+    assert execute_cli_actions(message, session, console) is True
+    assert changed_directories == [Path(r"C:\Users\Alice")]
+    assert session.history == [
+        {"type": "cli_agent", "text": message, "ok": True},
+        {"type": "shell", "text": r'cd "C:\Users\Alice"', "ok": True},
+    ]
 
 
 def test_execute_cli_actions_records_shell_failure(monkeypatch: object) -> None:

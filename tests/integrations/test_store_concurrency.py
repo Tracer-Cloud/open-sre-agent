@@ -241,6 +241,37 @@ def test_v1_load_returns_migrated_data_when_persist_fails(tmp_store: Path) -> No
     assert not temps, f"Orphaned temp files: {temps}"
 
 
+def test_v1_load_returns_migrated_data_when_migration_lock_times_out(tmp_store: Path) -> None:
+    """Read-time v1 migration keeps working when the persist lock cannot be acquired."""
+
+    class TimedOutLock:
+        def __enter__(self) -> None:
+            raise Timeout(str(tmp_store.with_suffix(".lock")))
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+    v1_data = {
+        "version": 1,
+        "integrations": [
+            {
+                "id": "grafana-abc",
+                "service": "grafana",
+                "status": "active",
+                "credentials": {"endpoint": "https://example.com", "api_key": "k"},
+            }
+        ],
+    }
+    tmp_store.write_text(json.dumps(v1_data) + "\n", encoding="utf-8")
+
+    with patch("app.integrations.store._acquire_lock", return_value=TimedOutLock()):
+        data = _load_raw()
+
+    assert data["version"] == 2
+    assert data["integrations"][0]["instances"][0]["credentials"]["api_key"] == "k"
+    assert _read_json(tmp_store)["version"] == 1
+
+
 def test_v1_migration_persists_when_locked_update_is_noop(tmp_store: Path) -> None:
     """A no-op remove should still persist an in-memory v1-to-v2 migration."""
     v1_data = {

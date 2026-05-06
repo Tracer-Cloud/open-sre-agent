@@ -1,6 +1,6 @@
 """Local integration credential store.
 
-Integrations are stored in ~/.opensre/integrations.json.
+Integrations are stored in ~/.config/opensre/integrations.json.
 
 File format (v2 — see ``_migrate_record_v1_to_v2`` for the v1 shape):
 {
@@ -107,6 +107,21 @@ def _migrate_if_needed(data: dict[str, Any]) -> tuple[dict[str, Any], bool]:
     return {"version": _VERSION, "integrations": migrated_records}, True
 
 
+def _read_json_store_at(path: Path) -> dict[str, Any] | None:
+    """Read integration store JSON from ``path`` when present and structurally valid."""
+    if not path.exists():
+        return None
+    try:
+        text = path.read_text(encoding="utf-8")
+        data = json.loads(text)
+    except (json.JSONDecodeError, OSError):
+        logger.warning("Failed to read integrations store at %s", path, exc_info=True)
+        return None
+    if not isinstance(data, dict) or "integrations" not in data:
+        return None
+    return data
+
+
 def _lock_path() -> Path:
     """Return the file lock path derived from the current STORE_PATH."""
     return STORE_PATH.with_suffix(".lock")
@@ -152,7 +167,7 @@ def _save_unlocked(data: dict[str, Any]) -> None:
 
 
 def _migrate_legacy_store_unlocked() -> None:
-    """Move the legacy ~/.tracer store into ~/.opensre on first access.
+    """Move the legacy ~/.tracer integrations store into ``STORE_PATH`` on first access.
 
     Must be called while holding the store lock.
     """
@@ -244,8 +259,16 @@ def _load_raw() -> dict[str, Any]:
         try:
             with _acquire_lock():
                 _migrate_legacy_store_unlocked()
-        except Timeout as exc:
-            raise _lock_timeout_error() from exc
+        except Timeout:
+            logger.warning(
+                "Timed out acquiring integration store lock for legacy migration from %s",
+                LEGACY_STORE_PATH,
+                exc_info=True,
+            )
+            raw_legacy = _read_json_store_at(LEGACY_STORE_PATH)
+            if raw_legacy is not None:
+                migrated, _ = _migrate_if_needed(raw_legacy)
+                return migrated
 
     data, did_migrate = _load_raw_unlocked()
     if did_migrate:
@@ -262,8 +285,12 @@ def _load_raw() -> dict[str, Any]:
                             exc_info=True,
                         )
                 return data2
-        except Timeout as exc:
-            raise _lock_timeout_error() from exc
+        except Timeout:
+            logger.warning(
+                "Timed out acquiring integration store lock for v2 migration persist",
+                exc_info=True,
+            )
+            return data
     return data
 
 
