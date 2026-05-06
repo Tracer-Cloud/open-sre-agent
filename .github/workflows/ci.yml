@@ -74,16 +74,39 @@ jobs:
         run: uv run python -m mypy app/
 
   test:
-    name: test (${{ matrix.os }})
+    name: test (shard ${{ matrix.shard }})
     needs: [quality]
-    continue-on-error: ${{ matrix.os == 'windows-latest' }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
+        include:
+          - shard: 1-tools
+            paths: tests/tools/
+          - shard: 2-cli-nodes
+            paths: tests/cli/ tests/nodes/
+          - shard: 3-rest
+            paths: >-
+              tests/integrations/ tests/services/ tests/remote/
+              tests/utils/ tests/test_guardrails/ tests/app/
+              tests/masking/ tests/pipeline/ tests/types/
+              tests/analytics/ tests/benchmarks/ tests/entrypoints/
+              tests/sandbox/ tests/github/
+              tests/test_auth.py tests/test_aws_urls.py
+              tests/test_bug_fixes_e2e.py tests/test_chaos_engineering_paths.py
+              tests/test_config.py tests/test_deployment_health.py
+              tests/test_devcontainer.py tests/test_dockerfile.py
+              tests/test_ec2_deploy.py tests/test_ec2_instance.py
+              tests/test_elasticsearch_client.py tests/test_google_docs.py
+              tests/test_kill_switch_matrix.py tests/test_llm_credentials.py
+              tests/test_main.py tests/test_mariadb_integration.py
+              tests/test_mongodb_atlas_integration.py tests/test_mongodb_integration.py
+              tests/test_naming_conventions.py tests/test_openclaw_integration.py
+              tests/test_output.py tests/test_sentry_init.py
+              tests/test_state.py tests/test_version.py tests/test_webapp.py
+              tests/chaos_engineering/ tests/deployment/ tests/cli_smoke_test.py
 
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 25
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -101,6 +124,7 @@ jobs:
       GCLOUD_OTLP_ENDPOINT: ${{ secrets.GCLOUD_OTLP_ENDPOINT }}
       GCLOUD_OTLP_AUTH_HEADER: ${{ secrets.GCLOUD_OTLP_AUTH_HEADER }}
       PYTHONUTF8: "1"
+      COVERAGE_FILE: .coverage.shard-${{ matrix.shard }}
 
     steps:
       - uses: actions/checkout@v5
@@ -121,26 +145,75 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --extra dev
 
-      - name: Run tests
+      - name: Run tests (shard ${{ matrix.shard }})
         run: >-
           uv run python -m pytest -n auto -v
           --cov=app
-          --cov-report=term-missing
-          --cov-report=html
           --ignore=tests/e2e/kubernetes_local_alert_simulation
           --ignore=tests/synthetic
-          -m "${{ matrix.os == 'windows-latest' && 'not synthetic and not integration' || 'not synthetic' }}"
+          -m "not synthetic and not e2e"
+          ${{ matrix.paths }}
 
-      - name: Upload coverage
+      - name: Upload coverage fragment
         if: >-
-          always() && matrix.os == 'ubuntu-latest' &&
+          always() &&
           (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false)
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report-${{ matrix.os }}
-          path: |
-            htmlcov/
-            .coverage
+          name: coverage-${{ matrix.shard }}
+          path: .coverage.shard-${{ matrix.shard }}
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  coverage-combine:
+    name: coverage-combine
+    needs: [test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: >-
+      needs.test.result == 'success' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false)
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev
+
+      - name: Download coverage fragments
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-*
+          merge-multiple: true
+
+      - name: Combine coverage
+        run: uv run coverage combine --data-file=.coverage
+
+      - name: Coverage report
+        run: uv run coverage report --show-missing | tee -a $GITHUB_STEP_SUMMARY
+
+      - name: Coverage HTML
+        run: uv run coverage html
+
+      - name: Upload combined coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-combined
+          path: htmlcov/
           retention-days: 7
 
   test-kubernetes:
