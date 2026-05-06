@@ -24,10 +24,12 @@ def _missing_env_error(
 def make_boto3_client(service: str):
     """Return a boto3 client for the given service using the configured AWS region."""
     try:
-        import boto3 as _boto3
+        from app.services.aws_session_manager import get_aws_session_manager
     except ImportError:
         return None
-    return _boto3.client(service, region_name=os.getenv("AWS_REGION", "us-east-1"))  # type: ignore[call-overload]
+
+    manager = get_aws_session_manager()
+    return manager.get_client(service)
 
 
 def require_aws_credentials(*, context: str) -> dict[str, Any] | None:

@@ -42,6 +42,8 @@ def _aws_operation_never_auto_available(_sources: dict[str, dict]) -> bool:
                 "description": "Operation name (e.g., 'describe_tasks', 'get_role')",
             },
             "parameters": {"type": "object", "description": "Operation parameters as dict"},
+            "role_arn": {"type": "string", "description": "Optional IAM role ARN to assume"},
+            "external_id": {"type": "string", "description": "Optional external ID for AssumeRole"},
         },
         "required": ["service", "operation"],
     },
@@ -51,6 +53,8 @@ def execute_aws_operation(
     service: str,
     operation: str,
     parameters: dict[str, Any] | None = None,
+    role_arn: str | None = None,
+    external_id: str | None = None,
 ) -> dict:
     """Execute any read-only AWS SDK operation for investigation."""
     if not service or not operation:
@@ -65,6 +69,8 @@ def execute_aws_operation(
         service_name=service,
         operation_name=operation,
         parameters=parameters,
+        role_arn=role_arn,
+        external_id=external_id,
     )
 
     if not result.get("success"):

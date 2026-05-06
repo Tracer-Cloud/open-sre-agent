@@ -7,8 +7,9 @@ Security-first design with operation allowlists and response sanitization.
 import re
 from typing import Any
 
-import boto3
 from botocore.exceptions import ClientError, NoCredentialsError, ParamValidationError
+
+from app.services.aws_session_manager import get_aws_session_manager
 
 # Read-only operation patterns (allowlist)
 ALLOWED_OPERATION_PATTERNS = [
@@ -133,6 +134,8 @@ def execute_aws_sdk_call(
     operation_name: str,
     parameters: dict[str, Any] | None = None,
     region: str | None = None,
+    role_arn: str | None = None,
+    external_id: str | None = None,
 ) -> dict[str, Any]:
     """
     Execute a read-only AWS SDK operation with safety validations.
@@ -142,6 +145,8 @@ def execute_aws_sdk_call(
         operation_name: Operation to call (e.g., 'describe_instances')
         parameters: Operation parameters as dict
         region: Optional AWS region override
+        role_arn: Optional IAM role ARN to assume
+        external_id: Optional external ID for AssumeRole
 
     Returns:
         Dictionary with standardized response:
@@ -177,12 +182,11 @@ def execute_aws_sdk_call(
         }
 
     try:
-        # Create boto3 client
-        client_kwargs: dict[str, str] = {}
-        if region:
-            client_kwargs["region_name"] = region
-
-        client = boto3.client(service_name, **client_kwargs)  # type: ignore[call-overload]
+        # Get cached or new boto3 client from manager
+        manager = get_aws_session_manager()
+        client = manager.get_client(
+            service_name=service_name, region=region, role_arn=role_arn, external_id=external_id
+        )
 
         # Verify operation exists
         if not hasattr(client, operation_name):
@@ -214,6 +218,7 @@ def execute_aws_sdk_call(
             "metadata": {
                 "region": client.meta.region_name,
                 "parameters_provided": bool(parameters),
+                "role_arn": role_arn,
             },
         }
 

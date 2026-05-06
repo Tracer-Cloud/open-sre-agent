@@ -14,6 +14,7 @@ from app.services.aws_sdk_client import (
     _sanitize_response,
     execute_aws_sdk_call,
 )
+from app.services.aws_session_manager import AWSSessionManager
 
 
 class TestIsOperationAllowedAllowlist:
@@ -193,11 +194,21 @@ class TestSanitizeResponseMisc:
 
 
 @pytest.fixture()
-def mock_boto3_client():
+def mock_aws_manager():
     fake_client = MagicMock()
     fake_client.meta.region_name = "us-east-1"
-    with patch("app.services.aws_sdk_client.boto3.client", return_value=fake_client):
-        yield fake_client
+
+    mock_manager = MagicMock(spec=AWSSessionManager)
+    mock_manager.get_client.return_value = fake_client
+
+    with patch("app.services.aws_sdk_client.get_aws_session_manager", return_value=mock_manager):
+        yield mock_manager, fake_client
+
+
+@pytest.fixture()
+def mock_boto3_client(mock_aws_manager):
+    _, fake_client = mock_aws_manager
+    yield fake_client
 
 
 class TestExecuteAwsSdkCallHappyPath:
@@ -223,11 +234,14 @@ class TestExecuteAwsSdkCallHappyPath:
         assert result["success"] is True
         mock_boto3_client.describe_instances.assert_called_once_with(**params)
 
-    def test_region_override(self, mock_boto3_client) -> None:
-        mock_boto3_client.list_clusters.return_value = {"ClusterArns": []}
-        with patch("app.services.aws_sdk_client.boto3.client", return_value=mock_boto3_client) as m:
-            execute_aws_sdk_call("ecs", "list_clusters", region="eu-west-1")
-            m.assert_called_once_with("ecs", region_name="eu-west-1")
+    def test_region_override(self, mock_aws_manager) -> None:
+        mock_manager, mock_client = mock_aws_manager
+        mock_client.list_clusters.return_value = {"ClusterArns": []}
+
+        execute_aws_sdk_call("ecs", "list_clusters", region="eu-west-1")
+        mock_manager.get_client.assert_called_with(
+            service_name="ecs", region="eu-west-1", role_arn=None, external_id=None
+        )
 
 
 class TestExecuteAwsSdkCallValidation:
@@ -253,11 +267,13 @@ class TestExecuteAwsSdkCallValidation:
         assert "not allowed" in result["error"].lower()
 
     def test_rejected_operation_does_not_create_client(self) -> None:
-        with patch("app.services.aws_sdk_client.boto3.client") as client:
+        from app.services.aws_session_manager import get_aws_session_manager
+
+        with patch("app.services.aws_sdk_client.get_aws_session_manager") as mock_get_manager:
             result = execute_aws_sdk_call("ec2", "terminate_instances")
 
         assert result["success"] is False
-        client.assert_not_called()
+        mock_get_manager.assert_not_called()
 
 
 class TestExecuteAwsSdkCallMissingOperation:
@@ -271,9 +287,12 @@ class TestExecuteAwsSdkCallMissingOperation:
 
 class TestExecuteAwsSdkCallCredentialErrors:
     def test_no_credentials_error_when_creating_client(self) -> None:
+        mock_manager = MagicMock(spec=AWSSessionManager)
+        mock_manager.get_client.side_effect = NoCredentialsError()
+
         with patch(
-            "app.services.aws_sdk_client.boto3.client",
-            side_effect=NoCredentialsError(),
+            "app.services.aws_sdk_client.get_aws_session_manager",
+            return_value=mock_manager,
         ):
             result = execute_aws_sdk_call("ec2", "describe_instances")
 
