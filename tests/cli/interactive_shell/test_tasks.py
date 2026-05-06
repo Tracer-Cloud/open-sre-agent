@@ -247,7 +247,9 @@ class TestSyntheticSubprocessWatcher:
         assert hist["type"] == "synthetic_test"
         assert hist["ok"] is False
 
-    def test_watch_skips_synthetic_history_after_reset(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_watch_skips_synthetic_history_after_reset(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import app.cli.interactive_shell.agent_actions as aa
 
         _DeferredSyntheticThread.pending.clear()
