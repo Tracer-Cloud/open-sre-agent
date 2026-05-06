@@ -400,15 +400,11 @@ class BedrockLLMClient:
         return self._invoke_converse(prompt_or_messages)
 
     def invoke_stream(self, prompt_or_messages: Any) -> Iterator[str]:
-        """Yield the full response as one chunk — real streaming is a follow-up.
+        """Yield the full response as one chunk; real streaming is a follow-up.
 
-        The LLM client Protocol declares ``invoke_stream`` so the interactive
-        shell's ``stream_to_console`` can call it uniformly across providers.
         Bedrock supports token streaming via ``AnthropicBedrock.messages.stream``
-        (and ``boto3 converse_stream`` for non-Anthropic models), but those
-        paths need their own test fixtures and aren't required to ship the
-        primary streaming UX. Real Bedrock streaming is tracked separately;
-        see the deferred follow-up note in the #1263 design doc.
+        and ``boto3 converse_stream``, but wiring those paths is deferred —
+        the yield-once fallback satisfies the protocol contract.
         """
         yield self.invoke(prompt_or_messages).content
 

@@ -161,14 +161,9 @@ class CLIBackedLLMClient:
         return LLMResponse(content=content)
 
     def invoke_stream(self, prompt_or_messages: Any) -> Iterator[str]:
-        """Yield the full response as one chunk — real streaming is a follow-up.
+        """Yield the full response as one chunk; real streaming is a follow-up.
 
-        The LLM client Protocol declares ``invoke_stream`` so the interactive
-        shell's ``stream_to_console`` can call it uniformly across providers.
-        Subprocess CLI adapters (codex, cursor, claude-code, opencode, kimi)
-        can't natively token-stream — they ``subprocess.run`` to completion —
-        so this method preserves correctness without introducing fake
-        progressive output. Real per-line streaming is tracked separately;
-        see the deferred follow-up note in the #1263 design doc.
+        Subprocess CLI adapters ``subprocess.run`` to completion, so this
+        satisfies the protocol contract without faking progressive output.
         """
         yield self.invoke(prompt_or_messages).content
