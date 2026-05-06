@@ -30,6 +30,7 @@ _BARE_COMMAND_ALIASES = frozenset(
         "trust",
     }
 )
+BARE_COMMAND_ALIASES = _BARE_COMMAND_ALIASES
 
 
 # Short, question-shaped strings that obviously target the previous investigation.
@@ -240,7 +241,7 @@ def classify_input(text: str, session: ReplSession) -> InputKind:
     if stripped.startswith("/"):
         return "slash"
 
-    if stripped.lower() in _BARE_COMMAND_ALIASES:
+    if stripped.lower() in BARE_COMMAND_ALIASES:
         return "slash"
 
     if _is_cli_help_intent(stripped):

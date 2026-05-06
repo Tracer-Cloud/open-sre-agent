@@ -130,6 +130,7 @@ LLMProvider = Literal[
     "codex",
     "cursor",
     "claude-code",
+    "gemini-cli",
     "opencode",
     "kimi",
 ]
@@ -183,6 +184,7 @@ class LLMSettings(StrictConfigModel):
             "codex",
             "cursor",
             "claude-code",
+            "gemini-cli",
             "opencode",
             "kimi",
         )
@@ -205,6 +207,7 @@ class LLMSettings(StrictConfigModel):
             "codex",
             "cursor",
             "claude-code",
+            "gemini-cli",
             "opencode",
             "kimi",
         ):

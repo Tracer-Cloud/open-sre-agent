@@ -1302,6 +1302,27 @@ Thanks goes to these amazing people:
             <sub><b>mazenessam77</b></sub>
         </a>
     </td>
+            <td align="center">
+        <a href="https://github.com/mstejas610">
+            <img src="https://avatars.githubusercontent.com/u/116860222?v=4" width="100" alt="mstejas610"/>
+            <br />
+            <sub><b>mstejas610</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/jeetjawale">
+            <img src="https://avatars.githubusercontent.com/u/112877983?v=4" width="100" alt="jeetjawale"/>
+            <br />
+            <sub><b>jeetjawale</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/rudra496">
+            <img src="https://avatars.githubusercontent.com/u/78224940?v=4" width="100" alt="rudra496"/>
+            <br />
+            <sub><b>rudra496</b></sub>
+        </a>
+    </td>
 		</tr>
 	</tbody>
 </table>
@@ -1321,34 +1342,42 @@ See [SECURITY.md](SECURITY.md) for responsible disclosure.
 
 ---
 
-## Telemetry
+## Telemetry & privacy
 
-`opensre` collects anonymous usage statistics with Posthog to help us understand adoption
-and demonstrate traction to sponsors and investors who fund the project.
-What we collect: command name, success/failure, rough runtime, CLI version,
-Python version, OS family, machine architecture, and a small amount of
-command-specific metadata such as which subcommand ran. For `opensre onboard`
-and `opensre investigate`, we may also collect the selected model/provider and
-whether the command used flags such as `--interactive` or `--input`.
+`opensre` ships with two telemetry stacks, both opt-out:
 
-A randomly generated anonymous ID is created on first run and stored in
-`~/.config/opensre/`. We never collect alert contents, file contents,
-hostnames, credentials, or any personally identifiable information.
+- **PostHog** for anonymous product analytics (which commands are used, success/failure, rough runtime, CLI version, Python version, OS family, machine architecture, and a small amount of command-specific metadata such as which subcommand ran). For `opensre onboard` and `opensre investigate`, we may also collect the selected model/provider and whether the command used flags such as `--interactive` or `--input`.
+- **Sentry** for crash and error reports (stack traces, environment, release tag). Stack traces are scrubbed for home-directory paths; auth headers, cookies, query strings on HTTP breadcrumbs, and obvious secret keys (`*_token`, `*_key`, `*_secret`, `*_password`) are filtered before transport.
 
-Telemetry is automatically disabled in GitHub Actions and pytest runs.
+A randomly generated anonymous install ID is created on first run and stored in `~/.config/opensre/anonymous_id`. PostHog `distinct_id` values are scoped to that install ID, so unique-user counts represent unique CLI installs/devices rather than command invocations. One-time lifecycle events use deterministic event IDs to avoid duplicate rows if they are retried.
 
-To opt out locally, set the environment variable before running:
+We never collect alert contents, file contents, hostnames, credentials, raw command arguments, or any other personally identifiable information. Telemetry is automatically disabled in GitHub Actions and pytest runs.
+
+### Kill-switch matrix
+
+| Env var | PostHog | Sentry |
+| --- | --- | --- |
+| `OPENSRE_NO_TELEMETRY=1` | disabled | disabled |
+| `DO_NOT_TRACK=1` | disabled | disabled |
+| `OPENSRE_ANALYTICS_DISABLED=1` | disabled | unaffected |
+| `OPENSRE_SENTRY_DISABLED=1` | unaffected | disabled |
+
+For full opt-out:
 
 ```bash
 export OPENSRE_NO_TELEMETRY=1
 ```
 
-The legacy alias `OPENSRE_ANALYTICS_DISABLED=1` also still works.
+### Overriding the Sentry DSN
 
-To inspect the payload locally without sending anything, use:
+Self-hosted users can route errors to their own Sentry project by setting `SENTRY_DSN` in the environment before invoking `opensre`. Leaving it unset uses the bundled default DSN. Setting `SENTRY_DSN=` (empty) drops all events at the `before_send` hook.
+
+### Inspecting outbound events
+
+To inspect what `opensre` is sending to PostHog, every event is also appended to `~/.config/opensre/posthog_events.txt` by default. The file rotates at 1000 lines (older lines move to `posthog_events.txt.1`, overwriting any prior backup) so it never grows unbounded. To disable local logging:
 
 ```bash
-export OPENSRE_TELEMETRY_DEBUG=1
+export OPENSRE_ANALYTICS_LOG_EVENTS=0
 ```
 
 ## License

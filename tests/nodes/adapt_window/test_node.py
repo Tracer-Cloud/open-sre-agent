@@ -113,6 +113,6 @@ def test_node_does_not_log_at_info_on_no_op(caplog: Any) -> None:
 
 
 def test_node_accepts_config_kwarg() -> None:
-    # LangGraph passes a RunnableConfig; the node must accept and ignore it.
+    # LangGraph passes a config dict; the node must accept and ignore it.
     delta = node_adapt_window(_firing_state(), config={"configurable": {}})  # type: ignore[arg-type]
     assert "incident_window" in delta

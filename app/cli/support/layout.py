@@ -16,7 +16,10 @@ _ASCII_HEADER = """\
  \\___/|_|   |_____|_| \\_|____/|_| \\_\\_____|"""
 
 _LANDING_EXAMPLES: tuple[tuple[str, str], ...] = (
-    ("opensre agent", "Launch the interactive SRE agent terminal"),
+    (
+        'opensre "investigate high latency in checkout-api"',
+        "Start the interactive agent with a prompt",
+    ),
     ("opensre onboard", "Configure LLM provider and integrations"),
     ("opensre investigate -i alert.json", "Run RCA against an alert payload"),
     ("opensre deploy ec2", "Deploy investigation server on AWS EC2"),
@@ -53,7 +56,7 @@ def _commands_from_group(group: click.Group) -> tuple[tuple[str, str], ...]:
 
 def _render_usage(console: Console) -> None:
     console.print(
-        Text.assemble(("  Usage: "), ("opensre", "bold white"), (" [OPTIONS] COMMAND [ARGS]..."))
+        Text.assemble(("  Usage: "), ("opensre", "bold white"), (" [OPTIONS] [COMMAND] [PROMPT]"))
     )
 
 

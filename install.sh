@@ -545,6 +545,31 @@ configure_path() {
   log "Or open a new terminal."
 }
 
+print_success_screen() {
+  local version="$1"
+  local sep="────────────────────────────────────────────"
+
+  if [ ! -t 1 ]; then
+    sep="--------------------------------------------"
+  fi
+
+  log ""
+  log "$sep"
+  if [ "$version" = "main" ]; then
+    log "  opensre (main build) installed successfully"
+  else
+    log "  opensre v${version} installed successfully"
+  fi
+  log "$sep"
+  log ""
+  log "Next steps:"
+  log "  1. Run:  opensre onboard"
+  log "  2. Then: opensre investigate -i <alert.json>"
+  log ""
+  log "Docs: https://www.opensre.com/docs"
+  log ""
+}
+
 os="$(uname -s)"
 arch="$(uname -m)"
 
@@ -698,6 +723,4 @@ else
 fi
 
 configure_path
-
-log ""
-log "Next: run 'opensre onboard' to complete setup."
+print_success_screen "$installed_version"

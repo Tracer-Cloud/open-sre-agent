@@ -149,6 +149,23 @@ def test_investigate_returns_bad_request_for_invalid_vercel_url(
     assert exc_info.value.detail == "invalid vercel url"
 
 
+def test_investigate_captures_unexpected_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured_errors: list[BaseException] = []
+    expected_error = RuntimeError("pipeline exploded")
+
+    def fake_execute_investigation(**_kwargs: Any) -> tuple[dict[str, Any], str, str, str]:
+        raise expected_error
+
+    monkeypatch.setattr(remote_server, "_execute_investigation", fake_execute_investigation)
+    monkeypatch.setattr(remote_server, "capture_exception", captured_errors.append)
+
+    with pytest.raises(HTTPException) as exc_info:
+        investigate(InvestigateRequest(raw_alert={"alert_name": "PayloadAlert"}))
+
+    assert exc_info.value.status_code == 500
+    assert captured_errors == [expected_error]
+
+
 @pytest.mark.asyncio
 async def test_investigate_stream_persists_state_on_disconnect(
     monkeypatch: pytest.MonkeyPatch,
@@ -197,6 +214,39 @@ async def test_investigate_stream_persists_state_on_disconnect(
     assert persisted["severity"] == "critical"
     assert persisted["state"]["root_cause"] == "Schema mismatch"
     assert persisted["state"]["report"] == "Fix upstream"
+
+
+@pytest.mark.asyncio
+async def test_investigate_stream_captures_streaming_exception(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_errors: list[BaseException] = []
+    expected_error = RuntimeError("stream failed")
+
+    async def fake_astream_investigation(*args: object, **kwargs: object):
+        _ = (args, kwargs)
+        raise expected_error
+        yield StreamEvent("events", data={})
+
+    monkeypatch.setattr("app.config.LLMSettings.from_env", object)
+    monkeypatch.setattr(
+        "app.cli.investigation.resolve_investigation_context",
+        lambda **_kwargs: ("test-alert", "etl_daily_orders", "critical"),
+    )
+    monkeypatch.setattr(
+        "app.pipeline.runners.astream_investigation",
+        fake_astream_investigation,
+    )
+    monkeypatch.setattr(remote_server, "capture_exception", captured_errors.append)
+    monkeypatch.setattr(remote_server, "_persist_streamed_result", lambda **_kwargs: None)
+
+    response = await investigate_stream(
+        InvestigateRequest(raw_alert={"alert_name": "PayloadAlert"})
+    )
+    chunks = [chunk async for chunk in response.body_iterator]
+
+    assert any("event: error" in chunk for chunk in chunks)
+    assert captured_errors == [expected_error]
 
 
 @pytest.mark.asyncio

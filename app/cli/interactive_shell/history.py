@@ -27,8 +27,13 @@ def load_prompt_history() -> History:
 
 def load_command_history_entries() -> list[str]:
     """Return persisted prompt entries in chronological order."""
-    history = FileHistory(str(prompt_history_path()))
-    return list(reversed(list(history.load_history_strings())))
+    try:
+        path = prompt_history_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        history = FileHistory(str(path))
+        return list(reversed(list(history.load_history_strings())))
+    except OSError:
+        return []
 
 
 __all__ = ["load_command_history_entries", "load_prompt_history", "prompt_history_path"]

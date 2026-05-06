@@ -4,16 +4,15 @@ from __future__ import annotations
 
 import os
 
-from rich.align import Align
-from rich.console import Console, Group
-from rich.panel import Panel
+from rich.console import Console
+from rich.rule import Rule
 from rich.text import Text
 
 from app.cli.interactive_shell.theme import (
-    BANNER_BORDER,
     BANNER_PRIMARY,
     BANNER_SECONDARY,
     BANNER_TERTIARY,
+    BANNER_UI_DIVIDER,
 )
 from app.config import LLMSettings
 from app.version import get_version
@@ -21,9 +20,14 @@ from app.version import get_version
 
 def resolve_provider_models(settings: object, provider: str) -> tuple[str, str]:
     """Return the active reasoning/toolcall model names for a provider."""
-    if provider == "codex":
-        codex_model = os.getenv("CODEX_MODEL", "").strip() or "CLI default"
-        return (codex_model, codex_model)
+    if provider in {"codex", "claude-code", "gemini-cli"}:
+        env_key = {
+            "codex": "CODEX_MODEL",
+            "claude-code": "CLAUDE_CODE_MODEL",
+            "gemini-cli": "GEMINI_CLI_MODEL",
+        }[provider]
+        cli_model = os.getenv(env_key, "").strip() or "CLI default"
+        return (cli_model, cli_model)
 
     single_model = str(getattr(settings, f"{provider}_model", "")).strip()
     if single_model:
@@ -47,53 +51,25 @@ def detect_provider_model() -> tuple[str, str]:
 
 
 def render_banner(console: Console | None = None) -> None:
-    """Print the REPL identity banner.
-
-    The panel expands to the full terminal width, leaving only Rich's
-    default 1-char margin on each side. Content inside is padded and
-    centered for a clean Claude-Code-style welcome.
-    """
+    """Print a single-line status banner and hairline rule (minimal chrome)."""
     console = console or Console(highlight=False)
     provider, model = detect_provider_model()
 
-    title = Text()
-    title.append("◉  ", style=f"bold {BANNER_PRIMARY}")
-    title.append("OpenSRE", style=f"bold {BANNER_SECONDARY}")
-    title.append("  ·  ", style="dim")
-    title.append(f"v{get_version()}", style=BANNER_TERTIARY)
-
-    info = Text()
-    info.append("model  ", style="dim")
-    info.append(f"{provider} · {model}", style=BANNER_SECONDARY)
-    info.append("\n")
-    info.append("mode   ", style="dim")
-    info.append("interactive · read-only tools", style="")
-
-    hints = Text()
-    hints.append("/help", style=f"bold {BANNER_SECONDARY}")
-    hints.append(" for commands", style="dim")
-    hints.append("   ·   ", style="dim")
-    hints.append("/status", style=f"bold {BANNER_PRIMARY}")
-    hints.append(" for setup", style="dim")
-    hints.append("   ·   ", style="dim")
-    hints.append("/exit", style=f"bold {BANNER_SECONDARY}")
-    hints.append(" to quit", style="dim")
-
-    body = Group(
-        Align.center(title),
-        Text(""),
-        Align.center(info),
-        Text(""),
-        Align.center(hints),
-    )
+    line = Text()
+    line.append("◆ ", style=f"bold {BANNER_PRIMARY}")
+    line.append("OpenSRE", style=f"bold {BANNER_SECONDARY}")
+    line.append(f"  v{get_version()}", style="dim")
+    line.append("   │   ", style=BANNER_UI_DIVIDER)
+    line.append(provider, style=f"bold {BANNER_SECONDARY}")
+    line.append("  ·  ", style="dim")
+    line.append(model, style="dim")
+    line.append("   │   ", style=BANNER_UI_DIVIDER)
+    line.append("Tab", style=BANNER_TERTIARY)
+    line.append(" complete  ", style="dim")
+    line.append("↑↓", style=BANNER_TERTIARY)
+    line.append(" history", style="dim")
 
     console.print()
-    console.print(
-        Panel(
-            body,
-            border_style=BANNER_BORDER,
-            padding=(1, 2),
-            expand=True,
-        )
-    )
+    console.print(line)
+    console.print(Rule(style=BANNER_UI_DIVIDER))
     console.print()

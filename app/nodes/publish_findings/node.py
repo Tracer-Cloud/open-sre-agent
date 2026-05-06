@@ -1,9 +1,7 @@
 """Main orchestration node for report generation and publishing."""
 
 import logging
-from typing import Optional
 
-from langchain_core.runnables import RunnableConfig
 from langsmith import traceable
 
 from app.masking import MaskingContext
@@ -13,6 +11,7 @@ from app.nodes.publish_findings.renderers.editor import open_in_editor
 from app.nodes.publish_findings.renderers.terminal import render_report
 from app.nodes.publish_findings.report_context import build_report_context
 from app.state import InvestigationState
+from app.types.config import NodeConfig
 from app.utils.ingest_delivery import create_investigation_and_attach_url
 
 logger = logging.getLogger(__name__)
@@ -164,7 +163,7 @@ def generate_report(state: InvestigationState) -> dict:
 @traceable(name="node_publish_findings")
 def node_publish_findings(
     state: InvestigationState,
-    config: Optional[RunnableConfig] = None,  # noqa: ARG001,UP007,UP045
+    config: NodeConfig | None = None,  # noqa: ARG001
 ) -> dict:
     """LangGraph node wrapper with LangSmith tracking."""
     return generate_report(state)

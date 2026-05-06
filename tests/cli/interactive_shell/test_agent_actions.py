@@ -4,16 +4,22 @@ from __future__ import annotations
 
 import io
 import subprocess
+import sys
+import time
+from pathlib import Path, PurePosixPath
+from unittest.mock import MagicMock
 
 from rich.console import Console
 
-from app.cli.interactive_shell import agent_actions
+from app.cli.interactive_shell import action_executor, agent_actions, shell_execution
+from app.cli.interactive_shell import intent_parser as intent_parser_module
 from app.cli.interactive_shell.agent_actions import (
     execute_cli_actions,
     plan_cli_actions,
     plan_terminal_tasks,
 )
 from app.cli.interactive_shell.session import ReplSession
+from app.cli.interactive_shell.tasks import TaskKind, TaskStatus
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -196,6 +202,9 @@ def test_explicit_shell_command_plans_shell_action() -> None:
 
 def test_direct_shell_command_plans_shell_action() -> None:
     assert plan_terminal_tasks("pwd") == ["shell"]
+    assert plan_terminal_tasks("cd /tmp") == ["shell"]
+    assert plan_terminal_tasks("CD /tmp") == ["shell"]
+    assert plan_terminal_tasks("!ls -la") == ["shell"]
 
 
 def test_sample_alert_launch_plans_sample_alert_action() -> None:
@@ -276,6 +285,7 @@ def test_execute_cli_actions_runs_sample_alert(monkeypatch: object) -> None:
         *,
         template_name: str = "generic",
         context_overrides: dict[str, object] | None = None,
+        cancel_requested: object | None = None,
     ) -> dict[str, object]:
         calls.append(template_name)
         assert context_overrides is None
@@ -304,29 +314,63 @@ def test_execute_cli_actions_runs_sample_alert(monkeypatch: object) -> None:
         "is_noise": False,
     }
     assert session.history[-1] == {"type": "alert", "text": "sample:generic", "ok": True}
+    inv_tasks = [
+        t for t in session.task_registry.list_recent(10) if t.kind == TaskKind.INVESTIGATION
+    ]
+    assert len(inv_tasks) == 1
+    assert inv_tasks[0].status == TaskStatus.COMPLETED
+    assert inv_tasks[0].result == "sample failure"
     output = buf.getvalue()
     assert "sample alert" in output
     assert "generic" in output
 
 
+def test_execute_cli_actions_sample_alert_opensre_error_marks_task_failed(
+    monkeypatch: object,
+) -> None:
+    from app.cli.support.errors import OpenSREError
+
+    def _raise(
+        *,
+        template_name: str = "generic",
+        context_overrides: dict[str, object] | None = None,
+        cancel_requested: object | None = None,
+    ) -> dict[str, object]:
+        raise OpenSREError("sample pipeline blocked")
+
+    import app.cli.investigation as investigation_module
+
+    monkeypatch.setattr(investigation_module, "run_sample_alert_for_session", _raise)
+
+    session = ReplSession()
+    console, _ = _capture()
+    assert execute_cli_actions("okay launch a simple alert", session, console) is True
+    inv_tasks = [
+        t for t in session.task_registry.list_recent(10) if t.kind == TaskKind.INVESTIGATION
+    ]
+    assert len(inv_tasks) == 1
+    assert inv_tasks[0].status == TaskStatus.FAILED
+    assert inv_tasks[0].error == "sample pipeline blocked"
+
+
 def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch: object) -> None:
     dispatched: list[str] = []
-    synthetic_calls: list[tuple[list[str], dict[str, object]]] = []
+    popen_calls: list[tuple[list[str], dict[str, object]]] = []
 
     def _fake_dispatch(command: str, _session: ReplSession, console: Console) -> bool:
         dispatched.append(command)
         console.print(f"ran {command}")
         return True
 
-    def _fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        synthetic_calls.append((command, kwargs))
-        return subprocess.CompletedProcess(
-            args=command,
-            returncode=0,
-        )
+    def _fake_popen(command: list[str], **kwargs: object) -> MagicMock:
+        popen_calls.append((command, kwargs))
+        proc = MagicMock()
+        proc.poll.return_value = 0
+        proc.returncode = 0
+        return proc
 
     monkeypatch.setattr(agent_actions, "dispatch_slash", _fake_dispatch)  # type: ignore[attr-defined]
-    monkeypatch.setattr(agent_actions.subprocess, "run", _fake_run)
+    monkeypatch.setattr(action_executor.subprocess, "Popen", _fake_popen)
 
     session = ReplSession()
     console, buf = _capture()
@@ -338,16 +382,16 @@ def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch:
 
     assert handled is True
     assert dispatched == ["/list integrations"]
-    assert synthetic_calls == [
-        (
-            [agent_actions.sys.executable, "-m", "app.cli", "tests", "synthetic"],
-            {
-                "timeout": agent_actions._SYNTHETIC_TEST_TIMEOUT_SECONDS,
-                "check": False,
-            },
-        )
+    assert len(popen_calls) == 1
+    assert popen_calls[0][0] == [
+        sys.executable,
+        "-m",
+        "app.cli",
+        "tests",
+        "synthetic",
     ]
-    assert session.history == [
+
+    assert session.history[:2] == [
         {
             "type": "cli_agent",
             "text": (
@@ -357,8 +401,22 @@ def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch:
             "ok": True,
         },
         {"type": "slash", "text": "/list integrations", "ok": True},
-        {"type": "synthetic_test", "text": "rds_postgres", "ok": True},
     ]
+
+    for _ in range(100):
+        recent = session.task_registry.list_recent(1)
+        if recent and recent[0].status != TaskStatus.RUNNING:
+            break
+        time.sleep(0.01)
+    finished = session.task_registry.list_recent(1)[0]
+    assert finished.status == TaskStatus.COMPLETED
+
+    synthetic_entry = session.history[-1]
+    assert synthetic_entry["type"] == "synthetic_test"
+    assert synthetic_entry["ok"] is True
+    assert "rds_postgres" in synthetic_entry["text"]
+    assert "task:" in synthetic_entry["text"]
+
     output = buf.getvalue()
     assert output.index("1.") < output.index("$ /list integrations")
     assert output.index("2.") < output.index("$ /list integrations")
@@ -393,25 +451,19 @@ def test_execute_cli_actions_falls_through_for_chat() -> None:
 
 
 def test_execute_cli_actions_runs_shell_command(monkeypatch: object) -> None:
-    completed = subprocess.CompletedProcess(
-        args="pwd",
-        returncode=0,
-        stdout="/tmp/project\n",
-        stderr="",
-    )
-    calls: list[str] = []
+    def _fake_cwd(_: type[Path]) -> PurePosixPath:
+        return PurePosixPath("/tmp/project")
 
-    def _fake_run(command: str, **_kwargs: object) -> subprocess.CompletedProcess[str]:
-        calls.append(command)
-        return completed
+    def _fail_run(*_args: object, **_kwargs: object) -> None:  # pragma: no cover
+        raise AssertionError("subprocess.run should not be used for pwd")
 
-    monkeypatch.setattr(agent_actions.subprocess, "run", _fake_run)
+    monkeypatch.setattr(action_executor.Path, "cwd", classmethod(_fake_cwd))
+    monkeypatch.setattr(shell_execution.subprocess, "run", _fail_run)
 
     session = ReplSession()
     console, buf = _capture()
 
     assert execute_cli_actions("run `pwd`", session, console) is True
-    assert calls == ["pwd"]
     assert session.history == [
         {"type": "cli_agent", "text": "run `pwd`", "ok": True},
         {"type": "shell", "text": "pwd", "ok": True},
@@ -422,24 +474,261 @@ def test_execute_cli_actions_runs_shell_command(monkeypatch: object) -> None:
     assert "/tmp/project" in output
 
 
+def test_execute_cli_actions_cd_preserves_windows_paths(monkeypatch: object) -> None:
+    changed_directories: list[Path] = []
+
+    def _fake_chdir(target: Path) -> None:
+        changed_directories.append(target)
+
+    monkeypatch.setattr(intent_parser_module, "IS_WINDOWS", True)
+    monkeypatch.setattr(action_executor.os, "chdir", _fake_chdir)
+
+    session = ReplSession()
+    console, _ = _capture()
+
+    message = r"run `cd C:\Users\Alice`"
+    assert execute_cli_actions(message, session, console) is True
+    assert changed_directories == [Path(r"C:\Users\Alice")]
+    assert session.history == [
+        {"type": "cli_agent", "text": message, "ok": True},
+        {"type": "shell", "text": r"cd C:\Users\Alice", "ok": True},
+    ]
+
+
+def test_execute_cli_actions_cd_routes_case_insensitively(monkeypatch: object) -> None:
+    changed_directories: list[Path] = []
+
+    def _fake_chdir(target: Path) -> None:
+        changed_directories.append(target)
+
+    def _fail_run(*_args: object, **_kwargs: object) -> None:  # pragma: no cover
+        raise AssertionError("subprocess.run should not be used for CD")
+
+    monkeypatch.setattr(intent_parser_module, "IS_WINDOWS", True)
+    monkeypatch.setattr(action_executor.os, "chdir", _fake_chdir)
+    monkeypatch.setattr(shell_execution.subprocess, "run", _fail_run)
+
+    session = ReplSession()
+    console, _ = _capture()
+
+    message = r"run `CD C:\Users\Alice`"
+    assert execute_cli_actions(message, session, console) is True
+    assert changed_directories == [Path(r"C:\Users\Alice")]
+    assert session.history == [
+        {"type": "cli_agent", "text": message, "ok": True},
+        {"type": "shell", "text": r"CD C:\Users\Alice", "ok": True},
+    ]
+
+
+def test_execute_cli_actions_cd_handles_trailing_backslash_on_windows(monkeypatch: object) -> None:
+    changed_directories: list[Path] = []
+
+    def _fake_chdir(target: Path) -> None:
+        changed_directories.append(target)
+
+    monkeypatch.setattr(intent_parser_module, "IS_WINDOWS", True)
+    monkeypatch.setattr(action_executor.os, "chdir", _fake_chdir)
+
+    session = ReplSession()
+    console, _ = _capture()
+
+    message = r"run `cd C:\`"
+    assert execute_cli_actions(message, session, console) is True
+    assert changed_directories == [Path("C:\\")]
+    assert session.history == [
+        {"type": "cli_agent", "text": message, "ok": True},
+        {"type": "shell", "text": "cd C:\\", "ok": True},
+    ]
+
+
+def test_execute_cli_actions_cd_strips_quotes_on_windows(monkeypatch: object) -> None:
+    changed_directories: list[Path] = []
+
+    def _fake_chdir(target: Path) -> None:
+        changed_directories.append(target)
+
+    monkeypatch.setattr(intent_parser_module, "IS_WINDOWS", True)
+    monkeypatch.setattr(action_executor.os, "chdir", _fake_chdir)
+
+    session = ReplSession()
+    console, _ = _capture()
+
+    message = r'run `cd "C:\Users\Alice"`'
+    assert execute_cli_actions(message, session, console) is True
+    assert changed_directories == [Path(r"C:\Users\Alice")]
+    assert session.history == [
+        {"type": "cli_agent", "text": message, "ok": True},
+        {"type": "shell", "text": r'cd "C:\Users\Alice"', "ok": True},
+    ]
+
+
 def test_execute_cli_actions_records_shell_failure(monkeypatch: object) -> None:
     completed = subprocess.CompletedProcess(
-        args="false",
+        args=["false"],
         returncode=2,
         stdout="",
         stderr="nope\n",
     )
+    calls: list[tuple[list[str], dict[str, object]]] = []
 
-    def _fake_run(command: str, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+    def _fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append((command, kwargs))
         return completed
 
-    monkeypatch.setattr(agent_actions.subprocess, "run", _fake_run)
+    monkeypatch.setattr(shell_execution.subprocess, "run", _fake_run)
 
     session = ReplSession()
     console, buf = _capture()
 
     assert execute_cli_actions("execute false", session, console) is True
+    assert calls == [
+        (
+            ["false"],
+            {
+                "shell": False,
+                "capture_output": True,
+                "text": True,
+                "timeout": action_executor.SHELL_COMMAND_TIMEOUT_SECONDS,
+                "check": False,
+            },
+        )
+    ]
     assert session.history[-1] == {"type": "shell", "text": "false", "ok": False}
     output = buf.getvalue()
     assert "nope" in output
     assert "exit code" in output
+
+
+def test_execute_cli_actions_runs_passthrough_with_shell_true(monkeypatch: object) -> None:
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    def _fake_run(command: str, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append((command, kwargs))
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=0,
+            stdout="ok\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(shell_execution.subprocess, "run", _fake_run)
+
+    session = ReplSession()
+    console, buf = _capture()
+
+    assert execute_cli_actions("run `!echo hello`", session, console) is True
+    assert calls == [
+        (
+            "echo hello",
+            {
+                "shell": True,
+                "executable": shell_execution.os.environ.get("SHELL") or None,
+                "capture_output": True,
+                "text": True,
+                "timeout": action_executor.SHELL_COMMAND_TIMEOUT_SECONDS,
+                "check": False,
+            },
+        )
+    ]
+    assert session.history[-1] == {"type": "shell", "text": "!echo hello", "ok": True}
+    output = buf.getvalue()
+    assert "explicit shell passthrough enabled" in output
+    assert "ok" in output
+
+
+def test_execute_cli_actions_routes_bang_cd_through_builtin(monkeypatch: object) -> None:
+    dirs: list[Path] = []
+
+    def _fake_chdir(target: Path) -> None:
+        dirs.append(target)
+
+    def _boom(*_args: object, **_kwargs: object) -> None:  # pragma: no cover
+        raise AssertionError("subprocess.run should not be used for !cd builtin routing")
+
+    monkeypatch.setattr(action_executor.os, "chdir", _fake_chdir)
+    monkeypatch.setattr(shell_execution.subprocess, "run", _boom)
+
+    session = ReplSession()
+    console, buf = _capture()
+
+    message = "run `!cd /tmp`"
+    assert execute_cli_actions(message, session, console) is True
+    assert dirs == [Path("/tmp")]
+    assert session.history[-1] == {"type": "shell", "text": "cd /tmp", "ok": True}
+    captured = buf.getvalue()
+    assert "explicit shell passthrough enabled" not in captured
+
+
+def test_execute_cli_actions_routes_bang_pwd_through_builtin(monkeypatch: object) -> None:
+    def _fake_cwd(_: type[Path]) -> PurePosixPath:
+        return PurePosixPath("/shown")
+
+    def _boom(*_args: object, **_kwargs: object) -> None:  # pragma: no cover
+        raise AssertionError("subprocess.run should not be used for !pwd builtin routing")
+
+    monkeypatch.setattr(action_executor.Path, "cwd", classmethod(_fake_cwd))
+    monkeypatch.setattr(shell_execution.subprocess, "run", _boom)
+
+    session = ReplSession()
+    console, buf = _capture()
+
+    assert execute_cli_actions("run `!pwd`", session, console) is True
+    assert session.history[-1] == {"type": "shell", "text": "pwd", "ok": True}
+    captured = buf.getvalue()
+    assert "/shown" in captured
+    assert "explicit shell passthrough enabled" not in captured
+
+
+def test_execute_cli_actions_blocks_mutating_command_by_default() -> None:
+    session = ReplSession()
+    console, buf = _capture()
+
+    assert execute_cli_actions("run `rm -rf /tmp/demo`", session, console) is True
+    assert session.history[-1] == {"type": "shell", "text": "rm -rf /tmp/demo", "ok": False}
+    output = buf.getvalue()
+    assert "command blocked" in output
+    assert "mutating commands are blocked" in output
+    assert "run !<command>" in output
+
+
+def test_execute_cli_actions_blocks_ambiguous_shell_operators() -> None:
+    session = ReplSession()
+    console, buf = _capture()
+
+    assert execute_cli_actions("run `ls | wc -l`", session, console) is True
+    assert session.history[-1] == {"type": "shell", "text": "ls | wc -l", "ok": False}
+    output = buf.getvalue()
+    assert "command blocked" in output
+    assert "shell operators" in output
+
+
+def test_execute_cli_actions_handles_path_with_spaces(monkeypatch: object) -> None:
+    calls: list[tuple[list[str], dict[str, object]]] = []
+
+    def _fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append((command, kwargs))
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=0,
+            stdout="done\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(shell_execution.subprocess, "run", _fake_run)
+
+    session = ReplSession()
+    console, _ = _capture()
+
+    assert execute_cli_actions('run `cat "/tmp/file with spaces.txt"`', session, console) is True
+    assert calls[0][0] == ["cat", "/tmp/file with spaces.txt"]
+
+
+def test_execute_cli_actions_rejects_malformed_shell_input() -> None:
+    session = ReplSession()
+    console, buf = _capture()
+
+    assert execute_cli_actions('run `cat "unterminated`', session, console) is True
+    assert session.history[-1] == {"type": "shell", "text": 'cat "unterminated', "ok": False}
+    output = buf.getvalue()
+    assert "command blocked" in output
+    assert "could not parse command" in output

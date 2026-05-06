@@ -17,22 +17,19 @@ from rich.markup import escape
 
 from app.cli.interactive_shell.cli_reference import build_cli_reference_text
 from app.cli.interactive_shell.docs_reference import build_docs_reference_text
+from app.cli.interactive_shell.grounding_diagnostics import log_grounding_cache_diagnostics
+from app.cli.interactive_shell.prompt_rules import (
+    CLI_ASSISTANT_MARKDOWN_RULE,
+    INTERACTIVE_SHELL_TERMINOLOGY_RULE,
+)
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.streaming import stream_to_console
+from app.utils.sentry_sdk import capture_exception
 
 # Match the cli_agent terminology / formatting rules so docs answers feel
 # consistent with the rest of the interactive shell.
-_TERMINOLOGY_RULE = (
-    "Terminology: always call this surface the 'interactive shell' (the "
-    "OpenSRE interactive terminal launched via `opensre` or `opensre agent`). "
-    "Never use the word 'REPL' in user-facing answers - it is internal jargon."
-)
-
-_MARKDOWN_RULE = (
-    "Formatting: respond in concise Markdown. Markdown will be rendered "
-    "in the user's terminal, so tables, **bold**, lists, and `code spans` "
-    "will display correctly - do not wrap the whole answer in a code fence."
-)
+_TERMINOLOGY_RULE = INTERACTIVE_SHELL_TERMINOLOGY_RULE
+_MARKDOWN_RULE = CLI_ASSISTANT_MARKDOWN_RULE
 
 
 def _build_grounded_prompt(question: str, cli_reference: str, docs_reference: str) -> str:
@@ -77,7 +74,7 @@ def _build_grounded_prompt(question: str, cli_reference: str, docs_reference: st
     return f"{system}\n{user_block}"
 
 
-def answer_cli_help(question: str, session: ReplSession, console: Console) -> None:  # noqa: ARG001
+def answer_cli_help(question: str, _session: ReplSession, console: Console) -> None:
     """Run one turn of the documentation-aware procedural assistant.
 
     Pulls the top-N relevant docs pages for ``question``, combines them with
@@ -85,15 +82,20 @@ def answer_cli_help(question: str, session: ReplSession, console: Console) -> No
     the assembled grounding. Behaves as a no-op for the session's action
     history (stateless across turns) so it never interferes with follow-up
     routing on a prior investigation.
+
+    ``_session`` is accepted for API symmetry with :func:`answer_cli_agent` and
+    input routing; this path does not read session state today.
     """
     try:
         from app.services.llm_client import get_llm_for_reasoning
     except Exception as exc:  # noqa: BLE001
+        capture_exception(exc)
         console.print(f"[red]LLM client unavailable:[/red] {escape(str(exc))}")
         return
 
     cli_reference = build_cli_reference_text()
     docs_reference = build_docs_reference_text(question)
+    log_grounding_cache_diagnostics("cli_help_grounding")
     prompt = _build_grounded_prompt(question, cli_reference, docs_reference)
 
     try:
@@ -109,12 +111,9 @@ def answer_cli_help(question: str, session: ReplSession, console: Console) -> No
         console.print("[dim]· cancelled[/dim]")
         return
     except Exception as exc:  # noqa: BLE001
+        capture_exception(exc)
         console.print(f"[red]assistant failed:[/red] {escape(str(exc))}")
         return
 
 
-__all__ = [
-    "answer_cli_help",
-    "build_cli_reference_text",
-    "build_docs_reference_text",
-]
+__all__ = ["answer_cli_help"]

@@ -1,8 +1,7 @@
 """Plan actions node - planning only."""
 
-from typing import Optional, cast
+from typing import cast
 
-from langchain_core.runnables import RunnableConfig
 from langsmith import traceable
 from pydantic import BaseModel, Field
 
@@ -11,6 +10,7 @@ from app.nodes.investigate.types import PlanAudit
 from app.nodes.plan_actions.plan_actions import plan_actions as build_plan_actions
 from app.output import debug_print, get_tracker
 from app.state import InvestigationState
+from app.types.config import NodeConfig
 from app.types.retrieval import RetrievalControlsMap, RetrievalIntent
 
 
@@ -39,7 +39,7 @@ class InvestigationPlan(BaseModel):
 
 
 @traceable(name="node_plan_actions")
-def node_plan_actions(state: InvestigationState, config: Optional[RunnableConfig] = None) -> dict:  # noqa: ARG001,UP007,UP045
+def node_plan_actions(state: InvestigationState, config: NodeConfig | None = None) -> dict:  # noqa: ARG001
     """Plan investigation actions and write plan outputs to state.
 
     Supports rerouting when new evidence changes the likely source family,

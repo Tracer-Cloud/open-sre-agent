@@ -86,11 +86,11 @@ class CliSandbox:
 
     @property
     def integration_store_path(self) -> Path:
-        return self.home / ".opensre" / "integrations.json"
+        return self.home / ".config" / "opensre" / "integrations.json"
 
     @property
     def wizard_store_path(self) -> Path:
-        return self.home / ".opensre" / "opensre.json"
+        return self.home / ".config" / "opensre" / "opensre.json"
 
     def seed_integrations(self, integrations: list[dict[str, object]]) -> None:
         self.integration_store_path.parent.mkdir(parents=True, exist_ok=True)
@@ -548,7 +548,7 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
         ),
         pytest.param(
             "opencode",
-            9,
+            10,
             "OpenCode CLI",
             120.0,
             marks=pytest.mark.skipif(

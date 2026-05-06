@@ -1,7 +1,7 @@
 -include .env
 export
 
-.PHONY: install onboard benchmark benchmark-update-readme test test-full demo alert-template investigate-alert opensre-hub-fetch opensre-hub-export opensre-hub-investigate verify-integrations check-docker check-langgraph check-langsmith-api-key grafana-local-up grafana-local-down grafana-local-seed langgraph-build langgraph-deploy clean lint format deploy deploy-lambda deploy-prefect deploy-flink destroy destroy-lambda destroy-prefect destroy-flink prefect-local-test simulate-k8s-alert test-k8s-local test-k8s test-k8s-datadog chaos-mesh-up chaos-mesh-down chaos-engineering-apply chaos-engineering-delete chaos-lab-up chaos-lab-down chaos-experiment-list chaos-experiment-up chaos-experiment-down deploy-dd-monitors cleanup-dd-monitors deploy-eks destroy-eks test-k8s-eks datadog-demo crashloop-demo regen-trigger-config test-rca test-rca-grafana test-synthetic test-rds-synthetic test-cli-smoke deploy-langsmith destroy-langsmith test-langsmith deploy-vercel destroy-vercel test-vercel deploy-ec2 destroy-ec2 test-ec2 deploy-ec2-hello destroy-ec2-hello deploy-remote destroy-remote deploy-bedrock destroy-bedrock test-bedrock
+.PHONY: install onboard benchmark benchmark-update-readme test test-full demo alert-template investigate-alert opensre-hub-fetch opensre-hub-export opensre-hub-investigate verify-integrations check-docker check-langgraph check-langsmith-api-key grafana-local-up grafana-local-down grafana-local-seed langgraph-build langgraph-deploy clean lint format deploy deploy-lambda deploy-prefect deploy-flink destroy destroy-lambda destroy-prefect destroy-flink prefect-local-test simulate-k8s-alert test-k8s-local test-k8s test-k8s-datadog chaos-mesh-up chaos-mesh-down chaos-engineering-apply chaos-engineering-delete chaos-lab-up chaos-lab-down chaos-experiment-list chaos-experiment-up chaos-experiment-down deploy-dd-monitors cleanup-dd-monitors deploy-eks destroy-eks test-k8s-eks datadog-demo crashloop-demo regen-trigger-config test-rca test-rca-grafana test-synthetic test-rds-synthetic test-cli-smoke deploy-langsmith destroy-langsmith test-langsmith deploy-vercel destroy-vercel test-vercel deploy-ec2 destroy-ec2 test-ec2 deploy-ec2-hello destroy-ec2-hello deploy-remote destroy-remote deploy-bedrock destroy-bedrock test-bedrock download-cloudopsbench-hf validate-cloudopsbench
 
 
 ifneq ($(wildcard .venv/bin/python),)
@@ -68,6 +68,12 @@ OPENSRE_QUERY_PREFIX ?= Market/cloudbed-1/query_alerts
 OPENSRE_HUB_INDEX ?= 0
 # Extra flags for investigate, e.g. omit --evaluate: OPENSRE_INVESTIGATE_FLAGS=
 OPENSRE_INVESTIGATE_FLAGS ?= --evaluate
+
+CLOUDOPSBENCH_HF_DATASET_ID ?= tracer-cloud/cloud-ops-bench-dataset
+CLOUDOPSBENCH_DATASET_DIR ?= tests/benchmarks/cloudopsbench
+CLOUDOPSBENCH_BENCHMARK_DIR ?= $(CLOUDOPSBENCH_DATASET_DIR)/benchmark
+CLOUDOPSBENCH_HF_INCLUDE ?= benchmark/**
+CLOUDOPSBENCH_LIMIT ?=
 
 opensre-hub-fetch:
 	$(PYTHON) scripts/fetch_opensre_hub_alert.py --prefix "$(OPENSRE_QUERY_PREFIX)" --output "$(OPENSRE_HUB_ALERT)" --index $(OPENSRE_HUB_INDEX)
@@ -140,6 +146,18 @@ test-rds-synthetic:
 # Run synthetic Kubernetes RCA benchmark suite via the CLI runner (supports --json, --scenario, --mock-backends)
 test-k8s-synthetic:
 	$(PYTHON) -m tests.synthetic.eks.run_suite $(if $(SCENARIO),--scenario $(SCENARIO),)
+
+# Run Cloud-OpsBench RCA benchmark suite via the OpenSRE runner
+test-cloudopsbench:
+	$(PYTHON) -m tests.benchmarks.cloudopsbench.run_suite --benchmark-dir "$(CLOUDOPSBENCH_BENCHMARK_DIR)" $(if $(SYSTEM),--system $(SYSTEM),) $(if $(FAULT),--fault-category $(FAULT),) $(if $(CASE),--case $(CASE),) $(if $(CLOUDOPSBENCH_LIMIT),--limit $(CLOUDOPSBENCH_LIMIT),$(if $(LIMIT),--limit $(LIMIT),))
+
+# Download Cloud-OpsBench benchmark data from Hugging Face.
+download-cloudopsbench-hf:
+	@command -v hf >/dev/null 2>&1 || { echo "Install the Hugging Face CLI with: pip install 'huggingface_hub[cli]'"; exit 1; }
+	hf download "$(CLOUDOPSBENCH_HF_DATASET_ID)" --repo-type dataset --local-dir "$(CLOUDOPSBENCH_DATASET_DIR)" --include "$(CLOUDOPSBENCH_HF_INCLUDE)"
+
+validate-cloudopsbench:
+	$(PYTHON) -m tests.benchmarks.cloudopsbench.run_suite --benchmark-dir "$(CLOUDOPSBENCH_BENCHMARK_DIR)" --validate-only
 
 # Boot local Grafana+Loki, seed deterministic test logs, then run the RCA pipeline
 # Requires GRAFANA_INSTANCE_URL + GRAFANA_READ_TOKEN in .env (see .env.example for local defaults)
@@ -549,6 +567,8 @@ help:
 	@echo "  make test-rca        - Run all RCA markdown alert tests in tests/e2e/rca/"
 	@echo "  make test-rca FILE=pipeline_error_in_logs - Run a single RCA alert test"
 	@echo "  make test-rds-synthetic - Run the synthetic RDS PostgreSQL RCA suite"
+	@echo "  make download-cloudopsbench-hf - Download Cloud-OpsBench from Hugging Face"
+	@echo "  make test-cloudopsbench - Run the Cloud-OpsBench synthetic RCA suite"
 	@echo "  make clean           - Clean up cache files"
 	@echo "  make lint            - Lint code with ruff"
 	@echo "  make format-check    - Check formatting with ruff (read-only)"

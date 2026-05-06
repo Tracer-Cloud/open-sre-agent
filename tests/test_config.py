@@ -107,3 +107,14 @@ def test_llm_settings_from_env_claude_code_without_api_key(monkeypatch) -> None:
     settings = LLMSettings.from_env()
 
     assert settings.provider == "claude-code"
+
+
+def test_llm_settings_from_env_gemini_cli_without_api_key(monkeypatch) -> None:
+    """CLI-backed Gemini CLI provider should not require GEMINI_API_KEY in config validation."""
+    monkeypatch.setenv("LLM_PROVIDER", "gemini-cli")
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setattr("app.config.resolve_llm_api_key", lambda _: "")
+
+    settings = LLMSettings.from_env()
+
+    assert settings.provider == "gemini-cli"

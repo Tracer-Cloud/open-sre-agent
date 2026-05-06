@@ -35,6 +35,7 @@ INVESTIGATED_EVIDENCE_KEYS = frozenset(
         "eks_node_health",
         "eks_pod_logs",
         "eks_deployment_status",
+        "cloudopsbench_evidence",
         # Argo CD status can be collected for one app, in list mode, or as diff/drift data.
         "argocd_application",
         "argocd_applications",
@@ -160,6 +161,7 @@ def check_evidence_availability(
         or evidence.get("eks_deployments") is not None
         or evidence.get("eks_pod_logs") is not None
         or evidence.get("eks_deployment_status") is not None
+        or evidence.get("cloudopsbench_evidence") is not None
         or evidence.get("argocd_application") is not None
         or evidence.get("argocd_applications") is not None
         or evidence.get("argocd_diff") is not None

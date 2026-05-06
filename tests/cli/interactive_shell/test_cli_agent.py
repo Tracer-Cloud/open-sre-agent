@@ -81,32 +81,26 @@ class TestSystemPromptTerminology:
     """The LLM grounding must steer answers away from the word 'REPL'."""
 
     def test_conversational_prompt_uses_interactive_shell_not_repl(self) -> None:
-        prompt = _build_system_prompt("conversational", reference="(ref)", history="(hist)")
+        prompt = _build_system_prompt(reference="(ref)", history="(hist)")
         assert "interactive shell" in prompt
         # The prompt must explicitly forbid the "REPL" jargon so the model
         # does not echo it back in answers (#604).
         assert _TERMINOLOGY_RULE in prompt
         assert "Never use the word 'REPL'" in prompt
 
-    def test_reference_only_prompt_uses_interactive_shell_not_repl(self) -> None:
-        prompt = _build_system_prompt("reference_only", reference="(ref)", history="(hist)")
-        assert "interactive shell" in prompt
-        assert _TERMINOLOGY_RULE in prompt
-        assert "Never use the word 'REPL'" in prompt
-
-    def test_both_prompts_request_markdown_formatting(self) -> None:
-        for mode in ("conversational", "reference_only"):
-            prompt = _build_system_prompt(mode, reference="(ref)", history="(hist)")  # type: ignore[arg-type]
-            assert _MARKDOWN_RULE in prompt
-            assert "Markdown" in prompt
+    def test_prompt_requests_markdown_formatting(self) -> None:
+        prompt = _build_system_prompt(reference="(ref)", history="(hist)")
+        assert _MARKDOWN_RULE in prompt
+        assert "Markdown" in prompt
 
     def test_conversational_prompt_exposes_action_contract(self) -> None:
-        prompt = _build_system_prompt("conversational", reference="(ref)", history="(hist)")
+        prompt = _build_system_prompt(reference="(ref)", history="(hist)")
 
         assert _ACTION_RULE in prompt
         assert "switch_llm_provider" in prompt
         assert '"action":"switch_llm_provider"' in prompt
         assert "claude-code" in prompt
+        assert "gemini-cli" in prompt
 
 
 class TestActionPlanParsing:
@@ -238,8 +232,8 @@ class TestAssistantOutputRendering:
             '{"actions":[{"action":"switch_llm_provider","provider":"anthropic"}]}',
         )
 
-        import app.cli.interactive_shell.commands as command_module
         import app.cli.wizard.env_sync as env_sync
+        from app.cli.interactive_shell.command_registry import repl_data as repl_data_module
 
         class _Fake:
             provider = "anthropic"
@@ -247,7 +241,7 @@ class TestAssistantOutputRendering:
             anthropic_toolcall_model = "claude-haiku-4-5-20251001"
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
-        monkeypatch.setattr(command_module, "_load_llm_settings", lambda: _Fake())
+        monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: _Fake())
         # /model set now requires the target provider's credential to exist;
         # provide one so the cli-agent's planned switch actually runs.
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
@@ -284,8 +278,8 @@ class TestAssistantOutputRendering:
             """,
         )
 
-        import app.cli.interactive_shell.commands as command_module
         import app.cli.wizard.env_sync as env_sync
+        from app.cli.interactive_shell.command_registry import repl_data as repl_data_module
 
         class _Fake:
             provider = "anthropic"
@@ -293,7 +287,7 @@ class TestAssistantOutputRendering:
             anthropic_toolcall_model = "claude-haiku-4-5-20251001"
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
-        monkeypatch.setattr(command_module, "_load_llm_settings", lambda: _Fake())
+        monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: _Fake())
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
 
         session = ReplSession()
@@ -349,8 +343,8 @@ class TestStreamingMigration:
             '{"actions":[{"action":"switch_llm_provider","provider":"anthropic"}]}',
         )
 
-        import app.cli.interactive_shell.commands as command_module
         import app.cli.wizard.env_sync as env_sync
+        from app.cli.interactive_shell.command_registry import repl_data as repl_data_module
 
         class _Fake:
             provider = "anthropic"
@@ -358,7 +352,7 @@ class TestStreamingMigration:
             anthropic_toolcall_model = "claude-haiku-4-5-20251001"
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
-        monkeypatch.setattr(command_module, "_load_llm_settings", lambda: _Fake())
+        monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: _Fake())
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
 
         session = ReplSession()

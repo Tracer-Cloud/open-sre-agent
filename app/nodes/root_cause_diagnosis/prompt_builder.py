@@ -32,6 +32,7 @@ ALLOWED_EVIDENCE_SOURCES = [
     "betterstack_logs",
     "vercel",
     "github",
+    "cloudopsbench_evidence",
 ]
 
 _GRAFANA_SOURCE_TYPE_LABELS = {
@@ -399,6 +400,7 @@ def _build_evidence_sections(
     github_code_matches = evidence.get("github_code_matches", [])
     github_file = evidence.get("github_file", {})
     github_commits = evidence.get("github_commits", [])
+    cloudopsbench_evidence = evidence.get("cloudopsbench_evidence", [])
 
     # Extract alert annotations
     raw_alert = state.get("raw_alert", {})
@@ -664,6 +666,9 @@ def _build_evidence_sections(
             )
         )
 
+    if cloudopsbench_evidence:
+        sections.append(_build_cloudopsbench_evidence_section(cloudopsbench_evidence))
+
     # Alert annotations
     if alert_annotations:
         section = _build_alert_annotations_section(alert_annotations)
@@ -675,6 +680,28 @@ def _build_evidence_sections(
         sections.append(f"\nAlert Notification Text:\n{raw_alert_text[:2000]}\n")
 
     return "".join(sections)
+
+
+def _build_cloudopsbench_evidence_section(entries: list[dict[str, Any]]) -> str:
+    section = f"\nCloud-OpsBench Tool Evidence ({len(entries)} actions):\n"
+    for entry in entries[:12]:
+        if not isinstance(entry, dict):
+            continue
+        action_name = entry.get("action_name", "unknown")
+        action_input = entry.get("action_input", {})
+        cache_hit = "hit" if entry.get("cache_hit") else "miss"
+        output = entry.get("output", "")
+        if not isinstance(output, str):
+            output = json.dumps(output, ensure_ascii=False, default=str)
+        section += (
+            f"- {action_name}({json.dumps(action_input, ensure_ascii=False)}) [{cache_hit}]\n"
+        )
+        section += f"  {output[:1200]}\n"
+    section += (
+        "\nCloud-OpsBench final-answer requirement: when evidence is sufficient, include the "
+        "benchmark labels fault_taxonomy, fault_object, and root_cause verbatim in the RCA text.\n"
+    )
+    return section
 
 
 def _build_lambda_function_section(lambda_function: dict[str, Any]) -> str:

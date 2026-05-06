@@ -1,6 +1,7 @@
 """Post-processing: merge evidence and track hypotheses."""
 
 import json
+import logging
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -8,6 +9,8 @@ from datetime import UTC, datetime
 from app.nodes.investigate.execution.execute_actions import ActionExecutionResult
 from app.nodes.investigate.types import ExecutedHypothesis, FailedAction, PlanAudit
 from app.tools.utils.metric_summary import summarize_prometheus_metrics
+
+logger = logging.getLogger(__name__)
 
 MAX_RETRYABLE_ACTION_FAILURES = 2
 _NON_RETRYABLE_FAILURE_INDICATORS = (
@@ -648,6 +651,17 @@ def _map_eks_deployment_status(data: dict) -> dict:
     }
 
 
+def _map_cloudopsbench_tool(data: dict) -> dict:
+    evidence_item = {
+        "action_name": data.get("action_name"),
+        "action_input": data.get("action_input", {}),
+        "output": data.get("output"),
+        "cache_key": data.get("cache_key", ""),
+        "cache_hit": bool(data.get("cache_hit", False)),
+    }
+    return {"cloudopsbench_evidence": [evidence_item]}
+
+
 EVIDENCE_MAPPERS: dict[str, Callable[[dict], dict]] = {
     "get_failed_jobs": _map_failed_jobs,
     "get_failed_tools": _map_failed_tools,
@@ -690,6 +704,16 @@ EVIDENCE_MAPPERS: dict[str, Callable[[dict], dict]] = {
     "get_eks_node_health": _map_eks_node_health,
     "get_eks_pod_logs": _map_eks_pod_logs,
     "get_eks_deployment_status": _map_eks_deployment_status,
+    "GetResources": _map_cloudopsbench_tool,
+    "DescribeResource": _map_cloudopsbench_tool,
+    "GetClusterConfiguration": _map_cloudopsbench_tool,
+    "GetAlerts": _map_cloudopsbench_tool,
+    "GetErrorLogs": _map_cloudopsbench_tool,
+    "GetRecentLogs": _map_cloudopsbench_tool,
+    "GetServiceDependencies": _map_cloudopsbench_tool,
+    "GetAppYAML": _map_cloudopsbench_tool,
+    "CheckServiceConnectivity": _map_cloudopsbench_tool,
+    "CheckNodeServiceStatus": _map_cloudopsbench_tool,
 }
 
 
@@ -719,7 +743,16 @@ def merge_evidence(
 
         mapper = EVIDENCE_MAPPERS.get(action_name)
         if mapper:
-            evidence.update(mapper(result.data))
+            mapped = mapper(result.data)
+            if "cloudopsbench_evidence" in mapped:
+                existing = evidence.get("cloudopsbench_evidence", [])
+                existing_items = existing if isinstance(existing, list) else []
+                evidence["cloudopsbench_evidence"] = [
+                    *existing_items,
+                    *mapped["cloudopsbench_evidence"],
+                ]
+            else:
+                evidence.update(mapped)
 
     return evidence
 
@@ -916,11 +949,15 @@ def build_evidence_summary(execution_results: dict[str, ActionExecutionResult]) 
                 summary_parts.append(f"alertmanager:{total} silences ({active_count} active)")
             elif action_name == "get_eks_deployment_status" and data.get("deployment_name"):
                 summary_parts.append("eks:deployment status retrieved")
+            elif data.get("source") == "cloudopsbench":
+                action = data.get("action_name") or action_name
+                cache_state = "hit" if data.get("cache_hit") else "miss"
+                summary_parts.append(f"cloudopsbench:{action} {cache_state}")
         else:
             # Log action failures for debugging
             error_msg = f"{action_name}:FAILED({result.error[:50] if result.error else 'unknown'})"
             errors.append(error_msg)
-            print(f"[WARNING] Action failed: {error_msg}")
+            logger.warning("Action failed: %s", error_msg)
 
     if errors:
         summary = ", ".join(summary_parts) if summary_parts else "No evidence collected"

@@ -63,3 +63,16 @@ def test_sync_provider_env_codex_writes_codex_model(tmp_path) -> None:
     content = env_path.read_text(encoding="utf-8")
     assert "LLM_PROVIDER=codex\n" in content
     assert "CODEX_MODEL=\n" in content
+
+
+def test_sync_provider_env_gemini_cli_writes_model(tmp_path) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text("LLM_PROVIDER=anthropic\n", encoding="utf-8")
+    sync_provider_env(
+        provider=PROVIDER_BY_VALUE["gemini-cli"],
+        model="",
+        env_path=env_path,
+    )
+    content = env_path.read_text(encoding="utf-8")
+    assert "LLM_PROVIDER=gemini-cli\n" in content
+    assert "GEMINI_CLI_MODEL=\n" in content

@@ -3,6 +3,7 @@ description: Suggest a new feature or capability
 title: "[FEATURE] "
 labels:
   - enhancement
+  - pending triage
 body:
   - type: textarea
     id: problem

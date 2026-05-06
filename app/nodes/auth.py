@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.runnables import RunnableConfig
-
 from app.state import AgentState
+from app.types.config import NodeConfig, get_configurable
 
 
-def _extract_auth(state: AgentState, config: RunnableConfig) -> dict[str, str]:
+def _extract_auth(state: AgentState, config: NodeConfig | None) -> dict[str, str]:
     """Extract auth context and LangGraph metadata from config."""
-    configurable = config.get("configurable", {})
+    configurable = get_configurable(config)
     auth = configurable.get("langgraph_auth_user", {})
 
     thread_id = configurable.get("thread_id", "") or state.get("thread_id", "")
@@ -28,6 +27,6 @@ def _extract_auth(state: AgentState, config: RunnableConfig) -> dict[str, str]:
     }
 
 
-def inject_auth_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
+def inject_auth_node(state: AgentState, config: NodeConfig | None = None) -> dict[str, Any]:
     """Extract auth context from JWT and inject into state."""
     return _extract_auth(state, config)
