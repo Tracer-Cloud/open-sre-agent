@@ -42,11 +42,12 @@ NodeWithConfig = Callable[[AgentState, NodeConfig | None], dict[str, Any]]
 
 def _accept_langgraph_config(func: NodeWithConfig) -> Callable[..., dict[str, Any]]:
     """Expose an unannotated config kwarg for LangGraph runtime injection."""
+    import functools
 
+    @functools.wraps(func)
     def _wrapped(state: AgentState, config=None) -> dict[str, Any]:
         return func(state, cast(NodeConfig | None, config))
 
-    _wrapped.__name__ = func.__name__
     return _wrapped
 
 

@@ -69,7 +69,8 @@ def _normalize_messages(msgs: list[Any]) -> list[ChatMessage]:
 
 
 class ToolEnabledChatModel(Protocol):
-    def invoke(self, input: object, **kwargs: Any) -> object: ...
+    def invoke(self, input: object, **kwargs: Any) -> object:
+        pass
 
 
 _chat_llm_cache: dict[str, BaseChatModel] = {}
