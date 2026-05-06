@@ -10,6 +10,9 @@ from app.cli.investigation import (
     run_investigation_cli,
     stream_investigation_cli,
 )
+from app.cli.support.cli_error_mapping import reraise_cli_runtime_error
+from app.cli.support.errors import OpenSREError
+from app.integrations.llm_cli.errors import CLIAuthenticationRequired
 from app.remote.stream import StreamEvent
 
 
@@ -149,9 +152,6 @@ def test_stream_investigation_cli_raises_queued_exception_immediately(
 def test_run_investigation_cli_maps_cli_auth_to_opensre_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.cli.support.errors import OpenSREError
-    from app.integrations.llm_cli.errors import CLIAuthenticationRequired
-
     def boom(*_args: object, **_kwargs: object) -> NoReturn:
         raise CLIAuthenticationRequired(
             provider="cursor",
@@ -171,9 +171,6 @@ def test_run_investigation_cli_maps_cli_auth_to_opensre_error(
 def test_stream_investigation_cli_maps_cli_auth_to_opensre_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.cli.support.errors import OpenSREError
-    from app.integrations.llm_cli.errors import CLIAuthenticationRequired
-
     async def fake_astream_investigation(*args: object, **kwargs: object):
         yield StreamEvent("metadata", data={"run_id": "run-123"})
         raise CLIAuthenticationRequired(
@@ -192,3 +189,34 @@ def test_stream_investigation_cli_maps_cli_auth_to_opensre_error(
     assert next(events).event_type == "metadata"
     with pytest.raises(OpenSREError, match="not authenticated"):
         next(events)
+
+
+def test_reraise_cli_runtime_error_maps_cli_auth() -> None:
+    exc = CLIAuthenticationRequired(
+        provider="opencode",
+        auth_hint="Run: opencode auth login",
+        detail="not logged in",
+    )
+
+    with pytest.raises(OpenSREError) as raised:
+        reraise_cli_runtime_error(exc)
+
+    assert str(raised.value) == "opencode CLI is not authenticated."
+    assert raised.value.suggestion == "Run: opencode auth login (not logged in)"
+
+
+def test_reraise_cli_runtime_error_maps_cli_not_found() -> None:
+    exc = RuntimeError("codex CLI not found on PATH")
+
+    with pytest.raises(OpenSREError) as raised:
+        reraise_cli_runtime_error(exc)
+
+    assert str(raised.value) == "CLI tool is not installed or not found."
+    assert raised.value.suggestion == "codex CLI not found on PATH"
+
+
+def test_reraise_cli_runtime_error_reraises_unknown_runtime_error() -> None:
+    exc = RuntimeError("some unrelated runtime failure")
+
+    with pytest.raises(RuntimeError, match="some unrelated runtime failure"):
+        reraise_cli_runtime_error(exc)

@@ -94,6 +94,7 @@ class TestSystemPromptTerminology:
         assert "switch_llm_provider" in prompt
         assert '"action":"switch_llm_provider"' in prompt
         assert "claude-code" in prompt
+        assert "gemini-cli" in prompt
 
 
 class TestActionPlanParsing:

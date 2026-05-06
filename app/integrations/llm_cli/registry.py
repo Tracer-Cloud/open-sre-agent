@@ -35,6 +35,12 @@ def _claude_code_factory() -> LLMCLIAdapter:
     return ClaudeCodeAdapter()
 
 
+def _gemini_cli_factory() -> LLMCLIAdapter:
+    from app.integrations.llm_cli.gemini_cli import GeminiCLIAdapter
+
+    return GeminiCLIAdapter()
+
+
 def _opencode_factory() -> LLMCLIAdapter:
     from app.integrations.llm_cli.opencode import OpenCodeAdapter
 
@@ -54,6 +60,9 @@ CLI_PROVIDER_REGISTRY: dict[str, CLIProviderRegistration] = {
     ),
     "claude-code": CLIProviderRegistration(
         adapter_factory=_claude_code_factory, model_env_key="CLAUDE_CODE_MODEL"
+    ),
+    "gemini-cli": CLIProviderRegistration(
+        adapter_factory=_gemini_cli_factory, model_env_key="GEMINI_CLI_MODEL"
     ),
     "opencode": CLIProviderRegistration(
         adapter_factory=_opencode_factory, model_env_key="OPENCODE_MODEL"

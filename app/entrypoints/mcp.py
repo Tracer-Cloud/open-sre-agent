@@ -7,6 +7,7 @@ from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, Field, ValidationError
 
 from app.cli.investigation import run_investigation_cli
+from app.cli.support.errors import OpenSREError
 from app.utils.sentry_sdk import capture_exception, init_sentry
 
 load_dotenv(override=False)
@@ -25,6 +26,7 @@ class RunRCAOutput(BaseModel):
     result: dict[str, Any] | None = None
     error: str | None = None
     error_type: str | None = None
+    suggestion: str | None = None
 
 
 mcp = FastMCP("opensre")
@@ -90,10 +92,27 @@ def run_rca(
 
         return RunRCAOutput(ok=True, result=result).model_dump()
     except ValidationError as err:
-        return RunRCAOutput(ok=False, error=str(err), error_type=type(err).__name__).model_dump()
+        return RunRCAOutput(
+            ok=False,
+            error=str(err),
+            error_type=type(err).__name__,
+        ).model_dump()
+
+    except OpenSREError as err:
+        return RunRCAOutput(
+            ok=False,
+            error=str(err),
+            error_type=type(err).__name__,
+            suggestion=err.suggestion,
+        ).model_dump()
+
     except Exception as err:  # noqa: BLE001
         capture_exception(err)
-        return RunRCAOutput(ok=False, error=str(err), error_type=type(err).__name__).model_dump()
+        return RunRCAOutput(
+            ok=False,
+            error=str(err),
+            error_type=type(err).__name__,
+        ).model_dump()
 
 
 def main() -> None:

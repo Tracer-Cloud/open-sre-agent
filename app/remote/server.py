@@ -44,6 +44,8 @@ from nacl.signing import VerifyKey
 from pydantic import BaseModel
 from starlette.responses import JSONResponse, StreamingResponse
 
+from app.cli.support.cli_error_mapping import reraise_cli_runtime_error
+from app.cli.support.errors import OpenSREError
 from app.remote.vercel_poller import (
     VercelInvestigationCandidate,
     VercelPoller,
@@ -349,6 +351,12 @@ def investigate(req: InvestigateRequest) -> InvestigateResponse:
         )
     except VercelResolutionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except OpenSREError as exc:
+        logger.warning("Investigation failed due to CLI runtime error: %s", exc)
+        detail = str(exc)
+        if exc.suggestion:
+            detail = f"{detail} Suggestion: {exc.suggestion}"
+        raise HTTPException(status_code=503, detail=detail) from exc
     except Exception as exc:
         capture_exception(exc)
         logger.exception("Investigation failed")
@@ -420,9 +428,24 @@ async def investigate_stream(req: InvestigateRequest) -> Response:
                 yield f"event: {event.event_type}\ndata: {payload}\n\n"
             yield "event: end\ndata: {}\n\n"
         except Exception as exc:
-            capture_exception(exc)
-            logger.exception("Streaming investigation failed")
-            yield 'event: error\ndata: {"detail": "internal error"}\n\n'
+            try:
+                reraise_cli_runtime_error(exc)
+            except OpenSREError as mapped:
+                logger.warning(
+                    "Streaming investigation failed due to CLI runtime error: %s",
+                    mapped,
+                )
+                error_payload = {
+                    "detail": str(mapped),
+                    "suggestion": mapped.suggestion,
+                }
+                yield f"event: error\ndata: {_json.dumps(error_payload)}\n\n"
+                return
+            except Exception as inner_exc:
+                capture_exception(inner_exc)
+                logger.exception("Streaming investigation failed")
+                yield 'event: error\ndata: {"detail": "internal error"}\n\n'
+                return
         finally:
             _persist_streamed_result(
                 alert_name=alert_name,

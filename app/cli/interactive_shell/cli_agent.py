@@ -40,7 +40,7 @@ _ACTION_RULE = (
     "action object schemas: "
     '`{"action":"switch_llm_provider","provider":"anthropic","model":"","toolcall_model":""}` '
     "where provider is one of anthropic, openai, openrouter, gemini, nvidia, "
-    "ollama, codex, claude-code; both `model` (reasoning) and `toolcall_model` are optional; "
+    "ollama, codex, claude-code, gemini-cli; both `model` (reasoning) and `toolcall_model` are optional; "
     '`{"action":"switch_toolcall_model","model":"claude-opus-4-7"}` '
     "to change ONLY the toolcall model on the currently active provider; "
     '`{"action":"slash","command":"/model show"}` where command is one of '

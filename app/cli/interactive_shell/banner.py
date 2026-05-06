@@ -21,9 +21,14 @@ from app.version import get_version
 
 def resolve_provider_models(settings: object, provider: str) -> tuple[str, str]:
     """Return the active reasoning/toolcall model names for a provider."""
-    if provider == "codex":
-        codex_model = os.getenv("CODEX_MODEL", "").strip() or "CLI default"
-        return (codex_model, codex_model)
+    if provider in {"codex", "claude-code", "gemini-cli"}:
+        env_key = {
+            "codex": "CODEX_MODEL",
+            "claude-code": "CLAUDE_CODE_MODEL",
+            "gemini-cli": "GEMINI_CLI_MODEL",
+        }[provider]
+        cli_model = os.getenv(env_key, "").strip() or "CLI default"
+        return (cli_model, cli_model)
 
     single_model = str(getattr(settings, f"{provider}_model", "")).strip()
     if single_model:

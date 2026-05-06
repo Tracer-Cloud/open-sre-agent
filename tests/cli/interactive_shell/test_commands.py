@@ -554,7 +554,7 @@ class TestModelCommand:
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
     ) -> None:
-        """Providers without a separate toolcall model (codex/claude-code/ollama)
+        """Providers without a separate toolcall model (codex/claude-code/gemini-cli/ollama)
         must not silently accept toolcall overrides."""
         import app.cli.wizard.env_sync as env_sync
 

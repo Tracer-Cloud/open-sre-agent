@@ -1316,6 +1316,13 @@ Thanks goes to these amazing people:
             <sub><b>jeetjawale</b></sub>
         </a>
     </td>
+            <td align="center">
+        <a href="https://github.com/rudra496">
+            <img src="https://avatars.githubusercontent.com/u/78224940?v=4" width="100" alt="rudra496"/>
+            <br />
+            <sub><b>rudra496</b></sub>
+        </a>
+    </td>
 		</tr>
 	</tbody>
 </table>

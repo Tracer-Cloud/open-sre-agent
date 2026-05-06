@@ -32,6 +32,7 @@ from app.cli.interactive_shell.theme import (
     OPENCLAW_ORANGE,
     PROMPT_ACCENT_ANSI,
 )
+from app.cli.support.errors import OpenSREError
 
 
 class SlashCommandCompleter(Completer):
@@ -114,6 +115,12 @@ def _run_new_alert(text: str, session: ReplSession, console: Console) -> None:
     except KeyboardInterrupt:
         task.mark_cancelled()
         console.print("[yellow]investigation cancelled.[/yellow]")
+        session.record("alert", text, ok=False)
+        return
+    except OpenSREError as exc:
+        console.print(f"[red]investigation failed:[/red] {escape(str(exc))}")
+        if exc.suggestion:
+            console.print(f"[yellow]suggestion:[/yellow] {escape(exc.suggestion)}")
         session.record("alert", text, ok=False)
         return
     except Exception as exc:  # noqa: BLE001

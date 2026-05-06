@@ -310,3 +310,31 @@ def test_create_llm_client_claude_code_reads_optional_model_env(monkeypatch) -> 
         assert client._model == "claude-opus-4-7"
     finally:
         llm_client.reset_llm_singletons()
+
+
+def test_create_llm_client_gemini_cli_wires_cli_adapter(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "gemini-cli")
+    monkeypatch.delenv("GEMINI_CLI_MODEL", raising=False)
+    llm_client.reset_llm_singletons()
+    try:
+        from app.integrations.llm_cli.gemini_cli import GeminiCLIAdapter
+        from app.integrations.llm_cli.runner import CLIBackedLLMClient
+
+        client = llm_client._create_llm_client("reasoning")
+
+        assert isinstance(client, CLIBackedLLMClient)
+        assert isinstance(client._adapter, GeminiCLIAdapter)
+    finally:
+        llm_client.reset_llm_singletons()
+
+
+def test_create_llm_client_gemini_cli_reads_optional_model_env(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "gemini-cli")
+    monkeypatch.setenv("GEMINI_CLI_MODEL", "gemini-2.5-pro")
+    llm_client.reset_llm_singletons()
+    try:
+        client = llm_client._create_llm_client("reasoning")
+
+        assert client._model == "gemini-2.5-pro"
+    finally:
+        llm_client.reset_llm_singletons()
