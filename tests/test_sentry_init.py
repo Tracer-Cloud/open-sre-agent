@@ -110,3 +110,152 @@ def test_capture_exception_is_best_effort(monkeypatch) -> None:
     sentry_mod.capture_exception(ValueError("boom"))
 
     capture_mock.assert_called_once()
+
+
+def test_init_sentry_noops_when_opensre_no_telemetry(monkeypatch) -> None:
+    sentry_mod._init_sentry_once.cache_clear()
+    monkeypatch.delenv("OPENSRE_SENTRY_DISABLED", raising=False)
+    monkeypatch.setenv("OPENSRE_NO_TELEMETRY", "1")
+    init_mock = MagicMock()
+    monkeypatch.setitem(sys.modules, "sentry_sdk", SimpleNamespace(init=init_mock))
+
+    sentry_mod.init_sentry()
+
+    init_mock.assert_not_called()
+
+
+def test_init_sentry_noops_when_do_not_track(monkeypatch) -> None:
+    sentry_mod._init_sentry_once.cache_clear()
+    monkeypatch.delenv("OPENSRE_SENTRY_DISABLED", raising=False)
+    monkeypatch.delenv("OPENSRE_NO_TELEMETRY", raising=False)
+    monkeypatch.setenv("DO_NOT_TRACK", "1")
+    init_mock = MagicMock()
+    monkeypatch.setitem(sys.modules, "sentry_sdk", SimpleNamespace(init=init_mock))
+
+    sentry_mod.init_sentry()
+
+    init_mock.assert_not_called()
+
+
+def test_init_sentry_dsn_env_overrides_constant(monkeypatch) -> None:
+    sentry_mod._init_sentry_once.cache_clear()
+    monkeypatch.delenv("OPENSRE_SENTRY_DISABLED", raising=False)
+    monkeypatch.delenv("OPENSRE_NO_TELEMETRY", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    custom_dsn = "https://abc@example.ingest.sentry.io/12345"
+    monkeypatch.setenv("SENTRY_DSN", custom_dsn)
+    init_mock = MagicMock()
+    monkeypatch.setitem(sys.modules, "sentry_sdk", SimpleNamespace(init=init_mock))
+
+    sentry_mod.init_sentry()
+
+    assert init_mock.call_args.kwargs["dsn"] == custom_dsn
+
+
+def test_init_sentry_release_tag_uses_get_version(monkeypatch) -> None:
+    sentry_mod._init_sentry_once.cache_clear()
+    monkeypatch.delenv("OPENSRE_SENTRY_DISABLED", raising=False)
+    monkeypatch.delenv("OPENSRE_NO_TELEMETRY", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    monkeypatch.setattr("app.version.get_version", lambda: "9.9.9")
+    init_mock = MagicMock()
+    monkeypatch.setitem(sys.modules, "sentry_sdk", SimpleNamespace(init=init_mock))
+
+    sentry_mod.init_sentry()
+
+    assert init_mock.call_args.kwargs["release"] == "opensre@9.9.9"
+
+
+def test_before_send_filters_sensitive_request_headers() -> None:
+    event = {
+        "request": {
+            "headers": {
+                "Authorization": "Bearer secret-token",
+                "Cookie": "session=abc",
+                "User-Agent": "opensre/1",
+            },
+            "cookies": {"session": "abc"},
+        },
+    }
+
+    sentry_mod._before_send(event, {})
+
+    headers = event["request"]["headers"]
+    assert headers["Authorization"] == "[Filtered]"
+    assert headers["Cookie"] == "[Filtered]"
+    assert headers["User-Agent"] == "opensre/1"
+    assert event["request"]["cookies"] == "[Filtered]"
+
+
+def test_before_send_drops_event_when_dsn_is_empty(monkeypatch) -> None:
+    monkeypatch.setenv("SENTRY_DSN", "")
+    monkeypatch.setattr(sentry_mod, "SENTRY_DSN", "")
+
+    assert sentry_mod._before_send({"message": "boom"}, {}) is None
+
+
+def test_before_send_filters_sensitive_extra_keys() -> None:
+    event = {
+        "extra": {
+            "github_token": "ghp_xxx",
+            "api_key": "abc",
+            "user_email": "user@example.com",
+        },
+    }
+
+    sentry_mod._before_send(event, {})
+
+    assert event["extra"]["github_token"] == "[Filtered]"
+    assert event["extra"]["api_key"] == "[Filtered]"
+    assert event["extra"]["user_email"] == "user@example.com"
+
+
+def test_before_send_scrubs_home_paths_in_stack_frames() -> None:
+    event = {
+        "exception": {
+            "values": [
+                {
+                    "stacktrace": {
+                        "frames": [
+                            {
+                                "abs_path": "/Users/jane/project/app/foo.py",
+                                "vars": {
+                                    "path": "/home/runner/secret",
+                                    "auth_token": "ghp_xxx",
+                                },
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    }
+
+    sentry_mod._before_send(event, {})
+
+    frame = event["exception"]["values"][0]["stacktrace"]["frames"][0]
+    assert frame["abs_path"] == "~/project/app/foo.py"
+    assert frame["vars"]["path"] == "~/secret"
+    assert frame["vars"]["auth_token"] == "[Filtered]"
+
+
+def test_before_breadcrumb_strips_query_string_for_http_categories() -> None:
+    crumb = {
+        "category": "httpx",
+        "data": {"url": "https://api.example.com/path?token=secret&id=42"},
+    }
+
+    sentry_mod._before_breadcrumb(crumb, {})
+
+    assert crumb["data"]["url"] == "https://api.example.com/path"
+
+
+def test_before_breadcrumb_leaves_other_categories_alone() -> None:
+    crumb = {
+        "category": "console",
+        "data": {"url": "https://api.example.com/path?token=secret"},
+    }
+
+    sentry_mod._before_breadcrumb(crumb, {})
+
+    assert crumb["data"]["url"] == "https://api.example.com/path?token=secret"
