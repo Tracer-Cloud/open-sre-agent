@@ -78,23 +78,4 @@ def execute_shell_command(
     )
 
 
-def timeout_result(
-    *,
-    command: str,
-    argv: list[str] | None,
-    use_shell: bool,
-) -> ShellExecutionResult:
-    """Build a timeout result object without process output."""
-    return ShellExecutionResult(
-        command=command,
-        argv=argv,
-        stdout="",
-        stderr="",
-        exit_code=None,
-        timed_out=True,
-        truncated=False,
-        executed_with_shell=use_shell,
-    )
-
-
-__all__ = ["ShellExecutionResult", "execute_shell_command", "timeout_result"]
+__all__ = ["ShellExecutionResult", "execute_shell_command"]

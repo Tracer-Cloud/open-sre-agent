@@ -73,13 +73,16 @@ _MUTATING_COMMANDS = frozenset(
         "dnf",
         "brew",
         "docker",
-        "kubectl",
-        "helm",
         "terraform",
         "ansible",
-        "git",
     }
 )
+
+# Commands that can exec arbitrary child processes via flags (e.g. find -exec, env <cmd>).
+# Allowing them defeats the mutating-command policy because the dangerous child process
+# is spawned by the permitted parent — no shell involved, policy never sees it.
+# Users who genuinely need these can prefix with ! for explicit passthrough.
+_EXEC_WRAPPER_COMMANDS = frozenset({"find", "env"})
 
 _READ_ONLY_COMMANDS = frozenset(
     {
@@ -96,12 +99,10 @@ _READ_ONLY_COMMANDS = frozenset(
         "cut",
         "rg",
         "grep",
-        "find",
         "which",
         "whereis",
         "echo",
         "printf",
-        "env",
         "printenv",
         "date",
         "uname",
@@ -212,6 +213,8 @@ def classify_command(argv: list[str]) -> CommandClassification:
 
     if command in _RESTRICTED_COMMANDS:
         return "restricted"
+    if command in _EXEC_WRAPPER_COMMANDS:
+        return "mutating"
     if command in _READ_ONLY_COMMANDS:
         return "read_only"
 
@@ -276,7 +279,10 @@ def evaluate_policy(*, parsed: ParsedShellCommand) -> PolicyDecision:
         return PolicyDecision(
             allow=False,
             classification=classification,
-            reason="mutating commands are blocked in safe mode.",
+            reason=(
+                "mutating commands are blocked in safe mode "
+                "(includes exec-wrapper commands such as find and env)."
+            ),
             hint=(
                 "Use a read-only command, or run !<command> to explicitly "
                 "opt into shell passthrough."

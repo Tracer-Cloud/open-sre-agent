@@ -38,3 +38,28 @@ def test_evaluate_policy_blocks_unknown_command_by_default() -> None:
     assert decision.allow is False
     assert decision.classification == "unknown"
     assert "allowlist" in (decision.reason or "")
+
+
+def test_find_exec_wrapper_is_blocked() -> None:
+    """find -exec can spawn arbitrary child processes; must be blocked in safe mode."""
+    parsed = parse_shell_command("find /tmp -exec rm -rf {} +", is_windows=False)
+    decision = evaluate_policy(parsed=parsed)
+
+    assert decision.allow is False
+    assert decision.classification == "mutating"
+    assert "exec-wrapper" in (decision.reason or "")
+
+
+def test_env_exec_wrapper_is_blocked() -> None:
+    """env <cmd> execs arbitrary programs; must be blocked in safe mode."""
+    parsed = parse_shell_command("env rm /tmp/foo", is_windows=False)
+    decision = evaluate_policy(parsed=parsed)
+
+    assert decision.allow is False
+    assert decision.classification == "mutating"
+    assert "exec-wrapper" in (decision.reason or "")
+
+
+def test_classify_command_marks_find_and_env_as_mutating() -> None:
+    assert classify_command(["find", "/tmp", "-name", "*.log"]) == "mutating"
+    assert classify_command(["env", "MY_VAR=1", "echo", "hello"]) == "mutating"
