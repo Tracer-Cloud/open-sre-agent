@@ -57,7 +57,7 @@ jobs:
   windows-test:
     if: contains(github.event.pull_request.labels.*.name, 'ci:windows')
     name: windows test
-    needs: [windows-quality, windows-typecheck]
+    needs: [windows-quality]
     runs-on: windows-latest
     timeout-minutes: 25
     continue-on-error: true
