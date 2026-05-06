@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from typing import Literal
 
 from rich.console import Console
 from rich.markdown import Markdown
@@ -21,7 +20,6 @@ from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
 
 # Cap stored (user, assistant) pairs; list holds 2 entries per turn.
 _MAX_CLI_AGENT_TURNS = 12
-type _GroundingMode = Literal["reference_only", "conversational"]
 
 _TERMINOLOGY_RULE = INTERACTIVE_SHELL_TERMINOLOGY_RULE
 _MARKDOWN_RULE = CLI_ASSISTANT_MARKDOWN_RULE
@@ -62,24 +60,12 @@ def _format_history_for_prompt(session: ReplSession) -> str:
     return "\n".join(lines) if lines else "(no prior messages in this CLI thread)"
 
 
-def _build_system_prompt(grounding: _GroundingMode, reference: str, history: str) -> str:
+def _build_system_prompt(reference: str, history: str) -> str:
     """Build the system prompt for one assistant turn.
 
     Split out so tests can assert on terminology / formatting rules without
     invoking an LLM.
     """
-    if grounding == "reference_only":
-        return (
-            "You are the OpenSRE CLI assistant. The user is in the OpenSRE "
-            "interactive shell (the `opensre` terminal) or asking how to use "
-            "OpenSRE from the shell.\n"
-            "Answer ONLY using the reference below. If the reference does not "
-            "cover their question, say so briefly and suggest `opensre --help` "
-            "or `/help` inside the interactive shell. Prefer copy-pastable "
-            "commands. Keep the answer concise.\n\n"
-            f"{_TERMINOLOGY_RULE}\n{_MARKDOWN_RULE}\n\n"
-            f"--- Reference ---\n{reference}\n"
-        )
     return (
         "You are the OpenSRE terminal assistant. You help with OpenSRE CLI "
         "usage, the interactive shell, and onboarding. Explicit local shell "
@@ -281,13 +267,11 @@ def answer_cli_agent(
     message: str,
     session: ReplSession,
     console: Console,
-    *,
-    grounding: _GroundingMode = "conversational",
 ) -> None:
     """Run one turn of the terminal assistant (no LangGraph / no investigation pipeline).
 
-    Use ``grounding="reference_only"`` for strict procedural CLI Q&A (same as
-    :func:`answer_cli_help`).
+    For documentation-grounded procedural Q&A use :func:`answer_cli_help`, which
+    also pulls relevant ``docs/`` pages into the grounding context.
     """
     try:
         from app.services.llm_client import get_llm_for_reasoning
@@ -298,12 +282,8 @@ def answer_cli_agent(
     reference = build_cli_reference_text()
     log_grounding_cache_diagnostics("cli_agent_grounding")
     history = _format_history_for_prompt(session)
-    system = _build_system_prompt(grounding, reference, history)
-    user_block = (
-        f"--- Question ---\n{message}"
-        if grounding == "reference_only"
-        else f"--- User message ---\n{message}"
-    )
+    system = _build_system_prompt(reference, history)
+    user_block = f"--- User message ---\n{message}"
     prompt = f"{system}\n{user_block}"
 
     try:

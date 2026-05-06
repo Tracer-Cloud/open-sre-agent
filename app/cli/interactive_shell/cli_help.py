@@ -118,8 +118,4 @@ def answer_cli_help(question: str, _session: ReplSession, console: Console) -> N
     console.print()
 
 
-__all__ = [
-    "answer_cli_help",
-    "build_cli_reference_text",
-    "build_docs_reference_text",
-]
+__all__ = ["answer_cli_help"]
