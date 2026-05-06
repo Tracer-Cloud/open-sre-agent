@@ -199,6 +199,26 @@ class StreamRenderer:
         if node == "plan_actions":
             actions = self._final_state.get("planned_actions", [])
             if actions:
+                if get_output_format() == "rich":
+                    from rich.console import Console
+                    from rich.panel import Panel
+
+                    from app.tools.registry import resolve_tool_display_name
+
+                    console = Console()
+                    console.print()
+                    console.print(
+                        Panel(
+                            "\n".join(
+                                f"  [bold green]{i + 1}.[/bold green] [white]{resolve_tool_display_name(act)}[/white]"
+                                for i, act in enumerate(actions)
+                            ),
+                            title="[bold yellow]📋 Investigation Plan Preview[/bold yellow]",
+                            border_style="yellow",
+                            expand=False,
+                        )
+                    )
+                    console.print()
                 return f"Planned actions: {actions}"
         if node == "resolve_integrations":
             integrations = self._final_state.get("resolved_integrations", {})
@@ -217,16 +237,103 @@ class StreamRenderer:
         severity = self._final_state.get("severity", "unknown")
 
         if alert_name != "Unknown" or pipeline != "Unknown":
-            render_investigation_header(alert_name, pipeline, severity)
+            if get_output_format() == "rich":
+                from rich.console import Console
+                from rich.panel import Panel
+
+                console = Console()
+                console.print()
+                console.print(
+                    Panel.fit(
+                        f"[bold cyan]📥 Alert Ingested & Parsed[/bold cyan]\n"
+                        f"  • [dim]Source/Name:[/dim] [bold white]{alert_name}[/bold white]\n"
+                        f"  • [dim]Pipeline:[/dim] [cyan]{pipeline}[/cyan]\n"
+                        f"  • [dim]Severity:[/dim] [bold yellow]{severity}[/bold yellow]",
+                        border_style="cyan",
+                    )
+                )
+            else:
+                render_investigation_header(alert_name, pipeline, severity)
 
         root_cause = self._final_state.get("root_cause", "")
         report = self._final_state.get("report", "")
+        score = self._final_state.get("validity_score")
+        confidence_str = f"{int(score * 100)}%" if score is not None else "HIGH"
 
-        if root_cause:
-            _print_section("Root Cause", root_cause)
-        if report:
-            _print_section("Report", report)
-        elif not root_cause:
+        if get_output_format() == "rich" and root_cause:
+            from rich.console import Console
+            from rich.panel import Panel
+
+            console = Console()
+            console.print()
+
+            evidence_lines = []
+            next_actions = []
+            other_findings = []
+
+            lines = report.strip().splitlines()
+            in_evidence = False
+            for line in lines:
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                if "evidence" in stripped.lower() or "cited" in stripped.lower():
+                    in_evidence = True
+                    continue
+                if stripped.startswith(("•", "●", "-", "—")):
+                    clean_line = stripped.lstrip("•● -—").strip()
+                    if in_evidence:
+                        evidence_lines.append(clean_line)
+                    else:
+                        other_findings.append(clean_line)
+                elif (
+                    "action" in stripped.lower()
+                    or "next" in stripped.lower()
+                    or "fix" in stripped.lower()
+                ):
+                    next_actions.append(stripped)
+                else:
+                    other_findings.append(stripped)
+
+            if not evidence_lines:
+                evidence_lines = other_findings[:3]
+                other_findings = other_findings[3:]
+
+            if not next_actions:
+                next_actions = [
+                    f"Review logs for pipeline '{pipeline}'",
+                    "Check health status of the related components",
+                ]
+
+            content = f"[bold white][Root Cause][/bold white]\n  {root_cause}\n\n"
+            content += f"[bold white][Confidence][/bold white]\n  [bold green]{confidence_str}[/bold green]\n\n"
+
+            if evidence_lines:
+                content += "[bold white][Supporting Evidence][/bold white]\n"
+                for ev in evidence_lines:
+                    content += f"  • {ev}\n"
+                content += "\n"
+
+            if next_actions:
+                content += "[bold white][Next Actions][/bold white]\n"
+                for act in next_actions:
+                    content += f"  • {act}\n"
+
+            console.print(
+                Panel(
+                    content.strip(),
+                    title="[bold green]🏆 Final Root Cause Analysis (RCA)[/bold green]",
+                    border_style="green",
+                    expand=False,
+                )
+            )
+            console.print()
+        else:
+            if root_cause:
+                _print_section("Root Cause", root_cause)
+            if report:
+                _print_section("Report", report)
+        if not root_cause:
             if self._final_state.get("is_noise"):
                 _print_info("Alert classified as noise — no investigation needed.")
             elif self._events_received == 0:

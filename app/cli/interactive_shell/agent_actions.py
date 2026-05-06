@@ -41,6 +41,33 @@ def execute_cli_actions(message: str, session: ReplSession, console: Console) ->
 
     for action in actions:
         console.print()
+
+        import questionary
+
+        from app.cli.interactive_shell.policy import ExecutionPolicyGate
+
+        gate = ExecutionPolicyGate()
+        decision, reason = gate.evaluate(action, session)
+
+        console.print(f"[dim]Policy decision: {decision.upper()} ({reason})[/dim]")
+
+        if decision == "deny":
+            console.print(f"[red]Action Denied: {reason}[/red]")
+            session.record("policy_denied", action.content, ok=False)
+            continue
+
+        if decision == "ask":
+            console.print(
+                f"[yellow]Approval Required: {action.kind} action '{action.content}'[/yellow]"
+            )
+            confirmed = questionary.confirm(
+                f"Do you want to execute this {action.kind} action?", default=False
+            ).ask()
+            if not confirmed:
+                console.print("[yellow]Action cancelled by user.[/yellow]")
+                session.record("policy_cancelled", action.content, ok=False)
+                continue
+
         if action.kind == "slash":
             session.record("slash", action.content)
             console.print(f"[bold]$ {escape(action.content)}[/bold]")

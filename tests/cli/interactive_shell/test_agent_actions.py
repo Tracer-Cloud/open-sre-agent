@@ -200,7 +200,9 @@ def test_explicit_shell_command_plans_shell_action() -> None:
     assert plan_cli_actions("run `pwd`") == []
 
 
-def test_direct_shell_command_plans_shell_action() -> None:
+def test_direct_shell_command_plans_shell_action(monkeypatch: object) -> None:
+    import shutil
+    monkeypatch.setattr(shutil, "which", lambda _: "/bin/pwd")
     assert plan_terminal_tasks("pwd") == ["shell"]
     assert plan_terminal_tasks("cd /tmp") == ["shell"]
     assert plan_terminal_tasks("CD /tmp") == ["shell"]
@@ -461,6 +463,7 @@ def test_execute_cli_actions_runs_shell_command(monkeypatch: object) -> None:
     monkeypatch.setattr(shell_execution.subprocess, "run", _fail_run)
 
     session = ReplSession()
+    session.trust_mode = True
     console, buf = _capture()
 
     assert execute_cli_actions("run `pwd`", session, console) is True
@@ -578,6 +581,7 @@ def test_execute_cli_actions_records_shell_failure(monkeypatch: object) -> None:
     monkeypatch.setattr(shell_execution.subprocess, "run", _fake_run)
 
     session = ReplSession()
+    session.trust_mode = True
     console, buf = _capture()
 
     assert execute_cli_actions("execute false", session, console) is True
