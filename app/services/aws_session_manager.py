@@ -45,7 +45,7 @@ class AWSSessionManager:
                     cls._instance._init_manager()
         return cls._instance
 
-    def _init_manager(self):
+    def _init_manager(self) -> None:
         """Initialize the manager's internal state."""
         self._client_cache: dict[tuple[str, str | None, str | None], Any] = {}
         self._session_metadata: dict[str, dict[str, Any]] = {}
@@ -64,7 +64,7 @@ class AWSSessionManager:
         except Exception as e:
             logger.warning("Could not initialize AWS session cache directory: %s", e)
 
-    def _load_metadata(self):
+    def _load_metadata(self) -> None:
         """Load session metadata from disk using JSON."""
         if os.path.exists(self._metadata_path):
             try:
@@ -74,7 +74,7 @@ class AWSSessionManager:
                 logger.warning("Could not load AWS session metadata: %s", e)
                 self._session_metadata = {}
 
-    def _save_metadata(self):
+    def _save_metadata(self) -> None:
         """Save session metadata to disk using JSON."""
         try:
             with open(self._metadata_path, "w") as f:
