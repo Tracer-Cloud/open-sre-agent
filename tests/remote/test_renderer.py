@@ -465,6 +465,93 @@ class TestStreamRendererDiagnoseStreaming:
         assert "Schema mismatch" in out
 
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "text"})
+    def test_diagnose_handles_anthropic_content_block_lists(self, capfd) -> None:
+        """langchain-anthropic emits AIMessageChunk.content as a list of blocks.
+
+        Each block can be a dict ``{"type": "text", "text": "..."}`` or an
+        object with ``.text``. The renderer must flatten both shapes; calling
+        ``str()`` on the list would render its Python repr instead of the
+        actual reasoning text.
+        """
+
+        class _AnthropicTextBlock:
+            def __init__(self, text: str) -> None:
+                self.type = "text"
+                self.text = text
+
+        def anthropic_diagnose_events() -> Iterator[StreamEvent]:
+            yield _make_event("metadata", data={"run_id": "r-anthropic"})
+            yield _make_event(
+                "events",
+                "diagnose",
+                {"name": "diagnose", "data": {}, "metadata": {"langgraph_node": "diagnose"}},
+                kind="on_chain_start",
+                tags=["graph:step:1"],
+            )
+            # Object-form block (langchain-anthropic typical shape).
+            yield _make_event(
+                "events",
+                "diagnose",
+                {
+                    "name": "diagnose",
+                    "data": {"chunk": {"content": [_AnthropicTextBlock("Schema ")]}},
+                    "metadata": {"langgraph_node": "diagnose"},
+                },
+                kind="on_chat_model_stream",
+                tags=[],
+            )
+            # Dict-form block (alternate shape).
+            yield _make_event(
+                "events",
+                "diagnose",
+                {
+                    "name": "diagnose",
+                    "data": {
+                        "chunk": {"content": [{"type": "text", "text": "mismatch detected."}]}
+                    },
+                    "metadata": {"langgraph_node": "diagnose"},
+                },
+                kind="on_chat_model_stream",
+                tags=[],
+            )
+            # Tool-use block (non-text) interleaved — must be skipped.
+            yield _make_event(
+                "events",
+                "diagnose",
+                {
+                    "name": "diagnose",
+                    "data": {
+                        "chunk": {"content": [{"type": "tool_use", "name": "search", "input": {}}]}
+                    },
+                    "metadata": {"langgraph_node": "diagnose"},
+                },
+                kind="on_chat_model_stream",
+                tags=[],
+            )
+            yield _make_event(
+                "events",
+                "diagnose",
+                {
+                    "name": "diagnose",
+                    "data": {"output": {"root_cause": "Schema mismatch"}},
+                    "metadata": {"langgraph_node": "diagnose"},
+                },
+                kind="on_chain_end",
+                tags=["graph:step:1"],
+            )
+            yield _make_event("end")
+
+        renderer = StreamRenderer()
+        renderer.render_stream(anthropic_diagnose_events())
+
+        out, _ = capfd.readouterr()
+        # Real reasoning text appears, not Python repr of the block list.
+        assert "Schema mismatch detected." in out
+        # Tool-use block contributed no garbage.
+        assert "tool_use" not in out
+        assert "_AnthropicTextBlock" not in out
+
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "text"})
     def test_diagnose_live_closed_on_mid_stream_exception(self) -> None:
         """If the stream raises during diagnose, the cleanup finish runs."""
 

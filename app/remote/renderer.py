@@ -258,12 +258,22 @@ class StreamRenderer:
         self._diagnose_live.start()
 
     def _append_diagnose_chunk(self, event: StreamEvent) -> None:
-        """Append a token delta to the diagnose buffer; refresh the Live region."""
+        """Append a token delta to the diagnose buffer; refresh the Live region.
+
+        The chunk's ``content`` shape varies by provider: OpenAI emits a plain
+        string; langchain-anthropic emits a list of content blocks (objects
+        with ``.text`` or dicts with a ``"text"`` key). Flatten the list shape
+        to the same text the OpenAI path produces — calling ``str()`` on a
+        block list would render its Python repr instead of the reasoning.
+        """
         chunk = event.data.get("data", {}).get("chunk", {})
         content = chunk.get("content", "") if isinstance(chunk, dict) else ""
         if not content:
             return
-        self._diagnose_buffer.append(str(content))
+        text = _flatten_chunk_content(content)
+        if not text:
+            return
+        self._diagnose_buffer.append(text)
         if self._diagnose_live is not None:
             self._diagnose_live.update(Markdown("".join(self._diagnose_buffer)))
 
@@ -396,6 +406,30 @@ def _canonical_node_name(name: str) -> str:
         "publish": "publish_findings",
     }
     return mapping.get(name, name)
+
+
+def _flatten_chunk_content(content: Any) -> str:
+    """Resolve a chat-model chunk's ``content`` to plain text.
+
+    OpenAI emits a string. langchain-anthropic emits a list of content
+    blocks where each block may be an object with ``.text`` or a dict
+    with a ``"text"`` key. Non-text blocks (tool-use, image) are skipped.
+    """
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return ""
+    parts: list[str] = []
+    for block in content:
+        if isinstance(block, dict):
+            text_value = block.get("text")
+            if isinstance(text_value, str):
+                parts.append(text_value)
+            continue
+        text_value = getattr(block, "text", None)
+        if isinstance(text_value, str):
+            parts.append(text_value)
+    return "".join(parts)
 
 
 def _print_connection_banner() -> None:

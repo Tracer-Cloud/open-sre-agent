@@ -514,8 +514,11 @@ class OpenAILLMClient:
     def invoke(self, prompt_or_messages: Any) -> LLMResponse:
         from app.guardrails.engine import GuardrailBlockedError
 
-        client = self._ensure_client()
+        # Build kwargs first (also calls _ensure_client internally) so the
+        # captured client below reflects the latest key — guards against a
+        # rotation between the two _ensure_client invocations.
         kwargs = self._build_request_kwargs(prompt_or_messages)
+        client = self._ensure_client()
 
         backoff_seconds = _RETRY_INITIAL_BACKOFF_SEC
         max_attempts = _RETRY_MAX_ATTEMPTS
@@ -556,8 +559,11 @@ class OpenAILLMClient:
         """
         from app.guardrails.engine import GuardrailBlockedError
 
-        client = self._ensure_client()
+        # Build kwargs first (also calls _ensure_client internally) so the
+        # captured client below reflects the latest key — same rotation
+        # guard as ``invoke``.
         kwargs = self._build_request_kwargs(prompt_or_messages)
+        client = self._ensure_client()
 
         backoff_seconds = _RETRY_INITIAL_BACKOFF_SEC
         max_attempts = _RETRY_MAX_ATTEMPTS
