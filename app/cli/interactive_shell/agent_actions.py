@@ -53,8 +53,6 @@ def execute_cli_actions(
     console.print()
     console.print(f"[{TERMINAL_ACCENT_BOLD}]assistant:[/]")
     print_planned_actions(console, actions)
-    console.print()
-    console.print("[dim]Running requested actions:[/dim]")
     if not has_unhandled_clause:
         session.record("cli_agent", message)
 
@@ -95,6 +93,7 @@ def execute_cli_actions(
                 action_summary=stripped,
                 confirm_fn=confirm_fn,
                 is_tty=is_tty,
+                action_already_listed=True,
             ):
                 session.record("slash", stripped, ok=False)
                 continue
@@ -117,6 +116,7 @@ def execute_cli_actions(
                 action_summary=f"/model set {action.content}",
                 confirm_fn=confirm_fn,
                 is_tty=is_tty,
+                action_already_listed=True,
             ):
                 continue
             console.print(f"[bold]$ /model set {escape(action.content)}[/bold]")
@@ -129,6 +129,7 @@ def execute_cli_actions(
                 console,
                 confirm_fn=confirm_fn,
                 is_tty=is_tty,
+                action_already_listed=True,
             )
         elif action.kind == "sample_alert":
             run_sample_alert(
@@ -137,6 +138,7 @@ def execute_cli_actions(
                 console,
                 confirm_fn=confirm_fn,
                 is_tty=is_tty,
+                action_already_listed=True,
             )
         else:
             run_synthetic_test(
@@ -145,6 +147,7 @@ def execute_cli_actions(
                 console,
                 confirm_fn=confirm_fn,
                 is_tty=is_tty,
+                action_already_listed=True,
             )
 
     console.print()

@@ -139,6 +139,7 @@ def run_shell_command(
     *,
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
+    action_already_listed: bool = False,
 ) -> None:
     parsed = parse_shell_command(command, is_windows=_intent_parser.IS_WINDOWS)
     policy = evaluate_shell_from_parsed(parsed)
@@ -149,6 +150,7 @@ def run_shell_command(
         action_summary=f"$ {command}",
         confirm_fn=confirm_fn,
         is_tty=is_tty,
+        action_already_listed=action_already_listed,
     ):
         session.record("shell", command, ok=False)
         return
@@ -260,6 +262,7 @@ def run_sample_alert(
     *,
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
+    action_already_listed: bool = False,
 ) -> None:
     from app.cli.investigation import run_sample_alert_for_session
 
@@ -271,6 +274,7 @@ def run_sample_alert(
         action_summary=f"sample alert investigation ({template_name})",
         confirm_fn=confirm_fn,
         is_tty=is_tty,
+        action_already_listed=action_already_listed,
     ):
         session.record("alert", f"sample:{template_name}", ok=False)
         return
@@ -316,6 +320,7 @@ def run_synthetic_test(
     *,
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
+    action_already_listed: bool = False,
 ) -> None:
     if suite_name != "rds_postgres":
         console.print(f"[red]unknown synthetic suite:[/red] {escape(suite_name)}")
@@ -330,6 +335,7 @@ def run_synthetic_test(
         action_summary="opensre tests synthetic",
         confirm_fn=confirm_fn,
         is_tty=is_tty,
+        action_already_listed=action_already_listed,
     ):
         session.record("synthetic_test", suite_name, ok=False)
         return

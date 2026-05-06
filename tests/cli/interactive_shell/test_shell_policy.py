@@ -47,7 +47,7 @@ def test_find_exec_wrapper_is_blocked() -> None:
 
     assert decision.allow is False
     assert decision.classification == "mutating"
-    assert "exec-wrapper" in (decision.reason or "")
+    assert decision.reason == "mutating commands are blocked in safe mode."
 
 
 def test_env_exec_wrapper_is_blocked() -> None:
@@ -57,7 +57,7 @@ def test_env_exec_wrapper_is_blocked() -> None:
 
     assert decision.allow is False
     assert decision.classification == "mutating"
-    assert "exec-wrapper" in (decision.reason or "")
+    assert decision.reason == "mutating commands are blocked in safe mode."
 
 
 def test_classify_command_marks_find_and_env_as_mutating() -> None:
@@ -71,7 +71,7 @@ def test_evaluate_policy_blocks_restricted_command_sudo() -> None:
 
     assert decision.allow is False
     assert decision.classification == "restricted"
-    assert decision.reason == "restricted command is not allowed from inferred execution."
+    assert decision.reason == "Not allowed for assistant-run shell."
 
 
 def test_evaluate_policy_blocks_restricted_command_dd() -> None:
@@ -80,7 +80,7 @@ def test_evaluate_policy_blocks_restricted_command_dd() -> None:
 
     assert decision.allow is False
     assert decision.classification == "restricted"
-    assert "restricted" in (decision.reason or "").lower()
+    assert decision.reason == "Not allowed for assistant-run shell."
 
 
 def test_classify_command_aws_ec2_describe_instances() -> None:

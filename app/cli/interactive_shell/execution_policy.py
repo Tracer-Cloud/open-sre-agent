@@ -97,8 +97,13 @@ def execution_allowed(
     action_summary: str,
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
+    action_already_listed: bool = False,
 ) -> bool:
-    """Print policy UX, emit analytics, and return whether execution should proceed."""
+    """Print policy UX, emit analytics, and return whether execution should proceed.
+
+    When ``action_already_listed`` is True (e.g. assistant printed a numbered action plan),
+    the TTY prompt omits repeating ``action_summary`` and shows only the policy reason.
+    """
     trust_mode = session.trust_mode
     tty = sys.stdin.isatty() if is_tty is None else is_tty
     confirm = confirm_fn or DEFAULT_CONFIRM_FN
@@ -111,7 +116,7 @@ def execution_allowed(
             trust_mode=trust_mode,
             reason=result.reason,
         )
-        console.print(f"[yellow]action blocked:[/yellow] {escape(result.reason or 'not allowed')}")
+        console.print(f"[yellow]Action blocked:[/yellow] {escape(result.reason or 'not allowed')}")
         if result.hint:
             console.print(f"[dim]{escape(result.hint)}[/dim]")
         return False
@@ -152,10 +157,16 @@ def execution_allowed(
         console.print(f"[dim]{escape(action_summary)}[/dim]")
         return False
 
-    console.print(
-        f"[yellow]Confirm:[/yellow] {escape(result.reason or 'this action')} "
-        f"[dim](reply y or yes)[/dim]"
-    )
+    reason = (result.reason or "this action").strip()
+    summary = action_summary.strip()
+    if action_already_listed:
+        console.print(f"[yellow]Confirm:[/yellow] [dim]{escape(reason)}[/dim]")
+    elif summary:
+        console.print(
+            f"[yellow]Confirm[/yellow] [bold]{escape(summary)}[/bold] [dim]— {escape(reason)}[/dim]"
+        )
+    else:
+        console.print(f"[yellow]Confirm:[/yellow] [dim]{escape(reason)}[/dim]")
     answer = confirm("Proceed? [y/N] ").strip().lower()
     if answer not in {"y", "yes"}:
         _emit_decision(

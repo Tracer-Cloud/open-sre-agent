@@ -215,7 +215,6 @@ def _execute_action_plan(
         console.print(f"[dim]{index}.[/dim] [{TERMINAL_ACCENT_BOLD}]{escape(label)}[/]")
 
     console.print()
-    console.print("[dim]Running requested actions:[/dim]")
     for action in actions:
         kind = str(action.get("action", "")).strip()
         console.print()
@@ -239,6 +238,7 @@ def _execute_action_plan(
                 action_summary=slash_label,
                 confirm_fn=confirm_fn,
                 is_tty=is_tty,
+                action_already_listed=True,
             ):
                 continue
             console.print(f"[bold]$ {escape(slash_label)}[/bold]")
@@ -264,6 +264,7 @@ def _execute_action_plan(
                 action_summary=f"/model toolcall set {requested_model}",
                 confirm_fn=confirm_fn,
                 is_tty=is_tty,
+                action_already_listed=True,
             ):
                 continue
             console.print(f"[bold]$ /model toolcall set {escape(requested_model)}[/bold]")
@@ -299,6 +300,7 @@ def _execute_action_plan(
                 action_summary=stripped,
                 confirm_fn=confirm_fn,
                 is_tty=is_tty,
+                action_already_listed=True,
             ):
                 session.record("slash", stripped, ok=False)
                 continue

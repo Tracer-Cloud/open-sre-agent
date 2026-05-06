@@ -93,7 +93,6 @@ def test_execute_cli_actions_dispatches_planned_commands(monkeypatch: object) ->
     assert output.index("Requested actions") < output.index("$ /health")
     assert output.index("1.") < output.index("$ /health")
     assert output.index("2.") < output.index("$ /health")
-    assert "Running requested actions" in output
     assert "ran /health" in output
     assert "ran /list integrations" in output
 
@@ -512,7 +511,6 @@ def test_execute_cli_actions_runs_shell_command(monkeypatch: object) -> None:
         {"type": "shell", "text": "pwd", "ok": True},
     ]
     output = buf.getvalue()
-    assert "Running requested actions" in output
     assert "$ pwd" in output
     assert "/tmp/project" in output
 
@@ -746,7 +744,7 @@ def test_execute_cli_actions_blocks_ambiguous_shell_operators() -> None:
     assert execute_cli_actions("run `ls | wc -l`", session, console) is True
     assert session.history[-1] == {"type": "shell", "text": "ls | wc -l", "ok": False}
     output = buf.getvalue()
-    assert "action blocked" in output
+    assert "action blocked" in output.lower()
     assert "shell operators" in output
 
 
@@ -778,5 +776,5 @@ def test_execute_cli_actions_rejects_malformed_shell_input() -> None:
     assert execute_cli_actions('run `cat "unterminated`', session, console) is True
     assert session.history[-1] == {"type": "shell", "text": 'cat "unterminated', "ok": False}
     output = buf.getvalue()
-    assert "action blocked" in output
+    assert "action blocked" in output.lower()
     assert "could not parse command" in output

@@ -374,10 +374,7 @@ def evaluate_policy(*, parsed: ParsedShellCommand) -> PolicyDecision:
         return PolicyDecision(
             allow=False,
             classification=classification,
-            reason=(
-                "mutating commands are blocked in safe mode "
-                "(includes exec-wrapper commands such as find and env)."
-            ),
+            reason="mutating commands are blocked in safe mode.",
             hint=(
                 "Use a read-only command, or run !<command> to explicitly "
                 "opt into shell passthrough."
@@ -388,8 +385,8 @@ def evaluate_policy(*, parsed: ParsedShellCommand) -> PolicyDecision:
         return PolicyDecision(
             allow=False,
             classification=classification,
-            reason="restricted command is not allowed from inferred execution.",
-            hint="Run the command directly in your shell if you truly intend it.",
+            reason="Not allowed for assistant-run shell.",
+            hint="Run it in your terminal if needed.",
         )
 
     return PolicyDecision(
