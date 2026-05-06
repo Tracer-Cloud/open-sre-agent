@@ -417,10 +417,21 @@ def _run_shell_command(command: str, session: ReplSession, console: Console) -> 
         session.record("shell", command, ok=False)
         return
 
-    if parsed.argv is not None and parsed.argv[0].lower() == "cd":
+    argv_builtin = parsed.argv
+    if argv_builtin is None and parsed.passthrough and parsed.command.strip():
+        passthrough_body = parsed.command.strip()
+        try:
+            argv_builtin = shlex.split(passthrough_body, posix=not _IS_WINDOWS)
+        except ValueError:
+            try:
+                argv_builtin = shlex.split(passthrough_body, posix=False)
+            except ValueError:
+                argv_builtin = None
+
+    if argv_builtin is not None and argv_builtin[0].lower() == "cd":
         _run_cd_command(parsed.command, session, console)
         return
-    if parsed.argv is not None and parsed.argv[0].lower() == "pwd":
+    if argv_builtin is not None and argv_builtin[0].lower() == "pwd":
         _run_pwd_command(parsed.command, session, console)
         return
 

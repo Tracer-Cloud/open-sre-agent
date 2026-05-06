@@ -582,6 +582,49 @@ def test_execute_cli_actions_runs_passthrough_with_shell_true(monkeypatch: objec
     assert "ok" in output
 
 
+def test_execute_cli_actions_routes_bang_cd_through_builtin(monkeypatch: object) -> None:
+    dirs: list[Path] = []
+
+    def _fake_chdir(target: Path) -> None:
+        dirs.append(target)
+
+    def _boom(*_args: object, **_kwargs: object) -> None:  # pragma: no cover
+        raise AssertionError("subprocess.run should not be used for !cd builtin routing")
+
+    monkeypatch.setattr(agent_actions.os, "chdir", _fake_chdir)
+    monkeypatch.setattr(agent_actions.subprocess, "run", _boom)
+
+    session = ReplSession()
+    console, buf = _capture()
+
+    message = "run `!cd /tmp`"
+    assert execute_cli_actions(message, session, console) is True
+    assert dirs == [Path("/tmp")]
+    assert session.history[-1] == {"type": "shell", "text": "cd /tmp", "ok": True}
+    captured = buf.getvalue()
+    assert "explicit shell passthrough enabled" not in captured
+
+
+def test_execute_cli_actions_routes_bang_pwd_through_builtin(monkeypatch: object) -> None:
+    def _fake_cwd(_: type[Path]) -> PurePosixPath:
+        return PurePosixPath("/shown")
+
+    def _boom(*_args: object, **_kwargs: object) -> None:  # pragma: no cover
+        raise AssertionError("subprocess.run should not be used for !pwd builtin routing")
+
+    monkeypatch.setattr(agent_actions.Path, "cwd", classmethod(_fake_cwd))
+    monkeypatch.setattr(agent_actions.subprocess, "run", _boom)
+
+    session = ReplSession()
+    console, buf = _capture()
+
+    assert execute_cli_actions("run `!pwd`", session, console) is True
+    assert session.history[-1] == {"type": "shell", "text": "pwd", "ok": True}
+    captured = buf.getvalue()
+    assert "/shown" in captured
+    assert "explicit shell passthrough enabled" not in captured
+
+
 def test_execute_cli_actions_blocks_mutating_command_by_default() -> None:
     session = ReplSession()
     console, buf = _capture()

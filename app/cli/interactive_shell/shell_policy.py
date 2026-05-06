@@ -81,6 +81,7 @@ _MUTATING_COMMANDS = frozenset(
 # Commands that can exec arbitrary child processes via flags (e.g. find -exec, env <cmd>).
 # Allowing them defeats the mutating-command policy because the dangerous child process
 # is spawned by the permitted parent — no shell involved, policy never sees it.
+# Same risk applies to xargs — it stays in `_MUTATING_COMMANDS` (blocked by name).
 # Users who genuinely need these can prefix with ! for explicit passthrough.
 _EXEC_WRAPPER_COMMANDS = frozenset({"find", "env"})
 
@@ -128,7 +129,89 @@ _READ_ONLY_HELM_SUBCOMMANDS = frozenset(
     {"list", "status", "history", "get", "search", "show", "env"}
 )
 
-_READ_ONLY_AWS_PREFIXES = ("get", "list", "describe")
+# AWS CLI positional args (approximately: drop `-`/`--` tokens and their bundled values).
+_AWS_TWO_ARG_FLAGS = frozenset(
+    {
+        "--region",
+        "--endpoint-url",
+        "--profile",
+        "--ca-bundle",
+        "--cli-read-timeout",
+        "--cli-connect-timeout",
+        "--output",
+        "--query",
+        "--color",
+        "--no-sign-request",
+    }
+)
+
+
+def _aws_token_looks_like_read_operation(tok: str) -> bool:
+    """Match verbs like get-caller-identity / list-tables without false-positive prefixes."""
+    if tok.startswith(
+        ("describe-", "list-", "get-", "batch-get-", "batch-describe-", "history-"),
+    ):
+        return True
+    # Require a hyphen for bare get/list/describe prefix (avoids tokens like getter).
+    if tok.startswith(("describe", "list", "get")):
+        return "-" in tok
+    return False
+
+
+def _aws_cli_positional_args(argv: list[str]) -> list[str]:
+    """Extract likely positional tokens after stripping common global CLI flags."""
+    out: list[str] = []
+    index = 1
+    limit = len(argv)
+    while index < limit:
+        token = argv[index]
+        lower = token.lower()
+        if lower.startswith("--") and "=" in lower:
+            index += 1
+            continue
+        lower_name = lower.split("=", maxsplit=1)[0]
+        if lower_name in _AWS_TWO_ARG_FLAGS or (
+            lower.startswith("--")
+            and "=" not in lower
+            and index + 1 < limit
+            and not argv[index + 1].startswith("-")
+        ):
+            index += 2
+            continue
+        if lower.startswith("-") and lower != "--":
+            skip_value = (
+                len(lower) >= 2
+                and lower[1] != "-"
+                and len(lower) == 2
+                and index + 1 < limit
+                and not argv[index + 1].startswith("-")
+            )
+            index += 2 if skip_value else 1
+            continue
+        out.append(lower)
+        index += 1
+    return out
+
+
+def _aws_cli_argv_is_read_only(argv: list[str]) -> bool:
+    """Treat common read-only AWS CLI calls as allowed (verbs after optional global flags).
+
+    Matches service-scoped invocations (`aws ec2 describe-instances`) as well as
+    shorthand read paths (`aws s3 ls`).
+    """
+    positional = _aws_cli_positional_args(argv)
+    if not positional:
+        return False
+
+    for tok in positional:
+        if _aws_token_looks_like_read_operation(tok):
+            return True
+
+    for index in range(len(positional) - 1):
+        if positional[index] == "s3" and positional[index + 1] in {"ls", "lsf"}:
+            return True
+
+    return False
 
 
 @dataclass(frozen=True)
@@ -231,8 +314,7 @@ def classify_command(argv: list[str]) -> CommandClassification:
         return "read_only" if subcommand in _READ_ONLY_HELM_SUBCOMMANDS else "mutating"
 
     if command == "aws":
-        subcommand = argv[1].lower() if len(argv) > 1 else ""
-        return "read_only" if subcommand.startswith(_READ_ONLY_AWS_PREFIXES) else "mutating"
+        return "read_only" if _aws_cli_argv_is_read_only(argv) else "mutating"
 
     if command in _MUTATING_COMMANDS:
         return "mutating"

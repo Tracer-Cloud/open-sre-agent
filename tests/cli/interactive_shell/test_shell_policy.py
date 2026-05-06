@@ -63,3 +63,57 @@ def test_env_exec_wrapper_is_blocked() -> None:
 def test_classify_command_marks_find_and_env_as_mutating() -> None:
     assert classify_command(["find", "/tmp", "-name", "*.log"]) == "mutating"
     assert classify_command(["env", "MY_VAR=1", "echo", "hello"]) == "mutating"
+
+
+def test_evaluate_policy_blocks_restricted_command_sudo() -> None:
+    parsed = parse_shell_command("sudo ls /tmp", is_windows=False)
+    decision = evaluate_policy(parsed=parsed)
+
+    assert decision.allow is False
+    assert decision.classification == "restricted"
+    assert decision.reason == "restricted command is not allowed from inferred execution."
+
+
+def test_evaluate_policy_blocks_restricted_command_dd() -> None:
+    parsed = parse_shell_command("dd if=/dev/zero of=/dev/null count=1", is_windows=False)
+    decision = evaluate_policy(parsed=parsed)
+
+    assert decision.allow is False
+    assert decision.classification == "restricted"
+    assert "restricted" in (decision.reason or "").lower()
+
+
+def test_classify_command_aws_ec2_describe_instances() -> None:
+    assert classify_command(["aws", "ec2", "describe-instances"]) == "read_only"
+
+
+def test_classify_command_aws_s3_ls() -> None:
+    assert classify_command(["aws", "s3", "ls"]) == "read_only"
+
+
+def test_classify_command_aws_global_flags_then_describe() -> None:
+    assert (
+        classify_command(
+            ["aws", "--region", "us-east-1", "ec2", "describe-instances"],
+        )
+        == "read_only"
+    )
+
+
+def test_classify_command_aws_s3_cp_mutating() -> None:
+    assert classify_command(["aws", "s3", "cp", "s3://b/a", "./a"]) == "mutating"
+
+
+def test_classify_command_aws_configure_is_mutating() -> None:
+    assert classify_command(["aws", "configure"]) == "mutating"
+
+
+def test_aws_cli_positional_handles_double_dash_equals_form() -> None:
+    parsed = parse_shell_command(
+        "aws ec2 describe-instances --output json --query Reservations",
+        is_windows=False,
+    )
+    decision = evaluate_policy(parsed=parsed)
+
+    assert decision.allow is True
+    assert decision.classification == "read_only"
