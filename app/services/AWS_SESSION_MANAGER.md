@@ -15,8 +15,8 @@ This implementation replaces the previous "stateless instantiation" pattern for 
 ## Implementation Details
 
 ### AWSSessionManager Singleton
-- **Centralized Caching**: Manages sessions and clients in a thread-safe dictionary.
-- **Persistence**: Saves session metadata to `~/.opensre/cache/aws_session_metadata.json` for reuse across restarts.
+- **In-Memory Caching**: Manages sessions and clients in a thread-safe dictionary.
+- **Security**: Credentials are kept strictly in-memory; no plaintext persistence to disk (as per P0 security guidelines).
 - **Atomic Locking**: Uses `threading.Lock` per `role_arn` to prevent the "Thundering Herd" problem.
 
 ### Integration Points

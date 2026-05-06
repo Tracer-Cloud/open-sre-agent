@@ -3,14 +3,20 @@ AWS Session Manager for centralized session caching and atomic role locking.
 
 Implements a thread-safe singleton to reuse boto3 clients and manage AssumeRole
 operations efficiently, reducing latency and preventing throttling.
+
+NOTE: This module uses a stateful singleton pattern which diverges from the
+standard stateless integration pattern. This is a deliberate trade-off to
+provide global connection pooling and prevent 'Thundering Herd' API
+throttling across parallel investigation nodes.
 """
 
-import json
+from __future__ import annotations
+
 import logging
 import os
 import threading
 import time
-from typing import Any, Optional
+from typing import Any
 
 import boto3
 from botocore.config import Config
@@ -34,10 +40,10 @@ class AWSSessionManager:
     - Service clients (per service + region + role_arn)
     """
 
-    _instance: Optional["AWSSessionManager"] = None
+    _instance: AWSSessionManager | None = None
     _lock = threading.Lock()
 
-    def __new__(cls):
+    def __new__(cls) -> AWSSessionManager:
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
@@ -47,40 +53,11 @@ class AWSSessionManager:
 
     def _init_manager(self) -> None:
         """Initialize the manager's internal state."""
-        self._client_cache: dict[tuple[str, str | None, str | None], Any] = {}
+        self._client_cache: dict[tuple[str, str, str | None], Any] = {}
         self._session_metadata: dict[str, dict[str, Any]] = {}
         self._cache_lock = threading.Lock()
         self._role_locks: dict[str, threading.Lock] = {}
         self._base_sessions: dict[str, boto3.Session] = {}
-
-        # Metadata persistence path
-        self._cache_dir = os.path.expanduser("~/.opensre/cache")
-        self._metadata_path = os.path.join(self._cache_dir, "aws_session_metadata.json")
-
-        # Create cache directory if it doesn't exist
-        try:
-            os.makedirs(self._cache_dir, exist_ok=True)
-            self._load_metadata()
-        except Exception as e:
-            logger.warning("Could not initialize AWS session cache directory: %s", e)
-
-    def _load_metadata(self) -> None:
-        """Load session metadata from disk using JSON."""
-        if os.path.exists(self._metadata_path):
-            try:
-                with open(self._metadata_path) as f:
-                    self._session_metadata = json.load(f)
-            except Exception as e:
-                logger.warning("Could not load AWS session metadata: %s", e)
-                self._session_metadata = {}
-
-    def _save_metadata(self) -> None:
-        """Save session metadata to disk using JSON."""
-        try:
-            with open(self._metadata_path, "w") as f:
-                json.dump(self._session_metadata, f, indent=2)
-        except Exception as e:
-            logger.warning("Could not save AWS session metadata: %s", e)
 
     def _get_role_lock(self, role_arn: str) -> threading.Lock:
         """Get or create a lock for a specific role ARN to ensure atomic assumption."""
@@ -90,7 +67,10 @@ class AWSSessionManager:
             return self._role_locks[role_arn]
 
     def _is_session_expired(self, role_arn: str) -> bool:
-        """Check if an assumed role session is expired or near expiry."""
+        """
+        Check if an assumed role session is expired or near expiry.
+        Must be called while holding _cache_lock or role_lock if consistency is required.
+        """
         metadata = self._session_metadata.get(role_arn)
         if not metadata:
             return True
@@ -129,14 +109,17 @@ class AWSSessionManager:
         # Handle Role Assumption with Atomic Locking
         role_lock = self._get_role_lock(role_arn)
         with role_lock:
-            if not self._is_session_expired(role_arn):
-                metadata = self._session_metadata[role_arn]
-                return boto3.Session(
-                    aws_access_key_id=metadata["access_key"],
-                    aws_secret_access_key=metadata["secret_key"],
-                    aws_session_token=metadata["session_token"],
-                    region_name=actual_region,
-                )
+            # Check expiry under lock to prevent race conditions (Fixes P1)
+            with self._cache_lock:
+                is_expired = self._is_session_expired(role_arn)
+                if not is_expired:
+                    metadata = self._session_metadata[role_arn]
+                    return boto3.Session(
+                        aws_access_key_id=metadata["access_key"],
+                        aws_secret_access_key=metadata["secret_key"],
+                        aws_session_token=metadata["session_token"],
+                        region_name=actual_region,
+                    )
 
             # Session expired or doesn't exist, assume role
             logger.info("Assuming role: %s", role_arn)
@@ -147,6 +130,7 @@ class AWSSessionManager:
             assume_role_kwargs: dict[str, Any] = {
                 "RoleArn": role_arn,
                 "RoleSessionName": f"OpenSRE-Session-{int(time.time())}",
+                "DurationSeconds": DEFAULT_SESSION_DURATION,  # Fixes P2
             }
             if external_id:
                 assume_role_kwargs["ExternalId"] = external_id
@@ -155,14 +139,14 @@ class AWSSessionManager:
                 response = sts.assume_role(**assume_role_kwargs)
                 credentials = response["Credentials"]
 
-                # Update metadata
-                self._session_metadata[role_arn] = {
-                    "access_key": credentials["AccessKeyId"],
-                    "secret_key": credentials["SecretAccessKey"],
-                    "session_token": credentials["SessionToken"],
-                    "expiration": credentials["Expiration"].timestamp(),
-                }
-                self._save_metadata()
+                # Update metadata in memory only (Fixes P0)
+                with self._cache_lock:
+                    self._session_metadata[role_arn] = {
+                        "access_key": credentials["AccessKeyId"],
+                        "secret_key": credentials["SecretAccessKey"],
+                        "session_token": credentials["SessionToken"],
+                        "expiration": credentials["Expiration"].timestamp(),
+                    }
 
                 return boto3.Session(
                     aws_access_key_id=credentials["AccessKeyId"],
