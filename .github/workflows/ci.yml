@@ -75,7 +75,6 @@ jobs:
 
   test:
     name: test (${{ matrix.os }})
-    needs: [quality]
     continue-on-error: ${{ matrix.os == 'windows-latest' }}
     strategy:
       fail-fast: false
@@ -145,7 +144,6 @@ jobs:
 
   test-kubernetes:
     runs-on: ubuntu-latest
-    needs: [quality]
     continue-on-error: true
     timeout-minutes: 15
 
@@ -259,3 +257,39 @@ jobs:
       - name: Run test
         run: uv run ${{ matrix.command }}
         timeout-minutes: 30
+
+  check:
+    name: check
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - quality
+      - test
+      - test-kubernetes
+      - test-thorough
+
+    steps:
+      - name: Validate required job results
+        env:
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          TEST_KUBERNETES_RESULT: ${{ needs.test-kubernetes.result }}
+          TEST_THOROUGH_RESULT: ${{ needs.test-thorough.result }}
+        run: |
+          echo "quality: ${QUALITY_RESULT}"
+          echo "test: ${TEST_RESULT}"
+          echo "test-kubernetes: ${TEST_KUBERNETES_RESULT}"
+          echo "test-thorough: ${TEST_THOROUGH_RESULT}"
+
+          [ "${QUALITY_RESULT}" = "success" ] || exit 1
+          [ "${TEST_RESULT}" = "success" ] || exit 1
+
+          case "${TEST_KUBERNETES_RESULT}" in
+            success|skipped) ;;
+            *) exit 1 ;;
+          esac
+
+          case "${TEST_THOROUGH_RESULT}" in
+            success|skipped) ;;
+            *) exit 1 ;;
+          esac
