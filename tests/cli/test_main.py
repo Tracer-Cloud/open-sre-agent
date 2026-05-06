@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -46,7 +47,7 @@ def _stub_analytics_httpx(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, obj
 def test_main_runs_health_command(monkeypatch) -> None:
     monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda: None)
+    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
 
     with (
         patch("app.integrations.verify.verify_integrations") as mock_verify,
@@ -76,7 +77,9 @@ def test_main_does_not_capture_analytics_for_help(monkeypatch, capsys) -> None:
     monkeypatch.setattr(
         "app.cli.__main__.capture_first_run_if_needed", lambda: captured.append("install")
     )
-    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda: captured.append("cli"))
+    monkeypatch.setattr(
+        "app.cli.__main__.capture_cli_invoked", lambda *_args: captured.append("cli")
+    )
     monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
 
     exit_code = main(["--help"])
@@ -91,7 +94,9 @@ def test_main_does_not_capture_analytics_for_parse_error(monkeypatch, capsys) ->
     monkeypatch.setattr(
         "app.cli.__main__.capture_first_run_if_needed", lambda: captured.append("install")
     )
-    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda: captured.append("cli"))
+    monkeypatch.setattr(
+        "app.cli.__main__.capture_cli_invoked", lambda *_args: captured.append("cli")
+    )
     monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
 
     exit_code = main(["not-a-command"])
@@ -106,7 +111,9 @@ def test_main_captures_analytics_once_for_accepted_command(monkeypatch, capsys) 
     monkeypatch.setattr(
         "app.cli.__main__.capture_first_run_if_needed", lambda: captured.append("install")
     )
-    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda: captured.append("cli"))
+    monkeypatch.setattr(
+        "app.cli.__main__.capture_cli_invoked", lambda *_args: captured.append("cli")
+    )
     monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
 
     exit_code = main(["version"])
@@ -114,6 +121,103 @@ def test_main_captures_analytics_once_for_accepted_command(monkeypatch, capsys) 
     assert exit_code == 0
     assert "opensre" in capsys.readouterr().out
     assert captured == ["install", "cli"]
+
+
+def test_main_captures_command_metadata_for_version(monkeypatch, capsys) -> None:
+    captured: list[dict[str, object] | None] = []
+    monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr(
+        "app.cli.__main__.capture_cli_invoked",
+        lambda properties=None: captured.append(properties),
+    )
+    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
+
+    exit_code = main(["version"])
+
+    assert exit_code == 0
+    assert "opensre" in capsys.readouterr().out
+    assert captured == [
+        {
+            "entrypoint": "opensre",
+            "command_path": "opensre version",
+            "command_family": "version",
+            "json_output": False,
+            "verbose": False,
+            "debug": False,
+            "yes": False,
+            "interactive": True,
+            "command_leaf": "version",
+        }
+    ]
+
+
+def test_main_captures_command_metadata_for_remote_health(monkeypatch) -> None:
+    captured: list[dict[str, object] | None] = []
+    remote_module = importlib.import_module("app.cli.commands.remote")
+    monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr(
+        "app.cli.__main__.capture_cli_invoked",
+        lambda properties=None: captured.append(properties),
+    )
+    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr(
+        remote_module,
+        "_load_remote_client",
+        lambda *_args, **_kwargs: SimpleNamespace(base_url="http://example.test"),
+    )
+    monkeypatch.setattr(remote_module, "run_remote_health_check", lambda **_kwargs: None)
+
+    exit_code = main(["remote", "--url", "http://example.test", "health"])
+
+    assert exit_code == 0
+    properties = captured[0]
+    assert properties is not None
+    assert properties["command_path"] == "opensre remote health"
+    assert properties["command_family"] == "remote"
+    assert properties["subcommand"] == "health"
+    assert properties["command_leaf"] == "health"
+
+
+def test_main_captures_command_metadata_for_nested_remote_ops(monkeypatch, capsys) -> None:
+    captured: list[dict[str, object] | None] = []
+    remote_module = importlib.import_module("app.cli.commands.remote")
+    monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr(
+        "app.cli.__main__.capture_cli_invoked",
+        lambda properties=None: captured.append(properties),
+    )
+    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
+
+    status = SimpleNamespace(
+        provider="railway",
+        project="proj",
+        service="svc",
+        deployment_id="dep",
+        deployment_status="success",
+        environment="production",
+        url="https://example.test",
+        health="healthy",
+        metadata={},
+    )
+    provider = SimpleNamespace(status=lambda _scope: status)
+    scope = SimpleNamespace(provider="railway", project="proj", service="svc")
+    monkeypatch.setattr(
+        remote_module,
+        "_resolve_remote_ops_scope",
+        lambda _ctx: (provider, scope),
+    )
+    monkeypatch.setattr(remote_module, "_persist_remote_ops_scope", lambda _scope: None)
+
+    exit_code = main(["remote", "ops", "status"])
+
+    assert exit_code == 0
+    assert "Provider: railway" in capsys.readouterr().out
+    properties = captured[0]
+    assert properties is not None
+    assert properties["command_path"] == "opensre remote ops status"
+    assert properties["command_family"] == "remote"
+    assert properties["subcommand"] == "ops"
+    assert properties["command_leaf"] == "status"
 
 
 def test_main_emits_first_run_install_before_cli_invoked(
@@ -177,7 +281,9 @@ def test_main_captures_cli_invoked_before_reported_subcommand_families(
     monkeypatch.setattr(
         "app.cli.__main__.capture_first_run_if_needed", lambda: captured.append("install")
     )
-    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda: captured.append("cli"))
+    monkeypatch.setattr(
+        "app.cli.__main__.capture_cli_invoked", lambda *_args: captured.append("cli")
+    )
     monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
 
     if setup == "app.cli.wizard.run_wizard":
@@ -225,7 +331,7 @@ def test_no_interactive_falls_through_to_landing_page(monkeypatch) -> None:
     """
     monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda: None)
+    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
 
     # Force the TTY branch so the regression path is actually exercised.
     monkeypatch.setattr("app.cli.__main__.sys.stdin.isatty", lambda: True)
@@ -264,7 +370,7 @@ def test_default_no_args_enters_repl(monkeypatch) -> None:
     """
     monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda: None)
+    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
     monkeypatch.setattr("app.cli.__main__.sys.stdin.isatty", lambda: True)
     monkeypatch.setattr("app.cli.__main__.sys.stdout.isatty", lambda: True)
 
@@ -306,7 +412,7 @@ def test_agent_subcommand_launches_repl(monkeypatch) -> None:
     """
     monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda: None)
+    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
     monkeypatch.setattr("app.cli.commands.agent.sys.stdin.isatty", lambda: True)
     monkeypatch.setenv("OPENSRE_INTERACTIVE", "0")
 
@@ -345,7 +451,7 @@ def test_agent_subcommand_accepts_layout(monkeypatch) -> None:
     """`opensre agent --layout pinned` must forward layout into ReplConfig."""
     monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda: None)
+    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
     monkeypatch.setattr("app.cli.commands.agent.sys.stdin.isatty", lambda: True)
 
     run_repl_calls: list[ReplConfig] = []
@@ -376,7 +482,7 @@ def test_agent_subcommand_errors_on_non_tty(monkeypatch, capsys) -> None:
     """
     monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda: None)
+    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
     monkeypatch.setattr("app.cli.commands.agent.sys.stdin.isatty", lambda: False)
 
     def _fail_if_called(**_kw: object) -> int:

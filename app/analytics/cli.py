@@ -65,8 +65,8 @@ def _investigation_started_properties(
     return properties
 
 
-def capture_cli_invoked() -> None:
-    get_analytics().capture(Event.CLI_INVOKED)
+def capture_cli_invoked(properties: Properties | None = None) -> None:
+    get_analytics().capture(Event.CLI_INVOKED, properties)
 
 
 def capture_onboard_started() -> None:

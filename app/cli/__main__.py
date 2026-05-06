@@ -17,7 +17,7 @@ import click
 from dotenv import load_dotenv
 
 from app.analytics.cli import capture_cli_invoked
-from app.analytics.provider import capture_first_run_if_needed, shutdown_analytics
+from app.analytics.provider import Properties, capture_first_run_if_needed, shutdown_analytics
 from app.cli.commands import register_commands
 from app.cli.support.layout import RichGroup, render_landing
 from app.cli.support.prompt_support import (
@@ -30,6 +30,58 @@ from app.version import get_version
 
 _CAPTURE_CLI_ANALYTICS = "capture_cli_analytics"
 _CLI_ANALYTICS_CAPTURED = "cli_analytics_captured"
+_CLI_ARGV = "cli_argv"
+
+
+def _resolve_command_parts(command: click.Command, argv: list[str]) -> list[str]:
+    """Resolve nested Click command names without recording option values."""
+    parts: list[str] = []
+    current = command
+    remaining_args = argv
+
+    while isinstance(current, click.Group):
+        parse_ctx = current.make_context(
+            current.name or "opensre",
+            remaining_args,
+            resilient_parsing=True,
+        )
+        protected_args = list(getattr(parse_ctx, "_protected_args", ()))
+        if not protected_args:
+            break
+
+        command_name = protected_args[0]
+        subcommand = current.get_command(parse_ctx, command_name)
+        if subcommand is None:
+            break
+
+        parts.append(command_name)
+        current = subcommand
+        remaining_args = list(parse_ctx.args)
+
+    return parts
+
+
+def _cli_invoked_properties(ctx: click.Context) -> Properties:
+    raw_argv = ctx.obj.get(_CLI_ARGV, []) if ctx.obj else []
+    command_parts = _resolve_command_parts(
+        ctx.command,
+        raw_argv if isinstance(raw_argv, list) else [],
+    )
+    properties: Properties = {
+        "entrypoint": "opensre",
+        "command_path": " ".join(("opensre", *command_parts)),
+        "command_family": command_parts[0] if command_parts else "root",
+        "json_output": bool(ctx.obj.get("json", False)) if ctx.obj else False,
+        "verbose": bool(ctx.obj.get("verbose", False)) if ctx.obj else False,
+        "debug": bool(ctx.obj.get("debug", False)) if ctx.obj else False,
+        "yes": bool(ctx.obj.get("yes", False)) if ctx.obj else False,
+        "interactive": bool(ctx.obj.get("interactive", True)) if ctx.obj else True,
+    }
+    if len(command_parts) > 1:
+        properties["subcommand"] = command_parts[1]
+    if command_parts:
+        properties["command_leaf"] = command_parts[-1]
+    return properties
 
 
 def _capture_accepted_cli_invocation(ctx: click.Context) -> None:
@@ -39,7 +91,7 @@ def _capture_accepted_cli_invocation(ctx: click.Context) -> None:
         return
     ctx.obj[_CLI_ANALYTICS_CAPTURED] = True
     capture_first_run_if_needed()
-    capture_cli_invoked()
+    capture_cli_invoked(_cli_invoked_properties(ctx))
 
 
 @click.group(
@@ -82,6 +134,7 @@ def cli(
     ctx.obj["verbose"] = verbose
     ctx.obj["debug"] = debug
     ctx.obj["yes"] = yes
+    ctx.obj["interactive"] = interactive
 
     if verbose or debug:
         os.environ["TRACER_VERBOSE"] = "1"
@@ -128,9 +181,14 @@ def main(argv: list[str] | None = None) -> int:
     install_questionary_escape_cancel()
     install_questionary_ctrl_c_double_exit()
     _install_sigint_handler()
+    cli_argv = list(sys.argv[1:] if argv is None else argv)
 
     try:
-        cli(args=argv, standalone_mode=True, obj={_CAPTURE_CLI_ANALYTICS: True})
+        cli(
+            args=cli_argv,
+            standalone_mode=True,
+            obj={_CAPTURE_CLI_ANALYTICS: True, _CLI_ARGV: cli_argv},
+        )
     except KeyboardInterrupt:
         # A KeyboardInterrupt that escapes cli() was not handled by our
         # double-exit logic (e.g. click.prompt, an unpatched library prompt).
