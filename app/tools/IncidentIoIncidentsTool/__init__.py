@@ -16,7 +16,7 @@ class IncidentIoIncidentsTool(BaseTool):
     description = (
         "Interact with incident.io to list active incidents or post investigation timeline updates. "
         "Provide action='list' to search for incidents (e.g. status=live) or action='add_timeline' "
-        "to add a new timeline event (requires incident_id and comment)."
+        "to add a new timeline event (requires incident_id, title, and description)."
     )
     use_cases = [
         "Listing live incidents to understand current context",
@@ -80,7 +80,7 @@ class IncidentIoIncidentsTool(BaseTool):
             "status": integration.get("status", "live"),
             "incident_id": integration.get("incident_id", ""),
             "title": integration.get("title", ""),
-            "description": integration.get("comment", "") or integration.get("description", ""),
+            "description": integration.get("description", "") or integration.get("comment", ""),
         }
 
     def run(

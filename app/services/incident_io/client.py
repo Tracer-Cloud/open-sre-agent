@@ -61,9 +61,16 @@ class IncidentIoClient:
             return ProbeResult.missing("Missing API key.")
 
         try:
-            # Use direct GET call to avoid internal helper dependencies in the probe
-            resp = self._get_client().get("/v2/incidents", params={"page_size": 1})
-            resp.raise_for_status()
+            # Use a short-lived client for the probe to avoid leaking persistent connections
+            transport = httpx.HTTPTransport(retries=_MAX_RETRIES)
+            with httpx.Client(
+                base_url=self.config.base_url,
+                headers=self.config.headers,
+                timeout=_DEFAULT_TIMEOUT,
+                transport=transport,
+            ) as client:
+                resp = client.get("/v2/incidents", params={"page_size": 1})
+                resp.raise_for_status()
         except Exception as e:
             return ProbeResult.failed(f"Connection failed: {e}", region=self.config.region)
 
@@ -192,11 +199,15 @@ class IncidentIoClient:
         """Add a custom event to an incident's timeline (findings write-back)."""
 
         try:
+            # Incident.io V2 API uses 'content' for the timeline event body.
+            # We combine title and description into a single markdown block.
+            content = f"### {title}"
+            if description:
+                content += f"\n\n{description}"
+
             payload = {
                 "incident_id": incident_id,
-                "event_type": "custom",
-                "title": title,
-                "description": description,
+                "content": content,
                 "occurred_at": datetime.now(UTC).isoformat(timespec="milliseconds"),
             }
             resp = self._get_client().post(

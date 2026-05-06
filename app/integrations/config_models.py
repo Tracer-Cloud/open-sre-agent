@@ -194,11 +194,17 @@ class IncidentIoIntegrationConfig(StrictConfigModel):
     region: str = "us"
     base_url: str = ""
 
+    @field_validator("region", mode="before")
+    @classmethod
+    def _normalize_region(cls, value: object) -> str:
+        raw = str(value or "us").strip().lower()
+        return raw if raw in DEFAULT_INCIDENT_IO_BASE_URLS else "us"
+
     @model_validator(mode="after")
     def _resolve_base_url(self) -> IncidentIoIntegrationConfig:
         if not self.base_url:
             self.base_url = DEFAULT_INCIDENT_IO_BASE_URLS.get(
-                self.region, "https://api.incident.io"
+                self.region, DEFAULT_INCIDENT_IO_BASE_URLS["us"]
             )
         return self
 

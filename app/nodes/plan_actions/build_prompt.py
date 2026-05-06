@@ -259,7 +259,7 @@ def _build_available_sources_hint(available_sources: dict[str, dict]) -> str:
         iio = available_sources["incident_io"]
         hints.append(
             f"""Incident.io Available:
-- Incident ID: {iio.get("incident_id")}
+- Incident ID: {iio.get("incident_id") or "unknown"}
 - Region: {iio.get("region", "us")}
 - Use incident_io_incidents with action="list" to fetch incident details and timeline events
 - Use incident_io_incidents with action="add_timeline" to post RCA findings or updates back to the incident timeline"""
