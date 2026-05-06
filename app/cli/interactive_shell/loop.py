@@ -37,6 +37,7 @@ from app.cli.interactive_shell.theme import (
     OPENCLAW_ORANGE,
     PROMPT_ACCENT_ANSI,
     SEPARATOR_COLOR,
+    TERMINAL_ERROR,
 )
 from app.cli.support.errors import OpenSREError
 
@@ -209,11 +210,13 @@ class ShellCompleter(Completer):
             cmd_name = parts[0].lower()
             raw_arg = "" if trailing_space or len(parts) < 2 else parts[1]
 
-            # File-path completion for commands that take a path argument
+            # File-path completion — pass ``raw_arg`` verbatim. ``PathCompleter``
+            # matches ``os.listdir`` names with case-sensitive ``startswith`` on
+            # Linux and case-sensitive macOS volumes; lowering breaks mixed-case paths.
             if cmd_name in ("/investigate", "/save"):
-                typed = raw_arg
+                path_prefix = raw_arg
                 yield from PathCompleter(expanduser=True).get_completions(
-                    Document(typed, len(typed)), complete_event
+                    Document(path_prefix, len(path_prefix)), complete_event
                 )
                 return
 
@@ -314,28 +317,39 @@ def _build_prompt_style() -> Style:
 
 def _run_new_alert(text: str, session: ReplSession, console: Console) -> None:
     """Dispatch a free-text alert description to the streaming pipeline."""
+    from app.cli.interactive_shell.tasks import TaskKind
     from app.cli.investigation import run_investigation_for_session
 
+    task = session.task_registry.create(TaskKind.INVESTIGATION)
+    task.mark_running()
     try:
         final_state = run_investigation_for_session(
             alert_text=text,
             context_overrides=session.accumulated_context or None,
+            cancel_requested=task.cancel_requested,
         )
     except KeyboardInterrupt:
+        task.mark_cancelled()
         console.print("[yellow]investigation cancelled.[/yellow]")
         session.record("alert", text, ok=False)
         return
     except OpenSREError as exc:
-        console.print(f"[red]investigation failed:[/red] {escape(str(exc))}")
+        task.mark_failed(str(exc))
+        console.print(f"[{TERMINAL_ERROR}]investigation failed:[/] {escape(str(exc))}")
         if exc.suggestion:
             console.print(f"[yellow]suggestion:[/yellow] {escape(exc.suggestion)}")
         session.record("alert", text, ok=False)
         return
     except Exception as exc:  # noqa: BLE001
-        console.print(f"[red]investigation failed:[/red] {escape(str(exc))}")
+        task.mark_failed(str(exc))
+        # Exception repr may contain brackets (stack frame refs, config
+        # dicts) that Rich would eat as markup tags — escape before printing.
+        console.print(f"[{TERMINAL_ERROR}]investigation failed:[/] {escape(str(exc))}")
         session.record("alert", text, ok=False)
         return
 
+    root = final_state.get("root_cause")
+    task.mark_completed(result=str(root) if root is not None else "")
     session.last_state = final_state
     session.accumulate_from_state(final_state)
     session.record("alert", text)

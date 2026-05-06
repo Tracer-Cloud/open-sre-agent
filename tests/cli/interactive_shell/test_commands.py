@@ -11,6 +11,7 @@ from rich.console import Console
 
 from app.cli.interactive_shell.commands import SLASH_COMMANDS, dispatch_slash
 from app.cli.interactive_shell.session import ReplSession
+from app.cli.interactive_shell.tasks import TaskKind, TaskStatus
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -630,7 +631,11 @@ class TestInvestigateFileCommand:
 
         captured: list[str] = []
 
-        def _fake(alert_text: str, context_overrides: object = None) -> dict:
+        def _fake(
+            alert_text: str,
+            context_overrides: object = None,
+            cancel_requested: object = None,
+        ) -> dict:
             captured.append(alert_text)
             return {"root_cause": "test cause"}
 
@@ -653,7 +658,11 @@ class TestInvestigateFileCommand:
         alert_file = tmp_path / "alert.json"  # type: ignore[operator]
         alert_file.write_text('{"alert_name": "test"}', encoding="utf-8")  # type: ignore[union-attr]
 
-        def _fake(alert_text: str, context_overrides: object = None) -> dict:
+        def _fake(
+            alert_text: str,
+            context_overrides: object = None,
+            cancel_requested: object = None,
+        ) -> dict:
             return {
                 "root_cause": "disk full",
                 "service": "orders-api",
@@ -674,8 +683,33 @@ class TestInvestigateFileCommand:
             "region": "us-east-1",
         }
 
+    def test_investigate_opensre_error_marks_task_failed(
+        self, tmp_path: object, monkeypatch: object
+    ) -> None:
+        from app.cli.support.errors import OpenSREError
 
-# ---------------------------------------------------------------------------
+        alert_file = tmp_path / "alert.json"  # type: ignore[operator]
+        alert_file.write_text('{"alert_name": "test"}', encoding="utf-8")  # type: ignore[union-attr]
+
+        def _raise(
+            alert_text: str,
+            context_overrides: object = None,
+            cancel_requested: object = None,
+        ) -> dict[str, object]:
+            raise OpenSREError("bad config")
+
+        monkeypatch.setattr("app.cli.investigation.run_investigation_for_session", _raise)
+        session = ReplSession()
+        console, _ = _capture()
+        dispatch_slash(f"/investigate {alert_file}", session, console)
+        inv_tasks = [
+            t for t in session.task_registry.list_recent(10) if t.kind == TaskKind.INVESTIGATION
+        ]
+        assert len(inv_tasks) == 1
+        assert inv_tasks[0].status == TaskStatus.FAILED
+        assert inv_tasks[0].error == "bad config"
+
+
 # Task 4 — Session-state commands
 # ---------------------------------------------------------------------------
 
@@ -873,12 +907,18 @@ class TestCompactCommand:
 
 
 class TestStopCommand:
-    def test_prints_ctrl_c_hint(self) -> None:
+    def test_prints_stop_hints(self) -> None:
         console, buf = _capture()
         dispatch_slash("/stop", ReplSession(), console)
-        assert "Ctrl+C" in buf.getvalue()
+        out = buf.getvalue()
+        assert "Ctrl+C" in out
+        assert "/tasks" in out
+        assert "/cancel" in out
 
-    def test_cancel_alias_same_as_stop(self) -> None:
+
+class TestCancelCommand:
+    def test_usage_without_task_id(self) -> None:
         console, buf = _capture()
         dispatch_slash("/cancel", ReplSession(), console)
-        assert "Ctrl+C" in buf.getvalue()
+        assert "usage" in buf.getvalue().lower()
+        assert "/tasks" in buf.getvalue()

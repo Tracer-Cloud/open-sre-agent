@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 from pathlib import Path
 
 import pytest
@@ -178,3 +179,51 @@ def test_completion_menu_current_item_uses_highlight_style() -> None:
     assert attrs_menu.bgcolor == "2c1e14"
     assert attrs_menu.reverse is False
     assert attrs_menu.bold is True
+
+
+def test_shell_completer_path_completion_honors_mixed_case_prefix(tmp_path: Path) -> None:
+    """Regression: path fragments must not be lowercased before PathCompleter.
+
+    On case-sensitive filesystems, a lowered prefix can stop matching real directory
+    names (e.g. ``RePoRtS`` no longer matches prefix ``re``).
+    """
+    mixed_dir = tmp_path / "RePoRtS"
+    mixed_dir.mkdir()
+    (mixed_dir / "x.txt").write_text("x", encoding="utf-8")
+    partial = str(tmp_path / "Re")
+    line = f"/investigate {partial}"
+    completions = list(
+        loop.ShellCompleter().get_completions(
+            Document(line, len(line)),
+            CompleteEvent(text_inserted=True),
+        )
+    )
+    assert completions
+    joined = " ".join(str(c.display) for c in completions)
+    assert "RePoRtS" in joined
+
+
+def test_run_new_alert_marks_task_failed_on_opensre_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    from rich.console import Console
+
+    from app.cli.interactive_shell.session import ReplSession
+    from app.cli.interactive_shell.tasks import TaskKind, TaskStatus
+    from app.cli.support.errors import OpenSREError
+
+    def _raise(
+        alert_text: str,
+        context_overrides: object = None,
+        cancel_requested: object = None,
+    ) -> dict[str, object]:
+        raise OpenSREError("integration misconfigured", suggestion="run /doctor")
+
+    monkeypatch.setattr("app.cli.investigation.run_investigation_for_session", _raise)
+    session = ReplSession()
+    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
+    loop._run_new_alert("High CPU alert", session, console)
+    inv_tasks = [
+        t for t in session.task_registry.list_recent(10) if t.kind == TaskKind.INVESTIGATION
+    ]
+    assert len(inv_tasks) == 1
+    assert inv_tasks[0].status == TaskStatus.FAILED
+    assert inv_tasks[0].error == "integration misconfigured"

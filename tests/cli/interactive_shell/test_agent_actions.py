@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import io
 import subprocess
+import time
 from pathlib import Path, PurePosixPath
+from unittest.mock import MagicMock
 
 from rich.console import Console
 
@@ -15,6 +17,7 @@ from app.cli.interactive_shell.agent_actions import (
     plan_terminal_tasks,
 )
 from app.cli.interactive_shell.session import ReplSession
+from app.cli.interactive_shell.tasks import TaskKind, TaskStatus
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -280,6 +283,7 @@ def test_execute_cli_actions_runs_sample_alert(monkeypatch: object) -> None:
         *,
         template_name: str = "generic",
         context_overrides: dict[str, object] | None = None,
+        cancel_requested: object | None = None,
     ) -> dict[str, object]:
         calls.append(template_name)
         assert context_overrides is None
@@ -308,29 +312,63 @@ def test_execute_cli_actions_runs_sample_alert(monkeypatch: object) -> None:
         "is_noise": False,
     }
     assert session.history[-1] == {"type": "alert", "text": "sample:generic", "ok": True}
+    inv_tasks = [
+        t for t in session.task_registry.list_recent(10) if t.kind == TaskKind.INVESTIGATION
+    ]
+    assert len(inv_tasks) == 1
+    assert inv_tasks[0].status == TaskStatus.COMPLETED
+    assert inv_tasks[0].result == "sample failure"
     output = buf.getvalue()
     assert "sample alert" in output
     assert "generic" in output
 
 
+def test_execute_cli_actions_sample_alert_opensre_error_marks_task_failed(
+    monkeypatch: object,
+) -> None:
+    from app.cli.support.errors import OpenSREError
+
+    def _raise(
+        *,
+        template_name: str = "generic",
+        context_overrides: dict[str, object] | None = None,
+        cancel_requested: object | None = None,
+    ) -> dict[str, object]:
+        raise OpenSREError("sample pipeline blocked")
+
+    import app.cli.investigation as investigation_module
+
+    monkeypatch.setattr(investigation_module, "run_sample_alert_for_session", _raise)
+
+    session = ReplSession()
+    console, _ = _capture()
+    assert execute_cli_actions("okay launch a simple alert", session, console) is True
+    inv_tasks = [
+        t for t in session.task_registry.list_recent(10) if t.kind == TaskKind.INVESTIGATION
+    ]
+    assert len(inv_tasks) == 1
+    assert inv_tasks[0].status == TaskStatus.FAILED
+    assert inv_tasks[0].error == "sample pipeline blocked"
+
+
 def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch: object) -> None:
     dispatched: list[str] = []
-    synthetic_calls: list[tuple[list[str], dict[str, object]]] = []
+    popen_calls: list[tuple[list[str], dict[str, object]]] = []
 
     def _fake_dispatch(command: str, _session: ReplSession, console: Console) -> bool:
         dispatched.append(command)
         console.print(f"ran {command}")
         return True
 
-    def _fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        synthetic_calls.append((command, kwargs))
-        return subprocess.CompletedProcess(
-            args=command,
-            returncode=0,
-        )
+    def _fake_popen(command: list[str], **kwargs: object) -> MagicMock:
+        popen_calls.append((command, kwargs))
+        proc = MagicMock()
+        proc.poll.return_value = 0
+        proc.returncode = 0
+        return proc
 
     monkeypatch.setattr(agent_actions, "dispatch_slash", _fake_dispatch)  # type: ignore[attr-defined]
-    monkeypatch.setattr(agent_actions.subprocess, "run", _fake_run)
+    monkeypatch.setattr(agent_actions.subprocess, "Popen", _fake_popen)
 
     session = ReplSession()
     console, buf = _capture()
@@ -342,16 +380,16 @@ def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch:
 
     assert handled is True
     assert dispatched == ["/list integrations"]
-    assert synthetic_calls == [
-        (
-            [agent_actions.sys.executable, "-m", "app.cli", "tests", "synthetic"],
-            {
-                "timeout": agent_actions._SYNTHETIC_TEST_TIMEOUT_SECONDS,
-                "check": False,
-            },
-        )
+    assert len(popen_calls) == 1
+    assert popen_calls[0][0] == [
+        agent_actions.sys.executable,
+        "-m",
+        "app.cli",
+        "tests",
+        "synthetic",
     ]
-    assert session.history == [
+
+    assert session.history[:2] == [
         {
             "type": "cli_agent",
             "text": (
@@ -361,8 +399,22 @@ def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch:
             "ok": True,
         },
         {"type": "slash", "text": "/list integrations", "ok": True},
-        {"type": "synthetic_test", "text": "rds_postgres", "ok": True},
     ]
+
+    for _ in range(100):
+        recent = session.task_registry.list_recent(1)
+        if recent and recent[0].status != TaskStatus.RUNNING:
+            break
+        time.sleep(0.01)
+    finished = session.task_registry.list_recent(1)[0]
+    assert finished.status == TaskStatus.COMPLETED
+
+    synthetic_entry = session.history[-1]
+    assert synthetic_entry["type"] == "synthetic_test"
+    assert synthetic_entry["ok"] is True
+    assert "rds_postgres" in synthetic_entry["text"]
+    assert "task:" in synthetic_entry["text"]
+
     output = buf.getvalue()
     assert output.index("1.") < output.index("$ /list integrations")
     assert output.index("2.") < output.index("$ /list integrations")

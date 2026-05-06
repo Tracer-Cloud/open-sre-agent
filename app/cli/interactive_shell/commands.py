@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 from rich import box
@@ -15,6 +16,7 @@ from rich.table import Table
 from app.cli.interactive_shell.banner import render_banner, resolve_provider_models
 from app.cli.interactive_shell.history import load_command_history_entries
 from app.cli.interactive_shell.session import ReplSession
+from app.cli.interactive_shell.tasks import TaskKind, TaskRecord, TaskStatus
 from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD, TERMINAL_ERROR
 from app.cli.support.errors import OpenSREError
 from app.utils.sentry_sdk import capture_exception
@@ -573,27 +575,35 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
         console.print(f"[{TERMINAL_ERROR}]cannot read file:[/] {escape(str(exc))}")
         return True
 
+    task = session.task_registry.create(TaskKind.INVESTIGATION)
+    task.mark_running()
     try:
         final_state = run_investigation_for_session(
             alert_text=text,
             context_overrides=session.accumulated_context or None,
+            cancel_requested=task.cancel_requested,
         )
     except KeyboardInterrupt:
+        task.mark_cancelled()
         console.print("[yellow]investigation cancelled.[/yellow]")
         session.record("alert", args[0], ok=False)
         return True
     except OpenSREError as exc:
+        task.mark_failed(str(exc))
         console.print(f"[{TERMINAL_ERROR}]investigation failed:[/] {escape(str(exc))}")
         if exc.suggestion:
             console.print(f"[yellow]suggestion:[/yellow] {escape(exc.suggestion)}")
         session.record("alert", args[0], ok=False)
         return True
     except Exception as exc:  # noqa: BLE001
+        task.mark_failed(str(exc))
         capture_exception(exc)
         console.print(f"[{TERMINAL_ERROR}]investigation failed:[/] {escape(str(exc))}")
         session.record("alert", args[0], ok=False)
         return True
 
+    root = final_state.get("root_cause")
+    task.mark_completed(result=str(root) if root is not None else "")
     session.last_state = final_state
     # Match `_run_new_alert` in loop.py: inherit service / cluster / region
     # across subsequent investigations in the same REPL session.  Without
@@ -757,8 +767,107 @@ def _cmd_compact(session: ReplSession, console: Console, args: list[str]) -> boo
     return True
 
 
+def _task_started_label(task: TaskRecord) -> str:
+    return datetime.fromtimestamp(task.started_at, tz=UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+
+def _task_duration_label(task: TaskRecord) -> str:
+    duration = task.duration_seconds()
+    if duration is None:
+        return "—"
+    return f"{duration:.1f}s"
+
+
+def _task_detail_label(task: TaskRecord) -> str:
+    if task.error:
+        return str(task.error)
+    if task.result:
+        return str(task.result)
+    return "—"
+
+
+def _cmd_tasks(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+    # ``list_recent(n)`` respects ``n`; default in the helper is smaller—use 50 here so
+    # /tasks spans most of what the registry can hold (~100 slots).
+    tasks = session.task_registry.list_recent(n=50)
+    if not tasks:
+        console.print("[dim]no tasks recorded this session.[/dim]")
+        return True
+
+    table = Table(title="Tasks", title_style=TERMINAL_ACCENT_BOLD)
+    table.add_column("id", style="bold")
+    table.add_column("kind")
+    table.add_column("status")
+    table.add_column("started", style="dim")
+    table.add_column("duration", style="dim", justify="right")
+    table.add_column("detail", style="dim", overflow="fold")
+
+    status_style = {
+        TaskStatus.RUNNING: "yellow",
+        TaskStatus.COMPLETED: "green",
+        TaskStatus.CANCELLED: "yellow",
+        TaskStatus.FAILED: "red",
+        TaskStatus.PENDING: "dim",
+    }
+    for task in tasks:
+        st = status_style.get(task.status, "dim")
+        table.add_row(
+            task.task_id,
+            task.kind.value,
+            f"[{st}]{task.status.value}[/{st}]",
+            _task_started_label(task),
+            _task_duration_label(task),
+            escape(_task_detail_label(task)),
+        )
+    console.print(table)
+    return True
+
+
+def _cmd_cancel(session: ReplSession, console: Console, args: list[str]) -> bool:
+    if not args:
+        console.print("[red]usage:[/red] /cancel <task_id>  — use [bold]/tasks[/bold] to list ids")
+        return True
+
+    needle = args[0]
+    candidates = session.task_registry.candidates(needle)
+    if not candidates:
+        console.print(f"[red]no task matches id:[/red] {escape(needle)}")
+        return True
+    if len(candidates) > 1:
+        console.print(
+            f"[red]ambiguous id prefix:[/red] {escape(needle)} "
+            f"[dim]({len(candidates)} matches — use a longer prefix)[/dim]"
+        )
+        return True
+
+    task = candidates[0]
+    if task.status != TaskStatus.RUNNING:
+        console.print(
+            f"[dim]task {escape(task.task_id)} already finished "
+            f"(status: {task.status.value}).[/dim]"
+        )
+        return True
+
+    task.request_cancel()
+    if task.kind == TaskKind.INVESTIGATION:
+        console.print(
+            "[yellow]cancellation signaled.[/yellow] "
+            "[dim]if the investigation is still streaming, press[/dim] [bold]Ctrl+C[/bold] "
+            "[dim]to interrupt the current run.[/dim]"
+        )
+    else:
+        console.print(
+            f"[green]stop requested[/green] [dim]for synthetic test {escape(task.task_id)}.[/dim] "
+            "[dim]use[/dim] [bold]/tasks[/bold] [dim]to confirm status.[/dim]"
+        )
+    return True
+
+
 def _cmd_stop(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    console.print("[dim]press [bold]Ctrl+C[/bold] to cancel an in-flight investigation.[/dim]")
+    console.print(
+        "[dim]in-flight work: press[/dim] [bold]Ctrl+C[/bold] [dim]during a streaming investigation, "
+        "or run[/dim] [bold]/tasks[/bold] [dim]then[/dim] [bold]/cancel <id>[/bold] [dim]for background tasks."
+    )
     return True
 
 
@@ -816,10 +925,13 @@ SLASH_COMMANDS: dict[str, SlashCommand] = {
         "/verbose", "toggle verbose logging ('/verbose off' to disable)", _cmd_verbose
     ),
     "/compact": SlashCommand("/compact", "trim old session history to free memory", _cmd_compact),
-    "/stop": SlashCommand(
-        "/stop", "reminder: press Ctrl+C to cancel an in-flight investigation", _cmd_stop
+    "/tasks": SlashCommand("/tasks", "list recent and in-flight shell tasks", _cmd_tasks),
+    "/cancel": SlashCommand(
+        "/cancel", "cancel a running task by id ('/cancel <task_id>' — see /tasks)", _cmd_cancel
     ),
-    "/cancel": SlashCommand("/cancel", "alias for /stop", _cmd_stop),
+    "/stop": SlashCommand(
+        "/stop", "hints for stopping in-flight investigations and background tasks", _cmd_stop
+    ),
 }
 
 

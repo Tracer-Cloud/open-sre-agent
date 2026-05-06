@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import re
 import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
+import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from rich.console import Console
 from rich.markup import escape
@@ -20,6 +24,7 @@ from app.cli.interactive_shell.commands import dispatch_slash, switch_llm_provid
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.shell_execution import execute_shell_command
 from app.cli.interactive_shell.shell_policy import evaluate_policy, parse_shell_command
+from app.cli.interactive_shell.tasks import TaskKind, TaskRecord
 from app.cli.interactive_shell.terminal_intent import mentioned_integration_services
 from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
 from app.cli.support.errors import OpenSREError
@@ -157,7 +162,10 @@ _NON_COMMAND_STARTS = frozenset(
 _SHELL_BUILTINS = frozenset({"cd", "pwd"})
 _SHELL_COMMAND_TIMEOUT_SECONDS = 120
 _SYNTHETIC_TEST_TIMEOUT_SECONDS = 1800
+_SYNTHETIC_POLL_SECONDS = 0.25
 _MAX_COMMAND_OUTPUT_CHARS = 24_000
+_SYNTHETIC_DIAG_CHARS = 2_000  # max stderr bytes captured from a failing synthetic run
+_SIGTERM_GRACE_SECONDS = 10  # wait for clean exit after SIGTERM before escalating to SIGKILL
 _IS_WINDOWS = os.name == "nt"
 
 
@@ -407,6 +415,98 @@ def _print_planned_actions(console: Console, actions: list[PlannedAction]) -> No
         )
 
 
+def _terminate_child_process(proc: subprocess.Popen[Any]) -> None:
+    """Best-effort SIGTERM → wait → SIGKILL → wait without blocking forever."""
+    if proc.poll() is not None:
+        return
+    with contextlib.suppress(OSError):
+        proc.terminate()
+    try:
+        proc.wait(timeout=_SIGTERM_GRACE_SECONDS)
+    except subprocess.TimeoutExpired:
+        with contextlib.suppress(OSError):
+            proc.kill()
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            proc.wait(timeout=5)
+
+
+def _read_diag(buf: tempfile.SpooledTemporaryFile[bytes]) -> str:  # type: ignore[type-arg]
+    """Read up to ``_SYNTHETIC_DIAG_CHARS`` bytes from a captured stderr buffer."""
+    buf.seek(0)
+    return buf.read(_SYNTHETIC_DIAG_CHARS).decode("utf-8", errors="replace").strip()
+
+
+def _watch_synthetic_subprocess(
+    task: TaskRecord,
+    proc: subprocess.Popen[Any],
+    session: ReplSession,
+    suite_name: str,
+    stderr_buf: tempfile.SpooledTemporaryFile[bytes],  # type: ignore[type-arg]
+) -> None:
+    def _history_text() -> str:
+        return f"{suite_name} task:{task.task_id}"
+
+    history_gen_when_watch_started = session.history_generation
+
+    def _record_synthetic_if_current_session(ok: bool) -> None:
+        if session.history_generation != history_gen_when_watch_started:
+            return
+        session.record("synthetic_test", _history_text(), ok=ok)
+
+    def _run() -> None:
+        started = time.monotonic()
+        timed_out = False
+        # Track whether *we* explicitly terminated the process so we can
+        # distinguish a cancel-driven exit from a natural exit that happened
+        # to race with a concurrent /cancel.
+        terminated_by_watcher = False
+        while proc.poll() is None:
+            if time.monotonic() - started > _SYNTHETIC_TEST_TIMEOUT_SECONDS:
+                timed_out = True
+                task.request_cancel()
+                _terminate_child_process(proc)
+                terminated_by_watcher = True
+                break
+            if task.cancel_requested.is_set():
+                _terminate_child_process(proc)
+                terminated_by_watcher = True
+                break
+            time.sleep(_SYNTHETIC_POLL_SECONDS)
+
+        try:
+            if timed_out:
+                task.mark_failed(f"timed out after {_SYNTHETIC_TEST_TIMEOUT_SECONDS}s")
+                _record_synthetic_if_current_session(ok=False)
+                return
+
+            code = proc.returncode
+            if code is None:
+                task.mark_failed("subprocess did not report exit code")
+                _record_synthetic_if_current_session(ok=False)
+                return
+
+            # Honour the real exit code when the process exited on its own.
+            # Only treat as CANCELLED when *we* killed it after a cancel request;
+            # a natural exit that races with /cancel should be recorded by its code.
+            if terminated_by_watcher and task.cancel_requested.is_set():
+                task.mark_cancelled()
+                _record_synthetic_if_current_session(ok=False)
+                return
+
+            if code == 0:
+                task.mark_completed(result="ok")
+                _record_synthetic_if_current_session(ok=True)
+            else:
+                diag = _read_diag(stderr_buf)
+                error_msg = f"exit code {code}" + (f": {diag}" if diag else "")
+                task.mark_failed(error_msg)
+                _record_synthetic_if_current_session(ok=False)
+        finally:
+            stderr_buf.close()
+
+    threading.Thread(target=_run, daemon=True, name=f"synthetic-{task.task_id}").start()
+
+
 def _run_shell_command(command: str, session: ReplSession, console: Console) -> None:
     console.print(f"[bold]$ {escape(command)}[/bold]")
     parsed = parse_shell_command(command, is_windows=_IS_WINDOWS)
@@ -524,26 +624,34 @@ def _run_sample_alert(template_name: str, session: ReplSession, console: Console
     from app.cli.investigation import run_sample_alert_for_session
 
     console.print(f"[bold]sample alert:[/bold] {escape(template_name)}")
+    task = session.task_registry.create(TaskKind.INVESTIGATION)
+    task.mark_running()
     try:
         final_state = run_sample_alert_for_session(
             template_name=template_name,
             context_overrides=session.accumulated_context or None,
+            cancel_requested=task.cancel_requested,
         )
     except KeyboardInterrupt:
+        task.mark_cancelled()
         console.print("[yellow]investigation cancelled.[/yellow]")
         session.record("alert", f"sample:{template_name}", ok=False)
         return
     except OpenSREError as exc:
+        task.mark_failed(str(exc))
         console.print(f"[red]investigation failed:[/red] {escape(str(exc))}")
         if exc.suggestion:
             console.print(f"[yellow]suggestion:[/yellow] {escape(exc.suggestion)}")
         session.record("alert", f"sample:{template_name}", ok=False)
         return
     except Exception as exc:  # noqa: BLE001
+        task.mark_failed(str(exc))
         console.print(f"[red]investigation failed:[/red] {escape(str(exc))}")
         session.record("alert", f"sample:{template_name}", ok=False)
         return
 
+    root = final_state.get("root_cause")
+    task.mark_completed(result=str(root) if root is not None else "")
     session.last_state = final_state
     session.accumulate_from_state(final_state)
     session.record("alert", f"sample:{template_name}")
@@ -557,27 +665,32 @@ def _run_synthetic_test(suite_name: str, session: ReplSession, console: Console)
 
     display_command = "opensre tests synthetic"
     console.print(f"[bold]$ {display_command}[/bold]")
+    task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
+    task.mark_running()
+    # Lifetime managed by the watcher thread's finally block. noqa: SIM115
+    stderr_buf: tempfile.SpooledTemporaryFile[bytes] = tempfile.SpooledTemporaryFile(  # type: ignore[type-arg] # noqa: SIM115
+        max_size=_SYNTHETIC_DIAG_CHARS * 2
+    )
     try:
-        completed = subprocess.run(
+        proc = subprocess.Popen(  # noqa: S603 - argv is trusted interpreter path + module
             [sys.executable, "-m", "app.cli", "tests", "synthetic"],
-            timeout=_SYNTHETIC_TEST_TIMEOUT_SECONDS,
-            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=stderr_buf,
         )
-    except subprocess.TimeoutExpired:
-        console.print(
-            f"[red]synthetic test timed out after {_SYNTHETIC_TEST_TIMEOUT_SECONDS} seconds[/red]"
-        )
-        session.record("synthetic_test", suite_name, ok=False)
-        return
     except Exception as exc:  # noqa: BLE001
+        stderr_buf.close()
+        task.mark_failed(str(exc))
         console.print(f"[red]synthetic test failed to start:[/red] {escape(str(exc))}")
         session.record("synthetic_test", suite_name, ok=False)
         return
 
-    ok = completed.returncode == 0
-    if not ok:
-        console.print(f"[red]exit code:[/red] {completed.returncode}")
-    session.record("synthetic_test", suite_name, ok=ok)
+    task.attach_process(proc)
+    _watch_synthetic_subprocess(task, proc, session, suite_name, stderr_buf)
+    console.print(
+        f"[dim]synthetic test started — task[/dim] [bold]{escape(task.task_id)}[/bold]. "
+        f"[dim]/tasks[/dim] [dim]to monitor,[/dim] [bold]/cancel {escape(task.task_id)}[/bold] "
+        f"[dim]to stop.[/dim]"
+    )
 
 
 def execute_cli_actions(message: str, session: ReplSession, console: Console) -> bool:
