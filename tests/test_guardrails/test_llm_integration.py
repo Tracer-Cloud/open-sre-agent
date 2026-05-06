@@ -250,14 +250,6 @@ class TestOpenAIClientGuardrails:
         assert "[REDACTED:aws_key]" in msg_content
 
 
-class _FakeMessage:
-    """Minimal LangChain-style message object with mutable content."""
-
-    def __init__(self, content: str, msg_type: str = "human") -> None:
-        self.content: str | None = content
-        self.type = msg_type
-
-
 class TestChatNodeGuardrails:
     def test_redacts_message_content(
         self,
@@ -274,10 +266,11 @@ class TestChatNodeGuardrails:
         monkeypatch.setattr("app.guardrails.rules.get_default_rules_path", lambda: config)
 
         from app.nodes.chat import _apply_guardrails_to_messages
+        from app.types.messages import SREMessageList, make_user
 
-        msgs: list[Any] = [
-            _FakeMessage("hello"),
-            _FakeMessage("key is AKIAIOSFODNN7EXAMPLE"),
+        msgs: SREMessageList = [
+            make_user("hello"),
+            make_user("key is AKIAIOSFODNN7EXAMPLE"),
         ]
         result = _apply_guardrails_to_messages(msgs)
 
@@ -285,7 +278,7 @@ class TestChatNodeGuardrails:
         assert "AKIA" not in str(result[1]["content"])
         assert "[REDACTED:aws_key]" in str(result[1]["content"])
         # Original should be untouched
-        assert msgs[1].content == "key is AKIAIOSFODNN7EXAMPLE"
+        assert msgs[1]["content"] == "key is AKIAIOSFODNN7EXAMPLE"
 
     def test_blocks_on_chat_content(
         self,
@@ -302,8 +295,9 @@ class TestChatNodeGuardrails:
         monkeypatch.setattr("app.guardrails.rules.get_default_rules_path", lambda: config)
 
         from app.nodes.chat import _apply_guardrails_to_messages
+        from app.types.messages import SREMessageList, make_user
 
-        msgs: list[Any] = [_FakeMessage("this is forbidden")]
+        msgs: SREMessageList = [make_user("this is forbidden")]
         with pytest.raises(GuardrailBlockedError):
             _apply_guardrails_to_messages(msgs)
 
@@ -322,10 +316,11 @@ class TestChatNodeGuardrails:
         monkeypatch.setattr("app.guardrails.rules.get_default_rules_path", lambda: config)
 
         from app.nodes.chat import _apply_guardrails_to_messages
+        from app.types.messages import SREMessageList, make_user
 
-        msg = _FakeMessage("")
-        msg.content = None
-        msgs: list[Any] = [msg]
+        msg = make_user("")
+        msg["content"] = None  # type: ignore[assignment]
+        msgs: SREMessageList = [msg]
         _apply_guardrails_to_messages(msgs)
 
     def test_noop_when_no_rules(
@@ -339,8 +334,9 @@ class TestChatNodeGuardrails:
         )
 
         from app.nodes.chat import _apply_guardrails_to_messages
+        from app.types.messages import SREMessageList, make_user
 
-        msgs: list[Any] = [_FakeMessage("AKIAIOSFODNN7EXAMPLE")]
+        msgs: SREMessageList = [make_user("AKIAIOSFODNN7EXAMPLE")]
         result = _apply_guardrails_to_messages(msgs)
         assert result[0]["content"] == "AKIAIOSFODNN7EXAMPLE"
 
@@ -460,9 +456,10 @@ class TestOverlappingRedactionReachesDownstream:
         self._install_rules(tmp_path, monkeypatch)
 
         from app.nodes.chat import _apply_guardrails_to_messages
+        from app.types.messages import SREMessageList, make_user
 
         original = "Investigation: api_key=AKIAIOSFODNN7EXAMPLE surfaced in logs"
-        msgs: list[Any] = [_FakeMessage(original)]
+        msgs: SREMessageList = [make_user(original)]
         result = _apply_guardrails_to_messages(msgs)
 
         redacted = str(result[0]["content"])
@@ -470,7 +467,7 @@ class TestOverlappingRedactionReachesDownstream:
         assert "AKIA" not in redacted
         assert "[REDACTED:generic_api_token]" in redacted
         # Source message untouched — confirms the defensive copy.
-        assert msgs[0].content == original
+        assert msgs[0]["content"] == original
 
     def test_contained_real_secret_fully_redacted_in_pipeline(
         self,

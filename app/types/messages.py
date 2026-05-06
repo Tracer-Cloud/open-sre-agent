@@ -17,11 +17,16 @@ from typing import Any, Literal
 from typing_extensions import TypedDict
 
 
-class SREMessage(TypedDict, total=False):
-    """A single message in a conversation, provider-agnostic."""
+class _SREMessageRequired(TypedDict):
+    """Required fields for every SREMessage."""
 
     role: Literal["system", "user", "assistant", "tool"]
     content: str
+
+
+class SREMessage(_SREMessageRequired, total=False):
+    """A single message in a conversation, provider-agnostic."""
+
     tool_calls: list[dict[str, Any]] | None
     tool_call_id: str | None
     name: str | None
@@ -126,8 +131,8 @@ def from_lc_message(msg: Any) -> SREMessage:
     elif isinstance(msg, ToolMessage):
         role_type = "tool"
     else:
-        # Unknown message type — treat as assistant to avoid crash
-        role_type = "assistant"
+        # Unknown message type — treat as user to avoid false tool-call matches
+        role_type = "user"
 
     content = msg.content if isinstance(msg.content, str) else str(msg.content)
     res = SREMessage(role=role_type, content=content)

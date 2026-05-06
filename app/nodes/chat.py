@@ -170,12 +170,11 @@ def router_node(state: AgentState) -> dict[str, Any]:
     return {"route": route if route in ("tracer_data", "general") else "general"}
 
 
-def _apply_guardrails_to_messages(msgs: list[Any]) -> SREMessageList:
+def _apply_guardrails_to_messages(msgs: SREMessageList) -> SREMessageList:
     """Return a copy of *msgs* with redacted content, leaving originals untouched.
 
     Operates on copies to avoid mutating shared LangGraph state objects.
     """
-    msgs = [from_lc_message(m) for m in msgs]
     from app.guardrails.engine import get_guardrail_engine
 
     engine = get_guardrail_engine()
