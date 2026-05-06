@@ -40,4 +40,7 @@ class OpenSREError(click.ClickException):
     def show(self, file: t.IO[t.Any] | None = None) -> None:
         if file is None:
             file = sys.stderr
-        click.echo(click.style("Error: ", fg="red", bold=True) + self.format_message(), file=file)
+        click.echo(
+            "\n" + click.style("Error: ", fg="red", bold=True) + self.format_message(),
+            file=file,
+        )
