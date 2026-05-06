@@ -7,6 +7,7 @@ from collections.abc import Mapping
 
 from app.analytics.events import Event
 from app.analytics.provider import Properties, get_analytics
+from app.utils.sentry_sdk import capture_exception
 
 
 def _string_value(value: object) -> str | None:
@@ -65,20 +66,27 @@ def _investigation_started_properties(
     return properties
 
 
+def _capture(event: Event, properties: Properties | None = None) -> None:
+    try:
+        get_analytics().capture(event, properties)
+    except Exception as exc:  # noqa: BLE001
+        capture_exception(exc)
+
+
 def capture_cli_invoked(properties: Properties | None = None) -> None:
-    get_analytics().capture(Event.CLI_INVOKED, properties)
+    _capture(Event.CLI_INVOKED, properties)
 
 
 def capture_onboard_started() -> None:
-    get_analytics().capture(Event.ONBOARD_STARTED)
+    _capture(Event.ONBOARD_STARTED)
 
 
 def capture_onboard_completed(config: Mapping[str, object]) -> None:
-    get_analytics().capture(Event.ONBOARD_COMPLETED, _onboard_completed_properties(config))
+    _capture(Event.ONBOARD_COMPLETED, _onboard_completed_properties(config))
 
 
 def capture_onboard_failed() -> None:
-    get_analytics().capture(Event.ONBOARD_FAILED)
+    _capture(Event.ONBOARD_FAILED)
 
 
 def capture_investigation_started(
@@ -87,7 +95,7 @@ def capture_investigation_started(
     input_json: str | None,
     interactive: bool,
 ) -> None:
-    get_analytics().capture(
+    _capture(
         Event.INVESTIGATION_STARTED,
         _investigation_started_properties(
             input_path=input_path,
@@ -98,63 +106,63 @@ def capture_investigation_started(
 
 
 def capture_investigation_completed() -> None:
-    get_analytics().capture(Event.INVESTIGATION_COMPLETED)
+    _capture(Event.INVESTIGATION_COMPLETED)
 
 
 def capture_investigation_failed() -> None:
-    get_analytics().capture(Event.INVESTIGATION_FAILED)
+    _capture(Event.INVESTIGATION_FAILED)
 
 
 def capture_integration_setup_started(service: str) -> None:
-    get_analytics().capture(Event.INTEGRATION_SETUP_STARTED, {"service": service})
+    _capture(Event.INTEGRATION_SETUP_STARTED, {"service": service})
 
 
 def capture_integration_setup_completed(service: str) -> None:
-    get_analytics().capture(Event.INTEGRATION_SETUP_COMPLETED, {"service": service})
+    _capture(Event.INTEGRATION_SETUP_COMPLETED, {"service": service})
 
 
 def capture_integrations_listed() -> None:
-    get_analytics().capture(Event.INTEGRATIONS_LISTED)
+    _capture(Event.INTEGRATIONS_LISTED)
 
 
 def capture_integration_removed(service: str) -> None:
-    get_analytics().capture(Event.INTEGRATION_REMOVED, {"service": service})
+    _capture(Event.INTEGRATION_REMOVED, {"service": service})
 
 
 def capture_integration_verified(service: str) -> None:
-    get_analytics().capture(Event.INTEGRATION_VERIFIED, {"service": service})
+    _capture(Event.INTEGRATION_VERIFIED, {"service": service})
 
 
 def capture_integration_added(service: str) -> None:
-    get_analytics().capture(Event.INTEGRATION_ADDED, {"service": service})
+    _capture(Event.INTEGRATION_ADDED, {"service": service})
 
 
 def capture_tests_picker_opened() -> None:
-    get_analytics().capture(Event.TESTS_PICKER_OPENED)
+    _capture(Event.TESTS_PICKER_OPENED)
 
 
 def capture_test_synthetic_started(scenario: str, *, mock_grafana: bool) -> None:
-    get_analytics().capture(
+    _capture(
         Event.TEST_SYNTHETIC_STARTED,
         {"scenario": scenario, "mock_grafana": mock_grafana},
     )
 
 
 def capture_tests_listed(category: str, *, search: bool) -> None:
-    get_analytics().capture(Event.TESTS_LISTED, {"category": category, "search": search})
+    _capture(Event.TESTS_LISTED, {"category": category, "search": search})
 
 
 def capture_test_run_started(test_id: str, *, dry_run: bool) -> None:
-    get_analytics().capture(Event.TEST_RUN_STARTED, {"test_id": test_id, "dry_run": dry_run})
+    _capture(Event.TEST_RUN_STARTED, {"test_id": test_id, "dry_run": dry_run})
 
 
 def capture_deploy_started(*, target: str, dry_run: bool) -> None:
-    get_analytics().capture(Event.DEPLOY_STARTED, {"target": target, "dry_run": dry_run})
+    _capture(Event.DEPLOY_STARTED, {"target": target, "dry_run": dry_run})
 
 
 def capture_deploy_completed(*, target: str, dry_run: bool) -> None:
-    get_analytics().capture(Event.DEPLOY_COMPLETED, {"target": target, "dry_run": dry_run})
+    _capture(Event.DEPLOY_COMPLETED, {"target": target, "dry_run": dry_run})
 
 
 def capture_deploy_failed(*, target: str, dry_run: bool) -> None:
-    get_analytics().capture(Event.DEPLOY_FAILED, {"target": target, "dry_run": dry_run})
+    _capture(Event.DEPLOY_FAILED, {"target": target, "dry_run": dry_run})

@@ -624,6 +624,15 @@ def _log_failure(stage: str, error: BaseException, **extra: object) -> None:
     )
 
 
+def _capture_sentry_failure(error: BaseException) -> None:
+    """Report telemetry failures without making analytics depend on Sentry imports."""
+    try:
+        from app.utils.sentry_sdk import capture_exception
+    except Exception:  # noqa: BLE001
+        return
+    capture_exception(error)
+
+
 class _QueueOverflow(RuntimeError):
     """Synthetic exception used so ``queue.Full`` produces a useful breadcrumb."""
 
@@ -668,19 +677,20 @@ class Analytics:
             event=event.value,
             properties=_BASE_PROPERTIES | (properties or {}),
         )
-        self._ensure_worker()
         try:
+            self._ensure_worker()
             with self._pending_lock:
                 self._pending += 1
                 self._drained.clear()
             self._queue.put_nowait(envelope)
         except queue.Full:
             self._mark_done()
-            _log_failure(
-                "queue_full",
-                _QueueOverflow(f"queue overflow at size={_QUEUE_SIZE}"),
-                event=event.value,
-            )
+            error = _QueueOverflow(f"queue overflow at size={_QUEUE_SIZE}")
+            _log_failure("queue_full", error, event=event.value)
+            _capture_sentry_failure(error)
+        except Exception as exc:  # noqa: BLE001
+            _log_failure("capture", exc, event=event.value)
+            _capture_sentry_failure(exc)
 
     def shutdown(self, *, flush: bool = True, timeout: float = _SHUTDOWN_WAIT) -> None:
         if self._shutdown:
@@ -691,6 +701,7 @@ class Analytics:
                 self._ensure_worker()
             except Exception as exc:  # noqa: BLE001
                 _log_failure("worker_start", exc)
+                _capture_sentry_failure(exc)
                 self._worker_alive = False
         with contextlib.suppress(queue.Full):
             self._queue.put_nowait(None)
@@ -745,8 +756,11 @@ class Analytics:
             "event": item.event,
             "properties": properties,
         }
-        with contextlib.suppress(Exception):
+        try:
             client.post(f"{POSTHOG_HOST}/capture/", json=payload).raise_for_status()
+        except Exception as exc:  # noqa: BLE001
+            _log_failure("posthog_send", exc, event=item.event)
+            _capture_sentry_failure(exc)
 
     def _mark_done(self) -> None:
         with self._pending_lock:

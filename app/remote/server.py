@@ -50,9 +50,11 @@ from app.remote.vercel_poller import (
     VercelResolutionError,
     enrich_remote_alert_from_vercel,
 )
+from app.utils.sentry_sdk import capture_exception, init_sentry
 from app.version import get_version
 
 load_dotenv(override=False)
+init_sentry()
 
 INVESTIGATIONS_DIR = Path(os.getenv("INVESTIGATIONS_DIR", "/opt/opensre/investigations"))
 _AUTH_KEY = os.getenv("OPENSRE_API_KEY")
@@ -209,7 +211,8 @@ def _discord_post_followup(
         )
         if resp.status_code not in (200, 204):
             logger.warning("[discord] followup failed: %s %s", resp.status_code, resp.text[:200])
-    except Exception:
+    except Exception as exc:
+        capture_exception(exc)
         logger.exception("[discord] followup request failed")
 
 
@@ -235,7 +238,8 @@ async def _run_discord_investigation(interaction: DiscordInteraction) -> None:
             pipeline_name=raw_alert.get("pipeline_name"),
             severity=raw_alert.get("severity"),
         )
-    except Exception:
+    except Exception as exc:
+        capture_exception(exc)
         logger.exception("[discord] background investigation failed")
         app_id = interaction.application_id or _DISCORD_APPLICATION_ID
         if app_id and interaction.token:
@@ -346,6 +350,7 @@ def investigate(req: InvestigateRequest) -> InvestigateResponse:
     except VercelResolutionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
+        capture_exception(exc)
         logger.exception("Investigation failed")
         raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
 
@@ -414,7 +419,8 @@ async def investigate_stream(req: InvestigateRequest) -> Response:
                 payload = _json.dumps(event.data, default=str)
                 yield f"event: {event.event_type}\ndata: {payload}\n\n"
             yield "event: end\ndata: {}\n\n"
-        except Exception:
+        except Exception as exc:
+            capture_exception(exc)
             logger.exception("Streaming investigation failed")
             yield 'event: error\ndata: {"detail": "internal error"}\n\n'
         finally:
@@ -455,7 +461,8 @@ def _persist_streamed_result(
             result=state,
         )
         logger.info("Persisted streamed investigation: %s", inv_id)
-    except Exception:
+    except Exception as exc:
+        capture_exception(exc)
         logger.exception("Failed to persist streamed investigation")
 
 
@@ -469,7 +476,8 @@ async def _handle_polled_candidate(candidate: VercelInvestigationCandidate) -> b
             pipeline_name=candidate.pipeline_name,
             severity=candidate.severity,
         )
-    except Exception:
+    except Exception as exc:
+        capture_exception(exc)
         logger.exception(
             "Background Vercel investigation failed for deployment %s",
             candidate.dedupe_key,

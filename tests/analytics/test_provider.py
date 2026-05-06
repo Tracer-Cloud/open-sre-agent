@@ -122,6 +122,45 @@ def test_capture_install_detected_initializes_identity_before_install_marker(
     assert events == [Event.INSTALL_DETECTED.value]
 
 
+def test_analytics_send_failure_is_reported_to_sentry(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("OPENSRE_ANALYTICS_DISABLED", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(provider, "_ANONYMOUS_ID_PATH", tmp_path / "anonymous_id")
+    monkeypatch.setattr(provider.atexit, "register", lambda _func: None)
+    captured_errors: list[BaseException] = []
+    expected_error = RuntimeError("posthog unavailable")
+
+    class _StubResponse:
+        def raise_for_status(self) -> None:
+            raise expected_error
+
+    class _StubClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def __enter__(self) -> _StubClient:
+            return self
+
+        def __exit__(self, _exc_type, _exc, _tb) -> None:
+            return None
+
+        def post(self, url: str, json: dict[str, object]) -> _StubResponse:
+            _ = (url, json)
+            return _StubResponse()
+
+    monkeypatch.setattr(provider.httpx, "Client", _StubClient)
+    monkeypatch.setattr(provider, "_capture_sentry_failure", captured_errors.append)
+
+    analytics = provider.get_analytics()
+    analytics.capture(Event.CLI_INVOKED)
+    provider.shutdown_analytics(flush=True)
+
+    assert captured_errors == [expected_error]
+
+
 def test_get_or_create_anonymous_id_reuses_persisted_value(monkeypatch, tmp_path: Path) -> None:
     anonymous_id_path = tmp_path / "anonymous_id"
 
