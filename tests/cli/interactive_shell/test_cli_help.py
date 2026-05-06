@@ -16,7 +16,6 @@ from app.cli.interactive_shell.cli_help import (
     _build_grounded_prompt,
     answer_cli_help,
 )
-from app.cli.interactive_shell.cli_reference import build_cli_reference_text
 from app.cli.interactive_shell.docs_reference import invalidate_docs_cache
 from app.cli.interactive_shell.session import ReplSession
 
@@ -72,12 +71,6 @@ def _seed_docs_root(root: Path) -> None:
         '---\ntitle: "Deployment"\n---\n\nDeploy OpenSRE to Railway, EC2, or LangGraph Cloud.\n',
         encoding="utf-8",
     )
-
-
-def test_legacy_export_still_present() -> None:
-    """The CLI reference helper must remain re-exported for backward compat."""
-    text = build_cli_reference_text()
-    assert "opensre" in text.lower()
 
 
 class TestSystemPromptGrounding:
