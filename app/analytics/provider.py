@@ -677,10 +677,12 @@ class Analytics:
             event=event.value,
             properties=_BASE_PROPERTIES | (properties or {}),
         )
+        pending_registered = False
         try:
             self._ensure_worker()
             with self._pending_lock:
                 self._pending += 1
+                pending_registered = True
                 self._drained.clear()
             self._queue.put_nowait(envelope)
         except queue.Full:
@@ -689,6 +691,8 @@ class Analytics:
             _log_failure("queue_full", error, event=event.value)
             _capture_sentry_failure(error)
         except Exception as exc:  # noqa: BLE001
+            if pending_registered:
+                self._mark_done()
             _log_failure("capture", exc, event=event.value)
             _capture_sentry_failure(exc)
 

@@ -161,6 +161,34 @@ def test_analytics_send_failure_is_reported_to_sentry(
     assert captured_errors == [expected_error]
 
 
+def test_analytics_capture_failure_releases_pending_counter(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("OPENSRE_ANALYTICS_DISABLED", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(provider, "_ANONYMOUS_ID_PATH", tmp_path / "anonymous_id")
+    monkeypatch.setattr(provider.atexit, "register", lambda _func: None)
+    captured_errors: list[BaseException] = []
+    expected_error = RuntimeError("queue unavailable")
+
+    analytics = provider.get_analytics()
+    monkeypatch.setattr(analytics, "_ensure_worker", lambda: None)
+    monkeypatch.setattr(
+        analytics._queue,
+        "put_nowait",
+        lambda _item: (_ for _ in ()).throw(expected_error),
+    )
+    monkeypatch.setattr(provider, "_capture_sentry_failure", captured_errors.append)
+
+    analytics.capture(Event.CLI_INVOKED)
+
+    assert analytics._pending == 0
+    assert analytics._drained.is_set()
+    assert captured_errors == [expected_error]
+    provider._instance = None
+
+
 def test_get_or_create_anonymous_id_reuses_persisted_value(monkeypatch, tmp_path: Path) -> None:
     anonymous_id_path = tmp_path / "anonymous_id"
 

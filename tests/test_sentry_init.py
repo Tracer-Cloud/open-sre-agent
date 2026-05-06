@@ -24,6 +24,8 @@ def test_init_sentry_is_idempotent_for_same_config(monkeypatch) -> None:
     monkeypatch.delenv("OPENSRE_SENTRY_DISABLED", raising=False)
     monkeypatch.delenv("OPENSRE_NO_TELEMETRY", raising=False)
     monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    monkeypatch.delenv("OPENSRE_SENTRY_DSN", raising=False)
+    monkeypatch.delenv("SENTRY_DSN", raising=False)
     monkeypatch.setenv("SENTRY_ERROR_SAMPLE_RATE", "0.25")
     monkeypatch.setenv("SENTRY_TRACES_SAMPLE_RATE", "0.5")
     monkeypatch.setenv("ENV", "production")
@@ -42,11 +44,27 @@ def test_init_sentry_is_idempotent_for_same_config(monkeypatch) -> None:
     assert init_mock.call_args.kwargs["traces_sample_rate"] == 0.5
 
 
+def test_init_sentry_allows_dsn_override(monkeypatch) -> None:
+    sentry_mod._init_sentry_once.cache_clear()
+    monkeypatch.delenv("OPENSRE_SENTRY_DISABLED", raising=False)
+    monkeypatch.delenv("OPENSRE_NO_TELEMETRY", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    monkeypatch.setenv("OPENSRE_SENTRY_DSN", "https://override@sentry.invalid/1")
+    init_mock = MagicMock()
+    monkeypatch.setitem(sys.modules, "sentry_sdk", SimpleNamespace(init=init_mock))
+
+    sentry_mod.init_sentry()
+
+    assert init_mock.call_args.kwargs["dsn"] == "https://override@sentry.invalid/1"
+
+
 def test_init_sentry_invalid_sample_rate_fallbacks(monkeypatch) -> None:
     sentry_mod._init_sentry_once.cache_clear()
     monkeypatch.delenv("OPENSRE_SENTRY_DISABLED", raising=False)
     monkeypatch.delenv("OPENSRE_NO_TELEMETRY", raising=False)
     monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    monkeypatch.delenv("OPENSRE_SENTRY_DSN", raising=False)
+    monkeypatch.delenv("SENTRY_DSN", raising=False)
     monkeypatch.setenv("SENTRY_ERROR_SAMPLE_RATE", "invalid_value")
     monkeypatch.setenv("SENTRY_TRACES_SAMPLE_RATE", "invalid_value")
     monkeypatch.setenv("ENV", "production")
@@ -65,6 +83,8 @@ def test_init_sentry_sample_rates_are_clamped(monkeypatch) -> None:
     monkeypatch.delenv("OPENSRE_SENTRY_DISABLED", raising=False)
     monkeypatch.delenv("OPENSRE_NO_TELEMETRY", raising=False)
     monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    monkeypatch.delenv("OPENSRE_SENTRY_DSN", raising=False)
+    monkeypatch.delenv("SENTRY_DSN", raising=False)
     monkeypatch.setenv("SENTRY_ERROR_SAMPLE_RATE", "2")
     monkeypatch.setenv("SENTRY_TRACES_SAMPLE_RATE", "-1")
     init_mock = MagicMock()

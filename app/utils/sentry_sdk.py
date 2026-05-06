@@ -34,6 +34,15 @@ def _sample_rate_from_env(env_var: str, default: float) -> float:
     return min(1.0, max(0.0, sample_rate))
 
 
+def _dsn_from_env() -> str:
+    """Use the project DSN by default while allowing operator-side rotation."""
+    return (
+        os.getenv("OPENSRE_SENTRY_DSN", "").strip()
+        or os.getenv("SENTRY_DSN", "").strip()
+        or SENTRY_DSN
+    )
+
+
 @cache
 def _init_sentry_once(
     dsn: str,
@@ -59,9 +68,11 @@ def _init_sentry_once(
 def init_sentry() -> None:
     """Configure and start the Sentry SDK if a DSN is available.
 
-    Sentry uses the project DSN constant so packaged builds capture errors
-    without requiring per-host configuration. Set ``OPENSRE_SENTRY_DISABLED=1``,
-    ``OPENSRE_NO_TELEMETRY=1``, or ``DO_NOT_TRACK=1`` to opt out.
+    Sentry uses the project DSN constant by default so packaged builds capture
+    errors without requiring per-host configuration. Set ``OPENSRE_SENTRY_DSN``
+    or ``SENTRY_DSN`` to override the destination, and set
+    ``OPENSRE_SENTRY_DISABLED=1``, ``OPENSRE_NO_TELEMETRY=1``, or
+    ``DO_NOT_TRACK=1`` to opt out.
     """
     if _is_sentry_disabled():
         return
@@ -70,7 +81,7 @@ def init_sentry() -> None:
     from app.version import get_version
 
     _init_sentry_once(
-        dsn=SENTRY_DSN,
+        dsn=_dsn_from_env(),
         environment=get_environment().value,
         release=f"opensre@{get_version()}",
         sample_rate=_sample_rate_from_env(
