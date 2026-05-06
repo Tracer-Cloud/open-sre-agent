@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from unittest.mock import patch
+
 from app.nodes.plan_actions.detect_sources import detect_sources
 
 
@@ -55,23 +57,48 @@ def test_detect_sources_includes_coralogix_with_scoped_default_query() -> None:
 
 
 def test_detect_sources_includes_openclaw_when_resolved() -> None:
-    sources = detect_sources(
-        raw_alert={"alert_name": "checkout-api failures", "service": "checkout-api"},
-        context={},
-        resolved_integrations={
-            "openclaw": {
-                "mode": "stdio",
-                "command": "openclaw",
-                "args": ["mcp", "serve"],
-                "auth_token": "",
-            }
-        },
-    )
+    with patch(
+        "app.nodes.plan_actions.detect_sources.openclaw_runtime_unavailable_reason",
+        return_value=None,
+    ):
+        sources = detect_sources(
+            raw_alert={"alert_name": "checkout-api failures", "service": "checkout-api"},
+            context={},
+            resolved_integrations={
+                "openclaw": {
+                    "mode": "stdio",
+                    "command": "openclaw",
+                    "args": ["mcp", "serve"],
+                    "auth_token": "",
+                }
+            },
+        )
 
     assert sources["openclaw"]["openclaw_mode"] == "stdio"
     assert sources["openclaw"]["openclaw_command"] == "openclaw"
     assert sources["openclaw"]["openclaw_args"] == ["mcp", "serve"]
     assert sources["openclaw"]["openclaw_search_query"] == "checkout-api"
+
+
+def test_detect_sources_skips_openclaw_when_runtime_is_unavailable() -> None:
+    with patch(
+        "app.nodes.plan_actions.detect_sources.openclaw_runtime_unavailable_reason",
+        return_value="Command not found: openclaw",
+    ):
+        sources = detect_sources(
+            raw_alert={"alert_name": "checkout-api failures", "service": "checkout-api"},
+            context={},
+            resolved_integrations={
+                "openclaw": {
+                    "mode": "stdio",
+                    "command": "openclaw",
+                    "args": ["mcp", "serve"],
+                    "auth_token": "",
+                }
+            },
+        )
+
+    assert "openclaw" not in sources
 
 
 _GITLAB_INTEGRATION = {

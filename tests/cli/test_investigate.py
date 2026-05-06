@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import NoReturn
+
 import pytest
 from pydantic import ValidationError
 
@@ -141,4 +143,52 @@ def test_stream_investigation_cli_raises_queued_exception_immediately(
     first = next(events)
     assert first.event_type == "metadata"
     with pytest.raises(RuntimeError, match="stream failed"):
+        next(events)
+
+
+def test_run_investigation_cli_maps_cli_auth_to_opensre_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.cli.support.errors import OpenSREError
+    from app.integrations.llm_cli.errors import CLIAuthenticationRequired
+
+    def boom(*_args: object, **_kwargs: object) -> NoReturn:
+        raise CLIAuthenticationRequired(
+            provider="cursor",
+            auth_hint="Run: agent login.",
+            detail="Not logged in.",
+        )
+
+    monkeypatch.setattr("app.cli.investigation.investigate.LLMSettings.from_env", object)
+    monkeypatch.setattr("app.cli.investigation.investigate._call_run_investigation", boom)
+
+    with pytest.raises(OpenSREError, match="not authenticated") as exc_info:
+        run_investigation_cli(raw_alert={"alert_name": "PayloadAlert"})
+    assert exc_info.value.suggestion is not None
+    assert "agent login" in exc_info.value.suggestion
+
+
+def test_stream_investigation_cli_maps_cli_auth_to_opensre_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.cli.support.errors import OpenSREError
+    from app.integrations.llm_cli.errors import CLIAuthenticationRequired
+
+    async def fake_astream_investigation(*args: object, **kwargs: object):
+        yield StreamEvent("metadata", data={"run_id": "run-123"})
+        raise CLIAuthenticationRequired(
+            provider="cursor",
+            auth_hint="Run: agent login.",
+            detail="Not logged in.",
+        )
+
+    monkeypatch.setattr("app.cli.investigation.investigate.LLMSettings.from_env", object)
+    monkeypatch.setattr(
+        "app.pipeline.runners.astream_investigation",
+        fake_astream_investigation,
+    )
+
+    events = stream_investigation_cli(raw_alert={"alert_name": "PayloadAlert"})
+    assert next(events).event_type == "metadata"
+    with pytest.raises(OpenSREError, match="not authenticated"):
         next(events)

@@ -162,7 +162,7 @@ def _build_available_sources_hint(available_sources: dict[str, dict]) -> str:
 - Use search_github_code and get_github_file_contents to trace the failure into code"""
         )
 
-    if "openclaw" in available_sources:
+    if available_sources.get("openclaw", {}).get("connection_verified"):
         openclaw = available_sources["openclaw"]
         endpoint = openclaw.get("openclaw_command") or openclaw.get("openclaw_url") or "unknown"
         hints.append(

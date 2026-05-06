@@ -47,4 +47,5 @@ EvidenceSource = Literal[
     "argocd",
     "victoria_logs",
     "incident_io",
+    "rds",
 ]

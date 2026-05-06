@@ -327,7 +327,29 @@ def score_result(
     # internal evidence keys (grafana_metrics, grafana_logs) set by _map_grafana_*.
     if not failure_reason and answer_key.required_evidence_sources:
         evidence = final_state.get("evidence") or {}
+        performance_insights_tokens = (
+            "top sql activity",
+            "avg load",
+            "aas",
+            "db load",
+            "walwrite",
+        )
+
         for source_key in answer_key.required_evidence_sources:
+            if source_key == "aws_performance_insights":
+                state_key = _EVIDENCE_KEY_MAP.get(source_key, source_key)
+
+                has_state_evidence = bool(evidence.get(state_key))
+                has_pi_signal = any(
+                    token in normalized_output for token in performance_insights_tokens
+                )
+
+                if not (has_state_evidence and has_pi_signal):
+                    failure_reason = f"required evidence not gathered: {source_key!r}"
+                    break
+
+                continue
+
             state_key = _EVIDENCE_KEY_MAP.get(source_key, source_key)
             if not evidence.get(state_key):
                 failure_reason = f"required evidence not gathered: {source_key!r}"

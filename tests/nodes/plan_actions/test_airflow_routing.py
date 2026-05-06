@@ -19,7 +19,7 @@ def test_seed_action_names_for_sources_includes_airflow_tools() -> None:
 def test_seed_action_names_for_sources_keeps_existing_seed_sources() -> None:
     available_sources = {
         "s3_audit": {"bucket": "example-bucket", "key": "audit.json"},
-        "openclaw": {"url": "http://localhost:8081"},
+        "openclaw": {"url": "http://localhost:8081", "connection_verified": True},
         "airflow": {
             "base_url": "http://localhost:8080/api/v1",
             "username": "admin",

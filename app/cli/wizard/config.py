@@ -182,6 +182,41 @@ CODEX_MODELS = (
     ModelOption(value="gpt-5.1-codex-mini", label="gpt-5.1-codex-mini"),
 )
 
+OPENCODE_MODELS = (
+    ModelOption(
+        value="",
+        label="CLI default (no -m; use OpenCode configured model)",
+    ),
+    ModelOption(
+        value="anthropic/claude-opus-4.7", label="Claude Opus 4.7 (via OpenCode) — most capable"
+    ),
+    ModelOption(
+        value="anthropic/claude-sonnet-4.6", label="Claude Sonnet 4.6 (via OpenCode) - balanced"
+    ),
+    ModelOption(
+        value="anthropic/claude-haiku-4-5-20251001",
+        label="Claude Haiku 4.5 (via OpenCode)— fast, cost-efficient",
+    ),
+    ModelOption(value="openai/gpt-5.4", label="GPT-5.4 (via OpenCode)"),
+    ModelOption(value="openai/gpt-5.4-mini", label="GPT-5.4 mini (via OpenCode)"),
+    ModelOption(value="openai/gpt-5.3-codex", label="GPT-5.3 Codex (via OpenCode)"),
+    ModelOption(value="google/gemini-3.1-pro-preview", label="Gemini 3.1 Pro (via OpenCode)"),
+    ModelOption(value="meta-llama/llama-4-maverick", label="Llama 4 Maverick (via OpenCode)"),
+    ModelOption(value="mistralai/mistral-large-2512", label="Mistral Large 3 (via OpenCode)"),
+)
+
+
+CURSOR_MODELS = (
+    ModelOption(
+        value="",
+        label="CLI default (no --model; use Cursor configured model)",
+    ),
+    ModelOption(value="auto", label="auto"),
+    ModelOption(value="gpt-5", label="gpt-5"),
+    ModelOption(value="sonnet-4", label="sonnet-4"),
+    ModelOption(value="sonnet-4-thinking", label="sonnet-4-thinking"),
+)
+
 
 def _codex_adapter_factory() -> LLMCLIAdapter:
     from app.integrations.llm_cli.codex import CodexAdapter
@@ -189,10 +224,39 @@ def _codex_adapter_factory() -> LLMCLIAdapter:
     return CodexAdapter()
 
 
+def _cursor_adapter_factory() -> LLMCLIAdapter:
+    from app.integrations.llm_cli.cursor import CursorAdapter
+
+    return CursorAdapter()
+
+
 def _claude_code_adapter_factory() -> LLMCLIAdapter:
     from app.integrations.llm_cli.claude_code import ClaudeCodeAdapter
 
     return ClaudeCodeAdapter()
+
+
+def _opencode_adapter_factory() -> LLMCLIAdapter:
+    from app.integrations.llm_cli.opencode import OpenCodeAdapter
+
+    return OpenCodeAdapter()
+
+
+def _kimi_adapter_factory() -> LLMCLIAdapter:
+    from app.integrations.llm_cli.kimi import KimiAdapter
+
+    return KimiAdapter()
+
+
+KIMI_MODELS = (
+    ModelOption(
+        value="",
+        label="CLI default (no -m; use Kimi configured model)",
+    ),
+    ModelOption(value="kimi-k2-thinking-turbo", label="kimi-k2-thinking-turbo"),
+    ModelOption(value="kimi-k2.5", label="kimi-k2.5"),
+    ModelOption(value="kimi-k2.6", label="kimi-k2.6"),
+)
 
 
 SUPPORTED_PROVIDERS = (
@@ -274,6 +338,18 @@ SUPPORTED_PROVIDERS = (
         adapter_factory=_codex_adapter_factory,
     ),
     ProviderOption(
+        value="cursor",
+        label="Cursor Agent CLI",
+        group="Local CLI providers",
+        api_key_env="",
+        model_env="CURSOR_MODEL",
+        default_model="auto",
+        models=CURSOR_MODELS,
+        credential_kind="cli",
+        credential_secret=False,
+        adapter_factory=_cursor_adapter_factory,
+    ),
+    ProviderOption(
         value="claude-code",
         label="Anthropic Claude Code CLI",
         group="Local CLI providers",
@@ -284,6 +360,30 @@ SUPPORTED_PROVIDERS = (
         credential_kind="cli",
         credential_secret=False,
         adapter_factory=_claude_code_adapter_factory,
+    ),
+    ProviderOption(
+        value="opencode",
+        label="OpenCode CLI",
+        group="Local CLI providers",
+        api_key_env="",
+        model_env="OPENCODE_MODEL",
+        default_model="",
+        models=OPENCODE_MODELS,
+        credential_kind="cli",
+        credential_secret=False,
+        adapter_factory=_opencode_adapter_factory,
+    ),
+    ProviderOption(
+        value="kimi",
+        label="Kimi Code CLI",
+        group="Local CLI providers",
+        api_key_env="",
+        model_env="KIMI_MODEL",
+        default_model="",
+        models=KIMI_MODELS,
+        credential_kind="cli",
+        credential_secret=False,
+        adapter_factory=_kimi_adapter_factory,
     ),
     ProviderOption(
         value="ollama",

@@ -2,10 +2,15 @@ from __future__ import annotations
 
 from typing import Any
 
+from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, Field, ValidationError
 
 from app.cli.investigation import run_investigation_cli
+from app.utils.sentry_sdk import capture_exception, init_sentry
+
+load_dotenv(override=False)
+init_sentry()
 
 
 class RunRCAInput(BaseModel):
@@ -87,6 +92,7 @@ def run_rca(
     except ValidationError as err:
         return RunRCAOutput(ok=False, error=str(err), error_type=type(err).__name__).model_dump()
     except Exception as err:  # noqa: BLE001
+        capture_exception(err)
         return RunRCAOutput(ok=False, error=str(err), error_type=type(err).__name__).model_dump()
 
 

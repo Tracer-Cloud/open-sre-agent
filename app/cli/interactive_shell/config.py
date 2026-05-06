@@ -10,7 +10,7 @@ _VALID_LAYOUTS = ("classic", "pinned")
 
 
 def _read_config_file() -> dict[str, Any]:
-    """Read the interactive section from ~/.opensre/config.yml.
+    """Read the interactive section from ~/.config/opensre/config.yml.
 
     Returns an empty dict if the file is missing, unreadable, or malformed.
     Failures are always silent — a bad config file must never crash the CLI.
@@ -47,13 +47,13 @@ class ReplConfig:
         When False the REPL is skipped and ``opensre`` falls back to
         ``render_landing()``.  Controlled by ``--no-interactive`` CLI flag,
         the ``OPENSRE_INTERACTIVE`` env var, or ``interactive.enabled`` in
-        ``~/.opensre/config.yml``.
+        ``~/.config/opensre/config.yml``.
 
     layout : str  ("classic" | "pinned")
         Which renderer to use.  Only ``classic`` is wired today; ``pinned``
         is accepted and stored so the flag round-trips cleanly once P3 lands.
         Controlled by ``--layout`` CLI option, ``OPENSRE_LAYOUT`` env var, or
-        ``interactive.layout`` in ``~/.opensre/config.yml``.
+        ``interactive.layout`` in ``~/.config/opensre/config.yml``.
     """
 
     enabled: bool = True
@@ -71,7 +71,7 @@ class ReplConfig:
         Priority (highest wins):
             1. CLI flag   — ``cli_enabled`` / ``cli_layout`` params
             2. Env var    — ``OPENSRE_INTERACTIVE`` / ``OPENSRE_LAYOUT``
-            3. Config file — ``~/.opensre/config.yml`` ``interactive`` section
+            3. Config file — ``~/.config/opensre/config.yml`` ``interactive`` section
             4. Built-in defaults (enabled=True, layout="classic")
         """
         file_conf = _read_config_file()

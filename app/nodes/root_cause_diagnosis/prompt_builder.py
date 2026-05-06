@@ -34,6 +34,17 @@ ALLOWED_EVIDENCE_SOURCES = [
     "github",
 ]
 
+_GRAFANA_SOURCE_TYPE_LABELS = {
+    "aws_performance_insights": "Performance Insights",
+    "aws_rds_events": "RDS Events",
+    "cloudwatch_logs": "CloudWatch Logs",
+    "datadog_logs": "Datadog Logs",
+    "db-instance": "RDS Event",
+    "grafana_loki": "Grafana Logs",
+    "opensre_log": "OpenSRE Log",
+    "rds_enhanced_monitoring": "RDS Enhanced Monitoring",
+}
+
 
 def build_diagnosis_prompt(
     state: InvestigationState, evidence: dict[str, Any], memory_context: str = ""
@@ -232,6 +243,7 @@ When evaluating database health metrics (especially RDS/Postgres):
 - Connection pool leaks (exhausting `max_connections`) are a `resource_exhaustion` root cause. High CPU is often just a secondary symptom of accumulated idle sessions. If connections are near 100%, the root cause is connection exhaustion, not CPU saturation. If connections are near 100% AND CPU is near 100%, look for a single shared root cause: a connection pool leak holding open scan-heavy queries, causing both (do not treat them as two independent problems).
 - Storage exhaustion (when `FreeStorageSpace` approaches 0) blocks all writes and causes Write IOPS to collapse to 0. The root cause is `resource_exhaustion` due to storage limits. If the `FreeStorageSpace` metric is completely missing, you MUST infer storage exhaustion from indirect signals: WriteIOPS dropping to 0, WriteLatency spiking, and RDS events indicating 'ran out of storage space'.
 - A single bad query driving CPU near 100% while connections and storage are healthy is `resource_exhaustion` due to CPU saturation (e.g. missing index, full table scans at high ReadIOPS). Pay close attention to Performance Insights to identify the exact query.
+- For bad-query CPU saturation, name the exact SQL statement from Performance Insights, cite its db_load/wait event if present, and explicitly rule out connection exhaustion when DatabaseConnections is stable.
 - Checkpoint Storms / VACUUM FREEZE: If CPU is high but the dominant wait event is `LWLock:BufferMapping` with massive WriteIOPS, the root cause is an I/O storm from checkpointing (e.g., `VACUUM FREEZE`) and should be classified as `resource_exhaustion`, NOT `code_defect`. The high CPU is a downstream symptom of I/O contention.
 - Replication lag: If a massive write-heavy workload on the primary generates WAL faster than the read replica can replay it, resulting in ReplicaLag spikes, the root cause is `resource_exhaustion` driven by the write workload on the primary. Watch out for red herrings: if concurrent analytics queries cause high CPU, do NOT classify the root cause as CPU-driven if the actual failing metric (like ReplicaLag) is driven by the write-heavy workload. Treat the CPU spike as an unrelated confounder/red herring and explicitly describe it as a red herring (i.e., not the root cause) in the final answer. Do not treat it as a second root cause or a contributing cause. Explicitly state that the analytics SELECT is not the root cause when the evidence shows it is causally independent from WAL generation. If the `ReplicaLag` metric is missing, infer lag from RDS events (e.g., 'exceeded 900s') and high `TransactionLogsGeneration`.
 - Compositional Faults: If two completely independent workloads cause two separate faults simultaneously (e.g., CPU saturation from an analytics SELECT AND storage exhaustion from an audit_log INSERT), explicitly identify BOTH as independent root causes (do not merge them into a single IOPS fault). You MUST explicitly state they are two independent, coincidental faults. Provide evidence for both the analytics query and the audit_log query. Use `resource_exhaustion` as ROOT_CAUSE_CATEGORY and describe both causes clearly in ROOT_CAUSE (e.g., "Two independent root causes: ..."). Trace each causal chain separately in CAUSAL_CHAIN. You MUST explicitly state that connection growth is a symptom of blocked writers, not connection exhaustion. You MUST explicitly state that ReplicaLag growth is a downstream symptom of the write burst (not an independent fault). NEVER diagnose `connection_exhaustion` as a root cause when connections spike due to a blocked write queue.
@@ -490,14 +502,12 @@ def _build_evidence_sections(
     if grafana_error_logs:
         section = f"\nGrafana Error Logs ({len(grafana_error_logs)} events):\n"
         for log in grafana_error_logs[:10]:
-            message = log.get("message", "") if isinstance(log, dict) else str(log)
-            section += f"- {message[:300]}\n"
+            section += f"- {_format_grafana_log_entry(log)}\n"
         sections.append(section)
     elif grafana_logs:
         section = f"\nGrafana Logs ({len(grafana_logs)} events):\n"
         for log in grafana_logs[:10]:
-            message = log.get("message", "") if isinstance(log, dict) else str(log)
-            section += f"- {message[:300]}\n"
+            section += f"- {_format_grafana_log_entry(log)}\n"
         sections.append(section)
 
     # Better Stack Telemetry logs (ClickHouse JSONEachRow rows with dt + raw)
@@ -740,6 +750,41 @@ def _build_rds_events_section(rds_events: list[dict[str, Any]]) -> str:
     return section
 
 
+def _format_grafana_log_entry(log: Any) -> str:
+    if not isinstance(log, dict):
+        return str(log)[:300]
+
+    message = str(log.get("message") or "")[:300]
+    source_type = str(log.get("source_type") or "").strip()
+    source_parts = [
+        _GRAFANA_SOURCE_TYPE_LABELS.get(source_type, ""),
+        str(log.get("source_identifier") or "").strip(),
+    ]
+    source = " ".join(part for part in source_parts if part)
+    if not source:
+        return message
+    return f"[{source}] {message}" if message else f"[{source}]"
+
+
+def _db_load_value(item: dict[str, Any]) -> Any:
+    db_load = item.get("db_load")
+    return item.get("db_load_avg") if db_load is None else db_load
+
+
+def _format_wait_events(wait_events: list[Any]) -> str:
+    formatted: list[str] = []
+    for wait in wait_events[:3]:
+        if not isinstance(wait, dict):
+            continue
+        name = wait.get("name") or wait.get("wait_event") or "unknown"
+        db_load = _db_load_value(wait)
+        if db_load is None:
+            formatted.append(str(name))
+        else:
+            formatted.append(f"{name}({db_load})")
+    return ", ".join(formatted)
+
+
 def _build_performance_insights_section(performance_insights: dict[str, Any]) -> str:
     """Build RDS Performance Insights evidence section."""
     section = "\nPerformance Insights:\n"
@@ -770,17 +815,52 @@ def _build_performance_insights_section(performance_insights: dict[str, Any]) ->
                 section += f" | db_load={db_load}"
             if wait_event:
                 section += f" | wait_event={wait_event}"
+            wait_events = item.get("wait_events", [])
+            if isinstance(wait_events, list) and wait_events:
+                section += f" | wait_events={_format_wait_events(wait_events)}"
+            if item.get("calls_per_sec") is not None:
+                section += f" | calls_per_sec={item['calls_per_sec']}"
             section += "\n"
 
-    wait_events = performance_insights.get("wait_events", [])
+    wait_events = (
+        performance_insights.get("wait_events") or performance_insights.get("top_wait_events") or []
+    )
     if wait_events:
         section += "Top Wait Events:\n"
         for item in wait_events[:5]:
             if not isinstance(item, dict):
                 continue
             name = item.get("name", "unknown")
-            db_load = item.get("db_load")
+            db_load = _db_load_value(item)
             section += f"- {name}"
+            if item.get("type"):
+                section += f" [{item['type']}]"
+            if db_load is not None:
+                section += f" | db_load={db_load}"
+            section += "\n"
+
+    top_users = performance_insights.get("top_users", [])
+    if top_users:
+        section += "Top Users:\n"
+        for item in top_users[:5]:
+            if not isinstance(item, dict):
+                continue
+            name = item.get("name", "unknown")
+            db_load = _db_load_value(item)
+            section += f"- {name}"
+            if db_load is not None:
+                section += f" | db_load={db_load}"
+            section += "\n"
+
+    top_hosts = performance_insights.get("top_hosts", [])
+    if top_hosts:
+        section += "Top Hosts:\n"
+        for item in top_hosts[:5]:
+            if not isinstance(item, dict):
+                continue
+            host = item.get("id") or item.get("host") or "unknown"
+            db_load = _db_load_value(item)
+            section += f"- {host}"
             if db_load is not None:
                 section += f" | db_load={db_load}"
             section += "\n"

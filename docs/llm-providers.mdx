@@ -156,7 +156,15 @@ export BEDROCK_REASONING_MODEL=us.anthropic.claude-sonnet-4-6
 export BEDROCK_TOOLCALL_MODEL=us.anthropic.claude-haiku-4-5-20251001-v1:0
 ```
 
-No API key — auth uses the AWS credential chain (env vars, shared credentials file, or IAM role). Defaults are US cross-region inference profile IDs for Anthropic models on Bedrock; override with the inference profile or model ID available in your region.
+No API key — auth uses the AWS credential chain (environment variables, shared credentials file, or IAM role). Your principal needs permission to invoke the model IDs you configure (for example Bedrock `InvokeModel` / Converse access scoped to those resources in IAM).
+
+**Model routing:**
+
+- **Anthropic Claude** on Bedrock (`anthropic.claude-*`, `us.anthropic.claude-*`, and foundation-model ARNs that contain `anthropic.claude`) use the existing **AnthropicBedrock** SDK path.
+- **Other Bedrock foundation models** (for example Mistral, Meta Llama, Amazon Titan IDs you enable in your account) use the **Bedrock Converse** API via `boto3`, so you can set `BEDROCK_REASONING_MODEL` to a non-Claude model ID when your use case requires it.
+- **Application inference profile** ARNs (`…:application-inference-profile/…`) do not encode the vendor in the ID; those are always sent through **Converse**, which works for any backing model in the profile.
+
+Defaults in `app/config.py` are US cross-region inference profile IDs for Anthropic Claude; override with IDs or ARNs that are **inference-access enabled** in your account and region.
 
 ### Ollama (local)
 

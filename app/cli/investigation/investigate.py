@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Iterator
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NoReturn
 
 from langsmith import traceable
 
@@ -16,6 +16,19 @@ if TYPE_CHECKING:
     from app.state import AgentState
 
 _logger = logging.getLogger(__name__)
+
+
+def _reraise_investigation_failure(exc: BaseException) -> NoReturn:
+    """Map CLI auth probe failures to structured CLI errors; re-raise anything else."""
+    from app.cli.support.errors import OpenSREError
+    from app.integrations.llm_cli.errors import CLIAuthenticationRequired
+
+    if isinstance(exc, CLIAuthenticationRequired):
+        raise OpenSREError(
+            f"{exc.provider} CLI is not authenticated.",
+            suggestion=f"{exc.auth_hint} ({exc.detail})",
+        ) from exc
+    raise exc
 
 
 def _call_run_investigation(
@@ -70,13 +83,16 @@ def run_investigation_cli(
         pipeline_name=pipeline_name,
         severity=severity,
     )
-    state = _call_run_investigation(
-        resolved_alert_name,
-        resolved_pipeline_name,
-        resolved_severity,
-        raw_alert=raw_alert,
-        opensre_evaluate=opensre_evaluate,
-    )
+    try:
+        state = _call_run_investigation(
+            resolved_alert_name,
+            resolved_pipeline_name,
+            resolved_severity,
+            raw_alert=raw_alert,
+            opensre_evaluate=opensre_evaluate,
+        )
+    except Exception as exc:
+        _reraise_investigation_failure(exc)
     slack_message = state["slack_message"]
     out: dict[str, Any] = {
         "report": slack_message,
@@ -160,7 +176,7 @@ def stream_investigation_cli(
         item = event_queue.get()
         if isinstance(item, Exception):
             thread.join()
-            raise item
+            _reraise_investigation_failure(item)
         if item is None:
             break
         yield item
@@ -266,7 +282,7 @@ def _run_session_alert_payload(
             while True:
                 item = event_queue.get()
                 if isinstance(item, BaseException):
-                    raise item
+                    _reraise_investigation_failure(item)
                 if item is None:
                     return
                 yield item

@@ -4,8 +4,13 @@ required_keywords:
   - write-heavy workload
   - replica
   - wal
+  - replay
+required_evidence_sources:
+  - aws_cloudwatch_metrics
+  - aws_performance_insights
 forbidden_categories:
   - cpu_saturation
+  - connection_exhaustion
 optimal_trajectory:
   - query_grafana_metrics
   - query_grafana_logs

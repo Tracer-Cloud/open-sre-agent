@@ -28,12 +28,10 @@ USER_BASE := $(shell $(PYTHON) -m site --user-base)
 USER_BIN := $(if $(filter Windows_NT,$(OS)),$(USER_BASE)/Scripts,$(USER_BASE)/bin)
 export PATH := $(if $(wildcard .venv/bin),$(CURDIR)/.venv/bin:,$(if $(wildcard .venv/Scripts),$(CURDIR)/.venv/Scripts:))$(USER_BIN):$(PATH)
 
-# Create venv and install dependencies
+# Create venv and install dependencies (requires https://docs.astral.sh/uv/)
 install:
-	$(PYTHON) -m venv .venv
-	$(PIP) install --upgrade pip
-	$(PIP) install $(PIP_INSTALL_FLAGS) -e ".[dev]"
-	$(PYTHON) -m app.analytics.install
+	uv sync --frozen --extra dev
+	uv run python -m app.analytics.install
 
 build:
 	$(PYTHON) -m build
