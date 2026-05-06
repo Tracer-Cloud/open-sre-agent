@@ -1,8 +1,8 @@
 """Shared Rich loaders for interactive-shell LLM calls.
 
-A bright orange spinner gives the user visible feedback that an LLM call is
-in flight.  Centralised so every LLM-backed surface in the interactive
-shell (``cli_agent``, ``cli_help``, ``follow_up``) shares the same look.
+A quiet, dim spinner shows that an LLM call is in flight.  Centralised so
+every LLM-backed surface in the interactive shell (``cli_agent``, ``cli_help``,
+``follow_up``) shares the same look.
 """
 
 from __future__ import annotations
@@ -23,16 +23,16 @@ DEFAULT_LOADER_LABEL = "thinking"
 
 @contextmanager
 def llm_loader(console: Console, label: str = DEFAULT_LOADER_LABEL) -> Iterator[None]:
-    """Render an orange spinner while an LLM call is in flight.
+    """Show a dim spinner while an LLM call is in flight.
 
-    On non-terminal consoles (CI, captured output, piped stdout) the
-    spinner is skipped so captured logs stay clean — the wrapped call
-    still runs unchanged.
+    On non-terminal consoles (CI, captured output, piped stdout), the spinner is
+    skipped so captured logs stay clean — the wrapped call still runs unchanged.
     """
     if not console.is_terminal:
         yield
         return
 
+    console.print()
     text = f"[{_LOADER_COLOR}]{label}…[/{_LOADER_COLOR}]"
     with console.status(text, spinner=_LOADER_SPINNER, spinner_style=_LOADER_COLOR):
         yield

@@ -15,7 +15,7 @@ from rich.table import Table
 from app.cli.interactive_shell.banner import render_banner, resolve_provider_models
 from app.cli.interactive_shell.history import load_command_history_entries
 from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
+from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD, TERMINAL_ERROR
 from app.cli.support.errors import OpenSREError
 from app.utils.sentry_sdk import capture_exception
 
@@ -166,7 +166,7 @@ def _render_mcp_table(console: Console, results: list[dict[str, str]]) -> None:
 def _render_models_table(console: Console) -> None:
     settings = _load_llm_settings()
     if settings is None:
-        console.print("[red]LLM settings unavailable[/red] — check provider env vars.")
+        console.print(f"[{TERMINAL_ERROR}]LLM settings unavailable[/] — check provider env vars.")
         return
     provider = str(getattr(settings, "provider", "unknown"))
     reasoning_model, toolcall_model = resolve_provider_models(settings, provider)
@@ -195,7 +195,7 @@ def switch_llm_provider(
     if provider is None:
         choices = ", ".join(sorted(PROVIDER_BY_VALUE))
         console.print(
-            f"[red]unknown LLM provider:[/red] {escape(provider_name)} "
+            f"[{TERMINAL_ERROR}]unknown LLM provider:[/] {escape(provider_name)} "
             f"[dim](choices: {choices})[/dim]"
         )
         return False
@@ -215,7 +215,7 @@ def switch_llm_provider(
         and not has_llm_api_key(provider.api_key_env)
     ):
         console.print(
-            f"[red]missing credential for {provider.value}:[/red] "
+            f"[{TERMINAL_ERROR}]missing credential for {provider.value}:[/] "
             f"{provider.api_key_env} is not set in env or the keyring."
         )
         console.print(
@@ -281,7 +281,7 @@ def switch_toolcall_model(
     if provider is None:
         choices = ", ".join(sorted(PROVIDER_BY_VALUE))
         console.print(
-            f"[red]unknown LLM provider:[/red] {escape(resolved_name)} "
+            f"[{TERMINAL_ERROR}]unknown LLM provider:[/] {escape(resolved_name)} "
             f"[dim](choices: {choices})[/dim]"
         )
         return False
@@ -293,7 +293,7 @@ def switch_toolcall_model(
         return False
     new_model = toolcall_model.strip()
     if not new_model:
-        console.print("[red]toolcall model cannot be empty[/red]")
+        console.print(f"[{TERMINAL_ERROR}]toolcall model cannot be empty[/]")
         return False
 
     values = {provider.toolcall_model_env: new_model}
@@ -362,13 +362,13 @@ def _cmd_integrations(session: ReplSession, console: Console, args: list[str]) -
 
     if sub == "show":
         if len(args) < 2:
-            console.print("[red]usage:[/red] /integrations show <service>")
+            console.print("[dim]usage:[/dim] /integrations show <service>")
             return True
         service = args[1].lower()
         results = _load_verified_integrations()
         match = next((r for r in results if r.get("service") == service), None)
         if match is None:
-            console.print(f"[red]service not found:[/red] {escape(service)}")
+            console.print(f"[{TERMINAL_ERROR}]service not found:[/] {escape(service)}")
             return True
         table = _repl_table(
             title=f"Integration: {service}",
@@ -383,7 +383,7 @@ def _cmd_integrations(session: ReplSession, console: Console, args: list[str]) -
         return True
 
     console.print(
-        f"[red]unknown subcommand:[/red] {escape(sub)}  "
+        f"[{TERMINAL_ERROR}]unknown subcommand:[/] {escape(sub)}  "
         "(try [bold]/integrations list[/bold], [bold]/integrations verify[/bold], "
         "or [bold]/integrations show <service>[/bold])"
     )
@@ -410,7 +410,7 @@ def _cmd_mcp(session: ReplSession, console: Console, args: list[str]) -> bool:  
         return True
 
     console.print(
-        f"[red]unknown subcommand:[/red] {escape(sub)}  "
+        f"[{TERMINAL_ERROR}]unknown subcommand:[/] {escape(sub)}  "
         "(try [bold]/mcp list[/bold], [bold]/mcp connect[/bold], or [bold]/mcp disconnect[/bold])"
     )
     return True
@@ -431,12 +431,12 @@ def _cmd_model(session: ReplSession, console: Console, args: list[str]) -> bool:
             return True
         if len(args) >= 2 and args[1].lower() in ("set", "use", "switch"):
             if len(args) < 3:
-                console.print("[red]usage:[/red] /model toolcall set <model>")
+                console.print("[dim]usage:[/dim] /model toolcall set <model>")
                 return True
             switch_toolcall_model(args[2], console)
             return True
         console.print(
-            "[red]usage:[/red] /model toolcall set <model> "
+            "[dim]usage:[/dim] /model toolcall set <model> "
             "[dim](sets the toolcall model for the active provider)[/dim]"
         )
         return True
@@ -445,7 +445,9 @@ def _cmd_model(session: ReplSession, console: Console, args: list[str]) -> bool:
         try:
             provider_name, reasoning_model, toolcall_model = _parse_model_set_args(args[1:])
         except ValueError as exc:
-            console.print(f"[red]{escape(str(exc))}[/red]")
+            console.print()
+            console.print(f"[{TERMINAL_ERROR}]{escape(str(exc))}[/]")
+            console.print()
             console.print(
                 "[dim]usage:[/dim] /model set <provider> [model] [--toolcall-model <model>]"
             )
@@ -459,7 +461,7 @@ def _cmd_model(session: ReplSession, console: Console, args: list[str]) -> bool:
         return True
 
     console.print(
-        f"[red]unknown subcommand:[/red] {escape(sub)}  "
+        f"[{TERMINAL_ERROR}]unknown subcommand:[/] {escape(sub)}  "
         "(try [bold]/model show[/bold], "
         "[bold]/model set <provider> [model] [--toolcall-model <m>][/bold], "
         "or [bold]/model toolcall set <model>[/bold])"
@@ -533,7 +535,7 @@ def _cmd_template(session: ReplSession, console: Console, args: list[str]) -> bo
 
     if not args:
         console.print(
-            f"[red]usage:[/red] /template <type>  (choices: {', '.join(ALERT_TEMPLATE_CHOICES)})"
+            f"[dim]usage:[/dim] /template <type>  (choices: {', '.join(ALERT_TEMPLATE_CHOICES)})"
         )
         return True
 
@@ -542,7 +544,7 @@ def _cmd_template(session: ReplSession, console: Console, args: list[str]) -> bo
         payload = build_alert_template(template_name)
     except ValueError:
         console.print(
-            f"[red]unknown template:[/red] {escape(template_name)}  "
+            f"[{TERMINAL_ERROR}]unknown template:[/] {escape(template_name)}  "
             f"(choices: {', '.join(ALERT_TEMPLATE_CHOICES)})"
         )
         return True
@@ -557,18 +559,18 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
     from app.cli.investigation import run_investigation_for_session
 
     if not args:
-        console.print("[red]usage:[/red] /investigate <file>")
+        console.print("[dim]usage:[/dim] /investigate <file>")
         return True
 
     path = Path(args[0])
     if not path.exists():
-        console.print(f"[red]file not found:[/red] {escape(str(path))}")
+        console.print(f"[{TERMINAL_ERROR}]file not found:[/] {escape(str(path))}")
         return True
 
     try:
         text = path.read_text(encoding="utf-8")
     except Exception as exc:  # noqa: BLE001
-        console.print(f"[red]cannot read file:[/red] {escape(str(exc))}")
+        console.print(f"[{TERMINAL_ERROR}]cannot read file:[/] {escape(str(exc))}")
         return True
 
     try:
@@ -581,14 +583,14 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
         session.record("alert", args[0], ok=False)
         return True
     except OpenSREError as exc:
-        console.print(f"[red]investigation failed:[/red] {escape(str(exc))}")
+        console.print(f"[{TERMINAL_ERROR}]investigation failed:[/] {escape(str(exc))}")
         if exc.suggestion:
             console.print(f"[yellow]suggestion:[/yellow] {escape(exc.suggestion)}")
         session.record("alert", args[0], ok=False)
         return True
     except Exception as exc:  # noqa: BLE001
         capture_exception(exc)
-        console.print(f"[red]investigation failed:[/red] {escape(str(exc))}")
+        console.print(f"[{TERMINAL_ERROR}]investigation failed:[/] {escape(str(exc))}")
         session.record("alert", args[0], ok=False)
         return True
 
@@ -619,7 +621,7 @@ def _cmd_list(session: ReplSession, console: Console, args: list[str]) -> bool: 
 
     if sub and sub not in ("", "all"):
         console.print(
-            f"[red]unknown list target:[/red] {escape(sub)}  "
+            f"[{TERMINAL_ERROR}]unknown list target:[/] {escape(sub)}  "
             "(try [bold]/list integrations[/bold], [bold]/list models[/bold], "
             "or [bold]/list mcp[/bold])"
         )
@@ -675,7 +677,9 @@ def _cmd_save(session: ReplSession, console: Console, args: list[str]) -> bool:
         return True
 
     if not args:
-        console.print("[red]usage:[/red] /save <path>  (e.g. /save report.md or /save out.json)")
+        console.print(
+            "[dim]usage:[/dim] /save <path>  (e.g. /save report.md or /save out.json)"
+        )
         return True
 
     dest = Path(args[0])
@@ -697,7 +701,7 @@ def _cmd_save(session: ReplSession, console: Console, args: list[str]) -> bool:
             dest.write_text("\n".join(lines) or "(no report content)", encoding="utf-8")
         console.print(f"[green]saved:[/green] {escape(str(dest))}")
     except Exception as exc:  # noqa: BLE001
-        console.print(f"[red]save failed:[/red] {escape(str(exc))}")
+        console.print(f"[{TERMINAL_ERROR}]save failed:[/] {escape(str(exc))}")
     return True
 
 
@@ -832,6 +836,9 @@ def dispatch_slash(command_line: str, session: ReplSession, console: Console) ->
     args = parts[1:]
     cmd = SLASH_COMMANDS.get(name)
     if cmd is None:
-        console.print(f"[red]unknown command:[/red] {escape(name)}  (type [bold]/help[/bold])")
+        console.print()
+        console.print(
+            f"[{TERMINAL_ERROR}]unknown command:[/] {escape(name)}  (type [bold]/help[/bold])"
+        )
         return True
     return cmd.handler(session, console, args)

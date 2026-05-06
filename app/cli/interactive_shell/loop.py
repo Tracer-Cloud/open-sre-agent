@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import sys
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 
 from prompt_toolkit import PromptSession
+from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.completion import CompleteEvent, Completer, Completion, PathCompleter
 from prompt_toolkit.document import Document
 from prompt_toolkit.filters import has_completions
-from prompt_toolkit.formatted_text import ANSI
+from prompt_toolkit.formatted_text import ANSI, StyleAndTextTuples
 from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.lexers import Lexer
 from prompt_toolkit.styles import Style
 from rich.console import Console
 from rich.markup import escape
@@ -39,14 +41,68 @@ from app.cli.interactive_shell.theme import (
 from app.cli.support.errors import OpenSREError
 
 
+class ReplInputLexer(Lexer):
+    """Style the command token (slash form or bare alias) like Claude Code."""
+
+    _CMD_STYLE = "class:repl-slash-command"
+
+    def lex_document(self, document: Document) -> Callable[[int], StyleAndTextTuples]:
+        lines = document.lines
+
+        def get_line(lineno: int) -> StyleAndTextTuples:
+            try:
+                line = lines[lineno]
+            except IndexError:
+                return []
+            if not line:
+                return [("", line)]
+            leading = len(line) - len(line.lstrip(" \t"))
+            lead, stripped = line[:leading], line[leading:]
+            if not stripped:
+                return [("", line)]
+
+            if stripped.startswith("/"):
+                i = 0
+                while i < len(stripped) and not stripped[i].isspace():
+                    i += 1
+                cmd, rest = stripped[:i], stripped[i:]
+                out: StyleAndTextTuples = []
+                if lead:
+                    out.append(("", lead))
+                out.append((self._CMD_STYLE, cmd))
+                if rest:
+                    out.append(("", rest))
+                return out
+
+            parts = stripped.split(maxsplit=1)
+            first = parts[0]
+            tail = stripped[len(first) :]
+            if first.lower() in _BARE_COMMAND_ALIASES:
+                out: StyleAndTextTuples = []
+                if lead:
+                    out.append(("", lead))
+                out.append((self._CMD_STYLE, first))
+                if tail:
+                    out.append(("", tail))
+                return out
+
+            return [("", line)]
+
+        return get_line
+
+
 def _prompt_line_ansi(session: ReplSession) -> ANSI:
-    """Context-aware prompt: `[n] ❯` after the first completed turn."""
+    """Context-aware prompt: ``[n] ❯`` after the first completed turn.
+
+    The chevron uses the accent colour; a normal space **after** ``ANSI_RESET``
+    separates user input from the glyph (clearer in emoji-aware terminals).
+    """
     if session.history:
         counter = len(session.history)
-        prefix = f"{DIM_COUNTER_ANSI}[{counter}] {ANSI_RESET}"
+        prefix = f"{DIM_COUNTER_ANSI}[{counter}]{ANSI_RESET} "
     else:
         prefix = ""
-    return ANSI(f"{prefix}{PROMPT_ACCENT_ANSI}❯ {ANSI_RESET}")
+    return ANSI(f"{prefix}{PROMPT_ACCENT_ANSI}❯{ANSI_RESET} ")
 
 
 def _print_turn_separator(console: Console) -> None:
@@ -172,12 +228,43 @@ class ShellCompleter(Completer):
                     )
 
 
+def _tab_expand_or_menu(buffer: Buffer) -> None:
+    """Complete Tab behaviour for the REPL.
+
+    - Menu already open: **accept** the highlighted entry (no extra Enter).
+    - Otherwise, if exactly one match: apply it; if several: open the menu.
+
+    Use ↑/↓ to change the highlighted row when multiple completions are shown.
+    """
+    if buffer.complete_state:
+        state = buffer.complete_state
+        completion = state.current_completion
+        if completion is None and state.completions:
+            completion = state.completions[0]
+        if completion is not None:
+            buffer.apply_completion(completion)
+        return
+    if buffer.completer is None:
+        return
+    completions = list(
+        buffer.completer.get_completions(
+            buffer.document,
+            CompleteEvent(completion_requested=True),
+        )
+    )
+    if len(completions) == 1:
+        buffer.apply_completion(completions[0])
+    else:
+        buffer.start_completion(select_first=True)
+
+
 def _build_prompt_session() -> PromptSession[str]:
     return PromptSession(
         completer=ShellCompleter(),
         complete_while_typing=True,
         reserve_space_for_menu=8,
         history=load_prompt_history(),
+        lexer=ReplInputLexer(),
         key_bindings=_build_prompt_key_bindings(),
         style=_build_prompt_style(),
     )
@@ -188,11 +275,7 @@ def _build_prompt_key_bindings() -> KeyBindings:
 
     @bindings.add("tab")
     def _tab_complete(event: object) -> None:
-        buff = event.current_buffer  # type: ignore[attr-defined]
-        if buff.complete_state:
-            buff.complete_next()
-        else:
-            buff.start_completion(select_first=True)
+        _tab_expand_or_menu(event.current_buffer)  # type: ignore[attr-defined]
 
     @bindings.add("s-tab")
     def _shift_tab_complete(event: object) -> None:
@@ -216,6 +299,7 @@ def _build_prompt_key_bindings() -> KeyBindings:
 def _build_prompt_style() -> Style:
     return Style.from_dict(
         {
+            "repl-slash-command": f"bold {OPENCLAW_AMBER} bg:#2c1e14",
             "completion-menu": "bg:#1c1917",
             "completion-menu.completion": "#d6d0ca bg:#1c1917",
             "completion-menu.completion.current": f"bold {OPENCLAW_ORANGE} bg:#2c1e14",
@@ -278,7 +362,9 @@ async def _run_one_turn(
         # Rewrite bare-word commands to their slash form before dispatch.
         cmd_text = text if text.startswith("/") else f"/{text}"
         session.record("slash", cmd_text)
-        return dispatch_slash(cmd_text, session, console)
+        should_continue = dispatch_slash(cmd_text, session, console)
+        console.print()
+        return should_continue
 
     if kind == "cli_help":
         answer_cli_help(text, session, console)
@@ -329,6 +415,7 @@ async def _repl_main(initial_input: str | None = None, config: ReplConfig | None
                 session.record("slash", cmd_text)
                 if not dispatch_slash(cmd_text, session, console):
                     return 0
+                console.print()
             elif kind == "cli_help":
                 answer_cli_help(stripped, session, console)
                 session.record("cli_help", stripped)

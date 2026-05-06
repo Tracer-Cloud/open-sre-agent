@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from prompt_toolkit.application import create_app_session
+from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.completion import CompleteEvent
 from prompt_toolkit.document import Document
 from prompt_toolkit.history import FileHistory, InMemoryHistory
@@ -14,6 +15,23 @@ from prompt_toolkit.keys import Keys
 from prompt_toolkit.output import DummyOutput
 
 from app.cli.interactive_shell import loop
+
+
+def test_repl_input_lexer_highlights_first_slash_token() -> None:
+    lexer = loop.ReplInputLexer()
+    get_line = lexer.lex_document(Document("/model show", len("/model")))
+    fragments = get_line(0)
+    cmd_frags = [(s, t) for s, t in fragments if s == "class:repl-slash-command"]
+    assert cmd_frags == [("class:repl-slash-command", "/model")]
+    rest = "".join(t for s, t in fragments if s == "")
+    assert " show" in rest or rest.endswith(" show")
+
+
+def test_repl_input_lexer_highlights_bare_help_alias() -> None:
+    lexer = loop.ReplInputLexer()
+    get_line = lexer.lex_document(Document("help", 4))
+    fragments = get_line(0)
+    assert ("class:repl-slash-command", "help") in fragments
 
 
 def test_build_prompt_session_uses_persistent_history(
@@ -87,6 +105,55 @@ def test_shell_completer_suggests_subcommands_for_list() -> None:
     assert names == ["integrations", "mcp", "models"]
 
 
+def test_tab_applies_unique_slash_command_completion() -> None:
+    buff = Buffer(completer=loop.ShellCompleter())
+    buff.insert_text("/mod")
+    loop._tab_expand_or_menu(buff)
+    assert buff.text == "/model"
+
+
+def test_tab_applies_unique_bareword_alias_completion() -> None:
+    buff = Buffer(completer=loop.ShellCompleter())
+    buff.insert_text("hel")
+    loop._tab_expand_or_menu(buff)
+    assert buff.text == "help"
+
+
+def test_tab_with_open_completion_menu_applies_current_item() -> None:
+    from prompt_toolkit.buffer import CompletionState
+    from prompt_toolkit.completion import Completion
+
+    buff = Buffer()
+    buff.insert_text("/mo")
+    orig_doc = buff.document
+    c_model = Completion("/model", start_position=-3)
+    c_mcp = Completion("/mcp", start_position=-3)
+    # Assign directly — updating ``buff.document`` afterward clears ``complete_state``.
+    buff.complete_state = CompletionState(orig_doc, [c_model, c_mcp], 0)
+
+    loop._tab_expand_or_menu(buff)
+
+    assert buff.complete_state is None
+    assert buff.text == "/model"
+
+
+def test_tab_with_menu_and_no_index_applies_first_choice() -> None:
+    from prompt_toolkit.buffer import CompletionState
+    from prompt_toolkit.completion import Completion
+
+    buff = Buffer()
+    buff.insert_text("/mo")
+    orig_doc = buff.document
+    c_model = Completion("/model", start_position=-3)
+    c_mcp = Completion("/mcp", start_position=-3)
+    buff.complete_state = CompletionState(orig_doc, [c_model, c_mcp], None)
+
+    loop._tab_expand_or_menu(buff)
+
+    assert buff.complete_state is None
+    assert buff.text == "/model"
+
+
 def test_completion_includes_tab_navigation() -> None:
     key_bindings = loop._build_prompt_key_bindings()
     keys = {binding.keys for binding in key_bindings.bindings}
@@ -99,9 +166,15 @@ def test_completion_includes_tab_navigation() -> None:
 
 def test_completion_menu_current_item_uses_highlight_style() -> None:
     style = loop._build_prompt_style()
-    attrs = style.get_attrs_for_style_str("class:completion-menu.completion.current")
+    attrs = style.get_attrs_for_style_str("class:repl-slash-command")
 
-    assert attrs.color == "ff7a45"
+    assert attrs.color == "ffbe68"
     assert attrs.bgcolor == "2c1e14"
-    assert attrs.reverse is False
     assert attrs.bold is True
+
+    attrs_menu = style.get_attrs_for_style_str("class:completion-menu.completion.current")
+
+    assert attrs_menu.color == "ff7a45"
+    assert attrs_menu.bgcolor == "2c1e14"
+    assert attrs_menu.reverse is False
+    assert attrs_menu.bold is True
