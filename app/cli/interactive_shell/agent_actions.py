@@ -18,6 +18,8 @@ from rich.text import Text
 
 from app.cli.interactive_shell.commands import dispatch_slash, switch_llm_provider
 from app.cli.interactive_shell.session import ReplSession
+from app.cli.interactive_shell.shell_execution import execute_shell_command
+from app.cli.interactive_shell.shell_policy import evaluate_policy, parse_shell_command
 from app.cli.interactive_shell.terminal_intent import mentioned_integration_services
 from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
 
@@ -239,6 +241,8 @@ def _extract_shell_command(clause: PromptClause) -> PlannedAction | None:
         return _shell_action(command, clause.position + explicit_match.start("command"))
 
     command = _normalize_shell_command(clause.text)
+    if command is not None and command.startswith("!") and len(command) > 1:
+        return _shell_action(command, clause.position)
     if command is not None and _looks_like_direct_shell_command(command):
         return _shell_action(command, clause.position)
     return None
@@ -382,8 +386,6 @@ def _print_command_output(console: Console, output: str, *, style: str | None = 
     if not output:
         return
     text = output.rstrip()
-    if len(text) > _MAX_COMMAND_OUTPUT_CHARS:
-        text = text[:_MAX_COMMAND_OUTPUT_CHARS].rstrip() + "\n... output truncated ..."
     console.print(Text(text) if style is None else Text(text, style=style))
 
 
@@ -404,23 +406,35 @@ def _print_planned_actions(console: Console, actions: list[PlannedAction]) -> No
 
 def _run_shell_command(command: str, session: ReplSession, console: Console) -> None:
     console.print(f"[bold]$ {escape(command)}[/bold]")
-    token = _first_command_token(command)
-    if token is not None and token.lower() == "cd":
-        _run_cd_command(command, session, console)
-        return
-    if token is not None and token.lower() == "pwd":
-        _run_pwd_command(command, session, console)
+    parsed = parse_shell_command(command, is_windows=_IS_WINDOWS)
+    decision = evaluate_policy(parsed=parsed)
+    if not decision.allow:
+        console.print(
+            f"[yellow]command blocked:[/yellow] {escape(decision.reason or 'not allowed')}"
+        )
+        if decision.hint:
+            console.print(f"[dim]{escape(decision.hint)}[/dim]")
+        session.record("shell", command, ok=False)
         return
 
+    if parsed.argv is not None and parsed.argv[0].lower() == "cd":
+        _run_cd_command(parsed.command, session, console)
+        return
+    if parsed.argv is not None and parsed.argv[0].lower() == "pwd":
+        _run_pwd_command(parsed.command, session, console)
+        return
+
+    use_shell = parsed.passthrough
+    if use_shell:
+        console.print("[dim]explicit shell passthrough enabled[/dim]")
+
     try:
-        completed = subprocess.run(
-            command,
-            shell=True,
-            executable=os.environ.get("SHELL") or None,
-            capture_output=True,
-            text=True,
-            timeout=_SHELL_COMMAND_TIMEOUT_SECONDS,
-            check=False,
+        result = execute_shell_command(
+            command=parsed.command,
+            argv=parsed.argv,
+            use_shell=use_shell,
+            timeout_seconds=_SHELL_COMMAND_TIMEOUT_SECONDS,
+            max_output_chars=_MAX_COMMAND_OUTPUT_CHARS,
         )
     except subprocess.TimeoutExpired:
         console.print(
@@ -433,12 +447,12 @@ def _run_shell_command(command: str, session: ReplSession, console: Console) -> 
         session.record("shell", command, ok=False)
         return
 
-    _print_command_output(console, completed.stdout)
-    _print_command_output(console, completed.stderr, style="red")
-    ok = completed.returncode == 0
+    _print_command_output(console, result.stdout)
+    _print_command_output(console, result.stderr, style="red")
+    ok = result.exit_code == 0
     if not ok:
-        console.print(f"[red]exit code:[/red] {completed.returncode}")
-    elif not completed.stdout and not completed.stderr:
+        console.print(f"[red]exit code:[/red] {result.exit_code}")
+    elif not result.stdout and not result.stderr:
         console.print("[dim]exit code: 0[/dim]")
     session.record("shell", command, ok=ok)
 

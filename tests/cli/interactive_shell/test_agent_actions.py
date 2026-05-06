@@ -199,6 +199,7 @@ def test_direct_shell_command_plans_shell_action() -> None:
     assert plan_terminal_tasks("pwd") == ["shell"]
     assert plan_terminal_tasks("cd /tmp") == ["shell"]
     assert plan_terminal_tasks("CD /tmp") == ["shell"]
+    assert plan_terminal_tasks("!ls -la") == ["shell"]
 
 
 def test_sample_alert_launch_plans_sample_alert_action() -> None:
@@ -509,13 +510,15 @@ def test_execute_cli_actions_cd_strips_quotes_on_windows(monkeypatch: object) ->
 
 def test_execute_cli_actions_records_shell_failure(monkeypatch: object) -> None:
     completed = subprocess.CompletedProcess(
-        args="false",
+        args=["false"],
         returncode=2,
         stdout="",
         stderr="nope\n",
     )
+    calls: list[tuple[list[str], dict[str, object]]] = []
 
-    def _fake_run(command: str, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+    def _fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append((command, kwargs))
         return completed
 
     monkeypatch.setattr(agent_actions.subprocess, "run", _fake_run)
@@ -524,7 +527,111 @@ def test_execute_cli_actions_records_shell_failure(monkeypatch: object) -> None:
     console, buf = _capture()
 
     assert execute_cli_actions("execute false", session, console) is True
+    assert calls == [
+        (
+            ["false"],
+            {
+                "shell": False,
+                "capture_output": True,
+                "text": True,
+                "timeout": agent_actions._SHELL_COMMAND_TIMEOUT_SECONDS,
+                "check": False,
+            },
+        )
+    ]
     assert session.history[-1] == {"type": "shell", "text": "false", "ok": False}
     output = buf.getvalue()
     assert "nope" in output
     assert "exit code" in output
+
+
+def test_execute_cli_actions_runs_passthrough_with_shell_true(monkeypatch: object) -> None:
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    def _fake_run(command: str, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append((command, kwargs))
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=0,
+            stdout="ok\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(agent_actions.subprocess, "run", _fake_run)
+
+    session = ReplSession()
+    console, buf = _capture()
+
+    assert execute_cli_actions("run `!echo hello`", session, console) is True
+    assert calls == [
+        (
+            "echo hello",
+            {
+                "shell": True,
+                "executable": agent_actions.os.environ.get("SHELL") or None,
+                "capture_output": True,
+                "text": True,
+                "timeout": agent_actions._SHELL_COMMAND_TIMEOUT_SECONDS,
+                "check": False,
+            },
+        )
+    ]
+    assert session.history[-1] == {"type": "shell", "text": "!echo hello", "ok": True}
+    output = buf.getvalue()
+    assert "explicit shell passthrough enabled" in output
+    assert "ok" in output
+
+
+def test_execute_cli_actions_blocks_mutating_command_by_default() -> None:
+    session = ReplSession()
+    console, buf = _capture()
+
+    assert execute_cli_actions("run `rm -rf /tmp/demo`", session, console) is True
+    assert session.history[-1] == {"type": "shell", "text": "rm -rf /tmp/demo", "ok": False}
+    output = buf.getvalue()
+    assert "command blocked" in output
+    assert "mutating commands are blocked" in output
+    assert "run !<command>" in output
+
+
+def test_execute_cli_actions_blocks_ambiguous_shell_operators() -> None:
+    session = ReplSession()
+    console, buf = _capture()
+
+    assert execute_cli_actions("run `ls | wc -l`", session, console) is True
+    assert session.history[-1] == {"type": "shell", "text": "ls | wc -l", "ok": False}
+    output = buf.getvalue()
+    assert "command blocked" in output
+    assert "shell operators" in output
+
+
+def test_execute_cli_actions_handles_path_with_spaces(monkeypatch: object) -> None:
+    calls: list[tuple[list[str], dict[str, object]]] = []
+
+    def _fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append((command, kwargs))
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=0,
+            stdout="done\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(agent_actions.subprocess, "run", _fake_run)
+
+    session = ReplSession()
+    console, _ = _capture()
+
+    assert execute_cli_actions('run `cat "/tmp/file with spaces.txt"`', session, console) is True
+    assert calls[0][0] == ["cat", "/tmp/file with spaces.txt"]
+
+
+def test_execute_cli_actions_rejects_malformed_shell_input() -> None:
+    session = ReplSession()
+    console, buf = _capture()
+
+    assert execute_cli_actions('run `cat "unterminated`', session, console) is True
+    assert session.history[-1] == {"type": "shell", "text": 'cat "unterminated', "ok": False}
+    output = buf.getvalue()
+    assert "command blocked" in output
+    assert "could not parse command" in output
