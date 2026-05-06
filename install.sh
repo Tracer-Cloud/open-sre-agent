@@ -34,7 +34,6 @@ INSTALL_DIR_OVERRIDE=0
 INSTALL_CHANNEL="${OPENSRE_INSTALL_CHANNEL:-release}"
 BIN_NAME="opensre"
 INSTALL_WITH_SUDO=0
-SMOKE_TEST_FAILED=0
 PRESERVED_BINARY_PATH=""
 requested_version="${OPENSRE_VERSION:-}"
 
@@ -483,7 +482,6 @@ verify_binary_version() {
   local actual_version
 
   if ! version_output="$("$binary_path" --version 2>&1)"; then
-    SMOKE_TEST_FAILED=1
     PRESERVED_BINARY_PATH="${HOME}/.opensre/failed-install/${BIN_NAME}"
     if mkdir -p "${PRESERVED_BINARY_PATH%/*}" 2>/dev/null && cp "$binary_path" "$PRESERVED_BINARY_PATH" 2>/dev/null; then
       die "Failed to execute '${binary_path##*/} --version': ${version_output}
@@ -629,6 +627,7 @@ configure_path() {
   log "Or open a new terminal."
 }
 
+<<<<<<< HEAD
 print_success_screen() {
   local version="$1"
   local sep="────────────────────────────────────────────"
@@ -662,6 +661,8 @@ print_success_screen() {
   log ""
 }
 
+=======
+>>>>>>> 9739c266 (address greptile feedback: drop duplicate preserved-path message + dead SMOKE_TEST_FAILED)
 os="$(uname -s)"
 arch="$(uname -m)"
 
@@ -772,9 +773,9 @@ need_cmd mktemp
 tmp_dir="$(mktemp -d)"
 
 cleanup() {
-  if [ "$SMOKE_TEST_FAILED" -eq 1 ] && [ -n "$PRESERVED_BINARY_PATH" ] && [ -e "$PRESERVED_BINARY_PATH" ]; then
-    printf 'Smoke test failed. Binary preserved at: %s\n' "$PRESERVED_BINARY_PATH" >&2
-  fi
+  # Note: when verify_binary_version dies after a successful preserve copy, its
+  # die() call already names the preserved path in the user-facing error, so we
+  # do not re-print it here (greptile flagged the duplicate on PR #1408).
   if [ -n "${tmp_dir:-}" ] && [ -d "$tmp_dir" ]; then
     rm -rf "$tmp_dir"
   fi
@@ -824,4 +825,6 @@ else
 fi
 
 configure_path
-print_success_screen "$installed_version"
+
+log ""
+log "Next: run 'opensre onboard' to complete setup."
