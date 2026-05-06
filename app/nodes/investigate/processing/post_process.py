@@ -6,11 +6,11 @@ import re
 from collections.abc import Callable
 from datetime import UTC, datetime
 
-logger = logging.getLogger(__name__)
-
 from app.nodes.investigate.execution.execute_actions import ActionExecutionResult
 from app.nodes.investigate.types import ExecutedHypothesis, FailedAction, PlanAudit
 from app.tools.utils.metric_summary import summarize_prometheus_metrics
+
+logger = logging.getLogger(__name__)
 
 MAX_RETRYABLE_ACTION_FAILURES = 2
 _NON_RETRYABLE_FAILURE_INDICATORS = (
