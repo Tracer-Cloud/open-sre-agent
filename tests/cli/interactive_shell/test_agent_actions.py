@@ -640,6 +640,29 @@ def test_execute_cli_actions_records_shell_failure(monkeypatch: object) -> None:
     assert "exit 2" in output
 
 
+def test_execute_cli_actions_shell_command_times_out(monkeypatch: object) -> None:
+    def _timeout(
+        cmd: object, **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:  # pragma: no cover
+        raise subprocess.TimeoutExpired(
+            cmd=cmd,
+            timeout=1,
+            output="partial out\n",
+            stderr="partial err\n",
+        )
+
+    monkeypatch.setattr(shell_execution.subprocess, "run", _timeout)
+
+    session = ReplSession()
+    console, buf = _capture()
+
+    assert execute_cli_actions("run `true`", session, console) is True
+    assert session.history[-1] == {"type": "shell", "text": "true", "ok": False}
+    output = buf.getvalue().lower()
+    assert "timed out" in output
+    assert "partial out" in output
+
+
 def test_execute_cli_actions_runs_passthrough_with_shell_true(monkeypatch: object) -> None:
     calls: list[tuple[str, dict[str, object]]] = []
 

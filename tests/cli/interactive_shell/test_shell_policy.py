@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.cli.interactive_shell.shell_policy import (
+    argv_for_repl_builtin_routing,
     classify_command,
     evaluate_policy,
     parse_shell_command,
@@ -16,6 +17,16 @@ def test_parse_shell_command_detects_passthrough_prefix() -> None:
     assert parsed.command == "echo hello"
     assert parsed.argv is None
     assert parsed.parse_error is None
+
+
+def test_argv_for_repl_builtin_routing_splits_passthrough_for_cd_pwd() -> None:
+    parsed = parse_shell_command("!cd /tmp", is_windows=False)
+    assert argv_for_repl_builtin_routing(parsed=parsed, is_windows=False) == ["cd", "/tmp"]
+
+
+def test_argv_for_repl_builtin_routing_returns_safe_mode_argv() -> None:
+    parsed = parse_shell_command("pwd", is_windows=False)
+    assert argv_for_repl_builtin_routing(parsed=parsed, is_windows=False) == ["pwd"]
 
 
 def test_parse_shell_command_rejects_operators_in_safe_mode() -> None:

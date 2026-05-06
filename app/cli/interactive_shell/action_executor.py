@@ -28,7 +28,10 @@ from app.cli.interactive_shell.execution_policy import (
 from app.cli.interactive_shell.rendering import print_command_output
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.shell_execution import execute_shell_command
-from app.cli.interactive_shell.shell_policy import parse_shell_command
+from app.cli.interactive_shell.shell_policy import (
+    argv_for_repl_builtin_routing,
+    parse_shell_command,
+)
 from app.cli.interactive_shell.tasks import TaskKind, TaskRecord
 from app.cli.interactive_shell.theme import TERMINAL_ERROR
 from app.cli.support.errors import OpenSREError
@@ -158,16 +161,9 @@ def run_shell_command(
 
     console.print(f"[bold]$ {escape(command)}[/bold]")
 
-    argv_builtin = parsed.argv
-    if argv_builtin is None and parsed.passthrough and parsed.command.strip():
-        passthrough_body = parsed.command.strip()
-        try:
-            argv_builtin = shlex.split(passthrough_body, posix=not _intent_parser.IS_WINDOWS)
-        except ValueError:
-            try:
-                argv_builtin = shlex.split(passthrough_body, posix=False)
-            except ValueError:
-                argv_builtin = None
+    argv_builtin = argv_for_repl_builtin_routing(
+        parsed=parsed, is_windows=_intent_parser.IS_WINDOWS
+    )
 
     if argv_builtin is not None and argv_builtin[0].lower() == "cd":
         run_cd_command(parsed.command, session, console)
@@ -188,10 +184,6 @@ def run_shell_command(
             timeout_seconds=SHELL_COMMAND_TIMEOUT_SECONDS,
             max_output_chars=_MAX_COMMAND_OUTPUT_CHARS,
         )
-    except subprocess.TimeoutExpired:
-        console.print(f"[red]command timed out after {SHELL_COMMAND_TIMEOUT_SECONDS} seconds[/red]")
-        session.record("shell", command, ok=False)
-        return
     except Exception as exc:  # noqa: BLE001
         console.print(f"[red]command failed to start:[/red] {escape(str(exc))}")
         session.record("shell", command, ok=False)
@@ -199,6 +191,10 @@ def run_shell_command(
 
     print_command_output(console, result.stdout)
     print_command_output(console, result.stderr, style="red")
+    if result.timed_out:
+        console.print(f"[red]command timed out after {SHELL_COMMAND_TIMEOUT_SECONDS} seconds[/red]")
+        session.record("shell", command, ok=False)
+        return
     ok = result.exit_code == 0
     had_stdout = bool((result.stdout or "").strip())
     had_stderr = bool((result.stderr or "").strip())

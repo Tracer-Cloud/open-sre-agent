@@ -70,6 +70,8 @@ class TestSystemPromptTerminology:
     def test_conversational_prompt_uses_interactive_shell_not_repl(self) -> None:
         prompt = _build_system_prompt(reference="(ref)", history="(hist)")
         assert "interactive shell" in prompt
+        assert "argv" in prompt
+        assert "!" in prompt
         # The prompt must explicitly forbid the "REPL" jargon so the model
         # does not echo it back in answers (#604).
         assert _TERMINOLOGY_RULE in prompt
