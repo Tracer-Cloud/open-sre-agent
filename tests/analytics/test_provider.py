@@ -943,3 +943,53 @@ def test_event_log_counter_increments_only_on_successful_write(monkeypatch, tmp_
         provider._log_debug_line("event")
 
     assert provider._event_log_state.lines_written == 7
+
+
+def test_capture_coerces_invalid_property_values(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """capture must accept str/bool, coerce numerics, drop None, and reject objects."""
+    monkeypatch.delenv("OPENSRE_ANALYTICS_DISABLED", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(provider, "_ANONYMOUS_ID_PATH", tmp_path / "anonymous_id")
+    monkeypatch.setattr(provider.atexit, "register", lambda _func: None)
+    posted_payloads = _stub_httpx_client(monkeypatch)
+
+    failure_lines: list[str] = []
+
+    def _record_failure(stage: str, error: BaseException, **extra: object) -> None:
+        failure_lines.append(f"{stage}:{type(error).__name__}:{extra}")
+
+    monkeypatch.setattr(provider, "_log_failure", _record_failure)
+
+    class _Custom:
+        def __repr__(self) -> str:
+            return "<custom>"
+
+    analytics = provider.Analytics()
+    analytics.capture(
+        Event.CLI_INVOKED,
+        {
+            "ok_string": "value",
+            "ok_bool": True,
+            "drop_none": None,
+            "coerce_int": 7,
+            "coerce_float": 1.5,
+            "drop_object": _Custom(),
+        },
+    )
+    analytics.shutdown(flush=True)
+
+    assert len(posted_payloads) == 1
+    properties = posted_payloads[0]["json"]["properties"]
+    assert properties["ok_string"] == "value"
+    assert properties["ok_bool"] is True
+    assert properties["coerce_int"] == "7"
+    assert properties["coerce_float"] == "1.5"
+    assert "drop_none" not in properties
+    assert "drop_object" not in properties
+
+    invalid = [line for line in failure_lines if line.startswith("invalid_property")]
+    assert any("drop_object" in line for line in invalid)
+    assert all("drop_none" not in line for line in invalid)
