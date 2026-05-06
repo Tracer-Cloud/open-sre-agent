@@ -7,6 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from rich import box
 from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
@@ -19,6 +20,17 @@ from app.cli.support.errors import OpenSREError
 from app.utils.sentry_sdk import capture_exception
 
 
+def _repl_table(**kwargs: Any) -> Table:
+    """Minimal outer borders — closer to Claude Code than full ASCII grids."""
+    opts: dict[str, Any] = {
+        "box": box.MINIMAL_HEAVY_HEAD,
+        "show_edge": False,
+        "pad_edge": False,
+    }
+    opts.update(kwargs)
+    return Table(**opts)
+
+
 @dataclass(frozen=True)
 class SlashCommand:
     name: str
@@ -27,7 +39,7 @@ class SlashCommand:
 
 
 def _cmd_help(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    table = Table(title="Slash commands", title_style=TERMINAL_ACCENT_BOLD, show_header=False)
+    table = _repl_table(title="Slash commands", title_style=TERMINAL_ACCENT_BOLD, show_header=False)
     table.add_column("name", style="bold")
     table.add_column("description", style="dim")
     for cmd in SLASH_COMMANDS.values():
@@ -64,7 +76,7 @@ def _cmd_trust(session: ReplSession, console: Console, args: list[str]) -> bool:
 
 
 def _cmd_status(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    table = Table(title="Session status", title_style=TERMINAL_ACCENT_BOLD, show_header=False)
+    table = _repl_table(title="Session status", title_style=TERMINAL_ACCENT_BOLD, show_header=False)
     table.add_column("key", style="bold")
     table.add_column("value")
     table.add_row("interactions", str(len(session.history)))
@@ -114,7 +126,7 @@ def _render_integrations_table(console: Console, results: list[dict[str, str]]) 
     if not rows:
         console.print("[dim]no integrations configured.  try `opensre onboard` to add one.[/dim]")
         return
-    table = Table(title="Integrations", title_style=TERMINAL_ACCENT_BOLD)
+    table = _repl_table(title="Integrations", title_style=TERMINAL_ACCENT_BOLD)
     table.add_column("service", style="bold")
     table.add_column("source", style="dim")
     table.add_column("status")
@@ -135,7 +147,7 @@ def _render_mcp_table(console: Console, results: list[dict[str, str]]) -> None:
     if not rows:
         console.print("[dim]no MCP servers configured.[/dim]")
         return
-    table = Table(title="MCP servers", title_style=TERMINAL_ACCENT_BOLD)
+    table = _repl_table(title="MCP servers", title_style=TERMINAL_ACCENT_BOLD)
     table.add_column("server", style="bold")
     table.add_column("source", style="dim")
     table.add_column("status")
@@ -158,7 +170,7 @@ def _render_models_table(console: Console) -> None:
         return
     provider = str(getattr(settings, "provider", "unknown"))
     reasoning_model, toolcall_model = resolve_provider_models(settings, provider)
-    table = Table(title="LLM connection", title_style=TERMINAL_ACCENT_BOLD, show_header=False)
+    table = _repl_table(title="LLM connection", title_style=TERMINAL_ACCENT_BOLD, show_header=False)
     table.add_column("key", style="bold")
     table.add_column("value")
     table.add_row("provider", provider)
@@ -358,7 +370,7 @@ def _cmd_integrations(session: ReplSession, console: Console, args: list[str]) -
         if match is None:
             console.print(f"[red]service not found:[/red] {escape(service)}")
             return True
-        table = Table(
+        table = _repl_table(
             title=f"Integration: {service}",
             title_style=TERMINAL_ACCENT_BOLD,
             show_header=False,
@@ -476,7 +488,7 @@ def _cmd_doctor(session: ReplSession, console: Console, args: list[str]) -> bool
     from app.cli.commands.doctor import _CHECKS, _check
 
     _STATUS_STYLES: dict[str, str] = {"ok": "green", "warn": "yellow", "error": "red"}
-    table = Table(title="OpenSRE Doctor", title_style=TERMINAL_ACCENT_BOLD)
+    table = _repl_table(title="OpenSRE Doctor", title_style=TERMINAL_ACCENT_BOLD)
     table.add_column("check", style="bold")
     table.add_column("status")
     table.add_column("detail", style="dim", overflow="fold")
@@ -503,7 +515,7 @@ def _cmd_version(session: ReplSession, console: Console, args: list[str]) -> boo
 
     from app.version import get_version
 
-    table = Table(title="Version info", title_style=TERMINAL_ACCENT_BOLD, show_header=False)
+    table = _repl_table(title="Version info", title_style=TERMINAL_ACCENT_BOLD, show_header=False)
     table.add_column("key", style="bold")
     table.add_column("value")
     table.add_row("opensre", get_version())
@@ -627,7 +639,7 @@ def _cmd_history(session: ReplSession, console: Console, args: list[str]) -> boo
         console.print("[dim]no history yet.[/dim]")
         return True
 
-    table = Table(title="Command history", title_style=TERMINAL_ACCENT_BOLD)
+    table = _repl_table(title="Command history", title_style=TERMINAL_ACCENT_BOLD)
     table.add_column("#", style="dim", justify="right")
     table.add_column("text", overflow="fold")
 
@@ -694,7 +706,7 @@ def _cmd_context(session: ReplSession, console: Console, args: list[str]) -> boo
         console.print("[dim]no infra context accumulated yet.[/dim]")
         return True
 
-    table = Table(title="Accumulated context", title_style=TERMINAL_ACCENT_BOLD, show_header=False)
+    table = _repl_table(title="Accumulated context", title_style=TERMINAL_ACCENT_BOLD, show_header=False)
     table.add_column("key", style="bold")
     table.add_column("value")
     for k, v in sorted(session.accumulated_context.items()):
@@ -704,7 +716,7 @@ def _cmd_context(session: ReplSession, console: Console, args: list[str]) -> boo
 
 
 def _cmd_cost(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    table = Table(title="Session cost", title_style=TERMINAL_ACCENT_BOLD, show_header=False)
+    table = _repl_table(title="Session cost", title_style=TERMINAL_ACCENT_BOLD, show_header=False)
     table.add_column("key", style="bold")
     table.add_column("value")
     table.add_row("interactions", str(len(session.history)))

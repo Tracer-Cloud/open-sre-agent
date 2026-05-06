@@ -30,7 +30,7 @@ def test_build_prompt_session_uses_persistent_history(
     assert isinstance(prompt.history, FileHistory)
     assert prompt.history.filename == str(tmp_path / "interactive_history")
     assert tmp_path.exists()
-    assert isinstance(prompt.completer, loop.SlashCommandCompleter)
+    assert isinstance(prompt.completer, loop.ShellCompleter)
     assert prompt.app.key_bindings is not None
 
 
@@ -50,9 +50,9 @@ def test_build_prompt_session_falls_back_to_memory_history(
     assert isinstance(prompt.history, InMemoryHistory)
 
 
-def test_slash_completer_previews_all_commands() -> None:
+def test_shell_completer_previews_all_commands() -> None:
     completions = list(
-        loop._build_slash_completer().get_completions(
+        loop.ShellCompleter().get_completions(
             Document("/"),
             CompleteEvent(text_inserted=True),
         )
@@ -65,9 +65,9 @@ def test_slash_completer_previews_all_commands() -> None:
     assert all(name.startswith("/") for name in names)
 
 
-def test_slash_completer_filters_by_prefix() -> None:
+def test_shell_completer_filters_by_prefix() -> None:
     completions = list(
-        loop._build_slash_completer().get_completions(
+        loop.ShellCompleter().get_completions(
             Document("/li"),
             CompleteEvent(text_inserted=True),
         )
@@ -76,30 +76,32 @@ def test_slash_completer_filters_by_prefix() -> None:
     assert [completion.text for completion in completions] == ["/list"]
 
 
-def test_slash_completer_ignores_subcommand_text() -> None:
+def test_shell_completer_suggests_subcommands_for_list() -> None:
     completions = list(
-        loop._build_slash_completer().get_completions(
+        loop.ShellCompleter().get_completions(
             Document("/list "),
             CompleteEvent(text_inserted=True),
         )
     )
+    names = sorted({c.text for c in completions})
+    assert names == ["integrations", "mcp", "models"]
 
-    assert completions == []
 
-
-def test_completion_menu_supports_up_down_navigation() -> None:
+def test_completion_includes_tab_navigation() -> None:
     key_bindings = loop._build_prompt_key_bindings()
     keys = {binding.keys for binding in key_bindings.bindings}
 
     assert (Keys.Down,) in keys
     assert (Keys.Up,) in keys
+    assert (Keys.Tab,) in keys
+    assert (Keys.BackTab,) in keys
 
 
-def test_completion_menu_current_item_uses_subtle_highlight() -> None:
+def test_completion_menu_current_item_uses_highlight_style() -> None:
     style = loop._build_prompt_style()
     attrs = style.get_attrs_for_style_str("class:completion-menu.completion.current")
 
     assert attrs.color == "ff7a45"
-    assert attrs.bgcolor == "241913"
+    assert attrs.bgcolor == "2c1e14"
     assert attrs.reverse is False
-    assert attrs.bold is False
+    assert attrs.bold is True

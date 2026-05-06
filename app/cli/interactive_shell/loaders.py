@@ -12,12 +12,11 @@ from contextlib import contextmanager
 
 from rich.console import Console
 
-# 256-colour orange that reads well on both light and dark terminal
-# themes; Rich auto-degrades to ANSI on 8-colour terminals.
-_LOADER_COLOR = "orange1"
-# ``dots12`` rotates a denser braille pattern than the default ``dots`` —
-# smoother motion for short waits without taking extra horizontal space.
-_LOADER_SPINNER = "dots12"
+from app.cli.interactive_shell.theme import DIM_TEXT_COLOR
+
+# Quiet, secondary-colour spinner — less visual noise than a bright accent.
+_LOADER_COLOR = DIM_TEXT_COLOR
+_LOADER_SPINNER = "dots"
 
 DEFAULT_LOADER_LABEL = "thinking"
 
@@ -34,9 +33,8 @@ def llm_loader(console: Console, label: str = DEFAULT_LOADER_LABEL) -> Iterator[
         yield
         return
 
-    style = f"bold {_LOADER_COLOR}"
-    text = f"[{style}]{label}…[/{style}]"
-    with console.status(text, spinner=_LOADER_SPINNER, spinner_style=style):
+    text = f"[{_LOADER_COLOR}]{label}…[/{_LOADER_COLOR}]"
+    with console.status(text, spinner=_LOADER_SPINNER, spinner_style=_LOADER_COLOR):
         yield
 
 

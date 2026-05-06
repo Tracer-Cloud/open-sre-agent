@@ -15,6 +15,7 @@ from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.styles import Style
 from rich.console import Console
 from rich.markup import escape
+from rich.rule import Rule
 
 from app.cli.interactive_shell.agent_actions import execute_cli_actions
 from app.cli.interactive_shell.banner import render_banner
@@ -28,12 +29,29 @@ from app.cli.interactive_shell.router import _BARE_COMMAND_ALIASES, classify_inp
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.theme import (
     ANSI_RESET,
+    DIM_COUNTER_ANSI,
     OPENCLAW_AMBER,
     OPENCLAW_CORAL,
     OPENCLAW_ORANGE,
     PROMPT_ACCENT_ANSI,
+    SEPARATOR_COLOR,
 )
 from app.cli.support.errors import OpenSREError
+
+
+def _prompt_line_ansi(session: ReplSession) -> ANSI:
+    """Context-aware prompt: `[n] ❯` after the first completed turn."""
+    if session.history:
+        counter = len(session.history)
+        prefix = f"{DIM_COUNTER_ANSI}[{counter}] {ANSI_RESET}"
+    else:
+        prefix = ""
+    return ANSI(f"{prefix}{PROMPT_ACCENT_ANSI}❯ {ANSI_RESET}")
+
+
+def _print_turn_separator(console: Console) -> None:
+    """Hairline between conversational turns."""
+    console.print(Rule(style=SEPARATOR_COLOR))
 
 
 def _short_meta(text: str, max_len: int = 54) -> str:
@@ -246,7 +264,7 @@ async def _run_one_turn(
 ) -> bool:
     """Read one line of input and dispatch. Returns False to exit."""
     try:
-        text = await prompt.prompt_async(ANSI(f"{PROMPT_ACCENT_ANSI}› {ANSI_RESET}"))
+        text = await prompt.prompt_async(_prompt_line_ansi(session))
     except (EOFError, KeyboardInterrupt):
         console.print()
         return False
@@ -265,22 +283,27 @@ async def _run_one_turn(
     if kind == "cli_help":
         answer_cli_help(text, session, console)
         session.record("cli_help", text)
+        _print_turn_separator(console)
         return True
 
     if kind == "cli_agent":
         if execute_cli_actions(text, session, console):
+            _print_turn_separator(console)
             return True
         answer_cli_agent(text, session, console)
         session.record("cli_agent", text)
+        _print_turn_separator(console)
         return True
 
     if kind == "new_alert":
         _run_new_alert(text, session, console)
+        _print_turn_separator(console)
         return True
 
     # follow_up — grounded answer against session.last_state
     answer_follow_up(text, session, console)
     session.record("follow_up", text)
+    _print_turn_separator(console)
     return True
 
 
@@ -309,15 +332,19 @@ async def _repl_main(initial_input: str | None = None, config: ReplConfig | None
             elif kind == "cli_help":
                 answer_cli_help(stripped, session, console)
                 session.record("cli_help", stripped)
+                _print_turn_separator(console)
             elif kind == "cli_agent":
                 if not execute_cli_actions(stripped, session, console):
                     answer_cli_agent(stripped, session, console)
                     session.record("cli_agent", stripped)
+                _print_turn_separator(console)
             elif kind == "new_alert":
                 _run_new_alert(stripped, session, console)
+                _print_turn_separator(console)
             else:
                 answer_follow_up(stripped, session, console)
                 session.record("follow_up", stripped)
+                _print_turn_separator(console)
 
     while True:
         should_continue = await _run_one_turn(prompt, session, console)

@@ -41,9 +41,8 @@ class TestLLMLoader:
         # Nothing should be written — no label, no escape sequences, nothing.
         assert buf.getvalue() == ""
 
-    def test_loader_uses_orange_spinner_style(self, monkeypatch: Any) -> None:
-        """The loader must call ``console.status`` with an orange spinner
-        style — guards against accidental colour drift."""
+    def test_loader_uses_subtle_spinner_style(self, monkeypatch: Any) -> None:
+        """The loader uses a dim, quiet spinner — less visual noise than a bright accent."""
         captured: dict[str, Any] = {}
 
         # Fake context manager so we can introspect the kwargs without
@@ -66,10 +65,10 @@ class TestLLMLoader:
         with llm_loader(console, label="consulting the model"):
             pass
 
-        assert "orange1" in captured["text"]
+        assert "#6b6561" in captured["text"]
         assert "consulting the model" in captured["text"]
-        assert captured["kwargs"]["spinner"] == "dots12"
-        assert "orange1" in captured["kwargs"]["spinner_style"]
+        assert captured["kwargs"]["spinner"] == "dots"
+        assert captured["kwargs"]["spinner_style"] == "#6b6561"
 
 
 def test_module_exports_loader_and_default_label() -> None:
