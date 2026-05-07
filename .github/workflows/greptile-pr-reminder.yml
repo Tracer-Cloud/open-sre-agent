@@ -20,11 +20,13 @@ jobs:
       - name: Comment with Greptile guidance
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          base_ref='${{ github.event.pull_request.base.ref }}'
+          base_ref="${BASE_REF}"
           contributing_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/blob/${base_ref}/CONTRIBUTING.md#greptile-code-review"
-          pr='${{ github.event.pull_request.number }}'
+          pr="${PR_NUMBER}"
           repo="${GITHUB_REPOSITORY}"
           {
             echo '### Greptile code review'
