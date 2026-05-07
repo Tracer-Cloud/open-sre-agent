@@ -589,3 +589,93 @@ class TestStreamRendererDiagnoseStreaming:
         # and clears _active_node.
         assert renderer._diagnose_live is None
         assert renderer._active_node is None
+
+
+class TestStreamRendererFocusedUXAndParsing:
+    """Focused tests for incident-first UX flow, plan preview, and deterministic report parsing."""
+
+    @patch("app.remote.renderer.Live")
+    @patch("app.output._EventLogDisplay")
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
+    def test_diagnose_first_flow_prints_alert_header_before_reasoning(
+        self, _mock_display, _mock_live
+    ) -> None:
+        """In the diagnose-first flow, the ingested alert header is printed before reasoning."""
+        renderer = StreamRenderer()
+        renderer._final_state = {
+            "alert_name": "critical-cpu-alert",
+            "pipeline_name": "infrastructure",
+            "severity": "critical",
+        }
+        renderer._start_diagnose_streaming("diagnose_root_cause")
+        assert renderer._alert_header_printed is True
+
+    @patch("app.remote.renderer.Live")
+    @patch("app.output._EventLogDisplay")
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
+    def test_plan_preview_printed_exactly_once(self, _mock_display, _mock_live) -> None:
+        """The plan preview panel is printed exactly once when the plan_actions node completes."""
+        renderer = StreamRenderer()
+        renderer._final_state = {"planned_actions": ["check_logs", "query_metrics"]}
+        renderer._active_node = "plan_actions"
+
+        renderer._finish_active_node()
+        assert renderer._plan_preview_printed is True
+
+        renderer._plan_preview_printed = True
+        renderer._active_node = "plan_actions"
+        renderer._finish_active_node()
+        assert renderer._plan_preview_printed is True
+
+    @patch("app.remote.renderer.Live")
+    @patch("app.output._EventLogDisplay")
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
+    def test_report_parsing_with_structured_sections(
+        self, _mock_display, _mock_live, capfd
+    ) -> None:
+        """Report parser correctly handles standard Evidence and Next Actions sections."""
+        renderer = StreamRenderer()
+        renderer._final_state = {
+            "root_cause": "Database connection pool saturated",
+            "validity_score": 0.95,
+            "report": (
+                "### Supporting Evidence\n"
+                "• Active connections reached 100 max limit\n"
+                "• Thread pool starvation observed in logs\n"
+                "\n"
+                "### Next Actions\n"
+                "• Scale database connections to 200\n"
+                "• Restart connection pool gracefully\n"
+            ),
+        }
+        renderer._print_report()
+        out, _ = capfd.readouterr()
+
+        assert "Supporting Evidence" in out
+        assert "Active connections" in out
+        assert "Next Actions" in out
+        assert "Scale database connections to 200" in out
+
+    @patch("app.remote.renderer.Live")
+    @patch("app.output._EventLogDisplay")
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
+    def test_report_parsing_fallback_to_verbs_if_no_section(
+        self, _mock_display, _mock_live, capfd
+    ) -> None:
+        """If no explicit sections exist, parser falls back to matching verbs for Next Actions."""
+        renderer = StreamRenderer()
+        renderer._final_state = {
+            "root_cause": "Deadlock in database",
+            "validity_score": 0.88,
+            "report": (
+                "The system experienced a major deadlock.\n"
+                "• Check transaction isolation levels.\n"
+                "• Restart the backend container.\n"
+            ),
+        }
+        renderer._print_report()
+        out, _ = capfd.readouterr()
+
+        assert "Next Actions" in out
+        assert "Check transaction isolation levels" in out
+        assert "Restart the backend container" in out

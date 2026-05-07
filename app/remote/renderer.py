@@ -17,6 +17,8 @@ from typing import Any
 from rich.console import Console
 from rich.live import Live
 from rich.markdown import Markdown
+from rich.markup import escape
+from rich.panel import Panel
 from rich.spinner import Spinner
 from rich.text import Text
 
@@ -27,6 +29,7 @@ from app.output import (
 )
 from app.remote.reasoning import reasoning_text
 from app.remote.stream import StreamEvent
+from app.tools.registry import resolve_tool_display_name
 
 _RESET = "\033[0m"
 _DIM = "\033[2m"
@@ -88,6 +91,9 @@ class StreamRenderer:
         self._diagnose_started: float = 0.0
         # Lazy-init: only constructed when the diagnose node first runs.
         self._diagnose_console: Console | None = None
+        self._console = Console()
+        self._alert_header_printed = False
+        self._plan_preview_printed = False
 
     @property
     def events_received(self) -> int:
@@ -233,6 +239,7 @@ class StreamRenderer:
             self._node_names_seen.append(canonical)
         self._diagnose_buffer = []
         self._diagnose_started = time.monotonic()
+        self._print_alert_header()
 
         if get_output_format() != "rich":
             sys.stdout.write(f"  … {canonical}\n")
@@ -333,9 +340,37 @@ class StreamRenderer:
         # closed even on mid-stream exceptions.
         if self._active_node == _DIAGNOSE_NODE:
             self._finish_diagnose_streaming()
+            self._active_node = None
             return
-        message = self._build_node_message(self._active_node)
-        self._tracker.complete(self._active_node, message=message)
+        node = self._active_node
+        message = self._build_node_message(node)
+        self._tracker.complete(node, message=message)
+        if get_output_format() == "rich":
+            self._print_alert_header()
+        if (
+            node == "plan_actions"
+            and get_output_format() == "rich"
+            and not self._plan_preview_printed
+        ):
+            actions = self._final_state.get("planned_actions", [])
+            if actions:
+                if self._tracker._display:
+                    self._tracker._display.stop()
+                    self._tracker._display = None
+                self._console.print()
+                self._console.print(
+                    Panel(
+                        "\n".join(
+                            f"  [bold green]{i + 1}.[/bold green] [white]{escape(resolve_tool_display_name(act))}[/white]"
+                            for i, act in enumerate(actions)
+                        ),
+                        title="[bold yellow]📋 Investigation Plan Preview[/bold yellow]",
+                        border_style="yellow",
+                        expand=False,
+                    )
+                )
+                self._console.print()
+                self._plan_preview_printed = True
         self._active_node = None
 
     def _merge_state(self, update: Any) -> None:
@@ -357,6 +392,8 @@ class StreamRenderer:
         if node == "plan_actions":
             actions = self._final_state.get("planned_actions", [])
             if actions:
+                if get_output_format() == "rich":
+                    return None
                 return f"Planned actions: {actions}"
         if node == "resolve_integrations":
             integrations = self._final_state.get("resolved_integrations", {})
@@ -369,36 +406,136 @@ class StreamRenderer:
                 return f"validity:{int(score * 100)}%"
         return None
 
-    def _print_report(self) -> None:
-        from app.output import stop_display
-
-        stop_display()
-
+    def _print_alert_header(self) -> None:
+        if self._alert_header_printed:
+            return
         alert_name = self._final_state.get("alert_name", "Unknown")
         pipeline = self._final_state.get("pipeline_name", "Unknown")
         severity = self._final_state.get("severity", "unknown")
 
         if alert_name != "Unknown" or pipeline != "Unknown":
-            render_investigation_header(alert_name, pipeline, severity)
+            if get_output_format() == "rich":
+                if self._tracker._display:
+                    self._tracker._display.stop()
+                    self._tracker._display = None
+                self._console.print()
+                self._console.print(
+                    Panel(
+                        f"  • [dim]Source/Name:[/dim] [bold white]{escape(alert_name)}[/bold white]\n"
+                        f"  • [dim]Pipeline:[/dim] [cyan]{escape(pipeline)}[/cyan]\n"
+                        f"  • [dim]Severity:[/dim] [bold yellow]{escape(severity)}[/bold yellow]",
+                        title="[bold cyan]📥 Alert Ingested & Parsed[/bold cyan]",
+                        border_style="cyan",
+                        expand=False,
+                    )
+                )
+            else:
+                render_investigation_header(alert_name, pipeline, severity)
+            self._alert_header_printed = True
+
+    def _print_report(self) -> None:
+        from app.output import stop_display
+
+        stop_display()
+
+        self._print_alert_header()
 
         root_cause = self._final_state.get("root_cause", "")
         report = self._final_state.get("report", "")
+        score = self._final_state.get("validity_score")
+        confidence_str = f"{int(score * 100)}%" if score is not None else "N/A"
 
-        # Skip the Root Cause one-liner if the diagnose node already streamed
-        # its reasoning live — the user has just watched the full analysis
-        # appear on screen, so the condensed summary adds noise rather than
-        # value. The Report section still prints because publish_findings
-        # adds alert framing and timing the diagnose stream doesn't carry.
-        diagnose_streamed = bool(self._diagnose_buffer)
-        if root_cause and not diagnose_streamed:
-            _print_section("Root Cause", root_cause)
-        if report:
-            _print_section("Report", report)
-        elif not root_cause:
-            if self._final_state.get("is_noise"):
-                _print_info("Alert classified as noise — no investigation needed.")
-            elif self._events_received == 0:
-                _print_info("No events received from the remote agent.")
+        if get_output_format() == "rich" and root_cause:
+            self._console.print()
+
+            evidence_lines = []
+            next_actions = []
+
+            lines = report.strip().splitlines()
+            current_section = None
+
+            for line in lines:
+                stripped = line.strip()
+                if not stripped:
+                    continue
+
+                lowered = stripped.lower()
+                if any(h in lowered for h in ("supporting evidence", "evidence")):
+                    current_section = "evidence"
+                    continue
+                elif any(
+                    h in lowered
+                    for h in ("next actions", "next steps", "remediation", "recommendations")
+                ):
+                    current_section = "next_actions"
+                    continue
+                elif "root cause" in lowered:
+                    current_section = "root_cause"
+                    continue
+
+                if current_section in ("evidence", "next_actions"):
+                    clean_line = stripped.lstrip("•●-—* ").strip()
+                    if clean_line:
+                        if current_section == "evidence":
+                            evidence_lines.append(clean_line)
+                        else:
+                            next_actions.append(clean_line)
+
+            if not next_actions:
+                action_verbs = {
+                    "check",
+                    "review",
+                    "restart",
+                    "fix",
+                    "verify",
+                    "investigate",
+                    "debug",
+                    "update",
+                    "scale",
+                    "run",
+                    "test",
+                }
+                for line in lines:
+                    stripped = line.strip()
+                    clean_line = stripped.lstrip("•●-—* ").strip()
+                    tokens = clean_line.lower().split()
+                    if tokens and tokens[0] in action_verbs:
+                        next_actions.append(clean_line)
+
+            content = f"[bold white][Root Cause][/bold white]\n  {escape(root_cause)}\n\n"
+            content += f"[bold white][Confidence][/bold white]\n  [bold green]{escape(confidence_str)}[/bold green]\n\n"
+
+            if evidence_lines:
+                content += "[bold white][Supporting Evidence][/bold white]\n"
+                for ev in evidence_lines:
+                    content += f"  • {escape(ev)}\n"
+                content += "\n"
+
+            if next_actions:
+                content += "[bold white][Next Actions][/bold white]\n"
+                for act in next_actions:
+                    content += f"  • {escape(act)}\n"
+
+            self._console.print(
+                Panel(
+                    content.strip(),
+                    title="[bold green]🏆 Final Root Cause Analysis (RCA)[/bold green]",
+                    border_style="green",
+                    expand=False,
+                )
+            )
+            self._console.print()
+        else:
+            diagnose_streamed = bool(self._diagnose_buffer)
+            if root_cause and not diagnose_streamed:
+                _print_section("Root Cause", root_cause)
+            if report:
+                _print_section("Report", report)
+            elif not root_cause:
+                if self._final_state.get("is_noise"):
+                    _print_info("Alert classified as noise — no investigation needed.")
+                elif self._events_received == 0:
+                    _print_info("No events received from the remote agent.")
 
 
 def _canonical_node_name(name: str) -> str:

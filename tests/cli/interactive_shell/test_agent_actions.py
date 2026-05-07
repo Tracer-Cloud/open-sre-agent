@@ -815,6 +815,7 @@ def test_execute_cli_actions_handles_path_with_spaces(monkeypatch: object) -> No
     console, _ = _capture()
 
     assert execute_cli_actions('run `cat "/tmp/file with spaces.txt"`', session, console) is True
+
     assert calls[0][0] == ["cat", "/tmp/file with spaces.txt"]
 
 
