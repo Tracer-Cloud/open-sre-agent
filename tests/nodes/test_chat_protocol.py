@@ -150,6 +150,31 @@ def test_anthropic_adapter_splits_system_into_top_level_param(
         assert msg.get("role") != "system"
 
 
+def test_anthropic_adapter_raises_on_empty_messages_after_system_extraction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Anthropic rejects messages=[]; the adapter must raise before hitting the API."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    adapter = _AnthropicChatAdapter(model="claude-3-5-sonnet-20241022", with_tools=False)
+
+    # Case 1: fully empty input
+    with pytest.raises(ValueError, match="empty messages list"):
+        adapter.invoke([])
+
+    # Case 2: only system messages — all consumed by _split_system_messages
+    with pytest.raises(ValueError, match="empty messages list"):
+        adapter.invoke([{"role": "system", "content": "You are helpful."}])
+
+    # Case 3: multiple system-only messages
+    with pytest.raises(ValueError, match="empty messages list"):
+        adapter.invoke(
+            [
+                {"role": "system", "content": "First system."},
+                {"role": "system", "content": "Second system."},
+            ]
+        )
+
+
 # ── messages_to_invocation_dicts ──────────────────────────────────────────────
 
 

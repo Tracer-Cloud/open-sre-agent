@@ -496,6 +496,14 @@ class _AnthropicChatAdapter:
         system, non_system = _split_system_messages(dicts)
         normalized = _normalize_messages_for_anthropic(non_system)
 
+        if not normalized:
+            raise ValueError(
+                "Anthropic requires at least one non-system message; "
+                "invoke was called with an empty messages list after system-prompt extraction. "
+                "Ensure the graph state contains at least one user or assistant message before "
+                "routing to a node that calls the Anthropic adapter."
+            )
+
         kwargs: dict[str, Any] = {
             "model": self._model,
             "max_tokens": self._max_tokens,
