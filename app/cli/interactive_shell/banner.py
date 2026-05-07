@@ -74,9 +74,9 @@ def _render_art() -> str:
     """Return figlet art, falling back to the embedded string."""
     font = os.getenv("OPENSRE_FIGLET_FONT", "big")
     try:
-        import pyfiglet  # type: ignore[import-untyped]
+        import pyfiglet  # type: ignore[import-untyped,import-not-found]
 
-        rendered = pyfiglet.figlet_format("OpenSRE", font=font).rstrip()
+        rendered: str = pyfiglet.figlet_format("OpenSRE", font=font).rstrip()
         # Reject if it won't fit in 80 columns.
         if rendered and all(len(ln) <= 78 for ln in rendered.splitlines()):
             return rendered
