@@ -34,9 +34,9 @@ class _DummyBoundModel:
             _messages: Messages passed to the model invoke call.
 
         Returns:
-            None.
+            Neutral assistant turn dict (tests that unwrap the wrapper may call invoke).
         """
-        return None
+        return {"content": "ok", "tool_calls": []}
 
 
 class _DummyChatModel:
@@ -131,7 +131,7 @@ def _patch_llm_imports(monkeypatch) -> None:
             return _FakeAnthropicModule
         raise AssertionError(f"Unexpected module import: {module_name}")
 
-    monkeypatch.setattr(chat, "import_module", _fake_import_module)
+    monkeypatch.setattr("app.services.chat_langchain_adapter.import_module", _fake_import_module)
 
 
 def _reset_chat_cache(monkeypatch) -> None:
@@ -170,8 +170,8 @@ def test_get_chat_llm_uses_openai_toolcall_model_when_provider_openai(
     _reset_chat_cache(monkeypatch)
 
     llm = chat._get_chat_llm(with_tools=True)
-    assert getattr(llm, "provider", "") == "openai"
-    assert getattr(llm, "model", "") == "gpt-openai-tools"
+    assert getattr(llm._inner, "provider", "") == "openai"
+    assert getattr(llm._inner, "model", "") == "gpt-openai-tools"
 
 
 def test_get_chat_llm_uses_openai_reasoning_model_when_without_tools(
@@ -194,8 +194,8 @@ def test_get_chat_llm_uses_openai_reasoning_model_when_without_tools(
     _reset_chat_cache(monkeypatch)
 
     llm = chat._get_chat_llm(with_tools=False)
-    assert getattr(llm, "provider", "") == "openai"
-    assert getattr(llm, "model", "") == "gpt-openai-reasoning"
+    assert getattr(llm._inner, "provider", "") == "openai"
+    assert getattr(llm._inner, "model", "") == "gpt-openai-reasoning"
 
 
 def test_get_chat_llm_uses_anthropic_models(monkeypatch) -> None:
@@ -218,10 +218,10 @@ def test_get_chat_llm_uses_anthropic_models(monkeypatch) -> None:
     tool_llm = chat._get_chat_llm(with_tools=True)
     reasoning_llm = chat._get_chat_llm(with_tools=False)
 
-    assert getattr(tool_llm, "provider", "") == "anthropic"
-    assert getattr(tool_llm, "model", "") == "claude-tools"
-    assert getattr(reasoning_llm, "provider", "") == "anthropic"
-    assert getattr(reasoning_llm, "model", "") == "claude-reason"
+    assert getattr(tool_llm._inner, "provider", "") == "anthropic"
+    assert getattr(tool_llm._inner, "model", "") == "claude-tools"
+    assert getattr(reasoning_llm._inner, "provider", "") == "anthropic"
+    assert getattr(reasoning_llm._inner, "model", "") == "claude-reason"
 
 
 def test_get_chat_llm_rebuilds_when_provider_changes(monkeypatch) -> None:
@@ -246,8 +246,8 @@ def test_get_chat_llm_rebuilds_when_provider_changes(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "anthropic")
     llm_anthropic = chat._get_chat_llm(with_tools=True)
 
-    assert getattr(llm_openai, "provider", "") == "openai"
-    assert getattr(llm_anthropic, "provider", "") == "anthropic"
+    assert getattr(llm_openai._inner, "provider", "") == "openai"
+    assert getattr(llm_anthropic._inner, "provider", "") == "anthropic"
 
 
 def test_get_chat_llm_raises_for_unsupported_provider(monkeypatch) -> None:

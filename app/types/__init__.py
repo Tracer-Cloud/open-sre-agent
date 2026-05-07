@@ -1,5 +1,6 @@
 """Shared domain types — decoupled from any single module."""
 
+from app.types.chat import AssistantTurn, BoundChatModel, ToolCallPayload
 from app.types.config import Configurable, NodeConfig, get_configurable
 from app.types.evidence import EvidenceSource
 from app.types.retrieval import (
@@ -14,6 +15,8 @@ from app.types.retrieval import (
 from app.types.tools import ToolSurface
 
 __all__ = [
+    "AssistantTurn",
+    "BoundChatModel",
     "Configurable",
     "EvidenceSource",
     "NodeConfig",
@@ -26,4 +29,5 @@ __all__ = [
     "FieldSelection",
     "AggregationSpec",
     "get_configurable",
+    "ToolCallPayload",
 ]

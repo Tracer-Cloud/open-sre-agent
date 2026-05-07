@@ -31,10 +31,13 @@ def openai_chat_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
 
 
+_ADAPTER = "app.services.chat_langchain_adapter.import_module"
+
+
 @pytest.mark.usefixtures("openai_chat_env")
 def test_get_chat_llm_openai_with_tools_uses_chat_openai() -> None:
     _clear_chat_llm_singletons()
-    with patch.object(chat_mod, "import_module") as mock_import_module:
+    with patch(_ADAPTER) as mock_import_module:
         mock_base = MagicMock()
         mock_bound = MagicMock()
         mock_base.bind_tools.return_value = mock_bound
@@ -42,32 +45,32 @@ def test_get_chat_llm_openai_with_tools_uses_chat_openai() -> None:
         mock_import_module.return_value = _OpenAIModule(mock_openai)
         out = chat_mod._get_chat_llm(with_tools=True)
         mock_openai.assert_called_once()
-        assert out is mock_bound
+        assert getattr(out, "_inner", None) is mock_bound
 
 
 @pytest.mark.usefixtures("openai_chat_env")
 def test_get_chat_llm_openai_without_tools_uses_chat_openai() -> None:
     _clear_chat_llm_singletons()
-    with patch.object(chat_mod, "import_module") as mock_import_module:
+    with patch(_ADAPTER) as mock_import_module:
         mock_llm = MagicMock()
         mock_openai = MagicMock(return_value=mock_llm)
         mock_import_module.return_value = _OpenAIModule(mock_openai)
         out = chat_mod._get_chat_llm(with_tools=False)
         mock_openai.assert_called_once()
-        assert out is mock_llm
+        assert getattr(out, "_inner", None) is mock_llm
 
 
 def test_get_chat_llm_anthropic_uses_chat_anthropic(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "anthropic")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
     _clear_chat_llm_singletons()
-    with patch.object(chat_mod, "import_module") as mock_import_module:
+    with patch(_ADAPTER) as mock_import_module:
         mock_llm = MagicMock()
         mock_anthropic = MagicMock(return_value=mock_llm)
         mock_import_module.return_value = _AnthropicModule(mock_anthropic)
         out = chat_mod._get_chat_llm(with_tools=False)
         mock_anthropic.assert_called_once()
-        assert out is mock_llm
+        assert getattr(out, "_inner", None) is mock_llm
 
 
 def test_general_node_returns_user_facing_message_for_codex_provider(
@@ -81,5 +84,6 @@ def test_general_node_returns_user_facing_message_for_codex_provider(
 
     assert out["messages"]
     assert (
-        "Interactive chat requires LLM_PROVIDER=anthropic or openai." in out["messages"][0].content
+        "Interactive chat requires LLM_PROVIDER=anthropic or openai."
+        in out["messages"][0]["content"]
     )

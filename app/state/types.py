@@ -13,7 +13,7 @@ AgentMode = Literal["chat", "investigation"]
 
 
 class ChatMessage(TypedDict, total=False):
-    role: Literal["system", "user", "assistant"]
+    role: Literal["system", "user", "assistant", "tool"]
     content: str
     tool_calls: list[dict[str, Any]]
 
