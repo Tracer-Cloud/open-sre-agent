@@ -941,6 +941,7 @@ def parse_root_cause(response: str) -> RootCauseResult:
                 "VALIDATED_CLAIMS:",
                 "NON_VALIDATED_CLAIMS:",
                 "CAUSAL_CHAIN:",
+                "REMEDIATION_STEPS:",
             ):
                 if delimiter in after:
                     root_cause = after.split(delimiter, 1)[0].strip()
@@ -951,10 +952,14 @@ def parse_root_cause(response: str) -> RootCauseResult:
             # Extract validated claims
             if "VALIDATED_CLAIMS:" in after:
                 validated_section = after.split("VALIDATED_CLAIMS:", 1)[1]
-                if "NON_VALIDATED_CLAIMS:" in validated_section:
-                    validated_text = validated_section.split("NON_VALIDATED_CLAIMS:", 1)[0]
-                elif "CAUSAL_CHAIN:" in validated_section:
-                    validated_text = validated_section.split("CAUSAL_CHAIN:", 1)[0]
+                for delimiter in (
+                    "NON_VALIDATED_CLAIMS:",
+                    "CAUSAL_CHAIN:",
+                    "REMEDIATION_STEPS:",
+                ):
+                    if delimiter in validated_section:
+                        validated_text = validated_section.split(delimiter, 1)[0]
+                        break
                 else:
                     validated_text = validated_section
 
@@ -966,6 +971,7 @@ def parse_root_cause(response: str) -> RootCauseResult:
                         and not line.startswith("CAUSAL_CHAIN")
                         and not line.startswith("CONFIDENCE")
                         and not line.startswith("ROOT_CAUSE")
+                        and not line.startswith("REMEDIATION_STEPS")
                     ):
                         validated_claims.append(line)
 
