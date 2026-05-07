@@ -738,3 +738,94 @@ def test_create_llm_client_gemini_cli_reads_optional_model_env(monkeypatch) -> N
         assert client._model == "gemini-2.5-pro"
     finally:
         llm_client.reset_llm_singletons()
+
+
+# ---------------------------------------------------------------------------
+# LLMClient.invoke / invoke_stream — NotFoundError handling
+# ---------------------------------------------------------------------------
+
+
+def _make_not_found_error() -> Exception:
+    """Return a minimal fake that looks like anthropic.NotFoundError."""
+    err = llm_client.NotFoundError.__new__(llm_client.NotFoundError)
+    # NotFoundError is an APIStatusError; bypass its __init__ by setting attrs directly.
+    err.status_code = 404  # type: ignore[attr-defined]
+    err.message = "model_not_found"  # type: ignore[attr-defined]
+    err.body = {}  # type: ignore[attr-defined]
+    err.request = None  # type: ignore[attr-defined]
+    err.response = None  # type: ignore[attr-defined]
+    return err
+
+
+class _NotFoundMessages:
+    """Fake messages object that always raises NotFoundError."""
+
+    def __init__(self, model: str) -> None:
+        self._model = model
+
+    def create(self, **_kwargs) -> None:
+        raise _make_not_found_error()
+
+    def stream(self, **_kwargs):
+        raise _make_not_found_error()
+
+
+class _NotFoundAnthropic:
+    def __init__(self, *, api_key: str, timeout: float) -> None:  # noqa: ARG002
+        self.messages = _NotFoundMessages("not-a-real-model-xyz")
+
+
+def test_anthropic_invoke_not_found_raises_friendly_runtime_error(monkeypatch) -> None:
+    """NotFoundError from the Anthropic API must become a clear RuntimeError."""
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "Anthropic", _NotFoundAnthropic)
+
+    client = llm_client.LLMClient(model="not-a-real-model-xyz")
+
+    with pytest.raises(RuntimeError, match="not-a-real-model-xyz") as exc_info:
+        client.invoke("hello")
+
+    msg = str(exc_info.value)
+    assert "was not found" in msg
+    assert "Check your configured model name" in msg
+
+
+def test_anthropic_invoke_not_found_does_not_retry(monkeypatch) -> None:
+    """NotFoundError must never be retried — it is a config error, not transient."""
+    call_count = 0
+
+    class _CountingMessages:
+        def create(self, **_kwargs) -> None:
+            nonlocal call_count
+            call_count += 1
+            raise _make_not_found_error()
+
+    class _CountingAnthropic:
+        def __init__(self, **_kwargs) -> None:
+            self.messages = _CountingMessages()
+
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "Anthropic", _CountingAnthropic)
+    monkeypatch.setattr(llm_client.time, "sleep", lambda _: None)
+
+    client = llm_client.LLMClient(model="bad-model")
+
+    with pytest.raises(RuntimeError):
+        client.invoke("hello")
+
+    assert call_count == 1, "NotFoundError must not trigger retries"
+
+
+def test_anthropic_invoke_stream_not_found_raises_friendly_runtime_error(monkeypatch) -> None:
+    """NotFoundError during streaming must also surface a clear message."""
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "Anthropic", _NotFoundAnthropic)
+
+    client = llm_client.LLMClient(model="not-a-real-model-xyz")
+
+    with pytest.raises(RuntimeError, match="not-a-real-model-xyz") as exc_info:
+        list(client.invoke_stream("hello"))
+
+    msg = str(exc_info.value)
+    assert "was not found" in msg
+    assert "Check your configured model name" in msg

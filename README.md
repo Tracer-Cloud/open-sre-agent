@@ -1348,6 +1348,22 @@ Thanks goes to these amazing people:
             <sub><b>YauhenBichel</b></sub>
         </a>
     </td>
+            <td align="center">
+        <a href="https://github.com/thisisharsh7">
+            <img src="https://avatars.githubusercontent.com/u/95894045?v=4" width="100" alt="thisisharsh7"/>
+            <br />
+            <sub><b>thisisharsh7</b></sub>
+        </a>
+    </td>
+		</tr>
+		<tr>
+            <td align="center">
+        <a href="https://github.com/programmerloverun">
+            <img src="https://avatars.githubusercontent.com/u/123237285?v=4" width="100" alt="programmerloverun"/>
+            <br />
+            <sub><b>programmerloverun</b></sub>
+        </a>
+    </td>
 		</tr>
 	</tbody>
 </table>
