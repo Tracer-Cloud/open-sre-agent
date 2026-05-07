@@ -62,6 +62,75 @@ class ScenarioScore:
     failure_reason: str = ""
     trajectory: TrajectoryScore | None = None
     reasoning: ReasoningScore | None = None
+    # Classification of the scenario outcome against the expected ground truth.
+    # One of: "TP" (real fault correctly identified), "FP" (healthy scenario
+    # mis-classified as a fault), "TN" (healthy scenario correctly identified),
+    # "FN" (real fault missed or mis-categorised). Set by score_result().
+    outcome_class: str | None = None
+
+
+def classify_outcome(
+    actual_category: str,
+    expected_category: str,
+    root_cause_present: bool,
+) -> str:
+    """Classify a scored scenario into TP/FP/TN/FN.
+
+    A scenario is HEALTHY when expected_category == "healthy" — the alert is
+    expected to be noise and the agent should report no fault. Otherwise the
+    scenario has a real fault that the agent should identify by category.
+
+    Returns one of: "TP", "FP", "TN", "FN".
+    """
+    is_healthy_ground_truth = expected_category == "healthy"
+    actual_says_healthy = (not root_cause_present) or actual_category == "healthy"
+
+    if is_healthy_ground_truth:
+        return "TN" if actual_says_healthy else "FP"
+
+    # Real-fault scenario from here on.
+    if not root_cause_present:
+        return "FN"
+    if actual_category == expected_category:
+        return "TP"
+    return "FN"
+
+
+def compute_classification_stats(results: list[ScenarioScore]) -> dict[str, Any]:
+    """Aggregate TP/FP/TN/FN counts and derived metrics across scenarios.
+
+    Returns a dict with the four raw counts plus total, accuracy, precision,
+    recall, and F1. Divisions return 0.0 when the denominator is zero rather
+    than raising, so the function is safe on empty or all-skipped result sets.
+    """
+    counts: dict[str, int] = {"TP": 0, "FP": 0, "TN": 0, "FN": 0}
+    for result in results:
+        cls = result.outcome_class
+        if cls in counts:
+            counts[cls] += 1
+
+    tp = counts["TP"]
+    fp = counts["FP"]
+    tn = counts["TN"]
+    fn = counts["FN"]
+    total = tp + fp + tn + fn
+
+    accuracy = (tp + tn) / total if total else 0.0
+    precision = tp / (tp + fp) if (tp + fp) else 0.0
+    recall = tp / (tp + fn) if (tp + fn) else 0.0
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
+
+    return {
+        "TP": tp,
+        "FP": fp,
+        "TN": tn,
+        "FN": fn,
+        "total": total,
+        "accuracy": accuracy,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+    }
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -404,6 +473,12 @@ def score_result(
     passed = not failure_reason
     trajectory = score_trajectory(fixture, final_state)
     reasoning = score_reasoning(fixture, final_state, queried_metrics)
+    outcome_class = classify_outcome(
+        actual_category=actual_category,
+        expected_category=fixture.answer_key.root_cause_category,
+        root_cause_present=root_cause_present,
+    )
+
     return ScenarioScore(
         scenario_id=fixture.scenario_id,
         passed=passed,
@@ -416,6 +491,7 @@ def score_result(
         failure_reason=failure_reason,
         trajectory=trajectory,
         reasoning=reasoning,
+        outcome_class=outcome_class,
     )
 
 
@@ -518,6 +594,18 @@ def run_suite(argv: list[str] | None = None) -> list[ScenarioScore]:
 
         passed_count = sum(1 for result in results if result.passed)
         print(f"\nResults: {passed_count}/{len(results)} passed")
+
+        stats = compute_classification_stats(results)
+        print(
+            f"Classification: TP={stats['TP']}  FP={stats['FP']}  "
+            f"TN={stats['TN']}  FN={stats['FN']}  (total {stats['total']})"
+        )
+        print(
+            f"Accuracy={stats['accuracy']:.0%}  "
+            f"Precision={stats['precision']:.0%}  "
+            f"Recall={stats['recall']:.0%}  "
+            f"F1={stats['f1']:.0%}"
+        )
 
     return results
 
