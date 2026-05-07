@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import click
 
+from app.cli.commands.agent import agents
 from app.cli.commands.deploy import deploy
 from app.cli.commands.doctor import doctor_command
 from app.cli.commands.general import (
@@ -27,6 +28,7 @@ _COMMANDS: tuple[click.Command, ...] = (
     tests,
     integrations,
     guardrails,
+    agents,
     health_command,
     doctor_command,
     update_command,
