@@ -1361,6 +1361,13 @@ Thanks goes to these amazing people:
             <sub><b>Dhaxor</b></sub>
         </a>
     </td>
+            <td align="center">
+        <a href="https://github.com/Lum1104">
+            <img src="https://avatars.githubusercontent.com/u/87774050?v=4" width="100" alt="Lum1104"/>
+            <br />
+            <sub><b>Lum1104</b></sub>
+        </a>
+    </td>
 		</tr>
 	</tbody>
 </table>
