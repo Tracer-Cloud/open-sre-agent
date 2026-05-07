@@ -137,7 +137,7 @@ Findings should appear in the configured chat. Long reports are truncated to Tel
 The bot token is invalid or has been revoked. Generate a new one in BotFather (`/mybots → your bot → API Token → Revoke current token`) and update `.env`.
 
 <Warning>
-The verifier currently does not redact secrets from this error: the `for url:` portion of the message includes the bot token (Telegram's API endpoint embeds the token in the path). Redact the token before sharing this error in bug reports or chat. See [#1481](https://github.com/Tracer-Cloud/opensre/issues/1481) and the linked issue for the verifier-side redaction follow-up.
+The verifier currently does not redact secrets from this error: the `for url:` portion of the message includes the bot token (Telegram's API endpoint embeds the token in the path). Redact the token before sharing this error in bug reports or chat. The verifier-side redaction fix is tracked separately from the wizard work — file a new issue if one does not yet exist.
 </Warning>
 
 ### Errors that only surface during delivery

@@ -71,7 +71,13 @@ You have two equivalent paths:
 opensre integrations verify slack
 ```
 
-A successful run reports the integration as `passed`. Expected failure modes are listed below.
+A successful run reports the integration as `passed` — but this only confirms the webhook URL is configured. It does **not** post anything to Slack. To also confirm delivery actually works, add the `--send-slack-test` flag:
+
+```bash
+opensre integrations verify slack --send-slack-test
+```
+
+This posts a small test message to the configured channel. Expected failure modes are listed below.
 
 You can also trigger a real investigation against a bundled fixture:
 
