@@ -212,15 +212,45 @@ def test_normalize_anthropic_merges_consecutive_tool_results() -> None:
     assert out[1] == {"role": "user", "content": "next"}
 
 
-def test_normalize_anthropic_non_leading_system_as_user_text() -> None:
+def test_normalize_anthropic_non_leading_system_merges_into_prior_user() -> None:
     out = _normalize_messages_for_anthropic(
         [{"role": "user", "content": "hi"}, {"role": "system", "content": "injected"}]
     )
-    assert out[0] == {"role": "user", "content": "hi"}
+    assert len(out) == 1
+    assert out[0] == {
+        "role": "user",
+        "content": "hi\n\n[system]\ninjected",
+    }
+
+
+def test_normalize_anthropic_system_after_assistant_is_own_user_turn() -> None:
+    out = _normalize_messages_for_anthropic(
+        [
+            {"role": "assistant", "content": "done"},
+            {"role": "system", "content": "extra"},
+        ]
+    )
+    assert len(out) == 2
+    assert out[0] == {"role": "assistant", "content": "done"}
     assert out[1] == {
         "role": "user",
-        "content": [{"type": "text", "text": "injected"}],
+        "content": [{"type": "text", "text": "extra"}],
     }
+
+
+def test_normalize_anthropic_system_merges_into_user_with_tool_result_blocks() -> None:
+    out = _normalize_messages_for_anthropic(
+        [
+            {"role": "tool", "content": "r1", "tool_call_id": "id1"},
+            {"role": "system", "content": "follow-up instruction"},
+        ]
+    )
+    assert len(out) == 1
+    blocks = out[0]["content"]
+    assert isinstance(blocks, list)
+    assert blocks[0]["type"] == "tool_result"
+    assert blocks[1]["type"] == "text"
+    assert "[system]" in str(blocks[1].get("text", ""))
 
 
 def test_chat_openai_tool_result_round_trip(monkeypatch: pytest.MonkeyPatch) -> None:

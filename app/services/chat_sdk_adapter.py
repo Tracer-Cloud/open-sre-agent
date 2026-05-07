@@ -24,6 +24,52 @@ _RETRY_INITIAL_BACKOFF_SEC = 1.0
 _RETRY_MAX_ATTEMPTS = 3
 _CLIENT_TIMEOUT_SEC = 60.0
 
+# Suffix for non-leading system lines folded into the prior user turn (Anthropic).
+_NON_LEADING_SYSTEM_MARK = "[system]"
+
+
+def _openai_chat_completions_with_retry(client: Any, kwargs: dict[str, Any]) -> Any:
+    """Call OpenAI chat completions with retry; raises ``RuntimeError`` on final failure."""
+    from openai import AuthenticationError as OpenAIAuthError
+
+    backoff = _RETRY_INITIAL_BACKOFF_SEC
+    for attempt in range(_RETRY_MAX_ATTEMPTS):
+        try:
+            return client.chat.completions.create(**kwargs)
+        except OpenAIAuthError as err:
+            raise RuntimeError(
+                "OpenAI authentication failed. Check OPENAI_API_KEY in your environment or .env."
+            ) from err
+        except Exception as err:
+            if attempt == _RETRY_MAX_ATTEMPTS - 1:
+                raise RuntimeError(
+                    "OpenAI API request failed after multiple retries. Try again in a few seconds."
+                ) from err
+            time.sleep(backoff)
+            backoff *= 2
+
+
+def _anthropic_messages_create_with_retry(client: Any, kwargs: dict[str, Any]) -> Any:
+    """Call Anthropic ``messages.create`` with retry."""
+    from anthropic import AuthenticationError as AnthropicAuthError
+
+    backoff = _RETRY_INITIAL_BACKOFF_SEC
+    for attempt in range(_RETRY_MAX_ATTEMPTS):
+        try:
+            return client.messages.create(**kwargs)
+        except AnthropicAuthError as err:
+            raise RuntimeError(
+                "Anthropic authentication failed. Check ANTHROPIC_API_KEY in your environment or .env."
+            ) from err
+        except Exception as err:
+            if attempt == _RETRY_MAX_ATTEMPTS - 1:
+                raise RuntimeError(
+                    "Anthropic API request failed after multiple retries. Try again in a few seconds."
+                ) from err
+            time.sleep(backoff)
+            backoff *= 2
+
+
 # ── Role mapping for legacy LC-typed messages in state ───────────────────────
 
 _LC_TYPE_TO_ROLE: dict[str, str] = {
@@ -244,8 +290,6 @@ class _OpenAIChatAdapter:
         return self._client
 
     def invoke(self, messages: list[Any]) -> AssistantTurn:
-        from openai import AuthenticationError as OpenAIAuthError
-
         dicts = messages_to_invocation_dicts(messages)
         normalized = _normalize_messages_for_openai(dicts)
 
@@ -260,27 +304,7 @@ class _OpenAIChatAdapter:
                 kwargs["tools"] = tools
 
         client = self._ensure_client()
-        backoff = _RETRY_INITIAL_BACKOFF_SEC
-        last_err: Exception | None = None
-        response: Any = None
-        for attempt in range(_RETRY_MAX_ATTEMPTS):
-            try:
-                response = client.chat.completions.create(**kwargs)
-                break
-            except OpenAIAuthError as err:
-                raise RuntimeError(
-                    "OpenAI authentication failed. Check OPENAI_API_KEY in your environment or .env."
-                ) from err
-            except Exception as err:
-                last_err = err
-                if attempt == _RETRY_MAX_ATTEMPTS - 1:
-                    raise RuntimeError(
-                        "OpenAI API request failed after multiple retries. Try again in a few seconds."
-                    ) from err
-                time.sleep(backoff)
-                backoff *= 2
-        if response is None:
-            raise RuntimeError("OpenAI invocation failed without a response") from last_err
+        response = _openai_chat_completions_with_retry(client, kwargs)
 
         if not response.choices:
             raise RuntimeError("OpenAI API returned an empty choices list")
@@ -347,8 +371,11 @@ def _normalize_messages_for_anthropic(
     ``content`` lists all ``tool_result`` blocks (Anthropic rejects multiple
     back-to-back user turns with only tool results).
 
-    Anthropic has no in-message ``role: system``; non-leading system lines are
-    sent as plain user text.
+    Anthropic has no in-message ``role: system``. Non-leading system lines are
+    folded into the **previous** message when that message is ``role: user`` so
+    we never emit two consecutive ``user`` turns (which the API rejects). If
+    there is no prior user message, system text is emitted as a standalone user
+    turn.
     """
     out: list[dict[str, Any]] = []
     i = 0
@@ -379,12 +406,37 @@ def _normalize_messages_for_anthropic(
             continue
 
         if role == "system":
-            out.append(
-                {
-                    "role": "user",
-                    "content": [{"type": "text", "text": content}],
-                }
-            )
+            if out and out[-1].get("role") == "user":
+                prev = out[-1]
+                prev_content = prev.get("content")
+                if isinstance(prev_content, str):
+                    out[-1] = {
+                        "role": "user",
+                        "content": (f"{prev_content}\n\n{_NON_LEADING_SYSTEM_MARK}\n{content}"),
+                    }
+                elif isinstance(prev_content, list):
+                    merged_blocks: list[dict[str, Any]] = [
+                        *prev_content,
+                        {
+                            "type": "text",
+                            "text": f"{_NON_LEADING_SYSTEM_MARK}\n{content}",
+                        },
+                    ]
+                    out[-1] = {"role": "user", "content": merged_blocks}
+                else:
+                    out.append(
+                        {
+                            "role": "user",
+                            "content": [{"type": "text", "text": content}],
+                        }
+                    )
+            else:
+                out.append(
+                    {
+                        "role": "user",
+                        "content": [{"type": "text", "text": content}],
+                    }
+                )
             i += 1
             continue
 
@@ -438,8 +490,6 @@ class _AnthropicChatAdapter:
         return self._client
 
     def invoke(self, messages: list[Any]) -> AssistantTurn:
-        from anthropic import AuthenticationError as AnthropicAuthError
-
         dicts = messages_to_invocation_dicts(messages)
         system, non_system = _split_system_messages(dicts)
         normalized = _normalize_messages_for_anthropic(non_system)
@@ -457,27 +507,7 @@ class _AnthropicChatAdapter:
                 kwargs["tools"] = tools
 
         client = self._ensure_client()
-        backoff = _RETRY_INITIAL_BACKOFF_SEC
-        last_err: Exception | None = None
-        response: Any = None
-        for attempt in range(_RETRY_MAX_ATTEMPTS):
-            try:
-                response = client.messages.create(**kwargs)
-                break
-            except AnthropicAuthError as err:
-                raise RuntimeError(
-                    "Anthropic authentication failed. Check ANTHROPIC_API_KEY in your environment or .env."
-                ) from err
-            except Exception as err:
-                last_err = err
-                if attempt == _RETRY_MAX_ATTEMPTS - 1:
-                    raise RuntimeError(
-                        "Anthropic API request failed after multiple retries. Try again in a few seconds."
-                    ) from err
-                time.sleep(backoff)
-                backoff *= 2
-        if response is None:
-            raise RuntimeError("Anthropic invocation failed without a response") from last_err
+        response = _anthropic_messages_create_with_retry(client, kwargs)
 
         text_parts: list[str] = []
         tool_calls: list[ToolCallPayload] = []
