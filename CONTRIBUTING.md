@@ -121,7 +121,7 @@ pytest tests/cli/test_.py                                       # single file
 pytest tests/cli/test_.py::test_                                # single function
 pytest tests/tools/ -k "test_registry"                          # tools example
 pytest tests/synthetic/ -k "test_scenario"                      # no live infra needed
-
+````
 ### 5. Open a Pull Request
 
 Follow the PR template (see below). Link the relevant issue and describe what changed and why.
