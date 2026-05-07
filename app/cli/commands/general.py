@@ -220,6 +220,7 @@ def investigate_command(
             input_path=input_path,
             input_json=input_json,
             interactive=interactive,
+            evaluate_requested=evaluate,
         )
         # Only stream the live UI when the user is interactively watching stdout
         # and hasn't asked for machine-readable JSON. Otherwise the spinner and
@@ -289,8 +290,13 @@ def _run_service_investigation(
             slack_thread_ref=slack_thread,
             slack_bot_token=slack_bot_token or None,
         )
-        capture_investigation_started(input_path=None, input_json=None, interactive=False)
         _eval = bool(other_inputs.get("evaluate"))
+        capture_investigation_started(
+            input_path=None,
+            input_json=None,
+            interactive=False,
+            evaluate_requested=_eval,
+        )
         result = run_investigation_cli(
             raw_alert=raw_alert,
             alert_name=raw_alert.get("alert_name"),

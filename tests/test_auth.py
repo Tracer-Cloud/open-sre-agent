@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from app.nodes.auth import _extract_auth, inject_auth_node
+from app.types.config import NodeConfig
 
 
 def _make_config(
     configurable: dict | None = None,
-) -> dict:
-    """Build a minimal RunnableConfig dict."""
+) -> NodeConfig:
+    """Build a minimal node config dict."""
     return {"configurable": configurable or {}}
 
 

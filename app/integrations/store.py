@@ -129,6 +129,7 @@ def _lock_path() -> Path:
 
 def _acquire_lock() -> FileLock:
     """Create and return a FileLock for the current STORE_PATH."""
+    STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
     return FileLock(str(_lock_path()), timeout=_LOCK_TIMEOUT_SECONDS)
 
 

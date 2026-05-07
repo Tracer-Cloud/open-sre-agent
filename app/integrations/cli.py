@@ -763,7 +763,10 @@ def cmd_list() -> None:
         return
 
     if not items:
-        print("  No integrations. Run: python -m app.integrations setup <service>")
+        print(
+            "  No integrations. Run: opensre integrations setup <service>, "
+            "or opensre onboard for the guided wizard."
+        )
         return
     print(f"\n  {_B}{'SERVICE':<14}STATUS    ID{_R}")
     for i in items:

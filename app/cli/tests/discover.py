@@ -12,6 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 MAKEFILE_PATH = REPO_ROOT / "Makefile"
 RCA_DIR = REPO_ROOT / "tests" / "e2e" / "rca"
 SYNTHETIC_SCENARIOS_DIR = REPO_ROOT / "tests" / "synthetic" / "rds_postgres"
+CLOUDOPSBENCH_DIR = REPO_ROOT / "tests" / "benchmarks" / "cloudopsbench"
 
 _TARGETS_TO_INDEX = (
     "test",
@@ -28,6 +29,8 @@ _TARGETS_TO_INDEX = (
     "test-k8s",
     "test-k8s-datadog",
     "test-k8s-eks",
+    "download-cloudopsbench-hf",
+    "test-cloudopsbench",
     "trigger-alert",
     "trigger-alert-verify",
     "prefect-local-test",
@@ -129,6 +132,16 @@ _TARGET_METADATA: dict[str, _TargetMetadata] = {
         "requirements": TestRequirement(
             env_vars=("DD_API_KEY", "DD_APP_KEY"), notes=("EKS cluster",)
         ),
+    },
+    "test-cloudopsbench": {
+        "display_name": "Cloud-OpsBench RCA Benchmark",
+        "tags": ("synthetic", "cloudopsbench", "k8s", "benchmark"),
+        "requirements": TestRequirement(env_vars=("ANTHROPIC_API_KEY",)),
+    },
+    "download-cloudopsbench-hf": {
+        "display_name": "Download Cloud-OpsBench Dataset",
+        "tags": ("cloudopsbench", "benchmark", "huggingface"),
+        "requirements": TestRequirement(notes=("Hugging Face CLI",)),
     },
     "trigger-alert": {
         "display_name": "Trigger K8s Alert",
@@ -354,9 +367,27 @@ def _discover_rds_synthetic_scenarios() -> list[TestCatalogItem]:
     return items
 
 
+def _discover_cloudopsbench_suite() -> list[TestCatalogItem]:
+    benchmark_dir = CLOUDOPSBENCH_DIR / "benchmark"
+    if not benchmark_dir.is_dir():
+        return []
+    return [
+        TestCatalogItem(
+            id="synthetic:cloudopsbench",
+            kind="cli_command",
+            display_name="Cloud-OpsBench RCA Benchmark",
+            description="Run the downloaded Cloud-OpsBench corpus through the OpenSRE runner.",
+            command=("opensre", "tests", "cloudopsbench"),
+            tags=("synthetic", "cloudopsbench", "k8s", "benchmark"),
+            source_path=str(CLOUDOPSBENCH_DIR),
+            requirements=TestRequirement(env_vars=("ANTHROPIC_API_KEY",)),
+        )
+    ]
+
+
 def discover_cli_commands() -> list[TestCatalogItem]:
     """Catalog entries for opensre sub-commands that have no Makefile equivalent."""
-    return _discover_rds_synthetic_scenarios()
+    return [*_discover_rds_synthetic_scenarios(), *_discover_cloudopsbench_suite()]
 
 
 def load_test_catalog() -> TestCatalog:

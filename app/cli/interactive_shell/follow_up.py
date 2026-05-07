@@ -9,9 +9,10 @@ from typing import Any
 from rich.console import Console
 from rich.markup import escape
 
-from app.cli.interactive_shell.loaders import llm_loader
 from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
+from app.cli.interactive_shell.streaming import STREAM_LABEL_ANSWER, stream_to_console
+from app.cli.interactive_shell.theme import TERMINAL_ERROR
+from app.cli.support.exception_reporting import report_exception
 
 _logger = logging.getLogger(__name__)
 
@@ -81,7 +82,8 @@ def answer_follow_up(question: str, session: ReplSession, console: Console) -> N
     try:
         from app.services.llm_client import get_llm_for_reasoning
     except Exception as exc:  # noqa: BLE001
-        console.print(f"[red]LLM client unavailable:[/red] {exc}")
+        report_exception(exc, context="interactive_shell.follow_up.import")
+        console.print(f"[{TERMINAL_ERROR}]LLM client unavailable:[/] {escape(str(exc))}")
         return
 
     context = _summarize_last_state(session.last_state)
@@ -95,20 +97,19 @@ def answer_follow_up(question: str, session: ReplSession, console: Console) -> N
     )
 
     try:
-        with llm_loader(console):
-            client = get_llm_for_reasoning()
-            response = client.invoke(prompt)
-    except Exception as exc:  # noqa: BLE001
-        console.print(f"[red]follow-up failed:[/red] {escape(str(exc))}")
+        client = get_llm_for_reasoning()
+        stream_to_console(
+            console,
+            label=STREAM_LABEL_ANSWER,
+            chunks=client.invoke_stream(prompt),
+        )
+    except KeyboardInterrupt:
+        console.print("[dim]· cancelled[/dim]")
         return
-
-    text = getattr(response, "content", None) or str(response)
-    # LLM output routinely contains brackets ([ERROR], [OOMKilled], ISO
-    # timestamps, service names) that Rich would interpret as markup tags and
-    # silently drop.  Escape everything that isn't our own markup.
-    console.print()
-    console.print(f"[{TERMINAL_ACCENT_BOLD}]answer:[/] {escape(text)}")
-    console.print()
+    except Exception as exc:  # noqa: BLE001
+        report_exception(exc, context="interactive_shell.follow_up.stream")
+        console.print(f"[{TERMINAL_ERROR}]follow-up failed:[/] {escape(str(exc))}")
+        return
 
 
 __all__ = ["answer_follow_up"]

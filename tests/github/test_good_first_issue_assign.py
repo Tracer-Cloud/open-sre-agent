@@ -145,6 +145,7 @@ def test_assign_decision_skips_merged_prs(gfi):
         skip_reason_pre_api=None,
         merged_pr_count_for_commenter=1,
         open_pr_count_for_commenter=0,
+        open_assigned_issue_count_for_commenter=0,
     )
     assert ok is False
     assert reason == "has_merged_prs"
@@ -155,6 +156,7 @@ def test_assign_decision_skips_open_prs_before_merged_check(gfi):
         skip_reason_pre_api=None,
         merged_pr_count_for_commenter=0,
         open_pr_count_for_commenter=1,
+        open_assigned_issue_count_for_commenter=0,
     )
     assert ok is False
     assert reason == "has_open_prs"
@@ -165,6 +167,7 @@ def test_assign_decision_ok_zero_merges(gfi):
         skip_reason_pre_api=None,
         merged_pr_count_for_commenter=0,
         open_pr_count_for_commenter=0,
+        open_assigned_issue_count_for_commenter=0,
     )
     assert ok is True
     assert reason == ""
@@ -176,9 +179,21 @@ def test_assign_decision_open_wins_over_merged(gfi):
         skip_reason_pre_api=None,
         merged_pr_count_for_commenter=2,
         open_pr_count_for_commenter=1,
+        open_assigned_issue_count_for_commenter=0,
     )
     assert ok is False
     assert reason == "has_open_prs"
+
+
+def test_assign_decision_skips_already_assigned_open_issue(gfi):
+    ok, reason = gfi.assign_decision(
+        skip_reason_pre_api=None,
+        merged_pr_count_for_commenter=0,
+        open_pr_count_for_commenter=0,
+        open_assigned_issue_count_for_commenter=1,
+    )
+    assert ok is False
+    assert reason == "already_has_open_assigned_issue"
 
 
 def test_fetch_open_pr_count_query_string(gfi):
@@ -199,6 +214,26 @@ def test_fetch_open_pr_count_query_string(gfi):
     assert "is:pr" in q
     assert "is:open" in q
     assert "author:alice" in q
+    assert "repo:myorg/myrepo" in q
+
+
+def test_fetch_open_assigned_issue_count_query_string(gfi):
+    captured: list[str] = []
+
+    def fake_request_json(url: str, token: str) -> dict:  # noqa: ARG001
+        captured.append(url)
+        return {"total_count": 0}
+
+    with patch.object(gfi, "_request_json", fake_request_json):
+        result = gfi.fetch_open_assigned_issue_count("myorg", "myrepo", "alice", "tok")
+
+    assert result == 0
+    assert len(captured) == 1
+    parsed = urllib.parse.urlparse(captured[0])
+    q = urllib.parse.parse_qs(parsed.query)["q"][0]
+    assert "is:issue" in q
+    assert "is:open" in q
+    assert "assignee:alice" in q
     assert "repo:myorg/myrepo" in q
 
 

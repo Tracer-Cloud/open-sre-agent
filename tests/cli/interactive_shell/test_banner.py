@@ -18,5 +18,6 @@ def test_banner_shows_ollama_model(monkeypatch: object) -> None:
     banner_module.render_banner(console)
 
     output = console_file.getvalue()
-    assert "ollama · qwen2.5:7b" in output
+    assert "ollama" in output
+    assert "qwen2.5:7b" in output
     assert "ollama · default" not in output

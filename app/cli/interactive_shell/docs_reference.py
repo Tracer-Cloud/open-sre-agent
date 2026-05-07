@@ -15,14 +15,19 @@ plus subdirectories like ``tutorials/`` and ``use-cases/``.
 
 How docs stay fresh
 -------------------
-Pages are parsed lazily on first use and memoized for the lifetime of the
-process via an :func:`functools.lru_cache` on :func:`_discover_docs_cached`.
-That means there is no build step and no on-disk cache file: a fresh
-``opensre`` invocation always reads the current ``docs/`` tree. Edits made
-to ``docs/*.mdx`` while a long-running shell is open are NOT picked up
-until the next process restart. To extend coverage, drop a new ``.mdx``
-file under ``docs/`` and it will be discovered automatically the next time
-the shell starts.
+Pages are parsed lazily and cached in-process keyed by the resolved docs root
+and a lightweight fingerprint of each tracked file (relative path, size,
+``st_mtime_ns``). Edits under ``docs/`` during a long-running shell invalidate
+the fingerprint and trigger a re-parse on the next grounding call. There is no
+on-disk cache. Use :func:`invalidate_docs_cache` in tests to clear the parse
+cache between cases.
+
+Each :func:`discover_docs` call walks the docs tree once to compute the
+fingerprint and (on cache miss) parse files in that same walk result. A prior
+``lru_cache`` on the root path alone avoided that walk but could not detect
+in-file edits during a session; the trade-off is intentional. Between
+fingerprinting and ``read_text``, a file may change (TOCTOU); the next call
+picks up the new ``st_mtime_ns`` and re-parses.
 
 When docs are missing
 ---------------------
@@ -34,10 +39,12 @@ CLI reference and avoid inventing setup steps.
 
 from __future__ import annotations
 
+import hashlib
 import re
+from collections import OrderedDict
 from dataclasses import dataclass
-from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 # Docs live at the repository root, three levels above this file
 # (.../app/cli/interactive_shell/docs_reference.py -> repo root).
@@ -204,17 +211,43 @@ def _iter_doc_files(root: Path) -> list[Path]:
     return sorted(files)
 
 
-@lru_cache(maxsize=1)
-def _discover_docs_cached(root_str: str) -> tuple[DocPage, ...]:
-    """Cached version of :func:`discover_docs` keyed on the resolved root.
+# Delimiters keep SHA-256 input unambiguous across (relpath, size, mtime) tuple
+# boundaries — concatenating decimal digits without separators is only
+# heuristic-safe, not injective in general.
+_FP_FIELD_SEP = b"\x00"
+_FP_RECORD_SEP = b"\xff"
 
-    The cache is process-local; re-launching the interactive shell picks up
-    any docs edits made since startup. Within one shell session, repeated
-    docs queries reuse the parsed pages.
-    """
+
+def _fingerprint_from_paths(root: Path, files: list[Path]) -> str:
+    """Digest of tracked docs files using paths from a single tree walk."""
+    digest = hashlib.sha256()
+    if not root.exists() or not root.is_dir():
+        digest.update(b"nodir")
+        digest.update(_FP_FIELD_SEP)
+        digest.update(str(root.resolve() if root.exists() else root).encode())
+        digest.update(_FP_FIELD_SEP)
+        return digest.hexdigest()
+
+    for path in files:
+        rel = path.relative_to(root).as_posix()
+        try:
+            st = path.stat()
+            digest.update(rel.encode())
+            digest.update(_FP_FIELD_SEP)
+            digest.update(str(st.st_size).encode())
+            digest.update(_FP_FIELD_SEP)
+            digest.update(str(st.st_mtime_ns).encode())
+            digest.update(_FP_RECORD_SEP)
+        except OSError:
+            continue
+    return digest.hexdigest()
+
+
+def _parse_doc_files(root: Path, files: list[Path]) -> tuple[DocPage, ...]:
+    if not root.exists() or not root.is_dir():
+        return ()
     pages: list[DocPage] = []
-    root = Path(root_str)
-    for path in _iter_doc_files(root):
+    for path in files:
         try:
             text = path.read_text(encoding="utf-8")
         except OSError:
@@ -233,14 +266,62 @@ def _discover_docs_cached(root_str: str) -> tuple[DocPage, ...]:
     return tuple(pages)
 
 
+# Distinct (root_key, fingerprint) entries retained under churn. Eviction drops
+# oldest keys; a reverted doc tree re-parses once then stays hot again.
+_MAX_DOCS_FP_CACHE_ENTRIES = 32
+
+_DOCS_PARSE_CACHE: OrderedDict[tuple[str, str], tuple[DocPage, ...]] = OrderedDict()
+_docs_cache_hits = 0
+_docs_cache_misses = 0
+
+
 def discover_docs(root: Path | None = None) -> list[DocPage]:
     """Walk the docs root, parse each MDX page, return them as :class:`DocPage` records."""
+    global _docs_cache_hits, _docs_cache_misses
+
     target = root if root is not None else _DOCS_ROOT
-    return list(_discover_docs_cached(str(target.resolve() if target.exists() else target)))
+    resolved = target.resolve() if target.exists() else target
+    root_key = str(resolved)
+
+    files = _iter_doc_files(resolved)
+    fp = _fingerprint_from_paths(resolved, files)
+    cache_key = (root_key, fp)
+
+    cached = _DOCS_PARSE_CACHE.get(cache_key)
+    if cached is not None:
+        _docs_cache_hits += 1
+        _DOCS_PARSE_CACHE.move_to_end(cache_key)
+        return list(cached)
+
+    _docs_cache_misses += 1
+    pages_tuple = _parse_doc_files(resolved, files)
+
+    while len(_DOCS_PARSE_CACHE) >= _MAX_DOCS_FP_CACHE_ENTRIES:
+        _DOCS_PARSE_CACHE.popitem(last=False)
+    _DOCS_PARSE_CACHE[cache_key] = pages_tuple
+    return list(pages_tuple)
+
+
+def invalidate_docs_cache() -> None:
+    """Clear the bounded parse cache (tests, forced refresh)."""
+    global _docs_cache_hits, _docs_cache_misses
+    _DOCS_PARSE_CACHE.clear()
+    _docs_cache_hits = 0
+    _docs_cache_misses = 0
+
+
+def get_docs_cache_stats() -> dict[str, Any]:
+    """Debug metrics for docs grounding cache (hits/misses/size)."""
+    return {
+        "hits": _docs_cache_hits,
+        "misses": _docs_cache_misses,
+        "currsize": len(_DOCS_PARSE_CACHE),
+        "maxsize": _MAX_DOCS_FP_CACHE_ENTRIES,
+    }
 
 
 def _tokenize(text: str) -> set[str]:
-    return {tok for tok in _TOKEN_RE.findall(text.lower()) if len(tok) >= 3}
+    return {tok for tok in _TOKEN_RE.findall(text.lower()) if len(tok) >= 2}
 
 
 def _query_tokens(query: str) -> set[str]:
@@ -376,4 +457,6 @@ __all__ = [
     "build_docs_reference_text",
     "discover_docs",
     "find_relevant_docs",
+    "get_docs_cache_stats",
+    "invalidate_docs_cache",
 ]

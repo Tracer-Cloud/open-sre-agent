@@ -21,10 +21,10 @@ def _capture() -> tuple[Console, io.StringIO]:
 
 def _redirect_history_path(monkeypatch: pytest.MonkeyPatch, target: Path) -> None:
     """Point ``prompt_history_path()`` at a tmp file across all importers."""
-    from app.cli.interactive_shell import commands as commands_module
+    from app.cli.interactive_shell.command_registry import privacy_cmds as privacy_cmds_module
 
     monkeypatch.setattr(history_module, "prompt_history_path", lambda: target)
-    monkeypatch.setattr(commands_module, "prompt_history_path", lambda: target)
+    monkeypatch.setattr(privacy_cmds_module, "prompt_history_path", lambda: target)
 
 
 class TestHistoryClear:

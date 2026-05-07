@@ -548,7 +548,7 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
         ),
         pytest.param(
             "opencode",
-            9,
+            10,
             "OpenCode CLI",
             120.0,
             marks=pytest.mark.skipif(

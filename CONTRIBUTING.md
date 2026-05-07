@@ -29,6 +29,7 @@ See **[SETUP.md](SETUP.md)** for detailed setup instructions including Windows-s
 1. Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and clone the repository (see [SETUP.md](SETUP.md) for Windows and alternatives)
 2. Install dependencies: `make install`
 3. Run checks: `make lint && make format-check && make typecheck && make test-cov`
+    - When invoking the CLI from your checkout, prefer **`uv run opensre …`** (see `SETUP.md` troubleshooting if another `opensre` shadows `.venv`).
 4. Build release artifacts when needed: `make build`
 
 If you prefer VS Code, you can use the repo's devcontainer at [.devcontainer/devcontainer.json](.devcontainer/devcontainer.json) instead of setting up Python manually.
@@ -110,11 +111,12 @@ make test-cov      # pytest: run tests with coverage report
 ```
 
 All four must pass. **CI will block merging if any fail.**
+
 ### Run one focused test
 
 Replace the placeholders with your actual file or test name:
 
-```bash
+````bash
 pytest tests/cli/test_.py                                       # single file
 pytest tests/cli/test_.py::test_                                # single function
 pytest tests/tools/ -k "test_registry"                          # tools example
@@ -145,6 +147,20 @@ Use the **[PR template](.github/PULL_REQUEST_TEMPLATE.md)** (automatically provi
 - Code follows project style (see **Code Quality** section below)
 - Self-reviewed your own code first
 - Considered edge cases
+
+### Greptile Code Review
+
+We use [Greptile](https://greptile.com) for automated code review. Before a PR can be merged it must reach a **5/5 confidence score** with zero unresolved comments.
+
+**Trigger a review** by posting this comment on your PR:
+
+```
+@greptile review
+```
+
+Wait 30–60 seconds for the review to appear, then address each comment and re-trigger until you hit 5/5.
+
+> **Automate the loop** — the [greploop skill](https://skills.sh/greptileai/skills/greploop) handles triggering, waiting, fixing, and re-reviewing automatically until 5/5 is reached.
 
 ### If Your PR Includes Screenshots or Logs
 
@@ -191,7 +207,7 @@ make lint          # Auto-fixes many style issues
 make format-check  # Checks formatting without modifying files
 make typecheck     # Catches type errors
 make test-cov      # Ensures tests pass and coverage is tracked
-```
+````
 
 To verify the package can be shipped, run:
 

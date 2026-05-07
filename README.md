@@ -121,16 +121,34 @@ pipx install opensre
 
 ## Quick Start
 
+Configure once, then pick how you want to run investigations:
+
 ```bash
 opensre onboard
+```
+
+**Interactive prompt shell** — run `opensre` with no subcommand to enter the REPL (TTY required). Describe incidents in plain language, stream investigations, and use slash commands:
+
+```bash
+opensre
+```
+
+**Direct investigation** — run the agent once from your terminal against an alert file (no interactive shell):
+
+```bash
 opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
+```
+
+Other useful commands:
+
+```bash
 opensre update
 opensre uninstall   # remove opensre and all local data
 ```
 
 ### Interactive mode
 
-Running `opensre` with no arguments enters a persistent REPL session — an incident response terminal in the style of Claude Code. Describe an alert in plain text, watch the investigation stream live, then ask follow-up questions that stay grounded in what just ran.
+With no subcommand, `opensre` starts a persistent REPL session — an incident response terminal in the style of Claude Code. Describe an alert in plain text, watch the investigation stream live, then ask follow-up questions that stay grounded in what just ran.
 
 ```bash
 opensre
@@ -1314,6 +1332,36 @@ Thanks goes to these amazing people:
             <img src="https://avatars.githubusercontent.com/u/112877983?v=4" width="100" alt="jeetjawale"/>
             <br />
             <sub><b>jeetjawale</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/rudra496">
+            <img src="https://avatars.githubusercontent.com/u/78224940?v=4" width="100" alt="rudra496"/>
+            <br />
+            <sub><b>rudra496</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/YauhenBichel">
+            <img src="https://avatars.githubusercontent.com/u/5603242?v=4" width="100" alt="YauhenBichel"/>
+            <br />
+            <sub><b>YauhenBichel</b></sub>
+        </a>
+    </td>
+            <td align="center">
+        <a href="https://github.com/thisisharsh7">
+            <img src="https://avatars.githubusercontent.com/u/95894045?v=4" width="100" alt="thisisharsh7"/>
+            <br />
+            <sub><b>thisisharsh7</b></sub>
+        </a>
+    </td>
+		</tr>
+		<tr>
+            <td align="center">
+        <a href="https://github.com/programmerloverun">
+            <img src="https://avatars.githubusercontent.com/u/123237285?v=4" width="100" alt="programmerloverun"/>
+            <br />
+            <sub><b>programmerloverun</b></sub>
         </a>
     </td>
 		</tr>

@@ -96,6 +96,25 @@ def _seed_plan_actions(
     return result
 
 
+def _cloudopsbench_backend(available_sources: AvailableSources) -> object | None:
+    backend = available_sources.get("eks", {}).get("_backend")
+    return backend if getattr(backend, "is_cloudopsbench_backend", False) else None
+
+
+def _cloudopsbench_path_actions(backend: object) -> list[str]:
+    case = getattr(backend, "case", None)
+    process = getattr(case, "process", {}) or {}
+    steps = process.get("path2") or process.get("path1") or []
+    actions: list[str] = []
+    for step in steps:
+        if not isinstance(step, str):
+            continue
+        action_name = step.split("::", 1)[0]
+        if action_name and action_name not in actions:
+            actions.append(action_name)
+    return actions
+
+
 def _ensure_seed_actions_available(
     available_actions: list[InvestigationAction],
     action_pool: list[InvestigationAction],
@@ -255,13 +274,43 @@ def plan_actions(
 
     debug_print(f"Relevant sources: {list(available_sources.keys())}")
 
+    all_actions = get_available_actions()
+    cloudops_backend = _cloudopsbench_backend(available_sources)
+    if cloudops_backend is not None:
+        blocked = get_blocked_action_names(input_data.executed_hypotheses)
+        requested_names = [
+            action_name
+            for action_name in _cloudopsbench_path_actions(cloudops_backend)
+            if action_name not in blocked
+        ]
+        action_by_name = {action.name: action for action in all_actions}
+        available_actions = [
+            action_by_name[action_name]
+            for action_name in requested_names
+            if action_name in action_by_name
+            and action_by_name[action_name].is_available(available_sources)
+        ][:tool_budget]
+        available_action_names = [action.name for action in available_actions]
+        plan = plan_model(
+            actions=available_action_names,
+            rationale="Cloud-OpsBench benchmark mode: executing official metadata.process path.",
+        )
+        return (
+            plan,
+            available_sources,
+            available_action_names,
+            available_actions,
+            rerouted,
+            reroute_reason,
+            [],
+        )
+
     keywords = extract_keywords(input_data.problem_md, input_data.alert_name)
     prioritization_sources = [
         cast(EvidenceSource, source_name)
         for source_name in available_sources
         if source_name in _PRIORITIZATION_SOURCES
     ]
-    all_actions = get_available_actions()
     if keywords or prioritization_sources:
         candidate_actions, inclusion_reasons = get_prioritized_actions_with_reasons(
             sources=prioritization_sources,

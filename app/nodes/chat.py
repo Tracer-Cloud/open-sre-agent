@@ -5,11 +5,10 @@ from __future__ import annotations
 import copy
 import json
 from importlib import import_module
-from typing import Any, TypeAlias, cast
+from typing import Any, Protocol, cast
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
-from langchain_core.runnables import Runnable, RunnableConfig
 from langchain_core.tools import StructuredTool
 
 from app.config import ANTHROPIC_LLM_CONFIG, DEFAULT_MAX_TOKENS, OPENAI_LLM_CONFIG
@@ -18,6 +17,7 @@ from app.services import get_llm_for_tools
 from app.state import AgentState, ChatMessage
 from app.tools.registered_tool import RegisteredTool
 from app.tools.registry import get_registered_tools
+from app.types.config import NodeConfig
 from app.utils.cfg_helpers import CfgHelpers
 
 
@@ -67,10 +67,20 @@ def _normalize_messages(msgs: list[Any]) -> list[ChatMessage]:
 
 # ── Chat LLM ─────────────────────────────────────────────────────────────
 
-ToolEnabledChatModel: TypeAlias = Runnable[object, object]  # noqa: UP040
+
+class ToolEnabledChatModel(Protocol):
+    def invoke(self, input: object, **kwargs: Any) -> object:
+        pass
+
 
 _chat_llm_cache: dict[str, BaseChatModel] = {}
 _chat_llm_with_tools_cache: dict[str, ToolEnabledChatModel] = {}
+
+
+def reset_chat_llm_cache() -> None:
+    """Clear cached chat models after provider/model configuration changes."""
+    _chat_llm_cache.clear()
+    _chat_llm_with_tools_cache.clear()
 
 
 class UnsupportedChatProviderError(ValueError):
@@ -205,7 +215,7 @@ def _apply_guardrails_to_messages(msgs: list[Any]) -> list[Any]:
     return result
 
 
-def chat_agent_node(state: AgentState, _config: RunnableConfig) -> dict[str, Any]:
+def chat_agent_node(state: AgentState, _config: NodeConfig | None = None) -> dict[str, Any]:
     """Chat agent with tools for Tracer data queries.
 
     Uses the configured provider with bound tools. The LLM can make tool calls
@@ -230,7 +240,7 @@ def chat_agent_node(state: AgentState, _config: RunnableConfig) -> dict[str, Any
     return {"messages": [response]}
 
 
-def general_node(state: AgentState, _config: RunnableConfig) -> dict[str, Any]:
+def general_node(state: AgentState, _config: NodeConfig | None = None) -> dict[str, Any]:
     """Direct LLM response without tools for general questions."""
     msgs = list(state.get("messages", []))
 

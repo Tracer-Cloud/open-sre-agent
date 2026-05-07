@@ -9,13 +9,13 @@ The Hub glob yields alerts in dataset order; use ``--index`` to skip to the Nth 
 Examples::
 
   # First alert in prefix (default)
-  python scripts/fetch_opensre_hub_alert.py --prefix Bank/query_alerts -o /tmp/a.json
+  python infra/opensre-dataset/fetch_opensre_hub_alert.py --prefix Bank/query_alerts -o /tmp/a.json
 
   # Third alert (skip 0,1 then take next)
-  python scripts/fetch_opensre_hub_alert.py --prefix Bank/query_alerts --index 2 -o /tmp/third.json
+  python infra/opensre-dataset/fetch_opensre_hub_alert.py --prefix Bank/query_alerts --index 2 -o /tmp/third.json
 
   # First 20 alerts under a directory
-  python scripts/fetch_opensre_hub_alert.py --prefix Bank/query_alerts --export-dir ./bank_alerts --limit 20
+  python infra/opensre-dataset/fetch_opensre_hub_alert.py --prefix Bank/query_alerts --export-dir ./bank_alerts --limit 20
 
   # Valid prefixes on tracer-cloud/opensre include:
   #   Bank/query_alerts  Market/cloudbed-1/query_alerts  Market/cloudbed-2/query_alerts
@@ -29,7 +29,7 @@ import json
 import sys
 from pathlib import Path
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 

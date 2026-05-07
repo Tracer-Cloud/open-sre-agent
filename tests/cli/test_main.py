@@ -73,6 +73,54 @@ def test_main_runs_health_command(monkeypatch) -> None:
     assert exit_code == 0
 
 
+def test_main_does_not_capture_expected_usage_errors_to_sentry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[BaseException] = []
+    monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr(
+        "app.cli.support.exception_reporting.capture_exception",
+        lambda exc, **_kwargs: captured.append(exc),
+    )
+
+    exit_code = main(["integrations", "show", "nonexistent"])
+
+    assert exit_code != 0
+    assert captured == []
+
+
+def test_main_allows_update_when_sentry_sdk_missing(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
+
+    def _raise_missing_sentry() -> None:
+        raise ModuleNotFoundError("No module named 'sentry_sdk'", name="sentry_sdk")
+
+    monkeypatch.setattr("app.cli.__main__.init_sentry", _raise_missing_sentry)
+    monkeypatch.setattr("app.cli.support.update._fetch_latest_version", lambda: "9999.0.0")
+    monkeypatch.setattr("app.cli.support.update._is_update_available", lambda _c, _l: False)
+
+    exit_code = main(["update", "--check"])
+
+    assert exit_code == 0
+    assert "already up to date" in capsys.readouterr().out
+
+
+def test_main_non_update_still_raises_when_sentry_sdk_missing(monkeypatch) -> None:
+    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
+
+    def _raise_missing_sentry() -> None:
+        raise ModuleNotFoundError("No module named 'sentry_sdk'", name="sentry_sdk")
+
+    monkeypatch.setattr("app.cli.__main__.init_sentry", _raise_missing_sentry)
+
+    with pytest.raises(ModuleNotFoundError):
+        main(["version"])
+
+
 def test_main_does_not_capture_analytics_for_help(monkeypatch, capsys) -> None:
     captured: list[str] = []
     monkeypatch.setattr(
@@ -90,7 +138,7 @@ def test_main_does_not_capture_analytics_for_help(monkeypatch, capsys) -> None:
     assert captured == []
 
 
-def test_main_does_not_capture_analytics_for_parse_error(monkeypatch, capsys) -> None:
+def test_main_captures_unknown_command_to_sentry(monkeypatch, capsys) -> None:
     captured: list[str] = []
     captured_errors: list[BaseException] = []
     monkeypatch.setattr(
@@ -100,7 +148,10 @@ def test_main_does_not_capture_analytics_for_parse_error(monkeypatch, capsys) ->
         "app.cli.__main__.capture_cli_invoked", lambda *_args: captured.append("cli")
     )
     monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("app.cli.__main__.capture_exception", captured_errors.append)
+    monkeypatch.setattr(
+        "app.cli.support.exception_reporting.capture_exception",
+        lambda exc, **_kwargs: captured_errors.append(exc),
+    )
 
     exit_code = main(["not-a-command"])
 
@@ -108,10 +159,11 @@ def test_main_does_not_capture_analytics_for_parse_error(monkeypatch, capsys) ->
     assert "No such command" in capsys.readouterr().err
     assert captured == []
     assert len(captured_errors) == 1
-    assert isinstance(captured_errors[0], click.ClickException)
+    assert isinstance(captured_errors[0], click.UsageError)
+    assert str(captured_errors[0]).startswith("No such command ")
 
 
-def test_main_captures_invalid_option_parse_error(monkeypatch, capsys) -> None:
+def test_main_does_not_capture_invalid_option_parse_error(monkeypatch, capsys) -> None:
     captured: list[str] = []
     captured_errors: list[BaseException] = []
     monkeypatch.setattr(
@@ -121,15 +173,17 @@ def test_main_captures_invalid_option_parse_error(monkeypatch, capsys) -> None:
         "app.cli.__main__.capture_cli_invoked", lambda *_args: captured.append("cli")
     )
     monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("app.cli.__main__.capture_exception", captured_errors.append)
+    monkeypatch.setattr(
+        "app.cli.support.exception_reporting.capture_exception",
+        lambda exc, **_kwargs: captured_errors.append(exc),
+    )
 
     exit_code = main(["--definitely-wrong-option"])
 
     assert exit_code == 2
     assert "No such option: --definitely-wrong-option" in capsys.readouterr().err
     assert captured == []
-    assert len(captured_errors) == 1
-    assert isinstance(captured_errors[0], click.ClickException)
+    assert captured_errors == []
 
 
 def test_main_captures_analytics_once_for_accepted_command(monkeypatch, capsys) -> None:
@@ -249,6 +303,10 @@ def test_main_captures_command_metadata_for_nested_remote_ops(monkeypatch, capsy
 def test_main_emits_first_run_install_before_cli_invoked(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys
 ) -> None:
+    # This test validates analytics event ordering only; avoid real Sentry init
+    # side effects (e.g. sdk integration hooks) that are unrelated to the
+    # install/cli-invoked event contract.
+    monkeypatch.setattr("app.cli.__main__.init_sentry", lambda: None)
     provider.shutdown_analytics(flush=False)
     provider._instance = None
     provider._cached_anonymous_id = None
@@ -257,6 +315,7 @@ def test_main_emits_first_run_install_before_cli_invoked(
     provider._pending_user_id_load_failures.clear()
     monkeypatch.delenv("OPENSRE_NO_TELEMETRY", raising=False)
     monkeypatch.delenv("OPENSRE_ANALYTICS_DISABLED", raising=False)
+    monkeypatch.delenv("OPENSRE_SENTRY_DISABLED", raising=False)
     monkeypatch.delenv("DO_NOT_TRACK", raising=False)
     monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
     monkeypatch.setattr(provider, "_ANONYMOUS_ID_PATH", tmp_path / "anonymous_id")
@@ -331,7 +390,7 @@ def test_main_captures_cli_invoked_before_reported_subcommand_families(
         )
     else:
         tests_module = importlib.import_module("app.cli.commands.tests")
-        monkeypatch.setattr(setup, lambda: _EmptyCatalog())
+        monkeypatch.setattr(setup, _EmptyCatalog)
 
         def _capture_tests_listed(_category: str, *, search: bool) -> None:
             _ = (_category, search)
@@ -428,98 +487,3 @@ def test_default_no_args_enters_repl(monkeypatch) -> None:
         f"default no-args run must pass cli_enabled=True, got {load_calls[0]}"
     )
     assert landing_calls == [], "REPL should run, not landing page"
-
-
-def test_agent_subcommand_launches_repl(monkeypatch) -> None:
-    """`opensre agent` must always enter the REPL, even if config disables it.
-
-    The explicit subcommand expresses clear user intent, so env/file disables
-    are overridden by passing cli_enabled=True into ReplConfig.load.
-    """
-    monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
-    monkeypatch.setattr("app.cli.commands.agent.sys.stdin.isatty", lambda: True)
-    monkeypatch.setenv("OPENSRE_INTERACTIVE", "0")
-
-    load_calls: list[dict] = []
-    orig_load = ReplConfig.load
-
-    @classmethod  # type: ignore[misc]
-    def spy_load(cls, **kw):  # type: ignore[no-untyped-def]
-        load_calls.append(kw)
-        return orig_load(**kw)
-
-    monkeypatch.setattr("app.cli.interactive_shell.config.ReplConfig.load", spy_load)
-
-    run_repl_calls: list[ReplConfig] = []
-
-    def fake_run_repl(**kw: object) -> int:
-        cfg = kw.get("config")
-        assert isinstance(cfg, ReplConfig)
-        run_repl_calls.append(cfg)
-        return 0
-
-    with (
-        patch("app.cli.interactive_shell.run_repl", side_effect=fake_run_repl),
-        patch("app.cli.interactive_shell.loop.run_repl", side_effect=fake_run_repl),
-    ):
-        exit_code = main(["agent"])
-
-    assert exit_code == 0
-    assert len(load_calls) == 1
-    assert load_calls[0].get("cli_enabled") is True
-    assert len(run_repl_calls) == 1
-    assert run_repl_calls[0].enabled is True, "agent subcommand must override OPENSRE_INTERACTIVE=0"
-
-
-def test_agent_subcommand_accepts_layout(monkeypatch) -> None:
-    """`opensre agent --layout pinned` must forward layout into ReplConfig."""
-    monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
-    monkeypatch.setattr("app.cli.commands.agent.sys.stdin.isatty", lambda: True)
-
-    run_repl_calls: list[ReplConfig] = []
-
-    def fake_run_repl(**kw: object) -> int:
-        cfg = kw.get("config")
-        assert isinstance(cfg, ReplConfig)
-        run_repl_calls.append(cfg)
-        return 0
-
-    with (
-        patch("app.cli.interactive_shell.run_repl", side_effect=fake_run_repl),
-        patch("app.cli.interactive_shell.loop.run_repl", side_effect=fake_run_repl),
-    ):
-        exit_code = main(["agent", "--layout", "pinned"])
-
-    assert exit_code == 0
-    assert len(run_repl_calls) == 1
-    assert run_repl_calls[0].layout == "pinned"
-
-
-def test_agent_subcommand_errors_on_non_tty(monkeypatch, capsys) -> None:
-    """`opensre agent` must surface a clear error on non-TTY stdin.
-
-    The module docstring promises the explicit subcommand starts the REPL on
-    user intent. On piped/CI stdin we cannot do that, so we raise a loud
-    OpenSREError with a suggestion instead of silently returning 0.
-    """
-    monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
-    monkeypatch.setattr("app.cli.commands.agent.sys.stdin.isatty", lambda: False)
-
-    def _fail_if_called(**_kw: object) -> int:
-        raise AssertionError("run_repl must not run when stdin is not a TTY")
-
-    with (
-        patch("app.cli.interactive_shell.run_repl", side_effect=_fail_if_called),
-        patch("app.cli.interactive_shell.loop.run_repl", side_effect=_fail_if_called),
-    ):
-        exit_code = main(["agent"])
-
-    assert exit_code != 0, "non-TTY agent invocation must not silently succeed"
-    captured = capsys.readouterr()
-    assert "TTY" in captured.err or "TTY" in captured.out

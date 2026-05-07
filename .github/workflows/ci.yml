@@ -1,6 +1,5 @@
 name: CI
 
-# Default CI remains path-scoped for pull_request and push events.
 on:
   push:
     branches: [main]
@@ -34,15 +33,7 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# ---------------------------------------------------------------
-# MATRIX: Ubuntu-only default matrix for push and pull_request in this workflow.
-# Optional label-driven Windows checks live in `ci-labels-windows.yml` (`ci:windows`).
-# Kubernetes local tests here run on push to main or PR titles containing k8s/kubernetes.
-# ---------------------------------------------------------------
 jobs:
-  # ---------------------------------------------------------------
-  # QUALITY CHECKS (lint + format)
-  # ---------------------------------------------------------------
   quality:
     name: quality (${{ matrix.os }})
     strategy:
@@ -79,48 +70,12 @@ jobs:
       - name: Format check
         run: uv run python -m ruff format --check app/ tests/
 
-  # ---------------------------------------------------------------
-  # TYPECHECK
-  # ---------------------------------------------------------------
-  typecheck:
-    name: typecheck (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest]
-
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
-    continue-on-error: ${{ matrix.os == 'windows-latest' }}
-
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v8.1.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: |
-            pyproject.toml
-            uv.lock
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
-
-      - name: Install dependencies
-        run: uv sync --frozen --extra dev
-
       - name: Typecheck
         run: uv run python -m mypy app/
 
-  # ---------------------------------------------------------------
-  # TESTS (MAIN CI GATE)
-  # ---------------------------------------------------------------
   test:
     name: test (${{ matrix.os }})
-    needs: [quality, typecheck]
+    needs: [quality]
     continue-on-error: ${{ matrix.os == 'windows-latest' }}
     strategy:
       fail-fast: false
@@ -133,8 +88,6 @@ jobs:
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       JWT_TOKEN: ${{ secrets.JWT_TOKEN }}
-      TRACER_ORG_ID: ${{ secrets.TRACER_ORG_ID }}
-      TRACER_WEB_APP_URL: ${{ secrets.TRACER_WEB_APP_URL }}
       LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
       LANGSMITH_ENDPOINT: ${{ secrets.LANGSMITH_ENDPOINT }}
       LANGSMITH_PROJECT: ${{ secrets.LANGSMITH_PROJECT }}
@@ -168,8 +121,6 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --extra dev
 
-      # Fork PRs previously ran a narrower pytest set; run the same suite as main pushes
-      # so merge does not surface failures only seen on push.
       - name: Run tests
         run: >-
           uv run python -m pytest -n auto -v
@@ -192,12 +143,9 @@ jobs:
             .coverage
           retention-days: 7
 
-  # ---------------------------------------------------------------
-  # KUBERNETES TESTS
-  # ---------------------------------------------------------------
   test-kubernetes:
     runs-on: ubuntu-latest
-    needs: [quality, typecheck]
+    needs: [quality]
     continue-on-error: true
     timeout-minutes: 15
 
@@ -237,9 +185,6 @@ jobs:
           AWS_DEFAULT_REGION: us-east-1
         run: uv run python -m tests.e2e.kubernetes.test_local
 
-  # ---------------------------------------------------------------
-  # THOROUGH E2E (MAIN ONLY)
-  # ---------------------------------------------------------------
   test-thorough:
     runs-on: ubuntu-latest
     needs: [test]
@@ -264,8 +209,6 @@ jobs:
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       JWT_TOKEN: ${{ secrets.JWT_TOKEN }}
-      TRACER_ORG_ID: ${{ secrets.TRACER_ORG_ID }}
-      TRACER_WEB_APP_URL: ${{ secrets.TRACER_WEB_APP_URL }}
       TRACER_API_URL: ${{ secrets.TRACER_API_URL }}
       TRACER_INGEST_TOKEN: ${{ secrets.TRACER_INGEST_TOKEN }}
       LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
@@ -282,8 +225,6 @@ jobs:
       GCLOUD_HOSTED_LOGS_ID: ${{ secrets.GCLOUD_HOSTED_LOGS_ID }}
       GCLOUD_HOSTED_LOGS_URL: ${{ secrets.GCLOUD_HOSTED_LOGS_URL }}
       GCLOUD_RW_API_KEY: ${{ secrets.GCLOUD_RW_API_KEY }}
-      GCLOUD_OTLP_ENDPOINT: ""
-      OTEL_EXPORTER_OTLP_ENDPOINT: ""
       CLOUDWATCH_VERIFY_LOGS: ${{ matrix.name == 'cloudwatch-demo' && '0' || '1' }}
 
     steps:
@@ -307,7 +248,7 @@ jobs:
 
       - name: Install tracer CLI
         run: |
-          curl -sSL https://install.tracer.cloud | CLI_BRANCH=dev sh -s user_36fbN6K6FwEgJFHsQv1pUByo8K6
+          curl -sSL https://install.tracer.cloud | sh -s user_36fbN6K6FwEgJFHsQv1pUByo8K6
 
       - name: Initialize tracer (optional)
         run: |

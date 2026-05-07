@@ -10,14 +10,13 @@ be tested in isolation against plain dicts.
 """
 
 import logging
-from typing import Optional
 
-from langchain_core.runnables import RunnableConfig
 from langsmith import traceable
 
 from app.nodes.adapt_window.rules import adapt_incident_window
 from app.output import debug_print
 from app.state import InvestigationState
+from app.types.config import NodeConfig
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +24,7 @@ logger = logging.getLogger(__name__)
 @traceable(name="node_adapt_window")
 def node_adapt_window(
     state: InvestigationState,
-    config: Optional[RunnableConfig] = None,  # noqa: ARG001,UP007,UP045
+    config: NodeConfig | None = None,  # noqa: ARG001
 ) -> dict:
     """Apply the adaptive-window rules and return a state delta.
 

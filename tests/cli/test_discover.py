@@ -115,6 +115,7 @@ def _patch_discover_paths(
     makefile: Path | None = None,
     rca_dir: Path | None = None,
     synthetic_dir: Path | None = None,
+    cloudopsbench_dir: Path | None = None,
 ) -> None:
     """Helper: monkeypatch any subset of the discover module's path constants.
 
@@ -130,6 +131,8 @@ def _patch_discover_paths(
         monkeypatch.setattr("app.cli.tests.discover.RCA_DIR", rca_dir)
     if synthetic_dir is not None:
         monkeypatch.setattr("app.cli.tests.discover.SYNTHETIC_SCENARIOS_DIR", synthetic_dir)
+    if cloudopsbench_dir is not None:
+        monkeypatch.setattr("app.cli.tests.discover.CLOUDOPSBENCH_DIR", cloudopsbench_dir)
 
 
 class TestDiscoverGracefulOnMissingSource:
@@ -171,6 +174,7 @@ class TestDiscoverGracefulOnMissingSource:
             makefile=empty / "Makefile",
             rca_dir=empty / "rca",
             synthetic_dir=empty / "rds_postgres",
+            cloudopsbench_dir=empty / "cloudopsbench",
         )
 
         catalog = load_test_catalog()

@@ -111,6 +111,9 @@ Temporary Items
 # Project specific
 output/
 .langgraph_api/
+.cloudopsbench-results/
+tests/benchmarks/cloudopsbench/benchmark/
+tests/benchmarks/cloudopsbench/.cache/
 
 # Vendorized packages in api_ingester
 tests/test_case_upstream_downstream_pipeline/pipeline_code/api_ingester/certifi/
