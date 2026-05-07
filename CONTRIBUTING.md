@@ -148,6 +148,20 @@ Use the **[PR template](.github/PULL_REQUEST_TEMPLATE.md)** (automatically provi
 - Self-reviewed your own code first
 - Considered edge cases
 
+### Greptile Code Review
+
+We use [Greptile](https://greptile.com) for automated code review. Before a PR can be merged it must reach a **5/5 confidence score** with zero unresolved comments.
+
+**Trigger a review** by posting this comment on your PR:
+
+```
+@greptile review
+```
+
+Wait 30–60 seconds for the review to appear, then address each comment and re-trigger until you hit 5/5.
+
+> **Automate the loop** — the [greploop skill](https://skills.sh/greptileai/skills/greploop) handles triggering, waiting, fixing, and re-reviewing automatically until 5/5 is reached.
+
 ### If Your PR Includes Screenshots or Logs
 
 Provide **before** and **after** examples when:
