@@ -34,13 +34,13 @@ class RouteDecision:
     matched_signals: tuple[str, ...] = ()
     fallback_reason: str | None = None
 
-    def to_event_payload(self) -> dict[str, object]:
+    def to_event_payload(self) -> dict[str, str | bool | int | float]:
         """Structured telemetry/debug payload for route decisions."""
         return {
             "route_kind": self.route_kind.value,
             "confidence": self.confidence,
-            "matched_signals": list(self.matched_signals),
-            "fallback_reason": self.fallback_reason,
+            "matched_signals": ",".join(self.matched_signals),
+            "fallback_reason": self.fallback_reason or "",
         }
 
 
