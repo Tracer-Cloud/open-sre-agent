@@ -474,6 +474,52 @@ class TestModelCommand:
         assert not env_path.exists()
         assert session.history[-1]["ok"] is False
 
+    def test_set_unknown_reasoning_model_is_rejected_for_openai(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        self._patch_llm(monkeypatch)
+        import app.cli.wizard.env_sync as env_sync
+
+        env_path = tmp_path / ".env"
+        monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+
+        console, buf = _capture()
+        dispatch_slash("/model set openai not-a-real-model-xyz", ReplSession(), console)
+
+        output = buf.getvalue()
+        assert "unknown model for openai" in output
+        assert "not-a-real-model-xyz" in output
+        assert "switched LLM provider" not in output
+        assert not env_path.exists()
+
+    def test_set_unknown_toolcall_model_is_rejected(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        self._patch_llm(monkeypatch)
+        import app.cli.wizard.env_sync as env_sync
+
+        env_path = tmp_path / ".env"
+        monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+
+        console, buf = _capture()
+        dispatch_slash(
+            "/model set anthropic claude-opus-4-7 --toolcall-model not-a-real-model-xyz",
+            ReplSession(),
+            console,
+        )
+
+        output = buf.getvalue()
+        assert "unknown model for anthropic" in output
+        assert "not-a-real-model-xyz" in output
+        assert "switched LLM provider" not in output
+        assert not env_path.exists()
+
     def test_set_with_toolcall_flag_writes_both_env_vars(
         self,
         monkeypatch: pytest.MonkeyPatch,

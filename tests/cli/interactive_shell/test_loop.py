@@ -17,6 +17,7 @@ from prompt_toolkit.keys import Keys
 from prompt_toolkit.output import DummyOutput
 
 from app.cli.interactive_shell import loop
+from app.cli.interactive_shell.session import ReplSession
 
 
 def test_repl_input_lexer_highlights_first_slash_token() -> None:
@@ -167,17 +168,21 @@ def test_completion_includes_tab_navigation() -> None:
 
 
 def test_completion_menu_current_item_uses_highlight_style() -> None:
+    # Design-system roles (hex without leading #, uppercase as prompt_toolkit stores them):
+    #   ACCENT_SOFT (#5EF0E8) → slash-command token
+    #   PRIMARY     (#1AFF8C) → currently-selected completion entry
+    #   SURFACE     (#111811) → menu background (inset panel role)
     style = loop._build_prompt_style()
     attrs = style.get_attrs_for_style_str("class:repl-slash-command")
 
-    assert attrs.color == "ffbe68"
-    assert attrs.bgcolor == "2c1e14"
+    assert attrs.color == "5EF0E8"  # ACCENT_SOFT
+    assert attrs.bgcolor == "2c1e14"  # warm dark bg used for slash-command token
     assert attrs.bold is True
 
     attrs_menu = style.get_attrs_for_style_str("class:completion-menu.completion.current")
 
-    assert attrs_menu.color == "ff7a45"
-    assert attrs_menu.bgcolor == "2c1e14"
+    assert attrs_menu.color == "1AFF8C"  # PRIMARY
+    assert attrs_menu.bgcolor == "2c1e14"  # warm dark bg
     assert attrs_menu.reverse is False
     assert attrs_menu.bold is True
 
@@ -207,7 +212,6 @@ def test_shell_completer_path_completion_honors_mixed_case_prefix(tmp_path: Path
 def test_run_new_alert_marks_task_failed_on_opensre_error(monkeypatch: pytest.MonkeyPatch) -> None:
     from rich.console import Console
 
-    from app.cli.interactive_shell.session import ReplSession
     from app.cli.interactive_shell.tasks import TaskKind, TaskStatus
     from app.cli.support.errors import OpenSREError
 
@@ -233,7 +237,6 @@ def test_run_new_alert_marks_task_failed_on_opensre_error(monkeypatch: pytest.Mo
 def test_run_new_alert_reports_unexpected_error(monkeypatch: pytest.MonkeyPatch) -> None:
     from rich.console import Console
 
-    from app.cli.interactive_shell.session import ReplSession
     from app.cli.interactive_shell.tasks import TaskStatus
 
     captured_errors: list[BaseException] = []
@@ -264,7 +267,6 @@ def test_run_new_alert_reports_unexpected_error(monkeypatch: pytest.MonkeyPatch)
 def test_run_new_alert_does_not_report_opensre_error(monkeypatch: pytest.MonkeyPatch) -> None:
     from rich.console import Console
 
-    from app.cli.interactive_shell.session import ReplSession
     from app.cli.support.errors import OpenSREError
 
     captured_errors: list[BaseException] = []
@@ -291,8 +293,6 @@ def test_run_new_alert_does_not_report_opensre_error(monkeypatch: pytest.MonkeyP
 
 def test_run_one_turn_reports_slash_dispatch_error(monkeypatch: pytest.MonkeyPatch) -> None:
     from rich.console import Console
-
-    from app.cli.interactive_shell.session import ReplSession
 
     class _Prompt:
         async def prompt_async(self, _prompt: object) -> str:

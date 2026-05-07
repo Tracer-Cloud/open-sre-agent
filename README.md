@@ -1347,6 +1347,13 @@ Thanks goes to these amazing people:
             <sub><b>abhinavgautam01</b></sub>
         </a>
     </td>
+            <td align="center">
+        <a href="https://github.com/arian24b">
+            <img src="https://avatars.githubusercontent.com/u/45208666?v=4" width="60" alt="arian24b"/>
+            <br />
+            <sub><b>arian24b</b></sub>
+        </a>
+    </td>
 		</tr>
 	</tbody>
 </table>

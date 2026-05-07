@@ -18,19 +18,30 @@ InputKind = Literal["slash", "cli_help", "cli_agent", "new_alert", "follow_up"]
 _MIN_INVESTIGATION_LINE_LEN = 48
 
 # Bare words that map to slash commands; users often forget the leading slash.
-_BARE_COMMAND_ALIASES = frozenset(
-    {
-        "help",
-        "?",  # iconic shortcut for help, matches vim, less, many REPLs
-        "exit",
-        "quit",
-        "clear",
-        "reset",
-        "status",
-        "trust",
-    }
-)
+# Keys without an explicit value rewrite to ``/<key>`` (e.g. ``help`` → ``/help``).
+# Greetings and meta-words ("agent", "hi", "menu", …) all rewrite to ``/welcome``
+# so a wandering user always lands on the structured welcome panel rather than a
+# verbose, unstructured LLM reply. Greeting aliases are intentionally chosen to
+# avoid conflicting Tab-completion prefixes with the existing command words
+# (e.g. no ``hello`` because ``hel`` would no longer uniquely complete to ``help``).
+_BARE_COMMAND_ALIAS_MAP: dict[str, str] = {
+    "help": "/help",
+    "?": "/help",
+    "exit": "/exit",
+    "quit": "/quit",
+    "clear": "/clear",
+    "reset": "/reset",
+    "status": "/status",
+    "trust": "/trust",
+    "welcome": "/welcome",
+    "agent": "/welcome",
+    "hi": "/welcome",
+    "hey": "/welcome",
+    "menu": "/welcome",
+}
+_BARE_COMMAND_ALIASES = frozenset(_BARE_COMMAND_ALIAS_MAP.keys())
 BARE_COMMAND_ALIASES = _BARE_COMMAND_ALIASES
+BARE_COMMAND_ALIAS_MAP = _BARE_COMMAND_ALIAS_MAP
 
 
 # Short, question-shaped strings that obviously target the previous investigation.
