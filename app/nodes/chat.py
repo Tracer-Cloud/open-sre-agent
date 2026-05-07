@@ -77,6 +77,12 @@ _chat_llm_cache: dict[str, BaseChatModel] = {}
 _chat_llm_with_tools_cache: dict[str, ToolEnabledChatModel] = {}
 
 
+def reset_chat_llm_cache() -> None:
+    """Clear cached chat models after provider/model configuration changes."""
+    _chat_llm_cache.clear()
+    _chat_llm_with_tools_cache.clear()
+
+
 class UnsupportedChatProviderError(ValueError):
     """Raised when chat mode is used with an unsupported provider."""
 

@@ -116,8 +116,8 @@ jobs:
           # Sort by first commit date ascending (earliest contributor first)
           contributors.sort(key=lambda c: c["first_commit"])
 
-          # Build the table HTML (6 columns per row)
-          cols = 6
+          # Build the table HTML (12 columns per row)
+          cols = 12
           rows = [contributors[i:i+cols] for i in range(0, len(contributors), cols)]
           lines = ["<table>", "\t<tbody>"]
           for row in rows:
@@ -125,7 +125,7 @@ jobs:
               for c in row:
                   lines.append(f"""            <td align="center">
                   <a href="{c['html_url']}">
-                      <img src="{c['avatar_url']}" width="100" alt="{c['login']}"/>
+                      <img src="{c['avatar_url']}" width="60" alt="{c['login']}"/>
                       <br />
                       <sub><b>{c['login']}</b></sub>
                   </a>

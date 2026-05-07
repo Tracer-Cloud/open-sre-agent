@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.cli.interactive_shell.shell_policy import (
+    argv_for_repl_builtin_routing,
     classify_command,
     evaluate_policy,
     parse_shell_command,
@@ -16,6 +17,16 @@ def test_parse_shell_command_detects_passthrough_prefix() -> None:
     assert parsed.command == "echo hello"
     assert parsed.argv is None
     assert parsed.parse_error is None
+
+
+def test_argv_for_repl_builtin_routing_splits_passthrough_for_cd_pwd() -> None:
+    parsed = parse_shell_command("!cd /tmp", is_windows=False)
+    assert argv_for_repl_builtin_routing(parsed=parsed, is_windows=False) == ["cd", "/tmp"]
+
+
+def test_argv_for_repl_builtin_routing_returns_safe_mode_argv() -> None:
+    parsed = parse_shell_command("pwd", is_windows=False)
+    assert argv_for_repl_builtin_routing(parsed=parsed, is_windows=False) == ["pwd"]
 
 
 def test_parse_shell_command_rejects_operators_in_safe_mode() -> None:
@@ -47,7 +58,7 @@ def test_find_exec_wrapper_is_blocked() -> None:
 
     assert decision.allow is False
     assert decision.classification == "mutating"
-    assert "exec-wrapper" in (decision.reason or "")
+    assert decision.reason == "mutating commands are blocked in safe mode."
 
 
 def test_env_exec_wrapper_is_blocked() -> None:
@@ -57,7 +68,7 @@ def test_env_exec_wrapper_is_blocked() -> None:
 
     assert decision.allow is False
     assert decision.classification == "mutating"
-    assert "exec-wrapper" in (decision.reason or "")
+    assert decision.reason == "mutating commands are blocked in safe mode."
 
 
 def test_classify_command_marks_find_and_env_as_mutating() -> None:
@@ -71,7 +82,7 @@ def test_evaluate_policy_blocks_restricted_command_sudo() -> None:
 
     assert decision.allow is False
     assert decision.classification == "restricted"
-    assert decision.reason == "restricted command is not allowed from inferred execution."
+    assert decision.reason == "Not allowed for assistant-run shell."
 
 
 def test_evaluate_policy_blocks_restricted_command_dd() -> None:
@@ -80,7 +91,7 @@ def test_evaluate_policy_blocks_restricted_command_dd() -> None:
 
     assert decision.allow is False
     assert decision.classification == "restricted"
-    assert "restricted" in (decision.reason or "").lower()
+    assert decision.reason == "Not allowed for assistant-run shell."
 
 
 def test_classify_command_aws_ec2_describe_instances() -> None:

@@ -10,13 +10,16 @@ from typing import Any
 import questionary.question
 from prompt_toolkit.key_binding import KeyBindings, KeyBindingsBase, merge_key_bindings
 from prompt_toolkit.keys import Keys
+from rich.console import Console
 
 _escape_patch_installed: list[bool] = [False]
 _ctrl_c_patch_installed: list[bool] = [False]
 
 # Shared timestamp of the last Ctrl+C press (None = never pressed).
 _last_ctrl_c: list[float | None] = [None]
-_CTRL_C_EXIT_WINDOW: float = 2.0
+
+CTRL_C_DOUBLE_PRESS_WINDOW_S: float = 2.0
+_CTRL_C_EXIT_WINDOW: float = CTRL_C_DOUBLE_PRESS_WINDOW_S
 
 
 class _HardQuitInterrupt(KeyboardInterrupt):
@@ -142,6 +145,21 @@ def _wrap_question_ctrl_c(
     wrapped.__doc__ = orig.__doc__
     wrapped.__qualname__ = getattr(orig, "__qualname__", orig.__name__)
     return wrapped
+
+
+def repl_reset_ctrl_c_gate() -> None:
+    _last_ctrl_c[0] = None
+
+
+def repl_prompt_note_ctrl_c(console: Console) -> bool:
+    now = time.monotonic()
+    if _last_ctrl_c[0] is not None and now - _last_ctrl_c[0] <= _CTRL_C_EXIT_WINDOW:
+        console.print("[dim]Goodbye![/dim]")
+        _last_ctrl_c[0] = None
+        return True
+    _last_ctrl_c[0] = now
+    console.print("[dim](Press Ctrl+C again to exit)[/dim]")
+    return False
 
 
 def install_questionary_ctrl_c_double_exit() -> None:

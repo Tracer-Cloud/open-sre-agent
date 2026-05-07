@@ -36,14 +36,22 @@ slug: "quickstart"
 
   </Step>
 
-  <Step title="Run your first investigation">
-    Trigger an investigation by passing in an alert file:
+  <Step title="Run an investigation">
+    Choose either path — both use the same local `opensre` binary:
+
+    **Interactive prompt shell** — start OpenSRE with no arguments (TTY) to type incidents in plain language and use slash commands (`/help`, `/status`, `/exit`):
+
+    ```bash
+    opensre
+    ```
+
+    **Direct investigation** — one-shot run from your shell with an alert file:
 
     ```bash
     opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
     ```
 
-    OpenSRE automatically fetches alert context, reasons across connected systems, and generates a structured root-cause report.
+    For file-based runs, OpenSRE fetches alert context, reasons across connected systems, and generates a structured root-cause report.
 
   </Step>
 

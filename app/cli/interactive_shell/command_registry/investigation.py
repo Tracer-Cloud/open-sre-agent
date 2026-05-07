@@ -8,7 +8,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.markup import escape
 
-from app.cli.interactive_shell.command_registry.types import SlashCommand
+from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.tasks import TaskKind
 from app.cli.interactive_shell.theme import (
@@ -18,10 +18,10 @@ from app.cli.interactive_shell.theme import (
     WARNING,
 )
 from app.cli.support.errors import OpenSREError
-from app.utils.sentry_sdk import capture_exception
+from app.cli.support.exception_reporting import report_exception
 
 
-def _cmd_template(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_template(_session: ReplSession, console: Console, args: list[str]) -> bool:
     from app.cli.investigation.alert_templates import build_alert_template
     from app.cli.support.constants import ALERT_TEMPLATE_CHOICES
 
@@ -50,17 +50,20 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
 
     if not args:
         console.print(f"[{TEXT_DIM}]usage:[/] /investigate <file>")
+        session.mark_latest(ok=False, kind="slash")
         return True
 
     path = Path(args[0])
     if not path.exists():
         console.print(f"[{TERMINAL_ERROR}]file not found:[/] {escape(str(path))}")
+        session.mark_latest(ok=False, kind="slash")
         return True
 
     try:
         text = path.read_text(encoding="utf-8")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         console.print(f"[{TERMINAL_ERROR}]cannot read file:[/] {escape(str(exc))}")
+        session.mark_latest(ok=False, kind="slash")
         return True
 
     task = session.task_registry.create(TaskKind.INVESTIGATION)
@@ -75,6 +78,7 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
         task.mark_cancelled()
         console.print(f"[{WARNING}]investigation cancelled.[/]")
         session.record("alert", args[0], ok=False)
+        session.mark_latest(ok=False, kind="slash")
         return True
     except OpenSREError as exc:
         task.mark_failed(str(exc))
@@ -82,12 +86,14 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
         if exc.suggestion:
             console.print(f"[{WARNING}]suggestion:[/] {escape(exc.suggestion)}")
         session.record("alert", args[0], ok=False)
+        session.mark_latest(ok=False, kind="slash")
         return True
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         task.mark_failed(str(exc))
-        capture_exception(exc)
+        report_exception(exc, context="interactive_shell.investigate_file")
         console.print(f"[{TERMINAL_ERROR}]investigation failed:[/] {escape(str(exc))}")
         session.record("alert", args[0], ok=False)
+        session.mark_latest(ok=False, kind="slash")
         return True
 
     root = final_state.get("root_cause")
@@ -100,7 +106,7 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
     return True
 
 
-def _cmd_last(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_last(session: ReplSession, console: Console, _args: list[str]) -> bool:
     if session.last_state is None:
         console.print(f"[{TEXT_DIM}]no investigation in this session yet.[/]")
         return True
@@ -155,10 +161,18 @@ def _cmd_save(session: ReplSession, console: Console, args: list[str]) -> bool:
                 lines.append(f"## Report\n\n{report}\n")
             dest.write_text("\n".join(lines) or "(no report content)", encoding="utf-8")
         console.print(f"[{PRIMARY}]saved:[/] {escape(str(dest))}")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         console.print(f"[{TERMINAL_ERROR}]save failed:[/] {escape(str(exc))}")
     return True
 
+
+_TEMPLATE_FIRST_ARGS: tuple[tuple[str, str], ...] = (
+    ("generic", "generic alert JSON template"),
+    ("datadog", "Datadog monitor alert template"),
+    ("grafana", "Grafana alert template"),
+    ("honeycomb", "Honeycomb trigger template"),
+    ("coralogix", "Coralogix alert template"),
+)
 
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
@@ -166,14 +180,27 @@ COMMANDS: list[SlashCommand] = [
         "print a starter alert JSON template "
         "('/template generic|datadog|grafana|honeycomb|coralogix')",
         _cmd_template,
+        first_arg_completions=_TEMPLATE_FIRST_ARGS,
+        execution_tier=ExecutionTier.SAFE,
     ),
     SlashCommand(
         "/investigate",
         "run an RCA investigation from a file ('/investigate <file>')",
         _cmd_investigate_file,
+        execution_tier=ExecutionTier.ELEVATED,
     ),
-    SlashCommand("/last", "reprint the most recent investigation report", _cmd_last),
-    SlashCommand("/save", "save last investigation to a file ('/save <path>')", _cmd_save),
+    SlashCommand(
+        "/last",
+        "reprint the most recent investigation report",
+        _cmd_last,
+        execution_tier=ExecutionTier.SAFE,
+    ),
+    SlashCommand(
+        "/save",
+        "save last investigation to a file ('/save <path>')",
+        _cmd_save,
+        execution_tier=ExecutionTier.ELEVATED,
+    ),
 ]
 
 __all__ = ["COMMANDS"]

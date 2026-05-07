@@ -27,6 +27,14 @@ def _truncate_output(text: str, *, max_chars: int) -> tuple[str, bool]:
     return f"{text[:max_chars].rstrip()}\n... output truncated ...", True
 
 
+def _text_from_timeout_stream(raw: str | bytes | None) -> str:
+    if raw is None:
+        return ""
+    if isinstance(raw, str):
+        return raw
+    return raw.decode("utf-8", errors="replace")
+
+
 def execute_shell_command(
     *,
     command: str,
@@ -36,26 +44,48 @@ def execute_shell_command(
     max_output_chars: int,
 ) -> ShellExecutionResult:
     """Execute a command and return a structured result object."""
-    if use_shell:
-        completed = subprocess.run(
-            command,
-            shell=True,
-            executable=os.environ.get("SHELL") or None,
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds,
-            check=False,
+    try:
+        if use_shell:
+            completed = subprocess.run(
+                command,
+                shell=True,
+                executable=os.environ.get("SHELL") or None,
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+                check=False,
+            )
+        else:
+            if argv is None:
+                raise ValueError("argv is required for shell=False execution.")
+            completed = subprocess.run(
+                argv,
+                shell=False,
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+                check=False,
+            )
+    except subprocess.TimeoutExpired as exc:
+        stdout = _text_from_timeout_stream(exc.stdout)
+        stderr = _text_from_timeout_stream(exc.stderr)
+        stdout, truncated_stdout = _truncate_output(
+            stdout,
+            max_chars=max_output_chars,
         )
-    else:
-        if argv is None:
-            raise ValueError("argv is required for shell=False execution.")
-        completed = subprocess.run(
-            argv,
-            shell=False,
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds,
-            check=False,
+        stderr, truncated_stderr = _truncate_output(
+            stderr,
+            max_chars=max_output_chars,
+        )
+        return ShellExecutionResult(
+            command=command,
+            argv=argv,
+            stdout=stdout,
+            stderr=stderr,
+            exit_code=None,
+            timed_out=True,
+            truncated=truncated_stdout or truncated_stderr,
+            executed_with_shell=use_shell,
         )
 
     stdout, truncated_stdout = _truncate_output(

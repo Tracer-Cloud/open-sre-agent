@@ -76,13 +76,13 @@ CLOUDOPSBENCH_HF_INCLUDE ?= benchmark/**
 CLOUDOPSBENCH_LIMIT ?=
 
 opensre-hub-fetch:
-	$(PYTHON) scripts/fetch_opensre_hub_alert.py --prefix "$(OPENSRE_QUERY_PREFIX)" --output "$(OPENSRE_HUB_ALERT)" --index $(OPENSRE_HUB_INDEX)
+	$(PYTHON) infra/opensre-dataset/fetch_opensre_hub_alert.py --prefix "$(OPENSRE_QUERY_PREFIX)" --output "$(OPENSRE_HUB_ALERT)" --index $(OPENSRE_HUB_INDEX)
 
 # Batch: OPENSRE_EXPORT_DIR=./bank_alerts OPENSRE_EXPORT_LIMIT=30 make opensre-hub-export
 opensre-hub-export:
 	@[ -n "$(OPENSRE_EXPORT_DIR)" ] || { echo "Set OPENSRE_EXPORT_DIR (e.g. ./hub_alerts) and OPENSRE_EXPORT_LIMIT"; exit 1; }
 	@[ -n "$(OPENSRE_EXPORT_LIMIT)" ] || { echo "Set OPENSRE_EXPORT_LIMIT (e.g. 25)"; exit 1; }
-	$(PYTHON) scripts/fetch_opensre_hub_alert.py --prefix "$(OPENSRE_QUERY_PREFIX)" --export-dir "$(OPENSRE_EXPORT_DIR)" --limit $(OPENSRE_EXPORT_LIMIT)
+	$(PYTHON) infra/opensre-dataset/fetch_opensre_hub_alert.py --prefix "$(OPENSRE_QUERY_PREFIX)" --export-dir "$(OPENSRE_EXPORT_DIR)" --limit $(OPENSRE_EXPORT_LIMIT)
 
 opensre-hub-investigate: opensre-hub-fetch
 	opensre investigate -i "$(OPENSRE_HUB_ALERT)" $(OPENSRE_INVESTIGATE_FLAGS)

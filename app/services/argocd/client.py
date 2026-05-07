@@ -218,7 +218,7 @@ class ArgoCDClient:
                 _normalize_application(item) for item in items if isinstance(item, dict)
             ]
             return {"success": True, "applications": applications, "total": len(applications)}
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("[argocd] list_applications failed type=%s", type(exc).__name__)
             return self._error_result("list applications failed", exc)
 
@@ -251,7 +251,7 @@ class ArgoCDClient:
                 "application": app,
                 "recent_history": _recent_history(payload),
             }
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning(
                 "[argocd] get_application_summary failed type=%s app=%r",
                 type(exc).__name__,
@@ -301,7 +301,7 @@ class ArgoCDClient:
                 "diffs": diffs,
                 "diff_count": len(diffs),
             }
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning(
                 "[argocd] get_application_diff failed type=%s app=%r",
                 type(exc).__name__,

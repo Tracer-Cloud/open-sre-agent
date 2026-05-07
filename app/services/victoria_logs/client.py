@@ -147,7 +147,7 @@ class VictoriaLogsClient:
                 "success": False,
                 "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
             }
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.warning("[victoria_logs] Query error: %s", e)
             return {"success": False, "error": str(e)}
 

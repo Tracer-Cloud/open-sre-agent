@@ -33,7 +33,7 @@ def _read_config_file() -> dict[str, Any]:
             return {}
 
         return interactive
-    except Exception:  # noqa: BLE001
+    except Exception:
         return {}
 
 

@@ -21,7 +21,7 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
-    def log_message(self, format: str, *args: object) -> None:  # noqa: A002, ARG002
+    def log_message(self, _format: str, *args: object) -> None:
         print(f"[hello-world] {args[0]} {args[1]} {args[2]}")
 
 

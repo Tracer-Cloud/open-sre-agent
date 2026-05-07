@@ -166,9 +166,13 @@ def test_validate_gitlab_config_fails_when_token_missing() -> None:
 def test_validate_gitlab_config_returns_ok_on_success(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    def _ok(*, config: GitlabConfig) -> dict[str, str]:
+        del config
+        return {"username": "gl-user"}
+
     monkeypatch.setattr(
         "app.integrations.gitlab.validate_gitlab_connection",
-        lambda *, config: {"username": "gl-user"},  # noqa: ARG005
+        _ok,
     )
 
     result = validate_gitlab_config(_make_config())
@@ -200,9 +204,13 @@ def test_validate_gitlab_config_handles_http_error(
 def test_validate_gitlab_config_handles_generic_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    def _boom(*, config: GitlabConfig) -> dict[str, str]:
+        del config
+        raise RuntimeError("connection refused")
+
     monkeypatch.setattr(
         "app.integrations.gitlab.validate_gitlab_connection",
-        lambda *, config: (_ for _ in ()).throw(RuntimeError("connection refused")),  # noqa: ARG005
+        _boom,
     )
 
     result = validate_gitlab_config(_make_config())

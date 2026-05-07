@@ -12,6 +12,7 @@ Covers:
 from __future__ import annotations
 
 import io
+from collections.abc import Iterator
 from typing import Any
 
 from rich.console import Console
@@ -39,22 +40,34 @@ def _capture() -> tuple[Console, io.StringIO]:
     )
 
 
-class _FakeLLMResponse:
-    def __init__(self, content: Any) -> None:
-        self.content = content
-
-
 class _FakeLLMClient:
-    def __init__(self, content: str) -> None:
+    """Streaming-aware fake.
+
+    ``invoke_stream`` yields the canned content as a single chunk. ``content``
+    accepts either a plain string or an Anthropic-style list of content blocks
+    (objects with ``.text`` or dicts with a ``"text"`` key); blocks are flattened
+    to the same text the real SDK's ``text_stream`` would surface.
+    """
+
+    def __init__(self, content: Any) -> None:
         self._content = content
         self.last_prompt: str | None = None
 
-    def invoke(self, prompt: str) -> _FakeLLMResponse:
+    def invoke_stream(self, prompt: str) -> Iterator[str]:
         self.last_prompt = prompt
-        return _FakeLLMResponse(self._content)
+        if isinstance(self._content, list):
+            parts: list[str] = []
+            for block in self._content:
+                if isinstance(block, dict):
+                    parts.append(block.get("text", ""))
+                elif hasattr(block, "text"):
+                    parts.append(block.text)
+            yield "\n".join(parts)
+            return
+        yield str(self._content)
 
 
-def _patch_llm(monkeypatch: Any, content: str) -> _FakeLLMClient:
+def _patch_llm(monkeypatch: Any, content: Any) -> _FakeLLMClient:
     client = _FakeLLMClient(content)
     # ``answer_cli_agent`` imports ``get_llm_for_reasoning`` lazily from
     # ``app.services.llm_client``, so we patch the symbol on that module.
@@ -68,27 +81,22 @@ class TestSystemPromptTerminology:
     """The LLM grounding must steer answers away from the word 'REPL'."""
 
     def test_conversational_prompt_uses_interactive_shell_not_repl(self) -> None:
-        prompt = _build_system_prompt("conversational", reference="(ref)", history="(hist)")
+        prompt = _build_system_prompt(reference="(ref)", history="(hist)")
         assert "interactive shell" in prompt
+        assert "argv" in prompt
+        assert "!" in prompt
         # The prompt must explicitly forbid the "REPL" jargon so the model
         # does not echo it back in answers (#604).
         assert _TERMINOLOGY_RULE in prompt
         assert "Never use the word 'REPL'" in prompt
 
-    def test_reference_only_prompt_uses_interactive_shell_not_repl(self) -> None:
-        prompt = _build_system_prompt("reference_only", reference="(ref)", history="(hist)")
-        assert "interactive shell" in prompt
-        assert _TERMINOLOGY_RULE in prompt
-        assert "Never use the word 'REPL'" in prompt
-
-    def test_both_prompts_request_markdown_formatting(self) -> None:
-        for mode in ("conversational", "reference_only"):
-            prompt = _build_system_prompt(mode, reference="(ref)", history="(hist)")  # type: ignore[arg-type]
-            assert _MARKDOWN_RULE in prompt
-            assert "Markdown" in prompt
+    def test_prompt_requests_markdown_formatting(self) -> None:
+        prompt = _build_system_prompt(reference="(ref)", history="(hist)")
+        assert _MARKDOWN_RULE in prompt
+        assert "Markdown" in prompt
 
     def test_conversational_prompt_exposes_action_contract(self) -> None:
-        prompt = _build_system_prompt("conversational", reference="(ref)", history="(hist)")
+        prompt = _build_system_prompt(reference="(ref)", history="(hist)")
 
         assert _ACTION_RULE in prompt
         assert "switch_llm_provider" in prompt
@@ -157,7 +165,8 @@ class TestAssistantOutputRendering:
 
     def test_table_markdown_is_rendered_as_table(self, monkeypatch: Any) -> None:
         markdown = (
-            "| Command | What it does |\n|---|---|\n| `agent` | Launch the interactive shell |\n"
+            "| Command | What it does |\n|---|---|\n"
+            "| `opensre` | Start the interactive shell (TTY) |\n"
         )
         _patch_llm(monkeypatch, markdown)
         session = ReplSession()
@@ -170,7 +179,7 @@ class TestAssistantOutputRendering:
         # so the text is what matters here, not the exact column dividers).
         assert "Command" in output
         assert "What it does" in output
-        assert "agent" in output
+        assert "opensre" in output
 
     def test_response_is_recorded_in_session_history(self, monkeypatch: Any) -> None:
         _patch_llm(monkeypatch, "Sure thing.")
@@ -197,19 +206,28 @@ class TestAssistantOutputRendering:
         assert session.cli_agent_messages[-1] == ("assistant", "First line\nSecond line")
 
     def test_llm_failure_prints_red_error_and_does_not_record(self, monkeypatch: Any) -> None:
+        captured_errors: list[BaseException] = []
+
         class _Boom:
-            def invoke(self, prompt: str) -> Any:  # noqa: ARG002
+            def invoke_stream(self, _prompt: str) -> Iterator[str]:
                 raise RuntimeError("upstream 503")
+                yield  # pragma: no cover  -- generator marker
 
         import app.services.llm_client as llm_module
 
         monkeypatch.setattr(llm_module, "get_llm_for_reasoning", lambda: _Boom())
+        monkeypatch.setattr(
+            "app.cli.support.exception_reporting.capture_exception",
+            lambda exc, **_kwargs: captured_errors.append(exc),
+        )
         session = ReplSession()
         console, buf = _capture()
         answer_cli_agent("hi", session, console)
         output = _strip_ansi(buf.getvalue())
         assert "assistant failed" in output
         assert "upstream 503" in output
+        assert len(captured_errors) == 1
+        assert isinstance(captured_errors[0], RuntimeError)
         # On failure the turn must NOT be appended to the cli-agent history,
         # otherwise the next turn's prompt would carry a phantom assistant
         # message.
@@ -288,33 +306,29 @@ class TestAssistantOutputRendering:
         answer_cli_agent("switch to the anthropic model", session, console)
 
         output = _strip_ansi(buf.getvalue())
-        assert "Here is the JSON response" not in output
+        # With streaming, prose-prefixed responses are rendered live before the
+        # action card — suppression only triggers when the response *starts*
+        # with ``{``. Surfacing the model's reasoning is preferred over the
+        # blocking-era behavior of hiding it (#1263).
+        assert "Here is the JSON response" in output
         assert "$ /model set anthropic" in output
         assert "switched LLM provider" in output
 
 
-class TestLoaderWiring:
-    """The orange spinner must surround every LLM call from the assistant."""
+class TestStreamingMigration:
+    """cli_agent must consume invoke_stream and route through the shared streaming renderer."""
 
-    def test_llm_invocation_is_wrapped_in_orange_loader(self, monkeypatch: Any) -> None:
-        from contextlib import contextmanager
-
-        events: list[str] = []
-
-        @contextmanager
-        def _spy_loader(_console: Console, label: str = "thinking") -> Any:
-            events.append(f"enter:{label}")
-            try:
-                yield
-            finally:
-                events.append("exit")
-
-        monkeypatch.setattr(cli_agent, "llm_loader", _spy_loader)
+    def test_response_uses_invoke_stream_not_invoke(self, monkeypatch: Any) -> None:
+        calls: list[str] = []
 
         class _Recording:
-            def invoke(self, prompt: str) -> _FakeLLMResponse:  # noqa: ARG002
-                events.append("invoke")
-                return _FakeLLMResponse("ok")
+            def invoke(self, _prompt: str) -> Any:
+                calls.append("invoke")
+                raise AssertionError("cli_agent must not call invoke after streaming migration")
+
+            def invoke_stream(self, _prompt: str) -> Iterator[str]:
+                calls.append("invoke_stream")
+                yield "ok"
 
         import app.services.llm_client as llm_module
 
@@ -323,9 +337,47 @@ class TestLoaderWiring:
         console, _ = _capture()
         answer_cli_agent("hi", ReplSession(), console)
 
-        # The LLM call MUST happen inside the loader's context; the order
-        # is ``enter -> invoke -> exit``.
-        assert events == ["enter:thinking", "invoke", "exit"]
+        assert calls == ["invoke_stream"]
+
+    def test_json_action_response_does_not_leak_to_live_region(
+        self,
+        monkeypatch: Any,
+        tmp_path: Any,
+    ) -> None:
+        """A JSON action plan must not surface as raw braces in the live render.
+
+        Suppression peeks the first non-whitespace char; if it is ``{``, the
+        helper drains silently and the action card prints in its place.
+        """
+        _patch_llm(
+            monkeypatch,
+            '{"actions":[{"action":"switch_llm_provider","provider":"anthropic"}]}',
+        )
+
+        import app.cli.wizard.env_sync as env_sync
+        from app.cli.interactive_shell.command_registry import repl_data as repl_data_module
+
+        class _Fake:
+            provider = "anthropic"
+            anthropic_reasoning_model = "claude-sonnet-4-6"
+            anthropic_toolcall_model = "claude-haiku-4-5-20251001"
+
+        monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
+        monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: _Fake())
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+
+        session = ReplSession()
+        console, buf = _capture()
+        answer_cli_agent("switch to anthropic", session, console)
+
+        output = _strip_ansi(buf.getvalue())
+        # Suppression: the raw JSON payload must not appear in the rendered
+        # output; only the action card is visible.
+        assert '{"actions"' not in output
+        assert '"switch_llm_provider"' not in output
+        # The action card is unchanged from pre-streaming behavior.
+        assert "Requested actions" in output
+        assert "$ /model set anthropic" in output
 
 
 # ---------------------------------------------------------------------------

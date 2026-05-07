@@ -434,7 +434,7 @@ provider._ANONYMOUS_ID_PATH = config_dir / "anonymous_id"
 while not start_file.exists():
     time.sleep(0.001)
 
-print(provider._compute_anonymous_id(), flush=True)
+print(provider._compute_anonymous_identity().distinct_id, flush=True)
 """
     env = os.environ | {"OPENSRE_ANALYTICS_DISABLED": "1"}
     processes = [

@@ -8,8 +8,6 @@ import click
 from rich.console import Console
 from rich.text import Text
 
-from app.cli.interactive_shell.theme import BOLD_ACCENT, BOLD_TEXT
-
 _ASCII_HEADER = """\
   ___  ____  _____ _   _ ____  ____  _____
  / _ \\|  _ \\| ____| \\ | / ___||  _ \\| ____|
@@ -58,7 +56,14 @@ def _commands_from_group(group: click.Group) -> tuple[tuple[str, str], ...]:
 
 def _render_usage(console: Console) -> None:
     console.print(
-        Text.assemble(("  Usage: "), ("opensre", BOLD_TEXT), (" [OPTIONS] [COMMAND] [PROMPT]"))
+        Text.assemble(("  Usage: "), ("opensre", "bold white"), (" [OPTIONS] [COMMAND] [ARGS]..."))
+    )
+    console.print(
+        Text.assemble(
+            ("  ", ""),
+            ("No COMMAND", "dim"),
+            (": start the interactive shell when stdin/stdout are TTYs.", "dim"),
+        )
     )
 
 
@@ -69,9 +74,9 @@ def _render_rows(
     rows: Sequence[tuple[str, str]],
     width: int,
 ) -> None:
-    console.print(Text.assemble((f"  {title}:", BOLD_TEXT)))
+    console.print(Text.assemble((f"  {title}:", "bold white")))
     for label, description in rows:
-        console.print(Text.assemble(("    ", ""), (f"{label:<{width}}", BOLD_ACCENT), description))
+        console.print(Text.assemble(("    ", ""), (f"{label:<{width}}", "bold cyan"), description))
 
 
 def render_help(group: click.Group) -> None:
@@ -92,7 +97,7 @@ def render_landing() -> None:
     console = Console(highlight=False)
     console.print()
     for line in _ASCII_HEADER.splitlines():
-        console.print(Text.assemble(("  ", ""), (line, BOLD_ACCENT)))
+        console.print(Text.assemble(("  ", ""), (line, "bold cyan")))
     console.print()
     console.print(
         Text.assemble(

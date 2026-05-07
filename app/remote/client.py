@@ -154,7 +154,7 @@ class RemoteAgentClient:
                 if parsed:
                     remote_version = parsed
                     version_source = "/version"
-        except Exception:  # noqa: BLE001
+        except Exception:
             return remote_version, version_source
         return remote_version, version_source
 
@@ -183,7 +183,7 @@ class RemoteAgentClient:
                         "detail": detail,
                     }
                 )
-        except Exception:  # noqa: BLE001
+        except Exception:
             return []
         return checks
 
@@ -201,7 +201,7 @@ class RemoteAgentClient:
         url = f"{self.base_url}{path}"
         try:
             response = client.get(url, headers=self._headers)
-        except Exception:  # noqa: BLE001
+        except Exception:
             return False
         return response.status_code != 404
 
@@ -268,7 +268,7 @@ class RemoteAgentClient:
         except httpx.HTTPStatusError as exc:
             code = exc.response.status_code
             return PreflightResult(ok=False, error=f"HTTP {code}")
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return PreflightResult(ok=False, error=str(exc) or "unknown error")
 
     def probe_health(

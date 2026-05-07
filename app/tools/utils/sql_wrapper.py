@@ -10,14 +10,12 @@ Centralizes the common pattern of:
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, TypeVar
+from typing import Any
 
 from app.tools.utils.db_warnings import default_db_warning
 
-T = TypeVar("T")
 
-
-def call_db_tool_with_default_db_warning(  # noqa: UP047
+def call_db_tool_with_default_db_warning[T](
     database: str | None,
     default_db_name: str,
     config_resolver: Callable[..., T],

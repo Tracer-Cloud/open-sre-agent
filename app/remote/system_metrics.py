@@ -90,7 +90,7 @@ def _collect_memory() -> dict[str, Any] | None:
             return _memory_linux()
         if sys.platform == "darwin":
             return _memory_darwin()
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None
     return None
 
@@ -123,16 +123,8 @@ def _memory_linux() -> dict[str, Any] | None:
 
 
 def _memory_darwin() -> dict[str, Any] | None:
-    total_bytes = int(
-        subprocess.check_output(  # noqa: S603, S607
-            ["sysctl", "-n", "hw.memsize"], text=True
-        ).strip()
-    )
-    user_bytes = int(
-        subprocess.check_output(  # noqa: S603, S607
-            ["sysctl", "-n", "hw.usermem"], text=True
-        ).strip()
-    )
+    total_bytes = int(subprocess.check_output(["sysctl", "-n", "hw.memsize"], text=True).strip())
+    user_bytes = int(subprocess.check_output(["sysctl", "-n", "hw.usermem"], text=True).strip())
     total_gb = round(total_bytes / (1024**3), 1)
     available_gb = round(user_bytes / (1024**3), 1)
     used_gb = round((total_bytes - user_bytes) / (1024**3), 1)
@@ -179,7 +171,7 @@ def _collect_uptime() -> dict[str, Any] | None:
             return _uptime_linux()
         if sys.platform == "darwin":
             return _uptime_darwin()
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None
     return None
 
@@ -191,9 +183,7 @@ def _uptime_linux() -> dict[str, Any] | None:
 
 
 def _uptime_darwin() -> dict[str, Any] | None:
-    raw = subprocess.check_output(  # noqa: S603, S607
-        ["sysctl", "-n", "kern.boottime"], text=True
-    ).strip()
+    raw = subprocess.check_output(["sysctl", "-n", "kern.boottime"], text=True).strip()
     # Format: "{ sec = 1712345678, usec = 123456 } ..."
     sec_part = raw.split("sec =")[1].split(",")[0].strip()
     boot_ts = int(sec_part)
@@ -254,5 +244,5 @@ def _collect_process() -> dict[str, Any] | None:
             result["open_fds"] = len(list(fd_dir.iterdir()))
 
         return result
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None

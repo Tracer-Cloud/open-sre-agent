@@ -11,7 +11,7 @@ from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.completion import CompleteEvent, Completer, Completion, PathCompleter
 from prompt_toolkit.document import Document
 from prompt_toolkit.filters import has_completions
-from prompt_toolkit.formatted_text import ANSI, FormattedText, StyleAndTextTuples
+from prompt_toolkit.formatted_text import ANSI, StyleAndTextTuples
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.lexers import Lexer
 from prompt_toolkit.styles import Style
@@ -19,38 +19,30 @@ from rich.console import Console
 from rich.markup import escape
 from rich.rule import Rule
 
-from app.cli.interactive_shell.agent_actions import execute_cli_actions
-from app.cli.interactive_shell.banner import render_ready_box, render_splash
+from app.analytics.cli import capture_terminal_turn_summarized
+from app.cli.interactive_shell.agent_actions import execute_cli_actions_with_metrics
+from app.cli.interactive_shell.banner import render_banner
 from app.cli.interactive_shell.cli_agent import answer_cli_agent
 from app.cli.interactive_shell.cli_help import answer_cli_help
 from app.cli.interactive_shell.commands import SLASH_COMMANDS, dispatch_slash
 from app.cli.interactive_shell.config import ReplConfig
 from app.cli.interactive_shell.follow_up import answer_follow_up
 from app.cli.interactive_shell.history import load_prompt_history
-from app.cli.interactive_shell.router import (
-    BARE_COMMAND_ALIAS_MAP,
-    BARE_COMMAND_ALIASES,
-    classify_input,
-)
+from app.cli.interactive_shell.router import BARE_COMMAND_ALIASES, classify_input
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.theme import (
-    ACCENT_SOFT,
     ANSI_RESET,
-    BORDER,
     DIM_COUNTER_ANSI,
     OPENCLAW_AMBER,
     OPENCLAW_CORAL,
     OPENCLAW_ORANGE,
     PROMPT_ACCENT_ANSI,
     SEPARATOR_COLOR,
-    SURFACE,
     TERMINAL_ERROR,
-    TEXT,
-    TEXT_DIM,
-    WARNING,
-    WARNING_ALT,
 )
 from app.cli.support.errors import OpenSREError
+from app.cli.support.exception_reporting import report_exception
+from app.cli.support.prompt_support import repl_prompt_note_ctrl_c, repl_reset_ctrl_c_gate
 
 
 class ReplInputLexer(Lexer):
@@ -133,52 +125,14 @@ class ShellCompleter(Completer):
     Completion levels:
       1. Bare-word aliases (``help``, ``exit``, …) — no leading slash, no spaces.
       2. Top-level slash command names (``/hel`` → ``/help``).
-      3. Subcommand keywords  (``/model `` → ``show / set / toolcall``).
+      3. First-arg keywords from each command's registry metadata (e.g. ``/model `` → hints).
       4. File-path completion for ``/investigate`` and ``/save``.
     """
-
-    _SUBCOMMANDS: dict[str, list[tuple[str, str]]] = {
-        "/model": [
-            ("show", "show active provider and models"),
-            ("set", "switch provider  ·  /model set <provider> [model]"),
-            ("toolcall", "manage toolcall model for the active provider"),
-        ],
-        "/integrations": [
-            ("list", "list all configured integrations"),
-            ("verify", "run health checks on all integrations"),
-            ("show", "show details for a single integration"),
-        ],
-        "/list": [
-            ("integrations", "alert-source integrations"),
-            ("models", "active LLM models"),
-            ("mcp", "connected MCP servers"),
-        ],
-        "/mcp": [
-            ("list", "list connected MCP servers"),
-            ("connect", "add an MCP server via opensre integrations setup"),
-            ("disconnect", "remove an MCP server"),
-        ],
-        "/template": [
-            ("generic", "generic alert JSON template"),
-            ("datadog", "Datadog monitor alert template"),
-            ("grafana", "Grafana alert template"),
-            ("honeycomb", "Honeycomb trigger template"),
-            ("coralogix", "Coralogix alert template"),
-        ],
-        "/trust": [
-            ("on", "enable trust mode (skip approval prompts)"),
-            ("off", "disable trust mode"),
-        ],
-        "/verbose": [
-            ("on", "enable verbose logging"),
-            ("off", "disable verbose logging"),
-        ],
-    }
 
     def get_completions(
         self,
         document: Document,
-        complete_event: CompleteEvent,  # noqa: ARG002 - required by prompt_toolkit protocol
+        complete_event: CompleteEvent,
     ) -> Iterable[Completion]:
         text = document.text_before_cursor
         if not text:
@@ -231,8 +185,10 @@ class ShellCompleter(Completer):
                 )
                 return
 
+            entry = SLASH_COMMANDS.get(cmd_name)
+            hints = entry.first_arg_completions if entry is not None else ()
             sub_prefix = raw_arg.lower()
-            for sub, meta in self._SUBCOMMANDS.get(cmd_name, []):
+            for sub, meta in hints:
                 if sub.startswith(sub_prefix):
                     yield Completion(
                         sub,
@@ -272,7 +228,7 @@ def _tab_expand_or_menu(buffer: Buffer) -> None:
         buffer.start_completion(select_first=True)
 
 
-def _build_prompt_session(session: ReplSession) -> PromptSession[str]:
+def _build_prompt_session() -> PromptSession[str]:
     return PromptSession(
         completer=ShellCompleter(),
         complete_while_typing=True,
@@ -281,7 +237,6 @@ def _build_prompt_session(session: ReplSession) -> PromptSession[str]:
         lexer=ReplInputLexer(),
         key_bindings=_build_prompt_key_bindings(),
         style=_build_prompt_style(),
-        bottom_toolbar=lambda: _status_toolbar(session),
     )
 
 
@@ -312,76 +267,48 @@ def _build_prompt_key_bindings() -> KeyBindings:
 
 
 def _build_prompt_style() -> Style:
-    # Completion-menu colours map to design-system roles:
-    #   OPENCLAW_AMBER (ACCENT_SOFT)  → slash-command token highlight
-    #   OPENCLAW_ORANGE (PRIMARY)     → currently-selected completion entry
-    #   OPENCLAW_CORAL (ACCENT)       → completion-menu border
-    #   SURFACE (#111811)             → menu background (inset panel role)
     return Style.from_dict(
         {
-            "repl-slash-command": f"bold {OPENCLAW_AMBER} bg:{SURFACE}",
-            "completion-menu": f"bg:{SURFACE}",
-            "completion-menu.completion": f"{TEXT_DIM} bg:{SURFACE}",
-            "completion-menu.completion.current": f"bold {OPENCLAW_ORANGE} bg:{SURFACE}",
-            "completion-menu.meta.completion": f"{TEXT_DIM} bg:{SURFACE}",
-            "completion-menu.meta.completion.current": f"{OPENCLAW_AMBER} bg:{SURFACE}",
+            "repl-slash-command": f"bold {OPENCLAW_AMBER} bg:#2c1e14",
+            "completion-menu": "bg:#1c1917",
+            "completion-menu.completion": "#d6d0ca bg:#1c1917",
+            "completion-menu.completion.current": f"bold {OPENCLAW_ORANGE} bg:#2c1e14",
+            "completion-menu.meta.completion": "#6b6561 bg:#1c1917",
+            "completion-menu.meta.completion.current": f"{OPENCLAW_AMBER} bg:#2c1e14",
             "completion-menu.border": OPENCLAW_CORAL,
-            "scrollbar.background": f"bg:{SURFACE}",
-            "scrollbar.button": f"bg:{BORDER}",
-            "bottom-toolbar": f"fg:{TEXT_DIM} bg:{SURFACE}",
+            "scrollbar.background": "bg:#1c1917",
+            "scrollbar.button": "bg:#4a3020",
         }
     )
 
 
-def _status_toolbar(session: ReplSession) -> FormattedText:
-    """Build the persistent status bar rendered below the prompt.
-
-    Rendered output (colour roles):
-      workspace  [TEXT_DIM]   ·  [BORDER]  provider · model  [TEXT]
-      ·  trust:on [WARNING_ALT]   ·  v2026.4.7 [ACCENT_SOFT]
-      ·  12,345 tok [TEXT_DIM]
-
-    The function is called on every prompt redraw so values stay live.
-    """
-    import os
-
-    from app.cli.interactive_shell.banner import detect_provider_model
-    from app.version import get_version
-
-    workspace = os.path.basename(os.getcwd()) or "."
-    provider, model = detect_provider_model()
-    version = get_version()
-
-    sep = (f"fg:{BORDER}", "  ·  ")
-
-    parts: list[tuple[str, str]] = [
-        (f"fg:{TEXT_DIM}", f"  {workspace}"),
-        sep,
-        (f"fg:{TEXT}", f"{provider}  ·  {model}"),
-    ]
-
-    if session.trust_mode:
-        parts.append(sep)
-        parts.append((f"fg:{WARNING_ALT} bold", "trust:on"))
-
-    parts.append(sep)
-    parts.append((f"fg:{ACCENT_SOFT}", f"v{version}"))
-
-    token_in = session.token_usage.get("input", 0)
-    token_out = session.token_usage.get("output", 0)
-    total_tokens = token_in + token_out
-    if total_tokens:
-        parts.append(sep)
-        parts.append((f"fg:{TEXT_DIM}", f"{total_tokens:,} tok"))
-
-    parts.append(("", " "))
-    return FormattedText(parts)
-
-
-def _run_new_alert(text: str, session: ReplSession, console: Console) -> None:
+def _run_new_alert(
+    text: str,
+    session: ReplSession,
+    console: Console,
+    *,
+    confirm_fn: Callable[[str], str] | None = None,
+    is_tty: bool | None = None,
+) -> None:
     """Dispatch a free-text alert description to the streaming pipeline."""
+    from app.cli.interactive_shell.execution_policy import (
+        evaluate_investigation_launch,
+        execution_allowed,
+    )
     from app.cli.interactive_shell.tasks import TaskKind
     from app.cli.investigation import run_investigation_for_session
+
+    policy = evaluate_investigation_launch(action_type="investigation")
+    if not execution_allowed(
+        policy,
+        session=session,
+        console=console,
+        action_summary="run RCA investigation from pasted alert text",
+        confirm_fn=confirm_fn,
+        is_tty=is_tty,
+    ):
+        session.record("alert", text, ok=False)
+        return
 
     task = session.task_registry.create(TaskKind.INVESTIGATION)
     task.mark_running()
@@ -393,18 +320,19 @@ def _run_new_alert(text: str, session: ReplSession, console: Console) -> None:
         )
     except KeyboardInterrupt:
         task.mark_cancelled()
-        console.print(f"[{WARNING}]investigation cancelled.[/]")
+        console.print("[yellow]investigation cancelled.[/yellow]")
         session.record("alert", text, ok=False)
         return
     except OpenSREError as exc:
         task.mark_failed(str(exc))
         console.print(f"[{TERMINAL_ERROR}]investigation failed:[/] {escape(str(exc))}")
         if exc.suggestion:
-            console.print(f"[{WARNING}]suggestion:[/] {escape(exc.suggestion)}")
+            console.print(f"[yellow]suggestion:[/yellow] {escape(exc.suggestion)}")
         session.record("alert", text, ok=False)
         return
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         task.mark_failed(str(exc))
+        report_exception(exc, context="interactive_shell.new_alert")
         # Exception repr may contain brackets (stack frame refs, config
         # dicts) that Rich would eat as markup tags — escape before printing.
         console.print(f"[{TERMINAL_ERROR}]investigation failed:[/] {escape(str(exc))}")
@@ -424,11 +352,19 @@ async def _run_one_turn(
     console: Console,
 ) -> bool:
     """Read one line of input and dispatch. Returns False to exit."""
-    try:
-        text = await prompt.prompt_async(_prompt_line_ansi(session))
-    except (EOFError, KeyboardInterrupt):
-        console.print()
-        return False
+    while True:
+        try:
+            text = await prompt.prompt_async(_prompt_line_ansi(session))
+        except EOFError:
+            console.print()
+            return False
+        except KeyboardInterrupt:
+            if repl_prompt_note_ctrl_c(console):
+                return False
+            continue
+
+        repl_reset_ctrl_c_gate()
+        break
 
     text = text.strip()
     if not text:
@@ -437,15 +373,14 @@ async def _run_one_turn(
     kind = classify_input(text, session)
     if kind == "slash":
         # Rewrite bare-word commands to their slash form before dispatch.
-        # The alias map handles greetings ("agent", "hi", …) → "/welcome" too.
-        cmd_text = text if text.startswith("/") else BARE_COMMAND_ALIAS_MAP.get(text.lower(), f"/{text}")
-        session.record("slash", cmd_text)
+        cmd_text = text if text.startswith("/") else f"/{text}"
         try:
             should_continue = dispatch_slash(cmd_text, session, console)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
+            report_exception(exc, context="interactive_shell.slash_dispatch")
             console.print(
                 f"[{TERMINAL_ERROR}]command error:[/] {escape(str(exc))}"
-                f" [{TEXT_DIM}](the REPL is still running)[/]"
+                " [dim](the REPL is still running)[/dim]"
             )
             should_continue = True
         console.print()
@@ -458,8 +393,24 @@ async def _run_one_turn(
         return True
 
     if kind == "cli_agent":
-        if execute_cli_actions(text, session, console):
-            _print_turn_separator(console)
+        turn = execute_cli_actions_with_metrics(text, session, console)
+        fallback_to_llm = not turn.handled
+        snapshot = session.record_terminal_turn(
+            executed_count=turn.executed_count,
+            executed_success_count=turn.executed_success_count,
+            fallback_to_llm=fallback_to_llm,
+        )
+        capture_terminal_turn_summarized(
+            planned_count=turn.planned_count,
+            executed_count=turn.executed_count,
+            executed_success_count=turn.executed_success_count,
+            fallback_to_llm=fallback_to_llm,
+            session_turn_index=snapshot.turn_index,
+            session_fallback_count=snapshot.fallback_count,
+            session_action_success_percent=snapshot.action_success_percent,
+            session_fallback_rate_percent=snapshot.fallback_rate_percent,
+        )
+        if turn.handled:
             return True
         answer_cli_agent(text, session, console)
         session.record("cli_agent", text)
@@ -478,16 +429,15 @@ async def _run_one_turn(
     return True
 
 
-async def _repl_main(initial_input: str | None = None, config: ReplConfig | None = None) -> int:  # noqa: ARG001
+async def _repl_main(initial_input: str | None = None, _config: ReplConfig | None = None) -> int:
     # force_terminal + truecolor so Rich always emits full ANSI, even after
     # prompt_toolkit has claimed and released stdout for input handling.
     # Without this, slash-command output after the first prompt renders as
     # literal escape codes in some terminal emulators.
     console = Console(highlight=False, force_terminal=True, color_system="truecolor")
+    render_banner(console)
     session = ReplSession()
-    render_splash(console)
-    render_ready_box(console, session=session)
-    prompt = _build_prompt_session(session)
+    prompt = _build_prompt_session()
 
     # Allow a single pre-seeded input for test harnesses
     if initial_input:
@@ -497,12 +447,7 @@ async def _repl_main(initial_input: str | None = None, config: ReplConfig | None
                 continue
             kind = classify_input(stripped, session)
             if kind == "slash":
-                cmd_text = (
-                    stripped
-                    if stripped.startswith("/")
-                    else BARE_COMMAND_ALIAS_MAP.get(stripped.lower(), f"/{stripped}")
-                )
-                session.record("slash", cmd_text)
+                cmd_text = stripped if stripped.startswith("/") else f"/{stripped}"
                 if not dispatch_slash(cmd_text, session, console):
                     return 0
                 console.print()
@@ -511,7 +456,24 @@ async def _repl_main(initial_input: str | None = None, config: ReplConfig | None
                 session.record("cli_help", stripped)
                 _print_turn_separator(console)
             elif kind == "cli_agent":
-                if not execute_cli_actions(stripped, session, console):
+                turn = execute_cli_actions_with_metrics(stripped, session, console)
+                fallback_to_llm = not turn.handled
+                snapshot = session.record_terminal_turn(
+                    executed_count=turn.executed_count,
+                    executed_success_count=turn.executed_success_count,
+                    fallback_to_llm=fallback_to_llm,
+                )
+                capture_terminal_turn_summarized(
+                    planned_count=turn.planned_count,
+                    executed_count=turn.executed_count,
+                    executed_success_count=turn.executed_success_count,
+                    fallback_to_llm=fallback_to_llm,
+                    session_turn_index=snapshot.turn_index,
+                    session_fallback_count=snapshot.fallback_count,
+                    session_action_success_percent=snapshot.action_success_percent,
+                    session_fallback_rate_percent=snapshot.fallback_rate_percent,
+                )
+                if not turn.handled:
                     answer_cli_agent(stripped, session, console)
                     session.record("cli_agent", stripped)
                 _print_turn_separator(console)
@@ -542,7 +504,7 @@ def run_repl(initial_input: str | None = None, config: ReplConfig | None = None)
         return 0
 
     try:
-        return asyncio.run(_repl_main(initial_input=initial_input, config=cfg))
+        return asyncio.run(_repl_main(initial_input=initial_input, _config=cfg))
     except (EOFError, KeyboardInterrupt):
         return 0
 

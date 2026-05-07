@@ -71,6 +71,24 @@ def _is_editable_install() -> bool:
     return False
 
 
+def development_install_doctor_version_detail(current: str) -> str | None:
+    """If this process looks like a local checkout, return the doctor line (skip release compare).
+
+    Editable installs (`pip install -e` / ``uv sync`` on a git checkout) and ``uv run``
+    children set signals we use so ``opensre doctor`` does not warn vs GitHub releases.
+    """
+    labels: list[str] = []
+    if _is_editable_install():
+        labels.append("editable install")
+    # uv sets this on the Python process when invoked via `uv run …`.
+    if os.environ.get("UV_RUN_RECURSION_DEPTH") is not None:
+        labels.append("uv run")
+    if not labels:
+        return None
+    ctx = " + ".join(labels)
+    return f"{current} ({ctx}; skipped comparing to latest release)"
+
+
 def _upgrade_via_install_script(version: str) -> int:
     """Download and run the official install script to upgrade to the target version."""
     if _is_windows():

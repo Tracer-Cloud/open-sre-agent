@@ -19,6 +19,7 @@ from app.cli.interactive_shell.action_executor import (
     terminate_child_process,
 )
 from app.cli.interactive_shell.session import ReplSession
+from app.cli.interactive_shell.shell_execution import ShellExecutionResult
 from app.cli.interactive_shell.shell_policy import PolicyDecision
 
 
@@ -81,7 +82,7 @@ def test_run_cd_command_chdirs_to_target(monkeypatch: pytest.MonkeyPatch) -> Non
 
 def test_run_shell_command_records_when_policy_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "app.cli.interactive_shell.action_executor.evaluate_policy",
+        "app.cli.interactive_shell.execution_policy.evaluate_policy",
         lambda **_: PolicyDecision(
             allow=False,
             classification="mutating",
@@ -94,11 +95,100 @@ def test_run_shell_command_records_when_policy_blocks(monkeypatch: pytest.Monkey
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
-    run_shell_command("rm -rf /nope", session, console)
+    run_shell_command(
+        "rm -rf /nope",
+        session,
+        console,
+        confirm_fn=lambda _p: "n",
+        is_tty=True,
+    )
 
     assert "test block" in buf.getvalue()
-    assert "use !" in buf.getvalue().lower() or "passthrough" in buf.getvalue().lower()
+    assert "cancelled" in buf.getvalue().lower()
     assert session.history[-1] == {"type": "shell", "text": "rm -rf /nope", "ok": False}
+
+
+def test_run_shell_command_silent_success_prints_checkmark(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _fake_execute(**_kwargs: object) -> ShellExecutionResult:
+        return ShellExecutionResult(
+            command="true",
+            argv=["true"],
+            stdout="",
+            stderr="",
+            exit_code=0,
+            timed_out=False,
+            truncated=False,
+            executed_with_shell=False,
+        )
+
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.action_executor.execute_shell_command",
+        _fake_execute,
+    )
+
+    session = ReplSession()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    run_shell_command("true", session, console)
+    assert "✓" in buf.getvalue()
+    assert session.history[-1] == {"type": "shell", "text": "true", "ok": True}
+
+
+def test_run_shell_command_failure_prints_exit_line(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _fake_execute(**_kwargs: object) -> ShellExecutionResult:
+        return ShellExecutionResult(
+            command="false",
+            argv=["false"],
+            stdout="",
+            stderr="",
+            exit_code=7,
+            timed_out=False,
+            truncated=False,
+            executed_with_shell=False,
+        )
+
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.action_executor.execute_shell_command",
+        _fake_execute,
+    )
+
+    session = ReplSession()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    run_shell_command("false", session, console)
+    out = buf.getvalue()
+    assert "✗" in out
+    assert "exit 7" in out
+    assert session.history[-1] == {"type": "shell", "text": "false", "ok": False}
+
+
+def test_run_shell_command_reports_start_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured_errors: list[BaseException] = []
+
+    def _raise(**_kwargs: object) -> ShellExecutionResult:
+        raise RuntimeError("spawn failed")
+
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.action_executor.execute_shell_command",
+        _raise,
+    )
+    monkeypatch.setattr(
+        "app.cli.support.exception_reporting.capture_exception",
+        lambda exc, **_kwargs: captured_errors.append(exc),
+    )
+
+    session = ReplSession()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    run_shell_command("true", session, console)
+
+    assert "command failed to start" in buf.getvalue()
+    assert len(captured_errors) == 1
+    assert isinstance(captured_errors[0], RuntimeError)
+    assert session.history[-1] == {"type": "shell", "text": "true", "ok": False}
 
 
 def test_run_synthetic_test_unknown_suite_records_failure() -> None:

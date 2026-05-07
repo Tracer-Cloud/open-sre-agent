@@ -303,6 +303,29 @@ def parse_shell_command(command: str, *, is_windows: bool) -> ParsedShellCommand
     return ParsedShellCommand(command=stripped, argv=argv, passthrough=False)
 
 
+def argv_for_repl_builtin_routing(
+    *, parsed: ParsedShellCommand, is_windows: bool
+) -> list[str] | None:
+    """Argv tokens for detecting ``cd`` / ``pwd`` REPL builtins.
+
+    Safe-mode parses populate ``parsed.argv``. Passthrough (``!``) leaves it unset
+    until ``shlex`` split here so builtin routing matches the user's intent without
+    a second parsing site in the action runner.
+    """
+    if parsed.argv is not None:
+        return parsed.argv
+    if not parsed.passthrough or not parsed.command.strip():
+        return None
+    body = parsed.command.strip()
+    try:
+        return shlex.split(body, posix=not is_windows)
+    except ValueError:
+        try:
+            return shlex.split(body, posix=False)
+        except ValueError:
+            return None
+
+
 def classify_command(argv: list[str]) -> CommandClassification:
     """Classify command into read-only, mutating, restricted, or unknown."""
     command = argv[0].lower()
@@ -374,10 +397,7 @@ def evaluate_policy(*, parsed: ParsedShellCommand) -> PolicyDecision:
         return PolicyDecision(
             allow=False,
             classification=classification,
-            reason=(
-                "mutating commands are blocked in safe mode "
-                "(includes exec-wrapper commands such as find and env)."
-            ),
+            reason="mutating commands are blocked in safe mode.",
             hint=(
                 "Use a read-only command, or run !<command> to explicitly "
                 "opt into shell passthrough."
@@ -388,8 +408,8 @@ def evaluate_policy(*, parsed: ParsedShellCommand) -> PolicyDecision:
         return PolicyDecision(
             allow=False,
             classification=classification,
-            reason="restricted command is not allowed from inferred execution.",
-            hint="Run the command directly in your shell if you truly intend it.",
+            reason="Not allowed for assistant-run shell.",
+            hint="Run it in your terminal if needed.",
         )
 
     return PolicyDecision(
@@ -403,6 +423,7 @@ def evaluate_policy(*, parsed: ParsedShellCommand) -> PolicyDecision:
 __all__ = [
     "ParsedShellCommand",
     "PolicyDecision",
+    "argv_for_repl_builtin_routing",
     "classify_command",
     "evaluate_policy",
     "parse_shell_command",

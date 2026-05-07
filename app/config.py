@@ -69,7 +69,7 @@ JWKS_CACHE_TTL_SECONDS = 3600
 DEFAULT_MAX_TOKENS = 4096
 
 # Anthropic model constants
-ANTHROPIC_REASONING_MODEL = "claude-sonnet-4-6"
+ANTHROPIC_REASONING_MODEL = "claude-opus-4-7"
 ANTHROPIC_TOOLCALL_MODEL = "claude-haiku-4-5-20251001"
 
 # OpenAI model constants

@@ -428,7 +428,7 @@ def _extract_anchor(payload: dict[str, Any]) -> tuple[datetime, str] | None:
     for parser in _ANCHOR_PARSERS:
         try:
             result = parser(payload)
-        except Exception:  # noqa: BLE001 - defensive isolation
+        except Exception:
             logger.debug("incident_window: anchor parser %s raised", parser.__name__, exc_info=True)
             continue
         if result is not None:

@@ -68,10 +68,16 @@ integrations verify <integration-name>
 
 ### 5) Run your first investigation
 
-From inside the OpenSRE shell:
+**From inside the OpenSRE shell** (after running bare `opensre`):
 
 ```bash
 investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
+```
+
+**From your normal terminal** (direct investigation, no shell):
+
+```bash
+opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
 ```
 
 ## Integration catalog

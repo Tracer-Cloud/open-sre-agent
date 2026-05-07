@@ -209,7 +209,7 @@ def validate_betterstack_config(
     try:
         with _sql_client(config) as client:
             response, err = _post_sql(client, config.query_endpoint, _VALIDATION_PROBE_SQL)
-    except Exception as err:  # noqa: BLE001 — final-resort guard around transport setup
+    except Exception as err:
         logger.debug("Better Stack validate_config failed", exc_info=True)
         return BetterStackValidationResult(
             ok=False, detail=f"Better Stack connection failed: {err}"
@@ -217,7 +217,7 @@ def validate_betterstack_config(
 
     if err is not None:
         return BetterStackValidationResult(ok=False, detail=err)
-    assert response is not None  # noqa: S101 — narrow for mypy; _post_sql contract guarantees non-None on err=None
+    assert response is not None
 
     status = response.status_code
     if status == 200:
@@ -395,7 +395,7 @@ def query_logs(
     try:
         with _sql_client(config) as client:
             response, err = _post_sql(client, config.query_endpoint, sql)
-    except Exception as err:  # noqa: BLE001 — final-resort guard around transport setup
+    except Exception as err:
         logger.debug("Better Stack query_logs failed", exc_info=True)
         return _error_evidence(f"Better Stack connection failed: {err}", source=safe_source)
 

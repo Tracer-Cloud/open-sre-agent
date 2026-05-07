@@ -5,19 +5,6 @@ from pydantic import BaseModel, ValidationError
 from app.nodes.investigate.types import ExecutedHypothesis
 
 
-def _get_executed_sources(executed_hypotheses: list[ExecutedHypothesis]) -> set[str]:
-    """Extract executed sources from hypotheses history."""
-    executed_sources_set = set()
-    for h in executed_hypotheses:
-        sources = h.get("sources", [])
-        if isinstance(sources, list):
-            executed_sources_set.update(sources)
-        single_source = h.get("source")
-        if single_source:
-            executed_sources_set.add(single_source)
-    return executed_sources_set
-
-
 def get_blocked_action_names(executed_hypotheses: list[ExecutedHypothesis]) -> set[str]:
     """Actions that should not be offered again to the planner."""
     blocked_actions: set[str] = set()

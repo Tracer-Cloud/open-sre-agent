@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import io
-from unittest.mock import MagicMock
+import re
+from collections.abc import Iterator
 
 from rich.console import Console
 
@@ -13,6 +14,16 @@ from app.cli.interactive_shell.follow_up import (
     answer_follow_up,
 )
 from app.cli.interactive_shell.session import ReplSession
+
+
+class _StreamingClient:
+    """Streaming-aware fake: ``invoke_stream`` yields the canned content as one chunk."""
+
+    def __init__(self, content: str) -> None:
+        self._content = content
+
+    def invoke_stream(self, _prompt: str) -> Iterator[str]:
+        yield self._content
 
 
 class TestSummarizeEvidence:
@@ -79,20 +90,13 @@ class TestSummarizeLastState:
 
 class TestAnswerFollowUpMarkupSafety:
     """Regression: LLM output with bracket sequences (e.g. [OOMKilled]) was
-    being silently truncated by Rich's markup parser.  All LLM and exception
-    text must be markup-escaped before interpolation."""
+    being silently truncated by Rich's markup parser. The streaming renderer
+    routes text through Markdown so brackets in plain prose survive."""
 
     def _run_with_response(self, monkeypatch: object, response_text: str) -> str:
-        fake_client = MagicMock()
-        fake_response = MagicMock()
-        fake_response.content = response_text
-        fake_client.invoke.return_value = fake_response
-
-        # follow_up.py imports get_llm_for_reasoning lazily inside the function,
-        # so patch at the source module.
         monkeypatch.setattr(  # type: ignore[attr-defined]
             "app.services.llm_client.get_llm_for_reasoning",
-            lambda: fake_client,
+            lambda: _StreamingClient(response_text),
         )
 
         session = ReplSession()
@@ -106,21 +110,30 @@ class TestAnswerFollowUpMarkupSafety:
     def test_llm_output_with_brackets_not_truncated(self, monkeypatch: object) -> None:
         response = (
             "The pod hit [OOMKilled] at [2026-04-15 14:00:00 UTC] on "
-            "[service-name=orders-api] — see [ERROR] in logs."
+            "[service-name=orders-api] - see [ERROR] in logs."
         )
         output = self._run_with_response(monkeypatch, response)
-        assert "[OOMKilled]" in output
-        assert "[ERROR]" in output
-        assert "orders-api" in output
-        assert "2026-04-15 14:00:00 UTC" in output
+        # Markdown rendering may break a long line; strip newlines so the
+        # bracketed tokens are still discoverable as substrings.
+        flat = re.sub(r"\s+", " ", output)
+        assert "[OOMKilled]" in flat
+        assert "[ERROR]" in flat
+        assert "orders-api" in flat
+        assert "2026-04-15 14:00:00 UTC" in flat
 
     def test_exception_message_with_brackets_not_dropped(self, monkeypatch: object) -> None:
+        captured_errors: list[BaseException] = []
+
         def _boom() -> None:
             raise RuntimeError("config error: missing [api_key] in [datadog] section")
 
         monkeypatch.setattr(  # type: ignore[attr-defined]
             "app.services.llm_client.get_llm_for_reasoning",
             _boom,
+        )
+        monkeypatch.setattr(  # type: ignore[attr-defined]
+            "app.cli.support.exception_reporting.capture_exception",
+            lambda exc, **_kwargs: captured_errors.append(exc),
         )
 
         session = ReplSession()
@@ -132,3 +145,5 @@ class TestAnswerFollowUpMarkupSafety:
         output = buf.getvalue()
         assert "[api_key]" in output
         assert "[datadog]" in output
+        assert len(captured_errors) == 1
+        assert isinstance(captured_errors[0], RuntimeError)

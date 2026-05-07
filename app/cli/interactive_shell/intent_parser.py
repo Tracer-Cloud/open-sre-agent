@@ -47,8 +47,8 @@ SAMPLE_ALERT_RE = re.compile(
 )
 SYNTHETIC_RDS_TEST_RE = re.compile(
     r"\b(?:run|start|launch|execute)\b.{0,80}?"
-    r"\b(?:synthetic|benchmark|test)\b.{0,80}?"
-    r"\b(?:r\s*d\s*s|postgres(?:ql)?|database|db)\b",
+    r"\b(?:synthetic(?:\s+test)?|benchmark)\b"
+    r"(?:.{0,80}?\b(?:r\s*d\s*s|postgres(?:ql)?|database|db)\b)?",
     re.IGNORECASE | re.DOTALL,
 )
 _LLM_PROVIDER_NAMES = frozenset(

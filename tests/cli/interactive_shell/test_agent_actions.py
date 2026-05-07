@@ -7,14 +7,17 @@ import subprocess
 import sys
 import time
 from pathlib import Path, PurePosixPath
+from typing import NoReturn
 from unittest.mock import MagicMock
 
+import pytest
 from rich.console import Console
 
 from app.cli.interactive_shell import action_executor, agent_actions, shell_execution
 from app.cli.interactive_shell import intent_parser as intent_parser_module
 from app.cli.interactive_shell.agent_actions import (
     execute_cli_actions,
+    execute_cli_actions_with_metrics,
     plan_cli_actions,
     plan_terminal_tasks,
 )
@@ -44,6 +47,10 @@ def test_provider_switch_plans_provider_action() -> None:
     assert plan_cli_actions(message) == []
 
 
+def test_generic_synthetic_test_request_plans_synthetic_action() -> None:
+    assert plan_terminal_tasks("Can you run a synthetic test?") == ["synthetic_test"]
+
+
 def test_integration_prompt_plans_datadog_lookup_only() -> None:
     message = (
         "tell me about what the discord integration can do and then tell me what "
@@ -56,8 +63,14 @@ def test_integration_prompt_plans_datadog_lookup_only() -> None:
 def test_execute_cli_actions_dispatches_planned_commands(monkeypatch: object) -> None:
     dispatched: list[str] = []
 
-    def _fake_dispatch(command: str, _session: ReplSession, console: Console) -> bool:
+    def _fake_dispatch(
+        command: str,
+        session: ReplSession,
+        console: Console,
+        **_kwargs: object,
+    ) -> bool:
         dispatched.append(command)
+        session.record("slash", command, ok=True)
         console.print(f"ran {command}")
         return True
 
@@ -86,7 +99,6 @@ def test_execute_cli_actions_dispatches_planned_commands(monkeypatch: object) ->
     assert output.index("Requested actions") < output.index("$ /health")
     assert output.index("1.") < output.index("$ /health")
     assert output.index("2.") < output.index("$ /health")
-    assert "Running requested actions" in output
     assert "ran /health" in output
     assert "ran /list integrations" in output
 
@@ -94,8 +106,14 @@ def test_execute_cli_actions_dispatches_planned_commands(monkeypatch: object) ->
 def test_execute_cli_actions_falls_through_for_local_llama_request(monkeypatch: object) -> None:
     dispatched: list[str] = []
 
-    def _fake_dispatch(command: str, _session: ReplSession, console: Console) -> bool:
+    def _fake_dispatch(
+        command: str,
+        session: ReplSession,
+        console: Console,
+        **_kwargs: object,
+    ) -> bool:
         dispatched.append(command)
+        session.record("slash", command, ok=True)
         console.print(f"ran {command}")
         return True
 
@@ -144,13 +162,40 @@ def test_execute_cli_actions_switches_llm_provider(monkeypatch: object) -> None:
     assert "switched to anthropic" in output
 
 
+def test_execute_cli_actions_records_llm_provider_failure(monkeypatch: object) -> None:
+    def _fake_switch(provider: str, console: Console, model: str | None = None) -> bool:
+        assert provider == "anthropic"
+        assert model is None
+        console.print("missing credential")
+        return False
+
+    monkeypatch.setattr(agent_actions, "switch_llm_provider", _fake_switch)  # type: ignore[attr-defined]
+
+    session = ReplSession()
+    console, _ = _capture()
+    handled = execute_cli_actions(
+        "switch from the current ollama model to setting the model to anthropic",
+        session,
+        console,
+    )
+
+    assert handled is True
+    assert session.history[-1] == {"type": "slash", "text": "/model set anthropic", "ok": False}
+
+
 def test_execute_cli_actions_answers_discord_then_dispatches_datadog(
     monkeypatch: object,
 ) -> None:
     dispatched: list[str] = []
 
-    def _fake_dispatch(command: str, _session: ReplSession, console: Console) -> bool:
+    def _fake_dispatch(
+        command: str,
+        session: ReplSession,
+        console: Console,
+        **_kwargs: object,
+    ) -> bool:
         dispatched.append(command)
+        session.record("slash", command, ok=True)
         console.print(f"ran {command}")
         return True
 
@@ -224,8 +269,14 @@ def test_compound_services_and_synthetic_rds_plans_all_actions() -> None:
 def test_compound_prompt_executes_all_supported_tasks(monkeypatch: object) -> None:
     dispatched: list[str] = []
 
-    def _fake_dispatch(command: str, _session: ReplSession, console: Console) -> bool:
+    def _fake_dispatch(
+        command: str,
+        session: ReplSession,
+        console: Console,
+        **_kwargs: object,
+    ) -> bool:
         dispatched.append(command)
+        session.record("slash", command, ok=True)
         console.print(f"ran {command}")
         return True
 
@@ -253,8 +304,14 @@ def test_compound_prompt_executes_all_supported_tasks(monkeypatch: object) -> No
 def test_services_version_deploy_prompt_executes_in_order(monkeypatch: object) -> None:
     dispatched: list[str] = []
 
-    def _fake_dispatch(command: str, _session: ReplSession, console: Console) -> bool:
+    def _fake_dispatch(
+        command: str,
+        session: ReplSession,
+        console: Console,
+        **_kwargs: object,
+    ) -> bool:
         dispatched.append(command)
+        session.record("slash", command, ok=True)
         console.print(f"ran {command}")
         return True
 
@@ -357,8 +414,14 @@ def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch:
     dispatched: list[str] = []
     popen_calls: list[tuple[list[str], dict[str, object]]] = []
 
-    def _fake_dispatch(command: str, _session: ReplSession, console: Console) -> bool:
+    def _fake_dispatch(
+        command: str,
+        session: ReplSession,
+        console: Console,
+        **_kwargs: object,
+    ) -> bool:
         dispatched.append(command)
+        session.record("slash", command, ok=True)
         console.print(f"ran {command}")
         return True
 
@@ -427,8 +490,14 @@ def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch:
 def test_partial_match_reports_unhandled_clause(monkeypatch: object) -> None:
     dispatched: list[str] = []
 
-    def _fake_dispatch(command: str, _session: ReplSession, console: Console) -> bool:
+    def _fake_dispatch(
+        command: str,
+        session: ReplSession,
+        console: Console,
+        **_kwargs: object,
+    ) -> bool:
         dispatched.append(command)
+        session.record("slash", command, ok=True)
         console.print(f"ran {command}")
         return True
 
@@ -469,7 +538,6 @@ def test_execute_cli_actions_runs_shell_command(monkeypatch: object) -> None:
         {"type": "shell", "text": "pwd", "ok": True},
     ]
     output = buf.getvalue()
-    assert "Running requested actions" in output
     assert "$ pwd" in output
     assert "/tmp/project" in output
 
@@ -596,7 +664,29 @@ def test_execute_cli_actions_records_shell_failure(monkeypatch: object) -> None:
     assert session.history[-1] == {"type": "shell", "text": "false", "ok": False}
     output = buf.getvalue()
     assert "nope" in output
-    assert "exit code" in output
+    assert "exit 2" in output
+
+
+def test_execute_cli_actions_shell_command_times_out(monkeypatch: object) -> None:
+    def _timeout(cmd: object, **kwargs: object) -> NoReturn:  # pragma: no cover
+        raise subprocess.TimeoutExpired(
+            cmd=cmd,
+            timeout=1,
+            output="partial out\n",
+            stderr="partial err\n",
+        )
+
+    monkeypatch.setattr(shell_execution.subprocess, "run", _timeout)
+
+    session = ReplSession()
+    console, buf = _capture()
+
+    assert execute_cli_actions("run `true`", session, console) is True
+    assert session.history[-1] == {"type": "shell", "text": "true", "ok": False}
+    output = buf.getvalue().lower()
+    assert "timed out" in output
+    assert "partial out" in output
+    assert "partial err" in output
 
 
 def test_execute_cli_actions_runs_passthrough_with_shell_true(monkeypatch: object) -> None:
@@ -679,16 +769,21 @@ def test_execute_cli_actions_routes_bang_pwd_through_builtin(monkeypatch: object
     assert "explicit shell passthrough enabled" not in captured
 
 
-def test_execute_cli_actions_blocks_mutating_command_by_default() -> None:
+def test_execute_cli_actions_declines_mutating_shell_when_user_rejects_prompt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.execution_policy.DEFAULT_CONFIRM_FN",
+        lambda _p: "n",
+    )
     session = ReplSession()
     console, buf = _capture()
 
     assert execute_cli_actions("run `rm -rf /tmp/demo`", session, console) is True
     assert session.history[-1] == {"type": "shell", "text": "rm -rf /tmp/demo", "ok": False}
     output = buf.getvalue()
-    assert "command blocked" in output
-    assert "mutating commands are blocked" in output
-    assert "run !<command>" in output
+    assert "cancelled" in output.lower()
+    assert "mutating commands are blocked" in output.lower() or "confirm" in output.lower()
 
 
 def test_execute_cli_actions_blocks_ambiguous_shell_operators() -> None:
@@ -698,7 +793,7 @@ def test_execute_cli_actions_blocks_ambiguous_shell_operators() -> None:
     assert execute_cli_actions("run `ls | wc -l`", session, console) is True
     assert session.history[-1] == {"type": "shell", "text": "ls | wc -l", "ok": False}
     output = buf.getvalue()
-    assert "command blocked" in output
+    assert "action blocked" in output.lower()
     assert "shell operators" in output
 
 
@@ -730,5 +825,34 @@ def test_execute_cli_actions_rejects_malformed_shell_input() -> None:
     assert execute_cli_actions('run `cat "unterminated`', session, console) is True
     assert session.history[-1] == {"type": "shell", "text": 'cat "unterminated', "ok": False}
     output = buf.getvalue()
-    assert "command blocked" in output
+    assert "action blocked" in output.lower()
     assert "could not parse command" in output
+
+
+def test_execute_cli_actions_with_metrics_counts_planned_and_executed(monkeypatch: object) -> None:
+    captured_planned: list[tuple[int, bool]] = []
+    captured_executed: list[tuple[int, int, int]] = []
+
+    monkeypatch.setattr(
+        "app.analytics.cli.capture_terminal_actions_planned",
+        lambda *, planned_count, has_unhandled_clause: captured_planned.append(
+            (planned_count, has_unhandled_clause)
+        ),
+    )
+    monkeypatch.setattr(
+        "app.analytics.cli.capture_terminal_actions_executed",
+        lambda *, planned_count, executed_count, executed_success_count: captured_executed.append(
+            (planned_count, executed_count, executed_success_count)
+        ),
+    )
+
+    session = ReplSession()
+    console, _ = _capture()
+    result = execute_cli_actions_with_metrics("run `pwd`", session, console)
+
+    assert result.handled is True
+    assert result.planned_count == 1
+    assert result.executed_count == 1
+    assert result.executed_success_count == 1
+    assert captured_planned == [(1, False)]
+    assert captured_executed == [(1, 1, 1)]

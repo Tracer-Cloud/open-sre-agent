@@ -1,19 +1,6 @@
 """Base formatting utilities for report generation."""
 
 
-def format_code_block(payload: str, language: str) -> str:
-    """Wrap content in a markdown code block with syntax highlighting.
-
-    Args:
-        payload: Content to wrap
-        language: Language identifier for syntax highlighting (json, text, python, etc.)
-
-    Returns:
-        Markdown-formatted code block
-    """
-    return f"```{language}\n{payload}\n```"
-
-
 def shorten_text(text: str, max_chars: int = 120, suffix: str = "...") -> str:
     """Shorten text to a maximum length.
 

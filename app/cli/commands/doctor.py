@@ -53,7 +53,7 @@ def _check(name: str, fn: Any) -> dict[str, str]:
     try:
         ok, detail = fn()
         return {"check": name, "status": "ok" if ok else "warn", "detail": detail}
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return {"check": name, "status": "error", "detail": str(exc)}
 
 
@@ -124,25 +124,23 @@ def _check_integrations() -> tuple[bool, str]:
 
 def _check_version_freshness() -> tuple[bool, str]:
     current = get_version()
-    try:
-        from app.cli.support.update import _fetch_latest_version, _is_update_available
+    from app.cli.support.update import (
+        _fetch_latest_version,
+        _is_update_available,
+        development_install_doctor_version_detail,
+    )
 
+    dev_detail = development_install_doctor_version_detail(current)
+    if dev_detail is not None:
+        return True, dev_detail
+
+    try:
         latest = _fetch_latest_version()
         if _is_update_available(current, latest):
             return False, f"current={current}, latest={latest} — run 'opensre update'"
         return True, f"{current} (up to date)"
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return True, f"{current} (could not check: {exc})"
-
-
-def _check_network() -> tuple[bool, str]:
-    import httpx
-
-    try:
-        resp = httpx.get("https://api.github.com", timeout=5)
-        return True, f"github.com reachable (HTTP {resp.status_code})"
-    except Exception as exc:  # noqa: BLE001
-        return False, f"github.com unreachable: {exc}"
 
 
 _CHECKS = [
@@ -151,7 +149,6 @@ _CHECKS = [
     ("llm_provider", _check_llm_provider),
     ("integrations", _check_integrations),
     ("version", _check_version_freshness),
-    ("network", _check_network),
 ]
 
 

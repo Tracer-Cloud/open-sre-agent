@@ -106,7 +106,7 @@ def run_rca(
             suggestion=err.suggestion,
         ).model_dump()
 
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         capture_exception(err)
         return RunRCAOutput(
             ok=False,

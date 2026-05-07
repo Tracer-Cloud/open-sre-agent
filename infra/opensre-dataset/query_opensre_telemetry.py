@@ -8,22 +8,22 @@ Examples::
 
   # Local clone root + relative path (same as alert annotations)
   export OPENSRE_DATASET_ROOT=~/data/w3joe-opensre
-  python scripts/query_opensre_telemetry.py \\
+  python infra/opensre-dataset/query_opensre_telemetry.py \\
     --relative Market/cloudbed-1/telemetry/2022_03_20 list
 
   # Materialize only that folder from Hugging Face (needs: pip install huggingface_hub)
   export OPENSRE_HF_DATASET_ID=tracer-cloud/opensre
-  python scripts/query_opensre_telemetry.py \\
+  python infra/opensre-dataset/query_opensre_telemetry.py \\
     --relative Market/cloudbed-1/telemetry/2022_03_20 \\
     --from-hub list
 
-  python scripts/query_opensre_telemetry.py \\
+  python infra/opensre-dataset/query_opensre_telemetry.py \\
     --telemetry-dir /path/to/telemetry/2022_03_20 metrics --contains cpu
-  python scripts/query_opensre_telemetry.py --telemetry-dir ... logs --service shipping
-  python scripts/query_opensre_telemetry.py --telemetry-dir ... traces
+  python infra/opensre-dataset/query_opensre_telemetry.py --telemetry-dir ... logs --service shipping
+  python infra/opensre-dataset/query_opensre_telemetry.py --telemetry-dir ... traces
 
   # First rows of one CSV (stdlib only for this subcommand)
-  python scripts/query_opensre_telemetry.py --telemetry-dir ... raw metric/metric_foo.csv --limit 20
+  python infra/opensre-dataset/query_opensre_telemetry.py --telemetry-dir ... raw metric/metric_foo.csv --limit 20
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ import json
 import sys
 from pathlib import Path
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
@@ -155,7 +155,9 @@ def main() -> None:
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list", help="List metric/log/trace CSV files")
 
-    sp_raw = sub.add_parser("raw", help="Print first rows of one CSV (path relative to telemetry dir)")
+    sp_raw = sub.add_parser(
+        "raw", help="Print first rows of one CSV (path relative to telemetry dir)"
+    )
     sp_raw.add_argument("csv_path", help="e.g. metric/container_cpu.csv")
     sp_raw.add_argument("--limit", type=int, default=50)
 

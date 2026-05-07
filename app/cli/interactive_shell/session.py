@@ -9,6 +9,16 @@ from app.cli.interactive_shell.tasks import TaskRegistry
 
 
 @dataclass
+class TerminalMetricsSnapshot:
+    """Session-level aggregate counters for interactive-shell analytics."""
+
+    turn_index: int
+    fallback_count: int
+    action_success_percent: float
+    fallback_rate_percent: float
+
+
+@dataclass
 class ReplSession:
     """Per-REPL-process accumulated state.
 
@@ -29,8 +39,7 @@ class ReplSession:
     earlier investigations that should seed future ones."""
 
     trust_mode: bool = False
-    """If True, skip any future [Y/n] confirmation prompts for read-only tools.
-    (No destructive tools exist today; reserved for forward compatibility.)"""
+    """When True, confirmation prompts for elevated REPL actions are skipped."""
 
     token_usage: dict[str, int] = field(default_factory=dict)
     """Accumulated token counts: {"input": N, "output": N}. Populated when available."""
@@ -43,6 +52,11 @@ class ReplSession:
 
     history_generation: int = 0
     """Incremented on /reset so background synthetic watchers can skip stale history writes."""
+
+    terminal_turn_count: int = 0
+    terminal_fallback_count: int = 0
+    terminal_actions_executed_count: int = 0
+    terminal_actions_success_count: int = 0
 
     # Keys from a completed AgentState that carry reusable infra context into
     # the next investigation.  Kept as a class-level tuple so any caller that
@@ -58,6 +72,14 @@ class ReplSession:
     def record(self, kind: str, text: str, *, ok: bool = True) -> None:
         """Append an entry to the session history."""
         self.history.append({"type": kind, "text": text, "ok": ok})
+
+    def mark_latest(self, *, ok: bool, kind: str | None = None) -> None:
+        """Update the latest history entry, optionally scanning for a matching kind."""
+        for latest in reversed(self.history):
+            if kind is not None and latest.get("type") != kind:
+                continue
+            latest["ok"] = ok
+            return
 
     def accumulate_from_state(self, state: dict[str, Any] | None) -> None:
         """Extract reusable infra hints from a completed investigation state.
@@ -83,4 +105,35 @@ class ReplSession:
         self.token_usage.clear()
         self.cli_agent_messages.clear()
         self.task_registry = TaskRegistry()
+
+        self.terminal_turn_count = 0
+        self.terminal_fallback_count = 0
+        self.terminal_actions_executed_count = 0
+        self.terminal_actions_success_count = 0
         # trust_mode is intentionally preserved across /reset
+
+    def record_terminal_turn(
+        self,
+        *,
+        executed_count: int,
+        executed_success_count: int,
+        fallback_to_llm: bool,
+    ) -> TerminalMetricsSnapshot:
+        """Update aggregate terminal metrics and return a stable snapshot."""
+        self.terminal_turn_count += 1
+        self.terminal_actions_executed_count += max(0, executed_count)
+        self.terminal_actions_success_count += max(0, executed_success_count)
+        if fallback_to_llm:
+            self.terminal_fallback_count += 1
+        action_success_percent = (
+            100.0 * self.terminal_actions_success_count / self.terminal_actions_executed_count
+            if self.terminal_actions_executed_count > 0
+            else 0.0
+        )
+        fallback_rate_percent = 100.0 * self.terminal_fallback_count / self.terminal_turn_count
+        return TerminalMetricsSnapshot(
+            turn_index=self.terminal_turn_count,
+            fallback_count=self.terminal_fallback_count,
+            action_success_percent=action_success_percent,
+            fallback_rate_percent=fallback_rate_percent,
+        )

@@ -200,7 +200,7 @@ def test_fetch_open_pr_count_query_string(gfi):
     """fetch_open_pr_count must search is:pr is:open for the correct author."""
     captured: list[str] = []
 
-    def fake_request_json(url: str, token: str) -> dict:  # noqa: ARG001
+    def fake_request_json(url: str, token: str) -> dict:
         captured.append(url)
         return {"total_count": 0}
 
@@ -220,7 +220,7 @@ def test_fetch_open_pr_count_query_string(gfi):
 def test_fetch_open_assigned_issue_count_query_string(gfi):
     captured: list[str] = []
 
-    def fake_request_json(url: str, token: str) -> dict:  # noqa: ARG001
+    def fake_request_json(url: str, token: str) -> dict:
         captured.append(url)
         return {"total_count": 0}
 

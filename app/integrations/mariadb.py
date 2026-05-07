@@ -130,7 +130,7 @@ def validate_mariadb_config(config: MariaDBConfig) -> MariaDBValidationResult:
                 )
         finally:
             conn.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         logger.debug("MariaDB validate_config failed", exc_info=True)
         return MariaDBValidationResult(ok=False, detail=f"MariaDB connection failed: {err}")
 
@@ -204,7 +204,7 @@ def get_process_list(
                 }
         finally:
             conn.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         logger.debug("MariaDB get_process_list failed", exc_info=True)
         return {"source": "mariadb", "available": False, "error": str(err)}
 
@@ -255,7 +255,7 @@ def get_global_status(config: MariaDBConfig) -> dict[str, Any]:
                 }
         finally:
             conn.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         logger.debug("MariaDB get_global_status failed", exc_info=True)
         return {"source": "mariadb", "available": False, "error": str(err)}
 
@@ -287,7 +287,7 @@ def get_innodb_status(config: MariaDBConfig) -> dict[str, Any]:
                 }
         finally:
             conn.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         logger.debug("MariaDB get_innodb_status failed", exc_info=True)
         return {"source": "mariadb", "available": False, "error": str(err)}
 
@@ -354,7 +354,7 @@ def get_slow_queries(
                 }
         finally:
             conn.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         logger.debug("MariaDB get_slow_queries failed", exc_info=True)
         return {"source": "mariadb", "available": False, "error": str(err)}
 
@@ -383,7 +383,7 @@ def get_replication_status(config: MariaDBConfig) -> dict[str, Any]:
                         if cur.description:
                             columns = [d[0] for d in cur.description]
                         break
-                    except Exception as stmt_err:  # noqa: BLE001
+                    except Exception as stmt_err:
                         import pymysql as _pymysql
 
                         if isinstance(stmt_err, _pymysql.err.ProgrammingError):
@@ -423,6 +423,6 @@ def get_replication_status(config: MariaDBConfig) -> dict[str, Any]:
                 }
         finally:
             conn.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         logger.debug("MariaDB get_replication_status failed", exc_info=True)
         return {"source": "mariadb", "available": False, "error": str(err)}

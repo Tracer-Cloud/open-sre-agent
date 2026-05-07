@@ -13,20 +13,18 @@ docs-grounded surface and never executes actions.
 from __future__ import annotations
 
 from rich.console import Console
-from rich.markdown import Markdown
 from rich.markup import escape
 
 from app.cli.interactive_shell.cli_reference import build_cli_reference_text
 from app.cli.interactive_shell.docs_reference import build_docs_reference_text
 from app.cli.interactive_shell.grounding_diagnostics import log_grounding_cache_diagnostics
-from app.cli.interactive_shell.loaders import llm_loader
 from app.cli.interactive_shell.prompt_rules import (
     CLI_ASSISTANT_MARKDOWN_RULE,
     INTERACTIVE_SHELL_TERMINOLOGY_RULE,
 )
 from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import ERROR, TERMINAL_ACCENT_BOLD
-from app.utils.sentry_sdk import capture_exception
+from app.cli.interactive_shell.streaming import STREAM_LABEL_ASSISTANT, stream_to_console
+from app.cli.support.exception_reporting import report_exception
 
 # Match the cli_agent terminology / formatting rules so docs answers feel
 # consistent with the rest of the interactive shell.
@@ -90,9 +88,9 @@ def answer_cli_help(question: str, _session: ReplSession, console: Console) -> N
     """
     try:
         from app.services.llm_client import get_llm_for_reasoning
-    except Exception as exc:  # noqa: BLE001
-        capture_exception(exc)
-        console.print(f"[{ERROR}]LLM client unavailable:[/] {escape(str(exc))}")
+    except Exception as exc:
+        report_exception(exc, context="interactive_shell.cli_help.import")
+        console.print(f"[red]LLM client unavailable:[/red] {escape(str(exc))}")
         return
 
     cli_reference = build_cli_reference_text()
@@ -101,25 +99,19 @@ def answer_cli_help(question: str, _session: ReplSession, console: Console) -> N
     prompt = _build_grounded_prompt(question, cli_reference, docs_reference)
 
     try:
-        with llm_loader(console):
-            client = get_llm_for_reasoning()
-            response = client.invoke(prompt)
-    except Exception as exc:  # noqa: BLE001
-        capture_exception(exc)
-        console.print(f"[{ERROR}]assistant failed:[/] {escape(str(exc))}")
+        client = get_llm_for_reasoning()
+        stream_to_console(
+            console,
+            label=STREAM_LABEL_ASSISTANT,
+            chunks=client.invoke_stream(prompt),
+        )
+    except KeyboardInterrupt:
+        console.print("[dim]· cancelled[/dim]")
+        return
+    except Exception as exc:
+        report_exception(exc, context="interactive_shell.cli_help.stream")
+        console.print(f"[red]assistant failed:[/red] {escape(str(exc))}")
         return
 
-    text = getattr(response, "content", None) or str(response)
-    text_str = str(text)
 
-    console.print()
-    console.print(f"[{TERMINAL_ACCENT_BOLD}]assistant:[/]")
-    console.print(Markdown(text_str))
-    console.print()
-
-
-__all__ = [
-    "answer_cli_help",
-    "build_cli_reference_text",
-    "build_docs_reference_text",
-]
+__all__ = ["answer_cli_help"]

@@ -145,7 +145,7 @@ def validate_clickhouse_config(config: ClickHouseConfig) -> ClickHouseValidation
             )
         finally:
             client.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return ClickHouseValidationResult(ok=False, detail=f"ClickHouse connection failed: {err}")
 
 
@@ -205,7 +205,7 @@ def get_query_activity(
             }
         finally:
             client.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {"source": "clickhouse", "available": False, "error": str(err)}
 
 
@@ -247,7 +247,7 @@ def get_system_health(config: ClickHouseConfig) -> dict[str, Any]:
             }
         finally:
             client.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {"source": "clickhouse", "available": False, "error": str(err)}
 
 
@@ -305,5 +305,5 @@ def get_table_stats(
             }
         finally:
             client.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {"source": "clickhouse", "available": False, "error": str(err)}

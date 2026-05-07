@@ -176,7 +176,7 @@ def validate_mysql_config(config: MySQLConfig) -> MySQLValidationResult:
                 )
         finally:
             conn.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return MySQLValidationResult(ok=False, detail=f"MySQL connection failed: {err}")
 
 
@@ -290,7 +290,7 @@ def get_server_status(config: MySQLConfig) -> dict[str, Any]:
                 }
         finally:
             conn.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {"source": "mysql", "available": False, "error": str(err)}
 
 
@@ -346,7 +346,7 @@ def get_current_processes(
                 }
         finally:
             conn.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {"source": "mysql", "available": False, "error": str(err)}
 
 
@@ -392,7 +392,7 @@ def get_replication_status(config: MySQLConfig) -> dict[str, Any]:
                         cur.execute(stmt)
                         rows = list(cur.fetchall())
                         break
-                    except Exception as stmt_err:  # noqa: BLE001
+                    except Exception as stmt_err:
                         import pymysql as _pymysql
 
                         if isinstance(stmt_err, _pymysql.err.ProgrammingError):
@@ -420,7 +420,7 @@ def get_replication_status(config: MySQLConfig) -> dict[str, Any]:
                 }
         finally:
             conn.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {"source": "mysql", "available": False, "error": str(err)}
 
 
@@ -517,7 +517,7 @@ def get_slow_queries(
                 }
         finally:
             conn.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {"source": "mysql", "available": False, "error": str(err)}
 
 
@@ -592,5 +592,5 @@ def get_table_stats(
                 }
         finally:
             conn.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {"source": "mysql", "available": False, "error": str(err)}

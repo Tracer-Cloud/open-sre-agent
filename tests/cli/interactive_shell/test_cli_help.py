@@ -11,12 +11,11 @@ from typing import Any
 import pytest
 from rich.console import Console
 
-from app.cli.interactive_shell import cli_help, docs_reference
+from app.cli.interactive_shell import docs_reference
 from app.cli.interactive_shell.cli_help import (
     _build_grounded_prompt,
     answer_cli_help,
 )
-from app.cli.interactive_shell.cli_reference import build_cli_reference_text
 from app.cli.interactive_shell.docs_reference import invalidate_docs_cache
 from app.cli.interactive_shell.session import ReplSession
 
@@ -36,19 +35,16 @@ def _capture() -> tuple[Console, io.StringIO]:
     )
 
 
-class _FakeLLMResponse:
-    def __init__(self, content: str) -> None:
-        self.content = content
-
-
 class _FakeLLMClient:
+    """Streaming-aware fake: ``invoke_stream`` yields the canned content as one chunk."""
+
     def __init__(self, content: str) -> None:
         self._content = content
         self.last_prompt: str | None = None
 
-    def invoke(self, prompt: str) -> _FakeLLMResponse:
+    def invoke_stream(self, prompt: str) -> Iterator[str]:
         self.last_prompt = prompt
-        return _FakeLLMResponse(self._content)
+        yield self._content
 
 
 def _patch_llm(monkeypatch: pytest.MonkeyPatch, content: str) -> _FakeLLMClient:
@@ -72,12 +68,6 @@ def _seed_docs_root(root: Path) -> None:
         '---\ntitle: "Deployment"\n---\n\nDeploy OpenSRE to Railway, EC2, or LangGraph Cloud.\n',
         encoding="utf-8",
     )
-
-
-def test_legacy_export_still_present() -> None:
-    """The CLI reference helper must remain re-exported for backward compat."""
-    text = build_cli_reference_text()
-    assert "opensre" in text.lower()
 
 
 class TestSystemPromptGrounding:
@@ -180,42 +170,48 @@ class TestAnswerCliHelp:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        captured_errors: list[BaseException] = []
+
         class _Boom:
-            def invoke(self, prompt: str) -> Any:  # noqa: ARG002
+            def invoke_stream(self, _prompt: str) -> Iterator[str]:
                 raise RuntimeError("upstream 503")
+                yield  # pragma: no cover  -- generator marker
 
         import app.services.llm_client as llm_module
 
         monkeypatch.setattr(llm_module, "get_llm_for_reasoning", lambda: _Boom())
+        monkeypatch.setattr(
+            "app.cli.support.exception_reporting.capture_exception",
+            lambda exc, **_kwargs: captured_errors.append(exc),
+        )
 
         console, buf = _capture()
         answer_cli_help("how do I deploy?", ReplSession(), console)
         output = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", buf.getvalue())
         assert "assistant failed" in output
         assert "upstream 503" in output
+        assert len(captured_errors) == 1
+        assert isinstance(captured_errors[0], RuntimeError)
 
-    def test_llm_call_runs_inside_loader_context(
+    def test_response_uses_invoke_stream_not_invoke(
         self,
         monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
     ) -> None:
-        from contextlib import contextmanager
+        """Migration check: cli_help must call invoke_stream, never invoke."""
+        _seed_docs_root(tmp_path)
+        monkeypatch.setattr(docs_reference, "_DOCS_ROOT", tmp_path)
 
-        events: list[str] = []
-
-        @contextmanager
-        def _spy_loader(_console: Console, label: str = "thinking") -> Any:
-            events.append(f"enter:{label}")
-            try:
-                yield
-            finally:
-                events.append("exit")
-
-        monkeypatch.setattr(cli_help, "llm_loader", _spy_loader)
+        calls: list[str] = []
 
         class _Recording:
-            def invoke(self, prompt: str) -> _FakeLLMResponse:  # noqa: ARG002
-                events.append("invoke")
-                return _FakeLLMResponse("ok")
+            def invoke(self, _prompt: str) -> Any:
+                calls.append("invoke")
+                raise AssertionError("cli_help must not call invoke after streaming migration")
+
+            def invoke_stream(self, _prompt: str) -> Iterator[str]:
+                calls.append("invoke_stream")
+                yield "ok"
 
         import app.services.llm_client as llm_module
 
@@ -224,4 +220,4 @@ class TestAnswerCliHelp:
         console, _ = _capture()
         answer_cli_help("how do I configure Datadog?", ReplSession(), console)
 
-        assert events == ["enter:thinking", "invoke", "exit"]
+        assert calls == ["invoke_stream"]
