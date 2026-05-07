@@ -6,9 +6,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from rich.console import Console
+from rich.live import Live
 from rich.markup import escape
 from rich.spinner import Spinner
-from rich.live import Live
 
 from app.cli.interactive_shell.action_executor import (
     run_sample_alert,
@@ -47,7 +47,6 @@ class TerminalActionExecutionResult:
 
 def _plan_with_spinner(
     message: str,
-    session: ReplSession,
     console: Console,
 ) -> tuple[list, bool]:
     """Plan actions while showing a thinking spinner."""
@@ -69,7 +68,7 @@ def execute_cli_actions(
     Returns True when the message was handled. Unknown or ambiguous requests fall
     through to the LLM-backed assistant.
     """
-    actions, has_unhandled_clause = _plan_with_spinner(message, session, console)
+    actions, has_unhandled_clause = _plan_with_spinner(message, console)
     if not actions:
         return False
 
@@ -186,7 +185,7 @@ def execute_cli_actions_with_metrics(
         capture_terminal_actions_planned,
     )
 
-    actions, has_unhandled_clause = _plan_with_spinner(message, session, console)
+    actions, has_unhandled_clause = _plan_with_spinner(message, console)
     capture_terminal_actions_planned(
         planned_count=len(actions),
         has_unhandled_clause=has_unhandled_clause,
