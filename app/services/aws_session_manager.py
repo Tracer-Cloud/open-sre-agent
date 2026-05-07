@@ -53,25 +53,30 @@ class AWSSessionManager:
 
     def _init_manager(self) -> None:
         """Initialize the manager's internal state."""
+        # Key: (service_name, region, role_arn, external_id)
         self._client_cache: dict[tuple[str, str, str | None, str | None], Any] = {}
-        self._session_metadata: dict[str, dict[str, Any]] = {}
+        # Key: (role_arn, external_id)
+        self._session_metadata: dict[tuple[str, str | None], dict[str, Any]] = {}
         self._cache_lock = threading.Lock()
-        self._role_locks: dict[str, threading.Lock] = {}
+        # Key: (role_arn, external_id)
+        self._role_locks: dict[tuple[str, str | None], threading.Lock] = {}
         self._base_sessions: dict[str, boto3.Session] = {}
 
-    def _get_role_lock(self, role_arn: str) -> threading.Lock:
-        """Get or create a lock for a specific role ARN to ensure atomic assumption."""
+    def _get_role_lock(self, role_arn: str, external_id: str | None) -> threading.Lock:
+        """Get or create a lock for a specific role ARN + external ID to ensure atomic assumption."""
+        key = (role_arn, external_id)
         with self._cache_lock:
-            if role_arn not in self._role_locks:
-                self._role_locks[role_arn] = threading.Lock()
-            return self._role_locks[role_arn]
+            if key not in self._role_locks:
+                self._role_locks[key] = threading.Lock()
+            return self._role_locks[key]
 
-    def _is_session_expired(self, role_arn: str) -> bool:
+    def _is_session_expired(self, role_arn: str, external_id: str | None) -> bool:
         """
         Check if an assumed role session is expired or near expiry.
         Must be called while holding _cache_lock or role_lock if consistency is required.
         """
-        metadata = self._session_metadata.get(role_arn)
+        key = (role_arn, external_id)
+        metadata = self._session_metadata.get(key)
         if not metadata:
             return True
 
@@ -107,13 +112,14 @@ class AWSSessionManager:
                 return self._base_sessions[actual_region]
 
         # Handle Role Assumption with Atomic Locking
-        role_lock = self._get_role_lock(role_arn)
+        role_lock = self._get_role_lock(role_arn, external_id)
         with role_lock:
             # Check expiry under lock to prevent race conditions
+            key = (role_arn, external_id)
             with self._cache_lock:
-                is_expired = self._is_session_expired(role_arn)
+                is_expired = self._is_session_expired(role_arn, external_id)
                 if not is_expired:
-                    metadata = self._session_metadata[role_arn]
+                    metadata = self._session_metadata[key]
                     return boto3.Session(
                         aws_access_key_id=metadata["access_key"],
                         aws_secret_access_key=metadata["secret_key"],
@@ -140,8 +146,9 @@ class AWSSessionManager:
                 credentials = response["Credentials"]
 
                 # Update metadata in memory only
+                key = (role_arn, external_id)
                 with self._cache_lock:
-                    self._session_metadata[role_arn] = {
+                    self._session_metadata[key] = {
                         "access_key": credentials["AccessKeyId"],
                         "secret_key": credentials["SecretAccessKey"],
                         "session_token": credentials["SessionToken"],
@@ -186,7 +193,7 @@ class AWSSessionManager:
         with self._cache_lock:
             # Check if we have a valid cached client
             if cache_key in self._client_cache and (
-                not role_arn or not self._is_session_expired(role_arn)
+                not role_arn or not self._is_session_expired(role_arn, external_id)
             ):
                 return self._client_cache[cache_key]
 
@@ -203,7 +210,7 @@ class AWSSessionManager:
         with self._cache_lock:
             # Fixes P1: Double-check pattern to prevent race-overwrites after network call
             if cache_key in self._client_cache and (
-                not role_arn or not self._is_session_expired(role_arn)
+                not role_arn or not self._is_session_expired(role_arn, external_id)
             ):
                 return self._client_cache[cache_key]
 
