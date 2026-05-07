@@ -135,3 +135,7 @@ CLAUDE_PERSONAL.md
 tasks/
 app/memories
 .aider*
+
+# Node dev tooling
+node_modules/
+package-lock.json

@@ -8,6 +8,16 @@ from typing import Any
 
 _VALID_LAYOUTS = ("classic", "pinned")
 
+# ── Release notes ─────────────────────────────────────────────────────────────
+# Shown in the "What's new" panel on startup. Update this each release with
+# exactly 2 user-visible changes. Keep each entry under ~50 chars so it fits
+# the right column without truncation. The banner reads this at import time.
+
+WHATS_NEW: tuple[str, ...] = (
+    "Confidence scoring now shown during diagnosis",
+    "New /save command exports investigation reports",
+)
+
 
 def _read_config_file() -> dict[str, Any]:
     """Read the interactive section from ~/.config/opensre/config.yml.
