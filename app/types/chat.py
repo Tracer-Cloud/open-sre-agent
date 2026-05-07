@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Protocol
-
-from typing_extensions import TypedDict
+from typing import Any, Protocol, Required, TypedDict
 
 
 class ToolCallPayload(TypedDict):
@@ -14,9 +12,9 @@ class ToolCallPayload(TypedDict):
 
 
 class AssistantTurn(TypedDict, total=False):
-    """One assistant generation: optional text plus optional tool calls."""
+    """One assistant generation: text content plus optional tool calls."""
 
-    content: str
+    content: Required[str]
     tool_calls: list[ToolCallPayload]
 
 
@@ -25,4 +23,4 @@ class BoundChatModel(Protocol):
 
     def invoke(self, messages: list[Any]) -> AssistantTurn:
         """Run one model invocation and return a framework-neutral turn."""
-        ...
+        pass

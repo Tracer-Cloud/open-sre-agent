@@ -12,11 +12,6 @@ import json
 import time
 from typing import Any
 
-from anthropic import Anthropic
-from anthropic import AuthenticationError as AnthropicAuthError
-from openai import AuthenticationError as OpenAIAuthError
-from openai import OpenAI
-
 from app.config import DEFAULT_MAX_TOKENS
 from app.llm_credentials import resolve_llm_api_key
 from app.tools.registered_tool import RegisteredTool
@@ -37,6 +32,24 @@ _LC_TYPE_TO_ROLE: dict[str, str] = {
     "system": "system",
     "tool": "tool",
 }
+
+
+def _legacy_message_to_dict_without_langchain(msg: Any) -> dict[str, Any]:
+    """Map an LC-shaped message when ``langchain_core`` is unavailable."""
+    content = str(getattr(msg, "content", ""))
+    t = getattr(msg, "type", None)
+    if isinstance(t, str):
+        role = _LC_TYPE_TO_ROLE.get(t, "user")
+        return {"role": role, "content": content}
+    cn = type(msg).__name__
+    class_map = {
+        "AIMessage": "assistant",
+        "HumanMessage": "user",
+        "SystemMessage": "system",
+        "ToolMessage": "tool",
+    }
+    role = class_map.get(cn, "user")
+    return {"role": role, "content": content}
 
 
 # ── Tool schema builders ──────────────────────────────────────────────────────
@@ -113,7 +126,7 @@ def lc_message_to_neutral_dict(msg: Any) -> dict[str, Any]:
             ToolMessage,
         )
     except ImportError:
-        return {"role": "user", "content": str(getattr(msg, "content", ""))}
+        return _legacy_message_to_dict_without_langchain(msg)
 
     if isinstance(msg, SystemMessage):
         return {"role": "system", "content": str(msg.content)}
@@ -133,8 +146,13 @@ def lc_message_to_neutral_dict(msg: Any) -> dict[str, Any]:
             "name": str(msg.name),
         }
     if isinstance(msg, BaseMessage):
-        return {"role": "user", "content": str(getattr(msg, "content", ""))}
-    return {"role": "user", "content": str(getattr(msg, "content", ""))}
+        t = getattr(msg, "type", None)
+        if isinstance(t, str):
+            role = _LC_TYPE_TO_ROLE.get(t, "user")
+        else:
+            role = "user"
+        return {"role": role, "content": str(getattr(msg, "content", ""))}
+    return _legacy_message_to_dict_without_langchain(msg)
 
 
 def messages_to_invocation_dicts(msgs: list[Any]) -> list[dict[str, Any]]:
@@ -168,13 +186,15 @@ def _normalize_messages_for_openai(
             content = str(content)
 
         if role == "tool":
-            out.append(
-                {
-                    "role": "tool",
-                    "content": content,
-                    "tool_call_id": str(m.get("tool_call_id", "")),
-                }
-            )
+            name = m.get("name")
+            tool_entry: dict[str, Any] = {
+                "role": "tool",
+                "content": content,
+                "tool_call_id": str(m.get("tool_call_id", "")),
+            }
+            if name is not None and str(name) != "":
+                tool_entry["name"] = str(name)
+            out.append(tool_entry)
             continue
 
         if role == "assistant":
@@ -208,9 +228,11 @@ class _OpenAIChatAdapter:
         self._with_tools = with_tools
         self._max_tokens = DEFAULT_MAX_TOKENS
         self._api_key: str = ""
-        self._client: OpenAI | None = None
+        self._client: Any = None
 
-    def _ensure_client(self) -> OpenAI:
+    def _ensure_client(self) -> Any:
+        from openai import OpenAI
+
         api_key = resolve_llm_api_key("OPENAI_API_KEY") or ""
         if not api_key:
             raise RuntimeError(
@@ -222,6 +244,8 @@ class _OpenAIChatAdapter:
         return self._client
 
     def invoke(self, messages: list[Any]) -> AssistantTurn:
+        from openai import AuthenticationError as OpenAIAuthError
+
         dicts = messages_to_invocation_dicts(messages)
         normalized = _normalize_messages_for_openai(dicts)
 
@@ -238,6 +262,7 @@ class _OpenAIChatAdapter:
         client = self._ensure_client()
         backoff = _RETRY_INITIAL_BACKOFF_SEC
         last_err: Exception | None = None
+        response: Any = None
         for attempt in range(_RETRY_MAX_ATTEMPTS):
             try:
                 response = client.chat.completions.create(**kwargs)
@@ -254,8 +279,8 @@ class _OpenAIChatAdapter:
                     ) from err
                 time.sleep(backoff)
                 backoff *= 2
-        else:
-            raise RuntimeError("OpenAI invocation failed without a concrete error") from last_err
+        if response is None:
+            raise RuntimeError("OpenAI invocation failed without a response") from last_err
 
         if not response.choices:
             raise RuntimeError("OpenAI API returned an empty choices list")
@@ -291,16 +316,25 @@ class _OpenAIChatAdapter:
 def _split_system_messages(
     msgs: list[dict[str, Any]],
 ) -> tuple[str | None, list[dict[str, Any]]]:
-    """Extract leading system messages into the Anthropic top-level ``system`` param."""
+    """Extract *initial contiguous* ``role: system`` entries for Anthropic ``system``.
+
+    Later ``role: system`` messages remain in the returned list; see
+    `_normalize_messages_for_anthropic` for how they are mapped to ``role: user``.
+    """
     system_parts: list[str] = []
-    rest: list[dict[str, Any]] = []
-    for m in msgs:
-        if m.get("role") == "system":
-            content = m.get("content", "")
-            if isinstance(content, str):
-                system_parts.append(content)
+    i = 0
+    n = len(msgs)
+    while i < n and str(msgs[i].get("role", "")) == "system":
+        m = msgs[i]
+        content = m.get("content", "")
+        if isinstance(content, str):
+            system_parts.append(content)
+        elif isinstance(content, (dict, list)):
+            system_parts.append(json.dumps(content))
         else:
-            rest.append(m)
+            system_parts.append(str(content))
+        i += 1
+    rest = list(msgs[i:])
     return ("\n".join(system_parts) if system_parts else None, rest)
 
 
@@ -309,29 +343,49 @@ def _normalize_messages_for_anthropic(
 ) -> list[dict[str, Any]]:
     """Convert neutral dicts to Anthropic's messages format.
 
-    Anthropic tool-result messages use ``role: user`` with a ``tool_result``
-    content block, not the OpenAI ``role: tool`` shape.
+    Consecutive ``role: tool`` entries become one ``role: user`` message whose
+    ``content`` lists all ``tool_result`` blocks (Anthropic rejects multiple
+    back-to-back user turns with only tool results).
+
+    Anthropic has no in-message ``role: system``; non-leading system lines are
+    sent as plain user text.
     """
     out: list[dict[str, Any]] = []
-    for m in msgs:
+    i = 0
+    n = len(msgs)
+    while i < n:
+        m = msgs[i]
         role = str(m.get("role", "user"))
         content = m.get("content", "")
         if not isinstance(content, str):
             content = str(content)
 
         if role == "tool":
+            tool_blocks: list[dict[str, Any]] = []
+            while i < n and str(msgs[i].get("role", "")) == "tool":
+                tm = msgs[i]
+                tc_content = tm.get("content", "")
+                if not isinstance(tc_content, str):
+                    tc_content = str(tc_content)
+                tool_blocks.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": str(tm.get("tool_call_id", "")),
+                        "content": tc_content,
+                    }
+                )
+                i += 1
+            out.append({"role": "user", "content": tool_blocks})
+            continue
+
+        if role == "system":
             out.append(
                 {
                     "role": "user",
-                    "content": [
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": str(m.get("tool_call_id", "")),
-                            "content": content,
-                        }
-                    ],
+                    "content": [{"type": "text", "text": content}],
                 }
             )
+            i += 1
             continue
 
         if role == "assistant":
@@ -352,9 +406,11 @@ def _normalize_messages_for_anthropic(
                         }
                     )
                 out.append({"role": "assistant", "content": content_blocks})
+                i += 1
                 continue
 
         out.append({"role": role, "content": content})
+        i += 1
     return out
 
 
@@ -366,9 +422,11 @@ class _AnthropicChatAdapter:
         self._with_tools = with_tools
         self._max_tokens = DEFAULT_MAX_TOKENS
         self._api_key: str = ""
-        self._client: Anthropic | None = None
+        self._client: Any = None
 
-    def _ensure_client(self) -> Anthropic:
+    def _ensure_client(self) -> Any:
+        from anthropic import Anthropic
+
         api_key = resolve_llm_api_key("ANTHROPIC_API_KEY") or ""
         if not api_key:
             raise RuntimeError(
@@ -380,6 +438,8 @@ class _AnthropicChatAdapter:
         return self._client
 
     def invoke(self, messages: list[Any]) -> AssistantTurn:
+        from anthropic import AuthenticationError as AnthropicAuthError
+
         dicts = messages_to_invocation_dicts(messages)
         system, non_system = _split_system_messages(dicts)
         normalized = _normalize_messages_for_anthropic(non_system)
@@ -399,6 +459,7 @@ class _AnthropicChatAdapter:
         client = self._ensure_client()
         backoff = _RETRY_INITIAL_BACKOFF_SEC
         last_err: Exception | None = None
+        response: Any = None
         for attempt in range(_RETRY_MAX_ATTEMPTS):
             try:
                 response = client.messages.create(**kwargs)
@@ -415,8 +476,8 @@ class _AnthropicChatAdapter:
                     ) from err
                 time.sleep(backoff)
                 backoff *= 2
-        else:
-            raise RuntimeError("Anthropic invocation failed without a concrete error") from last_err
+        if response is None:
+            raise RuntimeError("Anthropic invocation failed without a response") from last_err
 
         text_parts: list[str] = []
         tool_calls: list[ToolCallPayload] = []

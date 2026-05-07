@@ -112,24 +112,26 @@ def _get_chat_llm(*, with_tools: bool = False) -> BoundChatModel:
     tool_model, reasoning_model = _resolve_models(provider)
 
     if with_tools:
-        cached_tool_model = _chat_llm_with_tools_cache.get(provider)
+        cache_key = f"{provider}:{tool_model}:tools"
+        cached_tool_model = _chat_llm_with_tools_cache.get(cache_key)
         if cached_tool_model is None:
             cached_tool_model = build_bound_chat_model(
                 provider=provider,
                 model_name=tool_model,
                 with_tools=True,
             )
-            _chat_llm_with_tools_cache[provider] = cached_tool_model
+            _chat_llm_with_tools_cache[cache_key] = cached_tool_model
         return cached_tool_model
 
-    cached_reasoning_model = _chat_llm_cache.get(provider)
+    cache_key = f"{provider}:{reasoning_model}"
+    cached_reasoning_model = _chat_llm_cache.get(cache_key)
     if cached_reasoning_model is None:
         cached_reasoning_model = build_bound_chat_model(
             provider=provider,
             model_name=reasoning_model,
             with_tools=False,
         )
-        _chat_llm_cache[provider] = cached_reasoning_model
+        _chat_llm_cache[cache_key] = cached_reasoning_model
     return cached_reasoning_model
 
 
@@ -144,6 +146,18 @@ def _assistant_turn_to_state_message(turn: AssistantTurn) -> dict[str, Any]:
 
 def _has_system_message(msgs: list[dict[str, Any]]) -> bool:
     return any(m.get("role") == "system" for m in msgs)
+
+
+def _prepare_chat_invoke_messages(
+    raw: list[Any],
+    *,
+    default_system: str,
+) -> list[Any]:
+    """Normalize graph messages, ensure a system prompt, apply guardrails once."""
+    msgs = messages_to_invocation_dicts(raw)
+    if not _has_system_message(msgs):
+        msgs = [{"role": "system", "content": default_system}, *msgs]
+    return _apply_guardrails_to_messages(msgs)
 
 
 def _apply_guardrails_to_messages(msgs: list[Any]) -> list[Any]:
@@ -204,12 +218,7 @@ def chat_agent_node(state: AgentState, _config: NodeConfig | None = None) -> dic
     which will be executed by the tool_executor node.
     """
     raw = list(state.get("messages", []))
-    msgs = messages_to_invocation_dicts(raw)
-
-    if not _has_system_message(msgs):
-        msgs = [{"role": "system", "content": SYSTEM_PROMPT}, *msgs]
-
-    msgs = _apply_guardrails_to_messages(msgs)
+    msgs = _prepare_chat_invoke_messages(raw, default_system=SYSTEM_PROMPT)
     try:
         llm = _get_chat_llm(with_tools=True)
     except UnsupportedChatProviderError as exc:
@@ -221,12 +230,7 @@ def chat_agent_node(state: AgentState, _config: NodeConfig | None = None) -> dic
 def general_node(state: AgentState, _config: NodeConfig | None = None) -> dict[str, Any]:
     """Direct LLM response without tools for general questions."""
     raw = list(state.get("messages", []))
-    msgs = messages_to_invocation_dicts(raw)
-
-    if not _has_system_message(msgs):
-        msgs = [{"role": "system", "content": GENERAL_SYSTEM_PROMPT}, *msgs]
-
-    msgs = _apply_guardrails_to_messages(msgs)
+    msgs = _prepare_chat_invoke_messages(raw, default_system=GENERAL_SYSTEM_PROMPT)
     try:
         llm = _get_chat_llm(with_tools=False)
     except UnsupportedChatProviderError as exc:
