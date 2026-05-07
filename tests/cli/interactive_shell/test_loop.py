@@ -104,7 +104,7 @@ def test_shell_completer_suggests_subcommands_for_list() -> None:
         )
     )
     names = sorted({c.text for c in completions})
-    assert names == ["integrations", "mcp", "models"]
+    assert names == ["integrations", "mcp", "models", "tools"]
 
 
 def test_tab_applies_unique_slash_command_completion() -> None:
