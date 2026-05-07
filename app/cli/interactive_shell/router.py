@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
+from dataclasses import dataclass
+from enum import StrEnum
 from typing import Literal
 
 from app.cli.interactive_shell.session import ReplSession
@@ -14,6 +17,137 @@ from app.cli.interactive_shell.terminal_intent import (
 )
 
 InputKind = Literal["slash", "cli_help", "cli_agent", "new_alert", "follow_up"]
+
+
+class RouteKind(StrEnum):
+    SLASH = "slash"
+    CLI_HELP = "cli_help"
+    CLI_AGENT = "cli_agent"
+    NEW_ALERT = "new_alert"
+    FOLLOW_UP = "follow_up"
+
+
+@dataclass(frozen=True)
+class RouteDecision:
+    route_kind: RouteKind
+    confidence: float
+    matched_signals: tuple[str, ...] = ()
+    fallback_reason: str | None = None
+
+    def to_event_payload(self) -> dict[str, object]:
+        """Structured telemetry/debug payload for route decisions."""
+        return {
+            "route_kind": self.route_kind.value,
+            "confidence": self.confidence,
+            "matched_signals": list(self.matched_signals),
+            "fallback_reason": self.fallback_reason,
+        }
+
+
+@dataclass(frozen=True)
+class RouteRule:
+    name: str
+    route_kind: RouteKind
+    confidence: float
+    matcher: Callable[[str, ReplSession], bool]
+
+
+def _is_slash_prefix(text: str, _session: ReplSession) -> bool:
+    return text.strip().startswith("/")
+
+
+def _is_bare_command_alias(text: str, _session: ReplSession) -> bool:
+    return text.strip().lower() in BARE_COMMAND_ALIASES
+
+
+def _is_cli_help_rule(text: str, _session: ReplSession) -> bool:
+    return _is_cli_help_intent(text.strip())
+
+
+def _is_sample_alert_rule(text: str, _session: ReplSession) -> bool:
+    return is_sample_alert_launch_intent(text.strip())
+
+
+def _is_cli_agent_operational_rule(
+    text: str,
+    _session: ReplSession,
+) -> bool:
+    stripped = text.strip()
+    return is_cli_agent_operational_intent(stripped) and not mentions_alert_signal(stripped)
+
+
+def _is_new_alert_without_prior_state(
+    text: str,
+    session: ReplSession,
+) -> bool:
+    return session.last_state is None and _reads_like_investigation_request(text.strip())
+
+
+def _is_follow_up_with_prior_state(
+    text: str,
+    session: ReplSession,
+) -> bool:
+    return session.last_state is not None and _is_short_question(text.strip())
+
+
+def _is_new_alert_with_prior_state(
+    text: str,
+    session: ReplSession,
+) -> bool:
+    return session.last_state is not None and _reads_like_investigation_request(text.strip())
+
+
+ROUTE_RULES: tuple[RouteRule, ...] = (
+    RouteRule(
+        "slash_prefix",
+        RouteKind.SLASH,
+        1.0,
+        _is_slash_prefix,
+    ),
+    RouteRule(
+        "bare_command_alias",
+        RouteKind.SLASH,
+        0.98,
+        _is_bare_command_alias,
+    ),
+    RouteRule(
+        "cli_help_pattern",
+        RouteKind.CLI_HELP,
+        0.90,
+        _is_cli_help_rule,
+    ),
+    RouteRule(
+        "sample_alert_launch",
+        RouteKind.CLI_AGENT,
+        0.85,
+        _is_sample_alert_rule,
+    ),
+    RouteRule(
+        "cli_agent_operational",
+        RouteKind.CLI_AGENT,
+        0.82,
+        _is_cli_agent_operational_rule,
+    ),
+    RouteRule(
+        "investigation_request",
+        RouteKind.NEW_ALERT,
+        0.86,
+        _is_new_alert_without_prior_state,
+    ),
+    RouteRule(
+        "short_follow_up_question",
+        RouteKind.FOLLOW_UP,
+        0.78,
+        _is_follow_up_with_prior_state,
+    ),
+    RouteRule(
+        "investigation_request",
+        RouteKind.NEW_ALERT,
+        0.86,
+        _is_new_alert_with_prior_state,
+    ),
+)
+
 
 _MIN_INVESTIGATION_LINE_LEN = 48
 
@@ -220,48 +354,45 @@ def _is_cli_help_intent(text: str) -> bool:
     return any(pattern.search(text) for pattern in _CLI_HELP_PATTERNS)
 
 
-def classify_input(text: str, session: ReplSession) -> InputKind:
-    """Classify a single line of interactive-shell input.
-
-    Rules (in order):
-      1. Anything starting with ``/`` is a slash command.
-      2. A bare word matching a known slash-command alias routes like slash.
-      3. Procedural CLI questions route to ``cli_help`` (reference-grounded; no LangGraph).
-      4. Sample-alert launch requests and local setup / health / list-integrations
-         phrasing route to ``cli_agent`` (unless
-         alert keywords indicate a real incident).
-      5. With no prior investigation: if the line reads like an incident / alert /
-         investigation request, route to ``new_alert`` (LangGraph). Otherwise route to
-         ``cli_agent`` (LLM-only terminal assistant, no LangGraph).
-      6. With a prior investigation: short question-shaped input about the RCA routes to
-         ``follow_up``. New incident text routes to ``new_alert``. Otherwise route to
-         ``cli_agent`` (chat / CLI help that is not an RCA follow-up).
-    """
+def route_input(text: str, session: ReplSession) -> RouteDecision:
+    """Return a structured routing decision for interactive-shell input."""
     stripped = text.strip()
-    if stripped.startswith("/"):
-        return "slash"
 
-    if stripped.lower() in BARE_COMMAND_ALIASES:
-        return "slash"
-
-    if _is_cli_help_intent(stripped):
-        return "cli_help"
-
-    if is_sample_alert_launch_intent(stripped):
-        return "cli_agent"
-
-    if is_cli_agent_operational_intent(stripped) and not mentions_alert_signal(stripped):
-        return "cli_agent"
+    for rule in ROUTE_RULES:
+        if rule.matcher(stripped, session):
+            return RouteDecision(
+                route_kind=rule.route_kind,
+                confidence=rule.confidence,
+                matched_signals=(rule.name,),
+            )
 
     if session.last_state is None:
-        if _reads_like_investigation_request(stripped):
-            return "new_alert"
-        return "cli_agent"
+        return RouteDecision(
+            RouteKind.CLI_AGENT,
+            0.45,
+            (),
+            "no_prior_investigation_and_no_incident_signal",
+        )
 
-    if _is_short_question(stripped):
-        return "follow_up"
+    return RouteDecision(
+        RouteKind.CLI_AGENT,
+        0.45,
+        (),
+        "prior_investigation_but_no_follow_up_or_incident_signal",
+    )
 
-    if _reads_like_investigation_request(stripped):
-        return "new_alert"
 
-    return "cli_agent"
+def is_route_correction(
+    previous: RouteDecision | None,
+    current: RouteDecision,
+) -> bool:
+    """Detect when a newer route differs from the previous route."""
+    if previous is None:
+        return False
+
+    return previous.route_kind != current.route_kind
+
+
+def classify_input(text: str, session: ReplSession) -> InputKind:
+    """Backward-compatible wrapper around route_input()."""
+    return route_input(text, session).route_kind.value

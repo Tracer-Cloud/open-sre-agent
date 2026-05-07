@@ -19,6 +19,8 @@ from rich.console import Console
 from rich.markup import escape
 from rich.rule import Rule
 
+from app.analytics.events import Event
+from app.analytics.provider import get_analytics
 from app.cli.interactive_shell.agent_actions import execute_cli_actions
 from app.cli.interactive_shell.banner import render_banner
 from app.cli.interactive_shell.cli_agent import answer_cli_agent
@@ -27,7 +29,7 @@ from app.cli.interactive_shell.commands import SLASH_COMMANDS, dispatch_slash
 from app.cli.interactive_shell.config import ReplConfig
 from app.cli.interactive_shell.follow_up import answer_follow_up
 from app.cli.interactive_shell.history import load_prompt_history
-from app.cli.interactive_shell.router import BARE_COMMAND_ALIASES, classify_input
+from app.cli.interactive_shell.router import BARE_COMMAND_ALIASES, route_input
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.theme import (
     ANSI_RESET,
@@ -358,7 +360,13 @@ async def _run_one_turn(
     if not text:
         return True
 
-    kind = classify_input(text, session)
+    decision = route_input(text, session)
+    kind = decision.route_kind.value
+    session.last_route_decision = decision
+    get_analytics().capture(
+        Event.INTERACTIVE_SHELL_ROUTE_DECISION,
+        decision.to_event_payload(),
+    )
     if kind == "slash":
         # Rewrite bare-word commands to their slash form before dispatch.
         cmd_text = text if text.startswith("/") else f"/{text}"
@@ -416,7 +424,13 @@ async def _repl_main(initial_input: str | None = None, config: ReplConfig | None
             stripped = line.strip()
             if not stripped:
                 continue
-            kind = classify_input(stripped, session)
+            decision = route_input(stripped, session)
+            kind = decision.route_kind.value
+            session.last_route_decision = decision
+            get_analytics().capture(
+                Event.INTERACTIVE_SHELL_ROUTE_DECISION,
+                decision.to_event_payload(),
+            )
             if kind == "slash":
                 cmd_text = stripped if stripped.startswith("/") else f"/{stripped}"
                 if not dispatch_slash(cmd_text, session, console):

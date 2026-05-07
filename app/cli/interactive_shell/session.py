@@ -24,6 +24,9 @@ class ReplSession:
     last_state: dict[str, Any] | None = None
     """The final AgentState from the most recent investigation, used by follow-ups."""
 
+    last_route_decision: object | None = None
+    """Most recent structured routing decision for observability/debugging."""
+
     accumulated_context: dict[str, Any] = field(default_factory=dict)
     """Reusable infra context — service names, clusters, regions — learned from
     earlier investigations that should seed future ones."""
