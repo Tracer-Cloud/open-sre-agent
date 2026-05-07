@@ -405,7 +405,8 @@ def _handle_insufficient_evidence(state: InvestigationState, tracker) -> dict:
 @traceable(name="node_diagnose_root_cause")
 def node_diagnose_root_cause(
     state: InvestigationState,
-    config: NodeConfig | None = None,  # noqa: ARG001
+    config: NodeConfig | None = None,
 ) -> dict:
     """LangGraph node wrapper with LangSmith tracking."""
+    del config
     return diagnose_root_cause(state)

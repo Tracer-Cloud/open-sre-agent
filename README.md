@@ -381,10 +381,10 @@ Thanks goes to these amazing people:
         </a>
     </td>
             <td align="center" width="8%">
-        <a href="https://github.com/paultracer">
-            <img src="https://avatars.githubusercontent.com/u/214484440?v=4" width="45" alt="paultracer"/>
+        <a href="https://github.com/0xpaulx">
+            <img src="https://avatars.githubusercontent.com/u/214484440?v=4" width="45" alt="0xpaulx"/>
             <br />
-            <sub><b>paultracer</b></sub>
+            <sub><b>0xpaulx</b></sub>
         </a>
     </td>
             <td align="center" width="8%">
@@ -1359,6 +1359,13 @@ Thanks goes to these amazing people:
             <img src="https://avatars.githubusercontent.com/u/46064597?v=4" width="45" alt="Dhaxor"/>
             <br />
             <sub><b>Dhaxor</b></sub>
+        </a>
+    </td>
+            <td align="center" width="8%">
+        <a href="https://github.com/vivek41-glitch">
+            <img src="https://avatars.githubusercontent.com/u/222612958?v=4" width="45" alt="vivek41-glitch"/>
+            <br />
+            <sub><b>vivek41-glitch</b></sub>
         </a>
     </td>
 		</tr>
