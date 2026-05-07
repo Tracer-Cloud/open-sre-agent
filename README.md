@@ -1369,14 +1369,21 @@ Thanks goes to these amazing people:
         </a>
     </td>
             <td align="center" width="8%">
+        <a href="https://github.com/Lum1104">
+            <img src="https://avatars.githubusercontent.com/u/87774050?v=4" width="45" alt="Lum1104"/>
+            <br />
+            <sub><b>Lum1104</b></sub>
+        </a>
+    </td>
+		</tr>
+		<tr>
+            <td align="center" width="8%">
         <a href="https://github.com/nawneet77">
             <img src="https://avatars.githubusercontent.com/u/87024784?v=4" width="45" alt="nawneet77"/>
             <br />
             <sub><b>nawneet77</b></sub>
         </a>
     </td>
-		</tr>
-		<tr>
             <td align="center" width="8%">
         <a href="https://github.com/Imsharad">
             <img src="https://avatars.githubusercontent.com/u/19369042?v=4" width="45" alt="Imsharad"/>
