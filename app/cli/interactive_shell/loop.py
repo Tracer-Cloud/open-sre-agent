@@ -427,12 +427,12 @@ async def _run_one_turn(
         return True
 
     if kind == "new_alert":
-        _run_with_spinner(console, _run_new_alert, text, session, console)
+        _run_new_alert(text, session, console)
         _print_turn_separator(console)
         return True
 
     # follow_up — grounded answer against session.last_state
-    _run_with_spinner(console, answer_follow_up, text, session, console)
+    answer_follow_up(text, session, console)
     session.record("follow_up", text)
     _print_turn_separator(console)
     return True
@@ -487,10 +487,10 @@ async def _repl_main(initial_input: str | None = None, config: ReplConfig | None
                     session.record("cli_agent", stripped)
                 _print_turn_separator(console)
             elif kind == "new_alert":
-                _run_with_spinner(console, _run_new_alert, stripped, session, console)
+                _run_new_alert(stripped, session, console)
                 _print_turn_separator(console)
             else:
-                _run_with_spinner(console, answer_follow_up, stripped, session, console)
+                answer_follow_up(stripped, session, console)
                 session.record("follow_up", stripped)
                 _print_turn_separator(console)
 
