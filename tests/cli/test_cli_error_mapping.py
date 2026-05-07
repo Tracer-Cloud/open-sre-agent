@@ -25,8 +25,7 @@ def test_anthropic_model_not_found_raises_opensre_error() -> None:
 def test_anthropic_model_not_found_suggestion_guides_env_vars() -> None:
     """The suggestion must point at the two env vars users are most likely to misconfigure."""
     exc = RuntimeError(
-        "Anthropic model 'bad-model' was not found. "
-        "Check your configured model name and try again."
+        "Anthropic model 'bad-model' was not found. Check your configured model name and try again."
     )
     with pytest.raises(OpenSREError) as exc_info:
         reraise_cli_runtime_error(exc)
