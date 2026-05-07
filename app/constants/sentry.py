@@ -9,4 +9,4 @@ SENTRY_DSN: Final[str] = (
     "@o4509281671380992.ingest.us.sentry.io/4511150863482880"
 )
 SENTRY_ERROR_SAMPLE_RATE: Final[float] = 1.0
-SENTRY_TRACES_SAMPLE_RATE: Final[float] = 1.0
+SENTRY_TRACES_SAMPLE_RATE: Final[float] = 0.2
