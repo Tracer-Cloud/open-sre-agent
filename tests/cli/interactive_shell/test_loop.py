@@ -16,6 +16,7 @@ from prompt_toolkit.keys import Keys
 from prompt_toolkit.output import DummyOutput
 
 from app.cli.interactive_shell import loop
+from app.cli.interactive_shell.session import ReplSession
 
 
 def test_repl_input_lexer_highlights_first_slash_token() -> None:
@@ -44,7 +45,7 @@ def test_build_prompt_session_uses_persistent_history(
     monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
 
     with create_app_session(input=DummyInput(), output=DummyOutput()):
-        prompt = loop._build_prompt_session()
+        prompt = loop._build_prompt_session(ReplSession())
 
     assert isinstance(prompt.history, FileHistory)
     assert prompt.history.filename == str(tmp_path / "interactive_history")
@@ -64,7 +65,7 @@ def test_build_prompt_session_falls_back_to_memory_history(
     monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", blocked_home)
 
     with create_app_session(input=DummyInput(), output=DummyOutput()):
-        prompt = loop._build_prompt_session()
+        prompt = loop._build_prompt_session(ReplSession())
 
     assert isinstance(prompt.history, InMemoryHistory)
 
@@ -166,17 +167,21 @@ def test_completion_includes_tab_navigation() -> None:
 
 
 def test_completion_menu_current_item_uses_highlight_style() -> None:
+    # Design-system roles (hex without leading #, uppercase as prompt_toolkit stores them):
+    #   ACCENT_SOFT (#5EF0E8) → slash-command token
+    #   PRIMARY     (#1AFF8C) → currently-selected completion entry
+    #   SURFACE     (#111811) → menu background (inset panel role)
     style = loop._build_prompt_style()
     attrs = style.get_attrs_for_style_str("class:repl-slash-command")
 
-    assert attrs.color == "ffbe68"
-    assert attrs.bgcolor == "2c1e14"
+    assert attrs.color == "5EF0E8"  # ACCENT_SOFT
+    assert attrs.bgcolor == "111811"  # SURFACE
     assert attrs.bold is True
 
     attrs_menu = style.get_attrs_for_style_str("class:completion-menu.completion.current")
 
-    assert attrs_menu.color == "ff7a45"
-    assert attrs_menu.bgcolor == "2c1e14"
+    assert attrs_menu.color == "1AFF8C"  # PRIMARY
+    assert attrs_menu.bgcolor == "111811"  # SURFACE
     assert attrs_menu.reverse is False
     assert attrs_menu.bold is True
 

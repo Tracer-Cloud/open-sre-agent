@@ -17,7 +17,7 @@ from app.cli.interactive_shell.prompt_rules import (
     INTERACTIVE_SHELL_TERMINOLOGY_RULE,
 )
 from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
+from app.cli.interactive_shell.theme import BOLD_ACCENT, ERROR, TERMINAL_ACCENT_BOLD, TEXT_DIM
 
 # Cap stored (user, assistant) pairs; list holds 2 entries per turn.
 _MAX_CLI_AGENT_TURNS = 12
@@ -194,7 +194,7 @@ def _execute_action_plan(
 
     console.print()
     console.print(f"[{TERMINAL_ACCENT_BOLD}]assistant:[/]")
-    console.print("[dim]Requested actions:[/dim]")
+    console.print(f"[{TEXT_DIM}]Requested actions:[/]")
     for index, action in enumerate(actions, start=1):
         kind = str(action.get("action", "")).strip()
         if kind == "switch_llm_provider":
@@ -215,10 +215,10 @@ def _execute_action_plan(
             label = str(action.get("command", "")).strip()
         else:
             label = f"unsupported action: {kind or '?'}"
-        console.print(f"[dim]{index}.[/dim] [{TERMINAL_ACCENT_BOLD}]{escape(label)}[/]")
+        console.print(f"[{TEXT_DIM}]{index}.[/] [{TERMINAL_ACCENT_BOLD}]{escape(label)}[/]")
 
     console.print()
-    console.print("[dim]Running requested actions:[/dim]")
+    console.print(f"[{TEXT_DIM}]Running requested actions:[/]")
     for action in actions:
         kind = str(action.get("action", "")).strip()
         console.print()
@@ -227,14 +227,14 @@ def _execute_action_plan(
             requested_model = str(action.get("model", "")).strip() or None
             requested_toolcall = str(action.get("toolcall_model", "")).strip() or None
             if not provider:
-                console.print("[red]missing provider for switch_llm_provider action[/red]")
+                console.print(f"[{ERROR}]missing provider for switch_llm_provider action[/]")
                 continue
             slash_label = f"/model set {provider}"
             if requested_model:
                 slash_label += f" {requested_model}"
             if requested_toolcall:
                 slash_label += f" --toolcall-model {requested_toolcall}"
-            console.print(f"[bold]$ {escape(slash_label)}[/bold]")
+            console.print(f"[{BOLD_ACCENT}]$ {escape(slash_label)}[/]")
             switch_llm_provider(
                 provider,
                 console,
@@ -247,9 +247,9 @@ def _execute_action_plan(
         if kind == "switch_toolcall_model":
             requested_model = str(action.get("model", "")).strip()
             if not requested_model:
-                console.print("[red]missing model for switch_toolcall_model action[/red]")
+                console.print(f"[{ERROR}]missing model for switch_toolcall_model action[/]")
                 continue
-            console.print(f"[bold]$ /model toolcall set {escape(requested_model)}[/bold]")
+            console.print(f"[{BOLD_ACCENT}]$ /model toolcall set {escape(requested_model)}[/]")
             switch_toolcall_model(requested_model, console)
             session.record("slash", f"/model toolcall set {requested_model}")
             continue
@@ -257,14 +257,14 @@ def _execute_action_plan(
         if kind == "slash":
             command = str(action.get("command", "")).strip()
             if command not in _ALLOWED_SLASH_ACTIONS:
-                console.print(f"[red]unsupported action command:[/red] {escape(command)}")
+                console.print(f"[{ERROR}]unsupported action command:[/] {escape(command)}")
                 continue
             session.record("slash", command)
-            console.print(f"[bold]$ {escape(command)}[/bold]")
+            console.print(f"[{BOLD_ACCENT}]$ {escape(command)}[/]")
             dispatch_slash(command, session, console)
             continue
 
-        console.print(f"[red]unsupported action:[/red] {escape(kind or '?')}")
+        console.print(f"[{ERROR}]unsupported action:[/] {escape(kind or '?')}")
     console.print()
     return True
 
@@ -292,7 +292,7 @@ def answer_cli_agent(
     try:
         from app.services.llm_client import get_llm_for_reasoning
     except Exception as exc:  # noqa: BLE001
-        console.print(f"[red]LLM client unavailable:[/red] {escape(str(exc))}")
+        console.print(f"[{ERROR}]LLM client unavailable:[/] {escape(str(exc))}")
         return
 
     reference = build_cli_reference_text()
@@ -311,7 +311,7 @@ def answer_cli_agent(
             client = get_llm_for_reasoning()
             response = client.invoke(prompt)
     except Exception as exc:  # noqa: BLE001
-        console.print(f"[red]assistant failed:[/red] {escape(str(exc))}")
+        console.print(f"[{ERROR}]assistant failed:[/] {escape(str(exc))}")
         return
 
     text_str = _response_text(response)

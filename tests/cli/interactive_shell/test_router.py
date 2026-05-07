@@ -16,7 +16,7 @@ class TestClassifyInput:
         session = ReplSession()
         # A bare word matching a slash command short name should route to slash
         # even without the leading '/' and even with no prior investigation.
-        for word in ("help", "exit", "quit", "status", "clear", "reset", "trust"):
+        for word in ("help", "exit", "quit", "status", "clear", "reset", "trust", "welcome"):
             assert classify_input(word, session) == "slash", word
 
     def test_bare_question_mark_is_slash(self) -> None:
@@ -35,11 +35,13 @@ class TestClassifyInput:
         assert classify_input("HELP", session) == "slash"
         assert classify_input("Exit", session) == "slash"
 
-    def test_no_prior_greeting_routes_to_cli_agent_not_investigation(self) -> None:
+    def test_no_prior_greeting_routes_to_welcome_panel(self) -> None:
+        # Greetings and meta-words ("hi", "agent", "menu", …) are aliased to the
+        # /welcome slash command so the user always lands on the structured
+        # welcome panel instead of an unstructured LLM reply.
         session = ReplSession()
-        assert classify_input("hey", session) == "cli_agent"
-        assert classify_input("hi", session) == "cli_agent"
-        assert classify_input("hello", session) == "cli_agent"
+        for word in ("hey", "hi", "agent", "menu", "welcome"):
+            assert classify_input(word, session) == "slash", word
 
     def test_long_operational_health_question_stays_cli_agent(self) -> None:
         """Long setup questions must not hit LangGraph just because len >= 48."""

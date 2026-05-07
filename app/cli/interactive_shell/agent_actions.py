@@ -18,7 +18,7 @@ from app.cli.interactive_shell.action_planner import (
 from app.cli.interactive_shell.command_registry import dispatch_slash, switch_llm_provider
 from app.cli.interactive_shell.rendering import print_planned_actions
 from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
+from app.cli.interactive_shell.theme import BOLD_ACCENT, TERMINAL_ACCENT_BOLD, TEXT_DIM
 
 
 def execute_cli_actions(message: str, session: ReplSession, console: Console) -> bool:
@@ -35,7 +35,7 @@ def execute_cli_actions(message: str, session: ReplSession, console: Console) ->
     console.print(f"[{TERMINAL_ACCENT_BOLD}]assistant:[/]")
     print_planned_actions(console, actions)
     console.print()
-    console.print("[dim]Running requested actions:[/dim]")
+    console.print(f"[{TEXT_DIM}]Running requested actions:[/]")
     if not has_unhandled_clause:
         session.record("cli_agent", message)
 
@@ -43,11 +43,11 @@ def execute_cli_actions(message: str, session: ReplSession, console: Console) ->
         console.print()
         if action.kind == "slash":
             session.record("slash", action.content)
-            console.print(f"[bold]$ {escape(action.content)}[/bold]")
+            console.print(f"[{BOLD_ACCENT}]$ {escape(action.content)}[/]")
             if not dispatch_slash(action.content, session, console):
                 return True
         elif action.kind == "llm_provider":
-            console.print(f"[bold]$ /model set {escape(action.content)}[/bold]")
+            console.print(f"[{BOLD_ACCENT}]$ /model set {escape(action.content)}[/]")
             switch_llm_provider(action.content, console)
             session.record("slash", f"/model set {action.content}")
         elif action.kind == "shell":

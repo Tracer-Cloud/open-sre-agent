@@ -14,7 +14,13 @@ from app.cli.interactive_shell.rendering import (
     repl_table,
 )
 from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD, TERMINAL_ERROR
+from app.cli.interactive_shell.theme import (
+    PRIMARY,
+    TERMINAL_ACCENT_BOLD,
+    TERMINAL_ERROR,
+    TEXT_DIM,
+    WARNING,
+)
 
 
 def _cmd_integrations(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
@@ -29,14 +35,14 @@ def _cmd_integrations(session: ReplSession, console: Console, args: list[str]) -
         render_integrations_table(console, results)
         failed = [r for r in results if r.get("status") in ("failed", "missing")]
         if failed:
-            console.print(f"[yellow]{len(failed)} integration(s) need attention.[/yellow]")
+            console.print(f"[{WARNING}]{len(failed)} integration(s) need attention.[/]")
         else:
-            console.print("[green]all integrations ok.[/green]")
+            console.print(f"[{PRIMARY}]all integrations ok.[/]")
         return True
 
     if sub == "show":
         if len(args) < 2:
-            console.print("[dim]usage:[/dim] /integrations show <service>")
+            console.print(f"[{TEXT_DIM}]usage:[/] /integrations show <service>")
             return True
         service = args[1].lower()
         results = repl_data.load_verified_integrations()
@@ -73,13 +79,13 @@ def _cmd_mcp(session: ReplSession, console: Console, args: list[str]) -> bool:  
 
     if sub == "connect":
         console.print(
-            "[dim]to connect an MCP server, run:[/dim] [bold]opensre integrations setup[/bold]"
+            f"[{TEXT_DIM}]to connect an MCP server, run:[/] [bold]opensre integrations setup[/bold]"
         )
         return True
 
     if sub == "disconnect":
         console.print(
-            "[dim]to remove an MCP server, run:[/dim] [bold]opensre integrations remove <service>[/bold]"
+            f"[{TEXT_DIM}]to remove an MCP server, run:[/] [bold]opensre integrations remove <service>[/bold]"
         )
         return True
 

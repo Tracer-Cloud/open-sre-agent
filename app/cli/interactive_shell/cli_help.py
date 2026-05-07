@@ -25,7 +25,7 @@ from app.cli.interactive_shell.prompt_rules import (
     INTERACTIVE_SHELL_TERMINOLOGY_RULE,
 )
 from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
+from app.cli.interactive_shell.theme import ERROR, TERMINAL_ACCENT_BOLD
 from app.utils.sentry_sdk import capture_exception
 
 # Match the cli_agent terminology / formatting rules so docs answers feel
@@ -92,7 +92,7 @@ def answer_cli_help(question: str, _session: ReplSession, console: Console) -> N
         from app.services.llm_client import get_llm_for_reasoning
     except Exception as exc:  # noqa: BLE001
         capture_exception(exc)
-        console.print(f"[red]LLM client unavailable:[/red] {escape(str(exc))}")
+        console.print(f"[{ERROR}]LLM client unavailable:[/] {escape(str(exc))}")
         return
 
     cli_reference = build_cli_reference_text()
@@ -106,7 +106,7 @@ def answer_cli_help(question: str, _session: ReplSession, console: Console) -> N
             response = client.invoke(prompt)
     except Exception as exc:  # noqa: BLE001
         capture_exception(exc)
-        console.print(f"[red]assistant failed:[/red] {escape(str(exc))}")
+        console.print(f"[{ERROR}]assistant failed:[/] {escape(str(exc))}")
         return
 
     text = getattr(response, "content", None) or str(response)

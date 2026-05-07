@@ -7,11 +7,11 @@ import os
 from rich.console import Console
 from rich.markup import escape
 
-from app.cli.interactive_shell.banner import render_banner
+from app.cli.interactive_shell.banner import render_banner, render_ready_box
 from app.cli.interactive_shell.command_registry.types import SlashCommand
 from app.cli.interactive_shell.rendering import repl_table
 from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
+from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD, TEXT_DIM, WARNING
 
 
 def _cmd_clear(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
@@ -20,19 +20,24 @@ def _cmd_clear(session: ReplSession, console: Console, args: list[str]) -> bool:
     return True
 
 
+def _cmd_welcome(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+    render_ready_box(console, session=session)
+    return True
+
+
 def _cmd_reset(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     session.clear()
-    console.print("[dim]session state cleared.[/dim]")
+    console.print(f"[{TEXT_DIM}]session state cleared.[/]")
     return True
 
 
 def _cmd_trust(session: ReplSession, console: Console, args: list[str]) -> bool:
     if args and args[0].lower() in ("off", "false", "disable"):
         session.trust_mode = False
-        console.print("[dim]trust mode off[/dim]")
+        console.print(f"[{TEXT_DIM}]trust mode off[/]")
     else:
         session.trust_mode = True
-        console.print("[yellow]trust mode on[/yellow] — future approval prompts will be skipped")
+        console.print(f"[{WARNING}]trust mode on[/] — future approval prompts will be skipped")
     return True
 
 
@@ -78,7 +83,7 @@ def _cmd_cost(session: ReplSession, console: Console, args: list[str]) -> bool: 
         table.add_row("input tokens", f"{inp:,}")
         table.add_row("output tokens", f"{out:,}")
     else:
-        table.add_row("token usage", "[dim]not available (LangSmith not wired yet)[/dim]")
+        table.add_row("token usage", f"[{TEXT_DIM}]not available (LangSmith not wired yet)[/]")
 
     console.print(table)
     return True
@@ -87,10 +92,10 @@ def _cmd_cost(session: ReplSession, console: Console, args: list[str]) -> bool: 
 def _cmd_verbose(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     if args and args[0].lower() in ("off", "false", "0", "disable"):
         os.environ.pop("TRACER_VERBOSE", None)
-        console.print("[dim]verbose logging off[/dim]")
+        console.print(f"[{TEXT_DIM}]verbose logging off[/]")
     else:
         os.environ["TRACER_VERBOSE"] = "1"
-        console.print("[yellow]verbose logging on[/yellow]")
+        console.print(f"[{WARNING}]verbose logging on[/]")
     return True
 
 
@@ -98,15 +103,15 @@ def _cmd_compact(session: ReplSession, console: Console, args: list[str]) -> boo
     before = len(session.history)
     if before > 20:
         session.history = session.history[-20:]
-        console.print(f"[dim]compacted: kept last 20 of {before} entries.[/dim]")
+        console.print(f"[{TEXT_DIM}]compacted: kept last 20 of {before} entries.[/]")
     else:
-        console.print(f"[dim]nothing to compact ({before} entries, limit is 20).[/dim]")
+        console.print(f"[{TEXT_DIM}]nothing to compact ({before} entries, limit is 20).[/]")
     return True
 
 
 def _cmd_context(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     if not session.accumulated_context:
-        console.print("[dim]no infra context accumulated yet.[/dim]")
+        console.print(f"[{TEXT_DIM}]no infra context accumulated yet.[/]")
         return True
 
     table = repl_table(
@@ -122,6 +127,7 @@ def _cmd_context(session: ReplSession, console: Console, args: list[str]) -> boo
 
 COMMANDS: list[SlashCommand] = [
     SlashCommand("/clear", "clear the screen and re-render the banner", _cmd_clear),
+    SlashCommand("/welcome", "re-render the welcome panel", _cmd_welcome),
     SlashCommand("/reset", "clear session state (keeps trust mode)", _cmd_reset),
     SlashCommand("/trust", "toggle trust mode ('/trust off' to disable)", _cmd_trust),
     SlashCommand("/status", "show session status", _cmd_status),

@@ -11,7 +11,7 @@ from rich.markup import escape
 
 from app.cli.interactive_shell.loaders import llm_loader
 from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD, TERMINAL_ERROR
+from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD, TERMINAL_ERROR, WARNING
 
 _logger = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ def answer_follow_up(question: str, session: ReplSession, console: Console) -> N
     """Answer a follow-up question about the previous investigation."""
     if session.last_state is None:
         console.print(
-            "[yellow]no prior investigation in this session.[/yellow] "
+            f"[{WARNING}]no prior investigation in this session.[/] "
             "describe an alert first, then ask follow-up questions about it."
         )
         return

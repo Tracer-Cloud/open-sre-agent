@@ -9,11 +9,11 @@ from rich.console import Console
 from app.cli.interactive_shell.command_registry.types import SlashCommand
 from app.cli.interactive_shell.rendering import repl_table
 from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
+from app.cli.interactive_shell.theme import ERROR, PRIMARY, TERMINAL_ACCENT_BOLD, TEXT_DIM, WARNING
 
 
 def _cmd_exit(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    console.print("[dim]goodbye.[/dim]")
+    console.print(f"[{TEXT_DIM}]goodbye.[/]")
     return False
 
 
@@ -37,26 +37,26 @@ def _cmd_health(session: ReplSession, console: Console, args: list[str]) -> bool
 def _cmd_doctor(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     from app.cli.commands.doctor import _CHECKS, _check
 
-    status_styles: dict[str, str] = {"ok": "green", "warn": "yellow", "error": "red"}
+    status_styles: dict[str, str] = {"ok": PRIMARY, "warn": WARNING, "error": ERROR}
     table = repl_table(title="OpenSRE Doctor", title_style=TERMINAL_ACCENT_BOLD)
     table.add_column("check", style="bold")
     table.add_column("status")
-    table.add_column("detail", style="dim", overflow="fold")
+    table.add_column("detail", style=TEXT_DIM, overflow="fold")
 
     issues = 0
     for name, fn in _CHECKS:
         result = _check(name, fn)
         status = result["status"]
-        style = status_styles.get(status, "dim")
+        style = status_styles.get(status, TEXT_DIM)
         table.add_row(name, f"[{style}]{status}[/{style}]", result["detail"])
         if status in ("warn", "error"):
             issues += 1
 
     console.print(table)
     if issues:
-        console.print(f"[yellow]{issues} issue(s) found.[/yellow]")
+        console.print(f"[{WARNING}]{issues} issue(s) found.[/]")
     else:
-        console.print("[green]all checks passed.[/green]")
+        console.print(f"[{PRIMARY}]all checks passed.[/]")
     return True
 
 

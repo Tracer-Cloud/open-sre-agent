@@ -23,6 +23,7 @@ from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.shell_execution import execute_shell_command
 from app.cli.interactive_shell.shell_policy import evaluate_policy, parse_shell_command
 from app.cli.interactive_shell.tasks import TaskKind, TaskRecord
+from app.cli.interactive_shell.theme import BOLD_ACCENT, ERROR, TEXT_DIM, WARNING
 from app.cli.support.errors import OpenSREError
 
 SHELL_COMMAND_TIMEOUT_SECONDS = 120
@@ -126,15 +127,13 @@ def watch_synthetic_subprocess(
 
 
 def run_shell_command(command: str, session: ReplSession, console: Console) -> None:
-    console.print(f"[bold]$ {escape(command)}[/bold]")
+    console.print(f"[{BOLD_ACCENT}]$ {escape(command)}[/]")
     parsed = parse_shell_command(command, is_windows=_intent_parser.IS_WINDOWS)
     decision = evaluate_policy(parsed=parsed)
     if not decision.allow:
-        console.print(
-            f"[yellow]command blocked:[/yellow] {escape(decision.reason or 'not allowed')}"
-        )
+        console.print(f"[{WARNING}]command blocked:[/] {escape(decision.reason or 'not allowed')}")
         if decision.hint:
-            console.print(f"[dim]{escape(decision.hint)}[/dim]")
+            console.print(f"[{TEXT_DIM}]{escape(decision.hint)}[/]")
         session.record("shell", command, ok=False)
         return
 
@@ -158,7 +157,7 @@ def run_shell_command(command: str, session: ReplSession, console: Console) -> N
 
     use_shell = parsed.passthrough
     if use_shell:
-        console.print("[dim]explicit shell passthrough enabled[/dim]")
+        console.print(f"[{TEXT_DIM}]explicit shell passthrough enabled[/]")
 
     try:
         result = execute_shell_command(
@@ -169,21 +168,23 @@ def run_shell_command(command: str, session: ReplSession, console: Console) -> N
             max_output_chars=_MAX_COMMAND_OUTPUT_CHARS,
         )
     except subprocess.TimeoutExpired:
-        console.print(f"[red]command timed out after {SHELL_COMMAND_TIMEOUT_SECONDS} seconds[/red]")
+        console.print(
+            f"[{ERROR}]command timed out after {SHELL_COMMAND_TIMEOUT_SECONDS} seconds[/]"
+        )
         session.record("shell", command, ok=False)
         return
     except Exception as exc:  # noqa: BLE001
-        console.print(f"[red]command failed to start:[/red] {escape(str(exc))}")
+        console.print(f"[{ERROR}]command failed to start:[/] {escape(str(exc))}")
         session.record("shell", command, ok=False)
         return
 
     print_command_output(console, result.stdout)
-    print_command_output(console, result.stderr, style="red")
+    print_command_output(console, result.stderr, style=ERROR)
     ok = result.exit_code == 0
     if not ok:
-        console.print(f"[red]exit code:[/red] {result.exit_code}")
+        console.print(f"[{ERROR}]exit code:[/] {result.exit_code}")
     elif not result.stdout and not result.stderr:
-        console.print("[dim]exit code: 0[/dim]")
+        console.print(f"[{TEXT_DIM}]exit code: 0[/]")
     session.record("shell", command, ok=ok)
 
 
@@ -198,12 +199,12 @@ def run_cd_command(command: str, session: ReplSession, console: Console) -> None
         if _intent_parser.IS_WINDOWS and len(tokens) > 1:
             tokens = [tokens[0], *(_strip_outer_quotes(token) for token in tokens[1:])]
     except ValueError as exc:
-        console.print(f"[red]cd failed:[/red] {escape(str(exc))}")
+        console.print(f"[{ERROR}]cd failed:[/] {escape(str(exc))}")
         session.record("shell", command, ok=False)
         return
 
     if len(tokens) > 2:
-        console.print("[red]cd failed:[/red] too many arguments")
+        console.print(f"[{ERROR}]cd failed:[/] too many arguments")
         session.record("shell", command, ok=False)
         return
 
@@ -211,7 +212,7 @@ def run_cd_command(command: str, session: ReplSession, console: Console) -> None
     try:
         os.chdir(target)
     except Exception as exc:  # noqa: BLE001
-        console.print(f"[red]cd failed:[/red] {escape(str(exc))}")
+        console.print(f"[{ERROR}]cd failed:[/] {escape(str(exc))}")
         session.record("shell", command, ok=False)
         return
 
@@ -223,12 +224,12 @@ def run_pwd_command(command: str, session: ReplSession, console: Console) -> Non
     try:
         tokens = shlex.split(command, posix=not _intent_parser.IS_WINDOWS)
     except ValueError as exc:
-        console.print(f"[red]pwd failed:[/red] {escape(str(exc))}")
+        console.print(f"[{ERROR}]pwd failed:[/] {escape(str(exc))}")
         session.record("shell", command, ok=False)
         return
 
     if len(tokens) != 1:
-        console.print("[red]pwd failed:[/red] too many arguments")
+        console.print(f"[{ERROR}]pwd failed:[/] too many arguments")
         session.record("shell", command, ok=False)
         return
 
@@ -239,7 +240,7 @@ def run_pwd_command(command: str, session: ReplSession, console: Console) -> Non
 def run_sample_alert(template_name: str, session: ReplSession, console: Console) -> None:
     from app.cli.investigation import run_sample_alert_for_session
 
-    console.print(f"[bold]sample alert:[/bold] {escape(template_name)}")
+    console.print(f"[{BOLD_ACCENT}]sample alert:[/] {escape(template_name)}")
     task = session.task_registry.create(TaskKind.INVESTIGATION)
     task.mark_running()
     try:
@@ -250,19 +251,19 @@ def run_sample_alert(template_name: str, session: ReplSession, console: Console)
         )
     except KeyboardInterrupt:
         task.mark_cancelled()
-        console.print("[yellow]investigation cancelled.[/yellow]")
+        console.print(f"[{WARNING}]investigation cancelled.[/]")
         session.record("alert", f"sample:{template_name}", ok=False)
         return
     except OpenSREError as exc:
         task.mark_failed(str(exc))
-        console.print(f"[red]investigation failed:[/red] {escape(str(exc))}")
+        console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
         if exc.suggestion:
-            console.print(f"[yellow]suggestion:[/yellow] {escape(exc.suggestion)}")
+            console.print(f"[{WARNING}]suggestion:[/] {escape(exc.suggestion)}")
         session.record("alert", f"sample:{template_name}", ok=False)
         return
     except Exception as exc:  # noqa: BLE001
         task.mark_failed(str(exc))
-        console.print(f"[red]investigation failed:[/red] {escape(str(exc))}")
+        console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
         session.record("alert", f"sample:{template_name}", ok=False)
         return
 
@@ -275,12 +276,12 @@ def run_sample_alert(template_name: str, session: ReplSession, console: Console)
 
 def run_synthetic_test(suite_name: str, session: ReplSession, console: Console) -> None:
     if suite_name != "rds_postgres":
-        console.print(f"[red]unknown synthetic suite:[/red] {escape(suite_name)}")
+        console.print(f"[{ERROR}]unknown synthetic suite:[/] {escape(suite_name)}")
         session.record("synthetic_test", suite_name, ok=False)
         return
 
     display_command = "opensre tests synthetic"
-    console.print(f"[bold]$ {display_command}[/bold]")
+    console.print(f"[{BOLD_ACCENT}]$ {display_command}[/]")
     task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
     task.mark_running()
     # Lifetime managed by the watcher thread's finally block. noqa: SIM115
@@ -296,16 +297,16 @@ def run_synthetic_test(suite_name: str, session: ReplSession, console: Console) 
     except Exception as exc:  # noqa: BLE001
         stderr_buf.close()
         task.mark_failed(str(exc))
-        console.print(f"[red]synthetic test failed to start:[/red] {escape(str(exc))}")
+        console.print(f"[{ERROR}]synthetic test failed to start:[/] {escape(str(exc))}")
         session.record("synthetic_test", suite_name, ok=False)
         return
 
     task.attach_process(proc)
     watch_synthetic_subprocess(task, proc, session, suite_name, stderr_buf)
     console.print(
-        f"[dim]synthetic test started — task[/dim] [bold]{escape(task.task_id)}[/bold]. "
-        f"[dim]/tasks[/dim] [dim]to monitor,[/dim] [bold]/cancel {escape(task.task_id)}[/bold] "
-        f"[dim]to stop.[/dim]"
+        f"[{TEXT_DIM}]synthetic test started — task[/] [{BOLD_ACCENT}]{escape(task.task_id)}[/]. "
+        f"[{TEXT_DIM}]/tasks[/] [{TEXT_DIM}]to monitor,[/] [{BOLD_ACCENT}]/cancel {escape(task.task_id)}[/] "
+        f"[{TEXT_DIM}]to stop.[/]"
     )
 
 

@@ -8,6 +8,8 @@ import click
 from rich.console import Console
 from rich.text import Text
 
+from app.cli.interactive_shell.theme import BOLD_ACCENT, BOLD_TEXT
+
 _ASCII_HEADER = """\
   ___  ____  _____ _   _ ____  ____  _____
  / _ \\|  _ \\| ____| \\ | / ___||  _ \\| ____|
@@ -56,7 +58,7 @@ def _commands_from_group(group: click.Group) -> tuple[tuple[str, str], ...]:
 
 def _render_usage(console: Console) -> None:
     console.print(
-        Text.assemble(("  Usage: "), ("opensre", "bold white"), (" [OPTIONS] [COMMAND] [PROMPT]"))
+        Text.assemble(("  Usage: "), ("opensre", BOLD_TEXT), (" [OPTIONS] [COMMAND] [PROMPT]"))
     )
 
 
@@ -67,9 +69,9 @@ def _render_rows(
     rows: Sequence[tuple[str, str]],
     width: int,
 ) -> None:
-    console.print(Text.assemble((f"  {title}:", "bold white")))
+    console.print(Text.assemble((f"  {title}:", BOLD_TEXT)))
     for label, description in rows:
-        console.print(Text.assemble(("    ", ""), (f"{label:<{width}}", "bold cyan"), description))
+        console.print(Text.assemble(("    ", ""), (f"{label:<{width}}", BOLD_ACCENT), description))
 
 
 def render_help(group: click.Group) -> None:
@@ -90,7 +92,7 @@ def render_landing() -> None:
     console = Console(highlight=False)
     console.print()
     for line in _ASCII_HEADER.splitlines():
-        console.print(Text.assemble(("  ", ""), (line, "bold cyan")))
+        console.print(Text.assemble(("  ", ""), (line, BOLD_ACCENT)))
     console.print()
     console.print(
         Text.assemble(
