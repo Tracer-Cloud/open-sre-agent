@@ -9,7 +9,7 @@ from typing import Any
 from app.config import ANTHROPIC_LLM_CONFIG, OPENAI_LLM_CONFIG
 from app.constants.prompts import GENERAL_SYSTEM_PROMPT, ROUTER_PROMPT, SYSTEM_PROMPT
 from app.services import get_llm_for_tools
-from app.services.chat_langchain_adapter import (
+from app.services.chat_sdk_adapter import (
     build_bound_chat_model,
     messages_to_invocation_dicts,
 )
