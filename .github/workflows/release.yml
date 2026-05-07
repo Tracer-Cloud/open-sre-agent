@@ -415,6 +415,7 @@ jobs:
           } > RELEASE_NOTES.md
 
       - name: Create GitHub release
+        id: github_release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
@@ -427,6 +428,7 @@ jobs:
           target_sha="$(git rev-parse "origin/$default_branch")"
 
           if gh release view "$TAG_NAME" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "created=false" >> "$GITHUB_OUTPUT"
             echo "Release $TAG_NAME already exists; nothing to do."
             exit 0
           fi
@@ -437,6 +439,107 @@ jobs:
             --target "$target_sha" \
             --title "Latest" \
             --notes-file RELEASE_NOTES.md
+
+          echo "created=true" >> "$GITHUB_OUTPUT"
+
+      - name: Announce on Discord
+        if: ${{ steps.github_release.outputs.created == 'true' && !github.event.repository.fork && !github.event.repository.private }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL_UPDATE }}
+          DISCORD_RELEASES_ROLE_ID: ${{ secrets.DISCORD_RELEASES_ROLE_ID }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag_name }}
+          RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.prepare.outputs.tag_name }}
+          REPO_STARS: ${{ github.event.repository.stargazers_count }}
+          REPO_FORKS: ${{ github.event.repository.forks_count }}
+        shell: bash
+        run: bash .github/scripts/discord_release_announcement.sh
+
+      - name: Compose tweet (<= 280 chars)
+        id: compose_tweet
+        if: ${{ steps.github_release.outputs.created == 'true' && !github.event.repository.fork && !github.event.repository.private }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag_name }}
+          RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.prepare.outputs.tag_name }}
+          REPO_STARS: ${{ github.event.repository.stargazers_count }}
+          REPO_FORKS: ${{ github.event.repository.forks_count }}
+          TWITTER_CONSUMER_API_KEY: ${{ secrets.TWITTER_CONSUMER_API_KEY }}
+          TWITTER_CONSUMER_API_SECRET: ${{ secrets.TWITTER_CONSUMER_API_SECRET }}
+          TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
+          TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "${TWITTER_CONSUMER_API_KEY:-}" ] || [ -z "${TWITTER_CONSUMER_API_SECRET:-}" ] || [ -z "${TWITTER_ACCESS_TOKEN:-}" ] || [ -z "${TWITTER_ACCESS_TOKEN_SECRET:-}" ]; then
+            echo "Twitter secrets missing; skipping X announcement."
+            echo "should_tweet=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "message<<EOF"
+              echo ""
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          RELEASE_BODY="$(gh release view "$RELEASE_TAG" --repo "${{ github.repository }}" --json body -q .body)"
+
+          major_feature=""
+          while IFS= read -r line; do
+            if [[ "$line" =~ ^[[:space:]]*[Mm]ajor[[:space:]]feature:[[:space:]]*(.+)$ ]]; then
+              major_feature="${BASH_REMATCH[1]}"
+              break
+            fi
+          done <<< "${RELEASE_BODY:-}"
+
+          if [ -z "$major_feature" ]; then
+            major_feature="Major improvements shipped"
+          fi
+
+          major_feature="$(printf '%s' "$major_feature" | tr '\n' ' ' | tr -s ' ')"
+          prefix="New opensre release ${RELEASE_TAG}: Major feature: "
+          stats_suffix=" ⭐${REPO_STARS:-0} 🍴${REPO_FORKS:-0}"
+          suffix=" ${RELEASE_URL}${stats_suffix}"
+          max=280
+
+          available=$((max - ${#prefix} - ${#suffix}))
+          if [ "$available" -lt 1 ]; then
+            message="opensre ${RELEASE_TAG} ${RELEASE_URL}"
+          else
+            snippet="$major_feature"
+            if [ -n "$snippet" ] && [ "${#snippet}" -gt "$available" ]; then
+              snippet="${snippet:0:$((available-1))}…"
+            fi
+
+            if [ -n "$snippet" ]; then
+              message="${prefix}${snippet}${suffix}"
+            else
+              message="New opensre release ${RELEASE_TAG}: ${RELEASE_URL}"
+            fi
+          fi
+
+          if [ "${#message}" -gt 280 ]; then
+            message="New opensre release ${RELEASE_TAG}: ${RELEASE_URL}"
+          fi
+
+          echo "should_tweet=true" >> "$GITHUB_OUTPUT"
+          {
+            echo "message<<EOF"
+            echo "$message"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Post tweet
+        if: ${{ steps.github_release.outputs.created == 'true' && steps.compose_tweet.outputs.should_tweet == 'true' }}
+        uses: Eomm/why-don-t-you-tweet@54e11450e21479faa5db172b9f2c10a29aedfc62
+        with:
+          tweet-message: ${{ steps.compose_tweet.outputs.message }}
+        env:
+          TWITTER_CONSUMER_API_KEY: ${{ secrets.TWITTER_CONSUMER_API_KEY }}
+          TWITTER_CONSUMER_API_SECRET: ${{ secrets.TWITTER_CONSUMER_API_SECRET }}
+          TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
+          TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
 
       - name: Sync Homebrew tap formula
         env:
