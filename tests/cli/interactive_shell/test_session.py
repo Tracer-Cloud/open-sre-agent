@@ -13,6 +13,8 @@ class TestReplSession:
         assert session.accumulated_context == {}
         assert session.trust_mode is False
         assert session.task_registry.list_recent() == []
+        assert session.terminal_turn_count == 0
+        assert session.terminal_fallback_count == 0
 
     def test_record_appends_entry(self) -> None:
         session = ReplSession()
@@ -22,6 +24,16 @@ class TestReplSession:
         assert len(session.history) == 3
         assert session.history[-1]["type"] == "alert"
         assert session.history[-1]["ok"] is False
+
+    def test_mark_latest_updates_most_recent_matching_kind(self) -> None:
+        session = ReplSession()
+        session.record("slash", "/investigate missing.json")
+        session.record("alert", "missing.json", ok=False)
+
+        session.mark_latest(ok=False, kind="slash")
+
+        assert session.history[0]["ok"] is False
+        assert session.history[1]["ok"] is False
 
     def test_clear_preserves_trust_mode(self) -> None:
         session = ReplSession()
@@ -89,3 +101,27 @@ class TestReplSession:
         session.accumulate_from_state(None)
         session.accumulate_from_state({})
         assert session.accumulated_context == {}
+
+    def test_record_terminal_turn_updates_aggregates(self) -> None:
+        session = ReplSession()
+
+        first = session.record_terminal_turn(
+            executed_count=2,
+            executed_success_count=1,
+            fallback_to_llm=True,
+        )
+        second = session.record_terminal_turn(
+            executed_count=1,
+            executed_success_count=1,
+            fallback_to_llm=False,
+        )
+
+        assert first.turn_index == 1
+        assert first.fallback_count == 1
+        assert first.action_success_percent == 50.0
+        assert first.fallback_rate_percent == 100.0
+
+        assert second.turn_index == 2
+        assert second.fallback_count == 1
+        assert round(second.action_success_percent, 2) == 66.67
+        assert second.fallback_rate_percent == 50.0

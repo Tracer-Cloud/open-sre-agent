@@ -35,6 +35,7 @@ from app.cli.interactive_shell.shell_policy import (
 from app.cli.interactive_shell.tasks import TaskKind, TaskRecord
 from app.cli.interactive_shell.theme import TERMINAL_ERROR
 from app.cli.support.errors import OpenSREError
+from app.cli.support.exception_reporting import report_exception
 
 SHELL_COMMAND_TIMEOUT_SECONDS = 120
 SYNTHETIC_TEST_TIMEOUT_SECONDS = 1800
@@ -185,6 +186,7 @@ def run_shell_command(
             max_output_chars=_MAX_COMMAND_OUTPUT_CHARS,
         )
     except Exception as exc:  # noqa: BLE001
+        report_exception(exc, context="interactive_shell.shell_command.start")
         console.print(f"[red]command failed to start:[/red] {escape(str(exc))}")
         session.record("shell", command, ok=False)
         return
@@ -303,6 +305,7 @@ def run_sample_alert(
         return
     except Exception as exc:  # noqa: BLE001
         task.mark_failed(str(exc))
+        report_exception(exc, context="interactive_shell.sample_alert")
         console.print(f"[red]investigation failed:[/red] {escape(str(exc))}")
         session.record("alert", f"sample:{template_name}", ok=False)
         return
@@ -358,6 +361,7 @@ def run_synthetic_test(
     except Exception as exc:  # noqa: BLE001
         stderr_buf.close()
         task.mark_failed(str(exc))
+        report_exception(exc, context="interactive_shell.synthetic_test.start")
         console.print(f"[red]synthetic test failed to start:[/red] {escape(str(exc))}")
         session.record("synthetic_test", suite_name, ok=False)
         return

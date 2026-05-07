@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from app.integrations.llm_cli.registry import CLIProviderRegistration
 
 import boto3
-from anthropic import Anthropic, AnthropicBedrock, AuthenticationError
+from anthropic import Anthropic, AnthropicBedrock, AuthenticationError, NotFoundError
 from openai import AuthenticationError as OpenAIAuthError
 from openai import OpenAI
 from pydantic import BaseModel, ValidationError
@@ -165,6 +165,11 @@ class LLMClient:
                 raise RuntimeError(
                     "Anthropic authentication failed. Check ANTHROPIC_API_KEY in your environment or .env."
                 ) from err
+            except NotFoundError as err:
+                raise RuntimeError(
+                    f"Anthropic model '{self._model}' was not found. "
+                    "Check your configured model name and try again."
+                ) from err
             except GuardrailBlockedError:
                 raise
             except Exception as err:
@@ -205,6 +210,11 @@ class LLMClient:
             except AuthenticationError as err:
                 raise RuntimeError(
                     "Anthropic authentication failed. Check ANTHROPIC_API_KEY in your environment or .env."
+                ) from err
+            except NotFoundError as err:
+                raise RuntimeError(
+                    f"Anthropic model '{self._model}' was not found. "
+                    "Check your configured model name and try again."
                 ) from err
             except GuardrailBlockedError:
                 raise

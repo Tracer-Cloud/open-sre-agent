@@ -24,7 +24,7 @@ from app.cli.interactive_shell.prompt_rules import (
 )
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.streaming import STREAM_LABEL_ASSISTANT, stream_to_console
-from app.utils.sentry_sdk import capture_exception
+from app.cli.support.exception_reporting import report_exception
 
 # Match the cli_agent terminology / formatting rules so docs answers feel
 # consistent with the rest of the interactive shell.
@@ -89,7 +89,7 @@ def answer_cli_help(question: str, _session: ReplSession, console: Console) -> N
     try:
         from app.services.llm_client import get_llm_for_reasoning
     except Exception as exc:  # noqa: BLE001
-        capture_exception(exc)
+        report_exception(exc, context="interactive_shell.cli_help.import")
         console.print(f"[red]LLM client unavailable:[/red] {escape(str(exc))}")
         return
 
@@ -106,12 +106,10 @@ def answer_cli_help(question: str, _session: ReplSession, console: Console) -> N
             chunks=client.invoke_stream(prompt),
         )
     except KeyboardInterrupt:
-        # Cancel just this response and stay in the REPL. A second Ctrl+C
-        # at the prompt exits the shell.
         console.print("[dim]· cancelled[/dim]")
         return
     except Exception as exc:  # noqa: BLE001
-        capture_exception(exc)
+        report_exception(exc, context="interactive_shell.cli_help.stream")
         console.print(f"[red]assistant failed:[/red] {escape(str(exc))}")
         return
 

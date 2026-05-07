@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 
 from rich.console import Console
 from rich.markup import escape
@@ -31,6 +32,15 @@ from app.cli.interactive_shell.execution_policy import (
 from app.cli.interactive_shell.rendering import print_planned_actions
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
+
+
+@dataclass(frozen=True)
+class TerminalActionExecutionResult:
+    planned_count: int
+    executed_count: int
+    executed_success_count: int
+    has_unhandled_clause: bool
+    handled: bool
 
 
 def execute_cli_actions(
@@ -120,8 +130,8 @@ def execute_cli_actions(
             ):
                 continue
             console.print(f"[bold]$ /model set {escape(action.content)}[/bold]")
-            switch_llm_provider(action.content, console)
-            session.record("slash", f"/model set {action.content}")
+            ok = switch_llm_provider(action.content, console)
+            session.record("slash", f"/model set {action.content}", ok=ok)
         elif action.kind == "shell":
             run_shell_command(
                 action.content,
@@ -154,4 +164,56 @@ def execute_cli_actions(
     return not has_unhandled_clause
 
 
-__all__ = ["execute_cli_actions", "plan_cli_actions", "plan_terminal_tasks"]
+def execute_cli_actions_with_metrics(
+    message: str, session: ReplSession, console: Console
+) -> TerminalActionExecutionResult:
+    """Execute deterministic actions and return per-turn action counters."""
+    from app.analytics.cli import (
+        capture_terminal_actions_executed,
+        capture_terminal_actions_planned,
+    )
+
+    actions, has_unhandled_clause = plan_actions_with_unhandled(message)
+    capture_terminal_actions_planned(
+        planned_count=len(actions),
+        has_unhandled_clause=has_unhandled_clause,
+    )
+    if not actions:
+        return TerminalActionExecutionResult(
+            planned_count=0,
+            executed_count=0,
+            executed_success_count=0,
+            has_unhandled_clause=has_unhandled_clause,
+            handled=False,
+        )
+
+    history_start = len(session.history)
+    handled = execute_cli_actions(message, session, console)
+    executed_entries = [
+        item
+        for item in session.history[history_start:]
+        if item.get("type") in {"slash", "shell", "alert", "synthetic_test"}
+    ]
+    executed_count = len(executed_entries)
+    executed_success_count = sum(1 for item in executed_entries if item.get("ok", True))
+    capture_terminal_actions_executed(
+        planned_count=len(actions),
+        executed_count=executed_count,
+        executed_success_count=executed_success_count,
+    )
+    return TerminalActionExecutionResult(
+        planned_count=len(actions),
+        executed_count=executed_count,
+        executed_success_count=executed_success_count,
+        has_unhandled_clause=has_unhandled_clause,
+        handled=handled,
+    )
+
+
+__all__ = [
+    "TerminalActionExecutionResult",
+    "execute_cli_actions",
+    "execute_cli_actions_with_metrics",
+    "plan_cli_actions",
+    "plan_terminal_tasks",
+]

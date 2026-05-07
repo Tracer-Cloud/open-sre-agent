@@ -18,6 +18,7 @@ from app.cli.interactive_shell.prompt_rules import (
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.streaming import STREAM_LABEL_ASSISTANT, stream_to_console
 from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
+from app.cli.support.exception_reporting import report_exception
 
 # Cap stored (user, assistant) pairs; list holds 2 entries per turn.
 _MAX_CLI_AGENT_TURNS = 12
@@ -312,6 +313,7 @@ def answer_cli_agent(
     try:
         from app.services.llm_client import get_llm_for_reasoning
     except Exception as exc:  # noqa: BLE001
+        report_exception(exc, context="interactive_shell.cli_agent.import")
         console.print(f"[red]LLM client unavailable:[/red] {escape(str(exc))}")
         return
 
@@ -334,11 +336,10 @@ def answer_cli_agent(
             suppress_if_starts_with="{",
         )
     except KeyboardInterrupt:
-        # Cancel just this response and stay in the REPL. A second Ctrl+C
-        # at the prompt exits the shell.
         console.print("[dim]· cancelled[/dim]")
         return
     except Exception as exc:  # noqa: BLE001
+        report_exception(exc, context="interactive_shell.cli_agent.stream")
         console.print(f"[red]assistant failed:[/red] {escape(str(exc))}")
         return
 

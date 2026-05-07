@@ -122,12 +122,18 @@ class TestAnswerFollowUpMarkupSafety:
         assert "2026-04-15 14:00:00 UTC" in flat
 
     def test_exception_message_with_brackets_not_dropped(self, monkeypatch: object) -> None:
+        captured_errors: list[BaseException] = []
+
         def _boom() -> None:
             raise RuntimeError("config error: missing [api_key] in [datadog] section")
 
         monkeypatch.setattr(  # type: ignore[attr-defined]
             "app.services.llm_client.get_llm_for_reasoning",
             _boom,
+        )
+        monkeypatch.setattr(  # type: ignore[attr-defined]
+            "app.cli.support.exception_reporting.capture_exception",
+            lambda exc, **_kwargs: captured_errors.append(exc),
         )
 
         session = ReplSession()
@@ -139,3 +145,5 @@ class TestAnswerFollowUpMarkupSafety:
         output = buf.getvalue()
         assert "[api_key]" in output
         assert "[datadog]" in output
+        assert len(captured_errors) == 1
+        assert isinstance(captured_errors[0], RuntimeError)

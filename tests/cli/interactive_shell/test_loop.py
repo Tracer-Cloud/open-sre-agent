@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 from pathlib import Path
 
@@ -227,3 +228,91 @@ def test_run_new_alert_marks_task_failed_on_opensre_error(monkeypatch: pytest.Mo
     assert len(inv_tasks) == 1
     assert inv_tasks[0].status == TaskStatus.FAILED
     assert inv_tasks[0].error == "integration misconfigured"
+
+
+def test_run_new_alert_reports_unexpected_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    from rich.console import Console
+
+    from app.cli.interactive_shell.session import ReplSession
+    from app.cli.interactive_shell.tasks import TaskStatus
+
+    captured_errors: list[BaseException] = []
+
+    def _raise(
+        alert_text: str,
+        context_overrides: object = None,
+        cancel_requested: object = None,
+    ) -> dict[str, object]:
+        raise RuntimeError("pipeline exploded")
+
+    monkeypatch.setattr("app.cli.investigation.run_investigation_for_session", _raise)
+    monkeypatch.setattr(
+        "app.cli.support.exception_reporting.capture_exception",
+        lambda exc, **_kwargs: captured_errors.append(exc),
+    )
+    session = ReplSession()
+    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
+
+    loop._run_new_alert("High CPU alert", session, console)
+
+    inv_tasks = session.task_registry.list_recent(10)
+    assert inv_tasks[0].status == TaskStatus.FAILED
+    assert len(captured_errors) == 1
+    assert isinstance(captured_errors[0], RuntimeError)
+
+
+def test_run_new_alert_does_not_report_opensre_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    from rich.console import Console
+
+    from app.cli.interactive_shell.session import ReplSession
+    from app.cli.support.errors import OpenSREError
+
+    captured_errors: list[BaseException] = []
+
+    def _raise(
+        alert_text: str,
+        context_overrides: object = None,
+        cancel_requested: object = None,
+    ) -> dict[str, object]:
+        raise OpenSREError("integration misconfigured")
+
+    monkeypatch.setattr("app.cli.investigation.run_investigation_for_session", _raise)
+    monkeypatch.setattr(
+        "app.cli.support.exception_reporting.capture_exception",
+        lambda exc, **_kwargs: captured_errors.append(exc),
+    )
+    session = ReplSession()
+    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
+
+    loop._run_new_alert("High CPU alert", session, console)
+
+    assert captured_errors == []
+
+
+def test_run_one_turn_reports_slash_dispatch_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    from rich.console import Console
+
+    from app.cli.interactive_shell.session import ReplSession
+
+    class _Prompt:
+        async def prompt_async(self, prompt: object) -> str:  # noqa: ARG002
+            return "/boom"
+
+    captured_errors: list[BaseException] = []
+
+    def _boom(*_args: object, **_kwargs: object) -> bool:
+        raise RuntimeError("handler crashed")
+
+    monkeypatch.setattr(loop, "dispatch_slash", _boom)
+    monkeypatch.setattr(
+        "app.cli.support.exception_reporting.capture_exception",
+        lambda exc, **_kwargs: captured_errors.append(exc),
+    )
+    session = ReplSession()
+    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
+
+    should_continue = asyncio.run(loop._run_one_turn(_Prompt(), session, console))
+
+    assert should_continue is True
+    assert len(captured_errors) == 1
+    assert isinstance(captured_errors[0], RuntimeError)

@@ -296,9 +296,12 @@ class TestIntegrationsCommand:
 
     def test_show_unknown_service(self, monkeypatch: object) -> None:
         self._patch(monkeypatch)
+        session = ReplSession()
+        session.record("slash", "/integrations show bogus")
         console, buf = _capture()
-        dispatch_slash("/integrations show bogus", ReplSession(), console)
+        dispatch_slash("/integrations show bogus", session, console)
         assert "service not found" in buf.getvalue()
+        assert session.history[-1]["ok"] is False
 
     def test_show_missing_arg(self, monkeypatch: object) -> None:
         self._patch(monkeypatch)
@@ -383,8 +386,11 @@ class TestModelCommand:
     ) -> None:
         self._patch_llm(monkeypatch)
         import app.cli.wizard.env_sync as env_sync
+        from app.services import llm_client
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
+        reset_calls: list[str] = []
+        monkeypatch.setattr(llm_client, "reset_llm_singletons", lambda: reset_calls.append("reset"))
         # /model set now refuses to half-update .env when the target provider
         # has no usable credential; supply one so the happy path still runs.
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
@@ -400,6 +406,7 @@ class TestModelCommand:
         assert "reasoning model:" in output
         assert "ANTHROPIC_REASONING_MODEL" in output
         assert "LLM_PROVIDER=anthropic" in (tmp_path / ".env").read_text(encoding="utf-8")
+        assert reset_calls == ["reset"]
 
     def test_set_refuses_when_credential_missing(
         self,
@@ -443,6 +450,30 @@ class TestModelCommand:
         dispatch_slash("/model set", ReplSession(), console)
         assert "usage" in buf.getvalue()
 
+    def test_set_unknown_reasoning_model_is_rejected(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        self._patch_llm(monkeypatch)
+        import app.cli.wizard.env_sync as env_sync
+
+        env_path = tmp_path / ".env"
+        monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+        session = ReplSession()
+        session.record("slash", "/model set anthropic not-a-real-model-xyz")
+
+        console, buf = _capture()
+        dispatch_slash("/model set anthropic not-a-real-model-xyz", session, console)
+
+        output = buf.getvalue()
+        assert "unknown model for anthropic" in output
+        assert "not-a-real-model-xyz" in output
+        assert "switched LLM provider" not in output
+        assert not env_path.exists()
+        assert session.history[-1]["ok"] is False
+
     def test_set_with_toolcall_flag_writes_both_env_vars(
         self,
         monkeypatch: pytest.MonkeyPatch,
@@ -469,6 +500,31 @@ class TestModelCommand:
         assert "LLM_PROVIDER=anthropic" in contents
         assert "ANTHROPIC_REASONING_MODEL=claude-opus-4-7" in contents
         assert "ANTHROPIC_TOOLCALL_MODEL=claude-opus-4-7" in contents
+
+    def test_restore_resets_active_provider_to_default_model(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        self._patch_llm(monkeypatch)
+        import app.cli.wizard.env_sync as env_sync
+
+        env_path = tmp_path / ".env"
+        monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setenv("LLM_PROVIDER", "anthropic")
+        monkeypatch.setenv("ANTHROPIC_REASONING_MODEL", "not-a-real-model-xyz")
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+
+        console, buf = _capture()
+        dispatch_slash("/model restore", ReplSession(), console)
+
+        output = buf.getvalue()
+        assert "switched LLM provider" in output
+        assert "claude-opus-4-7" in output
+        contents = env_path.read_text(encoding="utf-8")
+        assert "LLM_PROVIDER=anthropic" in contents
+        assert "ANTHROPIC_REASONING_MODEL=claude-opus-4-7" in contents
+        assert "ANTHROPIC_MODEL=claude-opus-4-7" in contents
 
     def test_set_unknown_flag_prints_usage(
         self,
@@ -515,9 +571,12 @@ class TestModelCommand:
         """`/model toolcall set <m>` must persist only the toolcall env var."""
         self._patch_llm(monkeypatch)
         import app.cli.wizard.env_sync as env_sync
+        from app.services import llm_client
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        reset_calls: list[str] = []
+        monkeypatch.setattr(llm_client, "reset_llm_singletons", lambda: reset_calls.append("reset"))
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
 
         console, buf = _capture()
@@ -531,6 +590,7 @@ class TestModelCommand:
         assert "ANTHROPIC_REASONING_MODEL" not in contents
         # LLM_PROVIDER must not be rewritten by a toolcall-only switch.
         assert "LLM_PROVIDER=" not in contents
+        assert reset_calls == ["reset"]
 
     def test_toolcall_set_missing_arg_prints_usage(self) -> None:
         console, buf = _capture()
@@ -608,9 +668,12 @@ class TestInvestigateFileCommand:
         assert "usage" in buf.getvalue()
 
     def test_missing_file_prints_error(self) -> None:
+        session = ReplSession()
+        session.record("slash", "/investigate /nonexistent/path.json")
         console, buf = _capture()
-        dispatch_slash("/investigate /nonexistent/path.json", ReplSession(), console)
+        dispatch_slash("/investigate /nonexistent/path.json", session, console)
         assert "file not found" in buf.getvalue()
+        assert session.history[-1]["ok"] is False
 
     def test_valid_file_runs_investigation(self, tmp_path: object, monkeypatch: object) -> None:
         alert_file = tmp_path / "alert.json"  # type: ignore[operator]

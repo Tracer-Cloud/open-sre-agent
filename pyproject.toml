@@ -81,6 +81,7 @@ opensre-mcp = "app.entrypoints.mcp:main"
 
 [project.optional-dependencies]
 dev = [
+    "pre-commit>=4.0.0",
     "pytest>=8.0.0",
     "pytest-asyncio>=1.3.0",
     "pytest-cov>=7.1.0",
@@ -151,4 +152,11 @@ ignore_names = [
   "discord_interactions", "health_check",
   "version_check", "deep_health_check",
   "investigate_stream",
+]
+
+# uv installs this PEP 735 group by default (`uv sync`; omit with `--no-dev`).
+# `pre-commit` is also under `[project.optional-dependencies] dev` for `pip install .[dev]`.
+[dependency-groups]
+dev = [
+    "pre-commit>=4.0.0",
 ]

@@ -8,7 +8,11 @@ from typing import Any
 import click
 
 from app.analytics.cli import (
+    capture_test_run_completed,
+    capture_test_run_failed,
     capture_test_run_started,
+    capture_test_synthetic_completed,
+    capture_test_synthetic_failed,
     capture_test_synthetic_started,
     capture_tests_listed,
     capture_tests_picker_opened,
@@ -177,15 +181,21 @@ def run_synthetic_suite(scenario: str, output_json: bool, mock_grafana: bool) ->
         raise _synthetic_suite_not_bundled_error() from exc
 
     capture_test_synthetic_started(scenario or "all", mock_grafana=mock_grafana)
-    raise SystemExit(
-        run_suite_main(
+    scenario_name = scenario or "all"
+    try:
+        exit_code = run_suite_main(
             _build_synthetic_argv(
                 scenario=scenario,
                 output_json=output_json,
                 mock_grafana=mock_grafana,
             )
         )
-    )
+    except Exception as exc:
+        capture_test_synthetic_failed(scenario_name, reason=type(exc).__name__)
+        raise
+
+    capture_test_synthetic_completed(scenario_name, exit_code=exit_code)
+    raise SystemExit(exit_code)
 
 
 def _cloudopsbench_suite_not_bundled_error() -> OpenSREError:
@@ -296,4 +306,13 @@ def run_test(test_id: str, dry_run: bool) -> None:
         )
 
     capture_test_run_started(test_id, dry_run=dry_run)
-    raise SystemExit(run_catalog_item(item, dry_run=dry_run))
+    try:
+        exit_code = run_catalog_item(item, dry_run=dry_run)
+    except Exception as exc:
+        capture_test_run_failed(test_id, dry_run=dry_run, reason=type(exc).__name__)
+        raise
+    if exit_code == 0:
+        capture_test_run_completed(test_id, dry_run=dry_run, exit_code=exit_code)
+    else:
+        capture_test_run_failed(test_id, dry_run=dry_run, reason=f"exit_code_{exit_code}")
+    raise SystemExit(exit_code)

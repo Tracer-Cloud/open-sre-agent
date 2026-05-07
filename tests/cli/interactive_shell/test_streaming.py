@@ -127,12 +127,22 @@ class TestMidStreamError:
         assert "partial answer" in output
 
     def test_keyboard_interrupt_propagates_with_partial_visible(self) -> None:
-        """Ctrl+C mid-stream surfaces partial text so the caller can report cancellation."""
+        class _ChunksThenTwoKbds:
+            __slots__ = ("_i",)
 
-        def _interrupted_stream() -> Iterator[str]:
-            yield "partial "
-            yield "answer"
-            raise KeyboardInterrupt
+            def __init__(self) -> None:
+                self._i = 0
+
+            def __iter__(self) -> Iterator[str]:
+                return self
+
+            def __next__(self) -> str:
+                parts = ("partial ", "answer")
+                if self._i < len(parts):
+                    c = parts[self._i]
+                    self._i += 1
+                    return c
+                raise KeyboardInterrupt
 
         console, buf = _tty_console()
 
@@ -140,7 +150,7 @@ class TestMidStreamError:
             stream_to_console(
                 console,
                 label="assistant",
-                chunks=_interrupted_stream(),
+                chunks=iter(_ChunksThenTwoKbds()),
             )
 
         output = _strip_ansi(buf.getvalue())

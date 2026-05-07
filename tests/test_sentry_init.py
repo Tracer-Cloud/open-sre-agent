@@ -112,6 +112,44 @@ def test_capture_exception_is_best_effort(monkeypatch) -> None:
     capture_mock.assert_called_once()
 
 
+def test_capture_exception_attaches_context(monkeypatch) -> None:
+    monkeypatch.delenv("OPENSRE_SENTRY_DISABLED", raising=False)
+    monkeypatch.delenv("OPENSRE_NO_TELEMETRY", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    capture_mock = MagicMock()
+    tags: dict[str, str] = {}
+    extras: dict[str, object] = {}
+
+    class _Scope:
+        def __enter__(self) -> _Scope:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def set_tag(self, key: str, value: str) -> None:
+            tags[key] = value
+
+        def set_extra(self, key: str, value: object) -> None:
+            extras[key] = value
+
+    monkeypatch.setitem(
+        sys.modules,
+        "sentry_sdk",
+        SimpleNamespace(capture_exception=capture_mock, push_scope=_Scope),
+    )
+
+    sentry_mod.capture_exception(
+        ValueError("boom"),
+        context="interactive_shell.cli_agent.stream",
+        extra={"turn": 3},
+    )
+
+    capture_mock.assert_called_once()
+    assert tags == {"opensre.context": "interactive_shell.cli_agent.stream"}
+    assert extras == {"turn": 3}
+
+
 def test_init_sentry_noops_when_opensre_no_telemetry(monkeypatch) -> None:
     sentry_mod._init_sentry_once.cache_clear()
     monkeypatch.delenv("OPENSRE_SENTRY_DISABLED", raising=False)

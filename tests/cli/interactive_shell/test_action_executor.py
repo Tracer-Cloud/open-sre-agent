@@ -164,6 +164,33 @@ def test_run_shell_command_failure_prints_exit_line(monkeypatch: pytest.MonkeyPa
     assert session.history[-1] == {"type": "shell", "text": "false", "ok": False}
 
 
+def test_run_shell_command_reports_start_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured_errors: list[BaseException] = []
+
+    def _raise(**_kwargs: object) -> ShellExecutionResult:
+        raise RuntimeError("spawn failed")
+
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.action_executor.execute_shell_command",
+        _raise,
+    )
+    monkeypatch.setattr(
+        "app.cli.support.exception_reporting.capture_exception",
+        lambda exc, **_kwargs: captured_errors.append(exc),
+    )
+
+    session = ReplSession()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    run_shell_command("true", session, console)
+
+    assert "command failed to start" in buf.getvalue()
+    assert len(captured_errors) == 1
+    assert isinstance(captured_errors[0], RuntimeError)
+    assert session.history[-1] == {"type": "shell", "text": "true", "ok": False}
+
+
 def test_run_synthetic_test_unknown_suite_records_failure() -> None:
     session = ReplSession()
     buf = io.StringIO()

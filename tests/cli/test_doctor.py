@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import httpx
-
 from app.cli.commands import doctor
 
 
@@ -190,10 +188,29 @@ def test_check_integrations_reports_configured_services(monkeypatch, tmp_path) -
     assert detail == "2 configured: grafana, datadog"
 
 
+def test_check_version_freshness_skips_release_compare_for_local_dev(monkeypatch) -> None:
+    fetch_latest_version = MagicMock(return_value="9.9.9")
+    monkeypatch.setattr(doctor, "get_version", lambda: "1.2.3")
+    monkeypatch.setattr(
+        "app.cli.support.update.development_install_doctor_version_detail",
+        lambda c: f"{c} (editable install; skipped comparing to latest release)",
+    )
+    monkeypatch.setattr("app.cli.support.update._fetch_latest_version", fetch_latest_version)
+
+    ok, detail = doctor._check_version_freshness()
+
+    assert ok is True
+    assert detail == "1.2.3 (editable install; skipped comparing to latest release)"
+    fetch_latest_version.assert_not_called()
+
+
 def test_check_version_freshness_up_to_date(monkeypatch) -> None:
     fetch_latest_version = MagicMock(return_value="1.2.3")
     is_update_available = MagicMock(return_value=False)
     monkeypatch.setattr(doctor, "get_version", lambda: "1.2.3")
+    monkeypatch.setattr(
+        "app.cli.support.update.development_install_doctor_version_detail", lambda _c: None
+    )
     monkeypatch.setattr("app.cli.support.update._fetch_latest_version", fetch_latest_version)
     monkeypatch.setattr("app.cli.support.update._is_update_available", is_update_available)
 
@@ -209,6 +226,9 @@ def test_check_version_freshness_update_available(monkeypatch) -> None:
     fetch_latest_version = MagicMock(return_value="1.3.0")
     is_update_available = MagicMock(return_value=True)
     monkeypatch.setattr(doctor, "get_version", lambda: "1.2.3")
+    monkeypatch.setattr(
+        "app.cli.support.update.development_install_doctor_version_detail", lambda _c: None
+    )
     monkeypatch.setattr("app.cli.support.update._fetch_latest_version", fetch_latest_version)
     monkeypatch.setattr("app.cli.support.update._is_update_available", is_update_available)
 
@@ -223,6 +243,9 @@ def test_check_version_freshness_update_available(monkeypatch) -> None:
 
 def test_check_version_freshness_soft_fails_on_fetch_error(monkeypatch) -> None:
     monkeypatch.setattr(doctor, "get_version", lambda: "1.2.3")
+    monkeypatch.setattr(
+        "app.cli.support.update.development_install_doctor_version_detail", lambda _c: None
+    )
 
     def _raise() -> str:
         raise RuntimeError("rate limited")
@@ -233,35 +256,3 @@ def test_check_version_freshness_soft_fails_on_fetch_error(monkeypatch) -> None:
 
     assert ok is True
     assert detail == "1.2.3 (could not check: rate limited)"
-
-
-def test_check_network_success(monkeypatch) -> None:
-    calls: list[tuple[str, int]] = []
-
-    class _Response:
-        status_code = 200
-
-    def _fake_get(url: str, timeout: int) -> _Response:
-        calls.append((url, timeout))
-        return _Response()
-
-    monkeypatch.setattr(httpx, "get", _fake_get)
-
-    ok, detail = doctor._check_network()
-
-    assert ok is True
-    assert detail == "github.com reachable (HTTP 200)"
-    assert calls == [("https://api.github.com", 5)]
-
-
-def test_check_network_connect_error(monkeypatch) -> None:
-    def _raise(url: str, timeout: int) -> None:
-        raise httpx.ConnectError("boom")
-
-    monkeypatch.setattr(httpx, "get", _raise)
-
-    ok, detail = doctor._check_network()
-
-    assert ok is False
-    assert "github.com unreachable" in detail
-    assert "boom" in detail

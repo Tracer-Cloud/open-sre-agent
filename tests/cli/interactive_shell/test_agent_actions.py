@@ -17,6 +17,7 @@ from app.cli.interactive_shell import action_executor, agent_actions, shell_exec
 from app.cli.interactive_shell import intent_parser as intent_parser_module
 from app.cli.interactive_shell.agent_actions import (
     execute_cli_actions,
+    execute_cli_actions_with_metrics,
     plan_cli_actions,
     plan_terminal_tasks,
 )
@@ -44,6 +45,10 @@ def test_provider_switch_plans_provider_action() -> None:
 
     assert plan_terminal_tasks(message) == ["llm_provider"]
     assert plan_cli_actions(message) == []
+
+
+def test_generic_synthetic_test_request_plans_synthetic_action() -> None:
+    assert plan_terminal_tasks("Can you run a synthetic test?") == ["synthetic_test"]
 
 
 def test_integration_prompt_plans_datadog_lookup_only() -> None:
@@ -155,6 +160,27 @@ def test_execute_cli_actions_switches_llm_provider(monkeypatch: object) -> None:
     output = buf.getvalue()
     assert "$ /model set anthropic" in output
     assert "switched to anthropic" in output
+
+
+def test_execute_cli_actions_records_llm_provider_failure(monkeypatch: object) -> None:
+    def _fake_switch(provider: str, console: Console, model: str | None = None) -> bool:
+        assert provider == "anthropic"
+        assert model is None
+        console.print("missing credential")
+        return False
+
+    monkeypatch.setattr(agent_actions, "switch_llm_provider", _fake_switch)  # type: ignore[attr-defined]
+
+    session = ReplSession()
+    console, _ = _capture()
+    handled = execute_cli_actions(
+        "switch from the current ollama model to setting the model to anthropic",
+        session,
+        console,
+    )
+
+    assert handled is True
+    assert session.history[-1] == {"type": "slash", "text": "/model set anthropic", "ok": False}
 
 
 def test_execute_cli_actions_answers_discord_then_dispatches_datadog(
@@ -801,3 +827,32 @@ def test_execute_cli_actions_rejects_malformed_shell_input() -> None:
     output = buf.getvalue()
     assert "action blocked" in output.lower()
     assert "could not parse command" in output
+
+
+def test_execute_cli_actions_with_metrics_counts_planned_and_executed(monkeypatch: object) -> None:
+    captured_planned: list[tuple[int, bool]] = []
+    captured_executed: list[tuple[int, int, int]] = []
+
+    monkeypatch.setattr(
+        "app.analytics.cli.capture_terminal_actions_planned",
+        lambda *, planned_count, has_unhandled_clause: captured_planned.append(
+            (planned_count, has_unhandled_clause)
+        ),
+    )
+    monkeypatch.setattr(
+        "app.analytics.cli.capture_terminal_actions_executed",
+        lambda *, planned_count, executed_count, executed_success_count: captured_executed.append(
+            (planned_count, executed_count, executed_success_count)
+        ),
+    )
+
+    session = ReplSession()
+    console, _ = _capture()
+    result = execute_cli_actions_with_metrics("run `pwd`", session, console)
+
+    assert result.handled is True
+    assert result.planned_count == 1
+    assert result.executed_count == 1
+    assert result.executed_success_count == 1
+    assert captured_planned == [(1, False)]
+    assert captured_executed == [(1, 1, 1)]

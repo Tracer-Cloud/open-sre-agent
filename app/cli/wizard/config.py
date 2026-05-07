@@ -67,7 +67,7 @@ class ProviderOption:
 
 
 ANTHROPIC_MODELS = (
-    ModelOption(value=ANTHROPIC_REASONING_MODEL, label="Claude Opus 4"),
+    ModelOption(value=ANTHROPIC_REASONING_MODEL, label="Claude Opus 4.7"),
     ModelOption(value="claude-sonnet-4-20250514", label="Claude Sonnet 4"),
 )
 

@@ -56,7 +56,14 @@ def _commands_from_group(group: click.Group) -> tuple[tuple[str, str], ...]:
 
 def _render_usage(console: Console) -> None:
     console.print(
-        Text.assemble(("  Usage: "), ("opensre", "bold white"), (" [OPTIONS] [COMMAND] [PROMPT]"))
+        Text.assemble(("  Usage: "), ("opensre", "bold white"), (" [OPTIONS] [COMMAND] [ARGS]..."))
+    )
+    console.print(
+        Text.assemble(
+            ("  ", ""),
+            ("No COMMAND", "dim"),
+            (": start the interactive shell when stdin/stdout are TTYs.", "dim"),
+        )
     )
 
 

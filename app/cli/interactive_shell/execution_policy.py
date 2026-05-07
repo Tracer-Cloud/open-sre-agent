@@ -12,6 +12,7 @@ from rich.markup import escape
 
 import app.cli.interactive_shell.intent_parser as _intent_parser
 from app.analytics.cli import capture_repl_execution_policy_decision
+from app.analytics.provider import Properties
 from app.cli.interactive_shell.execution_tier import ExecutionTier
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.shell_policy import (
@@ -56,7 +57,7 @@ def resolve_slash_execution_tier(
             if len(args) >= 2 and args[1].lower() in {"set", "use", "switch"}:
                 return ExecutionTier.ELEVATED
             return ExecutionTier.SAFE
-        if sub in {"set", "use", "switch"}:
+        if sub in {"set", "use", "switch", "restore", "default", "reset"}:
             return ExecutionTier.ELEVATED
         return ExecutionTier.SAFE
     if key == "/integrations":
@@ -76,7 +77,7 @@ def _emit_decision(
     reason: str | None,
     user_prompted: bool = False,
 ) -> None:
-    props: dict[str, str | bool] = {
+    props: Properties = {
         "action_type": action_type,
         "policy_verdict": policy_verdict,
         "outcome": outcome,

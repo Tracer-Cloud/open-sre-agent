@@ -1,6 +1,6 @@
 """Pre-load OpenRCA / Hugging Face CSV telemetry into investigation evidence.
 
-Uses the same stack as ``scripts/query_opensre_telemetry.py``: ``OpenSRECsvGrafanaBackend``
+Uses the same stack as ``infra/opensre-dataset/query_opensre_telemetry.py``: ``OpenSRECsvGrafanaBackend``
 plus ``query_grafana_*`` tool functions so evidence matches normal tool output shapes.
 """
 

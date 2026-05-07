@@ -18,6 +18,7 @@ from rich.spinner import Spinner
 from rich.text import Text
 
 from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
+from app.cli.support.prompt_support import CTRL_C_DOUBLE_PRESS_WINDOW_S
 
 # Match loaders.py spinner so streaming and non-streaming surfaces look
 # identical. Duplicated rather than imported because loaders.py keeps these
@@ -37,6 +38,36 @@ _LIVE_REFRESH_PER_SECOND = 20
 # stay in sync if the brand naming ever changes.
 STREAM_LABEL_ASSISTANT = "assistant"
 STREAM_LABEL_ANSWER = "answer"
+
+_STREAM_CANCEL_HINT = "(Press Ctrl+C again to stop)"
+
+
+def _pin_terminal_footer(console: Console, message: str) -> None:
+    if not console.is_terminal:
+        return
+    try:
+        height = console.size.height
+        width = console.size.width
+    except Exception:
+        return
+    text = message.replace("\n", " ")
+    if width > 0 and len(text) >= width:
+        text = text[: max(width - 1, 0)] + "…"
+    out = console.file
+    out.write(f"\0337\033[{height};1H\033[2K{text}\0338")
+    out.flush()
+
+
+def _clear_terminal_footer(console: Console) -> None:
+    if not console.is_terminal:
+        return
+    try:
+        height = console.size.height
+    except Exception:
+        return
+    out = console.file
+    out.write(f"\0337\033[{height};1H\033[2K\0338")
+    out.flush()
 
 
 def stream_to_console(
@@ -87,15 +118,52 @@ def stream_to_console(
     chunks_iter = iter(chunks)
     peeked: list[str] = []
 
+    first_interrupt_at: float | None = None
+    footer_active = False
+
+    def _note_stream_interrupt() -> None:
+        nonlocal first_interrupt_at, footer_active
+        now = time.monotonic()
+        if (
+            first_interrupt_at is not None
+            and now - first_interrupt_at <= CTRL_C_DOUBLE_PRESS_WINDOW_S
+        ):
+            _clear_terminal_footer(console)
+            footer_active = False
+            first_interrupt_at = None
+            raise KeyboardInterrupt
+        if footer_active:
+            _clear_terminal_footer(console)
+        first_interrupt_at = now
+        footer_active = True
+        _pin_terminal_footer(console, _STREAM_CANCEL_HINT)
+
+    def _next_chunk(it: Iterator[str]) -> str | None:
+        while True:
+            try:
+                return next(it)
+            except StopIteration:
+                return None
+            except KeyboardInterrupt:
+                _note_stream_interrupt()
+
     if suppress_if_starts_with is not None:
-        for chunk in chunks_iter:
+        while True:
+            chunk = _next_chunk(chunks_iter)
+            if chunk is None:
+                break
             peeked.append(chunk)
             stripped = "".join(peeked).lstrip()
             if not stripped:
                 continue
             if stripped.startswith(suppress_if_starts_with):
-                # Suppressed: drain remaining silently and return.
-                return "".join(peeked) + "".join(chunks_iter)
+                drained: list[str] = []
+                while True:
+                    rest = _next_chunk(chunks_iter)
+                    if rest is None:
+                        break
+                    drained.append(rest)
+                return "".join(peeked) + "".join(drained)
             break
 
     buffer: list[str] = list(peeked)
@@ -116,26 +184,36 @@ def stream_to_console(
             refresh_per_second=_LIVE_REFRESH_PER_SECOND,
             transient=False,
         ) as live:
+
+            def _refresh_live(renderable: Markdown | Text) -> None:
+                live.update(renderable)
+                if footer_active:
+                    _pin_terminal_footer(console, _STREAM_CANCEL_HINT)
+
             if buffer:
-                live.update(Markdown("".join(buffer)))
-            for chunk in chunks_iter:
+                _refresh_live(Markdown("".join(buffer)))
+            while True:
+                chunk = _next_chunk(chunks_iter)
+                if chunk is None:
+                    break
                 if not chunk:
                     continue
                 buffer.append(chunk)
-                live.update(Markdown("".join(buffer)))
+                _refresh_live(Markdown("".join(buffer)))
             # If no chunks arrived, replace the frozen spinner with empty
             # content so it doesn't get stuck on screen.
             if not buffer:
-                live.update(Text(""))
+                _refresh_live(Text(""))
+        # Tiny dim footer so the user sees the stream actually finished and
+        # gets a rough sense of cost — same idea as Claude CLI's per-turn
+        # timing line. Skipped on empty streams so we don't print a footer
+        # under nothing.
+        if buffer:
+            console.print(f"[dim]· {time.monotonic() - started:.1f}s[/dim]")
     finally:
+        if footer_active:
+            _clear_terminal_footer(console)
         console.print()
-
-    # Tiny dim footer so the user sees the stream actually finished and
-    # gets a rough sense of cost — same idea as Claude CLI's per-turn
-    # timing line. Skipped on empty streams so we don't print a footer
-    # under nothing.
-    if buffer:
-        console.print(f"[dim]· {time.monotonic() - started:.1f}s[/dim]")
 
     return "".join(buffer)
 

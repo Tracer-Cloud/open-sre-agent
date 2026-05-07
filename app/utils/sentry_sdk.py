@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Mapping
 from contextlib import suppress
 from functools import cache
 from typing import Any
@@ -146,9 +147,9 @@ def _before_breadcrumb(crumb: dict[str, Any], _hint: dict[str, Any]) -> dict[str
 
 def _capture_sentry_init_skipped(reason: str, *, error_type: str | None = None) -> None:
     # Local import to avoid an import cycle between Sentry and analytics modules.
-    from app.analytics.provider import get_analytics
+    from app.analytics.provider import Properties, get_analytics
 
-    properties: dict[str, str | bool] = {"reason": reason}
+    properties: Properties = {"reason": reason}
     if error_type is not None:
         properties["error_type"] = error_type
     with suppress(Exception):
@@ -217,11 +218,25 @@ def init_sentry() -> None:
         raise
 
 
-def capture_exception(exc: BaseException) -> None:
+def capture_exception(
+    exc: BaseException,
+    *,
+    context: str | None = None,
+    extra: Mapping[str, Any] | None = None,
+) -> None:
     """Best-effort capture for exceptions swallowed by boundary adapters."""
     if _is_sentry_disabled():
         return
     with suppress(Exception):
         import sentry_sdk
 
-        sentry_sdk.capture_exception(exc)
+        if context is None and not extra:
+            sentry_sdk.capture_exception(exc)
+            return
+        with sentry_sdk.push_scope() as scope:
+            if context is not None:
+                scope.set_tag("opensre.context", context)
+            if extra:
+                for key, value in extra.items():
+                    scope.set_extra(key, value)
+            sentry_sdk.capture_exception(exc)

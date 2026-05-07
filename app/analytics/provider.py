@@ -66,7 +66,7 @@ _CI_FINGERPRINT_ENV_KEYS: Final[tuple[str, ...]] = (
     "JOB_NAME",
 )
 
-PropertyValue: TypeAlias = str | bool  # noqa: UP040
+PropertyValue: TypeAlias = str | bool | int | float  # noqa: UP040
 Properties: TypeAlias = dict[str, PropertyValue]  # noqa: UP040
 
 
@@ -320,10 +320,6 @@ def _compute_anonymous_identity() -> _AnonymousIdentity:
             legacy_anonymous_id_path_existed=legacy_anonymous_id_path_existed,
         )
         return _AnonymousIdentity(str(uuid.uuid4()), "none")
-
-
-def _compute_anonymous_id() -> str:
-    return _compute_anonymous_identity().distinct_id
 
 
 def _get_or_create_anonymous_id() -> str:

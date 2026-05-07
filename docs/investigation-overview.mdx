@@ -4,7 +4,24 @@ title: "Investigations overview"
 
 Use this workflow when running OpenSRE via the local `opensre` binary.
 
+You can work in two ways:
+
+- **Interactive prompt shell** — run `opensre` with no subcommand (TTY) to enter the REPL: describe incidents conversationally, stream investigations, and use slash commands.
+- **Direct investigation** — run `opensre investigate` from your terminal with `-i` pointing at an alert payload (or `--interactive` to pick a file in the UI). The process runs and exits when the investigation completes.
+
 ## 1) Start an investigation
+
+### Interactive shell (`opensre`)
+
+From a terminal with stdin and stdout attached (`opensre` detects a TTY), run:
+
+```bash
+opensre
+```
+
+Then describe the incident or paste alert context at the prompt. Use `/help` for slash commands and `/exit` when finished.
+
+### Direct investigation (`opensre investigate`)
 
 Pass an alert payload to `opensre investigate`:
 

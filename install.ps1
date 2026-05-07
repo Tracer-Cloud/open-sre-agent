@@ -595,8 +595,37 @@ function Install-OpenSre {
         Write-Warning "Add $installDir to your PATH to run opensre from any terminal."
     }
 
+    $exe = $binaryName.TrimEnd(".exe")
+    $sep = "────────────────────────────────────────────"
+
     Write-Host ""
-    Write-Host "Next: run 'opensre onboard' to complete setup."
+    Write-Host $sep
+    if ($resolvedChannel -eq "main") {
+        if ($binaryVersion) {
+            Write-Host "  opensre main build ($binaryVersion) installed successfully"
+        }
+        else {
+            Write-Host "  opensre main build installed successfully"
+        }
+    }
+    else {
+        Write-Host "  opensre v$version installed successfully"
+    }
+    Write-Host $sep
+    Write-Host ""
+    Write-Host "Next steps:"
+    Write-Host "  1. Run  $exe onboard"
+    Write-Host "     Set up your LLM provider and any observability integrations."
+    Write-Host ""
+    Write-Host "  2. Run  $exe  (no subcommand)"
+    Write-Host "     From a normal interactive terminal this starts the interactive shell; type a"
+    Write-Host "     prompt or incident description to investigate."
+    Write-Host ""
+    Write-Host "  3. Optional — one-shot RCA from a file:"
+    Write-Host "     $exe investigate -i path/to/alert.json"
+    Write-Host ""
+    Write-Host "Docs: https://www.opensre.com/docs"
+    Write-Host ""
 }
 
 if (-not $SkipMain) {

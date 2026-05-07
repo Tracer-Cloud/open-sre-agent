@@ -37,12 +37,14 @@ def _cmd_integrations(session: ReplSession, console: Console, args: list[str]) -
     if sub == "show":
         if len(args) < 2:
             console.print("[dim]usage:[/dim] /integrations show <service>")
+            session.mark_latest(ok=False, kind="slash")
             return True
         service = args[1].lower()
         results = repl_data.load_verified_integrations()
         match = next((r for r in results if r.get("service") == service), None)
         if match is None:
             console.print(f"[{TERMINAL_ERROR}]service not found:[/] {escape(service)}")
+            session.mark_latest(ok=False, kind="slash")
             return True
         table = repl_table(
             title=f"Integration: {service}",
@@ -61,6 +63,7 @@ def _cmd_integrations(session: ReplSession, console: Console, args: list[str]) -
         "(try [bold]/integrations list[/bold], [bold]/integrations verify[/bold], "
         "or [bold]/integrations show <service>[/bold])"
     )
+    session.mark_latest(ok=False, kind="slash")
     return True
 
 

@@ -141,7 +141,7 @@ ROUTE_RULES: tuple[RouteRule, ...] = (
         _is_follow_up_with_prior_state,
     ),
     RouteRule(
-        "investigation_request",
+        "investigation_request_with_prior_state",
         RouteKind.NEW_ALERT,
         0.86,
         _is_new_alert_with_prior_state,
@@ -380,17 +380,6 @@ def route_input(text: str, session: ReplSession) -> RouteDecision:
         (),
         "prior_investigation_but_no_follow_up_or_incident_signal",
     )
-
-
-def is_route_correction(
-    previous: RouteDecision | None,
-    current: RouteDecision,
-) -> bool:
-    """Detect when a newer route differs from the previous route."""
-    if previous is None:
-        return False
-
-    return previous.route_kind != current.route_kind
 
 
 def classify_input(text: str, session: ReplSession) -> InputKind:

@@ -19,13 +19,14 @@ from dotenv import load_dotenv
 from app.analytics.cli import build_cli_invoked_properties, capture_cli_invoked
 from app.analytics.provider import Properties, capture_first_run_if_needed, shutdown_analytics
 from app.cli.commands import register_commands
+from app.cli.support.exception_reporting import report_exception, should_report_exception
 from app.cli.support.layout import RichGroup, render_landing
 from app.cli.support.prompt_support import (
     handle_ctrl_c_press,
     install_questionary_ctrl_c_double_exit,
     install_questionary_escape_cancel,
 )
-from app.utils.sentry_sdk import capture_exception, init_sentry
+from app.utils.sentry_sdk import init_sentry
 from app.version import get_version
 
 _CAPTURE_CLI_ANALYTICS = "capture_cli_analytics"
@@ -176,7 +177,7 @@ def _install_sigint_handler() -> None:
     covers everything else: long-running operations, streaming output, etc.
     """
 
-    def _handler(signum: int, frame: object) -> None:  # noqa: ARG001
+    def _handler(_signum: int, _frame: object) -> None:
         handle_ctrl_c_press()
 
     signal.signal(signal.SIGINT, _handler)
@@ -185,6 +186,11 @@ def _install_sigint_handler() -> None:
 def _is_update_invocation(argv: list[str]) -> bool:
     command_parts = _resolve_command_parts(cli, argv)
     return bool(command_parts) and command_parts[0] == "update"
+
+
+def _should_capture_cli_exception(exc: click.ClickException) -> bool:
+    """Return whether a Click error represents an unexpected internal failure."""
+    return should_report_exception(exc)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -214,7 +220,8 @@ def main(argv: list[str] | None = None) -> int:
         print(flush=True)
         return 0
     except click.ClickException as exc:
-        capture_exception(exc)
+        if _should_capture_cli_exception(exc):
+            report_exception(exc, context="cli.main")
         exc.show()
         return exc.exit_code
     except click.exceptions.Exit as exc:
