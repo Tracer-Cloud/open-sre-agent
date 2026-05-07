@@ -1,10 +1,7 @@
-import threading
 import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, ANY
 
-import boto3
 import pytest
-from botocore.exceptions import ClientError
 
 from app.services.aws_session_manager import AWSSessionManager
 
@@ -47,14 +44,11 @@ def test_session_isolation_by_external_id():
         mock_base_session.client.return_value = mock_sts
         mock_session_class.return_value = mock_base_session
         
-        # 1. Get session for ext_id_1
-        session1 = manager.get_session(region=region, role_arn=role_arn, external_id="ext_id_1")
-        
-        # 2. Get session for ext_id_2
-        session2 = manager.get_session(region=region, role_arn=role_arn, external_id="ext_id_2")
+        # Get sessions for different external IDs
+        manager.get_session(region=region, role_arn=role_arn, external_id="ext_id_1")
+        manager.get_session(region=region, role_arn=role_arn, external_id="ext_id_2")
         
         # VERIFY: Two separate calls were made to STS with different external IDs
-        from unittest.mock import ANY
         assert mock_sts.assume_role.call_count == 2
         mock_sts.assume_role.assert_any_call(
             RoleArn=role_arn,
@@ -70,7 +64,6 @@ def test_session_isolation_by_external_id():
         )
         
         # VERIFY: Sessions have different credentials
-        # (Note: In actual code, boto3.Session creates a new session object)
         mock_session_class.assert_any_call(
             aws_access_key_id="AKIA-ext_id_1",
             aws_secret_access_key="SECRET-ext_id_1",
@@ -92,7 +85,6 @@ def test_get_client_double_check_locking():
     region = "us-east-1"
     
     # We want to simulate a race where two threads try to create the same client
-    # But get_session is mocked to return the same session
     mock_session = MagicMock()
     mock_client = MagicMock()
     mock_session.client.return_value = mock_client
