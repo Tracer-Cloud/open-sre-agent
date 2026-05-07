@@ -91,6 +91,23 @@ def test_main_does_not_capture_expected_usage_errors_to_sentry(
     assert captured == []
 
 
+def test_main_treats_onboard_abort_as_clean_cancel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("app.cli.__main__.init_sentry", lambda: None)
+    monkeypatch.setattr(
+        "app.cli.wizard.run_wizard",
+        lambda: (_ for _ in ()).throw(click.Abort()),
+    )
+
+    exit_code = main(["onboard"])
+
+    assert exit_code == 0
+
+
 def test_main_allows_update_when_sentry_sdk_missing(monkeypatch, capsys) -> None:
     monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)

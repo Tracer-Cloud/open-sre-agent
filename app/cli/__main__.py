@@ -219,6 +219,11 @@ def main(argv: list[str] | None = None) -> int:
         # exit quietly — Click's "Aborted!" message is intentionally suppressed.
         print(flush=True)
         return 0
+    except click.Abort:
+        # Click raises Abort for some prompt-level cancel paths. Treat it as a
+        # clean user cancel, not as an unexpected CLI failure.
+        print(flush=True)
+        return 0
     except click.ClickException as exc:
         if _should_capture_cli_exception(exc):
             report_exception(exc, context="cli.main")
