@@ -136,6 +136,22 @@ def test_file_settings_used_when_env_absent() -> None:
     assert policy.max_entries == 100
 
 
+def test_quoted_false_like_file_settings_are_parsed_as_disabled() -> None:
+    policy = HistoryPolicy.load({"enabled": "false", "redact": "0"})
+    assert policy.enabled is False
+    assert policy.redact is False
+
+
+def test_prune_to_cap_is_safe_when_cap_is_zero(tmp_path: Path) -> None:
+    history_file = tmp_path / "history"
+    backend = RedactingFileHistory(str(history_file), max_entries=0)
+    backend.store_string("entry-0")
+    backend._prune_to_cap()
+
+    persisted = list(reversed(list(backend.load_history_strings())))
+    assert persisted == ["entry-0"]
+
+
 def test_default_pattern_set_size_is_stable() -> None:
     # Catch accidental rule deletions in PRs.
     assert len(DEFAULT_REDACTION_RULES) >= 12

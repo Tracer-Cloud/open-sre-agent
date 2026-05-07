@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from prompt_toolkit.history import FileHistory, InMemoryHistory
 from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
@@ -36,7 +37,7 @@ def _show_history(console: Console) -> bool:
     return True
 
 
-def _history_clear(session: ReplSession, console: Console) -> bool:
+def _history_clear(session: ReplSession, console: Console) -> bool:  # noqa: ARG001
     if clear_persisted_history():
         console.print(
             "[green]cleared[/green] persistent history. Up-arrow recall resets on next launch."
@@ -45,7 +46,6 @@ def _history_clear(session: ReplSession, console: Console) -> bool:
         console.print(
             f"[red]could not clear history[/red] (file system error). path: {prompt_history_path()}"
         )
-    _ = session
     return True
 
 
@@ -56,12 +56,30 @@ def _history_pause(session: ReplSession, console: Console, *, paused: bool) -> b
         state = "off" if paused else "on"
         console.print(f"[dim]history persistence is now {state} for this session.[/dim]")
         return True
+    if isinstance(backend, FileHistory):
+        if paused:
+            console.print(
+                "[dim]history is persisting to disk without redaction. "
+                "Restart with OPENSRE_HISTORY_REDACT=1 to enable runtime pause support, "
+                "or OPENSRE_HISTORY_ENABLED=0 to disable persistence entirely.[/dim]"
+            )
+            return True
+        console.print("[dim]history persistence is already on (raw file history).[/dim]")
+        return True
+    if backend is None or isinstance(backend, InMemoryHistory):
+        if paused:
+            console.print("[dim]history is already not persisting in this session.[/dim]")
+            return True
+        console.print(
+            "[dim]history is in-memory only. "
+            "Restart with OPENSRE_HISTORY_ENABLED=1 to enable persistence.[/dim]"
+        )
+        return True
     if paused:
         console.print("[dim]history is already not persisting in this session.[/dim]")
         return True
     console.print(
-        "[dim]history is in-memory only. "
-        "Restart with OPENSRE_HISTORY_ENABLED=1 to enable persistence.[/dim]"
+        "[dim]history backend does not support runtime persistence controls in this session.[/dim]"
     )
     return True
 
@@ -80,8 +98,7 @@ def _history_retention(session: ReplSession, console: Console, args: list[str]) 
 
     backend = session.prompt_history_backend
     if isinstance(backend, RedactingFileHistory):
-        backend._max_entries = n
-        backend._prune_to_cap()
+        backend.set_max_entries(n)
         console.print(
             f"[dim]retention cap set to {n} for this session "
             "(set OPENSRE_HISTORY_MAX_ENTRIES or interactive.history.max_entries to persist).[/dim]"
@@ -121,14 +138,18 @@ def _cmd_privacy(session: ReplSession, console: Console, args: list[str]) -> boo
     if isinstance(backend, RedactingFileHistory):
         persistence = "off (paused)" if backend.paused else "on"
         redaction = "on"
-        retention = str(backend._max_entries) if backend._max_entries > 0 else "unlimited"
-    elif backend is None or backend.__class__.__name__ == "InMemoryHistory":
+        retention = str(backend.max_entries) if backend.max_entries > 0 else "unlimited"
+    elif backend is None or isinstance(backend, InMemoryHistory):
         persistence = "off (in-memory only)"
         redaction = "n/a"
         retention = "n/a"
-    else:
+    elif isinstance(backend, FileHistory):
         persistence = "on (no redaction)"
         redaction = "off"
+        retention = "n/a"
+    else:
+        persistence = "unknown"
+        redaction = "unknown"
         retention = "n/a"
 
     table.add_row("persistence", persistence)

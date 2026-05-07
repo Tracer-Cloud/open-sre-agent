@@ -6,6 +6,7 @@ import io
 from pathlib import Path
 
 import pytest
+from prompt_toolkit.history import FileHistory, InMemoryHistory
 from rich.console import Console
 
 from app.cli.interactive_shell import history as history_module
@@ -64,14 +65,30 @@ class TestHistoryToggle:
         assert backend.paused is False
 
     def test_off_with_in_memory_backend_is_noop_message(self) -> None:
-        from prompt_toolkit.history import InMemoryHistory
-
         session = ReplSession()
         session.prompt_history_backend = InMemoryHistory()
         console, buf = _capture()
 
         dispatch_slash("/history off", session, console)
         assert "in-memory" in buf.getvalue() or "not persisting" in buf.getvalue()
+
+    def test_file_history_backend_reports_runtime_pause_is_unavailable(
+        self, tmp_path: Path
+    ) -> None:
+        session = ReplSession()
+        session.prompt_history_backend = FileHistory(str(tmp_path / "history"))
+        console, buf = _capture()
+
+        dispatch_slash("/history off", session, console)
+        assert "without redaction" in buf.getvalue()
+
+    def test_file_history_backend_reports_persistence_already_on(self, tmp_path: Path) -> None:
+        session = ReplSession()
+        session.prompt_history_backend = FileHistory(str(tmp_path / "history"))
+        console, buf = _capture()
+
+        dispatch_slash("/history on", session, console)
+        assert "already on" in buf.getvalue()
 
 
 class TestHistoryRetention:
@@ -108,6 +125,22 @@ class TestHistoryRetention:
         dispatch_slash("/history retention -1", session, console)
         assert "non-negative integer" in buf.getvalue()
 
+    def test_zero_sets_unlimited_without_crashing(self, tmp_path: Path) -> None:
+        history_file = tmp_path / "history"
+        backend = RedactingFileHistory(str(history_file), max_entries=2)
+        for i in range(4):
+            backend.store_string(f"entry-{i}")
+
+        session = ReplSession()
+        session.prompt_history_backend = backend
+        console, buf = _capture()
+
+        assert dispatch_slash("/history retention 0", session, console) is True
+        persisted = list(reversed(list(backend.load_history_strings())))
+        assert persisted == ["entry-2", "entry-3"]
+        assert backend.max_entries == 0
+        assert "retention cap set to 0" in buf.getvalue()
+
 
 class TestHistoryUnknownSubcommand:
     def test_prints_usage(self) -> None:
@@ -142,11 +175,19 @@ class TestPrivacyCommand:
         assert "paused" in buf.getvalue()
 
     def test_in_memory_backend_reports_off(self) -> None:
-        from prompt_toolkit.history import InMemoryHistory
-
         session = ReplSession()
         session.prompt_history_backend = InMemoryHistory()
         console, buf = _capture()
 
         dispatch_slash("/privacy", session, console)
         assert "in-memory" in buf.getvalue()
+
+    def test_file_history_backend_reports_no_redaction(self, tmp_path: Path) -> None:
+        session = ReplSession()
+        session.prompt_history_backend = FileHistory(str(tmp_path / "history"))
+        console, buf = _capture()
+
+        dispatch_slash("/privacy", session, console)
+        out = buf.getvalue()
+        assert "on (no redaction)" in out
+        assert "redaction" in out

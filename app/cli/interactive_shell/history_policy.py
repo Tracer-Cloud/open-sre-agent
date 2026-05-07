@@ -99,6 +99,10 @@ class HistoryPolicy:
 def _parse_bool(env_val: str | None, file_val: Any, default: bool) -> bool:
     if env_val is not None and env_val != "":
         return env_val.strip().lower() not in {"0", "false", "off", "no"}
+    if isinstance(file_val, bool):
+        return file_val
+    if isinstance(file_val, str) and file_val.strip() != "":
+        return file_val.strip().lower() not in {"0", "false", "off", "no"}
     if file_val is not None:
         return bool(file_val)
     return default
@@ -123,8 +127,6 @@ class RedactingFileHistory(FileHistory):
     persistence at runtime without swapping the History instance.
     """
 
-    paused: bool = False
-
     def __init__(
         self,
         filename: str,
@@ -133,18 +135,37 @@ class RedactingFileHistory(FileHistory):
         max_entries: int = DEFAULT_MAX_ENTRIES,
     ) -> None:
         super().__init__(filename)
+        self.paused = False
         self._rules = rules
         self._max_entries = max_entries
+        self._entry_count: int | None = None
+
+    @property
+    def max_entries(self) -> int:
+        return self._max_entries
+
+    def set_max_entries(self, max_entries: int, *, prune: bool = True) -> None:
+        self._max_entries = max(0, max_entries)
+        if prune:
+            self._prune_to_cap()
 
     def store_string(self, string: str) -> None:
         if self.paused:
             return
         cleaned = redact_text(string, self._rules) if self._rules else string
         super().store_string(cleaned)
-        if self._max_entries > 0:
+        if self._max_entries <= 0:
+            return
+        if self._entry_count is None:
+            self._entry_count = self._count_entries()
+        else:
+            self._entry_count += 1
+        if self._entry_count > self._max_entries:
             self._prune_to_cap()
 
     def _prune_to_cap(self) -> None:
+        if self._max_entries <= 0:
+            return
         path = Path(os.fsdecode(self.filename))
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
@@ -155,6 +176,7 @@ class RedactingFileHistory(FileHistory):
         # Each persisted entry begins with a "# <timestamp>" comment line.
         boundaries = [i for i, ln in enumerate(lines) if ln.startswith("# ")]
         if len(boundaries) <= self._max_entries:
+            self._entry_count = len(boundaries)
             return
 
         keep_from = boundaries[len(boundaries) - self._max_entries]
@@ -162,8 +184,17 @@ class RedactingFileHistory(FileHistory):
             keep_from -= 1
         try:
             path.write_text("".join(lines[keep_from:]), encoding="utf-8")
+            self._entry_count = self._max_entries
         except OSError:
             return
+
+    def _count_entries(self) -> int:
+        path = Path(os.fsdecode(self.filename))
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return 0
+        return sum(1 for line in text.splitlines() if line.startswith("# "))
 
 
 __all__ = [
