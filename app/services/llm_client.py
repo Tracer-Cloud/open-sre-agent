@@ -972,7 +972,11 @@ def parse_root_cause(response: str) -> RootCauseResult:
             # Extract non-validated claims
             if "NON_VALIDATED_CLAIMS:" in after:
                 non_validated_section = after.split("NON_VALIDATED_CLAIMS:", 1)[1]
-                for delimiter in ("ALTERNATIVE_HYPOTHESES_CONSIDERED:", "CAUSAL_CHAIN:"):
+                for delimiter in (
+                    "ALTERNATIVE_HYPOTHESES_CONSIDERED:",
+                    "CAUSAL_CHAIN:",
+                    "REMEDIATION_STEPS:",
+                ):
                     if delimiter in non_validated_section:
                         non_validated_text = non_validated_section.split(delimiter, 1)[0]
                         break
@@ -985,6 +989,7 @@ def parse_root_cause(response: str) -> RootCauseResult:
                         line
                         and not line.startswith("CAUSAL_CHAIN")
                         and not line.startswith("ALTERNATIVE")
+                        and not line.startswith("REMEDIATION_STEPS")
                     ):
                         non_validated_claims.append(line)
 

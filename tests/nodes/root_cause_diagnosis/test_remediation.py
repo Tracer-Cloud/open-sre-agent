@@ -91,3 +91,27 @@ REMEDIATION_STEPS:
         assert not any("Validate env" in step for step in result.causal_chain)
         assert len(result.causal_chain) == 2
         assert len(result.remediation_steps) == 2
+
+    def test_non_validated_claims_does_not_swallow_remediation_steps(self):
+        """Weak model skips CAUSAL_CHAIN — REMEDIATION_STEPS must still be parsed."""
+        response = """ROOT_CAUSE:
+OOM kill detected.
+
+ROOT_CAUSE_CATEGORY:
+resource_exhaustion
+
+VALIDATED_CLAIMS:
+- Pod exited with code 137
+
+NON_VALIDATED_CLAIMS:
+- Memory limit may be too low
+
+REMEDIATION_STEPS:
+- Increase memory limit for payments-api
+- Add memory alert at 80% threshold
+"""
+        result = parse_root_cause(response)
+        assert not any("Increase memory" in c for c in result.non_validated_claims)
+        assert not any("Add memory alert" in c for c in result.non_validated_claims)
+        assert len(result.remediation_steps) == 2
+        assert "payments-api" in result.remediation_steps[0]
