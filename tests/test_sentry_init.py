@@ -4,8 +4,25 @@ import sys
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
+
 from app.constants import SENTRY_DSN, SENTRY_ERROR_SAMPLE_RATE, SENTRY_TRACES_SAMPLE_RATE
 from app.utils import sentry_sdk as sentry_mod
+
+
+@pytest.fixture(autouse=True)
+def _reset_sentry_module_state(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Clear cached init/tag state, and skip building real integrations.
+
+    The default test pattern replaces ``sys.modules["sentry_sdk"]`` with a
+    ``SimpleNamespace`` stub, which breaks ``from sentry_sdk.integrations.X
+    import Y`` because the stub is not a package. Stubbing the integrations
+    builder with an empty list keeps every test working; the one test that
+    asserts integrations were wired overrides this in its own body.
+    """
+    sentry_mod._init_sentry_once.cache_clear()
+    sentry_mod._reset_scope_tags_state_for_tests()
+    monkeypatch.setattr(sentry_mod, "_build_sentry_integrations", lambda: [])
 
 
 def test_init_sentry_noops_when_disabled(monkeypatch) -> None:
@@ -322,7 +339,16 @@ def _install_full_sentry_mock(monkeypatch):
 
 
 def test_init_sentry_passes_explicit_integrations(monkeypatch) -> None:
-    sentry_mod._init_sentry_once.cache_clear()
+    from sentry_sdk.integrations.asyncio import AsyncioIntegration
+    from sentry_sdk.integrations.httpx import HttpxIntegration
+    from sentry_sdk.integrations.logging import LoggingIntegration
+
+    real_integrations = [
+        LoggingIntegration(),
+        AsyncioIntegration(),
+        HttpxIntegration(),
+    ]
+    monkeypatch.setattr(sentry_mod, "_build_sentry_integrations", lambda: real_integrations)
     _clear_kill_switches(monkeypatch)
     init_mock, _ = _install_full_sentry_mock(monkeypatch)
 
@@ -559,3 +585,72 @@ def test_init_sentry_skips_scope_tags_when_dsn_empty(monkeypatch) -> None:
     sentry_mod.init_sentry(entrypoint="cli")
 
     tag_mock.assert_not_called()
+
+
+def test_before_send_filters_extra_recursively() -> None:
+    event = {
+        "extra": {
+            "context": {
+                "auth_token": "ghp_xxx",
+                "messages": [{"role": "user", "content": "hi"}],
+                "user_id": "ok",
+            },
+            "request_id": "req-42",
+        },
+    }
+
+    sentry_mod._before_send(event, {})
+
+    extra = event["extra"]
+    assert extra["context"]["auth_token"] == "[Filtered]"
+    assert extra["context"]["messages"] == "[Filtered]"
+    assert extra["context"]["user_id"] == "ok"
+    assert extra["request_id"] == "req-42"
+
+
+def test_before_send_parses_json_string_request_body() -> None:
+    raw_body = (
+        '{"system_prompt": "you are an assistant",'
+        ' "messages": [{"role": "user", "content": "hi"}],'
+        ' "request_id": "req-1"}'
+    )
+    event = {"request": {"body": raw_body}}
+
+    sentry_mod._before_send(event, {})
+
+    body = event["request"]["body"]
+    assert isinstance(body, dict)
+    assert body["system_prompt"] == "[Filtered]"
+    assert body["messages"] == "[Filtered]"
+    assert body["request_id"] == "req-1"
+
+
+def test_before_send_leaves_non_json_request_body_string_alone() -> None:
+    event = {"request": {"body": "not json"}}
+
+    sentry_mod._before_send(event, {})
+
+    assert event["request"]["body"] == "not json"
+
+
+def test_init_sentry_does_not_double_init_across_entrypoints(monkeypatch) -> None:
+    _clear_kill_switches(monkeypatch)
+    init_mock, _ = _install_full_sentry_mock(monkeypatch)
+
+    sentry_mod.init_sentry(entrypoint="webapp")
+    sentry_mod.init_sentry(entrypoint="graph_pipeline")
+
+    init_mock.assert_called_once()
+
+
+def test_apply_scope_tags_is_first_wins(monkeypatch) -> None:
+    _clear_kill_switches(monkeypatch)
+    _, tag_mock = _install_full_sentry_mock(monkeypatch)
+
+    sentry_mod.init_sentry(entrypoint="webapp")
+    sentry_mod.init_sentry(entrypoint="graph_pipeline")
+
+    entrypoint_tags = [
+        call.args[1] for call in tag_mock.call_args_list if call.args[0] == "entrypoint"
+    ]
+    assert entrypoint_tags == ["webapp"]

@@ -7,6 +7,7 @@ are safe — the function is idempotent.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from collections.abc import Mapping
@@ -20,7 +21,8 @@ from app.constants import (
     SENTRY_DSN,
     SENTRY_ERROR_SAMPLE_RATE,
     SENTRY_IN_APP_INCLUDE,
-    SENTRY_INTEGRATIONS,
+    SENTRY_LOGGING_BREADCRUMB_LEVEL,
+    SENTRY_LOGGING_EVENT_LEVEL,
     SENTRY_MAX_BREADCRUMBS,
     SENTRY_TRACES_SAMPLE_RATE,
 )
@@ -30,7 +32,6 @@ _SENSITIVE_KEY_SUFFIXES: tuple[str, ...] = ("_token", "_key", "_secret", "_passw
 _SENSITIVE_KEY_SUBSTRINGS: tuple[str, ...] = (
     "prompt",
     "messages",
-    "system_prompt",
     "dsn",
     "bearer",
     "cookie",
@@ -43,6 +44,8 @@ _SENSITIVE_HEADERS: frozenset[str] = frozenset(
 _QUERY_SCRUBBING_CATEGORIES: frozenset[str] = frozenset({"http", "httpx"})
 _HEADER_SCRUBBING_CATEGORIES: frozenset[str] = frozenset({"http", "httpx", "aiohttp"})
 _HOSTED_ENTRYPOINTS: frozenset[str] = frozenset({"webapp", "remote", "mcp", "graph_pipeline"})
+
+_SCOPE_TAGS_APPLIED: bool = False
 
 
 def _is_sentry_disabled() -> bool:
@@ -117,12 +120,31 @@ def _scrub_request(request: dict[str, Any]) -> None:
         body = request.get(body_key)
         if isinstance(body, dict):
             _scrub_mapping_recursive(body)
+        elif isinstance(body, list):
+            _scrub_list_recursive(body)
+        elif isinstance(body, str):
+            # FastAPI/Starlette integration captures `request.body` as a raw
+            # JSON string; parse it so the recursive scrubber can walk it.
+            try:
+                parsed = json.loads(body)
+            except (json.JSONDecodeError, ValueError):
+                continue
+            if isinstance(parsed, dict):
+                _scrub_mapping_recursive(parsed)
+                request[body_key] = parsed
+            elif isinstance(parsed, list):
+                _scrub_list_recursive(parsed)
+                request[body_key] = parsed
 
 
 def _scrub_extra(extra: dict[str, Any]) -> None:
-    for key in list(extra):
-        if _is_sensitive_key(key):
-            extra[key] = "[Filtered]"
+    """Recursively scrub the ``extra`` payload.
+
+    Sentry's ``extra`` field accepts arbitrary mappings, and ``capture_exception``
+    callers frequently pass nested dicts (e.g. an LLM context block). Walking
+    only the top level would let nested secrets and prompts through.
+    """
+    _scrub_mapping_recursive(extra)
 
 
 def _scrub_stacktrace_frames(frames: list[dict[str, Any]]) -> None:
@@ -219,6 +241,30 @@ def _capture_sentry_init_skipped(reason: str, *, error_type: str | None = None) 
         get_analytics().capture(Event.SENTRY_INIT_SKIPPED, properties)
 
 
+def _build_sentry_integrations() -> list[Any]:
+    """Build the Sentry integrations list lazily.
+
+    Importing ``sentry_sdk.integrations.*`` is deferred to the first init so
+    that ``app.constants.sentry`` does not pull in ``sentry_sdk`` at import
+    time. The CLI bootstrap relies on a ``try: init_sentry() except
+    ModuleNotFoundError`` guard to keep ``opensre update`` working when the
+    SDK is missing — that guard only fires if the import happens inside
+    ``init_sentry``, not at top-level module load.
+    """
+    from sentry_sdk.integrations.asyncio import AsyncioIntegration
+    from sentry_sdk.integrations.httpx import HttpxIntegration
+    from sentry_sdk.integrations.logging import LoggingIntegration
+
+    return [
+        LoggingIntegration(
+            level=SENTRY_LOGGING_BREADCRUMB_LEVEL,
+            event_level=SENTRY_LOGGING_EVENT_LEVEL,
+        ),
+        AsyncioIntegration(),
+        HttpxIntegration(),
+    ]
+
+
 @cache
 def _init_sentry_once(
     dsn: str,
@@ -226,15 +272,15 @@ def _init_sentry_once(
     release: str,
     sample_rate: float,
     traces_sample_rate: float,
-    entrypoint: str | None = None,
 ) -> None:
     """Initialize Sentry once per effective runtime configuration.
 
-    ``entrypoint`` is part of the cache key so distinct entrypoints in the
-    same process can each trigger a fresh init; the value itself is applied
-    via scope tags in :func:`init_sentry`, not passed to ``sentry_sdk.init``.
+    ``entrypoint`` is intentionally NOT part of the cache key — otherwise a
+    webapp process that internally invokes a pipeline runner would call
+    ``sentry_sdk.init()`` a second time, re-registering integrations and
+    replacing the client. Per-entrypoint differentiation is handled via
+    scope tags in :func:`_apply_scope_tags`, which is first-wins.
     """
-    del entrypoint  # cache-key only; tags are set after init.
     import sentry_sdk
 
     sentry_sdk.init(
@@ -247,17 +293,21 @@ def _init_sentry_once(
         traces_sample_rate=traces_sample_rate,
         max_breadcrumbs=SENTRY_MAX_BREADCRUMBS,
         in_app_include=list(SENTRY_IN_APP_INCLUDE),
-        integrations=list(SENTRY_INTEGRATIONS),
+        integrations=_build_sentry_integrations(),
         before_send=_before_send,
         before_breadcrumb=_before_breadcrumb,
     )
 
 
 def _apply_scope_tags(entrypoint: str | None) -> None:
-    """Apply runtime scope tags after init.
+    """Apply runtime scope tags after init — first-wins.
 
-    Wrapped at the call site in ``suppress(Exception)`` because the tagging
-    must never break the init flow if the SDK is stubbed (e.g. in tests).
+    Called once per process; subsequent ``init_sentry()`` calls (e.g. when a
+    pipeline runner is invoked from inside a webapp) are no-ops at this
+    layer so the outermost entrypoint dictates the tags. Wrapped at the
+    call site in ``suppress(Exception)`` because the tagging must never
+    break the init flow if the SDK is stubbed (e.g. in tests).
+
     The runtime tag is namespaced as ``opensre.runtime`` to avoid colliding
     with Sentry's built-in ``runtime`` context (which carries the Python
     runtime, e.g. ``CPython 3.12``, and is flattened into a tag of the same
@@ -267,6 +317,9 @@ def _apply_scope_tags(entrypoint: str | None) -> None:
     this matches the surface, not the ``ENV`` setting, so a webapp running
     locally still reports as ``hosted``.
     """
+    global _SCOPE_TAGS_APPLIED
+    if _SCOPE_TAGS_APPLIED:
+        return
     runtime = "hosted" if entrypoint in _HOSTED_ENTRYPOINTS else "cli"
     deployment_method = os.getenv("OPENSRE_DEPLOYMENT_METHOD", "local")
     import sentry_sdk
@@ -274,6 +327,13 @@ def _apply_scope_tags(entrypoint: str | None) -> None:
     sentry_sdk.set_tag("entrypoint", entrypoint or "unknown")
     sentry_sdk.set_tag("opensre.runtime", runtime)
     sentry_sdk.set_tag("deployment_method", deployment_method)
+    _SCOPE_TAGS_APPLIED = True
+
+
+def _reset_scope_tags_state_for_tests() -> None:
+    """Reset the first-wins guard. Test-only helper."""
+    global _SCOPE_TAGS_APPLIED
+    _SCOPE_TAGS_APPLIED = False
 
 
 def init_sentry(entrypoint: str | None = None) -> None:
@@ -287,7 +347,9 @@ def init_sentry(entrypoint: str | None = None) -> None:
 
     ``entrypoint`` identifies the calling surface (``cli``, ``webapp``,
     ``remote``, ``mcp``, ``integrations``, ``wizard``, ``graph_pipeline``)
-    and is attached as a scope tag for grouping in Sentry.
+    and is attached as a scope tag for grouping in Sentry. The first
+    non-no-op call wins — inner callers cannot overwrite the outer
+    entrypoint's tags.
     """
     if _is_sentry_disabled():
         _capture_sentry_init_skipped("telemetry_disabled")
@@ -309,7 +371,6 @@ def init_sentry(entrypoint: str | None = None) -> None:
                 "SENTRY_TRACES_SAMPLE_RATE",
                 SENTRY_TRACES_SAMPLE_RATE,
             ),
-            entrypoint=entrypoint,
         )
     except ModuleNotFoundError:
         _capture_sentry_init_skipped("missing_sdk", error_type="ModuleNotFoundError")

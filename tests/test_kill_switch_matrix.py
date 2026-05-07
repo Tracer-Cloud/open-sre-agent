@@ -46,6 +46,9 @@ def _posthog_is_disabled() -> bool:
 def _sentry_init_call_count(monkeypatch: pytest.MonkeyPatch) -> int:
     init_mock = MagicMock()
     monkeypatch.setitem(sys.modules, "sentry_sdk", SimpleNamespace(init=init_mock))
+    # Stubbed sentry_sdk module is not a package, so the real integrations
+    # submodule import would fail; bypass it for this counting test.
+    monkeypatch.setattr(sentry_mod, "_build_sentry_integrations", lambda: [])
     sentry_mod._init_sentry_once.cache_clear()
     sentry_mod.init_sentry()
     return init_mock.call_count
