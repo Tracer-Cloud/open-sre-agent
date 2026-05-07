@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import httpx
 
-from app.integrations.models import SlackWebhookConfig
-from app.integrations.verify import _verify_telegram
+from app.integrations.models import SlackWebhookConfig, TelegramBotConfig
 
 from .shared import IntegrationHealthResult
 
@@ -141,12 +140,49 @@ def validate_discord_bot(*, bot_token: str) -> IntegrationHealthResult:
 
 
 def validate_telegram_integration(*, bot_token: str) -> IntegrationHealthResult:
-    """Validate a Telegram bot token via the shared integration verifier."""
-    result = _verify_telegram("onboarding", {"bot_token": bot_token})
-    detail = str(result["detail"])
-    if bot_token:
-        detail = detail.replace(bot_token, "<redacted>")
+    """Validate a Telegram bot token with Telegram's getMe endpoint."""
+    try:
+        telegram_config = TelegramBotConfig.model_validate({"bot_token": bot_token})
+    except Exception as err:
+        return IntegrationHealthResult(ok=False, detail=str(err))
+
+    try:
+        resp = httpx.get(
+            f"https://api.telegram.org/bot{telegram_config.bot_token}/getMe",
+            timeout=10,
+        )
+    except httpx.RequestError as err:
+        detail = str(err).replace(telegram_config.bot_token, "<redacted>")
+        return IntegrationHealthResult(ok=False, detail=f"Telegram API unreachable: {detail}")
+
+    if resp.status_code != 200:
+        detail = f"Telegram API returned unexpected HTTP {resp.status_code}."
+        try:
+            payload = resp.json()
+        except ValueError:
+            payload = None
+        if isinstance(payload, dict):
+            description = str(payload.get("description") or "").strip()
+            if description:
+                detail = f"Telegram API check failed: {description}"
+        return IntegrationHealthResult(ok=False, detail=detail)
+
+    try:
+        payload = resp.json()
+    except ValueError as err:
+        return IntegrationHealthResult(
+            ok=False, detail=f"Telegram API returned invalid JSON: {err}"
+        )
+
+    if not payload.get("ok"):
+        return IntegrationHealthResult(
+            ok=False,
+            detail=f"Telegram API check failed: {payload.get('description', 'unknown error')}",
+        )
+
+    user = payload.get("result", {})
+    username = str(user.get("username", "")).strip()
     return IntegrationHealthResult(
-        ok=result["status"] == "passed",
-        detail=detail,
+        ok=True,
+        detail=f"Connected to Telegram bot @{username or 'unknown'}.",
     )

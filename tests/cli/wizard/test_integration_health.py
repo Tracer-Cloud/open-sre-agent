@@ -216,9 +216,9 @@ def test_validate_telegram_integration_uses_existing_verifier(monkeypatch) -> No
     module = import_module("app.cli.wizard.integration_health")
 
     monkeypatch.setattr(
-        "app.integrations._verification_adapters.requests.get",
+        "app.cli.wizard.integration_validators.http_probe_validators.httpx.get",
         lambda *_args, **_kwargs: types.SimpleNamespace(
-            raise_for_status=lambda: None,
+            status_code=200,
             json=lambda: {"ok": True, "result": {"username": "opensre_bot"}},
         ),
     )
@@ -236,10 +236,16 @@ def test_validate_telegram_integration_redacts_bot_token_on_error(monkeypatch) -
     module = import_module("app.cli.wizard.integration_health")
 
     def _raise_request_error(*_args, **_kwargs):
-        raise RuntimeError("request failed for https://api.telegram.org/bot123456:ABCDEF/getMe")
+        raise httpx.RequestError(
+            "request failed for https://api.telegram.org/bot123456:ABCDEF/getMe",
+            request=httpx.Request(
+                "GET",
+                "https://api.telegram.org/bot123456:ABCDEF/getMe",
+            ),
+        )
 
     monkeypatch.setattr(
-        "app.integrations._verification_adapters.requests.get",
+        "app.cli.wizard.integration_validators.http_probe_validators.httpx.get",
         _raise_request_error,
     )
 
