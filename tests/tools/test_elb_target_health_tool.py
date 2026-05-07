@@ -169,6 +169,54 @@ def test_summary_block_is_agent_friendly(monkeypatch: pytest.MonkeyPatch) -> Non
     assert summary["target_group_count"] == 1
 
 
+def test_partial_target_health_failure_marks_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When iterating multiple TGs, a per-TG describe_target_health failure must
+    surface in api_errors and flip available=False — silently absorbing the
+    error would let the agent conclude that a partially-queried tier is fully
+    healthy when we actually have no coverage of it."""
+
+    def _execute(**kwargs: Any) -> dict[str, Any]:
+        if kwargs["operation_name"] == "describe_target_groups":
+            return {
+                "success": True,
+                "data": {
+                    "TargetGroups": [
+                        {"TargetGroupArn": "tg-web"},
+                        {"TargetGroupArn": "tg-worker"},
+                    ]
+                },
+            }
+        # describe_target_health: succeed for tg-web, fail for tg-worker
+        if kwargs["parameters"]["TargetGroupArn"] == "tg-web":
+            return {
+                "success": True,
+                "data": {
+                    "TargetHealthDescriptions": [
+                        {
+                            "Target": {"Id": "i-w1", "Port": 80},
+                            "TargetHealth": {"State": "healthy"},
+                        },
+                    ],
+                },
+            }
+        return {"success": False, "error": "AccessDenied: tg-worker"}
+
+    monkeypatch.setattr("app.tools.ELBTargetHealthTool.execute_aws_sdk_call", _execute)
+    out = get_elb_target_health(target_group_arns=["tg-web", "tg-worker"])
+    assert out["available"] is False, (
+        "partial coverage must flip available to False so the agent doesn't "
+        "treat the worker tier as fully healthy"
+    )
+    assert out["error"] is not None
+    assert "Partial coverage" in out["error"]
+    assert len(out["api_errors"]) == 1
+    assert out["api_errors"][0]["target_group_arn"] == "tg-worker"
+    # Healthy data from the successful TG is still returned (don't lose what we have).
+    assert [t["instance_id"] for t in out["healthy_targets"]] == ["i-w1"]
+
+
 def test_real_path_propagates_describe_groups_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

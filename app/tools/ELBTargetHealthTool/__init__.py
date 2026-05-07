@@ -54,6 +54,10 @@ def _is_available(sources: dict[str, dict]) -> bool:
             "agent-friendly precomputed counts: total_targets, healthy_count, "
             "unhealthy_count, healthy_ratio_pct, unhealthy_states, target_group_count"
         ),
+        "api_errors": (
+            "per-target-group failures encountered during describe_target_health; "
+            "non-empty means coverage is partial and ``available`` is set to False"
+        ),
     },
     input_schema={
         "type": "object",
@@ -138,6 +142,7 @@ def get_elb_target_health(
     healthy_targets: list[dict[str, Any]] = []
     unhealthy_targets: list[dict[str, Any]] = []
     instance_ids: list[str] = []
+    api_errors: list[dict[str, str]] = []
     for tg in target_groups:
         tg_arn = tg.get("TargetGroupArn", "")
         if not tg_arn:
@@ -148,11 +153,19 @@ def get_elb_target_health(
             parameters={"TargetGroupArn": tg_arn},
             region=region,
         )
-        descriptions = (
-            (health_result.get("data") or {}).get("TargetHealthDescriptions") or []
-            if health_result.get("success")
-            else []
-        )
+        if not health_result.get("success"):
+            # Per-TG failures must be surfaced — silently treating them as
+            # "no targets" would let the agent conclude that a tier behind
+            # the failing TG is healthy when in fact we have zero coverage.
+            api_errors.append(
+                {
+                    "target_group_arn": tg_arn,
+                    "error": str(health_result.get("error") or "unknown"),
+                }
+            )
+            descriptions: list[dict[str, Any]] = []
+        else:
+            descriptions = (health_result.get("data") or {}).get("TargetHealthDescriptions") or []
         for desc in descriptions:
             target = desc.get("Target", {}) or {}
             health = desc.get("TargetHealth", {}) or {}
@@ -172,13 +185,22 @@ def get_elb_target_health(
             else:
                 unhealthy_targets.append(entry)
 
+    # When at least one TG queried successfully we still return the partial
+    # data — but with `available=False` and a populated `api_errors` list so
+    # the agent never silently treats partial coverage as full coverage.
+    coverage_complete = not api_errors
     return {
         "source": "ec2",
-        "available": True,
+        "available": coverage_complete,
         "target_groups": target_groups,
         "healthy_targets": healthy_targets,
         "unhealthy_targets": unhealthy_targets,
         "instance_ids": list(dict.fromkeys(instance_ids)),
         "summary": build_elb_summary(target_groups, healthy_targets, unhealthy_targets),
-        "error": None,
+        "api_errors": api_errors,
+        "error": (
+            None
+            if coverage_complete
+            else f"Partial coverage: {len(api_errors)}/{len(target_groups)} target groups failed."
+        ),
     }
