@@ -116,24 +116,24 @@ jobs:
           # Sort by first commit date ascending (earliest contributor first)
           contributors.sort(key=lambda c: c["first_commit"])
 
-          # Build the table HTML (12 columns per row)
-          cols = 12
-          rows = [contributors[i:i+cols] for i in range(0, len(contributors), cols)]
-          lines = ["<table>", "\t<tbody>"]
-          for row in rows:
-              lines.append("\t\t<tr>")
-              for c in row:
-                  lines.append(f"""            <td align="center">
-                  <a href="{c['html_url']}">
-                      <img src="{c['avatar_url']}" width="60" alt="{c['login']}"/>
-                      <br />
-                      <sub><b>{c['login']}</b></sub>
-                  </a>
-              </td>""")
-              lines.append("\t\t</tr>")
-          lines.append("\t</tbody>")
-          lines.append("</table>")
-          table = "\n".join(lines)
+          # Markdown avatar badges (see openclaw/openclaw README "Thanks to all clawtributors")
+          def readme_avatar_src(url):
+              if "&s=" in url or "?s=" in url:
+                  return url
+              return f"{url}&s=48" if "?" in url else f"{url}?s=48"
+
+          badges_per_line = 10
+          badges = []
+          for c in contributors:
+              src = readme_avatar_src(c["avatar_url"])
+              login = c["login"]
+              badges.append(f"[![{login}]({src})]({c['html_url']})")
+
+          lines_out = []
+          for i in range(0, len(badges), badges_per_line):
+              lines_out.append("".join(badges[i : i + badges_per_line]))
+
+          rendered = "\n".join(lines_out)
 
           # Replace the section in README.md
           with open("README.md", "r") as f:
@@ -141,7 +141,7 @@ jobs:
 
           new_content = re.sub(
               r"<!-- readme: contributors -start -->.*?<!-- readme: contributors -end -->",
-              f"<!-- readme: contributors -start -->\n{table}\n<!-- readme: contributors -end -->",
+              f"<!-- readme: contributors -start -->\n{rendered}\n<!-- readme: contributors -end -->",
               content,
               flags=re.DOTALL
           )
