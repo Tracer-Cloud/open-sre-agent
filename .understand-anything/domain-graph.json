@@ -1,0 +1,3255 @@
+{
+  "version": "1.0.0",
+  "project": {
+    "name": "opensre",
+    "languages": [
+      "python",
+      "yaml",
+      "markdown",
+      "shell",
+      "dockerfile",
+      "makefile",
+      "toml",
+      "json"
+    ],
+    "frameworks": [
+      "LangGraph",
+      "LangChain",
+      "FastAPI",
+      "Click",
+      "Pydantic",
+      "boto3 (AWS)",
+      "httpx",
+      "Anthropic SDK",
+      "OpenAI SDK",
+      "MCP",
+      "Questionary",
+      "Rich",
+      "PostHog",
+      "OpenTelemetry",
+      "PyJWT"
+    ],
+    "description": "Open-source AI SRE agent that automatically investigates production alerts and produces evidence-backed root-cause analyses by orchestrating a LangGraph pipeline over observability and infrastructure tooling (Datadog, Grafana, Coralogix, AWS/EKS, Kubernetes, Vercel, GitHub, etc.).",
+    "analyzedAt": "2026-04-30T00:00:00Z",
+    "gitCommitHash": "1e495c0524dfcfc7a9ae67d8884a0d450e3747b2"
+  },
+  "nodes": [
+    {
+      "id": "domain:alert-ingestion-and-triage",
+      "type": "domain",
+      "name": "Alert Ingestion & Triage",
+      "summary": "Captures raw alert payloads from Slack, Discord, Vercel pollers, CLI files, and remote HTTP triggers, normalizes them into a canonical schema, and uses an LLM extractor (with deterministic fallbacks) to turn unstructured signals into structured AlertDetails consumed by the investigator.",
+      "tags": [
+        "alerts",
+        "ingestion",
+        "extraction",
+        "triage",
+        "langgraph"
+      ],
+      "complexity": "moderate",
+      "domainMeta": {
+        "entities": [
+          "RawAlert",
+          "AlertDetails",
+          "AlertExtractionInput",
+          "InvestigationCandidate",
+          "ProblemMarkdown"
+        ],
+        "businessRules": [
+          "Every investigation begins from a normalized alert; raw payloads are enriched with extracted name/namespace/severity before downstream nodes run",
+          "When the LLM extractor fails or returns an unusable payload, a deterministic fallback constructs AlertDetails directly from raw fields",
+          "Vercel and runtime self-investigation alerts are deduplicated by signature so the same failure does not trigger repeat investigations"
+        ],
+        "crossDomainInteractions": [
+          "Hands the structured alert to Incident Investigation for planning and execution",
+          "Receives configured ingestion sources (Slack, Discord, Vercel) from Onboarding & Configuration",
+          "Posts back to Findings Publishing for write-back into the originating GitLab MR / Slack thread"
+        ]
+      }
+    },
+    {
+      "id": "domain:incident-investigation",
+      "type": "domain",
+      "name": "Incident Investigation",
+      "summary": "The core LangGraph agent loop: a planner LLM picks investigation actions from the available tool surface, an executor fans out one action per hypothesis in parallel, and a merger reduces evidence and tracks executed/failed actions across iterations until enough signal is collected.",
+      "tags": [
+        "agent-loop",
+        "planner",
+        "executor",
+        "langgraph",
+        "hypothesis",
+        "parallel-execution"
+      ],
+      "complexity": "complex",
+      "domainMeta": {
+        "entities": [
+          "InvestigationPlan",
+          "ExecutedHypothesis",
+          "ActionExecutionResult",
+          "FailedAction",
+          "PlanAudit",
+          "Evidence"
+        ],
+        "businessRules": [
+          "The planner is bounded by a per-loop tool budget and must skip actions blocked by prior failures or exhaustion",
+          "Each planned action runs as its own LangGraph hypothesis branch via Send so they execute concurrently with bounded retries",
+          "Tool failures are classified as retryable vs non-retryable and exhausted action names are excluded from subsequent loops",
+          "The investigation loop terminates when the routing predicate observes enough evidence or the iteration cap is reached"
+        ],
+        "crossDomainInteractions": [
+          "Calls into Tool & Integration Surface to actually query Datadog/Grafana/EKS/etc.",
+          "Pulls credentials and instance metadata from Onboarding & Configuration via the resolved-integrations bag",
+          "Hands accumulated evidence to Root-Cause Diagnosis when planning concludes"
+        ]
+      }
+    },
+    {
+      "id": "domain:root-cause-diagnosis-and-publishing",
+      "type": "domain",
+      "name": "Root-Cause Diagnosis & Findings Publishing",
+      "summary": "Closes the investigation loop: an LLM diagnosis node turns gathered evidence into validated claims and a non-speculative root-cause sentence, then publish_findings formats a Slack Block Kit report, opens a GitLab MR comment, and dispatches notifications to Slack/Discord/Telegram and the Tracer ingest endpoint.",
+      "tags": [
+        "diagnosis",
+        "claims",
+        "evidence",
+        "report",
+        "slack",
+        "publishing"
+      ],
+      "complexity": "complex",
+      "domainMeta": {
+        "entities": [
+          "Diagnosis",
+          "ValidatedClaim",
+          "ReportContext",
+          "EvidenceCatalog",
+          "DeliveryResponse",
+          "RCAReport"
+        ],
+        "businessRules": [
+          "Every claim emitted by the diagnosis LLM must be validated against concrete evidence; unsupported claims are bucketed separately and a 0-1 validity score is computed",
+          "When the evidence checker decides the subject is healthy, a healthy-verdict diagnosis short-circuits the report; insufficient evidence yields an inconclusive verdict listing missing vendor sources",
+          "The published report must include cited evidence with deep links to the original logs/metrics/traces and must respect masking before delivery",
+          "Slack delivery selects bot-token, hosted webapp proxy, or Incoming Webhook depending on which credentials are present"
+        ],
+        "crossDomainInteractions": [
+          "Consumes evidence and executed-hypothesis ledger from Incident Investigation",
+          "Sends tools-call summaries and claim provenance back to Tool & Integration Surface for citation IDs",
+          "Routes deliveries via Onboarding & Configuration's stored Slack/Discord/Telegram/Tracer credentials",
+          "Notifies Deployment & Runtime when self-investigation produced a result so it can write back to the originating thread"
+        ]
+      }
+    },
+    {
+      "id": "domain:tool-and-integration-surface",
+      "type": "domain",
+      "name": "Tool & Integration Surface",
+      "summary": "The auto-discovered registry of 100+ vendor tools (Datadog, Grafana, EKS, Kubernetes, GitHub, GitLab, Sentry, MongoDB, Vercel, Lambda, Honeycomb, etc.) plus their per-vendor service clients. Tools are exposed both to the investigation planner and to the conversational chat sub-graph.",
+      "tags": [
+        "tools",
+        "registry",
+        "vendor-clients",
+        "service-adapters"
+      ],
+      "complexity": "complex",
+      "domainMeta": {
+        "entities": [
+          "RegisteredTool",
+          "ToolMetadata",
+          "BaseTool",
+          "ToolSurface",
+          "ServiceClient"
+        ],
+        "businessRules": [
+          "Tools auto-register on import \u2014 modules under app/tools/ are scanned, RegisteredTool instances collected, deduplicated, and cached as a registry snapshot",
+          "Every tool declares input_schema, surface (investigation/chat), required integrations, and outputs so the planner can reason about applicability",
+          "Tools must reuse shared service clients in app/services/ rather than inlining HTTP/SDK calls",
+          "Diagnostic-code execution is sandboxed via a bounded subprocess timeout"
+        ],
+        "crossDomainInteractions": [
+          "Invoked by Incident Investigation's executor for planned actions",
+          "Invoked by Alert Ingestion when Vercel/Slack pollers need to fetch deployment metadata",
+          "Reads credentials and instance metadata from Onboarding & Configuration's integration store",
+          "Audited by Guardrails & Safety when tool inputs/outputs traverse user-facing surfaces"
+        ]
+      }
+    },
+    {
+      "id": "domain:onboarding-and-configuration",
+      "type": "domain",
+      "name": "Onboarding & Configuration",
+      "summary": "The interactive opensre wizard that picks an LLM provider, validates credentials with a live completion, runs per-vendor _configure_<service> helpers, persists v2 multi-instance integration records into a local store, and re-verifies them with the central verify_integrations orchestrator.",
+      "tags": [
+        "wizard",
+        "cli",
+        "integrations",
+        "credentials",
+        "verification"
+      ],
+      "complexity": "complex",
+      "domainMeta": {
+        "entities": [
+          "ProviderOption",
+          "IntegrationStore",
+          "IntegrationInstance",
+          "VerificationResult",
+          "WizardStore"
+        ],
+        "businessRules": [
+          "Provider credentials must validate with a live tiny-completion call before being persisted to the wizard store",
+          "Integrations are stored in a v2 multi-instance schema; legacy v1 records are migrated transparently on read",
+          "Every configured integration must have a verifier registered in app/integrations/verify.py \u2014 the verify-integrations CLI exits non-zero if any fail",
+          "Local Grafana onboarding spins up a docker-compose stack and seeds Loki with synthetic logs to give a working demo"
+        ],
+        "crossDomainInteractions": [
+          "Feeds resolved integration credentials into Incident Investigation via the resolve_integrations LangGraph node",
+          "Feeds vendor credentials into Tool & Integration Surface so registered tools can authenticate",
+          "Provides Slack/Discord/Telegram tokens to Root-Cause Diagnosis & Findings Publishing for delivery",
+          "Provides deploy targets to Deployment & Runtime"
+        ]
+      }
+    },
+    {
+      "id": "domain:deployment-and-runtime",
+      "type": "domain",
+      "name": "Deployment & Runtime",
+      "summary": "The hosted FastAPI runtime (app/remote/server.py) that exposes /investigate, /investigate_stream, /health, and Discord-interactions endpoints; plus the deploy CLI that ships the agent to AWS EC2, Railway, Vercel, or LangSmith. Includes the Vercel deployment poller that auto-files investigations on failed deploys.",
+      "tags": [
+        "fastapi",
+        "deployment",
+        "ec2",
+        "railway",
+        "vercel",
+        "langsmith",
+        "remote"
+      ],
+      "complexity": "complex",
+      "domainMeta": {
+        "entities": [
+          "InvestigateRequest",
+          "InvestigateResponse",
+          "HealthPollStatus",
+          "VercelInvestigationCandidate",
+          "RemoteAgentClient",
+          "DeployResult"
+        ],
+        "businessRules": [
+          "Every deploy validates provider credentials (AWS role_arn or static keys, Railway api_token, Vercel token) before issuing the deploy",
+          "Deployed runtimes must pass /health then /ok polling within a bounded retry budget before they are considered ready",
+          "The Vercel poller dedupes processed deployment signatures across restarts so the same failure does not re-trigger an investigation",
+          "FastAPI investigate endpoints are gated by an optional X-API-Key dependency when REMOTE_API_KEY is configured"
+        ],
+        "crossDomainInteractions": [
+          "Hosts the Incident Investigation pipeline behind HTTP and SSE streams",
+          "Receives Vercel-derived alerts and forwards them to Alert Ingestion",
+          "Reads deploy targets and provider credentials from Onboarding & Configuration",
+          "Self-investigates its own runtime by building a runtime alert payload via remote/runtime_alert.py"
+        ]
+      }
+    },
+    {
+      "id": "domain:guardrails-and-safety",
+      "type": "domain",
+      "name": "Guardrails, Masking & Safety",
+      "summary": "The cross-cutting safety layer: a regex/keyword guardrail engine that REDACTs or BLOCKs sensitive text with append-only JSONL audit logging, a masking context that reversibly substitutes IPs/emails/AWS resource IDs, JWT-based auth for the LangGraph runtime, and a sandboxed Python runner for diagnostic-code tools.",
+      "tags": [
+        "guardrails",
+        "masking",
+        "auth",
+        "jwt",
+        "sandbox",
+        "audit"
+      ],
+      "complexity": "moderate",
+      "domainMeta": {
+        "entities": [
+          "GuardrailEngine",
+          "GuardrailRule",
+          "ScanResult",
+          "MaskingContext",
+          "MaskingPolicy",
+          "JWTClaims"
+        ],
+        "businessRules": [
+          "Chat messages must pass through guardrails before reaching the LLM; BLOCK actions raise GuardrailBlockedError carrying offending rule names",
+          "Sensitive identifiers are replaced with reversible placeholders before LLM calls and restored on output",
+          "Every authenticated LangGraph thread must carry a verified Bearer JWT (Clerk-issued); auth context is injected into state by inject_auth_node",
+          "Diagnostic Python code only executes inside subprocess.run with a bounded timeout"
+        ],
+        "crossDomainInteractions": [
+          "Wraps every Tool & Integration Surface invocation that touches user input",
+          "Masks evidence and the diagnosis payload prior to Findings Publishing delivery",
+          "Authenticates every Deployment & Runtime request that hits LangGraph",
+          "Runs as a dedicated CLI surface (opensre guardrails) under Onboarding & Configuration"
+        ]
+      }
+    },
+    {
+      "id": "flow:cli-investigate",
+      "type": "flow",
+      "name": "CLI Investigate",
+      "summary": "Run an investigation locally from the opensre investigate CLI: parse argv, load a payload (file/stdin/sample), build alert context, and invoke the LangGraph pipeline.",
+      "tags": [
+        "cli",
+        "ingestion",
+        "click"
+      ],
+      "complexity": "moderate",
+      "domainMeta": {
+        "entryPoint": "opensre investigate",
+        "entryType": "cli"
+      }
+    },
+    {
+      "id": "step:cli-investigate:parse-cli-args",
+      "type": "step",
+      "name": "Parse CLI args",
+      "summary": "Translate Click options into the legacy argv list consumed by run_investigation_cli for backward compatibility.",
+      "tags": [
+        "cli",
+        "click"
+      ],
+      "complexity": "simple",
+      "filePath": "app/cli/commands/general.py"
+    },
+    {
+      "id": "step:cli-investigate:load-payload",
+      "type": "step",
+      "name": "Load alert payload",
+      "summary": "Load alert payloads from files (JSON/YAML/Markdown), stdin, or interactive entry, falling back to bundled sample templates.",
+      "tags": [
+        "payload",
+        "io"
+      ],
+      "complexity": "simple",
+      "filePath": "app/cli/payload.py"
+    },
+    {
+      "id": "step:cli-investigate:resolve-context",
+      "type": "step",
+      "name": "Resolve investigation context",
+      "summary": "Build the canonical alert-name/pipeline-name/severity tuple from the raw alert and any CLI overrides.",
+      "tags": [
+        "context"
+      ],
+      "complexity": "simple",
+      "filePath": "app/cli/investigate.py"
+    },
+    {
+      "id": "step:cli-investigate:dispatch-pipeline",
+      "type": "step",
+      "name": "Dispatch LangGraph pipeline",
+      "summary": "Call run_investigation with keyword arguments inferred from the payload and CLI options; choose blocking vs streaming based on TTY.",
+      "tags": [
+        "pipeline",
+        "dispatch"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/cli/investigate.py"
+    },
+    {
+      "id": "step:cli-investigate:render-result",
+      "type": "step",
+      "name": "Render result",
+      "summary": "Print the formatted result with rich, return an exit code, and optionally emit JSON for scripting.",
+      "tags": [
+        "render",
+        "rich"
+      ],
+      "complexity": "simple",
+      "filePath": "app/cli/investigate.py"
+    },
+    {
+      "id": "flow:vercel-deployment-poll",
+      "type": "flow",
+      "name": "Vercel Deployment Polling",
+      "summary": "Background poller that watches Vercel projects for failed deployments, dedupes by signature, builds a canonical alert from runtime logs and events, and dispatches an investigation.",
+      "tags": [
+        "vercel",
+        "polling",
+        "alert",
+        "ingestion"
+      ],
+      "complexity": "complex",
+      "domainMeta": {
+        "entryPoint": "VercelPoller.run() (loop)",
+        "entryType": "cron"
+      }
+    },
+    {
+      "id": "step:vercel-deployment-poll:iterate-projects",
+      "type": "step",
+      "name": "Iterate Vercel projects",
+      "summary": "Loop over the configured Vercel project allowlist on the configured interval.",
+      "tags": [
+        "vercel",
+        "loop"
+      ],
+      "complexity": "simple",
+      "filePath": "app/remote/vercel_poller.py"
+    },
+    {
+      "id": "step:vercel-deployment-poll:fetch-deployment-bundle",
+      "type": "step",
+      "name": "Fetch deployment bundle",
+      "summary": "Concurrently fetch deployment metadata, events, and runtime logs for a Vercel deployment.",
+      "tags": [
+        "vercel",
+        "fetch"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/remote/vercel_poller.py"
+    },
+    {
+      "id": "step:vercel-deployment-poll:select-actionable-failure",
+      "type": "step",
+      "name": "Select actionable failure",
+      "summary": "Pick the most recent deployment that represents an actionable failure suitable for opening an investigation candidate.",
+      "tags": [
+        "selection"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/remote/vercel_poller.py"
+    },
+    {
+      "id": "step:vercel-deployment-poll:dedupe-by-signature",
+      "type": "step",
+      "name": "Dedupe by signature",
+      "summary": "Use the persistent VercelPollStateStore to skip deployments whose signatures have already been processed.",
+      "tags": [
+        "dedup",
+        "state"
+      ],
+      "complexity": "simple",
+      "filePath": "app/remote/vercel_poller.py"
+    },
+    {
+      "id": "step:vercel-deployment-poll:dispatch-investigation",
+      "type": "step",
+      "name": "Dispatch investigation",
+      "summary": "Build the canonical alert dict and forward it to the investigation pipeline.",
+      "tags": [
+        "dispatch",
+        "alert"
+      ],
+      "complexity": "simple",
+      "filePath": "app/remote/vercel_poller.py"
+    },
+    {
+      "id": "flow:extract-alert-node",
+      "type": "flow",
+      "name": "Extract Alert (LangGraph node)",
+      "summary": "First node in the LangGraph pipeline: detect payload shape, call the LLM extractor for AlertDetails, fall back to deterministic parsing on failure, enrich the raw_alert, and emit a problem_md summary.",
+      "tags": [
+        "langgraph",
+        "node",
+        "extraction",
+        "llm"
+      ],
+      "complexity": "moderate",
+      "domainMeta": {
+        "entryPoint": "node_extract_alert (LangGraph)",
+        "entryType": "event"
+      }
+    },
+    {
+      "id": "step:extract-alert-node:detect-payload-shape",
+      "type": "step",
+      "name": "Detect payload shape",
+      "summary": "Heuristically decide whether the raw alert is rich enough to require full-JSON serialization for the LLM extractor.",
+      "tags": [
+        "heuristic"
+      ],
+      "complexity": "simple",
+      "filePath": "app/nodes/extract_alert/extract.py"
+    },
+    {
+      "id": "step:extract-alert-node:llm-extract-details",
+      "type": "step",
+      "name": "LLM extract details",
+      "summary": "Call the configured LLM with the alert payload to produce a structured AlertDetails object.",
+      "tags": [
+        "llm",
+        "extraction"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/nodes/extract_alert/extract.py"
+    },
+    {
+      "id": "step:extract-alert-node:fallback-deterministic",
+      "type": "step",
+      "name": "Deterministic fallback",
+      "summary": "Build an AlertDetails object directly from raw fields when the LLM call fails or returns an unusable response.",
+      "tags": [
+        "fallback",
+        "deterministic"
+      ],
+      "complexity": "simple",
+      "filePath": "app/nodes/extract_alert/extract.py"
+    },
+    {
+      "id": "step:extract-alert-node:enrich-raw-alert",
+      "type": "step",
+      "name": "Enrich raw alert",
+      "summary": "Merge extracted fields (alert_name, namespace, severity, etc.) back into the raw alert dict for later nodes.",
+      "tags": [
+        "enrichment"
+      ],
+      "complexity": "simple",
+      "filePath": "app/nodes/extract_alert/extract_node.py"
+    },
+    {
+      "id": "step:extract-alert-node:emit-problem-md",
+      "type": "step",
+      "name": "Emit problem markdown",
+      "summary": "Build the human-readable problem markdown summary that downstream nodes use to drive prompts.",
+      "tags": [
+        "markdown",
+        "summary"
+      ],
+      "complexity": "simple",
+      "filePath": "app/nodes/extract_alert/extract_node.py"
+    },
+    {
+      "id": "flow:remote-discord-trigger",
+      "type": "flow",
+      "name": "Discord Slash-Command Trigger",
+      "summary": "Discord interaction webhook that verifies the signature, dispatches a background investigation task, runs the agent pipeline against the supplied alert, and posts the resulting RCA back to the Discord channel.",
+      "tags": [
+        "discord",
+        "webhook",
+        "ingestion"
+      ],
+      "complexity": "moderate",
+      "domainMeta": {
+        "entryPoint": "POST /discord/interactions",
+        "entryType": "http"
+      }
+    },
+    {
+      "id": "step:remote-discord-trigger:verify-signature",
+      "type": "step",
+      "name": "Verify Discord signature",
+      "summary": "Validate the Ed25519 signature on the incoming Discord interaction using the configured public key.",
+      "tags": [
+        "discord",
+        "crypto"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/remote/server.py"
+    },
+    {
+      "id": "step:remote-discord-trigger:dispatch-background",
+      "type": "step",
+      "name": "Dispatch background task",
+      "summary": "Hand the interaction off to a background task so the webhook can ack quickly.",
+      "tags": [
+        "background"
+      ],
+      "complexity": "simple",
+      "filePath": "app/remote/server.py"
+    },
+    {
+      "id": "step:remote-discord-trigger:run-investigation",
+      "type": "step",
+      "name": "Run investigation",
+      "summary": "Run the agent pipeline against the supplied alert payload via _execute_investigation.",
+      "tags": [
+        "investigation"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/remote/server.py"
+    },
+    {
+      "id": "step:remote-discord-trigger:post-result-back",
+      "type": "step",
+      "name": "Post result back to Discord",
+      "summary": "Post the resulting RCA summary back into the originating Discord channel.",
+      "tags": [
+        "delivery"
+      ],
+      "complexity": "simple",
+      "filePath": "app/remote/server.py"
+    },
+    {
+      "id": "flow:plan-actions",
+      "type": "flow",
+      "name": "Plan Investigation Actions",
+      "summary": "Planner orchestrator: detects sources from the alert, extracts keywords, seeds default actions per source, builds the planner LLM prompt with executed-history and tool budget, and selects the next action set.",
+      "tags": [
+        "planner",
+        "llm",
+        "agent-loop"
+      ],
+      "complexity": "complex",
+      "domainMeta": {
+        "entryPoint": "node_plan_actions (LangGraph)",
+        "entryType": "event"
+      }
+    },
+    {
+      "id": "step:plan-actions:detect-sources",
+      "type": "step",
+      "name": "Detect sources",
+      "summary": "Inspect the raw alert, alert context, and resolved integrations to decide which observability sources are relevant.",
+      "tags": [
+        "heuristic",
+        "sources"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/nodes/plan_actions/detect_sources.py"
+    },
+    {
+      "id": "step:plan-actions:extract-keywords",
+      "type": "step",
+      "name": "Extract keywords",
+      "summary": "Pull candidate identifiers (services, namespaces, error tokens) from problem markdown to seed downstream queries.",
+      "tags": [
+        "nlp",
+        "keywords"
+      ],
+      "complexity": "simple",
+      "filePath": "app/nodes/plan_actions/extract_keywords.py"
+    },
+    {
+      "id": "step:plan-actions:seed-default-actions",
+      "type": "step",
+      "name": "Seed default actions",
+      "summary": "Build the seed action list from available action names plus source-specific seeds, ensuring a non-empty plan baseline.",
+      "tags": [
+        "seeding"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/nodes/plan_actions/plan_actions.py"
+    },
+    {
+      "id": "step:plan-actions:build-prompt",
+      "type": "step",
+      "name": "Build planner prompt",
+      "summary": "Compose the planner LLM prompt from problem markdown, executed-hypothesis history, available actions, and tool budget.",
+      "tags": [
+        "prompt",
+        "llm"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/nodes/plan_actions/build_prompt.py"
+    },
+    {
+      "id": "step:plan-actions:plan-with-llm",
+      "type": "step",
+      "name": "Plan with LLM",
+      "summary": "Call the planner LLM with the constructed prompt and structured plan_model schema, returning the raw plan.",
+      "tags": [
+        "llm"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/nodes/plan_actions/build_prompt.py"
+    },
+    {
+      "id": "step:plan-actions:apply-tool-budget",
+      "type": "step",
+      "name": "Apply tool budget",
+      "summary": "Truncate the planner-proposed action list to fit within the configured tool budget for the current loop.",
+      "tags": [
+        "budget"
+      ],
+      "complexity": "simple",
+      "filePath": "app/nodes/plan_actions/build_prompt.py"
+    },
+    {
+      "id": "step:plan-actions:detect-reroute",
+      "type": "step",
+      "name": "Detect reroute trigger",
+      "summary": "Decide whether the investigation should be rerouted to a different source set based on prior evidence.",
+      "tags": [
+        "reroute",
+        "heuristic"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/nodes/plan_actions/plan_actions.py"
+    },
+    {
+      "id": "flow:investigate-hypothesis-fanout",
+      "type": "flow",
+      "name": "Investigate Hypothesis (Parallel Fan-Out)",
+      "summary": "LangGraph fans out one hypothesis branch per planned action via Send. Each branch executes its tool with bounded retries and classifies failures so subsequent loops can avoid exhausted actions.",
+      "tags": [
+        "langgraph",
+        "send",
+        "parallel",
+        "executor"
+      ],
+      "complexity": "complex",
+      "domainMeta": {
+        "entryPoint": "node_investigate_hypothesis (LangGraph branch)",
+        "entryType": "event"
+      }
+    },
+    {
+      "id": "step:investigate-hypothesis-fanout:send-per-action-branch",
+      "type": "step",
+      "name": "Send per-action branch",
+      "summary": "LangGraph fans out one branch per planned action via Send so they execute concurrently.",
+      "tags": [
+        "langgraph",
+        "fanout"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/nodes/investigate/parallel.py"
+    },
+    {
+      "id": "step:investigate-hypothesis-fanout:execute-with-retry",
+      "type": "step",
+      "name": "Execute with retry",
+      "summary": "Run a single tool action with bounded retries and exponential backoff for transient errors.",
+      "tags": [
+        "retry",
+        "executor"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/nodes/investigate/execution/execute_actions.py"
+    },
+    {
+      "id": "step:investigate-hypothesis-fanout:classify-failure",
+      "type": "step",
+      "name": "Classify failure",
+      "summary": "Mark each failure as retryable or non-retryable so the planner can avoid exhausted actions next loop.",
+      "tags": [
+        "classification"
+      ],
+      "complexity": "simple",
+      "filePath": "app/nodes/investigate/processing/post_process.py"
+    },
+    {
+      "id": "step:investigate-hypothesis-fanout:track-hypothesis",
+      "type": "step",
+      "name": "Track hypothesis",
+      "summary": "Build an ExecutedHypothesis record and merge it into the running ledger of executed actions.",
+      "tags": [
+        "state"
+      ],
+      "complexity": "simple",
+      "filePath": "app/nodes/investigate/processing/post_process.py"
+    },
+    {
+      "id": "flow:merge-evidence",
+      "type": "flow",
+      "name": "Merge Hypothesis Results",
+      "summary": "Reducer node that merges per-hypothesis evidence back into shared state, post-processes vendor-specific tool outputs into a unified evidence schema, and routes the loop or transitions to diagnosis.",
+      "tags": [
+        "reducer",
+        "evidence",
+        "post-processing"
+      ],
+      "complexity": "complex",
+      "domainMeta": {
+        "entryPoint": "merge_hypothesis_results (LangGraph)",
+        "entryType": "event"
+      }
+    },
+    {
+      "id": "step:merge-evidence:gather-branch-results",
+      "type": "step",
+      "name": "Gather branch results",
+      "summary": "Collect the per-hypothesis outputs returned by the parallel investigate branches.",
+      "tags": [
+        "reducer"
+      ],
+      "complexity": "simple",
+      "filePath": "app/nodes/investigate/merge.py"
+    },
+    {
+      "id": "step:merge-evidence:post-process-tool-output",
+      "type": "step",
+      "name": "Post-process tool output",
+      "summary": "Normalize vendor-specific tool results (Datadog, Honeycomb, Coralogix, EKS, Vercel, Lambda, etc.) into the unified evidence schema.",
+      "tags": [
+        "normalization"
+      ],
+      "complexity": "complex",
+      "filePath": "app/nodes/investigate/processing/post_process.py"
+    },
+    {
+      "id": "step:merge-evidence:dedupe-and-merge",
+      "type": "step",
+      "name": "Dedupe and merge evidence",
+      "summary": "Merge new evidence into the existing store, deduplicating by stable identity.",
+      "tags": [
+        "dedup"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/nodes/investigate/processing/post_process.py"
+    },
+    {
+      "id": "step:merge-evidence:build-evidence-summary",
+      "type": "step",
+      "name": "Build evidence summary",
+      "summary": "Compile a compact LLM-friendly summary of accumulated evidence for the next planner loop.",
+      "tags": [
+        "summary"
+      ],
+      "complexity": "simple",
+      "filePath": "app/nodes/investigate/processing/post_process.py"
+    },
+    {
+      "id": "step:merge-evidence:route-loop-or-diagnose",
+      "type": "step",
+      "name": "Route loop vs diagnose",
+      "summary": "Routing predicate decides whether to continue the planner loop or transition to diagnosis.",
+      "tags": [
+        "routing"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/pipeline/routing.py"
+    },
+    {
+      "id": "flow:resolve-integrations",
+      "type": "flow",
+      "name": "Resolve Integrations",
+      "summary": "Pre-planner node that decodes auth, queries the remote tracer client for org integrations when available, falls back to the local store, and exposes the configured integrations bag to downstream nodes.",
+      "tags": [
+        "langgraph",
+        "integrations",
+        "resolution"
+      ],
+      "complexity": "moderate",
+      "domainMeta": {
+        "entryPoint": "node_resolve_integrations (LangGraph)",
+        "entryType": "event"
+      }
+    },
+    {
+      "id": "step:resolve-integrations:decode-auth",
+      "type": "step",
+      "name": "Decode auth context",
+      "summary": "Extract the JWT auth claims from RunnableConfig as injected by inject_auth_node.",
+      "tags": [
+        "auth"
+      ],
+      "complexity": "simple",
+      "filePath": "app/nodes/resolve_integrations/node.py"
+    },
+    {
+      "id": "step:resolve-integrations:try-remote-tracer",
+      "type": "step",
+      "name": "Try remote tracer",
+      "summary": "Query the remote tracer client for org-level integrations when an authenticated session is available.",
+      "tags": [
+        "remote"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/nodes/resolve_integrations/node.py"
+    },
+    {
+      "id": "step:resolve-integrations:fallback-local-store",
+      "type": "step",
+      "name": "Fallback to local store",
+      "summary": "Load integration configs from the local catalog/store and record provenance.",
+      "tags": [
+        "fallback"
+      ],
+      "complexity": "simple",
+      "filePath": "app/nodes/resolve_integrations/node.py"
+    },
+    {
+      "id": "step:resolve-integrations:expose-integrations-bag",
+      "type": "step",
+      "name": "Expose integrations bag",
+      "summary": "Place the resolved integrations dict into agent state for the planner and tool layer.",
+      "tags": [
+        "state"
+      ],
+      "complexity": "simple",
+      "filePath": "app/nodes/resolve_integrations/node.py"
+    },
+    {
+      "id": "flow:diagnose-root-cause",
+      "type": "flow",
+      "name": "Diagnose Root Cause",
+      "summary": "Diagnosis node: checks evidence sufficiency, short-circuits to healthy/inconclusive verdicts when applicable, otherwise builds a diagnosis prompt, invokes the LLM, validates each claim against evidence, and emits a 0-1 validity score.",
+      "tags": [
+        "diagnosis",
+        "llm",
+        "claim-validation"
+      ],
+      "complexity": "complex",
+      "domainMeta": {
+        "entryPoint": "node_diagnose_root_cause (LangGraph)",
+        "entryType": "event"
+      }
+    },
+    {
+      "id": "step:diagnose-root-cause:check-evidence-sufficient",
+      "type": "step",
+      "name": "Check evidence sufficiency",
+      "summary": "Inspect the evidence dictionary to determine whether enough signal exists across logs/metrics/traces.",
+      "tags": [
+        "evidence"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/nodes/root_cause_diagnosis/evidence_checker.py"
+    },
+    {
+      "id": "step:diagnose-root-cause:short-circuit-healthy",
+      "type": "step",
+      "name": "Short-circuit healthy/inconclusive",
+      "summary": "Return a healthy or inconclusive verdict directly when evidence is missing or the subject is clearly healthy.",
+      "tags": [
+        "short-circuit"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/nodes/root_cause_diagnosis/node.py"
+    },
+    {
+      "id": "step:diagnose-root-cause:build-prompt",
+      "type": "step",
+      "name": "Build diagnosis prompt",
+      "summary": "Compose a long-form diagnosis prompt from alert metadata, evidence, memory, and failure context.",
+      "tags": [
+        "prompt"
+      ],
+      "complexity": "complex",
+      "filePath": "app/nodes/root_cause_diagnosis/prompt_builder.py"
+    },
+    {
+      "id": "step:diagnose-root-cause:invoke-llm",
+      "type": "step",
+      "name": "Invoke diagnosis LLM",
+      "summary": "Call the diagnosis LLM and parse the structured claim list it produces.",
+      "tags": [
+        "llm"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/nodes/root_cause_diagnosis/node.py"
+    },
+    {
+      "id": "step:diagnose-root-cause:validate-claims",
+      "type": "step",
+      "name": "Validate claims against evidence",
+      "summary": "Bulk-validate claims, splitting them into validated and non-validated buckets and attaching evidence references.",
+      "tags": [
+        "validation"
+      ],
+      "complexity": "complex",
+      "filePath": "app/nodes/root_cause_diagnosis/claim_validator.py"
+    },
+    {
+      "id": "step:diagnose-root-cause:score-validity",
+      "type": "step",
+      "name": "Score validity",
+      "summary": "Compute a numeric 0-1 validity score from the ratio and weights of validated vs non-validated claims.",
+      "tags": [
+        "scoring"
+      ],
+      "complexity": "simple",
+      "filePath": "app/nodes/root_cause_diagnosis/claim_validator.py"
+    },
+    {
+      "id": "step:diagnose-root-cause:return-diagnosis-state",
+      "type": "step",
+      "name": "Return diagnosis state",
+      "summary": "Emit the diagnosis state delta consumed by publish_findings.",
+      "tags": [
+        "state"
+      ],
+      "complexity": "simple",
+      "filePath": "app/nodes/root_cause_diagnosis/node.py"
+    },
+    {
+      "id": "flow:publish-findings",
+      "type": "flow",
+      "name": "Publish Findings",
+      "summary": "Terminal node that builds the Slack mrkdwn / Block Kit report from the normalized ReportContext, applies masking, renders the report to terminal, and dispatches deliveries to Slack/Discord/Telegram plus the Tracer ingest endpoint.",
+      "tags": [
+        "publishing",
+        "slack",
+        "block-kit",
+        "report"
+      ],
+      "complexity": "complex",
+      "domainMeta": {
+        "entryPoint": "node_publish_findings (LangGraph)",
+        "entryType": "event"
+      }
+    },
+    {
+      "id": "step:publish-findings:build-report-context",
+      "type": "step",
+      "name": "Build report context",
+      "summary": "Convert investigation state into a fully-populated ReportContext including evidence catalog and provenance.",
+      "tags": [
+        "report"
+      ],
+      "complexity": "complex",
+      "filePath": "app/nodes/publish_findings/report_context.py"
+    },
+    {
+      "id": "step:publish-findings:format-slack-message",
+      "type": "step",
+      "name": "Format Slack message",
+      "summary": "Assemble the canonical Slack mrkdwn message body composing root cause, claims, evidence, and infra correlation.",
+      "tags": [
+        "slack",
+        "format"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/nodes/publish_findings/formatters/report.py"
+    },
+    {
+      "id": "step:publish-findings:build-block-kit",
+      "type": "step",
+      "name": "Build Block Kit payload",
+      "summary": "Construct the Slack Block Kit JSON with header, sections, and context blocks for richer rendering.",
+      "tags": [
+        "slack",
+        "block-kit"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/nodes/publish_findings/formatters/report.py"
+    },
+    {
+      "id": "step:publish-findings:apply-masking",
+      "type": "step",
+      "name": "Apply masking",
+      "summary": "Run masking over the report so sensitive identifiers do not leak in delivered content.",
+      "tags": [
+        "masking"
+      ],
+      "complexity": "simple",
+      "filePath": "app/nodes/publish_findings/node.py"
+    },
+    {
+      "id": "step:publish-findings:render-terminal",
+      "type": "step",
+      "name": "Render terminal report",
+      "summary": "Pretty-print the report via rich (or plain text) for the operator running the investigation locally.",
+      "tags": [
+        "render",
+        "rich"
+      ],
+      "complexity": "simple",
+      "filePath": "app/nodes/publish_findings/renderers/terminal.py"
+    },
+    {
+      "id": "step:publish-findings:dispatch-deliveries",
+      "type": "step",
+      "name": "Dispatch deliveries",
+      "summary": "Send the formatted report to Slack, Discord, Telegram, and any other configured channel.",
+      "tags": [
+        "delivery"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/nodes/publish_findings/node.py"
+    },
+    {
+      "id": "step:publish-findings:send-ingest",
+      "type": "step",
+      "name": "Send ingest payload",
+      "summary": "Forward the normalized investigation result to the Tracer ingest endpoint via the shared delivery transport.",
+      "tags": [
+        "ingest"
+      ],
+      "complexity": "simple",
+      "filePath": "app/utils/ingest_delivery.py"
+    },
+    {
+      "id": "flow:gitlab-mr-writeback",
+      "type": "flow",
+      "name": "GitLab MR Write-Back",
+      "summary": "When the originating alert references a GitLab MR, post the RCA summary as a comment on that MR using the configured GitLab token.",
+      "tags": [
+        "gitlab",
+        "writeback",
+        "merge-request"
+      ],
+      "complexity": "simple",
+      "domainMeta": {
+        "entryPoint": "post_gitlab_mr_writeback (publish_findings)",
+        "entryType": "event"
+      }
+    },
+    {
+      "id": "step:gitlab-mr-writeback:detect-mr-metadata",
+      "type": "step",
+      "name": "Detect MR metadata",
+      "summary": "Inspect the originating alert for GitLab MR identifiers (project, MR IID).",
+      "tags": [
+        "gitlab",
+        "metadata"
+      ],
+      "complexity": "simple",
+      "filePath": "app/nodes/publish_findings/gitlab_writeback.py"
+    },
+    {
+      "id": "step:gitlab-mr-writeback:build-mr-comment",
+      "type": "step",
+      "name": "Build MR comment",
+      "summary": "Render the RCA summary as a markdown comment suitable for posting to GitLab.",
+      "tags": [
+        "markdown"
+      ],
+      "complexity": "simple",
+      "filePath": "app/nodes/publish_findings/gitlab_writeback.py"
+    },
+    {
+      "id": "step:gitlab-mr-writeback:post-comment",
+      "type": "step",
+      "name": "Post comment",
+      "summary": "POST the comment to the GitLab MR via the configured GitLab token.",
+      "tags": [
+        "gitlab",
+        "api"
+      ],
+      "complexity": "simple",
+      "filePath": "app/nodes/publish_findings/gitlab_writeback.py"
+    },
+    {
+      "id": "flow:slack-delivery",
+      "type": "flow",
+      "name": "Slack Report Delivery",
+      "summary": "Top-level Slack dispatcher that picks among bot-token, hosted webapp proxy, and Incoming Webhook based on configured credentials, then posts the formatted message and replies in-thread.",
+      "tags": [
+        "slack",
+        "delivery",
+        "transport"
+      ],
+      "complexity": "moderate",
+      "domainMeta": {
+        "entryPoint": "send_slack_report (utils)",
+        "entryType": "event"
+      }
+    },
+    {
+      "id": "step:slack-delivery:select-transport",
+      "type": "step",
+      "name": "Select transport",
+      "summary": "Choose among bot-token (chat.postMessage), hosted webapp proxy, or Incoming Webhook based on configured credentials.",
+      "tags": [
+        "routing"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/utils/slack_delivery.py"
+    },
+    {
+      "id": "step:slack-delivery:build-action-blocks",
+      "type": "step",
+      "name": "Build action blocks",
+      "summary": "Construct Slack Block Kit actions blocks (e.g. View Investigation buttons) given the investigation URL/ID.",
+      "tags": [
+        "block-kit"
+      ],
+      "complexity": "simple",
+      "filePath": "app/utils/slack_delivery.py"
+    },
+    {
+      "id": "step:slack-delivery:post-message",
+      "type": "step",
+      "name": "Post message",
+      "summary": "Issue the actual Slack POST through the selected transport.",
+      "tags": [
+        "delivery"
+      ],
+      "complexity": "simple",
+      "filePath": "app/utils/slack_delivery.py"
+    },
+    {
+      "id": "step:slack-delivery:handle-thread-reply",
+      "type": "step",
+      "name": "Handle thread reply",
+      "summary": "Honor thread_ts when set so RCA replies attach to the originating Slack thread.",
+      "tags": [
+        "threading"
+      ],
+      "complexity": "simple",
+      "filePath": "app/utils/slack_delivery.py"
+    },
+    {
+      "id": "flow:tool-registry-discovery",
+      "type": "flow",
+      "name": "Tool Registry Discovery",
+      "summary": "On first call, scans every module under app/tools/, collects RegisteredTool instances (BaseTool subclasses or @tool-decorated functions), deduplicates them, caches the snapshot, and filters by surface for the caller.",
+      "tags": [
+        "registry",
+        "auto-discovery",
+        "tools"
+      ],
+      "complexity": "moderate",
+      "domainMeta": {
+        "entryPoint": "get_registered_tools (registry)",
+        "entryType": "event"
+      }
+    },
+    {
+      "id": "step:tool-registry-discovery:scan-modules",
+      "type": "step",
+      "name": "Scan tool modules",
+      "summary": "Import every module under app/tools/ so RegisteredTool instances become collectible.",
+      "tags": [
+        "import"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/tools/registry.py"
+    },
+    {
+      "id": "step:tool-registry-discovery:collect-registered-tools",
+      "type": "step",
+      "name": "Collect RegisteredTool instances",
+      "summary": "Walk each module's public members for BaseTool subclasses and @tool-decorated functions.",
+      "tags": [
+        "registry"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/tools/registry.py"
+    },
+    {
+      "id": "step:tool-registry-discovery:dedupe-and-cache",
+      "type": "step",
+      "name": "Dedupe and cache",
+      "summary": "Deduplicate by tool name and cache the registry snapshot via lru_cache.",
+      "tags": [
+        "cache"
+      ],
+      "complexity": "simple",
+      "filePath": "app/tools/registry.py"
+    },
+    {
+      "id": "step:tool-registry-discovery:filter-by-surface",
+      "type": "step",
+      "name": "Filter by surface",
+      "summary": "Return tools filtered for either the investigation surface or the chat surface.",
+      "tags": [
+        "filter"
+      ],
+      "complexity": "simple",
+      "filePath": "app/tools/registry.py"
+    },
+    {
+      "id": "flow:execute-tool-action",
+      "type": "flow",
+      "name": "Execute Tool Action",
+      "summary": "Resolves the tool referenced by a planned action, authenticates via the underlying service client, invokes the vendor API, normalizes the output via vendor-specific mappers, and returns an ActionExecutionResult.",
+      "tags": [
+        "tools",
+        "execution",
+        "service-client"
+      ],
+      "complexity": "complex",
+      "domainMeta": {
+        "entryPoint": "_execute_with_retry (investigate executor)",
+        "entryType": "event"
+      }
+    },
+    {
+      "id": "step:execute-tool-action:resolve-tool",
+      "type": "step",
+      "name": "Resolve tool",
+      "summary": "Look up the RegisteredTool referenced by the planned action name.",
+      "tags": [
+        "lookup"
+      ],
+      "complexity": "simple",
+      "filePath": "app/tools/registry.py"
+    },
+    {
+      "id": "step:execute-tool-action:authenticate-via-service-client",
+      "type": "step",
+      "name": "Authenticate via service client",
+      "summary": "Use the per-vendor service client to obtain credentials and a configured HTTP/SDK client.",
+      "tags": [
+        "auth",
+        "service-client"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/services/datadog/client.py"
+    },
+    {
+      "id": "step:execute-tool-action:invoke-vendor-api",
+      "type": "step",
+      "name": "Invoke vendor API",
+      "summary": "Issue the actual API call (Datadog, Grafana, EKS, GitHub, etc.) through the service client.",
+      "tags": [
+        "api"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/services/grafana/loki.py"
+    },
+    {
+      "id": "step:execute-tool-action:normalize-output",
+      "type": "step",
+      "name": "Normalize output",
+      "summary": "Apply vendor-specific mapping (e.g. _map_datadog_investigate, _map_eks_deployment_status) to convert raw output into the unified evidence schema.",
+      "tags": [
+        "normalization"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/nodes/investigate/processing/post_process.py"
+    },
+    {
+      "id": "step:execute-tool-action:return-action-result",
+      "type": "step",
+      "name": "Return ActionExecutionResult",
+      "summary": "Wrap the success flag, returned data, and any error string in an ActionExecutionResult dataclass.",
+      "tags": [
+        "result"
+      ],
+      "complexity": "simple",
+      "filePath": "app/nodes/investigate/execution/execute_actions.py"
+    },
+    {
+      "id": "flow:chat-tool-loop",
+      "type": "flow",
+      "name": "Conversational Tool Loop",
+      "summary": "The chat sub-graph: applies guardrails to messages, routes between general chat and the tool-using agent, invokes the tool-bound LLM, runs queued tool calls, and returns ToolMessage results.",
+      "tags": [
+        "chat",
+        "tool-binding",
+        "llm"
+      ],
+      "complexity": "moderate",
+      "domainMeta": {
+        "entryPoint": "router_node (chat sub-graph)",
+        "entryType": "event"
+      }
+    },
+    {
+      "id": "step:chat-tool-loop:apply-guardrails",
+      "type": "step",
+      "name": "Apply guardrails",
+      "summary": "Run the GuardrailEngine across user-authored chat messages and rewrite or block them before they reach the LLM.",
+      "tags": [
+        "guardrails"
+      ],
+      "complexity": "simple",
+      "filePath": "app/nodes/chat.py"
+    },
+    {
+      "id": "step:chat-tool-loop:route-general-or-tool",
+      "type": "step",
+      "name": "Route general vs tool",
+      "summary": "Router node decides between general chat and the tool-using chat agent based on intent.",
+      "tags": [
+        "routing"
+      ],
+      "complexity": "simple",
+      "filePath": "app/nodes/chat.py"
+    },
+    {
+      "id": "step:chat-tool-loop:invoke-tool-bound-llm",
+      "type": "step",
+      "name": "Invoke tool-bound LLM",
+      "summary": "Build and tool-bind the chat LLM (OpenAI/Anthropic only) and invoke it.",
+      "tags": [
+        "llm",
+        "tool-binding"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/nodes/chat.py"
+    },
+    {
+      "id": "step:chat-tool-loop:run-tool-executor",
+      "type": "step",
+      "name": "Run tool executor",
+      "summary": "Execute queued tool calls produced by the chat agent and return ToolMessage results.",
+      "tags": [
+        "executor"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/nodes/chat.py"
+    },
+    {
+      "id": "step:chat-tool-loop:return-tool-message",
+      "type": "step",
+      "name": "Return tool message",
+      "summary": "Surface the ToolMessage results back to the chat sub-graph for the next agent step.",
+      "tags": [
+        "state"
+      ],
+      "complexity": "simple",
+      "filePath": "app/nodes/chat.py"
+    },
+    {
+      "id": "flow:opensre-onboard-wizard",
+      "type": "flow",
+      "name": "Onboarding Wizard",
+      "summary": "End-to-end interactive onboarding: probe targets, prompt provider/model, validate credentials with a live completion, pick integrations, run per-vendor _configure_* helpers, persist the wizard store and .env, and render a summary panel.",
+      "tags": [
+        "wizard",
+        "questionary",
+        "onboarding"
+      ],
+      "complexity": "complex",
+      "domainMeta": {
+        "entryPoint": "opensre onboard",
+        "entryType": "cli"
+      }
+    },
+    {
+      "id": "step:opensre-onboard-wizard:probe-targets",
+      "type": "step",
+      "name": "Probe local targets",
+      "summary": "Reachability probes that check the local store and any pre-installed integrations.",
+      "tags": [
+        "probe"
+      ],
+      "complexity": "simple",
+      "filePath": "app/cli/wizard/probes.py"
+    },
+    {
+      "id": "step:opensre-onboard-wizard:select-provider-model",
+      "type": "step",
+      "name": "Select provider and model",
+      "summary": "Drive provider/model selection from the curated ProviderOption catalog.",
+      "tags": [
+        "provider",
+        "model"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/cli/wizard/flow.py"
+    },
+    {
+      "id": "step:opensre-onboard-wizard:validate-credentials",
+      "type": "step",
+      "name": "Validate provider credentials",
+      "summary": "Issue a tiny live completion to validate the provider's API key before persisting.",
+      "tags": [
+        "validation",
+        "llm"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/cli/wizard/validation.py"
+    },
+    {
+      "id": "step:opensre-onboard-wizard:select-integrations",
+      "type": "step",
+      "name": "Select integrations",
+      "summary": "Let the user pick which observability/cloud integrations to configure now.",
+      "tags": [
+        "integrations"
+      ],
+      "complexity": "simple",
+      "filePath": "app/cli/wizard/flow.py"
+    },
+    {
+      "id": "step:opensre-onboard-wizard:configure-each",
+      "type": "step",
+      "name": "Configure each integration",
+      "summary": "Iterate the selected integrations and dispatch to per-service _configure_* helpers, accumulating outcomes.",
+      "tags": [
+        "configuration"
+      ],
+      "complexity": "complex",
+      "filePath": "app/cli/wizard/flow.py"
+    },
+    {
+      "id": "step:opensre-onboard-wizard:persist-store-and-env",
+      "type": "step",
+      "name": "Persist wizard store and env",
+      "summary": "Write the wizard store JSON and synchronize the project .env with provider-specific values.",
+      "tags": [
+        "persistence"
+      ],
+      "complexity": "simple",
+      "filePath": "app/cli/wizard/store.py"
+    },
+    {
+      "id": "step:opensre-onboard-wizard:render-summary",
+      "type": "step",
+      "name": "Render saved summary",
+      "summary": "Render the post-wizard summary panel showing chosen provider/model, store path, and successfully configured integrations.",
+      "tags": [
+        "render"
+      ],
+      "complexity": "simple",
+      "filePath": "app/cli/wizard/flow.py"
+    },
+    {
+      "id": "flow:configure-vendor-integration",
+      "type": "flow",
+      "name": "Configure Vendor Integration",
+      "summary": "Per-vendor configuration helper: prompt for credentials, normalize them into a Pydantic config model, run a live validate call, upsert the v2 instance into the integration store, and emit analytics.",
+      "tags": [
+        "integration",
+        "configuration",
+        "credentials"
+      ],
+      "complexity": "moderate",
+      "domainMeta": {
+        "entryPoint": "_configure_<vendor> (wizard.flow)",
+        "entryType": "cli"
+      }
+    },
+    {
+      "id": "step:configure-vendor-integration:prompt-credentials",
+      "type": "step",
+      "name": "Prompt for credentials",
+      "summary": "Use questionary prompts to gather vendor-specific fields (host, token, region, etc.).",
+      "tags": [
+        "prompt"
+      ],
+      "complexity": "simple",
+      "filePath": "app/cli/wizard/flow.py"
+    },
+    {
+      "id": "step:configure-vendor-integration:normalize-config-model",
+      "type": "step",
+      "name": "Normalize config",
+      "summary": "Build the normalized Pydantic config model for the vendor.",
+      "tags": [
+        "model"
+      ],
+      "complexity": "simple",
+      "filePath": "app/integrations/models.py"
+    },
+    {
+      "id": "step:configure-vendor-integration:validate-live",
+      "type": "step",
+      "name": "Validate live",
+      "summary": "Hit the vendor's auth/identity endpoint to confirm the credentials work.",
+      "tags": [
+        "validation"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/integrations/verify.py"
+    },
+    {
+      "id": "step:configure-vendor-integration:upsert-instance",
+      "type": "step",
+      "name": "Upsert v2 instance",
+      "summary": "Persist the normalized config as a named v2 instance in the integration store.",
+      "tags": [
+        "store"
+      ],
+      "complexity": "simple",
+      "filePath": "app/integrations/store.py"
+    },
+    {
+      "id": "step:configure-vendor-integration:emit-analytics",
+      "type": "step",
+      "name": "Emit analytics",
+      "summary": "Capture an integration-configured PostHog event for the analytics provider.",
+      "tags": [
+        "analytics"
+      ],
+      "complexity": "simple",
+      "filePath": "app/analytics/cli.py"
+    },
+    {
+      "id": "flow:verify-integrations",
+      "type": "flow",
+      "name": "Verify Integrations",
+      "summary": "Central verification orchestrator: list stored integrations, dispatch per-vendor verifiers, format results for CLI output, and compute a non-zero process exit code when anything failed.",
+      "tags": [
+        "verification",
+        "ci",
+        "integrations"
+      ],
+      "complexity": "moderate",
+      "domainMeta": {
+        "entryPoint": "make verify-integrations / opensre integrations verify",
+        "entryType": "cli"
+      }
+    },
+    {
+      "id": "step:verify-integrations:list-stored",
+      "type": "step",
+      "name": "List stored integrations",
+      "summary": "Read the integration store and enumerate configured services and instances.",
+      "tags": [
+        "store"
+      ],
+      "complexity": "simple",
+      "filePath": "app/integrations/store.py"
+    },
+    {
+      "id": "step:verify-integrations:dispatch-per-vendor",
+      "type": "step",
+      "name": "Dispatch per-vendor verifier",
+      "summary": "Walk all configured integrations and dispatch to the matching _verify_<vendor> helper.",
+      "tags": [
+        "verification"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/integrations/verify.py"
+    },
+    {
+      "id": "step:verify-integrations:format-results-table",
+      "type": "step",
+      "name": "Format results table",
+      "summary": "Format the aggregated results into a CLI-friendly table consumed by the wizard and the make target.",
+      "tags": [
+        "format"
+      ],
+      "complexity": "simple",
+      "filePath": "app/integrations/verify.py"
+    },
+    {
+      "id": "step:verify-integrations:exit-code",
+      "type": "step",
+      "name": "Compute exit code",
+      "summary": "Compute a non-zero process exit code so CI pipelines fail when any integration is broken.",
+      "tags": [
+        "ci"
+      ],
+      "complexity": "simple",
+      "filePath": "app/integrations/verify.py"
+    },
+    {
+      "id": "flow:opensre-doctor",
+      "type": "flow",
+      "name": "opensre doctor",
+      "summary": "Diagnostic command that checks LLM provider configuration, lists configured integrations, compares the installed version with the latest release, and exits non-zero if any check fails.",
+      "tags": [
+        "cli",
+        "diagnostics",
+        "doctor"
+      ],
+      "complexity": "simple",
+      "domainMeta": {
+        "entryPoint": "opensre doctor",
+        "entryType": "cli"
+      }
+    },
+    {
+      "id": "step:opensre-doctor:check-llm-provider",
+      "type": "step",
+      "name": "Check LLM provider",
+      "summary": "Verify that at least one LLM provider key is configured and reachable.",
+      "tags": [
+        "llm"
+      ],
+      "complexity": "simple",
+      "filePath": "app/cli/commands/doctor.py"
+    },
+    {
+      "id": "step:opensre-doctor:check-integrations",
+      "type": "step",
+      "name": "Check integrations",
+      "summary": "Report which observability integrations have stored credentials.",
+      "tags": [
+        "integrations"
+      ],
+      "complexity": "simple",
+      "filePath": "app/cli/commands/doctor.py"
+    },
+    {
+      "id": "step:opensre-doctor:check-version-freshness",
+      "type": "step",
+      "name": "Check version freshness",
+      "summary": "Compare the installed opensre version with the latest published GitHub Release.",
+      "tags": [
+        "version"
+      ],
+      "complexity": "simple",
+      "filePath": "app/cli/commands/doctor.py"
+    },
+    {
+      "id": "step:opensre-doctor:render-and-exit",
+      "type": "step",
+      "name": "Render and exit",
+      "summary": "Aggregate check results, render a Rich summary, and exit non-zero on any failure.",
+      "tags": [
+        "render"
+      ],
+      "complexity": "simple",
+      "filePath": "app/cli/commands/doctor.py"
+    },
+    {
+      "id": "flow:remote-investigate-http",
+      "type": "flow",
+      "name": "Remote /investigate HTTP",
+      "summary": "FastAPI investigate endpoint: authenticate the request, normalize the InvestigateRequest payload, run the LangGraph pipeline (blocking or SSE-stream), persist the saved investigation, and respond.",
+      "tags": [
+        "http",
+        "fastapi",
+        "investigation"
+      ],
+      "complexity": "complex",
+      "domainMeta": {
+        "entryPoint": "POST /investigate (and /investigate_stream)",
+        "entryType": "http"
+      }
+    },
+    {
+      "id": "step:remote-investigate-http:authenticate-request",
+      "type": "step",
+      "name": "Authenticate request",
+      "summary": "FastAPI dependency validates the X-API-Key header against REMOTE_API_KEY when configured.",
+      "tags": [
+        "auth"
+      ],
+      "complexity": "simple",
+      "filePath": "app/remote/server.py"
+    },
+    {
+      "id": "step:remote-investigate-http:normalize-payload",
+      "type": "step",
+      "name": "Normalize InvestigateRequest",
+      "summary": "Validate the inbound request via the InvestigateRequest Pydantic model.",
+      "tags": [
+        "validation"
+      ],
+      "complexity": "simple",
+      "filePath": "app/remote/server.py"
+    },
+    {
+      "id": "step:remote-investigate-http:run-pipeline",
+      "type": "step",
+      "name": "Run pipeline",
+      "summary": "Invoke run_investigation (blocking) or astream_investigation (SSE) on the precompiled LangGraph singleton.",
+      "tags": [
+        "pipeline"
+      ],
+      "complexity": "complex",
+      "filePath": "app/remote/server.py"
+    },
+    {
+      "id": "step:remote-investigate-http:persist-investigation",
+      "type": "step",
+      "name": "Persist investigation",
+      "summary": "Save the investigation result as JSON under the configured investigations directory.",
+      "tags": [
+        "persistence"
+      ],
+      "complexity": "simple",
+      "filePath": "app/remote/server.py"
+    },
+    {
+      "id": "step:remote-investigate-http:respond-or-stream",
+      "type": "step",
+      "name": "Respond or stream",
+      "summary": "Return the InvestigateResponse JSON or stream node/tool events as SSE depending on the endpoint.",
+      "tags": [
+        "http",
+        "sse"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/remote/server.py"
+    },
+    {
+      "id": "flow:opensre-deploy",
+      "type": "flow",
+      "name": "opensre deploy",
+      "summary": "Interactive deploy wizard that picks a backend (EC2/Railway/LangSmith), validates provider config (AWS role/keys, Railway api_token, etc.), runs the backend deploy, polls /health then /ok with bounded retries, and persists the remote URL.",
+      "tags": [
+        "deploy",
+        "ec2",
+        "railway",
+        "langsmith"
+      ],
+      "complexity": "complex",
+      "domainMeta": {
+        "entryPoint": "opensre deploy",
+        "entryType": "cli"
+      }
+    },
+    {
+      "id": "step:opensre-deploy:select-backend",
+      "type": "step",
+      "name": "Select deploy backend",
+      "summary": "Interactive wizard picks among EC2, Railway, and LangSmith deploys.",
+      "tags": [
+        "wizard"
+      ],
+      "complexity": "simple",
+      "filePath": "app/cli/commands/deploy.py"
+    },
+    {
+      "id": "step:opensre-deploy:validate-provider-config",
+      "type": "step",
+      "name": "Validate provider config",
+      "summary": "Run provider-specific validators (AWS role/keys, Railway api_token, Vercel token) before issuing the deploy.",
+      "tags": [
+        "validation"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/deployment/provider_config.py"
+    },
+    {
+      "id": "step:opensre-deploy:run-backend-deploy",
+      "type": "step",
+      "name": "Run backend deploy",
+      "summary": "Shell out to the provider CLI (railway up, langgraph build, EC2 provisioning) and capture results.",
+      "tags": [
+        "deploy"
+      ],
+      "complexity": "complex",
+      "filePath": "app/cli/deploy.py"
+    },
+    {
+      "id": "step:opensre-deploy:poll-health-endpoint",
+      "type": "step",
+      "name": "Poll health endpoint",
+      "summary": "Poll /health then /ok on the deployed runtime with bounded retries until ready or timeout.",
+      "tags": [
+        "health"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/deployment/health.py"
+    },
+    {
+      "id": "step:opensre-deploy:persist-remote-url",
+      "type": "step",
+      "name": "Persist remote URL",
+      "summary": "Write the discovered remote URL into the wizard store so subsequent CLI invocations can reach it.",
+      "tags": [
+        "store"
+      ],
+      "complexity": "simple",
+      "filePath": "app/cli/commands/deploy.py"
+    },
+    {
+      "id": "flow:deep-health-check",
+      "type": "flow",
+      "name": "Deep Health Check",
+      "summary": "Runtime self-monitoring endpoint that aggregates LLM connectivity, disk free, memory pressure, and instance metadata into a structured response.",
+      "tags": [
+        "http",
+        "health",
+        "monitoring"
+      ],
+      "complexity": "moderate",
+      "domainMeta": {
+        "entryPoint": "GET /health/deep (FastAPI)",
+        "entryType": "http"
+      }
+    },
+    {
+      "id": "step:deep-health-check:run-llm-probe",
+      "type": "step",
+      "name": "Run LLM probe",
+      "summary": "Issue a tiny LLM connectivity probe and record latency/status.",
+      "tags": [
+        "llm"
+      ],
+      "complexity": "simple",
+      "filePath": "app/remote/server.py"
+    },
+    {
+      "id": "step:deep-health-check:check-disk",
+      "type": "step",
+      "name": "Check disk free",
+      "summary": "Inspect disk free-space and report a DeepHealthCheck record.",
+      "tags": [
+        "disk"
+      ],
+      "complexity": "simple",
+      "filePath": "app/remote/server.py"
+    },
+    {
+      "id": "step:deep-health-check:check-memory",
+      "type": "step",
+      "name": "Check memory pressure",
+      "summary": "Cross-platform memory pressure probe (reads /proc/meminfo on Linux or vm_stat on macOS).",
+      "tags": [
+        "memory"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/remote/server.py"
+    },
+    {
+      "id": "step:deep-health-check:aggregate-response",
+      "type": "step",
+      "name": "Aggregate response",
+      "summary": "Collect every DeepHealthCheck record into the deep health endpoint response.",
+      "tags": [
+        "aggregate"
+      ],
+      "complexity": "simple",
+      "filePath": "app/remote/server.py"
+    },
+    {
+      "id": "flow:runtime-self-investigation",
+      "type": "flow",
+      "name": "Runtime Self-Investigation",
+      "summary": "When the deployed runtime senses something wrong, it probes local deployment health and remote ops status, builds a runtime alert payload, and dispatches an investigation against itself.",
+      "tags": [
+        "self-monitoring",
+        "runtime",
+        "alert"
+      ],
+      "complexity": "moderate",
+      "domainMeta": {
+        "entryPoint": "build_runtime_alert_payload",
+        "entryType": "event"
+      }
+    },
+    {
+      "id": "step:runtime-self-investigation:probe-local-health",
+      "type": "step",
+      "name": "Probe local deployment health",
+      "summary": "Probe the local deployment health endpoints to detect issues with the running runtime.",
+      "tags": [
+        "health"
+      ],
+      "complexity": "simple",
+      "filePath": "app/remote/runtime_alert.py"
+    },
+    {
+      "id": "step:runtime-self-investigation:probe-remote-ops",
+      "type": "step",
+      "name": "Probe remote ops status",
+      "summary": "Use the remote-ops provider abstraction to ask Railway/EC2 about service status and recent logs.",
+      "tags": [
+        "ops"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/remote/ops.py"
+    },
+    {
+      "id": "step:runtime-self-investigation:build-runtime-alert",
+      "type": "step",
+      "name": "Build runtime alert payload",
+      "summary": "Combine local health, remote ops status, and Slack thread context into a normalized alert.",
+      "tags": [
+        "alert"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/remote/runtime_alert.py"
+    },
+    {
+      "id": "step:runtime-self-investigation:dispatch-investigation",
+      "type": "step",
+      "name": "Dispatch self-investigation",
+      "summary": "Send the runtime alert through the same investigation pipeline used for external alerts.",
+      "tags": [
+        "dispatch"
+      ],
+      "complexity": "simple",
+      "filePath": "app/remote/runtime_alert.py"
+    },
+    {
+      "id": "flow:guardrail-scan",
+      "type": "flow",
+      "name": "Guardrail Scan & Audit",
+      "summary": "Loads YAML rules into compiled regex/keyword sets, scans inbound text, REDACTs matches in place or BLOCKs the call (raising GuardrailBlockedError), and writes an append-only JSONL audit entry.",
+      "tags": [
+        "guardrails",
+        "regex",
+        "audit"
+      ],
+      "complexity": "moderate",
+      "domainMeta": {
+        "entryPoint": "GuardrailEngine.scan()",
+        "entryType": "event"
+      }
+    },
+    {
+      "id": "step:guardrail-scan:load-rules",
+      "type": "step",
+      "name": "Load rules",
+      "summary": "Load YAML guardrail rules from the configured path and compile their regex patterns.",
+      "tags": [
+        "yaml",
+        "regex"
+      ],
+      "complexity": "simple",
+      "filePath": "app/guardrails/rules.py"
+    },
+    {
+      "id": "step:guardrail-scan:apply-patterns",
+      "type": "step",
+      "name": "Apply patterns",
+      "summary": "Scan inbound text against compiled regex/keyword patterns and collect ScanMatch records.",
+      "tags": [
+        "scan"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/guardrails/engine.py"
+    },
+    {
+      "id": "step:guardrail-scan:redact-or-block",
+      "type": "step",
+      "name": "Redact or block",
+      "summary": "Apply rule actions: REDACT replaces matches in place; BLOCK raises GuardrailBlockedError carrying offending rule names.",
+      "tags": [
+        "redact",
+        "block"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/guardrails/engine.py"
+    },
+    {
+      "id": "step:guardrail-scan:audit-jsonl",
+      "type": "step",
+      "name": "Audit JSONL",
+      "summary": "Write an append-only JSONL audit entry for every evaluation via AuditLogger.",
+      "tags": [
+        "audit"
+      ],
+      "complexity": "simple",
+      "filePath": "app/guardrails/audit.py"
+    },
+    {
+      "id": "step:guardrail-scan:return-scan-result",
+      "type": "step",
+      "name": "Return ScanResult",
+      "summary": "Return the aggregated ScanResult to the caller so it can decide how to proceed.",
+      "tags": [
+        "result"
+      ],
+      "complexity": "simple",
+      "filePath": "app/guardrails/engine.py"
+    },
+    {
+      "id": "flow:masking-roundtrip",
+      "type": "flow",
+      "name": "Masking Roundtrip",
+      "summary": "Detects sensitive identifiers (IPs, emails, AWS resource IDs), substitutes reversible placeholders before downstream LLM calls, then reverses placeholders on output to restore original values.",
+      "tags": [
+        "masking",
+        "redaction",
+        "llm"
+      ],
+      "complexity": "moderate",
+      "domainMeta": {
+        "entryPoint": "MaskingContext.mask()/unmask()",
+        "entryType": "event"
+      }
+    },
+    {
+      "id": "step:masking-roundtrip:detect-identifiers",
+      "type": "step",
+      "name": "Detect identifiers",
+      "summary": "Run built-in regex detectors for IPs, emails, AWS resource IDs, and other sensitive identifiers.",
+      "tags": [
+        "regex"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/masking/detectors.py"
+    },
+    {
+      "id": "step:masking-roundtrip:substitute-placeholders",
+      "type": "step",
+      "name": "Substitute placeholders",
+      "summary": "Substitute reversible placeholder tokens for each detected identifier.",
+      "tags": [
+        "substitution"
+      ],
+      "complexity": "simple",
+      "filePath": "app/masking/context.py"
+    },
+    {
+      "id": "step:masking-roundtrip:invoke-downstream",
+      "type": "step",
+      "name": "Invoke downstream LLM",
+      "summary": "Pass the masked text to the downstream consumer (LLM call, delivery, etc.).",
+      "tags": [
+        "llm"
+      ],
+      "complexity": "simple",
+      "filePath": "app/masking/context.py"
+    },
+    {
+      "id": "step:masking-roundtrip:reverse-on-output",
+      "type": "step",
+      "name": "Reverse placeholders on output",
+      "summary": "Restore original identifiers in the response so consumers see the real values.",
+      "tags": [
+        "reverse"
+      ],
+      "complexity": "simple",
+      "filePath": "app/masking/context.py"
+    },
+    {
+      "id": "flow:jwt-auth-injection",
+      "type": "flow",
+      "name": "JWT Auth Injection",
+      "summary": "LangGraph Auth integration: verify a Clerk-issued Bearer JWT, extract claims, and inject the resulting auth context into agent state for downstream nodes (inject_auth_node).",
+      "tags": [
+        "auth",
+        "jwt",
+        "langgraph",
+        "clerk"
+      ],
+      "complexity": "moderate",
+      "domainMeta": {
+        "entryPoint": "inject_auth_node (LangGraph)",
+        "entryType": "event"
+      }
+    },
+    {
+      "id": "step:jwt-auth-injection:verify-bearer-token",
+      "type": "step",
+      "name": "Verify Bearer token",
+      "summary": "Verify the inbound Clerk-issued Bearer JWT using the configured JWKS.",
+      "tags": [
+        "jwt",
+        "clerk"
+      ],
+      "complexity": "moderate",
+      "filePath": "app/auth/jwt_auth.py"
+    },
+    {
+      "id": "step:jwt-auth-injection:extract-claims",
+      "type": "step",
+      "name": "Extract claims",
+      "summary": "Decode the verified token into typed JWTClaims (subject, org, scopes, etc.).",
+      "tags": [
+        "claims"
+      ],
+      "complexity": "simple",
+      "filePath": "app/auth/jwt_auth.py"
+    },
+    {
+      "id": "step:jwt-auth-injection:inject-into-state",
+      "type": "step",
+      "name": "Inject into state",
+      "summary": "LangGraph node returns a state delta containing the auth context for downstream nodes.",
+      "tags": [
+        "state"
+      ],
+      "complexity": "simple",
+      "filePath": "app/nodes/auth.py"
+    }
+  ],
+  "edges": [
+    {
+      "source": "domain:alert-ingestion-and-triage",
+      "target": "flow:cli-investigate",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:cli-investigate",
+      "target": "step:cli-investigate:parse-cli-args",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.2
+    },
+    {
+      "source": "flow:cli-investigate",
+      "target": "step:cli-investigate:load-payload",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.4
+    },
+    {
+      "source": "flow:cli-investigate",
+      "target": "step:cli-investigate:resolve-context",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "flow:cli-investigate",
+      "target": "step:cli-investigate:dispatch-pipeline",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "flow:cli-investigate",
+      "target": "step:cli-investigate:render-result",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "domain:alert-ingestion-and-triage",
+      "target": "flow:vercel-deployment-poll",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:vercel-deployment-poll",
+      "target": "step:vercel-deployment-poll:iterate-projects",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.2
+    },
+    {
+      "source": "flow:vercel-deployment-poll",
+      "target": "step:vercel-deployment-poll:fetch-deployment-bundle",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.4
+    },
+    {
+      "source": "flow:vercel-deployment-poll",
+      "target": "step:vercel-deployment-poll:select-actionable-failure",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "flow:vercel-deployment-poll",
+      "target": "step:vercel-deployment-poll:dedupe-by-signature",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "flow:vercel-deployment-poll",
+      "target": "step:vercel-deployment-poll:dispatch-investigation",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "domain:alert-ingestion-and-triage",
+      "target": "flow:extract-alert-node",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:extract-alert-node",
+      "target": "step:extract-alert-node:detect-payload-shape",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.2
+    },
+    {
+      "source": "flow:extract-alert-node",
+      "target": "step:extract-alert-node:llm-extract-details",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.4
+    },
+    {
+      "source": "flow:extract-alert-node",
+      "target": "step:extract-alert-node:fallback-deterministic",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "flow:extract-alert-node",
+      "target": "step:extract-alert-node:enrich-raw-alert",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "flow:extract-alert-node",
+      "target": "step:extract-alert-node:emit-problem-md",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "domain:alert-ingestion-and-triage",
+      "target": "flow:remote-discord-trigger",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:remote-discord-trigger",
+      "target": "step:remote-discord-trigger:verify-signature",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.2
+    },
+    {
+      "source": "flow:remote-discord-trigger",
+      "target": "step:remote-discord-trigger:dispatch-background",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.4
+    },
+    {
+      "source": "flow:remote-discord-trigger",
+      "target": "step:remote-discord-trigger:run-investigation",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "flow:remote-discord-trigger",
+      "target": "step:remote-discord-trigger:post-result-back",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "domain:incident-investigation",
+      "target": "flow:plan-actions",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:plan-actions",
+      "target": "step:plan-actions:detect-sources",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.1
+    },
+    {
+      "source": "flow:plan-actions",
+      "target": "step:plan-actions:extract-keywords",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.2
+    },
+    {
+      "source": "flow:plan-actions",
+      "target": "step:plan-actions:seed-default-actions",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.3
+    },
+    {
+      "source": "flow:plan-actions",
+      "target": "step:plan-actions:build-prompt",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.4
+    },
+    {
+      "source": "flow:plan-actions",
+      "target": "step:plan-actions:plan-with-llm",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "flow:plan-actions",
+      "target": "step:plan-actions:apply-tool-budget",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "flow:plan-actions",
+      "target": "step:plan-actions:detect-reroute",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "domain:incident-investigation",
+      "target": "flow:investigate-hypothesis-fanout",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:investigate-hypothesis-fanout",
+      "target": "step:investigate-hypothesis-fanout:send-per-action-branch",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.2
+    },
+    {
+      "source": "flow:investigate-hypothesis-fanout",
+      "target": "step:investigate-hypothesis-fanout:execute-with-retry",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.4
+    },
+    {
+      "source": "flow:investigate-hypothesis-fanout",
+      "target": "step:investigate-hypothesis-fanout:classify-failure",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "flow:investigate-hypothesis-fanout",
+      "target": "step:investigate-hypothesis-fanout:track-hypothesis",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "domain:incident-investigation",
+      "target": "flow:merge-evidence",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:merge-evidence",
+      "target": "step:merge-evidence:gather-branch-results",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.2
+    },
+    {
+      "source": "flow:merge-evidence",
+      "target": "step:merge-evidence:post-process-tool-output",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.4
+    },
+    {
+      "source": "flow:merge-evidence",
+      "target": "step:merge-evidence:dedupe-and-merge",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "flow:merge-evidence",
+      "target": "step:merge-evidence:build-evidence-summary",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "flow:merge-evidence",
+      "target": "step:merge-evidence:route-loop-or-diagnose",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "domain:incident-investigation",
+      "target": "flow:resolve-integrations",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:resolve-integrations",
+      "target": "step:resolve-integrations:decode-auth",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.2
+    },
+    {
+      "source": "flow:resolve-integrations",
+      "target": "step:resolve-integrations:try-remote-tracer",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.4
+    },
+    {
+      "source": "flow:resolve-integrations",
+      "target": "step:resolve-integrations:fallback-local-store",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "flow:resolve-integrations",
+      "target": "step:resolve-integrations:expose-integrations-bag",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "domain:root-cause-diagnosis-and-publishing",
+      "target": "flow:diagnose-root-cause",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:diagnose-root-cause",
+      "target": "step:diagnose-root-cause:check-evidence-sufficient",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.1
+    },
+    {
+      "source": "flow:diagnose-root-cause",
+      "target": "step:diagnose-root-cause:short-circuit-healthy",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.2
+    },
+    {
+      "source": "flow:diagnose-root-cause",
+      "target": "step:diagnose-root-cause:build-prompt",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.3
+    },
+    {
+      "source": "flow:diagnose-root-cause",
+      "target": "step:diagnose-root-cause:invoke-llm",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.4
+    },
+    {
+      "source": "flow:diagnose-root-cause",
+      "target": "step:diagnose-root-cause:validate-claims",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "flow:diagnose-root-cause",
+      "target": "step:diagnose-root-cause:score-validity",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "flow:diagnose-root-cause",
+      "target": "step:diagnose-root-cause:return-diagnosis-state",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "domain:root-cause-diagnosis-and-publishing",
+      "target": "flow:publish-findings",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:publish-findings",
+      "target": "step:publish-findings:build-report-context",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.1
+    },
+    {
+      "source": "flow:publish-findings",
+      "target": "step:publish-findings:format-slack-message",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.2
+    },
+    {
+      "source": "flow:publish-findings",
+      "target": "step:publish-findings:build-block-kit",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.3
+    },
+    {
+      "source": "flow:publish-findings",
+      "target": "step:publish-findings:apply-masking",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.4
+    },
+    {
+      "source": "flow:publish-findings",
+      "target": "step:publish-findings:render-terminal",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "flow:publish-findings",
+      "target": "step:publish-findings:dispatch-deliveries",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "flow:publish-findings",
+      "target": "step:publish-findings:send-ingest",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "domain:root-cause-diagnosis-and-publishing",
+      "target": "flow:gitlab-mr-writeback",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:gitlab-mr-writeback",
+      "target": "step:gitlab-mr-writeback:detect-mr-metadata",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.3
+    },
+    {
+      "source": "flow:gitlab-mr-writeback",
+      "target": "step:gitlab-mr-writeback:build-mr-comment",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "flow:gitlab-mr-writeback",
+      "target": "step:gitlab-mr-writeback:post-comment",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "domain:root-cause-diagnosis-and-publishing",
+      "target": "flow:slack-delivery",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:slack-delivery",
+      "target": "step:slack-delivery:select-transport",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.2
+    },
+    {
+      "source": "flow:slack-delivery",
+      "target": "step:slack-delivery:build-action-blocks",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.4
+    },
+    {
+      "source": "flow:slack-delivery",
+      "target": "step:slack-delivery:post-message",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "flow:slack-delivery",
+      "target": "step:slack-delivery:handle-thread-reply",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "domain:tool-and-integration-surface",
+      "target": "flow:tool-registry-discovery",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:tool-registry-discovery",
+      "target": "step:tool-registry-discovery:scan-modules",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.2
+    },
+    {
+      "source": "flow:tool-registry-discovery",
+      "target": "step:tool-registry-discovery:collect-registered-tools",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.4
+    },
+    {
+      "source": "flow:tool-registry-discovery",
+      "target": "step:tool-registry-discovery:dedupe-and-cache",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "flow:tool-registry-discovery",
+      "target": "step:tool-registry-discovery:filter-by-surface",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "domain:tool-and-integration-surface",
+      "target": "flow:execute-tool-action",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:execute-tool-action",
+      "target": "step:execute-tool-action:resolve-tool",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.2
+    },
+    {
+      "source": "flow:execute-tool-action",
+      "target": "step:execute-tool-action:authenticate-via-service-client",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.4
+    },
+    {
+      "source": "flow:execute-tool-action",
+      "target": "step:execute-tool-action:invoke-vendor-api",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "flow:execute-tool-action",
+      "target": "step:execute-tool-action:normalize-output",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "flow:execute-tool-action",
+      "target": "step:execute-tool-action:return-action-result",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "domain:tool-and-integration-surface",
+      "target": "flow:chat-tool-loop",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:chat-tool-loop",
+      "target": "step:chat-tool-loop:apply-guardrails",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.2
+    },
+    {
+      "source": "flow:chat-tool-loop",
+      "target": "step:chat-tool-loop:route-general-or-tool",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.4
+    },
+    {
+      "source": "flow:chat-tool-loop",
+      "target": "step:chat-tool-loop:invoke-tool-bound-llm",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "flow:chat-tool-loop",
+      "target": "step:chat-tool-loop:run-tool-executor",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "flow:chat-tool-loop",
+      "target": "step:chat-tool-loop:return-tool-message",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "domain:onboarding-and-configuration",
+      "target": "flow:opensre-onboard-wizard",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:opensre-onboard-wizard",
+      "target": "step:opensre-onboard-wizard:probe-targets",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.1
+    },
+    {
+      "source": "flow:opensre-onboard-wizard",
+      "target": "step:opensre-onboard-wizard:select-provider-model",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.2
+    },
+    {
+      "source": "flow:opensre-onboard-wizard",
+      "target": "step:opensre-onboard-wizard:validate-credentials",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.3
+    },
+    {
+      "source": "flow:opensre-onboard-wizard",
+      "target": "step:opensre-onboard-wizard:select-integrations",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.4
+    },
+    {
+      "source": "flow:opensre-onboard-wizard",
+      "target": "step:opensre-onboard-wizard:configure-each",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "flow:opensre-onboard-wizard",
+      "target": "step:opensre-onboard-wizard:persist-store-and-env",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "flow:opensre-onboard-wizard",
+      "target": "step:opensre-onboard-wizard:render-summary",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "domain:onboarding-and-configuration",
+      "target": "flow:configure-vendor-integration",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:configure-vendor-integration",
+      "target": "step:configure-vendor-integration:prompt-credentials",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.2
+    },
+    {
+      "source": "flow:configure-vendor-integration",
+      "target": "step:configure-vendor-integration:normalize-config-model",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.4
+    },
+    {
+      "source": "flow:configure-vendor-integration",
+      "target": "step:configure-vendor-integration:validate-live",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "flow:configure-vendor-integration",
+      "target": "step:configure-vendor-integration:upsert-instance",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "flow:configure-vendor-integration",
+      "target": "step:configure-vendor-integration:emit-analytics",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "domain:onboarding-and-configuration",
+      "target": "flow:verify-integrations",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:verify-integrations",
+      "target": "step:verify-integrations:list-stored",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.2
+    },
+    {
+      "source": "flow:verify-integrations",
+      "target": "step:verify-integrations:dispatch-per-vendor",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.4
+    },
+    {
+      "source": "flow:verify-integrations",
+      "target": "step:verify-integrations:format-results-table",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "flow:verify-integrations",
+      "target": "step:verify-integrations:exit-code",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "domain:onboarding-and-configuration",
+      "target": "flow:opensre-doctor",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:opensre-doctor",
+      "target": "step:opensre-doctor:check-llm-provider",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.2
+    },
+    {
+      "source": "flow:opensre-doctor",
+      "target": "step:opensre-doctor:check-integrations",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.4
+    },
+    {
+      "source": "flow:opensre-doctor",
+      "target": "step:opensre-doctor:check-version-freshness",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "flow:opensre-doctor",
+      "target": "step:opensre-doctor:render-and-exit",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "domain:deployment-and-runtime",
+      "target": "flow:remote-investigate-http",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:remote-investigate-http",
+      "target": "step:remote-investigate-http:authenticate-request",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.2
+    },
+    {
+      "source": "flow:remote-investigate-http",
+      "target": "step:remote-investigate-http:normalize-payload",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.4
+    },
+    {
+      "source": "flow:remote-investigate-http",
+      "target": "step:remote-investigate-http:run-pipeline",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "flow:remote-investigate-http",
+      "target": "step:remote-investigate-http:persist-investigation",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "flow:remote-investigate-http",
+      "target": "step:remote-investigate-http:respond-or-stream",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "domain:deployment-and-runtime",
+      "target": "flow:opensre-deploy",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:opensre-deploy",
+      "target": "step:opensre-deploy:select-backend",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.2
+    },
+    {
+      "source": "flow:opensre-deploy",
+      "target": "step:opensre-deploy:validate-provider-config",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.4
+    },
+    {
+      "source": "flow:opensre-deploy",
+      "target": "step:opensre-deploy:run-backend-deploy",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "flow:opensre-deploy",
+      "target": "step:opensre-deploy:poll-health-endpoint",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "flow:opensre-deploy",
+      "target": "step:opensre-deploy:persist-remote-url",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "domain:deployment-and-runtime",
+      "target": "flow:deep-health-check",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:deep-health-check",
+      "target": "step:deep-health-check:run-llm-probe",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.2
+    },
+    {
+      "source": "flow:deep-health-check",
+      "target": "step:deep-health-check:check-disk",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.4
+    },
+    {
+      "source": "flow:deep-health-check",
+      "target": "step:deep-health-check:check-memory",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "flow:deep-health-check",
+      "target": "step:deep-health-check:aggregate-response",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "domain:deployment-and-runtime",
+      "target": "flow:runtime-self-investigation",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:runtime-self-investigation",
+      "target": "step:runtime-self-investigation:probe-local-health",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.2
+    },
+    {
+      "source": "flow:runtime-self-investigation",
+      "target": "step:runtime-self-investigation:probe-remote-ops",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.4
+    },
+    {
+      "source": "flow:runtime-self-investigation",
+      "target": "step:runtime-self-investigation:build-runtime-alert",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "flow:runtime-self-investigation",
+      "target": "step:runtime-self-investigation:dispatch-investigation",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "domain:guardrails-and-safety",
+      "target": "flow:guardrail-scan",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:guardrail-scan",
+      "target": "step:guardrail-scan:load-rules",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.2
+    },
+    {
+      "source": "flow:guardrail-scan",
+      "target": "step:guardrail-scan:apply-patterns",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.4
+    },
+    {
+      "source": "flow:guardrail-scan",
+      "target": "step:guardrail-scan:redact-or-block",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "flow:guardrail-scan",
+      "target": "step:guardrail-scan:audit-jsonl",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "flow:guardrail-scan",
+      "target": "step:guardrail-scan:return-scan-result",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "domain:guardrails-and-safety",
+      "target": "flow:masking-roundtrip",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:masking-roundtrip",
+      "target": "step:masking-roundtrip:detect-identifiers",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.2
+    },
+    {
+      "source": "flow:masking-roundtrip",
+      "target": "step:masking-roundtrip:substitute-placeholders",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.4
+    },
+    {
+      "source": "flow:masking-roundtrip",
+      "target": "step:masking-roundtrip:invoke-downstream",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "flow:masking-roundtrip",
+      "target": "step:masking-roundtrip:reverse-on-output",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "domain:guardrails-and-safety",
+      "target": "flow:jwt-auth-injection",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:jwt-auth-injection",
+      "target": "step:jwt-auth-injection:verify-bearer-token",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.3
+    },
+    {
+      "source": "flow:jwt-auth-injection",
+      "target": "step:jwt-auth-injection:extract-claims",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "flow:jwt-auth-injection",
+      "target": "step:jwt-auth-injection:inject-into-state",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "domain:alert-ingestion-and-triage",
+      "target": "domain:incident-investigation",
+      "type": "cross_domain",
+      "direction": "forward",
+      "description": "Hands the normalized AlertDetails and enriched raw_alert to the planner so investigation can begin.",
+      "weight": 0.9
+    },
+    {
+      "source": "domain:incident-investigation",
+      "target": "domain:tool-and-integration-surface",
+      "type": "cross_domain",
+      "direction": "forward",
+      "description": "The investigator executor invokes registered tools to query observability/cloud vendors for evidence.",
+      "weight": 0.9
+    },
+    {
+      "source": "domain:onboarding-and-configuration",
+      "target": "domain:tool-and-integration-surface",
+      "type": "cross_domain",
+      "direction": "forward",
+      "description": "Persisted credentials and instance metadata are read by tools and service clients at runtime.",
+      "weight": 0.8
+    },
+    {
+      "source": "domain:onboarding-and-configuration",
+      "target": "domain:incident-investigation",
+      "type": "cross_domain",
+      "direction": "forward",
+      "description": "resolve_integrations exposes the configured integrations bag to the planner so it knows which tools are runnable.",
+      "weight": 0.8
+    },
+    {
+      "source": "domain:incident-investigation",
+      "target": "domain:root-cause-diagnosis-and-publishing",
+      "type": "cross_domain",
+      "direction": "forward",
+      "description": "When evidence is sufficient, accumulated evidence and the executed-hypothesis ledger flow into the diagnosis node.",
+      "weight": 0.9
+    },
+    {
+      "source": "domain:root-cause-diagnosis-and-publishing",
+      "target": "domain:onboarding-and-configuration",
+      "type": "cross_domain",
+      "direction": "forward",
+      "description": "Slack/Discord/Telegram/Tracer delivery uses credentials persisted by the wizard.",
+      "weight": 0.6
+    },
+    {
+      "source": "domain:deployment-and-runtime",
+      "target": "domain:alert-ingestion-and-triage",
+      "type": "cross_domain",
+      "direction": "forward",
+      "description": "The FastAPI runtime, Vercel poller, and Discord webhook hand inbound alerts to the ingestion pipeline.",
+      "weight": 0.8
+    },
+    {
+      "source": "domain:deployment-and-runtime",
+      "target": "domain:incident-investigation",
+      "type": "cross_domain",
+      "direction": "forward",
+      "description": "The remote /investigate endpoints invoke the LangGraph pipeline directly.",
+      "weight": 0.8
+    },
+    {
+      "source": "domain:guardrails-and-safety",
+      "target": "domain:incident-investigation",
+      "type": "cross_domain",
+      "direction": "forward",
+      "description": "Chat agent and planner inputs are scanned/masked by guardrails before LLM calls; auth is injected into state by inject_auth_node.",
+      "weight": 0.7
+    },
+    {
+      "source": "domain:guardrails-and-safety",
+      "target": "domain:root-cause-diagnosis-and-publishing",
+      "type": "cross_domain",
+      "direction": "forward",
+      "description": "Reports are masked and audited prior to dispatch to Slack/Discord/Telegram.",
+      "weight": 0.6
+    },
+    {
+      "source": "domain:guardrails-and-safety",
+      "target": "domain:deployment-and-runtime",
+      "type": "cross_domain",
+      "direction": "forward",
+      "description": "Bearer JWTs are verified for every authenticated LangGraph thread served by the FastAPI runtime.",
+      "weight": 0.7
+    },
+    {
+      "source": "domain:guardrails-and-safety",
+      "target": "domain:tool-and-integration-surface",
+      "type": "cross_domain",
+      "direction": "forward",
+      "description": "Diagnostic-code execution is sandboxed by app/sandbox/runner.py with a bounded subprocess timeout.",
+      "weight": 0.5
+    }
+  ],
+  "layers": [],
+  "tour": []
+}
