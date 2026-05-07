@@ -260,7 +260,7 @@ class TestListToolsSlashCommand:
         assert "## investigation" in out
         assert "## chat" in out
 
-    def test_list_tools_escapes_rich_markup_from_tool_metadata(self) -> None:
+    def test_list_tools_disables_markup_for_plain_catalog_text(self) -> None:
         console, buf = self._capture()
         session = ReplSession()
         fake = [
