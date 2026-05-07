@@ -31,7 +31,7 @@ jobs:
           {
             echo '### Greptile code review'
             echo ''
-            echo "This repo uses **Greptile** for automated review. Before merge, aim for **5/5 confidence** with **zero unresolved** review threads — see [CONTRIBUTING.md](${contributing_url})."
+            echo "This repo uses **Greptile** for automated review. Before merge, aim for **Confidence Score: 5/5** with **zero unresolved** review threads — see [CONTRIBUTING.md](${contributing_url})."
             echo ''
             echo '**Run a review** — add a PR comment with:'
             echo ''
