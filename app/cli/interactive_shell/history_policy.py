@@ -52,7 +52,7 @@ def _build_default_rules() -> tuple[RedactionRule, ...]:
         ("password_arg", r"(?i)(--password=|password=)\S+", "[REDACTED:password]"),
         (
             "private_key",
-            r"-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----",
+            r"-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----",
             "[REDACTED:private_key]",
         ),
     ]
@@ -135,7 +135,7 @@ class RedactingFileHistory(FileHistory):
         max_entries: int = DEFAULT_MAX_ENTRIES,
     ) -> None:
         super().__init__(filename)
-        self.paused = False
+        self.paused: bool = False
         self._rules = rules
         self._max_entries = max_entries
         self._entry_count: int | None = None

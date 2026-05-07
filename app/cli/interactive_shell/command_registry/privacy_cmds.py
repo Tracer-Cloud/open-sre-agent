@@ -98,7 +98,9 @@ def _history_retention(session: ReplSession, console: Console, args: list[str]) 
 
     backend = session.prompt_history_backend
     if isinstance(backend, RedactingFileHistory):
-        backend.set_max_entries(n)
+        backend._max_entries = n
+        if n > 0:
+            backend._prune_to_cap()
         console.print(
             f"[dim]retention cap set to {n} for this session "
             "(set OPENSRE_HISTORY_MAX_ENTRIES or interactive.history.max_entries to persist).[/dim]"

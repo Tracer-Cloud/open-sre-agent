@@ -39,13 +39,59 @@ from app.cli.interactive_shell.history_policy import (
         ),
         ("psql --password=hunter2 -h db", "[REDACTED:password]"),
         (
-            "-----BEGIN RSA PRIVATE KEY-----",
+            "-----BEGIN RSA PRIVATE KEY-----\nMIIEvQIBADANBgkq\n-----END RSA PRIVATE KEY-----",
             "[REDACTED:private_key]",
         ),
     ],
 )
 def test_each_default_pattern_redacts_known_token(raw: str, expected_marker: str) -> None:
     assert expected_marker in redact_text(raw)
+
+
+def test_full_pem_block_is_redacted_including_body_and_footer() -> None:
+    pem = (
+        "-----BEGIN RSA PRIVATE KEY-----\n"
+        "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDaaaa\n"
+        "bbbbbCCCCCdddddEEEEEfffffGGGGGhhhhhIIIIIjjjjjKKKKKlllll\n"
+        "mmmmmNNNNNoooooPPPPPqqqqqRRRRRsssssTTTTTuuuuuVVVVVwwwww\n"
+        "-----END RSA PRIVATE KEY-----"
+    )
+    redacted = redact_text(pem)
+    assert "[REDACTED:private_key]" in redacted
+    # The body and footer must be gone — no base64 or END marker can leak to disk.
+    assert "MIIEvQIBADANBgkq" not in redacted
+    assert "-----END" not in redacted
+    assert "-----BEGIN" not in redacted
+
+
+def test_openssh_pem_block_is_redacted_end_to_end() -> None:
+    pem = (
+        "-----BEGIN OPENSSH PRIVATE KEY-----\n"
+        "b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAACFw\n"
+        "-----END OPENSSH PRIVATE KEY-----"
+    )
+    redacted = redact_text(pem)
+    assert "[REDACTED:private_key]" in redacted
+    assert "b3BlbnNzaC1rZXktdjEA" not in redacted
+
+
+def test_pem_block_inside_history_entry_does_not_leak_to_disk(tmp_path: Path) -> None:
+    history_file = tmp_path / "history"
+    backend = RedactingFileHistory(str(history_file))
+    pem = (
+        "ssh-add - <<'EOF'\n"
+        "-----BEGIN EC PRIVATE KEY-----\n"
+        "MHcCAQEEIBcccDDDDDeeeeeFFFFFggggghhhhhIIIIIjjjjjKKKKKlllll\n"
+        "mmmmmNNNNNoooooPPPPPqqqqq\n"
+        "-----END EC PRIVATE KEY-----\n"
+        "EOF"
+    )
+    backend.store_string(pem)
+    contents = history_file.read_text(encoding="utf-8")
+    assert "[REDACTED:private_key]" in contents
+    assert "MHcCAQEEIBcccDDDDD" not in contents
+    assert "-----END EC PRIVATE KEY-----" not in contents
+    assert "-----BEGIN EC PRIVATE KEY-----" not in contents
 
 
 def test_natural_language_is_left_alone() -> None:
