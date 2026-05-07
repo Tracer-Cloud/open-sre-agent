@@ -41,6 +41,7 @@ from app.integrations._verification_adapters import (
     _verify_tracer,
     _verify_vercel,
     _verify_victoria_logs,
+    _verify_whatsapp,
 )
 
 
@@ -308,6 +309,7 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
     IntegrationSpec(service="posthog"),
     IntegrationSpec(service="trello"),
     IntegrationSpec(service="rds", setup_order=11),
+    IntegrationSpec(service="whatsapp", verifier=_verify_whatsapp, direct_effective=True),
 )
 
 INTEGRATION_SPECS_BY_SERVICE = {spec.service: spec for spec in INTEGRATION_SPECS}

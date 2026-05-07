@@ -19,8 +19,8 @@ from app.integrations.config_models import (
     GoogleDocsIntegrationConfig,
     GrafanaIntegrationConfig,
     HoneycombIntegrationConfig,
-    SlackWebhookConfig,
     TracerIntegrationConfig,
+    WhatsAppIntegrationConfig,
 )
 from app.integrations.github_mcp import build_github_mcp_config, validate_github_mcp_config
 from app.integrations.mariadb import build_mariadb_config, validate_mariadb_config
@@ -554,6 +554,14 @@ _verify_victoria_logs = build_probe_verifier(
 )
 
 
+def _verify_whatsapp(source: str, config: dict[str, Any]) -> dict[str, str]:
+    from app.notifications.providers.whatsapp import WhatsAppProvider
+
+    provider = WhatsAppProvider()
+    success, detail = provider.probe(config)
+    return result("whatsapp", source, "passed" if success else "failed", detail)
+
+
 def _verify_slack_without_test(source: str, config: dict[str, Any]) -> dict[str, str]:
     return _verify_slack(source, config, send_slack_test=False)
 
@@ -595,6 +603,7 @@ __all__ = [
     "_verify_tracer",
     "_verify_vercel",
     "_verify_victoria_logs",
+    "_verify_whatsapp",
     "build_probe_verifier",
     "build_validation_verifier",
     "result",

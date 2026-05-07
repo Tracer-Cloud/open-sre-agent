@@ -656,6 +656,16 @@ class TelegramBotConfig(StrictConfigModel):
         return stripped
 
 
+class WhatsAppIntegrationConfig(StrictConfigModel):
+    """WhatsApp integration config (webhook bridge)."""
+
+    webhook_url: str
+    phone_number: str | None = None
+
+    _normalize_webhook_url = field_validator("webhook_url", mode="before")(normalize_url())
+    _normalize_phone_number = field_validator("phone_number", mode="before")(normalize_str())
+
+
 # ---------------------------------------------------------------------------
 # Tracer internal
 # ---------------------------------------------------------------------------

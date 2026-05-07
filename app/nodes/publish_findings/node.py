@@ -82,78 +82,58 @@ def generate_report(state: InvestigationState) -> dict:
             f"[publish] Slack delivery failed: channel={_channel}, thread_ts={thread_ts}, reason={delivery_error}"
         )
 
-    # Discord delivery — uses integration credentials if configured
-    if discord_creds:
-        from app.utils.discord_delivery import send_discord_report
+    # Secondary Notification Deliveries (Discord, Telegram, WhatsApp, etc.)
+    from app.notifications.models import NotificationEvent
+    from app.notifications.registry import get_registry
 
-        discord_ctx = state.get("discord_context") or {}
-        bot_token = discord_ctx.get("bot_token") or discord_creds.get("bot_token", "")
-        channel_id = discord_ctx.get("channel_id") or discord_creds.get("default_channel_id", "")
-        thread_id = discord_ctx.get("thread_id", "")
-        logger.debug(
-            "[publish] discord delivery: channel_id=%s thread_id=%s bot_token_present=%s",
-            channel_id,
-            thread_id,
-            bool(bot_token),
-        )
-        if bot_token and channel_id:
-            discord_posted, discord_error = send_discord_report(
-                slack_message,
-                {"bot_token": bot_token, "channel_id": channel_id, "thread_id": thread_id},
-            )
-            logger.debug(
-                "[publish] discord delivery: posted=%s error=%s", discord_posted, discord_error
-            )
-            if not discord_posted:
-                logger.warning(
-                    "[publish] Discord delivery failed: channel=%s error=%s",
-                    channel_id,
-                    discord_error,
-                )
+    # Create the structured event
+    event = NotificationEvent(
+        title=f"Investigation findings for {state.get('investigation_id', 'unknown')}",
+        body=slack_message,
+        severity="info",
+        investigation_id=investigation_id,
+        investigation_url=investigation_url,
+        metadata={"blocks": all_blocks},
+    )
+
+    notification_registry = get_registry()
+
+    for service_name, provider in notification_registry.get_providers().items():
+        # Only dispatch if the integration is configured/resolved
+        creds = resolved.get(service_name)
+        if not creds:
+            continue
+
+        # Skip Slack as it was handled primary above
+        if service_name == "slack":
+            continue
+
+        # Build provider-specific configuration from state and resolved creds
+        provider_config = {**creds}
+        if service_name == "discord":
+            discord_ctx = state.get("discord_context") or {}
+            provider_config.update({
+                "bot_token": discord_ctx.get("bot_token") or creds.get("bot_token", ""),
+                "channel_id": discord_ctx.get("channel_id") or creds.get("default_channel_id", ""),
+                "thread_id": discord_ctx.get("thread_id", ""),
+            })
+        elif service_name == "telegram":
+            telegram_ctx = state.get("telegram_context") or {}
+            provider_config.update({
+                "bot_token": telegram_ctx.get("bot_token") or creds.get("bot_token", ""),
+                "chat_id": telegram_ctx.get("chat_id") or creds.get("default_chat_id", ""),
+                "reply_to_message_id": str(telegram_ctx.get("reply_to_message_id") or ""),
+            })
+        elif service_name == "whatsapp":
+            # WhatsApp uses webhook_url and phone_number from creds
+            pass
+
+        logger.debug("[publish] dispatching to %s", service_name)
+        posted, error = provider.send_notification(event, provider_config)
+        if not posted:
+            logger.warning("[publish] %s delivery failed: %s", service_name.title(), error)
         else:
-            logger.debug(
-                "[publish] discord delivery: skipped — bot_token_present=%s channel_id=%s",
-                bool(bot_token),
-                channel_id,
-            )
-    else:
-        logger.debug("[publish] discord delivery: no discord integration configured")
-
-    # Telegram delivery — uses integration credentials if configured
-    telegram_creds = resolved.get("telegram", {})
-    if telegram_creds:
-        from app.utils.telegram_delivery import send_telegram_report
-
-        telegram_ctx = state.get("telegram_context") or {}
-        bot_token = telegram_ctx.get("bot_token") or telegram_creds.get("bot_token", "")
-        chat_id = telegram_ctx.get("chat_id") or telegram_creds.get("default_chat_id", "")
-        reply_to = str(telegram_ctx.get("reply_to_message_id") or "")
-        logger.debug(
-            "[publish] telegram delivery: chat_id=%s reply_to=%s bot_token_present=%s",
-            chat_id,
-            reply_to,
-            bool(bot_token),
-        )
-        if bot_token and chat_id:
-            tg_posted, tg_error = send_telegram_report(
-                slack_message,
-                {"bot_token": bot_token, "chat_id": chat_id, "reply_to_message_id": reply_to},
-            )
-            logger.debug("[publish] telegram delivery: posted=%s error=%s", tg_posted, tg_error)
-            if not tg_posted:
-                logger.warning(
-                    "[publish] Telegram delivery failed: chat_id=%s error=%s",
-                    chat_id,
-                    tg_error,
-                )
-        else:
-            logger.debug(
-                "[publish] telegram delivery: skipped — bot_token_present=%s chat_id=%s",
-                bool(bot_token),
-                chat_id,
-            )
-    else:
-        logger.debug("[publish] telegram delivery: no telegram integration configured")
+            logger.debug("[publish] %s delivery successful", service_name)
 
     post_gitlab_mr_writeback(state, slack_message)
 

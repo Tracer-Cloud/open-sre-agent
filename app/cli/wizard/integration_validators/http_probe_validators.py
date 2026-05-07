@@ -137,3 +137,12 @@ def validate_discord_bot(*, bot_token: str) -> IntegrationHealthResult:
     return IntegrationHealthResult(
         ok=False, detail=f"Discord API returned unexpected HTTP {resp.status_code}."
     )
+
+
+def validate_whatsapp_integration(*, webhook_url: str, phone_number: str | None = None) -> IntegrationHealthResult:
+    """Validate WhatsApp connectivity via the bridge webhook."""
+    from app.notifications.providers.whatsapp import WhatsAppProvider
+
+    provider = WhatsAppProvider()
+    success, detail = provider.probe({"webhook_url": webhook_url, "phone_number": phone_number})
+    return IntegrationHealthResult(ok=success, detail=detail)

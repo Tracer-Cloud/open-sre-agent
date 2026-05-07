@@ -671,6 +671,38 @@ def _configure_slack() -> tuple[str, str]:
         _console.print("[dim]Try again or press Ctrl+C to cancel.[/]")
 
 
+def _configure_whatsapp() -> tuple[str, str]:
+    _, credentials = _integration_defaults("whatsapp")
+    while True:
+        webhook_url = _prompt_value(
+            "WhatsApp bridge webhook URL",
+            default=_string_value(credentials.get("webhook_url")),
+            secret=True,
+        )
+        phone_number = _prompt_value(
+            "WhatsApp phone number (optional)",
+            default=_string_value(credentials.get("phone_number")),
+            allow_empty=True,
+        )
+        with _console.status("Validating WhatsApp connectivity...", spinner="dots"):
+            from app.cli.wizard.integration_validators.http_probe_validators import (
+                validate_whatsapp_integration,
+            )
+
+            result = validate_whatsapp_integration(
+                webhook_url=webhook_url, phone_number=phone_number
+            )
+        _render_integration_result("WhatsApp", result)
+        if result.ok:
+            upsert_integration(
+                "whatsapp",
+                {"credentials": {"webhook_url": webhook_url, "phone_number": phone_number}},
+            )
+            env_path = sync_env_values({})
+            return "WhatsApp", str(env_path)
+        _console.print("[dim]Try again or press Ctrl+C to cancel.[/]")
+
+
 def _configure_aws() -> tuple[str, str]:
     existing, credentials = _integration_defaults("aws")
     default_auth_mode = "role" if _string_value(existing.get("role_arn")) else "keys"
@@ -1474,6 +1506,11 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
             label="Discord",
             hint="Trigger investigations via slash commands and post findings to threads",
         ),
+        Choice(
+            value="whatsapp",
+            label="WhatsApp",
+            hint="Send incident alerts and findings to WhatsApp via a webhook bridge",
+        ),
         Choice(value="aws", label="AWS", hint="Inspect CloudWatch, EKS, and account resources"),
         Choice(
             value="github", label="GitHub MCP", hint="Let the agent inspect repos, PRs, and issues"
@@ -1547,6 +1584,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "coralogix": _configure_coralogix,
         "slack": _configure_slack,
         "discord": _configure_discord,
+        "whatsapp": _configure_whatsapp,
         "aws": _configure_aws,
         "github": _configure_github_mcp,
         "sentry": _configure_sentry,
@@ -1569,6 +1607,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "coralogix": "coralogix",
         "slack": "slack",
         "discord": "discord",
+        "whatsapp": "whatsapp",
         "aws": "aws",
         "github": "github mcp",
         "sentry": "sentry",
