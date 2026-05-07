@@ -23,5 +23,10 @@ def reraise_cli_runtime_error(exc: BaseException) -> NoReturn:
                 "CLI tool is not installed or not found.",
                 suggestion=str(exc),
             ) from exc
+        if "was not found" in msg and "model" in msg:
+            raise OpenSREError(
+                str(exc),
+                suggestion="Verify your model name in ANTHROPIC_REASONING_MODEL or ANTHROPIC_TOOLCALL_MODEL environment variables.",
+            ) from exc
 
     raise exc
