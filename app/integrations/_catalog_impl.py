@@ -161,7 +161,9 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as e:
+            safe_msg = e.errors(include_input=False) if type(e).__name__ == "ValidationError" else str(e)
+            logger.warning("Failed to validate %s integration %s: %s", key, record_id, safe_msg)
             return None, None
         if not grafana_config.endpoint:
             return None, None
@@ -193,7 +195,9 @@ def _classify_service_instance(
                 AWSIntegrationConfig.model_validate(raw_config).model_dump(exclude_none=True),
                 "aws",
             )
-        except Exception:
+        except Exception as e:
+            safe_msg = e.errors(include_input=False) if type(e).__name__ == "ValidationError" else str(e)
+            logger.warning("Failed to validate %s integration %s: %s", key, record_id, safe_msg)
             return None, None
 
     if key == "datadog":
@@ -206,7 +210,9 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as e:
+            safe_msg = e.errors(include_input=False) if type(e).__name__ == "ValidationError" else str(e)
+            logger.warning("Failed to validate %s integration %s: %s", key, record_id, safe_msg)
             return None, None
         if datadog_config.api_key and datadog_config.app_key:
             return datadog_config.model_dump(), "datadog"
@@ -222,7 +228,9 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as e:
+            safe_msg = e.errors(include_input=False) if type(e).__name__ == "ValidationError" else str(e)
+            logger.warning("Failed to validate %s integration %s: %s", key, record_id, safe_msg)
             return None, None
         if honeycomb_config.api_key:
             return honeycomb_config.model_dump(), "honeycomb"
@@ -239,7 +247,9 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as e:
+            safe_msg = e.errors(include_input=False) if type(e).__name__ == "ValidationError" else str(e)
+            logger.warning("Failed to validate %s integration %s: %s", key, record_id, safe_msg)
             return None, None
         if coralogix_config.api_key:
             return coralogix_config.model_dump(), "coralogix"
@@ -258,7 +268,9 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as e:
+            safe_msg = e.errors(include_input=False) if type(e).__name__ == "ValidationError" else str(e)
+            logger.warning("Failed to validate %s integration %s: %s", key, record_id, safe_msg)
             return None, None
         return github_config.model_dump(), "github"
 
@@ -273,7 +285,9 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as e:
+            safe_msg = e.errors(include_input=False) if type(e).__name__ == "ValidationError" else str(e)
+            logger.warning("Failed to validate %s integration %s: %s", key, record_id, safe_msg)
             return None, None
         if sentry_config.organization_slug and sentry_config.auth_token:
             return sentry_config.model_dump(), "sentry"
@@ -287,7 +301,9 @@ def _classify_service_instance(
                     "auth_token": credentials.get("auth_token", ""),
                 }
             )
-        except Exception:
+        except Exception as e:
+            safe_msg = e.errors(include_input=False) if type(e).__name__ == "ValidationError" else str(e)
+            logger.warning("Failed to validate %s integration %s: %s", key, record_id, safe_msg)
             return None, None
         return gitlab_config.model_dump(), "gitlab"
 
@@ -301,7 +317,9 @@ def _classify_service_instance(
                     "tls": credentials.get("tls", True),
                 }
             )
-        except Exception:
+        except Exception as e:
+            safe_msg = e.errors(include_input=False) if type(e).__name__ == "ValidationError" else str(e)
+            logger.warning("Failed to validate %s integration %s: %s", key, record_id, safe_msg)
             return None, None
         if mongodb_config.connection_string:
             return mongodb_config.model_dump(), "mongodb"
@@ -319,7 +337,9 @@ def _classify_service_instance(
                     "ssl_mode": credentials.get("ssl_mode", "prefer"),
                 }
             )
-        except Exception:
+        except Exception as e:
+            safe_msg = e.errors(include_input=False) if type(e).__name__ == "ValidationError" else str(e)
+            logger.warning("Failed to validate %s integration %s: %s", key, record_id, safe_msg)
             return None, None
         if postgresql_config.host and postgresql_config.database:
             return postgresql_config.model_dump(), "postgresql"
@@ -337,7 +357,9 @@ def _classify_service_instance(
                     ),
                 }
             )
-        except Exception:
+        except Exception as e:
+            safe_msg = e.errors(include_input=False) if type(e).__name__ == "ValidationError" else str(e)
+            logger.warning("Failed to validate %s integration %s: %s", key, record_id, safe_msg)
             return None, None
         if atlas_config.api_public_key and atlas_config.api_private_key and atlas_config.project_id:
             return {
@@ -361,7 +383,9 @@ def _classify_service_instance(
                     "ssl": credentials.get("ssl", True),
                 }
             )
-        except Exception:
+        except Exception as e:
+            safe_msg = e.errors(include_input=False) if type(e).__name__ == "ValidationError" else str(e)
+            logger.warning("Failed to validate %s integration %s: %s", key, record_id, safe_msg)
             return None, None
         if mariadb_config.host and mariadb_config.database:
             return {
@@ -384,7 +408,9 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as e:
+            safe_msg = e.errors(include_input=False) if type(e).__name__ == "ValidationError" else str(e)
+            logger.warning("Failed to validate %s integration %s: %s", key, record_id, safe_msg)
             return None, None
         if vercel_config.api_token:
             return vercel_config.model_dump(), "vercel"
@@ -399,7 +425,9 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as e:
+            safe_msg = e.errors(include_input=False) if type(e).__name__ == "ValidationError" else str(e)
+            logger.warning("Failed to validate %s integration %s: %s", key, record_id, safe_msg)
             return None, None
         if opsgenie_config.api_key:
             return opsgenie_config.model_dump(), "opsgenie"
@@ -416,7 +444,9 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as e:
+            safe_msg = e.errors(include_input=False) if type(e).__name__ == "ValidationError" else str(e)
+            logger.warning("Failed to validate %s integration %s: %s", key, record_id, safe_msg)
             return None, None
         if jira_config.base_url and jira_config.email and jira_config.api_token:
             return jira_config.model_dump(), "jira"
@@ -432,7 +462,9 @@ def _classify_service_instance(
                     "default_channel_id": credentials.get("default_channel_id"),
                 }
             )
-        except Exception:
+        except Exception as e:
+            safe_msg = e.errors(include_input=False) if type(e).__name__ == "ValidationError" else str(e)
+            logger.warning("Failed to validate %s integration %s: %s", key, record_id, safe_msg)
             return None, None
         if discord_config.bot_token:
             return discord_config.model_dump(), "discord"
@@ -446,7 +478,9 @@ def _classify_service_instance(
                     "default_chat_id": credentials.get("default_chat_id"),
                 }
             )
-        except Exception:
+        except Exception as e:
+            safe_msg = e.errors(include_input=False) if type(e).__name__ == "ValidationError" else str(e)
+            logger.warning("Failed to validate %s integration %s: %s", key, record_id, safe_msg)
             return None, None
         if tg_config.bot_token:
             return tg_config.model_dump(), "telegram"
@@ -464,7 +498,9 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as e:
+            safe_msg = e.errors(include_input=False) if type(e).__name__ == "ValidationError" else str(e)
+            logger.warning("Failed to validate %s integration %s: %s", key, record_id, safe_msg)
             return None, None
         if openclaw_config.is_configured:
             return openclaw_config.model_dump(), "openclaw"
@@ -482,7 +518,9 @@ def _classify_service_instance(
                     "ssl_mode": credentials.get("ssl_mode", "preferred"),
                 }
             )
-        except Exception:
+        except Exception as e:
+            safe_msg = e.errors(include_input=False) if type(e).__name__ == "ValidationError" else str(e)
+            logger.warning("Failed to validate %s integration %s: %s", key, record_id, safe_msg)
             return None, None
         if mysql_config.host and mysql_config.database:
             return {
@@ -509,7 +547,9 @@ def _classify_service_instance(
                     "verify_ssl": credentials.get("verify_ssl", True),
                 }
             )
-        except Exception:
+        except Exception as e:
+            safe_msg = e.errors(include_input=False) if type(e).__name__ == "ValidationError" else str(e)
+            logger.warning("Failed to validate %s integration %s: %s", key, record_id, safe_msg)
             return None, None
         if rabbitmq_config.host and rabbitmq_config.username:
             return {
@@ -532,7 +572,9 @@ def _classify_service_instance(
                     "region": credentials.get("region", DEFAULT_RDS_REGION),
                 }
             )
-        except Exception:
+        except Exception as e:
+            safe_msg = e.errors(include_input=False) if type(e).__name__ == "ValidationError" else str(e)
+            logger.warning("Failed to validate %s integration %s: %s", key, record_id, safe_msg)
             return None, None
         if rds_config.is_configured:
             return {**rds_config.model_dump(), "integration_id": record_id}, "rds"
@@ -551,7 +593,9 @@ def _classify_service_instance(
                     "max_results": credentials.get("max_results", 50),
                 }
             )
-        except Exception:
+        except Exception as e:
+            safe_msg = e.errors(include_input=False) if type(e).__name__ == "ValidationError" else str(e)
+            logger.warning("Failed to validate %s integration %s: %s", key, record_id, safe_msg)
             return None, None
         if airflow_config.is_configured:
             return {
@@ -570,7 +614,9 @@ def _classify_service_instance(
                     "sources": credentials.get("sources", []),
                 }
             )
-        except Exception:
+        except Exception as e:
+            safe_msg = e.errors(include_input=False) if type(e).__name__ == "ValidationError" else str(e)
+            logger.warning("Failed to validate %s integration %s: %s", key, record_id, safe_msg)
             return None, None
         if bs_config.query_endpoint and bs_config.username:
             return {
@@ -595,7 +641,9 @@ def _classify_service_instance(
                     "encrypt": credentials.get("encrypt", True),
                 }
             )
-        except Exception:
+        except Exception as e:
+            safe_msg = e.errors(include_input=False) if type(e).__name__ == "ValidationError" else str(e)
+            logger.warning("Failed to validate %s integration %s: %s", key, record_id, safe_msg)
             return None, None
         if azure_sql_config.server and azure_sql_config.database:
             return azure_sql_config.model_dump(), "azure_sql"
@@ -612,7 +660,9 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as e:
+            safe_msg = e.errors(include_input=False) if type(e).__name__ == "ValidationError" else str(e)
+            logger.warning("Failed to validate %s integration %s: %s", key, record_id, safe_msg)
             return None, None
         if alertmanager_config.base_url:
             return alertmanager_config.model_dump(), "alertmanager"
@@ -634,7 +684,9 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as e:
+            safe_msg = e.errors(include_input=False) if type(e).__name__ == "ValidationError" else str(e)
+            logger.warning("Failed to validate %s integration %s: %s", key, record_id, safe_msg)
             return None, None
         if argocd_config.base_url and (
             argocd_config.bearer_token or (argocd_config.username and argocd_config.password)
@@ -651,7 +703,9 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as e:
+            safe_msg = e.errors(include_input=False) if type(e).__name__ == "ValidationError" else str(e)
+            logger.warning("Failed to validate %s integration %s: %s", key, record_id, safe_msg)
             return None, None
         if victoria_logs_config.base_url:
             return victoria_logs_config.model_dump(), "victoria_logs"
@@ -755,7 +809,9 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as e:
+            safe_msg = e.errors(include_input=False) if type(e).__name__ == "ValidationError" else str(e)
+            logger.warning("Failed to validate %s integration %s: %s", key, record_id, safe_msg)
             return None, None
         if splunk_config.base_url and splunk_config.token:
             return splunk_config.model_dump(), "splunk"
