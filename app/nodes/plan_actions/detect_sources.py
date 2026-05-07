@@ -776,6 +776,10 @@ def detect_sources(
         _aws_int
         and (_aws_int.get("role_arn") or _aws_int.get("credentials") or _injected_ec2_backend)
     )
+    # vpc_id alone is sufficient: a "this RDS in vpc-X is hot" alert is enough
+    # context to enumerate EC2 instances in the same VPC and let the agent
+    # discover tiers from tags. Pre-populated tier / TG / LB annotations are
+    # accepted but not required.
     _ec2_topology_hints = bool(
         annotations.get("instance_id")
         or annotations.get("target_group_arn")
@@ -783,6 +787,7 @@ def detect_sources(
         or annotations.get("auto_scaling_group")
         or annotations.get("asg_name")
         or annotations.get("tier")
+        or annotations.get("vpc_id")
     )
     _rds_topology_hints = bool(
         annotations.get("db_instance_identifier") or annotations.get("db_instance")

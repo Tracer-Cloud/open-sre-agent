@@ -20,10 +20,6 @@
     "cloudwatch_region": "us-east-1",
     "aws_region": "us-east-1",
     "vpc_id": "vpc-0a1b2c3d",
-    "target_group_arn": "arn:aws:elasticloadbalancing:us-east-1:111122223333:targetgroup/orders-web-tg/def456",
-    "load_balancer_arn": "arn:aws:elasticloadbalancing:us-east-1:111122223333:loadbalancer/app/orders-alb/abc123",
-    "auto_scaling_group": "orders-web-asg",
-    "tier": "web",
     "rds_failure_mode": "application_load_spike",
     "context_sources": "cloudwatch"
   }

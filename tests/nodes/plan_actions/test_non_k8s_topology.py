@@ -212,6 +212,38 @@ def test_exact_tier_annotation_still_captured() -> None:
     assert sources["ec2"]["tiers"] == ["web"]
 
 
+def test_vpc_id_alone_activates_ec2_topology() -> None:
+    """A minimal RDS alert that only carries db_instance_identifier + vpc_id
+    must still activate the EC2 topology source so the agent can enumerate
+    EC2 instances in the same VPC. Without this, the only way to drive the
+    EC2 path was to pre-populate tier / TG / LB / ASG in the annotations,
+    which made the synthetic scenario "tell the agent the answer".
+    """
+    alert: dict[str, Any] = {
+        "alert_source": "cloudwatch",
+        "commonAnnotations": {
+            "summary": "DBConnections climbing on orders-prod",
+            "db_instance_identifier": "orders-prod",
+            "engine": "mysql",
+            "aws_region": "us-east-1",
+            "vpc_id": "vpc-0a1b2c3d",
+        },
+    }
+    sources = detect_sources(
+        alert,
+        context={},
+        resolved_integrations=_aws_credentialed_integrations(),
+    )
+    assert "ec2" in sources
+    assert sources["ec2"]["vpc_id"] == "vpc-0a1b2c3d"
+    # No tier/TG/LB/ASG were given — those fields stay empty so the agent
+    # has to discover them via the new tools.
+    assert sources["ec2"]["tiers"] == []
+    assert sources["ec2"]["target_group_arns"] == []
+    assert sources["ec2"]["load_balancer_arns"] == []
+    assert sources["ec2"]["auto_scaling_groups"] == []
+
+
 def test_hybrid_alert_populates_both_eks_and_ec2() -> None:
     """An alert carrying both K8s and EC2/RDS hints should populate both sources."""
     alert = _eks_alert()
