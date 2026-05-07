@@ -1,11 +1,15 @@
 """Deterministic remediation step fallbacks keyed on root_cause_category."""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
 
 _TEMPLATES: dict[str, list[tuple[str, str | None]]] = {
     "resource_exhaustion": [
-        ("Identify the saturated resource (memory, CPU, connections, storage) from the evidence", None),
+        (
+            "Identify the saturated resource (memory, CPU, connections, storage) from the evidence",
+            None,
+        ),
         ("Scale up or right-size the affected workload or database", None),
         ("Set resource limits and alerts at 80% to catch saturation early", None),
         ("Review Grafana dashboards for resource trend leading up to the incident", "grafana"),
@@ -20,12 +24,18 @@ _TEMPLATES: dict[str, list[tuple[str, str | None]]] = {
         ("Check Datadog monitors for upstream SLO breach", "datadog"),
     ],
     "configuration_error": [
-        ("Diff the configuration deployed before the incident against the last known-good config", None),
+        (
+            "Diff the configuration deployed before the incident against the last known-good config",
+            None,
+        ),
         ("Roll back the configuration change that introduced the mismatch", None),
         ("Add validation checks to CI/CD pipeline for configuration values", None),
     ],
     "code_defect": [
-        ("Identify the commit introducing the defect using git history or recent deploy timestamps", None),
+        (
+            "Identify the commit introducing the defect using git history or recent deploy timestamps",
+            None,
+        ),
         ("Roll back or hot-fix the affected service", None),
         ("Add a regression test covering the failing code path before re-deploying", None),
     ],
@@ -41,7 +51,10 @@ _TEMPLATES: dict[str, list[tuple[str, str | None]]] = {
     ],
     "unknown": [
         ("Enable debug logging and re-run the failing workload to gather more signal", None),
-        ("Escalate to the owning team with the investigation trace and causal chain attached", None),
+        (
+            "Escalate to the owning team with the investigation trace and causal chain attached",
+            None,
+        ),
     ],
     "healthy": [],
 }
