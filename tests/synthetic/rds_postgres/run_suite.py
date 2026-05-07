@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from app.pipeline.runners import run_investigation
+from tests.synthetic.mock_aws_backend import FixtureAWSBackend
 from tests.synthetic.mock_grafana_backend.backend import FixtureGrafanaBackend
 from tests.synthetic.rds_postgres.scenario_loader import (
     SUITE_DIR,
@@ -100,17 +101,30 @@ def _build_resolved_integrations(
     Accepts an optional pre-built grafana_backend (e.g. SelectiveGrafanaBackend)
     so callers can instrument the backend before injection.  Falls back to a fresh
     FixtureGrafanaBackend when use_mock_grafana=True and no backend is provided.
+
+    When the scenario declares EC2/ELB evidence, also injects a FixtureAWSBackend
+    under ``aws.ec2_backend`` so the EC2/RDS topology tools can serve fixture
+    data without colliding with the EKS ``_backend`` slot.
     """
-    if not use_mock_grafana and grafana_backend is None:
+    has_aws_topology = bool(
+        fixture.evidence.ec2_instances_by_tag is not None
+        or fixture.evidence.elb_target_health is not None
+    )
+    if not use_mock_grafana and grafana_backend is None and not has_aws_topology:
         return None
-    backend = grafana_backend or FixtureGrafanaBackend(fixture)
-    return {
-        "grafana": {
+    integrations: dict[str, Any] = {}
+    if use_mock_grafana or grafana_backend is not None:
+        integrations["grafana"] = {
             "endpoint": "",
             "api_key": "",
-            "_backend": backend,
+            "_backend": grafana_backend or FixtureGrafanaBackend(fixture),
         }
-    }
+    if has_aws_topology:
+        integrations["aws"] = {
+            "region": fixture.metadata.region,
+            "ec2_backend": FixtureAWSBackend(fixture),
+        }
+    return integrations or None
 
 
 def _normalize_text(value: str) -> str:

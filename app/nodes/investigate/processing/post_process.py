@@ -651,6 +651,24 @@ def _map_eks_deployment_status(data: dict) -> dict:
     }
 
 
+def _map_ec2_instances_by_tag(data: dict) -> dict:
+    return {
+        "ec2_instances": data.get("instances", []),
+        "ec2_instances_by_tier": data.get("by_tier", {}),
+        "ec2_tiers_detected": data.get("tiers_detected", []),
+        "ec2_total_instances": data.get("total_instances", 0),
+    }
+
+
+def _map_elb_target_health(data: dict) -> dict:
+    return {
+        "elb_target_groups": data.get("target_groups", []),
+        "elb_healthy_targets": data.get("healthy_targets", []),
+        "elb_unhealthy_targets": data.get("unhealthy_targets", []),
+        "elb_target_instance_ids": data.get("instance_ids", []),
+    }
+
+
 def _map_cloudopsbench_tool(data: dict) -> dict:
     evidence_item = {
         "action_name": data.get("action_name"),
@@ -704,6 +722,8 @@ EVIDENCE_MAPPERS: dict[str, Callable[[dict], dict]] = {
     "get_eks_node_health": _map_eks_node_health,
     "get_eks_pod_logs": _map_eks_pod_logs,
     "get_eks_deployment_status": _map_eks_deployment_status,
+    "ec2_instances_by_tag": _map_ec2_instances_by_tag,
+    "get_elb_target_health": _map_elb_target_health,
     "GetResources": _map_cloudopsbench_tool,
     "DescribeResource": _map_cloudopsbench_tool,
     "GetClusterConfiguration": _map_cloudopsbench_tool,
