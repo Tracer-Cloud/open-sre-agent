@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Final
 
 SENTRY_DSN: Final[str] = (
@@ -13,5 +12,3 @@ SENTRY_ERROR_SAMPLE_RATE: Final[float] = 1.0
 SENTRY_TRACES_SAMPLE_RATE: Final[float] = 1.0
 SENTRY_MAX_BREADCRUMBS: Final[int] = 100
 SENTRY_IN_APP_INCLUDE: Final[tuple[str, ...]] = ("app",)
-SENTRY_LOGGING_BREADCRUMB_LEVEL: Final[int] = logging.INFO
-SENTRY_LOGGING_EVENT_LEVEL: Final[int] = logging.ERROR

@@ -8,6 +8,7 @@ are safe — the function is idempotent.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from collections.abc import Mapping
@@ -21,8 +22,6 @@ from app.constants import (
     SENTRY_DSN,
     SENTRY_ERROR_SAMPLE_RATE,
     SENTRY_IN_APP_INCLUDE,
-    SENTRY_LOGGING_BREADCRUMB_LEVEL,
-    SENTRY_LOGGING_EVENT_LEVEL,
     SENTRY_MAX_BREADCRUMBS,
     SENTRY_TRACES_SAMPLE_RATE,
 )
@@ -45,7 +44,17 @@ _QUERY_SCRUBBING_CATEGORIES: frozenset[str] = frozenset({"http", "httpx"})
 _HEADER_SCRUBBING_CATEGORIES: frozenset[str] = frozenset({"http", "httpx", "aiohttp"})
 _HOSTED_ENTRYPOINTS: frozenset[str] = frozenset({"webapp", "remote", "mcp", "graph_pipeline"})
 
-_SCOPE_TAGS_APPLIED: bool = False
+
+class _ScopeTagsState:
+    """Mutable holder for the first-wins scope-tag guard.
+
+    Wrapped in a class so the flag is read/written via attribute access on
+    a stable container, avoiding the ``global`` keyword (which CodeQL's
+    ``py/unused-global-variable`` rule misreports despite the in-function
+    reads, see github-advanced-security review on PR #1583).
+    """
+
+    applied: bool = False
 
 
 def _is_sentry_disabled() -> bool:
@@ -256,10 +265,7 @@ def _build_sentry_integrations() -> list[Any]:
     from sentry_sdk.integrations.logging import LoggingIntegration
 
     return [
-        LoggingIntegration(
-            level=SENTRY_LOGGING_BREADCRUMB_LEVEL,
-            event_level=SENTRY_LOGGING_EVENT_LEVEL,
-        ),
+        LoggingIntegration(level=logging.INFO, event_level=logging.ERROR),
         AsyncioIntegration(),
         HttpxIntegration(),
     ]
@@ -317,8 +323,7 @@ def _apply_scope_tags(entrypoint: str | None) -> None:
     this matches the surface, not the ``ENV`` setting, so a webapp running
     locally still reports as ``hosted``.
     """
-    global _SCOPE_TAGS_APPLIED
-    if _SCOPE_TAGS_APPLIED:
+    if _ScopeTagsState.applied:
         return
     runtime = "hosted" if entrypoint in _HOSTED_ENTRYPOINTS else "cli"
     deployment_method = os.getenv("OPENSRE_DEPLOYMENT_METHOD", "local")
@@ -327,13 +332,12 @@ def _apply_scope_tags(entrypoint: str | None) -> None:
     sentry_sdk.set_tag("entrypoint", entrypoint or "unknown")
     sentry_sdk.set_tag("opensre.runtime", runtime)
     sentry_sdk.set_tag("deployment_method", deployment_method)
-    _SCOPE_TAGS_APPLIED = True
+    _ScopeTagsState.applied = True
 
 
 def _reset_scope_tags_state_for_tests() -> None:
     """Reset the first-wins guard. Test-only helper."""
-    global _SCOPE_TAGS_APPLIED
-    _SCOPE_TAGS_APPLIED = False
+    _ScopeTagsState.applied = False
 
 
 def init_sentry(entrypoint: str | None = None) -> None:
