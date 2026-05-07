@@ -83,6 +83,7 @@ class RootCauseResult:
     validated_claims: list[str]
     non_validated_claims: list[str]
     causal_chain: list[str]
+    remediation_steps: list[str]
 
 
 @dataclass(frozen=True)
@@ -918,6 +919,7 @@ def parse_root_cause(response: str) -> RootCauseResult:
     validated_claims: list[str] = []
     non_validated_claims: list[str] = []
     causal_chain: list[str] = []
+    remediation_steps: list[str] = []
 
     if "ROOT_CAUSE_CATEGORY:" in response:
         parts = response.split("ROOT_CAUSE_CATEGORY:", 1)
@@ -989,6 +991,8 @@ def parse_root_cause(response: str) -> RootCauseResult:
             # Extract causal chain
             if "CAUSAL_CHAIN:" in after:
                 causal_section = after.split("CAUSAL_CHAIN:", 1)[1]
+                if "REMEDIATION_STEPS:" in causal_section:
+                    causal_section = causal_section.split("REMEDIATION_STEPS:", 1)[0]
                 causal_text = causal_section
 
                 for line in causal_text.strip().split("\n"):
@@ -996,10 +1000,30 @@ def parse_root_cause(response: str) -> RootCauseResult:
                     if line and not line.startswith("ALTERNATIVE"):
                         causal_chain.append(line)
 
+            if "REMEDIATION_STEPS:" in after:
+                rem_section = after.split("REMEDIATION_STEPS:", 1)[1]
+                for line in rem_section.strip().split("\n"):
+                    line = line.strip().lstrip("*-•( ").strip()
+                    if not line:
+                        continue
+                    if any(
+                        line.startswith(h)
+                        for h in (
+                            "ROOT_CAUSE",
+                            "VALIDATED",
+                            "NON_VALIDATED",
+                            "CAUSAL",
+                            "ALTERNATIVE",
+                        )
+                    ):
+                        break
+                    remediation_steps.append(line)
+
     return RootCauseResult(
         root_cause=root_cause,
         root_cause_category=root_cause_category,
         validated_claims=validated_claims,
         non_validated_claims=non_validated_claims,
         causal_chain=causal_chain,
+        remediation_steps=remediation_steps,
     )
