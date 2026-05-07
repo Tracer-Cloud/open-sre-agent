@@ -657,6 +657,10 @@ def _map_ec2_instances_by_tag(data: dict) -> dict:
         "ec2_instances_by_tier": data.get("by_tier", {}),
         "ec2_tiers_detected": data.get("tiers_detected", []),
         "ec2_total_instances": data.get("total_instances", 0),
+        # Pre-computed summary block — by_tier_counts, primary_tier, vpcs_in_scope,
+        # azs_in_scope. Pass-through is the whole point of this tool: the agent
+        # quotes these directly without iterating instance lists.
+        "ec2_instances_summary": data.get("summary", {}),
     }
 
 
@@ -666,6 +670,9 @@ def _map_elb_target_health(data: dict) -> dict:
         "elb_healthy_targets": data.get("healthy_targets", []),
         "elb_unhealthy_targets": data.get("unhealthy_targets", []),
         "elb_target_instance_ids": data.get("instance_ids", []),
+        # Pre-computed summary block — total_targets, healthy_count, unhealthy_count,
+        # healthy_ratio_pct, unhealthy_states, target_group_count.
+        "elb_target_health_summary": data.get("summary", {}),
     }
 
 

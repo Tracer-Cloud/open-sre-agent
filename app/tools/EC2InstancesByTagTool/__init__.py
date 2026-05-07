@@ -122,7 +122,8 @@ def ec2_instances_by_tag(
     parameters: dict[str, Any] = {"MaxResults": 1000}
     if instance_ids:
         parameters["InstanceIds"] = instance_ids
-        # InstanceIds and MaxResults are mutually exclusive in the EC2 API.
+        # When a finite ID list is provided, pagination is unnecessary —
+        # the response is bounded by len(instance_ids).
         parameters.pop("MaxResults", None)
     filters: list[dict[str, Any]] = []
     if tier:

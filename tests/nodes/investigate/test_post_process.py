@@ -44,6 +44,75 @@ class TestEKSMappersRegistered:
         assert "get_eks_pod_logs" in EVIDENCE_MAPPERS
 
 
+class TestEC2RDSMappersPreserveSummary:
+    """The two non-K8s topology mappers must forward the ``summary`` block.
+
+    Tools precompute by_tier_counts / healthy_ratio_pct / etc. specifically so
+    the agent can quote them without iterating arrays. If the mapper drops
+    ``summary`` (as the initial draft did), the entire agent-friendly
+    enrichment never reaches the evidence store.
+    """
+
+    def test_ec2_instances_by_tag_registered(self) -> None:
+        assert "ec2_instances_by_tag" in EVIDENCE_MAPPERS
+
+    def test_get_elb_target_health_registered(self) -> None:
+        assert "get_elb_target_health" in EVIDENCE_MAPPERS
+
+    def test_ec2_summary_reaches_evidence(self) -> None:
+        mapper = EVIDENCE_MAPPERS["ec2_instances_by_tag"]
+        mapped = mapper(
+            {
+                "source": "ec2",
+                "available": True,
+                "instances": [{"instance_id": "i-1", "tier": "web"}],
+                "by_tier": {"web": ["i-1"]},
+                "tiers_detected": ["web"],
+                "total_instances": 1,
+                "summary": {
+                    "by_tier_counts": {"web": 1},
+                    "total_active": 1,
+                    "primary_tier": "web",
+                    "vpcs_in_scope": ["vpc-1"],
+                    "azs_in_scope": ["us-east-1a"],
+                },
+            }
+        )
+        assert mapped["ec2_instances_summary"]["by_tier_counts"] == {"web": 1}
+        assert mapped["ec2_instances_summary"]["primary_tier"] == "web"
+
+    def test_elb_summary_reaches_evidence(self) -> None:
+        mapper = EVIDENCE_MAPPERS["get_elb_target_health"]
+        mapped = mapper(
+            {
+                "source": "ec2",
+                "available": True,
+                "target_groups": [{"TargetGroupArn": "tg-1"}],
+                "healthy_targets": [{"instance_id": "i-1", "state": "healthy"}],
+                "unhealthy_targets": [],
+                "instance_ids": ["i-1"],
+                "summary": {
+                    "total_targets": 1,
+                    "healthy_count": 1,
+                    "unhealthy_count": 0,
+                    "healthy_ratio_pct": 100.0,
+                    "unhealthy_states": [],
+                    "target_group_count": 1,
+                },
+            }
+        )
+        assert mapped["elb_target_health_summary"]["healthy_ratio_pct"] == 100.0
+        assert mapped["elb_target_health_summary"]["target_group_count"] == 1
+
+    def test_summary_absent_does_not_crash_mapper(self) -> None:
+        """Older or partial tool outputs without a summary block must still
+        flow through — the mapper degrades to an empty dict rather than KeyError."""
+        ec2 = EVIDENCE_MAPPERS["ec2_instances_by_tag"]({"instances": []})
+        assert ec2["ec2_instances_summary"] == {}
+        elb = EVIDENCE_MAPPERS["get_elb_target_health"]({"target_groups": []})
+        assert elb["elb_target_health_summary"] == {}
+
+
 class TestListEKSPodsMapper:
     """list_eks_pods → eks_pods / eks_failing_pods / eks_high_restart_pods / eks_total_pods."""
 

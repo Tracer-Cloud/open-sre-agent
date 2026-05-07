@@ -45,6 +45,7 @@ class AWSBackend(Protocol):
 
     def describe_target_health(
         self,
+        target_group_arns: list[str] | None = None,
         target_group_arn: str = "",
         load_balancer_arn: str = "",
         **kwargs: Any,
@@ -87,7 +88,9 @@ class FixtureAWSBackend:
         elif tier:
             instances = [i for i in all_instances if (i.get("tier", "") or "") == tier]
         if vpc_id:
-            instances = [i for i in instances if (i.get("vpc_id", "") or "") in ("", vpc_id)]
+            # Strict equality — real EC2 API never returns instances from other
+            # VPCs, and missing/empty vpc_id is a fixture error worth surfacing.
+            instances = [i for i in instances if i.get("vpc_id", "") == vpc_id]
 
         by_tier: dict[str, list[str]] = {}
         for inst in instances:
@@ -113,6 +116,7 @@ class FixtureAWSBackend:
 
     def describe_target_health(
         self,
+        target_group_arns: list[str] | None = None,
         target_group_arn: str = "",
         load_balancer_arn: str = "",
         **_: Any,
@@ -127,11 +131,14 @@ class FixtureAWSBackend:
         target_groups = list(elb_fixture.get("target_groups", []))
         targets = list(elb_fixture.get("targets", []))
 
+        # Accept the canonical plural list or the singular convenience alias.
+        arns = set(target_group_arns or [])
         if target_group_arn:
-            target_groups = [
-                tg for tg in target_groups if tg.get("TargetGroupArn") == target_group_arn
-            ]
-            targets = [t for t in targets if t.get("target_group_arn") == target_group_arn]
+            arns.add(target_group_arn)
+
+        if arns:
+            target_groups = [tg for tg in target_groups if tg.get("TargetGroupArn") in arns]
+            targets = [t for t in targets if t.get("target_group_arn") in arns]
         elif load_balancer_arn:
             target_groups = [
                 tg

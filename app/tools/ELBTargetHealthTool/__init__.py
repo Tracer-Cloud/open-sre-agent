@@ -58,7 +58,16 @@ def _is_available(sources: dict[str, dict]) -> bool:
     input_schema={
         "type": "object",
         "properties": {
-            "target_group_arn": {"type": "string"},
+            "target_group_arns": {
+                "type": "array",
+                "items": {"type": "string"},
+                "default": [],
+                "description": "List of target group ARNs (multi-TG ALBs are common).",
+            },
+            "target_group_arn": {
+                "type": "string",
+                "description": "Convenience alias for a single target group ARN.",
+            },
             "load_balancer_arn": {"type": "string"},
             "region": {"type": "string", "default": "us-east-1"},
         },
@@ -68,6 +77,7 @@ def _is_available(sources: dict[str, dict]) -> bool:
     extract_params=extract_target_health_params,
 )
 def get_elb_target_health(
+    target_group_arns: list[str] | None = None,
     target_group_arn: str = "",
     load_balancer_arn: str = "",
     region: str = "us-east-1",
@@ -79,32 +89,37 @@ def get_elb_target_health(
     When ``aws_backend`` is provided (FixtureAWSBackend in synthetic tests) the
     call short-circuits to the backend. Otherwise calls boto3 elbv2 via
     ``execute_aws_sdk_call`` using the default boto3 credential chain.
+
+    Accepts ``target_group_arns`` (list, canonical) or ``target_group_arn``
+    (string, convenience). The two are merged and deduplicated.
     """
+    arns = list(target_group_arns or [])
+    if target_group_arn and target_group_arn not in arns:
+        arns.append(target_group_arn)
+
     logger.info(
-        "[ec2] get_elb_target_health tg=%s lb=%s",
-        target_group_arn or "-",
+        "[ec2] get_elb_target_health tgs=%d lb=%s",
+        len(arns),
         load_balancer_arn or "-",
     )
     if aws_backend is not None:
         return cast(
             "dict[str, Any]",
             aws_backend.describe_target_health(
-                target_group_arn=target_group_arn,
+                target_group_arns=arns,
                 load_balancer_arn=load_balancer_arn,
             ),
         )
 
-    if not target_group_arn and not load_balancer_arn:
+    if not arns and not load_balancer_arn:
         return {
             "source": "ec2",
             "available": False,
-            "error": "either target_group_arn or load_balancer_arn is required",
+            "error": "either target_group_arns/target_group_arn or load_balancer_arn is required",
         }
 
     tg_params: dict[str, Any] = (
-        {"TargetGroupArns": [target_group_arn]}
-        if target_group_arn
-        else {"LoadBalancerArn": load_balancer_arn}
+        {"TargetGroupArns": arns} if arns else {"LoadBalancerArn": load_balancer_arn}
     )
     groups_result = execute_aws_sdk_call(
         service_name="elbv2",

@@ -16,15 +16,19 @@ class _FakeAWSBackend:
 
     def describe_target_health(
         self,
+        target_group_arns: list[str] | None = None,
         target_group_arn: str = "",
         load_balancer_arn: str = "",
         **_: Any,
     ) -> dict[str, Any]:
-        self.calls.append({"tg": target_group_arn, "lb": load_balancer_arn})
+        arns = list(target_group_arns or [])
+        if target_group_arn:
+            arns.append(target_group_arn)
+        self.calls.append({"tgs": arns, "lb": load_balancer_arn})
         return {
             "source": "ec2",
             "available": True,
-            "target_groups": [{"TargetGroupArn": target_group_arn or "tg-x"}],
+            "target_groups": [{"TargetGroupArn": arns[0] if arns else "tg-x"}],
             "healthy_targets": [{"instance_id": "i-1", "state": "healthy"}],
             "unhealthy_targets": [],
             "instance_ids": ["i-1"],
@@ -45,7 +49,9 @@ def test_is_available_requires_topology_hints() -> None:
     assert _is_available({"ec2": {"_backend": object()}}) is True
 
 
-def test_extract_params_picks_first_target_group_first() -> None:
+def test_extract_params_passes_all_target_group_arns() -> None:
+    """Multi-TG ALBs are common — silently truncating to the first ARN would
+    hide whole tiers from the agent. The full list must round-trip."""
     params = extract_target_health_params(
         {
             "ec2": {
@@ -55,14 +61,14 @@ def test_extract_params_picks_first_target_group_first() -> None:
             }
         }
     )
-    assert params["target_group_arn"] == "tg-1"
+    assert params["target_group_arns"] == ["tg-1", "tg-2"]
     assert params["load_balancer_arn"] == "lb-1"
     assert params["region"] == "eu-west-1"
 
 
 def test_extract_params_falls_back_to_load_balancer_when_no_target_group() -> None:
     params = extract_target_health_params({"ec2": {"load_balancer_arns": ["lb-1"]}})
-    assert params["target_group_arn"] == ""
+    assert params["target_group_arns"] == []
     assert params["load_balancer_arn"] == "lb-1"
 
 
@@ -73,10 +79,17 @@ def test_extract_params_raises_when_ec2_source_missing() -> None:
 
 def test_backend_short_circuits_boto3() -> None:
     backend = _FakeAWSBackend()
-    result = get_elb_target_health(target_group_arn="tg-1", aws_backend=backend)
+    result = get_elb_target_health(target_group_arns=["tg-1", "tg-2"], aws_backend=backend)
     assert result["available"] is True
     assert result["instance_ids"] == ["i-1"]
-    assert backend.calls == [{"tg": "tg-1", "lb": ""}]
+    assert backend.calls == [{"tgs": ["tg-1", "tg-2"], "lb": ""}]
+
+
+def test_singular_target_group_arn_alias_still_works() -> None:
+    """Convenience alias for the singular form must merge with the plural list."""
+    backend = _FakeAWSBackend()
+    get_elb_target_health(target_group_arn="tg-legacy", aws_backend=backend)
+    assert backend.calls == [{"tgs": ["tg-legacy"], "lb": ""}]
 
 
 def test_returns_error_when_neither_arn_provided() -> None:

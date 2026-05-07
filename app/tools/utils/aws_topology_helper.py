@@ -68,15 +68,21 @@ def extract_ec2_instances_params(sources: dict[str, dict]) -> dict[str, Any]:
 
 
 def extract_target_health_params(sources: dict[str, dict]) -> dict[str, Any]:
-    """Extract parameters for ELB target health queries."""
+    """Extract parameters for ELB target health queries.
+
+    Passes the full ``target_group_arns`` list — multi-TG ALBs (one ALB →
+    several listener rules → several target groups) are common, and silently
+    truncating to the first ARN would hide whole tiers from the agent. The
+    tool itself iterates the list. ``load_balancer_arn`` stays singular
+    because the boto3 API takes one LB per call.
+    """
     ec2 = sources.get("ec2")
     if ec2 is None:
         raise ValueError("Sources dictionary must contain an 'ec2' key with topology configuration")
 
-    tg_arns = ec2.get("target_group_arns") or []
     lb_arns = ec2.get("load_balancer_arns") or []
     return {
-        "target_group_arn": tg_arns[0] if tg_arns else "",
+        "target_group_arns": list(ec2.get("target_group_arns") or []),
         "load_balancer_arn": lb_arns[0] if lb_arns else "",
         "region": ec2.get("region", "us-east-1"),
         "aws_backend": ec2.get("_backend"),
