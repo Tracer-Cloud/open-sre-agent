@@ -98,3 +98,80 @@ def test_get_client_double_check_locking():
 
         assert client1 == client2
         assert mock_session.client.call_count == 1
+
+
+def test_proactive_refresh():
+    """Verify that a session near expiry (within 5 mins) is refreshed."""
+    manager = AWSSessionManager()
+    role_arn = "arn:aws:iam::123456789012:role/TestRole"
+
+    # 1. Setup an 'almost expired' session (e.g., expiring in 2 minutes)
+    near_expiry = time.time() + 120  # 2 mins from now
+    manager._session_metadata[(role_arn, None)] = {
+        "access_key": "OLD_KEY",
+        "secret_key": "OLD_SECRET",
+        "session_token": "OLD_TOKEN",
+        "expiration": near_expiry,
+    }
+
+    # 2. Mock STS to return a NEW session
+    mock_sts = MagicMock()
+    mock_sts.assume_role.return_value = {
+        "Credentials": {
+            "AccessKeyId": "NEW_KEY",
+            "SecretAccessKey": "NEW_SECRET",
+            "SessionToken": "NEW_TOKEN",
+            "Expiration": MagicMock(timestamp=lambda: time.time() + 3600),
+        }
+    }
+
+    with patch("boto3.Session") as mock_session_class:
+        mock_base_session = MagicMock()
+        mock_base_session.client.return_value = mock_sts
+        mock_session_class.return_value = mock_base_session
+
+        # 3. Call get_session — it should see the near-expiry and refresh
+        session = manager.get_session(role_arn=role_arn)
+
+        # VERIFY: New credentials are used
+        mock_session_class.assert_any_call(
+            aws_access_key_id="NEW_KEY",
+            aws_secret_access_key="NEW_SECRET",
+            aws_session_token="NEW_TOKEN",
+            region_name=ANY,
+        )
+        assert mock_sts.assume_role.called
+
+
+def test_assume_role_error_propagation():
+    """Verify that STS errors are raised correctly."""
+    manager = AWSSessionManager()
+    role_arn = "arn:aws:iam::123456789012:role/FailRole"
+
+    mock_sts = MagicMock()
+    mock_sts.assume_role.side_effect = Exception("STS_FAILURE")
+
+    with patch("boto3.Session") as mock_session_class:
+        mock_base_session = MagicMock()
+        mock_base_session.client.return_value = mock_sts
+        mock_session_class.return_value = mock_base_session
+
+        with pytest.raises(Exception, match="STS_FAILURE"):
+            manager.get_session(role_arn=role_arn)
+
+
+def test_base_session_region_caching():
+    """Verify that base sessions are cached per region."""
+    manager = AWSSessionManager()
+
+    with patch("boto3.Session") as mock_session_class:
+        # Request session for region A twice
+        manager.get_session(region="us-east-1")
+        manager.get_session(region="us-east-1")
+        # Request session for region B
+        manager.get_session(region="us-west-2")
+
+        # VERIFY: Only 2 Session objects created (one per region)
+        assert mock_session_class.call_count == 2
+        mock_session_class.assert_any_call(region_name="us-east-1")
+        mock_session_class.assert_any_call(region_name="us-west-2")
