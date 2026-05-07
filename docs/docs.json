@@ -110,15 +110,16 @@
             "pages": [
               "aws",
               "bitbucket",
-              "discord",
-              "github",
-              "gitlab",
-              "google-docs",
-              "jira",
-              "slack",
-              "vercel"
-            ]
-          },
+                "discord",
+                "github",
+                "gitlab",
+                "google-docs",
+                "jira",
+                "slack",
+                "telegram",
+                "vercel"
+              ]
+            },
           {
             "group": "Data and workflow systems",
             "pages": [

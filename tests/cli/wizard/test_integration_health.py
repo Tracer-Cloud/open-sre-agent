@@ -47,6 +47,7 @@ def test_legacy_integration_health_import_surface_still_exports_validators() -> 
         "validate_sentry_integration",
         "validate_slack_webhook",
         "validate_splunk_integration",
+        "validate_telegram_integration",
         "validate_vercel_integration",
     }
 
@@ -209,6 +210,47 @@ def test_validate_slack_webhook_fails_for_invalid_host() -> None:
 
     assert result.ok is False
     assert "slack domain" in result.detail.lower()
+
+
+def test_validate_telegram_integration_uses_existing_verifier(monkeypatch) -> None:
+    module = import_module("app.cli.wizard.integration_health")
+
+    monkeypatch.setattr(
+        "app.integrations._verification_adapters.requests.get",
+        lambda *_args, **_kwargs: types.SimpleNamespace(
+            raise_for_status=lambda: None,
+            json=lambda: {"ok": True, "result": {"username": "opensre_bot"}},
+        ),
+    )
+
+    validate = getattr(module, "validate_telegram_integration", None)
+
+    assert validate is not None
+    result = validate(bot_token="123456:ABCDEF")
+
+    assert result.ok is True
+    assert "@opensre_bot" in result.detail
+
+
+def test_validate_telegram_integration_redacts_bot_token_on_error(monkeypatch) -> None:
+    module = import_module("app.cli.wizard.integration_health")
+
+    def _raise_request_error(*_args, **_kwargs):
+        raise RuntimeError("request failed for https://api.telegram.org/bot123456:ABCDEF/getMe")
+
+    monkeypatch.setattr(
+        "app.integrations._verification_adapters.requests.get",
+        _raise_request_error,
+    )
+
+    validate = getattr(module, "validate_telegram_integration", None)
+
+    assert validate is not None
+    result = validate(bot_token="123456:ABCDEF")
+
+    assert result.ok is False
+    assert "123456:ABCDEF" not in result.detail
+    assert "<redacted>" in result.detail
 
 
 def test_validate_aws_integration_succeeds_with_static_credentials(monkeypatch) -> None:

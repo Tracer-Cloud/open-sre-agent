@@ -5,6 +5,7 @@ from __future__ import annotations
 import httpx
 
 from app.integrations.models import SlackWebhookConfig
+from app.integrations.verify import _verify_telegram
 
 from .shared import IntegrationHealthResult
 
@@ -136,4 +137,16 @@ def validate_discord_bot(*, bot_token: str) -> IntegrationHealthResult:
         return IntegrationHealthResult(ok=False, detail="Discord bot token is invalid or revoked.")
     return IntegrationHealthResult(
         ok=False, detail=f"Discord API returned unexpected HTTP {resp.status_code}."
+    )
+
+
+def validate_telegram_integration(*, bot_token: str) -> IntegrationHealthResult:
+    """Validate a Telegram bot token via the shared integration verifier."""
+    result = _verify_telegram("onboarding", {"bot_token": bot_token})
+    detail = str(result["detail"])
+    if bot_token:
+        detail = detail.replace(bot_token, "<redacted>")
+    return IntegrationHealthResult(
+        ok=result["status"] == "passed",
+        detail=detail,
     )

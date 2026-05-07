@@ -1,0 +1,110 @@
+---
+title: "Telegram"
+---
+
+OpenSRE's Telegram integration lets you post investigation findings into a personal chat, group, or channel using a BotFather-managed bot token.
+
+---
+
+## Step 1: Create a Telegram Bot
+
+1. Open Telegram and start a chat with [@BotFather](https://t.me/BotFather).
+2. Run `/newbot`.
+3. Follow the prompts to choose:
+   - A display name for the bot
+   - A unique bot username ending in `bot`
+4. Copy the bot token BotFather returns. Treat it like a password.
+
+---
+
+## Step 2: Add the Bot to the Destination Chat
+
+Choose where you want OpenSRE to post findings:
+
+- **Personal chat** — start a direct chat with the bot and send any message.
+- **Group** — add the bot to the group and send any message after it joins.
+- **Channel** — add the bot as an admin if the channel requires posting permissions.
+
+If you plan to use a group or channel, make sure the bot is allowed to post messages there.
+
+---
+
+## Step 3: Find the Chat ID
+
+Telegram uses a numeric `chat_id` to know where to post findings.
+
+### Personal chat
+
+1. Send a message to your bot.
+2. Open this URL in your browser, replacing `<BOT_TOKEN>` with the token from BotFather:
+
+   ```text
+   https://api.telegram.org/bot<BOT_TOKEN>/getUpdates
+   ```
+
+3. Look for `message.chat.id` in the JSON response.
+
+### Group or supergroup
+
+1. Add the bot to the group and send a message in that group.
+2. Refresh `getUpdates`.
+3. Look for `message.chat.id`.
+   - Supergroup IDs usually start with `-100`.
+
+If `getUpdates` is empty, make sure the bot has received at least one message since it was created or added to the chat.
+
+---
+
+## Step 4: Configure the Integration in OpenSRE
+
+Run the setup wizard and select **Telegram**:
+
+```bash
+opensre onboard
+```
+
+When prompted, enter:
+
+- **Telegram bot token** — from BotFather
+- **Default chat ID** *(optional)* — the chat where CLI-triggered findings should be posted
+
+OpenSRE validates the bot token with Telegram's `getMe` API before saving it.
+
+The wizard writes the following environment variables to your `.env` file:
+
+| Variable | Description |
+|---|---|
+| `TELEGRAM_BOT_TOKEN` | Bot token used for Telegram API calls |
+| `TELEGRAM_DEFAULT_CHAT_ID` | Default chat destination for findings posted outside a chat callback |
+
+---
+
+## Step 5: Verify It Works
+
+After onboarding, you can re-run the wizard or verify your integrations from the CLI:
+
+```bash
+opensre integrations verify telegram
+```
+
+A healthy result should mention the Telegram bot username returned by `getMe`.
+
+---
+
+## Troubleshooting
+
+**`Telegram API check failed` during onboarding**
+
+Double-check the bot token. BotFather tokens are long and easy to truncate when copying.
+
+**`chat not found` when posting findings**
+
+The bot is not in the destination chat, or the `chat_id` is wrong. Send a fresh message in the target chat and inspect `getUpdates` again.
+
+**No `getUpdates` results**
+
+Telegram only returns updates after the bot has received at least one message. Start a chat with the bot or mention it in the target group, then try again.
+
+**Group ID does not look like a normal number**
+
+That is expected. Supergroup chat IDs commonly start with `-100`, and OpenSRE accepts that format as-is.

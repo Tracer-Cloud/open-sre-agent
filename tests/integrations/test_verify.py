@@ -13,6 +13,7 @@ from app.integrations.verify import (
     _verify_honeycomb,
     _verify_sentry,
     _verify_snowflake,
+    _verify_telegram,
     _verify_tracer,
     _verify_vercel,
     resolve_effective_integrations,
@@ -140,6 +141,24 @@ def test_verify_grafana_passes_with_supported_datasource(monkeypatch: pytest.Mon
     assert result["status"] == "passed"
     assert "loki" in result["detail"]
     assert "prometheus" in result["detail"]
+
+
+def test_verify_telegram_passes_with_valid_bot_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _fake_requests_get(*_args: Any, **_kwargs: Any) -> _FakeResponse:
+        return _FakeResponse({"ok": True, "result": {"username": "opensre_bot"}})
+
+    monkeypatch.setattr(
+        "app.integrations._verification_adapters.requests.get",
+        _fake_requests_get,
+    )
+
+    result = _verify_telegram(
+        "local env",
+        {"bot_token": "123456:ABCDEF"},
+    )
+
+    assert result["status"] == "passed"
+    assert "@opensre_bot" in result["detail"]
 
 
 def test_verify_datadog_reports_api_failure(monkeypatch: pytest.MonkeyPatch) -> None:
