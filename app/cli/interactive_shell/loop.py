@@ -18,6 +18,8 @@ from prompt_toolkit.styles import Style
 from rich.console import Console
 from rich.markup import escape
 from rich.rule import Rule
+from rich.spinner import Spinner
+from rich.live import Live
 
 from app.analytics.cli import capture_terminal_turn_summarized
 from app.cli.interactive_shell.agent_actions import execute_cli_actions_with_metrics
@@ -43,6 +45,13 @@ from app.cli.interactive_shell.theme import (
 from app.cli.support.errors import OpenSREError
 from app.cli.support.exception_reporting import report_exception
 from app.cli.support.prompt_support import repl_prompt_note_ctrl_c, repl_reset_ctrl_c_gate
+
+
+def _run_with_spinner(console: Console, func, *args, **kwargs):
+    """Run a function while showing a thinking spinner."""
+    spinner = Spinner("dots12", text="thinking...", style="bold orange1")
+    with Live(spinner, console=console, refresh_per_second=20, transient=True):
+        return func(*args, **kwargs)
 
 
 class ReplInputLexer(Lexer):
@@ -393,7 +402,7 @@ async def _run_one_turn(
         return True
 
     if kind == "cli_agent":
-        turn = execute_cli_actions_with_metrics(text, session, console)
+        turn = _run_with_spinner(console, execute_cli_actions_with_metrics, text, session, console)
         fallback_to_llm = not turn.handled
         snapshot = session.record_terminal_turn(
             executed_count=turn.executed_count,
@@ -418,12 +427,12 @@ async def _run_one_turn(
         return True
 
     if kind == "new_alert":
-        _run_new_alert(text, session, console)
+        _run_with_spinner(console, _run_new_alert, text, session, console)
         _print_turn_separator(console)
         return True
 
     # follow_up — grounded answer against session.last_state
-    answer_follow_up(text, session, console)
+    _run_with_spinner(console, answer_follow_up, text, session, console)
     session.record("follow_up", text)
     _print_turn_separator(console)
     return True
@@ -456,7 +465,7 @@ async def _repl_main(initial_input: str | None = None, config: ReplConfig | None
                 session.record("cli_help", stripped)
                 _print_turn_separator(console)
             elif kind == "cli_agent":
-                turn = execute_cli_actions_with_metrics(stripped, session, console)
+                turn = _run_with_spinner(console, execute_cli_actions_with_metrics, stripped, session, console)
                 fallback_to_llm = not turn.handled
                 snapshot = session.record_terminal_turn(
                     executed_count=turn.executed_count,
@@ -478,10 +487,10 @@ async def _repl_main(initial_input: str | None = None, config: ReplConfig | None
                     session.record("cli_agent", stripped)
                 _print_turn_separator(console)
             elif kind == "new_alert":
-                _run_new_alert(stripped, session, console)
+                _run_with_spinner(console, _run_new_alert, stripped, session, console)
                 _print_turn_separator(console)
             else:
-                answer_follow_up(stripped, session, console)
+                _run_with_spinner(console, answer_follow_up, stripped, session, console)
                 session.record("follow_up", stripped)
                 _print_turn_separator(console)
 
