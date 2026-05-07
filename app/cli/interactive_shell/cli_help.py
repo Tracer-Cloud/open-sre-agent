@@ -74,7 +74,13 @@ def _build_grounded_prompt(question: str, cli_reference: str, docs_reference: st
     return f"{system}\n{user_block}"
 
 
-def answer_cli_help(question: str, _session: ReplSession, console: Console) -> None:
+def answer_cli_help(
+    question: str,
+    _session: ReplSession,
+    console: Console,
+    *,
+    active_prompt: str | None = None,  # noqa: ARG001 - reserved for upcoming footer-prompt wiring
+) -> None:
     """Run one turn of the documentation-aware procedural assistant.
 
     Pulls the top-N relevant docs pages for ``question``, combines them with
@@ -84,7 +90,9 @@ def answer_cli_help(question: str, _session: ReplSession, console: Console) -> N
     routing on a prior investigation.
 
     ``_session`` is accepted for API symmetry with :func:`answer_cli_agent` and
-    input routing; this path does not read session state today.
+    input routing; this path does not read session state today. ``active_prompt``
+    is accepted for the same reason and will feed the streaming footer once
+    that wiring lands; see ``stream_to_console``.
     """
     try:
         from app.services.llm_client import get_llm_for_reasoning

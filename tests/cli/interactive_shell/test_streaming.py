@@ -102,6 +102,17 @@ class TestTtyLiveRender:
         # Header still printed, but no thinking-spinner residue at finalize.
         assert "assistant:" in _strip_ansi(buf.getvalue())
 
+    def test_footer_prompt_kwarg_accepted_without_error(self) -> None:
+        """footer_prompt is accepted for backwards-compat but does not crash."""
+        console, buf = _tty_console()
+        result = stream_to_console(
+            console,
+            label="assistant",
+            chunks=_yield_chunks(["Hello"]),
+            footer_prompt="",
+        )
+        assert result == "Hello"
+
 
 class TestMidStreamError:
     """Errors inside the stream propagate while the partial buffer stays on screen."""
@@ -126,8 +137,10 @@ class TestMidStreamError:
         output = _strip_ansi(buf.getvalue())
         assert "partial answer" in output
 
-    def test_keyboard_interrupt_propagates_with_partial_visible(self) -> None:
-        class _ChunksThenTwoKbds:
+    def test_keyboard_interrupt_is_handled_gracefully(self) -> None:
+        """A single KeyboardInterrupt during stream is caught; partial text returned."""
+
+        class _ChunksThenKbd:
             __slots__ = ("_i",)
 
             def __init__(self) -> None:
@@ -145,16 +158,15 @@ class TestMidStreamError:
                 raise KeyboardInterrupt
 
         console, buf = _tty_console()
-
-        with pytest.raises(KeyboardInterrupt):
-            stream_to_console(
-                console,
-                label="assistant",
-                chunks=iter(_ChunksThenTwoKbds()),
-            )
+        result = stream_to_console(
+            console,
+            label="assistant",
+            chunks=iter(_ChunksThenKbd()),
+        )
 
         output = _strip_ansi(buf.getvalue())
         assert "partial answer" in output
+        assert result == "partial answer"
 
 
 class TestTimingFooter:

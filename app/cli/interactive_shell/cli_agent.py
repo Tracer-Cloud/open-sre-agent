@@ -304,11 +304,17 @@ def answer_cli_agent(
     message: str,
     session: ReplSession,
     console: Console,
+    *,
+    active_prompt: str | None = None,  # noqa: ARG001 - reserved for upcoming footer-prompt wiring
 ) -> None:
     """Run one turn of the terminal assistant (no LangGraph / no investigation pipeline).
 
     For documentation-grounded procedural Q&A use :func:`answer_cli_help`, which
     also pulls relevant ``docs/`` pages into the grounding context.
+
+    ``active_prompt`` is accepted for API symmetry with the rest of the answer
+    surface (callers thread it through alongside the user message). It will be
+    plumbed into the streaming footer in a follow-up; see ``stream_to_console``.
     """
     try:
         from app.services.llm_client import get_llm_for_reasoning
