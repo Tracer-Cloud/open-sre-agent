@@ -67,31 +67,31 @@ _C_TEAL_SOFT = "#5EF0E8"
 
 # (padded_label, text_color)  — all labels are 6 chars wide
 _BADGE_STYLES: dict[str, tuple[str, str]] = {
-    "READ":   ("READ  ", _C_PRIMARY),
-    "PLAN":   ("PLAN  ", _C_TEAL_SOFT),
+    "READ": ("READ  ", _C_PRIMARY),
+    "PLAN": ("PLAN  ", _C_TEAL_SOFT),
     "INVEST": ("INVEST", _C_WARNING),
-    "DIAG":   ("DIAG  ", _C_ORANGE),
-    "MERGE":  ("MERGE ", _C_TEXT_DIM),
+    "DIAG": ("DIAG  ", _C_ORANGE),
+    "MERGE": ("MERGE ", _C_TEXT_DIM),
 }
 
 _NODE_EVENT_TYPE: dict[str, str] = {
-    "extract_alert":        "READ",
+    "extract_alert": "READ",
     "resolve_integrations": "READ",
-    "plan_actions":         "PLAN",
-    "merge_hypotheses":     "MERGE",
-    "diagnose_root_cause":  "DIAG",
-    "opensre_llm_eval":     "DIAG",
-    "publish_findings":     "DIAG",
+    "plan_actions": "PLAN",
+    "merge_hypotheses": "MERGE",
+    "diagnose_root_cause": "DIAG",
+    "opensre_llm_eval": "DIAG",
+    "publish_findings": "DIAG",
 }
 
 _NODE_PHASE: dict[str, str] = {
-    "extract_alert":        "LOAD",
+    "extract_alert": "LOAD",
     "resolve_integrations": "LOAD",
-    "plan_actions":         "PLAN",
-    "merge_hypotheses":     "DIAGNOSE",
-    "diagnose_root_cause":  "DIAGNOSE",
-    "opensre_llm_eval":     "DIAGNOSE",
-    "publish_findings":     "PUBLISH",
+    "plan_actions": "PLAN",
+    "merge_hypotheses": "DIAGNOSE",
+    "diagnose_root_cause": "DIAGNOSE",
+    "opensre_llm_eval": "DIAGNOSE",
+    "publish_findings": "PUBLISH",
 }
 
 
@@ -112,18 +112,18 @@ def _node_phase_label(node_name: str) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 _NODE_LABELS: dict[str, str] = {
-    "extract_alert":        "Reading alert",
+    "extract_alert": "Reading alert",
     "resolve_integrations": "Loading integrations",
-    "plan_actions":         "Planning",
-    "investigate":          "Gathering evidence",
-    "diagnose_root_cause":  "Diagnosing",
-    "publish_findings":     "Publishing",
+    "plan_actions": "Planning",
+    "investigate": "Gathering evidence",
+    "diagnose_root_cause": "Diagnosing",
+    "publish_findings": "Publishing",
 }
 
 
 def _node_label(node_name: str) -> str:
     if node_name.startswith("investigate_"):
-        action = node_name[len("investigate_"):]
+        action = node_name[len("investigate_") :]
         return f"Investigate  · {action.replace('_', ' ').title()}"
     return _NODE_LABELS.get(node_name, node_name.replace("_", " ").title())
 

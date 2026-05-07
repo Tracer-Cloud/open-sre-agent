@@ -294,7 +294,6 @@ def test_run_new_alert_does_not_report_opensre_error(monkeypatch: pytest.MonkeyP
 def test_run_one_turn_reports_slash_dispatch_error(monkeypatch: pytest.MonkeyPatch) -> None:
     from rich.console import Console
 
-
     class _Prompt:
         async def prompt_async(self, _prompt: object) -> str:
             return "/boom"
