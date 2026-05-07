@@ -212,7 +212,6 @@ def test_shell_completer_path_completion_honors_mixed_case_prefix(tmp_path: Path
 def test_run_new_alert_marks_task_failed_on_opensre_error(monkeypatch: pytest.MonkeyPatch) -> None:
     from rich.console import Console
 
-    from app.cli.interactive_shell.session import ReplSession
     from app.cli.interactive_shell.tasks import TaskKind, TaskStatus
     from app.cli.support.errors import OpenSREError
 
@@ -238,7 +237,6 @@ def test_run_new_alert_marks_task_failed_on_opensre_error(monkeypatch: pytest.Mo
 def test_run_new_alert_reports_unexpected_error(monkeypatch: pytest.MonkeyPatch) -> None:
     from rich.console import Console
 
-    from app.cli.interactive_shell.session import ReplSession
     from app.cli.interactive_shell.tasks import TaskStatus
 
     captured_errors: list[BaseException] = []
@@ -269,7 +267,6 @@ def test_run_new_alert_reports_unexpected_error(monkeypatch: pytest.MonkeyPatch)
 def test_run_new_alert_does_not_report_opensre_error(monkeypatch: pytest.MonkeyPatch) -> None:
     from rich.console import Console
 
-    from app.cli.interactive_shell.session import ReplSession
     from app.cli.support.errors import OpenSREError
 
     captured_errors: list[BaseException] = []
@@ -297,7 +294,6 @@ def test_run_new_alert_does_not_report_opensre_error(monkeypatch: pytest.MonkeyP
 def test_run_one_turn_reports_slash_dispatch_error(monkeypatch: pytest.MonkeyPatch) -> None:
     from rich.console import Console
 
-    from app.cli.interactive_shell.session import ReplSession
 
     class _Prompt:
         async def prompt_async(self, _prompt: object) -> str:
