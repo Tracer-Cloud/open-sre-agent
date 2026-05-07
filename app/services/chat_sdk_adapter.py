@@ -47,6 +47,7 @@ def _openai_chat_completions_with_retry(client: Any, kwargs: dict[str, Any]) -> 
                 ) from err
             time.sleep(backoff)
             backoff *= 2
+    raise RuntimeError("OpenAI chat completions retry completed without return or raise")
 
 
 def _anthropic_messages_create_with_retry(client: Any, kwargs: dict[str, Any]) -> Any:
@@ -68,6 +69,7 @@ def _anthropic_messages_create_with_retry(client: Any, kwargs: dict[str, Any]) -
                 ) from err
             time.sleep(backoff)
             backoff *= 2
+    raise RuntimeError("Anthropic messages.create retry completed without return or raise")
 
 
 # ── Role mapping for legacy LC-typed messages in state ───────────────────────
