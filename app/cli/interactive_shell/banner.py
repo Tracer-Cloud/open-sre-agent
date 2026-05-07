@@ -42,7 +42,7 @@ def detect_provider_model() -> tuple[str, str]:
     """Return a human-readable (provider, model) for the active LLM config."""
     try:
         settings = LLMSettings.from_env()
-    except Exception:  # noqa: BLE001
+    except Exception:
         return ("unknown", "unknown")
 
     provider = settings.provider or os.getenv("LLM_PROVIDER", "anthropic")

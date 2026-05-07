@@ -1109,6 +1109,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 }
             )
         except Exception:
+            # invalid env-derived config: skip ArgoCD entry rather than fail discovery
             pass
         else:
             integrations.append(

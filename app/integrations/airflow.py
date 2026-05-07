@@ -146,7 +146,7 @@ def validate_airflow_config(config: AirflowConfig) -> AirflowValidationResult:
     except httpx.HTTPStatusError as err:
         detail = err.response.text.strip() or str(err)
         return AirflowValidationResult(ok=False, detail=f"Airflow validation failed: {detail}")
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return AirflowValidationResult(ok=False, detail=f"Airflow validation failed: {err}")
 
 

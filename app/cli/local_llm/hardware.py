@@ -46,7 +46,7 @@ def _get_total_ram_gb() -> float:
                 for line in f:
                     if line.startswith("MemTotal:"):
                         return int(line.split()[1]) / (1024**2)
-    except Exception:  # noqa: BLE001 — safe fallback: any detection failure uses conservative default
+    except Exception:
         return _FALLBACK_RAM_GB
     return _FALLBACK_RAM_GB
 
@@ -61,7 +61,7 @@ def _get_available_ram_gb(total_ram_gb: float) -> float:
                 for line in f:
                     if line.startswith("MemAvailable:"):
                         return int(line.split()[1]) / (1024**2)
-    except Exception:  # noqa: BLE001 — safe fallback: any detection failure uses conservative default
+    except Exception:
         return total_ram_gb * 0.5
     return total_ram_gb * 0.5
 

@@ -178,7 +178,7 @@ def query_snowflake_history(
         )
         response.raise_for_status()
         body = response.json()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {"source": "snowflake", "available": False, "error": str(err), "rows": []}
 
     rows = _normalize_rows(body)[:effective_limit]

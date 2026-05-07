@@ -209,7 +209,7 @@ class TestAssistantOutputRendering:
         captured_errors: list[BaseException] = []
 
         class _Boom:
-            def invoke_stream(self, prompt: str) -> Iterator[str]:  # noqa: ARG002
+            def invoke_stream(self, _prompt: str) -> Iterator[str]:
                 raise RuntimeError("upstream 503")
                 yield  # pragma: no cover  -- generator marker
 
@@ -322,11 +322,11 @@ class TestStreamingMigration:
         calls: list[str] = []
 
         class _Recording:
-            def invoke(self, prompt: str) -> Any:  # noqa: ARG002
+            def invoke(self, _prompt: str) -> Any:
                 calls.append("invoke")
                 raise AssertionError("cli_agent must not call invoke after streaming migration")
 
-            def invoke_stream(self, prompt: str) -> Iterator[str]:  # noqa: ARG002
+            def invoke_stream(self, _prompt: str) -> Iterator[str]:
                 calls.append("invoke_stream")
                 yield "ok"
 

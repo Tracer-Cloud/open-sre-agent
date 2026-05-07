@@ -295,7 +295,7 @@ def test_run_one_turn_reports_slash_dispatch_error(monkeypatch: pytest.MonkeyPat
     from app.cli.interactive_shell.session import ReplSession
 
     class _Prompt:
-        async def prompt_async(self, prompt: object) -> str:  # noqa: ARG002
+        async def prompt_async(self, _prompt: object) -> str:
             return "/boom"
 
     captured_errors: list[BaseException] = []

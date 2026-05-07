@@ -110,7 +110,7 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         if poller_task is not None:
             poller_task.cancel()
             with suppress(asyncio.CancelledError):
-                await poller_task  # noqa: B018  -- intentional await for clean shutdown
+                await poller_task
 
 
 app = FastAPI(
@@ -631,7 +631,7 @@ def _check_llm_connectivity() -> DeepHealthCheck:
             status="passed",
             detail=f"Connected to Bedrock in {region}.",
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return DeepHealthCheck(
             name="Bedrock connectivity",
             status="failed",

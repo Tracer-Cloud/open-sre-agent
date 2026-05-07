@@ -30,9 +30,9 @@ class _TestIdType(click.ParamType):
 
     def shell_complete(
         self,
-        ctx: click.Context,  # noqa: ARG002
-        param: click.Parameter,  # noqa: ARG002
-        incomplete: str,  # noqa: ARG002
+        _ctx: click.Context,
+        _param: click.Parameter,
+        incomplete: str,
     ) -> list[click.shell_completion.CompletionItem]:
         try:
             from app.cli.tests.discover import load_test_catalog
@@ -43,7 +43,7 @@ class _TestIdType(click.ParamType):
                 for item in catalog.all_items()
                 if item.id.startswith(incomplete) and item.is_runnable
             ]
-        except Exception:  # noqa: BLE001
+        except Exception:
             return []
 
 

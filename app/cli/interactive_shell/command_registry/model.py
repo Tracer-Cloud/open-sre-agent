@@ -225,7 +225,7 @@ def parse_model_set_args(args: list[str]) -> tuple[str, str | None, str | None]:
     return provider, reasoning_model, toolcall_model
 
 
-def _cmd_model(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_model(session: ReplSession, console: Console, args: list[str]) -> bool:
     sub = (args[0].lower() if args else "show").strip()
 
     if sub == "show":

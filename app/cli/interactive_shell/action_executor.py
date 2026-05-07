@@ -185,7 +185,7 @@ def run_shell_command(
             timeout_seconds=SHELL_COMMAND_TIMEOUT_SECONDS,
             max_output_chars=_MAX_COMMAND_OUTPUT_CHARS,
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         report_exception(exc, context="interactive_shell.shell_command.start")
         console.print(f"[red]command failed to start:[/red] {escape(str(exc))}")
         session.record("shell", command, ok=False)
@@ -232,7 +232,7 @@ def run_cd_command(command: str, session: ReplSession, console: Console) -> None
     target = Path(tokens[1]).expanduser() if len(tokens) == 2 else Path.home()
     try:
         os.chdir(target)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         console.print(f"[red]cd failed:[/red] {escape(str(exc))}")
         session.record("shell", command, ok=False)
         return
@@ -303,7 +303,7 @@ def run_sample_alert(
             console.print(f"[yellow]suggestion:[/yellow] {escape(exc.suggestion)}")
         session.record("alert", f"sample:{template_name}", ok=False)
         return
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         task.mark_failed(str(exc))
         report_exception(exc, context="interactive_shell.sample_alert")
         console.print(f"[red]investigation failed:[/red] {escape(str(exc))}")
@@ -353,12 +353,12 @@ def run_synthetic_test(
         max_size=_SYNTHETIC_DIAG_CHARS * 2
     )
     try:
-        proc = subprocess.Popen(  # noqa: S603 - argv is trusted interpreter path + module
+        proc = subprocess.Popen(
             [sys.executable, "-m", "app.cli", "tests", "synthetic"],
             stdout=subprocess.DEVNULL,
             stderr=stderr_buf,
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         stderr_buf.close()
         task.mark_failed(str(exc))
         report_exception(exc, context="interactive_shell.synthetic_test.start")

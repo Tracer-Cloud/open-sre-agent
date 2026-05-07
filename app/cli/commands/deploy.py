@@ -48,7 +48,7 @@ def _get_deployment_status() -> dict[str, str]:
             "instance_id": outputs.get("InstanceId", ""),
             "port": outputs.get("ServerPort", "8080"),
         }
-    except (FileNotFoundError, Exception):  # noqa: BLE001
+    except (FileNotFoundError, Exception):
         return {}
 
 
@@ -271,7 +271,7 @@ def _check_deploy_health(status: dict[str, str], console: Any) -> None:
         )
     except TimeoutError:
         console.print(f"  [red]Timeout[/red]  could not reach {ip}:{port}")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         console.print(f"  [red]Unhealthy[/red]  {exc}")
 
 

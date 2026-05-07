@@ -163,7 +163,7 @@ def validate_posthog_config(config: PostHogConfig) -> PostHogValidationResult:
             else f"HTTP {err.response.status_code}"
         )
         return PostHogValidationResult(ok=False, detail=detail)
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return PostHogValidationResult(ok=False, detail=str(err))
 
 

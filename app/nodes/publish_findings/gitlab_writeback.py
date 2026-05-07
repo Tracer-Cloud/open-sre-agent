@@ -50,5 +50,5 @@ def post_gitlab_mr_writeback(state: InvestigationState, report: str) -> None:
             body=_build_mr_note(report),
         )
         logger.info("[publish] GitLab MR note posted: project=%s mr_iid=%s", project_id, mr_iid)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("[publish] GitLab MR write-back failed: %s", exc)

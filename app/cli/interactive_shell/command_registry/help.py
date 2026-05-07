@@ -10,7 +10,7 @@ from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
 
 
-def _cmd_help(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_help(_session: ReplSession, console: Console, _args: list[str]) -> bool:
     # Import after the registry is fully assembled (avoids circular import at module load).
     from app.cli.interactive_shell.command_registry import SLASH_COMMANDS
 

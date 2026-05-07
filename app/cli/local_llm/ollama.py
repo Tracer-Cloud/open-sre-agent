@@ -41,7 +41,7 @@ def install(console: Console) -> bool:
         console.print(f"Will run: [bold]{cmd}[/bold]")
         if not questionary.confirm("Proceed?", default=True).ask():
             return False
-        result = subprocess.run(cmd, shell=True, check=False)  # noqa: S602
+        result = subprocess.run(cmd, shell=True, check=False)
         return result.returncode == 0
 
     elif sys.platform == "win32":
@@ -59,7 +59,7 @@ def is_server_running(host: str = DEFAULT_OLLAMA_HOST) -> bool:
 
 
 def start_server() -> subprocess.Popen:  # type: ignore[type-arg]
-    return subprocess.Popen(  # noqa: S603, S607
+    return subprocess.Popen(
         ["ollama", "serve"],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -99,5 +99,5 @@ def pull_model(model: str, console: Console, host: str = DEFAULT_OLLAMA_HOST) ->
     with console.status(
         f"Downloading [bold]{model}[/bold] (this may take a few minutes)...", spinner="dots"
     ):
-        result = subprocess.run(["ollama", "pull", model], check=False)  # noqa: S603, S607
+        result = subprocess.run(["ollama", "pull", model], check=False)
     return result.returncode == 0

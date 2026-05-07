@@ -105,7 +105,7 @@ class SplunkClient:
                 "success": False,
                 "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return {"success": False, "error": str(exc)}
 
         logs = self._parse_export_response(response.text)
@@ -170,7 +170,7 @@ class SplunkClient:
                 "success": False,
                 "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return {"success": False, "error": str(exc)}
 
     def probe_access(self) -> ProbeResult:

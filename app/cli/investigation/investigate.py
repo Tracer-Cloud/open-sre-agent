@@ -258,7 +258,7 @@ def _run_session_alert_payload(
                 loop.run_until_complete(task)
             except asyncio.CancelledError:
                 event_queue.put(KeyboardInterrupt("investigation cancelled"))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             event_queue.put(exc)
         finally:
             event_queue.put(None)

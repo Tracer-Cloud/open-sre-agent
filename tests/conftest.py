@@ -30,7 +30,7 @@ def _disable_system_keyring(monkeypatch) -> None:
     monkeypatch.setenv("OPENSRE_DISABLE_KEYRING", "1")
 
 
-def pytest_configure(config):  # noqa: ARG001
+def pytest_configure(config):
     """Pytest hook — keep env available for collection and execution."""
     _load_env()
     _disable_sentry()

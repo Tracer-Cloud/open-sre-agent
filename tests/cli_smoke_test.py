@@ -334,7 +334,7 @@ def _run_cli_pty(
 
 
 class _ReleaseHandler(BaseHTTPRequestHandler):
-    def do_GET(self) -> None:  # noqa: N802
+    def do_GET(self) -> None:
         payload = json.dumps({"tag_name": "v9999.0.0"}).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "application/json")

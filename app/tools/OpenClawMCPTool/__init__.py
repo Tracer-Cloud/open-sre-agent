@@ -181,7 +181,7 @@ def list_openclaw_bridge_tools(
 
     try:
         tools = list_openclaw_mcp_tools(config)
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         payload = _openclaw_unavailable_response(describe_openclaw_error(err, config))
         payload["tools"] = []
         return payload
@@ -259,7 +259,7 @@ def search_openclaw_conversations(
 
     try:
         result = invoke_openclaw_mcp_tool(config, "conversations_list", arguments)
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         payload = _openclaw_unavailable_response(describe_openclaw_error(err, config))
         payload["conversations"] = []
         return payload
@@ -338,7 +338,7 @@ def call_openclaw_bridge_tool(
 
     try:
         result = invoke_openclaw_mcp_tool(config, normalized_tool_name, arguments or {})
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return _openclaw_unavailable_response(
             describe_openclaw_error(err, config),
             tool_name=normalized_tool_name,

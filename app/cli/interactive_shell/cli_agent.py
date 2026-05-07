@@ -312,7 +312,7 @@ def answer_cli_agent(
     """
     try:
         from app.services.llm_client import get_llm_for_reasoning
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         report_exception(exc, context="interactive_shell.cli_agent.import")
         console.print(f"[red]LLM client unavailable:[/red] {escape(str(exc))}")
         return
@@ -338,7 +338,7 @@ def answer_cli_agent(
     except KeyboardInterrupt:
         console.print("[dim]· cancelled[/dim]")
         return
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         report_exception(exc, context="interactive_shell.cli_agent.stream")
         console.print(f"[red]assistant failed:[/red] {escape(str(exc))}")
         return

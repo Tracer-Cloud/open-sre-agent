@@ -17,7 +17,7 @@ from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD, TERMINAL_ERROR
 
 
-def _cmd_integrations(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_integrations(session: ReplSession, console: Console, args: list[str]) -> bool:
     sub = (args[0].lower() if args else "list").strip()
 
     if sub in ("list", "ls"):
@@ -67,7 +67,7 @@ def _cmd_integrations(session: ReplSession, console: Console, args: list[str]) -
     return True
 
 
-def _cmd_mcp(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_mcp(_session: ReplSession, console: Console, args: list[str]) -> bool:
     sub = (args[0].lower() if args else "list").strip()
 
     if sub in ("list", "ls"):
@@ -93,7 +93,7 @@ def _cmd_mcp(session: ReplSession, console: Console, args: list[str]) -> bool:  
     return True
 
 
-def _cmd_list(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_list(_session: ReplSession, console: Console, args: list[str]) -> bool:
     sub = (args[0].lower() if args else "").strip()
 
     if sub in ("integrations", "integration", "int"):

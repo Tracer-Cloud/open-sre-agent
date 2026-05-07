@@ -132,7 +132,7 @@ class ShellCompleter(Completer):
     def get_completions(
         self,
         document: Document,
-        complete_event: CompleteEvent,  # noqa: ARG002 - required by prompt_toolkit protocol
+        complete_event: CompleteEvent,
     ) -> Iterable[Completion]:
         text = document.text_before_cursor
         if not text:
@@ -330,7 +330,7 @@ def _run_new_alert(
             console.print(f"[yellow]suggestion:[/yellow] {escape(exc.suggestion)}")
         session.record("alert", text, ok=False)
         return
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         task.mark_failed(str(exc))
         report_exception(exc, context="interactive_shell.new_alert")
         # Exception repr may contain brackets (stack frame refs, config
@@ -376,7 +376,7 @@ async def _run_one_turn(
         cmd_text = text if text.startswith("/") else f"/{text}"
         try:
             should_continue = dispatch_slash(cmd_text, session, console)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             report_exception(exc, context="interactive_shell.slash_dispatch")
             console.print(
                 f"[{TERMINAL_ERROR}]command error:[/] {escape(str(exc))}"
@@ -429,7 +429,7 @@ async def _run_one_turn(
     return True
 
 
-async def _repl_main(initial_input: str | None = None, config: ReplConfig | None = None) -> int:  # noqa: ARG001
+async def _repl_main(initial_input: str | None = None, _config: ReplConfig | None = None) -> int:
     # force_terminal + truecolor so Rich always emits full ANSI, even after
     # prompt_toolkit has claimed and released stdout for input handling.
     # Without this, slash-command output after the first prompt renders as
@@ -504,7 +504,7 @@ def run_repl(initial_input: str | None = None, config: ReplConfig | None = None)
         return 0
 
     try:
-        return asyncio.run(_repl_main(initial_input=initial_input, config=cfg))
+        return asyncio.run(_repl_main(initial_input=initial_input, _config=cfg))
     except (EOFError, KeyboardInterrupt):
         return 0
 

@@ -109,7 +109,7 @@ def validate_bitbucket_config(
             )
         finally:
             client.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return BitbucketValidationResult(ok=False, detail=f"Bitbucket connection failed: {err}")
 
 
@@ -156,7 +156,7 @@ def list_commits(
             }
         finally:
             client.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {"source": "bitbucket", "available": False, "error": str(err)}
 
 
@@ -192,7 +192,7 @@ def get_file_contents(
             }
         finally:
             client.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {"source": "bitbucket", "available": False, "error": str(err)}
 
 
@@ -242,5 +242,5 @@ def search_code(
             }
         finally:
             client.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {"source": "bitbucket", "available": False, "error": str(err)}

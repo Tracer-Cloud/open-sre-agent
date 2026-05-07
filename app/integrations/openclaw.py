@@ -504,7 +504,7 @@ def validate_openclaw_config(config: OpenClawConfig) -> OpenClawValidationResult
             ),
             tool_names=tool_names,
         )
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return OpenClawValidationResult(
             ok=False,
             detail=f"OpenClaw MCP validation failed: {describe_openclaw_error(err, config)}",

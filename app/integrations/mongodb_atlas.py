@@ -132,7 +132,7 @@ def validate_mongodb_atlas_config(
             ok=False,
             detail=f"Atlas API returned {err.response.status_code}: {err.response.text[:200]}",
         )
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return MongoDBAtlasValidationResult(ok=False, detail=f"Atlas connection failed: {err}")
 
 
@@ -198,7 +198,7 @@ def get_clusters(config: MongoDBAtlasConfig) -> dict[str, Any]:
             }
         finally:
             client.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {"source": "mongodb_atlas", "available": False, "error": str(err)}
 
 
@@ -246,7 +246,7 @@ def get_alerts(
             }
         finally:
             client.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {"source": "mongodb_atlas", "available": False, "error": str(err)}
 
 
@@ -382,7 +382,7 @@ def get_cluster_metrics(
             }
         finally:
             client.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {"source": "mongodb_atlas", "available": False, "error": str(err)}
 
 
@@ -465,7 +465,7 @@ def get_performance_advisor(
             }
         finally:
             client.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {"source": "mongodb_atlas", "available": False, "error": str(err)}
 
 
@@ -517,5 +517,5 @@ def get_cluster_events(
             }
         finally:
             client.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {"source": "mongodb_atlas", "available": False, "error": str(err)}
