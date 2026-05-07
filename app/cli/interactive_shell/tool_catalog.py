@@ -63,10 +63,11 @@ class ToolCatalogEntry:
     """One-line description from the tool's metadata, trimmed for display."""
 
     source_file: str
-    """Path relative to the repo root (forward slashes), e.g.
-    ``"app/tools/run_diagnostic_code.py"``. Empty string if the tool's source
-    cannot be located on disk (defensive: an installed-package tool that
-    somehow registered without a discoverable file)."""
+    """Repo-relative path (forward slashes) when ``__file__`` lives under the
+    checkout root, otherwise the resolved absolute POSIX path when the defining
+    module is outside the repo (e.g. an installed editable or site-packages
+    shim). Empty string only when ``origin_module`` is missing, import fails,
+    or the loaded module exposes no ``__file__``."""
 
     input_schema_summary: str
     """One-line render of top-level params, e.g.

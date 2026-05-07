@@ -114,7 +114,7 @@ def _cmd_list(session: ReplSession, console: Console, args: list[str]) -> bool: 
         if not catalog:
             console.print("[dim]no tools registered.[/dim]")
             return True
-        console.print(format_tool_catalog_text(catalog))
+        console.print(escape(format_tool_catalog_text(catalog)))
         return True
 
     if sub and sub not in ("", "all"):

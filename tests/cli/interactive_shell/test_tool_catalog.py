@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import io
 from collections.abc import Iterator
+from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
@@ -154,6 +156,18 @@ class TestBuildToolCatalog:
         assert len(entries) == 1
         assert entries[0].source_file == ""
 
+    def test_origin_module_outside_repo_returns_absolute_source_path(
+        self, fake_registry: list[RegisteredTool], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        outside = Path("/virtual/site-packages/some_pkg/plugin.py")
+        fake_mod = SimpleNamespace(__file__=str(outside))
+
+        monkeypatch.setattr(tool_catalog.importlib, "import_module", lambda _: fake_mod)
+        fake_registry.append(_make_tool("ext_tool", origin_module="some_pkg.plugin"))
+        entries = build_tool_catalog()
+        assert len(entries) == 1
+        assert entries[0].source_file == outside.as_posix()
+
 
 class TestFormatToolCatalogText:
     def test_returns_empty_string_for_empty_catalog(self) -> None:
@@ -245,6 +259,26 @@ class TestListToolsSlashCommand:
         assert "search_github" in out
         assert "## investigation" in out
         assert "## chat" in out
+
+    def test_list_tools_escapes_rich_markup_from_tool_metadata(self) -> None:
+        console, buf = self._capture()
+        session = ReplSession()
+        fake = [
+            ToolCatalogEntry(
+                name="risky_tool",
+                surfaces=("investigation",),
+                description="Payload [bold]injection[/bold] attempt",
+                source_file="app/tools/risky.py",
+                input_schema_summary="x: string",
+            )
+        ]
+        with patch(
+            "app.cli.interactive_shell.command_registry.integrations.build_tool_catalog",
+            return_value=fake,
+        ):
+            assert _cmd_list(session, console, ["tools"]) is True
+        out = buf.getvalue()
+        assert "[bold]injection[/bold]" in out
 
     def test_list_tools_handles_empty_registry(self) -> None:
         console, buf = self._capture()
