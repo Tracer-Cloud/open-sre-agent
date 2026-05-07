@@ -1,6 +1,8 @@
 """Deterministic remediation step fallbacks keyed on root_cause_category."""
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 _TEMPLATES: dict[str, list[tuple[str, str | None]]] = {
     "resource_exhaustion": [
         ("Identify the saturated resource (memory, CPU, connections, storage) from the evidence", None),
@@ -45,7 +47,7 @@ _TEMPLATES: dict[str, list[tuple[str, str | None]]] = {
 }
 
 
-def get_template_steps(category: str, available_sources: dict[str, object]) -> list[str]:
+def get_template_steps(category: str, available_sources: Mapping[str, object]) -> list[str]:
     """Return filtered remediation steps for the given root_cause_category."""
     entries = _TEMPLATES.get(category, _TEMPLATES["unknown"])
     return [
