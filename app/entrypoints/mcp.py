@@ -11,7 +11,7 @@ from app.cli.support.errors import OpenSREError
 from app.utils.sentry_sdk import capture_exception, init_sentry
 
 load_dotenv(override=False)
-init_sentry()
+init_sentry(entrypoint="mcp")
 
 
 class RunRCAInput(BaseModel):

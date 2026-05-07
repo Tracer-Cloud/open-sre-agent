@@ -28,7 +28,7 @@ def _merge_state(state: AgentState, updates: dict[str, Any]) -> None:
 
 def run_chat(state: AgentState, config: NodeConfig | None = None) -> AgentState:
     """Run chat routing + response without LangGraph (for testing)."""
-    init_sentry()
+    init_sentry(entrypoint="graph_pipeline")
     cfg = config or {"configurable": {}}
     try:
         _merge_state(state, router_node(state))
@@ -58,7 +58,7 @@ def run_investigation(
             node_resolve_integrations is skipped — useful for synthetic testing where a
             FixtureGrafanaBackend should be injected without real credential resolution.
     """
-    init_sentry()
+    init_sentry(entrypoint="graph_pipeline")
     from app.pipeline.graph import graph as compiled_graph  # lazy to avoid circular import
 
     initial = make_initial_state(
@@ -91,7 +91,7 @@ async def astream_investigation(
     ``StreamRenderer``, so local and remote investigations share the
     same terminal UX.
     """
-    init_sentry()
+    init_sentry(entrypoint="graph_pipeline")
     from app.pipeline.graph import graph as compiled_graph  # lazy to avoid circular import
 
     initial = make_initial_state(
@@ -138,7 +138,7 @@ def _map_langgraph_event(event: dict[str, Any]) -> StreamEvent:
 @dataclass
 class SimpleAgent:
     def invoke(self, state: AgentState, config: NodeConfig | None = None) -> AgentState:
-        init_sentry()
+        init_sentry(entrypoint="graph_pipeline")
         from app.pipeline.graph import graph as compiled_graph  # lazy to avoid circular import
 
         cfg = config or {"configurable": {}}
