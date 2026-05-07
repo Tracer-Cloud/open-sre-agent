@@ -16,10 +16,10 @@ from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.lexers import Lexer
 from prompt_toolkit.styles import Style
 from rich.console import Console
+from rich.live import Live
 from rich.markup import escape
 from rich.rule import Rule
 from rich.spinner import Spinner
-from rich.live import Live
 
 from app.analytics.cli import capture_terminal_turn_summarized
 from app.cli.interactive_shell.agent_actions import execute_cli_actions_with_metrics
@@ -465,7 +465,9 @@ async def _repl_main(initial_input: str | None = None, config: ReplConfig | None
                 session.record("cli_help", stripped)
                 _print_turn_separator(console)
             elif kind == "cli_agent":
-                turn = _run_with_spinner(console, execute_cli_actions_with_metrics, stripped, session, console)
+                turn = _run_with_spinner(
+                    console, execute_cli_actions_with_metrics, stripped, session, console
+                )
                 fallback_to_llm = not turn.handled
                 snapshot = session.record_terminal_turn(
                     executed_count=turn.executed_count,
