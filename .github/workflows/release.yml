@@ -415,6 +415,7 @@ jobs:
           } > RELEASE_NOTES.md
 
       - name: Create GitHub release
+        id: github_release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
@@ -427,6 +428,7 @@ jobs:
           target_sha="$(git rev-parse "origin/$default_branch")"
 
           if gh release view "$TAG_NAME" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "created=false" >> "$GITHUB_OUTPUT"
             echo "Release $TAG_NAME already exists; nothing to do."
             exit 0
           fi
@@ -438,70 +440,131 @@ jobs:
             --title "Latest" \
             --notes-file RELEASE_NOTES.md
 
-      - name: Sync Homebrew tap formula
+          echo "created=true" >> "$GITHUB_OUTPUT"
+
+      - name: Announce on Discord
+        if: ${{ steps.github_release.outputs.created == 'true' && !github.event.repository.fork && !github.event.repository.private }}
+        continue-on-error: true
         env:
-          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          DISCORD_WEBHOOK_URL_UPDATE: ${{ secrets.DISCORD_WEBHOOK_URL_UPDATE }}
+          DISCORD_RELEASES_ROLE_ID: ${{ secrets.DISCORD_RELEASES_ROLE_ID }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag_name }}
+          RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.prepare.outputs.tag_name }}
+          REPO_STARS: ${{ github.event.repository.stargazers_count }}
+          REPO_FORKS: ${{ github.event.repository.forks_count }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
 
-          if [ -z "${HOMEBREW_TAP_GITHUB_TOKEN:-}" ]; then
-            echo "::error::HOMEBREW_TAP_GITHUB_TOKEN is required to sync Tracer-Cloud/homebrew-tap."
-            exit 1
-          fi
-
-          TAG_NAME="${{ needs.prepare.outputs.tag_name }}"
-          VERSION="${TAG_NAME#v}"
-          ASSET_DIR="release-assets"
-
-          linux_x64_sha="$(awk '{print $1}' "${ASSET_DIR}/opensre_${VERSION}_linux-x64.tar.gz.sha256")"
-          linux_arm64_sha="$(awk '{print $1}' "${ASSET_DIR}/opensre_${VERSION}_linux-arm64.tar.gz.sha256")"
-          darwin_x64_sha="$(awk '{print $1}' "${ASSET_DIR}/opensre_${VERSION}_darwin-x64.tar.gz.sha256")"
-          darwin_arm64_sha="$(awk '{print $1}' "${ASSET_DIR}/opensre_${VERSION}_darwin-arm64.tar.gz.sha256")"
-
-          tap_dir="$(mktemp -d)/homebrew-tap"
-          git clone "https://x-access-token:${HOMEBREW_TAP_GITHUB_TOKEN}@github.com/Tracer-Cloud/homebrew-tap.git" "$tap_dir"
-
-          python - "$tap_dir/Formula/opensre.rb" "$VERSION" "$darwin_arm64_sha" "$darwin_x64_sha" "$linux_arm64_sha" "$linux_x64_sha" <<'PY'
-          from __future__ import annotations
-
-          import re
-          import sys
-          from pathlib import Path
-
-          formula_path = Path(sys.argv[1])
-          version = sys.argv[2]
-          darwin_arm64_sha = sys.argv[3]
-          darwin_x64_sha = sys.argv[4]
-          linux_arm64_sha = sys.argv[5]
-          linux_x64_sha = sys.argv[6]
-
-          text = formula_path.read_text()
-          text = re.sub(r'version "[^"]+"', f'version "{version}"', text, count=1)
-          replacements = {
-              r'(opensre_#\{version\}_darwin-arm64\.tar\.gz"\n\s*sha256 ")[^"]+(")': darwin_arm64_sha,
-              r'(opensre_#\{version\}_darwin-x64\.tar\.gz"\n\s*sha256 ")[^"]+(")': darwin_x64_sha,
-              r'(opensre_#\{version\}_linux-arm64\.tar\.gz"\n\s*sha256 ")[^"]+(")': linux_arm64_sha,
-              r'(opensre_#\{version\}_linux-x64\.tar\.gz"\n\s*sha256 ")[^"]+(")': linux_x64_sha,
-          }
-          for pattern, sha in replacements.items():
-              text, count = re.subn(pattern, rf'\g<1>{sha}\g<2>', text, count=1)
-              if count != 1:
-                  raise SystemExit(f"Failed to update checksum with pattern: {pattern}")
-          formula_path.write_text(text)
-          PY
-
-          cd "$tap_dir"
-          if git diff --quiet -- Formula/opensre.rb; then
-            echo "Homebrew tap formula already up to date."
+          if [ -z "${DISCORD_WEBHOOK_URL_UPDATE:-}" ]; then
+            echo "DISCORD_WEBHOOK_URL_UPDATE is not set; skipping Discord announcement."
             exit 0
           fi
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Formula/opensre.rb
-          git commit -m "chore: update opensre formula to ${VERSION}"
-          git push origin HEAD:main
+          RELEASE_BODY="$(cat RELEASE_NOTES.md)"
+
+          role_mention=""
+          if [ -n "${DISCORD_RELEASES_ROLE_ID:-}" ]; then
+            role_mention="<@&${DISCORD_RELEASES_ROLE_ID}>"$'\n'
+          fi
+
+          NOTES="${RELEASE_BODY:-No release notes provided.}"
+          NOTES="$(printf '%s' "$NOTES" | tr -d '\r')"
+          MAX_NOTES_LENGTH=1700
+          if [ "${#NOTES}" -gt "$MAX_NOTES_LENGTH" ]; then
+            NOTES="${NOTES:0:$((MAX_NOTES_LENGTH-3))}..."
+          fi
+
+          payload="$(jq -n \
+            --arg tag "$RELEASE_TAG" \
+            --arg notes "$NOTES" \
+            --arg url "$RELEASE_URL" \
+            --arg stars "${REPO_STARS:-0}" \
+            --arg forks "${REPO_FORKS:-0}" \
+            --arg mention "$role_mention" \
+            '{
+              content: (
+                $mention
+                + "🚀 **opensre `" + $tag + "` is live**\n"
+                + "🔗 " + $url + "\n"
+                + "⭐ " + $stars + " stars • 🍴 " + $forks + " forks\n\n"
+                + "**Release Notes**\n"
+                + $notes
+              )
+            }'
+          )"
+
+          curl --fail --silent --show-error --max-time 30 \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d "$payload" \
+            "$DISCORD_WEBHOOK_URL_UPDATE"
+
+      # - name: Sync Homebrew tap formula
+      #   env:
+      #     HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+      #   shell: bash
+      #   run: |
+      #     set -euo pipefail
+      #
+      #     if [ -z "${HOMEBREW_TAP_GITHUB_TOKEN:-}" ]; then
+      #       echo "::error::HOMEBREW_TAP_GITHUB_TOKEN is required to sync Tracer-Cloud/homebrew-tap."
+      #       exit 1
+      #     fi
+      #
+      #     TAG_NAME="${{ needs.prepare.outputs.tag_name }}"
+      #     VERSION="${TAG_NAME#v}"
+      #     ASSET_DIR="release-assets"
+      #
+      #     linux_x64_sha="$(awk '{print $1}' "${ASSET_DIR}/opensre_${VERSION}_linux-x64.tar.gz.sha256")"
+      #     linux_arm64_sha="$(awk '{print $1}' "${ASSET_DIR}/opensre_${VERSION}_linux-arm64.tar.gz.sha256")"
+      #     darwin_x64_sha="$(awk '{print $1}' "${ASSET_DIR}/opensre_${VERSION}_darwin-x64.tar.gz.sha256")"
+      #     darwin_arm64_sha="$(awk '{print $1}' "${ASSET_DIR}/opensre_${VERSION}_darwin-arm64.tar.gz.sha256")"
+      #
+      #     tap_dir="$(mktemp -d)/homebrew-tap"
+      #     git clone "https://x-access-token:${HOMEBREW_TAP_GITHUB_TOKEN}@github.com/Tracer-Cloud/homebrew-tap.git" "$tap_dir"
+      #
+      #     python - "$tap_dir/Formula/opensre.rb" "$VERSION" "$darwin_arm64_sha" "$darwin_x64_sha" "$linux_arm64_sha" "$linux_x64_sha" <<'PY'
+      #     from __future__ import annotations
+      #
+      #     import re
+      #     import sys
+      #     from pathlib import Path
+      #
+      #     formula_path = Path(sys.argv[1])
+      #     version = sys.argv[2]
+      #     darwin_arm64_sha = sys.argv[3]
+      #     darwin_x64_sha = sys.argv[4]
+      #     linux_arm64_sha = sys.argv[5]
+      #     linux_x64_sha = sys.argv[6]
+      #
+      #     text = formula_path.read_text()
+      #     text = re.sub(r'version "[^"]+"', f'version "{version}"', text, count=1)
+      #     replacements = {
+      #         r'(opensre_#\{version\}_darwin-arm64\.tar\.gz"\n\s*sha256 ")[^"]+(")': darwin_arm64_sha,
+      #         r'(opensre_#\{version\}_darwin-x64\.tar\.gz"\n\s*sha256 ")[^"]+(")': darwin_x64_sha,
+      #         r'(opensre_#\{version\}_linux-arm64\.tar\.gz"\n\s*sha256 ")[^"]+(")': linux_arm64_sha,
+      #         r'(opensre_#\{version\}_linux-x64\.tar\.gz"\n\s*sha256 ")[^"]+(")': linux_x64_sha,
+      #     }
+      #     for pattern, sha in replacements.items():
+      #         text, count = re.subn(pattern, rf'\g<1>{sha}\g<2>', text, count=1)
+      #         if count != 1:
+      #             raise SystemExit(f"Failed to update checksum with pattern: {pattern}")
+      #     formula_path.write_text(text)
+      #     PY
+      #
+      #     cd "$tap_dir"
+      #     if git diff --quiet -- Formula/opensre.rb; then
+      #       echo "Homebrew tap formula already up to date."
+      #       exit 0
+      #     fi
+      #
+      #     git config user.name "github-actions[bot]"
+      #     git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      #     git add Formula/opensre.rb
+      #     git commit -m "chore: update opensre formula to ${VERSION}"
+      #     git push origin HEAD:main
 
   publish-main-release:
     if: needs.prepare.outputs.channel == 'main'

@@ -14,7 +14,7 @@ def test_main_initialises_sentry_and_emits_cli_invoked(
     init_calls: list[int] = []
     captured: list[dict[str, object] | None] = []
 
-    monkeypatch.setattr(wizard_main, "init_sentry", lambda: init_calls.append(1))
+    monkeypatch.setattr(wizard_main, "init_sentry", lambda **_kw: init_calls.append(1))
     monkeypatch.setattr(wizard_main, "shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr(
         wizard_main,
@@ -46,7 +46,7 @@ def test_main_flushes_analytics_even_when_wizard_raises(
 ) -> None:
     flush_calls: list[bool] = []
 
-    monkeypatch.setattr(wizard_main, "init_sentry", lambda: None)
+    monkeypatch.setattr(wizard_main, "init_sentry", lambda **_kw: None)
     monkeypatch.setattr(wizard_main, "capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr(wizard_main, "capture_cli_invoked", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
@@ -72,7 +72,7 @@ def test_main_treats_abort_as_clean_cancel(
 ) -> None:
     flush_calls: list[bool] = []
 
-    monkeypatch.setattr(wizard_main, "init_sentry", lambda: None)
+    monkeypatch.setattr(wizard_main, "init_sentry", lambda **_kw: None)
     monkeypatch.setattr(wizard_main, "capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr(wizard_main, "capture_cli_invoked", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
@@ -98,7 +98,7 @@ def test_main_treats_keyboard_interrupt_as_clean_cancel(
 ) -> None:
     flush_calls: list[bool] = []
 
-    monkeypatch.setattr(wizard_main, "init_sentry", lambda: None)
+    monkeypatch.setattr(wizard_main, "init_sentry", lambda **_kw: None)
     monkeypatch.setattr(wizard_main, "capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr(wizard_main, "capture_cli_invoked", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(

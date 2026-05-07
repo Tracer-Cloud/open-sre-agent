@@ -1,0 +1,11 @@
+{
+  "name": "opensre-dev",
+  "private": true,
+  "description": "Dev tooling for OpenSRE (not a published package).",
+  "scripts": {
+    "regen-splash": "node scripts/regen_splash.js"
+  },
+  "devDependencies": {
+    "oh-my-logo": "^0.4.0"
+  }
+}

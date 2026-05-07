@@ -97,7 +97,7 @@ def render_error(
          Run `opensre doctor` to diagnose       ← TEXT_DIM (hint)
     """
     # Lazy import avoids circular dependency: errors ← interactive_shell ← errors.
-    from app.cli.interactive_shell.theme import (  # noqa: PLC0415
+    from app.cli.interactive_shell.theme import (
         ACCENT_DIM,
         BORDER,
         ERROR,

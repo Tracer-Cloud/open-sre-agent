@@ -16,7 +16,7 @@ _ENTRYPOINT = "python -m app.cli.wizard"
 
 def main() -> int:
     load_dotenv(override=False)
-    init_sentry()
+    init_sentry(entrypoint="wizard")
     install_questionary_escape_cancel()
 
     capture_first_run_if_needed()

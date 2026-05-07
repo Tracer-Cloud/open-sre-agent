@@ -43,6 +43,7 @@ def test_legacy_integration_health_import_surface_still_exports_validators() -> 
         "validate_jira_integration",
         "validate_notion_integration",
         "validate_openclaw_integration",
+        "validate_opensearch_integration",
         "validate_opsgenie_integration",
         "validate_sentry_integration",
         "validate_slack_webhook",

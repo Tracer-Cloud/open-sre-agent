@@ -130,6 +130,22 @@ def _with_ctrl_c_double_exit(
                 print("\n(Press Ctrl+C again to exit)", flush=True)
                 # Loop: re-run the same application (Application.run() is
                 # safe to call again after a clean exit or KeyboardInterrupt).
+            except (OSError, KeyError) as exc:
+                # The event loop / selector can fail on platforms where
+                # epoll or select cannot handle terminal file descriptors.
+                # Bail out with a clear message instead of a cryptic
+                # traceback.
+                import logging
+
+                logging.getLogger(__name__).debug(
+                    "interactive prompt selector error: %s", exc, exc_info=True
+                )
+                print(
+                    "\nThe interactive prompt could not be displayed due to a "
+                    "terminal I/O error on this platform.",
+                    flush=True,
+                )
+                sys.exit(1)
 
     question.ask = _patched_ask  # type: ignore[method-assign]
     return question

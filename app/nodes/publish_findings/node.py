@@ -163,7 +163,8 @@ def generate_report(state: InvestigationState) -> dict:
 @traceable(name="node_publish_findings")
 def node_publish_findings(
     state: InvestigationState,
-    config: NodeConfig | None = None,  # noqa: ARG001
+    config: NodeConfig | None = None,
 ) -> dict:
     """LangGraph node wrapper with LangSmith tracking."""
+    del config
     return generate_report(state)

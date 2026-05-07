@@ -34,6 +34,7 @@ from app.cli.wizard.integration_health import IntegrationHealthResult
 from app.cli.wizard.probes import ProbeResult, probe_local_target, probe_remote_target
 from app.cli.wizard.prompts import select as select_prompt
 from app.cli.wizard.store import get_store_path, load_local_config, save_local_config
+from app.cli.wizard.validation import build_demo_action_response as _build_demo_action_response
 from app.integrations.llm_cli.binary_resolver import diagnose_binary_path
 from app.integrations.store import get_integration, remove_integration, upsert_integration
 from app.llm_credentials import (
@@ -58,6 +59,17 @@ _ASCII_HEADER = """\
 | | | | |_) |  _| |  \\| \\___ \\| |_) |  _|
 | |_| |  __/| |___| |\\  |___) |  _ <| |___
  \\___/|_|   |_____|_| \\_|____/|_| \\_\\_____|"""
+
+
+# Re-export build_demo_action_response from validation as a stable module-level
+# attribute. The wrapper indirection (instead of `from x import y`) is
+# preserved so the function remains patchable via monkeypatch.setattr(flow,
+# "build_demo_action_response", ...) — but we also keep the underlying import
+# at module load time so the attribute exists immediately, even in CI parallel
+# test workers where lazy imports inside the wrapper occasionally fail to
+# materialize on first access.
+def build_demo_action_response():
+    return _build_demo_action_response()
 
 
 def validate_grafana_integration(**kwargs):
@@ -159,6 +171,12 @@ def validate_betterstack_integration(**kwargs):
 
 def validate_alertmanager_integration(**kwargs):
     from app.cli.wizard.integration_health import validate_alertmanager_integration as _validate
+
+    return _validate(**kwargs)
+
+
+def validate_opensearch_integration(**kwargs):
+    from app.cli.wizard.integration_health import validate_opensearch_integration as _validate
 
     return _validate(**kwargs)
 
@@ -1569,6 +1587,101 @@ def _configure_splunk() -> tuple[str, str]:
         _console.print(f"[{TEXT_DIM}]Try again or press Ctrl+C to cancel.[/]")
 
 
+def _configure_opensearch() -> tuple[str, str]:
+    _, credentials = _integration_defaults("opensearch")
+    while True:
+        url = _prompt_value(
+            "OpenSearch URL (e.g. https://my-cluster.us-east-1.es.amazonaws.com)",
+            default=_string_value(credentials.get("url")),
+        )
+        auth_choice = _choose(
+            "Authentication method",
+            [
+                Choice(
+                    value="basic",
+                    label="Username + Password (HTTP Basic Auth)",
+                    hint="Default for self-hosted OpenSearch",
+                ),
+                Choice(
+                    value="api_key",
+                    label="API key",
+                    hint="Native to Elasticsearch and some OpenSearch deployments",
+                ),
+                Choice(
+                    value="none",
+                    label="None (security disabled)",
+                    hint="Clusters without authentication enabled",
+                ),
+            ],
+            default="basic",
+        )
+        api_key = ""
+        username = ""
+        password = ""
+        if auth_choice == "api_key":
+            api_key = _prompt_value(
+                "OpenSearch API key",
+                default=_string_value(credentials.get("api_key")),
+                secret=True,
+            )
+            # Guard against empty api_key reaching the cluster probe.
+            # On a cluster with security disabled the probe would return 200,
+            # silently dropping the user's chosen auth method and persisting
+            # the integration as URL-only.
+            if not api_key:
+                _console.print(
+                    f"[{ERROR}]  {GLYPH_ERROR}  API key is required when using API key authentication.[/]"
+                )
+                continue
+        elif auth_choice == "basic":
+            username = _prompt_value(
+                "OpenSearch username",
+                default=_string_value(credentials.get("username"), "admin"),
+            )
+            password = _prompt_value(
+                "OpenSearch password",
+                default=_string_value(credentials.get("password")),
+                secret=True,
+            )
+            # Guard against half-populated Basic Auth credentials reaching the
+            # cluster probe. ElasticsearchConfig.headers silently drops the
+            # Authorization header when either half is empty, so the agent
+            # would send unauthenticated requests against a security-enabled
+            # cluster and fail with a confusing 401.
+            if not username or not password:
+                _console.print(
+                    f"[{ERROR}]  {GLYPH_ERROR}  Both username and password are required for Basic Auth.[/]"
+                )
+                continue
+        with _console.status("Validating OpenSearch integration...", spinner="dots"):
+            result = validate_opensearch_integration(
+                url=url,
+                api_key=api_key,
+                username=username,
+                password=password,
+            )
+        _render_integration_result("OpenSearch", result)
+        if result.ok:
+            creds: dict[str, str] = {"url": url}
+            if api_key:
+                creds["api_key"] = api_key
+            if username:
+                creds["username"] = username
+                creds["password"] = password
+            upsert_integration("opensearch", {"credentials": creds})
+            env_values: dict[str, str] = {
+                "OPENSEARCH_URL": url,
+            }
+            if api_key:
+                env_values["OPENSEARCH_API_KEY"] = api_key
+            if username:
+                env_values["OPENSEARCH_USERNAME"] = username
+                env_values["OPENSEARCH_PASSWORD"] = password
+            env_path = sync_env_values(env_values)
+            return "OpenSearch", str(env_path)
+        _console.print("[dim]Try again or press Ctrl+C to cancel.[/]")
+
+
 def _configure_selected_integrations() -> tuple[list[str], str | None]:
     configured: list[str] = []
     last_env_path: str | None = None
@@ -1648,6 +1761,11 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         ),
         Choice(value="splunk", label="Splunk", hint="Query logs from Splunk"),
         Choice(
+            value="opensearch",
+            label="OpenSearch / Elasticsearch",
+            hint="Query logs and indices from OpenSearch or Elasticsearch clusters",
+        ),
+        Choice(
             value="skip",
             label="Skip for now",
             hint="Finish onboarding without configuring an integration",
@@ -1681,6 +1799,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "opsgenie": _configure_opsgenie,
         "notion": _configure_notion,
         "openclaw": _configure_openclaw,
+        "opensearch": _configure_opensearch,
         "splunk": _configure_splunk,
     }
     _SERVICE_LABELS = {
@@ -1702,6 +1821,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "opsgenie": "opsgenie",
         "notion": "notion",
         "openclaw": "openclaw",
+        "opensearch": "opensearch",
     }
 
     _step(f"Service · {_SERVICE_LABELS.get(selected_service, selected_service)}")

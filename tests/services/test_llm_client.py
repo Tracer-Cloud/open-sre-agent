@@ -771,7 +771,8 @@ class _NotFoundMessages:
 
 
 class _NotFoundAnthropic:
-    def __init__(self, *, api_key: str, timeout: float) -> None:  # noqa: ARG002
+    def __init__(self, *, api_key: str, timeout: float) -> None:
+        del api_key, timeout
         self.messages = _NotFoundMessages("not-a-real-model-xyz")
 
 

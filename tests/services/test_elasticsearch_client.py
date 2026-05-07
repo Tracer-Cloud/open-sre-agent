@@ -35,6 +35,35 @@ class TestElasticsearchConfig:
         cfg = ElasticsearchConfig(url="http://localhost:9200", api_key="my-key")
         assert cfg.headers["Authorization"] == "ApiKey my-key"
 
+    def test_headers_with_basic_auth(self) -> None:
+        cfg = ElasticsearchConfig(url="http://localhost:9200", username="admin", password="secret")
+        assert cfg.headers["Authorization"] == "Basic YWRtaW46c2VjcmV0"
+
+    def test_headers_api_key_takes_precedence_over_basic_auth(self) -> None:
+        cfg = ElasticsearchConfig(
+            url="http://localhost:9200",
+            api_key="my-key",
+            username="admin",
+            password="secret",
+        )
+        assert cfg.headers["Authorization"] == "ApiKey my-key"
+
+    def test_headers_username_without_password_no_auth(self) -> None:
+        cfg = ElasticsearchConfig(url="http://localhost:9200", username="admin")
+        assert "Authorization" not in cfg.headers
+
+    def test_headers_password_without_username_no_auth(self) -> None:
+        cfg = ElasticsearchConfig(url="http://localhost:9200", password="secret")
+        assert "Authorization" not in cfg.headers
+
+    def test_headers_basic_auth_with_special_characters(self) -> None:
+        cfg = ElasticsearchConfig(
+            url="http://localhost:9200",
+            username="admin",
+            password="p@ss:w/ord",
+        )
+        assert cfg.headers["Authorization"] == "Basic YWRtaW46cEBzczp3L29yZA=="
+
     def test_default_index_pattern(self) -> None:
         cfg = ElasticsearchConfig(url="http://localhost:9200")
         assert cfg.index_pattern == "*"

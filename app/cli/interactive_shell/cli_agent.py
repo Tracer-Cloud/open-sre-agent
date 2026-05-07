@@ -309,6 +309,7 @@ def answer_cli_agent(
 
     For documentation-grounded procedural Q&A use :func:`answer_cli_help`, which
     also pulls relevant ``docs/`` pages into the grounding context.
+
     """
     try:
         from app.services.llm_client import get_llm_for_reasoning
