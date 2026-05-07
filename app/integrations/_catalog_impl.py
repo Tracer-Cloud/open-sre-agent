@@ -1600,8 +1600,20 @@ def _service_metadata(
 
 
 def _raw_credentials(config: dict[str, Any]) -> dict[str, Any]:
-    raw_credentials = config.get("credentials", config)
-    return raw_credentials if isinstance(raw_credentials, dict) else {}
+    credentials = config.get("credentials")
+    if isinstance(credentials, dict):
+        return credentials
+
+    instances = config.get("instances")
+    if isinstance(instances, list):
+        for instance in instances:
+            if not isinstance(instance, dict):
+                continue
+            instance_credentials = instance.get("credentials")
+            if isinstance(instance_credentials, dict):
+                return instance_credentials
+
+    return config
 
 
 def resolve_effective_integrations(

@@ -171,6 +171,23 @@ def _merge_payload(
     return payload
 
 
+def _configured_webhook_url() -> str:
+    """Return the standalone Slack webhook from env or the local integration store."""
+    env_webhook_url = os.getenv("SLACK_WEBHOOK_URL", "").strip()
+    if env_webhook_url:
+        return env_webhook_url
+
+    try:
+        from app.integrations.catalog import resolve_effective_integrations
+
+        slack_integration = resolve_effective_integrations().get("slack") or {}
+        config = slack_integration.get("config") if isinstance(slack_integration, dict) else {}
+        return str(config.get("webhook_url", "") if isinstance(config, dict) else "").strip()
+    except Exception:
+        logger.debug("Failed to resolve Slack webhook from integration store", exc_info=True)
+        return ""
+
+
 def send_slack_report(
     slack_message: str,
     channel: str | None = None,
@@ -184,7 +201,8 @@ def send_slack_report(
 
     When thread context is available, prefers a thread reply to avoid creating
     loops for inbound Slack-triggered investigations. For standalone CLI or
-    local investigations, falls back to SLACK_WEBHOOK_URL if configured.
+    local investigations, falls back to SLACK_WEBHOOK_URL or the local Slack
+    integration store if configured.
 
     Args:
         slack_message: The formatted RCA report text.
@@ -198,7 +216,7 @@ def send_slack_report(
         (success, error_detail) — success is True if posted, error_detail is non-empty on failure.
     """
     if not thread_ts:
-        webhook_url = os.getenv("SLACK_WEBHOOK_URL", "").strip()
+        webhook_url = _configured_webhook_url()
         if webhook_url:
             webhook_ok = _post_via_incoming_webhook(
                 slack_message,
@@ -208,7 +226,7 @@ def send_slack_report(
             )
             return (True, "") if webhook_ok else (False, "webhook=failed")
         logger.debug("[slack] Delivery skipped: no thread_ts (channel=%s)", channel)
-        debug_print("Slack delivery skipped: no thread_ts and no SLACK_WEBHOOK_URL configured.")
+        debug_print("Slack delivery skipped: no thread_ts and no Slack webhook configured.")
         return False, "no_thread_ts"
 
     if access_token and channel:

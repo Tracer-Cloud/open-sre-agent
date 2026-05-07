@@ -118,6 +118,40 @@ def test_resolve_effective_integrations_keeps_incomplete_datadog_store_record(
     assert effective["datadog"]["config"]["api_key"] == ""
 
 
+def test_verify_slack_uses_v2_store_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "app.integrations.catalog.load_integrations",
+        lambda: [
+            {
+                "id": "slack-local",
+                "service": "slack",
+                "status": "active",
+                "instances": [
+                    {
+                        "name": "default",
+                        "tags": {},
+                        "credentials": {
+                            "webhook_url": "https://hooks.slack.com/services/T000/B000/test"
+                        },
+                    }
+                ],
+            }
+        ],
+    )
+    monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
+
+    results = verify_integrations("slack")
+
+    assert results == [
+        {
+            "service": "slack",
+            "source": "local store",
+            "status": "passed",
+            "detail": "Configured. Use --send-slack-test to validate delivery.",
+        }
+    ]
+
+
 def test_verify_grafana_passes_with_supported_datasource(monkeypatch: pytest.MonkeyPatch) -> None:
     def _fake_requests_get(*_args: Any, **_kwargs: Any) -> _FakeResponse:
         return _FakeResponse(
