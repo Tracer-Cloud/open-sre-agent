@@ -42,5 +42,5 @@ def test_agents_group_registered_in_root_cli() -> None:
 
     result = runner.invoke(cli, ["--help"])
 
-    assert result.exit_code == 0
+    assert result.exit_code == 0, result.output
     assert "agents" in result.output
