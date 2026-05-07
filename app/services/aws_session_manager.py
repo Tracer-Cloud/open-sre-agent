@@ -185,12 +185,14 @@ class AWSSessionManager:
         # Fixes P1: Include external_id in cache key
         cache_key = (service_name, actual_region, role_arn, external_id)
 
+        was_expired = False
         with self._cache_lock:
             # Check if we have a valid cached client
-            if cache_key in self._client_cache and (
-                not role_arn or not self._is_session_expired(role_arn, external_id=external_id)
-            ):
-                return self._client_cache[cache_key]
+            if cache_key in self._client_cache:
+                if not role_arn or not self._is_session_expired(role_arn, external_id=external_id):
+                    return self._client_cache[cache_key]
+                # Client exists but session expired — mark for forced replacement
+                was_expired = True
 
         # Create new client (network bound)
         session = self.get_session(region=actual_region, role_arn=role_arn, external_id=external_id)
@@ -203,9 +205,14 @@ class AWSSessionManager:
         client = session.client(service_name, config=config)  # type: ignore[call-overload]
 
         with self._cache_lock:
-            # Fixes P1: Double-check pattern to prevent race-overwrites after network call
-            if cache_key in self._client_cache and (
-                not role_arn or not self._is_session_expired(role_arn, external_id=external_id)
+            # If the miss was due to expiry, always replace the stale client.
+            # Only use double-check when the cache was originally empty (race with another thread).
+            if (
+                not was_expired
+                and cache_key in self._client_cache
+                and (
+                    not role_arn or not self._is_session_expired(role_arn, external_id=external_id)
+                )
             ):
                 return self._client_cache[cache_key]
 
