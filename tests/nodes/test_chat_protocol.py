@@ -221,6 +221,9 @@ def test_split_system_only_leading_contiguous() -> None:
 
 
 def test_normalize_anthropic_merges_consecutive_tool_results() -> None:
+    # Two back-to-back tool messages become one role:user turn with tool_result blocks.
+    # The following role:user message is merged into the same turn because Anthropic
+    # rejects consecutive user turns — so the final output is a single user turn.
     out = _normalize_messages_for_anthropic(
         [
             {"role": "tool", "content": "r1", "tool_call_id": "id1"},
@@ -228,13 +231,13 @@ def test_normalize_anthropic_merges_consecutive_tool_results() -> None:
             {"role": "user", "content": "next"},
         ]
     )
-    assert len(out) == 2
+    assert len(out) == 1
     assert out[0]["role"] == "user"
     blocks = out[0]["content"]
-    assert isinstance(blocks, list) and len(blocks) == 2
+    assert isinstance(blocks, list) and len(blocks) == 3
     assert blocks[0]["type"] == "tool_result" and blocks[0]["tool_use_id"] == "id1"
     assert blocks[1]["type"] == "tool_result" and blocks[1]["tool_use_id"] == "id2"
-    assert out[1] == {"role": "user", "content": "next"}
+    assert blocks[2] == {"type": "text", "text": "next"}
 
 
 def test_normalize_anthropic_non_leading_system_merges_into_prior_user() -> None:
@@ -249,6 +252,7 @@ def test_normalize_anthropic_non_leading_system_merges_into_prior_user() -> None
 
 
 def test_normalize_anthropic_system_after_assistant_is_own_user_turn() -> None:
+    # [assistant, system] — system becomes a standalone user turn (no following user to merge into)
     out = _normalize_messages_for_anthropic(
         [
             {"role": "assistant", "content": "done"},
@@ -261,6 +265,29 @@ def test_normalize_anthropic_system_after_assistant_is_own_user_turn() -> None:
         "role": "user",
         "content": [{"type": "text", "text": "extra"}],
     }
+
+
+def test_normalize_anthropic_assistant_system_user_no_consecutive_user_turns() -> None:
+    # Greptile-reported defect: [assistant, system, user] produced two consecutive user turns
+    # which the Anthropic API rejects with a 400. The system turn must be merged into the user.
+    out = _normalize_messages_for_anthropic(
+        [
+            {"role": "assistant", "content": "Let me check."},
+            {"role": "system", "content": "Injected context."},
+            {"role": "user", "content": "What next?"},
+        ]
+    )
+    roles = [m["role"] for m in out]
+    assert roles == ["assistant", "user"], f"Consecutive user turns produced: {roles}"
+    # The merged user turn must contain both the system and user text
+    merged = out[1]["content"]
+    if isinstance(merged, str):
+        assert "Injected context." in merged
+        assert "What next?" in merged
+    else:
+        texts = " ".join(b.get("text", "") for b in merged if isinstance(b, dict))
+        assert "Injected context." in texts
+        assert "What next?" in texts
 
 
 def test_normalize_anthropic_system_merges_into_user_with_tool_result_blocks() -> None:

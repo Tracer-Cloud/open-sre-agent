@@ -364,6 +364,35 @@ def _split_system_messages(
     return ("\n".join(system_parts) if system_parts else None, rest)
 
 
+def _merge_consecutive_user_turns(
+    msgs: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Collapse back-to-back ``role: user`` entries into one.
+
+    Anthropic rejects consecutive user turns. This arises when a non-leading
+    ``role: system`` message is emitted as a user turn immediately before a
+    real ``role: user`` entry (the ``[assistant, system, user]`` ordering).
+    Both string and block-list content shapes are handled.
+    """
+    out: list[dict[str, Any]] = []
+    for m in msgs:
+        if out and out[-1].get("role") == "user" and m.get("role") == "user":
+            prev_content = out[-1].get("content")
+            curr_content = m.get("content")
+            if isinstance(prev_content, list) and isinstance(curr_content, list):
+                merged: Any = prev_content + curr_content
+            elif isinstance(prev_content, list):
+                merged = prev_content + [{"type": "text", "text": str(curr_content)}]
+            elif isinstance(curr_content, list):
+                merged = [{"type": "text", "text": str(prev_content)}] + curr_content
+            else:
+                merged = f"{prev_content}\n\n{curr_content}"
+            out[-1] = {"role": "user", "content": merged}
+        else:
+            out.append(m)
+    return out
+
+
 def _normalize_messages_for_anthropic(
     msgs: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
@@ -377,7 +406,9 @@ def _normalize_messages_for_anthropic(
     folded into the **previous** message when that message is ``role: user`` so
     we never emit two consecutive ``user`` turns (which the API rejects). If
     there is no prior user message, system text is emitted as a standalone user
-    turn.
+    turn. A final ``_merge_consecutive_user_turns`` pass handles the residual
+    ``[assistant, system, user]`` ordering where the system-as-user turn would
+    immediately precede the real user turn.
     """
     out: list[dict[str, Any]] = []
     i = 0
@@ -465,7 +496,7 @@ def _normalize_messages_for_anthropic(
 
         out.append({"role": role, "content": content})
         i += 1
-    return out
+    return _merge_consecutive_user_turns(out)
 
 
 class _AnthropicChatAdapter:
