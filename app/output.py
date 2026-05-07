@@ -329,7 +329,7 @@ def _is_verbose() -> bool:
         from app.cli.support.context import is_debug, is_verbose
 
         return is_verbose() or is_debug()
-    except Exception:  # noqa: BLE001
+    except Exception:
         return False
 
 

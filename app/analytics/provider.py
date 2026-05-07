@@ -18,7 +18,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Final, TypeAlias
+from typing import Final
 
 import httpx
 
@@ -66,8 +66,8 @@ _CI_FINGERPRINT_ENV_KEYS: Final[tuple[str, ...]] = (
     "JOB_NAME",
 )
 
-PropertyValue: TypeAlias = str | bool | int | float  # noqa: UP040
-Properties: TypeAlias = dict[str, PropertyValue]  # noqa: UP040
+type PropertyValue = str | bool | int | float
+type Properties = dict[str, PropertyValue]
 
 
 @dataclass(frozen=True, slots=True)
@@ -323,7 +323,7 @@ def _compute_anonymous_identity() -> _AnonymousIdentity:
 
 
 def _get_or_create_anonymous_id() -> str:
-    global _cached_anonymous_id, _cached_identity_persistence  # noqa: PLW0603
+    global _cached_anonymous_id, _cached_identity_persistence
     if _cached_anonymous_id is not None:
         return _cached_anonymous_id
     with _anonymous_id_lock:
@@ -345,7 +345,7 @@ def _event_insert_id(event: str, distinct_id: str) -> str | None:
 
 
 def _touch_once(path: Path) -> bool:
-    global _first_run_marker_created_this_process  # noqa: PLW0603
+    global _first_run_marker_created_this_process
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("x", encoding="utf-8") as fh:
@@ -605,7 +605,7 @@ def _log_failure(stage: str, error: BaseException, **extra: object) -> None:
         _write_failure_line(primary_path, line)
     except OSError:
         primary_failed = True
-    except Exception:  # noqa: BLE001
+    except Exception:
         # Defensive: an unexpected exception in our diagnostics path must not
         # propagate. Treat it the same as an OSError and try the fallback.
         primary_failed = True
@@ -624,7 +624,7 @@ def _capture_sentry_failure(error: BaseException) -> None:
     """Report telemetry failures without making analytics depend on Sentry imports."""
     try:
         from app.utils.sentry_sdk import capture_exception
-    except Exception:  # noqa: BLE001
+    except Exception:
         return
     capture_exception(error)
 
@@ -726,7 +726,7 @@ class Analytics:
             error = _QueueOverflow(f"queue overflow at size={_QUEUE_SIZE}")
             _log_failure("queue_full", error, event=event.value)
             _capture_sentry_failure(error)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             if pending_registered:
                 self._mark_done()
             _log_failure("capture", exc, event=event.value)
@@ -739,7 +739,7 @@ class Analytics:
         if self._worker_alive:
             try:
                 self._ensure_worker()
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 _log_failure("worker_start", exc)
                 _capture_sentry_failure(exc)
                 self._worker_alive = False
@@ -798,7 +798,7 @@ class Analytics:
         }
         try:
             client.post(f"{POSTHOG_HOST}/capture/", json=payload).raise_for_status()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             _log_failure("posthog_send", exc, event=item.event)
             _capture_sentry_failure(exc)
 
@@ -813,7 +813,7 @@ _instance: Analytics | None = None
 
 
 def get_analytics() -> Analytics:
-    global _instance  # noqa: PLW0603
+    global _instance
     if _instance is None:
         _instance = Analytics()
     return _instance

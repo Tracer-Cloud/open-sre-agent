@@ -277,7 +277,7 @@ def test_run_interactive_picker_returns_zero_on_escape(monkeypatch) -> None:
         interactive,
         "choose_interactive_item",
         lambda _catalog: (_ for _ in ()).throw(KeyboardInterrupt()),
-    )  # noqa: E501
+    )
 
     assert interactive.run_interactive_picker(catalog) == 0
 

@@ -158,7 +158,7 @@ def validate_postgresql_config(config: PostgreSQLConfig) -> PostgreSQLValidation
             )
         finally:
             conn.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return PostgreSQLValidationResult(ok=False, detail=f"PostgreSQL connection failed: {err}")
 
 
@@ -267,7 +267,7 @@ def get_server_status(config: PostgreSQLConfig) -> dict[str, Any]:
             }
         finally:
             conn.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {"source": "postgresql", "available": False, "error": str(err)}
 
 
@@ -339,7 +339,7 @@ def get_current_queries(
             }
         finally:
             conn.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {"source": "postgresql", "available": False, "error": str(err)}
 
 
@@ -438,7 +438,7 @@ def get_replication_status(config: PostgreSQLConfig) -> dict[str, Any]:
             }
         finally:
             conn.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         error_str = str(err)
         # Check if this might be a replica server
         if "recovery" in error_str.lower() or "read-only" in error_str.lower():
@@ -541,7 +541,7 @@ def get_slow_queries(
             }
         finally:
             conn.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {"source": "postgresql", "available": False, "error": str(err)}
 
 
@@ -642,5 +642,5 @@ def get_table_stats(
             }
         finally:
             conn.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {"source": "postgresql", "available": False, "error": str(err)}

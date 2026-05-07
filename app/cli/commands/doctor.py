@@ -21,7 +21,7 @@ def _check(name: str, fn: Any) -> dict[str, str]:
     try:
         ok, detail = fn()
         return {"check": name, "status": "ok" if ok else "warn", "detail": detail}
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return {"check": name, "status": "error", "detail": str(exc)}
 
 
@@ -107,7 +107,7 @@ def _check_version_freshness() -> tuple[bool, str]:
         if _is_update_available(current, latest):
             return False, f"current={current}, latest={latest} — run 'opensre update'"
         return True, f"{current} (up to date)"
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return True, f"{current} (could not check: {exc})"
 
 

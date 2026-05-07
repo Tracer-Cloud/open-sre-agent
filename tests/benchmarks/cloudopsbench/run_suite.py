@@ -211,7 +211,7 @@ def _run_cases(
             case = future_to_case[future]
             try:
                 _, score = future.result()
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 raise RuntimeError(f"{case.case_id}: run failed") from exc
             scores.append(score)
     return sorted(scores, key=lambda item: item.case_id)

@@ -64,38 +64,43 @@ async def on_thread_create(ctx: Auth.types.AuthContext, value: dict[str, Any]) -
 
 @auth.on.threads.read
 async def on_thread_read(
-    ctx: Auth.types.AuthContext,  # noqa: ARG001
-    value: Any,  # noqa: ARG001
+    ctx: Auth.types.AuthContext,
+    value: Any,
 ) -> None:
+    del ctx, value
     return None
 
 
 @auth.on.threads.update
 async def on_thread_update(
-    ctx: Auth.types.AuthContext,  # noqa: ARG001
-    value: Any,  # noqa: ARG001
+    ctx: Auth.types.AuthContext,
+    value: Any,
 ) -> None:
+    del ctx, value
     return None
 
 
 @auth.on.threads.delete
 async def on_thread_delete(
-    ctx: Auth.types.AuthContext,  # noqa: ARG001
-    value: Any,  # noqa: ARG001
+    ctx: Auth.types.AuthContext,
+    value: Any,
 ) -> None:
+    del ctx, value
     return None
 
 
 @auth.on.threads.search
-async def on_thread_search(ctx: Auth.types.AuthContext, value: Any) -> dict[str, str]:  # noqa: ARG001
+async def on_thread_search(ctx: Auth.types.AuthContext, value: Any) -> dict[str, str]:
+    del value
     return {"org_id": _get_org_id(ctx)}
 
 
 @auth.on.threads.create_run
 async def on_thread_create_run(
-    ctx: Auth.types.AuthContext,  # noqa: ARG001
-    value: Any,  # noqa: ARG001
+    ctx: Auth.types.AuthContext,
+    value: Any,
 ) -> None:
+    del ctx, value
     return None
 
 
@@ -108,22 +113,26 @@ async def on_assistant_create(ctx: Auth.types.AuthContext, value: dict[str, Any]
 
 
 @auth.on.assistants.read
-async def on_assistant_read(ctx: Auth.types.AuthContext, value: Any) -> dict[str, str]:  # noqa: ARG001
+async def on_assistant_read(ctx: Auth.types.AuthContext, value: Any) -> dict[str, str]:
+    del value
     return {"org_id": _get_org_id(ctx)}
 
 
 @auth.on.assistants.update
-async def on_assistant_update(ctx: Auth.types.AuthContext, value: Any) -> dict[str, str]:  # noqa: ARG001
+async def on_assistant_update(ctx: Auth.types.AuthContext, value: Any) -> dict[str, str]:
+    del value
     return {"org_id": _get_org_id(ctx)}
 
 
 @auth.on.assistants.delete
-async def on_assistant_delete(ctx: Auth.types.AuthContext, value: Any) -> dict[str, str]:  # noqa: ARG001
+async def on_assistant_delete(ctx: Auth.types.AuthContext, value: Any) -> dict[str, str]:
+    del value
     return {"org_id": _get_org_id(ctx)}
 
 
 @auth.on.assistants.search
-async def on_assistant_search(ctx: Auth.types.AuthContext, value: Any) -> dict[str, str]:  # noqa: ARG001
+async def on_assistant_search(ctx: Auth.types.AuthContext, value: Any) -> dict[str, str]:
+    del value
     return {"org_id": _get_org_id(ctx)}
 
 
@@ -136,20 +145,24 @@ async def on_cron_create(ctx: Auth.types.AuthContext, value: dict[str, Any]) -> 
 
 
 @auth.on.crons.read
-async def on_cron_read(ctx: Auth.types.AuthContext, value: Any) -> dict[str, str]:  # noqa: ARG001
+async def on_cron_read(ctx: Auth.types.AuthContext, value: Any) -> dict[str, str]:
+    del value
     return {"org_id": _get_org_id(ctx)}
 
 
 @auth.on.crons.update
-async def on_cron_update(ctx: Auth.types.AuthContext, value: Any) -> dict[str, str]:  # noqa: ARG001
+async def on_cron_update(ctx: Auth.types.AuthContext, value: Any) -> dict[str, str]:
+    del value
     return {"org_id": _get_org_id(ctx)}
 
 
 @auth.on.crons.delete
-async def on_cron_delete(ctx: Auth.types.AuthContext, value: Any) -> dict[str, str]:  # noqa: ARG001
+async def on_cron_delete(ctx: Auth.types.AuthContext, value: Any) -> dict[str, str]:
+    del value
     return {"org_id": _get_org_id(ctx)}
 
 
 @auth.on.crons.search
-async def on_cron_search(ctx: Auth.types.AuthContext, value: Any) -> dict[str, str]:  # noqa: ARG001
+async def on_cron_search(ctx: Auth.types.AuthContext, value: Any) -> dict[str, str]:
+    del value
     return {"org_id": _get_org_id(ctx)}

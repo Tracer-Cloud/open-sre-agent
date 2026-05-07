@@ -16,7 +16,7 @@ from app.cli.support.errors import OpenSREError
 from app.cli.support.exception_reporting import report_exception
 
 
-def _cmd_template(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_template(_session: ReplSession, console: Console, args: list[str]) -> bool:
     from app.cli.investigation.alert_templates import build_alert_template
     from app.cli.support.constants import ALERT_TEMPLATE_CHOICES
 
@@ -56,7 +56,7 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
 
     try:
         text = path.read_text(encoding="utf-8")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         console.print(f"[{TERMINAL_ERROR}]cannot read file:[/] {escape(str(exc))}")
         session.mark_latest(ok=False, kind="slash")
         return True
@@ -83,7 +83,7 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
         session.record("alert", args[0], ok=False)
         session.mark_latest(ok=False, kind="slash")
         return True
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         task.mark_failed(str(exc))
         report_exception(exc, context="interactive_shell.investigate_file")
         console.print(f"[{TERMINAL_ERROR}]investigation failed:[/] {escape(str(exc))}")
@@ -101,7 +101,7 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
     return True
 
 
-def _cmd_last(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_last(session: ReplSession, console: Console, _args: list[str]) -> bool:
     if session.last_state is None:
         console.print("[dim]no investigation in this session yet.[/dim]")
         return True
@@ -145,7 +145,7 @@ def _cmd_save(session: ReplSession, console: Console, args: list[str]) -> bool:
                 lines.append(f"## Report\n\n{report}\n")
             dest.write_text("\n".join(lines) or "(no report content)", encoding="utf-8")
         console.print(f"[green]saved:[/green] {escape(str(dest))}")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         console.print(f"[{TERMINAL_ERROR}]save failed:[/] {escape(str(exc))}")
     return True
 

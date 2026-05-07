@@ -87,7 +87,7 @@ class HoneycombClient:
                 "success": False,
                 "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return {"success": False, "error": str(exc)}
 
         environment = payload.get("environment", {}) if isinstance(payload, dict) else {}
@@ -110,7 +110,7 @@ class HoneycombClient:
                 "success": False,
                 "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return {"success": False, "error": str(exc)}
 
         query_id = str(payload.get("id", "")).strip() if isinstance(payload, dict) else ""
@@ -139,7 +139,7 @@ class HoneycombClient:
                 "success": False,
                 "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return {"success": False, "error": str(exc)}
 
         return {"success": True, "result": result}
@@ -157,7 +157,7 @@ class HoneycombClient:
                 "success": False,
                 "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return {"success": False, "error": str(exc)}
         return {"success": True, "result": payload}
 

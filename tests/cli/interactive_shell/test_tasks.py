@@ -172,7 +172,7 @@ class _ImmediateThread:
         kwargs: dict[str, object] | None = None,
         *,
         daemon: object = None,
-    ) -> None:  # noqa: ARG002 - mimic threading.Thread ctor
+    ) -> None:
         del group, args, kwargs, daemon, name  # threaded API baggage
         if target is None:
             raise TypeError("target required")
@@ -196,7 +196,7 @@ class _DeferredSyntheticThread:
         kwargs: dict[str, object] | None = None,
         *,
         daemon: object = None,
-    ) -> None:  # noqa: ARG002 - mimic threading.Thread ctor
+    ) -> None:
         del group, args, kwargs, daemon, name
         if target is None:
             raise TypeError("target required")

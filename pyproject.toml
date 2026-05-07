@@ -7,7 +7,7 @@ name = "opensre"
 version = "2026.4.5"
 description = "Open-source SRE agent for automated incident investigation and root cause analysis. Automatically analyzes alerts from Slack, Grafana, Datadog, and other tooling."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = { text = "Apache-2.0" }
 authors = [
   { name = "OpenSRE", email = "support@opensre.com" },

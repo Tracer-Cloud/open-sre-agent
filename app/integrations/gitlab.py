@@ -103,7 +103,7 @@ def validate_gitlab_config(config: GitlabConfig) -> GitlabValidationResult:
     except httpx.HTTPStatusError as err:
         detail = err.response.text.strip() or str(err)
         return GitlabValidationResult(ok=False, detail=f"Gitlab validation failed: {detail}")
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return GitlabValidationResult(ok=False, detail=f"Gitlab validation failed: {err}")
 
 

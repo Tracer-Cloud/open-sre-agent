@@ -17,7 +17,7 @@ class _Result:
 
 
 def _make_run(log_output: str = "", log_returncode: int = 0, log_stderr: str = ""):
-    def _run(cmd, check, text, capture_output):  # noqa: ANN001
+    def _run(cmd, check, text, capture_output):
         _ = (check, text, capture_output)
         if cmd[:2] == ["railway", "link"]:
             return _Result(0, stdout="{}")
@@ -137,7 +137,7 @@ def test_fetch_logs_passes_tail_argument() -> None:
 
     captured: list[list[str]] = []
 
-    def _run(cmd, check, text, capture_output):  # noqa: ANN001
+    def _run(cmd, check, text, capture_output):
         _ = (check, text, capture_output)
         captured.append(list(cmd))
         if cmd[:2] == ["railway", "link"]:

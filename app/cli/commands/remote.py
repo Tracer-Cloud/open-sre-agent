@@ -87,7 +87,7 @@ def _browse_investigations(ctx: click.Context, style: Any, questionary: Any, con
             f"Connection timed out: {exc}",
             suggestion="Check network connectivity and verify the remote agent is running.",
         ) from exc
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise OpenSREError(
             f"Failed to list investigations: {exc}",
             suggestion="Run 'opensre remote health' to verify the remote agent.",
@@ -126,7 +126,7 @@ def _browse_investigations(ctx: click.Context, style: Any, questionary: Any, con
 
         try:
             content = client.get_investigation(selected)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             console.print(f"  [red]Failed to load: {exc}[/red]")
             continue
 
@@ -643,7 +643,7 @@ def _run_streamed_investigation(ctx: click.Context, raw_alert: dict[str, Any]) -
             f"Connection timed out reaching {client.base_url}.",
             suggestion="Check network connectivity and verify the remote agent is running.",
         ) from exc
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise OpenSREError(
             f"Remote investigation failed: {exc}",
             suggestion="Run 'opensre remote health' to verify the remote agent.",
@@ -728,7 +728,7 @@ def _run_langgraph_investigation(ctx: click.Context, raw_alert: dict[str, Any]) 
             f"Connection timed out reaching {client.base_url}.",
             suggestion="Check network connectivity and verify the remote agent is running.",
         ) from exc
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise OpenSREError(
             f"Remote investigation failed: {exc}",
             suggestion="Run 'opensre remote health' to verify the remote agent.",
@@ -926,7 +926,7 @@ def remote_trigger(ctx: click.Context, alert_json: str | None, detach: bool) -> 
             f"Connection timed out reaching {client.base_url}.",
             suggestion="Check network connectivity and verify the remote agent is running.",
         ) from exc
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise OpenSREError(
             f"Remote investigation failed: {exc}",
             suggestion="Run 'opensre remote health' to verify the remote agent.",
@@ -990,7 +990,7 @@ def _run_blocking_investigation(ctx: click.Context, raw_alert: dict[str, Any]) -
             f"Connection timed out: {exc}",
             suggestion="The remote agent may be overloaded. Try again or check 'opensre remote health'.",
         ) from exc
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise OpenSREError(
             f"Remote investigation failed: {exc}",
             suggestion="Run 'opensre remote health' to verify the remote agent.",
@@ -1028,7 +1028,7 @@ def remote_pull(ctx: click.Context, latest: bool, pull_all: bool, output_dir: st
             f"Connection timed out: {exc}",
             suggestion="Check network connectivity and verify the remote agent is running.",
         ) from exc
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise OpenSREError(
             f"Failed to list investigations: {exc}",
             suggestion="Run 'opensre remote health' to verify the remote agent.",
@@ -1055,5 +1055,5 @@ def remote_pull(ctx: click.Context, latest: bool, pull_all: bool, output_dir: st
             destination = output_path / f"{investigation_id}.md"
             destination.write_text(content, encoding="utf-8")
             click.echo(f"  Downloaded: {destination}")
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             click.echo(f"  Failed to download {investigation_id}: {exc}", err=True)

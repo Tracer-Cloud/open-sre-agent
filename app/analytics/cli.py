@@ -175,7 +175,7 @@ def _investigation_started_properties(
 def _capture(event: Event, properties: Properties | None = None) -> None:
     try:
         get_analytics().capture(event, properties)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         capture_exception(exc)
 
 

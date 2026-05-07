@@ -88,7 +88,7 @@ def answer_cli_help(question: str, _session: ReplSession, console: Console) -> N
     """
     try:
         from app.services.llm_client import get_llm_for_reasoning
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         report_exception(exc, context="interactive_shell.cli_help.import")
         console.print(f"[red]LLM client unavailable:[/red] {escape(str(exc))}")
         return
@@ -108,7 +108,7 @@ def answer_cli_help(question: str, _session: ReplSession, console: Console) -> N
     except KeyboardInterrupt:
         console.print("[dim]· cancelled[/dim]")
         return
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         report_exception(exc, context="interactive_shell.cli_help.stream")
         console.print(f"[red]assistant failed:[/red] {escape(str(exc))}")
         return

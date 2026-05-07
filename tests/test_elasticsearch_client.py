@@ -303,7 +303,7 @@ class TestGetClusterHealth:
 
 
 def test_package_exports() -> None:
-    from app.services.elasticsearch import ElasticsearchClient as C  # noqa: F401
+    from app.services.elasticsearch import ElasticsearchClient as C
     from app.services.elasticsearch import ElasticsearchConfig as Cfg
 
     assert C is not None

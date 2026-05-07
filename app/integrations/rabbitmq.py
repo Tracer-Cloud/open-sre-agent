@@ -194,7 +194,7 @@ def validate_rabbitmq_config(config: RabbitMQConfig) -> RabbitMQValidationResult
                     f"Connected to RabbitMQ {version} (cluster: {cluster}, vhost: {config.vhost})."
                 ),
             )
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         logger.debug("RabbitMQ validate_config failed", exc_info=True)
         return RabbitMQValidationResult(ok=False, detail=f"RabbitMQ connection failed: {err}")
 
@@ -275,7 +275,7 @@ def get_queue_backlog(
                 "returned": len(truncated),
                 "queues": truncated,
             }
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         logger.debug("RabbitMQ get_queue_backlog failed", exc_info=True)
         return _error_evidence(str(err))
 
@@ -321,7 +321,7 @@ def get_consumer_health(
                 "returned": len(consumers),
                 "consumers": consumers,
             }
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         logger.debug("RabbitMQ get_consumer_health failed", exc_info=True)
         return _error_evidence(str(err))
 
@@ -394,7 +394,7 @@ def get_broker_overview(config: RabbitMQConfig) -> dict[str, Any]:
                 "channels": object_totals.get("channels", 0),
                 "alarms": alarm_payload,
             }
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         logger.debug("RabbitMQ get_broker_overview failed", exc_info=True)
         return _error_evidence(str(err))
 
@@ -441,7 +441,7 @@ def get_node_health(config: RabbitMQConfig) -> dict[str, Any]:
                 "any_partitioned": any_partitioned,
                 "nodes": nodes,
             }
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         logger.debug("RabbitMQ get_node_health failed", exc_info=True)
         return _error_evidence(str(err))
 
@@ -495,7 +495,7 @@ def get_connection_stats(
                 "returned": len(truncated),
                 "connections": truncated,
             }
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         logger.debug("RabbitMQ get_connection_stats failed", exc_info=True)
         return _error_evidence(str(err))
 

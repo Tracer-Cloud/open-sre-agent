@@ -120,7 +120,7 @@ def _before_send(event: Any, _hint: dict[str, Any]) -> Any:
         return event
     try:
         _scrub_event_in_place(event)
-    except Exception:  # noqa: BLE001
+    except Exception:
         # The hook must never raise — Sentry will swallow the event silently.
         return event
     return event

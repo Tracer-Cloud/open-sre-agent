@@ -34,7 +34,7 @@ def _task_detail_label(task: TaskRecord) -> str:
     return "—"
 
 
-def _cmd_history(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_history(_session: ReplSession, console: Console, _args: list[str]) -> bool:
     entries = load_command_history_entries()
     if not entries:
         console.print("[dim]no history yet.[/dim]")
@@ -50,7 +50,7 @@ def _cmd_history(session: ReplSession, console: Console, args: list[str]) -> boo
     return True
 
 
-def _cmd_tasks(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_tasks(session: ReplSession, console: Console, _args: list[str]) -> bool:
     tasks = session.task_registry.list_recent(n=50)
     if not tasks:
         console.print("[dim]no tasks recorded this session.[/dim]")

@@ -14,13 +14,13 @@ from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
 
 
-def _cmd_clear(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_clear(_session: ReplSession, console: Console, _args: list[str]) -> bool:
     console.clear()
     render_banner(console)
     return True
 
 
-def _cmd_reset(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_reset(session: ReplSession, console: Console, _args: list[str]) -> bool:
     session.clear()
     console.print("[dim]session state cleared.[/dim]")
     return True
@@ -36,7 +36,7 @@ def _cmd_trust(session: ReplSession, console: Console, args: list[str]) -> bool:
     return True
 
 
-def _cmd_status(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_status(session: ReplSession, console: Console, _args: list[str]) -> bool:
     from app.cli.interactive_shell.cli_reference import get_cli_reference_cache_stats
     from app.cli.interactive_shell.docs_reference import get_docs_cache_stats
 
@@ -66,7 +66,7 @@ def _cmd_status(session: ReplSession, console: Console, args: list[str]) -> bool
     return True
 
 
-def _cmd_cost(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_cost(session: ReplSession, console: Console, _args: list[str]) -> bool:
     table = repl_table(title="Session cost", title_style=TERMINAL_ACCENT_BOLD, show_header=False)
     table.add_column("key", style="bold")
     table.add_column("value")
@@ -84,7 +84,7 @@ def _cmd_cost(session: ReplSession, console: Console, args: list[str]) -> bool: 
     return True
 
 
-def _cmd_verbose(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_verbose(_session: ReplSession, console: Console, args: list[str]) -> bool:
     if args and args[0].lower() in ("off", "false", "0", "disable"):
         os.environ.pop("TRACER_VERBOSE", None)
         console.print("[dim]verbose logging off[/dim]")
@@ -94,7 +94,7 @@ def _cmd_verbose(session: ReplSession, console: Console, args: list[str]) -> boo
     return True
 
 
-def _cmd_compact(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_compact(session: ReplSession, console: Console, _args: list[str]) -> bool:
     before = len(session.history)
     if before > 20:
         session.history = session.history[-20:]
@@ -104,7 +104,7 @@ def _cmd_compact(session: ReplSession, console: Console, args: list[str]) -> boo
     return True
 
 
-def _cmd_context(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_context(session: ReplSession, console: Console, _args: list[str]) -> bool:
     if not session.accumulated_context:
         console.print("[dim]no infra context accumulated yet.[/dim]")
         return True

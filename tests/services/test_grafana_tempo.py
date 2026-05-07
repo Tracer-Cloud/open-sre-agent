@@ -18,7 +18,8 @@ class FakeGrafanaClient(TempoMixin):
     def _build_datasource_url(self, uid: str, path: str) -> str:
         return f"https://grafana.fake/api/datasources/uid/{uid}{path}"
 
-    def _make_request(self, url: str, params: dict | None = None) -> dict:  # noqa: ARG002
+    def _make_request(self, url: str, params: dict | None = None) -> dict:
+        del url, params
         # To be mocked in tests
         return {}
 
