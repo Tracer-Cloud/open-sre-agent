@@ -402,7 +402,7 @@ def _handle_insufficient_evidence(state: InvestigationState, tracker) -> dict:
         ],
         "validity_score": 0.0,
         "investigation_recommendations": recommendations,
-        "remediation_steps": get_template_steps("unknown", {}),
+        "remediation_steps": get_template_steps("unknown", state.get("available_sources", {})),
         "investigation_loop_count": next_loop_count,
     }
 

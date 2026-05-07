@@ -1004,7 +1004,7 @@ def parse_root_cause(response: str) -> RootCauseResult:
                 rem_section = after.split("REMEDIATION_STEPS:", 1)[1]
                 for line in rem_section.strip().split("\n"):
                     line = line.strip().lstrip("*-•( ").strip()
-                    if not line:
+                    if not line or line.startswith("("):
                         continue
                     if any(
                         line.startswith(h)
