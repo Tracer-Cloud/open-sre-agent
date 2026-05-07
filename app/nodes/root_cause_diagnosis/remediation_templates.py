@@ -45,7 +45,7 @@ _TEMPLATES: dict[str, list[tuple[str, str | None]]] = {
 }
 
 
-def get_template_steps(category: str, available_sources: dict) -> list[str]:
+def get_template_steps(category: str, available_sources: dict[str, object]) -> list[str]:
     """Return filtered remediation steps for the given root_cause_category."""
     entries = _TEMPLATES.get(category, _TEMPLATES["unknown"])
     return [

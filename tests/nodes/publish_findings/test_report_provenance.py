@@ -58,6 +58,27 @@ def test_format_slack_message_shows_provenance() -> None:
     assert "*Provenance:*" in message
     assert "Grafana: instance=myorg.grafana.net" in message
     assert "AWS EKS: cluster=prod-cluster, namespace=payments, region=us-east-1" in message
+
+
+def test_format_slack_message_shows_recommended_actions() -> None:
+    state = _make_state()
+    state["remediation_steps"] = [
+        "Increase memory limit for payments-api deployment",
+        "Add Datadog monitor for memory usage at 80% threshold",
+    ]
+    ctx = build_report_context(state)
+    message = format_slack_message(ctx)
+
+    assert "## Recommended Actions" in message
+    assert "• Increase memory limit for payments-api deployment" in message
+    assert "• Add Datadog monitor for memory usage at 80% threshold" in message
+
+
+def test_format_slack_message_omits_recommended_actions_when_empty() -> None:
+    ctx = build_report_context(_make_state())  # remediation_steps=[] by default
+    message = format_slack_message(ctx)
+
+    assert "## Recommended Actions" not in message
     assert (
         "provenance: instance=myorg.grafana.net, service=checkout-api, pipeline=checkout-service"
         in message

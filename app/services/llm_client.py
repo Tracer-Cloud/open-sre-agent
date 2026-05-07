@@ -1014,6 +1014,7 @@ def parse_root_cause(response: str) -> RootCauseResult:
                             "NON_VALIDATED",
                             "CAUSAL",
                             "ALTERNATIVE",
+                            "REMEDIATION_STEPS",
                         )
                     ):
                         break
