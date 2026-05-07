@@ -7,9 +7,8 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Literal
+from typing import Literal, Protocol
 
-from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.terminal_intent import (
     is_cli_agent_operational_intent,
     is_sample_alert_launch_intent,
@@ -17,6 +16,10 @@ from app.cli.interactive_shell.terminal_intent import (
 )
 
 InputKind = Literal["slash", "cli_help", "cli_agent", "new_alert", "follow_up"]
+
+
+class RoutingSession(Protocol):
+    last_state: dict[str, object] | None
 
 
 class RouteKind(StrEnum):
@@ -49,28 +52,28 @@ class RouteRule:
     name: str
     route_kind: RouteKind
     confidence: float
-    matcher: Callable[[str, ReplSession], bool]
+    matcher: Callable[[str, RoutingSession], bool]
 
 
-def _is_slash_prefix(text: str, _session: ReplSession) -> bool:
+def _is_slash_prefix(text: str, _session: RoutingSession) -> bool:
     return text.strip().startswith("/")
 
 
-def _is_bare_command_alias(text: str, _session: ReplSession) -> bool:
+def _is_bare_command_alias(text: str, _session: RoutingSession) -> bool:
     return text.strip().lower() in BARE_COMMAND_ALIASES
 
 
-def _is_cli_help_rule(text: str, _session: ReplSession) -> bool:
+def _is_cli_help_rule(text: str, _session: RoutingSession) -> bool:
     return _is_cli_help_intent(text.strip())
 
 
-def _is_sample_alert_rule(text: str, _session: ReplSession) -> bool:
+def _is_sample_alert_rule(text: str, _session: RoutingSession) -> bool:
     return is_sample_alert_launch_intent(text.strip())
 
 
 def _is_cli_agent_operational_rule(
     text: str,
-    _session: ReplSession,
+    _session: RoutingSession,
 ) -> bool:
     stripped = text.strip()
     return is_cli_agent_operational_intent(stripped) and not mentions_alert_signal(stripped)
@@ -78,21 +81,21 @@ def _is_cli_agent_operational_rule(
 
 def _is_new_alert_without_prior_state(
     text: str,
-    session: ReplSession,
+    session: RoutingSession,
 ) -> bool:
     return session.last_state is None and _reads_like_investigation_request(text.strip())
 
 
 def _is_follow_up_with_prior_state(
     text: str,
-    session: ReplSession,
+    session: RoutingSession,
 ) -> bool:
     return session.last_state is not None and _is_short_question(text.strip())
 
 
 def _is_new_alert_with_prior_state(
     text: str,
-    session: ReplSession,
+    session: RoutingSession,
 ) -> bool:
     return session.last_state is not None and _reads_like_investigation_request(text.strip())
 
@@ -354,7 +357,7 @@ def _is_cli_help_intent(text: str) -> bool:
     return any(pattern.search(text) for pattern in _CLI_HELP_PATTERNS)
 
 
-def route_input(text: str, session: ReplSession) -> RouteDecision:
+def route_input(text: str, session: RoutingSession) -> RouteDecision:
     """Return a structured routing decision for interactive-shell input."""
     stripped = text.strip()
 
@@ -382,6 +385,6 @@ def route_input(text: str, session: ReplSession) -> RouteDecision:
     )
 
 
-def classify_input(text: str, session: ReplSession) -> InputKind:
+def classify_input(text: str, session: RoutingSession) -> InputKind:
     """Backward-compatible wrapper around route_input()."""
     return route_input(text, session).route_kind.value

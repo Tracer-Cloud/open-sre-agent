@@ -3,12 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from app.cli.interactive_shell.tasks import TaskRegistry
-
-if TYPE_CHECKING:
-    from app.cli.interactive_shell.router import RouteDecision
 
 
 @dataclass
@@ -37,7 +34,7 @@ class ReplSession:
     last_state: dict[str, Any] | None = None
     """The final AgentState from the most recent investigation, used by follow-ups."""
 
-    last_route_decision: RouteDecision | None = None
+    last_route_decision: Any | None = None
     """Most recent structured routing decision for observability/debugging."""
 
     accumulated_context: dict[str, Any] = field(default_factory=dict)
