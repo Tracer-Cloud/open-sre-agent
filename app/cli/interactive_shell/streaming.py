@@ -19,6 +19,7 @@ _SPINNER_NAME = "dots12"
 _SPINNER_COLOR = "orange1"
 _SPINNER_LABEL = "thinking"
 _LIVE_REFRESH_PER_SECOND = 10
+_STREAM_CANCEL_HINT = "Press Ctrl+C again to stop"
 
 STREAM_LABEL_ASSISTANT = "assistant"
 STREAM_LABEL_ANSWER = "answer"
@@ -68,6 +69,7 @@ def stream_to_console(
             first_interrupt_at = None
             raise KeyboardInterrupt
         first_interrupt_at = now
+        console.print(f"[dim]{_STREAM_CANCEL_HINT}[/dim]")
 
     def _next_chunk(it: Iterator[str]) -> str | None:
         while True:

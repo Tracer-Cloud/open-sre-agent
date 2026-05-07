@@ -42,16 +42,6 @@ def _prompt_rule_line(width: int) -> str:
     return _PROMPT_RULE_CHAR * max(width, 1)
 
 
-def _truncate_visible(text: str, width: int) -> str:
-    if width <= 0:
-        return ""
-    if len(text) <= width:
-        return text
-    if width == 1:
-        return "…"
-    return text[: width - 1] + "…"
-
-
 def _prompt_rule_ansi() -> str:
     try:
         width = get_app().output.get_size().columns

@@ -578,28 +578,38 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
         f"{provider_label} requires login. What next?",
         f"Could not verify {provider_label} login. What next?",
     )
-    result = _run_cli_pty(
-        cli_sandbox,
-        "onboard",
-        actions=[
-            PtyAction(expect="How do you want to get started?", send=b"\r"),
-            PtyAction(expect="Choose your LLM provider", send=b"\r", stagger_j=stagger_j),
-            PtyAction(
-                expect=login_prompt,
-                send=b"\r",
-                stagger_j=1,
-                timeout=90.0,
-            ),
-            PtyAction(expect="Choose your LLM provider", send=b"\r"),
-            PtyAction(expect="Anthropic API key", send=b"smoke-test-key\r"),
-            PtyAction(
-                expect="Choose an integration to configure",
-                send=b"\r",
-                stagger_j=21,
-            ),
-        ],
-        timeout=pty_timeout,
-    )
+    try:
+        result = _run_cli_pty(
+            cli_sandbox,
+            "onboard",
+            actions=[
+                PtyAction(expect="How do you want to get started?", send=b"\r"),
+                PtyAction(expect="Choose your LLM provider", send=b"\r", stagger_j=stagger_j),
+                PtyAction(
+                    expect=login_prompt,
+                    send=b"\r",
+                    stagger_j=1,
+                    timeout=90.0,
+                ),
+                PtyAction(expect="Choose your LLM provider", send=b"\r"),
+                PtyAction(expect="Anthropic API key", send=b"smoke-test-key\r"),
+                PtyAction(
+                    expect="Choose an integration to configure",
+                    send=b"\r",
+                    stagger_j=21,
+                ),
+            ],
+            timeout=pty_timeout,
+        )
+    except AssertionError as exc:
+        msg = str(exc)
+        if (
+            _cli_binary == "opencode"
+            and "environment provider key(s)" in msg
+            and "OpenCode:" in msg
+        ):
+            pytest.skip("OpenCode CLI is already authenticated via env; unauth repick flow skipped")
+        raise
 
     assert result.exit_code == 0
     assert "Done." in result.stdout
