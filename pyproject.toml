@@ -93,6 +93,7 @@ dev = [
     "types-psycopg2",
     "types-PyMySQL",
     "types-PyYAML",
+    "types-psutil",
     "boto3-stubs[essential]",
     "huggingface_hub>=0.26.0",
     "datasets>=3.0.0",

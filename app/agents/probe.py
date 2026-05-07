@@ -18,7 +18,11 @@ from datetime import UTC, datetime
 
 import psutil
 
-_BYTES_PER_MB = 1024 * 1024
+# 1 MiB exactly. The dataclass field below is named ``rss_mb`` because
+# every monitoring tool in this space (htop, top, ps, k8s metrics,
+# Datadog, Grafana) labels the same 1024² unit as "MB"; the constant
+# stays precise so the unit math is unambiguous.
+_BYTES_PER_MIB = 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -50,8 +54,11 @@ def probe(pid: int, *, cpu_interval: float = 0.1) -> ProcessSnapshot | None:
     manage their own ``psutil.Process`` instances and call this
     function with ``cpu_interval=0.0`` on subsequent samples.
 
-    Returns ``None`` for PIDs that don't exist or are zombies. Never
-    raises ``psutil.NoSuchProcess`` or ``psutil.ZombieProcess``.
+    Returns ``None`` for PIDs that don't exist, are zombies, or whose
+    fields are inaccessible (typically processes owned by another user
+    on macOS or Linux setups with restricted ``/proc``). Never raises
+    ``psutil.NoSuchProcess``, ``psutil.ZombieProcess``, or
+    ``psutil.AccessDenied``.
     """
     try:
         proc = psutil.Process(pid)
@@ -61,13 +68,16 @@ def probe(pid: int, *, cpu_interval: float = 0.1) -> ProcessSnapshot | None:
     try:
         with proc.oneshot():
             cpu = proc.cpu_percent(interval=cpu_interval)
-            rss_mb = proc.memory_info().rss / _BYTES_PER_MB
+            rss_mb = proc.memory_info().rss / _BYTES_PER_MIB
             num_fds = _safe_num_fds(proc)
             num_connections = _safe_num_connections(proc)
             status = proc.status()
             started_at = datetime.fromtimestamp(proc.create_time(), tz=UTC)
-    except (psutil.NoSuchProcess, psutil.ZombieProcess):
-        # Process exited between the lookup and the field reads.
+    except (psutil.NoSuchProcess, psutil.ZombieProcess, psutil.AccessDenied):
+        # Process exited or its core fields (memory, status, create
+        # time) are inaccessible to this user. The wiring layer in
+        # #1490 treats both as "no snapshot this tick" and renders an
+        # empty cell rather than tearing the REPL background task.
         return None
 
     return ProcessSnapshot(
@@ -95,11 +105,16 @@ def _safe_num_fds(proc: psutil.Process) -> int | None:
 
 
 def _safe_num_connections(proc: psutil.Process) -> int | None:
-    """Connection count requires elevated privileges on some platforms."""
+    """Connection count requires elevated privileges on some platforms.
+
+    Lazy fallback via ``hasattr`` rather than ``getattr(..., default)``
+    because the latter eagerly evaluates ``proc.connections`` even when
+    ``net_connections`` exists; a future psutil release that drops the
+    deprecated ``connections`` method would then raise ``AttributeError``
+    on the working code path.
+    """
+    method = proc.net_connections if hasattr(proc, "net_connections") else proc.connections
     try:
-        # ``net_connections`` is the modern name; older psutil only has
-        # ``connections``. Probe for the new one first.
-        method = getattr(proc, "net_connections", proc.connections)
         connections = method()
     except (psutil.AccessDenied, NotImplementedError):
         return None
