@@ -258,17 +258,21 @@ def _apply_scope_tags(entrypoint: str | None) -> None:
 
     Wrapped at the call site in ``suppress(Exception)`` because the tagging
     must never break the init flow if the SDK is stubbed (e.g. in tests).
-    Runtime is derived from the ``entrypoint`` (server-side surfaces such as
-    ``webapp``/``remote``/``mcp``/``graph_pipeline`` map to ``hosted``;
-    everything else maps to ``cli``) — this matches the surface, not the
-    ``ENV`` setting, so a webapp running locally still reports as ``hosted``.
+    The runtime tag is namespaced as ``opensre.runtime`` to avoid colliding
+    with Sentry's built-in ``runtime`` context (which carries the Python
+    runtime, e.g. ``CPython 3.12``, and is flattened into a tag of the same
+    name by Sentry's event processor — overriding any plain ``runtime`` tag
+    set on the scope). Server-side surfaces (``webapp``/``remote``/``mcp``/
+    ``graph_pipeline``) map to ``hosted``; everything else maps to ``cli`` —
+    this matches the surface, not the ``ENV`` setting, so a webapp running
+    locally still reports as ``hosted``.
     """
     runtime = "hosted" if entrypoint in _HOSTED_ENTRYPOINTS else "cli"
     deployment_method = os.getenv("OPENSRE_DEPLOYMENT_METHOD", "local")
     import sentry_sdk
 
     sentry_sdk.set_tag("entrypoint", entrypoint or "unknown")
-    sentry_sdk.set_tag("runtime", runtime)
+    sentry_sdk.set_tag("opensre.runtime", runtime)
     sentry_sdk.set_tag("deployment_method", deployment_method)
 
 

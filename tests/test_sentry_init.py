@@ -365,7 +365,7 @@ def test_init_sentry_sets_scope_tags(monkeypatch) -> None:
 
     tag_calls = {call.args for call in tag_mock.call_args_list}
     assert ("entrypoint", "webapp") in tag_calls
-    assert ("runtime", "hosted") in tag_calls
+    assert ("opensre.runtime", "hosted") in tag_calls
     assert ("deployment_method", "railway") in tag_calls
 
 
@@ -388,7 +388,7 @@ def test_init_sentry_runtime_tag_is_cli_for_cli_entrypoint(monkeypatch) -> None:
     sentry_mod.init_sentry(entrypoint="cli")
 
     tag_calls = {call.args for call in tag_mock.call_args_list}
-    assert ("runtime", "cli") in tag_calls
+    assert ("opensre.runtime", "cli") in tag_calls
 
 
 def test_init_sentry_runtime_tag_is_hosted_for_webapp_entrypoint(monkeypatch) -> None:
@@ -399,7 +399,7 @@ def test_init_sentry_runtime_tag_is_hosted_for_webapp_entrypoint(monkeypatch) ->
     sentry_mod.init_sentry(entrypoint="webapp")
 
     tag_calls = {call.args for call in tag_mock.call_args_list}
-    assert ("runtime", "hosted") in tag_calls
+    assert ("opensre.runtime", "hosted") in tag_calls
 
 
 def test_init_sentry_runtime_tag_is_cli_when_entrypoint_unknown(monkeypatch) -> None:
@@ -410,7 +410,7 @@ def test_init_sentry_runtime_tag_is_cli_when_entrypoint_unknown(monkeypatch) -> 
     sentry_mod.init_sentry()
 
     tag_calls = {call.args for call in tag_mock.call_args_list}
-    assert ("runtime", "cli") in tag_calls
+    assert ("opensre.runtime", "cli") in tag_calls
 
 
 def test_init_sentry_deployment_method_defaults_to_local(monkeypatch) -> None:
