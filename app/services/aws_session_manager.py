@@ -116,12 +116,19 @@ class AWSSessionManager:
                 is_expired = self._is_session_expired(role_arn, external_id=external_id)
                 if not is_expired:
                     metadata = self._session_metadata[(role_arn, external_id)]
-                    return boto3.Session(
-                        aws_access_key_id=metadata["access_key"],
-                        aws_secret_access_key=metadata["secret_key"],
-                        aws_session_token=metadata["session_token"],
-                        region_name=actual_region,
-                    )
+                    access_key = metadata["access_key"]
+                    secret_key = metadata["secret_key"]
+                    token = metadata["session_token"]
+                else:
+                    access_key = secret_key = token = None
+
+            if access_key:
+                return boto3.Session(
+                    aws_access_key_id=access_key,
+                    aws_secret_access_key=secret_key,
+                    aws_session_token=token,
+                    region_name=actual_region,
+                )
 
             # Session expired or doesn't exist, assume role
             logger.info("Assuming role: %s", role_arn)

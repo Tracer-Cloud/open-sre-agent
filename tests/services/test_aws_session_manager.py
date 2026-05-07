@@ -1,3 +1,4 @@
+import threading
 import time
 from unittest.mock import ANY, MagicMock, patch
 
@@ -8,8 +9,9 @@ from app.services.aws_session_manager import AWSSessionManager
 
 @pytest.fixture(autouse=True)
 def reset_singleton():
-    """Reset the AWSSessionManager singleton before each test."""
+    """Reset the AWSSessionManager singleton and its class lock before each test."""
     AWSSessionManager._instance = None
+    AWSSessionManager._lock = threading.Lock()
     yield
 
 
