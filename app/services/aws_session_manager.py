@@ -53,7 +53,7 @@ class AWSSessionManager:
 
     def _init_manager(self) -> None:
         """Initialize the manager's internal state."""
-        self._client_cache: dict[tuple[str, str, str | None], Any] = {}
+        self._client_cache: dict[tuple[str, str, str | None, str | None], Any] = {}
         self._session_metadata: dict[str, dict[str, Any]] = {}
         self._cache_lock = threading.Lock()
         self._role_locks: dict[str, threading.Lock] = {}
@@ -109,7 +109,7 @@ class AWSSessionManager:
         # Handle Role Assumption with Atomic Locking
         role_lock = self._get_role_lock(role_arn)
         with role_lock:
-            # Check expiry under lock to prevent race conditions (Fixes P1)
+            # Check expiry under lock to prevent race conditions
             with self._cache_lock:
                 is_expired = self._is_session_expired(role_arn)
                 if not is_expired:
@@ -130,7 +130,7 @@ class AWSSessionManager:
             assume_role_kwargs: dict[str, Any] = {
                 "RoleArn": role_arn,
                 "RoleSessionName": f"OpenSRE-Session-{int(time.time())}",
-                "DurationSeconds": DEFAULT_SESSION_DURATION,  # Fixes P2
+                "DurationSeconds": DEFAULT_SESSION_DURATION,
             }
             if external_id:
                 assume_role_kwargs["ExternalId"] = external_id
@@ -139,7 +139,7 @@ class AWSSessionManager:
                 response = sts.assume_role(**assume_role_kwargs)
                 credentials = response["Credentials"]
 
-                # Update metadata in memory only (Fixes P0)
+                # Update metadata in memory only
                 with self._cache_lock:
                     self._session_metadata[role_arn] = {
                         "access_key": credentials["AccessKeyId"],
@@ -180,7 +180,8 @@ class AWSSessionManager:
         actual_region = (
             region or os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "us-east-1"
         )
-        cache_key = (service_name, actual_region, role_arn)
+        # Fixes P1: Include external_id in cache key
+        cache_key = (service_name, actual_region, role_arn, external_id)
 
         with self._cache_lock:
             # Check if we have a valid cached client
@@ -189,7 +190,7 @@ class AWSSessionManager:
             ):
                 return self._client_cache[cache_key]
 
-        # Create new client
+        # Create new client (network bound)
         session = self.get_session(region=actual_region, role_arn=role_arn, external_id=external_id)
 
         # Use persistent connections configuration
@@ -200,6 +201,12 @@ class AWSSessionManager:
         client = session.client(service_name, config=config)  # type: ignore[call-overload]
 
         with self._cache_lock:
+            # Fixes P1: Double-check pattern to prevent race-overwrites after network call
+            if cache_key in self._client_cache and (
+                not role_arn or not self._is_session_expired(role_arn)
+            ):
+                return self._client_cache[cache_key]
+
             self._client_cache[cache_key] = client
             return client
 
