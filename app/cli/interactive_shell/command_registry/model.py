@@ -21,10 +21,14 @@ def _format_supported_models(provider_models: tuple[object, ...]) -> str:
     return ", ".join(visible) if visible else "provider default"
 
 
-def _is_reasoning_model_plausible(provider_value: str, model: str) -> bool:
-    if provider_value == "anthropic":
-        return model.startswith("claude-")
-    return True
+def _is_model_supported(
+    provider_value: str, model: str, provider_models: tuple[object, ...]
+) -> bool:
+    if provider_value == "ollama":
+        # Ollama supports any local model name the daemon exposes.
+        return bool(model)
+    supported_values = {str(getattr(option, "value", "")) for option in provider_models}
+    return model in supported_values
 
 
 def _reset_runtime_llm_caches() -> None:
@@ -84,7 +88,7 @@ def switch_llm_provider(
         return False
 
     selected_model = model.strip() if model else provider.default_model
-    if selected_model and not _is_reasoning_model_plausible(provider.value, selected_model):
+    if selected_model and not _is_model_supported(provider.value, selected_model, provider.models):
         console.print(
             f"[{TERMINAL_ERROR}]unknown model for {provider.value}:[/] {escape(selected_model)}"
         )
@@ -108,6 +112,16 @@ def switch_llm_provider(
         else:
             selected_toolcall = toolcall_model.strip()
             if selected_toolcall:
+                if not _is_model_supported(provider.value, selected_toolcall, provider.models):
+                    console.print(
+                        f"[{TERMINAL_ERROR}]unknown model for {provider.value}:[/] "
+                        f"{escape(selected_toolcall)}"
+                    )
+                    console.print(
+                        "[dim]known toolcall models:[/dim] "
+                        f"{escape(_format_supported_models(provider.models))}"
+                    )
+                    return False
                 values[provider.toolcall_model_env] = selected_toolcall
 
     env_path = sync_env_values(values)
