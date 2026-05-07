@@ -110,13 +110,21 @@
             "pages": [
               "aws",
               "bitbucket",
-              "discord",
               "github",
               "gitlab",
               "google-docs",
               "jira",
-              "slack",
               "vercel"
+            ]
+          },
+          {
+            "group": "Messaging",
+            "expanded": true,
+            "pages": [
+              "messaging/index",
+              "messaging/slack",
+              "messaging/discord",
+              "messaging/telegram"
             ]
           },
           {
