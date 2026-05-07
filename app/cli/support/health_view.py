@@ -13,17 +13,26 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from app.cli.interactive_shell.theme import (
+    ACCENT,
+    BOLD_ACCENT,
+    ERROR,
+    PRIMARY,
+    TEXT_DIM,
+    WARNING,
+)
+
 
 def status_badge(status: str) -> Text:
     normalized = status.strip().lower()
     if normalized in {"passed", "pass", "ok", "healthy"}:
-        return Text("PASSED", style="bold green")
+        return Text("PASSED", style=f"bold {PRIMARY}")
     if normalized in {"warn", "warning", "degraded", "outdated"}:
-        return Text("WARN", style="bold yellow")
+        return Text("WARN", style=f"bold {WARNING}")
     if normalized == "missing":
-        return Text("MISSING", style="bold yellow")
+        return Text("MISSING", style=f"bold {WARNING}")
     if normalized in {"failed", "fail", "error", "unhealthy"}:
-        return Text("FAILED", style="bold red")
+        return Text("FAILED", style=f"bold {ERROR}")
     return Text(normalized.upper() or "UNKNOWN", style="bold")
 
 
@@ -71,7 +80,7 @@ def render_health_report(
     counts = _summary_counts(normalized_results)
 
     console.print()
-    console.print(Panel.fit("[bold cyan]OpenSRE Health[/bold cyan]", border_style="cyan"))
+    console.print(Panel.fit(f"[{BOLD_ACCENT}]OpenSRE Health[/]", border_style=ACCENT))
 
     from app.guardrails.rules import get_default_rules_path, load_rules
 
@@ -91,21 +100,21 @@ def render_health_report(
 
     summary = Text.assemble(
         ("Summary: ", "bold"),
-        (f"{counts['passed']} passed", "green"),
-        ("  |  ", "dim"),
-        (f"{counts['missing']} missing", "yellow"),
-        ("  |  ", "dim"),
-        (f"{counts['failed']} failed", "red"),
+        (f"{counts['passed']} passed", PRIMARY),
+        ("  |  ", TEXT_DIM),
+        (f"{counts['missing']} missing", WARNING),
+        ("  |  ", TEXT_DIM),
+        (f"{counts['failed']} failed", ERROR),
     )
     if counts["other"]:
-        summary.append("  |  ", style="dim")
-        summary.append(f"{counts['other']} unknown", style="magenta")
+        summary.append("  |  ", style=TEXT_DIM)
+        summary.append(f"{counts['other']} unknown")
     console.print(summary)
     console.print()
 
     table = Table(title="Integration Checks", box=box.SIMPLE_HEAVY, show_lines=False)
-    table.add_column("Service", style="bold cyan")
-    table.add_column("Source", style="dim")
+    table.add_column("Service", style=BOLD_ACCENT)
+    table.add_column("Source", style=TEXT_DIM)
     table.add_column("Status")
     table.add_column("Detail")
 
@@ -122,15 +131,15 @@ def render_health_report(
 
     if counts["failed"] > 0:
         console.print(
-            "[bold red]Action:[/bold red] Fix failed integrations, then rerun [bold]opensre health[/bold]."
+            f"[bold {ERROR}]Action:[/] Fix failed integrations, then rerun [bold]opensre health[/bold]."
         )
     elif counts["missing"] > 0:
         console.print(
-            "[bold yellow]Action:[/bold yellow] Configure missing integrations with "
+            f"[bold {WARNING}]Action:[/] Configure missing integrations with "
             "[bold]opensre integrations setup <service>[/bold]."
         )
     else:
-        console.print("[bold green]All configured integrations look healthy.[/bold green]")
+        console.print(f"[bold {PRIMARY}]All configured integrations look healthy.[/]")
 
 
 def render_health_json(

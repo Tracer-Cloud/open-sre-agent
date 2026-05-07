@@ -65,10 +65,11 @@ class TestLLMLoader:
         with llm_loader(console, label="consulting the model"):
             pass
 
-        assert "#6b6561" in captured["text"]
+        # TEXT_DIM role: #6B8C6B (replaces the old #6b6561 value)
+        assert "#6B8C6B" in captured["text"]
         assert "consulting the model" in captured["text"]
         assert captured["kwargs"]["spinner"] == "dots"
-        assert captured["kwargs"]["spinner_style"] == "#6b6561"
+        assert captured["kwargs"]["spinner_style"] == "#6B8C6B"
 
 
 def test_module_exports_loader_and_default_label() -> None:

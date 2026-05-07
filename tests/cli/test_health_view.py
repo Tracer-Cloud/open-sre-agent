@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 from rich.console import Console
 
+from app.cli.interactive_shell.theme import ERROR, PRIMARY, WARNING
 from app.cli.support.health_view import (
     _summary_counts,
     render_health_json,
@@ -18,24 +19,24 @@ def test_status_badge() -> None:
     for s in ["passed", "pass", "ok", "healthy", " PASSED "]:
         badge = status_badge(s)
         assert badge.plain == "PASSED"
-        assert badge.style == "bold green"
+        assert badge.style == f"bold {PRIMARY}"
 
     # Test warn statuses
     for s in ["warn", "warning", "degraded", "outdated"]:
         badge = status_badge(s)
         assert badge.plain == "WARN"
-        assert badge.style == "bold yellow"
+        assert badge.style == f"bold {WARNING}"
 
     # Test missing status
     badge = status_badge("missing")
     assert badge.plain == "MISSING"
-    assert badge.style == "bold yellow"
+    assert badge.style == f"bold {WARNING}"
 
     # Test failed statuses
     for s in ["failed", "fail", "error", "unhealthy"]:
         badge = status_badge(s)
         assert badge.plain == "FAILED"
-        assert badge.style == "bold red"
+        assert badge.style == f"bold {ERROR}"
 
     # Test unknown status
     badge = status_badge("unknown_status")

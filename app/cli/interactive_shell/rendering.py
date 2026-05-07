@@ -12,7 +12,14 @@ from rich.text import Text
 
 from app.cli.interactive_shell.banner import resolve_provider_models
 from app.cli.interactive_shell.interaction_models import PlannedAction
-from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD, TERMINAL_ERROR
+from app.cli.interactive_shell.theme import (
+    ERROR,
+    PRIMARY,
+    TERMINAL_ACCENT_BOLD,
+    TERMINAL_ERROR,
+    TEXT_DIM,
+    WARNING,
+)
 
 
 def repl_table(**kwargs: Any) -> Table:
@@ -28,11 +35,11 @@ def repl_table(**kwargs: Any) -> Table:
 
 def status_style(status: str) -> str:
     return {
-        "ok": "green",
-        "configured": "green",
-        "missing": "yellow",
-        "failed": "red",
-    }.get(status, "dim")
+        "ok": PRIMARY,
+        "configured": PRIMARY,
+        "missing": WARNING,
+        "failed": ERROR,
+    }.get(status, TEXT_DIM)
 
 
 # MCP-type services are rendered separately under `/list mcp` so the default
@@ -43,19 +50,21 @@ _MCP_SERVICES = frozenset({"github", "openclaw"})
 def render_integrations_table(console: Console, results: list[dict[str, str]]) -> None:
     rows = [r for r in results if r.get("service") not in _MCP_SERVICES]
     if not rows:
-        console.print("[dim]no integrations configured.  try `opensre onboard` to add one.[/dim]")
+        console.print(
+            f"[{TEXT_DIM}]no integrations configured.  try `opensre onboard` to add one.[/]"
+        )
         return
     table = repl_table(title="Integrations", title_style=TERMINAL_ACCENT_BOLD)
     table.add_column("service", style="bold")
-    table.add_column("source", style="dim")
+    table.add_column("source", style=TEXT_DIM)
     table.add_column("status")
-    table.add_column("detail", style="dim", overflow="fold")
+    table.add_column("detail", style=TEXT_DIM, overflow="fold")
     for row in rows:
         st = row.get("status", "unknown")
         table.add_row(
             escape(row.get("service", "?")),
             escape(row.get("source", "?")),
-            f"[{status_style(st)}]{escape(st)}[/{status_style(st)}]",
+            f"[{status_style(st)}]{escape(st)}[/]",
             escape(row.get("detail", "")),
         )
     console.print(table)
@@ -64,19 +73,19 @@ def render_integrations_table(console: Console, results: list[dict[str, str]]) -
 def render_mcp_table(console: Console, results: list[dict[str, str]]) -> None:
     rows = [r for r in results if r.get("service") in _MCP_SERVICES]
     if not rows:
-        console.print("[dim]no MCP servers configured.[/dim]")
+        console.print(f"[{TEXT_DIM}]no MCP servers configured.[/]")
         return
     table = repl_table(title="MCP servers", title_style=TERMINAL_ACCENT_BOLD)
     table.add_column("server", style="bold")
-    table.add_column("source", style="dim")
+    table.add_column("source", style=TEXT_DIM)
     table.add_column("status")
-    table.add_column("detail", style="dim", overflow="fold")
+    table.add_column("detail", style=TEXT_DIM, overflow="fold")
     for row in rows:
         st = row.get("status", "unknown")
         table.add_row(
             escape(row.get("service", "?")),
             escape(row.get("source", "?")),
-            f"[{status_style(st)}]{escape(st)}[/{status_style(st)}]",
+            f"[{status_style(st)}]{escape(st)}[/]",
             escape(row.get("detail", "")),
         )
     console.print(table)
@@ -105,7 +114,7 @@ def print_command_output(console: Console, output: str, *, style: str | None = N
 
 
 def print_planned_actions(console: Console, actions: list[PlannedAction]) -> None:
-    console.print("[dim]Requested actions:[/dim]")
+    console.print(f"[{TEXT_DIM}]Requested actions:[/]")
     for index, action in enumerate(actions, start=1):
         label = {
             "llm_provider": "LLM provider",
@@ -115,7 +124,7 @@ def print_planned_actions(console: Console, actions: list[PlannedAction]) -> Non
             "synthetic_test": "synthetic test",
         }[action.kind]
         console.print(
-            f"[dim]{index}.[/dim] [{TERMINAL_ACCENT_BOLD}]{label}[/] {escape(action.content)}"
+            f"[{TEXT_DIM}]{index}.[/] [{TERMINAL_ACCENT_BOLD}]{label}[/] {escape(action.content)}"
         )
 
 

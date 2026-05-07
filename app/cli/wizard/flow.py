@@ -11,8 +11,23 @@ from urllib.parse import urlparse
 
 import questionary
 from rich.console import Console
+from rich.rule import Rule
 from rich.text import Text
 
+from app.cli.interactive_shell.theme import (
+    ACCENT,
+    ACCENT_SOFT,
+    BORDER,
+    ERROR,
+    GLYPH_ERROR,
+    GLYPH_SUCCESS,
+    GLYPH_WARNING,
+    PRIMARY,
+    PRIMARY_ALT,
+    TEXT,
+    TEXT_DIM,
+    WARNING,
+)
 from app.cli.wizard.config import PROVIDER_BY_VALUE, SUPPORTED_PROVIDERS, ProviderOption
 from app.cli.wizard.env_sync import sync_env_values, sync_provider_env
 from app.cli.wizard.integration_health import IntegrationHealthResult
@@ -26,8 +41,9 @@ from app.llm_credentials import (
     has_llm_api_key,
     save_llm_api_key,
 )
+from app.version import get_version
 
-_console = Console()
+_console = Console(highlight=False, force_terminal=True, color_system="truecolor")
 DEFAULT_GITHUB_MCP_URL = "https://api.githubcopilot.com/mcp/"
 DEFAULT_GITHUB_MCP_MODE = "streamable-http"
 DEFAULT_OPENCLAW_MCP_URL = "http://127.0.0.1:18789/"
@@ -179,16 +195,16 @@ def get_sentry_auth_recommendations():
 
 _STYLE = questionary.Style(
     [
-        ("qmark", "fg:#5c7cfa bold"),
-        ("question", "fg:#f8f9fa bold"),
-        ("answer", "fg:#ffd166 bold"),
-        ("pointer", "fg:#ffd166 bold"),
-        ("highlighted", "fg:#0b1020 bg:#ffd166 bold"),
-        ("selected", "fg:#f8f9fa bg:default bold"),
-        ("separator", "fg:#74c0fc"),
-        ("text", "fg:#d9dee7 bg:default"),
-        ("disabled", "fg:#6c757d bg:default italic"),
-        ("instruction", "fg:#858585 italic"),
+        ("qmark", f"fg:{PRIMARY} bold"),
+        ("question", f"fg:{TEXT} bold"),
+        ("answer", f"fg:{ACCENT_SOFT} bold"),
+        ("pointer", f"fg:{PRIMARY} bold"),
+        ("highlighted", f"fg:{TEXT} bg:{PRIMARY} bold"),
+        ("selected", f"fg:{TEXT} bg:default bold"),
+        ("separator", f"fg:{BORDER}"),
+        ("text", f"fg:{TEXT} bg:default"),
+        ("disabled", f"fg:{TEXT_DIM} bg:default italic"),
+        ("instruction", f"fg:{TEXT_DIM} italic"),
     ]
 )
 
@@ -244,7 +260,32 @@ def _integration_defaults(service: str) -> tuple[Mapping[str, object], Mapping[s
 
 
 def _step(title: str) -> None:
-    _console.print(f"\n[bold]{title}[/]")
+    """Print a sub-step header in PRIMARY_ALT with a BORDER rule."""
+    _console.print()
+    t = Text()
+    t.append("  ")
+    t.append(title, style=f"bold {PRIMARY_ALT}")
+    _console.print(t)
+    _console.print(Rule(style=BORDER))
+
+
+def _step_header(n: int, total: int, title: str) -> None:
+    """Print a numbered wizard stage header.
+
+    Rendered output (colour roles):
+      ─────────────────────────────────────────  [BORDER rule]
+      Step 2/4  —  LLM Provider                  [TEXT_DIM "Step N/N"] [TEXT title]
+      ─────────────────────────────────────────  [BORDER rule]
+    """
+    _console.print()
+    _console.print(Rule(style=BORDER))
+    header = Text()
+    header.append("  ")
+    header.append(f"Step {n}/{total}", style=f"bold {TEXT_DIM}")
+    header.append("  —  ", style=BORDER)
+    header.append(title, style=f"bold {TEXT}")
+    _console.print(header)
+    _console.print(Rule(style=BORDER))
 
 
 def _choice_title(choice: Choice) -> str:
@@ -322,19 +363,19 @@ def _prompt_value(
             return default
         if allow_empty:
             return ""
-        _console.print("[red]Required.[/]")
+        _console.print(f"[{ERROR}]  {GLYPH_ERROR}  Required.[/]")
 
 
 def _persist_llm_api_key(env_var: str, value: str) -> bool:
     try:
         save_llm_api_key(env_var, value)
     except RuntimeError as exc:
-        _console.print(f"[red]{exc}[/]")
+        _console.print(f"[{ERROR}]  {GLYPH_ERROR}  {exc}[/]")
         _console.print(
-            "[yellow]OpenSRE could not save your API key to the local system keychain.[/]"
+            f"[{WARNING}]  {GLYPH_WARNING}  OpenSRE could not save your API key to the local system keychain.[/]"
         )
         for line in get_keyring_setup_instructions(env_var):
-            _console.print(f"[dim]{line}[/]")
+            _console.print(f"[{TEXT_DIM}]    {line}[/]")
         return False
     return True
 
@@ -344,12 +385,12 @@ def _parse_csv_values(raw_value: str) -> list[str]:
 
 
 def _display_probe(result: ProbeResult) -> None:
-    status = "[green]reachable[/]" if result.reachable else "[red]unreachable[/]"
-    _console.print(f"{result.target}: {status} [dim]({result.detail})[/]")
+    status = f"[{PRIMARY}]reachable[/]" if result.reachable else f"[{ERROR}]unreachable[/]"
+    _console.print(f"{result.target}: {status} [{TEXT_DIM}]({result.detail})[/]")
 
 
 def _select_target_for_advanced(local_probe: ProbeResult, remote_probe: ProbeResult) -> str | None:
-    _console.print("\n[dim]reachability[/]")
+    _console.print(f"\n[{TEXT_DIM}]reachability[/]")
     _display_probe(local_probe)
     _display_probe(remote_probe)
 
@@ -364,31 +405,65 @@ def _select_target_for_advanced(local_probe: ProbeResult, remote_probe: ProbeRes
     if target == "local":
         return "local"
 
-    _console.print("\n[yellow]Remote setup is not available yet.[/]")
+    _console.print(f"\n[{WARNING}]Remote setup is not available yet.[/]")
     if _confirm("Use local setup instead?", default=True):
         return "local"
-    _console.print("[yellow]Setup cancelled.[/]")
+    _console.print(f"[{WARNING}]Setup cancelled.[/]")
     return None
 
 
 def _render_header() -> None:
+    """Print the onboarding splash using the design-system palette.
+
+    Rendered output (colour roles):
+      ─────────────────────────────────────────  [BORDER rule]
+        ___                    ____  ____  _____ [PRIMARY_ALT art]
+       / _ \\ ...
+      opensre  ·  v2026.4.7                      [TEXT_DIM name] [BORDER ·] [ACCENT_SOFT version]
+      open-source SRE agent for automated …      [BORDER description]
+      ─────────────────────────────────────────  [BORDER rule]
+      Setup — Configure your local AI stack …    [TEXT_DIM subtitle]
+    """
+    from app.cli.interactive_shell.banner import _render_art
+
+    art = _render_art()
+    version = get_version()
+
     _console.print()
-    for line in _ASCII_HEADER.splitlines():
-        _console.print(Text.assemble(("  ", ""), (line, "bold cyan")))
+    _console.print(Rule(style=BORDER))
     _console.print()
-    _console.print(
-        Text.assemble(
-            ("  ", ""),
-            "open-source SRE agent for automated incident investigation and root cause analysis",
-        )
+
+    for line in art.splitlines():
+        t = Text()
+        t.append("  ")
+        t.append(line, style=f"bold {PRIMARY_ALT}")
+        _console.print(t)
+
+    _console.print()
+
+    subtitle = Text()
+    subtitle.append("  ")
+    subtitle.append("opensre", style=TEXT_DIM)
+    subtitle.append("  ·  ", style=BORDER)
+    subtitle.append(f"v{version}", style=ACCENT_SOFT)
+    _console.print(subtitle)
+
+    desc = Text()
+    desc.append(
+        "  open-source SRE agent for automated incident investigation and root cause analysis",
+        style=BORDER,
     )
+    _console.print(desc)
     _console.print()
-    _console.print(Text.assemble(("  Setup", "bold white")))
-    _console.print(
-        Text.assemble(
-            ("    ", ""), ("Configure your local AI stack and optional integrations.", "dim")
-        )
+    _console.print(Rule(style=BORDER))
+    _console.print()
+
+    setup_line = Text()
+    setup_line.append("  Setup", style=f"bold {TEXT}")
+    setup_line.append(
+        "  —  Configure your local AI stack and optional integrations.", style=TEXT_DIM
     )
+    _console.print(setup_line)
     _console.print()
 
 
@@ -401,17 +476,52 @@ def _render_saved_summary(
     configured_integrations: list[str],
     credential_line: str = "system keychain",
 ) -> None:
+    """Print the post-onboarding success screen.
+
+    Rendered output (colour roles):
+      ─────────────────────────────────────────  [BORDER rule]
+      ✓  Done.                                   [PRIMARY ✓ + text]
+      ─────────────────────────────────────────  [BORDER rule]
+                                                 [blank]
+        provider    Anthropic                    [TEXT_DIM key] [TEXT value]
+        model       claude-opus-4-5              [TEXT_DIM key] [TEXT value]
+        services    grafana · datadog            [TEXT_DIM key] [TEXT value]
+        config      ~/.opensre/opensre.json      [TEXT_DIM key] [ACCENT path]
+        env         .env                         [TEXT_DIM key] [ACCENT path]
+        credentials system keychain              [TEXT_DIM key] [TEXT value]
+        store       ~/.opensre/store.json        [TEXT_DIM key] [ACCENT path]
+    """
     from app.integrations.store import STORE_PATH
 
-    integrations = ", ".join(configured_integrations) or "none"
-    _console.print("\n[green]Done.[/]")
-    _console.print(f"[dim]provider      {provider_label}[/]")
-    _console.print(f"[dim]model         {model}[/]")
-    _console.print(f"[dim]services      {integrations}[/]")
-    _console.print(f"[dim]config        {saved_path}[/]")
-    _console.print(f"[dim]env           {env_path}[/]")
-    _console.print(f"[dim]llm creds     {credential_line}[/]")
-    _console.print(f"[dim]integrations  {STORE_PATH}[/]")
+    integrations_str = "  ·  ".join(configured_integrations) if configured_integrations else "none"
+
+    _console.print()
+    _console.print(Rule(style=BORDER))
+
+    done = Text()
+    done.append(f"  {GLYPH_SUCCESS}  ", style=f"bold {PRIMARY}")
+    done.append("Done.", style=f"bold {TEXT}")
+    _console.print(done)
+
+    _console.print(Rule(style=BORDER))
+    _console.print()
+
+    key_col = 14
+
+    def _kv(key: str, value: str, value_style: str = TEXT) -> None:
+        row = Text()
+        row.append(f"    {key:<{key_col}}", style=TEXT_DIM)
+        row.append(value, style=value_style)
+        _console.print(row)
+
+    _kv("provider", provider_label)
+    _kv("model", model)
+    _kv("services", integrations_str)
+    _kv("config", saved_path, ACCENT)
+    _kv("env", env_path, ACCENT)
+    _kv("credentials", credential_line)
+    _kv("store", str(STORE_PATH), ACCENT)
+    _console.print()
 
 
 def _render_integration_result(
@@ -437,13 +547,23 @@ def _render_integration_result(
         return
     ok = bool(result.ok)
     detail = str(result.detail)
-    color = "green" if ok else "red"
+    glyph = GLYPH_SUCCESS if ok else GLYPH_ERROR
+    glyph_style = f"bold {PRIMARY}" if ok else f"bold {ERROR}"
     prefix = "Connected" if ok else "Failed"
-    _console.print(f"[{color}]{service_label} · {prefix}[/]")
+
+    status_line = Text()
+    status_line.append(f"  {glyph}  ", style=glyph_style)
+    status_line.append(f"{service_label}", style=f"bold {TEXT}")
+    status_line.append("  ·  ", style=BORDER)
+    status_line.append(prefix, style=TEXT)
+    _console.print(status_line)
+
     for raw_line in detail.splitlines():
         line = raw_line.strip()
         if line:
-            _console.print(f"[dim]{line}[/]")
+            detail_text = Text()
+            detail_text.append(f"     {line}", style=TEXT_DIM)
+            _console.print(detail_text)
 
 
 def _configure_grafana() -> tuple[str, str]:
@@ -471,7 +591,7 @@ def _configure_grafana() -> tuple[str, str]:
                 }
             )
             return "Grafana", str(env_path)
-        _console.print("[dim]Try again or press Ctrl+C to cancel.[/]")
+        _console.print(f"[{TEXT_DIM}]Try again or press Ctrl+C to cancel.[/]")
 
 
 def _configure_grafana_local() -> tuple[str, str]:
@@ -480,8 +600,8 @@ def _configure_grafana_local() -> tuple[str, str]:
     from pathlib import Path
 
     if not shutil.which("docker"):
-        _console.print("[red]Docker not found.[/]")
-        _console.print("[dim]Install Docker Desktop and retry.[/]")
+        _console.print(f"[{ERROR}]Docker not found.[/]")
+        _console.print(f"[{TEXT_DIM}]Install Docker Desktop and retry.[/]")
         return "Grafana Local (skipped)", ""
 
     # Check Docker daemon is actually running
@@ -493,8 +613,10 @@ def _configure_grafana_local() -> tuple[str, str]:
         errors="replace",
     )
     if ping.returncode != 0:
-        _console.print("[red]Docker is not running.[/]")
-        _console.print("[dim]Start Docker Desktop, then run [bold]opensre onboard[/bold] again.[/]")
+        _console.print(f"[{ERROR}]Docker is not running.[/]")
+        _console.print(
+            f"[{TEXT_DIM}]Start Docker Desktop, then run [bold]opensre onboard[/bold] again.[/]"
+        )
         return "Grafana Local (skipped)", ""
 
     compose_file = str(Path(__file__).parent / "local_grafana_stack/docker-compose.yml")
@@ -507,7 +629,7 @@ def _configure_grafana_local() -> tuple[str, str]:
             errors="replace",
         )
     if result.returncode != 0:
-        _console.print("[red]Docker compose failed.[/]")
+        _console.print(f"[{ERROR}]Docker compose failed.[/]")
         _console.print(result.stderr or result.stdout)
         return "Grafana Local (skipped)", ""
 
@@ -517,7 +639,7 @@ def _configure_grafana_local() -> tuple[str, str]:
 
             seed_logs()
         except (SystemExit, Exception) as exc:
-            _console.print(f"[red]Loki seed failed: {exc}[/]")
+            _console.print(f"[{ERROR}]Loki seed failed: {exc}[/]")
             return "Grafana Local (skipped)", ""
 
     endpoint = "http://localhost:3000"
@@ -525,10 +647,10 @@ def _configure_grafana_local() -> tuple[str, str]:
     remove_integration("grafana")  # clean up any stale grafana record pointing to localhost
     upsert_integration("grafana_local", {"credentials": {"endpoint": endpoint, "api_key": api_key}})
     env_path = sync_env_values({"GRAFANA_INSTANCE_URL": endpoint})
-    _console.print("[green]Grafana Local · ready[/]")
-    _console.print(f"[dim]UI: {endpoint}[/]")
-    _console.print("[dim]Loki seeded with events_fact pipeline failure logs.[/]")
-    _console.print("[dim]Run RCA:[/]")
+    _console.print(f"[{PRIMARY}]Grafana Local · ready[/]")
+    _console.print(f"[{TEXT_DIM}]UI: {endpoint}[/]")
+    _console.print(f"[{TEXT_DIM}]Loki seeded with events_fact pipeline failure logs.[/]")
+    _console.print(f"[{TEXT_DIM}]Run RCA:[/]")
     _console.print("[bold]  opensre investigate -i tests/fixtures/grafana_local_alert.json[/]")
     return "Grafana Local", str(env_path)
 
@@ -560,7 +682,7 @@ def _configure_datadog() -> tuple[str, str]:
             )
             env_path = sync_env_values({})
             return "Datadog", str(env_path)
-        _console.print("[dim]Try again or press Ctrl+C to cancel.[/]")
+        _console.print(f"[{TEXT_DIM}]Try again or press Ctrl+C to cancel.[/]")
 
 
 def _configure_honeycomb() -> tuple[str, str]:
@@ -598,7 +720,7 @@ def _configure_honeycomb() -> tuple[str, str]:
                 }
             )
             return "Honeycomb", str(env_path)
-        _console.print("[dim]Try again or press Ctrl+C to cancel.[/]")
+        _console.print(f"[{TEXT_DIM}]Try again or press Ctrl+C to cancel.[/]")
 
 
 def _configure_coralogix() -> tuple[str, str]:
@@ -651,7 +773,7 @@ def _configure_coralogix() -> tuple[str, str]:
                 }
             )
             return "Coralogix", str(env_path)
-        _console.print("[dim]Try again or press Ctrl+C to cancel.[/]")
+        _console.print(f"[{TEXT_DIM}]Try again or press Ctrl+C to cancel.[/]")
 
 
 def _configure_slack() -> tuple[str, str]:
@@ -668,7 +790,7 @@ def _configure_slack() -> tuple[str, str]:
         if result.ok:
             env_path = sync_env_values({})
             return "Slack", str(env_path)
-        _console.print("[dim]Try again or press Ctrl+C to cancel.[/]")
+        _console.print(f"[{TEXT_DIM}]Try again or press Ctrl+C to cancel.[/]")
 
 
 def _configure_aws() -> tuple[str, str]:
@@ -760,7 +882,7 @@ def _configure_aws() -> tuple[str, str]:
                 )
                 return "AWS", str(env_path)
 
-        _console.print("[dim]Try again or press Ctrl+C to cancel.[/]")
+        _console.print(f"[{TEXT_DIM}]Try again or press Ctrl+C to cancel.[/]")
 
 
 def _configure_github_mcp() -> tuple[str, str]:
@@ -890,7 +1012,7 @@ def _configure_github_mcp() -> tuple[str, str]:
                 }
             )
             return "GitHub MCP", str(env_path)
-        _console.print("[dim]Try again or press Ctrl+C to cancel.[/]")
+        _console.print(f"[{TEXT_DIM}]Try again or press Ctrl+C to cancel.[/]")
 
 
 def _configure_openclaw() -> tuple[str, str]:
@@ -995,7 +1117,7 @@ def _configure_openclaw() -> tuple[str, str]:
             )
             return "OpenClaw", str(env_path)
         default_mode = mode
-        _console.print("[dim]Try again or press Ctrl+C to cancel.[/]")
+        _console.print(f"[{TEXT_DIM}]Try again or press Ctrl+C to cancel.[/]")
 
 
 def _configure_gitlab() -> tuple[str, str]:
@@ -1025,14 +1147,14 @@ def _configure_gitlab() -> tuple[str, str]:
                 }
             )
             return "Gitlab", str(env_path)
-        _console.print("[dim]Try again or press Ctrl+C to cancel.[/]")
+        _console.print(f"[{TEXT_DIM}]Try again or press Ctrl+C to cancel.[/]")
 
 
 def _configure_sentry() -> tuple[str, str]:
     _, credentials = _integration_defaults("sentry")
     guidance = get_sentry_auth_recommendations()
     _console.print(
-        "[dim]Recommended: "
+        f"[{TEXT_DIM}]Recommended: "
         f"{guidance['recommended_token_type']} from {guidance['where_to_create']}. "
         f"{guidance['fallback_token_type']} only if you need broader scopes.[/]"
     )
@@ -1081,7 +1203,7 @@ def _configure_sentry() -> tuple[str, str]:
                 }
             )
             return "Sentry", str(env_path)
-        _console.print("[dim]Try again or press Ctrl+C to cancel.[/]")
+        _console.print(f"[{TEXT_DIM}]Try again or press Ctrl+C to cancel.[/]")
 
 
 def _configure_notion() -> tuple[str, str]:
@@ -1104,7 +1226,7 @@ def _configure_notion() -> tuple[str, str]:
             )
             env_path = sync_env_values({"NOTION_DATABASE_ID": database_id})
             return "Notion", str(env_path)
-        _console.print("[dim]Try again or press Ctrl+C to cancel.[/]")
+        _console.print(f"[{TEXT_DIM}]Try again or press Ctrl+C to cancel.[/]")
 
 
 def _configure_jira() -> tuple[str, str]:
@@ -1143,7 +1265,7 @@ def _configure_jira() -> tuple[str, str]:
             )
             env_path = sync_env_values({})
             return "Jira", str(env_path)
-        _console.print("[dim]Try again or press Ctrl+C to cancel.[/]")
+        _console.print(f"[{TEXT_DIM}]Try again or press Ctrl+C to cancel.[/]")
 
 
 def _configure_google_docs() -> tuple[str, str]:
@@ -1180,7 +1302,7 @@ def _configure_google_docs() -> tuple[str, str]:
                 }
             )
             return "Google Docs", str(env_path)
-        _console.print("[dim]Try again or press Ctrl+C to cancel.[/]")
+        _console.print(f"[{TEXT_DIM}]Try again or press Ctrl+C to cancel.[/]")
 
 
 def _configure_vercel() -> tuple[str, str]:
@@ -1206,7 +1328,7 @@ def _configure_vercel() -> tuple[str, str]:
             )
             env_path = sync_env_values({})
             return "Vercel", str(env_path)
-        _console.print("[dim]Try again or press Ctrl+C to cancel.[/]")
+        _console.print(f"[{TEXT_DIM}]Try again or press Ctrl+C to cancel.[/]")
 
 
 def _configure_betterstack() -> tuple[str, str]:
@@ -1254,7 +1376,7 @@ def _configure_betterstack() -> tuple[str, str]:
             )
             env_path = sync_env_values({})
             return "Better Stack", str(env_path)
-        _console.print("[dim]Try again or press Ctrl+C to cancel.[/]")
+        _console.print(f"[{TEXT_DIM}]Try again or press Ctrl+C to cancel.[/]")
 
 
 def _configure_alertmanager() -> tuple[str, str]:
@@ -1265,7 +1387,7 @@ def _configure_alertmanager() -> tuple[str, str]:
             default=_string_value(credentials.get("base_url")),
         )
         if not base_url:
-            _console.print("[red]Alertmanager URL is required.[/]")
+            _console.print(f"[{ERROR}]Alertmanager URL is required.[/]")
             continue
         auth_choice = _choose(
             "Authentication method",
@@ -1302,7 +1424,7 @@ def _configure_alertmanager() -> tuple[str, str]:
             upsert_integration("alertmanager", {"credentials": creds})
             env_path = sync_env_values({})
             return "Alertmanager", str(env_path)
-        _console.print("[dim]Try again or press Ctrl+C to cancel.[/]")
+        _console.print(f"[{TEXT_DIM}]Try again or press Ctrl+C to cancel.[/]")
 
 
 def _configure_opsgenie() -> tuple[str, str]:
@@ -1327,14 +1449,14 @@ def _configure_opsgenie() -> tuple[str, str]:
             )
             env_path = sync_env_values({})
             return "OpsGenie", str(env_path)
-        _console.print("[dim]Try again or press Ctrl+C to cancel.[/]")
+        _console.print(f"[{TEXT_DIM}]Try again or press Ctrl+C to cancel.[/]")
 
 
 def _configure_discord() -> tuple[str, str]:
     _, credentials = _integration_defaults("discord")
     _console.print(
         "\n[bold]Discord Integration[/bold]\n"
-        "[dim]Get your credentials from https://discord.com/developers/applications.[/]\n"
+        f"[{TEXT_DIM}]Get your credentials from https://discord.com/developers/applications.[/]\n"
     )
     while True:
         bot_token = _prompt_value(
@@ -1382,7 +1504,7 @@ def _configure_discord() -> tuple[str, str]:
                 }
             )
             return "Discord", str(env_path)
-        _console.print("[dim]Try again or press Ctrl+C to cancel.[/]")
+        _console.print(f"[{TEXT_DIM}]Try again or press Ctrl+C to cancel.[/]")
 
 
 def _configure_splunk() -> tuple[str, str]:
@@ -1444,7 +1566,7 @@ def _configure_splunk() -> tuple[str, str]:
                 env_values["SPLUNK_CA_BUNDLE"] = ca_bundle
             env_path = sync_env_values(env_values)
             return "Splunk", str(env_path)
-        _console.print("[dim]Try again or press Ctrl+C to cancel.[/]")
+        _console.print(f"[{TEXT_DIM}]Try again or press Ctrl+C to cancel.[/]")
 
 
 def _configure_selected_integrations() -> tuple[list[str], str | None]:
@@ -1452,7 +1574,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
     last_env_path: str | None = None
 
     _console.print(
-        "[dim]Pick one integration to wire up now, or skip this step and come back later.[/]"
+        f"[{TEXT_DIM}]Pick one integration to wire up now, or skip this step and come back later.[/]"
     )
     integration_choices = [
         Choice(
@@ -1585,7 +1707,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
     _step(f"Service · {_SERVICE_LABELS.get(selected_service, selected_service)}")
     if selected_service == "vercel":
         _console.print(
-            "[dim]Note: Vercel's runtime-log API may omit or delay lines compared to the "
+            f"[{TEXT_DIM}]Note: Vercel's runtime-log API may omit or delay lines compared to the "
             "dashboard. Deployment and build checks still apply; there is no CLI incident browser.[/]"
         )
     try:
@@ -1594,18 +1716,54 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         last_env_path = env_path
     except KeyboardInterrupt:
         _console.print(
-            f"[yellow]{_SERVICE_LABELS.get(selected_service, selected_service)} setup skipped.[/]"
+            f"[{WARNING}]{_SERVICE_LABELS.get(selected_service, selected_service)} setup skipped.[/]"
         )
 
     return configured, last_env_path
 
 
 def _render_next_steps() -> None:
-    _console.print("\n[bold]next[/]")
-    _console.print("[dim]opensre onboard[/]")
-    _console.print(
-        "[dim]opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json[/]"
+    """Print the 'What's next' section after successful onboarding.
+
+    Rendered output (colour roles):
+      ─────────────────────────────────────────  [BORDER rule]
+      What's next                                [TEXT_DIM label]
+      ─────────────────────────────────────────  [BORDER rule]
+        opensre                                  [ACCENT runnable command]
+          Start the interactive agent
+        opensre investigate -i alert.json        [ACCENT runnable command]
+          Run root-cause analysis on an alert
+        opensre doctor                           [ACCENT runnable command]
+          Verify your environment setup
+    """
+    _console.print(Rule(style=BORDER))
+
+    section = Text()
+    section.append("  What's next", style=TEXT_DIM)
+    _console.print(section)
+
+    _console.print(Rule(style=BORDER))
+    _console.print()
+
+    _NEXT: tuple[tuple[str, str], ...] = (
+        ("opensre", "Start the interactive agent"),
+        (
+            "opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json",
+            "Run root-cause analysis on a sample alert",
+        ),
+        ("opensre doctor", "Verify your full environment setup"),
+        ("opensre onboard", "Re-run this setup at any time"),
     )
+
+    for cmd, description in _NEXT:
+        cmd_line = Text()
+        cmd_line.append(f"  {cmd}", style=f"bold {ACCENT}")
+        _console.print(cmd_line)
+        desc_line = Text()
+        desc_line.append(f"    {description}", style=TEXT_DIM)
+        _console.print(desc_line)
+
+    _console.print()
 
 
 def _credential_line_for_saved_summary(provider: ProviderOption) -> str:
@@ -1622,7 +1780,9 @@ def _run_cli_llm_onboarding(provider: ProviderOption) -> Literal["ok", "abort", 
     """Probe CLI binary + auth; recovery menu when missing. ``repick`` = choose another LLM."""
     factory = provider.adapter_factory
     if factory is None:
-        _console.print("[red]Internal error: CLI provider missing adapter factory.[/]")
+        _console.print(
+            f"[{ERROR}]  {GLYPH_ERROR}  Internal error: CLI provider missing adapter factory.[/]"
+        )
         return "abort"
     adapter = factory()
     env_key = adapter.binary_env_key
@@ -1632,10 +1792,10 @@ def _run_cli_llm_onboarding(provider: ProviderOption) -> Literal["ok", "abort", 
     for _attempt in range(10):
         probe = adapter.detect()
         if probe.installed and probe.logged_in is True:
-            _console.print(f"[dim]{probe.detail}[/]")
+            _console.print(f"[{TEXT_DIM}]{probe.detail}[/]")
             return "ok"
         if probe.installed and probe.logged_in is not True:
-            _console.print(f"[yellow]{probe.detail}[/]")
+            _console.print(f"[{WARNING}]  {GLYPH_WARNING}  {probe.detail}[/]")
             status_prompt = (
                 f"{provider.label} requires login. What next?"
                 if probe.logged_in is False
@@ -1660,7 +1820,7 @@ def _run_cli_llm_onboarding(provider: ProviderOption) -> Literal["ok", "abort", 
             if action == "repick":
                 return "repick"
             continue
-        _console.print(f"[yellow]{probe.detail}[/]")
+        _console.print(f"[{WARNING}]  {GLYPH_WARNING}  {probe.detail}[/]")
         action = _choose(
             f"{provider.label} not found. What next?",
             [
@@ -1688,13 +1848,13 @@ def _run_cli_llm_onboarding(provider: ProviderOption) -> Literal["ok", "abort", 
             path = _prompt_value(f"Full path to {name} binary")
             reason = diagnose_binary_path(path)
             if reason:
-                _console.print(f"[yellow]{reason} Try again.[/]")
+                _console.print(f"[{WARNING}]{reason} Try again.[/]")
                 continue
             sync_env_values({env_key: path})
             os.environ[env_key] = path
             continue
-        _console.print(f"[dim]Hint: {install_hint}[/]")
-    _console.print("[yellow]Too many retry attempts. Aborting setup.[/]")
+        _console.print(f"[{TEXT_DIM}]    Hint: {install_hint}[/]")
+    _console.print(f"[{WARNING}]  {GLYPH_WARNING}  Too many retry attempts. Aborting setup.[/]")
     return "abort"
 
 
@@ -1713,7 +1873,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
         else SUPPORTED_PROVIDERS[0].value
     )
 
-    _step("Setup Mode")
+    _step_header(1, 4, "Setup Mode")
     wizard_mode = _choose(
         "How do you want to get started?",
         [
@@ -1753,13 +1913,15 @@ def run_wizard(_argv: list[str] | None = None) -> int:
     provider: ProviderOption
     model: str
     while True:
-        _step("LLM Provider")
+        _step_header(2, 4, "LLM Provider")
         saved_provider = (
             PROVIDER_BY_VALUE.get(saved_provider_value) if saved_provider_value else None
         )
         if saved_provider is not None and not force_repick:
             current_model = saved_model_value or saved_provider.default_model
-            _console.print(f"[dim]current provider  {saved_provider.label}  ·  {current_model}[/]")
+            _console.print(
+                f"[{TEXT_DIM}]current provider  {saved_provider.label}  ·  {current_model}[/]"
+            )
             change_provider = _confirm("Change provider?", default=False)
         else:
             change_provider = True
@@ -1790,7 +1952,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                         secret=provider.credential_secret,
                     )
                 except KeyboardInterrupt:
-                    _console.print("\n[yellow]Setup cancelled.[/]")
+                    _console.print(f"\n[{WARNING}]Setup cancelled.[/]")
                     return 1
                 if not _persist_llm_api_key(provider.api_key_env, api_key):
                     return 1
@@ -1814,7 +1976,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                             secret=provider.credential_secret,
                         )
                     except KeyboardInterrupt:
-                        _console.print("\n[yellow]Setup cancelled.[/]")
+                        _console.print(f"\n[{WARNING}]Setup cancelled.[/]")
                         return 1
                     if not _persist_llm_api_key(provider.api_key_env, api_key):
                         return 1
@@ -1842,11 +2004,14 @@ def run_wizard(_argv: list[str] | None = None) -> int:
     )
     env_path = sync_provider_env(provider=provider, model=model)
 
-    _step("Integrations")
+    _step_header(3, 4, "Integrations")
     try:
         configured_integrations, integration_env_path = _configure_selected_integrations()
     except KeyboardInterrupt:
-        _console.print("\n[yellow]Integration setup cancelled. AI config was kept.[/]")
+        cancelled = Text()
+        cancelled.append(f"\n  {GLYPH_WARNING}  ", style=f"bold {WARNING}")
+        cancelled.append("Integration setup cancelled. AI config was kept.", style=TEXT)
+        _console.print(cancelled)
         configured_integrations = []
         integration_env_path = None
 
