@@ -162,14 +162,9 @@ def test_build_slack_blocks_shows_recommended_actions() -> None:
     blocks = build_slack_blocks(ctx)
 
     block_texts = [
-        b.get("text", {}).get("text", "") if isinstance(b.get("text"), dict) else ""
-        for b in blocks
+        b.get("text", {}).get("text", "") if isinstance(b.get("text"), dict) else "" for b in blocks
     ]
-    header_texts = [
-        b.get("text", {}).get("text", "")
-        for b in blocks
-        if b.get("type") == "header"
-    ]
+    header_texts = [b.get("text", {}).get("text", "") for b in blocks if b.get("type") == "header"]
     assert any("Recommended Actions" in t for t in header_texts)
     assert any("Increase memory limit" in t for t in block_texts)
     assert any(b.get("type") == "divider" for b in blocks)
@@ -179,9 +174,5 @@ def test_build_slack_blocks_omits_recommended_actions_when_empty() -> None:
     ctx = build_report_context(_make_state())  # remediation_steps=[] by default
     blocks = build_slack_blocks(ctx)
 
-    header_texts = [
-        b.get("text", {}).get("text", "")
-        for b in blocks
-        if b.get("type") == "header"
-    ]
+    header_texts = [b.get("text", {}).get("text", "") for b in blocks if b.get("type") == "header"]
     assert not any("Recommended Actions" in t for t in header_texts)
