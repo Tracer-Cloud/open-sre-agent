@@ -17,21 +17,39 @@ def meter() -> ClaudeCodeMeter:
 
 
 def test_parses_full_fixture_stream(meter: ClaudeCodeMeter) -> None:
-    """Sum input + output tokens across every message in a real stream.
+    """Sum input + output tokens across every ``assistant`` event in a
+    real stream.
 
     Hand-counted from ``fixtures/claude_code_stream.ndjson``:
-    - msg_01: 120 in + 18 out = 138
-    - msg_02: 250 in + 42 out = 292
-    - msg_03: 315 in + 11 out = 326
-    - result: 315 in + 71 out = 386 (the ``result`` event repeats the
-      final-turn totals, which the meter correctly counts again — the
-      dashboard wiring is responsible for de-duplicating, not the
-      parser)
 
-    Total: 138 + 292 + 326 + 386 = 1142.
+    - ``system.init`` → no usage block, contributes 0.
+    - ``assistant`` msg_01: 120 in + 18 out = 138.
+    - ``assistant`` msg_02: 250 in + 42 out = 292.
+    - ``user`` (tool_result) → no usage block, contributes 0.
+    - ``assistant`` msg_03: 315 in + 11 out = 326.
+    - ``result`` → cumulative session totals (315 in + 71 out); the
+      meter ignores ``result`` events because counting them would
+      double-count the final turn's input and the entire session's
+      output (~50% inflation in any multi-turn session).
+
+    Total: 138 + 292 + 326 = **756**.
     """
     chunk = _FIXTURE.read_text(encoding="utf-8")
-    assert meter.parse_chunk(chunk) == 1142
+    assert meter.parse_chunk(chunk) == 756
+
+
+def test_result_event_is_ignored(meter: ClaudeCodeMeter) -> None:
+    """The ``result`` event carries cumulative session totals, not
+    per-turn deltas — counting it would overcount. Locking the
+    behavior in so a future "simplification" doesn't silently
+    re-introduce a ~50% inflation in every multi-turn session.
+    """
+    result_event = (
+        '{"type":"result","subtype":"success","is_error":false,'
+        '"duration_ms":3420,"usage":{"input_tokens":315,"output_tokens":71},'
+        '"total_cost_usd":0.012}'
+    )
+    assert meter.parse_chunk(result_event) == 0
 
 
 def test_returns_zero_for_irrelevant_chunk(meter: ClaudeCodeMeter) -> None:
@@ -41,13 +59,23 @@ def test_returns_zero_for_irrelevant_chunk(meter: ClaudeCodeMeter) -> None:
     assert meter.parse_chunk('{"type":"system","subtype":"init"}') == 0
 
 
-def test_returns_zero_for_token_word_outside_json_key_form(meter: ClaudeCodeMeter) -> None:
-    """Free-form 'tokens' mentions in assistant content must not be counted.
-
-    Previously a regex that matched any ``tokens`` substring would
-    falsely score the assistant's own prose. The quoted-key form is
-    the contract.
+def test_returns_zero_for_assistant_text_containing_token_keys(meter: ClaudeCodeMeter) -> None:
+    """An assistant response whose ``text`` content happens to embed
+    the literal JSON-key form (e.g. Claude generating documentation
+    about the Anthropic API) must not contribute. Structural
+    discrimination via ``message.usage`` rules out free-form text
+    matches that a flat regex would have captured.
     """
+    embedded_key = (
+        '{"type":"assistant","message":{"content":'
+        '[{"type":"text","text":"Anthropic responses look like '
+        r'\"input_tokens\": 5000."}]}}'
+    )
+    assert meter.parse_chunk(embedded_key) == 0
+
+
+def test_returns_zero_for_token_word_outside_json_key_form(meter: ClaudeCodeMeter) -> None:
+    """Free-form 'tokens' mentions in assistant content must not be counted."""
     free_form = (
         '{"type":"assistant","message":{"content":'
         '[{"type":"text","text":"This used 50 tokens, roughly."}]}}'
@@ -56,30 +84,29 @@ def test_returns_zero_for_token_word_outside_json_key_form(meter: ClaudeCodeMete
 
 
 def test_sums_correctly_across_split_chunks(meter: ClaudeCodeMeter) -> None:
-    """Acceptance: a stream split into multiple chunks must total to the
-    same as the full stream when partial chunks don't bisect a
-    ``"input_tokens": <n>`` match.
-
-    The dashboard wiring delivers chunks aligned on newlines (it reads
-    ``stdout`` line-by-line under the hood), so this is the realistic
-    splitting case.
+    """A stream split into line-aligned chunks must total to the same
+    as the full stream. The wiring layer reads ``stdout`` line-by-line,
+    so this is the realistic splitting case.
     """
     full = _FIXTURE.read_text(encoding="utf-8")
     lines = full.splitlines(keepends=True)
-    # Split mid-stream: first half + second half, line-aligned.
     midpoint = len(lines) // 2
     chunk_a = "".join(lines[:midpoint])
     chunk_b = "".join(lines[midpoint:])
-    assert meter.parse_chunk(chunk_a) + meter.parse_chunk(chunk_b) == 1142
+    assert meter.parse_chunk(chunk_a) + meter.parse_chunk(chunk_b) == 756
 
 
 def test_handles_each_event_type_in_isolation(meter: ClaudeCodeMeter) -> None:
     """Each NDJSON event is independently parseable — useful for the
-    line-by-line streaming the dashboard wiring will do."""
+    line-by-line streaming the dashboard wiring will do.
+
+    Per-line breakdown of the fixture (system, three assistant turns,
+    a tool_result user event, and a final result event):
+    """
     lines = _FIXTURE.read_text(encoding="utf-8").splitlines()
     counts = [meter.parse_chunk(line) for line in lines]
-    # init has no usage → 0; first assistant has 120+18=138; etc.
-    assert counts == [0, 138, 292, 0, 326, 386]
+    # system, msg_01, msg_02, tool_result, msg_03, result
+    assert counts == [0, 138, 292, 0, 326, 0]
 
 
 def test_cache_token_counters_are_not_summed(meter: ClaudeCodeMeter) -> None:
@@ -89,8 +116,22 @@ def test_cache_token_counters_are_not_summed(meter: ClaudeCodeMeter) -> None:
     separately when cache-cost tracking ships in a follow-up.
     """
     chunk_with_cache = (
-        '{"usage":{"input_tokens":100,"cache_creation_input_tokens":500,'
-        '"cache_read_input_tokens":2000,"output_tokens":50}}'
+        '{"type":"assistant","message":{"usage":{"input_tokens":100,'
+        '"cache_creation_input_tokens":500,"cache_read_input_tokens":2000,'
+        '"output_tokens":50}}}'
     )
     # 100 + 50 = 150, NOT 100 + 500 + 2000 + 50 = 2650
     assert meter.parse_chunk(chunk_with_cache) == 150
+
+
+def test_malformed_json_lines_are_skipped(meter: ClaudeCodeMeter) -> None:
+    """Truncated or otherwise unparseable JSON lines must not raise —
+    the wiring layer can deliver partial lines on subprocess
+    teardown, and a noisy session should not crash the dashboard.
+    """
+    chunk = (
+        "not json at all\n"
+        '{"type":"assistant","message":{"usage":{"input_tokens":10,"output_tokens":5}}}\n'
+        '{"type":"assistant","message":{"usage":'  # truncated
+    )
+    assert meter.parse_chunk(chunk) == 15
