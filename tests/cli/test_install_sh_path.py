@@ -51,6 +51,104 @@ def _run(
     return subprocess.run(["bash", "-c", script], capture_output=True, text=True)
 
 
+def _run_logging_snippet(body: str) -> subprocess.CompletedProcess[str]:
+    script = textwrap.dedent(f"""\
+        eval "$(awk '/^REPO=/{{exit}} {{print}}' {INSTALL_SH})"
+        eval "$(awk '
+            /^[a-z_][a-z_]*\\(\\)/ {{ in_fn=1 }}
+            in_fn {{ print }}
+            in_fn && /^\\}}$/ {{ in_fn=0 }}
+        ' {INSTALL_SH})"
+        {body}
+    """)
+    return subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+
+
+def _find_release_metadata_step_block() -> str:
+    lines = INSTALL_SH.read_text().splitlines()
+    for i, line in enumerate(lines):
+        if line.strip() != 'release_tag=""':
+            continue
+
+        block = []
+        for candidate in lines[i + 1 :]:
+            block.append(candidate)
+            if candidate.strip() == "fi":
+                return "\n".join(block)
+
+    raise RuntimeError(f"Could not locate release metadata step block in {INSTALL_SH}.")
+
+
+def _run_release_metadata_step(
+    install_channel: str = "release", version: str = ""
+) -> subprocess.CompletedProcess[str]:
+    block = _find_release_metadata_step_block()
+    script = textwrap.dedent(f"""\
+        eval "$(awk '/^REPO=/{{exit}} {{print}}' {INSTALL_SH})"
+        eval "$(awk '
+            /^[a-z_][a-z_]*\\(\\)/ {{ in_fn=1 }}
+            in_fn {{ print }}
+            in_fn && /^\\}}$/ {{ in_fn=0 }}
+        ' {INSTALL_SH})"
+        INSTALL_CHANNEL="{install_channel}"
+        version="{version}"
+        {block}
+    """)
+    return subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+
+
+def test_install_sh_logging_falls_back_to_plain_text_when_not_tty() -> None:
+    result = _run_logging_snippet(
+        """
+        warn "check config"
+        success "installed"
+        step "[1/4] Fetching metadata"
+        """
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "\x1b[" not in result.stdout + result.stderr
+    assert "Warning: check config" in result.stderr
+    assert "Success: installed" in result.stdout
+    assert "[1/4] Fetching metadata" in result.stdout
+
+
+def test_install_sh_die_falls_back_to_plain_text_when_not_tty() -> None:
+    result = _run_logging_snippet('die "missing curl"')
+
+    assert result.returncode == 1
+    assert "\x1b[" not in result.stderr
+    assert "Error: missing curl" in result.stderr
+
+
+def test_install_sh_defines_tty_aware_ansi_formatting() -> None:
+    source = INSTALL_SH.read_text()
+
+    assert "if [ -t 1 ]; then" in source
+    assert "COLOR_GREEN=$'\\033[32m'" in source
+    assert "COLOR_YELLOW=$'\\033[33m'" in source
+    assert "COLOR_RED=$'\\033[31m'" in source
+    assert "success()" in source
+
+
+def test_install_sh_success_screen_has_visual_structure() -> None:
+    result = _run_logging_snippet("print_success_screen 2026.4.1")
+    output = result.stdout + result.stderr
+
+    assert result.returncode == 0, result.stderr
+    assert "--------------------------------------------" in output
+    assert "Success: Welcome to OpenSRE" in output
+    assert "opensre v2026.4.1 installed successfully" in output
+    assert "Next steps:" in output
+
+
+def test_install_sh_has_step_for_explicit_version_fetch() -> None:
+    result = _run_release_metadata_step(version="2026.4.29")
+
+    assert result.returncode == 0, result.stderr
+    assert "[1/4] Fetching release metadata for v2026.4.29..." in result.stdout
+
+
 def test_zsh_writes_export_to_zshrc(tmp_path: Path) -> None:
     result = _run(tmp_path, shell="/bin/zsh")
     assert result.returncode == 0, result.stderr

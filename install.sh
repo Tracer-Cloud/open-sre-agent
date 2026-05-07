@@ -7,6 +7,24 @@
 
 set -euo pipefail
 
+if [ -t 1 ]; then
+  COLOR_RESET=$'\033[0m'
+  COLOR_BOLD=$'\033[1m'
+  COLOR_RED=$'\033[31m'
+  COLOR_GREEN=$'\033[32m'
+  COLOR_YELLOW=$'\033[33m'
+  COLOR_CYAN=$'\033[36m'
+  SUCCESS_MARK="✓"
+else
+  COLOR_RESET=""
+  COLOR_BOLD=""
+  COLOR_RED=""
+  COLOR_GREEN=""
+  COLOR_YELLOW=""
+  COLOR_CYAN=""
+  SUCCESS_MARK="Success:"
+fi
+
 REPO="${OPENSRE_INSTALL_REPO:-Tracer-Cloud/opensre}"
 DEFAULT_INSTALL_DIR="${HOME}/.local/bin"
 USER_INSTALL_DIR_CANDIDATES="${OPENSRE_USER_INSTALL_DIR_CANDIDATES:-$HOME/.local/bin:$HOME/bin}"
@@ -26,12 +44,20 @@ log() {
 }
 
 warn() {
-  printf 'Warning: %s\n' "$*" >&2
+  printf '%sWarning:%s %s\n' "${COLOR_YELLOW:-}" "${COLOR_RESET:-}" "$*" >&2
 }
 
 die() {
-  printf 'Error: %s\n' "$*" >&2
+  printf '%sError:%s %s\n' "${COLOR_RED:-}" "${COLOR_RESET:-}" "$*" >&2
   exit 1
+}
+
+success() {
+  printf '%s%s %s%s\n' "${COLOR_GREEN:-}" "${SUCCESS_MARK:-Success:}" "$*" "${COLOR_RESET:-}"
+}
+
+step() {
+  printf '%s%s%s\n' "${COLOR_CYAN:-}" "$1" "${COLOR_RESET:-}"
 }
 
 usage() {
@@ -555,10 +581,11 @@ print_success_screen() {
 
   log ""
   log "$sep"
+  success "Welcome to OpenSRE"
   if [ "$version" = "main" ]; then
-    log "  opensre (main build) installed successfully"
+    log "  ${COLOR_BOLD:-}opensre (main build) installed successfully${COLOR_RESET:-}"
   else
-    log "  opensre v${version} installed successfully"
+    log "  ${COLOR_BOLD:-}opensre v${version} installed successfully${COLOR_RESET:-}"
   fi
   log "$sep"
   log ""
@@ -615,9 +642,11 @@ version="$requested_version"
 release_tag=""
 
 if [ "$INSTALL_CHANNEL" = "main" ]; then
-  log "Fetching latest main build metadata..."
-elif [ -z "$version" ]; then
-  log "Fetching latest release version..."
+  step "[1/4] Fetching latest main build metadata..."
+elif [ -n "$version" ]; then
+  step "[1/4] Fetching release metadata for v${version}..."
+else
+  step "[1/4] Fetching latest release version..."
 fi
 
 release_json="$(fetch_release_json "$version")" || {
@@ -669,14 +698,15 @@ checksum_asset="${archive}.sha256"
 checksum_url="${download_url}.sha256"
 
 if [ "$INSTALL_CHANNEL" = "main" ]; then
-  log "Installing opensre main build (${platform}/${target_arch})..."
+  step "[2/4] Preparing opensre main build (${platform}/${target_arch})..."
 else
-  log "Installing opensre v${version} (${platform}/${target_arch})..."
+  step "[2/4] Preparing opensre v${version} (${platform}/${target_arch})..."
 fi
 if [ "$asset_arch" != "$target_arch" ]; then
   log "Using release asset built for ${platform}/${asset_arch}."
 fi
-log "Downloading ${download_url}"
+step "[3/4] Downloading release archive..."
+log "  ${download_url}"
 
 need_cmd mktemp
 tmp_dir="$(mktemp -d)"
@@ -708,6 +738,7 @@ if [ "$INSTALL_WITH_SUDO" -eq 1 ]; then
   log "Installing into ${INSTALL_DIR} with sudo so '${BIN_NAME}' is available immediately in this shell."
 fi
 
+step "[4/4] Installing binary..."
 run_with_privilege mkdir -p "$INSTALL_DIR"
 extract_archive "$archive_path" "$tmp_dir"
 
@@ -721,12 +752,12 @@ install_binary "$binary_path" "${INSTALL_DIR}/${BIN_NAME}"
 
 if [ "$INSTALL_CHANNEL" = "main" ]; then
   if [ "$installed_version" = "main" ]; then
-    log "Installed ${BIN_NAME} main build to ${INSTALL_DIR}/${BIN_NAME}"
+    success "Installed ${BIN_NAME} main build to ${INSTALL_DIR}/${BIN_NAME}"
   else
-    log "Installed ${BIN_NAME} main build (${installed_version}) to ${INSTALL_DIR}/${BIN_NAME}"
+    success "Installed ${BIN_NAME} main build (${installed_version}) to ${INSTALL_DIR}/${BIN_NAME}"
   fi
 else
-  log "Installed ${BIN_NAME} v${installed_version} to ${INSTALL_DIR}/${BIN_NAME}"
+  success "Installed ${BIN_NAME} v${installed_version} to ${INSTALL_DIR}/${BIN_NAME}"
 fi
 
 configure_path
