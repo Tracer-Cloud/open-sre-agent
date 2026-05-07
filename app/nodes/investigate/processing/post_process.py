@@ -673,6 +673,12 @@ def _map_elb_target_health(data: dict) -> dict:
         # Pre-computed summary block — total_targets, healthy_count, unhealthy_count,
         # healthy_ratio_pct, unhealthy_states, target_group_count.
         "elb_target_health_summary": data.get("summary", {}),
+        # Per-TG describe_target_health failures. Non-empty means the agent
+        # is reading partial coverage and must NOT cite a healthy_ratio_pct
+        # without acknowledging the gap. The mapper still runs on
+        # `result.success=True` regardless of `data["available"]`, so we
+        # forward the failure list explicitly.
+        "elb_api_errors": data.get("api_errors", []),
     }
 
 

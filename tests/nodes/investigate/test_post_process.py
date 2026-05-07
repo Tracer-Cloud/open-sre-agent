@@ -104,6 +104,37 @@ class TestEC2RDSMappersPreserveSummary:
         assert mapped["elb_target_health_summary"]["healthy_ratio_pct"] == 100.0
         assert mapped["elb_target_health_summary"]["target_group_count"] == 1
 
+    def test_elb_api_errors_reach_evidence(self) -> None:
+        """Partial-coverage failures must surface to the agent. Without
+        ``elb_api_errors`` the agent would read healthy_ratio_pct=100 from
+        the only successful TG and miss that other TGs were never queried."""
+        mapper = EVIDENCE_MAPPERS["get_elb_target_health"]
+        mapped = mapper(
+            {
+                "source": "ec2",
+                "available": False,
+                "target_groups": [
+                    {"TargetGroupArn": "tg-web"},
+                    {"TargetGroupArn": "tg-worker"},
+                ],
+                "healthy_targets": [{"instance_id": "i-w1", "state": "healthy"}],
+                "unhealthy_targets": [],
+                "instance_ids": ["i-w1"],
+                "summary": {
+                    "total_targets": 1,
+                    "healthy_count": 1,
+                    "unhealthy_count": 0,
+                    "healthy_ratio_pct": 100.0,
+                    "unhealthy_states": [],
+                    "target_group_count": 2,
+                },
+                "api_errors": [{"target_group_arn": "tg-worker", "error": "AccessDenied"}],
+            }
+        )
+        assert mapped["elb_api_errors"] == [
+            {"target_group_arn": "tg-worker", "error": "AccessDenied"}
+        ]
+
     def test_summary_absent_does_not_crash_mapper(self) -> None:
         """Older or partial tool outputs without a summary block must still
         flow through — the mapper degrades to an empty dict rather than KeyError."""
