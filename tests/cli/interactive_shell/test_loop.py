@@ -46,7 +46,7 @@ def test_build_prompt_session_uses_persistent_history(
     monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
 
     with create_app_session(input=DummyInput(), output=DummyOutput()):
-        prompt = loop._build_prompt_session(ReplSession())
+        prompt = loop._build_prompt_session()
 
     assert isinstance(prompt.history, FileHistory)
     assert prompt.history.filename == str(tmp_path / "interactive_history")
@@ -66,7 +66,7 @@ def test_build_prompt_session_falls_back_to_memory_history(
     monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", blocked_home)
 
     with create_app_session(input=DummyInput(), output=DummyOutput()):
-        prompt = loop._build_prompt_session(ReplSession())
+        prompt = loop._build_prompt_session()
 
     assert isinstance(prompt.history, InMemoryHistory)
 
@@ -176,13 +176,13 @@ def test_completion_menu_current_item_uses_highlight_style() -> None:
     attrs = style.get_attrs_for_style_str("class:repl-slash-command")
 
     assert attrs.color == "5EF0E8"  # ACCENT_SOFT
-    assert attrs.bgcolor == "111811"  # SURFACE
+    assert attrs.bgcolor == "2c1e14"  # warm dark bg used for slash-command token
     assert attrs.bold is True
 
     attrs_menu = style.get_attrs_for_style_str("class:completion-menu.completion.current")
 
     assert attrs_menu.color == "1AFF8C"  # PRIMARY
-    assert attrs_menu.bgcolor == "111811"  # SURFACE
+    assert attrs_menu.bgcolor == "2c1e14"  # warm dark bg
     assert attrs_menu.reverse is False
     assert attrs_menu.bold is True
 
