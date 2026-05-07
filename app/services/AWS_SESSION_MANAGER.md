@@ -17,6 +17,7 @@ This implementation replaces the previous "stateless instantiation" pattern for 
 ### AWSSessionManager Singleton
 - **In-Memory Caching**: Manages sessions and clients in a thread-safe dictionary.
 - **Security**: Credentials are kept strictly in-memory; no plaintext persistence to disk (as per P0 security guidelines).
+- **Isolation**: Sessions are isolated by `(role_arn, external_id)`. This ensures that different external IDs for the same role are independently verified by AWS and cannot "borrow" existing sessions (Fixes PR #1424).
 - **Atomic Locking**: Uses `threading.Lock` per `role_arn` to prevent the "Thundering Herd" problem.
 
 ### Integration Points
@@ -26,5 +27,6 @@ This implementation replaces the previous "stateless instantiation" pattern for 
 
 ## Verification
 - Passed `make test-cov` (relevant AWS suite).
+- Verified `external_id` isolation with dedicated security unit tests: `tests/services/test_aws_session_manager.py`.
 - Passed `make lint` and `make typecheck` (Python 3.12).
 - Manual verification of credential error handling and client reuse.
