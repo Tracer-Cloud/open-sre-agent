@@ -57,7 +57,7 @@ success() {
 }
 
 step() {
-  printf '%s%s%s\n' "${COLOR_CYAN:-}" "$1" "${COLOR_RESET:-}"
+  printf '%s%s%s\n' "${COLOR_CYAN:-}" "$*" "${COLOR_RESET:-}"
 }
 
 usage() {
