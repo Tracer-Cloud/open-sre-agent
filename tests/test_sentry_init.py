@@ -297,3 +297,128 @@ def test_before_breadcrumb_leaves_other_categories_alone() -> None:
     sentry_mod._before_breadcrumb(crumb, {})
 
     assert crumb["data"]["url"] == "https://api.example.com/path?token=secret"
+
+
+def test_before_breadcrumb_strips_headers_for_http_categories() -> None:
+    crumb = {
+        "category": "aiohttp",
+        "data": {
+            "url": "https://api.example.com/path?token=secret",
+            "headers": {"Authorization": "Bearer secret-token"},
+        },
+    }
+
+    sentry_mod._before_breadcrumb(crumb, {})
+
+    assert crumb["data"]["url"] == "https://api.example.com/path"
+    assert crumb["data"]["headers"] == "[Filtered]"
+
+
+def test_before_send_scrubs_request_body_recursively() -> None:
+    event = {
+        "request": {
+            "data": {
+                "user": "alice",
+                "auth_token": "ghp_xxx",
+                "nested": {"system_prompt": "secret prompt", "ok": "value"},
+                "items": [{"bearer": "abc", "id": 1}],
+            },
+            "body": {"messages": ["hello"], "keep": True},
+        },
+    }
+
+    sentry_mod._before_send(event, {})
+
+    data = event["request"]["data"]
+    body = event["request"]["body"]
+    assert data["user"] == "alice"
+    assert data["auth_token"] == "[Filtered]"
+    assert data["nested"]["system_prompt"] == "[Filtered]"
+    assert data["nested"]["ok"] == "value"
+    assert data["items"][0]["bearer"] == "[Filtered]"
+    assert data["items"][0]["id"] == 1
+    assert body["messages"] == "[Filtered]"
+    assert body["keep"] is True
+
+
+def test_before_send_filters_prompt_and_credential_extra_keys() -> None:
+    event = {
+        "extra": {
+            "system_prompt": "secret prompt",
+            "messages": ["hi"],
+            "credential_blob": "c",
+            "user_email": "user@example.com",
+        },
+    }
+
+    sentry_mod._before_send(event, {})
+
+    assert event["extra"]["system_prompt"] == "[Filtered]"
+    assert event["extra"]["messages"] == "[Filtered]"
+    assert event["extra"]["credential_blob"] == "[Filtered]"
+    assert event["extra"]["user_email"] == "user@example.com"
+
+
+def test_init_sentry_passes_explicit_integrations_and_in_app(monkeypatch) -> None:
+    sentry_mod._init_sentry_once.cache_clear()
+    monkeypatch.delenv("OPENSRE_SENTRY_DISABLED", raising=False)
+    monkeypatch.delenv("OPENSRE_NO_TELEMETRY", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    init_mock = MagicMock()
+    monkeypatch.setitem(sys.modules, "sentry_sdk", SimpleNamespace(init=init_mock))
+
+    sentry_mod.init_sentry()
+
+    kwargs = init_mock.call_args.kwargs
+    assert "integrations" in kwargs
+    assert isinstance(kwargs["integrations"], list)
+    assert kwargs["in_app_include"] == ["app"]
+    assert kwargs["max_breadcrumbs"] == 100
+
+
+def test_init_sentry_sets_entrypoint_runtime_tags(monkeypatch) -> None:
+    sentry_mod._init_sentry_once.cache_clear()
+    monkeypatch.delenv("OPENSRE_SENTRY_DISABLED", raising=False)
+    monkeypatch.delenv("OPENSRE_NO_TELEMETRY", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    monkeypatch.delenv("RAILWAY_ENVIRONMENT", raising=False)
+    monkeypatch.delenv("RAILWAY_PROJECT_ID", raising=False)
+    monkeypatch.delenv("LANGGRAPH_HOSTED", raising=False)
+    monkeypatch.delenv("LANGSMITH_DEPLOYMENT_ID", raising=False)
+
+    init_mock = MagicMock()
+    set_tag_mock = MagicMock()
+    monkeypatch.setitem(
+        sys.modules,
+        "sentry_sdk",
+        SimpleNamespace(init=init_mock, set_tag=set_tag_mock),
+    )
+
+    sentry_mod.init_sentry(entrypoint="webapp")
+
+    tags = {call.args[0]: call.args[1] for call in set_tag_mock.call_args_list}
+    assert tags["entrypoint"] == "webapp"
+    assert tags["runtime"] == "hosted"
+    assert tags["deployment_method"] == "local"
+
+
+def test_init_sentry_detects_railway_deployment(monkeypatch) -> None:
+    sentry_mod._init_sentry_once.cache_clear()
+    monkeypatch.delenv("OPENSRE_SENTRY_DISABLED", raising=False)
+    monkeypatch.delenv("OPENSRE_NO_TELEMETRY", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+
+    init_mock = MagicMock()
+    set_tag_mock = MagicMock()
+    monkeypatch.setitem(
+        sys.modules,
+        "sentry_sdk",
+        SimpleNamespace(init=init_mock, set_tag=set_tag_mock),
+    )
+
+    sentry_mod.init_sentry(entrypoint="cli")
+
+    tags = {call.args[0]: call.args[1] for call in set_tag_mock.call_args_list}
+    assert tags["runtime"] == "cli"
+    assert tags["deployment_method"] == "railway"
