@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Final
+
+from sentry_sdk.integrations import Integration
+from sentry_sdk.integrations.asyncio import AsyncioIntegration
+from sentry_sdk.integrations.httpx import HttpxIntegration
+from sentry_sdk.integrations.logging import LoggingIntegration
 
 SENTRY_DSN: Final[str] = (
     "https://06d6b2b739eb2267864d12c6cad34e70"
@@ -10,3 +16,10 @@ SENTRY_DSN: Final[str] = (
 )
 SENTRY_ERROR_SAMPLE_RATE: Final[float] = 1.0
 SENTRY_TRACES_SAMPLE_RATE: Final[float] = 1.0
+SENTRY_MAX_BREADCRUMBS: Final[int] = 100
+SENTRY_IN_APP_INCLUDE: Final[tuple[str, ...]] = ("app",)
+SENTRY_INTEGRATIONS: Final[tuple[Integration, ...]] = (
+    LoggingIntegration(level=logging.INFO, event_level=logging.ERROR),
+    AsyncioIntegration(),
+    HttpxIntegration(),
+)

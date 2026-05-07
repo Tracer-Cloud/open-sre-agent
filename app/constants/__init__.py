@@ -17,6 +17,9 @@ from app.constants.posthog import (
 from app.constants.sentry import (
     SENTRY_DSN,
     SENTRY_ERROR_SAMPLE_RATE,
+    SENTRY_IN_APP_INCLUDE,
+    SENTRY_INTEGRATIONS,
+    SENTRY_MAX_BREADCRUMBS,
     SENTRY_TRACES_SAMPLE_RATE,
 )
 
@@ -52,5 +55,8 @@ __all__ = [
     "POSTHOG_HOST",
     "SENTRY_DSN",
     "SENTRY_ERROR_SAMPLE_RATE",
+    "SENTRY_IN_APP_INCLUDE",
+    "SENTRY_INTEGRATIONS",
+    "SENTRY_MAX_BREADCRUMBS",
     "SENTRY_TRACES_SAMPLE_RATE",
 ]

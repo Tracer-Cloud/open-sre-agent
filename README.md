@@ -1385,7 +1385,9 @@ See [SECURITY.md](SECURITY.md) for responsible disclosure.
 `opensre` ships with two telemetry stacks, both opt-out:
 
 - **PostHog** for anonymous product analytics (which commands are used, success/failure, rough runtime, CLI version, Python version, OS family, machine architecture, and a small amount of command-specific metadata such as which subcommand ran). For `opensre onboard` and `opensre investigate`, we may also collect the selected model/provider and whether the command used flags such as `--interactive` or `--input`.
-- **Sentry** for crash and error reports (stack traces, environment, release tag). Stack traces are scrubbed for home-directory paths; auth headers, cookies, query strings on HTTP breadcrumbs, and obvious secret keys (`*_token`, `*_key`, `*_secret`, `*_password`) are filtered before transport.
+- **Sentry** for crash and error reports (stack traces, environment, release tag).
+  - Every event is tagged with `entrypoint` (`cli`, `webapp`, `remote`, `mcp`, `integrations`, `wizard`, `graph_pipeline`), `runtime` (`cli` for user-driven CLI/wizard surfaces, `hosted` for `webapp`/`remote`/`mcp`/`graph_pipeline` server surfaces — derived from the entrypoint, not the `ENV` var), and `deployment_method` (`railway`, `langsmith`, `local`). `in_app_include=["app"]` keeps agent frames marked in-app, and `LoggingIntegration`, `AsyncioIntegration` and `HttpxIntegration` are wired explicitly.
+  - Scrubbing before transport: home-directory paths in stack traces; sensitive headers (`Authorization`, `Cookie`, `Set-Cookie`, `X-API-Key`); query strings on `http`/`httpx` breadcrumbs and the same headers on `http`/`httpx`/`aiohttp` breadcrumbs (defensive — the aiohttp filter only fires if a breadcrumb of that category is emitted); secret-looking keys, both by suffix (`*_token`, `*_key`, `*_secret`, `*_password`) and by substring (`prompt`, `messages`, `system_prompt`, `dsn`, `bearer`, `cookie`, `auth`, `credential`). The substring sweep is intentionally aggressive: keys like `auth_method` or `chat_messages` will be redacted. Request bodies (`request.data`/`request.body`) and `extra` payloads are walked recursively, so nested LLM payloads cannot leak through.
 
 A randomly generated anonymous install ID is created on first run and stored in `~/.config/opensre/anonymous_id`. PostHog `distinct_id` values are scoped to that install ID, so unique-user counts represent unique CLI installs/devices rather than command invocations. One-time lifecycle events use deterministic event IDs to avoid duplicate rows if they are retried.
 
@@ -1409,6 +1411,10 @@ export OPENSRE_NO_TELEMETRY=1
 ### Overriding the Sentry DSN
 
 Self-hosted users can route errors to their own Sentry project by setting `SENTRY_DSN` in the environment before invoking `opensre`. Leaving it unset uses the bundled default DSN. Setting `SENTRY_DSN=` (empty) drops all events at the `before_send` hook.
+
+### Tagging deployments
+
+Set `OPENSRE_DEPLOYMENT_METHOD` to `railway`, `langsmith`, or `local` (default `local`) to tag Sentry events with the host environment. This is a label only — it has no effect on transport or sampling.
 
 ### Inspecting outbound events
 

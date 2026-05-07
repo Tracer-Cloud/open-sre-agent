@@ -19,12 +19,30 @@ from app.analytics.events import Event
 from app.constants import (
     SENTRY_DSN,
     SENTRY_ERROR_SAMPLE_RATE,
+    SENTRY_IN_APP_INCLUDE,
+    SENTRY_INTEGRATIONS,
+    SENTRY_MAX_BREADCRUMBS,
     SENTRY_TRACES_SAMPLE_RATE,
 )
 
 _HOME_PATH_RE: re.Pattern[str] = re.compile(r"/(?:Users|home)/[^/\s]+")
 _SENSITIVE_KEY_SUFFIXES: tuple[str, ...] = ("_token", "_key", "_secret", "_password")
+_SENSITIVE_KEY_SUBSTRINGS: tuple[str, ...] = (
+    "prompt",
+    "messages",
+    "system_prompt",
+    "dsn",
+    "bearer",
+    "cookie",
+    "auth",
+    "credential",
+)
+_SENSITIVE_HEADERS: frozenset[str] = frozenset(
+    {"authorization", "cookie", "set-cookie", "x-api-key"}
+)
 _QUERY_SCRUBBING_CATEGORIES: frozenset[str] = frozenset({"http", "httpx"})
+_HEADER_SCRUBBING_CATEGORIES: frozenset[str] = frozenset({"http", "httpx", "aiohttp"})
+_HOSTED_ENTRYPOINTS: frozenset[str] = frozenset({"webapp", "remote", "mcp", "graph_pipeline"})
 
 
 def _is_sentry_disabled() -> bool:
@@ -55,18 +73,50 @@ def _scrub_string(value: object) -> object:
 
 
 def _is_sensitive_key(key: str) -> bool:
+    """True when a key likely carries a secret or LLM payload.
+
+    Combines a suffix check (``_token``, ``_key``, ``_secret``, ``_password``)
+    with a permissive substring check against curated terms — the substring
+    pass is intentionally aggressive (e.g. ``auth`` matches ``oauth_provider``)
+    to err on the side of redaction over leakage.
+    """
     lowered = key.lower()
-    return any(lowered.endswith(suffix) for suffix in _SENSITIVE_KEY_SUFFIXES)
+    if any(lowered.endswith(suffix) for suffix in _SENSITIVE_KEY_SUFFIXES):
+        return True
+    return any(substring in lowered for substring in _SENSITIVE_KEY_SUBSTRINGS)
+
+
+def _scrub_mapping_recursive(mapping: dict[str, Any]) -> None:
+    for key, value in list(mapping.items()):
+        if _is_sensitive_key(key):
+            mapping[key] = "[Filtered]"
+            continue
+        if isinstance(value, dict):
+            _scrub_mapping_recursive(value)
+        elif isinstance(value, list):
+            _scrub_list_recursive(value)
+
+
+def _scrub_list_recursive(items: list[Any]) -> None:
+    for item in items:
+        if isinstance(item, dict):
+            _scrub_mapping_recursive(item)
+        elif isinstance(item, list):
+            _scrub_list_recursive(item)
 
 
 def _scrub_request(request: dict[str, Any]) -> None:
     headers = request.get("headers")
     if isinstance(headers, dict):
         for header in list(headers):
-            if header.lower() in {"authorization", "cookie", "set-cookie", "x-api-key"}:
+            if header.lower() in _SENSITIVE_HEADERS:
                 headers[header] = "[Filtered]"
     if "cookies" in request:
         request["cookies"] = "[Filtered]"
+    for body_key in ("data", "body"):
+        body = request.get(body_key)
+        if isinstance(body, dict):
+            _scrub_mapping_recursive(body)
 
 
 def _scrub_extra(extra: dict[str, Any]) -> None:
@@ -133,15 +183,28 @@ def _strip_url_query(url: str) -> str:
     return urlunsplit((parts.scheme, parts.netloc, parts.path, "", parts.fragment))
 
 
+def _scrub_breadcrumb_headers(headers: dict[str, Any]) -> None:
+    for header in list(headers):
+        if header.lower() in _SENSITIVE_HEADERS:
+            headers[header] = "[Filtered]"
+
+
 def _before_breadcrumb(crumb: dict[str, Any], _hint: dict[str, Any]) -> dict[str, Any] | None:
-    """Strip query strings from HTTP breadcrumbs to avoid leaking secrets."""
+    """Strip query strings and sensitive headers from HTTP breadcrumbs."""
     category = crumb.get("category")
-    if isinstance(category, str) and category in _QUERY_SCRUBBING_CATEGORIES:
-        data = crumb.get("data")
-        if isinstance(data, dict):
-            url = data.get("url")
-            if isinstance(url, str):
-                data["url"] = _strip_url_query(url)
+    if not isinstance(category, str):
+        return crumb
+    data = crumb.get("data")
+    if not isinstance(data, dict):
+        return crumb
+    if category in _QUERY_SCRUBBING_CATEGORIES:
+        url = data.get("url")
+        if isinstance(url, str):
+            data["url"] = _strip_url_query(url)
+    if category in _HEADER_SCRUBBING_CATEGORIES:
+        headers = data.get("headers")
+        if isinstance(headers, dict):
+            _scrub_breadcrumb_headers(headers)
     return crumb
 
 
@@ -163,8 +226,15 @@ def _init_sentry_once(
     release: str,
     sample_rate: float,
     traces_sample_rate: float,
+    entrypoint: str | None = None,
 ) -> None:
-    """Initialize Sentry once per effective runtime configuration."""
+    """Initialize Sentry once per effective runtime configuration.
+
+    ``entrypoint`` is part of the cache key so distinct entrypoints in the
+    same process can each trigger a fresh init; the value itself is applied
+    via scope tags in :func:`init_sentry`, not passed to ``sentry_sdk.init``.
+    """
+    del entrypoint  # cache-key only; tags are set after init.
     import sentry_sdk
 
     sentry_sdk.init(
@@ -175,12 +245,34 @@ def _init_sentry_once(
         attach_stacktrace=True,
         sample_rate=sample_rate,
         traces_sample_rate=traces_sample_rate,
+        max_breadcrumbs=SENTRY_MAX_BREADCRUMBS,
+        in_app_include=list(SENTRY_IN_APP_INCLUDE),
+        integrations=list(SENTRY_INTEGRATIONS),
         before_send=_before_send,
         before_breadcrumb=_before_breadcrumb,
     )
 
 
-def init_sentry() -> None:
+def _apply_scope_tags(entrypoint: str | None) -> None:
+    """Apply runtime scope tags after init.
+
+    Wrapped at the call site in ``suppress(Exception)`` because the tagging
+    must never break the init flow if the SDK is stubbed (e.g. in tests).
+    Runtime is derived from the ``entrypoint`` (server-side surfaces such as
+    ``webapp``/``remote``/``mcp``/``graph_pipeline`` map to ``hosted``;
+    everything else maps to ``cli``) — this matches the surface, not the
+    ``ENV`` setting, so a webapp running locally still reports as ``hosted``.
+    """
+    runtime = "hosted" if entrypoint in _HOSTED_ENTRYPOINTS else "cli"
+    deployment_method = os.getenv("OPENSRE_DEPLOYMENT_METHOD", "local")
+    import sentry_sdk
+
+    sentry_sdk.set_tag("entrypoint", entrypoint or "unknown")
+    sentry_sdk.set_tag("runtime", runtime)
+    sentry_sdk.set_tag("deployment_method", deployment_method)
+
+
+def init_sentry(entrypoint: str | None = None) -> None:
     """Configure and start the Sentry SDK if a DSN is available.
 
     DSN sourcing precedence: ``OPENSRE_SENTRY_DSN`` env var, ``SENTRY_DSN``
@@ -188,6 +280,10 @@ def init_sentry() -> None:
     ``DO_NOT_TRACK=1`` to disable both Sentry and PostHog product analytics.
     ``OPENSRE_SENTRY_DISABLED=1`` disables Sentry only;
     ``OPENSRE_ANALYTICS_DISABLED=1`` disables PostHog only.
+
+    ``entrypoint`` identifies the calling surface (``cli``, ``webapp``,
+    ``remote``, ``mcp``, ``integrations``, ``wizard``, ``graph_pipeline``)
+    and is attached as a scope tag for grouping in Sentry.
     """
     if _is_sentry_disabled():
         _capture_sentry_init_skipped("telemetry_disabled")
@@ -209,6 +305,7 @@ def init_sentry() -> None:
                 "SENTRY_TRACES_SAMPLE_RATE",
                 SENTRY_TRACES_SAMPLE_RATE,
             ),
+            entrypoint=entrypoint,
         )
     except ModuleNotFoundError:
         _capture_sentry_init_skipped("missing_sdk", error_type="ModuleNotFoundError")
@@ -216,6 +313,11 @@ def init_sentry() -> None:
     except Exception as exc:
         _capture_sentry_init_skipped("init_error", error_type=type(exc).__name__)
         raise
+
+    if not _resolved_dsn():
+        return
+    with suppress(Exception):
+        _apply_scope_tags(entrypoint)
 
 
 def capture_exception(
