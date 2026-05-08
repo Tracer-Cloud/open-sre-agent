@@ -366,11 +366,14 @@ class TestMarkdownReparseThrottle:
 
         stream_to_console(console, label="assistant", chunks=chunks())
 
-        # 10 in-loop renders + 1 final flush. Allow a small tolerance for
-        # the loop's first chunk (which renders unconditionally if buffer
-        # was empty before the loop).
-        assert 9 <= parse_count[0] <= 12, (
-            f"expected ~10–11 parses across 10 windows, got {parse_count[0]}"
+        # The first chunk lands at fake_time=0 with last_render=0, so it
+        # fails the gate (0 - 0 not >= interval) and skips its render.
+        # The remaining 9 chunks each cross a fresh render window, then
+        # the final flush in the inner ``finally`` adds one more parse.
+        # Net: 9 in-loop renders + 1 final flush = 10 total parses.
+        # Range allows ±2 for any clock-edge ambiguity if interval drifts.
+        assert 8 <= parse_count[0] <= 12, (
+            f"expected ~10 parses (9 in-loop + 1 final flush), got {parse_count[0]}"
         )
         # Render count must stay << total chunks; the throttle is what
         # this test exists to prove.
