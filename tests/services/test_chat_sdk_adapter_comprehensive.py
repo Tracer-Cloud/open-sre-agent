@@ -885,7 +885,7 @@ def test_anthropic_normalize_no_consecutive_user_turns_for_any_ordering() -> Non
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# messages_to_invocation_dicts — LC bridge
+# messages_to_invocation_dicts — neutral graph message normalization
 # ══════════════════════════════════════════════════════════════════════════════
 
 
@@ -899,7 +899,7 @@ def test_messages_to_invocation_dicts_plain_dicts_pass_through() -> None:
 
 
 def test_messages_to_invocation_dicts_lc_type_field_remapped() -> None:
-    """Dict messages using LC 'type' field (human/ai) must be remapped to 'role'."""
+    """Dict messages using legacy ``type`` field (human/ai) must be remapped to ``role``."""
     msgs: list[Any] = [
         {"type": "human", "content": "hi"},
         {"type": "ai", "content": "hello"},
@@ -907,3 +907,19 @@ def test_messages_to_invocation_dicts_lc_type_field_remapped() -> None:
     out = messages_to_invocation_dicts(msgs)
     assert out[0]["role"] == "user"
     assert out[1]["role"] == "assistant"
+
+
+def test_messages_to_invocation_dicts_tool_shaped_object() -> None:
+    class _Toolish:
+        type = "tool"
+        content = '{"r": 1}'
+        tool_call_id = "z"
+        name = "n"
+
+    out = messages_to_invocation_dicts([_Toolish()])
+    assert out[0] == {
+        "role": "tool",
+        "content": '{"r": 1}',
+        "tool_call_id": "z",
+        "name": "n",
+    }

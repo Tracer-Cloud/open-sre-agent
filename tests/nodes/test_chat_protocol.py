@@ -8,7 +8,6 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
-from langchain_core.messages import AIMessage, HumanMessage
 
 from app.nodes import chat as chat_mod
 from app.services.chat_sdk_adapter import (
@@ -350,10 +349,15 @@ def test_chat_openai_tool_result_round_trip(monkeypatch: pytest.MonkeyPatch) -> 
     )
 
 
-def test_messages_to_invocation_dicts_handles_lc_base_messages() -> None:
+def test_messages_to_invocation_dicts_handles_object_messages_with_type_attr() -> None:
+    """Framework-shaped objects (duck-typed ``type`` / ``content`` / ``tool_calls``) normalize."""
     msgs: list[object] = [
-        HumanMessage(content="hi"),
-        AIMessage(content="yo", tool_calls=[{"id": "a", "name": "t", "args": {}}]),
+        SimpleNamespace(type="human", content="hi"),
+        SimpleNamespace(
+            type="ai",
+            content="yo",
+            tool_calls=[{"id": "a", "name": "t", "args": {}}],
+        ),
     ]
     d = messages_to_invocation_dicts(msgs)
     assert d[0] == {"role": "user", "content": "hi"}

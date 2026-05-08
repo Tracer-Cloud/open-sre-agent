@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import copy
 import json
 from typing import Any
 
@@ -13,41 +12,11 @@ from app.services.chat_sdk_adapter import (
     build_bound_chat_model,
     messages_to_invocation_dicts,
 )
-from app.state import AgentState, ChatMessage
+from app.state import AgentState
 from app.tools.registry import get_registered_tools
 from app.types.chat import AssistantTurn, BoundChatModel
 from app.types.config import NodeConfig
 from app.utils.cfg_helpers import CfgHelpers
-
-# LangChain type -> ChatMessage role mapping (router normalization)
-_TYPE_TO_ROLE: dict[str, str] = {
-    "human": "user",
-    "ai": "assistant",
-    "system": "system",
-    "tool": "tool",
-}
-
-
-def _normalize_messages(msgs: list[Any]) -> list[ChatMessage]:
-    """Normalize messages from LangChain format to plain ChatMessage dicts."""
-    result: list[ChatMessage] = []
-    for m in msgs:
-        if hasattr(m, "type") and hasattr(m, "content"):
-            role = _TYPE_TO_ROLE.get(m.type, "user")
-            result.append({"role": role, "content": str(m.content)})  # type: ignore[typeddict-item]
-            continue
-        if not isinstance(m, dict):
-            continue
-        if "role" in m:
-            result.append(m)  # type: ignore[arg-type]
-            continue
-        if "type" in m:
-            role = _TYPE_TO_ROLE.get(m["type"], "user")
-            result.append({"role": role, "content": str(m.get("content", ""))})  # type: ignore[typeddict-item]
-            continue
-        result.append(m)  # type: ignore[arg-type]
-    return result
-
 
 # ── Chat LLM ─────────────────────────────────────────────────────────────
 
@@ -152,7 +121,7 @@ def _prepare_chat_invoke_messages(
     raw: list[Any],
     *,
     default_system: str,
-) -> list[Any]:
+) -> list[dict[str, Any]]:
     """Normalize graph messages, ensure a system prompt, apply guardrails once."""
     msgs = messages_to_invocation_dicts(raw)
     if not _has_system_message(msgs):
@@ -160,34 +129,21 @@ def _prepare_chat_invoke_messages(
     return _apply_guardrails_to_messages(msgs)
 
 
-def _apply_guardrails_to_messages(msgs: list[Any]) -> list[Any]:
-    """Return a copy of *msgs* with redacted content, leaving originals untouched.
-
-    Supports neutral dict messages and legacy objects with a ``content`` attribute
-    (used by guardrail tests and any pre-migration graph state).
-    """
+def _apply_guardrails_to_messages(msgs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return a copy of *msgs* with redacted string ``content``, leaving originals untouched."""
     from app.guardrails.engine import get_guardrail_engine
 
     engine = get_guardrail_engine()
     if not engine.is_active:
         return msgs
-    result: list[Any] = []
+    result: list[dict[str, Any]] = []
     for msg in msgs:
-        if isinstance(msg, dict):
-            content = msg.get("content")
-            if isinstance(content, str) and content:
-                redacted = engine.apply(content)
-                if redacted != content:
-                    msg = dict(msg)
-                    msg["content"] = redacted
-            result.append(msg)
-            continue
-        content = getattr(msg, "content", None)
+        content = msg.get("content")
         if isinstance(content, str) and content:
             redacted = engine.apply(content)
             if redacted != content:
-                msg = copy.copy(msg)
-                msg.content = redacted
+                msg = dict(msg)
+                msg["content"] = redacted
         result.append(msg)
     return result
 
@@ -197,7 +153,7 @@ def _apply_guardrails_to_messages(msgs: list[Any]) -> list[Any]:
 
 def router_node(state: AgentState) -> dict[str, Any]:
     """Route chat messages by intent."""
-    msgs = _normalize_messages(list(state.get("messages", [])))
+    msgs = messages_to_invocation_dicts(list(state.get("messages", [])))
     if not msgs or msgs[-1].get("role") != "user":
         return {"route": "general"}
 

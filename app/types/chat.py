@@ -1,4 +1,8 @@
-"""Framework-neutral types for chat / tool-calling LLM turns (issue #1358)."""
+"""Framework-neutral chat types and protocols (issues #1358, #1361).
+
+Assistant turns and tool-call payloads are framework-agnostic. Message rows in
+graph state are plain dicts shaped like ``ChatMessage`` in ``app/state/types.py``.
+"""
 
 from __future__ import annotations
 
