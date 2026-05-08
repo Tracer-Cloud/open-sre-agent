@@ -18,8 +18,8 @@ collectors would pull it in transitively. The slash command in
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Literal
 
+from rich.console import JustifyMethod
 from rich.markup import escape
 from rich.table import Table
 
@@ -30,15 +30,13 @@ from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
 # which downstream issues fill which column.
 _UNFILLED = "-"
 
-# Rich's ``Table.add_column`` only accepts this restricted Literal
-# for ``justify`` — narrowing the local alias keeps mypy happy
-# without sprinkling ignore comments.
-_Justify = Literal["default", "left", "center", "right", "full"]
-
 #: Columns the dashboard ships with. Order is the user-facing order
 #: and is also the cell-injection contract that #1490 will lean on
 #: when it threads probe snapshots into the rendering layer.
-_COLUMNS: tuple[tuple[str, _Justify], ...] = (
+#: Re-using Rich's own ``JustifyMethod`` type alias rather than a
+#: hand-maintained Literal so column-justify options stay in lockstep
+#: with the library if Rich ever expands them.
+_COLUMNS: tuple[tuple[str, JustifyMethod], ...] = (
     ("agent", "left"),
     ("pid", "right"),
     ("uptime", "right"),
@@ -63,14 +61,16 @@ def render_agents_table(records: Iterable[AgentRecord]) -> Table:
     issue map.
     """
     materialized = list(records)
+    # The empty-state caption deliberately doesn't suggest a registration
+    # command: ``opensre agents register`` is currently a stub
+    # (``feat(cli): register agents command group skeleton (#1486)``)
+    # that prints "not implemented yet". Pointing users at it would be
+    # misleading. The wording will gain a "register one with X" hint
+    # when that ticket grows real behavior.
     table = Table(
         title="agents",
         title_style=TERMINAL_ACCENT_BOLD,
-        caption=(
-            "no agents registered — use `opensre agents register` to track one"
-            if not materialized
-            else None
-        ),
+        caption="no agents registered yet" if not materialized else None,
     )
     for header, justify in _COLUMNS:
         table.add_column(header, justify=justify)

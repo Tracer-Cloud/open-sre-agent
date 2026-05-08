@@ -76,11 +76,16 @@ def test_empty_records_renders_table_with_zero_rows() -> None:
     assert table.row_count == 0
 
 
-def test_empty_records_caption_points_user_to_register_command() -> None:
-    """Empty-state UX: the table caption tells the user what to do
-    next instead of leaving a blank table that looks like a bug."""
+def test_empty_records_caption_announces_empty_state() -> None:
+    """Empty-state UX: the table caption tells the user the registry
+    is empty rather than leaving a blank table that looks like a bug.
+
+    The caption deliberately doesn't suggest a registration command —
+    the ``register`` subcommand is currently a stub. When that gains
+    real behavior, this caption can grow a hint pointing at it.
+    """
     _, out = _render([])
-    assert "no agents registered" in out
+    assert "no agents registered yet" in out
 
 
 def test_non_empty_records_have_no_caption() -> None:
