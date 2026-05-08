@@ -2,11 +2,11 @@
 
 Produces the structural shape of the dashboard with the columns
 documented in #1486's preview (``agent``, ``pid``, ``uptime``,
-``cpu%``, ``tokens/min``, ``$/hr``, ``status``). Cells that aren't
-yet wired (every metric column for now) render as ``-`` — the
-sampler in #1490 fills ``cpu%`` / ``uptime`` / ``status`` later, the
-token meter consumer in #1490+ fills ``tokens/min``, and the budget
-loader from #1494 fills ``$/hr``.
+``cpu%``, ``tokens/min``, ``$/hr``, ``status``). The ``$/hr`` cell
+reads from ``agents.yaml`` via :func:`app.agents.config.load_agents_config`;
+the remaining metric columns still render as ``-`` until #1490 wires
+the per-PID sampler (``cpu%`` / ``uptime`` / ``status``) and the
+token-meter consumer (``tokens/min``).
 
 This module lives outside ``app/agents/`` deliberately: the agents
 package is for *collectors* (probe, registry, sweep, meters) and
@@ -23,6 +23,7 @@ from rich.console import JustifyMethod
 from rich.markup import escape
 from rich.table import Table
 
+from app.agents.config import load_agents_config
 from app.agents.registry import AgentRecord
 from app.cli.interactive_shell.theme import BOLD_BRAND
 
@@ -55,10 +56,10 @@ def render_agents_table(records: Iterable[AgentRecord]) -> Table:
     An empty record list produces a table with no body rows and an
     explanatory caption pointing the user at the registration command.
 
-    Cells for metric columns (``uptime``, ``cpu%``, ``tokens/min``,
-    ``$/hr``, ``status``) render as ``-`` placeholders. Filling them
-    is intentionally out of scope here — see module docstring for the
-    issue map.
+    The ``$/hr`` cell reads ``hourly_budget_usd`` from ``agents.yaml``
+    when configured. The other metric cells (``uptime``, ``cpu%``,
+    ``tokens/min``, ``status``) still render as ``-`` placeholders;
+    filling them is out of scope here.
     """
     materialized = list(records)
     # The empty-state caption deliberately doesn't suggest a registration
@@ -74,14 +75,24 @@ def render_agents_table(records: Iterable[AgentRecord]) -> Table:
     )
     for header, justify in _COLUMNS:
         table.add_column(header, justify=justify)
+    # Load once per render: agents.yaml is small and the dashboard is
+    # invoked interactively, so a single read per ``/agents`` invocation
+    # is cheaper than caching with invalidation.
+    budgets = load_agents_config().agents
     for record in materialized:
+        budget = budgets.get(record.name)
+        hourly_cell = (
+            f"${budget.hourly_budget_usd:.2f}"
+            if budget is not None and budget.hourly_budget_usd is not None
+            else _UNFILLED
+        )
         table.add_row(
             escape(record.name),
             str(record.pid),
             _UNFILLED,  # uptime
             _UNFILLED,  # cpu%
             _UNFILLED,  # tokens/min
-            _UNFILLED,  # $/hr
+            hourly_cell,
             _UNFILLED,  # status
         )
     return table

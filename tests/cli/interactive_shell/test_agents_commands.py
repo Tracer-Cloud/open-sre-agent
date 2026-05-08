@@ -9,6 +9,7 @@ import pytest
 from rich.console import Console
 from rich.table import Table
 
+from app.agents import config as config_mod
 from app.agents.conflicts import (
     DEFAULT_WINDOW_SECONDS,
     FileWriteConflict,
@@ -36,6 +37,18 @@ def _isolate_registry(monkeypatch: pytest.MonkeyPatch, path: Path) -> AgentRegis
 
     monkeypatch.setattr(agents_mod, "AgentRegistry", lambda: AgentRegistry(path=path))
     return registry
+
+
+@pytest.fixture(autouse=True)
+def isolated_agents_yaml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    """Autouse: redirect ``agents_config_path()`` to a per-test tmp path so
+    ``/agents`` (which now reads ``agents.yaml`` for the ``$/hr`` cell)
+    and ``/agents budget`` never touch the developer's real
+    ``~/.config/opensre/agents.yaml``.
+    """
+    target = tmp_path / "agents.yaml"
+    monkeypatch.setattr(config_mod, "agents_config_path", lambda: target)
+    return target
 
 
 class TestAgentsRegistration:
@@ -98,6 +111,102 @@ class TestAgentsDispatch:
         out = buf.getvalue()
         assert "unknown subcommand" in out.lower()
         assert "bogus" in out
+
+    def test_dollar_hr_cell_reads_from_agents_yaml(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        registry = _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
+        registry.register(AgentRecord(name="claude-code", pid=8421, command="claude"))
+
+        # Pre-seed the budget via the slash command itself so we exercise
+        # the full write→read round-trip (set → list).
+        session = ReplSession()
+        write_console, _ = _capture()
+        assert dispatch_slash("/agents budget claude-code 5", session, write_console) is True
+
+        list_console, list_buf = _capture()
+        assert dispatch_slash("/agents", session, list_console) is True
+        assert "$5.00" in list_buf.getvalue()
+
+
+class TestAgentsBudget:
+    def test_no_args_empty_state_when_no_config(self) -> None:
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents budget", session, console) is True
+        assert "no per-agent budgets" in buf.getvalue().lower()
+
+    def test_writes_and_round_trips_through_load(self, isolated_agents_yaml: Path) -> None:
+        session = ReplSession()
+        write_console, write_buf = _capture()
+        assert dispatch_slash("/agents budget claude-code 5", session, write_console) is True
+
+        # Confirmation message references the agent and amount.
+        write_out = write_buf.getvalue()
+        assert "claude-code" in write_out
+        assert "$5.00" in write_out
+
+        # Subsequent /agents budget lists the just-written entry.
+        read_console, read_buf = _capture()
+        assert dispatch_slash("/agents budget", session, read_console) is True
+        read_out = read_buf.getvalue()
+        assert "claude-code" in read_out
+        assert "$5.00" in read_out
+
+        # File on disk has the expected shape.
+        assert isolated_agents_yaml.exists()
+
+    def test_rejects_negative_budget(self) -> None:
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents budget claude-code -3", session, console) is True
+        out = buf.getvalue()
+        assert "invalid budget" in out.lower()
+        # Latest slash invocation should be marked failed.
+        assert session.history[-1]["ok"] is False
+
+    def test_rejects_zero_budget(self) -> None:
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents budget claude-code 0", session, console) is True
+        assert "invalid budget" in buf.getvalue().lower()
+        assert session.history[-1]["ok"] is False
+
+    def test_rejects_non_numeric_budget(self) -> None:
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents budget claude-code five", session, console) is True
+        assert "invalid budget" in buf.getvalue().lower()
+        assert session.history[-1]["ok"] is False
+
+    def test_single_arg_prints_usage(self) -> None:
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents budget claude-code", session, console) is True
+        assert "usage" in buf.getvalue().lower()
+        assert session.history[-1]["ok"] is False
+
+    def test_first_arg_completions_include_budget(self) -> None:
+        cmd = SLASH_COMMANDS["/agents"]
+        keywords = [pair[0] for pair in cmd.first_arg_completions]
+        assert "budget" in keywords
+
+    def test_corrupt_config_surfaces_friendly_error(self, isolated_agents_yaml: Path) -> None:
+        # Hand-edit an agents.yaml with a typo'd field. The loader
+        # raises ValidationError; the slash handler catches it and
+        # renders a "agents.yaml has invalid contents" message rather
+        # than crashing the REPL.
+        isolated_agents_yaml.parent.mkdir(parents=True, exist_ok=True)
+        isolated_agents_yaml.write_text(
+            "agents:\n  claude-code:\n    hourly_budegt_usd: 5.0\n",
+            encoding="utf-8",
+        )
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents budget", session, console) is True
+        out = buf.getvalue()
+        assert "invalid contents" in out.lower()
+        assert session.history[-1]["ok"] is False
 
 
 class TestRenderConflicts:
