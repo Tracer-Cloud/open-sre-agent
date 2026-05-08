@@ -1391,6 +1391,13 @@ Thanks goes to these amazing people:
             <sub><b>Mohdtalibakhtar</b></sub>
         </a>
     </td>
+            <td align="center" width="8%">
+        <a href="https://github.com/Lum1104">
+            <img src="https://avatars.githubusercontent.com/u/87774050?v=4" width="45" alt="Lum1104"/>
+            <br />
+            <sub><b>Lum1104</b></sub>
+        </a>
+    </td>
 		</tr>
 	</tbody>
 </table>
