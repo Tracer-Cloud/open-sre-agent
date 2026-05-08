@@ -144,7 +144,7 @@ def verification_exit_code(
     if requested_service:
         return 1 if any(row.get("status") in {"missing", "failed"} for row in results) else 0
     core_results = [row for row in results if row.get("service") in CORE_VERIFY_SERVICES]
-    if not any(row["status"] == "passed" for row in core_results):
+    if not any(row.get("status") == "passed" for row in core_results):
         return 1
     return 0
 
