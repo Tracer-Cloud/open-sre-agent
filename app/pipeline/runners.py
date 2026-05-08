@@ -71,7 +71,7 @@ def run_investigation(
     if resolved_integrations is not None:
         cast(dict[str, Any], initial)["resolved_integrations"] = resolved_integrations
     try:
-        return cast(AgentState, compiled_graph.invoke(initial))
+        return cast(AgentState, compiled_graph.invoke(initial, {"recursion_limit": 50}))
     except Exception as exc:
         capture_exception(exc)
         raise
@@ -103,7 +103,9 @@ async def astream_investigation(
     )
 
     try:
-        async for event in compiled_graph.astream_events(initial, version="v2"):
+        async for event in compiled_graph.astream_events(
+            initial, version="v2", config={"recursion_limit": 50}
+        ):
             yield _map_langgraph_event(dict(event))
     except Exception as exc:
         capture_exception(exc)
