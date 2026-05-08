@@ -251,18 +251,15 @@ class StreamRenderer:
         self._diagnose_buffer.append(text)
 
     def _finish_diagnose_streaming(self) -> None:
-        """Print the accumulated reasoning and mark the diagnose step complete.
+        """Mark the diagnose step complete through ProgressTracker.
 
-        The buffer is printed permanently above the event-log Live via
-        ProgressTracker.print_above(), then the step is closed through the
-        same tracker path as every other node — keeping one Live active at all
-        times and eliminating the two-Live flickering.
+        The buffer is retained for _print_report(), which already handles
+        displaying the findings — printing it here too would duplicate output.
         """
         message = self._build_node_message(_DIAGNOSE_NODE)
         buffer_text = "".join(self._diagnose_buffer)
 
         if get_output_format() == "rich":
-            self._tracker.print_above(buffer_text)
             self._tracker.complete(_DIAGNOSE_NODE, message=message)
         else:
             if buffer_text:
