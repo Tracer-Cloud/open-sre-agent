@@ -61,3 +61,6 @@ class Event(StrEnum):
     DEPLOY_STARTED = "deploy_started"
     DEPLOY_COMPLETED = "deploy_completed"
     DEPLOY_FAILED = "deploy_failed"
+
+    # Local agent monitoring (Monitor Local Agents feature)
+    AGENT_SECRET_DETECTED = "agent_secret_detected"

@@ -6,9 +6,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from rich.console import Console
+from rich.live import Live
 from rich.markup import escape
+from rich.spinner import Spinner
 
 from app.cli.interactive_shell.action_executor import (
+    run_opensre_cli_command,
     run_sample_alert,
     run_shell_command,
     run_synthetic_test,
@@ -43,6 +46,16 @@ class TerminalActionExecutionResult:
     handled: bool
 
 
+def _plan_with_spinner(
+    message: str,
+    console: Console,
+) -> tuple[list, bool]:
+    """Plan actions while showing a thinking spinner."""
+    spinner = Spinner("dots12", text="thinking...", style="bold orange1")
+    with Live(spinner, console=console, refresh_per_second=20, transient=True):
+        return plan_actions_with_unhandled(message)
+
+
 def execute_cli_actions(
     message: str,
     session: ReplSession,
@@ -56,7 +69,7 @@ def execute_cli_actions(
     Returns True when the message was handled. Unknown or ambiguous requests fall
     through to the LLM-backed assistant.
     """
-    actions, has_unhandled_clause = plan_actions_with_unhandled(message)
+    actions, has_unhandled_clause = _plan_with_spinner(message, console)
     if not actions:
         return False
 
@@ -141,6 +154,8 @@ def execute_cli_actions(
                 is_tty=is_tty,
                 action_already_listed=True,
             )
+        elif action.kind == "cli_command":
+            run_opensre_cli_command(action.content, session, console)
         elif action.kind == "sample_alert":
             run_sample_alert(
                 action.content,
@@ -173,7 +188,7 @@ def execute_cli_actions_with_metrics(
         capture_terminal_actions_planned,
     )
 
-    actions, has_unhandled_clause = plan_actions_with_unhandled(message)
+    actions, has_unhandled_clause = _plan_with_spinner(message, console)
     capture_terminal_actions_planned(
         planned_count=len(actions),
         has_unhandled_clause=has_unhandled_clause,

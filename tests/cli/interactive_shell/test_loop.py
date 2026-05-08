@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import re
 from pathlib import Path
 
 import pytest
@@ -13,15 +14,25 @@ from prompt_toolkit.completion import CompleteEvent
 from prompt_toolkit.document import Document
 from prompt_toolkit.history import FileHistory, InMemoryHistory
 from prompt_toolkit.input import DummyInput
+from prompt_toolkit.input.defaults import create_pipe_input
 from prompt_toolkit.keys import Keys
 from prompt_toolkit.output import DummyOutput
 
 from app.cli.interactive_shell import loop
+from app.cli.interactive_shell.prompt_surface import (
+    _SHIFT_ENTER_SEQUENCE,
+    ReplInputLexer,
+    ShellCompleter,
+    _build_prompt_key_bindings,
+    _build_prompt_style,
+    _tab_expand_or_menu,
+)
 from app.cli.interactive_shell.session import ReplSession
+from app.cli.interactive_shell.theme import ANSI_RESET, PROMPT_ACCENT_ANSI
 
 
 def test_repl_input_lexer_highlights_first_slash_token() -> None:
-    lexer = loop.ReplInputLexer()
+    lexer = ReplInputLexer()
     get_line = lexer.lex_document(Document("/model show", len("/model")))
     fragments = get_line(0)
     cmd_frags = [(s, t) for s, t in fragments if s == "class:repl-slash-command"]
@@ -31,7 +42,7 @@ def test_repl_input_lexer_highlights_first_slash_token() -> None:
 
 
 def test_repl_input_lexer_highlights_bare_help_alias() -> None:
-    lexer = loop.ReplInputLexer()
+    lexer = ReplInputLexer()
     get_line = lexer.lex_document(Document("help", 4))
     fragments = get_line(0)
     assert ("class:repl-slash-command", "help") in fragments
@@ -51,7 +62,9 @@ def test_build_prompt_session_uses_persistent_history(
     assert isinstance(prompt.history, FileHistory)
     assert prompt.history.filename == str(tmp_path / "interactive_history")
     assert tmp_path.exists()
-    assert isinstance(prompt.completer, loop.ShellCompleter)
+    assert isinstance(prompt.completer, ShellCompleter)
+    assert prompt.multiline is True
+    assert prompt.reserve_space_for_menu == 0
     assert prompt.app.key_bindings is not None
 
 
@@ -71,9 +84,54 @@ def test_build_prompt_session_falls_back_to_memory_history(
     assert isinstance(prompt.history, InMemoryHistory)
 
 
+def test_repl_session_prompt_history_backend_matches_prompt_toolkit_history(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.constants as const_module
+
+    monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+    with create_app_session(input=DummyInput(), output=DummyOutput()):
+        session = ReplSession()
+        prompt = loop._build_prompt_session()
+        session.prompt_history_backend = prompt.history
+    assert session.prompt_history_backend is prompt.history
+
+
+def test_prompt_message_uses_accent_glyph() -> None:
+    rendered = loop._prompt_message(ReplSession()).value
+
+    assert PROMPT_ACCENT_ANSI in rendered
+    assert "❯" in rendered
+    assert ANSI_RESET in rendered
+
+
+def test_shift_enter_inserts_newline_before_submit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.constants as const_module
+
+    monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+
+    async def _collect() -> str:
+        with (
+            create_pipe_input() as pipe_input,
+            create_app_session(input=pipe_input, output=DummyOutput()),
+        ):
+            prompt = loop._build_prompt_session()
+            task = asyncio.create_task(prompt.prompt_async(""))
+            pipe_input.send_bytes(b"first line")
+            pipe_input.send_bytes(_SHIFT_ENTER_SEQUENCE.encode())
+            pipe_input.send_bytes(b"second line\r")
+            return await asyncio.wait_for(task, timeout=1)
+
+    assert asyncio.run(_collect()) == "first line\nsecond line"
+
+
 def test_shell_completer_previews_all_commands() -> None:
     completions = list(
-        loop.ShellCompleter().get_completions(
+        ShellCompleter().get_completions(
             Document("/"),
             CompleteEvent(text_inserted=True),
         )
@@ -88,7 +146,7 @@ def test_shell_completer_previews_all_commands() -> None:
 
 def test_shell_completer_filters_by_prefix() -> None:
     completions = list(
-        loop.ShellCompleter().get_completions(
+        ShellCompleter().get_completions(
             Document("/li"),
             CompleteEvent(text_inserted=True),
         )
@@ -99,26 +157,26 @@ def test_shell_completer_filters_by_prefix() -> None:
 
 def test_shell_completer_suggests_subcommands_for_list() -> None:
     completions = list(
-        loop.ShellCompleter().get_completions(
+        ShellCompleter().get_completions(
             Document("/list "),
             CompleteEvent(text_inserted=True),
         )
     )
     names = sorted({c.text for c in completions})
-    assert names == ["integrations", "mcp", "models"]
+    assert names == ["integrations", "mcp", "models", "tools"]
 
 
 def test_tab_applies_unique_slash_command_completion() -> None:
-    buff = Buffer(completer=loop.ShellCompleter())
+    buff = Buffer(completer=ShellCompleter())
     buff.insert_text("/mod")
-    loop._tab_expand_or_menu(buff)
+    _tab_expand_or_menu(buff)
     assert buff.text == "/model"
 
 
 def test_tab_applies_unique_bareword_alias_completion() -> None:
-    buff = Buffer(completer=loop.ShellCompleter())
+    buff = Buffer(completer=ShellCompleter())
     buff.insert_text("hel")
-    loop._tab_expand_or_menu(buff)
+    _tab_expand_or_menu(buff)
     assert buff.text == "help"
 
 
@@ -134,7 +192,7 @@ def test_tab_with_open_completion_menu_applies_current_item() -> None:
     # Assign directly — updating ``buff.document`` afterward clears ``complete_state``.
     buff.complete_state = CompletionState(orig_doc, [c_model, c_mcp], 0)
 
-    loop._tab_expand_or_menu(buff)
+    _tab_expand_or_menu(buff)
 
     assert buff.complete_state is None
     assert buff.text == "/model"
@@ -151,16 +209,17 @@ def test_tab_with_menu_and_no_index_applies_first_choice() -> None:
     c_mcp = Completion("/mcp", start_position=-3)
     buff.complete_state = CompletionState(orig_doc, [c_model, c_mcp], None)
 
-    loop._tab_expand_or_menu(buff)
+    _tab_expand_or_menu(buff)
 
     assert buff.complete_state is None
     assert buff.text == "/model"
 
 
 def test_completion_includes_tab_navigation() -> None:
-    key_bindings = loop._build_prompt_key_bindings()
+    key_bindings = _build_prompt_key_bindings()
     keys = {binding.keys for binding in key_bindings.bindings}
 
+    assert (Keys.ControlM,) in keys
     assert (Keys.Down,) in keys
     assert (Keys.Up,) in keys
     assert (Keys.Tab,) in keys
@@ -168,21 +227,17 @@ def test_completion_includes_tab_navigation() -> None:
 
 
 def test_completion_menu_current_item_uses_highlight_style() -> None:
-    # Design-system roles (hex without leading #, uppercase as prompt_toolkit stores them):
-    #   ACCENT_SOFT (#5EF0E8) → slash-command token
-    #   PRIMARY     (#1AFF8C) → currently-selected completion entry
-    #   SURFACE     (#111811) → menu background (inset panel role)
-    style = loop._build_prompt_style()
+    style = _build_prompt_style()
     attrs = style.get_attrs_for_style_str("class:repl-slash-command")
 
     assert attrs.color == "5EF0E8"  # ACCENT_SOFT
-    assert attrs.bgcolor == "2c1e14"  # warm dark bg used for slash-command token
+    assert attrs.bgcolor == "2c1e14"
     assert attrs.bold is True
 
     attrs_menu = style.get_attrs_for_style_str("class:completion-menu.completion.current")
 
     assert attrs_menu.color == "1AFF8C"  # PRIMARY
-    assert attrs_menu.bgcolor == "2c1e14"  # warm dark bg
+    assert attrs_menu.bgcolor == "2c1e14"
     assert attrs_menu.reverse is False
     assert attrs_menu.bold is True
 
@@ -199,7 +254,7 @@ def test_shell_completer_path_completion_honors_mixed_case_prefix(tmp_path: Path
     partial = str(tmp_path / "Re")
     line = f"/investigate {partial}"
     completions = list(
-        loop.ShellCompleter().get_completions(
+        ShellCompleter().get_completions(
             Document(line, len(line)),
             CompleteEvent(text_inserted=True),
         )
@@ -316,3 +371,26 @@ def test_run_one_turn_reports_slash_dispatch_error(monkeypatch: pytest.MonkeyPat
     assert should_continue is True
     assert len(captured_errors) == 1
     assert isinstance(captured_errors[0], RuntimeError)
+
+
+def test_run_one_turn_renders_submitted_prompt_before_handler(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from rich.console import Console
+
+    class _Prompt:
+        async def prompt_async(self, _prompt: object) -> str:
+            return "explain deploy"
+
+    monkeypatch.setattr(loop, "classify_input", lambda *_args: "cli_help")
+    monkeypatch.setattr(loop, "answer_cli_help", lambda *_args, **_kwargs: None)
+
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=True, color_system=None, highlight=False)
+
+    should_continue = asyncio.run(loop._run_one_turn(_Prompt(), ReplSession(), console))
+
+    output = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", buf.getvalue())
+    assert should_continue is True
+    assert "❯" in output
+    assert "explain deploy" in output

@@ -20,6 +20,12 @@ Use the path that matches the kind of contribution you want to make:
 6. **Questions** -> Use the docs, email [support@opensre.com](mailto:support@opensre.com), or ask in Discord [#contribute](http://discord.gg/opensre). GitHub Issues are for actionable work.
 7. **Security issues** -> Follow `SECURITY.md`; do not open a public issue.
 
+### Exploring the Codebase
+
+This repo ships with a generated codebase map at `.understand-anything/` — a knowledge graph of files, functions, classes, and their relationships, plus a business-domain view. Open it interactively with the [Understand Anything](https://github.com/Lum1104/Understand-Anything) plugin (e.g., `/understand-anything:understand-dashboard`), or read the JSON files directly.
+
+---
+
 ### Environment Setup
 
 See **[SETUP.md](SETUP.md)** for detailed setup instructions including Windows-specific guidance.

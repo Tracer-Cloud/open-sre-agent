@@ -10,3 +10,7 @@ This file is required for setuptools' default ``find_packages``
 discovery — without it the ``app.agents.*`` subpackages would be
 silently omitted from the built wheel.
 """
+
+from app.agents.registry import AgentRecord, AgentRegistry
+
+__all__ = ["AgentRecord", "AgentRegistry"]

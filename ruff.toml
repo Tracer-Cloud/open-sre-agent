@@ -50,3 +50,7 @@ ignore = [
 # CLI entry points
 "app/main.py" = ["ARG001"]
 
+# stderr buffer outlives the function — closed in a watcher thread's `finally`,
+# so a `with` block at the call site would close it before the subprocess runs.
+"app/cli/interactive_shell/action_executor.py" = ["SIM115"]
+

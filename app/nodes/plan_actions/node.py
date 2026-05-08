@@ -39,12 +39,13 @@ class InvestigationPlan(BaseModel):
 
 
 @traceable(name="node_plan_actions")
-def node_plan_actions(state: InvestigationState, config: NodeConfig | None = None) -> dict:  # noqa: ARG001
+def node_plan_actions(state: InvestigationState, config: NodeConfig | None = None) -> dict:
     """Plan investigation actions and write plan outputs to state.
 
     Supports rerouting when new evidence changes the likely source family,
     and enforces per-step tool budgets.
     """
+    del config
     input_data = InvestigateInput.from_state(state)
     loop_count = state.get("investigation_loop_count", 0)
 

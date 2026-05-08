@@ -70,8 +70,15 @@ def _summarize_last_state(state: dict[str, Any]) -> str:
     return "\n\n".join(parts) or "(no prior investigation details available)"
 
 
-def answer_follow_up(question: str, session: ReplSession, console: Console) -> None:
-    """Answer a follow-up question about the previous investigation."""
+def answer_follow_up(
+    question: str,
+    session: ReplSession,
+    console: Console,
+) -> None:
+    """Answer a follow-up question about the previous investigation.
+
+    The answer is grounded strictly in the prior investigation state.
+    """
     if session.last_state is None:
         console.print(
             "[yellow]no prior investigation in this session.[/yellow] "

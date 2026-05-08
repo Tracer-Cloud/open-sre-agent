@@ -198,7 +198,7 @@ def main(argv: list[str] | None = None) -> int:
     load_dotenv(override=False)
     cli_argv = list(sys.argv[1:] if argv is None else argv)
     try:
-        init_sentry()
+        init_sentry(entrypoint="cli")
     except ModuleNotFoundError as exc:
         if exc.name != "sentry_sdk" or not _is_update_invocation(cli_argv):
             raise

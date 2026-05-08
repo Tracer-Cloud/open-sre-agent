@@ -74,7 +74,11 @@ def _build_grounded_prompt(question: str, cli_reference: str, docs_reference: st
     return f"{system}\n{user_block}"
 
 
-def answer_cli_help(question: str, _session: ReplSession, console: Console) -> None:
+def answer_cli_help(
+    question: str,
+    _session: ReplSession,
+    console: Console,
+) -> None:
     """Run one turn of the documentation-aware procedural assistant.
 
     Pulls the top-N relevant docs pages for ``question``, combines them with

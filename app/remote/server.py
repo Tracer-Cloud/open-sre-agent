@@ -56,7 +56,7 @@ from app.utils.sentry_sdk import capture_exception, init_sentry
 from app.version import get_version
 
 load_dotenv(override=False)
-init_sentry()
+init_sentry(entrypoint="remote")
 
 INVESTIGATIONS_DIR = Path(os.getenv("INVESTIGATIONS_DIR", "/opt/opensre/investigations"))
 _AUTH_KEY = os.getenv("OPENSRE_API_KEY")

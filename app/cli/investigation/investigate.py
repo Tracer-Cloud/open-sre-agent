@@ -20,6 +20,28 @@ if TYPE_CHECKING:
 _logger = logging.getLogger(__name__)
 
 
+def _check_llm_settings() -> None:
+    """Validate LLM settings early and surface misconfiguration as a structured error."""
+    from pydantic import ValidationError
+
+    from app.cli.support.errors import OpenSREError
+
+    try:
+        LLMSettings.from_env()
+    except ValidationError as exc:
+        errors = exc.errors()
+        if errors:
+            ctx = errors[0].get("ctx", {})
+            original = ctx.get("error")
+            msg = str(original) if isinstance(original, Exception) else errors[0]["msg"]
+        else:
+            msg = str(exc)
+        raise OpenSREError(
+            msg,
+            suggestion="Run `opensre onboard` to configure your LLM provider and API credentials.",
+        ) from exc
+
+
 def _reraise_investigation_failure(exc: BaseException) -> NoReturn:
     """Map investigation runtime failures to structured CLI errors."""
     reraise_cli_runtime_error(exc)
@@ -70,7 +92,7 @@ def run_investigation_cli(
     opensre_evaluate: bool = False,
 ) -> dict[str, Any]:
     """Run the investigation and return the CLI-facing JSON payload."""
-    LLMSettings.from_env()
+    _check_llm_settings()
     resolved_alert_name, resolved_pipeline_name, resolved_severity = resolve_investigation_context(
         raw_alert=raw_alert,
         alert_name=alert_name,
@@ -133,7 +155,7 @@ def stream_investigation_cli(
 
     from app.pipeline.runners import astream_investigation
 
-    LLMSettings.from_env()
+    _check_llm_settings()
     resolved_alert_name, resolved_pipeline_name, resolved_severity = resolve_investigation_context(
         raw_alert=raw_alert,
         alert_name=alert_name,
@@ -223,7 +245,7 @@ def _run_session_alert_payload(
     from app.pipeline.runners import astream_investigation
     from app.remote.renderer import StreamRenderer
 
-    LLMSettings.from_env()
+    _check_llm_settings()
     if context_overrides:
         raw_alert.setdefault("annotations", {}).update(context_overrides)
 

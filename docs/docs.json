@@ -79,6 +79,7 @@
               "integrations-overview",
               "remote-runtime-investigation",
               "masking",
+              "interactive-shell-privacy",
               "multi-instance-integrations"
             ]
           },
@@ -110,13 +111,21 @@
             "pages": [
               "aws",
               "bitbucket",
-              "discord",
               "github",
               "gitlab",
               "google-docs",
               "jira",
-              "slack",
               "vercel"
+            ]
+          },
+          {
+            "group": "Messaging",
+            "expanded": true,
+            "pages": [
+              "messaging/index",
+              "messaging/slack",
+              "messaging/discord",
+              "messaging/telegram"
             ]
           },
           {
@@ -128,6 +137,7 @@
               "mongodb",
               "mysql",
               "openclaw",
+              "opensearch",
               "postgresql",
               "prefect",
               "rabbitmq",

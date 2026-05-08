@@ -232,10 +232,10 @@ def investigate_command(
             sys.stdout.isatty() and not is_json_output() and output is None and not evaluate
         )
         if stream_to_stdout:
-            result = run_investigation_cli_streaming(raw_alert=payload)
+            run_investigation_cli_streaming(raw_alert=payload)
         else:
             result = run_investigation_cli(raw_alert=payload, opensre_evaluate=evaluate)
-        write_json(result, output)
+            write_json(result, output)
     except SystemExit:
         raise
     except Exception:

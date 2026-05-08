@@ -26,6 +26,8 @@ def _opensearch_extract_params(sources: dict[str, dict[str, Any]]) -> dict[str, 
     return {
         "url": str(source.get("url", "")).strip(),
         "api_key": str(source.get("api_key", "")).strip(),
+        "username": str(source.get("username", "")).strip(),
+        "password": str(source.get("password", "")).strip(),
         "index_pattern": str(source.get("index_pattern", "*")).strip() or "*",
         "query": str(source.get("default_query", "*")).strip() or "*",
         "time_range_minutes": int(source.get("time_range_minutes", 60) or 60),
@@ -46,6 +48,8 @@ def _opensearch_extract_params(sources: dict[str, dict[str, Any]]) -> dict[str, 
         "properties": {
             "url": {"type": "string"},
             "api_key": {"type": "string"},
+            "username": {"type": "string"},
+            "password": {"type": "string"},
             "index_pattern": {"type": "string", "default": "*"},
             "query": {"type": "string", "default": "*"},
             "time_range_minutes": {"type": "integer", "default": 60},
@@ -61,6 +65,8 @@ def _opensearch_extract_params(sources: dict[str, dict[str, Any]]) -> dict[str, 
 def query_opensearch_analytics(
     url: str,
     api_key: str = "",
+    username: str = "",
+    password: str = "",
     index_pattern: str = "*",
     query: str = "*",
     time_range_minutes: int = 60,
@@ -82,7 +88,11 @@ def query_opensearch_analytics(
     effective_limit = _bounded_limit(limit, max_results)
     client = ElasticsearchClient(
         ElasticsearchConfig(
-            url=endpoint, api_key=api_key.strip() or None, index_pattern=index_pattern or "*"
+            url=endpoint,
+            api_key=api_key.strip() or None,
+            username=username.strip() or None,
+            password=password.strip() or None,
+            index_pattern=index_pattern or "*",
         )
     )
     result = client.search_logs(

@@ -73,6 +73,7 @@ VERIFY_SERVICES: tuple[str, ...] = (
     "mysql",
     "openclaw",
     "opsgenie",
+    "opensearch",
     "postgresql",
     "rabbitmq",
     "sentry",
