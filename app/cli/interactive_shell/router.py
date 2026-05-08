@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Literal, Protocol
 
+from app.cli.interactive_shell.action_planner import plan_cli_actions
 from app.cli.interactive_shell.terminal_intent import (
     is_sample_alert_launch_intent,
     mentions_alert_signal,
@@ -71,6 +72,14 @@ def _is_sample_alert_rule(text: str, _session: RoutingSession) -> bool:
     return is_sample_alert_launch_intent(text.strip())
 
 
+def _is_cli_agent_action_rule(
+    text: str,
+    _session: RoutingSession,
+) -> bool:
+    stripped = text.strip()
+    return bool(plan_cli_actions(stripped)) and not mentions_alert_signal(stripped)
+
+
 def _is_new_alert_without_prior_state(
     text: str,
     session: RoutingSession,
@@ -116,6 +125,12 @@ ROUTE_RULES: tuple[RouteRule, ...] = (
         RouteKind.CLI_AGENT,
         0.85,
         _is_sample_alert_rule,
+    ),
+    RouteRule(
+        "cli_agent_action_plan",
+        RouteKind.CLI_AGENT,
+        0.83,
+        _is_cli_agent_action_rule,
     ),
     RouteRule(
         "investigation_request",
