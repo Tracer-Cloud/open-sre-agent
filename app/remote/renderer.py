@@ -370,6 +370,10 @@ class StreamRenderer:
         return None
 
     def _print_report(self) -> None:
+        from app.output import stop_display
+
+        stop_display()
+
         alert_name = self._final_state.get("alert_name", "Unknown")
         pipeline = self._final_state.get("pipeline_name", "Unknown")
         severity = self._final_state.get("severity", "unknown")
@@ -445,9 +449,15 @@ def _print_connection_banner() -> None:
 
 def _print_section(title: str, content: str) -> None:
     if get_output_format() == "rich":
-        sys.stdout.write(f"\n  {_BOLD}{_WHITE}{title}{_RESET}\n")
-        for line in content.strip().splitlines():
-            sys.stdout.write(f"  {_DIM}{line}{_RESET}\n")
+        from rich.console import Console
+        from rich.markdown import Markdown
+        from rich.padding import Padding
+        from rich.rule import Rule
+
+        console = Console(highlight=False)
+        console.print()
+        console.print(Rule(f"[bold white] {title} [/]", style="#2D4A2D", align="left"))
+        console.print(Padding(Markdown(content.strip()), (1, 2)))
     else:
         print(f"\n  {title}")
         for line in content.strip().splitlines():

@@ -114,7 +114,7 @@ def validate_trello_config(config: TrelloConfig) -> TrelloValidationResult:
     except httpx.HTTPStatusError as err:
         detail = err.response.text.strip() or str(err)
         return TrelloValidationResult(ok=False, detail=f"Trello validation failed: {detail}")
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return TrelloValidationResult(ok=False, detail=f"Trello validation failed: {err}")
 
 

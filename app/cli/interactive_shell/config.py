@@ -8,6 +8,16 @@ from typing import Any
 
 _VALID_LAYOUTS = ("classic", "pinned")
 
+# ── Release notes ─────────────────────────────────────────────────────────────
+# Shown in the "What's new" panel on startup. Update this each release with
+# exactly 2 user-visible changes. Keep each entry under ~50 chars so it fits
+# the right column without truncation. The banner reads this at import time.
+
+WHATS_NEW: tuple[str, ...] = (
+    "Confidence scoring now shown during diagnosis",
+    "New /save command exports investigation reports",
+)
+
 
 def _read_config_file() -> dict[str, Any]:
     """Read the interactive section from ~/.config/opensre/config.yml.
@@ -33,7 +43,7 @@ def _read_config_file() -> dict[str, Any]:
             return {}
 
         return interactive
-    except Exception:  # noqa: BLE001
+    except Exception:
         return {}
 
 
@@ -102,3 +112,10 @@ class ReplConfig:
     def from_env(cls) -> ReplConfig:
         """Convenience alias — loads from env + file, no CLI override."""
         return cls.load()
+
+
+def read_history_settings() -> dict[str, Any]:
+    """Return the ``interactive.history`` config block, or empty dict."""
+    interactive = _read_config_file()
+    raw = interactive.get("history", {})
+    return raw if isinstance(raw, dict) else {}

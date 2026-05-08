@@ -250,14 +250,6 @@ class TestOpenAIClientGuardrails:
         assert "[REDACTED:aws_key]" in msg_content
 
 
-class _FakeMessage:
-    """Minimal LangChain-style message object with mutable content."""
-
-    def __init__(self, content: str, msg_type: str = "human") -> None:
-        self.content: str | None = content
-        self.type = msg_type
-
-
 class TestChatNodeGuardrails:
     def test_redacts_message_content(
         self,
@@ -275,17 +267,17 @@ class TestChatNodeGuardrails:
 
         from app.nodes.chat import _apply_guardrails_to_messages
 
-        msgs: list[Any] = [
-            _FakeMessage("hello"),
-            _FakeMessage("key is AKIAIOSFODNN7EXAMPLE"),
+        secret = "key is AKIAIOSFODNN7EXAMPLE"
+        msgs: list[dict[str, Any]] = [
+            {"role": "user", "content": "hello"},
+            {"role": "user", "content": secret},
         ]
         result = _apply_guardrails_to_messages(msgs)
 
-        assert result[0].content == "hello"
-        assert "AKIA" not in str(result[1].content)
-        assert "[REDACTED:aws_key]" in str(result[1].content)
-        # Original should be untouched
-        assert msgs[1].content == "key is AKIAIOSFODNN7EXAMPLE"
+        assert result[0]["content"] == "hello"
+        assert "AKIA" not in str(result[1]["content"])
+        assert "[REDACTED:aws_key]" in str(result[1]["content"])
+        assert msgs[1]["content"] == secret
 
     def test_blocks_on_chat_content(
         self,
@@ -303,7 +295,7 @@ class TestChatNodeGuardrails:
 
         from app.nodes.chat import _apply_guardrails_to_messages
 
-        msgs: list[Any] = [_FakeMessage("this is forbidden")]
+        msgs: list[dict[str, Any]] = [{"role": "user", "content": "this is forbidden"}]
         with pytest.raises(GuardrailBlockedError):
             _apply_guardrails_to_messages(msgs)
 
@@ -323,9 +315,7 @@ class TestChatNodeGuardrails:
 
         from app.nodes.chat import _apply_guardrails_to_messages
 
-        msg = _FakeMessage("")
-        msg.content = None
-        msgs: list[Any] = [msg]
+        msgs: list[dict[str, Any]] = [{"role": "user", "content": None}]
         _apply_guardrails_to_messages(msgs)
 
     def test_noop_when_no_rules(
@@ -340,9 +330,9 @@ class TestChatNodeGuardrails:
 
         from app.nodes.chat import _apply_guardrails_to_messages
 
-        msgs: list[Any] = [_FakeMessage("AKIAIOSFODNN7EXAMPLE")]
+        msgs: list[dict[str, Any]] = [{"role": "user", "content": "AKIAIOSFODNN7EXAMPLE"}]
         result = _apply_guardrails_to_messages(msgs)
-        assert result[0].content == "AKIAIOSFODNN7EXAMPLE"
+        assert result[0]["content"] == "AKIAIOSFODNN7EXAMPLE"
 
 
 # Production-grade configs exercising every reachable overlap shape the fix
@@ -462,15 +452,14 @@ class TestOverlappingRedactionReachesDownstream:
         from app.nodes.chat import _apply_guardrails_to_messages
 
         original = "Investigation: api_key=AKIAIOSFODNN7EXAMPLE surfaced in logs"
-        msgs: list[Any] = [_FakeMessage(original)]
+        msgs: list[dict[str, Any]] = [{"role": "user", "content": original}]
         result = _apply_guardrails_to_messages(msgs)
 
-        redacted = str(result[0].content)
+        redacted = str(result[0]["content"])
         assert "api_key=" not in redacted
         assert "AKIA" not in redacted
         assert "[REDACTED:generic_api_token]" in redacted
-        # Source message untouched — confirms the defensive copy.
-        assert msgs[0].content == original
+        assert msgs[0]["content"] == original
 
     def test_contained_real_secret_fully_redacted_in_pipeline(
         self,

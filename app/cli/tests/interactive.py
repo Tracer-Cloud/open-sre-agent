@@ -246,7 +246,8 @@ def choose_interactive_item(
         search = ""
         filtered = catalog.filter(category=category, search=search)
         if not filtered:
-            raise ValueError("No tests matched the selected category.")
+            _console.print("[yellow]No tests matched the selected category. Choose another.[/]")
+            continue
 
         while True:
             try:

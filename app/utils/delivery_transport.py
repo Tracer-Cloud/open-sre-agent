@@ -113,7 +113,7 @@ def post_json(
             timeout=timeout,
             follow_redirects=follow_redirects,
         )
-    except Exception as exc:  # noqa: BLE001 — transport never re-raises
+    except Exception as exc:
         return DeliveryResponse(ok=False, error=str(exc), exc_type=type(exc).__name__)
 
     text = response.text
@@ -122,7 +122,8 @@ def post_json(
         parsed = response.json()
         if isinstance(parsed, dict):
             data = parsed
-    except Exception:  # noqa: BLE001 — non-JSON body is permitted
+    except Exception:
+        # non-JSON body is permitted; fall through with empty data
         pass
 
     return DeliveryResponse(

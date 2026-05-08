@@ -10,7 +10,6 @@ from enum import StrEnum
 from typing import Literal, Protocol
 
 from app.cli.interactive_shell.terminal_intent import (
-    is_cli_agent_operational_intent,
     is_sample_alert_launch_intent,
     mentions_alert_signal,
 )
@@ -34,6 +33,7 @@ class RouteKind(StrEnum):
 class RouteDecision:
     route_kind: RouteKind
     confidence: float
+    # Must contain only internal rule names; never user-derived content.
     matched_signals: tuple[str, ...] = ()
     fallback_reason: str | None = None
 
@@ -69,14 +69,6 @@ def _is_cli_help_rule(text: str, _session: RoutingSession) -> bool:
 
 def _is_sample_alert_rule(text: str, _session: RoutingSession) -> bool:
     return is_sample_alert_launch_intent(text.strip())
-
-
-def _is_cli_agent_operational_rule(
-    text: str,
-    _session: RoutingSession,
-) -> bool:
-    stripped = text.strip()
-    return is_cli_agent_operational_intent(stripped) and not mentions_alert_signal(stripped)
 
 
 def _is_new_alert_without_prior_state(
@@ -126,12 +118,6 @@ ROUTE_RULES: tuple[RouteRule, ...] = (
         _is_sample_alert_rule,
     ),
     RouteRule(
-        "cli_agent_operational",
-        RouteKind.CLI_AGENT,
-        0.82,
-        _is_cli_agent_operational_rule,
-    ),
-    RouteRule(
         "investigation_request",
         RouteKind.NEW_ALERT,
         0.86,
@@ -155,19 +141,39 @@ ROUTE_RULES: tuple[RouteRule, ...] = (
 _MIN_INVESTIGATION_LINE_LEN = 48
 
 # Bare words that map to slash commands; users often forget the leading slash.
-_BARE_COMMAND_ALIASES = frozenset(
-    {
-        "help",
-        "?",  # iconic shortcut for help, matches vim, less, many REPLs
-        "exit",
-        "quit",
-        "clear",
-        "reset",
-        "status",
-        "trust",
-    }
-)
+# Keys without an explicit value rewrite to ``/<key>`` (e.g. ``help`` → ``/help``).
+# Greetings and meta-words ("agent", "hi", "menu", …) all rewrite to ``/welcome``
+# so a wandering user always lands on the structured welcome panel rather than a
+# verbose, unstructured LLM reply. Greeting aliases are intentionally chosen to
+# avoid conflicting Tab-completion prefixes with the existing command words
+# (e.g. no ``hello`` because ``hel`` would no longer uniquely complete to ``help``).
+_BARE_COMMAND_ALIAS_MAP: dict[str, str] = {
+    "help": "/help",
+    "?": "/help",
+    "exit": "/exit",
+    "quit": "/quit",
+    "clear": "/clear",
+    "reset": "/reset",
+    "status": "/status",
+    "trust": "/trust",
+    "onboard": "/onboard",
+    "deploy": "/deploy",
+    "remote": "/remote",
+    "tests": "/tests",
+    "guardrails": "/guardrails",
+    "update": "/update",
+    "uninstall": "/uninstall",
+    "agents": "/agents",
+    "doctor": "/doctor",
+    "welcome": "/welcome",
+    "agent": "/welcome",
+    "hi": "/welcome",
+    "hey": "/welcome",
+    "menu": "/welcome",
+}
+_BARE_COMMAND_ALIASES = frozenset(_BARE_COMMAND_ALIAS_MAP.keys())
 BARE_COMMAND_ALIASES = _BARE_COMMAND_ALIASES
+BARE_COMMAND_ALIAS_MAP = _BARE_COMMAND_ALIAS_MAP
 
 
 # Short, question-shaped strings that obviously target the previous investigation.
@@ -386,5 +392,5 @@ def route_input(text: str, session: RoutingSession) -> RouteDecision:
 
 
 def classify_input(text: str, session: RoutingSession) -> InputKind:
-    """Backward-compatible wrapper around route_input()."""
+    """Legacy InputKind adapter built on top of route_input()."""
     return route_input(text, session).route_kind.value

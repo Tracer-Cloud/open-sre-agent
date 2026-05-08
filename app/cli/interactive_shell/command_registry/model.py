@@ -12,7 +12,7 @@ from app.cli.interactive_shell.command_registry import repl_data
 from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
 from app.cli.interactive_shell.rendering import render_models_table
 from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import TERMINAL_ERROR
+from app.cli.interactive_shell.theme import PRIMARY, TERMINAL_ERROR, TEXT_DIM, WARNING
 
 
 def _format_supported_models(provider_models: tuple[object, ...]) -> str:
@@ -21,10 +21,14 @@ def _format_supported_models(provider_models: tuple[object, ...]) -> str:
     return ", ".join(visible) if visible else "provider default"
 
 
-def _is_reasoning_model_plausible(provider_value: str, model: str) -> bool:
-    if provider_value == "anthropic":
-        return model.startswith("claude-")
-    return True
+def _is_model_supported(
+    provider_value: str, model: str, provider_models: tuple[object, ...]
+) -> bool:
+    if provider_value == "ollama":
+        # Ollama supports any local model name the daemon exposes.
+        return bool(model)
+    supported_values = {str(getattr(option, "value", "")) for option in provider_models}
+    return model in supported_values
 
 
 def _reset_runtime_llm_caches() -> None:
@@ -54,7 +58,7 @@ def switch_llm_provider(
         choices = ", ".join(sorted(PROVIDER_BY_VALUE))
         console.print(
             f"[{TERMINAL_ERROR}]unknown LLM provider:[/] {escape(provider_name)} "
-            f"[dim](choices: {choices})[/dim]"
+            f"[{TEXT_DIM}](choices: {choices})[/]"
         )
         return False
 
@@ -77,14 +81,14 @@ def switch_llm_provider(
             f"{provider.api_key_env} is not set in env or the keyring."
         )
         console.print(
-            f"[dim]set it with[/dim] [bold]export {provider.api_key_env}=<your-key>[/bold] "
-            "[dim]or run[/dim] [bold]opensre onboard[/bold] "
-            "[dim]to save it to the keyring, then rerun this command.[/dim]"
+            f"[{TEXT_DIM}]set it with[/] [bold]export {provider.api_key_env}=<your-key>[/bold] "
+            f"[{TEXT_DIM}]or run[/] [bold]opensre onboard[/bold] "
+            f"[{TEXT_DIM}]to save it to the keyring, then rerun this command.[/]"
         )
         return False
 
     selected_model = model.strip() if model else provider.default_model
-    if selected_model and not _is_reasoning_model_plausible(provider.value, selected_model):
+    if selected_model and not _is_model_supported(provider.value, selected_model, provider.models):
         console.print(
             f"[{TERMINAL_ERROR}]unknown model for {provider.value}:[/] {escape(selected_model)}"
         )
@@ -102,12 +106,22 @@ def switch_llm_provider(
     if toolcall_model is not None:
         if not provider.toolcall_model_env:
             console.print(
-                f"[yellow]provider {provider.value} does not expose a separate "
-                "toolcall model[/yellow] — toolcall override ignored."
+                f"[{WARNING}]provider {provider.value} does not expose a separate "
+                "toolcall model[/] — toolcall override ignored."
             )
         else:
             selected_toolcall = toolcall_model.strip()
             if selected_toolcall:
+                if not _is_model_supported(provider.value, selected_toolcall, provider.models):
+                    console.print(
+                        f"[{TERMINAL_ERROR}]unknown model for {provider.value}:[/] "
+                        f"{escape(selected_toolcall)}"
+                    )
+                    console.print(
+                        "[dim]known toolcall models:[/dim] "
+                        f"{escape(_format_supported_models(provider.models))}"
+                    )
+                    return False
                 values[provider.toolcall_model_env] = selected_toolcall
 
     env_path = sync_env_values(values)
@@ -115,17 +129,17 @@ def switch_llm_provider(
     _reset_runtime_llm_caches()
 
     # Be explicit about which slot each model lands in.
-    console.print(f"[green]switched LLM provider:[/green] {provider.value}")
+    console.print(f"[{PRIMARY}]switched LLM provider:[/] {provider.value}")
     console.print(
-        f"[green]reasoning model:[/green] {selected_model or 'provider default'} "
-        f"[dim]({provider.model_env})[/dim]"
+        f"[{PRIMARY}]reasoning model:[/] {selected_model or 'provider default'} "
+        f"[{TEXT_DIM}]({provider.model_env})[/]"
     )
     if selected_toolcall:
         console.print(
-            f"[green]toolcall model:[/green] {selected_toolcall} "
-            f"[dim]({provider.toolcall_model_env})[/dim]"
+            f"[{PRIMARY}]toolcall model:[/] {selected_toolcall} "
+            f"[{TEXT_DIM}]({provider.toolcall_model_env})[/]"
         )
-    console.print(f"[dim]updated {env_path}[/dim]")
+    console.print(f"[{TEXT_DIM}]updated {env_path}[/]")
     render_models_table(console, repl_data.load_llm_settings())
     return True
 
@@ -147,13 +161,13 @@ def switch_toolcall_model(
         choices = ", ".join(sorted(PROVIDER_BY_VALUE))
         console.print(
             f"[{TERMINAL_ERROR}]unknown LLM provider:[/] {escape(resolved_name)} "
-            f"[dim](choices: {choices})[/dim]"
+            f"[{TEXT_DIM}](choices: {choices})[/]"
         )
         return False
     if not provider.toolcall_model_env:
         console.print(
-            f"[yellow]provider {provider.value} does not expose a separate "
-            "toolcall model[/yellow] — nothing to set."
+            f"[{WARNING}]provider {provider.value} does not expose a separate "
+            "toolcall model[/] — nothing to set."
         )
         return False
     new_model = toolcall_model.strip()
@@ -167,10 +181,10 @@ def switch_toolcall_model(
     _reset_runtime_llm_caches()
 
     console.print(
-        f"[green]toolcall model set to:[/green] {new_model} "
-        f"[dim]({provider.value} · {provider.toolcall_model_env})[/dim]"
+        f"[{PRIMARY}]toolcall model set to:[/] {new_model} "
+        f"[{TEXT_DIM}]({provider.value} · {provider.toolcall_model_env})[/]"
     )
-    console.print(f"[dim]updated {env_path}[/dim]")
+    console.print(f"[{TEXT_DIM}]updated {env_path}[/]")
     render_models_table(console, repl_data.load_llm_settings())
     return True
 
@@ -225,7 +239,7 @@ def parse_model_set_args(args: list[str]) -> tuple[str, str | None, str | None]:
     return provider, reasoning_model, toolcall_model
 
 
-def _cmd_model(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_model(session: ReplSession, console: Console, args: list[str]) -> bool:
     sub = (args[0].lower() if args else "show").strip()
 
     if sub == "show":
@@ -238,13 +252,13 @@ def _cmd_model(session: ReplSession, console: Console, args: list[str]) -> bool:
             return True
         if len(args) >= 2 and args[1].lower() in ("set", "use", "switch"):
             if len(args) < 3:
-                console.print("[dim]usage:[/dim] /model toolcall set <model>")
+                console.print(f"[{TEXT_DIM}]usage:[/] /model toolcall set <model>")
                 return True
             switch_toolcall_model(args[2], console)
             return True
         console.print(
-            "[dim]usage:[/dim] /model toolcall set <model> "
-            "[dim](sets the toolcall model for the active provider)[/dim]"
+            f"[{TEXT_DIM}]usage:[/] /model toolcall set <model> "
+            f"[{TEXT_DIM}](sets the toolcall model for the active provider)[/]"
         )
         return True
 
@@ -267,7 +281,7 @@ def _cmd_model(session: ReplSession, console: Console, args: list[str]) -> bool:
             console.print(f"[{TERMINAL_ERROR}]{escape(str(exc))}[/]")
             console.print()
             console.print(
-                "[dim]usage:[/dim] /model set <provider> [model] [--toolcall-model <model>]"
+                f"[{TEXT_DIM}]usage:[/] /model set <provider> [model] [--toolcall-model <model>]"
             )
             session.mark_latest(ok=False, kind="slash")
             return True

@@ -52,6 +52,14 @@ class ElasticsearchLogsTool(BaseTool):
                 "type": "string",
                 "description": "API key for authenticated clusters (optional)",
             },
+            "username": {
+                "type": "string",
+                "description": "Username for HTTP Basic Auth (optional, used when api_key is not provided)",
+            },
+            "password": {
+                "type": "string",
+                "description": "Password for HTTP Basic Auth (optional, used when api_key is not provided)",
+            },
         },
         "required": ["query"],
     }
@@ -67,6 +75,8 @@ class ElasticsearchLogsTool(BaseTool):
             "limit": 50,
             "url": es.get("url"),
             "api_key": es.get("api_key"),
+            "username": es.get("username"),
+            "password": es.get("password"),
             "index_pattern": es.get("index_pattern", "*"),
         }
 
@@ -78,9 +88,17 @@ class ElasticsearchLogsTool(BaseTool):
         index_pattern: str = "*",
         url: str | None = None,
         api_key: str | None = None,
+        username: str | None = None,
+        password: str | None = None,
         **_kwargs: Any,
     ) -> dict:
-        client = make_client(url, api_key=api_key, index_pattern=index_pattern)
+        client = make_client(
+            url,
+            api_key=api_key,
+            username=username,
+            password=password,
+            index_pattern=index_pattern,
+        )
         if not client:
             return unavailable(
                 "elasticsearch_logs", "logs", "Elasticsearch integration not configured"

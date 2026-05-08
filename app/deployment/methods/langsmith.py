@@ -27,7 +27,7 @@ def _run_command(
 ) -> subprocess.CompletedProcess[str]:
     """Run a command and return the completed process."""
     try:
-        return subprocess.run(  # noqa: S603
+        return subprocess.run(
             cmd,
             capture_output=True,
             text=True,

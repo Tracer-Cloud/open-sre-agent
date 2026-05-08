@@ -28,7 +28,7 @@ def _timed(label: str, fn: Callable[[], object]) -> tuple[float, object]:
     t0 = time.perf_counter()
     result = fn()
     elapsed = time.perf_counter() - t0
-    print(f"{label}: {elapsed * 1000:.2f} ms")  # noqa: T201
+    print(f"{label}: {elapsed * 1000:.2f} ms")
     return elapsed, result
 
 
@@ -52,19 +52,19 @@ def main() -> None:
             lambda: build_docs_reference_text("configure Datadog integration"),
         )
     else:
-        print("[skip] docs/ not present — docs parse timings omitted")  # noqa: T201
+        print("[skip] docs/ not present — docs parse timings omitted")
 
     docs_stats = get_docs_cache_stats()
 
-    print(  # noqa: T201
+    print(
         f"\nSummary: CLI speedup ~{cold_cli / warm_cli:.1f}x (warm vs cold reference build)"
         if warm_cli > 0
         else "\nSummary: CLI warm path too fast to ratio"
     )
     if docs_root.is_dir() and warm_docs > 0:
-        print(f"Docs parse speedup ~{cold_docs / warm_docs:.1f}x")  # noqa: T201
-    print(f"CLI cache stats: {cli_stats}")  # noqa: T201
-    print(f"Docs cache stats: {docs_stats}")  # noqa: T201
+        print(f"Docs parse speedup ~{cold_docs / warm_docs:.1f}x")
+    print(f"CLI cache stats: {cli_stats}")
+    print(f"Docs cache stats: {docs_stats}")
 
 
 if __name__ == "__main__":

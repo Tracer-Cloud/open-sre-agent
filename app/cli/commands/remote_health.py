@@ -148,5 +148,5 @@ def run_remote_health_check(
             "SSH into the instance and check: `systemctl status opensre` and "
             "`cat /var/log/opensre-remote.log`."
         ) from exc
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise click.ClickException(f"Health check failed: {exc}") from exc

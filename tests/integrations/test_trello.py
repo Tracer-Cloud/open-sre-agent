@@ -11,8 +11,8 @@ from app.integrations.trello import (
     validate_trello_connection,
 )
 
-_TEST_API_KEY = "test-trello-api-key"  # noqa: S105
-_TEST_TOKEN = "test-trello-token"  # noqa: S105
+_TEST_API_KEY = "test-trello-api-key"
+_TEST_TOKEN = "test-trello-token"
 _TEST_BOARD_ID = "board123"
 _TEST_LIST_ID = "list123"
 
@@ -117,7 +117,7 @@ def test_validate_trello_config_success(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_validate_trello_config_unauthorized(monkeypatch: pytest.MonkeyPatch) -> None:
-    config = _make_config(api_key="bad_key", token="bad_token")  # noqa: S106
+    config = _make_config(api_key="bad_key", token="bad_token")
 
     request = httpx.Request("GET", "https://api.trello.com/1/members/me")
     response = httpx.Response(401, request=request, text="unauthorized")

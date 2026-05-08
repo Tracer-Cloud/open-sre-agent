@@ -160,7 +160,7 @@ def validate_kafka_config(config: KafkaConfig) -> KafkaValidationResult:
                 f"and {topic_count} topic(s)."
             ),
         )
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return KafkaValidationResult(ok=False, detail=f"Kafka connection failed: {err}")
 
 
@@ -217,7 +217,7 @@ def get_topic_health(
             "cluster_topic_count": len(metadata.topics),
             "topics": topics,
         }
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {"source": "kafka", "available": False, "error": str(err)}
 
 
@@ -281,5 +281,5 @@ def get_consumer_group_lag(
             }
         finally:
             consumer.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {"source": "kafka", "available": False, "error": str(err)}

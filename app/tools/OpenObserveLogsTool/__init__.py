@@ -167,7 +167,7 @@ def query_openobserve_logs(
         )
         response.raise_for_status()
         body = response.json()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {"source": "openobserve", "available": False, "error": str(err), "records": []}
 
     records = _extract_records(body if isinstance(body, dict) else {})[:effective_limit]

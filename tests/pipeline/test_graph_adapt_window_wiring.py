@@ -24,7 +24,7 @@ from __future__ import annotations
 from app.pipeline.graph import build_graph
 
 
-def _builder():  # noqa: ANN202 - internal LangGraph type, type-stub varies
+def _builder():
     return build_graph().builder
 
 

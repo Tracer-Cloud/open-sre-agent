@@ -216,7 +216,7 @@ _engine: GuardrailEngine | None = None
 
 def get_guardrail_engine() -> GuardrailEngine:
     """Return the module-level singleton engine, loading rules from default path."""
-    global _engine  # noqa: PLW0603
+    global _engine
     if _engine is None:
         rules = load_rules(get_default_rules_path())
         _engine = GuardrailEngine(rules, audit_logger=AuditLogger())
@@ -225,5 +225,5 @@ def get_guardrail_engine() -> GuardrailEngine:
 
 def reset_guardrail_engine() -> None:
     """Clear the singleton (for tests and config reload)."""
-    global _engine  # noqa: PLW0603
+    global _engine
     _engine = None

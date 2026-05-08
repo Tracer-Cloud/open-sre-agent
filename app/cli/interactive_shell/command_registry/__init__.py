@@ -8,6 +8,10 @@ from itertools import chain
 from rich.console import Console
 from rich.markup import escape
 
+from app.cli.interactive_shell.command_registry.agents import COMMANDS as AGENTS_COMMANDS
+from app.cli.interactive_shell.command_registry.cli_parity import (
+    COMMANDS as PARITY_COMMANDS,
+)
 from app.cli.interactive_shell.command_registry.help import COMMANDS as HELP_COMMANDS
 from app.cli.interactive_shell.command_registry.integrations import (
     COMMANDS as INTEGRATIONS_COMMANDS,
@@ -20,6 +24,7 @@ from app.cli.interactive_shell.command_registry.model import (
     switch_llm_provider,
     switch_toolcall_model,
 )
+from app.cli.interactive_shell.command_registry.privacy_cmds import COMMANDS as PRIVACY_COMMANDS
 from app.cli.interactive_shell.command_registry.repl_data import (
     load_llm_settings,
     load_verified_integrations,
@@ -44,6 +49,9 @@ _MERGED_SEQUENCE = tuple(
         MODEL_COMMANDS,
         INVESTIGATION_COMMANDS,
         TASK_COMMANDS,
+        PRIVACY_COMMANDS,
+        AGENTS_COMMANDS,
+        PARITY_COMMANDS,
         SYSTEM_COMMANDS,
     )
 )

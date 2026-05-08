@@ -34,11 +34,11 @@ load_dotenv()
 
 from pathlib import Path
 
-from tests.e2e.kubernetes.infrastructure_sdk.local import (  # noqa: E402
+from tests.e2e.kubernetes.infrastructure_sdk.local import (
     create_or_update_monitor,
     load_monitor_definitions,
 )
-from tests.utils.conftest import get_test_config  # noqa: E402
+from tests.utils.conftest import get_test_config
 
 BASE_DIR = Path(__file__).parent
 MONITOR_DEFS = str(BASE_DIR / "datadog-monitor.yaml")

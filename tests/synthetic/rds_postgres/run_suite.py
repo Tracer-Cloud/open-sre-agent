@@ -333,6 +333,7 @@ def score_result(
             "aas",
             "db load",
             "walwrite",
+            "clientread",
         )
 
         for source_key in answer_key.required_evidence_sources:

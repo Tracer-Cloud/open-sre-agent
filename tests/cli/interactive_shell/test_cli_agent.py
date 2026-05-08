@@ -105,6 +105,44 @@ class TestSystemPromptTerminology:
         assert "gemini-cli" in prompt
 
 
+class TestSystemPromptAgentsMdGrounding:
+    """The conversational shell wires AGENTS.md repo-map content (#1442).
+
+    The strict reference_only docs-aware path (``cli_help._build_grounded_prompt``)
+    intentionally does NOT include AGENTS.md so it stays grounded only on the
+    public docs and CLI reference.
+    """
+
+    def test_section_present_in_conversational_prompt_when_agents_md_provided(self) -> None:
+        prompt = _build_system_prompt(
+            reference="(ref)",
+            history="(hist)",
+            agents_md="repo map content",
+        )
+        assert "--- Repo map (AGENTS.md) ---" in prompt
+        assert "repo map content" in prompt
+
+    def test_section_omitted_when_agents_md_empty(self) -> None:
+        prompt = _build_system_prompt(reference="(ref)", history="(hist)", agents_md="")
+        assert "--- Repo map (AGENTS.md) ---" not in prompt
+
+    def test_section_omitted_by_default_for_callers_that_dont_pass_it(self) -> None:
+        prompt = _build_system_prompt(reference="(ref)", history="(hist)")
+        assert "--- Repo map (AGENTS.md) ---" not in prompt
+
+    def test_section_absent_in_reference_only_grounded_prompt(self) -> None:
+        from app.cli.interactive_shell.cli_help import _build_grounded_prompt
+
+        # The reference_only path stays strict — even if AGENTS.md grounding is
+        # available elsewhere in the shell, this prompt must not include it.
+        prompt = _build_grounded_prompt(
+            question="how do I configure datadog?",
+            cli_reference="(ref)",
+            docs_reference="(docs)",
+        )
+        assert "--- Repo map (AGENTS.md) ---" not in prompt
+
+
 class TestActionPlanParsing:
     def test_parses_prose_wrapped_json(self) -> None:
         actions = _parse_action_plan(
@@ -209,7 +247,7 @@ class TestAssistantOutputRendering:
         captured_errors: list[BaseException] = []
 
         class _Boom:
-            def invoke_stream(self, prompt: str) -> Iterator[str]:  # noqa: ARG002
+            def invoke_stream(self, _prompt: str) -> Iterator[str]:
                 raise RuntimeError("upstream 503")
                 yield  # pragma: no cover  -- generator marker
 
@@ -322,11 +360,11 @@ class TestStreamingMigration:
         calls: list[str] = []
 
         class _Recording:
-            def invoke(self, prompt: str) -> Any:  # noqa: ARG002
+            def invoke(self, _prompt: str) -> Any:
                 calls.append("invoke")
                 raise AssertionError("cli_agent must not call invoke after streaming migration")
 
-            def invoke_stream(self, prompt: str) -> Iterator[str]:  # noqa: ARG002
+            def invoke_stream(self, _prompt: str) -> Iterator[str]:
                 calls.append("invoke_stream")
                 yield "ok"
 
