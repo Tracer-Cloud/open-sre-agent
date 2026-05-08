@@ -8,12 +8,7 @@ import click
 from rich.console import Console
 from rich.text import Text
 
-_ASCII_HEADER = """\
-  ___  ____  _____ _   _ ____  ____  _____
- / _ \\|  _ \\| ____| \\ | / ___||  _ \\| ____|
-| | | | |_) |  _| |  \\| \\___ \\| |_) |  _|
-| |_| |  __/| |___| |\\  |___) |  _ <| |___
- \\___/|_|   |_____|_| \\_|____/|_| \\_\\_____|"""
+from app.cli.interactive_shell.banner import build_ready_panel
 
 _LANDING_EXAMPLES: tuple[tuple[str, str], ...] = (
     (
@@ -84,6 +79,8 @@ def render_help(group: click.Group) -> None:
     console = Console(highlight=False)
     commands = _commands_from_group(group)
     console.print()
+    console.print(build_ready_panel(console))
+    console.print()
     _render_usage(console)
     console.print()
     _render_rows(console, title="Commands", rows=commands, width=16)
@@ -96,9 +93,7 @@ def render_landing() -> None:
     """Render the root landing page shown with no subcommand."""
     console = Console(highlight=False)
     console.print()
-    for line in _ASCII_HEADER.splitlines():
-        console.print(Text.assemble(("  ", ""), (line, "bold cyan")))
-    console.print()
+    console.print(build_ready_panel(console))
     console.print(
         Text.assemble(
             ("  ", ""),

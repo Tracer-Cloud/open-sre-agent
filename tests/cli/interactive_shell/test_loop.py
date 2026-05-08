@@ -394,3 +394,52 @@ def test_run_one_turn_renders_submitted_prompt_before_handler(
     assert should_continue is True
     assert "❯" in output
     assert "explain deploy" in output
+
+
+class TestLooksLikeCorrection:
+    """Unit tests for the ``_looks_like_correction`` heuristic.
+
+    Pins the v1 catches, false-positive guards, and limitations so future
+    iteration on ``_INTERVENTION_CORRECTION_RE`` has a regression baseline.
+    """
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "no, do that instead",
+            "nope",
+            "nvm",
+            "never mind",
+            "actually, let's check Datadog first",
+            "scratch that, run the synthetic test",
+            "wait, wrong dashboard",
+            "let's do an EKS health check instead",
+            "try a token refresh instead",
+            "wrong dashboard, fix it",
+            "instead, log a warning",
+            "Wait!",  # case-insensitive
+            "NO.",
+        ],
+    )
+    def test_correction_cues_match(self, text: str) -> None:
+        assert loop._looks_like_correction(text) is True
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            # Punctuation-lookahead guards reject content uses of cue words.
+            "stop the server before redeploying",
+            "instead of returning null, log a warning",
+            "no problem, I'll handle it",
+            "wait for the result",
+            # v1 limitation: cue must be at start of message.
+            "hmm, scratch that",
+            "doesn't work, try X instead",
+            # Edge cases.
+            "",
+            "   ",
+            "```\nstop the server\n```",
+        ],
+    )
+    def test_non_correction_text_does_not_match(self, text: str) -> None:
+        assert loop._looks_like_correction(text) is False

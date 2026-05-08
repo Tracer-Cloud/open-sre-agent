@@ -69,6 +69,7 @@
 - `app/tools/` — Tool registry, decorator, base classes, per-tool packages, shared utilities, and registry helpers.
 - `app/types/` — Shared typed contracts for evidence, retrieval, and tool-related payloads.
 - `app/utils/` — Cross-cutting utility helpers used across the app and test harnesses.
+- `app/watch_dog/` — Watchdog feature: per-threshold Telegram alarm dispatch with cooldown, sitting on top of `app/utils/telegram_delivery.py`.
 - `app/main.py` and `app/webapp.py` — Application entrypoints for the CLI/runtime and web-facing surface.
 
 `tests/` is organized by capability boundary rather than by framework:
