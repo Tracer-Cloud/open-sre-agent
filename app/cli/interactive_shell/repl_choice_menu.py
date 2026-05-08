@@ -29,29 +29,13 @@ from app.cli.interactive_shell.theme import (
 
 _HINT = "↑↓  Enter  Esc"
 CRUMB_SEP = "  ›  "
+# Blank line after the submitted slash line before the menu header (all pickers).
+_MENU_LEADING_LINES = 1
 
 
 def repl_tty_interactive() -> bool:
-    """Return True when stdin/stdout support an interactive picker UI.
-
-    ``prompt_toolkit`` (and some IDEs) may wrap :data:`sys.stdout` so
-    :meth:`~io.TextIOBase.isatty` is false even though the process is still
-    attached to a real terminal on file descriptors 0/1. Fall back to
-    :func:`os.isatty` so bare ``/model``, ``/list``, etc. still get inline menus
-    in the interactive REPL.
-    """
-    try:
-        sys_in = bool(sys.stdin.isatty())
-        sys_out = bool(sys.stdout.isatty())
-    except (AttributeError, OSError, ValueError):
-        sys_in = False
-        sys_out = False
-    try:
-        fd_in = os.isatty(0)
-        fd_out = os.isatty(1)
-    except OSError:
-        return False
-    return bool((sys_in or fd_in) and (sys_out or fd_out))
+    """Return True when stdin/stdout support an interactive picker UI."""
+    return bool(sys.stdin.isatty() and sys.stdout.isatty())
 
 
 def repl_section_break(console: Console) -> None:
@@ -129,8 +113,8 @@ def _pad(sym: str, label: str, width: int) -> str:
 
 
 def _menu_height(crumb: str, labels: list[str]) -> int:
-    # title, crumb, rule, blank, choices, blank, hint
-    return 1 + (1 if crumb else 0) + 1 + 1 + len(labels) + 1 + 1
+    # leading, title, [crumb], rule, blank, choices, blank, hint
+    return _MENU_LEADING_LINES + 1 + (1 if crumb else 0) + 1 + 1 + len(labels) + 1 + 1
 
 
 def _draw_menu(
@@ -145,6 +129,7 @@ def _draw_menu(
     w = _cols()
     if erase_lines:
         out.write(f"\x1b[{erase_lines}A\x1b[J")
+    out.write("\n" * _MENU_LEADING_LINES)
     # title
     out.write(f"{PROMPT_ACCENT_ANSI}{title}{ANSI_RESET}\n")
     # breadcrumb path

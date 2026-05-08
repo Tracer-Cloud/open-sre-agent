@@ -46,7 +46,6 @@ from app.cli.interactive_shell.theme import (
     ACCENT,
     ACCENT_SOFT,
     BORDER,
-    GLYPH_ACTIVE,
     PRIMARY,
     PRIMARY_ALT,
     TEXT,
@@ -266,6 +265,12 @@ _TIPS: tuple[str, ...] = (
 _LEFT_COL_WIDTH = 34
 _RIGHT_COL_WIDTH = 52
 
+# OpenSRE brand mark — single "O" from oh-my-logo tiny font (half-block chars).
+_LOGO_MARK_ROWS: tuple[tuple[str, str], ...] = (
+    ("█▀█", ""),
+    ("█▄█", ""),
+)
+
 
 def _get_username() -> str:
     try:
@@ -277,7 +282,10 @@ def _get_username() -> str:
 def _build_logo_mark() -> Text:
     """Return the brand mark left-aligned (flush with the column's 2-space indent)."""
     logo = Text(no_wrap=True)
-    logo.append(GLYPH_ACTIVE, style=f"bold {PRIMARY_ALT}")
+    for index, (body, _echo) in enumerate(_LOGO_MARK_ROWS):
+        if index:
+            logo.append("\n")
+        logo.append(body, style=f"bold {PRIMARY_ALT}")
     return logo
 
 

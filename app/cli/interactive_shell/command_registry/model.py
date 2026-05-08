@@ -377,24 +377,27 @@ def _interactive_model_menu(session: ReplSession, console: Console) -> bool:
                 continue
             if not switched:
                 session.mark_latest(ok=False, kind="slash")
-            repl_section_break(console)
-            continue
+                repl_section_break(console)
+                continue
+            return True
         if action == "restore":
             restored = _interactive_restore_provider(console)
             if restored is None:
                 continue
             if not restored:
                 session.mark_latest(ok=False, kind="slash")
-            repl_section_break(console)
-            continue
+                repl_section_break(console)
+                continue
+            return True
         if action == "toolcall":
             switched = _interactive_set_toolcall(console)
             if switched is None:
                 continue
             if not switched:
                 session.mark_latest(ok=False, kind="slash")
-            repl_section_break(console)
-            continue
+                repl_section_break(console)
+                continue
+            return True
 
 
 def parse_model_set_args(args: list[str]) -> tuple[str, str | None, str | None]:
@@ -511,7 +514,8 @@ COMMANDS: list[SlashCommand] = [
     SlashCommand(
         "/model",
         "show or set the active LLM (TTY: bare '/model' opens an inline menu — "
-        "run several actions in a row; choose finish to leave the menu; "
+        "show stays open for more actions; set / restore / toolcall exit after success; "
+        "done or Esc closes; "
         "else '/model show', '/model set <provider> [model] [--toolcall-model <m>]', "
         "'/model restore [provider]', '/model toolcall set <model>')",
         _cmd_model,
