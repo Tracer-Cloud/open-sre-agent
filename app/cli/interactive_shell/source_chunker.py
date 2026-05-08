@@ -40,14 +40,17 @@ def chunk_python_file(path: Path, *, repo_root: Path) -> list[SourceChunk]:
     if "__pycache__" in path.parts or path.name.startswith("_"):
         return []
 
-    text = path.read_text(encoding="utf-8")
+    rel = _relpath(path, repo_root)
+    if rel is None:
+        return []
+
+    text = path.read_text(encoding="utf-8-sig")
     try:
         tree = ast.parse(text)
     except SyntaxError:
         return []
 
     source_lines = text.splitlines()
-    rel = _relpath(path, repo_root)
     chunks: list[SourceChunk] = []
 
     module_chunk = _build_module_chunk(tree, source_lines, rel, path.stem)
@@ -64,9 +67,12 @@ def chunk_python_file(path: Path, *, repo_root: Path) -> list[SourceChunk]:
 
 def chunk_markdown_file(path: Path, *, repo_root: Path) -> list[SourceChunk]:
     """Chunk a Markdown/MDX file by H2 headings, stripping YAML frontmatter."""
-    text = path.read_text(encoding="utf-8")
-    body, _ = _strip_frontmatter(text)
     rel = _relpath(path, repo_root)
+    if rel is None:
+        return []
+
+    text = path.read_text(encoding="utf-8-sig")
+    body, _ = _strip_frontmatter(text)
 
     if not body.strip():
         return []
@@ -115,8 +121,12 @@ def chunk_path(path: Path, *, repo_root: Path) -> list[SourceChunk]:
     return []
 
 
-def _relpath(path: Path, repo_root: Path) -> str:
-    return path.resolve().relative_to(repo_root.resolve()).as_posix()
+def _relpath(path: Path, repo_root: Path) -> str | None:
+    """Return the path's POSIX-style relpath inside repo_root, or None if outside."""
+    try:
+        return path.resolve().relative_to(repo_root.resolve()).as_posix()
+    except ValueError:
+        return None
 
 
 def _truncate_content(content: str) -> str:
@@ -185,14 +195,26 @@ def _build_def_chunk(
 
 
 def _find_h2_starts(body_lines: list[str]) -> list[tuple[int, str]]:
-    """Return ``(index, heading)`` for every H2 outside fenced code blocks."""
-    in_fence = False
+    """Return ``(index, heading)`` for every H2 outside fenced code blocks.
+
+    Tracks the opening fence character so a backtick fence is only closed by
+    backticks (and tilde by tilde) — mismatched fences don't toggle state.
+    """
+    open_fence: str | None = None
     starts: list[tuple[int, str]] = []
     for i, line in enumerate(body_lines):
         stripped = line.lstrip()
-        if stripped.startswith("```") or stripped.startswith("~~~"):
-            in_fence = not in_fence
+        if open_fence is None:
+            if stripped.startswith("```"):
+                open_fence = "```"
+                continue
+            if stripped.startswith("~~~"):
+                open_fence = "~~~"
+                continue
+        else:
+            if stripped.startswith(open_fence):
+                open_fence = None
             continue
-        if not in_fence and line.startswith("## "):
+        if line.startswith("## "):
             starts.append((i, line[3:].strip()))
     return starts

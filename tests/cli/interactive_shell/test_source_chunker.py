@@ -223,6 +223,84 @@ def test_relpath_uses_forward_slashes(tmp_path: Path) -> None:
     assert chunks[0].relpath == "a/b/thing.py"
 
 
+def test_python_class_with_decorator(tmp_path: Path) -> None:
+    source = (
+        "from dataclasses import dataclass\n\n\n@dataclass\nclass Point:\n    x: int\n    y: int\n"
+    )
+    path = _write(tmp_path, "deco_class.py", source)
+    chunks = chunk_python_file(path, repo_root=tmp_path)
+    cls = next(c for c in chunks if c.kind == "py_class")
+    assert cls.symbol == "Point"
+    assert cls.start_line == 4  # decorator line, not the class line
+    assert cls.end_line == 7
+
+
+def test_python_nested_def_inside_class_is_not_top_level(tmp_path: Path) -> None:
+    source = (
+        "class Foo:\n    def bar(self):\n        return 1\n\n    def baz(self):\n        return 2\n"
+    )
+    path = _write(tmp_path, "nested.py", source)
+    chunks = chunk_python_file(path, repo_root=tmp_path)
+    # Only Foo should appear; bar/baz are nested and not top-level
+    symbols = [c.symbol for c in chunks]
+    assert symbols == ["Foo"]
+    assert chunks[0].kind == "py_class"
+
+
+def test_python_file_outside_repo_root_returns_empty(tmp_path: Path) -> None:
+    outside = tmp_path / "outside.py"
+    outside.write_text("def f():\n    return 1\n", encoding="utf-8")
+    other_root = tmp_path / "other_root"
+    other_root.mkdir()
+    assert chunk_python_file(outside, repo_root=other_root) == []
+    assert chunk_path(outside, repo_root=other_root) == []
+
+
+def test_markdown_file_outside_repo_root_returns_empty(tmp_path: Path) -> None:
+    outside = tmp_path / "outside.md"
+    outside.write_text("## H\n\nbody\n", encoding="utf-8")
+    other_root = tmp_path / "other_root"
+    other_root.mkdir()
+    assert chunk_markdown_file(outside, repo_root=other_root) == []
+
+
+def test_markdown_with_utf8_bom_is_handled(tmp_path: Path) -> None:
+    path = tmp_path / "bom.md"
+    # Write a UTF-8 BOM followed by an H2 heading and body
+    path.write_bytes(b"\xef\xbb\xbf## Section\n\nbody\n")
+    chunks = chunk_markdown_file(path, repo_root=tmp_path)
+    assert len(chunks) == 1
+    assert chunks[0].symbol == "Section"
+    assert chunks[0].content.startswith("## Section")
+
+
+def test_python_with_utf8_bom_is_handled(tmp_path: Path) -> None:
+    path = tmp_path / "bom.py"
+    path.write_bytes(b"\xef\xbb\xbfdef hello():\n    return 1\n")
+    chunks = chunk_python_file(path, repo_root=tmp_path)
+    func = next(c for c in chunks if c.kind == "py_func")
+    assert func.symbol == "hello"
+
+
+def test_markdown_mismatched_fence_types_do_not_swap_state(tmp_path: Path) -> None:
+    # Open with ``` then a ~~~ line appears; the ~~~ should NOT close the
+    # backtick fence. Then ``` actually closes it.
+    source = """## Real Section A
+
+```python
+~~~ this is content, not a fence close ~~~
+## also content, not a heading
+```
+
+## Real Section B
+
+body
+"""
+    path = _write(tmp_path, "mixed.md", source)
+    chunks = chunk_markdown_file(path, repo_root=tmp_path)
+    assert [c.symbol for c in chunks] == ["Real Section A", "Real Section B"]
+
+
 def test_source_chunk_is_frozen() -> None:
     chunk = SourceChunk(
         relpath="x.py",
