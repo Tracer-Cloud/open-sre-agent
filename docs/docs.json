@@ -113,6 +113,7 @@
               "bitbucket",
               "github",
               "gitlab",
+              "helm",
               "google-docs",
               "jira",
               "vercel"
