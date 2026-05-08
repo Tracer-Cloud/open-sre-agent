@@ -213,7 +213,12 @@ class IncidentIoIntegrationConfig(StrictConfigModel):
             )
         return self
 
-    _normalize_base_url = field_validator("base_url", mode="before")(normalize_url(""))
+    @field_validator("base_url", mode="before")
+    @classmethod
+    def _normalize_base_url(cls, value: object) -> str:
+        raw = str(value or "").strip().rstrip("/")
+        return validate_https_or_loopback_http_url(raw, service_name="Incident.io")
+
     _normalize_api_key = field_validator("api_key", mode="before")(normalize_str())
 
     @property
