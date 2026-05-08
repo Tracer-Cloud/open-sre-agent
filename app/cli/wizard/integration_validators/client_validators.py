@@ -448,9 +448,10 @@ def validate_incident_io_integration(
             detail=f"Incident.io validation failed: {result.get('error', 'unknown error')}",
         )
     except Exception as err:
+        err_msg = str(err).replace(api_key, "[REDACTED]")
         return IntegrationHealthResult(
             ok=False,
-            detail=f"Incident.io validation failed: {err}",
+            detail=f"Incident.io validation failed: {err_msg}",
         )
 
 

@@ -120,8 +120,8 @@ def test_add_timeline_event_failure_handling(client, monkeypatch):
     assert "HTTP 404" in res["error"]
 
 
-def test_add_timeline_event_retry_on_429(client, monkeypatch):
-    """Verify add_timeline_event retries on 429 and eventually succeeds."""
+def test_list_incidents_retry_on_429(client, monkeypatch):
+    """Verify list_incidents retries on 429 and eventually succeeds."""
     mock_429_resp = MagicMock()
     mock_429_resp.status_code = 429
 
@@ -130,9 +130,10 @@ def test_add_timeline_event_retry_on_429(client, monkeypatch):
 
     mock_429_resp.raise_for_status.side_effect = raise_429
 
-    mock_201_resp = MagicMock()
-    mock_201_resp.status_code = 201
-    mock_201_resp.raise_for_status.return_value = None
+    mock_200_resp = MagicMock()
+    mock_200_resp.status_code = 200
+    mock_200_resp.json.return_value = {"incidents": []}
+    mock_200_resp.raise_for_status.return_value = None
 
     calls = []
 
@@ -140,15 +141,15 @@ def test_add_timeline_event_retry_on_429(client, monkeypatch):
         calls.append(url)
         if len(calls) == 1:
             return mock_429_resp
-        return mock_201_resp
+        return mock_200_resp
 
     monkeypatch.setattr(httpx.Client, "request", mock_request)
     # Mock time.sleep to avoid waiting in tests
     monkeypatch.setattr("time.sleep", lambda _: None)
 
-    res = client.add_timeline_event("inc-123", title="Retry")
+    res = client.list_incidents()
 
     assert res["success"] is True
     assert len(calls) == 2
-    assert calls[0] == "/v2/incident_timeline_events"
-    assert calls[1] == "/v2/incident_timeline_events"
+    assert calls[0] == "/v2/incidents"
+    assert calls[1] == "/v2/incidents"

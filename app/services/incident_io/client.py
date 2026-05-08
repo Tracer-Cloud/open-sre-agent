@@ -73,7 +73,8 @@ class IncidentIoClient:
             resp = self._request("GET", "/v2/incidents", params={"page_size": 1})
             resp.raise_for_status()
         except Exception as e:
-            return ProbeResult.failed(f"Connection failed: {e}", region=self.config.region)
+            err_text = self._redact(str(e))
+            return ProbeResult.failed(f"Connection failed: {err_text}", region=self.config.region)
 
         return ProbeResult.passed(
             f"Connected to incident.io ({self.config.region.upper()} region); API key accepted.",
@@ -99,6 +100,10 @@ class IncidentIoClient:
                     raise e
 
                 if attempt < _MAX_RETRIES:
+                    # Only retry if the method is idempotent
+                    if method.upper() not in ("GET", "HEAD", "OPTIONS"):
+                        raise e
+
                     sleep_time = (2**attempt) + (random.random() * 0.1)
                     logger.warning(
                         "[incident_io] Request %s %s failed (%s); retrying in %.2fs (attempt %s/%s)",
@@ -115,6 +120,10 @@ class IncidentIoClient:
                 # Connection errors are partly handled by HTTPTransport, but we add
                 # another layer here for robustness across different error types.
                 if attempt < _MAX_RETRIES:
+                    # Only retry if the method is idempotent
+                    if method.upper() not in ("GET", "HEAD", "OPTIONS"):
+                        raise e
+
                     sleep_time = (2**attempt) + (random.random() * 0.1)
                     time.sleep(sleep_time)
                 else:
@@ -200,8 +209,9 @@ class IncidentIoClient:
                 "error": f"HTTP {e.response.status_code}: {err_text}",
             }
         except Exception as e:
-            logger.warning("[incident_io] List incidents error: %s", e)
-            return {"success": False, "error": str(e)}
+            err_text = self._redact(str(e))
+            logger.warning("[incident_io] List incidents error: %s", err_text)
+            return {"success": False, "error": err_text}
 
     def get_incident(self, incident_id: str) -> dict[str, Any]:
         """Fetch full details for a specific incident.io incident."""
@@ -236,8 +246,9 @@ class IncidentIoClient:
                 "error": f"HTTP {e.response.status_code}: {err_text}",
             }
         except Exception as e:
-            logger.warning("[incident_io] Get incident error: %s", e)
-            return {"success": False, "error": str(e)}
+            err_text = self._redact(str(e))
+            logger.warning("[incident_io] Get incident error: %s", err_text)
+            return {"success": False, "error": err_text}
 
     def add_timeline_event(
         self, incident_id: str, title: str, description: str = ""
@@ -272,8 +283,9 @@ class IncidentIoClient:
                 "error": f"HTTP {e.response.status_code}: {err_text}",
             }
         except Exception as e:
-            logger.warning("[incident_io] Add timeline event error: %s", e)
-            return {"success": False, "error": str(e)}
+            err_text = self._redact(str(e))
+            logger.warning("[incident_io] Add timeline event error: %s", err_text)
+            return {"success": False, "error": err_text}
 
     def _add_timeline_event_via_summary(
         self, incident_id: str, title: str, description: str = ""
@@ -322,8 +334,9 @@ class IncidentIoClient:
                     "error": f"HTTP {e.response.status_code}: {err_text}",
                 }
             except Exception as e:
-                logger.warning("[incident_io] Summary-append fallback error: %s", e)
-                return {"success": False, "error": str(e)}
+                err_text = self._redact(str(e))
+                logger.warning("[incident_io] Summary-append fallback error: %s", err_text)
+                return {"success": False, "error": err_text}
 
 
 def make_incident_io_client(

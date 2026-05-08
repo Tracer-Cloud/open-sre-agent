@@ -1490,7 +1490,9 @@ def _configure_incident_io() -> tuple[str, str]:
                 "incident_io",
                 {"credentials": {"api_key": api_key, "region": region}},
             )
-            env_path = sync_env_values({})
+            env_path = sync_env_values(
+                {"INCIDENT_IO_API_KEY": api_key, "INCIDENT_IO_REGION": region}
+            )
             return "Incident.io", str(env_path)
         _console.print("[dim]Try again or press Ctrl+C to cancel.[/]")
 

@@ -27,7 +27,6 @@ class IncidentIoIncidentsTool(BaseTool):
     input_schema = {
         "type": "object",
         "properties": {
-            "api_key": {"type": "string", "description": "Incident.io API key"},
             "action": {
                 "type": "string",
                 "enum": ["list", "add_timeline", "get"],
@@ -69,7 +68,7 @@ class IncidentIoIncidentsTool(BaseTool):
                 "description": "Detailed description/comment for the timeline event (used in 'add_timeline')",
             },
         },
-        "required": ["api_key"],
+        "required": [],
     }
     outputs = {
         "incidents": "List of incidents or details of a specific incident",
