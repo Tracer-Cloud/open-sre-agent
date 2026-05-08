@@ -1,4 +1,9 @@
-"""Slash command: /agents (file-write conflicts between local AI agents)."""
+"""Slash command: ``/agents`` (registered local AI agent fleet view).
+
+Bare ``/agents`` renders the registered-agents dashboard; subcommands
+drill into specific surfaces (currently ``conflicts``, with more
+landing as the monitor-local-agents initiative ships).
+"""
 
 from __future__ import annotations
 
@@ -13,6 +18,8 @@ from app.agents.conflicts import (
     detect_conflicts,
     render_conflicts,
 )
+from app.agents.registry import AgentRegistry
+from app.cli.interactive_shell.agents_view import render_agents_table
 from app.cli.interactive_shell.command_registry.types import SlashCommand
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.theme import TERMINAL_ERROR
@@ -24,6 +31,20 @@ _AGENTS_FIRST_ARGS: tuple[tuple[str, str], ...] = (
 
 def _opensre_agent_id() -> str:
     return f"opensre:{os.getpid()}"
+
+
+def _cmd_agents_list(console: Console) -> bool:
+    """Render the registered ``AgentRecord`` set as a Rich table.
+
+    Bare ``/agents`` resolves here. Metric cells (``cpu%``,
+    ``tokens/min``, ``$/hr``, ``status``, ``uptime``) render as
+    placeholders until the wiring from #1490 / #1494 lands; this
+    surface only consumes what the registry already holds today.
+    """
+    registry = AgentRegistry()
+    table = render_agents_table(registry.list())
+    console.print(table)
+    return True
 
 
 def _cmd_agents_conflicts(console: Console) -> bool:
@@ -42,12 +63,7 @@ def _cmd_agents_conflicts(console: Console) -> bool:
 
 def _cmd_agents(session: ReplSession, console: Console, args: list[str]) -> bool:
     if not args:
-        console.print(
-            f"[{TERMINAL_ERROR}]usage:[/] /agents <subcommand>  "
-            "— try [bold]/agents conflicts[/bold]"
-        )
-        session.mark_latest(ok=False, kind="slash")
-        return True
+        return _cmd_agents_list(console)
 
     sub = args[0].lower().strip()
 
@@ -56,7 +72,7 @@ def _cmd_agents(session: ReplSession, console: Console, args: list[str]) -> bool
 
     console.print(
         f"[{TERMINAL_ERROR}]unknown subcommand:[/] {escape(sub)}  "
-        "(try [bold]/agents conflicts[/bold])"
+        "(try [bold]/agents[/bold] or [bold]/agents conflicts[/bold])"
     )
     session.mark_latest(ok=False, kind="slash")
     return True
@@ -65,7 +81,7 @@ def _cmd_agents(session: ReplSession, console: Console, args: list[str]) -> bool
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
         "/agents",
-        "inspect and coordinate concurrent local AI agents (subcommands: conflicts)",
+        "show registered local AI agents (subcommands: conflicts)",
         _cmd_agents,
         first_arg_completions=_AGENTS_FIRST_ARGS,
     ),
