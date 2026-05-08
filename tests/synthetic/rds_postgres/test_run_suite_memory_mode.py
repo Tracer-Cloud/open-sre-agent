@@ -11,6 +11,8 @@ from dataclasses import asdict
 
 import pytest
 
+pytestmark = pytest.mark.synthetic
+
 from tests.synthetic.rds_postgres.run_suite import (
     ScenarioScore,
     annotate_with_memory_mode,
@@ -84,3 +86,13 @@ def test_asdict_serialises_none_memory_mode() -> None:
     payload = asdict(_make_score())
     assert "memory_mode" in payload
     assert payload["memory_mode"] is None
+
+
+@pytest.mark.parametrize(
+    "bad_mode",
+    ["", "neutral", "memory_HELPED", "MEMORY_NEUTRAL", "garbage", "helped"],
+)
+def test_annotate_rejects_unknown_mode(bad_mode: str) -> None:
+    """An unknown memory_mode string raises ValueError rather than silently storing."""
+    with pytest.raises(ValueError, match="unknown memory_mode"):
+        annotate_with_memory_mode(_make_score(), bad_mode)  # type: ignore[arg-type]

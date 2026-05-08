@@ -4,7 +4,7 @@ import argparse
 import json
 import re
 from dataclasses import asdict, dataclass, replace
-from typing import Any
+from typing import Any, Literal, get_args
 
 from app.pipeline.runners import run_investigation
 from tests.synthetic.mock_grafana_backend.backend import FixtureGrafanaBackend
@@ -49,6 +49,17 @@ class ReasoningScore:
     reasoning_score: float
 
 
+# The five canonical memory-anchoring modes. Set on ScenarioScore.memory_mode
+# by the axis-memory runner (tests/synthetic/rds_postgres/axis_memory/, #1234).
+MemoryMode = Literal[
+    "memory_helped",
+    "memory_hurt",
+    "memory_neutral",
+    "pre_existing",
+    "not_run",
+]
+
+
 @dataclass(frozen=True)
 class ScenarioScore:
     scenario_id: str
@@ -67,17 +78,24 @@ class ScenarioScore:
     # scenario is run as part of an axis pair. One of: "memory_helped",
     # "memory_hurt", "memory_neutral", "pre_existing", "not_run". None when
     # the scenario was not run via the axis-memory runner.
-    memory_mode: str | None = None
+    memory_mode: MemoryMode | None = None
 
 
-def annotate_with_memory_mode(score: ScenarioScore, memory_mode: str) -> ScenarioScore:
+def annotate_with_memory_mode(score: ScenarioScore, memory_mode: MemoryMode) -> ScenarioScore:
     """Return a new ScenarioScore with memory_mode set.
 
     ScenarioScore is frozen, so this uses dataclasses.replace to produce a new
     instance. Used by the axis-memory runner to tag sibling scenario scores
     with the memory-anchoring classification produced by
     axis_memory.scoring.annotate_pair (see issue #1234).
+
+    Raises ValueError if memory_mode is not one of the five canonical values.
     """
+    if memory_mode not in get_args(MemoryMode):
+        raise ValueError(
+            f"unknown memory_mode: {memory_mode!r} "
+            f"(expected one of {get_args(MemoryMode)})"
+        )
     return replace(score, memory_mode=memory_mode)
 
 
