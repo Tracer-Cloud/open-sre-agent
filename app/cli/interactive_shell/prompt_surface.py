@@ -287,7 +287,7 @@ def _build_prompt_style() -> Style:
 _PLACEHOLDER_ANSI = ANSI(f"{ANSI_DIM}Type a message, /command, or paste an alert{ANSI_RESET}")
 
 
-def _build_prompt_session() -> PromptSession[str]:
+def _build_prompt_session(_session: ReplSession | None = None) -> PromptSession[str]:
     return _install_prompt_frame(
         PromptSession(
             completer=ShellCompleter(),

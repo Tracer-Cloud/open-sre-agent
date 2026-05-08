@@ -17,6 +17,12 @@ from app.cli.interactive_shell.history_policy import (
     DEFAULT_REDACTION_RULES,
     RedactingFileHistory,
 )
+from app.cli.interactive_shell.repl_choice_menu import (
+    CRUMB_SEP,
+    repl_choose_one,
+    repl_section_break,
+    repl_tty_interactive,
+)
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.theme import BOLD_BRAND, DIM, ERROR, HIGHLIGHT
 
@@ -112,7 +118,58 @@ def _history_retention(session: ReplSession, console: Console, args: list[str]) 
     return True
 
 
+def _interactive_history_menu(session: ReplSession, console: Console) -> bool:
+    root = "/history"
+    while True:
+        sub = repl_choose_one(
+            title="history",
+            breadcrumb=root,
+            choices=[
+                ("show", "show"),
+                ("clear", "clear"),
+                ("off", "off"),
+                ("on", "on"),
+                ("retention", "retention"),
+                ("done", "done"),
+            ],
+        )
+        if sub is None or sub == "done":
+            return True
+        show_section_break = False
+        if sub == "show":
+            _show_history(console)
+            show_section_break = True
+        elif sub == "clear":
+            _history_clear(session, console)
+            show_section_break = True
+        elif sub == "off":
+            _history_pause(session, console, paused=True)
+            show_section_break = True
+        elif sub == "on":
+            _history_pause(session, console, paused=False)
+            show_section_break = True
+        elif sub == "retention":
+            cap = repl_choose_one(
+                title="retention cap",
+                breadcrumb=f"{root}{CRUMB_SEP}retention",
+                choices=[
+                    ("100", "100"),
+                    ("500", "500"),
+                    ("1000", "1000"),
+                    ("5000", "5000"),
+                ],
+            )
+            if cap:
+                _history_retention(session, console, [cap])
+                show_section_break = True
+        if show_section_break:
+            repl_section_break(console)
+
+
 def _cmd_history(session: ReplSession, console: Console, args: list[str]) -> bool:
+    if not args and repl_tty_interactive():
+        return _interactive_history_menu(session, console)
+
     if not args:
         return _show_history(console)
 
@@ -178,7 +235,7 @@ _HISTORY_FIRST_ARGS: tuple[tuple[str, str], ...] = (
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
         "/history",
-        "show command history; subcommands: clear | off | on | retention <N>",
+        "command history (TTY: bare '/history' opens menu; else clear | off | on | retention <N>)",
         _cmd_history,
         first_arg_completions=_HISTORY_FIRST_ARGS,
     ),

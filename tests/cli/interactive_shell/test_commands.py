@@ -401,6 +401,69 @@ class TestModelCommand:
         dispatch_slash("/model", ReplSession(), console)
         assert "anthropic" in buf.getvalue()
 
+    def test_model_interactive_set_flow_applies_selection(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        self._patch_llm(monkeypatch)
+        import app.cli.wizard.env_sync as env_sync
+        from app.cli.interactive_shell.command_registry import model as model_cmd
+
+        env_path = tmp_path / ".env"
+        monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setattr(model_cmd, "repl_tty_interactive", lambda: True)
+        selections = iter(["set", "anthropic", "__provider_default__"])
+        monkeypatch.setattr(model_cmd, "repl_choose_one", lambda **_: next(selections))
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+
+        console, buf = _capture()
+        dispatch_slash("/model", ReplSession(), console)
+
+        output = buf.getvalue()
+        assert "switched LLM provider" in output
+        assert "reasoning model:" in output
+        assert "LLM_PROVIDER=anthropic" in env_path.read_text(encoding="utf-8")
+
+    def test_model_interactive_show_then_done_shows_table_once(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        self._patch_llm(monkeypatch)
+        from app.cli.interactive_shell.command_registry import model as model_cmd
+
+        monkeypatch.setattr(model_cmd, "repl_tty_interactive", lambda: True)
+        picks = iter(["show", "done"])
+        monkeypatch.setattr(model_cmd, "repl_choose_one", lambda **_: next(picks))
+        console, buf = _capture()
+        dispatch_slash("/model", ReplSession(), console)
+        assert "anthropic" in buf.getvalue()
+
+    def test_model_interactive_escape_backs_out_without_changes(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        self._patch_llm(monkeypatch)
+        from app.cli.interactive_shell.command_registry import model as model_cmd
+
+        monkeypatch.setattr(model_cmd, "repl_tty_interactive", lambda: True)
+        selections = iter(
+            [
+                "set",  # root -> set
+                "anthropic",  # provider selected
+                None,  # Esc from model selection -> back to provider list
+                None,  # Esc from provider list -> back to root action list
+                None,  # Esc at root -> close menu
+            ]
+        )
+        monkeypatch.setattr(model_cmd, "repl_choose_one", lambda **_: next(selections))
+        session = ReplSession()
+        console, buf = _capture()
+        dispatch_slash("/model", session, console)
+
+        assert "switched LLM provider" not in buf.getvalue()
+        assert session.history[-1]["ok"] is True
+
     def test_set_switches_provider(
         self,
         monkeypatch: pytest.MonkeyPatch,

@@ -651,6 +651,37 @@ def _map_eks_deployment_status(data: dict) -> dict:
     }
 
 
+def _map_ec2_instances_by_tag(data: dict) -> dict:
+    return {
+        "ec2_instances": data.get("instances", []),
+        "ec2_instances_by_tier": data.get("by_tier", {}),
+        "ec2_tiers_detected": data.get("tiers_detected", []),
+        "ec2_total_instances": data.get("total_instances", 0),
+        # Pre-computed summary block — by_tier_counts, primary_tier, vpcs_in_scope,
+        # azs_in_scope. Pass-through is the whole point of this tool: the agent
+        # quotes these directly without iterating instance lists.
+        "ec2_instances_summary": data.get("summary", {}),
+    }
+
+
+def _map_elb_target_health(data: dict) -> dict:
+    return {
+        "elb_target_groups": data.get("target_groups", []),
+        "elb_healthy_targets": data.get("healthy_targets", []),
+        "elb_unhealthy_targets": data.get("unhealthy_targets", []),
+        "elb_target_instance_ids": data.get("instance_ids", []),
+        # Pre-computed summary block — total_targets, healthy_count, unhealthy_count,
+        # healthy_ratio_pct, unhealthy_states, target_group_count.
+        "elb_target_health_summary": data.get("summary", {}),
+        # Per-TG describe_target_health failures. Non-empty means the agent
+        # is reading partial coverage and must NOT cite a healthy_ratio_pct
+        # without acknowledging the gap. The mapper still runs on
+        # `result.success=True` regardless of `data["available"]`, so we
+        # forward the failure list explicitly.
+        "elb_api_errors": data.get("api_errors", []),
+    }
+
+
 def _map_cloudopsbench_tool(data: dict) -> dict:
     evidence_item = {
         "action_name": data.get("action_name"),
@@ -704,6 +735,8 @@ EVIDENCE_MAPPERS: dict[str, Callable[[dict], dict]] = {
     "get_eks_node_health": _map_eks_node_health,
     "get_eks_pod_logs": _map_eks_pod_logs,
     "get_eks_deployment_status": _map_eks_deployment_status,
+    "ec2_instances_by_tag": _map_ec2_instances_by_tag,
+    "get_elb_target_health": _map_elb_target_health,
     "GetResources": _map_cloudopsbench_tool,
     "DescribeResource": _map_cloudopsbench_tool,
     "GetClusterConfiguration": _map_cloudopsbench_tool,

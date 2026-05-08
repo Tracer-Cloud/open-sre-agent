@@ -348,11 +348,20 @@ def detect_sources(
         "db_instance",
         "db_instance_identifier",
         "db_cluster",
-        # EC2
+        # EC2 / ELB / Auto Scaling
         "instance_id",
         "vpc_id",
         "subnet_id",
         "security_group",
+        "load_balancer_arn",
+        "load_balancer_name",
+        "target_group_arn",
+        "target_group_name",
+        "auto_scaling_group",
+        "asg_name",
+        # NOTE: 'tier' is intentionally NOT in this list — substring-match on
+        # a 4-letter token would falsely capture 'frontier', 'multi_tier_app',
+        # 'tier_count', etc. Handled with exact-match in the loop below.
         # Lambda (additional metadata beyond function_name)
         "lambda_arn",
         "lambda_alias",
@@ -380,8 +389,15 @@ def detect_sources(
     ]
 
     for key, value in annotations.items():
+        lower_key = key.lower()
+        # Exact-match collection for short tokens prone to false-positive
+        # substring matches (see note above the aws_patterns list).
+        if lower_key == "tier":
+            if value and "tier" not in aws_metadata:
+                aws_metadata["tier"] = value
+            continue
         # Collect fields matching AWS patterns
-        if any(pattern in key.lower() for pattern in aws_patterns):
+        if any(pattern in lower_key for pattern in aws_patterns):
             if value and key not in aws_metadata:
                 aws_metadata[key] = value
         # Also collect any field ending with common AWS suffixes
@@ -744,6 +760,109 @@ def detect_sources(
             else:
                 eks_params["connection_verified"] = True
             sources["eks"] = eks_params
+
+    # Detect non-K8s EC2/RDS topology (DNS → LB → Target Group → EC2 → RDS).
+    # Runs in parallel to the EKS block: an alert may trigger both blocks
+    # (e.g. a hybrid stack) without conflict — they write distinct source keys.
+    #
+    # Backend slot convention on resolved_integrations["aws"]:
+    #   - "_backend"     → FixtureEKSBackend, gates the EKS path only
+    #   - "ec2_backend"  → FixtureAWSBackend, gates the EC2/RDS topology path only
+    # The two slots coexist on the same dict so a hybrid synthetic test can
+    # inject both without one block bleeding into the other.
+    _aws_int = (resolved_integrations or {}).get("aws")
+    _injected_ec2_backend = _aws_int.get("ec2_backend") if _aws_int else None
+    _aws_credentialed = bool(
+        _aws_int
+        and (_aws_int.get("role_arn") or _aws_int.get("credentials") or _injected_ec2_backend)
+    )
+    # vpc_id alone is sufficient: a "this RDS in vpc-X is hot" alert is enough
+    # context to enumerate EC2 instances in the same VPC and let the agent
+    # discover tiers from tags. Pre-populated tier / TG / LB annotations are
+    # accepted but not required.
+    _ec2_topology_hints = bool(
+        annotations.get("instance_id")
+        or annotations.get("target_group_arn")
+        or annotations.get("load_balancer_arn")
+        or annotations.get("auto_scaling_group")
+        or annotations.get("asg_name")
+        or annotations.get("tier")
+        or annotations.get("vpc_id")
+    )
+    _rds_topology_hints = bool(
+        annotations.get("db_instance_identifier") or annotations.get("db_instance")
+    )
+
+    if _aws_credentialed and (_ec2_topology_hints or _rds_topology_hints):
+        _aws_region = (
+            annotations.get("aws_region")
+            or annotations.get("region")
+            or (_aws_int.get("region") if _aws_int else None)
+            or "us-east-1"
+        )
+        _vpc_id = annotations.get("vpc_id", "")
+
+        if _ec2_topology_hints:
+            instance_id = annotations.get("instance_id", "")
+            ec2_params: dict[str, Any] = {
+                "region": _aws_region,
+                "vpc_id": _vpc_id,
+                "instance_ids": [instance_id] if instance_id else [],
+                "auto_scaling_groups": [
+                    asg
+                    for asg in (
+                        annotations.get("auto_scaling_group", ""),
+                        annotations.get("asg_name", ""),
+                    )
+                    if asg
+                ],
+                "target_group_arns": [
+                    tg for tg in (annotations.get("target_group_arn", ""),) if tg
+                ],
+                "load_balancer_arns": [
+                    lb for lb in (annotations.get("load_balancer_arn", ""),) if lb
+                ],
+                "tiers": [annotations.get("tier")] if annotations.get("tier") else [],
+                "role_arn": _aws_int.get("role_arn", "") if _aws_int else "",
+                "external_id": _aws_int.get("external_id", "") if _aws_int else "",
+                "credentials": (_aws_int.get("credentials") if _aws_int else None) or None,
+            }
+            if _injected_ec2_backend is not None:
+                ec2_params["_backend"] = _injected_ec2_backend
+            else:
+                ec2_params["connection_verified"] = True
+            sources["ec2"] = ec2_params
+
+        if _rds_topology_hints:
+            db_identifier = (
+                annotations.get("db_instance_identifier") or annotations.get("db_instance") or ""
+            )
+            rds_topology_params: dict[str, Any] = {
+                "db_instance_identifier": db_identifier,
+                "db_cluster_identifier": annotations.get("db_cluster", ""),
+                "engine": annotations.get("engine", ""),
+                "region": _aws_region,
+                "vpc_id": _vpc_id,
+                "topology": {
+                    "consumer_target_groups": [
+                        tg for tg in (annotations.get("target_group_arn", ""),) if tg
+                    ],
+                    "consumer_tiers": (
+                        [annotations.get("tier")] if annotations.get("tier") else []
+                    ),
+                    "consumer_security_groups": [
+                        sg for sg in (annotations.get("security_group", ""),) if sg
+                    ],
+                },
+                "role_arn": _aws_int.get("role_arn", "") if _aws_int else "",
+                "external_id": _aws_int.get("external_id", "") if _aws_int else "",
+                "credentials": (_aws_int.get("credentials") if _aws_int else None) or None,
+            }
+            if _injected_ec2_backend is not None:
+                rds_topology_params["_backend"] = _injected_ec2_backend
+            else:
+                rds_topology_params["connection_verified"] = True
+            sources["rds"] = rds_topology_params
 
     bitbucket_int = (resolved_integrations or {}).get("bitbucket")
     if bitbucket_int and alert_source in ("bitbucket", ""):
@@ -1246,7 +1365,12 @@ def detect_sources(
 
     rds_int = (resolved_integrations or {}).get("rds")
     if rds_int and str(rds_int.get("db_instance_identifier", "")).strip():
+        # Merge into any existing rds source from the EC2/RDS topology block so
+        # ``topology``, ``_backend`` and ``connection_verified`` survive when both
+        # the alert and a legacy rds integration are present.
+        existing_rds = sources.get("rds", {})
         sources["rds"] = {
+            **existing_rds,
             "db_instance_identifier": str(rds_int.get("db_instance_identifier", "")).strip(),
             "region": str(rds_int.get("region") or DEFAULT_RDS_REGION).strip()
             or DEFAULT_RDS_REGION,

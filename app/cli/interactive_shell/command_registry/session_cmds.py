@@ -10,6 +10,11 @@ from rich.markup import escape
 from app.cli.interactive_shell.banner import render_banner
 from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
 from app.cli.interactive_shell.rendering import repl_table
+from app.cli.interactive_shell.repl_choice_menu import (
+    repl_choose_one,
+    repl_section_break,
+    repl_tty_interactive,
+)
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.theme import BOLD_BRAND, DIM, WARNING
 
@@ -26,7 +31,23 @@ def _cmd_reset(session: ReplSession, console: Console, _args: list[str]) -> bool
     return True
 
 
+def _interactive_trust_menu(session: ReplSession, console: Console) -> bool:
+    while True:
+        mode = repl_choose_one(
+            title="trust",
+            breadcrumb="/trust",
+            choices=[("on", "on"), ("off", "off"), ("done", "done")],
+        )
+        if mode is None or mode == "done":
+            return True
+        _cmd_trust(session, console, [mode])
+        repl_section_break(console)
+
+
 def _cmd_trust(session: ReplSession, console: Console, args: list[str]) -> bool:
+    if not args and repl_tty_interactive():
+        return _interactive_trust_menu(session, console)
+
     if args and args[0].lower() in ("off", "false", "disable"):
         session.trust_mode = False
         console.print(f"[{DIM}]trust mode off[/]")
@@ -84,7 +105,23 @@ def _cmd_cost(session: ReplSession, console: Console, _args: list[str]) -> bool:
     return True
 
 
+def _interactive_verbose_menu(_session: ReplSession, console: Console) -> bool:
+    while True:
+        mode = repl_choose_one(
+            title="verbose",
+            breadcrumb="/verbose",
+            choices=[("on", "on"), ("off", "off"), ("done", "done")],
+        )
+        if mode is None or mode == "done":
+            return True
+        _cmd_verbose(_session, console, [mode])
+        repl_section_break(console)
+
+
 def _cmd_verbose(_session: ReplSession, console: Console, args: list[str]) -> bool:
+    if not args and repl_tty_interactive():
+        return _interactive_verbose_menu(_session, console)
+
     if args and args[0].lower() in ("off", "false", "0", "disable"):
         os.environ.pop("TRACER_VERBOSE", None)
         console.print(f"[{DIM}]verbose logging off[/]")
@@ -133,7 +170,7 @@ COMMANDS: list[SlashCommand] = [
     SlashCommand("/reset", "clear session state (keeps trust mode)", _cmd_reset),
     SlashCommand(
         "/trust",
-        "toggle trust mode ('/trust off' to disable)",
+        "toggle trust mode (TTY: bare '/trust' opens menu; else '/trust off')",
         _cmd_trust,
         first_arg_completions=_TRUST_FIRST_ARGS,
         execution_tier=ExecutionTier.EXEMPT,
@@ -143,7 +180,7 @@ COMMANDS: list[SlashCommand] = [
     SlashCommand("/cost", "show token usage and session cost", _cmd_cost),
     SlashCommand(
         "/verbose",
-        "toggle verbose logging ('/verbose off' to disable)",
+        "toggle verbose logging (TTY: bare '/verbose' opens menu; else '/verbose off')",
         _cmd_verbose,
         first_arg_completions=_VERBOSE_FIRST_ARGS,
     ),
