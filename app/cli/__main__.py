@@ -35,6 +35,17 @@ _CLI_ANALYTICS_CAPTURED = "cli_analytics_captured"
 _CLI_ARGV = "cli_argv"
 
 
+def _ensure_utf8_stdio() -> None:
+    """Force UTF-8 on stdout/stderr so the themed UI renders on legacy
+    Windows consoles (cp1252) without UnicodeEncodeError."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        with suppress(Exception):
+            reconfigure(encoding="utf-8", errors="replace")
+
+
 def _option_value_count(command: click.Command, token: str) -> int:
     for param in command.params:
         if not isinstance(param, click.Option):
@@ -196,6 +207,7 @@ def _should_capture_cli_exception(exc: click.ClickException) -> bool:
 
 def main(argv: list[str] | None = None) -> int:
     """Entry point for the ``opensre`` console script."""
+    _ensure_utf8_stdio()
     load_dotenv(override=False)
     cli_argv = list(sys.argv[1:] if argv is None else argv)
     try:
