@@ -122,3 +122,23 @@ def test_helm_status_requires_release_name(monkeypatch: pytest.MonkeyPatch) -> N
     out = _client().release_status("", "demo")
     assert out["success"] is False
     assert "required" in out["error"].lower()
+
+
+def test_helm_get_values_treats_json_null_as_empty_dict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Helm 3 prints the JSON literal null for releases installed without custom values."""
+    monkeypatch.setattr("app.services.helm.client.shutil.which", lambda _name: "/bin/helm")
+
+    def fake_run(cmd: list[str], **_kwargs: Any) -> SimpleNamespace:
+        for i, part in enumerate(cmd):
+            if part == "get" and i + 1 < len(cmd) and cmd[i + 1] == "values":
+                return SimpleNamespace(returncode=0, stdout="null\n", stderr="")
+        return SimpleNamespace(returncode=1, stdout="", stderr="unexpected argv")
+
+    monkeypatch.setattr("app.services.helm.client.subprocess.run", fake_run)
+    out = _client().get_values("my-release", "default")
+    assert out["success"] is True
+    assert out["values"] == {}
+    assert out["release"] == "my-release"
+    assert out["namespace"] == "default"

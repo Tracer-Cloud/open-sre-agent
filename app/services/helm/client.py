@@ -244,7 +244,7 @@ class HelmClient:
             raw = json.loads(out or "{}")
         except json.JSONDecodeError:
             return {"success": False, "error": "invalid JSON from helm get values", "values": {}}
-        # `helm get values -o json` emits JSON null for releases with no user values.
+        # helm get values -o json emits JSON null when the release has no user-supplied values.
         if raw is None:
             raw = {}
         if not isinstance(raw, dict):
