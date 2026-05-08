@@ -374,6 +374,16 @@ class _EventLogDisplay:
                 self._active_steps[node_name]["subtext"] = text
                 self._active_steps[node_name]["subtext_until"] = time.monotonic() + duration
 
+    def print_above(self, text: str) -> None:
+        """Print text permanently above the live region via the Live's own console."""
+        if not text.strip():
+            return
+        from rich.markdown import Markdown
+
+        from app.cli.interactive_shell.theme import MARKDOWN_THEME
+        with self._live.console.use_theme(MARKDOWN_THEME):
+            self._live.console.print(Markdown(text, code_theme="ansi_dark"))
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Progress event + tracker
@@ -428,6 +438,14 @@ class ProgressTracker:
         """Push a live status string into the active spinner for *node_name*."""
         if self._display:
             self._display.step_subtext(node_name, text, duration)
+
+    def print_above(self, text: str) -> None:
+        """Print text permanently above the active live region, or to stdout in text mode."""
+        if self._display:
+            self._display.print_above(text)
+        elif text.strip():
+            for line in text.strip().splitlines():
+                print(f"  {line}")
 
     def _finish(
         self, node_name: str, status: str, fields_updated: list[str], message: str | None

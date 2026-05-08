@@ -14,12 +14,6 @@ import time
 from collections.abc import Iterator
 from typing import Any
 
-from rich.console import Console
-from rich.live import Live
-from rich.markdown import Markdown
-from rich.spinner import Spinner
-from rich.text import Text
-
 from app.cli.interactive_shell.theme import (
     ANSI_BOLD,
     ANSI_DIM,
@@ -28,7 +22,6 @@ from app.cli.interactive_shell.theme import (
     BRAND,
     HIGHLIGHT_ANSI,
     TEXT_ANSI,
-    WARNING,
 )
 from app.output import (
     ProgressTracker,
@@ -66,11 +59,6 @@ _TOKEN_STREAM_KIND = "on_chat_model_stream"
 # warrant streaming the raw token deltas live as Markdown. Other nodes keep
 # the compact spinner UX from ``_LiveSpinner`` in app.output.
 _DIAGNOSE_NODE = "diagnose_root_cause"
-# Same Rich.Live refresh / spinner choices as the interactive-shell streamer
-# so the two surfaces feel identical.
-_DIAGNOSE_LIVE_REFRESH = 20
-_DIAGNOSE_SPINNER_NAME = "dots12"
-_DIAGNOSE_SPINNER_COLOR = WARNING
 
 
 class StreamRenderer:
@@ -90,14 +78,8 @@ class StreamRenderer:
         self._final_state: dict[str, Any] = {}
         self._stream_completed = False
         self._local = local
-        # diagnose_root_cause streams the model's reasoning live as Markdown
-        # instead of into the compact spinner subtext. Buffer always
-        # accumulates; ``_diagnose_live`` only opens in rich-output mode.
         self._diagnose_buffer: list[str] = []
-        self._diagnose_live: Live | None = None
         self._diagnose_started: float = 0.0
-        # Lazy-init: only constructed when the diagnose node first runs.
-        self._diagnose_console: Console | None = None
 
     @property
     def events_received(self) -> int:
@@ -205,9 +187,6 @@ class StreamRenderer:
             if kind == _TOKEN_STREAM_KIND and self._active_node == canonical:
                 self._append_diagnose_chunk(event)
                 return
-            # Other diagnose-related callbacks (tool starts, sub-chain
-            # events, etc.) intentionally don't fall through to the
-            # spinner-subtext path — diagnose owns its own Rich.Live region.
             return
 
         if kind in _NODE_START_KINDS and self._is_graph_node_event(event):
@@ -231,10 +210,10 @@ class StreamRenderer:
                 self._tracker.update_subtext(canonical, text)
 
     def _start_diagnose_streaming(self, canonical: str) -> None:
-        """Begin the diagnose-streaming branch.
+        """Begin the diagnose node.
 
-        Closes any previous spinner-driven node (e.g. ``investigate``)
-        before taking over stdout for the Live region.
+        Routes through ProgressTracker so there is only one Live display active
+        at a time — eliminating the flicker caused by two competing Live regions.
         """
         if self._active_node and self._active_node != canonical:
             self._finish_active_node()
@@ -249,32 +228,18 @@ class StreamRenderer:
             sys.stdout.flush()
             return
 
-        if self._diagnose_console is None:
-            self._diagnose_console = Console(highlight=False)
-        spinner = Spinner(
-            _DIAGNOSE_SPINNER_NAME,
-            text=Text(
-                f"{canonical}  reasoning…",
-                style=f"bold {_DIAGNOSE_SPINNER_COLOR}",
-            ),
-            style=f"bold {_DIAGNOSE_SPINNER_COLOR}",
-        )
-        self._diagnose_live = Live(
-            spinner,
-            console=self._diagnose_console,
-            refresh_per_second=_DIAGNOSE_LIVE_REFRESH,
-            transient=False,
-        )
-        self._diagnose_live.start()
+        self._tracker.start(canonical)
+        self._tracker.update_subtext(canonical, "reasoning…", duration=86400.0)
 
     def _append_diagnose_chunk(self, event: StreamEvent) -> None:
-        """Append a token delta to the diagnose buffer; refresh the Live region.
+        """Append a token delta to the diagnose buffer.
 
         The chunk's ``content`` shape varies by provider: OpenAI emits a plain
         string; langchain-anthropic emits a list of content blocks (objects
         with ``.text`` or dicts with a ``"text"`` key). Flatten the list shape
         to the same text the OpenAI path produces — calling ``str()`` on a
         block list would render its Python repr instead of the reasoning.
+        Content is printed in full via the event-log Live when the step finishes.
         """
         chunk = event.data.get("data", {}).get("chunk", {})
         content = chunk.get("content", "") if isinstance(chunk, dict) else ""
@@ -284,35 +249,26 @@ class StreamRenderer:
         if not text:
             return
         self._diagnose_buffer.append(text)
-        if self._diagnose_live is not None:
-            self._diagnose_live.update(Markdown("".join(self._diagnose_buffer)))
 
     def _finish_diagnose_streaming(self) -> None:
-        """Close the diagnose Live region and print the resolved-dot line.
+        """Print the accumulated reasoning and mark the diagnose step complete.
 
-        Also handles the text-mode fallback: replays the accumulated buffer
-        as plain lines (since text mode never opened a Live region).
+        The buffer is printed permanently above the event-log Live via
+        ProgressTracker.print_above(), then the step is closed through the
+        same tracker path as every other node — keeping one Live active at all
+        times and eliminating the two-Live flickering.
         """
-        elapsed = time.monotonic() - self._diagnose_started
         message = self._build_node_message(_DIAGNOSE_NODE)
+        buffer_text = "".join(self._diagnose_buffer)
 
-        if self._diagnose_live is not None:
-            try:
-                self._diagnose_live.stop()
-            finally:
-                self._diagnose_live = None
-            sys.stdout.write(
-                f"  {_GREEN}●{_RESET}  {_BOLD}{_WHITE}{_DIAGNOSE_NODE}{_RESET}"
-                f"  {_DIM}{elapsed:.1f}s{_RESET}"
-            )
-            if message:
-                sys.stdout.write(f"  {_DIM}{message}{_RESET}")
-            sys.stdout.write("\n")
-            sys.stdout.flush()
+        if get_output_format() == "rich":
+            self._tracker.print_above(buffer_text)
+            self._tracker.complete(_DIAGNOSE_NODE, message=message)
         else:
-            if self._diagnose_buffer:
-                for line in "".join(self._diagnose_buffer).strip().splitlines():
+            if buffer_text:
+                for line in buffer_text.strip().splitlines():
                     print(f"  {line}")
+            elapsed = time.monotonic() - self._diagnose_started
             tail = f"  ● {_DIAGNOSE_NODE}  {elapsed:.1f}s"
             if message:
                 tail += f"  {message}"
