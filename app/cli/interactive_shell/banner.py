@@ -36,7 +36,7 @@ import os
 import sys
 
 from rich import box
-from rich.console import Console, Group, RenderableType
+from rich.console import Console, Group
 from rich.panel import Panel
 from rich.rule import Rule
 from rich.table import Table
@@ -387,7 +387,7 @@ def build_ready_panel(
         ]
     )
 
-    panel_body: RenderableType
+    body: Group | Table
     if console.width - _PANEL_FRAME_WIDTH >= _MIN_TWO_COLUMN_CONTENT_WIDTH:
         left_width, right_width = _two_column_widths(console.width)
         height = max(
@@ -401,16 +401,16 @@ def build_ready_panel(
         grid.add_column(justify="center", vertical="top", width=_DIVIDER_WIDTH)
         grid.add_column(justify="left", vertical="top", width=right_width)
         grid.add_row(left, divider, right)
-        panel_body = grid
+        body = grid
     else:
-        panel_body = Group(
+        body = Group(
             left,
             Rule(style=BORDER),
             right,
         )
 
     return Panel(
-        panel_body,
+        body,
         title=panel_title,
         title_align="left",
         border_style=BORDER,

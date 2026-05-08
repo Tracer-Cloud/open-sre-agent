@@ -44,6 +44,28 @@ class ProcessSnapshot:
     started_at: datetime
 
 
+def pid_exists(pid: int) -> bool:
+    """Return whether ``pid`` corresponds to a process the OS knows about.
+
+    Thin wrapper over ``psutil.pid_exists`` exposed here so ``psutil``
+    stays confined to this module per the issue #1489 acceptance
+    criterion. Unlike ``probe()``, this returns ``True`` for processes
+    we can't introspect (cross-user on macOS, restricted ``/proc``,
+    etc.) — the OS-level existence check doesn't traverse the access
+    boundary, which is exactly what the boot sweep (#1501) needs to
+    avoid pruning live foreign-user agents.
+
+    Returns ``False`` for PIDs outside the platform's valid range
+    (e.g. an int that overflows the kernel's PID type) — psutil
+    raises ``OverflowError`` or ``ValueError`` on those, which we
+    treat as "not a real PID" rather than propagating.
+    """
+    try:
+        return psutil.pid_exists(pid)
+    except (OverflowError, ValueError):
+        return False
+
+
 def probe(pid: int, *, cpu_interval: float = 0.1) -> ProcessSnapshot | None:
     """Return a one-shot resource snapshot for ``pid``.
 

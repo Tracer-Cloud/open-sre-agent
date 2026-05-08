@@ -11,6 +11,7 @@ from prompt_toolkit import PromptSession
 from rich.console import Console
 from rich.markup import escape
 
+from app.agents.sweep import run_startup_sweep
 from app.analytics.cli import capture_terminal_turn_summarized
 from app.cli.interactive_shell.agent_actions import execute_cli_actions_with_metrics
 from app.cli.interactive_shell.banner import render_banner
@@ -211,6 +212,10 @@ async def _repl_main(initial_input: str | None = None, _config: ReplConfig | Non
     # literal escape codes in some terminal emulators.
     console = Console(highlight=False, force_terminal=True, color_system="truecolor")
     render_banner(console)
+    # Prune dead-PID agent records and stale lockfiles before the user's
+    # first ``/agents`` call. Errors are caught inside; a sweep failure
+    # must never prevent the REPL from starting.
+    run_startup_sweep()
     session = ReplSession()
     prompt = _build_prompt_session()
     session.prompt_history_backend = prompt.history
