@@ -30,6 +30,7 @@ def config_command() -> None:
         "requesty": "REQUESTY_API_KEY",
         "gemini": "GEMINI_API_KEY",
         "nvidia": "NVIDIA_API_KEY",
+        "bedrock": "AWS_DEFAULT_REGION",
         "minimax": "MINIMAX_API_KEY",
         "ollama": "OLLAMA_HOST",
     }
@@ -40,6 +41,7 @@ def config_command() -> None:
         "requesty": "REQUESTY_REASONING_MODEL",
         "gemini": "GEMINI_REASONING_MODEL",
         "nvidia": "NVIDIA_REASONING_MODEL",
+        "bedrock": "BEDROCK_MODEL",
         "minimax": "MINIMAX_REASONING_MODEL",
         "ollama": "OLLAMA_MODEL",
     }
