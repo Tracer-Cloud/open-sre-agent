@@ -18,7 +18,7 @@ from app.cli.interactive_shell.history_policy import (
     RedactingFileHistory,
 )
 from app.cli.interactive_shell.repl_choice_menu import (
-    _CRUMB_SEP,
+    CRUMB_SEP,
     repl_choose_one,
     repl_section_break,
     repl_tty_interactive,
@@ -122,7 +122,6 @@ def _interactive_history_menu(session: ReplSession, console: Console) -> bool:
     while True:
         sub = repl_choose_one(
             title="history",
-            text="",
             breadcrumb=root,
             choices=[
                 ("show", "show"),
@@ -146,8 +145,7 @@ def _interactive_history_menu(session: ReplSession, console: Console) -> bool:
         elif sub == "retention":
             cap = repl_choose_one(
                 title="retention cap",
-                text="",
-                breadcrumb=f"{root}{_CRUMB_SEP}retention",
+                breadcrumb=f"{root}{CRUMB_SEP}retention",
                 choices=[
                     ("100", "100"),
                     ("500", "500"),

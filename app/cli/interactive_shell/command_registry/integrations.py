@@ -16,7 +16,7 @@ from app.cli.interactive_shell.rendering import (
     repl_table,
 )
 from app.cli.interactive_shell.repl_choice_menu import (
-    _CRUMB_SEP,
+    CRUMB_SEP,
     repl_choose_one,
     repl_section_break,
     repl_tty_interactive,
@@ -48,7 +48,6 @@ def _interactive_list_menu(_session: ReplSession, console: Console) -> bool:
     while True:
         sub = repl_choose_one(
             title="list",
-            text="",
             breadcrumb=_ROOT_LIST,
             choices=[
                 ("integrations", "integrations"),
@@ -72,6 +71,12 @@ def _interactive_list_menu(_session: ReplSession, console: Console) -> bool:
             render_integrations_table(console, results)
             render_mcp_table(console, results)
             render_models_table(console, repl_data.load_llm_settings())
+        elif sub == "tools":
+            catalog = build_tool_catalog()
+            if not catalog:
+                console.print("[dim]no tools registered.[/dim]")
+            else:
+                console.print(format_tool_catalog_text(catalog), markup=False)
         repl_section_break(console)
 
 
@@ -139,7 +144,6 @@ def _interactive_integrations_menu(session: ReplSession, console: Console) -> bo
     while True:
         sub = repl_choose_one(
             title="integrations",
-            text="",
             breadcrumb=root,
             choices=[
                 ("list", "list"),
@@ -165,8 +169,7 @@ def _interactive_integrations_menu(session: ReplSession, console: Console) -> bo
             else:
                 svc = repl_choose_one(
                     title="service",
-                    text="",
-                    breadcrumb=f"{root}{_CRUMB_SEP}show",
+                    breadcrumb=f"{root}{CRUMB_SEP}show",
                     choices=choices,
                 )
                 if svc:
@@ -178,8 +181,7 @@ def _interactive_integrations_menu(session: ReplSession, console: Console) -> bo
             else:
                 svc = repl_choose_one(
                     title="service",
-                    text="",
-                    breadcrumb=f"{root}{_CRUMB_SEP}remove",
+                    breadcrumb=f"{root}{CRUMB_SEP}remove",
                     choices=choices,
                 )
                 if svc:
@@ -215,7 +217,6 @@ def _interactive_mcp_menu(session: ReplSession, console: Console) -> bool:
     while True:
         sub = repl_choose_one(
             title="mcp",
-            text="",
             breadcrumb=root,
             choices=[
                 ("list", "list"),
@@ -237,8 +238,7 @@ def _interactive_mcp_menu(session: ReplSession, console: Console) -> bool:
             else:
                 svc = repl_choose_one(
                     title="server",
-                    text="",
-                    breadcrumb=f"{root}{_CRUMB_SEP}disconnect",
+                    breadcrumb=f"{root}{CRUMB_SEP}disconnect",
                     choices=choices,
                 )
                 if svc:

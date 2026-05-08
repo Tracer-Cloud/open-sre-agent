@@ -28,7 +28,7 @@ from app.cli.interactive_shell.theme import (
 )
 
 _HINT = "↑↓  Enter  Esc"
-_CRUMB_SEP = "  ›  "
+CRUMB_SEP = "  ›  "
 
 
 def repl_tty_interactive() -> bool:
@@ -194,7 +194,6 @@ def _pick(*, title: str, crumb: str, labels: list[str]) -> int | None:
 def repl_choose_one(
     *,
     title: str,
-    text: str,
     choices: list[tuple[str, str]],
     breadcrumb: str = "",
 ) -> str | None:
@@ -205,7 +204,7 @@ def repl_choose_one(
     """
     if not choices or not repl_tty_interactive():
         return None
-    crumb = breadcrumb or text
+    crumb = breadcrumb
     labels = [label for _value, label in choices]
     picked = _pick(title=title, crumb=crumb, labels=labels)
     if picked is None:
@@ -229,7 +228,7 @@ def print_valid_choice_list(
 
 
 __all__ = [
-    "_CRUMB_SEP",
+    "CRUMB_SEP",
     "print_valid_choice_list",
     "repl_choose_one",
     "repl_section_break",

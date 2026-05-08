@@ -12,7 +12,7 @@ from app.cli.interactive_shell.command_registry import repl_data
 from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
 from app.cli.interactive_shell.rendering import render_models_table
 from app.cli.interactive_shell.repl_choice_menu import (
-    _CRUMB_SEP,
+    CRUMB_SEP,
     print_valid_choice_list,
     repl_choose_one,
     repl_section_break,
@@ -256,11 +256,10 @@ def _toolcall_model_menu_choices(provider: object) -> list[tuple[str, str]]:
 def _interactive_set_provider(console: Console) -> bool | None:
     from app.cli.wizard.config import PROVIDER_BY_VALUE
 
-    crumb_set = f"{_ROOT}{_CRUMB_SEP}set"
+    crumb_set = f"{_ROOT}{CRUMB_SEP}set"
     while True:
         provider_value = repl_choose_one(
             title="provider",
-            text="",
             breadcrumb=crumb_set,
             choices=_provider_menu_choices(),
         )
@@ -270,11 +269,10 @@ def _interactive_set_provider(console: Console) -> bool | None:
         if provider is None:
             return False
 
-        crumb_model = f"{crumb_set}{_CRUMB_SEP}{provider_value}"
+        crumb_model = f"{crumb_set}{CRUMB_SEP}{provider_value}"
         while True:
             reasoning_choice = repl_choose_one(
                 title="reasoning model",
-                text="",
                 breadcrumb=crumb_model,
                 choices=_reasoning_model_menu_choices(provider),
             )
@@ -286,11 +284,10 @@ def _interactive_set_provider(console: Console) -> bool | None:
             )
             toolcall_choice: str | None = None
             if provider.toolcall_model_env:
-                crumb_tc = f"{crumb_model}{_CRUMB_SEP}toolcall"
+                crumb_tc = f"{crumb_model}{CRUMB_SEP}toolcall"
                 while True:
                     toolcall_value = repl_choose_one(
                         title="toolcall model",
-                        text="",
                         breadcrumb=crumb_tc,
                         choices=_toolcall_model_menu_choices(provider),
                     )
@@ -306,7 +303,7 @@ def _interactive_set_provider(console: Console) -> bool | None:
                     toolcall_choice = toolcall_value
                     break
                 if toolcall_value is None:
-                    continue
+                    return None
 
             return switch_llm_provider(
                 provider.value,
@@ -319,8 +316,7 @@ def _interactive_set_provider(console: Console) -> bool | None:
 def _interactive_restore_provider(console: Console) -> bool | None:
     provider_value = repl_choose_one(
         title="provider",
-        text="",
-        breadcrumb=f"{_ROOT}{_CRUMB_SEP}restore",
+        breadcrumb=f"{_ROOT}{CRUMB_SEP}restore",
         choices=_provider_menu_choices(),
     )
     if provider_value is None:
@@ -331,10 +327,9 @@ def _interactive_restore_provider(console: Console) -> bool | None:
 def _interactive_set_toolcall(console: Console) -> bool | None:
     from app.cli.wizard.config import PROVIDER_BY_VALUE
 
-    crumb_tc = f"{_ROOT}{_CRUMB_SEP}toolcall"
+    crumb_tc = f"{_ROOT}{CRUMB_SEP}toolcall"
     provider_value = repl_choose_one(
         title="provider",
-        text="",
         breadcrumb=crumb_tc,
         choices=_provider_menu_choices(),
     )
@@ -352,8 +347,7 @@ def _interactive_set_toolcall(console: Console) -> bool | None:
     while True:
         model_value = repl_choose_one(
             title="toolcall model",
-            text="",
-            breadcrumb=f"{crumb_tc}{_CRUMB_SEP}{provider_value}",
+            breadcrumb=f"{crumb_tc}{CRUMB_SEP}{provider_value}",
             choices=_reasoning_model_menu_choices(provider),
         )
         if model_value is None:
@@ -368,7 +362,6 @@ def _interactive_model_menu(session: ReplSession, console: Console) -> bool:
     while True:
         action = repl_choose_one(
             title="Select Model and Effort",
-            text="",
             breadcrumb=f"{_ROOT}",
             choices=[
                 ("show", "show"),

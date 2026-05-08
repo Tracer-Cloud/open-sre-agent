@@ -35,7 +35,6 @@ def _interactive_template_menu(session: ReplSession, console: Console) -> bool:
     while True:
         name = repl_choose_one(
             title="template",
-            text="",
             breadcrumb=root,
             choices=choices,
         )

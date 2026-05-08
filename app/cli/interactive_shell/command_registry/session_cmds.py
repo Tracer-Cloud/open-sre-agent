@@ -35,7 +35,6 @@ def _interactive_trust_menu(session: ReplSession, console: Console) -> bool:
     while True:
         mode = repl_choose_one(
             title="trust",
-            text="",
             breadcrumb="/trust",
             choices=[("on", "on"), ("off", "off"), ("done", "done")],
         )
@@ -110,7 +109,6 @@ def _interactive_verbose_menu(_session: ReplSession, console: Console) -> bool:
     while True:
         mode = repl_choose_one(
             title="verbose",
-            text="",
             breadcrumb="/verbose",
             choices=[("on", "on"), ("off", "off"), ("done", "done")],
         )
