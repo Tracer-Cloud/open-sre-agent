@@ -211,10 +211,7 @@ def test_append_summary_update_skips_post_when_finding_already_present(
 
     monkeypatch.setattr("app.services.incident_io.client.datetime", FrozenDateTime)
 
-    embedded = (
-        "Existing\n\n---\n"
-        "**OpenSRE finding: Already posted** (2099-01-01 00:00:00 UTC)"
-    )
+    embedded = "Existing\n\n---\n**OpenSRE finding: Already posted** (2099-01-01 00:00:00 UTC)"
     calls: list[tuple[str, str, dict]] = []
 
     def fake_request(method: str, path: str, **kwargs):

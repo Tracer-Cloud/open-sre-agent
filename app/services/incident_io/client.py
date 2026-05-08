@@ -364,7 +364,10 @@ class IncidentIoClient:
                         incident_id,
                         err_text,
                     )
-                    return {"success": False, "error": f"HTTP {exc.response.status_code}: {err_text}"}
+                    return {
+                        "success": False,
+                        "error": f"HTTP {exc.response.status_code}: {err_text}",
+                    }
                 except Exception as exc:
                     err_text = self._redact(exc)
                     logger.warning("[incident_io] Summary append error: %s", err_text)
