@@ -431,7 +431,12 @@ def _format_anthropic_retry_error(err: Exception) -> str:
             "Anthropic API connection failed after multiple retries. "
             "Check network access and try again."
         )
-    if status_code == 529:
+    # Detect overloaded via HTTP status (error-response path) or via body error
+    # type (SSE streaming path: the SDK raises APIStatusError from body events
+    # where the initial HTTP response was 200, so status_code is absent/not 529).
+    body = getattr(err, "body", None)
+    body_error_type = body.get("error", {}).get("type", "") if isinstance(body, dict) else ""
+    if status_code == 529 or body_error_type == "overloaded_error":
         return (
             "Anthropic API is overloaded (HTTP 529) after multiple retries. "
             "Try again in a few seconds."

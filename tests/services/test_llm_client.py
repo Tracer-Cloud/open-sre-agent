@@ -475,6 +475,50 @@ def test_anthropic_invoke_stream_does_not_retry_after_yielding(monkeypatch) -> N
     assert len(attempts) == 1, "Must not retry after emitting any chunk"
 
 
+def test_anthropic_invoke_stream_overloaded_via_body_raises_friendly_error(
+    monkeypatch,
+) -> None:
+    """APIStatusError with overloaded_error body (SSE path, no HTTP 529) raises the
+    friendly overloaded message, not the raw 'APIStatusError' class name."""
+
+    class _OverloadedBodyError(Exception):
+        """Simulates APIStatusError raised from the SSE stream body (status_code absent)."""
+
+        def __init__(self) -> None:
+            super().__init__("Overloaded")
+            self.body = {"error": {"type": "overloaded_error", "message": "Overloaded"}}
+
+    def _yield_overloaded():
+        raise _OverloadedBodyError()
+        yield  # make it a generator
+
+    class _Stream:
+        def __init__(self) -> None:
+            self.text_stream = _yield_overloaded()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    class _Messages:
+        def stream(self, **_kwargs):
+            return _Stream()
+
+    class _Anthropic:
+        def __init__(self, **_kwargs) -> None:
+            self.messages = _Messages()
+
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "Anthropic", _Anthropic)
+    monkeypatch.setattr(llm_client.time, "sleep", lambda _s: None)
+
+    client = llm_client.LLMClient(model="claude-test")
+    with pytest.raises(RuntimeError, match="overloaded"):
+        list(client.invoke_stream("hi"))
+
+
 # ---------------------------------------------------------------------------
 # OpenAILLMClient.invoke / invoke_stream — kwargs builder + streaming behavior
 # ---------------------------------------------------------------------------
