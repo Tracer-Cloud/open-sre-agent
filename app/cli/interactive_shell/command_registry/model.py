@@ -231,7 +231,7 @@ def _provider_menu_choices() -> list[tuple[str, str]]:
 def _reasoning_model_menu_choices(provider: object) -> list[tuple[str, str]]:
     model_options = list(getattr(provider, "models", ()))
     choices: list[tuple[str, str]] = [
-        ("__provider_default__", "default"),
+        ("__provider_default__", "provider default (one step)"),
     ]
     for option in model_options:
         value = str(getattr(option, "value", ""))
@@ -259,7 +259,7 @@ def _interactive_set_provider(console: Console) -> bool | None:
     crumb_set = f"{_ROOT}{CRUMB_SEP}set"
     while True:
         provider_value = repl_choose_one(
-            title="provider",
+            title="LLM provider",
             breadcrumb=crumb_set,
             choices=_provider_menu_choices(),
         )
@@ -283,7 +283,9 @@ def _interactive_set_provider(console: Console) -> bool | None:
                 None if reasoning_choice == "__provider_default__" else str(reasoning_choice)
             )
             toolcall_model: str | None = None
-            if provider.toolcall_model_env:
+            # Default reasoning: switch provider + default reasoning only — do not
+            # prompt for toolcall (matches non-interactive `/model set <provider>`).
+            if provider.toolcall_model_env and reasoning_choice != "__provider_default__":
                 crumb_tc = f"{crumb_model}{CRUMB_SEP}toolcall"
                 while True:
                     toolcall_value = repl_choose_one(
@@ -311,7 +313,7 @@ def _interactive_set_provider(console: Console) -> bool | None:
 
 def _interactive_restore_provider(console: Console) -> bool | None:
     provider_value = repl_choose_one(
-        title="provider",
+        title="LLM provider",
         breadcrumb=f"{_ROOT}{CRUMB_SEP}restore",
         choices=_provider_menu_choices(),
     )
@@ -325,7 +327,7 @@ def _interactive_set_toolcall(console: Console) -> bool | None:
 
     crumb_tc = f"{_ROOT}{CRUMB_SEP}toolcall"
     provider_value = repl_choose_one(
-        title="provider",
+        title="LLM provider",
         breadcrumb=crumb_tc,
         choices=_provider_menu_choices(),
     )
@@ -520,7 +522,8 @@ COMMANDS: list[SlashCommand] = [
         "/model",
         "show or set the active LLM (TTY: bare '/model' opens an inline menu — "
         "show stays open for more actions; set / restore / toolcall exit after success; "
-        "done or Esc closes; "
+        "done or Esc closes; TTY set: LLM provider then reasoning — pick "
+        "'provider default (one step)' to skip toolcall tuning (like bare `/model set p`); "
         "else '/model show', '/model set <provider> [model] [--toolcall-model <m>]', "
         "'/model restore [provider]', '/model toolcall set <model>')",
         _cmd_model,

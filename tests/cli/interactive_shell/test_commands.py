@@ -413,7 +413,7 @@ class TestModelCommand:
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
         monkeypatch.setattr(model_cmd, "repl_tty_interactive", lambda: True)
-        selections = iter(["set", "anthropic", "__provider_default__", "__keep__"])
+        selections = iter(["set", "anthropic", "__provider_default__"])
         monkeypatch.setattr(model_cmd, "repl_choose_one", lambda **_: next(selections))
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
 
