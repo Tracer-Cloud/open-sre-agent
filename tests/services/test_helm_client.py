@@ -145,6 +145,46 @@ def test_helm_list_parses_json_array(monkeypatch: pytest.MonkeyPatch) -> None:
     assert out["releases"][0]["name"] == "demo"
 
 
+def test_helm_list_reports_all_namespaces_when_cli_uses_dash_a_with_empty_namespace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Default branch passes `-A`; response metadata must not claim single-namespace mode."""
+    monkeypatch.setattr("app.services.helm.client.shutil.which", lambda _name: "/bin/helm")
+    cmds: list[list[str]] = []
+
+    def fake_run(cmd: list[str], **_kwargs: Any) -> SimpleNamespace:
+        cmds.append(list(cmd))
+        if "list" in cmd:
+            return SimpleNamespace(returncode=0, stdout="[]", stderr="")
+        return SimpleNamespace(returncode=1, stdout="", stderr="unexpected")
+
+    monkeypatch.setattr("app.services.helm.client.subprocess.run", fake_run)
+    out = _client().list_releases(all_namespaces=False, namespace="", max_releases=10)
+    assert out["success"] is True
+    assert out["all_namespaces"] is True
+    assert any(part == "-A" for part in cmds[0])
+
+
+def test_helm_list_reports_single_namespace_when_cli_uses_dash_n(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("app.services.helm.client.shutil.which", lambda _name: "/bin/helm")
+    cmds: list[list[str]] = []
+
+    def fake_run(cmd: list[str], **_kwargs: Any) -> SimpleNamespace:
+        cmds.append(list(cmd))
+        if "list" in cmd:
+            return SimpleNamespace(returncode=0, stdout="[]", stderr="")
+        return SimpleNamespace(returncode=1, stdout="", stderr="unexpected")
+
+    monkeypatch.setattr("app.services.helm.client.subprocess.run", fake_run)
+    out = _client().list_releases(all_namespaces=False, namespace="prod", max_releases=10)
+    assert out["success"] is True
+    assert out["all_namespaces"] is False
+    assert out["namespace"] == "prod"
+    assert "-n" in cmds[0] and "prod" in cmds[0]
+
+
 def test_helm_status_requires_release_name(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("app.services.helm.client.shutil.which", lambda _name: "/bin/helm")
     out = _client().release_status("", "demo")

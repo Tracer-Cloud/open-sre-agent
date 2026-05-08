@@ -166,14 +166,18 @@ class HelmClient:
         else:
             args.append("-A")
 
+        ns_filter = namespace.strip()
+        # Match the branches above: `-A` when listing every namespace (explicit flag or none set).
+        listed_all_namespaces = bool(all_namespaces) or not bool(ns_filter)
+
         code, out, err = self._run(args, timeout=_DEFAULT_CMD_TIMEOUT)
         if code != 0:
             return {
                 "success": False,
                 "error": (err or out).strip(),
                 "releases": [],
-                "all_namespaces": all_namespaces,
-                "namespace": namespace.strip(),
+                "all_namespaces": listed_all_namespaces,
+                "namespace": ns_filter,
             }
         try:
             parsed = json.loads(out or "[]")
@@ -182,23 +186,23 @@ class HelmClient:
                 "success": False,
                 "error": "invalid JSON from helm list",
                 "releases": [],
-                "all_namespaces": all_namespaces,
-                "namespace": namespace.strip(),
+                "all_namespaces": listed_all_namespaces,
+                "namespace": ns_filter,
             }
         if not isinstance(parsed, list):
             return {
                 "success": False,
                 "error": "unexpected helm list shape",
                 "releases": [],
-                "all_namespaces": all_namespaces,
-                "namespace": namespace.strip(),
+                "all_namespaces": listed_all_namespaces,
+                "namespace": ns_filter,
             }
         return {
             "success": True,
             "error": "",
             "releases": parsed,
-            "all_namespaces": all_namespaces,
-            "namespace": namespace.strip(),
+            "all_namespaces": listed_all_namespaces,
+            "namespace": ns_filter,
         }
 
     def release_status(self, release: str, namespace: str) -> dict[str, Any]:
