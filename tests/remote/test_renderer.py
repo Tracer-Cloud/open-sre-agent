@@ -434,8 +434,8 @@ class TestStreamRendererDiagnoseStreaming:
         renderer = StreamRenderer()
         renderer.render_stream(_events_mode_stream())
 
-        assert renderer._diagnose_buffer == []
-        assert renderer._diagnose_live is None
+        assert renderer._diagnose.buffer == []
+        assert renderer._diagnose._live is None
         assert "diagnose_root_cause" not in renderer.node_names_seen
 
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "text"})
@@ -587,7 +587,7 @@ class TestStreamRendererDiagnoseStreaming:
         # _finish_active_node runs in the finally block and routes diagnose
         # through _finish_diagnose_streaming, which closes the Live region
         # and clears _active_node.
-        assert renderer._diagnose_live is None
+        assert renderer._diagnose._live is None
         assert renderer._active_node is None
 
 
@@ -683,8 +683,8 @@ class TestStreamRendererDiagnoseThrottle:
             "throttle is letting intra-window updates through"
         )
         # Buffer still contains all chunks even though we only rendered once.
-        assert "c0 " in "".join(renderer._diagnose_buffer)
-        assert "c99 " in "".join(renderer._diagnose_buffer)
+        assert "c0 " in "".join(renderer._diagnose.buffer)
+        assert "c99 " in "".join(renderer._diagnose.buffer)
         # silence unused-var while keeping the fixture wired.
         assert fake_time[0] == 0.0
 
@@ -730,7 +730,7 @@ class TestStreamRendererDiagnoseThrottle:
         renderer._handle_event(self._make_diagnose_end())
 
         # All chunks must be in the buffer at finish (final flush picks them up).
-        assert "".join(renderer._diagnose_buffer) == "early tail-1 tail-2"
+        assert "".join(renderer._diagnose.buffer) == "early tail-1 tail-2"
         # Two parses: one in-loop render at "early " + one final flush.
         assert parse_count[0] == 2
 
@@ -751,6 +751,6 @@ class TestStreamRendererDiagnoseThrottle:
         # Exactly one Markdown parse — the final flush.
         assert parse_count[0] == 1
         # Block list shapes flatten correctly through the throttle path too.
-        assert "".join(renderer._diagnose_buffer).startswith("c0 ")
-        assert "c19" in "".join(renderer._diagnose_buffer)
+        assert "".join(renderer._diagnose.buffer).startswith("c0 ")
+        assert "c19" in "".join(renderer._diagnose.buffer)
         assert fake_time[0] == 0.0
