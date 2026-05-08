@@ -25,6 +25,8 @@ Usage
 
 from __future__ import annotations
 
+from rich.theme import Theme
+
 # ── Semantic color tokens (the only permitted colours) ─────────────────────
 
 HIGHLIGHT = "#B9EDAF"
@@ -94,3 +96,13 @@ INPUT_SURFACE_BG_ANSI = (
 
 # Inline REPL picker: full-line selection bar (HIGHLIGHT fg over INPUT_SURFACE bg).
 MENU_SELECTION_ROW_ANSI = f"{INPUT_SURFACE_BG_ANSI}\x1b[1m{HIGHLIGHT_ANSI}"
+
+# ── Rich Theme override for Markdown rendering ─────────────────────────────
+# Overrides Rich's defaults ("bold cyan on black" / "cyan on black") so that
+# inline code spans and code-block chrome stay within the project palette.
+MARKDOWN_THEME = Theme(
+    {
+        "markdown.code": f"bold {HIGHLIGHT}",
+        "markdown.code_block": TEXT,
+    }
+)

@@ -12,7 +12,7 @@ from rich.markdown import Markdown
 from rich.spinner import Spinner
 from rich.text import Text
 
-from app.cli.interactive_shell.theme import BOLD_BRAND, DIM, HIGHLIGHT
+from app.cli.interactive_shell.theme import BOLD_BRAND, DIM, HIGHLIGHT, MARKDOWN_THEME
 from app.cli.support.prompt_support import CTRL_C_DOUBLE_PRESS_WINDOW_S
 
 _SPINNER_NAME = "dots12"
@@ -50,7 +50,8 @@ def stream_to_console(
         if text:
             console.print()
             console.print(f"[{BOLD_BRAND}]{label}:[/]")
-            console.print(Markdown(text))
+            with console.use_theme(MARKDOWN_THEME):
+                console.print(Markdown(text, code_theme="ansi_dark"))
             console.print()
         return text
 
@@ -111,6 +112,7 @@ def stream_to_console(
     started = time.monotonic()
     try:
         with (
+            console.use_theme(MARKDOWN_THEME),
             patch_stdout(raw=True),
             Live(
                 spinner,
@@ -121,7 +123,7 @@ def stream_to_console(
             ) as live,
         ):
             if buffer:
-                live.update(Markdown("".join(buffer)))
+                live.update(Markdown("".join(buffer), code_theme="ansi_dark"))
             while True:
                 chunk = _next_chunk(chunks_iter)
                 if chunk is None:
@@ -129,7 +131,7 @@ def stream_to_console(
                 if not chunk:
                     continue
                 buffer.append(chunk)
-                live.update(Markdown("".join(buffer)))
+                live.update(Markdown("".join(buffer), code_theme="ansi_dark"))
             if not buffer:
                 live.update(Text(""))
         if buffer:

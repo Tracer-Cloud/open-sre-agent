@@ -18,7 +18,7 @@ from app.cli.interactive_shell.prompt_rules import (
 )
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.streaming import STREAM_LABEL_ASSISTANT, stream_to_console
-from app.cli.interactive_shell.theme import BOLD_BRAND, DIM, ERROR
+from app.cli.interactive_shell.theme import BOLD_BRAND, DIM, ERROR, MARKDOWN_THEME
 from app.cli.support.exception_reporting import report_exception
 from app.integrations.llm_cli.errors import CLITimeoutError
 
@@ -384,7 +384,8 @@ def answer_cli_agent(
     if text_str.lstrip().startswith("{") and text_str.strip():
         console.print()
         console.print(f"[{BOLD_BRAND}]{STREAM_LABEL_ASSISTANT}:[/]")
-        console.print(Markdown(text_str))
+        with console.use_theme(MARKDOWN_THEME):
+            console.print(Markdown(text_str, code_theme="ansi_dark"))
         console.print()
 
 
