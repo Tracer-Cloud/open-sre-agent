@@ -282,7 +282,7 @@ def _interactive_set_provider(console: Console) -> bool | None:
             model_choice = (
                 None if reasoning_choice == "__provider_default__" else str(reasoning_choice)
             )
-            toolcall_choice: str | None = None
+            toolcall_model: str | None = None
             if provider.toolcall_model_env:
                 crumb_tc = f"{crumb_model}{CRUMB_SEP}toolcall"
                 while True:
@@ -292,23 +292,20 @@ def _interactive_set_provider(console: Console) -> bool | None:
                         choices=_toolcall_model_menu_choices(provider),
                     )
                     if toolcall_value is None:
-                        break
+                        return None
                     if toolcall_value == "__keep__":
-                        toolcall_choice = None
                         break
                     if toolcall_value == "__match_reasoning__":
-                        toolcall_choice = model_choice or provider.default_model
+                        toolcall_model = model_choice or provider.default_model
                         break
-                    toolcall_choice = toolcall_value
+                    toolcall_model = str(toolcall_value)
                     break
-                if toolcall_value is None:
-                    return None
 
             return switch_llm_provider(
                 provider.value,
                 console,
                 model=model_choice,
-                toolcall_model=toolcall_choice,
+                toolcall_model=toolcall_model,
             )
 
 
@@ -343,18 +340,15 @@ def _interactive_set_toolcall(console: Console) -> bool | None:
             "toolcall model[/] — nothing to set."
         )
         return False
-    while True:
-        model_value = repl_choose_one(
-            title="toolcall model",
-            breadcrumb=f"{crumb_tc}{CRUMB_SEP}{provider_value}",
-            choices=_reasoning_model_menu_choices(provider),
-        )
-        if model_value is None:
-            return None
-        target_model = (
-            provider.default_model if model_value == "__provider_default__" else model_value
-        )
-        return switch_toolcall_model(target_model, console, provider_name=provider.value)
+    model_value = repl_choose_one(
+        title="toolcall model",
+        breadcrumb=f"{crumb_tc}{CRUMB_SEP}{provider_value}",
+        choices=_reasoning_model_menu_choices(provider),
+    )
+    if model_value is None:
+        return None
+    target_model = provider.default_model if model_value == "__provider_default__" else model_value
+    return switch_toolcall_model(target_model, console, provider_name=provider.value)
 
 
 def _interactive_model_menu(session: ReplSession, console: Console) -> bool:
