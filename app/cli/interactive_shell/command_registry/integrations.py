@@ -60,14 +60,16 @@ def _interactive_list_menu(_session: ReplSession, console: Console) -> bool:
         )
         if sub is None or sub == "done":
             return True
-        results = repl_data.load_verified_integrations()
         if sub == "integrations":
+            results = repl_data.load_verified_integrations()
             render_integrations_table(console, results)
         elif sub == "mcp":
+            results = repl_data.load_verified_integrations()
             render_mcp_table(console, results)
         elif sub == "models":
             render_models_table(console, repl_data.load_llm_settings())
         elif sub == "all":
+            results = repl_data.load_verified_integrations()
             render_integrations_table(console, results)
             render_mcp_table(console, results)
             render_models_table(console, repl_data.load_llm_settings())
@@ -156,16 +158,21 @@ def _interactive_integrations_menu(session: ReplSession, console: Console) -> bo
         )
         if sub is None or sub == "done":
             return True
+        show_section_break = False
         if sub == "list":
             _cmd_integrations(session, console, ["list"])
+            show_section_break = True
         elif sub == "verify":
             _cmd_integrations(session, console, ["verify"])
+            show_section_break = True
         elif sub == "setup":
             _cmd_integrations(session, console, ["setup"])
+            show_section_break = True
         elif sub == "show":
             choices = _verified_service_choices()
             if not choices:
                 console.print("[dim]no integrations in store to show.[/dim]")
+                show_section_break = True
             else:
                 svc = repl_choose_one(
                     title="service",
@@ -174,10 +181,12 @@ def _interactive_integrations_menu(session: ReplSession, console: Console) -> bo
                 )
                 if svc:
                     _cmd_integrations(session, console, ["show", svc])
+                    show_section_break = True
         elif sub == "remove":
             choices = _verified_service_choices()
             if not choices:
                 console.print("[dim]no integrations in store to remove.[/dim]")
+                show_section_break = True
             else:
                 svc = repl_choose_one(
                     title="service",
@@ -186,7 +195,9 @@ def _interactive_integrations_menu(session: ReplSession, console: Console) -> bo
                 )
                 if svc:
                     _cmd_integrations(session, console, ["remove", svc])
-        repl_section_break(console)
+                    show_section_break = True
+        if show_section_break:
+            repl_section_break(console)
 
 
 def _cmd_mcp(session: ReplSession, console: Console, args: list[str]) -> bool:
@@ -227,14 +238,18 @@ def _interactive_mcp_menu(session: ReplSession, console: Console) -> bool:
         )
         if sub is None or sub == "done":
             return True
+        show_section_break = False
         if sub == "list":
             _cmd_mcp(session, console, ["list"])
+            show_section_break = True
         elif sub == "connect":
             _cmd_mcp(session, console, ["connect"])
+            show_section_break = True
         elif sub == "disconnect":
             choices = _mcp_service_choices()
             if not choices:
                 console.print("[dim]no MCP servers configured.[/dim]")
+                show_section_break = True
             else:
                 svc = repl_choose_one(
                     title="server",
@@ -243,7 +258,9 @@ def _interactive_mcp_menu(session: ReplSession, console: Console) -> bool:
                 )
                 if svc:
                     _cmd_mcp(session, console, ["disconnect", svc])
-        repl_section_break(console)
+                    show_section_break = True
+        if show_section_break:
+            repl_section_break(console)
 
 
 def _cmd_list(session: ReplSession, console: Console, args: list[str]) -> bool:

@@ -134,14 +134,19 @@ def _interactive_history_menu(session: ReplSession, console: Console) -> bool:
         )
         if sub is None or sub == "done":
             return True
+        show_section_break = False
         if sub == "show":
             _show_history(console)
+            show_section_break = True
         elif sub == "clear":
             _history_clear(session, console)
+            show_section_break = True
         elif sub == "off":
             _history_pause(session, console, paused=True)
+            show_section_break = True
         elif sub == "on":
             _history_pause(session, console, paused=False)
+            show_section_break = True
         elif sub == "retention":
             cap = repl_choose_one(
                 title="retention cap",
@@ -155,7 +160,9 @@ def _interactive_history_menu(session: ReplSession, console: Console) -> bool:
             )
             if cap:
                 _history_retention(session, console, [cap])
-        repl_section_break(console)
+                show_section_break = True
+        if show_section_break:
+            repl_section_break(console)
 
 
 def _cmd_history(session: ReplSession, console: Console, args: list[str]) -> bool:
