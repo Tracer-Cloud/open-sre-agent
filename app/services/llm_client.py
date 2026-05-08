@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 import boto3
 from anthropic import Anthropic, AnthropicBedrock, AuthenticationError, NotFoundError
 from openai import AuthenticationError as OpenAIAuthError
+from openai import NotFoundError as OpenAINotFoundError
 from openai import OpenAI
 from pydantic import BaseModel, ValidationError
 
@@ -541,6 +542,11 @@ class OpenAILLMClient:
                 raise RuntimeError(
                     f"{self._provider_label} authentication failed. Check {self._api_key_env} in your environment, .env, or secure local keychain."
                 ) from err
+            except OpenAINotFoundError as err:
+                raise RuntimeError(
+                    f"{self._provider_label} model '{self._model}' was not found. "
+                    "Check your configured model name or endpoint."
+                ) from err
             except GuardrailBlockedError:
                 raise
             except Exception as err:
@@ -591,6 +597,11 @@ class OpenAILLMClient:
             except OpenAIAuthError as err:
                 raise RuntimeError(
                     f"{self._provider_label} authentication failed. Check {self._api_key_env} in your environment, .env, or secure local keychain."
+                ) from err
+            except OpenAINotFoundError as err:
+                raise RuntimeError(
+                    f"{self._provider_label} model '{self._model}' was not found. "
+                    "Check your configured model name or endpoint."
                 ) from err
             except GuardrailBlockedError:
                 raise

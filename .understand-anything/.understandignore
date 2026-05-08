@@ -1,0 +1,127 @@
+# .understandignore — patterns for files/dirs to exclude from analysis
+# Syntax: same as .gitignore (globs, # comments, ! negation, trailing / for dirs)
+# Built-in defaults (always excluded unless negated):
+#   node_modules/, .git/, dist/, build/, obj/, *.lock, *.min.js, etc.
+
+# --- User explicitly excluded ---
+
+# Tests are excluded — focus the graph on the agent runtime, not its test harness
+tests/
+
+# Docs site is excluded — it has its own pnpm project and is not part of the agent runtime
+docs/
+
+# --- From .gitignore (Python build / cache / venv artifacts) ---
+
+*.env
+.env
+.env.local
+.env.*.local
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+.venv-devcontainer/
+virtualenv/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.ipynb_checkpoints
+.python-version
+uv.lock
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+.pyre/
+
+# --- IDE / Editor cruft ---
+
+.vscode/
+.idea/
+.cursor/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# --- macOS noise ---
+
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# --- Project-specific generated state ---
+
+output/
+.langgraph_api/
+app/memories/
+.aider*
+**/cdk.out/
+
+# --- Personal/local notes (not checked in) ---
+
+CLAUDE_PERSONAL.md
+tasks/
+
+# --- Top-level meta-docs (CoC, license, contributing — not architecturally meaningful) ---
+
+LICENSE
+CODE_OF_CONDUCT.md
+SECURITY.md
+CONTRIBUTING.md
+.gitignore
+.gitattributes
+.editorconfig
+.dockerignore
+.tool-versions
+
+# --- Packaging / release scripts (not part of the agent runtime) ---
+
+packaging/
+scripts/
+
+# --- Devcontainer ---
+
+.devcontainer/
+
+# --- Generated lock files ---
+
+*.lock
+package-lock.json
+yarn.lock
+pnpm-lock.yaml

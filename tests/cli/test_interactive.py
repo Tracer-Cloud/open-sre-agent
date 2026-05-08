@@ -62,17 +62,28 @@ def test_choose_interactive_item_prompts_when_multiple_matches_exist(monkeypatch
     assert "make:test-cov" in selected_item_ids[0]
 
 
-def test_choose_interactive_item_raises_on_empty_filter(monkeypatch) -> None:
-    catalog = Catalog(items=())
+def test_choose_interactive_item_retries_after_empty_filter(monkeypatch) -> None:
+    catalog = Catalog(
+        items=(
+            CatalogItem(
+                id="make:test-cov",
+                kind="make_target",
+                display_name="Coverage Suite",
+                description="Run the coverage suite.",
+                command=("make", "test-cov"),
+                tags=("ci-safe",),
+            ),
+        )
+    )
 
-    monkeypatch.setattr(interactive, "_choose_category", lambda: "rca")
+    category_choices = iter(["rca", "ci-safe"])
 
-    try:
-        interactive.choose_interactive_item(catalog)
-    except ValueError as exc:
-        assert "No tests matched the selected category." in str(exc)
-    else:
-        raise AssertionError("Expected choose_interactive_item to reject empty categories")
+    monkeypatch.setattr(interactive, "_choose_category", lambda: next(category_choices))
+
+    item, auto_selected = interactive.choose_interactive_item(catalog)
+
+    assert item.id == "make:test-cov"
+    assert auto_selected is True
 
 
 def test_choose_interactive_item_reselects_category_after_escape(monkeypatch) -> None:

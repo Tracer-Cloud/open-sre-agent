@@ -119,13 +119,13 @@ jobs:
           # Build the table HTML (12 columns per row)
           cols = 12
           rows = [contributors[i:i+cols] for i in range(0, len(contributors), cols)]
-          lines = ["<table>", "\t<tbody>"]
+          lines = ["<table width=\"100%\" style=\"table-layout: fixed;\">", "\t<tbody>"]
           for row in rows:
               lines.append("\t\t<tr>")
               for c in row:
-                  lines.append(f"""            <td align="center">
+                  lines.append(f"""            <td align="center" width="8%">
                   <a href="{c['html_url']}">
-                      <img src="{c['avatar_url']}" width="60" alt="{c['login']}"/>
+                      <img src="{c['avatar_url']}" width="45" alt="{c['login']}"/>
                       <br />
                       <sub><b>{c['login']}</b></sub>
                   </a>

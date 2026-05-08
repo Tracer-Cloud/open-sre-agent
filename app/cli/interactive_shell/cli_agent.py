@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.markup import escape
 
+from app.cli.interactive_shell.agents_md_reference import build_agents_md_reference_text
 from app.cli.interactive_shell.cli_reference import build_cli_reference_text
 from app.cli.interactive_shell.grounding_diagnostics import log_grounding_cache_diagnostics
 from app.cli.interactive_shell.prompt_rules import (
@@ -62,12 +63,16 @@ def _format_history_for_prompt(session: ReplSession) -> str:
     return "\n".join(lines) if lines else "(no prior messages in this CLI thread)"
 
 
-def _build_system_prompt(reference: str, history: str) -> str:
+def _build_system_prompt(reference: str, history: str, agents_md: str = "") -> str:
     """Build the system prompt for one assistant turn.
 
     Split out so tests can assert on terminology / formatting rules without
-    invoking an LLM.
+    invoking an LLM. ``agents_md`` is the optional repo-map block from
+    :mod:`app.cli.interactive_shell.agents_md_reference`; when empty the
+    section is omitted so callers in environments that ship no AGENTS.md
+    files don't waste tokens on an empty header.
     """
+    repo_map_block = f"--- Repo map (AGENTS.md) ---\n{agents_md}\n\n" if agents_md else ""
     return (
         "You are the OpenSRE terminal assistant. You help with OpenSRE CLI "
         "usage, the interactive shell, and onboarding. A deterministic pre-pass "
@@ -84,6 +89,7 @@ def _build_system_prompt(reference: str, history: str) -> str:
         "not invent subcommands.\n\n"
         f"{_TERMINOLOGY_RULE}\n{_MARKDOWN_RULE}\n{_ACTION_RULE}\n\n"
         f"--- CLI reference ---\n{reference}\n\n"
+        f"{repo_map_block}"
         f"--- Recent CLI conversation ---\n{history}\n"
     )
 
@@ -309,6 +315,7 @@ def answer_cli_agent(
 
     For documentation-grounded procedural Q&A use :func:`answer_cli_help`, which
     also pulls relevant ``docs/`` pages into the grounding context.
+
     """
     try:
         from app.services.llm_client import get_llm_for_reasoning
@@ -318,9 +325,10 @@ def answer_cli_agent(
         return
 
     reference = build_cli_reference_text()
+    agents_md = build_agents_md_reference_text()
     log_grounding_cache_diagnostics("cli_agent_grounding")
     history = _format_history_for_prompt(session)
-    system = _build_system_prompt(reference, history)
+    system = _build_system_prompt(reference, history, agents_md=agents_md)
     user_block = f"--- User message ---\n{message}"
     prompt = f"{system}\n{user_block}"
 

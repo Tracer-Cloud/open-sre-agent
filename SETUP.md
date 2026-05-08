@@ -4,7 +4,7 @@
 
 - Python 3.11 or later (see `.python-version` / `pyproject.toml`; CI uses 3.13)
 - Git
-- [uv](https://docs.astral.sh/uv/getting-started/installation/) — required for `make install` (creates `.venv`, installs locked deps from `uv.lock`)
+- [uv](https://docs.astral.sh/uv/getting-started/installation/) — required for `make install` (sets up the project environment, installs locked deps from `uv.lock`)
 - Make (standard on macOS/Linux; see Windows section below)
 
 ## Quick Setup (All Platforms)
@@ -129,10 +129,10 @@ uv run pytest --cov=app tests/
 
 ## Troubleshooting
 
-### Virtual environment not activating
+### Commands not using the project environment
 
-- **macOS/Linux:** Make sure you ran `source .venv/bin/activate` (uv creates `.venv` under the project root)
-- **Windows:** Use `.venv\Scripts\activate` instead
+- Prefer `uv run <command>` from the repo root so commands run in the project environment.
+- Reinstall dependencies if needed: `uv sync --frozen --extra dev`.
 
 ### Command not found: python
 
@@ -157,7 +157,7 @@ uv run pytest --cov=app tests/
 
 ### Import errors when running code
 
-- Make sure you've activated the virtual environment, or prefix commands with `uv run`
+- Run commands with `uv run` from the repo root to ensure they use the project environment.
 - Reinstall dependencies: `uv sync --frozen --extra dev`
 
 ### `opensre` does not pick up my local code edits
@@ -166,7 +166,7 @@ uv run pytest --cov=app tests/
 
 1. Prefer **`uv run opensre …`** from the repository root (always uses this project’s environment and sources).
 2. Or run **`eval "$(./scripts/dev-path.sh)"`** from the repo root, then **`hash -r`** — same `PATH` prepend, works from any cwd if you use the script’s absolute path.
-3. Or activate `.venv` and confirm **`which opensre`** shows `<repo>/.venv/bin/opensre`. If not, prepend manually: `export PATH="$(pwd)/.venv/bin:$PATH"` (macOS/Linux), then **`hash -r`** or open a new terminal.
+3. Or prepend the repo environment to `PATH` and confirm **`which opensre`** shows `<repo>/.venv/bin/opensre`: `export PATH="$(pwd)/.venv/bin:$PATH"` (macOS/Linux), then **`hash -r`** or open a new terminal.
 
 ---
 
@@ -213,10 +213,10 @@ In OpenClaw, open **Settings → MCP Servers** and add:
 }
 ```
 
-If `opensre-mcp` is not on your `PATH`, use the full path:
+If `opensre-mcp` is not on your `PATH`, use `uv` directly:
 
 ```json
-{ "command": "/path/to/venv/bin/opensre-mcp" }
+{ "command": "uv", "args": ["run", "opensre-mcp"] }
 ```
 
 ### 2. Configure one observability integration

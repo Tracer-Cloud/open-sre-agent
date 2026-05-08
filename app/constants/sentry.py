@@ -10,3 +10,5 @@ SENTRY_DSN: Final[str] = (
 )
 SENTRY_ERROR_SAMPLE_RATE: Final[float] = 1.0
 SENTRY_TRACES_SAMPLE_RATE: Final[float] = 1.0
+SENTRY_MAX_BREADCRUMBS: Final[int] = 100
+SENTRY_IN_APP_INCLUDE: Final[tuple[str, ...]] = ("app",)

@@ -28,7 +28,18 @@ In OpenClaw, add this MCP server:
 }
 ```
 
-If `opensre-mcp` is not on your `PATH`, use the full path to the binary in your virtualenv.
+If `opensre-mcp` is not on your `PATH`, run it through `uv`:
+
+```json
+{
+    "mcpServers": {
+        "opensre": {
+            "command": "uv",
+            "args": ["run", "opensre-mcp"]
+        }
+    }
+}
+```
 
 ### 3. Configure one observability integration
 
@@ -82,7 +93,7 @@ opensre integrations verify openclaw
 
 ## Troubleshooting
 
-- `opensre-mcp` not found: use the full path to the binary inside your virtualenv.
+- `opensre-mcp` not found: run it as `uv run opensre-mcp`.
 - `run_rca` says no integrations configured: run `opensre integrations setup` and add Datadog, Grafana, or Sentry.
 - Verify fails against `http://127.0.0.1:18789/`: that URL is the OpenClaw Control UI/Gateway, not the MCP bridge. Use `openclaw mcp serve`.
 - `search_openclaw_conversations` fails with `Connection closed` or `ECONNREFUSED`: the OpenClaw Gateway is not running. Check `openclaw gateway status`, then run `openclaw gateway run`.

@@ -54,6 +54,7 @@ _PRIMARY_RGB = (0x1A, 0xFF, 0x8C)
 _TEXT_DIM_RGB = (0x6B, 0x8C, 0x6B)
 
 PROMPT_ACCENT_ANSI = f"\x1b[1;38;2;{_PRIMARY_RGB[0]};{_PRIMARY_RGB[1]};{_PRIMARY_RGB[2]}m"
+PROMPT_FRAME_ANSI = PROMPT_ACCENT_ANSI
 ANSI_RESET = "\x1b[0m"
 
 # Truecolour ANSI for the bracketed turn counter in the prompt.

@@ -17,6 +17,7 @@ from app.integrations.sentry import build_sentry_config, validate_sentry_config
 from app.services.alertmanager import make_alertmanager_client
 from app.services.coralogix import CoralogixClient
 from app.services.datadog import DatadogClient, DatadogConfig
+from app.services.elasticsearch.client import ElasticsearchClient, ElasticsearchConfig
 from app.services.grafana import get_grafana_client_from_credentials
 from app.services.honeycomb import HoneycombClient
 from app.services.opsgenie import OpsGenieClient, OpsGenieConfig
@@ -446,4 +447,45 @@ def validate_splunk_integration(
     return IntegrationHealthResult(
         ok=False,
         detail=f"Splunk validation failed: {result.get('error', 'unknown error')}",
+    )
+
+
+def validate_opensearch_integration(
+    *,
+    url: str,
+    api_key: str = "",
+    username: str = "",
+    password: str = "",
+) -> IntegrationHealthResult:
+    """Validate OpenSearch / Elasticsearch connectivity via GET /_cluster/health.
+
+    Supports three authentication modes:
+    - No authentication (security disabled clusters)
+    - API key (native to Elasticsearch and some OpenSearch deployments)
+    - HTTP Basic Auth (default for most self-hosted OpenSearch clusters)
+    """
+    if not url:
+        return IntegrationHealthResult(ok=False, detail="OpenSearch URL is required.")
+    config = ElasticsearchConfig(
+        url=url,
+        api_key=api_key or None,
+        username=username or None,
+        password=password or None,
+    )
+    client = ElasticsearchClient(config)
+    result = client.get_cluster_health()
+    if result.get("success"):
+        cluster_name = result.get("cluster_name") or "unknown"
+        cluster_status = result.get("status") or "unknown"
+        node_count = result.get("number_of_nodes", 0)
+        return IntegrationHealthResult(
+            ok=True,
+            detail=(
+                f"Connected to OpenSearch cluster '{cluster_name}' "
+                f"({cluster_status}, {node_count} node(s))."
+            ),
+        )
+    return IntegrationHealthResult(
+        ok=False,
+        detail=f"OpenSearch validation failed: {result.get('error', 'unknown error')}",
     )

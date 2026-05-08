@@ -1,0 +1,116 @@
+---
+title: "Slack"
+description: "Deliver investigation findings to a Slack channel via incoming webhook."
+---
+
+The Slack integration delivers investigation findings to a Slack channel using an [incoming webhook](https://api.slack.com/messaging/webhooks). It is the simplest of the three messaging integrations to configure — one URL, one channel.
+
+---
+
+## Prerequisites
+
+- A Slack workspace where you can create or install apps (workspace admin or app-install permissions).
+- The channel you want findings posted to.
+
+---
+
+## Step 1: Create a Slack incoming webhook
+
+1. Visit [https://api.slack.com/apps](https://api.slack.com/apps) and click **Create New App → From scratch**.
+2. Name the app (e.g. `OpenSRE`) and pick your workspace.
+3. In the left sidebar, open **Incoming Webhooks** and toggle the feature **On**.
+4. Click **Add New Webhook to Workspace**.
+5. Pick the channel where findings should be posted and click **Allow**.
+6. Copy the generated URL. It has three path segments — a workspace ID, a channel/app binding ID, and a per-webhook secret — for example:
+
+   ```text
+   https://hooks.slack.com/services/<workspace-id>/<binding-id>/<secret>
+   ```
+
+<Note>
+Treat this URL like a password — anyone holding it can post to your channel. If your workspace already has a Slack app you want to reuse, you can add a new webhook to it instead of creating a fresh app; the URL format is the same.
+</Note>
+
+---
+
+## Step 2: Configure the integration in OpenSRE
+
+You have two equivalent paths:
+
+<Tabs>
+  <Tab title="Direct setup command (recommended)">
+    ```bash
+    opensre integrations setup slack
+    ```
+    Paste the webhook URL when prompted. The credentials are persisted to `~/.config/opensre/integrations.json`.
+  </Tab>
+  <Tab title="Manual env var">
+    Add to `.env`:
+    ```bash
+    SLACK_WEBHOOK_URL=https://hooks.slack.com/services/<workspace-id>/<binding-id>/<secret>
+    ```
+    OpenSRE reads this at startup as a fallback when no Slack entry exists in `~/.config/opensre/integrations.json`. If you have previously run `opensre integrations setup slack`, remove that entry first (`opensre integrations remove slack`) or the env var will be ignored.
+  </Tab>
+  <Tab title="Onboarding wizard">
+    ```bash
+    opensre onboard
+    ```
+    Select **Slack** and paste your webhook URL. The wizard validates the URL via a probe request.
+
+    <Note>
+    The wizard's Slack step currently validates the URL but does not persist it. After the wizard completes, run `opensre integrations setup slack` (or set `SLACK_WEBHOOK_URL` in `.env`) so the credentials are saved.
+    </Note>
+  </Tab>
+</Tabs>
+
+---
+
+## Step 3: Verify
+
+```bash
+opensre integrations verify slack
+```
+
+A successful run reports the integration as `passed` — but this only confirms the webhook URL is configured. It does **not** post anything to Slack. To also confirm delivery actually works, add the `--send-slack-test` flag:
+
+```bash
+opensre integrations verify slack --send-slack-test
+```
+
+This posts a small test message to the configured channel. Expected failure modes are listed below.
+
+You can also trigger a real investigation against a bundled fixture:
+
+```bash
+opensre investigate --input tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
+```
+
+Findings should appear in the configured channel.
+
+---
+
+## Environment variables
+
+| Variable | Description |
+|---|---|
+| `SLACK_WEBHOOK_URL` | Incoming webhook URL. Required for delivery. |
+
+---
+
+## Troubleshooting
+
+**`error: webhook_url is required.` from `opensre integrations setup slack`**
+
+The setup command was given an empty value. Re-run and paste the full URL including the `https://` prefix.
+
+**`invalid_payload` or `channel_not_found` from Slack**
+
+The webhook URL was created against a channel that has since been archived or renamed in a way that broke the binding. Create a new webhook in the Slack app settings and replace `SLACK_WEBHOOK_URL`.
+
+**Findings posted to the wrong channel**
+
+A webhook is bound to the channel it was created against. To change channels, create a new webhook in Slack pointed at the new channel and update `SLACK_WEBHOOK_URL`.
+
+**Webhook returns `no_service`**
+
+The Slack app or webhook was deleted. Re-create it and update the URL.

@@ -17,7 +17,7 @@ from app.integrations import __main__ as integrations_main
 
 @pytest.fixture(autouse=True)
 def _stub_telemetry(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(integrations_main, "init_sentry", lambda: None)
+    monkeypatch.setattr(integrations_main, "init_sentry", lambda **_kw: None)
     monkeypatch.setattr(integrations_main, "shutdown_analytics", lambda **_kw: None)
 
 
@@ -99,7 +99,7 @@ def test_verify_emits_cli_invoked_with_service_subcommand(monkeypatch) -> None:
 
 def test_main_initialises_sentry(monkeypatch) -> None:
     init_calls: list[int] = []
-    monkeypatch.setattr(integrations_main, "init_sentry", lambda: init_calls.append(1))
+    monkeypatch.setattr(integrations_main, "init_sentry", lambda **_kw: init_calls.append(1))
     _captures(monkeypatch)
     monkeypatch.setattr("sys.argv", ["python -m app.integrations", "--help"])
 
