@@ -4,7 +4,7 @@ import argparse
 import json
 import re
 from dataclasses import asdict, dataclass
-from typing import Any
+from typing import Any, Literal
 
 from app.pipeline.runners import run_investigation
 from tests.synthetic.mock_grafana_backend.backend import FixtureGrafanaBackend
@@ -66,14 +66,14 @@ class ScenarioScore:
     # One of: "TP" (real fault correctly identified), "FP" (healthy scenario
     # mis-classified as a fault), "TN" (healthy scenario correctly identified),
     # "FN" (real fault missed or mis-categorised). Set by score_result().
-    outcome_class: str | None = None
+    outcome_class: Literal["TP", "FP", "TN", "FN"] | None = None
 
 
 def classify_outcome(
     actual_category: str,
     expected_category: str,
     root_cause_present: bool,
-) -> str:
+) -> Literal["TP", "FP", "TN", "FN"]:
     """Classify a scored scenario into TP/FP/TN/FN.
 
     A scenario is HEALTHY when expected_category == "healthy" — the alert is
