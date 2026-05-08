@@ -1,9 +1,8 @@
 """Unified agent pipeline — wires nodes and edges into a LangGraph."""
 
 from collections.abc import Callable
-from typing import Any, Optional, cast
+from typing import Any, cast
 
-from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
@@ -40,9 +39,9 @@ NodeWithConfig = Callable[[AgentState, NodeConfig | None], dict[str, Any]]
 
 
 def _accept_langgraph_config(func: NodeWithConfig) -> Callable[..., dict[str, Any]]:
-    """Expose a RunnableConfig-typed config kwarg for LangGraph runtime injection."""
+    """Adapt a NodeConfig-typed node for LangGraph runtime injection."""
 
-    def _wrapped(state: AgentState, config: Optional[RunnableConfig] = None) -> dict[str, Any]:  # noqa: UP045
+    def _wrapped(state: AgentState, config: Any = None) -> dict[str, Any]:
         return func(state, cast(NodeConfig | None, config))
 
     _wrapped.__name__ = func.__name__
