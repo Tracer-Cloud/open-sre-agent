@@ -11,6 +11,8 @@ from dataclasses import dataclass
 
 import pytest
 
+pytestmark = pytest.mark.synthetic
+
 from tests.synthetic.rds_postgres.axis_memory.scoring import (
     MemoryMode,
     PairAnnotation,

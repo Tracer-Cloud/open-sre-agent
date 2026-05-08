@@ -101,10 +101,10 @@ def _run_baseline(scenario_id: str, fixtures_by_id: dict[str, Any], use_mock_gra
 
 
 def _run_with_memory(
-    base_scenario_id: str,
-    sibling_scenario_id: str,
-    fixtures_by_id: dict[str, Any],
-    use_mock_grafana: bool,
+    _base_scenario_id: str,
+    _sibling_scenario_id: str,
+    _fixtures_by_id: dict[str, Any],
+    _use_mock_grafana: bool,
 ) -> Any:
     """Run sibling with memory primed from base.
 
@@ -128,7 +128,17 @@ def run(argv: list[str] | None = None) -> list[PairAnnotation]:
     args = parse_args(argv)
     pairs = load_pairs(only_id=args.pair)
 
-    fixtures = load_all_scenarios(SUITE_DIR)
+    # Only load scenarios referenced by pairs to avoid blowing up on scenarios
+    # that don't ship an answer.yml (e.g. some healthy/noisy scenarios).
+    needed_ids: set[str] = set()
+    for pair in pairs:
+        needed_ids.add(pair["base"])
+        needed_ids.add(pair["sibling"])
+    fixtures = [
+        fixture
+        for fixture in load_all_scenarios(SUITE_DIR)
+        if fixture.scenario_id in needed_ids
+    ]
     fixtures_by_id = {fixture.scenario_id: fixture for fixture in fixtures}
 
     annotations: list[PairAnnotation] = []
@@ -209,4 +219,6 @@ def _passed_str(passed: bool | None) -> str:
 
 
 if __name__ == "__main__":
-    sys.exit(0 if run() is not None else 1)
+    results = run()
+    hurt = sum(1 for a in results if a.memory_mode is MemoryMode.MEMORY_HURT)
+    sys.exit(1 if hurt else 0)
