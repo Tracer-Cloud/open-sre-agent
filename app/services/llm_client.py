@@ -20,7 +20,9 @@ if TYPE_CHECKING:
 
 import boto3
 from anthropic import Anthropic, AnthropicBedrock, AuthenticationError, NotFoundError
+from anthropic import BadRequestError as AnthropicBadRequestError
 from openai import AuthenticationError as OpenAIAuthError
+from openai import BadRequestError as OpenAIBadRequestError
 from openai import NotFoundError as OpenAINotFoundError
 from openai import OpenAI
 from openai import RateLimitError as OpenAIRateLimitError
@@ -173,6 +175,8 @@ class LLMClient:
                     f"Anthropic model '{self._model}' was not found. "
                     "Check your configured model name and try again."
                 ) from err
+            except AnthropicBadRequestError as err:
+                raise RuntimeError(f"Anthropic request rejected (HTTP 400): {err.message}") from err
             except GuardrailBlockedError:
                 raise
             except Exception as err:
@@ -219,6 +223,8 @@ class LLMClient:
                     f"Anthropic model '{self._model}' was not found. "
                     "Check your configured model name and try again."
                 ) from err
+            except AnthropicBadRequestError as err:
+                raise RuntimeError(f"Anthropic request rejected (HTTP 400): {err.message}") from err
             except GuardrailBlockedError:
                 raise
             except Exception as err:
@@ -573,6 +579,10 @@ class OpenAILLMClient:
                     f"{self._provider_label} model '{self._model}' was not found. "
                     "Check your configured model name or endpoint."
                 ) from err
+            except OpenAIBadRequestError as err:
+                raise RuntimeError(
+                    f"{self._provider_label} request rejected (HTTP 400): {err.message}"
+                ) from err
             except GuardrailBlockedError:
                 raise
             except OpenAIRateLimitError as err:
@@ -639,6 +649,10 @@ class OpenAILLMClient:
                 raise RuntimeError(
                     f"{self._provider_label} model '{self._model}' was not found. "
                     "Check your configured model name or endpoint."
+                ) from err
+            except OpenAIBadRequestError as err:
+                raise RuntimeError(
+                    f"{self._provider_label} request rejected (HTTP 400): {err.message}"
                 ) from err
             except GuardrailBlockedError:
                 raise
