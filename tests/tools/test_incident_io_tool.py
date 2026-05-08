@@ -32,9 +32,15 @@ def test_incident_io_tool_extract_params(tool):
     params = tool.extract_params(sources)
     assert params["api_key"] == "test-key"
     assert params["region"] == "eu"
+    assert params["base_url"] == ""
     assert params["status"] == "triage"
     assert params["incident_id"] == "inc-456"
     assert params["description"] == ""
+
+    # Test with custom base_url
+    sources["incident_io"]["base_url"] = "https://custom.api.incident.io"
+    params = tool.extract_params(sources)
+    assert params["base_url"] == "https://custom.api.incident.io"
 
 
 def test_incident_io_tool_run_list(tool, monkeypatch):
@@ -53,7 +59,7 @@ def test_incident_io_tool_run_list(tool, monkeypatch):
 
     result = tool.run(api_key="test-key", region="us", action="list", status="live")
 
-    mock_make_client.assert_called_once_with("test-key", "us")
+    mock_make_client.assert_called_once_with("test-key", "us", base_url="")
     mock_client.list_incidents.assert_called_once_with(status="live", page_size=None, after=None)
     assert result["success"] is True
     assert result["action"] == "list"

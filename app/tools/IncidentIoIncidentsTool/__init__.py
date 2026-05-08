@@ -34,6 +34,15 @@ class IncidentIoIncidentsTool(BaseTool):
                 "default": "list",
                 "description": "Action to perform: list, add_timeline, or get",
             },
+            "region": {
+                "type": "string",
+                "default": "us",
+                "description": "Incident.io region (us or eu)",
+            },
+            "base_url": {
+                "type": "string",
+                "description": "Override for the Incident.io API base URL",
+            },
             "status": {
                 "type": "string",
                 "default": "live",
@@ -76,6 +85,7 @@ class IncidentIoIncidentsTool(BaseTool):
         return {
             "api_key": integration.get("api_key", ""),
             "region": integration.get("region", "us"),
+            "base_url": integration.get("base_url", ""),
             "action": integration.get("action", "list"),
             "status": integration.get("status", "live"),
             "incident_id": integration.get("incident_id", ""),
@@ -87,6 +97,7 @@ class IncidentIoIncidentsTool(BaseTool):
         self,
         api_key: str,
         region: str = "us",
+        base_url: str = "",
         action: str = "list",
         status: str = "live",
         incident_id: str = "",
@@ -96,7 +107,7 @@ class IncidentIoIncidentsTool(BaseTool):
         after: str | None = None,
         **_kwargs: Any,
     ) -> dict[str, Any]:
-        client = make_incident_io_client(api_key, region)
+        client = make_incident_io_client(api_key, region, base_url=base_url)
         if client is None:
             return {
                 "source": "incident_io",
