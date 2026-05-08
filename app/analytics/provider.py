@@ -798,6 +798,12 @@ class Analytics:
         }
         try:
             client.post(f"{POSTHOG_HOST}/capture/", json=payload).raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            _log_failure("posthog_send", exc, event=item.event)
+            # 4xx errors (e.g. 403 Forbidden) are operational/config issues on
+            # the PostHog side; only report 5xx server errors to Sentry.
+            if exc.response.status_code >= 500:
+                _capture_sentry_failure(exc)
         except Exception as exc:
             _log_failure("posthog_send", exc, event=item.event)
             _capture_sentry_failure(exc)
