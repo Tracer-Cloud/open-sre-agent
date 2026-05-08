@@ -336,6 +336,27 @@ class ArgoCDIntegrationConfig(StrictConfigModel):
         return bool(self.base_url and (self.bearer_token or (self.username and self.password)))
 
 
+class HelmIntegrationConfig(StrictConfigModel):
+    """Normalized Helm CLI settings for read-only Kubernetes release inspection."""
+
+    helm_path: str = "helm"
+    kube_context: str = ""
+    kubeconfig: str = ""
+    default_namespace: str = ""
+    integration_id: str = ""
+
+    _normalize_helm_path = field_validator("helm_path", mode="before")(
+        normalize_with_default("helm")
+    )
+    _normalize_strs = field_validator(
+        "kube_context", "kubeconfig", "default_namespace", "integration_id", mode="before"
+    )(normalize_str())
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(str(self.helm_path or "").strip())
+
+
 class GitLabIntegrationConfig(StrictConfigModel):
     """Normalized GitLab credentials used by resolution and verification flows."""
 

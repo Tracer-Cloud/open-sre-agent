@@ -45,6 +45,8 @@ EvidenceSource = Literal[
     "splunk",
     "airflow",
     "argocd",
+    "helm",
     "victoria_logs",
     "rds",
+    "ec2",
 ]

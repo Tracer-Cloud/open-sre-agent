@@ -9,6 +9,7 @@ from rich.console import Console
 
 from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
 from app.cli.interactive_shell.session import ReplSession
+from app.cli.interactive_shell.theme import DIM, ERROR
 
 _UPDATE_SUBPROCESS_TIMEOUT_SECONDS = 300
 
@@ -35,13 +36,13 @@ def run_cli_command(
     try:
         result = subprocess.run(cmd, check=False, timeout=subprocess_timeout)
         if result.returncode != 0:
-            console.print(f"[red]CLI command exited with non-zero code {result.returncode}[/red]")
+            console.print(f"[{ERROR}]CLI command exited with non-zero code {result.returncode}[/]")
     except subprocess.TimeoutExpired:
-        console.print("[red]error:[/red] CLI command timed out")
+        console.print(f"[{ERROR}]error:[/] CLI command timed out")
     except KeyboardInterrupt:
-        console.print("[dim]CLI command cancelled (Ctrl+C).[/dim]")
+        console.print(f"[{DIM}]CLI command cancelled (Ctrl+C).[/]")
     except Exception as exc:
-        console.print(f"[red]error running CLI command:[/red] {exc}")
+        console.print(f"[{ERROR}]error running CLI command:[/] {exc}")
     console.print()
     return True
 

@@ -318,9 +318,9 @@ class TestMarkdownReparseThrottle:
         real_markdown = streaming_module.Markdown
 
         class _SpyMarkdown(real_markdown):  # type: ignore[misc, valid-type]
-            def __init__(self, text: str) -> None:
+            def __init__(self, text: str, **kwargs) -> None:
                 parse_count[0] += 1
-                super().__init__(text)
+                super().__init__(text, **kwargs)
 
         monkeypatch.setattr(streaming_module.time, "monotonic", lambda: fake_time[0])
         monkeypatch.setattr(streaming_module, "Markdown", _SpyMarkdown)

@@ -33,7 +33,7 @@ from app.cli.interactive_shell.shell_policy import (
     parse_shell_command,
 )
 from app.cli.interactive_shell.tasks import TaskKind, TaskRecord
-from app.cli.interactive_shell.theme import TERMINAL_ERROR
+from app.cli.interactive_shell.theme import DIM, ERROR, HIGHLIGHT, WARNING
 from app.cli.support.errors import OpenSREError
 from app.cli.support.exception_reporting import report_exception
 
@@ -176,7 +176,7 @@ def run_shell_command(
 
     use_shell = parsed.passthrough
     if use_shell:
-        console.print("[dim]explicit shell passthrough enabled[/dim]")
+        console.print(f"[{DIM}]explicit shell passthrough enabled[/]")
 
     exec_argv = argv if argv is not None else parsed.argv
 
@@ -190,14 +190,16 @@ def run_shell_command(
         )
     except Exception as exc:
         report_exception(exc, context="interactive_shell.shell_command.start")
-        console.print(f"[red]command failed to start:[/red] {escape(str(exc))}")
+        console.print(f"[{ERROR}]command failed to start:[/] {escape(str(exc))}")
         session.record("shell", command, ok=False)
         return
 
     print_command_output(console, result.stdout)
-    print_command_output(console, result.stderr, style="red")
+    print_command_output(console, result.stderr, style=ERROR)
     if result.timed_out:
-        console.print(f"[red]command timed out after {SHELL_COMMAND_TIMEOUT_SECONDS} seconds[/red]")
+        console.print(
+            f"[{ERROR}]command timed out after {SHELL_COMMAND_TIMEOUT_SECONDS} seconds[/]"
+        )
         session.record("shell", command, ok=False)
         return
     ok = result.exit_code == 0
@@ -205,10 +207,10 @@ def run_shell_command(
     had_stderr = bool((result.stderr or "").strip())
     if ok:
         if not had_stdout and not had_stderr:
-            console.print("[dim]✓[/dim]")
+            console.print(f"[{HIGHLIGHT}]✓[/]")
     else:
         code = result.exit_code if result.exit_code is not None else "?"
-        console.print(f"[{TERMINAL_ERROR}]✗[/] exit {code}")
+        console.print(f"[{ERROR}]✗[/] exit {code}")
     session.record("shell", command, ok=ok)
 
 
@@ -223,12 +225,12 @@ def run_cd_command(command: str, session: ReplSession, console: Console) -> None
         if _intent_parser.IS_WINDOWS and len(tokens) > 1:
             tokens = [tokens[0], *(_strip_outer_quotes(token) for token in tokens[1:])]
     except ValueError as exc:
-        console.print(f"[red]cd failed:[/red] {escape(str(exc))}")
+        console.print(f"[{ERROR}]cd failed:[/] {escape(str(exc))}")
         session.record("shell", command, ok=False)
         return
 
     if len(tokens) > 2:
-        console.print("[red]cd failed:[/red] too many arguments")
+        console.print(f"[{ERROR}]cd failed:[/] too many arguments")
         session.record("shell", command, ok=False)
         return
 
@@ -236,7 +238,7 @@ def run_cd_command(command: str, session: ReplSession, console: Console) -> None
     try:
         os.chdir(target)
     except Exception as exc:
-        console.print(f"[red]cd failed:[/red] {escape(str(exc))}")
+        console.print(f"[{ERROR}]cd failed:[/] {escape(str(exc))}")
         session.record("shell", command, ok=False)
         return
 
@@ -248,12 +250,12 @@ def run_pwd_command(command: str, session: ReplSession, console: Console) -> Non
     try:
         tokens = shlex.split(command, posix=not _intent_parser.IS_WINDOWS)
     except ValueError as exc:
-        console.print(f"[red]pwd failed:[/red] {escape(str(exc))}")
+        console.print(f"[{ERROR}]pwd failed:[/] {escape(str(exc))}")
         session.record("shell", command, ok=False)
         return
 
     if len(tokens) != 1:
-        console.print("[red]pwd failed:[/red] too many arguments")
+        console.print(f"[{ERROR}]pwd failed:[/] too many arguments")
         session.record("shell", command, ok=False)
         return
 
@@ -289,7 +291,7 @@ def run_opensre_cli_command(args: str, session: ReplSession, console: Console) -
 
     first_token = tokens[0].lower()
     if first_token in _OPENSRE_BLOCKED_SUBCOMMANDS:
-        console.print(f"[red]Cannot run `opensre {first_token}`: subcommand is blocked.[/red]")
+        console.print(f"[{ERROR}]Cannot run `opensre {first_token}`: subcommand is blocked.[/]")
         return False
 
     command_classification = (
@@ -350,7 +352,7 @@ def run_opensre_cli_command(args: str, session: ReplSession, console: Console) -
         stdout_buf.close()
         stderr_buf.close()
         task.mark_failed(str(exc))
-        console.print(f"[red]failed to start:[/red] {escape(str(exc))}")
+        console.print(f"[{ERROR}]failed to start:[/] {escape(str(exc))}")
         return True
 
     task.attach_process(proc)
@@ -397,21 +399,21 @@ def run_opensre_cli_command(args: str, session: ReplSession, console: Console) -
                 diag = read_diag(stderr_buf)
                 error_msg = f"exit code {code}" + (f": {diag}" if diag else "")
                 task.mark_failed(error_msg)
-                console.print(f"[red]command failed (exit {code}):[/red]")
+                console.print(f"[{ERROR}]command failed (exit {code}):[/]")
                 if stdout_lines:
                     print_command_output(console, stdout_lines)
                 if diag:
-                    console.print(f"[dim]{escape(diag)}[/dim]")
+                    console.print(f"[{DIM}]{escape(diag)}[/]")
         except Exception as exc:  # noqa: BLE001
             task.mark_failed(str(exc))
-            console.print(f"[red]error:[/red] {escape(str(exc))}")
+            console.print(f"[{ERROR}]error:[/] {escape(str(exc))}")
         finally:
             stdout_buf.close()
             stderr_buf.close()
 
     thread = threading.Thread(target=_watch, daemon=True)
     thread.start()
-    console.print("[dim]started.[/dim]")
+    console.print(f"[{DIM}]started.[/]")
     return True
 
 
@@ -450,20 +452,20 @@ def run_sample_alert(
         )
     except KeyboardInterrupt:
         task.mark_cancelled()
-        console.print("[yellow]investigation cancelled.[/yellow]")
+        console.print(f"[{WARNING}]investigation cancelled.[/]")
         session.record("alert", f"sample:{template_name}", ok=False)
         return
     except OpenSREError as exc:
         task.mark_failed(str(exc))
-        console.print(f"[red]investigation failed:[/red] {escape(str(exc))}")
+        console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
         if exc.suggestion:
-            console.print(f"[yellow]suggestion:[/yellow] {escape(exc.suggestion)}")
+            console.print(f"[{WARNING}]suggestion:[/] {escape(exc.suggestion)}")
         session.record("alert", f"sample:{template_name}", ok=False)
         return
     except Exception as exc:
         task.mark_failed(str(exc))
         report_exception(exc, context="interactive_shell.sample_alert")
-        console.print(f"[red]investigation failed:[/red] {escape(str(exc))}")
+        console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
         session.record("alert", f"sample:{template_name}", ok=False)
         return
 
@@ -484,7 +486,7 @@ def run_synthetic_test(
     action_already_listed: bool = False,
 ) -> None:
     if suite_name != "rds_postgres":
-        console.print(f"[red]unknown synthetic suite:[/red] {escape(suite_name)}")
+        console.print(f"[{ERROR}]unknown synthetic suite:[/] {escape(suite_name)}")
         session.record("synthetic_test", suite_name, ok=False)
         return
 
@@ -520,16 +522,16 @@ def run_synthetic_test(
         stderr_buf.close()
         task.mark_failed(str(exc))
         report_exception(exc, context="interactive_shell.synthetic_test.start")
-        console.print(f"[red]synthetic test failed to start:[/red] {escape(str(exc))}")
+        console.print(f"[{ERROR}]synthetic test failed to start:[/] {escape(str(exc))}")
         session.record("synthetic_test", suite_name, ok=False)
         return
 
     task.attach_process(proc)
     watch_synthetic_subprocess(task, proc, session, suite_name, stderr_buf)
     console.print(
-        f"[dim]synthetic test started — task[/dim] [bold]{escape(task.task_id)}[/bold]. "
-        f"[dim]/tasks[/dim] [dim]to monitor,[/dim] [bold]/cancel {escape(task.task_id)}[/bold] "
-        f"[dim]to stop.[/dim]"
+        f"[{DIM}]synthetic test started — task[/] [bold]{escape(task.task_id)}[/bold]. "
+        f"[{HIGHLIGHT}]/tasks[/] [{DIM}]to monitor,[/] "
+        f"[{HIGHLIGHT}]/cancel {escape(task.task_id)}[/] [{DIM}]to stop.[/]"
     )
 
 

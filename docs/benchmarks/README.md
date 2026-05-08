@@ -53,8 +53,8 @@ After each benchmark run, the content between these markers is replaced with
 the latest summary table. The replacement is idempotent — running benchmarks
 multiple times replaces the previous results rather than appending duplicates.
 
-This follows the same pattern used by the contributors workflow
-(`.github/workflows/contributors.yml`).
+This follows the same marker-delimited replacement pattern used in other
+`README.md` sections (for example the contributors block).
 
 A GitHub Actions workflow (`.github/workflows/benchmark-readme.yml`) also
 runs automatically when `docs/benchmarks/results.md` changes on `main`,

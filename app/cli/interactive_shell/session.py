@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from prompt_toolkit.history import History
 
 from app.cli.interactive_shell.tasks import TaskRegistry
+
+InterventionKind = Literal["ctrl_c", "correction"]
 
 
 @dataclass
@@ -36,6 +38,9 @@ class ReplSession:
 
     last_state: dict[str, Any] | None = None
     """The final AgentState from the most recent investigation, used by follow-ups."""
+
+    last_route_decision: Any | None = None
+    """Most recent structured routing decision for observability/debugging."""
 
     accumulated_context: dict[str, Any] = field(default_factory=dict)
     """Reusable infra context — service names, clusters, regions — learned from
@@ -67,6 +72,16 @@ class ReplSession:
     terminal_fallback_count: int = 0
     terminal_actions_executed_count: int = 0
     terminal_actions_success_count: int = 0
+
+    ctrl_c_intervention_count: int = 0
+    """Incremented when the user Ctrl-Cs an active investigation. Bare-prompt
+    Ctrl-C with no agent running is intentionally not counted."""
+
+    correction_intervention_count: int = 0
+    """Incremented when a follow-up or new-alert message starts with a
+    correction cue (see ``_looks_like_correction`` in ``loop.py``).
+    Slash and CLI-agent turns are not counted because content like
+    ``actually run ps aux`` is a command, not a correction."""
 
     # Keys from a completed AgentState that carry reusable infra context into
     # the next investigation.  Kept as a class-level tuple so any caller that
@@ -111,6 +126,7 @@ class ReplSession:
         self.history_generation += 1
         self.history.clear()
         self.last_state = None
+        self.last_route_decision = None
         self.accumulated_context.clear()
         self.token_usage.clear()
         self.cli_agent_messages.clear()
@@ -120,7 +136,19 @@ class ReplSession:
         self.terminal_fallback_count = 0
         self.terminal_actions_executed_count = 0
         self.terminal_actions_success_count = 0
+
+        self.ctrl_c_intervention_count = 0
+        self.correction_intervention_count = 0
         # trust_mode is intentionally preserved across /reset
+
+    def record_intervention(self, kind: InterventionKind) -> None:
+        """Increment the per-kind intervention counter (Ctrl-C or correction)."""
+        if kind == "ctrl_c":
+            self.ctrl_c_intervention_count += 1
+        elif kind == "correction":
+            self.correction_intervention_count += 1
+        else:
+            raise ValueError(f"Unknown intervention kind: {kind!r}")
 
     def record_terminal_turn(
         self,

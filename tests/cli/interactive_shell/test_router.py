@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
-from app.cli.interactive_shell.router import classify_input
+from pathlib import Path
+
+import yaml
+
+from app.cli.interactive_shell.router import RouteKind, classify_input, route_input
 from app.cli.interactive_shell.session import ReplSession
+
+FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
 class TestClassifyInput:
@@ -200,6 +206,71 @@ class TestClassifyInput:
         catches legitimate docs questions (#1166)."""
         session = ReplSession()
         assert classify_input("in the docs, where is the OAuth flow?", session) == "cli_help"
+
+    def test_route_input_returns_structured_decision(self) -> None:
+        session = ReplSession()
+
+        decision = route_input("/help", session)
+
+        assert decision.route_kind == RouteKind.SLASH
+        assert decision.confidence == 1.0
+        assert decision.matched_signals == ("slash_prefix",)
+        assert decision.fallback_reason is None
+
+    def test_route_input_preserves_legacy_classification(self) -> None:
+        session = ReplSession()
+
+        cases = [
+            "/help",
+            "help",
+            "how do I run an investigation?",
+            "run a sample alert",
+            "api latency spiked and 5xx errors increased",
+            "hello",
+        ]
+
+        for text in cases:
+            assert route_input(text, session).route_kind.value == classify_input(text, session)
+
+    def test_route_input_emits_fallback_reason_for_low_signal_input(self) -> None:
+        session = ReplSession()
+
+        decision = route_input("hello", session)
+
+        assert decision.route_kind == RouteKind.CLI_AGENT
+        assert decision.confidence == 0.45
+        assert decision.matched_signals == ()
+        assert decision.fallback_reason == "no_prior_investigation_and_no_incident_signal"
+
+    def test_cli_action_plan_routes_to_cli_agent_before_investigation(self) -> None:
+        session = ReplSession()
+
+        decision = route_input("show me connected services", session)
+
+        assert decision.route_kind == RouteKind.CLI_AGENT
+        assert decision.matched_signals == ("cli_agent_action_plan",)
+
+    def test_yaml_routing_regression_cases(self) -> None:
+        fixture_path = FIXTURES_DIR / "routing_cases.yml"
+        payload = yaml.safe_load(fixture_path.read_text(encoding="utf-8"))
+
+        session = ReplSession()
+
+        for case in payload:
+            decision = route_input(case["input"], session)
+
+            assert decision.route_kind.value == case["expected"]
+
+    def test_route_input_matched_signals_are_internal_rule_names(self) -> None:
+        session = ReplSession()
+
+        decision = route_input(
+            "api latency spiked and 5xx errors increased",
+            session,
+        )
+
+        assert decision.matched_signals == ("investigation_request",)
+        assert "api latency" not in decision.matched_signals
 
 
 class TestEdgeCaseRegressionFixtures:

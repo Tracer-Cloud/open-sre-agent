@@ -816,7 +816,10 @@ def _get_cli_provider_registration(provider: str) -> CLIProviderRegistration | N
 
 
 def _create_llm_client(model_type: str) -> _LLMClientType:
-    settings = LLMSettings.from_env()
+    try:
+        settings = LLMSettings.from_env()
+    except ValidationError as exc:
+        raise RuntimeError(str(exc)) from exc
     provider = settings.provider
     if provider == "openai":
         config = OPENAI_LLM_CONFIG

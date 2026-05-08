@@ -39,7 +39,7 @@ from app.cli.interactive_shell.execution_policy import (
     resolve_slash_execution_tier,
 )
 from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import TERMINAL_ERROR
+from app.cli.interactive_shell.theme import ERROR
 
 _MERGED_SEQUENCE = tuple(
     chain(
@@ -109,9 +109,7 @@ def dispatch_slash(
     if cmd is None:
         session.record("slash", stripped, ok=False)
         console.print()
-        console.print(
-            f"[{TERMINAL_ERROR}]unknown command:[/] {escape(name)}  (type [bold]/help[/bold])"
-        )
+        console.print(f"[{ERROR}]unknown command:[/] {escape(name)}  (type [bold]/help[/bold])")
         return True
     if policy_precleared:
         session.record("slash", stripped, ok=True)

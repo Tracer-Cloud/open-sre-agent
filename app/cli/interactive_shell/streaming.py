@@ -12,11 +12,11 @@ from rich.markdown import Markdown
 from rich.spinner import Spinner
 from rich.text import Text
 
-from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
+from app.cli.interactive_shell.theme import BOLD_BRAND, DIM, HIGHLIGHT, MARKDOWN_THEME
 from app.cli.support.prompt_support import CTRL_C_DOUBLE_PRESS_WINDOW_S
 
 _SPINNER_NAME = "dots12"
-_SPINNER_COLOR = "orange1"
+_SPINNER_COLOR = HIGHLIGHT
 _SPINNER_LABEL = "thinking"
 _LIVE_REFRESH_PER_SECOND = 10
 # Cap how often we re-parse the accumulated buffer as Markdown. Without this,
@@ -55,8 +55,9 @@ def stream_to_console(
             return text
         if text:
             console.print()
-            console.print(f"[{TERMINAL_ACCENT_BOLD}]{label}:[/]")
-            console.print(Markdown(text))
+            console.print(f"[{BOLD_BRAND}]{label}:[/]")
+            with console.use_theme(MARKDOWN_THEME):
+                console.print(Markdown(text, code_theme="ansi_dark"))
             console.print()
         return text
 
@@ -74,7 +75,7 @@ def stream_to_console(
             first_interrupt_at = None
             raise KeyboardInterrupt
         first_interrupt_at = now
-        console.print(f"[dim]{_STREAM_CANCEL_HINT}[/dim]")
+        console.print(f"[{DIM}]{_STREAM_CANCEL_HINT}[/]")
 
     def _next_chunk(it: Iterator[str]) -> str | None:
         while True:
@@ -112,11 +113,12 @@ def stream_to_console(
     )
 
     console.print()
-    console.print(f"[{TERMINAL_ACCENT_BOLD}]{label}:[/]")
+    console.print(f"[{BOLD_BRAND}]{label}:[/]")
 
     started = time.monotonic()
     try:
         with (
+            console.use_theme(MARKDOWN_THEME),
             patch_stdout(raw=True),
             Live(
                 spinner,
@@ -129,7 +131,7 @@ def stream_to_console(
             last_render = 0.0
             try:
                 if buffer:
-                    live.update(Markdown("".join(buffer)))
+                    live.update(Markdown("".join(buffer), code_theme="ansi_dark"))
                     last_render = time.monotonic()
                 while True:
                     chunk = _next_chunk(chunks_iter)
@@ -143,18 +145,18 @@ def stream_to_console(
                     # the current refresh window. The final flush below
                     # guarantees the buffer's final state still lands.
                     if now - last_render >= _LIVE_RENDER_INTERVAL_S:
-                        live.update(Markdown("".join(buffer)))
+                        live.update(Markdown("".join(buffer), code_theme="ansi_dark"))
                         last_render = now
             finally:
                 # Always flush latest state before Live exits — covers
                 # both "chunks arrived in the last throttle window" and
                 # "exception interrupted the loop with chunks pending".
                 if buffer:
-                    live.update(Markdown("".join(buffer)))
+                    live.update(Markdown("".join(buffer), code_theme="ansi_dark"))
                 else:
                     live.update(Text(""))
         if buffer:
-            console.print(f"[dim]· {time.monotonic() - started:.1f}s[/dim]")
+            console.print(f"[{DIM}]· {time.monotonic() - started:.1f}s[/]")
     finally:
         console.print()
 

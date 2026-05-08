@@ -7,7 +7,7 @@ from rich.console import Console
 from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
 from app.cli.interactive_shell.rendering import repl_table
 from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import ACCENT_DIM, TERMINAL_ACCENT_BOLD, TEXT_DIM
+from app.cli.interactive_shell.theme import BOLD_BRAND, DIM, HIGHLIGHT
 
 
 def _cmd_help(_session: ReplSession, console: Console, _args: list[str]) -> bool:
@@ -35,15 +35,15 @@ def _cmd_help(_session: ReplSession, console: Console, _args: list[str]) -> bool
         ("System", list(SYS_CMDS)),
     ]
 
-    table = repl_table(title="Slash commands", title_style=TERMINAL_ACCENT_BOLD, show_header=False)
+    table = repl_table(title="Slash commands", title_style=BOLD_BRAND, show_header=False)
     table.add_column("name", no_wrap=True, min_width=18)
-    table.add_column("description", style=TEXT_DIM)
+    table.add_column("description", style=DIM)
 
     for section_name, cmds in sections:
-        table.add_row(f"[{TERMINAL_ACCENT_BOLD}]{section_name}[/]", "")
+        table.add_row(f"[{BOLD_BRAND}]{section_name}[/]", "")
         for i, cmd in enumerate(cmds):
             table.add_row(
-                f"  [{ACCENT_DIM}]{cmd.name}[/]",
+                f"  [{HIGHLIGHT}]{cmd.name}[/]",
                 cmd.help_text,
                 end_section=(i == len(cmds) - 1),
             )

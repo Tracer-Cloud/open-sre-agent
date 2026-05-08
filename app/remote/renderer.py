@@ -20,20 +20,30 @@ from rich.markdown import Markdown
 from rich.spinner import Spinner
 from rich.text import Text
 
+from app.cli.interactive_shell.theme import (
+    ANSI_BOLD,
+    ANSI_DIM,
+    ANSI_RESET,
+    BOLD_BRAND_ANSI,
+    BRAND,
+    HIGHLIGHT_ANSI,
+    TEXT_ANSI,
+)
 from app.output import (
     ProgressTracker,
     get_output_format,
     render_investigation_header,
+    stop_display,
 )
 from app.remote.reasoning import reasoning_text
 from app.remote.stream import StreamEvent
 
-_RESET = "\033[0m"
-_DIM = "\033[2m"
-_BOLD = "\033[1m"
-_WHITE = "\033[37m"
-_GREEN = "\033[32m"
-_CYAN = "\033[1;36m"
+_RESET = ANSI_RESET
+_DIM = ANSI_DIM
+_BOLD = ANSI_BOLD
+_WHITE = TEXT_ANSI
+_GREEN = HIGHLIGHT_ANSI
+_CYAN = BOLD_BRAND_ANSI
 
 _NODE_START_KINDS = frozenset(
     {
@@ -115,6 +125,13 @@ class _DiagnoseStreamRenderer:
             sys.stdout.write(f"  … {_DIAGNOSE_NODE}\n")
             sys.stdout.flush()
             return
+
+        # Stop any active ProgressTracker Live display before opening our own
+        # Live region. Two competing Rich Live regions cause visible flicker;
+        # keeping only one Live at a time eliminates it. The next graph node
+        # (publish_findings) already stops the display unconditionally, so
+        # this just moves the stop point one node earlier.
+        stop_display()
 
         if self._console is None:
             self._console = Console(highlight=False)
@@ -324,9 +341,6 @@ class StreamRenderer:
             if kind == _TOKEN_STREAM_KIND and self._active_node == canonical:
                 self._diagnose.append_chunk(event)
                 return
-            # Other diagnose-related callbacks (tool starts, sub-chain
-            # events, etc.) intentionally don't fall through to the
-            # spinner-subtext path — diagnose owns its own Rich.Live region.
             return
 
         if kind in _NODE_START_KINDS and self._is_graph_node_event(event):
@@ -385,9 +399,8 @@ class StreamRenderer:
     def _finish_active_node(self) -> None:
         if self._active_node is None:
             return
-        # Diagnose is streamed via Rich.Live, not the spinner tracker — route
-        # cleanup through the streaming finish so the Live region is always
-        # closed even on mid-stream exceptions.
+        # Diagnose owns its own Rich.Live region — route cleanup through
+        # _end_diagnose so the Live closes even on mid-stream exceptions.
         if self._active_node == _DIAGNOSE_NODE:
             self._end_diagnose()
             return
@@ -511,10 +524,13 @@ def _print_section(title: str, content: str) -> None:
         from rich.padding import Padding
         from rich.rule import Rule
 
+        from app.cli.interactive_shell.theme import MARKDOWN_THEME
+
         console = Console(highlight=False)
         console.print()
-        console.print(Rule(f"[bold white] {title} [/]", style="#2D4A2D", align="left"))
-        console.print(Padding(Markdown(content.strip()), (1, 2)))
+        console.print(Rule(f"[bold] {title} [/]", style=BRAND, align="left"))
+        with console.use_theme(MARKDOWN_THEME):
+            console.print(Padding(Markdown(content.strip(), code_theme="ansi_dark"), (1, 2)))
     else:
         print(f"\n  {title}")
         for line in content.strip().splitlines():

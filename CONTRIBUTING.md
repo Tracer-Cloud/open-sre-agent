@@ -107,6 +107,25 @@ Notes:
 - New features should have corresponding tests
 - Aim for >80% code coverage (run `make test-cov` to check)
 
+#### Tests under `tests/synthetic/` need an explicit `pytest.mark.synthetic` marker
+
+The synthetic test tree has its own Make target (`make test-synthetic`) and is excluded from `make test-cov`. The two targets use marker filters:
+
+- `make test-cov` runs `pytest --ignore=tests/synthetic -m "not synthetic"`, so the whole `tests/synthetic/` tree is excluded.
+- `make test-synthetic` runs `pytest -m synthetic`, so a file without `pytest.mark.synthetic` is collected but skipped.
+
+If you add a new test file under `tests/synthetic/`, declare the marker at module level so the file runs under `make test-synthetic`:
+
+```python
+import pytest
+
+pytestmark = pytest.mark.synthetic
+```
+
+Without this marker the new file silently runs in **zero** standard CI configurations. The pattern is already in `tests/synthetic/rds_postgres/test_suite.py`; new files in the same tree should follow it.
+
+See [#1671](https://github.com/Tracer-Cloud/opensre/issues/1671) for the meta-issue tracking this discoverability gap.
+
 ### 4. Run Local Checks (Required Before PR)
 
 ```bash

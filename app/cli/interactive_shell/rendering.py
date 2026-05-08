@@ -13,11 +13,10 @@ from rich.text import Text
 from app.cli.interactive_shell.banner import resolve_provider_models
 from app.cli.interactive_shell.interaction_models import PlannedAction
 from app.cli.interactive_shell.theme import (
+    BOLD_BRAND,
+    DIM,
     ERROR,
-    PRIMARY,
-    TERMINAL_ACCENT_BOLD,
-    TERMINAL_ERROR,
-    TEXT_DIM,
+    HIGHLIGHT,
     WARNING,
 )
 
@@ -34,31 +33,33 @@ def repl_table(**kwargs: Any) -> Table:
 
 
 def status_style(status: str) -> str:
+    # Semantic rule: a missing/unconfigured integration is the default
+    # state (DIM), while a previously-configured integration that is now
+    # broken is a WARNING. Hard failures escalate to ERROR.
     return {
-        "ok": PRIMARY,
-        "configured": PRIMARY,
-        "missing": WARNING,
-        "failed": ERROR,
-    }.get(status, TEXT_DIM)
+        "ok": HIGHLIGHT,
+        "configured": HIGHLIGHT,
+        "missing": DIM,
+        "failed": WARNING,
+        "error": ERROR,
+    }.get(status, DIM)
 
 
 # MCP-type services are rendered separately under `/list mcp` so the default
 # `/list integrations` view stays focused on alert-source / data integrations.
-_MCP_SERVICES = frozenset({"github", "openclaw"})
+MCP_INTEGRATION_SERVICES = frozenset({"github", "openclaw"})
 
 
 def render_integrations_table(console: Console, results: list[dict[str, str]]) -> None:
-    rows = [r for r in results if r.get("service") not in _MCP_SERVICES]
+    rows = [r for r in results if r.get("service") not in MCP_INTEGRATION_SERVICES]
     if not rows:
-        console.print(
-            f"[{TEXT_DIM}]no integrations configured.  try `opensre onboard` to add one.[/]"
-        )
+        console.print(f"[{DIM}]no integrations configured.  try `opensre onboard` to add one.[/]")
         return
-    table = repl_table(title="Integrations", title_style=TERMINAL_ACCENT_BOLD)
+    table = repl_table(title="Integrations", title_style=BOLD_BRAND)
     table.add_column("service", style="bold")
-    table.add_column("source", style=TEXT_DIM)
+    table.add_column("source", style=DIM)
     table.add_column("status")
-    table.add_column("detail", style=TEXT_DIM, overflow="fold")
+    table.add_column("detail", style=DIM, overflow="fold")
     for row in rows:
         st = row.get("status", "unknown")
         table.add_row(
@@ -71,15 +72,15 @@ def render_integrations_table(console: Console, results: list[dict[str, str]]) -
 
 
 def render_mcp_table(console: Console, results: list[dict[str, str]]) -> None:
-    rows = [r for r in results if r.get("service") in _MCP_SERVICES]
+    rows = [r for r in results if r.get("service") in MCP_INTEGRATION_SERVICES]
     if not rows:
-        console.print(f"[{TEXT_DIM}]no MCP servers configured.[/]")
+        console.print(f"[{DIM}]no MCP servers configured.[/]")
         return
-    table = repl_table(title="MCP servers", title_style=TERMINAL_ACCENT_BOLD)
+    table = repl_table(title="MCP servers", title_style=BOLD_BRAND)
     table.add_column("server", style="bold")
-    table.add_column("source", style=TEXT_DIM)
+    table.add_column("source", style=DIM)
     table.add_column("status")
-    table.add_column("detail", style=TEXT_DIM, overflow="fold")
+    table.add_column("detail", style=DIM, overflow="fold")
     for row in rows:
         st = row.get("status", "unknown")
         table.add_row(
@@ -93,11 +94,11 @@ def render_mcp_table(console: Console, results: list[dict[str, str]]) -> None:
 
 def render_models_table(console: Console, settings: Any) -> None:
     if settings is None:
-        console.print(f"[{TERMINAL_ERROR}]LLM settings unavailable[/] — check provider env vars.")
+        console.print(f"[{ERROR}]LLM settings unavailable[/] — check provider env vars.")
         return
     provider = str(getattr(settings, "provider", "unknown"))
     reasoning_model, toolcall_model = resolve_provider_models(settings, provider)
-    table = repl_table(title="LLM connection", title_style=TERMINAL_ACCENT_BOLD, show_header=False)
+    table = repl_table(title="LLM connection", title_style=BOLD_BRAND, show_header=False)
     table.add_column("key", style="bold")
     table.add_column("value")
     table.add_row("provider", provider)
@@ -114,7 +115,7 @@ def print_command_output(console: Console, output: str, *, style: str | None = N
 
 
 def print_planned_actions(console: Console, actions: list[PlannedAction]) -> None:
-    console.print(f"[{TEXT_DIM}]Requested actions:[/]")
+    console.print(f"[{DIM}]Requested actions:[/]")
     for index, action in enumerate(actions, start=1):
         label = {
             "llm_provider": "LLM provider",
@@ -124,12 +125,11 @@ def print_planned_actions(console: Console, actions: list[PlannedAction]) -> Non
             "synthetic_test": "synthetic test",
             "cli_command": "opensre",
         }[action.kind]
-        console.print(
-            f"[{TEXT_DIM}]{index}.[/] [{TERMINAL_ACCENT_BOLD}]{label}[/] {escape(action.content)}"
-        )
+        console.print(f"[{DIM}]{index}.[/] [{BOLD_BRAND}]{label}[/] {escape(action.content)}")
 
 
 __all__ = [
+    "MCP_INTEGRATION_SERVICES",
     "print_command_output",
     "print_planned_actions",
     "repl_table",

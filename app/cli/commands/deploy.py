@@ -12,6 +12,7 @@ from app.analytics.cli import (
     capture_deploy_failed,
     capture_deploy_started,
 )
+from app.cli.interactive_shell.theme import BRAND, DIM, ERROR, HIGHLIGHT, WARNING
 from app.cli.support.context import is_json_output, is_yes
 from app.cli.support.errors import OpenSREError
 from app.deployment.methods.langsmith import (
@@ -30,11 +31,11 @@ from app.deployment.operations.health import poll_deployment_health
 def _deploy_style(questionary: Any) -> Any:
     return questionary.Style(
         [
-            ("qmark", "fg:cyan bold"),
+            ("qmark", f"fg:{BRAND} bold"),
             ("question", "bold"),
-            ("answer", "fg:cyan bold"),
-            ("pointer", "fg:cyan bold"),
-            ("highlighted", "fg:cyan bold"),
+            ("answer", f"fg:{BRAND} bold"),
+            ("pointer", f"fg:{BRAND} bold"),
+            ("highlighted", f"fg:{BRAND} bold"),
         ]
     )
 
@@ -100,10 +101,10 @@ def _run_deploy_interactive(ctx: click.Context) -> None:
     if status.get("ip"):
         status_line = f"EC2 running at [bold]{status['ip']}:{status['port']}[/bold]"
     else:
-        status_line = "[dim]no active deployment[/dim]"
+        status_line = f"[{DIM}]no active deployment[/]"
 
     console.print()
-    console.print(f"  [bold cyan]Deploy[/bold cyan]  {status_line}")
+    console.print(f"  [bold {BRAND}]Deploy[/]  {status_line}")
     console.print()
 
     choices: list[Any] = []
@@ -155,7 +156,7 @@ def _run_deploy_interactive(ctx: click.Context) -> None:
             default=True,
             style=style,
         ).ask():
-            console.print("  [dim]Cancelled.[/dim]")
+            console.print(f"  [{DIM}]Cancelled.[/]")
             return
 
         ctx.invoke(deploy_ec2, down=False, branch=branch)
@@ -169,7 +170,7 @@ def _run_deploy_interactive(ctx: click.Context) -> None:
         # 2. LangGraph CLI check
         ok, msg = is_langgraph_cli_installed()
         if not ok:
-            console.print(f"[red]{msg}[/red]")
+            console.print(f"[{ERROR}]{msg}[/]")
             return
 
         # 3. API key resolve
@@ -182,7 +183,7 @@ def _run_deploy_interactive(ctx: click.Context) -> None:
         # 4. Validate API key
         valid, msg = validate_langsmith_api_key(api_key)
         if not valid:
-            console.print(f"[red]{msg}[/red]")
+            console.print(f"[{ERROR}]{msg}[/]")
             return
 
         # 5. Deployment name
@@ -193,7 +194,7 @@ def _run_deploy_interactive(ctx: click.Context) -> None:
             default=True,
             style=style,
         ).ask():
-            console.print("  [dim]Cancelled.[/dim]")
+            console.print(f"  [{DIM}]Cancelled.[/]")
             return
 
         # 6. Persist to .env
@@ -202,7 +203,7 @@ def _run_deploy_interactive(ctx: click.Context) -> None:
         capture_deploy_started(target="langsmith", dry_run=False)
 
         # 7. Deploy
-        console.print("[cyan]Deploying to LangSmith...[/cyan]")
+        console.print(f"[{BRAND}]Deploying to LangSmith...[/]")
         code, output = run_langsmith_deploy(
             api_key=api_key,
             deployment_name=deployment_name,
@@ -216,12 +217,12 @@ def _run_deploy_interactive(ctx: click.Context) -> None:
             capture_deploy_completed(target="langsmith", dry_run=False)
             url = extract_deployment_url(output)
             if url:
-                console.print(f"[green]Deployment URL:[/green] {url}")
+                console.print(f"[{HIGHLIGHT}]Deployment URL:[/] {url}")
             else:
-                console.print("[yellow]Deployment succeeded but no URL found[/yellow]")
+                console.print(f"[{WARNING}]Deployment succeeded but no URL found[/]")
         else:
             capture_deploy_failed(target="langsmith", dry_run=False)
-            console.print("[red]Deployment failed[/red]")
+            console.print(f"[{ERROR}]Deployment failed[/]")
 
         return
 
@@ -231,7 +232,7 @@ def _run_deploy_interactive(ctx: click.Context) -> None:
             default=False,
             style=style,
         ).ask():
-            console.print("  [dim]Cancelled.[/dim]")
+            console.print(f"  [{DIM}]Cancelled.[/]")
             return
         ctx.invoke(deploy_ec2, down=True, branch="main")  # branch unused when down=True
         return
@@ -246,7 +247,7 @@ def _run_deploy_interactive(ctx: click.Context) -> None:
             default=False,
             style=style,
         ).ask():
-            console.print("  [dim]Cancelled.[/dim]")
+            console.print(f"  [{DIM}]Cancelled.[/]")
             return
 
         _redeploy_ec2(ctx, branch=branch, console=console)
@@ -266,13 +267,13 @@ def _check_deploy_health(status: dict[str, str], console: Any) -> None:
             request_timeout_seconds=5.0,
         )
         console.print(
-            f"  [green]Healthy[/green]  endpoint={health.url} "
+            f"  [{HIGHLIGHT}]Healthy[/]  endpoint={health.url} "
             f"attempts={health.attempts} elapsed={health.elapsed_seconds:.1f}s"
         )
     except TimeoutError:
-        console.print(f"  [red]Timeout[/red]  could not reach {ip}:{port}")
+        console.print(f"  [{ERROR}]Timeout[/]  could not reach {ip}:{port}")
     except Exception as exc:
-        console.print(f"  [red]Unhealthy[/red]  {exc}")
+        console.print(f"  [{ERROR}]Unhealthy[/]  {exc}")
 
 
 def _ec2_deploy_not_bundled_error() -> OpenSREError:

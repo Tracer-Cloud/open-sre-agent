@@ -740,6 +740,22 @@ def test_create_llm_client_gemini_cli_reads_optional_model_env(monkeypatch) -> N
         llm_client.reset_llm_singletons()
 
 
+# _create_llm_client — missing API key raises RuntimeError (not ValidationError)
+# ---------------------------------------------------------------------------
+
+
+def test_create_llm_client_missing_api_key_raises_runtime_error(monkeypatch) -> None:
+    """Sentry #1678: missing API key must surface as RuntimeError, not pydantic.ValidationError."""
+    monkeypatch.setenv("LLM_PROVIDER", "anthropic")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    llm_client.reset_llm_singletons()
+    try:
+        with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
+            llm_client._create_llm_client("reasoning")
+    finally:
+        llm_client.reset_llm_singletons()
+
+
 # ---------------------------------------------------------------------------
 # LLMClient.invoke / invoke_stream — NotFoundError handling
 # ---------------------------------------------------------------------------

@@ -114,6 +114,7 @@
               "github",
               "gitlab",
               "google-docs",
+              "helm",
               "jira",
               "vercel"
             ]

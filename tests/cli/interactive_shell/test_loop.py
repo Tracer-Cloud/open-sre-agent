@@ -27,6 +27,7 @@ from app.cli.interactive_shell.prompt_surface import (
     _build_prompt_style,
     _tab_expand_or_menu,
 )
+from app.cli.interactive_shell.router import RouteDecision, RouteKind
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.theme import ANSI_RESET, PROMPT_ACCENT_ANSI
 
@@ -227,17 +228,19 @@ def test_completion_includes_tab_navigation() -> None:
 
 
 def test_completion_menu_current_item_uses_highlight_style() -> None:
+    from app.cli.interactive_shell.theme import BG, HIGHLIGHT
+
     style = _build_prompt_style()
     attrs = style.get_attrs_for_style_str("class:repl-slash-command")
 
-    assert attrs.color == "5EF0E8"  # ACCENT_SOFT
-    assert attrs.bgcolor == "2c1e14"
+    assert attrs.color == HIGHLIGHT.lstrip("#")
+    assert attrs.bgcolor == BG.lstrip("#")
     assert attrs.bold is True
 
     attrs_menu = style.get_attrs_for_style_str("class:completion-menu.completion.current")
 
-    assert attrs_menu.color == "1AFF8C"  # PRIMARY
-    assert attrs_menu.bgcolor == "2c1e14"
+    assert attrs_menu.color == HIGHLIGHT.lstrip("#")
+    assert attrs_menu.bgcolor == BG.lstrip("#")
     assert attrs_menu.reverse is False
     assert attrs_menu.bold is True
 
@@ -382,7 +385,11 @@ def test_run_one_turn_renders_submitted_prompt_before_handler(
         async def prompt_async(self, _prompt: object) -> str:
             return "explain deploy"
 
-    monkeypatch.setattr(loop, "classify_input", lambda *_args: "cli_help")
+    monkeypatch.setattr(
+        loop,
+        "route_input",
+        lambda *_args: RouteDecision(RouteKind.CLI_HELP, 0.9, ("test",)),
+    )
     monkeypatch.setattr(loop, "answer_cli_help", lambda *_args, **_kwargs: None)
 
     buf = io.StringIO()
@@ -394,3 +401,52 @@ def test_run_one_turn_renders_submitted_prompt_before_handler(
     assert should_continue is True
     assert "❯" in output
     assert "explain deploy" in output
+
+
+class TestLooksLikeCorrection:
+    """Unit tests for the ``_looks_like_correction`` heuristic.
+
+    Pins the v1 catches, false-positive guards, and limitations so future
+    iteration on ``_INTERVENTION_CORRECTION_RE`` has a regression baseline.
+    """
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "no, do that instead",
+            "nope",
+            "nvm",
+            "never mind",
+            "actually, let's check Datadog first",
+            "scratch that, run the synthetic test",
+            "wait, wrong dashboard",
+            "let's do an EKS health check instead",
+            "try a token refresh instead",
+            "wrong dashboard, fix it",
+            "instead, log a warning",
+            "Wait!",  # case-insensitive
+            "NO.",
+        ],
+    )
+    def test_correction_cues_match(self, text: str) -> None:
+        assert loop._looks_like_correction(text) is True
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            # Punctuation-lookahead guards reject content uses of cue words.
+            "stop the server before redeploying",
+            "instead of returning null, log a warning",
+            "no problem, I'll handle it",
+            "wait for the result",
+            # v1 limitation: cue must be at start of message.
+            "hmm, scratch that",
+            "doesn't work, try X instead",
+            # Edge cases.
+            "",
+            "   ",
+            "```\nstop the server\n```",
+        ],
+    )
+    def test_non_correction_text_does_not_match(self, text: str) -> None:
+        assert loop._looks_like_correction(text) is False

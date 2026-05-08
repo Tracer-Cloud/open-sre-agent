@@ -460,7 +460,7 @@ class TestStreamRendererDiagnoseStreaming:
         renderer.render_stream(_investigation_events())
 
         out, _ = capfd.readouterr()
-        # Updates mode never populates _diagnose_buffer, so the section prints.
+        # Updates mode never populates the diagnose buffer, so the section prints.
         assert "Root Cause" in out
         assert "Schema mismatch" in out
 
@@ -585,8 +585,8 @@ class TestStreamRendererDiagnoseStreaming:
             assert "LLM quota exhausted" in str(exc)
 
         # _finish_active_node runs in the finally block and routes diagnose
-        # through _finish_diagnose_streaming, which closes the Live region
-        # and clears _active_node.
+        # through _end_diagnose, which closes the Live region and clears
+        # _active_node.
         assert renderer._diagnose._live is None
         assert renderer._active_node is None
 
@@ -666,7 +666,7 @@ class TestStreamRendererDiagnoseThrottle:
         fake_time, parse_count = self._install_clock_and_spy(monkeypatch)
         # Force rich mode so the Live region opens and the throttle gates
         # actual ``live.update`` calls. In text mode (pytest default — stdout
-        # isn't a tty) ``_diagnose_live`` stays None and the throttle never
+        # isn't a tty) ``_diagnose._live`` stays None and the throttle never
         # fires, which is the wrong path to test here.
         renderer = StreamRenderer()
 
@@ -676,7 +676,7 @@ class TestStreamRendererDiagnoseThrottle:
         renderer._handle_event(self._make_diagnose_end())
 
         # Clock never advanced past 0.0 — every per-chunk render was gated.
-        # Only the unconditional final flush in _finish_diagnose_streaming
+        # Only the unconditional final flush in _DiagnoseStreamRenderer.finish
         # fires, producing exactly one Markdown parse.
         assert parse_count[0] == 1, (
             f"expected 1 parse (final flush only), got {parse_count[0]}; "

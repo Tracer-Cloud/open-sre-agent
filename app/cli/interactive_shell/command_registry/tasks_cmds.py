@@ -13,11 +13,10 @@ from app.cli.interactive_shell.rendering import repl_table
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.tasks import TaskKind, TaskRecord, TaskStatus
 from app.cli.interactive_shell.theme import (
+    BOLD_BRAND,
+    DIM,
     ERROR,
-    PRIMARY,
-    TERMINAL_ACCENT_BOLD,
-    TERMINAL_ERROR,
-    TEXT_DIM,
+    HIGHLIGHT,
     WARNING,
 )
 
@@ -44,11 +43,11 @@ def _task_detail_label(task: TaskRecord) -> str:
 def _cmd_history(_session: ReplSession, console: Console, _args: list[str]) -> bool:
     entries = load_command_history_entries()
     if not entries:
-        console.print(f"[{TEXT_DIM}]no history yet.[/]")
+        console.print(f"[{DIM}]no history yet.[/]")
         return True
 
-    table = repl_table(title="Command history", title_style=TERMINAL_ACCENT_BOLD)
-    table.add_column("#", style=TEXT_DIM, justify="right")
+    table = repl_table(title="Command history", title_style=BOLD_BRAND)
+    table.add_column("#", style=DIM, justify="right")
     table.add_column("text", overflow="fold")
 
     for i, entry in enumerate(entries, start=1):
@@ -60,30 +59,30 @@ def _cmd_history(_session: ReplSession, console: Console, _args: list[str]) -> b
 def _cmd_tasks(session: ReplSession, console: Console, _args: list[str]) -> bool:
     tasks = session.task_registry.list_recent(n=50)
     if not tasks:
-        console.print(f"[{TEXT_DIM}]no tasks recorded this session.[/]")
+        console.print(f"[{DIM}]no tasks recorded this session.[/]")
         return True
 
-    table = repl_table(title="Tasks", title_style=TERMINAL_ACCENT_BOLD)
+    table = repl_table(title="Tasks", title_style=BOLD_BRAND)
     table.add_column("id", style="bold")
     table.add_column("kind")
     table.add_column("status")
-    table.add_column("started", style=TEXT_DIM)
-    table.add_column("duration", style=TEXT_DIM, justify="right")
-    table.add_column("detail", style=TEXT_DIM, overflow="fold")
+    table.add_column("started", style=DIM)
+    table.add_column("duration", style=DIM, justify="right")
+    table.add_column("detail", style=DIM, overflow="fold")
 
     status_style = {
         TaskStatus.RUNNING: WARNING,
-        TaskStatus.COMPLETED: PRIMARY,
+        TaskStatus.COMPLETED: HIGHLIGHT,
         TaskStatus.CANCELLED: WARNING,
         TaskStatus.FAILED: ERROR,
-        TaskStatus.PENDING: TEXT_DIM,
+        TaskStatus.PENDING: DIM,
     }
     for task in tasks:
-        st = status_style.get(task.status, TEXT_DIM)
+        st = status_style.get(task.status, DIM)
         table.add_row(
             task.task_id,
             task.kind.value,
-            f"[{st}]{task.status.value}[/{st}]",
+            f"[{st}]{task.status.value}[/]",
             _task_started_label(task),
             _task_duration_label(task),
             escape(_task_detail_label(task)),
@@ -94,9 +93,9 @@ def _cmd_tasks(session: ReplSession, console: Console, _args: list[str]) -> bool
 
 def _cmd_stop(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     console.print(
-        "[dim]in-flight work: press[/dim] [bold]Ctrl+C[/bold] "
-        "[dim]during a streaming investigation, or run[/dim] [bold]/tasks[/bold] "
-        "[dim]then[/dim] [bold]/cancel <id>[/bold] [dim]for background tasks.[/dim]"
+        f"[{DIM}]in-flight work: press[/] [bold]Ctrl+C[/bold] "
+        f"[{DIM}]during a streaming investigation, or run[/] [{HIGHLIGHT}]/tasks[/] "
+        f"[{DIM}]then[/] [{HIGHLIGHT}]/cancel <id>[/] [{DIM}]for background tasks.[/]"
     )
     return True
 
@@ -104,27 +103,26 @@ def _cmd_stop(session: ReplSession, console: Console, args: list[str]) -> bool: 
 def _cmd_cancel(session: ReplSession, console: Console, args: list[str]) -> bool:
     if not args:
         console.print(
-            f"[{TERMINAL_ERROR}]usage:[/] /cancel <task_id>  — use [bold]/tasks[/bold] to list ids"
+            f"[{ERROR}]usage:[/] /cancel <task_id>  — use [{HIGHLIGHT}]/tasks[/] to list ids"
         )
         return True
 
     needle = args[0]
     candidates = session.task_registry.candidates(needle)
     if not candidates:
-        console.print(f"[{TERMINAL_ERROR}]no task matches id:[/] {escape(needle)}")
+        console.print(f"[{ERROR}]no task matches id:[/] {escape(needle)}")
         return True
     if len(candidates) > 1:
         console.print(
-            f"[{TERMINAL_ERROR}]ambiguous id prefix:[/] {escape(needle)} "
-            f"[{TEXT_DIM}]({len(candidates)} matches — use a longer prefix)[/]"
+            f"[{ERROR}]ambiguous id prefix:[/] {escape(needle)} "
+            f"[{DIM}]({len(candidates)} matches — use a longer prefix)[/]"
         )
         return True
 
     task = candidates[0]
     if task.status != TaskStatus.RUNNING:
         console.print(
-            f"[{TEXT_DIM}]task {escape(task.task_id)} already finished "
-            f"(status: {task.status.value}).[/]"
+            f"[{DIM}]task {escape(task.task_id)} already finished (status: {task.status.value}).[/]"
         )
         return True
 
@@ -132,13 +130,13 @@ def _cmd_cancel(session: ReplSession, console: Console, args: list[str]) -> bool
     if task.kind == TaskKind.INVESTIGATION:
         console.print(
             f"[{WARNING}]cancellation signaled.[/] "
-            f"[{TEXT_DIM}]if the investigation is still streaming, press[/] [bold]Ctrl+C[/bold] "
-            f"[{TEXT_DIM}]to interrupt the current run.[/]"
+            f"[{DIM}]if the investigation is still streaming, press[/] [bold]Ctrl+C[/bold] "
+            f"[{DIM}]to interrupt the current run.[/]"
         )
     else:
         console.print(
-            f"[{PRIMARY}]stop requested[/] [{TEXT_DIM}]for synthetic test {escape(task.task_id)}.[/] "
-            f"[{TEXT_DIM}]use[/] [bold]/tasks[/bold] [{TEXT_DIM}]to confirm status.[/]"
+            f"[{HIGHLIGHT}]stop requested[/] [{DIM}]for synthetic test {escape(task.task_id)}.[/] "
+            f"[{DIM}]use[/] [{HIGHLIGHT}]/tasks[/] [{DIM}]to confirm status.[/]"
         )
     return True
 
