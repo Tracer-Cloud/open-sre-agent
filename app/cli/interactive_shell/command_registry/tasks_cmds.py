@@ -92,6 +92,15 @@ def _cmd_tasks(session: ReplSession, console: Console, _args: list[str]) -> bool
     return True
 
 
+def _cmd_stop(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+    console.print(
+        "[dim]in-flight work: press[/dim] [bold]Ctrl+C[/bold] "
+        "[dim]during a streaming investigation, or run[/dim] [bold]/tasks[/bold] "
+        "[dim]then[/dim] [bold]/cancel <id>[/bold] [dim]for background tasks.[/dim]"
+    )
+    return True
+
+
 def _cmd_cancel(session: ReplSession, console: Console, args: list[str]) -> bool:
     if not args:
         console.print(
@@ -142,6 +151,11 @@ COMMANDS: list[SlashCommand] = [
         "cancel a running task by id ('/cancel <task_id>' — see /tasks)",
         _cmd_cancel,
         execution_tier=ExecutionTier.ELEVATED,
+    ),
+    SlashCommand(
+        "/stop",
+        "hints for stopping in-flight investigations and background tasks",
+        _cmd_stop,
     ),
 ]
 

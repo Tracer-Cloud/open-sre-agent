@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 import boto3
 from anthropic import Anthropic, AnthropicBedrock, AuthenticationError, NotFoundError
 from openai import AuthenticationError as OpenAIAuthError
+from openai import NotFoundError as OpenAINotFoundError
 from openai import OpenAI
 from pydantic import BaseModel, ValidationError
 
@@ -83,6 +84,7 @@ class RootCauseResult:
     validated_claims: list[str]
     non_validated_claims: list[str]
     causal_chain: list[str]
+    remediation_steps: list[str]
 
 
 @dataclass(frozen=True)
@@ -541,6 +543,11 @@ class OpenAILLMClient:
                 raise RuntimeError(
                     f"{self._provider_label} authentication failed. Check {self._api_key_env} in your environment, .env, or secure local keychain."
                 ) from err
+            except OpenAINotFoundError as err:
+                raise RuntimeError(
+                    f"{self._provider_label} model '{self._model}' was not found. "
+                    "Check your configured model name or endpoint."
+                ) from err
             except GuardrailBlockedError:
                 raise
             except Exception as err:
@@ -591,6 +598,11 @@ class OpenAILLMClient:
             except OpenAIAuthError as err:
                 raise RuntimeError(
                     f"{self._provider_label} authentication failed. Check {self._api_key_env} in your environment, .env, or secure local keychain."
+                ) from err
+            except OpenAINotFoundError as err:
+                raise RuntimeError(
+                    f"{self._provider_label} model '{self._model}' was not found. "
+                    "Check your configured model name or endpoint."
                 ) from err
             except GuardrailBlockedError:
                 raise
@@ -928,6 +940,7 @@ def parse_root_cause(response: str) -> RootCauseResult:
     validated_claims: list[str] = []
     non_validated_claims: list[str] = []
     causal_chain: list[str] = []
+    remediation_steps: list[str] = []
 
     if "ROOT_CAUSE_CATEGORY:" in response:
         parts = response.split("ROOT_CAUSE_CATEGORY:", 1)
@@ -949,6 +962,7 @@ def parse_root_cause(response: str) -> RootCauseResult:
                 "VALIDATED_CLAIMS:",
                 "NON_VALIDATED_CLAIMS:",
                 "CAUSAL_CHAIN:",
+                "REMEDIATION_STEPS:",
             ):
                 if delimiter in after:
                     root_cause = after.split(delimiter, 1)[0].strip()
@@ -959,10 +973,14 @@ def parse_root_cause(response: str) -> RootCauseResult:
             # Extract validated claims
             if "VALIDATED_CLAIMS:" in after:
                 validated_section = after.split("VALIDATED_CLAIMS:", 1)[1]
-                if "NON_VALIDATED_CLAIMS:" in validated_section:
-                    validated_text = validated_section.split("NON_VALIDATED_CLAIMS:", 1)[0]
-                elif "CAUSAL_CHAIN:" in validated_section:
-                    validated_text = validated_section.split("CAUSAL_CHAIN:", 1)[0]
+                for delimiter in (
+                    "NON_VALIDATED_CLAIMS:",
+                    "CAUSAL_CHAIN:",
+                    "REMEDIATION_STEPS:",
+                ):
+                    if delimiter in validated_section:
+                        validated_text = validated_section.split(delimiter, 1)[0]
+                        break
                 else:
                     validated_text = validated_section
 
@@ -974,13 +992,18 @@ def parse_root_cause(response: str) -> RootCauseResult:
                         and not line.startswith("CAUSAL_CHAIN")
                         and not line.startswith("CONFIDENCE")
                         and not line.startswith("ROOT_CAUSE")
+                        and not line.startswith("REMEDIATION_STEPS")
                     ):
                         validated_claims.append(line)
 
             # Extract non-validated claims
             if "NON_VALIDATED_CLAIMS:" in after:
                 non_validated_section = after.split("NON_VALIDATED_CLAIMS:", 1)[1]
-                for delimiter in ("ALTERNATIVE_HYPOTHESES_CONSIDERED:", "CAUSAL_CHAIN:"):
+                for delimiter in (
+                    "ALTERNATIVE_HYPOTHESES_CONSIDERED:",
+                    "CAUSAL_CHAIN:",
+                    "REMEDIATION_STEPS:",
+                ):
                     if delimiter in non_validated_section:
                         non_validated_text = non_validated_section.split(delimiter, 1)[0]
                         break
@@ -993,12 +1016,15 @@ def parse_root_cause(response: str) -> RootCauseResult:
                         line
                         and not line.startswith("CAUSAL_CHAIN")
                         and not line.startswith("ALTERNATIVE")
+                        and not line.startswith("REMEDIATION_STEPS")
                     ):
                         non_validated_claims.append(line)
 
             # Extract causal chain
             if "CAUSAL_CHAIN:" in after:
                 causal_section = after.split("CAUSAL_CHAIN:", 1)[1]
+                if "REMEDIATION_STEPS:" in causal_section:
+                    causal_section = causal_section.split("REMEDIATION_STEPS:", 1)[0]
                 causal_text = causal_section
 
                 for line in causal_text.strip().split("\n"):
@@ -1006,10 +1032,31 @@ def parse_root_cause(response: str) -> RootCauseResult:
                     if line and not line.startswith("ALTERNATIVE"):
                         causal_chain.append(line)
 
+            if "REMEDIATION_STEPS:" in after:
+                rem_section = after.split("REMEDIATION_STEPS:", 1)[1]
+                for line in rem_section.strip().split("\n"):
+                    line = line.strip().lstrip("*-•( ").strip()
+                    if not line or line.startswith("("):
+                        continue
+                    if any(
+                        line.startswith(h)
+                        for h in (
+                            "ROOT_CAUSE",
+                            "VALIDATED",
+                            "NON_VALIDATED",
+                            "CAUSAL",
+                            "ALTERNATIVE",
+                            "REMEDIATION_STEPS",
+                        )
+                    ):
+                        break
+                    remediation_steps.append(line)
+
     return RootCauseResult(
         root_cause=root_cause,
         root_cause_category=root_cause_category,
         validated_claims=validated_claims,
         non_validated_claims=non_validated_claims,
         causal_chain=causal_chain,
+        remediation_steps=remediation_steps,
     )

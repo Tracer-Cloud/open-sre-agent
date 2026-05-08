@@ -15,6 +15,7 @@ def _cmd_help(_session: ReplSession, console: Console, _args: list[str]) -> bool
     from app.cli.interactive_shell.command_registry.integrations import COMMANDS as INT_CMDS
     from app.cli.interactive_shell.command_registry.investigation import COMMANDS as INV_CMDS
     from app.cli.interactive_shell.command_registry.model import COMMANDS as MODEL_CMDS
+    from app.cli.interactive_shell.command_registry.privacy_cmds import COMMANDS as PRIVACY_CMDS
     from app.cli.interactive_shell.command_registry.session_cmds import COMMANDS as SESSION_CMDS
     from app.cli.interactive_shell.command_registry.system import COMMANDS as SYS_CMDS
     from app.cli.interactive_shell.command_registry.tasks_cmds import COMMANDS as TASK_CMDS
@@ -24,6 +25,7 @@ def _cmd_help(_session: ReplSession, console: Console, _args: list[str]) -> bool
         ("Session", list(SESSION_CMDS)),
         ("Integrations & Models", list(INT_CMDS) + list(MODEL_CMDS)),
         ("Investigation", list(INV_CMDS)),
+        ("Privacy", list(PRIVACY_CMDS)),
         ("Tasks", list(TASK_CMDS)),
         ("Agents", list(AGENTS_CMDS)),
         ("System", list(SYS_CMDS)),

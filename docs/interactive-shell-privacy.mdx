@@ -1,0 +1,90 @@
+---
+title: 'Interactive Shell Privacy'
+description: 'How OpenSRE redacts secrets from your command history, and the controls you have over persistence'
+---
+
+## Overview
+
+The OpenSRE interactive shell persists every line you type to a history file so up-arrow recall and `/history` work across sessions. Incident prompts can include sensitive identifiers and tokens, so the shell:
+
+- redacts known token shapes before each entry is written to disk
+- supports disabling persistence entirely (memory-only mode)
+- caps how many entries are kept (oldest pruned)
+- offers a one-shot `/history clear` to wipe the file on demand
+
+The history file lives at `~/.config/opensre/interactive_history`.
+
+## Defaults
+
+| Setting | Default | Effect |
+| --- | --- | --- |
+| Persistence | **on** | Lines you type are appended to the history file. |
+| Redaction | **on** | Known token shapes are replaced with `[REDACTED:<kind>]` before writing. |
+| Retention cap | **5000 entries** | Older entries are pruned when the cap is exceeded. |
+
+## Redaction patterns
+
+The built-in pattern set targets token shapes that are unique enough to keep false positives on natural-language incident text very low. Each match is replaced with a labeled placeholder.
+
+| Kind | Examples |
+| --- | --- |
+| `aws_key` | `AKIA…`, `ASIA…` |
+| `aws_secret` | `aws_secret_access_key=…` |
+| `github_pat` | `ghp_…`, `github_pat_…` |
+| `anthropic_key` | `sk-ant-…` |
+| `openai_key` | `sk-…` |
+| `slack_token` | `xoxb-…`, `xoxp-…`, `xoxa-…` |
+| `stripe_key` | `sk_live_…`, `sk_test_…` |
+| `bearer` | `Bearer <opaque>` headers |
+| `jwt` | `eyJ…` three-segment tokens |
+| `password` | `--password=…`, `password=…` |
+| `private_key` | PEM-encoded private keys |
+
+Redaction applies only to **persistent history**. The line you typed is still passed to OpenSRE's normal pipeline as you typed it.
+
+## Slash commands
+
+| Command | Effect |
+| --- | --- |
+| `/history` | Show all persisted entries. |
+| `/history clear` | Wipe the history file. Up-arrow recall resets on next launch. |
+| `/history off` | Pause persistence for this session. New entries are not written. |
+| `/history on` | Resume persistence for this session. |
+| `/history retention <N>` | Keep at most N entries on disk. Prunes immediately. |
+| `/privacy` | Show current persistence + redaction state, retention cap, and threat model. |
+
+## Configuration
+
+Settings resolve from (highest wins):
+
+1. Environment variables
+2. The `interactive.history` block in `~/.config/opensre/config.yml`
+3. Built-in defaults
+
+### Environment variables
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `OPENSRE_HISTORY_ENABLED` | `1` | Set to `0`/`false`/`off` to skip persistence entirely (in-memory only). |
+| `OPENSRE_HISTORY_REDACT` | `1` | Set to `0`/`false`/`off` to disable redaction (raw `FileHistory`). |
+| `OPENSRE_HISTORY_MAX_ENTRIES` | `5000` | Non-negative integer. `0` disables the cap (unlimited). |
+
+### Config file
+
+```yaml
+interactive:
+  history:
+    enabled: true
+    redact: true
+    max_entries: 5000
+```
+
+## Threat model
+
+The history file is **plain text on local disk** at `~/.config/opensre/interactive_history`, with the user's default file permissions. Built-in redaction targets common token shapes only — it is not a substitute for proper secret handling. Treat the file as confidential and be aware:
+
+- A determined attacker with read access to your home directory can still read pre-existing entries written before redaction was enabled.
+- Redaction cannot detect tokens that look like normal text (for example a natural-language password). Don't paste secrets you wouldn't be comfortable seeing in a system log.
+- Custom redaction patterns are not yet supported in v1. If you need to redact internal token shapes, use `/history off` for that session and run `/history clear` afterwards.
+
+For the strongest posture: set `OPENSRE_HISTORY_ENABLED=0`, accept the loss of cross-session up-arrow recall, and rely on the in-memory ring instead.

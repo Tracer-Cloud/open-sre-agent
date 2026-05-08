@@ -105,6 +105,44 @@ class TestSystemPromptTerminology:
         assert "gemini-cli" in prompt
 
 
+class TestSystemPromptAgentsMdGrounding:
+    """The conversational shell wires AGENTS.md repo-map content (#1442).
+
+    The strict reference_only docs-aware path (``cli_help._build_grounded_prompt``)
+    intentionally does NOT include AGENTS.md so it stays grounded only on the
+    public docs and CLI reference.
+    """
+
+    def test_section_present_in_conversational_prompt_when_agents_md_provided(self) -> None:
+        prompt = _build_system_prompt(
+            reference="(ref)",
+            history="(hist)",
+            agents_md="repo map content",
+        )
+        assert "--- Repo map (AGENTS.md) ---" in prompt
+        assert "repo map content" in prompt
+
+    def test_section_omitted_when_agents_md_empty(self) -> None:
+        prompt = _build_system_prompt(reference="(ref)", history="(hist)", agents_md="")
+        assert "--- Repo map (AGENTS.md) ---" not in prompt
+
+    def test_section_omitted_by_default_for_callers_that_dont_pass_it(self) -> None:
+        prompt = _build_system_prompt(reference="(ref)", history="(hist)")
+        assert "--- Repo map (AGENTS.md) ---" not in prompt
+
+    def test_section_absent_in_reference_only_grounded_prompt(self) -> None:
+        from app.cli.interactive_shell.cli_help import _build_grounded_prompt
+
+        # The reference_only path stays strict — even if AGENTS.md grounding is
+        # available elsewhere in the shell, this prompt must not include it.
+        prompt = _build_grounded_prompt(
+            question="how do I configure datadog?",
+            cli_reference="(ref)",
+            docs_reference="(docs)",
+        )
+        assert "--- Repo map (AGENTS.md) ---" not in prompt
+
+
 class TestActionPlanParsing:
     def test_parses_prose_wrapped_json(self) -> None:
         actions = _parse_action_plan(

@@ -11,6 +11,7 @@ from rich.markup import escape
 from rich.spinner import Spinner
 
 from app.cli.interactive_shell.action_executor import (
+    run_opensre_cli_command,
     run_sample_alert,
     run_shell_command,
     run_synthetic_test,
@@ -153,6 +154,8 @@ def execute_cli_actions(
                 is_tty=is_tty,
                 action_already_listed=True,
             )
+        elif action.kind == "cli_command":
+            run_opensre_cli_command(action.content, session, console)
         elif action.kind == "sample_alert":
             run_sample_alert(
                 action.content,

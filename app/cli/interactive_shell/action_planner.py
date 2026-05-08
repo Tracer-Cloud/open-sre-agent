@@ -11,6 +11,7 @@ from app.cli.interactive_shell.intent_parser import (
     INTEGRATION_DETAIL_RE,
     SAMPLE_ALERT_RE,
     SYNTHETIC_RDS_TEST_RE,
+    cli_command_action,
     extract_llm_provider_switch,
     extract_shell_command,
     sample_alert_action,
@@ -33,6 +34,17 @@ def plan_clause_actions(
     for pattern, command in ACTION_PATTERNS:
         match = pattern.search(clause.text)
         if match is None or command in seen_slash:
+            continue
+        if command == "cli_command":
+            groups = match.groupdict()
+            subcmd = groups.get("subcmd") or groups.get("subcmd2")
+            if subcmd is None:
+                continue
+            rest = groups.get("rest") or groups.get("rest2") or ""
+            args = f"{subcmd} {rest}".strip() if rest else subcmd
+            if subcmd not in seen_slash:
+                planned.append(cli_command_action(args, clause.position + match.start()))
+                seen_slash.add(subcmd)
             continue
         if command == "/list integrations" and mentioned_services:
             continue
@@ -115,8 +127,12 @@ def plan_actions(message: str) -> list[PlannedAction]:
 
 
 def plan_cli_actions(message: str) -> list[str]:
-    """Return safe read-only slash commands requested by a natural-language turn."""
-    return [action.content for action in plan_actions(message) if action.kind == "slash"]
+    """Return safe read-only slash commands and CLI commands requested by a natural-language turn."""
+    return [
+        action.content
+        for action in plan_actions(message)
+        if action.kind in ("slash", "cli_command")
+    ]
 
 
 def plan_terminal_tasks(message: str) -> list[str]:
