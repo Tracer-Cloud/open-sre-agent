@@ -116,24 +116,24 @@ jobs:
           # Sort by first commit date ascending (earliest contributor first)
           contributors.sort(key=lambda c: c["first_commit"])
 
-          # Build markdown avatar links (10 per line)
-          def avatar_with_size(url, size=48):
-              url = re.sub(r"[?&]s=\d+", "", url)
-              sep = "&" if "?" in url else "?"
-              return f"{url}{sep}s={size}"
-
-          cols = 10
+          # Build the table HTML (12 columns per row)
+          cols = 12
           rows = [contributors[i:i+cols] for i in range(0, len(contributors), cols)]
-          lines = []
+          lines = ["<table width=\"100%\" style=\"table-layout: fixed;\">", "\t<tbody>"]
           for row in rows:
-              links = []
+              lines.append("\t\t<tr>")
               for c in row:
-                  login = c["login"]
-                  avatar_url = avatar_with_size(c["avatar_url"], 48)
-                  profile_url = c["html_url"]
-                  links.append(f"[![{login}]({avatar_url})]({profile_url})")
-              lines.append(" ".join(links))
-          contributors_block = "\n".join(lines)
+                  lines.append(f"""            <td align="center" width="8%">
+                  <a href="{c['html_url']}">
+                      <img src="{c['avatar_url']}" width="45" alt="{c['login']}"/>
+                      <br />
+                      <sub><b>{c['login']}</b></sub>
+                  </a>
+              </td>""")
+              lines.append("\t\t</tr>")
+          lines.append("\t</tbody>")
+          lines.append("</table>")
+          table = "\n".join(lines)
 
           # Replace the section in README.md
           with open("README.md", "r") as f:
@@ -141,7 +141,7 @@ jobs:
 
           new_content = re.sub(
               r"<!-- readme: contributors -start -->.*?<!-- readme: contributors -end -->",
-              f"<!-- readme: contributors -start -->\n{contributors_block}\n<!-- readme: contributors -end -->",
+              f"<!-- readme: contributors -start -->\n{table}\n<!-- readme: contributors -end -->",
               content,
               flags=re.DOTALL
           )
