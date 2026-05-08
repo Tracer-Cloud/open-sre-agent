@@ -241,11 +241,15 @@ class HelmClient:
         if code != 0:
             return {"success": False, "error": (err or out).strip(), "values": {}}
         try:
-            parsed = json.loads(out or "{}")
+            raw = json.loads(out or "{}")
         except json.JSONDecodeError:
             return {"success": False, "error": "invalid JSON from helm get values", "values": {}}
-        if not isinstance(parsed, dict):
+        # `helm get values -o json` emits JSON null for releases with no user values.
+        if raw is None:
+            raw = {}
+        if not isinstance(raw, dict):
             return {"success": False, "error": "unexpected helm values shape", "values": {}}
+        parsed = raw
         return {
             "success": True,
             "error": "",
