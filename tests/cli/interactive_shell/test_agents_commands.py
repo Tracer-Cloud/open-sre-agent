@@ -128,6 +128,30 @@ class TestAgentsDispatch:
         assert dispatch_slash("/agents", session, list_console) is True
         assert "$5.00" in list_buf.getvalue()
 
+    def test_bare_agents_does_not_crash_on_schema_invalid_config(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, isolated_agents_yaml: Path
+    ) -> None:
+        # Hand-edited agents.yaml with a typo'd field used to crash bare
+        # /agents with a raw ValidationError traceback. The dashboard
+        # must degrade gracefully (render with $/hr = '-') so the user
+        # can still see their fleet while /agents budget surfaces the
+        # actual error message.
+        registry = _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
+        registry.register(AgentRecord(name="claude-code", pid=8421, command="claude"))
+        isolated_agents_yaml.parent.mkdir(parents=True, exist_ok=True)
+        isolated_agents_yaml.write_text(
+            "agents:\n  claude-code:\n    hourly_budegt_usd: 5.0\n",
+            encoding="utf-8",
+        )
+
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents", session, console) is True
+        out = buf.getvalue()
+        # Dashboard still renders the agent row.
+        assert "claude-code" in out
+        assert "8421" in out
+
 
 class TestAgentsBudget:
     def test_no_args_empty_state_when_no_config(self) -> None:

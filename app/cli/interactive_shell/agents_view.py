@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from pydantic import ValidationError
 from rich.console import JustifyMethod
 from rich.markup import escape
 from rich.table import Table
@@ -77,8 +78,15 @@ def render_agents_table(records: Iterable[AgentRecord]) -> Table:
         table.add_column(header, justify=justify)
     # Load once per render: agents.yaml is small and the dashboard is
     # invoked interactively, so a single read per ``/agents`` invocation
-    # is cheaper than caching with invalidation.
-    budgets = load_agents_config().agents
+    # is cheaper than caching with invalidation. A schema-invalid file
+    # falls back to empty budgets here (``$/hr`` cells render as ``-``)
+    # rather than crashing the dashboard with a raw traceback — the
+    # same hand-edit surfaces a friendly error in ``/agents budget``,
+    # which is the surface that exists to fix it.
+    try:
+        budgets = load_agents_config().agents
+    except ValidationError:
+        budgets = {}
     for record in materialized:
         budget = budgets.get(record.name)
         hourly_cell = (

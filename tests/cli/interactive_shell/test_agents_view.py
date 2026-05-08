@@ -9,12 +9,31 @@ this function.
 from __future__ import annotations
 
 import io
+from pathlib import Path
 
+import pytest
+from pydantic import ValidationError
 from rich.console import Console
 from rich.table import Table
 
+from app.agents import config as config_mod
 from app.agents.registry import AgentRecord
+from app.cli.interactive_shell import agents_view as agents_view_mod
 from app.cli.interactive_shell.agents_view import render_agents_table
+
+
+@pytest.fixture(autouse=True)
+def isolated_agents_yaml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    """Autouse: redirect ``agents_config_path`` to a per-test tmp file
+    so the rendering tests don't read the developer's real
+    ``~/.config/opensre/agents.yaml`` (which would let real budgets
+    leak into the placeholder assertions and create cross-machine
+    flakes).
+    """
+    target = tmp_path / "agents.yaml"
+    monkeypatch.setattr(config_mod, "agents_config_path", lambda: target)
+    return target
+
 
 # The columns this PR ships are the contract for #1490 and later
 # tickets that thread snapshot data into the rendering layer; pin
@@ -150,3 +169,35 @@ def test_record_name_is_rich_escaped_so_markup_does_not_render() -> None:
     _, out = _render(records)
     # Literal brackets survive in the rendered output:
     assert "[bold red]ghost[/]" in out
+
+
+# ---------------------------------------------------------------------------
+# Graceful degradation when agents.yaml has a schema violation
+# ---------------------------------------------------------------------------
+
+
+def test_schema_invalid_budget_config_does_not_crash_render(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A typo'd field key in ``agents.yaml`` raises
+    ``pydantic.ValidationError`` from ``load_agents_config()``. The
+    rendering function must catch it and fall back to empty budgets so
+    bare ``/agents`` still renders (with ``$/hr`` as ``-``) instead of
+    crashing the REPL with a raw traceback. The same hand-edit is
+    surfaced as a friendly error in ``/agents budget``, which is the
+    surface that exists to fix it.
+    """
+
+    def _raise(*_args: object, **_kwargs: object) -> None:
+        raise ValidationError.from_exception_data("AgentsConfig", [])
+
+    monkeypatch.setattr(agents_view_mod, "load_agents_config", _raise)
+
+    table, out = _render([AgentRecord(name="claude-code", pid=8421, command="claude")])
+    assert table.row_count == 1
+    assert "claude-code" in out
+    # $/hr cell falls back to the placeholder rather than the
+    # configured value, but the table still renders.
+    rendered_cells = [list(col.cells)[0] for col in table.columns]
+    # cells[5] is the $/hr column.
+    assert rendered_cells[5] == "-"
