@@ -798,6 +798,10 @@ class Analytics:
         }
         try:
             client.post(f"{POSTHOG_HOST}/capture/", json=payload).raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            _log_failure("posthog_send", exc, event=item.event)
+            if exc.response.status_code >= 500:
+                _capture_sentry_failure(exc)
         except Exception as exc:
             _log_failure("posthog_send", exc, event=item.event)
             _capture_sentry_failure(exc)
