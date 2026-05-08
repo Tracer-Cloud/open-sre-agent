@@ -341,8 +341,11 @@ def answer_cli_agent(
         console.print("[dim]· cancelled[/dim]")
         return
     except Exception as exc:
-        report_exception(exc, context="interactive_shell.cli_agent.stream",
-                         expected=isinstance(exc, CLITimeoutError))
+        report_exception(
+            exc,
+            context="interactive_shell.cli_agent.stream",
+            expected=isinstance(exc, CLITimeoutError),
+        )
         console.print(f"[red]assistant failed:[/red] {escape(str(exc))}")
         return
 
