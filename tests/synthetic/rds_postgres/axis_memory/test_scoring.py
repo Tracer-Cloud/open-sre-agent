@@ -11,14 +11,14 @@ from dataclasses import dataclass
 
 import pytest
 
-pytestmark = pytest.mark.synthetic
-
 from tests.synthetic.rds_postgres.axis_memory.scoring import (
     MemoryMode,
     PairAnnotation,
     annotate_pair,
     summarize_annotations,
 )
+
+pytestmark = pytest.mark.synthetic
 
 # ---------------------------------------------------------------------------
 # Test fixtures
