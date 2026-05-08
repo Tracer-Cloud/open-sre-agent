@@ -49,6 +49,60 @@ def test_helm_probe_passes_when_version_and_list_succeed(
     assert "Helm CLI" in result.detail
 
 
+def test_helm_probe_fails_when_list_stdout_is_not_valid_json(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("app.services.helm.client.shutil.which", lambda _name: "/usr/bin/helm")
+
+    def fake_run(cmd: list[str], **_kwargs: Any) -> SimpleNamespace:
+        if "version" in cmd:
+            return SimpleNamespace(returncode=0, stdout='{"version":"v3"}', stderr="")
+        if "list" in cmd:
+            return SimpleNamespace(returncode=0, stdout="WARNING: banner\nnot-json", stderr="")
+        return SimpleNamespace(returncode=1, stdout="", stderr="unexpected argv")
+
+    monkeypatch.setattr("app.services.helm.client.subprocess.run", fake_run)
+    result = _client().probe_access()
+    assert result.ok is False
+    assert "json" in result.detail.lower()
+
+
+def test_helm_probe_fails_when_list_stdout_is_not_a_json_array(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("app.services.helm.client.shutil.which", lambda _name: "/usr/bin/helm")
+
+    def fake_run(cmd: list[str], **_kwargs: Any) -> SimpleNamespace:
+        if "version" in cmd:
+            return SimpleNamespace(returncode=0, stdout='{"version":"v3"}', stderr="")
+        if "list" in cmd:
+            return SimpleNamespace(returncode=0, stdout='{"releases":[]}', stderr="")
+        return SimpleNamespace(returncode=1, stdout="", stderr="unexpected argv")
+
+    monkeypatch.setattr("app.services.helm.client.subprocess.run", fake_run)
+    result = _client().probe_access()
+    assert result.ok is False
+    assert "array" in result.detail.lower()
+
+
+def test_helm_probe_fails_when_list_stdout_is_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("app.services.helm.client.shutil.which", lambda _name: "/usr/bin/helm")
+
+    def fake_run(cmd: list[str], **_kwargs: Any) -> SimpleNamespace:
+        if "version" in cmd:
+            return SimpleNamespace(returncode=0, stdout='{"version":"v3"}', stderr="")
+        if "list" in cmd:
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        return SimpleNamespace(returncode=1, stdout="", stderr="unexpected argv")
+
+    monkeypatch.setattr("app.services.helm.client.subprocess.run", fake_run)
+    result = _client().probe_access()
+    assert result.ok is False
+    assert "empty" in result.detail.lower()
+
+
 def test_helm_list_parses_json_array(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("app.services.helm.client.shutil.which", lambda _name: "/bin/helm")
 

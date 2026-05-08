@@ -31,11 +31,12 @@ Rendered output legend (colour roles)
 from __future__ import annotations
 
 import getpass
+import math
 import os
 import sys
 
 from rich import box
-from rich.console import Console
+from rich.console import Console, Group, RenderableType
 from rich.panel import Panel
 from rich.rule import Rule
 from rich.table import Table
@@ -260,10 +261,16 @@ _TIPS: tuple[str, ...] = (
     "Use /investigate <file> for file alerts",
 )
 
-# Column geometry. Left carries identity + branding and is given more breathing
-# room; right is a compact, scannable side-bar that truncates with `…`.
-_LEFT_COL_WIDTH = 34
-_RIGHT_COL_WIDTH = 52
+# Panel geometry. The body switches to a stacked layout on narrow terminals,
+# and otherwise expands to fill the full console width while keeping the left
+# identity column readable and the right notes column roomy.
+_MIN_LEFT_COL_WIDTH = 34
+_MAX_LEFT_COL_WIDTH = 48
+_MIN_RIGHT_COL_WIDTH = 40
+_DIVIDER_WIDTH = 3
+_PANEL_PADDING_X = 2
+_PANEL_FRAME_WIDTH = 2 + (_PANEL_PADDING_X * 2)
+_MIN_TWO_COLUMN_CONTENT_WIDTH = _MIN_LEFT_COL_WIDTH + _DIVIDER_WIDTH + _MIN_RIGHT_COL_WIDTH
 
 # OpenSRE brand mark — single "O" from oh-my-logo tiny font (half-block chars).
 _LOGO_MARK_ROWS: tuple[tuple[str, str], ...] = (
@@ -329,9 +336,88 @@ def _build_notes_block(header_text: str, items: tuple[str, ...]) -> Text:
     return Text("\n").join(parts)
 
 
+def _visual_line_count(block: Text, width: int) -> int:
+    """Estimate how many terminal lines a Text block will occupy at ``width``."""
+    safe_width = max(width, 1)
+    total = 0
+    for raw_line in block.plain.split("\n"):
+        total += max(1, math.ceil(max(len(raw_line), 1) / safe_width))
+    return total
+
+
 def _vertical_divider(height: int) -> Text:
-    """Build a single-character vertical rule with ``height`` lines."""
-    return Text("\n".join("│" for _ in range(max(height, 1))), style=TEXT_DIM, no_wrap=True)
+    """Build a padded vertical rule with ``height`` lines."""
+    return Text("\n".join(" │ " for _ in range(max(height, 1))), style=TEXT_DIM, no_wrap=True)
+
+
+def _two_column_widths(console_width: int) -> tuple[int, int]:
+    """Return responsive left/right widths for the ready panel body."""
+    content_width = max(console_width - _PANEL_FRAME_WIDTH, _MIN_TWO_COLUMN_CONTENT_WIDTH)
+    left_width = int((content_width - _DIVIDER_WIDTH) * 0.42)
+    left_width = max(_MIN_LEFT_COL_WIDTH, min(left_width, _MAX_LEFT_COL_WIDTH))
+    right_width = content_width - _DIVIDER_WIDTH - left_width
+    if right_width < _MIN_RIGHT_COL_WIDTH:
+        right_width = _MIN_RIGHT_COL_WIDTH
+        left_width = content_width - _DIVIDER_WIDTH - right_width
+    return left_width, right_width
+
+
+def build_ready_panel(
+    console: Console | None = None,
+    *,
+    session: object = None,
+) -> Panel:
+    """Build the responsive welcome panel shared by startup and CLI help."""
+    console = console or Console(highlight=False, force_terminal=True, color_system="truecolor")
+    provider, model = detect_provider_model()
+    version = get_version()
+    trust_mode: bool = bool(getattr(session, "trust_mode", False))
+
+    panel_title = Text()
+    panel_title.append(" OpenSRE", style=f"bold {PRIMARY}")
+    panel_title.append(" · ", style=BORDER)
+    panel_title.append(f"v{version} ", style=ACCENT_SOFT)
+
+    left = _build_identity_block(provider, model, trust_mode=trust_mode)
+    right = Text("\n").join(
+        [
+            _build_notes_block("Tips for getting started", _TIPS),
+            Text("───", style=BORDER),
+            _build_notes_block("What's new", WHATS_NEW),
+        ]
+    )
+
+    panel_body: RenderableType
+    if console.width - _PANEL_FRAME_WIDTH >= _MIN_TWO_COLUMN_CONTENT_WIDTH:
+        left_width, right_width = _two_column_widths(console.width)
+        height = max(
+            _visual_line_count(left, left_width),
+            _visual_line_count(right, right_width),
+        )
+        divider = _vertical_divider(height)
+
+        grid = Table.grid(padding=0, expand=False)
+        grid.add_column(justify="left", vertical="top", width=left_width)
+        grid.add_column(justify="center", vertical="top", width=_DIVIDER_WIDTH)
+        grid.add_column(justify="left", vertical="top", width=right_width)
+        grid.add_row(left, divider, right)
+        panel_body = grid
+    else:
+        panel_body = Group(
+            left,
+            Rule(style=BORDER),
+            right,
+        )
+
+    return Panel(
+        panel_body,
+        title=panel_title,
+        title_align="left",
+        border_style=BORDER,
+        padding=(1, _PANEL_PADDING_X),
+        expand=True,
+        box=box.ROUNDED,
+    )
 
 
 def render_ready_box(
@@ -354,54 +440,8 @@ def render_ready_box(
     ╰─────────────────────────────────────────────────────────────────────────╯
     """
     console = console or Console(highlight=False, force_terminal=True, color_system="truecolor")
-    provider, model = detect_provider_model()
-    version = get_version()
-    trust_mode: bool = bool(getattr(session, "trust_mode", False))
-
-    # Step 1 — embedded title bar
-    panel_title = Text()
-    panel_title.append(" OpenSRE", style=f"bold {PRIMARY}")
-    panel_title.append(" · ", style=BORDER)
-    panel_title.append(f"v{version} ", style=ACCENT_SOFT)
-
-    # Step 2 — greeting + centred mascot + flowing identity (no version repeated)
-    left = _build_identity_block(provider, model, trust_mode=trust_mode)
-
-    right = Text("\n").join(
-        [
-            _build_notes_block("Tips for getting started", _TIPS),
-            Text("───", style=BORDER),
-            _build_notes_block("What's new", WHATS_NEW),
-        ]
-    )
-
-    height = max(left.plain.count("\n"), right.plain.count("\n")) + 1
-    divider = _vertical_divider(height)
-
-    grid = Table.grid(padding=(0, 2), expand=False)
-    grid.add_column(justify="left", vertical="top", width=_LEFT_COL_WIDTH)
-    grid.add_column(justify="center", vertical="top", width=1)
-    grid.add_column(
-        justify="left",
-        vertical="top",
-        width=_RIGHT_COL_WIDTH,
-        no_wrap=True,
-        overflow="ellipsis",
-    )
-    grid.add_row(left, divider, right)
-
     console.print()
-    console.print(
-        Panel(
-            grid,
-            title=panel_title,
-            title_align="left",
-            border_style=BORDER,
-            padding=(1, 2),
-            expand=False,
-            box=box.ROUNDED,
-        )
-    )
+    console.print(build_ready_panel(console, session=session))
     console.print()
 
 

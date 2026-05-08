@@ -95,6 +95,24 @@ class HelmClient:
             detail = (err or out or "cluster unreachable or kubeconfig missing").strip()
             return ProbeResult.failed(f"Helm cannot list releases: {detail}")
 
+        stdout = (out or "").strip()
+        if not stdout:
+            return ProbeResult.failed(
+                "Helm list returned empty output; expected a JSON array of releases."
+            )
+        try:
+            parsed = json.loads(stdout)
+        except json.JSONDecodeError as exc:
+            snippet = stdout[:200].replace("\n", " ")
+            return ProbeResult.failed(
+                f"Helm list output is not valid JSON ({exc}; stdout starts with {snippet!r})"
+            )
+        if not isinstance(parsed, list):
+            return ProbeResult.failed(
+                "Helm list -o json must return a JSON array of releases, "
+                f"not {type(parsed).__name__}."
+            )
+
         return ProbeResult.passed("Helm CLI is available and can reach the Kubernetes cluster.")
 
     def list_releases(

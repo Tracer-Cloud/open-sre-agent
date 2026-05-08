@@ -49,3 +49,13 @@ def test_helm_source_not_created_without_integration() -> None:
     alert = {"annotations": {"helm_release": "demo"}}
     sources = detect_sources(alert, {}, {})
     assert "helm" not in sources
+
+
+def test_helm_detection_handles_non_dict_raw_alert() -> None:
+    """Non-dict payloads must not raise when Helm is configured."""
+    sources = detect_sources(
+        "plain-string-alert-payload",
+        {},
+        {"helm": _HELM_INT},
+    )
+    assert "helm" not in sources

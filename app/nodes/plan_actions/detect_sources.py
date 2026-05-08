@@ -1275,17 +1275,17 @@ def detect_sources(
 
     helm_int = (resolved_integrations or {}).get("helm")
     if helm_int:
+        alert_dict: dict[str, Any] = raw_alert if isinstance(raw_alert, dict) else {}
         merged_labels: dict[str, Any] = {}
-        if isinstance(raw_alert, dict):
-            merged_labels.update(raw_alert.get("commonLabels", {}) or {})
-            merged_labels.update(raw_alert.get("labels", {}) or {})
+        merged_labels.update(alert_dict.get("commonLabels", {}) or {})
+        merged_labels.update(alert_dict.get("labels", {}) or {})
 
         release_name = str(
             annotations.get("helm_release")
             or annotations.get("helm_release_name")
             or merged_labels.get("meta.helm.sh/release-name")
-            or raw_alert.get("helm_release", "")
-            or raw_alert.get("helm_release_name", "")
+            or alert_dict.get("helm_release", "")
+            or alert_dict.get("helm_release_name", "")
         ).strip()
         ann_keys = {str(k).lower() for k in annotations}
         helm_annotation_hit = any(
@@ -1301,8 +1301,8 @@ def detect_sources(
         helm_hint_text = " ".join(
             str(value)
             for value in (
-                raw_alert.get("alert_name", ""),
-                raw_alert.get("error_message", ""),
+                alert_dict.get("alert_name", ""),
+                alert_dict.get("error_message", ""),
                 annotations.get("summary", ""),
                 annotations.get("description", ""),
                 annotations.get("message", ""),
@@ -1325,7 +1325,7 @@ def detect_sources(
                 annotations.get("helm_namespace")
                 or annotations.get("k8s_namespace")
                 or annotations.get("kubernetes_namespace")
-                or raw_alert.get("helm_namespace", "")
+                or alert_dict.get("helm_namespace", "")
                 or helm_int.get("default_namespace", "")
                 or ""
             ).strip()
