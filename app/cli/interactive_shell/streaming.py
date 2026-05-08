@@ -19,6 +19,12 @@ _SPINNER_NAME = "dots12"
 _SPINNER_COLOR = "orange1"
 _SPINNER_LABEL = "thinking"
 _LIVE_REFRESH_PER_SECOND = 10
+# Cap how often we re-parse the accumulated buffer as Markdown. Without this,
+# every incoming chunk triggers a full Markdown(buffer) parse, so a 10k-token
+# response performs ~10k full re-parses of a growing string — O(n²) total work
+# that visibly stalls long streams. Re-render at most refresh-rate times per
+# second; final flush at end ensures the last chunks always land.
+_LIVE_RENDER_INTERVAL_S = 1.0 / _LIVE_REFRESH_PER_SECOND
 _STREAM_CANCEL_HINT = "Press Ctrl+C again to stop"
 
 STREAM_LABEL_ASSISTANT = "assistant"
@@ -120,18 +126,33 @@ def stream_to_console(
                 vertical_overflow="visible",
             ) as live,
         ):
-            if buffer:
-                live.update(Markdown("".join(buffer)))
-            while True:
-                chunk = _next_chunk(chunks_iter)
-                if chunk is None:
-                    break
-                if not chunk:
-                    continue
-                buffer.append(chunk)
-                live.update(Markdown("".join(buffer)))
-            if not buffer:
-                live.update(Text(""))
+            last_render = 0.0
+            try:
+                if buffer:
+                    live.update(Markdown("".join(buffer)))
+                    last_render = time.monotonic()
+                while True:
+                    chunk = _next_chunk(chunks_iter)
+                    if chunk is None:
+                        break
+                    if not chunk:
+                        continue
+                    buffer.append(chunk)
+                    now = time.monotonic()
+                    # Throttle: skip re-parse if we already rendered within
+                    # the current refresh window. The final flush below
+                    # guarantees the buffer's final state still lands.
+                    if now - last_render >= _LIVE_RENDER_INTERVAL_S:
+                        live.update(Markdown("".join(buffer)))
+                        last_render = now
+            finally:
+                # Always flush latest state before Live exits — covers
+                # both "chunks arrived in the last throttle window" and
+                # "exception interrupted the loop with chunks pending".
+                if buffer:
+                    live.update(Markdown("".join(buffer)))
+                else:
+                    live.update(Text(""))
         if buffer:
             console.print(f"[dim]· {time.monotonic() - started:.1f}s[/dim]")
     finally:

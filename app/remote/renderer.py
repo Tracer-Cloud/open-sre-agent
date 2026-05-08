@@ -59,6 +59,11 @@ _DIAGNOSE_NODE = "diagnose_root_cause"
 # Same Rich.Live refresh / spinner choices as the interactive-shell streamer
 # so the two surfaces feel identical.
 _DIAGNOSE_LIVE_REFRESH = 20
+# Same throttle rationale as ``streaming._LIVE_RENDER_INTERVAL_S``: cap
+# Markdown(buffer) re-parses to one per refresh window. Without this, the
+# diagnose Live region performs O(n²) parsing on long streams and stalls
+# visibly past a few thousand tokens.
+_DIAGNOSE_RENDER_INTERVAL_S = 1.0 / _DIAGNOSE_LIVE_REFRESH
 _DIAGNOSE_SPINNER_NAME = "dots12"
 _DIAGNOSE_SPINNER_COLOR = "orange1"
 
@@ -86,6 +91,9 @@ class StreamRenderer:
         self._diagnose_buffer: list[str] = []
         self._diagnose_live: Live | None = None
         self._diagnose_started: float = 0.0
+        # Tracks the last time we re-parsed the buffer; used by
+        # _append_diagnose_chunk to throttle Markdown re-renders.
+        self._diagnose_last_render: float = 0.0
         # Lazy-init: only constructed when the diagnose node first runs.
         self._diagnose_console: Console | None = None
 
@@ -233,6 +241,9 @@ class StreamRenderer:
             self._node_names_seen.append(canonical)
         self._diagnose_buffer = []
         self._diagnose_started = time.monotonic()
+        # 0.0 sentinel forces the first chunk to render immediately
+        # regardless of the throttle window.
+        self._diagnose_last_render = 0.0
 
         if get_output_format() != "rich":
             sys.stdout.write(f"  … {canonical}\n")
@@ -274,8 +285,15 @@ class StreamRenderer:
         if not text:
             return
         self._diagnose_buffer.append(text)
-        if self._diagnose_live is not None:
+        if self._diagnose_live is None:
+            return
+        # Throttle Markdown re-parse to once per refresh window; the final
+        # flush in _finish_diagnose_streaming guarantees the latest buffer
+        # is rendered before the Live region closes.
+        now = time.monotonic()
+        if now - self._diagnose_last_render >= _DIAGNOSE_RENDER_INTERVAL_S:
             self._diagnose_live.update(Markdown("".join(self._diagnose_buffer)))
+            self._diagnose_last_render = now
 
     def _finish_diagnose_streaming(self) -> None:
         """Close the diagnose Live region and print the resolved-dot line.
@@ -287,6 +305,11 @@ class StreamRenderer:
         message = self._build_node_message(_DIAGNOSE_NODE)
 
         if self._diagnose_live is not None:
+            # Final flush: chunks within the last throttle window were
+            # buffered but not yet rendered. Always render the latest
+            # state so the user sees the complete reasoning.
+            if self._diagnose_buffer:
+                self._diagnose_live.update(Markdown("".join(self._diagnose_buffer)))
             try:
                 self._diagnose_live.stop()
             finally:
