@@ -30,7 +30,12 @@ def _check_llm_settings() -> None:
         LLMSettings.from_env()
     except ValidationError as exc:
         errors = exc.errors()
-        msg = errors[0]["msg"] if errors else str(exc)
+        if errors:
+            ctx = errors[0].get("ctx", {})
+            original = ctx.get("error")
+            msg = str(original) if isinstance(original, Exception) else errors[0]["msg"]
+        else:
+            msg = str(exc)
         raise OpenSREError(
             msg,
             suggestion="Run `opensre onboard` to configure your LLM provider and API credentials.",
