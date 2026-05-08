@@ -78,8 +78,9 @@ _HELM_SOURCE = {
 
 
 def test_helm_list_tool_is_available_and_lists(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Patch where the name is used — HelmTools binds the import at load time.
     monkeypatch.setattr(
-        "app.tools.utils.helm_tools.helm_client_for_run",
+        "app.tools.HelmTools.helm_client_for_run",
         lambda *_a, **_k: _FakeHelmClient(),
     )
     tool = HelmListReleasesTool()
@@ -100,7 +101,7 @@ def test_helm_evidence_merges_and_counts_for_availability_gate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "app.tools.utils.helm_tools.helm_client_for_run",
+        "app.tools.HelmTools.helm_client_for_run",
         lambda *_a, **_k: _FakeHelmClient(),
     )
     list_tool = HelmListReleasesTool()
@@ -136,7 +137,7 @@ def test_helm_evidence_counts_as_investigated_for_healthy_short_circuit() -> Non
 
 def test_helm_get_manifest_tool_returns_yaml(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "app.tools.utils.helm_tools.helm_client_for_run",
+        "app.tools.HelmTools.helm_client_for_run",
         lambda *_a, **_k: _FakeHelmClient(),
     )
     tool = HelmGetReleaseManifestTool()
