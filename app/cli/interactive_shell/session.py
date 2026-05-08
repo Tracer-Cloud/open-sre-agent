@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from prompt_toolkit.history import History
 
 from app.cli.interactive_shell.tasks import TaskRegistry
+
+InterventionKind = Literal["ctrl_c", "correction"]
 
 
 @dataclass
@@ -68,6 +70,9 @@ class ReplSession:
     terminal_actions_executed_count: int = 0
     terminal_actions_success_count: int = 0
 
+    ctrl_c_intervention_count: int = 0
+    correction_intervention_count: int = 0
+
     # Keys from a completed AgentState that carry reusable infra context into
     # the next investigation.  Kept as a class-level tuple so any caller that
     # wants to know "what counts as accumulated context" has a single source.
@@ -120,7 +125,17 @@ class ReplSession:
         self.terminal_fallback_count = 0
         self.terminal_actions_executed_count = 0
         self.terminal_actions_success_count = 0
+
+        self.ctrl_c_intervention_count = 0
+        self.correction_intervention_count = 0
         # trust_mode is intentionally preserved across /reset
+
+    def record_intervention(self, kind: InterventionKind) -> None:
+        """Increment the per-kind intervention counter (Ctrl-C or correction)."""
+        if kind == "ctrl_c":
+            self.ctrl_c_intervention_count += 1
+        else:
+            self.correction_intervention_count += 1
 
     def record_terminal_turn(
         self,

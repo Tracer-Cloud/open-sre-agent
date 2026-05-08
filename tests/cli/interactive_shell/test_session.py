@@ -15,6 +15,8 @@ class TestReplSession:
         assert session.task_registry.list_recent() == []
         assert session.terminal_turn_count == 0
         assert session.terminal_fallback_count == 0
+        assert session.ctrl_c_intervention_count == 0
+        assert session.correction_intervention_count == 0
 
     def test_record_appends_entry(self) -> None:
         session = ReplSession()
@@ -42,6 +44,8 @@ class TestReplSession:
         session.record("alert", "something")
         session.last_state = {"foo": "bar"}
         session.cli_agent_messages.append(("user", "hey"))
+        session.record_intervention("ctrl_c")
+        session.record_intervention("correction")
 
         assert session.history_generation == 0
         session.clear()
@@ -52,6 +56,8 @@ class TestReplSession:
         assert session.accumulated_context == {}
         assert session.cli_agent_messages == []
         assert session.task_registry.list_recent() == []
+        assert session.ctrl_c_intervention_count == 0
+        assert session.correction_intervention_count == 0
         assert session.trust_mode is True  # preserved intentionally
 
     def test_accumulate_from_state_extracts_known_keys(self) -> None:
@@ -125,3 +131,33 @@ class TestReplSession:
         assert second.fallback_count == 1
         assert round(second.action_success_percent, 2) == 66.67
         assert second.fallback_rate_percent == 50.0
+
+    def test_record_intervention_increments_per_kind(self) -> None:
+        session = ReplSession()
+
+        session.record_intervention("ctrl_c")
+        session.record_intervention("ctrl_c")
+        session.record_intervention("correction")
+
+        assert session.ctrl_c_intervention_count == 2
+        assert session.correction_intervention_count == 1
+
+    def test_record_intervention_kinds_are_independent(self) -> None:
+        """Incrementing one kind does not touch the other."""
+        session = ReplSession()
+
+        session.record_intervention("correction")
+
+        assert session.ctrl_c_intervention_count == 0
+        assert session.correction_intervention_count == 1
+
+    def test_fresh_session_starts_with_zero_intervention_counts(self) -> None:
+        """A new ReplSession does not inherit any prior session's counters."""
+        first = ReplSession()
+        first.record_intervention("ctrl_c")
+        first.record_intervention("correction")
+
+        second = ReplSession()
+
+        assert second.ctrl_c_intervention_count == 0
+        assert second.correction_intervention_count == 0
