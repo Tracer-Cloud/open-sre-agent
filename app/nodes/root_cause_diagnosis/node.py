@@ -22,6 +22,7 @@ from .evidence_checker import (
     is_clearly_healthy,
 )
 from .prompt_builder import build_diagnosis_prompt
+from .remediation_templates import get_template_steps
 
 
 def _is_healthy_claim_key(key: str, value: object) -> bool:
@@ -293,6 +294,10 @@ def diagnose_root_cause(state: InvestigationState) -> dict:
     # Unmask any placeholders the LLM passed through so state carries real
     # identifiers for user-facing display. No-op when masking is disabled.
     masking_ctx = MaskingContext.from_state(dict(state))
+    _available_sources = state.get("available_sources", {})
+    _remediation = result.remediation_steps or get_template_steps(
+        result.root_cause_category, _available_sources
+    )
     return {
         "root_cause": masking_ctx.unmask(result.root_cause),
         "root_cause_category": result.root_cause_category,
@@ -301,7 +306,7 @@ def diagnose_root_cause(state: InvestigationState) -> dict:
         "non_validated_claims": masking_ctx.unmask_value(non_validated_claims_list),
         "validity_score": validity_score,
         "investigation_recommendations": [masking_ctx.unmask(rec) for rec in recommendations],
-        "remediation_steps": [],
+        "remediation_steps": [masking_ctx.unmask(s) for s in _remediation],
         "investigation_loop_count": next_loop_count,
     }
 
@@ -397,7 +402,7 @@ def _handle_insufficient_evidence(state: InvestigationState, tracker) -> dict:
         ],
         "validity_score": 0.0,
         "investigation_recommendations": recommendations,
-        "remediation_steps": [],
+        "remediation_steps": get_template_steps("unknown", state.get("available_sources", {})),
         "investigation_loop_count": next_loop_count,
     }
 

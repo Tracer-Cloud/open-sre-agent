@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from prompt_toolkit.history import History
 
 from app.cli.interactive_shell.tasks import TaskRegistry
 
@@ -46,6 +49,13 @@ class ReplSession:
 
     cli_agent_messages: list[tuple[str, str]] = field(default_factory=list)
     """LangGraph-free terminal assistant history: alternating (\"user\"|\"assistant\", text)."""
+
+    prompt_history_backend: History | None = None
+    """The live ``prompt_toolkit.History`` object backing the input prompt.
+
+    Stored here so ``/history`` and ``/privacy`` slash commands can mutate
+    its ``paused`` flag (when it is a ``RedactingFileHistory``) without
+    needing access to the ``PromptSession``."""
 
     task_registry: TaskRegistry = field(default_factory=TaskRegistry)
     """Recent in-flight and completed shell tasks for /tasks and /cancel."""

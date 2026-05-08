@@ -1398,6 +1398,13 @@ Thanks goes to these amazing people:
             <sub><b>Lum1104</b></sub>
         </a>
     </td>
+            <td align="center" width="8%">
+        <a href="https://github.com/VibhorGautam">
+            <img src="https://avatars.githubusercontent.com/u/55019395?v=4" width="45" alt="VibhorGautam"/>
+            <br />
+            <sub><b>VibhorGautam</b></sub>
+        </a>
+    </td>
 		</tr>
 	</tbody>
 </table>

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import io
 import tempfile
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from unittest.mock import MagicMock
 
 import pytest
@@ -18,6 +18,19 @@ from app.cli.interactive_shell.tasks import TaskKind, TaskRegistry, TaskStatus
 def _capture() -> tuple[Console, io.StringIO]:
     buf = io.StringIO()
     return Console(file=buf, force_terminal=False, highlight=False), buf
+
+
+@pytest.fixture
+def stderr_buf() -> Iterator[tempfile.SpooledTemporaryFile]:  # type: ignore[type-arg]
+    """Stderr buffer for synthetic-watcher tests.
+
+    The watcher's ``finally`` block closes the buffer; the ``with`` here
+    is the belt-and-braces close that runs when a test exits before the
+    watcher does (e.g. deferred-thread tests where ``pending[0]()`` is
+    never invoked).
+    """
+    with tempfile.SpooledTemporaryFile() as buf:
+        yield buf
 
 
 class TestTaskRecord:
@@ -208,7 +221,9 @@ class _DeferredSyntheticThread:
 
 class TestSyntheticSubprocessWatcher:
     def test_watch_marks_completed_when_process_already_done(
-        self, monkeypatch: pytest.MonkeyPatch
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        stderr_buf: tempfile.SpooledTemporaryFile,  # type: ignore[type-arg]
     ) -> None:
         import app.cli.interactive_shell.action_executor as ae
 
@@ -222,7 +237,6 @@ class TestSyntheticSubprocessWatcher:
         task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
         task.mark_running()
         task.attach_process(proc)
-        stderr_buf: tempfile.SpooledTemporaryFile[bytes] = tempfile.SpooledTemporaryFile()  # type: ignore[type-arg]  # noqa: SIM115
         ae.watch_synthetic_subprocess(task, proc, session, "rds_postgres", stderr_buf)
         assert task.status == TaskStatus.COMPLETED
         hist = session.history[-1]
@@ -231,7 +245,9 @@ class TestSyntheticSubprocessWatcher:
         assert "task:" in hist["text"]
 
     def test_watch_honours_exit_code_when_cancel_races_loop_exit(
-        self, monkeypatch: pytest.MonkeyPatch
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        stderr_buf: tempfile.SpooledTemporaryFile,  # type: ignore[type-arg]
     ) -> None:
         """Process exits naturally (code 0) in the same poll tick that /cancel fires.
 
@@ -266,14 +282,15 @@ class TestSyntheticSubprocessWatcher:
             pending[0] = 0  # process finishes naturally in the same window
 
         monkeypatch.setattr(ae.time, "sleep", _fake_sleep)
-        stderr_buf: tempfile.SpooledTemporaryFile[bytes] = tempfile.SpooledTemporaryFile()  # type: ignore[type-arg]  # noqa: SIM115
         ae.watch_synthetic_subprocess(task, proc, session, "rds_postgres", stderr_buf)
         # terminated_by_watcher is False → honour exit code 0 → COMPLETED
         assert task.status == TaskStatus.COMPLETED
         assert sleeps
 
     def test_watch_marks_cancelled_when_watcher_kills_process(
-        self, monkeypatch: pytest.MonkeyPatch
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        stderr_buf: tempfile.SpooledTemporaryFile,  # type: ignore[type-arg]
     ) -> None:
         """cancel_requested is set while proc is still running; watcher terminates it."""
         import app.cli.interactive_shell.action_executor as ae
@@ -295,7 +312,6 @@ class TestSyntheticSubprocessWatcher:
         # Skip the sleep so the loop iterates immediately to the cancel branch.
         monkeypatch.setattr(ae.time, "sleep", lambda _: None)
 
-        stderr_buf: tempfile.SpooledTemporaryFile[bytes] = tempfile.SpooledTemporaryFile()  # type: ignore[type-arg]  # noqa: SIM115
         ae.watch_synthetic_subprocess(task, proc, session, "rds_postgres", stderr_buf)
         assert task.status == TaskStatus.CANCELLED
         hist = session.history[-1]
@@ -303,7 +319,9 @@ class TestSyntheticSubprocessWatcher:
         assert hist["ok"] is False
 
     def test_watch_honours_exit_code_when_cancel_races_natural_exit(
-        self, monkeypatch: pytest.MonkeyPatch
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        stderr_buf: tempfile.SpooledTemporaryFile,  # type: ignore[type-arg]
     ) -> None:
         """Process exits naturally (code 0) while /cancel fires concurrently.
 
@@ -326,11 +344,14 @@ class TestSyntheticSubprocessWatcher:
         # Simulate /cancel arriving just as the watcher reads poll()
         task.cancel_requested.set()
 
-        stderr_buf: tempfile.SpooledTemporaryFile[bytes] = tempfile.SpooledTemporaryFile()  # type: ignore[type-arg]  # noqa: SIM115
         ae.watch_synthetic_subprocess(task, proc, session, "rds_postgres", stderr_buf)
         assert task.status == TaskStatus.COMPLETED
 
-    def test_watch_captures_stderr_on_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_watch_captures_stderr_on_failure(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        stderr_buf: tempfile.SpooledTemporaryFile,  # type: ignore[type-arg]
+    ) -> None:
         """Diagnostic stderr output is included in mark_failed message."""
         import app.cli.interactive_shell.action_executor as ae
 
@@ -343,7 +364,6 @@ class TestSyntheticSubprocessWatcher:
         proc.poll.return_value = 1
         proc.returncode = 1
 
-        stderr_buf: tempfile.SpooledTemporaryFile[bytes] = tempfile.SpooledTemporaryFile()  # type: ignore[type-arg]  # noqa: SIM115
         stderr_buf.write(b"ConnectionError: database unreachable\n")
         ae.watch_synthetic_subprocess(task, proc, session, "rds_postgres", stderr_buf)
         assert task.status == TaskStatus.FAILED
@@ -351,7 +371,9 @@ class TestSyntheticSubprocessWatcher:
         assert "ConnectionError" in (task.error or "")
 
     def test_watch_skips_synthetic_history_after_reset(
-        self, monkeypatch: pytest.MonkeyPatch
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        stderr_buf: tempfile.SpooledTemporaryFile,  # type: ignore[type-arg]
     ) -> None:
         import app.cli.interactive_shell.action_executor as ae
 
@@ -366,7 +388,6 @@ class TestSyntheticSubprocessWatcher:
         task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
         task.mark_running()
         task.attach_process(proc)
-        stderr_buf: tempfile.SpooledTemporaryFile[bytes] = tempfile.SpooledTemporaryFile()  # type: ignore[type-arg]  # noqa: SIM115
         ae.watch_synthetic_subprocess(task, proc, session, "rds_postgres", stderr_buf)
         assert len(_DeferredSyntheticThread.pending) == 1
         session.clear()
@@ -375,7 +396,9 @@ class TestSyntheticSubprocessWatcher:
         _DeferredSyntheticThread.pending.clear()
 
     def test_deferred_watcher_writes_history_when_no_reset(
-        self, monkeypatch: pytest.MonkeyPatch
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        stderr_buf: tempfile.SpooledTemporaryFile,  # type: ignore[type-arg]
     ) -> None:
         import app.cli.interactive_shell.action_executor as ae
 
@@ -390,7 +413,6 @@ class TestSyntheticSubprocessWatcher:
         task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
         task.mark_running()
         task.attach_process(proc)
-        stderr_buf: tempfile.SpooledTemporaryFile[bytes] = tempfile.SpooledTemporaryFile()  # type: ignore[type-arg]  # noqa: SIM115
         ae.watch_synthetic_subprocess(task, proc, session, "rds_postgres", stderr_buf)
         _DeferredSyntheticThread.pending[0]()
         assert session.history[-1]["type"] == "synthetic_test"

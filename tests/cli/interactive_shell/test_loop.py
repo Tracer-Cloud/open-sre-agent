@@ -84,6 +84,20 @@ def test_build_prompt_session_falls_back_to_memory_history(
     assert isinstance(prompt.history, InMemoryHistory)
 
 
+def test_repl_session_prompt_history_backend_matches_prompt_toolkit_history(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.constants as const_module
+
+    monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+    with create_app_session(input=DummyInput(), output=DummyOutput()):
+        session = ReplSession()
+        prompt = loop._build_prompt_session()
+        session.prompt_history_backend = prompt.history
+    assert session.prompt_history_backend is prompt.history
+
+
 def test_prompt_message_uses_accent_glyph() -> None:
     rendered = loop._prompt_message(ReplSession()).value
 

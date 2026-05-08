@@ -38,6 +38,15 @@ ACTION_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         ),
         "/version",
     ),
+    (
+        re.compile(
+            r"\bopensre\s+(?P<subcmd>(?!health|version)[a-z][a-z0-9-]*)(?:\s+(?P<rest>.*))?\b"
+            r"|"
+            r"\b(?:run|execute)\s+opensre\s+(?P<subcmd2>[a-z][a-z0-9-]*)(?:\s+(?P<rest2>.*))?\b",
+            re.IGNORECASE,
+        ),
+        "cli_command",
+    ),
 )
 
 SAMPLE_ALERT_RE = re.compile(
@@ -144,6 +153,10 @@ def synthetic_test_action(suite_name: str, position: int) -> PlannedAction:
 
 def llm_provider_action(provider: str, position: int) -> PlannedAction:
     return PlannedAction(kind="llm_provider", content=provider, position=position)
+
+
+def cli_command_action(args: str, position: int) -> PlannedAction:
+    return PlannedAction(kind="cli_command", content=args, position=position)
 
 
 def strip_wrapping_quotes(command: str) -> str:
@@ -256,6 +269,7 @@ __all__ = [
     "IS_WINDOWS",
     "SAMPLE_ALERT_RE",
     "SYNTHETIC_RDS_TEST_RE",
+    "cli_command_action",
     "extract_llm_provider_switch",
     "extract_shell_command",
     "looks_like_direct_shell_command",

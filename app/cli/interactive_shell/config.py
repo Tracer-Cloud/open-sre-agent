@@ -112,3 +112,10 @@ class ReplConfig:
     def from_env(cls) -> ReplConfig:
         """Convenience alias — loads from env + file, no CLI override."""
         return cls.load()
+
+
+def read_history_settings() -> dict[str, Any]:
+    """Return the ``interactive.history`` config block, or empty dict."""
+    interactive = _read_config_file()
+    raw = interactive.get("history", {})
+    return raw if isinstance(raw, dict) else {}
