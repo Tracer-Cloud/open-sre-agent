@@ -1,0 +1,256 @@
+"""Shared Supabase integration helpers.
+
+Provides configuration, connectivity validation, and read-only diagnostic
+queries for Supabase projects. Covers the PostgREST API, Auth service, and
+Storage service. All operations are production-safe: read-only, timeouts
+enforced, result sizes capped.
+"""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from typing import Any
+
+from pydantic import Field, field_validator
+
+from app.strict_config import StrictConfigModel
+
+DEFAULT_SUPABASE_TIMEOUT_SECONDS = 10.0
+DEFAULT_SUPABASE_MAX_RESULTS = 50
+
+
+class SupabaseConfig(StrictConfigModel):
+    """Normalized Supabase connection settings."""
+
+    url: str = ""
+    service_key: str = ""
+    timeout_seconds: float = Field(default=DEFAULT_SUPABASE_TIMEOUT_SECONDS, gt=0)
+    max_results: int = Field(default=DEFAULT_SUPABASE_MAX_RESULTS, gt=0, le=200)
+    integration_id: str = ""
+
+    @field_validator("url", mode="before")
+    @classmethod
+    def _normalize_url(cls, value: Any) -> str:  # type: ignore[override]
+        return str(value or "").strip().rstrip("/")
+
+    @field_validator("service_key", mode="before")
+    @classmethod
+    def _normalize_service_key(cls, value: Any) -> str:  # type: ignore[override]
+        return str(value or "").strip()
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.url and self.service_key)
+
+    @property
+    def headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.service_key}",
+            "apikey": self.service_key,
+            "Content-Type": "application/json",
+        }
+
+
+@dataclass(frozen=True)
+class SupabaseValidationResult:
+    """Result of validating a Supabase integration."""
+
+    ok: bool
+    detail: str
+
+
+def build_supabase_config(raw: dict[str, Any] | None) -> SupabaseConfig:
+    """Build a normalized Supabase config object from raw data."""
+    return SupabaseConfig.model_validate(raw or {})
+
+
+def supabase_config_from_env() -> SupabaseConfig | None:
+    """Load a Supabase config from environment variables."""
+    url = os.getenv("SUPABASE_URL", "").strip()
+    service_key = os.getenv("SUPABASE_SERVICE_KEY", "").strip()
+    if not url or not service_key:
+        return None
+    return build_supabase_config({"url": url, "service_key": service_key})
+
+
+def resolve_supabase_config(project_url: str) -> SupabaseConfig:
+    """Build a config for the given project URL, resolving credentials from env.
+
+    The LLM supplies only the identifying param (project_url).
+    The service key is resolved from environment variables so it never appears
+    in tool signatures and is never seen by the LLM.
+    """
+    env_config = supabase_config_from_env()
+    if env_config and env_config.url == project_url.rstrip("/"):
+        return env_config
+    service_key = os.getenv("SUPABASE_SERVICE_KEY", "").strip()
+    return build_supabase_config({"url": project_url, "service_key": service_key})
+
+
+def _make_request(
+    config: SupabaseConfig,
+    path: str,
+    *,
+    params: dict[str, Any] | None = None,
+) -> tuple[int, Any]:
+    """Make a GET request to the Supabase project API.
+
+    Returns (status_code, response_body). Caller handles error inspection.
+    """
+    import httpx  # type: ignore[import-untyped]
+
+    url = f"{config.url}{path}"
+    with httpx.Client(timeout=config.timeout_seconds) as client:
+        response = client.get(url, headers=config.headers, params=params or {})
+    try:
+        body: Any = response.json()
+    except Exception:
+        body = response.text
+    return response.status_code, body
+
+
+def validate_supabase_config(config: SupabaseConfig) -> SupabaseValidationResult:
+    """Validate Supabase connectivity by probing the PostgREST health endpoint."""
+    if not config.url:
+        return SupabaseValidationResult(ok=False, detail="Supabase URL is required.")
+    if not config.service_key:
+        return SupabaseValidationResult(ok=False, detail="Supabase service key is required.")
+
+    try:
+        status, _ = _make_request(config, "/rest/v1/")
+        if status == 200:
+            return SupabaseValidationResult(
+                ok=True,
+                detail=f"Connected to Supabase project at {config.url}.",
+            )
+        return SupabaseValidationResult(
+            ok=False,
+            detail=f"Supabase PostgREST returned HTTP {status}.",
+        )
+    except Exception as err:
+        return SupabaseValidationResult(ok=False, detail=f"Supabase connection failed: {err}")
+
+
+def supabase_is_available(sources: dict[str, dict]) -> bool:  # type: ignore[type-arg]
+    """Check if Supabase integration identifying params are present."""
+    sb = sources.get("supabase", {})
+    return bool(sb.get("project_url"))
+
+
+def supabase_extract_params(sources: dict[str, dict]) -> dict[str, Any]:  # type: ignore[type-arg]
+    """Extract Supabase identifying params from resolved integrations.
+
+    The service key is resolved internally from environment variables so it
+    never appears in tool signatures and is never seen by the LLM.
+    """
+    sb = sources.get("supabase", {})
+    return {
+        "project_url": str(sb.get("project_url", "")).strip(),
+    }
+
+
+def get_service_health(config: SupabaseConfig) -> dict[str, Any]:
+    """Check the health of all Supabase services: PostgREST, Auth, and Storage.
+
+    Read-only: hits health/status endpoints only. Returns a per-service
+    breakdown so the agent can pinpoint which layer is degraded.
+    """
+    if not config.is_configured:
+        return {"source": "supabase", "available": False, "error": "Not configured."}
+
+    services: dict[str, Any] = {}
+
+    # PostgREST — the database REST API layer
+    try:
+        status, _ = _make_request(config, "/rest/v1/")
+        services["postgrest"] = {
+            "healthy": status == 200,
+            "status_code": status,
+        }
+    except Exception as err:
+        services["postgrest"] = {"healthy": False, "error": str(err)}
+
+    # Auth service
+    try:
+        status, body = _make_request(config, "/auth/v1/health")
+        detail = ""
+        if isinstance(body, dict):
+            detail = body.get("description", "")
+        elif isinstance(body, str):
+            detail = body
+        services["auth"] = {
+            "healthy": status == 200,
+            "status_code": status,
+            "detail": detail,
+        }
+    except Exception as err:
+        services["auth"] = {"healthy": False, "error": str(err)}
+
+    # Storage service
+    try:
+        status, _ = _make_request(config, "/storage/v1/bucket")
+        services["storage"] = {
+            "healthy": status == 200,
+            "status_code": status,
+        }
+    except Exception as err:
+        services["storage"] = {"healthy": False, "error": str(err)}
+
+    all_healthy = all(s.get("healthy", False) for s in services.values())
+    degraded = [name for name, s in services.items() if not s.get("healthy", False)]
+
+    return {
+        "source": "supabase",
+        "available": True,
+        "project_url": config.url,
+        "overall_healthy": all_healthy,
+        "degraded_services": degraded,
+        "services": services,
+    }
+
+
+def get_storage_buckets(config: SupabaseConfig) -> dict[str, Any]:
+    """Retrieve all storage buckets and their basic metadata.
+
+    Read-only: queries the Supabase Storage API. Useful for detecting
+    misconfigured or unexpectedly missing buckets during a file upload incident.
+    Results are capped at config.max_results.
+    """
+    if not config.is_configured:
+        return {"source": "supabase", "available": False, "error": "Not configured."}
+
+    try:
+        status, body = _make_request(config, "/storage/v1/bucket")
+
+        if status != 200:
+            return {
+                "source": "supabase",
+                "available": False,
+                "error": f"Storage API returned HTTP {status}.",
+            }
+
+        raw_buckets: list[dict[str, Any]] = body if isinstance(body, list) else []
+        bucket_summaries = []
+        for bucket in raw_buckets[: config.max_results]:
+            bucket_summaries.append(
+                {
+                    "id": bucket.get("id", ""),
+                    "name": bucket.get("name", ""),
+                    "public": bucket.get("public", False),
+                    "file_size_limit": bucket.get("file_size_limit"),
+                    "allowed_mime_types": bucket.get("allowed_mime_types"),
+                    "created_at": bucket.get("created_at", ""),
+                    "updated_at": bucket.get("updated_at", ""),
+                }
+            )
+
+        return {
+            "source": "supabase",
+            "available": True,
+            "project_url": config.url,
+            "total_buckets": len(bucket_summaries),
+            "buckets": bucket_summaries,
+        }
+    except Exception as err:
+        return {"source": "supabase", "available": False, "error": str(err)}
