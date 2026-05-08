@@ -22,6 +22,7 @@ IncidentIoConfig = IncidentIoIntegrationConfig
 
 _DEFAULT_TIMEOUT = 30
 _MAX_RETRIES = 3
+_APPEND_SUMMARY_VERIFY_ATTEMPTS = 5
 _RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 _IDEMPOTENT_METHODS = {"GET", "HEAD", "OPTIONS"}
 _SECRET_RE = re.compile(
@@ -127,7 +128,6 @@ class IncidentIoClient:
 
     def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
         method_upper = method.upper()
-        last_error: Exception | None = None
 
         for attempt in range(_MAX_RETRIES + 1):
             try:
@@ -136,7 +136,6 @@ class IncidentIoClient:
                     return response
                 response.raise_for_status()
             except httpx.HTTPStatusError as exc:
-                last_error = exc
                 status_code = exc.response.status_code
                 should_retry = status_code == 429 or method_upper in _IDEMPOTENT_METHODS
                 if status_code not in _RETRYABLE_STATUS_CODES or not should_retry:
@@ -155,7 +154,6 @@ class IncidentIoClient:
                 )
                 time.sleep(sleep_for)
             except httpx.RequestError as exc:
-                last_error = exc
                 if method_upper not in _IDEMPOTENT_METHODS or attempt >= _MAX_RETRIES:
                     raise
                 sleep_for = (2**attempt) + (random.random() * 0.1)
@@ -168,9 +166,7 @@ class IncidentIoClient:
                 )
                 time.sleep(sleep_for)
 
-        if last_error is not None:
-            raise last_error
-        raise RuntimeError("incident.io request failed without a response")
+        raise AssertionError("incident.io _request loop exited without return or raise")
 
     def probe_access(self) -> ProbeResult:
         """Validate credentials with a minimal incident list request."""
@@ -324,45 +320,88 @@ class IncidentIoClient:
         body: str = "",
         notify_incident_channel: bool = False,
     ) -> dict[str, Any]:
-        """Append OpenSRE findings to an incident summary via the supported edit endpoint."""
-        with _get_incident_write_lock(incident_id):
-            incident_result = self.get_incident(incident_id)
-            if not incident_result.get("success"):
-                return incident_result
+        """Append OpenSRE findings to an incident summary via the supported edit endpoint.
 
-            incident = incident_result.get("incident", {})
-            current_summary = str(incident.get("summary") or "")
-            timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
-            finding = f"\n\n---\n**OpenSRE finding: {title}** ({timestamp})"
-            if body:
-                finding = f"{finding}\n{body}"
-            updated_summary = (current_summary + finding).strip()
+        Uses read-post-verify with retries so concurrent writers (including separate OS
+        processes) typically converge: if another writer posts between our read and
+        write, verification misses our appended text and we merge again from the latest
+        summary before re-posting.
+        """
+        timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
+        finding = f"\n\n---\n**OpenSRE finding: {title}** ({timestamp})"
+        if body:
+            finding = f"{finding}\n{body}"
 
-            payload = {
-                "incident": {"summary": updated_summary},
-                "notify_incident_channel": notify_incident_channel,
-            }
-            try:
-                response = self._request(
-                    "POST",
-                    f"/v2/incidents/{incident_id}/actions/edit",
-                    json=payload,
-                )
-                response.raise_for_status()
-                return {"success": True, "summary": updated_summary}
-            except httpx.HTTPStatusError as exc:
-                err_text = self._redact(exc.response.text[:300])
-                logger.warning(
-                    "[incident_io] Summary append HTTP failure status=%s id=%r error=%r",
-                    exc.response.status_code,
-                    incident_id,
-                    err_text,
-                )
-                return {"success": False, "error": f"HTTP {exc.response.status_code}: {err_text}"}
-            except Exception as exc:
-                err_text = self._redact(exc)
-                logger.warning("[incident_io] Summary append error: %s", err_text)
-                return {"success": False, "error": err_text}
+        last_error: str | None = None
+        for verify_attempt in range(_APPEND_SUMMARY_VERIFY_ATTEMPTS):
+            with _get_incident_write_lock(incident_id):
+                incident_result = self.get_incident(incident_id)
+                if not incident_result.get("success"):
+                    return incident_result
+
+                incident = incident_result.get("incident", {})
+                current_summary = str(incident.get("summary") or "")
+                if finding in current_summary:
+                    return {"success": True, "summary": current_summary.strip()}
+
+                updated_summary = (current_summary + finding).strip()
+                payload = {
+                    "incident": {"summary": updated_summary},
+                    "notify_incident_channel": notify_incident_channel,
+                }
+                try:
+                    response = self._request(
+                        "POST",
+                        f"/v2/incidents/{incident_id}/actions/edit",
+                        json=payload,
+                    )
+                    response.raise_for_status()
+                except httpx.HTTPStatusError as exc:
+                    err_text = self._redact(exc.response.text[:300])
+                    logger.warning(
+                        "[incident_io] Summary append HTTP failure status=%s id=%r error=%r",
+                        exc.response.status_code,
+                        incident_id,
+                        err_text,
+                    )
+                    return {"success": False, "error": f"HTTP {exc.response.status_code}: {err_text}"}
+                except Exception as exc:
+                    err_text = self._redact(exc)
+                    logger.warning("[incident_io] Summary append error: %s", err_text)
+                    return {"success": False, "error": err_text}
+
+                verify_result = self.get_incident(incident_id)
+                if not verify_result.get("success"):
+                    last_error = str(verify_result.get("error", "verify fetch failed"))
+                    logger.warning(
+                        "[incident_io] Summary verify GET failed id=%r attempt=%s: %s",
+                        incident_id,
+                        verify_attempt + 1,
+                        last_error,
+                    )
+                else:
+                    verified = str(verify_result.get("incident", {}).get("summary") or "")
+                    if finding in verified:
+                        return {"success": True, "summary": verified.strip()}
+                    last_error = "summary verify mismatch after edit (concurrent writer?)"
+
+            if verify_attempt >= _APPEND_SUMMARY_VERIFY_ATTEMPTS - 1:
+                break
+            # Retry outside the per-incident lock so another process can finish its write.
+            sleep_for = (0.2 * (2**verify_attempt)) + random.random() * 0.05
+            logger.warning(
+                "[incident_io] Summary append verify retry id=%r attempt=%s in %.2fs: %s",
+                incident_id,
+                verify_attempt + 1,
+                sleep_for,
+                last_error,
+            )
+            time.sleep(sleep_for)
+
+        return {
+            "success": False,
+            "error": last_error or "summary append failed verification after retries",
+        }
 
 
 def _format_incident(data: dict[str, Any], *, full: bool = False) -> dict[str, Any]:

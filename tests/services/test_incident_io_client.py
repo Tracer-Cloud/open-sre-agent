@@ -134,11 +134,14 @@ def test_append_summary_update_uses_supported_edit_endpoint(
     monkeypatch,
 ) -> None:
     calls: list[tuple[str, str, dict]] = []
+    summary_store = {"text": "Existing summary"}
 
     def fake_request(method: str, path: str, **kwargs):
         calls.append((method, path, kwargs))
         if method == "GET":
-            return _response({"incident": {"id": "inc-123", "summary": "Existing summary"}})
+            return _response({"incident": {"id": "inc-123", "summary": summary_store["text"]}})
+        payload = kwargs["json"]
+        summary_store["text"] = payload["incident"]["summary"]
         return _response({"incident": {"id": "inc-123"}})
 
     monkeypatch.setattr(client, "_request", fake_request)
@@ -156,6 +159,78 @@ def test_append_summary_update_uses_supported_edit_endpoint(
     assert payload["notify_incident_channel"] is False
     assert "Existing summary" in payload["incident"]["summary"]
     assert "Root cause found" in payload["incident"]["summary"]
+    assert calls[2][0] == "GET"
+    assert calls[2][1] == "/v2/incidents/inc-123"
+
+
+def test_append_summary_update_retries_until_verify_sees_finding(
+    monkeypatch,
+) -> None:
+    """Patch class `_request`: instance patches can fail after sleeps in retry loops."""
+    client = IncidentIoClient(IncidentIoIntegrationConfig(api_key="test-key"))
+    calls: list[tuple[str, str, dict]] = []
+    merged_holder = {"text": ""}
+
+    def fake_request(self: IncidentIoClient, method: str, path: str, **kwargs):
+        calls.append((method, path, kwargs))
+        if method == "GET":
+            get_idx = sum(1 for c in calls if c[0] == "GET")
+            if get_idx in {1, 2}:
+                summary = "Existing summary"
+            else:
+                summary = merged_holder["text"]
+            return _response({"incident": {"id": "inc-123", "summary": summary}})
+        payload = kwargs["json"]
+        merged_holder["text"] = payload["incident"]["summary"]
+        return _response({"incident": {"id": "inc-123"}})
+
+    sleeps: list[float] = []
+    monkeypatch.setattr(IncidentIoClient, "_request", fake_request)
+    monkeypatch.setattr("app.services.incident_io.client.time.sleep", sleeps.append)
+    monkeypatch.setattr("app.services.incident_io.client.random.random", lambda: 0.0)
+
+    result = client.append_summary_update(
+        "inc-123",
+        title="Lag spike",
+        body="Retry path.",
+    )
+
+    assert result["success"] is True
+    assert sum(1 for c in calls if c[0] == "POST") == 1
+    assert len(sleeps) >= 1
+
+
+def test_append_summary_update_skips_post_when_finding_already_present(
+    client: IncidentIoClient,
+    monkeypatch,
+) -> None:
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, _tz=None):
+            return datetime(2099, 1, 1, 0, 0, 0, tzinfo=UTC)
+
+    monkeypatch.setattr("app.services.incident_io.client.datetime", FrozenDateTime)
+
+    embedded = (
+        "Existing\n\n---\n"
+        "**OpenSRE finding: Already posted** (2099-01-01 00:00:00 UTC)"
+    )
+    calls: list[tuple[str, str, dict]] = []
+
+    def fake_request(method: str, path: str, **kwargs):
+        calls.append((method, path, kwargs))
+        return _response({"incident": {"id": "inc-123", "summary": embedded}})
+
+    monkeypatch.setattr(client, "_request", fake_request)
+
+    result = client.append_summary_update(
+        "inc-123",
+        title="Already posted",
+        body="",
+    )
+
+    assert result["success"] is True
+    assert all(c[0] != "POST" for c in calls)
 
 
 def test_concurrent_append_summary_uses_shared_module_level_lock() -> None:
