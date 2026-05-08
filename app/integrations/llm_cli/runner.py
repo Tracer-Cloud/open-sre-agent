@@ -13,7 +13,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from app.integrations.llm_cli.base import CLIProbe, LLMCLIAdapter
-from app.integrations.llm_cli.errors import CLIAuthenticationRequired
+from app.integrations.llm_cli.errors import CLIAuthenticationRequired, CLITimeoutError
 from app.integrations.llm_cli.subprocess_env import build_cli_subprocess_env
 from app.integrations.llm_cli.text import flatten_messages_to_prompt
 from app.services.llm_client import LLMResponse
@@ -124,7 +124,7 @@ class CLIBackedLLMClient:
                 check=False,
             )
         except subprocess.TimeoutExpired as exc:
-            raise RuntimeError(
+            raise CLITimeoutError(
                 f"{self._adapter.name} CLI timed out after {invocation.timeout_sec:.0f}s."
             ) from exc
         except OSError as exc:
