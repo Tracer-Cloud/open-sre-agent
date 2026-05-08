@@ -71,7 +71,14 @@ class ReplSession:
     terminal_actions_success_count: int = 0
 
     ctrl_c_intervention_count: int = 0
+    """Incremented when the user Ctrl-Cs an active investigation. Bare-prompt
+    Ctrl-C with no agent running is intentionally not counted."""
+
     correction_intervention_count: int = 0
+    """Incremented when a follow-up or new-alert message starts with a
+    correction cue (see ``_looks_like_correction`` in ``loop.py``).
+    Slash and CLI-agent turns are not counted because content like
+    ``actually run ps aux`` is a command, not a correction."""
 
     # Keys from a completed AgentState that carry reusable infra context into
     # the next investigation.  Kept as a class-level tuple so any caller that
@@ -134,8 +141,10 @@ class ReplSession:
         """Increment the per-kind intervention counter (Ctrl-C or correction)."""
         if kind == "ctrl_c":
             self.ctrl_c_intervention_count += 1
-        else:
+        elif kind == "correction":
             self.correction_intervention_count += 1
+        else:
+            raise ValueError(f"Unknown intervention kind: {kind!r}")
 
     def record_terminal_turn(
         self,

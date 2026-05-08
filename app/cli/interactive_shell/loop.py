@@ -147,11 +147,10 @@ async def _run_one_turn(
     if not text:
         return True
 
-    if _looks_like_correction(text):
-        session.record_intervention("correction")
-
     render_submitted_prompt(console, session, text)
     kind = classify_input(text, session)
+    if kind in ("follow_up", "new_alert") and _looks_like_correction(text):
+        session.record_intervention("correction")
     if kind == "slash":
         # Rewrite bare-word commands to their slash form before dispatch.
         cmd_text = text if text.startswith("/") else f"/{text}"
