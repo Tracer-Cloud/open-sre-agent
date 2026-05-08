@@ -60,6 +60,15 @@ ANSI_RESET = "\x1b[0m"
 # Truecolour ANSI for the bracketed turn counter in the prompt.
 DIM_COUNTER_ANSI = f"\x1b[38;2;{_TEXT_DIM_RGB[0]};{_TEXT_DIM_RGB[1]};{_TEXT_DIM_RGB[2]}m"
 
+# Inline REPL picker: full-line selection bar (Codex-style background highlight).
+_MENU_SELECT_BG_RGB = (18, 52, 48)
+_MENU_SELECT_FG_RGB = (0x5E, 0xF0, 0xE8)
+
+MENU_SELECTION_ROW_ANSI = (
+    f"\x1b[48;2;{_MENU_SELECT_BG_RGB[0]};{_MENU_SELECT_BG_RGB[1]};{_MENU_SELECT_BG_RGB[2]}m"
+    f"\x1b[38;2;{_MENU_SELECT_FG_RGB[0]};{_MENU_SELECT_FG_RGB[1]};{_MENU_SELECT_FG_RGB[2]}m"
+)
+
 # ── Backward-compatible aliases (referenced by existing modules) ───────────
 # Do not remove — update the importing modules gradually instead.
 

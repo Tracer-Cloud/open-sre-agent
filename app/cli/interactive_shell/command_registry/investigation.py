@@ -9,6 +9,11 @@ from rich.console import Console
 from rich.markup import escape
 
 from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
+from app.cli.interactive_shell.repl_choice_menu import (
+    repl_choose_one,
+    repl_section_break,
+    repl_tty_interactive,
+)
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.tasks import TaskKind
 from app.cli.interactive_shell.theme import (
@@ -21,9 +26,31 @@ from app.cli.support.errors import OpenSREError
 from app.cli.support.exception_reporting import report_exception
 
 
-def _cmd_template(_session: ReplSession, console: Console, args: list[str]) -> bool:
+def _interactive_template_menu(session: ReplSession, console: Console) -> bool:
+    from app.cli.support.constants import ALERT_TEMPLATE_CHOICES
+
+    root = "/template"
+    choices: list[tuple[str, str]] = [(c, c) for c in ALERT_TEMPLATE_CHOICES]
+    choices.append(("done", "done"))
+    while True:
+        name = repl_choose_one(
+            title="template",
+            text="",
+            breadcrumb=root,
+            choices=choices,
+        )
+        if name is None or name == "done":
+            return True
+        _cmd_template(session, console, [name])
+        repl_section_break(console)
+
+
+def _cmd_template(session: ReplSession, console: Console, args: list[str]) -> bool:
     from app.cli.investigation.alert_templates import build_alert_template
     from app.cli.support.constants import ALERT_TEMPLATE_CHOICES
+
+    if not args and repl_tty_interactive():
+        return _interactive_template_menu(session, console)
 
     if not args:
         console.print(
@@ -177,8 +204,8 @@ _TEMPLATE_FIRST_ARGS: tuple[tuple[str, str], ...] = (
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
         "/template",
-        "print a starter alert JSON template "
-        "('/template generic|datadog|grafana|honeycomb|coralogix')",
+        "print a starter alert JSON template (TTY: bare '/template' opens menu; "
+        "else '/template generic|datadog|grafana|honeycomb|coralogix')",
         _cmd_template,
         first_arg_completions=_TEMPLATE_FIRST_ARGS,
         execution_tier=ExecutionTier.SAFE,
