@@ -29,8 +29,8 @@
       "MCP"
     ],
     "description": "Open-source SRE agent for automated incident investigation and root cause analysis. Connects 60+ observability/incident tools, runs LangGraph-driven agentic investigations, and ships scored synthetic RCA suites.",
-    "analyzedAt": "2026-05-07T15:35:03Z",
-    "gitCommitHash": "f908a90c178de13f10c28894744311e5088d692c"
+    "analyzedAt": "2026-05-08T00:53:46Z",
+    "gitCommitHash": "8e536abbd74454b3c2b12e52ab96a6e214f91e6b"
   },
   "nodes": [
     {
