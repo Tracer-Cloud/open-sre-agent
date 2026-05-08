@@ -33,13 +33,16 @@ import csv
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from app.integrations.opensre.constants import OPENSRE_HF_DATASET_ID  # noqa: E402
-from app.integrations.opensre.csv_grafana_backend import OpenSRECsvGrafanaBackend  # noqa: E402
+# App imports are deferred into the functions that use them. Doing them here
+# would be E402 (module-level imports after the sys.path mutation above) and
+# the alternative — module-level imports before sys.path setup — would fail
+# with ImportError when the script is run directly.
 
 
 def _resolve_telemetry_dir(args: argparse.Namespace) -> Path:
@@ -53,6 +56,7 @@ def _resolve_telemetry_dir(args: argparse.Namespace) -> Path:
         raise SystemExit("Pass --telemetry-dir or --relative PATH")
 
     if args.from_hub:
+        from app.integrations.opensre.constants import OPENSRE_HF_DATASET_ID
         from app.integrations.opensre.hf_remote import materialize_opensre_telemetry_from_hub
 
         dataset_id = (args.dataset_id or "").strip() or OPENSRE_HF_DATASET_ID
@@ -108,25 +112,31 @@ def _cmd_raw(root: Path, rel_path: str, limit: int) -> None:
     print(json.dumps({"file": rel_path, "rows": rows}, indent=2))
 
 
+def _csv_backend(root: Path) -> Any:
+    """Lazy-construct the CSV Grafana backend after ``sys.path`` is set up."""
+    from app.integrations.opensre.csv_grafana_backend import OpenSRECsvGrafanaBackend
+
+    return OpenSRECsvGrafanaBackend(telemetry_dir=root, alert_fixture={})
+
+
 def _cmd_metrics(root: Path, contains: str) -> None:
-    be = OpenSRECsvGrafanaBackend(telemetry_dir=root, alert_fixture={})
-    out = be.query_timeseries(query=contains or "")
+    out = _csv_backend(root).query_timeseries(query=contains or "")
     print(json.dumps(out, indent=2, default=str))
 
 
 def _cmd_logs(root: Path, service: str) -> None:
-    be = OpenSRECsvGrafanaBackend(telemetry_dir=root, alert_fixture={})
-    out = be.query_logs(service_name=service or "")
+    out = _csv_backend(root).query_logs(service_name=service or "")
     print(json.dumps(out, indent=2, default=str))
 
 
 def _cmd_traces(root: Path, service: str) -> None:
-    be = OpenSRECsvGrafanaBackend(telemetry_dir=root, alert_fixture={})
-    out = be.query_traces(service_name=service or "")
+    out = _csv_backend(root).query_traces(service_name=service or "")
     print(json.dumps(out, indent=2, default=str))
 
 
 def main() -> None:
+    from app.integrations.opensre.constants import OPENSRE_HF_DATASET_ID
+
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument(
         "--telemetry-dir",

@@ -79,6 +79,7 @@
               "integrations-overview",
               "remote-runtime-investigation",
               "masking",
+              "interactive-shell-privacy",
               "multi-instance-integrations"
             ]
           },

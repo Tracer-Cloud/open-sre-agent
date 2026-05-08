@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
+from app.config import has_credentials_for_active_llm_provider
 from app.nodes.plan_actions.node import InvestigationPlan
 from tests.synthetic.eks.run_suite import run_scenario, score_result
 from tests.synthetic.eks.scenario_loader import (
@@ -17,6 +18,13 @@ from tests.synthetic.eks.scenario_loader import (
 from tests.synthetic.k8s_schemas import VALID_K8S_EVIDENCE_SOURCES
 from tests.synthetic.mock_datadog_backend.backend import FixtureDatadogBackend
 from tests.synthetic.mock_eks_backend.backend import FixtureEKSBackend
+
+# Synthetic E2E uses fixture EKS/Datadog backends; many tool "calls" hit mocks, not real APIs.
+# This gate only reflects whether the *LLM* can authenticate (the reason we skip when keys are absent).
+_SYNTHETIC_SKIP_LLM = (
+    "SKIPPED: missing API key for LLM_PROVIDER "
+    "(suite uses mock EKS/Datadog backends; configure the key for your selected provider)"
+)
 
 # ---------------------------------------------------------------------------
 # Loader and fixture validation
@@ -269,6 +277,7 @@ class TestHarnessEndToEnd:
         # environment.  A dummy value is enough here because every LLM call in
         # the pipeline is either mocked (plan_actions) or bypassed entirely by
         # the healthy short-circuit (diagnose_root_cause).
+        monkeypatch.setenv("LLM_PROVIDER", "anthropic")
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-dummy")
         monkeypatch.setenv("HEALTHY_SHORT_CIRCUIT", "true")
 
@@ -343,6 +352,9 @@ def _should_assert_trajectory(fixture, actual_category: str) -> bool:
 
 def _run_scenario_test(fixture) -> None:
     """Run scenario with real LLM and mock backends, then assert scoring."""
+    if not has_credentials_for_active_llm_provider():
+        pytest.skip(_SYNTHETIC_SKIP_LLM)
+
     failures: list[str] = []
     for attempt in range(1, _LLM_ATTEMPTS + 1):
         final_state, score = run_scenario(fixture, use_mock_backends=True)

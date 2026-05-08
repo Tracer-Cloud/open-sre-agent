@@ -31,10 +31,9 @@ def test_terminate_child_process_noop_when_exited() -> None:
 
 
 def test_read_diag_respects_byte_cap() -> None:
-    buf: tempfile.SpooledTemporaryFile[bytes] = tempfile.SpooledTemporaryFile()  # type: ignore[type-arg]  # noqa: SIM115
-    buf.write(b"z" * 5_000)
-    text = read_diag(buf)
-    buf.close()
+    with tempfile.SpooledTemporaryFile() as buf:  # type: ignore[type-arg]
+        buf.write(b"z" * 5_000)
+        text = read_diag(buf)
     assert len(text) == 2_000
 
 

@@ -30,12 +30,15 @@ def plan_clause_actions(
 ) -> list[PlannedAction]:
     planned: list[PlannedAction] = []
     mentioned_services = mentioned_integration_services(clause.text)
+    matched_slash_registry = False
 
     for pattern, command in ACTION_PATTERNS:
         match = pattern.search(clause.text)
         if match is None or command in seen_slash:
             continue
         if command == "cli_command":
+            if matched_slash_registry:
+                continue
             groups = match.groupdict()
             subcmd = groups.get("subcmd") or groups.get("subcmd2")
             if subcmd is None:
@@ -50,6 +53,7 @@ def plan_clause_actions(
             continue
         planned.append(slash_action(command, clause.position + match.start()))
         seen_slash.add(command)
+        matched_slash_registry = True
 
     lower = clause.text.lower()
     for service in mentioned_services:

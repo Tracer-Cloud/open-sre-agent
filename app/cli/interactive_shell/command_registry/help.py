@@ -12,9 +12,13 @@ from app.cli.interactive_shell.theme import ACCENT_DIM, TERMINAL_ACCENT_BOLD, TE
 
 def _cmd_help(_session: ReplSession, console: Console, _args: list[str]) -> bool:
     from app.cli.interactive_shell.command_registry.agents import COMMANDS as AGENTS_CMDS
+    from app.cli.interactive_shell.command_registry.cli_parity import (
+        COMMANDS as PARITY_COMMANDS,
+    )
     from app.cli.interactive_shell.command_registry.integrations import COMMANDS as INT_CMDS
     from app.cli.interactive_shell.command_registry.investigation import COMMANDS as INV_CMDS
     from app.cli.interactive_shell.command_registry.model import COMMANDS as MODEL_CMDS
+    from app.cli.interactive_shell.command_registry.privacy_cmds import COMMANDS as PRIVACY_CMDS
     from app.cli.interactive_shell.command_registry.session_cmds import COMMANDS as SESSION_CMDS
     from app.cli.interactive_shell.command_registry.system import COMMANDS as SYS_CMDS
     from app.cli.interactive_shell.command_registry.tasks_cmds import COMMANDS as TASK_CMDS
@@ -24,8 +28,10 @@ def _cmd_help(_session: ReplSession, console: Console, _args: list[str]) -> bool
         ("Session", list(SESSION_CMDS)),
         ("Integrations & Models", list(INT_CMDS) + list(MODEL_CMDS)),
         ("Investigation", list(INV_CMDS)),
+        ("Privacy", list(PRIVACY_CMDS)),
         ("Tasks", list(TASK_CMDS)),
         ("Agents", list(AGENTS_CMDS)),
+        ("CLI (parity)", list(PARITY_COMMANDS)),
         ("System", list(SYS_CMDS)),
     ]
 

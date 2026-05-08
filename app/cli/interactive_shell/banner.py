@@ -275,7 +275,7 @@ _LOGO_MARK_ROWS: tuple[tuple[str, str], ...] = (
 def _get_username() -> str:
     try:
         return getpass.getuser()
-    except Exception:  # noqa: BLE001
+    except Exception:
         return "there"
 
 

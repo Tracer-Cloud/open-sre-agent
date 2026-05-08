@@ -505,8 +505,9 @@ def run_synthetic_test(
     console.print(f"[bold]$ {display_command}[/bold]")
     task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
     task.mark_running()
-    # Lifetime managed by the watcher thread's finally block. noqa: SIM115
-    stderr_buf: tempfile.SpooledTemporaryFile[bytes] = tempfile.SpooledTemporaryFile(  # type: ignore[type-arg] # noqa: SIM115
+    # Lifetime managed by the watcher thread's finally block; SIM115 ignored
+    # for this file in ruff.toml.
+    stderr_buf: tempfile.SpooledTemporaryFile[bytes] = tempfile.SpooledTemporaryFile(  # type: ignore[type-arg]
         max_size=_SYNTHETIC_DIAG_CHARS * 2
     )
     try:

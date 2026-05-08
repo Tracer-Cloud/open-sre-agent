@@ -183,6 +183,7 @@ async def _repl_main(initial_input: str | None = None, _config: ReplConfig | Non
     render_banner(console)
     session = ReplSession()
     prompt = _build_prompt_session()
+    session.prompt_history_backend = prompt.history
 
     # Allow a single pre-seeded input for test harnesses
     if initial_input:

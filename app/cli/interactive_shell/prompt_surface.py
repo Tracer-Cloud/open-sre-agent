@@ -45,7 +45,7 @@ def _prompt_rule_line(width: int) -> str:
 def _prompt_rule_ansi() -> str:
     try:
         width = get_app().output.get_size().columns
-    except Exception:  # noqa: BLE001
+    except Exception:
         width = 80
     return f"{PROMPT_FRAME_ANSI}{_prompt_rule_line(width)}{ANSI_RESET}"
 
