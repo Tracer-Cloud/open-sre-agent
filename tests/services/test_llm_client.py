@@ -895,10 +895,6 @@ def test_openai_invoke_rate_limit_retries_with_suggested_delay(monkeypatch) -> N
     attempts: list[int] = []
     sleeps: list[float] = []
 
-    class _Delta:
-        def __init__(self, content: str) -> None:
-            self.content = content
-
     class _Choice:
         def __init__(self, content: str) -> None:
             self.message = type("_Msg", (), {"content": content})()
