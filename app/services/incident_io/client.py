@@ -31,8 +31,10 @@ _SECRET_RE = re.compile(
     r"|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})"
 )
 
-# Module-level write locks keyed by incident ID so concurrent invocations from
-# separate client instances that target the same incident are serialised.
+# Module-level write locks keyed by incident ID so concurrent *thread* invocations
+# within the same process that target the same incident are serialised.  Each
+# distinct active incident adds one Lock (~50 bytes); in practice the set is
+# bounded by the number of incidents in flight during an investigation session.
 _INCIDENT_WRITE_LOCKS: dict[str, threading.Lock] = {}
 _INCIDENT_WRITE_LOCKS_META = threading.Lock()
 

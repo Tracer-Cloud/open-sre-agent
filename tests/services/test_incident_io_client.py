@@ -9,7 +9,7 @@ import pytest
 
 from app.integrations.config_models import IncidentIoIntegrationConfig
 from app.services.incident_io import IncidentIoClient, make_incident_io_client
-from app.services.incident_io.client import _INCIDENT_WRITE_LOCKS, _get_incident_write_lock
+from app.services.incident_io.client import _get_incident_write_lock
 
 
 def _response(payload: dict) -> MagicMock:
