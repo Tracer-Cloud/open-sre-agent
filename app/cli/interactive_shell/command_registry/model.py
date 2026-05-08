@@ -292,7 +292,6 @@ def _interactive_set_provider(console: Console) -> bool | None:
                         choices=_toolcall_model_menu_choices(provider),
                     )
                     if toolcall_value is None:
-                        toolcall_choice = None
                         break
                     if toolcall_value == "__keep__":
                         toolcall_choice = None
