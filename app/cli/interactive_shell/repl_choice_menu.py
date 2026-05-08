@@ -32,8 +32,26 @@ CRUMB_SEP = "  ›  "
 
 
 def repl_tty_interactive() -> bool:
-    """Return True when stdin/stdout support an interactive picker UI."""
-    return bool(sys.stdin.isatty() and sys.stdout.isatty())
+    """Return True when stdin/stdout support an interactive picker UI.
+
+    ``prompt_toolkit`` (and some IDEs) may wrap :data:`sys.stdout` so
+    :meth:`~io.TextIOBase.isatty` is false even though the process is still
+    attached to a real terminal on file descriptors 0/1. Fall back to
+    :func:`os.isatty` so bare ``/model``, ``/list``, etc. still get inline menus
+    in the interactive REPL.
+    """
+    try:
+        sys_in = bool(sys.stdin.isatty())
+        sys_out = bool(sys.stdout.isatty())
+    except (AttributeError, OSError, ValueError):
+        sys_in = False
+        sys_out = False
+    try:
+        fd_in = os.isatty(0)
+        fd_out = os.isatty(1)
+    except OSError:
+        return False
+    return bool((sys_in or fd_in) and (sys_out or fd_out))
 
 
 def repl_section_break(console: Console) -> None:
