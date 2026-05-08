@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sys
 import time
 from collections.abc import Callable
@@ -114,9 +115,20 @@ def _with_ctrl_c_double_exit(
     def _patched_ask(*args: Any, **kwargs: Any) -> Any:
         while True:
             try:
-                # unsafe_ask() propagates KeyboardInterrupt instead of
-                # swallowing it the way ask() does.
-                result = question.unsafe_ask(*args, **kwargs)
+                # unsafe_ask() → application.run() → asyncio.run(), which
+                # raises RuntimeError when called from inside a running event
+                # loop (e.g. the async REPL). Use in_thread=True so
+                # prompt_toolkit creates its own event loop in a background
+                # thread instead.
+                try:
+                    asyncio.get_running_loop()
+                    _in_event_loop = True
+                except RuntimeError:
+                    _in_event_loop = False
+                if _in_event_loop:
+                    result = question.application.run(in_thread=True)
+                else:
+                    result = question.unsafe_ask(*args, **kwargs)
                 _last_ctrl_c[0] = None  # reset on clean exit so next prompt starts fresh
                 return result
             except KeyboardInterrupt as exc:
