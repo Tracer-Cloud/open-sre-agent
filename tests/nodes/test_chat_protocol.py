@@ -177,6 +177,20 @@ def test_anthropic_adapter_raises_on_empty_messages_after_system_extraction(
 # ── messages_to_invocation_dicts ──────────────────────────────────────────────
 
 
+def test_openai_normalize_coerces_none_message_content() -> None:
+    out = _normalize_messages_for_openai([{"role": "user", "content": None}])
+    assert out[0]["content"] == ""
+
+
+def test_anthropic_normalize_coerces_none_tool_message_content() -> None:
+    out = _normalize_messages_for_anthropic(
+        [{"role": "tool", "content": None, "tool_call_id": "x"}]
+    )
+    blocks = out[0]["content"]
+    assert isinstance(blocks, list)
+    assert blocks[0]["content"] == ""
+
+
 def test_openai_normalize_forwards_tool_message_name() -> None:
     out = _normalize_messages_for_openai(
         [
@@ -347,6 +361,56 @@ def test_chat_openai_tool_result_round_trip(monkeypatch: pytest.MonkeyPatch) -> 
     assert any(
         m.get("role") == "tool" and "from-tool" in str(m.get("content", "")) for m in second_kw
     )
+
+
+def test_router_normalizes_duck_message_and_routes(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    mock_llm = MagicMock()
+    mock_llm.invoke.return_value = SimpleNamespace(content=" tracer_data ")
+    with patch("app.nodes.chat.get_llm_for_tools", return_value=mock_llm):
+        out = chat_mod.router_node(
+            {"messages": [SimpleNamespace(type="human", content="show dashboards")]}
+        )
+    assert out["route"] == "tracer_data"
+
+
+def test_general_node_success_returns_assistant_dict(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    chat_mod.reset_chat_llm_cache()
+    with patch.object(chat_mod, "_get_chat_llm") as get_llm:
+        llm = MagicMock()
+        llm.invoke.return_value = {"content": "short answer"}
+        get_llm.return_value = llm
+        out = chat_mod.general_node(
+            {"messages": [{"role": "user", "content": "hi"}]},
+            None,  # type: ignore[arg-type]
+        )
+    assert out["messages"][0]["role"] == "assistant"
+    assert out["messages"][0]["content"] == "short answer"
+
+
+def test_tool_executor_reraises_guardrail_blocked() -> None:
+    from app.guardrails.engine import GuardrailBlockedError
+
+    tool = MagicMock()
+    tool.name = "guarded_tool"
+    tool.side_effect = GuardrailBlockedError(("secret_rule",))
+
+    state: dict[str, Any] = {
+        "messages": [
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{"id": "c1", "name": "guarded_tool", "args": {}}],
+            }
+        ]
+    }
+    with (
+        patch("app.nodes.chat.get_registered_tools", return_value=[tool]),
+        pytest.raises(GuardrailBlockedError),
+    ):
+        chat_mod.tool_executor_node(state)  # type: ignore[arg-type]
 
 
 def test_messages_to_invocation_dicts_handles_object_messages_with_type_attr() -> None:

@@ -7,6 +7,7 @@ from typing import Any
 
 from app.config import ANTHROPIC_LLM_CONFIG, OPENAI_LLM_CONFIG
 from app.constants.prompts import GENERAL_SYSTEM_PROMPT, ROUTER_PROMPT, SYSTEM_PROMPT
+from app.guardrails.engine import GuardrailBlockedError
 from app.services import get_llm_for_tools
 from app.services.chat_sdk_adapter import (
     build_bound_chat_model,
@@ -234,6 +235,8 @@ def tool_executor_node(state: AgentState) -> dict[str, Any]:
                 result = out if isinstance(out, str) else json.dumps(out, default=str)
         # Catch recoverable tool failures broadly (SDK / IO / import / JSON, etc.).
         # BaseException is not caught so SystemExit / KeyboardInterrupt still propagate.
+        except GuardrailBlockedError:
+            raise
         except Exception as e:
             result = json.dumps({"error": str(e)})
 

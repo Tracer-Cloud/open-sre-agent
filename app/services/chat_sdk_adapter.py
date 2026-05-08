@@ -122,6 +122,15 @@ def _anthropic_chat_tools() -> list[dict[str, Any]]:
 # ── Neutral message dict helpers ─────────────────────────────────────────────
 
 
+def _coerce_text_field(value: Any) -> str:
+    """Flatten message ``content`` for API payloads: ``None`` → ``\"\"``, never ``\"None\"``."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    return str(value)
+
+
 def normalize_graph_message_dict(m: dict[str, Any]) -> dict[str, Any]:
     """Ensure a neutral dict has ``role`` (maps legacy ``type`` if needed)."""
     out = dict(m)
@@ -140,6 +149,8 @@ def normalize_invocation_message_dict(m: dict[str, Any]) -> dict[str, Any]:
     if neutral:
         out["tool_calls"] = list(neutral)
     else:
+        # ``_tool_calls_to_neutral`` returns one entry per iterable item (no filtering),
+        # so emptiness implies ``tool_calls`` was effectively empty — keep ``[]``.
         out["tool_calls"] = []
     return out
 
@@ -181,8 +192,7 @@ def object_graph_message_to_neutral_dict(msg: Any) -> dict[str, Any]:
     else:
         role = _CLASS_NAME_TO_ROLE.get(cn, "user")
 
-    raw_content = getattr(msg, "content", "")
-    content = raw_content if isinstance(raw_content, str) else str(raw_content)
+    content = _coerce_text_field(getattr(msg, "content", ""))
 
     if role == "tool" or cn == "ToolMessage":
         return {
@@ -227,9 +237,7 @@ def _normalize_messages_for_openai(
     out: list[dict[str, Any]] = []
     for m in msgs:
         role = str(m.get("role", "user"))
-        content = m.get("content", "")
-        if not isinstance(content, str):
-            content = str(content)
+        content = _coerce_text_field(m.get("content"))
 
         if role == "tool":
             name = m.get("name")
@@ -290,6 +298,11 @@ class _OpenAIChatAdapter:
         return self._client
 
     def invoke(self, messages: list[Any]) -> AssistantTurn:
+        """Call OpenAI Chat Completions.
+
+        ``messages`` may be reducer entries or outputs of ``messages_to_invocation_dicts``;
+        normalization runs once (no-op shapes are cheap).
+        """
         dicts = messages_to_invocation_dicts(messages)
         normalized = _normalize_messages_for_openai(dicts)
 
@@ -350,13 +363,15 @@ def _split_system_messages(
     n = len(msgs)
     while i < n and str(msgs[i].get("role", "")) == "system":
         m = msgs[i]
-        content = m.get("content", "")
-        if isinstance(content, str):
-            system_parts.append(content)
-        elif isinstance(content, (dict, list)):
-            system_parts.append(json.dumps(content))
+        raw_content = m.get("content")
+        if raw_content is None:
+            system_parts.append("")
+        elif isinstance(raw_content, str):
+            system_parts.append(raw_content)
+        elif isinstance(raw_content, (dict, list)):
+            system_parts.append(json.dumps(raw_content))
         else:
-            system_parts.append(str(content))
+            system_parts.append(str(raw_content))
         i += 1
     rest = list(msgs[i:])
     return ("\n".join(system_parts) if system_parts else None, rest)
@@ -380,11 +395,11 @@ def _merge_consecutive_user_turns(
             if isinstance(prev_content, list) and isinstance(curr_content, list):
                 merged: Any = prev_content + curr_content
             elif isinstance(prev_content, list):
-                merged = prev_content + [{"type": "text", "text": str(curr_content)}]
+                merged = prev_content + [{"type": "text", "text": _coerce_text_field(curr_content)}]
             elif isinstance(curr_content, list):
-                merged = [{"type": "text", "text": str(prev_content)}] + curr_content
+                merged = [{"type": "text", "text": _coerce_text_field(prev_content)}] + curr_content
             else:
-                merged = f"{prev_content}\n\n{curr_content}"
+                merged = f"{_coerce_text_field(prev_content)}\n\n{_coerce_text_field(curr_content)}"
             out[-1] = {"role": "user", "content": merged}
         else:
             out.append(m)
@@ -414,17 +429,13 @@ def _normalize_messages_for_anthropic(
     while i < n:
         m = msgs[i]
         role = str(m.get("role", "user"))
-        content = m.get("content", "")
-        if not isinstance(content, str):
-            content = str(content)
+        content = _coerce_text_field(m.get("content"))
 
         if role == "tool":
             tool_blocks: list[dict[str, Any]] = []
             while i < n and str(msgs[i].get("role", "")) == "tool":
                 tm = msgs[i]
-                tc_content = tm.get("content", "")
-                if not isinstance(tc_content, str):
-                    tc_content = str(tc_content)
+                tc_content = _coerce_text_field(tm.get("content"))
                 tool_blocks.append(
                     {
                         "type": "tool_result",
@@ -521,6 +532,7 @@ class _AnthropicChatAdapter:
         return self._client
 
     def invoke(self, messages: list[Any]) -> AssistantTurn:
+        """Call Anthropic ``messages.create`` (same ``messages`` contract as OpenAI adapter)."""
         dicts = messages_to_invocation_dicts(messages)
         system, non_system = _split_system_messages(dicts)
         normalized = _normalize_messages_for_anthropic(non_system)
