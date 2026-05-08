@@ -12,6 +12,7 @@ from app.integrations.supabase import (
     build_supabase_config,
     get_service_health,
     get_storage_buckets,
+    resolve_supabase_config,
     supabase_config_from_env,
     supabase_extract_params,
     supabase_is_available,
@@ -85,6 +86,37 @@ class TestSupabaseConfigFromEnv:
         monkeypatch.delenv("SUPABASE_URL", raising=False)
         monkeypatch.delenv("SUPABASE_SERVICE_KEY", raising=False)
         assert supabase_config_from_env() is None
+
+
+# ---------------------------------------------------------------------------
+# resolve_supabase_config — URL origin validation (security)
+# ---------------------------------------------------------------------------
+
+
+class TestResolveSupabaseConfig:
+    def test_resolves_matching_url(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SUPABASE_URL", "https://proj.supabase.co")
+        monkeypatch.setenv("SUPABASE_SERVICE_KEY", "svc")
+        config = resolve_supabase_config("https://proj.supabase.co")
+        assert config.service_key == "svc"
+
+    def test_rejects_mismatched_host(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SUPABASE_URL", "https://proj.supabase.co")
+        monkeypatch.setenv("SUPABASE_SERVICE_KEY", "svc")
+        with pytest.raises(ValueError, match="unrecognised host"):
+            resolve_supabase_config("https://attacker.example.com")
+
+    def test_rejects_when_env_not_configured(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("SUPABASE_URL", raising=False)
+        monkeypatch.delenv("SUPABASE_SERVICE_KEY", raising=False)
+        with pytest.raises(ValueError, match="not configured"):
+            resolve_supabase_config("https://proj.supabase.co")
+
+    def test_strips_trailing_slash_before_comparison(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SUPABASE_URL", "https://proj.supabase.co")
+        monkeypatch.setenv("SUPABASE_SERVICE_KEY", "svc")
+        config = resolve_supabase_config("https://proj.supabase.co/")
+        assert config.url == "https://proj.supabase.co"
 
 
 # ---------------------------------------------------------------------------
@@ -176,6 +208,21 @@ class TestGetServiceHealth:
         assert result["degraded_services"] == []
         assert set(result["services"].keys()) == {"postgrest", "auth", "storage"}
 
+    def test_storage_health_uses_dedicated_endpoint(self) -> None:
+        """Ensure we call /storage/v1/health not the bucket-listing endpoint."""
+        config = SupabaseConfig(url="https://proj.supabase.co", service_key="key")
+        called_paths: list[str] = []
+
+        def _capture(cfg: SupabaseConfig, path: str, **_: Any) -> tuple[int, Any]:
+            called_paths.append(path)
+            return (200, {})
+
+        with patch("app.integrations.supabase._make_request", side_effect=_capture):
+            get_service_health(config)
+
+        assert "/storage/v1/health" in called_paths
+        assert "/storage/v1/bucket" not in called_paths
+
     def test_partial_degradation_reports_correct_service(self) -> None:
         config = SupabaseConfig(url="https://proj.supabase.co", service_key="key")
 
@@ -237,9 +284,7 @@ class TestGetStorageBuckets:
 
     def test_returns_error_on_403(self) -> None:
         config = SupabaseConfig(url="https://proj.supabase.co", service_key="key")
-        with patch(
-            "app.integrations.supabase._make_request", return_value=(403, {})
-        ):
+        with patch("app.integrations.supabase._make_request", return_value=(403, {})):
             result = get_storage_buckets(config)
         assert result["available"] is False
         assert "403" in result["error"]
@@ -247,7 +292,8 @@ class TestGetStorageBuckets:
     def test_handles_non_list_body_gracefully(self) -> None:
         config = SupabaseConfig(url="https://proj.supabase.co", service_key="key")
         with patch(
-            "app.integrations.supabase._make_request", return_value=(200, {"error": "unexpected"})
+            "app.integrations.supabase._make_request",
+            return_value=(200, {"error": "unexpected"}),
         ):
             result = get_storage_buckets(config)
         assert result["available"] is True

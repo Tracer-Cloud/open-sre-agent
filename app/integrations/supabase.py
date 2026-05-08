@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlparse
 
 from pydantic import Field, field_validator
 
@@ -74,18 +75,39 @@ def supabase_config_from_env() -> SupabaseConfig | None:
     return build_supabase_config({"url": url, "service_key": service_key})
 
 
+def _same_origin(url_a: str, url_b: str) -> bool:
+    """Return True when both URLs share the same scheme and host."""
+    a, b = urlparse(url_a), urlparse(url_b)
+    return a.scheme == b.scheme and a.netloc == b.netloc
+
+
 def resolve_supabase_config(project_url: str) -> SupabaseConfig:
     """Build a config for the given project URL, resolving credentials from env.
 
     The LLM supplies only the identifying param (project_url).
-    The service key is resolved from environment variables so it never appears
-    in tool signatures and is never seen by the LLM.
+    Credentials are resolved from environment variables so they never appear
+    in tool signatures and are never seen by the LLM.
+
+    Raises ValueError if project_url does not match the configured SUPABASE_URL.
+    This prevents prompt-injection attacks from exfiltrating the service key
+    to an attacker-controlled domain.
     """
     env_config = supabase_config_from_env()
-    if env_config and env_config.url == project_url.rstrip("/"):
-        return env_config
-    service_key = os.getenv("SUPABASE_SERVICE_KEY", "").strip()
-    return build_supabase_config({"url": project_url, "service_key": service_key})
+    normalized = project_url.rstrip("/")
+
+    if env_config is None:
+        raise ValueError(
+            "Supabase is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_KEY."
+        )
+
+    if not _same_origin(env_config.url, normalized):
+        raise ValueError(
+            f"project_url '{normalized}' does not match the configured "
+            f"SUPABASE_URL origin. Refusing to attach credentials to an "
+            f"unrecognised host."
+        )
+
+    return build_supabase_config({"url": normalized, "service_key": env_config.service_key})
 
 
 def _make_request(
@@ -111,7 +133,7 @@ def _make_request(
 
 
 def validate_supabase_config(config: SupabaseConfig) -> SupabaseValidationResult:
-    """Validate Supabase connectivity by probing the PostgREST health endpoint."""
+    """Validate Supabase connectivity by probing the PostgREST root endpoint."""
     if not config.url:
         return SupabaseValidationResult(ok=False, detail="Supabase URL is required.")
     if not config.service_key:
@@ -153,7 +175,7 @@ def supabase_extract_params(sources: dict[str, dict]) -> dict[str, Any]:  # type
 def get_service_health(config: SupabaseConfig) -> dict[str, Any]:
     """Check the health of all Supabase services: PostgREST, Auth, and Storage.
 
-    Read-only: hits health/status endpoints only. Returns a per-service
+    Read-only: hits dedicated health endpoints only. Returns a per-service
     breakdown so the agent can pinpoint which layer is degraded.
     """
     if not config.is_configured:
@@ -187,9 +209,9 @@ def get_service_health(config: SupabaseConfig) -> dict[str, Any]:
     except Exception as err:
         services["auth"] = {"healthy": False, "error": str(err)}
 
-    # Storage service
+    # Storage service — dedicated health endpoint; does not require bucket permissions
     try:
-        status, _ = _make_request(config, "/storage/v1/bucket")
+        status, _ = _make_request(config, "/storage/v1/health")
         services["storage"] = {
             "healthy": status == 200,
             "status_code": status,

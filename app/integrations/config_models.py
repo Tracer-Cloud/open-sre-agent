@@ -693,26 +693,3 @@ class PrefectIntegrationConfig(StrictConfigModel):
     _normalize_strs = field_validator("api_key", "account_id", "workspace_id", mode="before")(
         normalize_str()
     )
-
-# ---------------------------------------------------------------------------
-# BaaS / Backend as a Service
-# ---------------------------------------------------------------------------
-
-
-class SupabaseIntegrationConfig(StrictConfigModel):
-    """Normalized Supabase credentials used by resolution and verification flows."""
-
-    url: str
-    service_key: str
-    integration_id: str = ""
-
-    _normalize_url = field_validator("url", mode="before")(normalize_url())
-    _normalize_service_key = field_validator("service_key", mode="before")(normalize_str())
-
-    @property
-    def headers(self) -> dict[str, str]:
-        return {
-            "Authorization": f"Bearer {self.service_key}",
-            "apikey": self.service_key,
-            "Content-Type": "application/json",
-        }
