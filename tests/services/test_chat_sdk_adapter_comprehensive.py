@@ -22,15 +22,29 @@ Anthropic messages API
 
 State contract
   § ChatMessageModel       — tool_call_id + name accepted (StrictConfigModel no extra-fields)
+
+Response factory strategy
+  _openai_response / _anthropic_response build **real SDK Pydantic objects**
+  (openai.types.chat.ChatCompletion, anthropic.types.Message) so the adapter is
+  exercised against the same attribute shapes the live API returns.  SimpleNamespace
+  dummies would hide type mismatches (e.g. arguments: str vs dict, input: dict vs str).
+
+API references used to derive field names and types:
+  OpenAI  — https://platform.openai.com/docs/api-reference/chat/object
+  Anthropic — https://docs.anthropic.com/en/api/messages
 """
 
 from __future__ import annotations
 
 import json
-from types import SimpleNamespace
 from typing import Any
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
+# Real SDK Pydantic types — used to build response fixtures that match what the
+# live API actually returns, not SimpleNamespace dummies.
+import anthropic.types as ant
+import openai.types.chat as oai
+import openai.types.chat.chat_completion_message_tool_call as oai_tc_mod
 import pytest
 
 from app.services.chat_sdk_adapter import (
@@ -42,28 +56,63 @@ from app.services.chat_sdk_adapter import (
     messages_to_invocation_dicts,
 )
 
-# ── Shared fake response factories ────────────────────────────────────────────
+# ── Response factories using real SDK types ────────────────────────────────────
+#
+# OpenAI:  ChatCompletion → choices[].message (ChatCompletionMessage)
+#            .content       str | None
+#            .tool_calls    list[ChatCompletionMessageToolCall] | None
+#              .id          str
+#              .type        "function"
+#              .function    Function(.name: str, .arguments: str  ← JSON string)
+#
+# Anthropic: Message → .content list[TextBlock | ToolUseBlock]
+#            TextBlock:   .type="text"     .text: str
+#            ToolUseBlock:.type="tool_use" .id: str  .name: str  .input: dict (pre-decoded)
 
 
 def _openai_response(content: str | None = "", tool_calls: list[dict] | None = None) -> Any:
-    tc_objs: list[Any] = []
+    """Build a real openai.types.chat.ChatCompletion object."""
+    tc_objs: list[oai.ChatCompletionMessageToolCall] = []
     for tc in tool_calls or []:
-        fn = SimpleNamespace(name=tc["name"], arguments=json.dumps(tc.get("args", {})))
-        tc_objs.append(SimpleNamespace(id=tc["id"], type="function", function=fn))
-    message = SimpleNamespace(content=content, tool_calls=tc_objs or None)
-    return SimpleNamespace(choices=[SimpleNamespace(message=message)])
+        fn = oai_tc_mod.Function(name=tc["name"], arguments=json.dumps(tc.get("args", {})))
+        tc_objs.append(oai.ChatCompletionMessageToolCall(id=tc["id"], type="function", function=fn))
+    message = oai.ChatCompletionMessage(
+        role="assistant",
+        content=content,
+        tool_calls=tc_objs or None,
+    )
+    return oai.ChatCompletion(
+        id="chatcmpl-test",
+        choices=[oai.chat_completion.Choice(finish_reason="stop", index=0, message=message)],
+        created=1_700_000_000,
+        model="gpt-4o",
+        object="chat.completion",
+    )
 
 
-def _anthropic_response(text: str = "", tool_uses: list[dict] | None = None) -> Any:
-    blocks: list[Any] = []
+def _anthropic_response(text: str = "", tool_uses: list[dict] | None = None) -> ant.Message:
+    """Build a real anthropic.types.Message object.
+
+    Anthropic delivers tool input as a **pre-decoded dict**, never a JSON string.
+    """
+    blocks: list[ant.TextBlock | ant.ToolUseBlock] = []
     if text:
-        blocks.append(SimpleNamespace(type="text", text=text))
+        blocks.append(ant.TextBlock(type="text", text=text))
     for tu in tool_uses or []:
-        # Anthropic sends input as a pre-decoded dict, not a JSON string.
         blocks.append(
-            SimpleNamespace(type="tool_use", id=tu["id"], name=tu["name"], input=tu.get("args", {}))
+            ant.ToolUseBlock(
+                type="tool_use", id=tu["id"], name=tu["name"], input=tu.get("args", {})
+            )
         )
-    return SimpleNamespace(content=blocks)
+    return ant.Message(
+        id="msg-test",
+        content=blocks,
+        model="claude-3-5-sonnet-20241022",
+        role="assistant",
+        stop_reason="end_turn",
+        type="message",
+        usage=ant.Usage(input_tokens=10, output_tokens=20),
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -147,6 +196,10 @@ def test_openai_content_none_becomes_empty_string(monkeypatch: pytest.MonkeyPatc
 def test_openai_empty_choices_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     adapter = _OpenAIChatAdapter(model="gpt-4o", with_tools=False)
+    # Real ChatCompletion cannot be constructed with an empty choices list
+    # (the API never does this), so use a minimal stand-in for this error path only.
+    from types import SimpleNamespace
+
     bad_resp = SimpleNamespace(choices=[])
 
     with patch("openai.OpenAI") as cls:
@@ -161,9 +214,17 @@ def test_openai_empty_choices_raises(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_openai_tool_call_invalid_json_args_defaults_to_empty(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Malformed JSON in tool call arguments must not propagate — fall back to {}."""
+    """Malformed JSON in tool call arguments must not propagate — fall back to {}.
+
+    The real SDK validates `arguments` as a string but not as valid JSON — so this
+    edge case (server bug or streaming partial) is represented with real SDK types
+    where possible, except the inner Function object which requires a plain stub
+    because Pydantic would normalise valid JSON before we can test the bad-JSON path.
+    """
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     adapter = _OpenAIChatAdapter(model="gpt-4o", with_tools=True)
+    from types import SimpleNamespace
+
     fn = SimpleNamespace(name="broken", arguments="{not valid json}")
     tc = SimpleNamespace(id="bad", type="function", function=fn)
     message = SimpleNamespace(content=None, tool_calls=[tc])
@@ -409,11 +470,18 @@ def test_anthropic_multi_text_blocks_concatenated(monkeypatch: pytest.MonkeyPatc
     """Multiple text blocks in a single response must be joined into one content string."""
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
     adapter = _AnthropicChatAdapter(model="claude-3-5-sonnet-20241022", with_tools=False)
-    blocks = [
-        SimpleNamespace(type="text", text="Part one. "),
-        SimpleNamespace(type="text", text="Part two."),
-    ]
-    resp = SimpleNamespace(content=blocks)
+    resp = ant.Message(
+        id="msg-multi",
+        content=[
+            ant.TextBlock(type="text", text="Part one. "),
+            ant.TextBlock(type="text", text="Part two."),
+        ],
+        model="claude-3-5-sonnet-20241022",
+        role="assistant",
+        stop_reason="end_turn",
+        type="message",
+        usage=ant.Usage(input_tokens=5, output_tokens=10),
+    )
 
     with patch("anthropic.Anthropic") as cls:
         client = MagicMock()
@@ -488,8 +556,15 @@ def test_anthropic_tool_input_is_pre_decoded_dict(monkeypatch: pytest.MonkeyPatc
     """Anthropic sends tool input as a pre-decoded dict (not a JSON string); args must match."""
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
     adapter = _AnthropicChatAdapter(model="claude-3-5-sonnet-20241022", with_tools=True)
-    block = SimpleNamespace(type="tool_use", id="x", name="t", input={"nested": {"k": "v"}})
-    resp = SimpleNamespace(content=[block])
+    resp = ant.Message(
+        id="msg-dict",
+        content=[ant.ToolUseBlock(type="tool_use", id="x", name="t", input={"nested": {"k": "v"}})],
+        model="claude-3-5-sonnet-20241022",
+        role="assistant",
+        stop_reason="tool_use",
+        type="message",
+        usage=ant.Usage(input_tokens=5, output_tokens=5),
+    )
 
     with patch("anthropic.Anthropic") as cls:
         client = MagicMock()
