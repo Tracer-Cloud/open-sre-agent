@@ -147,7 +147,8 @@ Post-processing writes **distinct** evidence keys so parallel tools do not overw
 | `helm_release_status` | Status object from `helm status` |
 | `helm_release_history` | Revision history array |
 | `helm_release_values` | Values object |
-| `helm_release_manifest` | Manifest string (`helm_manifest_truncated` when capped) |
+| `helm_release_manifest` | Rendered manifest YAML **string**; unchanged key name. When the manifest exceeds the size cap, this value is **truncated** text, not a separate key. |
+| `helm_manifest_truncated` | Boolean: `true` when `helm_release_manifest` was truncated because of `HELM_MANIFEST_MAX_CHARS` / the client default cap. |
 
 ## Advanced
 
