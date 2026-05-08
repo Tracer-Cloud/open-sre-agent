@@ -516,21 +516,22 @@ def run_suite(argv: list[str] | None = None) -> list[ScenarioScore]:
 
     results: list[ScenarioScore] = []
     for fixture in fixtures:
+        if not args.json:
+            print(f"RUNNING {fixture.scenario_id}...", flush=True)
         _, score = run_scenario(fixture, use_mock_grafana=args.mock_grafana)
         results.append(score)
+        if not args.json:
+            status = "PASS" if score.passed else "FAIL"
+            detail = (
+                f"reason={score.failure_reason!r}"
+                if score.failure_reason
+                else f"category={score.actual_category}"
+            )
+            print(f"{status} {fixture.scenario_id} {detail}", flush=True)
 
     if args.json:
         print(json.dumps([asdict(result) for result in results], indent=2))
     else:
-        for result in results:
-            status = "PASS" if result.passed else "FAIL"
-            detail = (
-                f"reason={result.failure_reason!r}"
-                if result.failure_reason
-                else f"category={result.actual_category}"
-            )
-            print(f"{status} {result.scenario_id} {detail}")
-
         passed_count = sum(1 for result in results if result.passed)
         print(f"\nResults: {passed_count}/{len(results)} passed")
 

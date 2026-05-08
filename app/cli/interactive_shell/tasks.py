@@ -14,6 +14,7 @@ from typing import Any
 
 _TASK_ID_BYTES = 4
 _MAX_REGISTRY = 100
+_MAX_PROGRESS_CHARS = 500
 
 
 class TaskStatus(StrEnum):
@@ -41,6 +42,7 @@ class TaskRecord:
     ended_at: float | None = None
     result: str | None = None
     error: str | None = None
+    progress: str | None = None
     _cancel_requested: threading.Event = field(
         default_factory=threading.Event, repr=False, init=False
     )
@@ -85,6 +87,12 @@ class TaskRecord:
             self.status = TaskStatus.FAILED
             self.error = message
             self.ended_at = time.time()
+
+    def update_progress(self, text: str) -> None:
+        with self._lock:
+            if self.status != TaskStatus.RUNNING:
+                return
+            self.progress = text[:_MAX_PROGRESS_CHARS]
 
     def request_cancel(self) -> bool:
         """Signal cancellation and kill a bound subprocess. Returns True if task was running."""
@@ -146,4 +154,5 @@ __all__ = [
     "TaskRecord",
     "TaskRegistry",
     "TaskStatus",
+    "_MAX_PROGRESS_CHARS",
 ]

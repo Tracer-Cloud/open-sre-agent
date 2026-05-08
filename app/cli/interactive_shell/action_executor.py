@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import queue
 import shlex
 import subprocess
 import sys
@@ -72,6 +73,7 @@ def watch_synthetic_subprocess(
     session: ReplSession,
     suite_name: str,
     stderr_buf: tempfile.SpooledTemporaryFile[bytes],  # type: ignore[type-arg]
+    stdout_queue: queue.Queue[str] | None = None,
 ) -> None:
     def _history_text() -> str:
         return f"{suite_name} task:{task.task_id}"
@@ -101,6 +103,12 @@ def watch_synthetic_subprocess(
                 terminate_child_process(proc)
                 terminated_by_watcher = True
                 break
+            if stdout_queue is not None:
+                lines: list[str] = []
+                while not stdout_queue.empty():
+                    lines.append(stdout_queue.get_nowait())
+                if lines:
+                    task.update_progress("\n".join(lines))
             time.sleep(_SYNTHETIC_POLL_SECONDS)
 
         try:
@@ -515,7 +523,7 @@ def run_synthetic_test(
     try:
         proc = subprocess.Popen(
             [sys.executable, "-m", "app.cli", "tests", "synthetic"],
-            stdout=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
             stderr=stderr_buf,
         )
     except Exception as exc:
@@ -526,8 +534,21 @@ def run_synthetic_test(
         session.record("synthetic_test", suite_name, ok=False)
         return
 
+    stdout_queue_local: queue.Queue[str] = queue.Queue()
+
+    def _read_stdout() -> None:
+        try:
+            for raw_line in proc.stdout or []:
+                line = raw_line.decode("utf-8", errors="replace").rstrip()
+                if line:
+                    stdout_queue_local.put(line)
+        except ValueError:
+            pass
+
+    threading.Thread(target=_read_stdout, daemon=True, name=f"stdout-{task.task_id}").start()
+
     task.attach_process(proc)
-    watch_synthetic_subprocess(task, proc, session, suite_name, stderr_buf)
+    watch_synthetic_subprocess(task, proc, session, suite_name, stderr_buf, stdout_queue=stdout_queue_local)
     console.print(
         f"[{DIM}]synthetic test started — task[/] [bold]{escape(task.task_id)}[/bold]. "
         f"[{HIGHLIGHT}]/tasks[/] [{DIM}]to monitor,[/] "
