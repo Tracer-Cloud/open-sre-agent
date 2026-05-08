@@ -387,6 +387,7 @@ def build_ready_panel(
         ]
     )
 
+    body: Group | Table
     if console.width - _PANEL_FRAME_WIDTH >= _MIN_TWO_COLUMN_CONTENT_WIDTH:
         left_width, right_width = _two_column_widths(console.width)
         height = max(
@@ -395,11 +396,12 @@ def build_ready_panel(
         )
         divider = _vertical_divider(height)
 
-        body = Table.grid(padding=0, expand=False)
-        body.add_column(justify="left", vertical="top", width=left_width)
-        body.add_column(justify="center", vertical="top", width=_DIVIDER_WIDTH)
-        body.add_column(justify="left", vertical="top", width=right_width)
-        body.add_row(left, divider, right)
+        grid = Table.grid(padding=0, expand=False)
+        grid.add_column(justify="left", vertical="top", width=left_width)
+        grid.add_column(justify="center", vertical="top", width=_DIVIDER_WIDTH)
+        grid.add_column(justify="left", vertical="top", width=right_width)
+        grid.add_row(left, divider, right)
+        body = grid
     else:
         body = Group(
             left,
