@@ -1405,6 +1405,13 @@ Thanks goes to these amazing people:
             <sub><b>VibhorGautam</b></sub>
         </a>
     </td>
+            <td align="center" width="8%">
+        <a href="https://github.com/samdiano">
+            <img src="https://avatars.githubusercontent.com/u/27571135?v=4" width="45" alt="samdiano"/>
+            <br />
+            <sub><b>samdiano</b></sub>
+        </a>
+    </td>
 		</tr>
 	</tbody>
 </table>
