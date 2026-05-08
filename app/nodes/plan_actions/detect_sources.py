@@ -165,7 +165,7 @@ def _extract_issue_id_from_url(value: str) -> str:
 def _extract_incident_io_id_from_url(value: str) -> str:
     parsed = urlparse(value.strip())
     host = (parsed.hostname or "").lower()
-    if not host.endswith("incident.io"):
+    if host != "incident.io" and not host.endswith(".incident.io"):
         return ""
     parts = [part for part in parsed.path.split("/") if part]
     if "incidents" not in parts:
@@ -1587,9 +1587,7 @@ def detect_sources(
     if incident_io_int and str(incident_io_int.get("api_key", "")).strip():
         incident_id = str(
             annotations.get("incident_io_incident_id")
-            or annotations.get("incident_id")
             or raw_alert.get("incident_io_incident_id", "")
-            or raw_alert.get("incident_id", "")
         ).strip()
         if not incident_id:
             incident_url = str(

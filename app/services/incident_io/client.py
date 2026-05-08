@@ -31,6 +31,18 @@ _SECRET_RE = re.compile(
     r"|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})"
 )
 
+# Module-level write locks keyed by incident ID so concurrent invocations from
+# separate client instances that target the same incident are serialised.
+_INCIDENT_WRITE_LOCKS: dict[str, threading.Lock] = {}
+_INCIDENT_WRITE_LOCKS_META = threading.Lock()
+
+
+def _get_incident_write_lock(incident_id: str) -> threading.Lock:
+    with _INCIDENT_WRITE_LOCKS_META:
+        if incident_id not in _INCIDENT_WRITE_LOCKS:
+            _INCIDENT_WRITE_LOCKS[incident_id] = threading.Lock()
+        return _INCIDENT_WRITE_LOCKS[incident_id]
+
 
 def _safe_int(value: int | None, default: int, maximum: int) -> int:
     if value is None:
@@ -78,7 +90,6 @@ class IncidentIoClient:
         self.config = config
         self._client: httpx.Client | None = None
         self._client_lock = threading.RLock()
-        self._write_lock = threading.Lock()
 
     @property
     def is_configured(self) -> bool:
@@ -312,7 +323,7 @@ class IncidentIoClient:
         notify_incident_channel: bool = False,
     ) -> dict[str, Any]:
         """Append OpenSRE findings to an incident summary via the supported edit endpoint."""
-        with self._write_lock:
+        with _get_incident_write_lock(incident_id):
             incident_result = self.get_incident(incident_id)
             if not incident_result.get("success"):
                 return incident_result

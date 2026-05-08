@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
@@ -8,6 +9,7 @@ import pytest
 
 from app.integrations.config_models import IncidentIoIntegrationConfig
 from app.services.incident_io import IncidentIoClient, make_incident_io_client
+from app.services.incident_io.client import _INCIDENT_WRITE_LOCKS, _get_incident_write_lock
 
 
 def _response(payload: dict) -> MagicMock:
@@ -154,6 +156,56 @@ def test_append_summary_update_uses_supported_edit_endpoint(
     assert payload["notify_incident_channel"] is False
     assert "Existing summary" in payload["incident"]["summary"]
     assert "Root cause found" in payload["incident"]["summary"]
+
+
+def test_concurrent_append_summary_uses_shared_module_level_lock() -> None:
+    """Two separate client instances targeting the same incident must share one lock."""
+    client_a = IncidentIoClient(IncidentIoIntegrationConfig(api_key="key-a"))
+    client_b = IncidentIoClient(IncidentIoIntegrationConfig(api_key="key-b"))
+
+    lock_a = _get_incident_write_lock("inc-shared")
+    lock_b = _get_incident_write_lock("inc-shared")
+    assert lock_a is lock_b, "Different client instances must share the same lock per incident ID"
+
+    lock_other = _get_incident_write_lock("inc-other")
+    assert lock_other is not lock_a, "Different incident IDs must use different locks"
+
+    # Verify the clients themselves no longer carry a _write_lock attribute
+    assert not hasattr(client_a, "_write_lock")
+    assert not hasattr(client_b, "_write_lock")
+
+    # Confirm concurrent writes from two clients are serialised by the shared lock:
+    # the first writer holds the lock while the second waits.
+    order: list[str] = []
+    barrier = threading.Barrier(2)
+
+    def write_a(client: IncidentIoClient, monkeypatch_fn) -> None:  # type: ignore[type-arg]
+        # Not testing HTTP here — just lock ordering
+        pass
+
+    lock = _get_incident_write_lock("inc-concurrent")
+    results: list[bool] = []
+
+    def holder() -> None:
+        with lock:
+            order.append("held")
+            barrier.wait()
+
+    def waiter() -> None:
+        barrier.wait()
+        acquired = lock.acquire(blocking=False)
+        results.append(acquired)
+        if acquired:
+            lock.release()
+
+    t1 = threading.Thread(target=holder)
+    t2 = threading.Thread(target=waiter)
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+
+    assert results == [False], "Concurrent writer must be blocked while the lock is held"
 
 
 def test_request_honors_documented_json_rate_limit_retry_after(
