@@ -8,7 +8,6 @@ from typing import Literal
 
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.terminal_intent import (
-    is_cli_agent_operational_intent,
     is_sample_alert_launch_intent,
     mentions_alert_signal,
 )
@@ -261,7 +260,9 @@ def classify_input(text: str, session: ReplSession) -> InputKind:
     if is_sample_alert_launch_intent(stripped):
         return "cli_agent"
 
-    if is_cli_agent_operational_intent(stripped) and not mentions_alert_signal(stripped):
+    from app.cli.interactive_shell.action_planner import plan_cli_actions
+
+    if plan_cli_actions(stripped) and not mentions_alert_signal(stripped):
         return "cli_agent"
 
     if session.last_state is None:
