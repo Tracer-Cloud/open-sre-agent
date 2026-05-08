@@ -757,7 +757,7 @@ class Analytics:
         self._worker = worker
 
     def _worker_loop(self) -> None:
-        with httpx.Client(timeout=_SEND_TIMEOUT) as client:
+        with httpx.Client(timeout=_SEND_TIMEOUT, trust_env=False) as client:
             while True:
                 item = self._queue.get()
                 if item is None:
