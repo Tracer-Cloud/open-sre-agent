@@ -10,6 +10,7 @@ from app.constants.prompts import GENERAL_SYSTEM_PROMPT, ROUTER_PROMPT, SYSTEM_P
 from app.guardrails.engine import GuardrailBlockedError
 from app.services import get_llm_for_tools
 from app.services.chat_sdk_adapter import (
+    _coerce_text_field,
     build_bound_chat_model,
     messages_to_invocation_dicts,
 )
@@ -161,7 +162,7 @@ def router_node(state: AgentState) -> dict[str, Any]:
     response = get_llm_for_tools().invoke(
         [
             {"role": "system", "content": ROUTER_PROMPT},
-            {"role": "user", "content": str(msgs[-1].get("content", ""))},
+            {"role": "user", "content": _coerce_text_field(msgs[-1].get("content"))},
         ]
     )
     route = str(response.content).strip().lower()

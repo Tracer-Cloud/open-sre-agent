@@ -413,6 +413,19 @@ def test_tool_executor_reraises_guardrail_blocked() -> None:
         chat_mod.tool_executor_node(state)  # type: ignore[arg-type]
 
 
+def test_router_coerces_none_last_user_content_for_llm(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    mock_llm = MagicMock()
+    mock_llm.invoke.return_value = SimpleNamespace(content="general")
+    with patch("app.nodes.chat.get_llm_for_tools", return_value=mock_llm):
+        chat_mod.router_node(
+            {"messages": [{"role": "user", "content": None}]},
+        )
+    user_msg = mock_llm.invoke.call_args[0][0][1]
+    assert user_msg["role"] == "user"
+    assert user_msg["content"] == ""
+
+
 def test_messages_to_invocation_dicts_handles_object_messages_with_type_attr() -> None:
     """Framework-shaped objects (duck-typed ``type`` / ``content`` / ``tool_calls``) normalize."""
     msgs: list[object] = [
