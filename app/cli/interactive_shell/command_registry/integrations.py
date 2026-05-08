@@ -6,6 +6,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from app.cli.interactive_shell.command_registry import repl_data
+from app.cli.interactive_shell.command_registry.cli_parity import run_cli_command
 from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
 from app.cli.interactive_shell.rendering import (
     render_integrations_table,
@@ -34,6 +35,12 @@ def _cmd_integrations(session: ReplSession, console: Console, args: list[str]) -
         else:
             console.print("[green]all integrations ok.[/green]")
         return True
+
+    if sub == "setup":
+        return run_cli_command(console, ["integrations", "setup", *args[1:]])
+
+    if sub == "remove":
+        return run_cli_command(console, ["integrations", "remove", *args[1:]])
 
     if sub == "show":
         if len(args) < 2:
@@ -76,16 +83,10 @@ def _cmd_mcp(_session: ReplSession, console: Console, args: list[str]) -> bool:
         return True
 
     if sub == "connect":
-        console.print(
-            "[dim]to connect an MCP server, run:[/dim] [bold]opensre integrations setup[/bold]"
-        )
-        return True
+        return run_cli_command(console, ["integrations", "setup", *args[1:]])
 
     if sub == "disconnect":
-        console.print(
-            "[dim]to remove an MCP server, run:[/dim] [bold]opensre integrations remove <service>[/bold]"
-        )
-        return True
+        return run_cli_command(console, ["integrations", "remove", *args[1:]])
 
     console.print(
         f"[{TERMINAL_ERROR}]unknown subcommand:[/] {escape(sub)}  "

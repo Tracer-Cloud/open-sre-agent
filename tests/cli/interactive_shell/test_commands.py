@@ -315,6 +315,22 @@ class TestIntegrationsCommand:
         dispatch_slash("/integrations bogus", ReplSession(), console)
         assert "unknown subcommand" in buf.getvalue()
 
+    def test_setup_delegates_to_cli(self, monkeypatch: object) -> None:
+        from app.cli.interactive_shell.command_registry import integrations as m
+
+        captured = []
+        monkeypatch.setattr(m, "run_cli_command", lambda _, args: (captured.append(args), True)[1])
+        dispatch_slash("/integrations setup", ReplSession(), Console())
+        assert captured == [["integrations", "setup"]]
+
+    def test_remove_delegates_to_cli(self, monkeypatch: object) -> None:
+        from app.cli.interactive_shell.command_registry import integrations as m
+
+        captured = []
+        monkeypatch.setattr(m, "run_cli_command", lambda _, args: (captured.append(args), True)[1])
+        dispatch_slash("/integrations remove slack", ReplSession(), Console())
+        assert captured == [["integrations", "remove", "slack"]]
+
 
 class TestMcpCommand:
     _FAKE = [
@@ -341,15 +357,21 @@ class TestMcpCommand:
         dispatch_slash("/mcp", ReplSession(), console)
         assert "github" in buf.getvalue()
 
-    def test_connect_prints_hint(self) -> None:
-        console, buf = _capture()
-        dispatch_slash("/mcp connect", ReplSession(), console)
-        assert "integrations setup" in buf.getvalue()
+    def test_connect_delegates_to_cli(self, monkeypatch: object) -> None:
+        from app.cli.interactive_shell.command_registry import integrations as m
 
-    def test_disconnect_prints_hint(self) -> None:
-        console, buf = _capture()
-        dispatch_slash("/mcp disconnect", ReplSession(), console)
-        assert "integrations remove" in buf.getvalue()
+        captured = []
+        monkeypatch.setattr(m, "run_cli_command", lambda _, args: (captured.append(args), True)[1])
+        dispatch_slash("/mcp connect", ReplSession(), Console())
+        assert captured == [["integrations", "setup"]]
+
+    def test_disconnect_delegates_to_cli(self, monkeypatch: object) -> None:
+        from app.cli.interactive_shell.command_registry import integrations as m
+
+        captured = []
+        monkeypatch.setattr(m, "run_cli_command", lambda _, args: (captured.append(args), True)[1])
+        dispatch_slash("/mcp disconnect github", ReplSession(), Console())
+        assert captured == [["integrations", "remove", "github"]]
 
     def test_unknown_subcommand(self, monkeypatch: object) -> None:
         self._patch(monkeypatch)
@@ -772,7 +794,7 @@ class TestInvestigateFileCommand:
         console, _ = _capture()
         dispatch_slash(f"/investigate {alert_file}", session, console)
 
-        # The next free-text alert must inherit these — proving accumulation ran.
+        # The next free-text alert must inherit these—proving accumulation ran.
         assert session.accumulated_context == {
             "service": "orders-api",
             "cluster_name": "prod-us-east",
@@ -807,7 +829,6 @@ class TestInvestigateFileCommand:
 
 
 # Task 4 — Session-state commands
-# ---------------------------------------------------------------------------
 
 
 class TestHistoryCommand:
@@ -1009,3 +1030,34 @@ class TestCancelCommand:
         dispatch_slash("/cancel", ReplSession(), console)
         assert "usage" in buf.getvalue().lower()
         assert "/tasks" in buf.getvalue()
+
+
+class TestCliDelegatedCommands:
+    """Coverage for commands that simply delegate to the underlying Click CLI."""
+
+    @pytest.mark.parametrize(
+        "command,expected_args",
+        [
+            ("/onboard", ["onboard"]),
+            ("/deploy ec2", ["deploy", "ec2"]),
+            ("/remote health", ["remote", "health"]),
+            ("/tests list", ["tests", "list"]),
+            ("/guardrails audit", ["guardrails", "audit"]),
+            ("/update", ["update"]),
+            ("/uninstall", ["uninstall"]),
+        ],
+    )
+    def test_command_delegation(
+        self, monkeypatch: object, command: str, expected_args: list[str]
+    ) -> None:
+        from app.cli.interactive_shell.command_registry import cli_parity as m
+
+        captured: list[list[str]] = []
+
+        def _fake_run_cli_command(_console: Console, args: list[str], **kwargs: object) -> bool:
+            captured.append(args)
+            return True
+
+        monkeypatch.setattr(m, "run_cli_command", _fake_run_cli_command)
+        dispatch_slash(command, ReplSession(), Console())
+        assert captured == [expected_args]
