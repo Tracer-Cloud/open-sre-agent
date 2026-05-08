@@ -163,6 +163,14 @@ def discover_agents_md_files(root: Path | None = None) -> list[AgentsMdFile]:
     resolved = target.resolve() if target.exists() else target
     root_key = str(resolved)
 
+    # Every discover call walks the tree (and stats what it finds) — even on
+    # cache hits — because the walk + per-file fingerprint is what detects
+    # in-file edits between grounding calls during a long-running shell.
+    # Skipping the walk on cache hits would make AGENTS.md edits invisible
+    # until eviction, which is the bug the fingerprint design in
+    # docs_reference.py was introduced to avoid; we keep the same trade-off
+    # here so the two grounding sources stay symmetric. The cost is bounded
+    # by the _SKIP_DIRS prune (notably ``.venv``).
     files = _iter_agents_md_files(resolved)
     fp = _fingerprint_from_paths(resolved, files)
     cache_key = (root_key, fp)

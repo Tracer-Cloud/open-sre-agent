@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -172,8 +173,6 @@ class TestAgentsMdGroundingCache:
         # fingerprint definitely changes on the next discover call.
         target = tmp_path / "AGENTS.md"
         target.write_text("# Repo map\n\nNew refreshed content.\n", encoding="utf-8")
-        import os
-
         st = target.stat()
         os.utime(target, ns=(st.st_atime_ns, st.st_mtime_ns + 2_000_000_000))
 
