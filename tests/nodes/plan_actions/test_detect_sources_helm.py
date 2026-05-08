@@ -31,6 +31,21 @@ def test_helm_source_detected_from_helm_sh_label() -> None:
     sources = detect_sources(alert, {}, {"helm": _HELM_INT})
     assert sources.get("helm") is not None
     assert sources["helm"]["release_name"] == "demo"
+    assert sources["helm"]["namespace"] == "demo"
+
+
+def test_helm_source_uses_meta_helm_release_namespace_label() -> None:
+    alert = {
+        "labels": {
+            "meta.helm.sh/release-name": "myrel",
+            "meta.helm.sh/release-namespace": "kube-system",
+        },
+        "annotations": {},
+    }
+    sources = detect_sources(alert, {}, {"helm": _HELM_INT})
+    assert sources.get("helm") is not None
+    assert sources["helm"]["release_name"] == "myrel"
+    assert sources["helm"]["namespace"] == "kube-system"
 
 
 def test_helm_source_detected_from_summary_phrase() -> None:

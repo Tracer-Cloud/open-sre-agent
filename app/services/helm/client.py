@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -18,11 +19,36 @@ logger = logging.getLogger(__name__)
 _DEFAULT_CMD_TIMEOUT = 90.0
 _PROBE_LIST_TIMEOUT = 45.0
 _PROBE_VERSION_TIMEOUT = 15.0
-_MAX_MANIFEST_CHARS = 600_000
+_DEFAULT_MANIFEST_CHARS = 600_000
+
+
+def _helm_client_major_version(version_client_output: str) -> int | None:
+    """Best-effort major Helm client version from ``helm version --client`` stdout."""
+    text = version_client_output
+    if m := re.search(r'SemVer:"v(\d+)', text):
+        return int(m.group(1))
+    if m := re.search(r'Version:"v(\d+)', text):
+        return int(m.group(1))
+    return None
+
+
+def _manifest_char_cap() -> int:
+    """Max manifest size; override with HELM_MANIFEST_MAX_CHARS (integer, min 1024)."""
+    raw = (os.getenv("HELM_MANIFEST_MAX_CHARS") or "").strip()
+    if raw.isdigit():
+        return max(1024, int(raw))
+    return _DEFAULT_MANIFEST_CHARS
 
 
 class HelmClient:
-    """Runs Helm 3 CLI commands with explicit kubeconfig/context and timeouts."""
+    """Runs Helm 3 CLI commands with explicit kubeconfig/context and timeouts.
+
+    Requires Helm 3.x (``helm version --client`` is checked during :meth:`probe_access`).
+
+    Environment:
+        ``HELM_MANIFEST_MAX_CHARS`` — optional integer; minimum 1024; caps ``get_manifest``
+        output size (default 600_000). When truncated, the result sets ``truncated=True``.
+    """
 
     def __init__(self, config: HelmIntegrationConfig) -> None:
         self._config = config
@@ -82,10 +108,19 @@ class HelmClient:
             return ProbeResult.missing(
                 f"Helm binary not found ({path!r}). Install Helm or set helm_path to a binary."
             )
-        code, _, err = self._run(["version", "--client"], timeout=_PROBE_VERSION_TIMEOUT)
+        code, ver_out, err = self._run(["version", "--client"], timeout=_PROBE_VERSION_TIMEOUT)
         if code != 0:
             detail = (err or "unknown error").strip()
             return ProbeResult.failed(f"helm version --client failed (exit {code}): {detail}")
+
+        combined_ver = f"{ver_out}\n{err or ''}"
+        major = _helm_client_major_version(combined_ver)
+        if major is not None and major < 3:
+            return ProbeResult.failed(
+                "Helm 3.x is required for this integration; `helm version --client` "
+                f"reports a Helm {major}.x client. Install Helm 3 or point helm_path at a Helm 3 "
+                "binary."
+            )
 
         code, out, err = self._run(
             ["list", "-A", "--max", "1", "-o", "json"],
@@ -277,8 +312,9 @@ class HelmClient:
             }
         text = out or ""
         truncated = False
-        if len(text) > _MAX_MANIFEST_CHARS:
-            text = text[:_MAX_MANIFEST_CHARS]
+        cap = _manifest_char_cap()
+        if len(text) > cap:
+            text = text[:cap]
             truncated = True
         return {
             "success": True,

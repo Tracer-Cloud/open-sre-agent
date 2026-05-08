@@ -8,7 +8,11 @@ from typing import Any
 import pytest
 
 from app.integrations.config_models import HelmIntegrationConfig
-from app.services.helm.client import HelmClient
+from app.services.helm.client import HelmClient, _helm_client_major_version
+
+_HELM_V3_VERSION_STDOUT = (
+    'Client: version.BuildInfo{Version:"v3.14.0", GitCommit:"abc", GoVersion:"go1.22"}\n'
+)
 
 
 def _client() -> HelmClient:
@@ -31,6 +35,14 @@ def test_helm_probe_missing_binary(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "not found" in result.detail.lower()
 
 
+def test_helm_client_major_version_parses_helm2_and_helm3_output() -> None:
+    assert (
+        _helm_client_major_version('Client: &version.Version{SemVer:"v2.17.0", GitCommit:""}')
+        == 2
+    )
+    assert _helm_client_major_version('version.BuildInfo{Version:"v3.0.0", GitCommit:""}') == 3
+
+
 def test_helm_probe_passes_when_version_and_list_succeed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -38,7 +50,7 @@ def test_helm_probe_passes_when_version_and_list_succeed(
 
     def fake_run(cmd: list[str], **_kwargs: Any) -> SimpleNamespace:
         if "version" in cmd:
-            return SimpleNamespace(returncode=0, stdout='{"version":"v3"}', stderr="")
+            return SimpleNamespace(returncode=0, stdout=_HELM_V3_VERSION_STDOUT, stderr="")
         if "list" in cmd:
             return SimpleNamespace(returncode=0, stdout="[]", stderr="")
         return SimpleNamespace(returncode=1, stdout="", stderr="unexpected argv")
@@ -49,6 +61,23 @@ def test_helm_probe_passes_when_version_and_list_succeed(
     assert "Helm CLI" in result.detail
 
 
+def test_helm_probe_rejects_helm2_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("app.services.helm.client.shutil.which", lambda _name: "/usr/bin/helm")
+    helm2_out = 'Client: &version.Version{SemVer:"v2.17.0", GitCommit:""}\n'
+
+    def fake_run(cmd: list[str], **_kwargs: Any) -> SimpleNamespace:
+        if "version" in cmd:
+            return SimpleNamespace(returncode=0, stdout=helm2_out, stderr="")
+        if "list" in cmd:
+            return SimpleNamespace(returncode=0, stdout="[]", stderr="")
+        return SimpleNamespace(returncode=1, stdout="", stderr="unexpected argv")
+
+    monkeypatch.setattr("app.services.helm.client.subprocess.run", fake_run)
+    result = _client().probe_access()
+    assert result.ok is False
+    assert "helm 3" in result.detail.lower()
+
+
 def test_helm_probe_fails_when_list_stdout_is_not_valid_json(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -56,7 +85,7 @@ def test_helm_probe_fails_when_list_stdout_is_not_valid_json(
 
     def fake_run(cmd: list[str], **_kwargs: Any) -> SimpleNamespace:
         if "version" in cmd:
-            return SimpleNamespace(returncode=0, stdout='{"version":"v3"}', stderr="")
+            return SimpleNamespace(returncode=0, stdout=_HELM_V3_VERSION_STDOUT, stderr="")
         if "list" in cmd:
             return SimpleNamespace(returncode=0, stdout="WARNING: banner\nnot-json", stderr="")
         return SimpleNamespace(returncode=1, stdout="", stderr="unexpected argv")
@@ -74,7 +103,7 @@ def test_helm_probe_fails_when_list_stdout_is_not_a_json_array(
 
     def fake_run(cmd: list[str], **_kwargs: Any) -> SimpleNamespace:
         if "version" in cmd:
-            return SimpleNamespace(returncode=0, stdout='{"version":"v3"}', stderr="")
+            return SimpleNamespace(returncode=0, stdout=_HELM_V3_VERSION_STDOUT, stderr="")
         if "list" in cmd:
             return SimpleNamespace(returncode=0, stdout='{"releases":[]}', stderr="")
         return SimpleNamespace(returncode=1, stdout="", stderr="unexpected argv")
@@ -92,7 +121,7 @@ def test_helm_probe_fails_when_list_stdout_is_empty(
 
     def fake_run(cmd: list[str], **_kwargs: Any) -> SimpleNamespace:
         if "version" in cmd:
-            return SimpleNamespace(returncode=0, stdout='{"version":"v3"}', stderr="")
+            return SimpleNamespace(returncode=0, stdout=_HELM_V3_VERSION_STDOUT, stderr="")
         if "list" in cmd:
             return SimpleNamespace(returncode=0, stdout="", stderr="")
         return SimpleNamespace(returncode=1, stdout="", stderr="unexpected argv")
@@ -142,3 +171,23 @@ def test_helm_get_values_treats_json_null_as_empty_dict(
     assert out["values"] == {}
     assert out["release"] == "my-release"
     assert out["namespace"] == "default"
+
+
+def test_helm_get_manifest_truncates_using_helm_manifest_max_chars_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HELM_MANIFEST_MAX_CHARS", "5000")
+    monkeypatch.setattr("app.services.helm.client.shutil.which", lambda _name: "/bin/helm")
+    payload = "x" * 8000
+
+    def fake_run(cmd: list[str], **_kwargs: Any) -> SimpleNamespace:
+        for i, part in enumerate(cmd):
+            if part == "get" and i + 1 < len(cmd) and cmd[i + 1] == "manifest":
+                return SimpleNamespace(returncode=0, stdout=payload, stderr="")
+        return SimpleNamespace(returncode=1, stdout="", stderr="unexpected argv")
+
+    monkeypatch.setattr("app.services.helm.client.subprocess.run", fake_run)
+    out = _client().get_manifest("rel", "ns")
+    assert out["success"] is True
+    assert len(out["manifest"]) == 5000
+    assert out["truncated"] is True

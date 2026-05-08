@@ -1325,6 +1325,7 @@ def detect_sources(
                 annotations.get("helm_namespace")
                 or annotations.get("k8s_namespace")
                 or annotations.get("kubernetes_namespace")
+                or merged_labels.get("meta.helm.sh/release-namespace")
                 or alert_dict.get("helm_namespace", "")
                 or helm_int.get("default_namespace", "")
                 or ""
