@@ -417,10 +417,13 @@ def _print_section(title: str, content: str) -> None:
         from rich.padding import Padding
         from rich.rule import Rule
 
+        from app.cli.interactive_shell.theme import MARKDOWN_THEME
+
         console = Console(highlight=False)
         console.print()
         console.print(Rule(f"[bold] {title} [/]", style=BRAND, align="left"))
-        console.print(Padding(Markdown(content.strip()), (1, 2)))
+        with console.use_theme(MARKDOWN_THEME):
+            console.print(Padding(Markdown(content.strip(), code_theme="ansi_dark"), (1, 2)))
     else:
         print(f"\n  {title}")
         for line in content.strip().splitlines():

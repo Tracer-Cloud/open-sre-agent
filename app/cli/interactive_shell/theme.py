@@ -104,5 +104,8 @@ MARKDOWN_THEME = Theme(
     {
         "markdown.code": f"bold {HIGHLIGHT}",
         "markdown.code_block": TEXT,
+        "markdown.h1": f"bold {HIGHLIGHT}",
+        "markdown.h2": f"bold {BRAND}",
+        "markdown.h3": f"bold {BRAND}",
     }
 )
