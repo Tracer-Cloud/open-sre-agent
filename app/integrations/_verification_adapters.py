@@ -19,6 +19,7 @@ from app.integrations.config_models import (
     GoogleDocsIntegrationConfig,
     GrafanaIntegrationConfig,
     HoneycombIntegrationConfig,
+    IncidentIoIntegrationConfig,
     SlackWebhookConfig,
     TracerIntegrationConfig,
 )
@@ -37,6 +38,7 @@ from app.services.coralogix import CoralogixClient
 from app.services.datadog.client import DatadogClient, DatadogConfig
 from app.services.google_docs import GoogleDocsClient
 from app.services.honeycomb import HoneycombClient
+from app.services.incident_io.client import IncidentIoClient
 from app.services.opsgenie import OpsGenieClient, OpsGenieConfig
 from app.services.splunk import SplunkClient, SplunkConfig
 from app.services.tracer_client.client import TracerClient
@@ -527,6 +529,11 @@ _verify_vercel = build_probe_verifier(
     build_config=VercelConfig.model_validate,
     client_factory=VercelClient,
 )
+_verify_incident_io = build_probe_verifier(
+    "incident_io",
+    build_config=IncidentIoIntegrationConfig.model_validate,
+    client_factory=IncidentIoClient,
+)
 _verify_opsgenie = build_probe_verifier(
     "opsgenie",
     build_config=OpsGenieConfig.model_validate,
@@ -575,6 +582,7 @@ __all__ = [
     "_verify_google_docs",
     "_verify_grafana",
     "_verify_honeycomb",
+    "_verify_incident_io",
     "_verify_kafka",
     "_verify_mariadb",
     "_verify_mongodb",

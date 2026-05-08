@@ -149,3 +149,21 @@ def test_detect_sources_gitlab_not_added_when_no_integration() -> None:
     sources = detect_sources(raw_alert, {}, resolved_integrations={})
 
     assert "gitlab" not in sources
+
+
+def test_detect_sources_incident_io_extracts_id_from_various_url_formats() -> None:
+    test_cases = [
+        ("https://incident.io/incidents/INC-123", "INC-123"),
+        ("https://incident.io/incidents/INC-123/", "INC-123"),
+        ("https://incident.io/incidents/INC-123/timeline", "INC-123"),
+        ("https://incident.io/incidents/INC-123?query=param", "INC-123"),
+        ("https://incident.io/incidents/INC-123/?query=param", "INC-123"),
+        ("https://incident.io/incidents/INC-123/timeline?query=param", "INC-123"),
+    ]
+
+    resolved_integrations = {"incident_io": {"api_key": "test-key", "region": "us"}}
+
+    for url, expected_id in test_cases:
+        raw_alert = {"annotations": {"incident_url": url}}
+        sources = detect_sources(raw_alert, {}, resolved_integrations)
+        assert sources["incident_io"]["incident_id"] == expected_id, f"Failed for URL: {url}"

@@ -16,6 +16,7 @@ from app.cli.wizard.integration_health import (
     validate_github_mcp_integration,
     validate_grafana_integration,
     validate_honeycomb_integration,
+    validate_incident_io_integration,
     validate_sentry_integration,
     validate_slack_webhook,
     validate_vercel_integration,
@@ -40,6 +41,7 @@ def test_legacy_integration_health_import_surface_still_exports_validators() -> 
         "validate_google_docs_integration",
         "validate_grafana_integration",
         "validate_honeycomb_integration",
+        "validate_incident_io_integration",
         "validate_jira_integration",
         "validate_notion_integration",
         "validate_openclaw_integration",
@@ -155,6 +157,42 @@ def test_validate_coralogix_integration_fails(monkeypatch) -> None:
 
     assert result.ok is False
     assert "http 401" in result.detail.lower()
+
+
+def test_validate_incident_io_integration_succeeds(monkeypatch) -> None:
+    from unittest.mock import MagicMock
+
+    mock_client = MagicMock()
+    mock_client.__enter__.return_value = mock_client
+    mock_client.list_incidents.return_value = {"success": True}
+
+    monkeypatch.setattr(
+        "app.services.incident_io.client.IncidentIoClient",
+        lambda _config: mock_client,
+    )
+
+    result = validate_incident_io_integration(api_key="iio_test", region="us")
+
+    assert result.ok is True
+    assert "Incident.io validated" in result.detail
+
+
+def test_validate_incident_io_integration_fails(monkeypatch) -> None:
+    from unittest.mock import MagicMock
+
+    mock_client = MagicMock()
+    mock_client.__enter__.return_value = mock_client
+    mock_client.list_incidents.return_value = {"success": False, "error": "Unauthorized"}
+
+    monkeypatch.setattr(
+        "app.services.incident_io.client.IncidentIoClient",
+        lambda _config: mock_client,
+    )
+
+    result = validate_incident_io_integration(api_key="bad_key")
+
+    assert result.ok is False
+    assert "unauthorized" in result.detail.lower()
 
 
 @pytest.mark.parametrize("status_code", [200, 400, 403, 405])

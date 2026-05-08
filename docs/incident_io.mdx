@@ -1,0 +1,79 @@
+---
+title: "Incident.io"
+description: "Connect Incident.io so OpenSRE can read active incidents and post timeline updates during investigations"
+---
+
+OpenSRE queries Incident.io to retrieve active incidents and their details — and can post RCA findings directly to the incident timeline as custom events.
+
+## Prerequisites
+
+- Incident.io account
+- API key
+
+## Setup
+
+### Option 1: Interactive CLI
+
+```bash
+opensre integrations setup
+```
+
+Select **Incident.io** when prompted and provide your API key.
+
+### Option 2: Environment variables
+
+Add to your `.env`:
+
+```bash
+INCIDENT_IO_API_KEY=your-api-key
+```
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `INCIDENT_IO_API_KEY` | — | **Required.** Incident.io API key |
+| `INCIDENT_IO_REGION` | `us` | Incident.io region (`us` or `eu`) |
+| `INCIDENT_IO_BASE_URL` | `https://api.incident.io` | Incident.io API base URL |
+
+### Option 3: Persistent store
+
+```json
+{
+  "version": 1,
+  "integrations": [
+    {
+      "id": "incident-io-prod",
+      "service": "incident_io",
+      "status": "active",
+      "credentials": {
+        "api_key": "your-api-key"
+      }
+    }
+  ]
+}
+```
+
+## Creating an API key
+
+1. In the Incident.io dashboard, go to **Settings** → **API keys**
+2. Click **Create API key**
+3. Name it `opensre`
+4. Copy the key
+
+## Verify
+
+```bash
+opensre integrations verify incident_io
+```
+
+Expected output:
+
+```
+Service: incident_io
+Status: passed
+Detail: Connected to incident.io; API key accepted
+```
+
+## Security best practices
+
+- Create a dedicated API key for OpenSRE to easily revoke or rotate.
+- Store the API key in `.env`, not in source code.

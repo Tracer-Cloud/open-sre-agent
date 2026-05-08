@@ -242,6 +242,16 @@ def _build_available_sources_hint(available_sources: dict[str, dict]) -> str:
 - Use query_openobserve_logs for bounded log retrieval"""
         )
 
+    if "incident_io" in available_sources:
+        iio = available_sources["incident_io"]
+        hints.append(
+            f"""Incident.io Available:
+- Incident ID: {iio.get("incident_id") or "unknown"}
+- Region: {iio.get("region", "us")}
+- Use incident_io_incidents with action="list" to fetch incident details and timeline events
+- Use incident_io_incidents with action="add_timeline" to post RCA findings or updates back to the incident timeline"""
+        )
+
     if "opensearch" in available_sources:
         opensearch = available_sources["opensearch"]
         hints.append(

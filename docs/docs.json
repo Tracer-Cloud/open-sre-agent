@@ -99,6 +99,7 @@
               "datadog",
               "grafana",
               "honeycomb",
+              "incident_io",
               "opsgenie",
               "sentry",
               "splunk"

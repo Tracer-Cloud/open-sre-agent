@@ -180,6 +180,50 @@ class SlackWebhookConfig(StrictConfigModel):
         return self
 
 
+DEFAULT_INCIDENT_IO_BASE_URLS = {
+    "us": "https://api.incident.io",
+    "eu": "https://api.eu.incident.io",
+}
+
+
+class IncidentIoIntegrationConfig(StrictConfigModel):
+    """Normalized Incident.io credentials used by resolution and verification flows."""
+
+    integration_id: str = ""
+    api_key: str
+    region: str = "us"
+    base_url: str = ""
+
+    @field_validator("region", mode="before")
+    @classmethod
+    def _normalize_region(cls, value: object) -> str:
+        raw = str(value or "us").strip().lower()
+        if raw not in DEFAULT_INCIDENT_IO_BASE_URLS:
+            raise ValueError(
+                f"Unknown Incident.io region: {raw}. Supported regions: "
+                f"{', '.join(DEFAULT_INCIDENT_IO_BASE_URLS.keys())}"
+            )
+        return raw
+
+    @model_validator(mode="after")
+    def _resolve_base_url(self) -> IncidentIoIntegrationConfig:
+        if not self.base_url:
+            self.base_url = DEFAULT_INCIDENT_IO_BASE_URLS.get(
+                self.region, DEFAULT_INCIDENT_IO_BASE_URLS["us"]
+            )
+        return self
+
+    _normalize_base_url = field_validator("base_url", mode="before")(normalize_url(""))
+    _normalize_api_key = field_validator("api_key", mode="before")(normalize_str())
+
+    @property
+    def headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+
 class OpsGenieIntegrationConfig(StrictConfigModel):
     """Normalized OpsGenie credentials used by resolution and verification flows."""
 
