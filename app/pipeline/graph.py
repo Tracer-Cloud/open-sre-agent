@@ -8,13 +8,13 @@ from langgraph.graph.state import CompiledStateGraph
 
 from app.nodes import (
     node_adapt_window,
+    node_agent_incident,
     node_diagnose_root_cause,
     node_extract_alert,
     node_plan_actions,
     node_publish_findings,
     node_resolve_integrations,
 )
-from app.nodes.agent_incident import node_agent_incident
 from app.nodes.auth import inject_auth_node
 from app.nodes.chat import (
     chat_agent_node,
