@@ -44,10 +44,14 @@ def chunk_python_file(path: Path, *, repo_root: Path) -> list[SourceChunk]:
     if rel is None:
         return []
 
-    text = path.read_text(encoding="utf-8-sig")
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return []
     try:
         tree = ast.parse(text)
-    except SyntaxError:
+    except (SyntaxError, ValueError):
+        # ValueError covers source containing null bytes; SyntaxError covers everything else.
         return []
 
     source_lines = text.splitlines()
@@ -66,13 +70,24 @@ def chunk_python_file(path: Path, *, repo_root: Path) -> list[SourceChunk]:
 
 
 def chunk_markdown_file(path: Path, *, repo_root: Path) -> list[SourceChunk]:
-    """Chunk a Markdown/MDX file by H2 headings, stripping YAML frontmatter."""
+    """Chunk a Markdown/MDX file by H2 headings, stripping YAML frontmatter.
+
+    Line numbers are file-relative — i.e. they include any frontmatter lines
+    that were stripped before scanning, so a consumer can use them to navigate
+    back to the original source location.
+    """
     rel = _relpath(path, repo_root)
     if rel is None:
         return []
 
-    text = path.read_text(encoding="utf-8-sig")
-    body, _ = _strip_frontmatter(text)
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return []
+    body, frontmatter = _strip_frontmatter(text)
+    # Number of source lines consumed by frontmatter; markdown line numbers
+    # below are reported as file-relative by adding this offset.
+    fm_line_offset = text[: len(text) - len(body)].count("\n") if frontmatter is not None else 0
 
     if not body.strip():
         return []
@@ -86,8 +101,8 @@ def chunk_markdown_file(path: Path, *, repo_root: Path) -> list[SourceChunk]:
                 relpath=rel,
                 kind="md_section",
                 symbol=path.stem,
-                start_line=1,
-                end_line=len(body_lines),
+                start_line=1 + fm_line_offset,
+                end_line=len(body_lines) + fm_line_offset,
                 content=_truncate_content(body),
             )
         ]
@@ -103,8 +118,8 @@ def chunk_markdown_file(path: Path, *, repo_root: Path) -> list[SourceChunk]:
                 relpath=rel,
                 kind="md_section",
                 symbol=heading,
-                start_line=start_idx + 1,
-                end_line=end_idx + 1,
+                start_line=start_idx + 1 + fm_line_offset,
+                end_line=end_idx + 1 + fm_line_offset,
                 content=_truncate_content(section_text),
             )
         )

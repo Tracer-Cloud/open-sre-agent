@@ -301,6 +301,73 @@ body
     assert [c.symbol for c in chunks] == ["Real Section A", "Real Section B"]
 
 
+def test_markdown_line_numbers_are_file_relative_not_body_relative(tmp_path: Path) -> None:
+    """Locks in the fix for Greptile finding: line numbers must include
+    frontmatter lines so consumers can navigate to the original source."""
+    source = """---
+title: Example
+description: test
+---
+
+Intro paragraph on file line 6.
+
+## First Section
+
+First body.
+"""
+    path = _write(tmp_path, "doc.md", source)
+    chunks = chunk_markdown_file(path, repo_root=tmp_path)
+
+    assert len(chunks) == 1
+    section = chunks[0]
+    assert section.symbol == "First Section"
+    # File layout: line 1 `---`, 2 `title: Example`, 3 `description: test`,
+    # 4 `---`, 5 blank, 6 intro, 7 blank, 8 `## First Section`, 9 blank,
+    # 10 `First body.`. The frontmatter regex's trailing `\s*\n` consumes the
+    # blank line after the closing `---` too, so fm_line_offset = 5.
+    assert section.start_line == 8
+    assert section.end_line == 10
+
+
+def test_markdown_no_h2_with_frontmatter_offsets_line_numbers(tmp_path: Path) -> None:
+    source = """---
+title: Plain
+---
+
+Just body text, no headings.
+"""
+    path = _write(tmp_path, "plain.md", source)
+    chunks = chunk_markdown_file(path, repo_root=tmp_path)
+
+    assert len(chunks) == 1
+    # File layout: 1 `---`, 2 `title: Plain`, 3 `---`, 4 blank, 5 body. The
+    # frontmatter regex's trailing `\s*\n` also consumes the blank line, so
+    # the body's first line ("Just body text...") is file line 5.
+    assert chunks[0].start_line == 5
+    assert chunks[0].end_line == 5
+
+
+def test_python_file_with_null_bytes_returns_empty(tmp_path: Path) -> None:
+    """ast.parse raises ValueError (not SyntaxError) on null bytes;
+    the chunker must catch that too."""
+    path = tmp_path / "null.py"
+    path.write_bytes(b"def f():\n    return 1\n\x00\n")
+    assert chunk_python_file(path, repo_root=tmp_path) == []
+
+
+def test_python_file_with_undecodable_bytes_returns_empty(tmp_path: Path) -> None:
+    path = tmp_path / "binary.py"
+    # Bytes that are not valid UTF-8
+    path.write_bytes(b"\xff\xfe\x00\x01garbage")
+    assert chunk_python_file(path, repo_root=tmp_path) == []
+
+
+def test_markdown_file_with_undecodable_bytes_returns_empty(tmp_path: Path) -> None:
+    path = tmp_path / "binary.md"
+    path.write_bytes(b"\xff\xfe\x00\x01garbage")
+    assert chunk_markdown_file(path, repo_root=tmp_path) == []
+
+
 def test_source_chunk_is_frozen() -> None:
     chunk = SourceChunk(
         relpath="x.py",
