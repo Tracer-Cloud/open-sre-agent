@@ -59,3 +59,50 @@ def test_make_incident_io_client_empty():
     assert make_incident_io_client(None) is None
     assert make_incident_io_client("") is None
     assert make_incident_io_client("   ") is None
+
+
+def test_add_timeline_event_prefers_summary_append(monkeypatch):
+    """Test that add_timeline_event prefers summary-append by default."""
+    client = make_incident_io_client("test-key")
+
+    # Track which methods were called
+    calls = []
+
+    def mock_add_via_summary(*args, **kwargs):
+        calls.append("summary_append")
+        return {"success": True}
+
+    def mock_request(*args, **kwargs):
+        calls.append("native_api")
+        resp = MagicMock()
+        resp.status_code = 200
+        return resp
+
+    monkeypatch.setattr(client, "_add_timeline_event_via_summary", mock_add_via_summary)
+    monkeypatch.setattr(client, "_request", mock_request)
+
+    client.add_timeline_event("INC-123", "Title")
+
+    # Should ONLY call summary_append
+    assert calls == ["summary_append"]
+
+
+def test_add_timeline_event_uses_native_when_enabled(monkeypatch):
+    """Test that add_timeline_event uses native API when enabled."""
+    client = make_incident_io_client("test-key")
+    client.config.use_native_timeline = True
+
+    calls = []
+
+    def mock_request(*args, **kwargs):
+        calls.append("native_api")
+        resp = MagicMock()
+        resp.status_code = 200
+        return resp
+
+    monkeypatch.setattr(client, "_request", mock_request)
+
+    client.add_timeline_event("INC-123", "Title")
+
+    # Should call native_api
+    assert "native_api" in calls

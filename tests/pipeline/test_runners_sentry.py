@@ -21,7 +21,9 @@ def test_run_chat_initializes_sentry_and_captures_unhandled_errors(
     monkeypatch.setattr(
         runners.sentry_sdk, "init_sentry", lambda **_kw: sentry_init_calls.append(None)
     )
-    monkeypatch.setattr(runners.sentry_sdk, "capture_exception", captured_errors.append)
+    monkeypatch.setattr(
+        runners.sentry_sdk, "capture_exception", lambda err, **_kw: captured_errors.append(err)
+    )
     monkeypatch.setattr(runners, "router_node", failing_router)
 
     with pytest.raises(RuntimeError, match="router failed"):

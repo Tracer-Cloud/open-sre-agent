@@ -193,6 +193,7 @@ class IncidentIoIntegrationConfig(StrictConfigModel):
     api_key: str
     region: str = "us"
     base_url: str = ""
+    use_native_timeline: bool = False
 
     @field_validator("region", mode="before")
     @classmethod

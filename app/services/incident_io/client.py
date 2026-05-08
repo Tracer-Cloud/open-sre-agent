@@ -254,37 +254,27 @@ class IncidentIoClient:
     ) -> dict[str, Any]:
         """Add findings to an incident timeline.
 
-        Tries the dedicated timeline API first (atomic).
-        Falls back to summary-append if timeline API is unavailable or returns 404.
+        Prefers summary-append by default because the native timeline API is not
+        yet generally available. If use_native_timeline is enabled, tries the
+        dedicated API first with a fallback.
         """
-        payload = {
-            "incident_id": incident_id,
-            "content": f"**OpenSRE Finding: {title}**\n\n{description}",
-        }
-        try:
-            resp = self._request("POST", "/v2/incident_timeline_events", json=payload)
-            resp.raise_for_status()
-            return {"success": True}
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 404:
-                # If the timeline endpoint is non-existent, fallback to summary-append
-                return self._add_timeline_event_via_summary(incident_id, title, description)
-
-            err_text = self._redact(e.response.text[:200])
-            logger.warning(
-                "[incident_io] Add timeline event HTTP failure status=%s id=%r error=%r",
-                e.response.status_code,
-                incident_id,
-                err_text,
-            )
-            return {
-                "success": False,
-                "error": f"HTTP {e.response.status_code}: {err_text}",
+        if self.config.use_native_timeline:
+            payload = {
+                "incident_id": incident_id,
+                "content": f"**OpenSRE Finding: {title}**\n\n{description}",
             }
-        except Exception as e:
-            err_text = self._redact(str(e))
-            logger.warning("[incident_io] Add timeline event error: %s", err_text)
-            return {"success": False, "error": err_text}
+            try:
+                resp = self._request("POST", "/v2/incident_timeline_events", json=payload)
+                resp.raise_for_status()
+                return {"success": True}
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code != 404:
+                    err_text = self._redact(e.response.text[:200])
+                    logger.warning("[incident_io] Native timeline event failure: %s", err_text)
+                    return {"success": False, "error": err_text}
+                # Fall through to summary-append on 404
+
+        return self._add_timeline_event_via_summary(incident_id, title, description)
 
     def _add_timeline_event_via_summary(
         self, incident_id: str, title: str, description: str = ""

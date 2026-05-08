@@ -18,7 +18,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 
-from app.utils.sentry_sdk import capture_exception
+import app.utils.sentry_sdk as sentry_sdk
 
 
 def report_exception(
@@ -42,7 +42,7 @@ def report_exception(
         combined.update({f"tag.{k}": v for k, v in tags.items()})
     if extras:
         combined.update(extras)
-    capture_exception(exc, extra=combined or None)
+    sentry_sdk.capture_exception(exc, extra=combined or None)
 
 
 @contextmanager
