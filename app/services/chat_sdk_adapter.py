@@ -139,10 +139,8 @@ def normalize_invocation_message_dict(m: dict[str, Any]) -> dict[str, Any]:
     neutral = _tool_calls_to_neutral(tcs)
     if neutral:
         out["tool_calls"] = list(neutral)
-    elif not tcs:
-        out["tool_calls"] = []
     else:
-        out.pop("tool_calls", None)
+        out["tool_calls"] = []
     return out
 
 
