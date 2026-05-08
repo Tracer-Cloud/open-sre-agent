@@ -19,8 +19,8 @@ def test_run_chat_initializes_sentry_and_captures_unhandled_errors(
     def failing_router(_state: AgentState) -> dict[str, object]:
         raise expected_error
 
- 
     monkeypatch.setattr(runners.sentry_sdk, "capture_exception", captured_errors.append)
+
     def capture_stub(exc: BaseException, **_kwargs: object) -> None:
         captured_errors.append(exc)
 
