@@ -110,7 +110,12 @@ def verify_integrations(
             )
             continue
 
-        results.append(verifier(str(integration["source"]), dict(integration["config"])))
+        try:
+            results.append(verifier(str(integration["source"]), dict(integration["config"])))
+        except Exception as exc:
+            results.append(
+                _result(current_service, str(integration.get("source", "-")), "failed", str(exc))
+            )
 
     return results
 
@@ -119,7 +124,11 @@ def format_verification_results(results: list[dict[str, str]]) -> str:
     """Render verification results as a compact terminal table."""
     lines = ["", "  SERVICE    SOURCE       STATUS      DETAIL"]
     for row in results:
-        lines.append(f"  {row['service']:<10}{row['source']:<13}{row['status']:<12}{row['detail']}")
+        service = row.get("service", "?")
+        source = row.get("source", "-")
+        status = row.get("status", "?")
+        detail = row.get("detail", "")
+        lines.append(f"  {service:<10}{source:<13}{status:<12}{detail}")
     lines.append("")
     return "\n".join(lines)
 
@@ -130,12 +139,12 @@ def verification_exit_code(
     requested_service: str | None = None,
 ) -> int:
     """Return a CLI exit code for a verification run."""
-    if any(row["status"] == "failed" for row in results):
+    if any(row.get("status") == "failed" for row in results):
         return 1
     if requested_service:
-        return 1 if any(row["status"] in {"missing", "failed"} for row in results) else 0
-    core_results = [row for row in results if row["service"] in CORE_VERIFY_SERVICES]
-    if not any(row["status"] == "passed" for row in core_results):
+        return 1 if any(row.get("status") in {"missing", "failed"} for row in results) else 0
+    core_results = [row for row in results if row.get("service") in CORE_VERIFY_SERVICES]
+    if not any(row.get("status") == "passed" for row in core_results):
         return 1
     return 0
 

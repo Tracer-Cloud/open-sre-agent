@@ -2,10 +2,12 @@
 
 Env vars
 --------
-CLAUDE_CODE_BIN   Optional explicit path to the ``claude`` binary.
-                  Blank or non-runnable paths are ignored; PATH + fallbacks apply.
-CLAUDE_CODE_MODEL Optional model override (e.g. ``claude-opus-4-7``).
-                  Unset or empty → omit ``--model``; CLI default applies.
+CLAUDE_CODE_BIN              Optional explicit path to the ``claude`` binary.
+                             Blank or non-runnable paths are ignored; PATH + fallbacks apply.
+CLAUDE_CODE_MODEL            Optional model override (e.g. ``claude-opus-4-7``).
+                             Unset or empty → omit ``--model``; CLI default applies.
+CLAUDE_CODE_TIMEOUT_SECONDS  Optional invocation timeout override in seconds for long prompts
+                             (default: 120, min: 30, max: 600).
 
 Auth
 ----
@@ -53,6 +55,22 @@ _CLAUDE_VERSION_RE = re.compile(r"(\d+\.\d+\.\d+)")
 # budget on cold starts or when another claude process holds shared state.
 _PROBE_TIMEOUT_SEC = 8.0
 _AUTH_HINT = "Run: claude auth login or set ANTHROPIC_API_KEY."
+_DEFAULT_EXEC_TIMEOUT_SEC = 120.0
+_MIN_EXEC_TIMEOUT_SEC = 30.0
+_MAX_EXEC_TIMEOUT_SEC = 600.0
+
+
+def _resolve_exec_timeout_seconds() -> float:
+    raw = os.environ.get("CLAUDE_CODE_TIMEOUT_SECONDS", "").strip()
+    if not raw:
+        return _DEFAULT_EXEC_TIMEOUT_SEC
+    try:
+        value = float(raw)
+    except ValueError:
+        return _DEFAULT_EXEC_TIMEOUT_SEC
+    if value <= 0:
+        return _DEFAULT_EXEC_TIMEOUT_SEC
+    return max(_MIN_EXEC_TIMEOUT_SEC, min(value, _MAX_EXEC_TIMEOUT_SEC))
 
 
 def _parse_semver(text: str) -> str | None:
@@ -222,7 +240,7 @@ class ClaudeCodeAdapter:
     install_hint = "npm i -g @anthropic-ai/claude-code"
     auth_hint = _AUTH_HINT.removesuffix(".")
     min_version: str | None = None
-    default_exec_timeout_sec = 120.0
+    default_exec_timeout_sec = _DEFAULT_EXEC_TIMEOUT_SEC
 
     def _resolve_binary(self) -> str | None:
         return resolve_cli_binary(
@@ -319,7 +337,7 @@ class ClaudeCodeAdapter:
             stdin=prompt,
             cwd=cwd,
             env=env,
-            timeout_sec=self.default_exec_timeout_sec,
+            timeout_sec=_resolve_exec_timeout_seconds(),
         )
 
     def parse(self, *, stdout: str, stderr: str, returncode: int) -> str:

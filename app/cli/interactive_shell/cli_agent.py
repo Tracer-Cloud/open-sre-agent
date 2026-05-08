@@ -20,6 +20,7 @@ from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.streaming import STREAM_LABEL_ASSISTANT, stream_to_console
 from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
 from app.cli.support.exception_reporting import report_exception
+from app.integrations.llm_cli.errors import CLITimeoutError
 
 # Cap stored (user, assistant) pairs; list holds 2 entries per turn.
 _MAX_CLI_AGENT_TURNS = 12
@@ -362,7 +363,11 @@ def answer_cli_agent(
         console.print("[dim]· cancelled[/dim]")
         return
     except Exception as exc:
-        report_exception(exc, context="interactive_shell.cli_agent.stream")
+        report_exception(
+            exc,
+            context="interactive_shell.cli_agent.stream",
+            expected=isinstance(exc, CLITimeoutError),
+        )
         console.print(f"[red]assistant failed:[/red] {escape(str(exc))}")
         return
 

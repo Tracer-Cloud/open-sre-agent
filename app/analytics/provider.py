@@ -798,6 +798,10 @@ class Analytics:
         }
         try:
             client.post(f"{POSTHOG_HOST}/capture/", json=payload).raise_for_status()
+        except httpx.TransportError as exc:
+            # Network/TLS failures (ConnectTimeout, ConnectError, ReadTimeout, …) are
+            # transient infrastructure issues, not application bugs — log only.
+            _log_failure("posthog_send", exc, event=item.event)
         except httpx.HTTPStatusError as exc:
             _log_failure("posthog_send", exc, event=item.event)
             # 4xx errors (e.g. 403 Forbidden) are operational/config issues on

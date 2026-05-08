@@ -109,7 +109,10 @@ def build_probe_verifier[ConfigT](
             normalized_config = build_config(config)
         except Exception as err:
             return result(service, source, "missing", str(err))
-        probe_result = client_factory(normalized_config).probe_access()
+        try:
+            probe_result = client_factory(normalized_config).probe_access()
+        except Exception as err:
+            return result(service, source, "failed", str(err))
         return result(service, source, probe_result.status, probe_result.detail)
 
     return _verifier

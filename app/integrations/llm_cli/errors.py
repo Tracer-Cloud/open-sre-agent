@@ -3,6 +3,14 @@
 from __future__ import annotations
 
 
+class CLITimeoutError(RuntimeError):
+    """The CLI subprocess exceeded its configured timeout.
+
+    Treated as an expected operational failure (not a bug), so callers should
+    not forward it to error-tracking services like Sentry.
+    """
+
+
 class CLIAuthenticationRequired(RuntimeError):
     """CLI probe reported the user is definitely not authenticated (`logged_in=False`).
 

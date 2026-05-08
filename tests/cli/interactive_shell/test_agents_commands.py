@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import io
+from pathlib import Path
 
+import pytest
 from rich.console import Console
 from rich.table import Table
 
@@ -12,6 +14,7 @@ from app.agents.conflicts import (
     FileWriteConflict,
     render_conflicts,
 )
+from app.agents.registry import AgentRecord, AgentRegistry
 from app.cli.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from app.cli.interactive_shell.session import ReplSession
 
@@ -19,6 +22,20 @@ from app.cli.interactive_shell.session import ReplSession
 def _capture() -> tuple[Console, io.StringIO]:
     buf = io.StringIO()
     return Console(file=buf, force_terminal=False, highlight=False, width=120), buf
+
+
+def _isolate_registry(monkeypatch: pytest.MonkeyPatch, path: Path) -> AgentRegistry:
+    """Point the slash command's ``AgentRegistry()`` constructor at
+    ``path`` so tests don't read the developer's real
+    ``~/.config/opensre/agents.jsonl``. Returns the registry instance
+    that the test can populate.
+    """
+    registry = AgentRegistry(path=path)
+
+    from app.cli.interactive_shell.command_registry import agents as agents_mod
+
+    monkeypatch.setattr(agents_mod, "AgentRegistry", lambda: AgentRegistry(path=path))
+    return registry
 
 
 class TestAgentsRegistration:
@@ -41,13 +58,38 @@ class TestAgentsDispatch:
         assert dispatch_slash("/agents conflicts", session, console) is True
         assert "no conflicts detected" in buf.getvalue()
 
-    def test_no_subcommand_prints_usage_hint(self) -> None:
+    def test_no_subcommand_with_empty_registry_renders_empty_state(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
+        session = ReplSession()
+        console, buf = _capture()
+
+        assert dispatch_slash("/agents", session, console) is True
+
+        out = buf.getvalue()
+        # Caption from agents_view.render_agents_table:
+        assert "no agents registered" in out
+        # Header row still rendered with the dashboard column structure:
+        assert "agent" in out
+        assert "pid" in out
+
+    def test_no_subcommand_renders_registered_agents(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        registry = _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
+        registry.register(AgentRecord(name="claude-code", pid=8421, command="claude"))
+        registry.register(AgentRecord(name="cursor-tab", pid=9133, command="cursor"))
+
         session = ReplSession()
         console, buf = _capture()
         assert dispatch_slash("/agents", session, console) is True
+
         out = buf.getvalue()
-        assert "usage" in out.lower()
-        assert "/agents conflicts" in out
+        assert "claude-code" in out
+        assert "8421" in out
+        assert "cursor-tab" in out
+        assert "9133" in out
 
     def test_unknown_subcommand_prints_error(self) -> None:
         session = ReplSession()
