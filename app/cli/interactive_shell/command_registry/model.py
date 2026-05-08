@@ -343,12 +343,17 @@ def _interactive_set_toolcall(console: Console) -> bool | None:
     model_value = repl_choose_one(
         title="toolcall model",
         breadcrumb=f"{crumb_tc}{CRUMB_SEP}{provider_value}",
-        choices=_reasoning_model_menu_choices(provider),
+        choices=_toolcall_model_menu_choices(provider),
     )
     if model_value is None:
         return None
-    target_model = provider.default_model if model_value == "__provider_default__" else model_value
-    return switch_toolcall_model(target_model, console, provider_name=provider.value)
+    if model_value == "__keep__":
+        console.print("[dim]toolcall model left unchanged.[/dim]")
+        return True
+    if model_value == "__match_reasoning__":
+        reasoning = (os.getenv(provider.model_env, "") or "").strip() or provider.default_model
+        return switch_toolcall_model(reasoning, console, provider_name=provider.value)
+    return switch_toolcall_model(str(model_value), console, provider_name=provider.value)
 
 
 def _interactive_model_menu(session: ReplSession, console: Console) -> bool:
