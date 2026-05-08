@@ -41,11 +41,10 @@ _GENERIC_SECRET_VALUE_RE = re.compile(
 class IncidentIoClient:
     """Synchronous client for querying the incident.io API."""
 
-    _lock = threading.Lock()
-
     def __init__(self, config: IncidentIoIntegrationConfig) -> None:
         self.config = config
         self._client: httpx.Client | None = None
+        self._lock = threading.Lock()
 
     def _get_client(self) -> httpx.Client:
         if self._client is None:

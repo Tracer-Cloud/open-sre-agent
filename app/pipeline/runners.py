@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any, cast
@@ -11,6 +12,9 @@ from app.nodes.chat import chat_agent_node, general_node, router_node
 from app.remote.stream import StreamEvent
 from app.state import AgentState, make_initial_state
 from app.types.config import NodeConfig
+from app.utils.errors import report_and_reraise
+
+logger = logging.getLogger(__name__)
 
 _GRAPH_RECURSION_LIMIT = 50
 
@@ -32,15 +36,16 @@ def run_chat(state: AgentState, config: NodeConfig | None = None) -> AgentState:
     """Run chat routing + response without LangGraph (for testing)."""
     sentry_sdk.init_sentry(entrypoint="graph_pipeline")
     cfg = config or {"configurable": {}}
-    try:
+    with report_and_reraise(
+        logger=logger,
+        message="Chat pipeline failure",
+        tags={"surface": "pipeline", "component": "app.pipeline.runners"},
+    ):
         _merge_state(state, router_node(state))
         if state.get("route") == "tracer_data":
             _merge_state(state, chat_agent_node(state, cfg))
         else:
             _merge_state(state, general_node(state, cfg))
-    except Exception as exc:
-        sentry_sdk.capture_exception(exc)
-        raise
     return state
 
 
@@ -72,13 +77,14 @@ def run_investigation(
     )
     if resolved_integrations is not None:
         cast(dict[str, Any], initial)["resolved_integrations"] = resolved_integrations
-    try:
+    with report_and_reraise(
+        logger=logger,
+        message="Investigation pipeline failure",
+        tags={"surface": "pipeline", "component": "app.pipeline.runners"},
+    ):
         return cast(
             AgentState, compiled_graph.invoke(initial, {"recursion_limit": _GRAPH_RECURSION_LIMIT})
         )
-    except Exception as exc:
-        sentry_sdk.capture_exception(exc)
-        raise
 
 
 async def astream_investigation(
@@ -106,14 +112,15 @@ async def astream_investigation(
         opensre_evaluate=opensre_evaluate,
     )
 
-    try:
+    with report_and_reraise(
+        logger=logger,
+        message="Streaming investigation failure",
+        tags={"surface": "pipeline", "component": "app.pipeline.runners"},
+    ):
         async for event in compiled_graph.astream_events(
             initial, version="v2", config={"recursion_limit": _GRAPH_RECURSION_LIMIT}
         ):
             yield _map_langgraph_event(dict(event))
-    except Exception as exc:
-        sentry_sdk.capture_exception(exc)
-        raise
 
 
 def _map_langgraph_event(event: dict[str, Any]) -> StreamEvent:
@@ -151,8 +158,9 @@ class SimpleAgent:
             **(config or {"configurable": {}}),
             "recursion_limit": _GRAPH_RECURSION_LIMIT,
         }
-        try:
+        with report_and_reraise(
+            logger=logger,
+            message="SimpleAgent invocation failure",
+            tags={"surface": "pipeline", "component": "app.pipeline.runners"},
+        ):
             return cast(AgentState, compiled_graph.invoke(state, cast(Any, cfg)))
-        except Exception as exc:
-            sentry_sdk.capture_exception(exc)
-            raise

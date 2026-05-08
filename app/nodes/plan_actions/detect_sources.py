@@ -7,6 +7,7 @@ and extract their parameters.
 
 import logging
 from datetime import UTC, datetime, timedelta
+from functools import lru_cache
 from typing import Any
 from urllib.parse import urlparse
 
@@ -160,6 +161,24 @@ def _extract_issue_id_from_url(value: str) -> str:
     if index + 1 >= len(parts):
         return ""
     return parts[index + 1].strip()
+
+
+@lru_cache(maxsize=32)
+def _probe_incident_io_cached(api_key: str, region: str, base_url: str) -> bool:
+    """Cached connectivity probe for Incident.io.
+
+    Prevents redundant network calls across planning cycles while ensuring
+    credentials actually work before marking a source as verified.
+    """
+    from app.services.incident_io.client import make_incident_io_client
+
+    client = make_incident_io_client(api_key, region=region, base_url=base_url)
+    if not client:
+        return False
+    try:
+        return client.probe_access().status == "passed"
+    except Exception:
+        return False
 
 
 def detect_sources(
@@ -920,10 +939,14 @@ def detect_sources(
                     incident_url.split("/incidents/")[-1].split("?")[0].split("/")[0].strip()
                 )
 
+        api_key = str(incident_io_int.get("api_key", "")).strip()
+        region = str(incident_io_int.get("region", "us")).strip()
+        base_url = str(incident_io_int.get("base_url", "")).strip()
+
         sources["incident_io"] = {
-            "api_key": str(incident_io_int.get("api_key", "")).strip(),
-            "region": str(incident_io_int.get("region", "us")).strip(),
-            "base_url": str(incident_io_int.get("base_url", "")).strip(),
+            "api_key": api_key,
+            "region": region,
+            "base_url": base_url,
             "incident_id": incident_id,
             "title": str(
                 annotations.get("incident_title") or raw_alert.get("alert_name", "")
@@ -931,7 +954,7 @@ def detect_sources(
             "description": str(
                 annotations.get("incident_comment") or annotations.get("summary") or ""
             ).strip(),
-            "connection_verified": True,
+            "connection_verified": _probe_incident_io_cached(api_key, region, base_url),
             "integration_id": str(incident_io_int.get("integration_id", "")).strip(),
         }
 
