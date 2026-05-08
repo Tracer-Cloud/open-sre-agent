@@ -2,16 +2,25 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections import Counter, deque
+
+
+def _shingle_fingerprint(shingle: tuple[str, ...]) -> int:
+    """Return a stable 64-bit int for *shingle* (same input → same value across processes)."""
+    payload = b"\0".join(t.encode("utf-8") for t in shingle)
+    digest = hashlib.blake2b(payload, digest_size=8).digest()
+    return int.from_bytes(digest, "big")
 
 
 class LoopDetector:
     """Rolling w-shingle detector for repetitive agent output.
 
     Ingests text chunks, tokenizes on whitespace (lowercased), and hashes
-    consecutive token windows of size ``shingle_size``. The last ``window``
-    emitted shingle hashes are retained; if any hash appears strictly more
-    than ``threshold`` times in that deque, :attr:`is_looping` is true.
+    consecutive token windows of size ``shingle_size``. Shingles are fingerprinted
+    with BLAKE2b (8-byte digest) so counts are stable across processes. The last
+    ``window`` emitted fingerprint values are retained; if any fingerprint appears
+    strictly more than ``threshold`` times in that deque, :attr:`is_looping` is true.
 
     Each logical shingle add or remove is O(1). :meth:`observe` costs
     O(number of tokens derived from *chunk*).
@@ -20,6 +29,7 @@ class LoopDetector:
     __slots__ = (
         "_pending",
         "_shingle_size",
+        "_window",
         "_shingle_hashes",
         "_hash_count",
         "_threshold",
@@ -41,6 +51,7 @@ class LoopDetector:
             raise ValueError("shingle_size must be >= 1")
 
         self._shingle_size = shingle_size
+        self._window = window
         self._threshold = threshold
         self._pending: deque[str] = deque(maxlen=shingle_size)
         self._shingle_hashes: deque[int] = deque(maxlen=window)
@@ -60,18 +71,19 @@ class LoopDetector:
             self._pending.append(token)
             if len(self._pending) == self._shingle_size:
                 shingle: tuple[str, ...] = tuple(self._pending)
-                self._push_hash(hash(shingle))
+                self._push_hash(_shingle_fingerprint(shingle))
                 self._pending.popleft()
 
     @property
     def is_looping(self) -> bool:
-        """True when some shingle hash count exceeds ``threshold`` in the rolling window."""
+        """True when some shingle fingerprint exceeds ``threshold`` in the rolling window."""
         return self._violators > 0
 
     def _tokens_from_chunk(self, chunk: str) -> list[str]:
         if not chunk or not chunk.strip():
             return []
-        return [t for t in (p.lower() for p in chunk.split()) if t]
+        # ``str.split()`` with no sep splits on arbitrary whitespace and omits empties.
+        return [p.lower() for p in chunk.split()]
 
     def _push_hash(self, h: int) -> None:
         if len(self._shingle_hashes) == self._shingle_hashes.maxlen:

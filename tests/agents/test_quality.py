@@ -4,10 +4,26 @@ from __future__ import annotations
 
 import pytest
 
-from app.agents.quality import LoopDetector
+from app.agents.quality import LoopDetector, _shingle_fingerprint
+
+
+class TestShingleFingerprint:
+    def test_stable_for_identical_shingle(self) -> None:
+        s = ("hello", "world", "again")
+        assert _shingle_fingerprint(s) == _shingle_fingerprint(s)
+
+    def test_distinct_for_different_shingles(self) -> None:
+        a = _shingle_fingerprint(("a", "bc"))
+        b = _shingle_fingerprint(("ab", "c"))
+        assert a != b
 
 
 class TestLoopDetector:
+    def test_stores_window_configuration(self) -> None:
+        det = LoopDetector(window=17, threshold=1, shingle_size=2)
+        assert det._window == 17
+        assert det._shingle_hashes.maxlen == 17
+
     def test_defaults_non_looping_on_varied_stream(self) -> None:
         det = LoopDetector(window=20, threshold=4, shingle_size=3)
         phrases = [
