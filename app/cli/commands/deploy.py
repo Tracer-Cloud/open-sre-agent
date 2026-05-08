@@ -353,7 +353,18 @@ def deploy_ec2(down: bool, branch: str) -> None:
                 raise
             raise _ec2_deploy_not_bundled_error() from exc
 
-        destroy()
+        try:
+            destroy()
+        except Exception as exc:
+            if exc.__class__.__name__ == "NoCredentialsError":
+                raise OpenSREError(
+                    "AWS credentials not found.",
+                    suggestion=(
+                        "Run 'aws configure' or export AWS_ACCESS_KEY_ID and "
+                        "AWS_SECRET_ACCESS_KEY before tearing down an EC2 deployment."
+                    ),
+                ) from exc
+            raise
         return
 
     from app.cli.commands.remote_health import run_remote_health_check
@@ -365,7 +376,18 @@ def deploy_ec2(down: bool, branch: str) -> None:
             raise
         raise _ec2_deploy_not_bundled_error() from exc
 
-    outputs = run_deploy(branch=branch)
+    try:
+        outputs = run_deploy(branch=branch)
+    except Exception as exc:
+        if exc.__class__.__name__ == "NoCredentialsError":
+            raise OpenSREError(
+                "AWS credentials not found.",
+                suggestion=(
+                    "Run 'aws configure' or export AWS_ACCESS_KEY_ID and "
+                    "AWS_SECRET_ACCESS_KEY before deploying to EC2."
+                ),
+            ) from exc
+        raise
     _persist_remote_url(outputs)
 
     remote_url = _build_remote_url(outputs)
