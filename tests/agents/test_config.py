@@ -176,3 +176,15 @@ class TestSetAgentBudget:
         assert "claude-code" in reloaded.agents
         # The padded variant did not become a separate key.
         assert "  claude-code " not in reloaded.agents
+
+    def test_rejects_nan_at_api_layer(self) -> None:
+        # ``model_copy`` would skip validators and silently persist a
+        # ``nan`` that the next load can't parse. Re-validating in
+        # ``set_agent_budget`` blocks corruption from any caller that
+        # bypasses the CLI's pre-check.
+        with pytest.raises(ValidationError):
+            set_agent_budget("claude-code", float("nan"))
+
+    def test_rejects_inf_at_api_layer(self) -> None:
+        with pytest.raises(ValidationError):
+            set_agent_budget("claude-code", float("inf"))

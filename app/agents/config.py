@@ -28,9 +28,13 @@ class AgentBudget(StrictConfigModel):
     them.
     """
 
-    hourly_budget_usd: float | None = Field(default=None, gt=0)
+    # ``allow_inf_nan=False`` keeps non-finite floats out of the
+    # config. ``inf > 0`` is ``True`` so ``gt=0`` alone wouldn't block
+    # ``inf``; ``nan > 0`` is ``False`` but the explicit flag yields
+    # a clearer error message either way.
+    hourly_budget_usd: float | None = Field(default=None, gt=0, allow_inf_nan=False)
     progress_minutes: int | None = Field(default=None, ge=0)
-    error_rate_pct: float | None = Field(default=None, ge=0, le=100)
+    error_rate_pct: float | None = Field(default=None, ge=0, le=100, allow_inf_nan=False)
 
 
 class AgentsConfig(StrictConfigModel):
@@ -86,13 +90,22 @@ def set_agent_budget(name: str, hourly_budget_usd: float) -> AgentsConfig:
     surrounding whitespace so callers don't accidentally split one
     logical agent into two dict keys (``"claude-code"`` vs
     ``" claude-code "``).
+
+    Goes through ``model_validate`` rather than ``model_copy`` because
+    the latter skips field validators — a programmatic caller passing
+    ``float("nan")`` or ``float("inf")`` could otherwise persist a
+    value that fails ``gt=0`` on the next load and corrupts
+    ``agents.yaml``. Re-validation here keeps the public mutation
+    surface consistent with the constructor's invariants.
     """
     name = name.strip()
     config = load_agents_config()
     existing = config.agents.get(name)
     if existing is None:
         existing = AgentBudget()
-    config.agents[name] = existing.model_copy(update={"hourly_budget_usd": hourly_budget_usd})
+    merged = existing.model_dump(exclude_none=True)
+    merged["hourly_budget_usd"] = hourly_budget_usd
+    config.agents[name] = AgentBudget.model_validate(merged)
     save_agents_config(config)
     return config
 

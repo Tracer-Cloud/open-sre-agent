@@ -7,6 +7,7 @@ landing as the monitor-local-agents initiative ships).
 
 from __future__ import annotations
 
+import math
 import os
 from pathlib import Path
 
@@ -132,8 +133,13 @@ def _cmd_agents_budget(session: ReplSession, console: Console, args: list[str]) 
         console.print(f"[{ERROR}]invalid budget:[/] {escape(raw_usd)} is not a number")
         session.mark_latest(ok=False, kind="slash")
         return True
-    if usd <= 0:
-        console.print(f"[{ERROR}]invalid budget:[/] must be a positive number")
+    # ``nan`` and ``inf`` slip past ``usd <= 0`` because both
+    # ``float("nan") <= 0`` and ``float("inf") <= 0`` are ``False``.
+    # Without this guard a stored ``nan`` would corrupt agents.yaml
+    # (next load fails Pydantic's ``gt=0`` since ``nan > 0`` is
+    # ``False``) and ``inf`` would render as ``$inf`` in the dashboard.
+    if not math.isfinite(usd) or usd <= 0:
+        console.print(f"[{ERROR}]invalid budget:[/] must be a positive finite number")
         session.mark_latest(ok=False, kind="slash")
         return True
 

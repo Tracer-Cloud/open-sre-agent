@@ -203,6 +203,29 @@ class TestAgentsBudget:
         assert "invalid budget" in buf.getvalue().lower()
         assert session.history[-1]["ok"] is False
 
+    def test_rejects_nan_budget(self, isolated_agents_yaml: Path) -> None:
+        # ``float("nan") <= 0`` is ``False``, so without ``math.isfinite``
+        # ``nan`` would slip past the guard, hit set_agent_budget, and
+        # poison agents.yaml so the next load raises ValidationError.
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents budget claude-code nan", session, console) is True
+        assert "invalid budget" in buf.getvalue().lower()
+        assert session.history[-1]["ok"] is False
+        # The file must not exist — a single non-finite write can't be
+        # allowed to leave agents.yaml in an unreadable state.
+        assert not isolated_agents_yaml.exists()
+
+    def test_rejects_inf_budget(self, isolated_agents_yaml: Path) -> None:
+        # ``float("inf") <= 0`` is ``False`` and ``gt=0`` alone accepts
+        # ``inf`` (``inf > 0`` is ``True``); only ``isfinite`` blocks it.
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents budget claude-code inf", session, console) is True
+        assert "invalid budget" in buf.getvalue().lower()
+        assert session.history[-1]["ok"] is False
+        assert not isolated_agents_yaml.exists()
+
     def test_single_arg_prints_usage(self) -> None:
         session = ReplSession()
         console, buf = _capture()
