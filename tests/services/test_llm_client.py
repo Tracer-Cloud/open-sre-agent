@@ -877,17 +877,24 @@ def test_parse_retry_after_returns_zero_when_no_hint() -> None:
 # ---------------------------------------------------------------------------
 
 
+class _FakeRateLimitError(llm_client.OpenAIRateLimitError):
+    """Minimal stand-in for openai.RateLimitError with a Google-style body.
+
+    Inherits from the real class so it's caught by ``except OpenAIRateLimitError``.
+    Calls ``Exception.__init__`` directly to bypass ``APIStatusError.__init__``,
+    which requires a live ``request``/``response`` pair not available in unit tests.
+    This also ensures ``str(err)`` works correctly via ``args``.
+    """
+
+    def __init__(self, retry_delay: str) -> None:
+        Exception.__init__(self, f"quota exceeded, retry in {retry_delay}")
+        self.status_code = 429
+        self.body = {"error": {"details": [{"retryDelay": retry_delay}]}}
+
+
 def _make_fake_rate_limit_error(retry_delay: str = "5s") -> Exception:
-    """Construct a minimal fake that looks like openai.RateLimitError with Google body."""
-    err = llm_client.OpenAIRateLimitError.__new__(llm_client.OpenAIRateLimitError)
-    err.status_code = 429  # type: ignore[attr-defined]
-    err.body = {  # type: ignore[attr-defined]
-        "error": {
-            "details": [{"retryDelay": retry_delay}],
-        }
-    }
-    err.message = f"quota exceeded, retry in {retry_delay}"  # type: ignore[attr-defined]
-    return err
+    """Return a fake openai.RateLimitError carrying a Google-style retry body."""
+    return _FakeRateLimitError(retry_delay)
 
 
 def test_openai_invoke_rate_limit_retries_with_suggested_delay(monkeypatch) -> None:

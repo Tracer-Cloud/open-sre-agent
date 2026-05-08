@@ -454,7 +454,7 @@ def _parse_retry_after(err: Exception) -> float:
             for detail in error_obj.get("details", []):
                 delay_str = detail.get("retryDelay", "")
                 if delay_str:
-                    m = re.match(r"(\d+(?:\.\d+)?)s", str(delay_str))
+                    m = re.search(r"^(\d+(?:\.\d+)?)\s*s$", str(delay_str).strip())
                     if m:
                         return min(float(m.group(1)), 60.0)
     m = re.search(r"[Rr]etry in (\d+(?:\.\d+)?)s", str(err))
