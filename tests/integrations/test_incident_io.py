@@ -21,14 +21,13 @@ def test_incident_io_client_probe_success(monkeypatch):
     """Test that probe_access returns a passed result when the API list call succeeds."""
     client = make_incident_io_client("test-key")
 
-    # Mock httpx.Client.get
-    mock_get = MagicMock()
+    # Mock httpx.Client.request
     mock_response = MagicMock()
+    mock_response.status_code = 200
     mock_response.json.return_value = {"incidents": []}
     mock_response.raise_for_status.return_value = None
-    mock_get.return_value = mock_response
 
-    monkeypatch.setattr(httpx.Client, "get", mock_get)
+    monkeypatch.setattr(httpx.Client, "request", lambda _self, *_, **__: mock_response)
 
     result = client.probe_access()
     assert result.status == "passed"
@@ -39,16 +38,16 @@ def test_incident_io_client_probe_failure(monkeypatch):
     """Test that probe_access returns failed when the API list call raises an error."""
     client = make_incident_io_client("test-key")
 
-    mock_get = MagicMock()
     mock_response = MagicMock()
+    mock_response.status_code = 401
+    mock_response.text = "Unauthorized"
     mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
         "Unauthorized",
         request=MagicMock(),
-        response=MagicMock(status_code=401, text="Unauthorized"),
+        response=mock_response,
     )
-    mock_get.return_value = mock_response
 
-    monkeypatch.setattr(httpx.Client, "get", mock_get)
+    monkeypatch.setattr(httpx.Client, "request", lambda _self, *_, **__: mock_response)
 
     result = client.probe_access()
     assert result.status == "failed"
