@@ -242,6 +242,14 @@ class TestClassifyInput:
         assert decision.matched_signals == ()
         assert decision.fallback_reason == "no_prior_investigation_and_no_incident_signal"
 
+    def test_cli_action_plan_routes_to_cli_agent_before_investigation(self) -> None:
+        session = ReplSession()
+
+        decision = route_input("show me connected services", session)
+
+        assert decision.route_kind == RouteKind.CLI_AGENT
+        assert decision.matched_signals == ("cli_agent_action_plan",)
+
     def test_yaml_routing_regression_cases(self) -> None:
         fixture_path = FIXTURES_DIR / "routing_cases.yml"
         payload = yaml.safe_load(fixture_path.read_text(encoding="utf-8"))
