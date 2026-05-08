@@ -89,16 +89,18 @@ class TestReportAndSwallow:
 
     def test_does_not_swallow_other_types(self) -> None:
         mock_log = _mock_logger()
-        with pytest.raises(TypeError), report_and_swallow(
-            logger=mock_log, message="only value", swallow=ValueError
+        with (
+            pytest.raises(TypeError),
+            report_and_swallow(logger=mock_log, message="only value", swallow=ValueError),
         ):
             raise TypeError("not swallowed")
 
     def test_calls_report_exception_on_match(self) -> None:
         mock_log = _mock_logger()
         exc = RuntimeError("reported")
-        with patch("app.utils.errors.capture_exception") as mock_cap, report_and_swallow(
-            logger=mock_log, message="msg"
+        with (
+            patch("app.utils.errors.capture_exception") as mock_cap,
+            report_and_swallow(logger=mock_log, message="msg"),
         ):
             raise exc
         mock_cap.assert_called_once_with(exc, extra=None)
@@ -106,8 +108,9 @@ class TestReportAndSwallow:
     def test_no_exception_passes_through(self) -> None:
         mock_log = _mock_logger()
         result: list[int] = []
-        with patch("app.utils.errors.capture_exception") as mock_cap, report_and_swallow(
-            logger=mock_log, message="msg"
+        with (
+            patch("app.utils.errors.capture_exception") as mock_cap,
+            report_and_swallow(logger=mock_log, message="msg"),
         ):
             result.append(1)
         assert result == [1]
@@ -116,10 +119,13 @@ class TestReportAndSwallow:
     def test_tuple_of_swallow_types(self) -> None:
         mock_log = _mock_logger()
         for exc_type in (ValueError, KeyError):
-            with patch("app.utils.errors.capture_exception"), report_and_swallow(
-                logger=mock_log,
-                message="multi",
-                swallow=(ValueError, KeyError),
+            with (
+                patch("app.utils.errors.capture_exception"),
+                report_and_swallow(
+                    logger=mock_log,
+                    message="multi",
+                    swallow=(ValueError, KeyError),
+                ),
             ):
                 raise exc_type("x")
 
@@ -138,8 +144,9 @@ class TestReportAndReraise:
     def test_no_exception_passes_through(self) -> None:
         mock_log = _mock_logger()
         result: list[int] = []
-        with patch("app.utils.errors.capture_exception") as mock_cap, report_and_reraise(
-            logger=mock_log, message="no error"
+        with (
+            patch("app.utils.errors.capture_exception") as mock_cap,
+            report_and_reraise(logger=mock_log, message="no error"),
         ):
             result.append(42)
         assert result == [42]
