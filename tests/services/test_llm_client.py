@@ -755,6 +755,7 @@ def test_create_llm_client_missing_api_key_raises_runtime_error(monkeypatch) -> 
     finally:
         llm_client.reset_llm_singletons()
 
+
 # ---------------------------------------------------------------------------
 # LLMClient.invoke / invoke_stream — NotFoundError handling
 # ---------------------------------------------------------------------------
