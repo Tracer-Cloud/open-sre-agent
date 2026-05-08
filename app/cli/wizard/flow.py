@@ -179,6 +179,12 @@ def validate_opsgenie_integration(**kwargs):
     return _validate(**kwargs)
 
 
+def validate_incident_io_integration(**kwargs):
+    from app.cli.wizard.integration_health import validate_incident_io_integration as _validate
+
+    return _validate(**kwargs)
+
+
 def validate_discord_bot(**kwargs):
     from app.cli.wizard.integration_health import validate_discord_bot as _validate
 
@@ -1462,6 +1468,41 @@ def _configure_opsgenie() -> tuple[str, str]:
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 
 
+def _configure_incident_io() -> tuple[str, str]:
+    _, credentials = _integration_defaults("incident_io")
+    while True:
+        api_key = _prompt_value(
+            "incident.io API key",
+            default=_string_value(credentials.get("api_key")),
+            secret=True,
+        )
+        base_url = _prompt_value(
+            "API base URL override (optional)",
+            default=_string_value(credentials.get("base_url")),
+            allow_empty=True,
+        )
+        with _console.status("Validating incident.io integration...", spinner="dots"):
+            result = validate_incident_io_integration(
+                api_key=api_key,
+                base_url=base_url,
+            )
+        _render_integration_result("incident.io", result)
+        if result.ok:
+            credentials_payload = {
+                "api_key": api_key,
+                "base_url": base_url,
+            }
+            upsert_integration("incident_io", {"credentials": credentials_payload})
+            env_path = sync_env_values(
+                {
+                    "INCIDENT_IO_API_KEY": api_key,
+                    "INCIDENT_IO_BASE_URL": base_url,
+                }
+            )
+            return "incident.io", str(env_path)
+        _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
+
+
 def _configure_discord() -> tuple[str, str]:
     _, credentials = _integration_defaults("discord")
     _console.print(
@@ -1742,6 +1783,11 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
             hint="Investigate alerts and triage state from OpsGenie",
         ),
         Choice(
+            value="incident_io",
+            label="incident.io",
+            hint="Read incident context and updates from incident.io",
+        ),
+        Choice(
             value="notion",
             label="Notion",
             hint="Post investigation reports to a Notion database",
@@ -1789,6 +1835,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "jira": _configure_jira,
         "alertmanager": _configure_alertmanager,
         "opsgenie": _configure_opsgenie,
+        "incident_io": _configure_incident_io,
         "notion": _configure_notion,
         "openclaw": _configure_openclaw,
         "opensearch": _configure_opensearch,
@@ -1811,6 +1858,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "jira": "jira",
         "alertmanager": "alertmanager",
         "opsgenie": "opsgenie",
+        "incident_io": "incident.io",
         "notion": "notion",
         "openclaw": "openclaw",
         "opensearch": "opensearch",

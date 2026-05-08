@@ -504,8 +504,8 @@ def test_tests_inventory_commands_smoke(cli_sandbox: CliSandbox) -> None:
 def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
     # One `j` per keypress (burst writes are not separate keys). The select list wraps;
     # from the first option, len(choices)-1 steps reach "Skip for now" without wrapping past it.
-    # 21 integrations + "Skip for now" = 22 choices. OpenSearch is at index 20;
-    # 21 j's lands on the new "Skip for now" position at index 21.
+    # 22 integrations + "Skip for now" = 23 choices. OpenSearch is at index 21;
+    # 22 j's lands on the new "Skip for now" position at index 22.
     result = _run_cli_pty(
         cli_sandbox,
         "onboard",
@@ -516,7 +516,7 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
             PtyAction(
                 expect="Choose an integration to configure",
                 send=b"\r",
-                stagger_j=21,
+                stagger_j=22,
             ),
         ],
         timeout=30.0,
@@ -596,10 +596,16 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
                 PtyAction(
                     expect="Choose an integration to configure",
                     send=b"\r",
-                    stagger_j=21,
+                    stagger_j=22,
                 ),
             ],
             timeout=pty_timeout,
+            extra_env={
+                "OPENAI_API_KEY": "",
+                "OPENAI_ORG_ID": "",
+                "OPENAI_PROJECT_ID": "",
+                "OPENAI_BASE_URL": "",
+            },
         )
     except AssertionError as exc:
         msg = str(exc)
