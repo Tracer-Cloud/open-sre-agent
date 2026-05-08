@@ -103,9 +103,11 @@ def _check_llm_provider() -> tuple[bool, str]:
             return False, f"provider={provider}, CLI auth status unclear ({probe.detail})"
         return True, f"provider={provider}, CLI ready ({probe.detail})"
 
+    from app.llm_credentials import has_llm_api_key
+
     expected_key = key_vars.get(provider)
-    if expected_key and not os.getenv(expected_key):
-        return False, f"provider={provider}, but {expected_key} is not set"
+    if expected_key and not has_llm_api_key(expected_key):
+        return False, f"provider={provider}, {expected_key} not found in environment or keyring"
     return True, f"provider={provider}"
 
 
