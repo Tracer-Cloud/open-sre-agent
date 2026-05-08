@@ -144,7 +144,7 @@ def validate_sentry_config(config: SentryConfig) -> SentryValidationResult:
     except httpx.HTTPStatusError as err:
         detail = err.response.text.strip() or str(err)
         return SentryValidationResult(ok=False, detail=f"Sentry validation failed: {detail}")
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return SentryValidationResult(ok=False, detail=f"Sentry validation failed: {err}")
 
 

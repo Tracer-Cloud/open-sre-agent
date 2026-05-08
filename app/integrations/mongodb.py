@@ -118,7 +118,7 @@ def validate_mongodb_config(config: MongoDBConfig) -> MongoDBValidationResult:
             )
         finally:
             client.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return MongoDBValidationResult(ok=False, detail=f"MongoDB connection failed: {err}")
 
 
@@ -182,7 +182,7 @@ def get_server_status(config: MongoDBConfig) -> dict[str, Any]:
             }
         finally:
             client.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {"source": "mongodb", "available": False, "error": str(err)}
 
 
@@ -231,7 +231,7 @@ def get_current_ops(
             }
         finally:
             client.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {"source": "mongodb", "available": False, "error": str(err)}
 
 
@@ -271,7 +271,7 @@ def get_rs_status(config: MongoDBConfig) -> dict[str, Any]:
             }
         finally:
             client.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         error_str = str(err)
         # Not a replica set is not an error per se
         if "not running with --replSet" in error_str or "NotYetInitialized" in error_str:
@@ -357,7 +357,7 @@ def get_profiler_data(
             }
         finally:
             client.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {"source": "mongodb", "available": False, "error": str(err)}
 
 
@@ -403,5 +403,5 @@ def get_collection_stats(
             }
         finally:
             client.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {"source": "mongodb", "available": False, "error": str(err)}

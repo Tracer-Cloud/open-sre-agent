@@ -12,12 +12,12 @@ from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
 
 
-def _cmd_exit(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_exit(_session: ReplSession, console: Console, _args: list[str]) -> bool:
     console.print("[dim]goodbye.[/dim]")
     return False
 
 
-def _cmd_health(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_health(_session: ReplSession, console: Console, _args: list[str]) -> bool:
     from app.cli.support.health_view import render_health_report
     from app.config import get_environment
     from app.integrations.store import STORE_PATH
@@ -34,7 +34,7 @@ def _cmd_health(session: ReplSession, console: Console, args: list[str]) -> bool
     return True
 
 
-def _cmd_doctor(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_doctor(_session: ReplSession, console: Console, _args: list[str]) -> bool:
     from app.cli.commands.doctor import _CHECKS, _check
 
     status_styles: dict[str, str] = {"ok": "green", "warn": "yellow", "error": "red"}
@@ -60,7 +60,7 @@ def _cmd_doctor(session: ReplSession, console: Console, args: list[str]) -> bool
     return True
 
 
-def _cmd_version(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_version(_session: ReplSession, console: Console, _args: list[str]) -> bool:
     from app.version import get_version
 
     table = repl_table(title="Version info", title_style=TERMINAL_ACCENT_BOLD, show_header=False)

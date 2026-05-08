@@ -170,3 +170,81 @@ def test_opensearch_tool_caps_limit_before_client_query(monkeypatch: Any) -> Non
     assert captured["limit"] == 5
     assert result["available"] is True
     assert len(result["logs"]) == 5
+
+
+def test_opensearch_tool_forwards_basic_auth_to_elasticsearch_config(monkeypatch: Any) -> None:
+    """Layer 5 / #1143: username and password must reach ElasticsearchConfig.
+
+    Without this wiring, even though the user configures Basic Auth via the wizard
+    or the legacy CLI, the AI agent's OpenSearch tool drops the credentials when
+    constructing the runtime client, so the LLM cannot authenticate against the
+    cluster during investigations.
+    """
+    captured: dict[str, Any] = {}
+
+    class _FakeConfig:
+        def __init__(
+            self,
+            url: str,
+            api_key: str | None = None,
+            username: str | None = None,
+            password: str | None = None,
+            index_pattern: str = "*",
+        ) -> None:
+            captured["url"] = url
+            captured["api_key"] = api_key
+            captured["username"] = username
+            captured["password"] = password
+            captured["index_pattern"] = index_pattern
+
+    def _fake_search_logs(
+        self: Any,
+        query: str = "*",
+        time_range_minutes: int = 60,
+        limit: int = 50,
+        index_pattern: str | None = None,
+        timestamp_field: str = "@timestamp",
+    ) -> dict[str, Any]:
+        return {"success": True, "logs": []}
+
+    monkeypatch.setattr(
+        "app.tools.OpenSearchAnalyticsTool.ElasticsearchConfig",
+        _FakeConfig,
+    )
+    monkeypatch.setattr(
+        "app.tools.OpenSearchAnalyticsTool.ElasticsearchClient.search_logs",
+        _fake_search_logs,
+    )
+
+    result = query_opensearch_analytics(
+        url="https://opensearch.example.invalid",
+        username="admin",
+        password="secret",
+        query="*",
+    )
+
+    assert captured["username"] == "admin"
+    assert captured["password"] == "secret"
+    assert result["available"] is True
+
+
+def test_opensearch_tool_extract_params_reads_basic_auth() -> None:
+    """Layer 5 / #1143: _opensearch_extract_params must surface username/password.
+
+    These keys are populated by the catalog classifier (Layer 2) when a user
+    configures Basic Auth, and the registered tool's runtime kwargs must
+    include them so they reach ElasticsearchConfig.
+    """
+    from app.tools.OpenSearchAnalyticsTool import _opensearch_extract_params
+
+    sources = {
+        "opensearch": {
+            "connection_verified": True,
+            "url": "https://opensearch.example.invalid",
+            "username": "admin",
+            "password": "secret",
+        }
+    }
+    params = _opensearch_extract_params(sources)
+    assert params["username"] == "admin"
+    assert params["password"] == "secret"

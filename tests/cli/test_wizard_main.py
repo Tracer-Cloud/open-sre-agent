@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import click
 import pytest
 
 from app.cli.wizard import __main__ as wizard_main
@@ -13,7 +14,7 @@ def test_main_initialises_sentry_and_emits_cli_invoked(
     init_calls: list[int] = []
     captured: list[dict[str, object] | None] = []
 
-    monkeypatch.setattr(wizard_main, "init_sentry", lambda: init_calls.append(1))
+    monkeypatch.setattr(wizard_main, "init_sentry", lambda **_kw: init_calls.append(1))
     monkeypatch.setattr(wizard_main, "shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr(
         wizard_main,
@@ -45,7 +46,7 @@ def test_main_flushes_analytics_even_when_wizard_raises(
 ) -> None:
     flush_calls: list[bool] = []
 
-    monkeypatch.setattr(wizard_main, "init_sentry", lambda: None)
+    monkeypatch.setattr(wizard_main, "init_sentry", lambda **_kw: None)
     monkeypatch.setattr(wizard_main, "capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr(wizard_main, "capture_cli_invoked", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
@@ -63,4 +64,56 @@ def test_main_flushes_analytics_even_when_wizard_raises(
     with pytest.raises(RuntimeError):
         wizard_main.main()
 
+    assert flush_calls == [True]
+
+
+def test_main_treats_abort_as_clean_cancel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    flush_calls: list[bool] = []
+
+    monkeypatch.setattr(wizard_main, "init_sentry", lambda **_kw: None)
+    monkeypatch.setattr(wizard_main, "capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr(wizard_main, "capture_cli_invoked", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        wizard_main,
+        "shutdown_analytics",
+        lambda **kw: flush_calls.append(bool(kw.get("flush"))),
+    )
+    monkeypatch.setattr(wizard_main, "install_questionary_escape_cancel", lambda: None)
+    monkeypatch.setattr(
+        wizard_main,
+        "run_wizard",
+        lambda: (_ for _ in ()).throw(click.Abort()),
+    )
+
+    exit_code = wizard_main.main()
+
+    assert exit_code == 0
+    assert flush_calls == [True]
+
+
+def test_main_treats_keyboard_interrupt_as_clean_cancel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    flush_calls: list[bool] = []
+
+    monkeypatch.setattr(wizard_main, "init_sentry", lambda **_kw: None)
+    monkeypatch.setattr(wizard_main, "capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr(wizard_main, "capture_cli_invoked", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        wizard_main,
+        "shutdown_analytics",
+        lambda **kw: flush_calls.append(bool(kw.get("flush"))),
+    )
+    monkeypatch.setattr(wizard_main, "install_questionary_escape_cancel", lambda: None)
+    monkeypatch.setattr(
+        wizard_main,
+        "run_wizard",
+        lambda: (_ for _ in ()).throw(KeyboardInterrupt()),
+    )
+
+    exit_code = wizard_main.main()
+
+    assert exit_code == 0
     assert flush_calls == [True]

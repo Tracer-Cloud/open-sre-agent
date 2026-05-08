@@ -150,3 +150,112 @@ def test_detect_sources_skips_snowflake_without_token() -> None:
     sources = detect_sources(alert, {}, integrations)
 
     assert "snowflake" not in sources
+
+
+def test_detect_sources_forwards_opensearch_basic_auth_credentials() -> None:
+    alert = {"alert_name": "Cluster errors spike", "annotations": {}}
+    integrations = {
+        "opensearch": {
+            "url": "https://opensearch.example.invalid",
+            "username": "admin",
+            "password": "secret",
+            "index_pattern": "logs-*",
+            "integration_id": "os-basic-auth-1",
+        },
+    }
+
+    sources = detect_sources(alert, {}, integrations)
+
+    opensearch = sources.get("opensearch")
+    assert opensearch is not None
+    assert opensearch["url"] == "https://opensearch.example.invalid"
+    assert opensearch["username"] == "admin"
+    assert opensearch["password"] == "secret"
+    assert opensearch["api_key"] == ""
+    assert opensearch["integration_id"] == "os-basic-auth-1"
+    assert opensearch["connection_verified"] is True
+
+
+def test_detect_sources_opensearch_basic_auth_strips_whitespace() -> None:
+    alert = {"alert_name": "Cluster errors spike", "annotations": {}}
+    integrations = {
+        "opensearch": {
+            "url": "https://opensearch.example.invalid",
+            "username": "  admin  ",
+            "password": "  secret  ",
+        },
+    }
+
+    sources = detect_sources(alert, {}, integrations)
+
+    opensearch = sources.get("opensearch")
+    assert opensearch is not None
+    assert opensearch["username"] == "admin"
+    assert opensearch["password"] == "secret"
+
+
+def test_detect_sources_opensearch_no_auth_yields_empty_credentials() -> None:
+    alert = {"alert_name": "Cluster errors spike", "annotations": {}}
+    integrations = {
+        "opensearch": {
+            "url": "https://opensearch.example.invalid",
+        },
+    }
+
+    sources = detect_sources(alert, {}, integrations)
+
+    opensearch = sources.get("opensearch")
+    assert opensearch is not None
+    assert opensearch["api_key"] == ""
+    assert opensearch["username"] == ""
+    assert opensearch["password"] == ""
+
+
+def test_detect_sources_opensearch_username_without_password_forwards_half_pair() -> None:
+    """Half-populated Basic Auth credentials must surface as-is from detect_sources.
+
+    A user who sets OPENSEARCH_USERNAME via env var but forgets OPENSEARCH_PASSWORD
+    (or vice versa) ends up with a half-populated catalog record. The wizard's
+    _prompt_value blocks this UI-side, but env-var or .env-edited records can still
+    produce it.
+
+    detect_sources must surface the half-pair to the runtime sources dict
+    rather than silently normalizing it. ElasticsearchConfig.headers then emits
+    no Authorization header (covered by tests/services/test_elasticsearch_client.py),
+    so the agent sends an unauthenticated request and the cluster returns 401 —
+    a visible failure mode rather than a silent credential drop.
+    """
+    alert = {"alert_name": "Cluster errors spike", "annotations": {}}
+    integrations = {
+        "opensearch": {
+            "url": "https://opensearch.example.invalid",
+            "username": "admin",
+            # password intentionally missing — simulates env var set without pair
+        },
+    }
+
+    sources = detect_sources(alert, {}, integrations)
+
+    opensearch = sources.get("opensearch")
+    assert opensearch is not None
+    assert opensearch["username"] == "admin"
+    assert opensearch["password"] == ""
+
+
+def test_detect_sources_opensearch_password_without_username_forwards_half_pair() -> None:
+    """Reverse half-pair: password set without username — same behavior expected."""
+    alert = {"alert_name": "Cluster errors spike", "annotations": {}}
+    integrations = {
+        "opensearch": {
+            "url": "https://opensearch.example.invalid",
+            "password": "secret",
+            # username intentionally missing
+        },
+    }
+
+    sources = detect_sources(alert, {}, integrations)
+
+    opensearch = sources.get("opensearch")
+    assert opensearch is not None
+    assert opensearch["username"] == ""
+    assert opensearch["password"] == "secret"

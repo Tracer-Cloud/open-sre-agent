@@ -56,8 +56,9 @@ def _enrich_raw_alert(raw_alert: Any, details: AlertDetails) -> Any:
 
 
 @traceable(name="node_extract_alert")
-def node_extract_alert(state: InvestigationState, config: NodeConfig | None = None) -> dict:  # noqa: ARG001
+def node_extract_alert(state: InvestigationState, config: NodeConfig | None = None) -> dict:
     """Classify and extract alert details from raw input (single LLM call)."""
+    del config
     tracker = get_tracker()
     tracker.start("extract_alert", "Classifying and extracting alert details")
 

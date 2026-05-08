@@ -141,6 +141,12 @@ CAUSAL_CHAIN:
 - <step 2: how the fault propagated>
 - <step N: the observable symptom or alert>
 (Trace from root cause to the alert. Each step should be one sentence backed by evidence where possible.)
+
+REMEDIATION_STEPS:
+- <step 1: most urgent concrete action — reference the specific service, pod, or resource identified above>
+- <step 2>
+- <step 3>
+(3–5 steps. Ground each in the evidence. Only suggest steps using tools or resources confirmed in the investigation. No generic advice.)
 """
 
     return prompt

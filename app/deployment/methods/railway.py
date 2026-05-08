@@ -57,7 +57,7 @@ def _run_command(
         kwargs["timeout"] = timeout
 
     try:
-        result: subprocess.CompletedProcess[str] = subprocess.run(cmd, **kwargs)  # noqa: S603
+        result: subprocess.CompletedProcess[str] = subprocess.run(cmd, **kwargs)
         return result
     except FileNotFoundError:
         # Command not found - CLI not installed
@@ -254,7 +254,7 @@ def deploy_to_railway(
                     logs.append("Health check passed!")
                     health_ok = True
                     break
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logs.append(f"Health check pending... ({type(exc).__name__})")
 
             time.sleep(health_interval)

@@ -7,7 +7,7 @@ name = "opensre"
 version = "2026.4.5"
 description = "Open-source SRE agent for automated incident investigation and root cause analysis. Automatically analyzes alerts from Slack, Grafana, Datadog, and other tooling."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = { text = "Apache-2.0" }
 authors = [
   { name = "OpenSRE", email = "support@opensre.com" },
@@ -67,6 +67,7 @@ dependencies = [
     "sentry-sdk>=2.59.0",
     # File locking for atomic store operations
     "filelock>=3.29.0",
+    "psutil>=5.9",
 ]
 
 [project.urls]
@@ -92,6 +93,7 @@ dev = [
     "types-psycopg2",
     "types-PyMySQL",
     "types-PyYAML",
+    "types-psutil",
     "boto3-stubs[essential]",
     "huggingface_hub>=0.26.0",
     "datasets>=3.0.0",
@@ -159,4 +161,5 @@ ignore_names = [
 [dependency-groups]
 dev = [
     "pre-commit>=4.0.0",
+    "types-psutil>=7.2.2.20260408",
 ]

@@ -15,7 +15,7 @@ def should_report_exception(exc: BaseException, *, expected: bool = False) -> bo
     """Return whether a caught exception should be reported to Sentry."""
     if expected:
         return False
-    if isinstance(exc, (KeyboardInterrupt, EOFError, OpenSREError)):
+    if isinstance(exc, (KeyboardInterrupt, EOFError, OpenSREError, click.Abort)):
         return False
     if isinstance(exc, click.UsageError):
         return str(exc).startswith("No such command ")

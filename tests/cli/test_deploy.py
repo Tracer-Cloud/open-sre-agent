@@ -169,7 +169,7 @@ class TestIsRailwayCliInstalled:
     """Tests for is_railway_cli_installed function."""
 
     def test_returns_true_when_cli_installed(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        def mock_run(*args, **kwargs):  # noqa: ARG001
+        def mock_run(*args, **kwargs):
             class Result:
                 returncode = 0
 
@@ -179,7 +179,7 @@ class TestIsRailwayCliInstalled:
         assert is_railway_cli_installed() is True
 
     def test_returns_false_when_cli_not_installed(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        def mock_run(*args, **kwargs):  # noqa: ARG001
+        def mock_run(*args, **kwargs):
             class Result:
                 returncode = 127
 
@@ -193,7 +193,7 @@ class TestGetRailwayAuthStatus:
     """Tests for get_railway_auth_status function."""
 
     def test_authenticated_when_whoami_succeeds(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        def mock_run(*args, **kwargs):  # noqa: ARG001
+        def mock_run(*args, **kwargs):
             class Result:
                 returncode = 0
                 stdout = "user@example.com"
@@ -207,7 +207,7 @@ class TestGetRailwayAuthStatus:
         assert result["detail"] == "user@example.com"
 
     def test_not_authenticated_when_whoami_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        def mock_run(*args, **kwargs):  # noqa: ARG001
+        def mock_run(*args, **kwargs):
             class Result:
                 returncode = 1
                 stdout = ""
@@ -272,7 +272,7 @@ class TestDeployToRailway:
         assert "dry-run" in result["logs"][0].lower()
 
     def test_failed_deploy_includes_database_hint(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        def mock_run_command(cmd: list[str], **kwargs: object) -> object:  # noqa: ARG001
+        def mock_run_command(cmd: list[str], **kwargs: object) -> object:
             class Result:
                 returncode = 1
                 stdout = ""
@@ -299,7 +299,7 @@ class TestDeployToRailway:
 
         commands_run: list[list[str]] = []
 
-        def mock_run_command(cmd: list[str], **kwargs: object) -> object:  # noqa: ARG001
+        def mock_run_command(cmd: list[str], **kwargs: object) -> object:
             commands_run.append(cmd)
 
             class Result:
@@ -330,7 +330,7 @@ class TestDeployToRailway:
             lambda: {"authenticated": True, "detail": "user@example.com"},
         )
 
-        def mock_run_command(cmd: list[str], **kwargs: object) -> object:  # noqa: ARG001
+        def mock_run_command(cmd: list[str], **kwargs: object) -> object:
             class Result:
                 returncode = 0
                 stdout = "https://myapp.up.railway.app"
@@ -362,7 +362,7 @@ class TestDeployToRailway:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        def mock_run_command(cmd: list[str], **kwargs: object) -> object:  # noqa: ARG001
+        def mock_run_command(cmd: list[str], **kwargs: object) -> object:
             class Result:
                 returncode = 0
                 stdout = "https://myapp.up.railway.app"
@@ -403,7 +403,7 @@ class TestDeployToRailway:
 
         command_calls = {"count": 0}
 
-        def mock_run_command(cmd: list[str], **kwargs: object) -> object:  # noqa: ARG001
+        def mock_run_command(cmd: list[str], **kwargs: object) -> object:
             command_calls["count"] += 1
 
             class Result:
@@ -432,7 +432,7 @@ class TestDeployToRailway:
             lambda: pytest.fail("Auth check should be skipped"),
         )
 
-        def mock_run_command(cmd: list[str], **kwargs: object) -> object:  # noqa: ARG001
+        def mock_run_command(cmd: list[str], **kwargs: object) -> object:
             class Result:
                 returncode = 0
                 stdout = "https://myapp.up.railway.app"
@@ -459,7 +459,7 @@ class TestDeployToRailway:
             lambda: pytest.fail("Auth check should be skipped"),
         )
 
-        def mock_run_command(cmd: list[str], **kwargs: object) -> object:  # noqa: ARG001
+        def mock_run_command(cmd: list[str], **kwargs: object) -> object:
             class Result:
                 returncode = 0
                 stdout = "https://myapp.up.railway.app"

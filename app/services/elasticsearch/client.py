@@ -1,12 +1,24 @@
-"""Elasticsearch REST API client.
+"""Elasticsearch / OpenSearch REST API client.
 
 Uses the ES HTTP API directly via httpx (no elasticsearch-py SDK).
-Supports clusters with security disabled (no credentials) and
-clusters requiring API key authentication.
+Supports three authentication modes, in order of precedence:
+
+1. No authentication — clusters with security disabled.
+2. API key authentication — emits ``Authorization: ApiKey <key>``.
+   Native to Elasticsearch and to OpenSearch deployments that have
+   added API key support.
+3. HTTP Basic authentication — emits ``Authorization: Basic <base64>``.
+   This is the default and primary authentication method for most
+   self-hosted OpenSearch deployments, where API keys are not natively
+   available (see opensearch-project/security#4009).
+
+When both ``api_key`` and (``username``, ``password``) are configured,
+the API key takes precedence.
 """
 
 from __future__ import annotations
 
+import base64
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -23,6 +35,8 @@ _DEFAULT_TIMEOUT = 30
 class ElasticsearchConfig:
     url: str
     api_key: str | None = None
+    username: str | None = None
+    password: str | None = None
     index_pattern: str = field(default="*")
 
     @property
@@ -33,7 +47,14 @@ class ElasticsearchConfig:
     def headers(self) -> dict[str, str]:
         h: dict[str, str] = {"Content-Type": "application/json"}
         if self.api_key:
+            # Preferred: API key (native to Elasticsearch; supported by
+            # some OpenSearch deployments).
             h["Authorization"] = f"ApiKey {self.api_key}"
+        elif self.username and self.password:
+            # Fallback: HTTP Basic Auth (primary method for most
+            # self-hosted OpenSearch clusters).
+            credentials = base64.b64encode(f"{self.username}:{self.password}".encode()).decode()
+            h["Authorization"] = f"Basic {credentials}"
         return h
 
 

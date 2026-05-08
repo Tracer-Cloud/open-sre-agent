@@ -126,8 +126,55 @@ class TestMidStreamError:
         output = _strip_ansi(buf.getvalue())
         assert "partial answer" in output
 
-    def test_keyboard_interrupt_propagates_with_partial_visible(self) -> None:
-        class _ChunksThenTwoKbds:
+    def test_single_keyboard_interrupt_is_noted_and_stream_completes(self) -> None:
+        """A single Ctrl+C mid-stream is absorbed (footer hint pinned) and the
+        stream finishes naturally; the partial buffer is returned.
+
+        This reflects the double-press cancellation contract introduced for
+        the terminal CLI: one press warns, a second within the window aborts.
+        """
+
+        class _ChunksThenSingleKbd:
+            __slots__ = ("_i", "_raised")
+
+            def __init__(self) -> None:
+                self._i = 0
+                self._raised = False
+
+            def __iter__(self) -> Iterator[str]:
+                return self
+
+            def __next__(self) -> str:
+                parts = ("partial ", "answer")
+                if self._i < len(parts):
+                    c = parts[self._i]
+                    self._i += 1
+                    return c
+                if not self._raised:
+                    self._raised = True
+                    raise KeyboardInterrupt
+                raise StopIteration
+
+        console, buf = _tty_console()
+        result = stream_to_console(
+            console,
+            label="assistant",
+            chunks=iter(_ChunksThenSingleKbd()),
+        )
+
+        output = _strip_ansi(buf.getvalue())
+        assert "partial answer" in output
+        assert "Press Ctrl+C again to stop" in output
+        assert result == "partial answer"
+
+    def test_double_keyboard_interrupt_propagates(self) -> None:
+        """Two Ctrl+C presses within the window cancel the stream and re-raise.
+
+        The partial buffer rendered before the cancellation must remain on
+        screen so the caller can label it as cancelled.
+        """
+
+        class _ChunksThenDoubleKbd:
             __slots__ = ("_i",)
 
             def __init__(self) -> None:
@@ -142,19 +189,21 @@ class TestMidStreamError:
                     c = parts[self._i]
                     self._i += 1
                     return c
+                # Every subsequent call raises — emulates two Ctrl+C presses
+                # firing back-to-back within the double-press window.
                 raise KeyboardInterrupt
 
         console, buf = _tty_console()
-
         with pytest.raises(KeyboardInterrupt):
             stream_to_console(
                 console,
                 label="assistant",
-                chunks=iter(_ChunksThenTwoKbds()),
+                chunks=iter(_ChunksThenDoubleKbd()),
             )
 
         output = _strip_ansi(buf.getvalue())
         assert "partial answer" in output
+        assert "Press Ctrl+C again to stop" in output
 
 
 class TestTimingFooter:

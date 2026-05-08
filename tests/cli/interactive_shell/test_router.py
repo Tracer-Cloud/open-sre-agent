@@ -16,7 +16,7 @@ class TestClassifyInput:
         session = ReplSession()
         # A bare word matching a slash command short name should route to slash
         # even without the leading '/' and even with no prior investigation.
-        for word in ("help", "exit", "quit", "status", "clear", "reset", "trust"):
+        for word in ("help", "exit", "quit", "status", "clear", "reset", "trust", "welcome"):
             assert classify_input(word, session) == "slash", word
 
     def test_bare_question_mark_is_slash(self) -> None:
@@ -35,11 +35,13 @@ class TestClassifyInput:
         assert classify_input("HELP", session) == "slash"
         assert classify_input("Exit", session) == "slash"
 
-    def test_no_prior_greeting_routes_to_cli_agent_not_investigation(self) -> None:
+    def test_no_prior_greeting_routes_to_welcome_panel(self) -> None:
+        # Greetings and meta-words ("hi", "agent", "menu", …) are aliased to the
+        # /welcome slash command so the user always lands on the structured
+        # welcome panel instead of an unstructured LLM reply.
         session = ReplSession()
-        assert classify_input("hey", session) == "cli_agent"
-        assert classify_input("hi", session) == "cli_agent"
-        assert classify_input("hello", session) == "cli_agent"
+        for word in ("hey", "hi", "agent", "menu", "welcome"):
+            assert classify_input(word, session) == "slash", word
 
     def test_long_operational_health_question_stays_cli_agent(self) -> None:
         """Long setup questions must not hit LangGraph just because len >= 48."""
@@ -198,3 +200,73 @@ class TestClassifyInput:
         catches legitimate docs questions (#1166)."""
         session = ReplSession()
         assert classify_input("in the docs, where is the OAuth flow?", session) == "cli_help"
+
+
+class TestEdgeCaseRegressionFixtures:
+    """Regression fixtures for historical boundary prompts that were ambiguous
+    between the sample-alert launch surface (cli_agent) and real incident
+    investigation (new_alert) during the typed-routing migration (#1375/#1378).
+
+    These fixtures guard the consolidated single-source routing so that the
+    boundary does not silently drift if the canonical SAMPLE_ALERT_RE pattern
+    in intent_parser is ever edited.
+    """
+
+    def test_sample_alert_verb_variants_stay_cli_agent(self) -> None:
+        """All verb forms that launch a built-in test alert must route to
+        cli_agent, not kick off a real LangGraph investigation."""
+        session = ReplSession()
+        for phrase in (
+            "try a sample alert",
+            "run a sample alert",
+            "launch a simple alert",
+            "fire a demo alert",
+            "start a test alert",
+            "send a sample event",
+            "trigger a demo event",
+            "okay launch a simple alert",
+            "try a test event",
+        ):
+            result = classify_input(phrase, session)
+            assert result == "cli_agent", (
+                f"Expected cli_agent for sample-alert phrase {phrase!r}, got {result!r}"
+            )
+
+    def test_real_alert_keywords_alongside_sample_phrasing_still_route_to_new_alert(
+        self,
+    ) -> None:
+        """When a prompt contains alert signal vocabulary alongside a sample-alert
+        phrase, the alert signal wins and the turn goes to new_alert."""
+        session = ReplSession()
+        # "errors" is an alert signal — even though "sample" appears, the
+        # investigation pipeline should handle genuine incident descriptions.
+        assert classify_input("500 errors happening — run a sample check?", session) == "new_alert"
+
+    def test_prior_state_sample_alert_launch_stays_cli_agent(self) -> None:
+        """With a prior investigation present, sample-alert launch must still
+        route to cli_agent and not be misclassified as a follow-up question."""
+        session = ReplSession()
+        session.last_state = {"root_cause": "disk full"}
+        assert classify_input("try a sample alert", session) == "cli_agent"
+        assert classify_input("launch a simple alert", session) == "cli_agent"
+
+    def test_json_alert_payload_is_new_alert_not_cli_agent(self) -> None:
+        """A valid JSON object that looks like an alert payload must route to
+        new_alert regardless of surrounding session state."""
+        session = ReplSession()
+        json_alert = '{"alertname": "HighCPU", "severity": "critical", "service": "checkout"}'
+        assert classify_input(json_alert, session) == "new_alert"
+
+    def test_short_incident_question_without_prior_state_is_new_alert(self) -> None:
+        """Short production-symptom questions with no prior investigation must
+        reach the LangGraph pipeline, not the cli_agent."""
+        session = ReplSession()
+        for phrase in (
+            "why is the database slow?",
+            "why is the pod failing?",
+            "why is the node timing out?",
+        ):
+            result = classify_input(phrase, session)
+            assert result == "new_alert", (
+                f"Expected new_alert for incident question {phrase!r}, got {result!r}"
+            )

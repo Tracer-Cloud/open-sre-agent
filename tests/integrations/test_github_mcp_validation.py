@@ -457,7 +457,7 @@ def test_connectivity_failure_detail_unwraps_taskgroup_exception_group() -> None
     """TaskGroup often wraps the real error; users should see the inner exception."""
     inner = ConnectionError("Connection refused")
     group = ExceptionGroup("unhandled errors in a TaskGroup (1 sub-exception)", [inner])
-    msg = github_mcp_module._connectivity_failure_detail(group)  # noqa: SLF001
+    msg = github_mcp_module._connectivity_failure_detail(group)
     assert "ConnectionError" in msg
     assert "Connection refused" in msg
     assert "Check: outbound HTTPS" in msg

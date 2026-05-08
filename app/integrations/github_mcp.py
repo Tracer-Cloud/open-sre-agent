@@ -1047,7 +1047,7 @@ def validate_github_mcp_config(
             profile_public_repos=profile_pub,
             profile_private_repos=profile_priv,
         )
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return GitHubMCPValidationResult(
             ok=False,
             detail=_connectivity_failure_detail(err),

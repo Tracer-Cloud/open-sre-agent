@@ -18,7 +18,7 @@ def load_llm_settings() -> Any | None:
         from app.config import LLMSettings
 
         return LLMSettings.from_env()
-    except Exception:  # noqa: BLE001 — env/config errors are expected here
+    except Exception:
         return None
 
 

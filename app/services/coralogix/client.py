@@ -217,7 +217,7 @@ class CoralogixClient:
                 "success": False,
                 "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return {"success": False, "error": str(exc)}
 
         parsed = self._parse_ndjson(response.text)

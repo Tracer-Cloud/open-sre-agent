@@ -112,7 +112,7 @@ def query_azure_monitor_logs(
         response = httpx.post(url, headers=headers, json=payload, timeout=max(1.0, timeout_seconds))
         response.raise_for_status()
         body = response.json()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {"source": "azure", "available": False, "error": str(err), "rows": []}
 
     tables = body.get("tables", []) if isinstance(body, dict) else []

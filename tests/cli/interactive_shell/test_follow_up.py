@@ -22,7 +22,7 @@ class _StreamingClient:
     def __init__(self, content: str) -> None:
         self._content = content
 
-    def invoke_stream(self, prompt: str) -> Iterator[str]:  # noqa: ARG002
+    def invoke_stream(self, _prompt: str) -> Iterator[str]:
         yield self._content
 
 

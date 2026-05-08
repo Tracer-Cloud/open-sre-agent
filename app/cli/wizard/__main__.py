@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import click
 from dotenv import load_dotenv
 
 from app.analytics.cli import build_cli_invoked_properties, capture_cli_invoked
@@ -15,7 +16,7 @@ _ENTRYPOINT = "python -m app.cli.wizard"
 
 def main() -> int:
     load_dotenv(override=False)
-    init_sentry()
+    init_sentry(entrypoint="wizard")
     install_questionary_escape_cancel()
 
     capture_first_run_if_needed()
@@ -28,6 +29,12 @@ def main() -> int:
 
     try:
         return int(run_wizard())
+    except KeyboardInterrupt:
+        print(flush=True)
+        return 0
+    except click.Abort:
+        print(flush=True)
+        return 0
     finally:
         shutdown_analytics(flush=True)
 

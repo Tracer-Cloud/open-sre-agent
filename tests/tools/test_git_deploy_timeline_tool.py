@@ -110,7 +110,7 @@ def test_run_passes_time_window_and_branch_to_mcp() -> None:
     mock_config = MagicMock()
     captured: dict[str, object] = {}
 
-    def _fake_call(config, name, arguments):  # noqa: ARG001
+    def _fake_call(config, name, arguments):
         captured["name"] = name
         captured["arguments"] = arguments
         return {"is_error": False, "text": "", "structured_content": [], "content": []}
@@ -202,7 +202,7 @@ def test_run_passes_per_page_to_mcp() -> None:
     mock_config = MagicMock()
     captured: dict[str, object] = {}
 
-    def _fake_call(config, name, arguments):  # noqa: ARG001
+    def _fake_call(config, name, arguments):
         captured["arguments"] = arguments
         return {"is_error": False, "text": "", "structured_content": [], "content": []}
 
@@ -231,7 +231,7 @@ def test_run_clamps_per_page_to_api_maximum() -> None:
     mock_config = MagicMock()
     captured: dict[str, object] = {}
 
-    def _fake_call(config, name, arguments):  # noqa: ARG001
+    def _fake_call(config, name, arguments):
         captured["arguments"] = arguments
         return {"is_error": False, "text": "", "structured_content": [], "content": []}
 
@@ -356,7 +356,7 @@ def _run_with_shared_window(
     """Helper: run the tool with a stubbed MCP and return (kwargs_to_mcp, payload)."""
     captured: dict = {}
 
-    def _fake_call(config, name, arguments):  # noqa: ARG001
+    def _fake_call(config, name, arguments):
         captured["arguments"] = arguments
         return {"is_error": False, "text": "", "structured_content": [], "content": []}
 

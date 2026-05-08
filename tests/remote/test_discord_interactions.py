@@ -10,7 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 from nacl.signing import SigningKey
 
-_INTERACTION_TOKEN = "test-interaction-token"  # noqa: S105
+_INTERACTION_TOKEN = "test-interaction-token"
 
 # ---------------------------------------------------------------------------
 # Helpers

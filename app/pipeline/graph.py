@@ -1,8 +1,5 @@
 """Unified agent pipeline — wires nodes and edges into a LangGraph."""
 
-from __future__ import annotations
-
-import functools
 from collections.abc import Callable
 from typing import Any, cast
 
@@ -42,12 +39,13 @@ NodeWithConfig = Callable[[AgentState, NodeConfig | None], dict[str, Any]]
 
 
 def _accept_langgraph_config(func: NodeWithConfig) -> Callable[..., dict[str, Any]]:
-    """Expose an unannotated config kwarg for LangGraph runtime injection."""
+    """Adapt a NodeConfig-typed node for LangGraph runtime injection."""
 
-    @functools.wraps(func)
-    def _wrapped(state: AgentState, config=None) -> dict[str, Any]:
+    def _wrapped(state: AgentState, config: Any = None) -> dict[str, Any]:
         return func(state, cast(NodeConfig | None, config))
 
+    _wrapped.__name__ = func.__name__
+    _wrapped.__qualname__ = func.__qualname__
     return _wrapped
 
 

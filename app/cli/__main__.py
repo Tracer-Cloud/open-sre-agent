@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import signal
 import sys
+from contextlib import suppress
 
 import click
 from dotenv import load_dotenv
@@ -26,7 +27,7 @@ from app.cli.support.prompt_support import (
     install_questionary_ctrl_c_double_exit,
     install_questionary_escape_cancel,
 )
-from app.utils.sentry_sdk import init_sentry
+from app.utils.sentry_sdk import capture_exception, init_sentry
 from app.version import get_version
 
 _CAPTURE_CLI_ANALYTICS = "capture_cli_analytics"
@@ -198,7 +199,7 @@ def main(argv: list[str] | None = None) -> int:
     load_dotenv(override=False)
     cli_argv = list(sys.argv[1:] if argv is None else argv)
     try:
-        init_sentry()
+        init_sentry(entrypoint="cli")
     except ModuleNotFoundError as exc:
         if exc.name != "sentry_sdk" or not _is_update_invocation(cli_argv):
             raise
@@ -219,6 +220,11 @@ def main(argv: list[str] | None = None) -> int:
         # exit quietly — Click's "Aborted!" message is intentionally suppressed.
         print(flush=True)
         return 0
+    except click.Abort:
+        # Click raises Abort for some prompt-level cancel paths. Treat it as a
+        # clean user cancel, not as an unexpected CLI failure.
+        print(flush=True)
+        return 0
     except click.ClickException as exc:
         if _should_capture_cli_exception(exc):
             report_exception(exc, context="cli.main")
@@ -233,6 +239,14 @@ def main(argv: list[str] | None = None) -> int:
             click.echo(exc.code, err=True)
             return 1
         return 0
+    except BaseException as exc:
+        if not isinstance(exc, KeyboardInterrupt):
+            capture_exception(exc, context="cli.main.unhandled")
+            with suppress(Exception):
+                import sentry_sdk as _sentry_sdk
+
+                _sentry_sdk.flush(timeout=2)
+        raise
     finally:
         shutdown_analytics(flush=True)
     return 0

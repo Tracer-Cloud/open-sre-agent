@@ -136,3 +136,7 @@ tasks/
 app/memories
 .aider*
 .worktrees/
+
+# Node dev tooling
+node_modules/
+package-lock.json
