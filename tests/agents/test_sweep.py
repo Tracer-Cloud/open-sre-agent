@@ -304,7 +304,6 @@ def test_run_startup_sweep_swallows_exceptions(monkeypatch: pytest.MonkeyPatch) 
     """``run_startup_sweep`` is the REPL's boot hook; an unexpected
     exception inside must NOT propagate, otherwise a sweep bug could
     block the REPL from starting at all."""
-    import app.agents.sweep as sweep_module
 
     def _explode(*_args: object, **_kwargs: object) -> None:
         raise RuntimeError("simulated registry-load failure")
