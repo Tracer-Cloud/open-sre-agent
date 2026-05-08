@@ -37,8 +37,7 @@ def test_helm_probe_missing_binary(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_helm_client_major_version_parses_helm2_and_helm3_output() -> None:
     assert (
-        _helm_client_major_version('Client: &version.Version{SemVer:"v2.17.0", GitCommit:""}')
-        == 2
+        _helm_client_major_version('Client: &version.Version{SemVer:"v2.17.0", GitCommit:""}') == 2
     )
     assert _helm_client_major_version('version.BuildInfo{Version:"v3.0.0", GitCommit:""}') == 3
 
