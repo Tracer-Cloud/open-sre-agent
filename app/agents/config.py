@@ -89,7 +89,9 @@ def set_agent_budget(name: str, hourly_budget_usd: float) -> AgentsConfig:
     """
     name = name.strip()
     config = load_agents_config()
-    existing = config.agents.get(name) or AgentBudget()
+    existing = config.agents.get(name)
+    if existing is None:
+        existing = AgentBudget()
     config.agents[name] = existing.model_copy(update={"hourly_budget_usd": hourly_budget_usd})
     save_agents_config(config)
     return config
