@@ -73,7 +73,9 @@ def run_investigation(
     if resolved_integrations is not None:
         cast(dict[str, Any], initial)["resolved_integrations"] = resolved_integrations
     try:
-        return cast(AgentState, compiled_graph.invoke(initial, {"recursion_limit": _GRAPH_RECURSION_LIMIT}))
+        return cast(
+            AgentState, compiled_graph.invoke(initial, {"recursion_limit": _GRAPH_RECURSION_LIMIT})
+        )
     except Exception as exc:
         capture_exception(exc)
         raise
@@ -145,7 +147,10 @@ class SimpleAgent:
         init_sentry(entrypoint="graph_pipeline")
         from app.pipeline.graph import graph as compiled_graph  # lazy to avoid circular import
 
-        cfg: dict[str, Any] = {**(config or {"configurable": {}}), "recursion_limit": _GRAPH_RECURSION_LIMIT}
+        cfg: dict[str, Any] = {
+            **(config or {"configurable": {}}),
+            "recursion_limit": _GRAPH_RECURSION_LIMIT,
+        }
         try:
             return cast(AgentState, compiled_graph.invoke(state, cast(Any, cfg)))
         except Exception as exc:
