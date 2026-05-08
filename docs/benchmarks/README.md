@@ -9,7 +9,7 @@ Reported metrics:
 - duration
 - token usage
 - estimated LLM cost
-- accuracy / precision / recall / F1 (from the synthetic RDS suite, see [Axis 1 vs Axis 2 Gap](#axis-1-vs-axis-2-gap) below)
+- per-scenario pass / fail and aggregate pass-rate (from the synthetic RDS suite, see [Axis 1 vs Axis 2 Gap](#axis-1-vs-axis-2-gap) below)
 - TP / FP / TN / FN counts across the suite
 
 ## Running benchmarks
@@ -89,15 +89,14 @@ The **gap** is `axis_1_pass_rate - axis_2_pass_rate` in percentage points. A sma
 
 ### How to run
 
-To print the gap report, run both suites and pass `--axis2` to the runner:
+To produce the underlying axis 1 and axis 2 results today:
 
 ```shell
 make test-rds-synthetic                                              # Axis 1
 pytest -m axis2 tests/synthetic/rds_postgres/test_suite_axis2.py -v  # Axis 2
-python -m tests.synthetic.rds_postgres.run_suite --axis2             # gap report
 ```
 
-The `--axis2` flag routes through `_print_gap_report` in `run_suite.py`, which prints overall and per-difficulty-level pass rates plus the gap.
+The aggregator that prints overall and per-difficulty-level pass rates plus the gap lives in `_print_gap_report` (`run_suite.py`). Wiring the `--axis2` CLI flag through to that aggregator is tracked separately; until that lands, run the two suites independently and read the gap from the per-difficulty pass-rate lines they emit.
 
 ### How to read the report
 
@@ -105,7 +104,7 @@ The `--axis2` flag routes through `_print_gap_report` in `run_suite.py`, which p
 === Axis 1 vs Axis 2 Gap Report ===
   Axis 1 (all scenarios, full data):   X%  (n/N)
   Axis 2 (adversarial, selective):     Y%  (m/N)
-  Gap:                                 +Zpp
+  Gap:                                 +/-Zpp
 
   Per difficulty level:
     Difficulty 1: Axis1=...% (n scenarios)  Axis2=...% (m scenarios)  gap=+/-Zpp
@@ -119,7 +118,7 @@ The per-difficulty breakdown is the high-signal piece: difficulty-1 scenarios ar
 ### Latest gap
 
 <!-- AXIS-GAP-START -->
-The latest numbers are produced by running the commands above. They are not auto-committed today; run the suite locally to refresh.
+The latest numbers are produced by running the two-axis commands above and reading `_print_gap_report` from a local invocation. They are not auto-committed today; the marker pair is here so a future workflow can drop the rendered gap output between them once the `--axis2` CLI wiring lands.
 <!-- AXIS-GAP-END -->
 
 The `AXIS-GAP-START` / `AXIS-GAP-END` markers follow the same pattern as the existing `BENCHMARK-START` / `BENCHMARK-END` block in the main `README.md`, so a future workflow can write the latest gap output between them automatically.
