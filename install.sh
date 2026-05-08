@@ -482,8 +482,12 @@ verify_binary_version() {
   local actual_version
 
   if ! version_output="$("$binary_path" --version 2>&1)"; then
-    PRESERVED_BINARY_PATH="${HOME}/.opensre/failed-install/${BIN_NAME}"
-    if mkdir -p "${PRESERVED_BINARY_PATH%/*}" 2>/dev/null && cp "$binary_path" "$PRESERVED_BINARY_PATH" 2>/dev/null; then
+    # Stage the target path locally; only promote to the global
+    # PRESERVED_BINARY_PATH after the copy actually succeeds, so callers don't
+    # see a path pointing to a file that was never written.
+    local _preserve_target="${HOME}/.opensre/failed-install/${BIN_NAME}"
+    if mkdir -p "${_preserve_target%/*}" 2>/dev/null && cp "$binary_path" "$_preserve_target" 2>/dev/null; then
+      PRESERVED_BINARY_PATH="$_preserve_target"
       die "Failed to execute '${binary_path##*/} --version': ${version_output}
 The downloaded binary has been preserved at ${PRESERVED_BINARY_PATH} for debugging.
 On Linux, run 'ldd ${PRESERVED_BINARY_PATH}' to inspect missing libraries.
@@ -518,6 +522,39 @@ See https://github.com/${REPO}/issues/1284 for the most common cause (glibc < 2.
   esac
 }
 
+print_success_screen() {
+  local version="$1"
+  local sep="────────────────────────────────────────────"
+
+  if [ ! -t 1 ]; then
+    sep="--------------------------------------------"
+  fi
+
+  log ""
+  log "$sep"
+  success "Welcome to OpenSRE"
+  if [ "$version" = "main" ]; then
+    log "  ${COLOR_BOLD:-}opensre (main build) installed successfully${COLOR_RESET:-}"
+  else
+    log "  ${COLOR_BOLD:-}opensre v${version} installed successfully${COLOR_RESET:-}"
+  fi
+  log "$sep"
+  log ""
+  log "Next steps:"
+  log "  1. Run  ${BIN_NAME:-opensre} onboard"
+  log "     Set up your LLM provider and add your observability integrations."
+  log ""
+  log "  2. Run  ${BIN_NAME:-opensre}  (no subcommand)"
+  log "     From a normal interactive terminal this starts the interactive shell — type a"
+  log "     prompt or incident description at the prompt to investigate."
+  log ""
+  log "  3. Optional — one-shot RCA from a file:"
+  log "     ${BIN_NAME:-opensre} investigate -i path/to/alert.json"
+  log ""
+  log "Docs: https://www.opensre.com/docs"
+  log ""
+}
+
 check_glibc_floor() {
   # Linux-only: verify glibc version is at or above the published floor.
   # Returns silently if check is not applicable or passes; dies with a clear
@@ -529,6 +566,16 @@ check_glibc_floor() {
   local required_major=2 required_minor=38
 
   ldd_output="$(ldd --version 2>&1 | head -n 1 || true)"
+
+  # Skip the check on musl-based systems (e.g. Alpine ships ldd as a musl
+  # symlink that emits "musl libc ... Version 1.2.4"). The greedy version
+  # extract below would otherwise pull "2.4" from "1.2.4" and fail with a
+  # misleading glibc-version error. A glibc-built binary won't run on musl
+  # anyway, but that's a separate failure mode the binary itself surfaces.
+  case "$ldd_output" in
+    *musl*|*MUSL*) return 0 ;;
+  esac
+
   detected_version="$(printf '%s\n' "$ldd_output" | sed -n 's/.*[^0-9.]\([0-9]\+\.[0-9]\+\).*/\1/p' | head -n 1)"
   [ -n "$detected_version" ] || return 0
 
@@ -825,6 +872,4 @@ else
 fi
 
 configure_path
-
-log ""
-log "Next: run 'opensre onboard' to complete setup."
+print_success_screen "$installed_version"
