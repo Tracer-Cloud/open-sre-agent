@@ -9,6 +9,7 @@ from langgraph.constants import Send
 from app.investigation_constants import MAX_INVESTIGATION_LOOPS
 from app.output import debug_print
 from app.state import AgentState, InvestigationState
+from app.utils.sentry_sdk import capture_exception
 
 logger = logging.getLogger(__name__)
 
@@ -94,5 +95,6 @@ def should_continue_investigation(state: InvestigationState) -> str:
         return "publish"
     except Exception as e:
         logger.exception("should_continue_investigation failed, defaulting to publish: %s", e)
+        capture_exception(e, context="pipeline.routing.should_continue_investigation")
         debug_print(f"Routing function failed: {e} -> publish")
         return "publish"
