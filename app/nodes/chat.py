@@ -276,7 +276,9 @@ def tool_executor_node(state: AgentState) -> dict[str, Any]:
             else:
                 out = reg(**tool_args)
                 result = out if isinstance(out, str) else json.dumps(out, default=str)
-        except (RuntimeError, ValueError, TypeError, KeyError) as e:
+        # Catch recoverable tool failures broadly (SDK / IO / import / JSON, etc.).
+        # BaseException is not caught so SystemExit / KeyboardInterrupt still propagate.
+        except Exception as e:
             result = json.dumps({"error": str(e)})
 
         tool_messages.append(

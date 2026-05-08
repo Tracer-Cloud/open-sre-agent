@@ -362,6 +362,32 @@ def test_messages_to_invocation_dicts_handles_lc_base_messages() -> None:
     assert d[1]["tool_calls"]
 
 
+def test_tool_executor_returns_json_error_on_tool_oserror() -> None:
+    """Tools may raise OSError, SDK errors, etc.; node must not crash the graph."""
+    flaky = MagicMock()
+    flaky.name = "flaky_tool"
+    flaky.side_effect = OSError("simulated IO failure")
+
+    with patch("app.nodes.chat.get_registered_tools", return_value=[flaky]):
+        out = chat_mod.tool_executor_node(
+            {
+                "messages": [
+                    {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [{"id": "c1", "name": "flaky_tool", "args": {}}],
+                    }
+                ]
+            }
+        )
+
+    msg = out["messages"][0]
+    assert msg["role"] == "tool"
+    payload = json.loads(msg["content"])
+    assert "error" in payload
+    assert "simulated IO failure" in payload["error"]
+
+
 # ── Codex / unsupported provider path ────────────────────────────────────────
 
 
