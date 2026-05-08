@@ -12,7 +12,6 @@ from prompt_toolkit.document import Document
 from prompt_toolkit.filters import has_completions
 from prompt_toolkit.formatted_text import ANSI, StyleAndTextTuples
 from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.layout.containers import HSplit, Window
 from prompt_toolkit.lexers import Lexer
 from prompt_toolkit.styles import Style
 from rich.console import Console
@@ -23,18 +22,19 @@ from app.cli.interactive_shell.history import load_prompt_history
 from app.cli.interactive_shell.router import BARE_COMMAND_ALIASES
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.theme import (
+    ANSI_DIM,
     ANSI_RESET,
+    BG,
+    DIM,
     DIM_COUNTER_ANSI,
-    OPENCLAW_AMBER,
-    OPENCLAW_CORAL,
-    OPENCLAW_ORANGE,
-    PRIMARY,
+    HIGHLIGHT,
     PROMPT_ACCENT_ANSI,
     PROMPT_FRAME_ANSI,
-    TEXT_DIM,
+    TEXT,
 )
 
 _PROMPT_RULE_CHAR = "─"
+# Keystroke escape (xterm modifyOtherKeys for Shift+Enter), not a colour code.
 _SHIFT_ENTER_SEQUENCE = "\x1b[27;2;13~"
 
 
@@ -68,7 +68,7 @@ def _prompt_line_ansi(session: ReplSession) -> ANSI:
 
 
 def _prompt_message(session: ReplSession) -> ANSI:
-    """Top rule line + prompt cursor line (the ❯ sits below the rule)."""
+    """Top border rule + cursor line — the top two rows of the input box."""
     return ANSI(f"{_prompt_rule_ansi()}\n{_prompt_line_ansi(session).value}")
 
 
@@ -79,33 +79,17 @@ def render_submitted_prompt(console: Console, session: ReplSession, text: str) -
     rendered = Text()
     counter = _prompt_counter_text(session)
     if counter:
-        rendered.append(counter, style=TEXT_DIM)
-    rendered.append("❯ ", style=f"bold {PRIMARY}")
+        rendered.append(counter, style=DIM)
+    rendered.append("❯ ", style=f"bold {HIGHLIGHT}")
     rendered.append(lines[0])
     for line in lines[1:]:
         rendered.append("\n")
-        rendered.append(continuation_prefix, style=TEXT_DIM)
+        rendered.append(continuation_prefix, style=DIM)
         rendered.append(line)
     console.print(rendered)
 
 
 def _install_prompt_frame(session: PromptSession[str]) -> PromptSession[str]:
-    """Add a full-width rule line directly below the input buffer."""
-    children = getattr(session.layout.container, "children", None)
-    if not children:
-        return session
-    main_container = getattr(children[0], "alternative_content", None)
-    content = getattr(main_container, "content", None)
-    if not isinstance(content, HSplit):
-        return session
-    content.children.append(
-        Window(
-            height=1,
-            char=_PROMPT_RULE_CHAR,
-            dont_extend_height=True,
-            style="class:prompt-frame-line",
-        )
-    )
     return session
 
 
@@ -286,18 +270,21 @@ def _build_prompt_key_bindings() -> KeyBindings:
 def _build_prompt_style() -> Style:
     return Style.from_dict(
         {
-            "prompt-frame-line": f"bold {PRIMARY}",
-            "repl-slash-command": f"bold {OPENCLAW_AMBER} bg:#2c1e14",
-            "completion-menu": "bg:#1c1917",
-            "completion-menu.completion": "#d6d0ca bg:#1c1917",
-            "completion-menu.completion.current": f"bold {OPENCLAW_ORANGE} bg:#2c1e14",
-            "completion-menu.meta.completion": "#6b6561 bg:#1c1917",
-            "completion-menu.meta.completion.current": f"{OPENCLAW_AMBER} bg:#2c1e14",
-            "completion-menu.border": OPENCLAW_CORAL,
-            "scrollbar.background": "bg:#1c1917",
-            "scrollbar.button": "bg:#4a3020",
+            "prompt-frame-line": f"bold {HIGHLIGHT}",
+            "repl-slash-command": f"bold {HIGHLIGHT} bg:{BG}",
+            "completion-menu": f"bg:{BG}",
+            "completion-menu.completion": f"{TEXT} bg:{BG}",
+            "completion-menu.completion.current": f"bold {HIGHLIGHT} bg:{BG}",
+            "completion-menu.meta.completion": f"{DIM} bg:{BG}",
+            "completion-menu.meta.completion.current": f"{HIGHLIGHT} bg:{BG}",
+            "completion-menu.border": DIM,
+            "scrollbar.background": f"bg:{BG}",
+            "scrollbar.button": f"bg:{DIM}",
         }
     )
+
+
+_PLACEHOLDER_ANSI = ANSI(f"{ANSI_DIM}Type a message, /command, or paste an alert{ANSI_RESET}")
 
 
 def _build_prompt_session() -> PromptSession[str]:
@@ -312,6 +299,7 @@ def _build_prompt_session() -> PromptSession[str]:
             key_bindings=_build_prompt_key_bindings(),
             style=_build_prompt_style(),
             erase_when_done=True,
+            placeholder=_PLACEHOLDER_ANSI,
         )
     )
 

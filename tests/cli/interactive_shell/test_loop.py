@@ -227,17 +227,19 @@ def test_completion_includes_tab_navigation() -> None:
 
 
 def test_completion_menu_current_item_uses_highlight_style() -> None:
+    from app.cli.interactive_shell.theme import BG, HIGHLIGHT
+
     style = _build_prompt_style()
     attrs = style.get_attrs_for_style_str("class:repl-slash-command")
 
-    assert attrs.color == "5EF0E8"  # ACCENT_SOFT
-    assert attrs.bgcolor == "2c1e14"
+    assert attrs.color == HIGHLIGHT.lstrip("#")
+    assert attrs.bgcolor == BG.lstrip("#")
     assert attrs.bold is True
 
     attrs_menu = style.get_attrs_for_style_str("class:completion-menu.completion.current")
 
-    assert attrs_menu.color == "1AFF8C"  # PRIMARY
-    assert attrs_menu.bgcolor == "2c1e14"
+    assert attrs_menu.color == HIGHLIGHT.lstrip("#")
+    assert attrs_menu.bgcolor == BG.lstrip("#")
     assert attrs_menu.reverse is False
     assert attrs_menu.bold is True
 

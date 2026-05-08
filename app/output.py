@@ -21,6 +21,15 @@ from typing import TYPE_CHECKING
 from rich.console import Console, ConsoleOptions, RenderResult
 from rich.text import Text
 
+from app.cli.interactive_shell.theme import (
+    BRAND,
+    DIM,
+    ERROR,
+    HIGHLIGHT,
+    SECONDARY,
+    TEXT,
+    WARNING,
+)
 from app.tools.registry import resolve_tool_display_name
 
 if TYPE_CHECKING:
@@ -47,31 +56,16 @@ def get_output_format() -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Design tokens (mirrors theme.py but scoped to output — no CLI dependency)
-# ─────────────────────────────────────────────────────────────────────────────
-
-_C_PRIMARY = "#1AFF8C"
-_C_ACCENT = "#00D4C8"
-_C_WARNING = "#F0A500"
-_C_ERROR = "#FF4D6A"
-_C_TEXT = "#E8EFE8"
-_C_TEXT_DIM = "#6B8C6B"
-_C_BORDER = "#2D4A2D"
-_C_ORANGE = "#FF8C42"
-_C_TEAL_SOFT = "#5EF0E8"
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Badge registry
 # ─────────────────────────────────────────────────────────────────────────────
 
 # (padded_label, text_color)  — all labels are 6 chars wide
 _BADGE_STYLES: dict[str, tuple[str, str]] = {
-    "READ": ("READ  ", _C_PRIMARY),
-    "PLAN": ("PLAN  ", _C_TEAL_SOFT),
-    "INVEST": ("INVEST", _C_WARNING),
-    "DIAG": ("DIAG  ", _C_ORANGE),
-    "MERGE": ("MERGE ", _C_TEXT_DIM),
+    "READ": ("READ  ", HIGHLIGHT),
+    "PLAN": ("PLAN  ", BRAND),
+    "INVEST": ("INVEST", WARNING),
+    "DIAG": ("DIAG  ", TEXT),
+    "MERGE": ("MERGE ", SECONDARY),
 }
 
 _NODE_EVENT_TYPE: dict[str, str] = {
@@ -183,9 +177,9 @@ def stop_display() -> None:
 
 
 def render_divider(width: int = 80) -> None:
-    """Print a BORDER-coloured dashed ┄ divider."""
+    """Print a DIM-coloured dashed ┄ divider."""
     if get_output_format() == "rich":
-        _get_console().print(Text("┄" * width, style=_C_BORDER))
+        _get_console().print(Text("┄" * width, style=DIM))
     else:
         print("─" * width)
 
@@ -194,13 +188,13 @@ def render_footer(phase: str, elapsed: float, model: str, mode: str) -> None:
     """Print the persistent status footer line."""
     if get_output_format() == "rich":
         t = Text()
-        t.append(" ● ", style=f"bold {_C_PRIMARY}")
-        t.append(f"{phase}  ", style=f"bold {_C_TEXT_DIM}")
-        t.append(f"{_elapsed_hms(elapsed)}  ", style=_C_TEXT_DIM)
+        t.append(" ● ", style=f"bold {HIGHLIGHT}")
+        t.append(f"{phase}  ", style=f"bold {SECONDARY}")
+        t.append(f"{_elapsed_hms(elapsed)}  ", style=SECONDARY)
         if model:
-            t.append(f"{model}  ", style=_C_TEXT_DIM)
-        t.append(f"{mode}  ", style=_C_TEXT_DIM)
-        t.append("esc to cancel", style=f"dim {_C_TEXT_DIM}")
+            t.append(f"{model}  ", style=SECONDARY)
+        t.append(f"{mode}  ", style=SECONDARY)
+        t.append("esc to cancel", style=DIM)
         _get_console().print(t)
     else:
         print(f"● {phase}  {elapsed:.1f}s  {model}  {mode}")
@@ -218,24 +212,24 @@ def render_event(
 ) -> None:
     """Print one typed event-log row."""
     if get_output_format() == "rich":
-        badge_label, badge_color = _BADGE_STYLES.get(event_type, ("DIAG  ", _C_ORANGE))
+        badge_label, badge_color = _BADGE_STYLES.get(event_type, ("DIAG  ", WARNING))
         ts = _elapsed_hms(elapsed_s)
         t = Text()
-        t.append(f"{ts}  ", style=_C_TEXT_DIM)
+        t.append(f"{ts}  ", style=SECONDARY)
         if muted:
-            t.append(f"{glyph}  ", style=_C_TEXT_DIM)
-            msg_style = _C_TEXT_DIM
+            t.append(f"{glyph}  ", style=SECONDARY)
+            msg_style = SECONDARY
         elif error:
-            t.append("✗  ", style=f"bold {_C_ERROR}")
-            msg_style = _C_TEXT
+            t.append("✗  ", style=f"bold {ERROR}")
+            msg_style = TEXT
         else:
-            t.append(f"{glyph}  ", style=f"bold {_C_PRIMARY}")
-            msg_style = _C_TEXT
+            t.append(f"{glyph}  ", style=f"bold {HIGHLIGHT}")
+            msg_style = TEXT
         t.append(f"[{badge_label}]", style=f"bold {badge_color}")
         t.append("  ")
         t.append(message, style=msg_style)
         if insight:
-            t.append(f"  ↳ {insight}", style=_C_ACCENT)
+            t.append(f"  ↳ {insight}", style=BRAND)
         _get_console().print(t)
     else:
         mark = "✗" if error else ("·" if muted else "✓")
@@ -272,7 +266,7 @@ class _LiveRenderable:
                 elapsed_total = now - d._t0
                 frame = _SPINNER_FRAMES[int(elapsed_step / _FRAME_SECS) % len(_SPINNER_FRAMES)]
                 ev_type = _node_event_type(node_name)
-                badge_label, badge_color = _BADGE_STYLES.get(ev_type, ("DIAG  ", _C_ORANGE))
+                badge_label, badge_color = _BADGE_STYLES.get(ev_type, ("DIAG  ", WARNING))
                 label = _node_label(node_name)
 
                 # subtext (tool calls / reasoning snippets)
@@ -281,29 +275,29 @@ class _LiveRenderable:
                     subtext = None
 
                 t = Text()
-                t.append(f"{_elapsed_hms(elapsed_total)}  ", style=_C_TEXT_DIM)
-                t.append(f"{frame}  ", style=_C_TEXT_DIM)
+                t.append(f"{_elapsed_hms(elapsed_total)}  ", style=SECONDARY)
+                t.append(f"{frame}  ", style=SECONDARY)
                 t.append(f"[{badge_label}]", style=f"bold {badge_color}")
                 t.append("  ")
-                t.append(label, style=f"bold {_C_TEXT}")
+                t.append(label, style=f"bold {TEXT}")
                 if subtext:
-                    t.append(f"  ↳ {subtext}", style=_C_ACCENT)
-                t.append(f"  {_fmt_timing(int(elapsed_step * 1000))}", style=_C_WARNING)
+                    t.append(f"  ↳ {subtext}", style=BRAND)
+                t.append(f"  {_fmt_timing(int(elapsed_step * 1000))}", style=WARNING)
                 yield t
 
             # Divider + footer
             yield Text("")
-            yield Text("┄" * options.max_width, style=_C_BORDER)
+            yield Text("┄" * options.max_width, style=DIM)
 
             elapsed_total = now - d._t0
             ft = Text()
-            ft.append(" ● ", style=f"bold {_C_PRIMARY}")
-            ft.append(f"{d._current_phase}  ", style=f"bold {_C_TEXT_DIM}")
-            ft.append(f"{_elapsed_hms(elapsed_total)}  ", style=_C_TEXT_DIM)
+            ft.append(" ● ", style=f"bold {HIGHLIGHT}")
+            ft.append(f"{d._current_phase}  ", style=f"bold {SECONDARY}")
+            ft.append(f"{_elapsed_hms(elapsed_total)}  ", style=SECONDARY)
             if d._model:
-                ft.append(f"{d._model}  ", style=_C_TEXT_DIM)
-            ft.append(f"{d._mode}  ", style=_C_TEXT_DIM)
-            ft.append("esc to cancel", style=f"dim {_C_TEXT_DIM}")
+                ft.append(f"{d._model}  ", style=SECONDARY)
+            ft.append(f"{d._mode}  ", style=SECONDARY)
+            ft.append("esc to cancel", style=DIM)
             yield ft
 
 
@@ -357,21 +351,21 @@ class _EventLogDisplay:
             self._active_steps.pop(node_name, None)
             elapsed_total = time.monotonic() - self._t0
             ev_type = _node_event_type(node_name)
-            badge_label, badge_color = _BADGE_STYLES.get(ev_type, ("DIAG  ", _C_ORANGE))
+            badge_label, badge_color = _BADGE_STYLES.get(ev_type, ("DIAG  ", WARNING))
             label = _node_label(node_name)
             err = event.status == "error"
             msg = _humanise_message(event.message or "")
             timing = _fmt_timing(event.elapsed_ms)
 
             t = Text()
-            t.append(f"{_elapsed_hms(elapsed_total)}  ", style=_C_TEXT_DIM)
-            t.append("✗  " if err else "✓  ", style=f"bold {_C_ERROR if err else _C_PRIMARY}")
+            t.append(f"{_elapsed_hms(elapsed_total)}  ", style=SECONDARY)
+            t.append("✗  " if err else "✓  ", style=f"bold {ERROR if err else HIGHLIGHT}")
             t.append(f"[{badge_label}]", style=f"bold {badge_color}")
             t.append("  ")
-            t.append(label, style=f"bold {_C_TEXT}")
+            t.append(label, style=f"bold {TEXT}")
             if msg:
-                t.append(f"  {msg}", style=_C_ACCENT)
-            t.append(f"  {timing}", style=_C_TEXT_DIM)
+                t.append(f"  {msg}", style=BRAND)
+            t.append(f"  {timing}", style=SECONDARY)
             self._completed.append(t)
 
     def step_subtext(self, node_name: str, text: str, duration: float = 4.0) -> None:
@@ -499,20 +493,20 @@ def reset_tracker() -> ProgressTracker:
 def render_investigation_header(
     alert_name: str, pipeline_name: str, severity: str, alert_id: str | None = None
 ) -> None:
-    sev_color = "red" if severity.lower() == "critical" else "yellow"
+    sev_color = ERROR if severity.lower() == "critical" else WARNING
     fields = [
-        ("  Alert      ", alert_name, "bold white"),
-        ("  Pipeline   ", pipeline_name, "cyan"),
+        ("  Alert      ", alert_name, f"bold {TEXT}"),
+        ("  Pipeline   ", pipeline_name, BRAND),
         ("  Severity   ", severity, f"bold {sev_color}"),
     ]
     if alert_id:
-        fields.append(("  Alert ID   ", alert_id, "dim"))
+        fields.append(("  Alert ID   ", alert_id, SECONDARY))
 
     if get_output_format() == "rich":
         console = _get_console()
         console.print()
         for label, value, style in fields:
-            console.print(Text.assemble((label, "dim"), (value, style)))
+            console.print(Text.assemble((label, SECONDARY), (value, style)))
         console.print()
     else:
         print()
@@ -541,6 +535,6 @@ def debug_print(message: str) -> None:
     if not _is_verbose():
         return
     if get_output_format() == "rich":
-        _get_console().print(f"[dim]{message}[/]")
+        _get_console().print(f"[{SECONDARY}]{message}[/]")
     else:
         print(f"DEBUG: {message}")

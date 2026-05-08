@@ -24,7 +24,7 @@ from rich.markup import escape
 from rich.table import Table
 
 from app.agents.registry import AgentRecord
-from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
+from app.cli.interactive_shell.theme import BOLD_BRAND
 
 # Cells we don't yet have a data source for. See module docstring for
 # which downstream issues fill which column.
@@ -69,7 +69,7 @@ def render_agents_table(records: Iterable[AgentRecord]) -> Table:
     # when that ticket grows real behavior.
     table = Table(
         title="agents",
-        title_style=TERMINAL_ACCENT_BOLD,
+        title_style=BOLD_BRAND,
         caption="no agents registered yet" if not materialized else None,
     )
     for header, justify in _COLUMNS:

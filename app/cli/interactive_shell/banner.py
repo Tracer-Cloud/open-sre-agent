@@ -7,7 +7,7 @@ render_splash(console, first_run=False)
     Called once when the CLI starts.
 
 render_ready_box(console, session=None)
-    BORDER-boxed two-column welcome panel:
+    DIM-bordered two-column welcome panel:
       left  → ◉ OpenSRE · provider · model · mode · cwd
       right → "Tips for getting started" + "What's new"
     Called after the splash and on /clear, /welcome, and greeting aliases.
@@ -18,14 +18,12 @@ render_banner(console)
 
 Rendered output legend (colour roles)
 --------------------------------------
-# [PRIMARY_ALT]  ASCII art lines
-# [TEXT_DIM]     "opensre" product name label · cwd · tip / note body
-# [ACCENT_SOFT]  version string
-# [ACCENT]       "Tips for getting started" / "What's new" headers
-# [BORDER]       subtitle description · rule lines · box chrome
-# [PRIMARY]      ◉ glyph
-# [TEXT]         OpenSRE label + provider/model values
-# [WARNING]      read-only or trust-mode notice
+# [HIGHLIGHT]  ASCII art lines · ◉ glyph · OpenSRE brand name
+# [BRAND]      version string · model name · section headers
+# [SECONDARY]  "opensre" product name label · cwd · tip / note body
+# [DIM]        subtitle description · rule lines · box chrome · dividers
+# [TEXT]       provider/model values · greeting
+# [WARNING]    read-only or trust-mode notice
 """
 
 from __future__ import annotations
@@ -44,13 +42,11 @@ from rich.text import Text
 
 from app.cli.interactive_shell.config import WHATS_NEW
 from app.cli.interactive_shell.theme import (
-    ACCENT,
-    ACCENT_SOFT,
-    BORDER,
-    PRIMARY,
-    PRIMARY_ALT,
+    BRAND,
+    DIM,
+    HIGHLIGHT,
+    SECONDARY,
     TEXT,
-    TEXT_DIM,
     WARNING,
 )
 from app.config import LLMSettings
@@ -58,13 +54,12 @@ from app.version import get_version
 
 # ── Splash art ───────────────────────────────────────────────────────────────
 # Pre-rendered by oh-my-logo (devDependency, see package.json) at build time.
-# Colour codes are stripped; PRIMARY_ALT (#00E87A) is re-applied at render time.
+# Colour codes are stripped; HIGHLIGHT is re-applied at render time.
 # Regenerate with: npm run regen-splash  (or: node scripts/regen_splash.js)
 #
-# SPLASH_ART         oh-my-logo block font --letter-spacing 0 — 59 cols
-#                    solid ██ fills + box-drawing inner detail
-# SPLASH_ART_NARROW  oh-my-logo simpleBlock font — 72 cols, pure ASCII fallback
-# _FALLBACK_ART      original minimal art — 44 cols, absolute last resort
+# SPLASH_ART         block font, 59 cols, solid ██ fills
+# SPLASH_ART_NARROW  simpleBlock font, 72 cols, pure ASCII fallback
+# _FALLBACK_ART      minimal art, 44 cols, last resort
 
 SPLASH_ART = """\
  ██████╗ ██████╗ ███████╗███╗   ██╗███████╗██████╗ ███████╗
@@ -177,18 +172,18 @@ def render_splash(console: Console | None = None, *, first_run: bool | None = No
     """Print the branded startup splash.
 
     Rendered output (with colour roles):
-    ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ [BORDER divider]
-    ╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋           [PRIMARY_ALT art]
+    ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ [DIM divider]
+    ╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋           [HIGHLIGHT art]
     ╋┏━━┓╋┏━━┓╋┏━━┓╋┏━┓╋╋┏━━┓╋┏━┓╋┏━━┓
     ...
-      opensre  [TEXT_DIM]  ·  v2026.4.7 [ACCENT_SOFT]
+      opensre  [SECONDARY]  ·  v2026.4.7 [BRAND]
       open-source SRE agent for automated incident
-      investigation and root cause analysis          [BORDER]
-    ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ [BORDER divider]
+      investigation and root cause analysis          [DIM]
+    ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ [DIM divider]
 
     If first_run (or not set and wizard has never run):
       ⚠  This tool runs AI-powered commands …      [WARNING]
-         Press Enter to continue…                   [TEXT_DIM]
+         Press Enter to continue…                   [SECONDARY]
     """
     console = console or Console(highlight=False, force_terminal=True, color_system="truecolor")
     if first_run is None:
@@ -198,32 +193,32 @@ def render_splash(console: Console | None = None, *, first_run: bool | None = No
     art = _render_art(console.width)
 
     console.print()
-    console.print(Rule(style=BORDER))
+    console.print(Rule(style=DIM))
     console.print()
 
     for line in art.splitlines():
         t = Text()
         t.append("  ")
-        t.append(line, style=f"bold {PRIMARY_ALT}")
+        t.append(line, style=f"bold {HIGHLIGHT}")
         console.print(t)
 
     console.print()
 
     subtitle = Text()
     subtitle.append("  ")
-    subtitle.append("opensre", style=TEXT_DIM)
-    subtitle.append("  ·  ", style=BORDER)
-    subtitle.append(f"v{version}", style=ACCENT_SOFT)
+    subtitle.append("opensre", style=SECONDARY)
+    subtitle.append("  ·  ", style=DIM)
+    subtitle.append(f"v{version}", style=BRAND)
     console.print(subtitle)
 
     desc = Text()
     desc.append(
         "  open-source SRE agent for automated incident investigation and root cause analysis",
-        style=BORDER,
+        style=DIM,
     )
     console.print(desc)
     console.print()
-    console.print(Rule(style=BORDER))
+    console.print(Rule(style=DIM))
 
     if first_run:
         console.print()
@@ -234,13 +229,13 @@ def render_splash(console: Console | None = None, *, first_run: bool | None = No
             "This tool executes AI-powered commands against your infrastructure.\n"
             "     Review the documentation before connecting production systems.\n"
             "     Source: https://github.com/opensre-dev/opensre",
-            style=TEXT_DIM,
+            style=SECONDARY,
         )
         console.print(notice)
         console.print()
         if sys.stdin.isatty():
             try:
-                console.print(f"  [{TEXT_DIM}]Press Enter to continue…[/]", end="")
+                console.print(f"  [{SECONDARY}]Press Enter to continue…[/]", end="")
                 sys.stdin.readline()
             except (EOFError, KeyboardInterrupt, OSError):
                 # Non-interactive stdin or user abort — skip blocking and continue startup.
@@ -292,7 +287,7 @@ def _build_logo_mark() -> Text:
     for index, (body, _echo) in enumerate(_LOGO_MARK_ROWS):
         if index:
             logo.append("\n")
-        logo.append(body, style=f"bold {PRIMARY_ALT}")
+        logo.append(body, style=f"bold {HIGHLIGHT}")
     return logo
 
 
@@ -315,24 +310,24 @@ def _build_identity_block(provider: str, model: str, *, trust_mode: bool) -> Tex
     cwd = _format_cwd(os.getcwd())
     tier = "trust mode" if trust_mode else provider
     identity = Text(overflow="fold")
-    identity.append(model, style=f"bold {ACCENT}")
-    identity.append("  ·  ", style=BORDER)
+    identity.append(model, style=f"bold {BRAND}")
+    identity.append("  ·  ", style=DIM)
     if trust_mode:
         identity.append(tier, style=f"bold {WARNING}")
-        identity.append("  ·  ", style=BORDER)
+        identity.append("  ·  ", style=DIM)
     else:
-        identity.append(tier, style=TEXT_DIM)
-        identity.append("  ·  ", style=BORDER)
-    identity.append(cwd, style=TEXT_DIM)
+        identity.append(tier, style=SECONDARY)
+        identity.append("  ·  ", style=DIM)
+    identity.append(cwd, style=SECONDARY)
 
     return Text("\n").join([logo, Text(), Text(), greeting, Text(), Text(), identity])
 
 
 def _build_notes_block(header_text: str, items: tuple[str, ...]) -> Text:
     """Right column section: bold header followed by dim list items."""
-    parts: list[Text] = [Text(header_text, style=f"bold {ACCENT}")]
+    parts: list[Text] = [Text(header_text, style=f"bold {BRAND}")]
     for item in items:
-        parts.append(Text(item, style=TEXT_DIM, overflow="fold"))
+        parts.append(Text(item, style=SECONDARY, overflow="fold"))
     return Text("\n").join(parts)
 
 
@@ -347,7 +342,7 @@ def _visual_line_count(block: Text, width: int) -> int:
 
 def _vertical_divider(height: int) -> Text:
     """Build a padded vertical rule with ``height`` lines."""
-    return Text("\n".join(" │ " for _ in range(max(height, 1))), style=TEXT_DIM, no_wrap=True)
+    return Text("\n".join(" │ " for _ in range(max(height, 1))), style=DIM, no_wrap=True)
 
 
 def _two_column_widths(console_width: int) -> tuple[int, int]:
@@ -374,15 +369,15 @@ def build_ready_panel(
     trust_mode: bool = bool(getattr(session, "trust_mode", False))
 
     panel_title = Text()
-    panel_title.append(" OpenSRE", style=f"bold {PRIMARY}")
-    panel_title.append(" · ", style=BORDER)
-    panel_title.append(f"v{version} ", style=ACCENT_SOFT)
+    panel_title.append(" OpenSRE", style=f"bold {HIGHLIGHT}")
+    panel_title.append(" · ", style=DIM)
+    panel_title.append(f"v{version} ", style=BRAND)
 
     left = _build_identity_block(provider, model, trust_mode=trust_mode)
     right = Text("\n").join(
         [
             _build_notes_block("Tips for getting started", _TIPS),
-            Text("───", style=BORDER),
+            Text("───", style=DIM),
             _build_notes_block("What's new", WHATS_NEW),
         ]
     )
@@ -395,15 +390,16 @@ def build_ready_panel(
         )
         divider = _vertical_divider(height)
 
-        body = Table.grid(padding=0, expand=False)
-        body.add_column(justify="left", vertical="top", width=left_width)
-        body.add_column(justify="center", vertical="top", width=_DIVIDER_WIDTH)
-        body.add_column(justify="left", vertical="top", width=right_width)
-        body.add_row(left, divider, right)
+        grid = Table.grid(padding=0, expand=False)
+        grid.add_column(justify="left", vertical="top", width=left_width)
+        grid.add_column(justify="center", vertical="top", width=_DIVIDER_WIDTH)
+        grid.add_column(justify="left", vertical="top", width=right_width)
+        grid.add_row(left, divider, right)
+        body: Table | Group = grid
     else:
         body = Group(
             left,
-            Rule(style=BORDER),
+            Rule(style=DIM),
             right,
         )
 
@@ -411,7 +407,7 @@ def build_ready_panel(
         body,
         title=panel_title,
         title_align="left",
-        border_style=BORDER,
+        border_style=DIM,
         padding=(1, _PANEL_PADDING_X),
         expand=True,
         box=box.ROUNDED,

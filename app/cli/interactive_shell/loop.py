@@ -27,7 +27,7 @@ from app.cli.interactive_shell.prompt_surface import (
 )
 from app.cli.interactive_shell.router import classify_input
 from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import TERMINAL_ERROR
+from app.cli.interactive_shell.theme import DIM, ERROR, WARNING
 from app.cli.support.errors import OpenSREError
 from app.cli.support.exception_reporting import report_exception
 from app.cli.support.prompt_support import repl_prompt_note_ctrl_c, repl_reset_ctrl_c_gate
@@ -98,14 +98,14 @@ def _run_new_alert(
     except KeyboardInterrupt:
         task.mark_cancelled()
         session.record_intervention("ctrl_c")
-        console.print("[yellow]investigation cancelled.[/yellow]")
+        console.print(f"[{WARNING}]investigation cancelled.[/]")
         session.record("alert", text, ok=False)
         return
     except OpenSREError as exc:
         task.mark_failed(str(exc))
-        console.print(f"[{TERMINAL_ERROR}]investigation failed:[/] {escape(str(exc))}")
+        console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
         if exc.suggestion:
-            console.print(f"[yellow]suggestion:[/yellow] {escape(exc.suggestion)}")
+            console.print(f"[{WARNING}]suggestion:[/] {escape(exc.suggestion)}")
         session.record("alert", text, ok=False)
         return
     except Exception as exc:
@@ -113,7 +113,7 @@ def _run_new_alert(
         report_exception(exc, context="interactive_shell.new_alert")
         # Exception repr may contain brackets (stack frame refs, config
         # dicts) that Rich would eat as markup tags — escape before printing.
-        console.print(f"[{TERMINAL_ERROR}]investigation failed:[/] {escape(str(exc))}")
+        console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
         session.record("alert", text, ok=False)
         return
 
@@ -160,8 +160,8 @@ async def _run_one_turn(
         except Exception as exc:
             report_exception(exc, context="interactive_shell.slash_dispatch")
             console.print(
-                f"[{TERMINAL_ERROR}]command error:[/] {escape(str(exc))}"
-                " [dim](the REPL is still running)[/dim]"
+                f"[{ERROR}]command error:[/] {escape(str(exc))}"
+                f" [{DIM}](the REPL is still running)[/]"
             )
             should_continue = True
         return should_continue

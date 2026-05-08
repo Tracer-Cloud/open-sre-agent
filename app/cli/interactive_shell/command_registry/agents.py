@@ -22,7 +22,7 @@ from app.agents.registry import AgentRegistry
 from app.cli.interactive_shell.agents_view import render_agents_table
 from app.cli.interactive_shell.command_registry.types import SlashCommand
 from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import TERMINAL_ERROR
+from app.cli.interactive_shell.theme import ERROR
 
 _AGENTS_FIRST_ARGS: tuple[tuple[str, str], ...] = (
     ("conflicts", "show file-write conflicts between local AI agents"),
@@ -71,7 +71,7 @@ def _cmd_agents(session: ReplSession, console: Console, args: list[str]) -> bool
         return _cmd_agents_conflicts(console)
 
     console.print(
-        f"[{TERMINAL_ERROR}]unknown subcommand:[/] {escape(sub)}  "
+        f"[{ERROR}]unknown subcommand:[/] {escape(sub)}  "
         "(try [bold]/agents[/bold] or [bold]/agents conflicts[/bold])"
     )
     session.mark_latest(ok=False, kind="slash")

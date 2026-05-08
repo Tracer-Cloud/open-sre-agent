@@ -12,11 +12,11 @@ from rich.markdown import Markdown
 from rich.spinner import Spinner
 from rich.text import Text
 
-from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
+from app.cli.interactive_shell.theme import BOLD_BRAND, DIM, HIGHLIGHT
 from app.cli.support.prompt_support import CTRL_C_DOUBLE_PRESS_WINDOW_S
 
 _SPINNER_NAME = "dots12"
-_SPINNER_COLOR = "orange1"
+_SPINNER_COLOR = HIGHLIGHT
 _SPINNER_LABEL = "thinking"
 _LIVE_REFRESH_PER_SECOND = 10
 _STREAM_CANCEL_HINT = "Press Ctrl+C again to stop"
@@ -49,7 +49,7 @@ def stream_to_console(
             return text
         if text:
             console.print()
-            console.print(f"[{TERMINAL_ACCENT_BOLD}]{label}:[/]")
+            console.print(f"[{BOLD_BRAND}]{label}:[/]")
             console.print(Markdown(text))
             console.print()
         return text
@@ -68,7 +68,7 @@ def stream_to_console(
             first_interrupt_at = None
             raise KeyboardInterrupt
         first_interrupt_at = now
-        console.print(f"[dim]{_STREAM_CANCEL_HINT}[/dim]")
+        console.print(f"[{DIM}]{_STREAM_CANCEL_HINT}[/]")
 
     def _next_chunk(it: Iterator[str]) -> str | None:
         while True:
@@ -106,7 +106,7 @@ def stream_to_console(
     )
 
     console.print()
-    console.print(f"[{TERMINAL_ACCENT_BOLD}]{label}:[/]")
+    console.print(f"[{BOLD_BRAND}]{label}:[/]")
 
     started = time.monotonic()
     try:
@@ -133,7 +133,7 @@ def stream_to_console(
             if not buffer:
                 live.update(Text(""))
         if buffer:
-            console.print(f"[dim]· {time.monotonic() - started:.1f}s[/dim]")
+            console.print(f"[{DIM}]· {time.monotonic() - started:.1f}s[/]")
     finally:
         console.print()
 

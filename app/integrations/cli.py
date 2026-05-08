@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import questionary
 
+from app.cli.interactive_shell.theme import ANSI_BOLD, ANSI_RESET
+
 if TYPE_CHECKING:
     from app.integrations.github_mcp import GitHubMcpDisplayDetailLevel
 
@@ -35,8 +37,8 @@ from app.integrations.verify import (
     verify_integrations,
 )
 
-_B = "\033[1m"
-_R = "\033[0m"
+_B = ANSI_BOLD
+_R = ANSI_RESET
 
 
 def _json_echo(data: Any) -> None:

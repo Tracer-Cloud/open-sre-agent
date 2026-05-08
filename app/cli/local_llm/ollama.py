@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 import httpx
 
+from app.cli.interactive_shell.theme import DIM, WARNING
 from app.config import DEFAULT_OLLAMA_HOST
 
 if TYPE_CHECKING:
@@ -32,7 +33,7 @@ def install(console: Console) -> bool:
                 return False
             result = subprocess.run(["brew", "install", "ollama"], check=False)
             return result.returncode == 0
-        console.print("[yellow]Homebrew not found.[/yellow]")
+        console.print(f"[{WARNING}]Homebrew not found.[/]")
         console.print("Install Ollama from: [link]https://ollama.com/download/mac[/link]")
         return False
 
@@ -45,7 +46,7 @@ def install(console: Console) -> bool:
         return result.returncode == 0
 
     elif sys.platform == "win32":
-        console.print("[yellow]Windows is not yet supported by this automated setup.[/yellow]")
+        console.print(f"[{WARNING}]Windows is not yet supported by this automated setup.[/]")
     console.print("Install Ollama from: [link]https://ollama.com/download[/link]")
     return False
 
@@ -94,7 +95,7 @@ def is_model_present(model: str, host: str = DEFAULT_OLLAMA_HOST) -> bool:
 def pull_model(model: str, console: Console, host: str = DEFAULT_OLLAMA_HOST) -> bool:
     """Pull a model from the Ollama registry. Skips if already present. Returns True on success."""
     if is_model_present(model, host):
-        console.print(f"[dim]Model '{model}' already present, skipping download.[/dim]")
+        console.print(f"[{DIM}]Model '{model}' already present, skipping download.[/]")
         return True
     with console.status(
         f"Downloading [bold]{model}[/bold] (this may take a few minutes)...", spinner="dots"

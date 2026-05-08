@@ -20,6 +20,16 @@ from rich.markdown import Markdown
 from rich.spinner import Spinner
 from rich.text import Text
 
+from app.cli.interactive_shell.theme import (
+    ANSI_BOLD,
+    ANSI_DIM,
+    ANSI_RESET,
+    BOLD_BRAND_ANSI,
+    BRAND,
+    HIGHLIGHT_ANSI,
+    TEXT_ANSI,
+    WARNING,
+)
 from app.output import (
     ProgressTracker,
     get_output_format,
@@ -28,12 +38,12 @@ from app.output import (
 from app.remote.reasoning import reasoning_text
 from app.remote.stream import StreamEvent
 
-_RESET = "\033[0m"
-_DIM = "\033[2m"
-_BOLD = "\033[1m"
-_WHITE = "\033[37m"
-_GREEN = "\033[32m"
-_CYAN = "\033[1;36m"
+_RESET = ANSI_RESET
+_DIM = ANSI_DIM
+_BOLD = ANSI_BOLD
+_WHITE = TEXT_ANSI
+_GREEN = HIGHLIGHT_ANSI
+_CYAN = BOLD_BRAND_ANSI
 
 _NODE_START_KINDS = frozenset(
     {
@@ -60,7 +70,7 @@ _DIAGNOSE_NODE = "diagnose_root_cause"
 # so the two surfaces feel identical.
 _DIAGNOSE_LIVE_REFRESH = 20
 _DIAGNOSE_SPINNER_NAME = "dots12"
-_DIAGNOSE_SPINNER_COLOR = "orange1"
+_DIAGNOSE_SPINNER_COLOR = WARNING
 
 
 class StreamRenderer:
@@ -456,7 +466,7 @@ def _print_section(title: str, content: str) -> None:
 
         console = Console(highlight=False)
         console.print()
-        console.print(Rule(f"[bold white] {title} [/]", style="#2D4A2D", align="left"))
+        console.print(Rule(f"[bold] {title} [/]", style=BRAND, align="left"))
         console.print(Padding(Markdown(content.strip()), (1, 2)))
     else:
         print(f"\n  {title}")

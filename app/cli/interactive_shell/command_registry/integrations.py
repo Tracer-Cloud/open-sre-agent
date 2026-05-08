@@ -15,7 +15,7 @@ from app.cli.interactive_shell.rendering import (
     repl_table,
 )
 from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD, TERMINAL_ERROR
+from app.cli.interactive_shell.theme import BOLD_BRAND, DIM, ERROR, HIGHLIGHT, WARNING
 from app.cli.interactive_shell.tool_catalog import build_tool_catalog, format_tool_catalog_text
 
 
@@ -31,9 +31,9 @@ def _cmd_integrations(session: ReplSession, console: Console, args: list[str]) -
         render_integrations_table(console, results)
         failed = [r for r in results if r.get("status") in ("failed", "missing")]
         if failed:
-            console.print(f"[yellow]{len(failed)} integration(s) need attention.[/yellow]")
+            console.print(f"[{WARNING}]{len(failed)} integration(s) need attention.[/]")
         else:
-            console.print("[green]all integrations ok.[/green]")
+            console.print(f"[{HIGHLIGHT}]all integrations ok.[/]")
         return True
 
     if sub == "setup":
@@ -44,19 +44,19 @@ def _cmd_integrations(session: ReplSession, console: Console, args: list[str]) -
 
     if sub == "show":
         if len(args) < 2:
-            console.print("[dim]usage:[/dim] /integrations show <service>")
+            console.print(f"[{DIM}]usage:[/] /integrations show <service>")
             session.mark_latest(ok=False, kind="slash")
             return True
         service = args[1].lower()
         results = repl_data.load_verified_integrations()
         match = next((r for r in results if r.get("service") == service), None)
         if match is None:
-            console.print(f"[{TERMINAL_ERROR}]service not found:[/] {escape(service)}")
+            console.print(f"[{ERROR}]service not found:[/] {escape(service)}")
             session.mark_latest(ok=False, kind="slash")
             return True
         table = repl_table(
             title=f"Integration: {service}",
-            title_style=TERMINAL_ACCENT_BOLD,
+            title_style=BOLD_BRAND,
             show_header=False,
         )
         table.add_column("key", style="bold")
@@ -67,7 +67,7 @@ def _cmd_integrations(session: ReplSession, console: Console, args: list[str]) -
         return True
 
     console.print(
-        f"[{TERMINAL_ERROR}]unknown subcommand:[/] {escape(sub)}  "
+        f"[{ERROR}]unknown subcommand:[/] {escape(sub)}  "
         "(try [bold]/integrations list[/bold], [bold]/integrations verify[/bold], "
         "or [bold]/integrations show <service>[/bold])"
     )
@@ -89,7 +89,7 @@ def _cmd_mcp(_session: ReplSession, console: Console, args: list[str]) -> bool:
         return run_cli_command(console, ["integrations", "remove", *args[1:]])
 
     console.print(
-        f"[{TERMINAL_ERROR}]unknown subcommand:[/] {escape(sub)}  "
+        f"[{ERROR}]unknown subcommand:[/] {escape(sub)}  "
         "(try [bold]/mcp list[/bold], [bold]/mcp connect[/bold], or [bold]/mcp disconnect[/bold])"
     )
     return True
@@ -113,14 +113,14 @@ def _cmd_list(_session: ReplSession, console: Console, args: list[str]) -> bool:
     if sub in ("tools", "tool"):
         catalog = build_tool_catalog()
         if not catalog:
-            console.print("[dim]no tools registered.[/dim]")
+            console.print(f"[{DIM}]no tools registered.[/]")
             return True
         console.print(format_tool_catalog_text(catalog), markup=False)
         return True
 
     if sub and sub not in ("", "all"):
         console.print(
-            f"[{TERMINAL_ERROR}]unknown list target:[/] {escape(sub)}  "
+            f"[{ERROR}]unknown list target:[/] {escape(sub)}  "
             "(try [bold]/list integrations[/bold], [bold]/list models[/bold], "
             "[bold]/list mcp[/bold], or [bold]/list tools[/bold])"
         )

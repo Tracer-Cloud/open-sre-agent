@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.text import Text
 
 from app.cli.interactive_shell.banner import build_ready_panel
+from app.cli.interactive_shell.theme import BRAND, DIM, TEXT
 
 _LANDING_EXAMPLES: tuple[tuple[str, str], ...] = (
     (
@@ -51,13 +52,17 @@ def _commands_from_group(group: click.Group) -> tuple[tuple[str, str], ...]:
 
 def _render_usage(console: Console) -> None:
     console.print(
-        Text.assemble(("  Usage: "), ("opensre", "bold white"), (" [OPTIONS] [COMMAND] [ARGS]..."))
+        Text.assemble(
+            ("  Usage: "),
+            ("opensre", f"bold {TEXT}"),
+            (" [OPTIONS] [COMMAND] [ARGS]..."),
+        )
     )
     console.print(
         Text.assemble(
             ("  ", ""),
-            ("No COMMAND", "dim"),
-            (": start the interactive shell when stdin/stdout are TTYs.", "dim"),
+            ("No COMMAND", DIM),
+            (": start the interactive shell when stdin/stdout are TTYs.", DIM),
         )
     )
 
@@ -69,9 +74,11 @@ def _render_rows(
     rows: Sequence[tuple[str, str]],
     width: int,
 ) -> None:
-    console.print(Text.assemble((f"  {title}:", "bold white")))
+    console.print(Text.assemble((f"  {title}:", f"bold {TEXT}")))
     for label, description in rows:
-        console.print(Text.assemble(("    ", ""), (f"{label:<{width}}", "bold cyan"), description))
+        console.print(
+            Text.assemble(("    ", ""), (f"{label:<{width}}", f"bold {BRAND}"), description)
+        )
 
 
 def render_help(group: click.Group) -> None:

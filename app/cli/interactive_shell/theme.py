@@ -1,43 +1,48 @@
-"""Shared color theme for the interactive shell.
+"""Shared color theme for the OpenSRE CLI.
 
-Design system palette — use these role constants via Rich markup or as hex
-strings in Rich styles. Never use raw \\033[3Xm / \\033[9Xm ANSI codes in
-user-facing output; every colour must carry a semantic meaning per the role
-table below.
+Single source of truth for every colour rendered to the terminal. Eight
+semantic tokens — never introduce new hexes, never use Rich named colours
+(red / yellow / cyan / ...), never embed raw ANSI colour escapes outside
+this module.
+
+Token reference
+---------------
+  HIGHLIGHT  brand name, ❯ prompt, ✓ success, /commands, key findings, live indicator
+  BRAND      model name, file paths, version numbers, secondary labels
+  TEXT       all primary body text, step names, values, section headers
+  SECONDARY  tips, descriptions, muted info, secondary body text
+  DIM        timestamps, dividers, labels, ruled-out items, dim context
+  WARNING    warnings only — no auth, fallback store, config issues
+  ERROR      errors only — missing required config, failures
+  BG         terminal background, never used as foreground
 
 Usage
 -----
-  from app.cli.interactive_shell.theme import PRIMARY, ERROR, TEXT_DIM
-  console.print(f"[{PRIMARY}]✓ success[/]")
+  from app.cli.interactive_shell.theme import HIGHLIGHT, ERROR, DIM
+  console.print(f"[{HIGHLIGHT}]✓ success[/]")
   console.print(f"[{ERROR}]✗ failed[/]")
 """
 
 from __future__ import annotations
 
-# ── Semantic color roles ────────────────────────────────────────────────────
+# ── Semantic color tokens (the only permitted colours) ─────────────────────
 
-PRIMARY = "#1AFF8C"  # prompts (?), success (✓), active selections
-PRIMARY_ALT = "#00E87A"  # splash art, section headers
-ACCENT = "#00D4C8"  # file paths, commands, runnable hints
-ACCENT_SOFT = "#5EF0E8"  # version numbers, highlights
-ACCENT_DIM = "#00A89E"  # slash commands, muted interactive elements
-WARNING = "#F0A500"  # warnings, read-only mode
-WARNING_ALT = "#FF8C42"  # elevated warnings, destructive confirmations
-ERROR = "#FF4D6A"  # errors, failures, ✗ checks
-ERROR_ALT = "#E8365D"  # critical errors only
-TEXT = "#E8EFE8"  # primary body text, values
-TEXT_DIM = "#6B8C6B"  # labels, secondary info, key names
-BORDER = "#2D4A2D"  # box borders, dividers, rule lines
-SURFACE = "#111811"  # titlebar, inset panels
-BG = "#0E0E0E"  # terminal background (never set directly)
+HIGHLIGHT = "#B9EDAF"
+BRAND = "#66A17D"
+TEXT = "#E0E0E0"
+SECONDARY = "#888888"
+DIM = "#444444"
+WARNING = "#CEA25C"
+ERROR = "#C45B52"
+BG = "#0A0A0A"
 
-# ── Rich style shorthands ──────────────────────────────────────────────────
+# ── Rich style shorthands (bold variants of the semantic tokens) ──────────
 
-BOLD_PRIMARY = f"bold {PRIMARY}"
-BOLD_ACCENT = f"bold {ACCENT}"
+BOLD_HIGHLIGHT = f"bold {HIGHLIGHT}"
+BOLD_BRAND = f"bold {BRAND}"
 BOLD_TEXT = f"bold {TEXT}"
-BOLD_ERROR = f"bold {ERROR}"
 BOLD_WARNING = f"bold {WARNING}"
+BOLD_ERROR = f"bold {ERROR}"
 
 # ── Semantic glyphs ────────────────────────────────────────────────────────
 
@@ -49,32 +54,40 @@ GLYPH_ACTIVE = "◉"
 GLYPH_BULLET = "·"
 
 # ── ANSI escape sequences for prompt_toolkit (bypasses Rich markup) ────────
+# This module is the only place in the codebase where raw ANSI escapes are
+# permitted. Every truecolour value below corresponds to one of the eight
+# semantic tokens above.
 
-_PRIMARY_RGB = (0x1A, 0xFF, 0x8C)
-_TEXT_DIM_RGB = (0x6B, 0x8C, 0x6B)
+_HIGHLIGHT_RGB = (0xB9, 0xED, 0xAF)
+_BRAND_RGB = (0x66, 0xA1, 0x7D)
+_TEXT_RGB = (0xE0, 0xE0, 0xE0)
+_DIM_RGB = (0x44, 0x44, 0x44)
+_BG_RGB = (0x0A, 0x0A, 0x0A)
 
-PROMPT_ACCENT_ANSI = f"\x1b[1;38;2;{_PRIMARY_RGB[0]};{_PRIMARY_RGB[1]};{_PRIMARY_RGB[2]}m"
-PROMPT_FRAME_ANSI = PROMPT_ACCENT_ANSI
+
+def _fg(rgb: tuple[int, int, int]) -> str:
+    return f"\x1b[38;2;{rgb[0]};{rgb[1]};{rgb[2]}m"
+
+
+HIGHLIGHT_ANSI = _fg(_HIGHLIGHT_RGB)
+BRAND_ANSI = _fg(_BRAND_RGB)
+TEXT_ANSI = _fg(_TEXT_RGB)
+DIM_ANSI = _fg(_DIM_RGB)
+BOLD_BRAND_ANSI = f"\x1b[1m{BRAND_ANSI}"
+
 ANSI_RESET = "\x1b[0m"
+ANSI_BOLD = "\x1b[1m"
+ANSI_DIM = "\x1b[2m"
 
-# Truecolour ANSI for the bracketed turn counter in the prompt.
-DIM_COUNTER_ANSI = f"\x1b[38;2;{_TEXT_DIM_RGB[0]};{_TEXT_DIM_RGB[1]};{_TEXT_DIM_RGB[2]}m"
+PROMPT_ACCENT_ANSI = f"\x1b[1;38;2;{_HIGHLIGHT_RGB[0]};{_HIGHLIGHT_RGB[1]};{_HIGHLIGHT_RGB[2]}m"
+PROMPT_FRAME_ANSI = PROMPT_ACCENT_ANSI
 
-# ── Backward-compatible aliases (referenced by existing modules) ───────────
-# Do not remove — update the importing modules gradually instead.
+DIM_COUNTER_ANSI = DIM_ANSI
+SURFACE_BG_ANSI = f"\x1b[48;2;{_BG_RGB[0]};{_BG_RGB[1]};{_BG_RGB[2]}m"
 
-SEPARATOR_COLOR = BORDER
-TERMINAL_ERROR = ERROR
-TERMINAL_ACCENT = ACCENT
-TERMINAL_ACCENT_BOLD = BOLD_ACCENT
-DIM_TEXT_COLOR = TEXT_DIM
-
-BANNER_PRIMARY = PRIMARY
-BANNER_SECONDARY = PRIMARY_ALT
-BANNER_TERTIARY = ACCENT_SOFT
-BANNER_UI_DIVIDER = BORDER
-
-# OpenClaw legacy names kept for loop.py completion-menu styles.
-OPENCLAW_CORAL = ACCENT  # border colour → ACCENT
-OPENCLAW_ORANGE = PRIMARY  # active completion → PRIMARY
-OPENCLAW_AMBER = ACCENT_SOFT  # slash-command token → ACCENT_SOFT
+# Input box surface — slightly lighter than BG so the full-width fill is visible.
+_INPUT_SURFACE_RGB = (0x14, 0x14, 0x14)
+INPUT_SURFACE = "#141414"
+INPUT_SURFACE_BG_ANSI = (
+    f"\x1b[48;2;{_INPUT_SURFACE_RGB[0]};{_INPUT_SURFACE_RGB[1]};{_INPUT_SURFACE_RGB[2]}m"
+)

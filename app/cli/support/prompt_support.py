@@ -12,6 +12,8 @@ from prompt_toolkit.key_binding import KeyBindings, KeyBindingsBase, merge_key_b
 from prompt_toolkit.keys import Keys
 from rich.console import Console
 
+from app.cli.interactive_shell.theme import DIM
+
 _escape_patch_installed: list[bool] = [False]
 _ctrl_c_patch_installed: list[bool] = [False]
 
@@ -170,11 +172,11 @@ def repl_reset_ctrl_c_gate() -> None:
 def repl_prompt_note_ctrl_c(console: Console) -> bool:
     now = time.monotonic()
     if _last_ctrl_c[0] is not None and now - _last_ctrl_c[0] <= _CTRL_C_EXIT_WINDOW:
-        console.print("[dim]Goodbye![/dim]")
+        console.print(f"[{DIM}]Goodbye![/]")
         _last_ctrl_c[0] = None
         return True
     _last_ctrl_c[0] = now
-    console.print("[dim](Press Ctrl+C again to exit)[/dim]")
+    console.print(f"[{DIM}](Press Ctrl+C again to exit)[/]")
     return False
 
 
