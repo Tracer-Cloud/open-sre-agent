@@ -909,6 +909,12 @@ def test_messages_to_invocation_dicts_lc_type_field_remapped() -> None:
     assert out[1]["role"] == "assistant"
 
 
+def test_messages_to_invocation_dicts_preserves_explicit_empty_tool_calls() -> None:
+    msgs: list[Any] = [{"role": "assistant", "content": "x", "tool_calls": []}]
+    out = messages_to_invocation_dicts(msgs)
+    assert out[0].get("tool_calls") == []
+
+
 def test_messages_to_invocation_dicts_tool_shaped_object() -> None:
     class _Toolish:
         type = "tool"

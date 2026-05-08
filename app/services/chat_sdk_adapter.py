@@ -132,14 +132,15 @@ def normalize_graph_message_dict(m: dict[str, Any]) -> dict[str, Any]:
 
 def normalize_invocation_message_dict(m: dict[str, Any]) -> dict[str, Any]:
     """Normalize a message dict so ``tool_calls`` are plain ``ToolCallPayload`` dicts."""
-    out = normalize_graph_message_dict(dict(m))
+    out = normalize_graph_message_dict(m)
     tcs = out.get("tool_calls")
     if tcs is None:
         return out
     neutral = _tool_calls_to_neutral(tcs)
-    out = dict(out)
     if neutral:
         out["tool_calls"] = list(neutral)
+    elif not tcs:
+        out["tool_calls"] = []
     else:
         out.pop("tool_calls", None)
     return out
