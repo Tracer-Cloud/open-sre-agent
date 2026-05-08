@@ -5,6 +5,15 @@ the second time. Removes ``AgentRegistry`` entries whose PIDs no longer
 exist plus lockfiles in ``~/.config/opensre/agents/`` that correspond
 to dead PIDs.
 
+Liveness is checked via ``pid_exists`` rather than ``probe()``
+because ``probe()`` returns ``None`` for two distinct reasons —
+"PID doesn't exist" and "PID exists but I can't access its fields"
+(``psutil.AccessDenied``, common for cross-user processes on macOS
+or with a hardened ``/proc``). Treating both cases as "dead" would
+silently delete records and lockfiles for live processes owned by
+other users. ``pid_exists`` is the right primitive: it does an
+OS-level existence check that doesn't traverse the access boundary.
+
 The function is split from the boot wiring so it stays unit-testable
 without spinning up the REPL: the loop.py side just calls
 ``run_startup_sweep()`` and lets this module handle path defaults and
@@ -17,7 +26,7 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from app.agents.probe import probe
+from app.agents.probe import pid_exists
 from app.agents.registry import AgentRecord, AgentRegistry
 from app.constants import OPENSRE_HOME_DIR
 
@@ -86,7 +95,10 @@ def run_startup_sweep() -> SweepResult:
     try:
         registry = AgentRegistry()
         result = sweep(registry)
-    except Exception:  # pragma: no cover — defensive boundary
+    except Exception:
+        # Pinned by ``test_run_startup_sweep_swallows_exceptions`` which
+        # mocks ``AgentRegistry()`` to raise. The REPL must boot even if
+        # the sweep is broken; logging is the only side effect.
         logger.warning("agent sweep failed at REPL boot", exc_info=True)
         return SweepResult()
     if result.total > 0:
@@ -99,20 +111,22 @@ def run_startup_sweep() -> SweepResult:
 
 
 def _sweep_registry(registry: AgentRegistry) -> list[AgentRecord]:
-    removed: list[AgentRecord] = []
-    for record in registry.list():
-        # ``cpu_interval=0.0`` because we only need the existence
-        # signal, not an accurate CPU sample. Blocking 100 ms per
-        # registered agent at boot would be a noticeable startup tax.
-        if probe(record.pid, cpu_interval=0.0) is None:
-            forgotten = registry.forget(record.pid)
-            if forgotten is not None:
-                removed.append(forgotten)
-                logger.debug(
-                    "sweep: forgot dead agent record pid=%s name=%s",
-                    forgotten.pid,
-                    forgotten.name,
-                )
+    """Prune dead-PID records in a single batched rewrite.
+
+    Building the dead-PID set first and calling ``forget_many`` once
+    means a registry with N dead entries triggers exactly one
+    ``_rewrite()`` instead of N — relevant if a developer crashes and
+    relaunches the REPL many times without registry maintenance. See
+    AgentRegistry.forget_many for the contract.
+    """
+    dead_pids = [record.pid for record in registry.list() if not pid_exists(record.pid)]
+    removed = registry.forget_many(dead_pids)
+    for record in removed:
+        logger.debug(
+            "sweep: forgot dead agent record pid=%s name=%s",
+            record.pid,
+            record.name,
+        )
     return removed
 
 
@@ -129,14 +143,28 @@ def _sweep_locks(lock_dir: Path) -> list[Path]:
             pid = int(path.stem)
         except ValueError:
             continue
-        if probe(pid, cpu_interval=0.0) is None:
-            try:
-                path.unlink()
-            except OSError:
-                logger.warning("sweep: failed to remove stale lockfile %s", path)
-                continue
-            removed.append(path)
-            logger.debug("sweep: removed stale lockfile %s (pid=%s)", path, pid)
+        if pid_exists(pid):
+            continue
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            # Race against another sweep / external cleanup that
+            # already removed this exact lockfile. Idempotent
+            # success — don't log a warning, don't claim we did it.
+            continue
+        except OSError:
+            # Read-only filesystem, permission denied, etc. Log with
+            # ``exc_info`` so a downstream operator can tell exactly
+            # why; carry on with the rest of the sweep.
+            logger.warning(
+                "sweep: failed to remove stale lockfile %s (pid=%s)",
+                path,
+                pid,
+                exc_info=True,
+            )
+            continue
+        removed.append(path)
+        logger.debug("sweep: removed stale lockfile %s (pid=%s)", path, pid)
     return removed
 
 

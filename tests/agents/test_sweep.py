@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
+import app.agents.sweep as sweep_module
 from app.agents.registry import AgentRecord, AgentRegistry
 from app.agents.sweep import SweepResult, run_startup_sweep, sweep
 
@@ -49,6 +50,82 @@ def test_live_pid_record_is_kept(isolated_registry: AgentRegistry, tmp_path: Pat
 
     assert isolated_registry.get(self_pid) is not None
     assert result.removed_records == ()
+
+
+def test_access_denied_pid_is_kept_not_pruned(
+    isolated_registry: AgentRegistry, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A live PID owned by another user (where ``psutil.Process(pid)``
+    construction would raise ``AccessDenied`` and the old probe-based
+    check would falsely return ``None``) must NOT be pruned.
+
+    Locks in the fix for the Copilot review concern: the sweep now
+    uses ``psutil.pid_exists`` which doesn't traverse the access
+    boundary, so cross-user processes survive both the registry and
+    lockfile sweeps.
+    """
+    foreign_pid = 4242  # arbitrary; we mock pid_exists to say "alive"
+    isolated_registry.register(
+        AgentRecord(name="other-users-claude", pid=foreign_pid, command="claude")
+    )
+
+    monkeypatch.setattr(sweep_module, "pid_exists", lambda pid: pid == foreign_pid)
+
+    result = sweep(isolated_registry, lock_dir=tmp_path / "no-such-dir")
+
+    assert isolated_registry.get(foreign_pid) is not None
+    assert result.removed_records == ()
+
+
+def test_access_denied_pid_lockfile_is_kept(
+    isolated_registry: AgentRegistry, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Symmetric to the registry case: a lockfile for a live foreign
+    PID must survive the sweep even though the calling process can't
+    introspect it. Without the ``pid_exists`` fix, the sweep would
+    delete this file and break the foreign agent's coordination.
+    """
+    foreign_pid = 4242
+    lock_dir = tmp_path / "agents"
+    lock_dir.mkdir()
+    foreign_lock = lock_dir / f"{foreign_pid}.lock"
+    foreign_lock.write_text("locked")
+
+    monkeypatch.setattr(sweep_module, "pid_exists", lambda pid: pid == foreign_pid)
+
+    result = sweep(isolated_registry, lock_dir=lock_dir)
+
+    assert foreign_lock.exists()
+    assert result.removed_locks == ()
+
+
+def test_many_dead_pids_trigger_one_rewrite_not_n(
+    isolated_registry: AgentRegistry, tmp_path: Path
+) -> None:
+    """Pruning N dead records must rewrite the JSONL once, not N times.
+
+    Spies on ``AgentRegistry._rewrite`` to count calls — locks in the
+    Copilot review concern about boot-time N-rewrite scaling.
+    """
+    for pid in range(_DEAD_PID - 5, _DEAD_PID):
+        isolated_registry.register(AgentRecord(name=f"ghost-{pid}", pid=pid, command="bin"))
+
+    rewrite_call_count = 0
+    real_rewrite = isolated_registry._rewrite
+
+    def _spy() -> None:
+        nonlocal rewrite_call_count
+        rewrite_call_count += 1
+        real_rewrite()
+
+    isolated_registry._rewrite = _spy  # type: ignore[method-assign]
+
+    result = sweep(isolated_registry, lock_dir=tmp_path / "no-such-dir")
+
+    assert len(result.removed_records) == 5
+    assert rewrite_call_count == 1, (
+        f"expected 1 batched rewrite for 5 dead PIDs, got {rewrite_call_count}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -130,12 +207,14 @@ def test_missing_lock_dir_is_tolerated(isolated_registry: AgentRegistry, tmp_pat
     assert result.removed_locks == ()
 
 
-def test_lockfile_unlink_failure_is_logged_not_raised(
+def test_lockfile_unlink_failure_is_logged_with_exc_info(
     isolated_registry: AgentRegistry, tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     """If the OS refuses to remove a lockfile (e.g. permission denied
-    on a read-only filesystem), the sweep logs and continues rather
-    than crashing the REPL boot."""
+    on a read-only filesystem), the sweep logs at WARNING **with**
+    ``exc_info`` so the operator can diagnose the cause, then
+    continues rather than crashing the REPL boot.
+    """
     lock_dir = tmp_path / "agents"
     lock_dir.mkdir()
     stuck_lock = lock_dir / f"{_DEAD_PID}.lock"
@@ -151,8 +230,39 @@ def test_lockfile_unlink_failure_is_logged_not_raised(
     assert stuck_lock.exists()
     # ...but the sweep didn't claim a successful removal
     assert stuck_lock not in result.removed_locks
-    # ...and it logged the failure for ops visibility
-    assert any("failed to remove stale lockfile" in r.getMessage() for r in caplog.records)
+    # ...and it logged the failure with exception info attached so
+    # an ops operator sees *why* the unlink failed, not just *that*
+    # it did.
+    matching = [r for r in caplog.records if "failed to remove stale lockfile" in r.getMessage()]
+    assert matching, "expected a WARNING log for the unlink failure"
+    assert matching[0].exc_info is not None, (
+        "warning log must include exc_info so the underlying exception is visible"
+    )
+
+
+def test_lockfile_already_gone_is_silently_idempotent(
+    isolated_registry: AgentRegistry, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A concurrent sweep / external cleanup may have already removed
+    the lockfile between our existence check and our unlink call.
+    ``FileNotFoundError`` is expected behaviour, not a warning —
+    treat it as idempotent success and emit no log line.
+    """
+    lock_dir = tmp_path / "agents"
+    lock_dir.mkdir()
+    racy_lock = lock_dir / f"{_DEAD_PID}.lock"
+    racy_lock.write_text("locked")
+
+    with (
+        patch.object(Path, "unlink", side_effect=FileNotFoundError("already gone")),
+        caplog.at_level("WARNING", logger="app.agents.sweep"),
+    ):
+        result = sweep(isolated_registry, lock_dir=lock_dir)
+
+    # The race-already-removed file is treated as nothing-to-do:
+    # not in removed_locks, but also no warning logged.
+    assert racy_lock not in result.removed_locks
+    assert not [r for r in caplog.records if "failed to remove stale lockfile" in r.getMessage()]
 
 
 # ---------------------------------------------------------------------------
@@ -167,7 +277,9 @@ def test_sweep_result_total_property(isolated_registry: AgentRegistry, tmp_path:
     lock_dir.mkdir()
     isolated_registry.register(AgentRecord(name="ghost", pid=_DEAD_PID, command="bin"))
     (lock_dir / f"{_DEAD_PID}.lock").write_text("locked")
-    (lock_dir / f"{_DEAD_PID + 1}.lock").write_text("locked")
+    # ``_DEAD_PID - 1`` to stay within int32 — ``_DEAD_PID`` is the
+    # signed-int32 max, so ``+ 1`` would overflow ``psutil.pid_exists``.
+    (lock_dir / f"{_DEAD_PID - 1}.lock").write_text("locked")
 
     result = sweep(isolated_registry, lock_dir=lock_dir)
 
