@@ -6,7 +6,7 @@ import pytest
 from langgraph.graph import END, StateGraph
 
 from app.nodes.auth import inject_auth_node
-from app.pipeline.graph import _accept_langgraph_config
+from app.pipeline.langgraph_node_adapter import _accept_langgraph_config
 from app.state import AgentState, make_chat_state
 
 
