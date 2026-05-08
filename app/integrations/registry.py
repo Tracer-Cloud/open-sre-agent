@@ -21,6 +21,7 @@ from app.integrations._verification_adapters import (
     _verify_github,
     _verify_google_docs,
     _verify_grafana,
+    _verify_helm,
     _verify_honeycomb,
     _verify_kafka,
     _verify_mariadb,
@@ -279,6 +280,12 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         verifier=_verify_argocd,
         direct_effective=True,
         verify_order=1,
+    ),
+    IntegrationSpec(
+        service="helm",
+        verifier=_verify_helm,
+        direct_effective=True,
+        verify_order=34,
     ),
     IntegrationSpec(
         service="victoria_logs",

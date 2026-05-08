@@ -92,4 +92,5 @@ class EffectiveIntegrations(StrictConfigModel):
     splunk: EffectiveIntegrationEntry | None = None
     airflow: dict[str, Any] | None = None
     argocd: EffectiveIntegrationEntry | None = None
+    helm: EffectiveIntegrationEntry | None = None
     victoria_logs: EffectiveIntegrationEntry | None = None

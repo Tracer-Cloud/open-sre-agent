@@ -583,6 +583,54 @@ def _map_argocd_application_diff(data: dict) -> dict:
     }
 
 
+def _map_helm_list_releases(data: dict) -> dict:
+    releases = data.get("releases", [])
+    if not isinstance(releases, list):
+        releases = []
+    return {
+        "helm_releases": releases,
+        "helm_list_all_namespaces": bool(data.get("all_namespaces", False)),
+        "helm_list_namespace": str(data.get("namespace", "") or ""),
+    }
+
+
+def _map_helm_release_status(data: dict) -> dict:
+    return {
+        "helm_release_status": data.get("status") or {},
+        "helm_release_name": str(data.get("release", "") or ""),
+        "helm_release_namespace": str(data.get("namespace", "") or ""),
+    }
+
+
+def _map_helm_release_history(data: dict) -> dict:
+    history = data.get("history", [])
+    if not isinstance(history, list):
+        history = []
+    return {
+        "helm_release_history": history,
+        "helm_release_name": str(data.get("release", "") or ""),
+        "helm_release_namespace": str(data.get("namespace", "") or ""),
+    }
+
+
+def _map_helm_get_release_values(data: dict) -> dict:
+    return {
+        "helm_release_values": data.get("values") or {},
+        "helm_values_all_requested": bool(data.get("all_values", False)),
+        "helm_release_name": str(data.get("release", "") or ""),
+        "helm_release_namespace": str(data.get("namespace", "") or ""),
+    }
+
+
+def _map_helm_get_release_manifest(data: dict) -> dict:
+    return {
+        "helm_release_manifest": str(data.get("manifest", "") or ""),
+        "helm_manifest_truncated": bool(data.get("truncated", False)),
+        "helm_release_name": str(data.get("release", "") or ""),
+        "helm_release_namespace": str(data.get("namespace", "") or ""),
+    }
+
+
 def _map_alertmanager_alerts(data: dict) -> dict:
     return {
         "alertmanager_alerts": data.get("alerts") or [],
@@ -696,6 +744,11 @@ EVIDENCE_MAPPERS: dict[str, Callable[[dict], dict]] = {
     "get_git_deploy_timeline": _map_git_deploy_timeline,
     "argocd_application_status": _map_argocd_application_status,
     "argocd_application_diff": _map_argocd_application_diff,
+    "helm_list_releases": _map_helm_list_releases,
+    "helm_release_status": _map_helm_release_status,
+    "helm_release_history": _map_helm_release_history,
+    "helm_get_release_values": _map_helm_get_release_values,
+    "helm_get_release_manifest": _map_helm_get_release_manifest,
     "alertmanager_alerts": _map_alertmanager_alerts,
     "alertmanager_silences": _map_alertmanager_silences,
     "list_eks_pods": _map_eks_pods,
@@ -939,6 +992,29 @@ def build_evidence_summary(execution_results: dict[str, ActionExecutionResult]) 
                 app_name = str(data.get("application_name", "")).strip() or "?"
                 drift = str(bool(data.get("drift_detected", False))).lower()
                 summary_parts.append(f"argocd:{app_name} drift {drift}")
+            elif action_name == "helm_list_releases" and data.get("releases") is not None:
+                count = len(data.get("releases") or [])
+                scope = "all-ns" if data.get("all_namespaces") else (data.get("namespace") or "?")
+                summary_parts.append(f"helm:{count} releases ({scope})")
+            elif action_name == "helm_release_status" and data.get("status") is not None:
+                rel = str(data.get("release", "")).strip() or "?"
+                status_obj = data.get("status")
+                st = status_obj if isinstance(status_obj, dict) else {}
+                info_obj = st.get("info")
+                info = info_obj if isinstance(info_obj, dict) else {}
+                status = str(info.get("status", "") or "").strip() or "unknown"
+                summary_parts.append(f"helm:{rel} status {status}")
+            elif action_name == "helm_release_history" and data.get("history") is not None:
+                rel = str(data.get("release", "")).strip() or "?"
+                summary_parts.append(f"helm:{rel} history {len(data.get('history') or [])} revs")
+            elif action_name == "helm_get_release_values" and data.get("values") is not None:
+                rel = str(data.get("release", "")).strip() or "?"
+                summary_parts.append(f"helm:{rel} values keys {len(data.get('values') or {})}")
+            elif action_name == "helm_get_release_manifest" and data.get("manifest") is not None:
+                rel = str(data.get("release", "")).strip() or "?"
+                lines = len(str(data.get("manifest", "")).splitlines())
+                trunc = " truncated" if data.get("truncated") else ""
+                summary_parts.append(f"helm:{rel} manifest {lines} lines{trunc}")
             elif action_name == "alertmanager_alerts":
                 firing_count = len(data.get("firing_alerts") or [])
                 total = data.get("total", 0)

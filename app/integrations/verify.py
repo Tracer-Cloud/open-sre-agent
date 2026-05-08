@@ -27,6 +27,7 @@ _verify_discord = _adapters._verify_discord
 _verify_github = _adapters._verify_github
 _verify_google_docs = _adapters._verify_google_docs
 _verify_grafana = _adapters._verify_grafana
+_verify_helm = _adapters._verify_helm
 _verify_honeycomb = _adapters._verify_honeycomb
 _verify_kafka = _adapters._verify_kafka
 _verify_mariadb = _adapters._verify_mariadb
@@ -168,6 +169,7 @@ __all__ = [
     "_verify_github",
     "_verify_google_docs",
     "_verify_grafana",
+    "_verify_helm",
     "_verify_honeycomb",
     "_verify_kafka",
     "_verify_mariadb",
