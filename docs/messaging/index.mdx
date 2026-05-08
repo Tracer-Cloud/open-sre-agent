@@ -50,7 +50,7 @@ TELEGRAM_BOT_TOKEN=
 TELEGRAM_DEFAULT_CHAT_ID=
 ```
 
-After editing `.env`, run `opensre doctor` to confirm the integration is detected.
+After editing `.env`, run `opensre integrations verify <service>` (e.g. `opensre integrations verify telegram`) to confirm the credentials work. Note that `opensre doctor` only inspects the integrations store (`~/.config/opensre/integrations.json`), so it does **not** detect env-var-only configurations like Telegram or Slack-via-`SLACK_WEBHOOK_URL`.
 
 ---
 
