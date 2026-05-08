@@ -9,8 +9,13 @@ import pytest
 from prompt_toolkit.history import FileHistory
 from rich.console import Console
 
+import app.cli.interactive_shell.grounding_diagnostics as grounding_diagnostics
 from app.cli.interactive_shell.command_registry import repl_data as repl_data_module
 from app.cli.interactive_shell.commands import SLASH_COMMANDS, dispatch_slash
+from app.cli.interactive_shell.grounding_diagnostics import (
+    GroundingSource,
+    register_grounding_source,
+)
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.tasks import TaskKind, TaskStatus
 
@@ -18,6 +23,16 @@ from app.cli.interactive_shell.tasks import TaskKind, TaskStatus
 def _capture() -> tuple[Console, io.StringIO]:
     buf = io.StringIO()
     return Console(file=buf, force_terminal=False, highlight=False), buf
+
+
+@pytest.fixture(autouse=True)
+def restore_grounding_source_registry() -> None:
+    original_registry = grounding_diagnostics._GROUNDING_SOURCE_REGISTRY.copy()
+    try:
+        yield
+    finally:
+        grounding_diagnostics._GROUNDING_SOURCE_REGISTRY.clear()
+        grounding_diagnostics._GROUNDING_SOURCE_REGISTRY.update(original_registry)
 
 
 class TestDispatchSlash:
@@ -87,6 +102,23 @@ class TestDispatchSlash:
         assert "trust mode" in output
         assert "grounding cli cache" in output
         assert "grounding docs cache" in output
+
+    def test_status_renders_registered_grounding_sources(self) -> None:
+        register_grounding_source(
+            GroundingSource(
+                name="custom_status_source",
+                stats_fn=lambda: {"items": 4},
+                format_fn=lambda stats: f"items={stats['items']}",
+            )
+        )
+        session = ReplSession()
+        console, buf = _capture()
+
+        dispatch_slash("/status", session, console)
+
+        output = buf.getvalue()
+        assert "grounding custom_status_source cache" in output
+        assert "items=4" in output
 
     def test_unknown_command_does_not_exit(self) -> None:
         session = ReplSession()

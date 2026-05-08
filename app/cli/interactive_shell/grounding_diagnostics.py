@@ -4,25 +4,66 @@ from __future__ import annotations
 
 import logging
 import os
+from collections import OrderedDict
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass
+from typing import Any
 
 _logger = logging.getLogger(__name__)
+
+_GROUNDING_SOURCE_REGISTRY: OrderedDict[str, GroundingSource] = OrderedDict()
+
+
+def _format_grounding_stats(stats: dict[str, Any]) -> str:
+    hits = stats.get("hits", 0)
+    misses = stats.get("misses", 0)
+    if "cached" in stats:
+        return f"hits={hits} misses={misses} cached={'yes' if stats['cached'] else 'no'}"
+    if "currsize" in stats and "maxsize" in stats:
+        return f"hits={hits} misses={misses} entries={stats['currsize']}/{stats['maxsize']}"
+    return str(stats)
+
+
+@dataclass(frozen=True)
+class GroundingSource:
+    name: str
+    stats_fn: Callable[[], dict[str, Any]]
+    format_fn: Callable[[dict[str, Any]], str] = _format_grounding_stats
+
+
+def register_grounding_source(source: GroundingSource) -> None:
+    _GROUNDING_SOURCE_REGISTRY[source.name] = source
+
+
+def _ensure_builtin_grounding_sources_registered() -> None:
+    if "cli" not in _GROUNDING_SOURCE_REGISTRY:
+        from app.cli.interactive_shell import cli_reference  # noqa: F401
+    if "docs" not in _GROUNDING_SOURCE_REGISTRY:
+        from app.cli.interactive_shell import docs_reference  # noqa: F401
+    if "agents_md" not in _GROUNDING_SOURCE_REGISTRY:
+        from app.cli.interactive_shell import agents_md_reference  # noqa: F401
+
+
+def iter_grounding_sources() -> Iterable[GroundingSource]:
+    _ensure_builtin_grounding_sources_registered()
+    return tuple(_GROUNDING_SOURCE_REGISTRY.values())
 
 
 def log_grounding_cache_diagnostics(reason: str) -> None:
     """Log CLI/docs grounding cache stats when ``TRACER_VERBOSE=1``."""
     if os.environ.get("TRACER_VERBOSE") != "1":
         return
-    from app.cli.interactive_shell.agents_md_reference import get_agents_md_cache_stats
-    from app.cli.interactive_shell.cli_reference import get_cli_reference_cache_stats
-    from app.cli.interactive_shell.docs_reference import get_docs_cache_stats
-
+    rendered = " ".join(f"{source.name}={source.stats_fn()}" for source in iter_grounding_sources())
     _logger.debug(
-        "grounding cache [%s] cli=%s docs=%s agents_md=%s",
+        "grounding cache [%s] %s",
         reason,
-        get_cli_reference_cache_stats(),
-        get_docs_cache_stats(),
-        get_agents_md_cache_stats(),
+        rendered,
     )
 
 
-__all__ = ["log_grounding_cache_diagnostics"]
+__all__ = [
+    "GroundingSource",
+    "iter_grounding_sources",
+    "log_grounding_cache_diagnostics",
+    "register_grounding_source",
+]

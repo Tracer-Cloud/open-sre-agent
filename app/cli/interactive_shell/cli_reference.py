@@ -156,6 +156,18 @@ def build_cli_reference_text() -> str:
     return text
 
 
+def _register_grounding_source() -> None:
+    from app.cli.interactive_shell.grounding_diagnostics import (
+        GroundingSource,
+        register_grounding_source,
+    )
+
+    register_grounding_source(GroundingSource(name="cli", stats_fn=get_cli_reference_cache_stats))
+
+
+_register_grounding_source()
+
+
 __all__ = [
     "build_cli_reference_text",
     "get_cli_reference_cache_stats",

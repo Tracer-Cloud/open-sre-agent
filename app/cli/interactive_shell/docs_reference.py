@@ -451,6 +451,18 @@ def build_docs_reference_text(
     return text
 
 
+def _register_grounding_source() -> None:
+    from app.cli.interactive_shell.grounding_diagnostics import (
+        GroundingSource,
+        register_grounding_source,
+    )
+
+    register_grounding_source(GroundingSource(name="docs", stats_fn=get_docs_cache_stats))
+
+
+_register_grounding_source()
+
+
 __all__ = [
     "DocPage",
     "build_docs_index",

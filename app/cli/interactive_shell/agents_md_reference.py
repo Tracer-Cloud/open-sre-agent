@@ -260,6 +260,18 @@ def build_agents_md_reference_text(*, max_chars: int = _DEFAULT_MAX_TOTAL_CHARS)
     return text
 
 
+def _register_grounding_source() -> None:
+    from app.cli.interactive_shell.grounding_diagnostics import (
+        GroundingSource,
+        register_grounding_source,
+    )
+
+    register_grounding_source(GroundingSource(name="agents_md", stats_fn=get_agents_md_cache_stats))
+
+
+_register_grounding_source()
+
+
 __all__ = [
     "AgentsMdFile",
     "build_agents_md_reference_text",
