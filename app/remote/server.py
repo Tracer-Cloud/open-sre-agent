@@ -46,6 +46,7 @@ from starlette.responses import JSONResponse, StreamingResponse
 
 from app.cli.support.cli_error_mapping import reraise_cli_runtime_error
 from app.cli.support.errors import OpenSREError
+from app.constants import OPENSRE_HOME_DIR
 from app.remote.vercel_poller import (
     VercelInvestigationCandidate,
     VercelPoller,
@@ -58,7 +59,10 @@ from app.version import get_version
 load_dotenv(override=False)
 init_sentry(entrypoint="remote")
 
-INVESTIGATIONS_DIR = Path(os.getenv("INVESTIGATIONS_DIR", "/opt/opensre/investigations"))
+_INVESTIGATIONS_DIR_ENV = "INVESTIGATIONS_DIR"
+_DEFAULT_INVESTIGATIONS_DIR = Path("/opt/opensre/investigations")
+_FALLBACK_INVESTIGATIONS_DIR = OPENSRE_HOME_DIR / "remote" / "investigations"
+INVESTIGATIONS_DIR = Path(os.getenv(_INVESTIGATIONS_DIR_ENV, str(_DEFAULT_INVESTIGATIONS_DIR)))
 _AUTH_KEY = os.getenv("OPENSRE_API_KEY")
 _AUTH_EXEMPT_PATHS = {
     "/discord/interactions",
@@ -74,6 +78,27 @@ _INSTANCE_METADATA: dict[str, str | None] = {
     "public_ip": None,
 }
 logger = logging.getLogger(__name__)
+
+
+def _using_default_investigations_dir(path: Path) -> bool:
+    return not os.getenv(_INVESTIGATIONS_DIR_ENV) and path == _DEFAULT_INVESTIGATIONS_DIR
+
+
+def _ensure_investigations_dir(path: Path) -> Path:
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+    except OSError:
+        if not _using_default_investigations_dir(path):
+            raise
+
+    _FALLBACK_INVESTIGATIONS_DIR.mkdir(parents=True, exist_ok=True)
+    logger.warning(
+        "Unable to create default investigations directory %s; using writable fallback %s",
+        path,
+        _FALLBACK_INVESTIGATIONS_DIR,
+    )
+    return _FALLBACK_INVESTIGATIONS_DIR
 
 
 def _configured_auth_key() -> str | None:
@@ -93,7 +118,9 @@ def _check_api_key(request: Request, x_api_key: str | None = Header(default=None
 
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    INVESTIGATIONS_DIR.mkdir(parents=True, exist_ok=True)
+    global INVESTIGATIONS_DIR
+
+    INVESTIGATIONS_DIR = _ensure_investigations_dir(INVESTIGATIONS_DIR)
     _refresh_instance_metadata()
 
     poller_task: asyncio.Task[None] | None = None

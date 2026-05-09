@@ -4,6 +4,7 @@ import asyncio
 import collections
 import shutil
 import urllib.error
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -20,6 +21,7 @@ from app.remote.server import (
     InvestigateRequest,
     _check_disk_health,
     _check_memory_health,
+    _ensure_investigations_dir,
     _imds_get,
     _imds_token,
     _lifespan,
@@ -34,6 +36,59 @@ from app.remote.vercel_poller import VercelResolutionError
 def remote_client(monkeypatch: pytest.MonkeyPatch, tmp_path) -> TestClient:
     monkeypatch.setattr(remote_server, "INVESTIGATIONS_DIR", tmp_path)
     return TestClient(remote_server.app, raise_server_exceptions=False)
+
+
+def test_ensure_investigations_dir_creates_requested_dir(tmp_path) -> None:
+    target = tmp_path / "investigations"
+
+    result = _ensure_investigations_dir(target)
+
+    assert result == target
+    assert target.is_dir()
+
+
+def test_ensure_investigations_dir_falls_back_for_unwritable_default(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    default_dir = remote_server._DEFAULT_INVESTIGATIONS_DIR
+    fallback_dir = tmp_path / "fallback" / "investigations"
+    original_mkdir = Path.mkdir
+
+    def fake_mkdir(self: Path, *args: object, **kwargs: object) -> None:
+        if self == default_dir:
+            raise PermissionError("permission denied")
+        original_mkdir(self, *args, **kwargs)
+
+    monkeypatch.delenv("INVESTIGATIONS_DIR", raising=False)
+    monkeypatch.setattr(remote_server, "_FALLBACK_INVESTIGATIONS_DIR", fallback_dir)
+    monkeypatch.setattr(Path, "mkdir", fake_mkdir)
+
+    result = _ensure_investigations_dir(default_dir)
+
+    assert result == fallback_dir
+    assert fallback_dir.is_dir()
+
+
+def test_ensure_investigations_dir_reraises_configured_dir_permission_error(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    configured_dir = tmp_path / "configured" / "investigations"
+    fallback_dir = tmp_path / "fallback" / "investigations"
+
+    def fake_mkdir(self: Path, *_args: object, **_kwargs: object) -> None:
+        if self == configured_dir:
+            raise PermissionError("permission denied")
+
+    monkeypatch.setenv("INVESTIGATIONS_DIR", str(configured_dir))
+    monkeypatch.setattr(remote_server, "_FALLBACK_INVESTIGATIONS_DIR", fallback_dir)
+    monkeypatch.setattr(Path, "mkdir", fake_mkdir)
+
+    with pytest.raises(PermissionError, match="permission denied"):
+        _ensure_investigations_dir(configured_dir)
+
+    assert not fallback_dir.exists()
 
 
 @pytest.mark.parametrize(
@@ -274,6 +329,32 @@ async def test_lifespan_starts_and_cancels_vercel_poller(
         await asyncio.wait_for(started.wait(), timeout=1)
 
     assert cancelled.is_set()
+
+
+@pytest.mark.asyncio
+async def test_lifespan_uses_fallback_investigations_dir_when_default_is_unwritable(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    default_dir = remote_server._DEFAULT_INVESTIGATIONS_DIR
+    fallback_dir = tmp_path / "fallback" / "investigations"
+    original_mkdir = Path.mkdir
+
+    def fake_mkdir(self: Path, *args: object, **kwargs: object) -> None:
+        if self == default_dir:
+            raise PermissionError("permission denied")
+        original_mkdir(self, *args, **kwargs)
+
+    monkeypatch.delenv("INVESTIGATIONS_DIR", raising=False)
+    monkeypatch.delenv("VERCEL_POLL_ENABLED", raising=False)
+    monkeypatch.setattr(remote_server, "INVESTIGATIONS_DIR", default_dir)
+    monkeypatch.setattr(remote_server, "_FALLBACK_INVESTIGATIONS_DIR", fallback_dir)
+    monkeypatch.setattr(remote_server, "_refresh_instance_metadata", lambda: None)
+    monkeypatch.setattr(Path, "mkdir", fake_mkdir)
+
+    async with _lifespan(object()):
+        assert fallback_dir == remote_server.INVESTIGATIONS_DIR
+        assert fallback_dir.is_dir()
 
 
 # ---------------------------------------------------------------------------
