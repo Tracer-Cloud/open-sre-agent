@@ -13,13 +13,13 @@ from dataclasses import dataclass
 
 import pytest
 
-pytestmark = pytest.mark.synthetic
-
 from tests.synthetic.rds_postgres.run_suite import (
     ScenarioScore,
     classify_outcome,
     compute_classification_stats,
 )
+
+pytestmark = pytest.mark.synthetic
 
 # ---------------------------------------------------------------------------
 # classify_outcome — truth table
