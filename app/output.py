@@ -304,14 +304,14 @@ class _LiveRenderable:
 class _EventLogDisplay:
     """Rich Live-backed animated event log. One instance per investigation."""
 
-    def __init__(self, model: str = "", mode: str = "local") -> None:
+    def __init__(self, model: str = "", mode: str = "local", t0: float | None = None) -> None:
         from rich.live import Live
 
         global _live_console, _active_display
 
         self._model = model
         self._mode = mode
-        self._t0 = time.monotonic()
+        self._t0 = t0 if t0 is not None else time.monotonic()
         self._completed: list[Text] = []
         self._active_steps: dict[str, dict] = {}  # node_name → {t0, subtext, subtext_until}
         self._current_phase = "LOAD"
@@ -410,10 +410,11 @@ class ProgressTracker:
     def __init__(self) -> None:
         self.events: list[ProgressEvent] = []
         self._start_times: dict[str, float] = {}
+        self._t0: float = time.monotonic()
         self._rich = get_output_format() == "rich"
         self._display: _EventLogDisplay | None = None
         if self._rich:
-            self._display = _EventLogDisplay()
+            self._display = _EventLogDisplay(t0=self._t0)
 
     def stop(self) -> None:
         """Stop the active live display if running."""
@@ -432,7 +433,9 @@ class ProgressTracker:
                 if self._display:
                     self._display.stop()
                     self._display = None
-            elif self._display:
+            else:
+                if self._display is None:
+                    self._display = _EventLogDisplay(t0=self._t0)
                 self._display.step_start(node_name)
         else:
             print(f"  … {_node_label(node_name)}")
