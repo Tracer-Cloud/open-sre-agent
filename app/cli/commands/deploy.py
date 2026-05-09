@@ -365,7 +365,20 @@ def deploy_ec2(down: bool, branch: str) -> None:
             raise
         raise _ec2_deploy_not_bundled_error() from exc
 
-    outputs = run_deploy(branch=branch)
+    from botocore.exceptions import NoCredentialsError
+
+    try:
+        outputs = run_deploy(branch=branch)
+    except NoCredentialsError as exc:
+        raise OpenSREError(
+            "AWS credentials not found.",
+            suggestion=(
+                "Configure AWS credentials before deploying to EC2:\n"
+                "  1. Run 'aws configure' to set up ~/.aws/credentials\n"
+                "  2. Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY env vars\n"
+                "  3. Attach an IAM role if running on EC2"
+            ),
+        ) from exc
     _persist_remote_url(outputs)
 
     remote_url = _build_remote_url(outputs)
