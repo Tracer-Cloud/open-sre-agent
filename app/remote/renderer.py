@@ -96,7 +96,9 @@ class _DiagnoseStreamRenderer:
     investigation runs — :meth:`start` resets all state.
     """
 
-    def __init__(self, console: Console | None = None) -> None:
+    def __init__(
+        self, console: Console | None = None, tracker: ProgressTracker | None = None
+    ) -> None:
         self.buffer: list[str] = []
         self._live: Live | None = None
         self._started: float = 0.0
@@ -105,6 +107,7 @@ class _DiagnoseStreamRenderer:
         # incur O(n²) parsing.
         self._last_render: float = 0.0
         self._console: Console | None = console
+        self._tracker: ProgressTracker | None = tracker
 
     @property
     def streamed(self) -> bool:
@@ -129,12 +132,10 @@ class _DiagnoseStreamRenderer:
             sys.stdout.flush()
             return
 
-        # Stop any active ProgressTracker Live display before opening our own
-        # Live region. Two competing Rich Live regions cause visible flicker;
-        # keeping only one Live at a time eliminates it. The next graph node
-        # (publish_findings) already stops the display unconditionally, so
-        # this just moves the stop point one node earlier.
-        stop_display()
+        if self._tracker is not None:
+            self._tracker.stop()
+        else:
+            stop_display()
 
         if self._console is None:
             self._console = Console(highlight=False)
@@ -246,7 +247,7 @@ class StreamRenderer:
         # buffer + Live region + throttle state; the renderer only
         # orchestrates lifecycle (active_node tracking, finish-on-end).
         self._console = Console(highlight=False)
-        self._diagnose = _DiagnoseStreamRenderer(self._console)
+        self._diagnose = _DiagnoseStreamRenderer(self._console, self._tracker)
         self._alert_header_printed = False
         self._plan_preview_printed = False
 

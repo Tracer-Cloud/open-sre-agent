@@ -967,3 +967,14 @@ class TestStreamRendererDiagnoseThrottle:
         assert "".join(renderer._diagnose.buffer).startswith("c0 ")
         assert "c19" in "".join(renderer._diagnose.buffer)
         assert fake_time[0] == 0.0
+
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
+    def test_diagnose_start_stops_progress_tracker_display(self) -> None:
+        """Calling _begin_diagnose safely stops the active ProgressTracker display and sets it to None."""
+        renderer = StreamRenderer()
+        # Initialize active display
+        renderer._tracker._display = renderer._tracker._display or True
+        assert renderer._tracker._display is not None
+
+        renderer._begin_diagnose("diagnose_root_cause")
+        assert renderer._tracker._display is None
