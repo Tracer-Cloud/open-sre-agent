@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
 import boto3
 from anthropic import Anthropic, AnthropicBedrock, AuthenticationError, NotFoundError
+from openai import APIConnectionError as OpenAIConnectionError
 from openai import AuthenticationError as OpenAIAuthError
 from openai import NotFoundError as OpenAINotFoundError
 from openai import OpenAI
@@ -440,6 +441,33 @@ def _format_anthropic_retry_error(err: Exception) -> str:
     return f"Anthropic API request failed after multiple retries: {error_name}."
 
 
+def _format_openai_connection_error(err: Exception, provider_label: str) -> str:
+    """Return a user-facing message for an OpenAI APIConnectionError.
+
+    Walks the exception cause chain looking for SSL fingerprints so that a TLS
+    misconfiguration (e.g. pointing an HTTPS client at an HTTP endpoint) gets a
+    distinct, actionable message rather than the generic "try again" text.
+    """
+    cause: Exception | None = err
+    cause_text_parts: list[str] = []
+    while cause is not None:
+        cause_text_parts.append(str(cause).lower())
+        next_cause = getattr(cause, "__cause__", None)
+        if next_cause is None:
+            next_cause = getattr(cause, "__context__", None)
+        cause = next_cause
+    cause_text = " ".join(cause_text_parts)
+    if "ssl" in cause_text or "wrong_version_number" in cause_text or "certificate" in cause_text:
+        return (
+            f"Cannot connect to {provider_label} API (SSL/TLS error). "
+            "Verify the endpoint URL uses HTTPS and that no proxy is stripping TLS."
+        )
+    return (
+        f"Cannot connect to {provider_label} API. "
+        "Check your network connection and that the endpoint URL is reachable."
+    )
+
+
 def _parse_retry_after(err: Exception) -> float:
     """Extract the suggested retry delay in seconds from a RateLimitError.
 
@@ -589,6 +617,10 @@ class OpenAILLMClient:
                 ) from err
             except GuardrailBlockedError:
                 raise
+            except OpenAIConnectionError as err:
+                raise RuntimeError(
+                    _format_openai_connection_error(err, self._provider_label)
+                ) from err
             except OpenAIRateLimitError as err:
                 last_err = err
                 if attempt == max_attempts - 1:
@@ -656,6 +688,10 @@ class OpenAILLMClient:
                 ) from err
             except GuardrailBlockedError:
                 raise
+            except OpenAIConnectionError as err:
+                raise RuntimeError(
+                    _format_openai_connection_error(err, self._provider_label)
+                ) from err
             except OpenAIRateLimitError as err:
                 if emitted:
                     raise
