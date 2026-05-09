@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import math
 import os
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -53,12 +54,25 @@ _AGENTS_FIRST_ARGS: tuple[tuple[str, str], ...] = (
 )
 
 _TRACE_REFRESH_PER_SECOND = 10
+# Match the throttle period to ``Live``'s refresh rate: under a 1k-line/sec
+# agent the reader thread can publish chunks faster than Rich actually
+# paints, and each ``live.update(Text.from_ansi(...))`` we make in
+# excess just creates a Renderable Rich will discard at the next paint.
+# Throttling the *call* to ``Live`` to one period bounds CPU under burst
+# writers without affecting how fast the screen updates.
+_TRACE_RENDER_PERIOD_S = 1.0 / _TRACE_REFRESH_PER_SECOND
 # Cap the on-screen render to the most recent slice of the 4 MiB buffer
 # so we don't reparse a 4 MiB string through Rich at 10 fps under burst
 # writers. A few screens of context is plenty for "what is the agent
 # doing right now"; the full tail is still in ``sess.buffer`` for any
 # future drill-down view.
 _TRACE_RENDER_TAIL_BYTES = 64 * 1024
+
+
+def _render_trace_snapshot(live: Live, sess: AttachSession) -> None:
+    """Pull the bounded snapshot, decode on a UTF-8 boundary, hand to ``Live``."""
+    snapshot = _slice_to_utf8_boundary(sess.buffer.snapshot(), _TRACE_RENDER_TAIL_BYTES)
+    live.update(Text.from_ansi(snapshot.decode("utf-8", errors="replace")))
 
 
 def _slice_to_utf8_boundary(data: bytes, max_bytes: int) -> bytes:
@@ -393,9 +407,25 @@ def _render_live_tail(console: Console, label: str, sess: AttachSession) -> None
             # appends to ``sess.buffer`` — the loop body only needs the
             # *side effect* of advancing, not the chunk value, so the
             # iteration variable is intentionally discarded.
+            # Seeded at 0.0 so the first iteration always renders (any
+            # ``time.monotonic() - 0.0`` clears the period); the throttle
+            # kicks in from the second iteration onward.
+            last_render = 0.0
+            pending = False
             for _ in sess:
-                snapshot = _slice_to_utf8_boundary(sess.buffer.snapshot(), _TRACE_RENDER_TAIL_BYTES)
-                live.update(Text.from_ansi(snapshot.decode("utf-8", errors="replace")))
+                now = time.monotonic()
+                if now - last_render >= _TRACE_RENDER_PERIOD_S:
+                    _render_trace_snapshot(live, sess)
+                    last_render = now
+                    pending = False
+                else:
+                    pending = True
+            # Final flush: the last chunk(s) may have arrived inside a
+            # throttle window; render once after the loop so the user
+            # sees the very latest state instead of whatever was on
+            # screen at the last gated update.
+            if pending:
+                _render_trace_snapshot(live, sess)
     except KeyboardInterrupt:
         # kubectl-logs-style: a single Ctrl+C ends the trace and returns
         # to the REPL prompt without propagating a traceback. The
