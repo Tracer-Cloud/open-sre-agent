@@ -406,6 +406,12 @@ class ProgressTracker:
         if self._rich:
             self._display = _EventLogDisplay()
 
+    def stop(self) -> None:
+        """Stop the active live display if running."""
+        if self._display:
+            self._display.stop()
+            self._display = None
+
     def start(self, node_name: str, message: str | None = None) -> None:
         self._start_times[node_name] = time.monotonic()
         self.events.append(

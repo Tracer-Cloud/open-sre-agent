@@ -679,3 +679,72 @@ class TestStreamRendererFocusedUXAndParsing:
         assert "Next Actions" in out
         assert "Check transaction isolation levels" in out
         assert "Restart the backend container" in out
+
+    @patch("app.remote.renderer.Live")
+    @patch("app.output._EventLogDisplay")
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
+    def test_report_parsing_ignores_prose_evidence(self, _mock_display, _mock_live, capfd) -> None:
+        """Report parser ignores bare 'evidence' in prose form and does not treat it as a section header."""
+        renderer = StreamRenderer()
+        renderer._final_state = {
+            "root_cause": "Database connection pool saturated",
+            "validity_score": 0.95,
+            "report": (
+                "There is no evidence of database hardware failure.\n"
+                "### Supporting Evidence\n"
+                "• Saturated pool connections count is 100\n"
+            ),
+        }
+        renderer._print_report()
+        out, _ = capfd.readouterr()
+        assert "Supporting Evidence" in out
+        assert "Saturated pool connections count" in out
+
+    @patch("app.remote.renderer.Live")
+    @patch("app.output._EventLogDisplay")
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
+    def test_verb_fallback_ignores_consumed_lines(self, _mock_display, _mock_live, capfd) -> None:
+        """Verb-fallback does not pick up diagnostic prose that was already consumed by another section."""
+        renderer = StreamRenderer()
+        renderer._final_state = {
+            "root_cause": "High memory consumption",
+            "validity_score": 0.90,
+            "report": (
+                "### Supporting Evidence\n• We run the check on CPU and confirm it is stable.\n"
+            ),
+        }
+        renderer._print_report()
+        out, _ = capfd.readouterr()
+        assert "Next Actions" not in out
+
+    @patch("app.remote.renderer.Live")
+    @patch("app.output._EventLogDisplay")
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
+    def test_report_parsing_mid_list_transition_guard(
+        self, _mock_display, _mock_live, capfd
+    ) -> None:
+        """Section keywords inside a bullet item do not cause mid-list section transitions."""
+        renderer = StreamRenderer()
+        renderer._final_state = {
+            "root_cause": "High memory consumption",
+            "validity_score": 0.90,
+            "report": (
+                "### Supporting Evidence\n"
+                "• The evidence suggests memory leak in container.\n"
+                "• Check the heap dump next.\n"
+            ),
+        }
+        renderer._print_report()
+        out, _ = capfd.readouterr()
+        assert "Supporting Evidence" in out
+        assert "The evidence suggests memory leak" in out
+
+    def test_strip_outer_quotes_does_not_fire_on_linux(self) -> None:
+        """Outer quote-stripping is windows-only and does not fire on POSIX/Linux systems."""
+        from app.cli.interactive_shell.shell_policy import parse_shell_command
+
+        parsed = parse_shell_command('run "cat /tmp/file.txt"', is_windows=False)
+        assert parsed.argv == ["run", '"cat /tmp/file.txt"'] or parsed.argv == [
+            "run",
+            "cat /tmp/file.txt",
+        ]

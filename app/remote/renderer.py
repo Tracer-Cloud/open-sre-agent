@@ -89,9 +89,7 @@ class StreamRenderer:
         self._diagnose_buffer: list[str] = []
         self._diagnose_live: Live | None = None
         self._diagnose_started: float = 0.0
-        # Lazy-init: only constructed when the diagnose node first runs.
-        self._diagnose_console: Console | None = None
-        self._console = Console()
+        self._console = Console(highlight=False)
         self._alert_header_printed = False
         self._plan_preview_printed = False
 
@@ -246,8 +244,6 @@ class StreamRenderer:
             sys.stdout.flush()
             return
 
-        if self._diagnose_console is None:
-            self._diagnose_console = Console(highlight=False)
         spinner = Spinner(
             _DIAGNOSE_SPINNER_NAME,
             text=Text(
@@ -258,7 +254,7 @@ class StreamRenderer:
         )
         self._diagnose_live = Live(
             spinner,
-            console=self._diagnose_console,
+            console=self._console,
             refresh_per_second=_DIAGNOSE_LIVE_REFRESH,
             transient=False,
         )
@@ -354,9 +350,7 @@ class StreamRenderer:
         ):
             actions = self._final_state.get("planned_actions", [])
             if actions:
-                if self._tracker._display:
-                    self._tracker._display.stop()
-                    self._tracker._display = None
+                self._tracker.stop()
                 self._console.print()
                 self._console.print(
                     Panel(
@@ -415,9 +409,7 @@ class StreamRenderer:
 
         if alert_name != "Unknown" or pipeline != "Unknown":
             if get_output_format() == "rich":
-                if self._tracker._display:
-                    self._tracker._display.stop()
-                    self._tracker._display = None
+                self._tracker.stop()
                 self._console.print()
                 self._console.print(
                     Panel(
@@ -453,29 +445,66 @@ class StreamRenderer:
 
             lines = report.strip().splitlines()
             current_section = None
+            consumed_indices = set()
 
-            for line in lines:
+            def is_header_candidate(line: str, keywords: list[str]) -> bool:
+                stripped = line.strip()
+                if not stripped:
+                    return False
+                stripped_clean = stripped.lstrip("#").strip()
+                if len(stripped_clean) > 60:
+                    return False
+                if stripped_clean[-1] in {".", "?", "!"}:
+                    return False
+                lowered = stripped_clean.lower()
+                return any(kw in lowered for kw in keywords)
+
+            for idx, line in enumerate(lines):
                 stripped = line.strip()
                 if not stripped:
                     continue
 
-                lowered = stripped.lower()
-                if any(h in lowered for h in ("supporting evidence", "evidence")):
+                if is_header_candidate(line, ["supporting evidence"]):
                     current_section = "evidence"
+                    consumed_indices.add(idx)
                     continue
-                elif any(
-                    h in lowered
-                    for h in ("next actions", "next steps", "remediation", "recommendations")
+                elif is_header_candidate(
+                    line, ["next actions", "next steps", "remediation", "recommendations"]
                 ):
                     current_section = "next_actions"
+                    consumed_indices.add(idx)
                     continue
-                elif "root cause" in lowered:
+                elif is_header_candidate(line, ["root cause"]):
                     current_section = "root_cause"
+                    consumed_indices.add(idx)
                     continue
 
                 if current_section in ("evidence", "next_actions"):
+                    if is_header_candidate(
+                        line,
+                        [
+                            "supporting evidence",
+                            "next actions",
+                            "next steps",
+                            "remediation",
+                            "recommendations",
+                            "root cause",
+                        ],
+                    ):
+                        if is_header_candidate(line, ["supporting evidence"]):
+                            current_section = "evidence"
+                        elif is_header_candidate(
+                            line, ["next actions", "next steps", "remediation", "recommendations"]
+                        ):
+                            current_section = "next_actions"
+                        else:
+                            current_section = "root_cause"
+                        consumed_indices.add(idx)
+                        continue
+
                     clean_line = stripped.lstrip("•●-—* ").strip()
                     if clean_line:
+                        consumed_indices.add(idx)
                         if current_section == "evidence":
                             evidence_lines.append(clean_line)
                         else:
@@ -495,8 +524,12 @@ class StreamRenderer:
                     "run",
                     "test",
                 }
-                for line in lines:
+                for idx, line in enumerate(lines):
+                    if idx in consumed_indices:
+                        continue
                     stripped = line.strip()
+                    if not stripped:
+                        continue
                     clean_line = stripped.lstrip("•●-—* ").strip()
                     tokens = clean_line.lower().split()
                     if tokens and tokens[0] in action_verbs:
