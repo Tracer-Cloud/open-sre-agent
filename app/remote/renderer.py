@@ -132,11 +132,6 @@ class _DiagnoseStreamRenderer:
             sys.stdout.flush()
             return
 
-        if self._tracker is not None:
-            self._tracker.stop()
-        else:
-            stop_display()
-
         if self._console is None:
             self._console = Console(highlight=False)
         spinner = Spinner(
@@ -153,6 +148,13 @@ class _DiagnoseStreamRenderer:
             refresh_per_second=_DIAGNOSE_LIVE_REFRESH,
             transient=False,
         )
+
+        # Shrink the gap: stop previous display immediately before starting new one
+        if self._tracker is not None:
+            self._tracker.stop()
+        else:
+            stop_display()
+
         self._live.start()
 
     def append_chunk(self, event: StreamEvent) -> None:
@@ -354,6 +356,7 @@ class StreamRenderer:
 
         if canonical == _DIAGNOSE_NODE:
             if kind in _NODE_START_KINDS and self._is_graph_node_event(event):
+                self._merge_chain_start_input(event)
                 self._begin_diagnose(canonical)
                 return
             if kind in _NODE_END_KINDS and self._is_graph_node_event(event):
@@ -367,6 +370,7 @@ class StreamRenderer:
             return
 
         if kind in _NODE_START_KINDS and self._is_graph_node_event(event):
+            self._merge_chain_start_input(event)
             if canonical != self._active_node:
                 self._finish_active_node()
                 self._active_node = canonical
@@ -457,6 +461,13 @@ class StreamRenderer:
         if isinstance(update, dict):
             self._final_state.update(update)
             self._print_alert_header()
+
+    def _merge_chain_start_input(self, event: StreamEvent) -> None:
+        """Pull the ``input`` payload from a chain-start event into ``_final_state``."""
+        data = event.data.get("data", {})
+        input_payload = data.get("input", {})
+        if isinstance(input_payload, dict):
+            self._merge_state(input_payload)
 
     def _merge_chain_end_output(self, event: StreamEvent) -> None:
         """Pull the ``output`` payload from a chain-end event into ``_final_state``.

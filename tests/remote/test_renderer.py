@@ -1030,3 +1030,28 @@ class TestStreamRendererPrintAboveRenderable:
 
         # Should fall back to tracker
         mock_tracker_print.assert_called_once_with(panel)
+
+    def test_merge_chain_start_input_eagerly_updates_metadata(self) -> None:
+        """_merge_chain_start_input should pull 'input' payload from data into _final_state."""
+        from app.remote.renderer import StreamEvent, StreamRenderer
+
+        renderer = StreamRenderer()
+        assert "alert_name" not in renderer._final_state
+
+        # Construct on_chain_start style event carrying metadata in input
+        event = StreamEvent(
+            event_type="events",
+            node_name="diagnose",
+            kind="on_chain_start",
+            data={
+                "name": "diagnose",
+                "data": {
+                    "input": {"alert_name": "late-breaking-alert", "pipeline_name": "test-pipeline"}
+                },
+            },
+        )
+
+        renderer._merge_chain_start_input(event)
+
+        assert renderer._final_state.get("alert_name") == "late-breaking-alert"
+        assert renderer._final_state.get("pipeline_name") == "test-pipeline"
