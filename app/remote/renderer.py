@@ -480,17 +480,20 @@ class StreamRenderer:
         severity = self._final_state.get("severity", "unknown")
 
         if alert_name != "Unknown" or pipeline != "Unknown":
-            if get_output_format() == "rich" and self._tracker._display:
-                self._tracker._display._live.console.print(
-                    Panel(
-                        f"  • [dim]Source/Name:[/dim] [bold white]{escape(alert_name)}[/bold white]\n"
-                        f"  • [dim]Pipeline:[/dim] [cyan]{escape(pipeline)}[/cyan]\n"
-                        f"  • [dim]Severity:[/dim] [bold yellow]{escape(severity)}[/bold yellow]",
-                        title="[bold cyan]📥 Alert Ingested & Parsed[/bold cyan]",
-                        border_style="cyan",
-                        expand=False,
-                    )
+            if get_output_format() == "rich":
+                panel = Panel(
+                    f"  • [dim]Source/Name:[/dim] [bold white]{escape(alert_name)}[/bold white]\n"
+                    f"  • [dim]Pipeline:[/dim] [cyan]{escape(pipeline)}[/cyan]\n"
+                    f"  • [dim]Severity:[/dim] [bold yellow]{escape(severity)}[/bold yellow]",
+                    title="[bold cyan]📥 Alert Ingested & Parsed[/bold cyan]",
+                    border_style="cyan",
+                    expand=False,
                 )
+                if self._tracker._display:
+                    self._tracker._display._live.console.print(panel)
+                else:
+                    self._console.print()
+                    self._console.print(panel)
             else:
                 render_investigation_header(alert_name, pipeline, severity)
             self._alert_header_printed = True
@@ -522,6 +525,8 @@ class StreamRenderer:
                 if not stripped:
                     return False
                 stripped_clean = stripped.lstrip("#").strip()
+                if not stripped_clean:
+                    return False
                 if len(stripped_clean) > 60:
                     return False
                 if stripped_clean[-1] in {".", "?", "!"}:
