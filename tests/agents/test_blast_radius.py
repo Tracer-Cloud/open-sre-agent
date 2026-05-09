@@ -18,6 +18,7 @@ Plus one slow end-to-end smoke test using a real watchdog observer on a
 
 from __future__ import annotations
 
+import threading
 import time
 from collections import deque
 from collections.abc import Iterator
@@ -120,7 +121,7 @@ class TestBlastRadiusEventHandler:
         self, project_root: Path
     ) -> tuple[_BlastRadiusEventHandler, deque[BlastRadiusEvent]]:
         sink: deque[BlastRadiusEvent] = deque(maxlen=10)
-        handler = _BlastRadiusEventHandler("claude-code:1", project_root, sink)
+        handler = _BlastRadiusEventHandler("claude-code:1", project_root, sink, threading.Lock())
         return handler, sink
 
     def test_on_modified_emits_event_for_in_tree_file(self, tmp_path: Path) -> None:
@@ -172,7 +173,7 @@ class TestBlastRadiusEventHandler:
     def test_sink_is_bounded_by_maxlen(self, tmp_path: Path) -> None:
         # Build a handler with a 3-event sink; emit 5 events; oldest two drop.
         sink: deque[BlastRadiusEvent] = deque(maxlen=3)
-        handler = _BlastRadiusEventHandler("a:1", tmp_path, sink)
+        handler = _BlastRadiusEventHandler("a:1", tmp_path, sink, threading.Lock())
         for i in range(5):
             f = tmp_path / f"f{i}.py"
             f.write_text("x", encoding="utf-8")

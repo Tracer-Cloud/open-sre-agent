@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import atexit
 import logging
+import os
 import threading
 import time
 from collections import deque
@@ -120,11 +121,13 @@ class _BlastRadiusEventHandler(FileSystemEventHandler):
         agent_id: str,
         project_root: Path,
         sink: deque[BlastRadiusEvent],
+        sink_lock: threading.Lock,
     ) -> None:
         super().__init__()
         self._agent_id = agent_id
         self._project_root = project_root
         self._sink = sink
+        self._sink_lock = sink_lock
 
     def on_modified(self, event: FileSystemEvent) -> None:
         self._record(event, event.src_path)
@@ -142,9 +145,12 @@ class _BlastRadiusEventHandler(FileSystemEventHandler):
     def _record(self, event: FileSystemEvent, raw_path: str | bytes) -> None:
         if event.is_directory:
             return
+        # ``os.fsdecode`` is the canonical str-or-bytes path handler:
+        # accepts both, decodes bytes per the filesystem encoding with
+        # surrogateescape, never raises on malformed input.
         try:
-            resolved = Path(raw_path if isinstance(raw_path, str) else raw_path.decode()).resolve()
-        except (OSError, UnicodeDecodeError):
+            resolved = Path(os.fsdecode(raw_path)).resolve()
+        except OSError:
             # Path that disappeared between the kernel notify and our
             # ``resolve()`` — can happen during rapid rename/delete bursts.
             # Drop the event rather than emit a half-formed record.
@@ -156,14 +162,20 @@ class _BlastRadiusEventHandler(FileSystemEventHandler):
             # but this branch keeps the function total under unexpected
             # platform layouts.
             outside = True
-        self._sink.append(
-            BlastRadiusEvent(
-                agent=self._agent_id,
-                path=str(resolved),
-                timestamp=time.time(),
-                outside_project_root=outside,
-            )
+        evt = BlastRadiusEvent(
+            agent=self._agent_id,
+            path=str(resolved),
+            timestamp=time.time(),
+            outside_project_root=outside,
         )
+        # Mutating the deque from the watchdog callback thread races
+        # with iteration on the main thread (``list(deque)`` raises
+        # ``RuntimeError("deque mutated during iteration")``). The lock
+        # is shared with :class:`BlastRadiusWatcher` so the callback
+        # serializes against ``events()`` /
+        # ``write_events_for_conflicts()``.
+        with self._sink_lock:
+            self._sink.append(evt)
 
 
 class BlastRadiusWatcher:
@@ -172,9 +184,11 @@ class BlastRadiusWatcher:
     The watcher uses ``watchdog.observers.Observer`` with a recursive
     schedule on ``project_root``. Events are appended to a bounded
     :class:`collections.deque` (``maxlen=max_events``) — when the deque
-    is full, the oldest event is dropped automatically. ``deque.append``
-    is atomic under the GIL so the callback thread and the ``events()``
-    reader thread don't need an explicit lock.
+    is full, the oldest event is dropped automatically. A
+    :class:`threading.Lock` serializes the watchdog callback's append
+    against the main-thread reader's iteration; without it,
+    ``list(deque)`` would race against a concurrent ``append`` and raise
+    ``RuntimeError("deque mutated during iteration")``.
 
     ``start()`` and ``stop()`` are idempotent. ``stop()`` joins the
     observer with a 5-second timeout; if the join times out a warning is
@@ -192,6 +206,7 @@ class BlastRadiusWatcher:
         self._record = record
         self._project_root = project_root
         self._events: deque[BlastRadiusEvent] = deque(maxlen=max_events)
+        self._events_lock = threading.Lock()
         self._observer: BaseObserver | None = None
 
     @property
@@ -212,6 +227,7 @@ class BlastRadiusWatcher:
                 agent_id=self.agent_id,
                 project_root=self._project_root,
                 sink=self._events,
+                sink_lock=self._events_lock,
             ),
             str(self._project_root),
             recursive=True,
@@ -234,8 +250,13 @@ class BlastRadiusWatcher:
             )
 
     def events(self) -> list[BlastRadiusEvent]:
-        """Return a snapshot of observed events, oldest-first."""
-        return list(self._events)
+        """Return a snapshot of observed events, oldest-first.
+
+        The snapshot is a fresh ``list`` — mutating it does not affect
+        the watcher's internal deque.
+        """
+        with self._events_lock:
+            return list(self._events)
 
     def write_events_for_conflicts(self, since: float) -> list[WriteEvent]:
         """Project events to :class:`WriteEvent` shape, filtered by wall-clock cutoff.
@@ -246,11 +267,12 @@ class BlastRadiusWatcher:
         without it, anchor-based windowing would slide backward when no
         new writes arrive and stale conflicts would never roll off.
         """
-        return [
-            WriteEvent(agent=e.agent, path=e.path, timestamp=e.timestamp)
-            for e in self._events
-            if e.timestamp >= since
-        ]
+        with self._events_lock:
+            return [
+                WriteEvent(agent=e.agent, path=e.path, timestamp=e.timestamp)
+                for e in self._events
+                if e.timestamp >= since
+            ]
 
 
 # Process-global watcher cache. Keyed by ``f"{name}:{pid}"`` so two
