@@ -212,6 +212,14 @@ class _DiagnoseStreamRenderer:
             if message:
                 tail += f"  {message}"
             print(tail)
+def _clean_markdown_line(line: str) -> str:
+    """Strip both bulleted lists (•, ●, -, —, *) and numbered lists (e.g. 1., 2))."""
+    import re
+    stripped = line.strip()
+    # Strip numbered list prefix (e.g. "1. ", "2) ")
+    stripped = re.sub(r"^\s*\d+[.)]\s*", "", stripped)
+    # Strip bullet prefix (e.g. "• ", "- ")
+    return stripped.lstrip("•●-—* ").strip()
 
 
 class StreamRenderer:
@@ -577,7 +585,7 @@ class StreamRenderer:
                         consumed_indices.add(idx)
                         continue
 
-                    clean_line = stripped.lstrip("•●-—* ").strip()
+                    clean_line = _clean_markdown_line(stripped)
                     if clean_line:
                         consumed_indices.add(idx)
                         if current_section == "evidence":
@@ -605,7 +613,7 @@ class StreamRenderer:
                     stripped = line.strip()
                     if not stripped:
                         continue
-                    clean_line = stripped.lstrip("•●-—* ").strip()
+                    clean_line = _clean_markdown_line(stripped)
                     tokens = clean_line.lower().split()
                     if tokens and tokens[0] in action_verbs:
                         next_actions.append(clean_line)

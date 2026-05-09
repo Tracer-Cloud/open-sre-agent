@@ -659,6 +659,35 @@ class TestStreamRendererFocusedUXAndParsing:
     @patch("app.remote.renderer.Live")
     @patch("app.output._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
+    def test_report_parsing_with_numbered_lists(
+        self, _mock_display, _mock_live, capfd
+    ) -> None:
+        """Report parser correctly handles numbered lists in Evidence and Next Actions sections."""
+        renderer = StreamRenderer()
+        renderer._final_state = {
+            "root_cause": "Database connection pool saturated",
+            "validity_score": 0.95,
+            "report": (
+                "### Supporting Evidence\n"
+                "1. Active connections reached 100 max limit\n"
+                "2) Thread pool starvation observed in logs\n"
+                "\n"
+                "### Next Actions\n"
+                "1. Scale database connections to 200\n"
+                "2) Restart connection pool gracefully\n"
+            ),
+        }
+        renderer._print_report()
+        out, _ = capfd.readouterr()
+
+        assert "Supporting Evidence" in out
+        assert "Active connections" in out
+        assert "Next Actions" in out
+        assert "Scale database connections to 200" in out
+
+    @patch("app.remote.renderer.Live")
+    @patch("app.output._EventLogDisplay")
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
     def test_report_parsing_fallback_to_verbs_if_no_section(
         self, _mock_display, _mock_live, capfd
     ) -> None:
