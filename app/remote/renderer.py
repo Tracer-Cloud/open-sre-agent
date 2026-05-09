@@ -441,11 +441,7 @@ class StreamRenderer:
                     border_style="yellow",
                     expand=False,
                 )
-                if self._tracker._display:
-                    self._tracker._display._live.console.print(panel)
-                else:
-                    self._console.print()
-                    self._console.print(panel)
+                self._tracker.print_above_renderable(panel)
                 self._plan_preview_printed = True
         self._active_node = None
 
@@ -499,11 +495,7 @@ class StreamRenderer:
                     border_style="cyan",
                     expand=False,
                 )
-                if self._tracker._display:
-                    self._tracker._display._live.console.print(panel)
-                else:
-                    self._console.print()
-                    self._console.print(panel)
+                self._tracker.print_above_renderable(panel)
             else:
                 render_investigation_header(alert_name, pipeline, severity)
             self._alert_header_printed = True
@@ -564,13 +556,13 @@ class StreamRenderer:
                     consumed_indices.add(idx)
                     continue
 
-                if current_section in ("evidence", "next_actions"):
+                if current_section in ("evidence", "next_actions", "root_cause"):
                     clean_line = _clean_markdown_line(stripped)
                     if clean_line:
                         consumed_indices.add(idx)
                         if current_section == "evidence":
                             evidence_lines.append(clean_line)
-                        else:
+                        elif current_section == "next_actions":
                             next_actions.append(clean_line)
 
             if not next_actions:

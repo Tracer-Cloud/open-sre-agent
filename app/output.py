@@ -16,7 +16,7 @@ import sys
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from rich.console import Console, ConsoleOptions, RenderResult
 from rich.text import Text
@@ -385,6 +385,10 @@ class _EventLogDisplay:
         with self._live.console.use_theme(MARKDOWN_THEME):
             self._live.console.print(Markdown(text, code_theme="ansi_dark"))
 
+    def print_above_renderable(self, renderable: Any) -> None:
+        """Print a rich renderable permanently above the live region."""
+        self._live.console.print(renderable)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Progress event + tracker
@@ -453,6 +457,14 @@ class ProgressTracker:
         elif text.strip():
             for line in text.strip().splitlines():
                 print(f"  {line}")
+
+    def print_above_renderable(self, renderable: Any) -> None:
+        """Print a rich renderable permanently above the active live region, or to console."""
+        if self._display:
+            self._display.print_above_renderable(renderable)
+        else:
+            _get_console().print()
+            _get_console().print(renderable)
 
     def _finish(
         self, node_name: str, status: str, fields_updated: list[str], message: str | None
