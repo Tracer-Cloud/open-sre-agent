@@ -9,6 +9,7 @@ Handles both ``stream_mode: ["updates"]`` (legacy node-level) and
 
 from __future__ import annotations
 
+import re
 import sys
 import time
 from collections.abc import Iterator
@@ -216,8 +217,6 @@ class _DiagnoseStreamRenderer:
 
 def _clean_markdown_line(line: str) -> str:
     """Strip both bulleted lists (•, ●, -, —, *) and numbered lists (e.g. 1., 2))."""
-    import re
-
     stripped = line.strip()
     # Strip numbered list prefix (e.g. "1. ", "2) ")
     stripped = re.sub(r"^\s*\d+[.)]\s*", "", stripped)
@@ -566,28 +565,6 @@ class StreamRenderer:
                     continue
 
                 if current_section in ("evidence", "next_actions"):
-                    if is_header_candidate(
-                        line,
-                        [
-                            "supporting evidence",
-                            "next actions",
-                            "next steps",
-                            "remediation",
-                            "recommendations",
-                            "root cause",
-                        ],
-                    ):
-                        if is_header_candidate(line, ["supporting evidence"]):
-                            current_section = "evidence"
-                        elif is_header_candidate(
-                            line, ["next actions", "next steps", "remediation", "recommendations"]
-                        ):
-                            current_section = "next_actions"
-                        else:
-                            current_section = "root_cause"
-                        consumed_indices.add(idx)
-                        continue
-
                     clean_line = _clean_markdown_line(stripped)
                     if clean_line:
                         consumed_indices.add(idx)
