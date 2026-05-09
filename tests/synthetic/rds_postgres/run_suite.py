@@ -93,8 +93,7 @@ def annotate_with_memory_mode(score: ScenarioScore, memory_mode: MemoryMode) -> 
     """
     if memory_mode not in get_args(MemoryMode):
         raise ValueError(
-            f"unknown memory_mode: {memory_mode!r} "
-            f"(expected one of {get_args(MemoryMode)})"
+            f"unknown memory_mode: {memory_mode!r} (expected one of {get_args(MemoryMode)})"
         )
     return replace(score, memory_mode=memory_mode)
 
