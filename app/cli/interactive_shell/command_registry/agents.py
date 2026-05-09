@@ -402,6 +402,11 @@ def _render_live_tail(console: Console, label: str, sess: AttachSession) -> None
         # ``with sess:`` in the caller still runs and joins the reader
         # thread, so this swallow is safe.
         pass
+    if sess.producer_exited:
+        # Distinguish "the agent died and we noticed" from "the user
+        # asked us to stop" so a long unattended trace doesn't look the
+        # same as a Ctrl+C abort.
+        console.print(f"[{DIM}]· process exited[/]")
     console.print(f"[{DIM}]· trace ended[/]")
 
 

@@ -521,9 +521,23 @@ class TestAttachSession:
             while time.monotonic() < deadline and sess._thread.is_alive():  # noqa: SLF001
                 time.sleep(0.01)
             assert not sess._thread.is_alive()  # noqa: SLF001
+            # ``producer_exited`` is the signal the slash-command trailer
+            # uses to print "· process exited" — must flip True only on
+            # the pid-death path, not on close() / OSError.
+            assert sess.producer_exited is True
             # Sentinel should be the next item.
             with pytest.raises(StopIteration):
                 next(iter(sess))
+
+    def test_close_does_not_set_producer_exited(self, tmp_path: Path) -> None:
+        # User-initiated close must NOT look like the producer died —
+        # otherwise every Ctrl+C would print a misleading "process
+        # exited" line in the slash-command trailer.
+        log = tmp_path / "agent.log"
+        log.write_text("")
+        with self._make_session(log) as sess:
+            pass
+        assert sess.producer_exited is False
 
 
 class TestAttachIntegration:

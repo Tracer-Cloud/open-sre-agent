@@ -267,6 +267,12 @@ class AttachSession:
     ) -> None:
         self.target = target
         self.buffer = TailBuffer(buffer_bytes)
+        # Set by :meth:`_reader_loop` when it exits because ``pid_exists``
+        # went False — i.e. the producer died. Stays False on
+        # user-initiated close (``stop_event``) or fd error, which lets
+        # the slash-command UI distinguish "process exited" from "you
+        # pressed Ctrl+C" in the trailer.
+        self.producer_exited = False
         self._queue: queue.Queue[bytes | object] = queue.Queue(maxsize=queue_max)
         self._stop_event = threading.Event()
         self._poll_interval_s = poll_interval_s
@@ -313,6 +319,7 @@ class AttachSession:
                 # end the trace mid-incident even though the agent is
                 # still writing to the original inode.
                 if not pid_exists(self.target.pid):
+                    self.producer_exited = True
                     break
                 self._stop_event.wait(self._poll_interval_s)
         finally:

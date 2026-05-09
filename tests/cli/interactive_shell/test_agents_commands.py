@@ -326,10 +326,17 @@ class _FakeSession:
     spawning a reader thread or touching the filesystem.
     """
 
-    def __init__(self, chunks: list[bytes] | None = None, *, raise_ki: bool = False) -> None:
+    def __init__(
+        self,
+        chunks: list[bytes] | None = None,
+        *,
+        raise_ki: bool = False,
+        producer_exited: bool = False,
+    ) -> None:
         self.buffer = TailBuffer()
         self._chunks = list(chunks or [])
         self._raise_ki = raise_ki
+        self.producer_exited = producer_exited
         self.closed = False
 
     def __iter__(self) -> _FakeSession:
@@ -530,3 +537,38 @@ class TestAgentsTrace:
         console, _ = _capture()
         assert dispatch_slash("/agents trace 8421", sess_obj, console) is True
         assert fake.closed is True
+
+    def test_renders_process_exited_when_producer_died(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # When the agent process dies during a trace, the trailer should
+        # surface that explicitly so an unattended trace doesn't look
+        # the same as a Ctrl+C abort.
+        monkeypatch.setattr(
+            agents_mod,
+            "attach",
+            lambda _pid: _FakeSession(chunks=[b"goodbye\n"], producer_exited=True),
+        )
+        sess_obj = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents trace 8421", sess_obj, console) is True
+        out = buf.getvalue()
+        assert "process exited" in out
+        assert "trace ended" in out
+
+    def test_does_not_render_process_exited_on_user_stop(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Producer is alive, user pressed Ctrl+C: only "trace ended"
+        # should appear; "process exited" would be misleading.
+        monkeypatch.setattr(
+            agents_mod,
+            "attach",
+            lambda _pid: _FakeSession(raise_ki=True, producer_exited=False),
+        )
+        sess_obj = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents trace 8421", sess_obj, console) is True
+        out = buf.getvalue()
+        assert "process exited" not in out
+        assert "trace ended" in out
