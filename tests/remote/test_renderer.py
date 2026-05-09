@@ -730,6 +730,33 @@ class TestStreamRendererFocusedUXAndParsing:
     @patch("app.remote.renderer.Live")
     @patch("app.output._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
+    def test_report_parsing_ignores_mid_sentence_prose_keywords(
+        self, _mock_display, _mock_live, capfd
+    ) -> None:
+        """Report parser ignores mid-sentence prose containing keywords without a structural prefix."""
+        renderer = StreamRenderer()
+        renderer._final_state = {
+            "root_cause": "Database connection pool saturated",
+            "validity_score": 0.95,
+            "report": (
+                "There is no supporting evidence of DB hardware failure\n"
+                "Investigating root cause further to be absolutely sure\n"
+                "Skip next steps for now until confirmed\n"
+                "### Supporting Evidence\n"
+                "• Saturated pool connections count is 100\n"
+            ),
+        }
+        renderer._print_report()
+        out, _ = capfd.readouterr()
+        assert "Supporting Evidence" in out
+        assert "Saturated pool connections count" in out
+        assert "There is no supporting evidence" not in out
+        assert "Investigating root cause further" not in out
+        assert "Skip next steps for now" not in out
+
+    @patch("app.remote.renderer.Live")
+    @patch("app.output._EventLogDisplay")
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
     def test_verb_fallback_ignores_consumed_lines(self, _mock_display, _mock_live, capfd) -> None:
         """Verb-fallback does not pick up diagnostic prose that was already consumed by another section."""
         renderer = StreamRenderer()

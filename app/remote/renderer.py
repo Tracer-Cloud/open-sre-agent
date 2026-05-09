@@ -533,6 +533,17 @@ class StreamRenderer:
                     return False
                 if stripped_clean[-1] in {".", "?", "!"}:
                     return False
+
+                # Structural prefix requirement: starts with #, [, **, or is all-caps
+                has_prefix = (
+                    stripped.startswith("#")
+                    or stripped.startswith("[")
+                    or stripped.startswith("**")
+                    or stripped_clean.isupper()
+                )
+                if not has_prefix:
+                    return False
+
                 lowered = stripped_clean.lower()
                 return any(kw in lowered for kw in keywords)
 
