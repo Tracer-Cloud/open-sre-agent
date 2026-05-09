@@ -56,10 +56,6 @@ class AttachUnsupported(Exception):
         self.reason = reason
 
 
-def _reject(reason: str) -> AttachUnsupported:
-    return AttachUnsupported(reason)
-
-
 @dataclass(frozen=True)
 class _ResolvedTarget:
     """Regular-file target backing fd 1 of a tracked pid."""
@@ -72,13 +68,17 @@ def _check_regular_file(path: Path, *, what: str) -> Path:
     try:
         st = path.stat()
     except FileNotFoundError as exc:
-        raise _reject(f"{what} target {path} no longer exists") from exc
+        raise AttachUnsupported(f"{what} target {path} no longer exists") from exc
     except PermissionError as exc:
-        raise _reject(f"{what} target {path} is not readable (permission denied)") from exc
+        raise AttachUnsupported(
+            f"{what} target {path} is not readable (permission denied)"
+        ) from exc
     except OSError as exc:
-        raise _reject(f"{what} target {path} is unreachable: {exc.strerror or exc}") from exc
+        raise AttachUnsupported(
+            f"{what} target {path} is unreachable: {exc.strerror or exc}"
+        ) from exc
     if not stat.S_ISREG(st.st_mode):
-        raise _reject(f"{what} is not a regular file (got {stat.filemode(st.st_mode)})")
+        raise AttachUnsupported(f"{what} is not a regular file (got {stat.filemode(st.st_mode)})")
     return path
 
 
@@ -87,24 +87,24 @@ def _resolve_linux_target(pid: int) -> _ResolvedTarget:
     try:
         target = os.readlink(fd_link)
     except FileNotFoundError as exc:
-        raise _reject(f"no such pid {pid}") from exc
+        raise AttachUnsupported(f"no such pid {pid}") from exc
     except PermissionError as exc:
-        raise _reject(f"cannot inspect pid {pid} (permission denied)") from exc
+        raise AttachUnsupported(f"cannot inspect pid {pid} (permission denied)") from exc
     except OSError as exc:
-        raise _reject(f"cannot inspect pid {pid}: {exc.strerror or exc}") from exc
+        raise AttachUnsupported(f"cannot inspect pid {pid}: {exc.strerror or exc}") from exc
 
     if target.startswith("socket:["):
-        raise _reject("stdout is a socket; live tail not supported")
+        raise AttachUnsupported("stdout is a socket; live tail not supported")
     if target.startswith("pipe:["):
-        raise _reject("stdout is a pipe; live tail not supported")
+        raise AttachUnsupported("stdout is a pipe; live tail not supported")
     if target.startswith("anon_inode:"):
-        raise _reject(f"stdout is {target}; live tail not supported")
+        raise AttachUnsupported(f"stdout is {target}; live tail not supported")
     if not target.startswith("/"):
-        raise _reject(f"stdout target {target!r} is not a filesystem path")
+        raise AttachUnsupported(f"stdout target {target!r} is not a filesystem path")
     if target.startswith(("/dev/pts/", "/dev/tty")):
-        raise _reject("stdout is on a terminal; live tail not supported")
+        raise AttachUnsupported("stdout is on a terminal; live tail not supported")
     if target == "/dev/null":
-        raise _reject("stdout is /dev/null; nothing to tail")
+        raise AttachUnsupported("stdout is /dev/null; nothing to tail")
 
     return _ResolvedTarget(pid=pid, path=_check_regular_file(Path(target), what="stdout"))
 
@@ -157,54 +157,54 @@ def _resolve_macos_target(pid: int) -> _ResolvedTarget:
             check=False,
         )
     except FileNotFoundError as exc:
-        raise _reject("lsof not found; cannot resolve stdout on this host") from exc
+        raise AttachUnsupported("lsof not found; cannot resolve stdout on this host") from exc
     except subprocess.TimeoutExpired as exc:
-        raise _reject(f"lsof timed out resolving pid {pid}") from exc
+        raise AttachUnsupported(f"lsof timed out resolving pid {pid}") from exc
 
     if proc.returncode != 0 and not proc.stdout:
         detail = proc.stderr.strip() or "unknown error"
-        raise _reject(f"no such pid {pid} (lsof: {detail})")
+        raise AttachUnsupported(f"no such pid {pid} (lsof: {detail})")
 
     fd_type, fd_name = _parse_lsof_fd1(proc.stdout)
     if fd_type is None and fd_name is None:
-        raise _reject(f"pid {pid} has no fd 1 (lsof returned no stdout entry)")
+        raise AttachUnsupported(f"pid {pid} has no fd 1 (lsof returned no stdout entry)")
     if fd_type is None:
-        raise _reject("lsof returned no type for stdout")
+        raise AttachUnsupported("lsof returned no type for stdout")
     if fd_type != "REG":
         kind = fd_type.upper()
         # ``/dev/null`` and ``/dev/zero`` come back as CHR with their path in
         # ``n``; surface a tail-specific message rather than the generic
         # "stdout is on a terminal" reject so the user understands the cause.
         if fd_name == "/dev/null":
-            raise _reject("stdout is /dev/null; nothing to tail")
+            raise AttachUnsupported("stdout is /dev/null; nothing to tail")
         if kind == "CHR":
-            raise _reject("stdout is on a terminal; live tail not supported")
+            raise AttachUnsupported("stdout is on a terminal; live tail not supported")
         if kind == "PIPE":
-            raise _reject("stdout is a pipe; live tail not supported")
+            raise AttachUnsupported("stdout is a pipe; live tail not supported")
         if kind in {"IPV4", "IPV6", "UNIX"}:
-            raise _reject("stdout is a socket; live tail not supported")
-        raise _reject(f"stdout fd type {kind} is not a regular file")
+            raise AttachUnsupported("stdout is a socket; live tail not supported")
+        raise AttachUnsupported(f"stdout fd type {kind} is not a regular file")
     if not fd_name:
-        raise _reject("lsof returned no name for stdout")
+        raise AttachUnsupported("lsof returned no name for stdout")
 
     return _ResolvedTarget(pid=pid, path=_check_regular_file(Path(fd_name), what="stdout"))
 
 
 def _resolve_target(pid: int) -> _ResolvedTarget:
     if sys.platform == "win32":
-        raise _reject("Windows is not supported")
+        raise AttachUnsupported("Windows is not supported")
     # Guard non-positive ids before probing: ``psutil.pid_exists(0)`` can
     # raise ``PermissionError`` on macOS, which the slash-command handler
     # doesn't catch (it only catches :class:`AttachUnsupported`).
     if pid <= 0:
-        raise _reject(f"invalid pid {pid} (must be positive)")
+        raise AttachUnsupported(f"invalid pid {pid} (must be positive)")
     if not pid_exists(pid):
-        raise _reject(f"no such pid {pid}")
+        raise AttachUnsupported(f"no such pid {pid}")
     if sys.platform == "darwin":
         return _resolve_macos_target(pid)
     if sys.platform.startswith("linux"):
         return _resolve_linux_target(pid)
-    raise _reject(f"platform {sys.platform!r} is not supported")
+    raise AttachUnsupported(f"platform {sys.platform!r} is not supported")
 
 
 class TailBuffer:
