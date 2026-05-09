@@ -61,6 +61,28 @@ _TRACE_REFRESH_PER_SECOND = 10
 _TRACE_RENDER_TAIL_BYTES = 64 * 1024
 
 
+def _slice_to_utf8_boundary(data: bytes, max_bytes: int) -> bytes:
+    """Return the suffix of ``data`` that fits in ``max_bytes`` and starts
+    on a UTF-8 codepoint boundary.
+
+    A plain ``data[-max_bytes:]`` can land mid-codepoint, which decodes to
+    a leading U+FFFD under ``errors="replace"`` — visible as a stray
+    replacement character at the top of the live view. ``TailBuffer``
+    preserves boundaries by dropping whole chunks; we have to do the same
+    once we re-flatten and slice on the render side. UTF-8 continuation
+    bytes match ``10xxxxxx`` (``b & 0xC0 == 0x80``); a codepoint is at
+    most 4 bytes, so we walk forward at most 3 continuation bytes to
+    reach the next start byte.
+    """
+    if len(data) <= max_bytes:
+        return data
+    sliced = data[-max_bytes:]
+    start = 0
+    while start < 4 and start < len(sliced) and (sliced[start] & 0xC0) == 0x80:
+        start += 1
+    return sliced[start:]
+
+
 def _opensre_agent_id() -> str:
     return f"opensre:{os.getpid()}"
 
@@ -368,9 +390,7 @@ def _render_live_tail(console: Console, label: str, sess: AttachSession) -> None
             ) as live,
         ):
             for _chunk in sess:
-                snapshot = sess.buffer.snapshot()
-                if len(snapshot) > _TRACE_RENDER_TAIL_BYTES:
-                    snapshot = snapshot[-_TRACE_RENDER_TAIL_BYTES:]
+                snapshot = _slice_to_utf8_boundary(sess.buffer.snapshot(), _TRACE_RENDER_TAIL_BYTES)
                 live.update(Text.from_ansi(snapshot.decode("utf-8", errors="replace")))
     except KeyboardInterrupt:
         pass

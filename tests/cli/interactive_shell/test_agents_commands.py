@@ -19,6 +19,7 @@ from app.agents.registry import AgentRecord, AgentRegistry
 from app.agents.tail import AttachUnsupported, TailBuffer
 from app.cli.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from app.cli.interactive_shell.command_registry import agents as agents_mod
+from app.cli.interactive_shell.command_registry.agents import _slice_to_utf8_boundary
 from app.cli.interactive_shell.session import ReplSession
 
 
@@ -354,6 +355,68 @@ class _FakeSession:
 
     def __exit__(self, *_: object) -> None:
         self.close()
+
+
+class TestSliceToUtf8Boundary:
+    """``_slice_to_utf8_boundary`` enforces the same chunk-edge guarantee
+    on the render side that :class:`TailBuffer` enforces on the consumer
+    side. Without it, the 64 KiB cap in ``_render_live_tail`` would slice
+    mid-codepoint and surface a U+FFFD at the top of the live view."""
+
+    def test_returns_input_when_under_cap(self) -> None:
+        data = b"\xf0\x9f\xa6\x80hello"
+        assert _slice_to_utf8_boundary(data, max_bytes=64) is data
+
+    def test_returns_input_when_exactly_at_cap(self) -> None:
+        data = b"X" * 64
+        assert _slice_to_utf8_boundary(data, max_bytes=64) is data
+
+    def test_walks_past_continuation_bytes_at_slice_start(self) -> None:
+        # 🦀 = b"\xf0\x9f\xa6\x80". Slicing at byte 2 of that codepoint
+        # would leave two stray continuation bytes (\xa6\x80) at the
+        # head; the boundary walk must skip them so the decoded string
+        # has no leading replacement character.
+        prefix = b"X" * 1000
+        data = prefix + b"\xf0\x9f\xa6\x80 done"
+        # max_bytes drops the first 998 bytes of prefix but keeps the
+        # last two ASCII bytes of prefix plus the partial 4-byte 🦀
+        # plus " done" — i.e. it lands inside the codepoint.
+        sliced = _slice_to_utf8_boundary(data, max_bytes=8)
+        # The decoded suffix must not start with U+FFFD.
+        decoded = sliced.decode("utf-8", errors="replace")
+        assert not decoded.startswith("�")
+        # And it must end with the trailing ASCII so we know we kept
+        # the suffix, not over-trimmed.
+        assert decoded.endswith(" done")
+
+    def test_drops_at_most_three_continuation_bytes(self) -> None:
+        # If for some reason the slice starts with more than 3
+        # continuation bytes (corrupt input), we don't loop forever.
+        # The bound is the max UTF-8 codepoint length (4 bytes).
+        bad = b"\x80\x80\x80\x80\x80hello"
+        sliced = _slice_to_utf8_boundary(bad, max_bytes=len(bad))
+        assert sliced is bad  # under cap, returned unchanged
+
+        sliced = _slice_to_utf8_boundary(b"prefix" + bad, max_bytes=len(bad))
+        # We walk forward at most 4 bytes; if all of those are still
+        # continuation bytes, decoding will surface U+FFFD — the helper
+        # is bounded, not magic.
+        assert len(sliced) >= len(bad) - 4
+
+    def test_pure_ascii_unchanged_after_slice(self) -> None:
+        data = b"abcdefghij"
+        sliced = _slice_to_utf8_boundary(data, max_bytes=5)
+        assert sliced == b"fghij"
+
+    def test_multibyte_decode_clean_after_slice(self) -> None:
+        # Snapshot ends with several 2-byte codepoints (é = b"\xc3\xa9");
+        # the slice must land on a leading byte so the decoded string
+        # has no leading replacement character.
+        prefix = b"a" * 100
+        data = prefix + b"\xc3\xa9\xc3\xa9\xc3\xa9"
+        sliced = _slice_to_utf8_boundary(data, max_bytes=5)
+        decoded = sliced.decode("utf-8", errors="replace")
+        assert "�" not in decoded
 
 
 class TestAgentsTrace:
