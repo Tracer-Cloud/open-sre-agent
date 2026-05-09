@@ -11,12 +11,12 @@ from dataclasses import asdict
 
 import pytest
 
-pytestmark = pytest.mark.synthetic
-
 from tests.synthetic.rds_postgres.run_suite import (
     ScenarioScore,
     annotate_with_memory_mode,
 )
+
+pytestmark = pytest.mark.synthetic
 
 
 def _make_score(memory_mode: str | None = None) -> ScenarioScore:
