@@ -16,6 +16,7 @@ from app.integrations.llm_cli.base import CLIProbe, LLMCLIAdapter
 from app.integrations.llm_cli.errors import CLIAuthenticationRequired, CLITimeoutError
 from app.integrations.llm_cli.subprocess_env import build_cli_subprocess_env
 from app.integrations.llm_cli.text import flatten_messages_to_prompt
+from app.llm_reasoning_effort import get_active_reasoning_effort
 from app.services.llm_client import LLMResponse
 
 logger = logging.getLogger(__name__)
@@ -107,7 +108,12 @@ class CLIBackedLLMClient:
             )
         auth_probe_unclear = probe.logged_in is None
 
-        invocation = self._adapter.build(prompt=flat, model=self._model, workspace="")
+        invocation = self._adapter.build(
+            prompt=flat,
+            model=self._model,
+            workspace="",
+            reasoning_effort=get_active_reasoning_effort(),
+        )
         merged_env = _build_subprocess_env(invocation.env)
 
         try:

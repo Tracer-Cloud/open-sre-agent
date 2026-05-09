@@ -36,6 +36,7 @@ from app.config import (
     LLMSettings,
 )
 from app.llm_credentials import resolve_llm_api_key
+from app.llm_reasoning_effort import get_active_reasoning_effort
 
 logger = logging.getLogger(__name__)
 
@@ -468,6 +469,13 @@ def _uses_max_completion_tokens(model: str) -> bool:
     return model.startswith(("o1", "o3", "o4", "gpt-5"))
 
 
+def _resolve_openai_reasoning_effort(*, model: str, api_key_env: str) -> str | None:
+    """Session override for OpenAI reasoning models in the interactive shell."""
+    if api_key_env != "OPENAI_API_KEY" or not _uses_max_completion_tokens(model):
+        return None
+    return get_active_reasoning_effort()
+
+
 class OpenAILLMClient:
     def __init__(
         self,
@@ -544,6 +552,12 @@ class OpenAILLMClient:
             token_param: self._max_tokens,
             "messages": messages,
         }
+        reasoning_effort = _resolve_openai_reasoning_effort(
+            model=self._model,
+            api_key_env=self._api_key_env,
+        )
+        if reasoning_effort is not None:
+            kwargs["reasoning_effort"] = reasoning_effort
         if self._temperature is not None:
             kwargs["temperature"] = self._temperature
         return kwargs

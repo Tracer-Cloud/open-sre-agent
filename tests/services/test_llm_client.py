@@ -87,6 +87,36 @@ def test_openai_llm_client_reads_secure_local_api_key(monkeypatch) -> None:
     assert _FakeOpenAI.init_api_keys == ["stored-openai-key"]
 
 
+def test_openai_llm_client_adds_reasoning_effort_for_reasoning_models(monkeypatch) -> None:
+    monkeypatch.setattr(
+        llm_client,
+        "resolve_llm_api_key",
+        lambda env_var: "stored-openai-key" if env_var == "OPENAI_API_KEY" else "",
+    )
+    monkeypatch.setattr(llm_client, "OpenAI", _FakeOpenAI)
+    monkeypatch.setenv("OPENSRE_REASONING_EFFORT", "xhigh")
+
+    client = llm_client.OpenAILLMClient(model="gpt-5.2")
+    kwargs = client._build_request_kwargs("hello")
+
+    assert kwargs["reasoning_effort"] == "xhigh"
+
+
+def test_openai_llm_client_omits_reasoning_effort_for_non_reasoning_models(monkeypatch) -> None:
+    monkeypatch.setattr(
+        llm_client,
+        "resolve_llm_api_key",
+        lambda env_var: "stored-openai-key" if env_var == "OPENAI_API_KEY" else "",
+    )
+    monkeypatch.setattr(llm_client, "OpenAI", _FakeOpenAI)
+    monkeypatch.setenv("OPENSRE_REASONING_EFFORT", "high")
+
+    client = llm_client.OpenAILLMClient(model="gpt-4.1-mini")
+    kwargs = client._build_request_kwargs("hello")
+
+    assert "reasoning_effort" not in kwargs
+
+
 def test_openai_llm_client_invoke_fails_when_key_missing(monkeypatch) -> None:
     monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env_var: "")
     client = llm_client.OpenAILLMClient(model="gpt-4.1-mini")

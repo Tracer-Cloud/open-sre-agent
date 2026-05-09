@@ -24,6 +24,7 @@ from app.cli.interactive_shell.theme import (
 )
 from app.cli.support.errors import OpenSREError
 from app.cli.support.exception_reporting import report_exception
+from app.llm_reasoning_effort import apply_reasoning_effort
 
 
 def _interactive_template_menu(session: ReplSession, console: Console) -> bool:
@@ -95,11 +96,12 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
     task = session.task_registry.create(TaskKind.INVESTIGATION)
     task.mark_running()
     try:
-        final_state = run_investigation_for_session(
-            alert_text=text,
-            context_overrides=session.accumulated_context or None,
-            cancel_requested=task.cancel_requested,
-        )
+        with apply_reasoning_effort(session.reasoning_effort):
+            final_state = run_investigation_for_session(
+                alert_text=text,
+                context_overrides=session.accumulated_context or None,
+                cancel_requested=task.cancel_requested,
+            )
     except KeyboardInterrupt:
         task.mark_cancelled()
         console.print(f"[{WARNING}]investigation cancelled.[/]")

@@ -64,6 +64,30 @@ class TestDispatchSlash:
         dispatch_slash("/trust off", session, console)
         assert session.trust_mode is False
 
+    def test_effort_sets_session_preference(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        class _FakeLLM:
+            provider = "openai"
+
+        monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: _FakeLLM())
+        session = ReplSession()
+        console, buf = _capture()
+
+        dispatch_slash("/effort max", session, console)
+
+        assert session.reasoning_effort == "max"
+        output = buf.getvalue()
+        assert "reasoning effort set to" in output
+        assert "runtime: xhigh" in output
+
+    def test_effort_rejects_unknown_value(self) -> None:
+        session = ReplSession()
+        console, buf = _capture()
+
+        dispatch_slash("/effort turbo", session, console)
+
+        assert session.reasoning_effort is None
+        assert "unknown reasoning effort" in buf.getvalue()
+
     def test_reset_clears_session(self) -> None:
         session = ReplSession()
         session.record("alert", "test")
@@ -80,10 +104,12 @@ class TestDispatchSlash:
     def test_status_shows_session_fields(self) -> None:
         session = ReplSession()
         session.record("alert", "hello")
+        session.reasoning_effort = "max"
         console, buf = _capture()
         dispatch_slash("/status", session, console)
         output = buf.getvalue()
         assert "interactions" in output
+        assert "reasoning effort" in output
         assert "trust mode" in output
         assert "grounding cli cache" in output
         assert "grounding docs cache" in output

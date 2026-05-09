@@ -7,6 +7,7 @@ import os
 from rich.console import Console
 from rich.markup import escape
 
+import app.cli.interactive_shell.command_registry.repl_data as repl_data
 from app.cli.interactive_shell.banner import render_banner
 from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
 from app.cli.interactive_shell.rendering import repl_table
@@ -16,7 +17,13 @@ from app.cli.interactive_shell.repl_choice_menu import (
     repl_tty_interactive,
 )
 from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import BOLD_BRAND, DIM, WARNING
+from app.cli.interactive_shell.theme import BOLD_BRAND, DIM, ERROR, HIGHLIGHT, WARNING
+from app.llm_reasoning_effort import (
+    REASONING_EFFORT_OPTIONS,
+    display_reasoning_effort,
+    parse_reasoning_effort,
+    provider_supports_reasoning_effort,
+)
 
 
 def _cmd_clear(_session: ReplSession, console: Console, _args: list[str]) -> bool:
@@ -67,6 +74,7 @@ def _cmd_status(session: ReplSession, console: Console, _args: list[str]) -> boo
     table.add_row("interactions", str(len(session.history)))
     table.add_row("last investigation", "yes" if session.last_state else "none")
     table.add_row("trust mode", "on" if session.trust_mode else "off")
+    table.add_row("reasoning effort", display_reasoning_effort(session.reasoning_effort))
     table.add_row("provider", os.getenv("LLM_PROVIDER", "anthropic"))
     cli_stats = get_cli_reference_cache_stats()
     doc_stats = get_docs_cache_stats()
@@ -102,6 +110,47 @@ def _cmd_cost(session: ReplSession, console: Console, _args: list[str]) -> bool:
         table.add_row("token usage", f"[{DIM}]not available (LangSmith not wired yet)[/]")
 
     console.print(table)
+    return True
+
+
+def _cmd_effort(session: ReplSession, console: Console, args: list[str]) -> bool:
+    settings = repl_data.load_llm_settings()
+    provider = str(getattr(settings, "provider", os.getenv("LLM_PROVIDER", "anthropic")))
+    supported_values = ", ".join(REASONING_EFFORT_OPTIONS)
+
+    if not args:
+        console.print(
+            f"[{HIGHLIGHT}]reasoning effort:[/] {display_reasoning_effort(session.reasoning_effort)}"
+        )
+        console.print(f"[{DIM}]usage:[/] /effort <{supported_values}>")
+        if not provider_supports_reasoning_effort(provider):
+            console.print(
+                f"[{DIM}]current provider {provider} ignores this setting; "
+                "switch to openai or codex to use it.[/]"
+            )
+        return True
+
+    effort = parse_reasoning_effort(args[0])
+    if effort is None:
+        console.print(
+            f"[{ERROR}]unknown reasoning effort:[/] {escape(args[0])} "
+            f"[{DIM}](choices: {supported_values})[/]"
+        )
+        session.mark_latest(ok=False, kind="slash")
+        return True
+
+    session.reasoning_effort = effort
+    console.print(f"[{HIGHLIGHT}]reasoning effort set to:[/] {display_reasoning_effort(effort)}")
+    if not provider_supports_reasoning_effort(provider):
+        console.print(
+            f"[{DIM}]current provider {provider} ignores this setting; "
+            "switch to openai or codex to use it.[/]"
+        )
+    elif effort in {"xhigh", "max"}:
+        console.print(
+            f"[{DIM}]xhigh/max work best with newer GPT-5 or Codex models; "
+            "older reasoning models may reject them.[/]"
+        )
     return True
 
 
@@ -165,6 +214,14 @@ _VERBOSE_FIRST_ARGS: tuple[tuple[str, str], ...] = (
     ("off", "disable verbose logging"),
 )
 
+_EFFORT_FIRST_ARGS: tuple[tuple[str, str], ...] = (
+    ("low", "favor speed and lower reasoning cost"),
+    ("medium", "balanced reasoning effort"),
+    ("high", "favor more thorough reasoning"),
+    ("xhigh", "favor deepest supported reasoning"),
+    ("max", "alias for xhigh"),
+)
+
 COMMANDS: list[SlashCommand] = [
     SlashCommand("/clear", "clear the screen and re-render the banner", _cmd_clear),
     SlashCommand("/reset", "clear session state (keeps trust mode)", _cmd_reset),
@@ -178,6 +235,12 @@ COMMANDS: list[SlashCommand] = [
     SlashCommand("/status", "show session status", _cmd_status),
     SlashCommand("/context", "show accumulated infra context", _cmd_context),
     SlashCommand("/cost", "show token usage and session cost", _cmd_cost),
+    SlashCommand(
+        "/effort",
+        "set REPL reasoning effort ('/effort low|medium|high|xhigh|max')",
+        _cmd_effort,
+        first_arg_completions=_EFFORT_FIRST_ARGS,
+    ),
     SlashCommand(
         "/verbose",
         "toggle verbose logging (TTY: bare '/verbose' opens menu; else '/verbose off')",

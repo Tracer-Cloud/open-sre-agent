@@ -140,6 +140,7 @@ def test_shell_completer_previews_all_commands() -> None:
     names = [completion.text for completion in completions]
 
     assert "/help" in names
+    assert "/effort" in names
     assert "/list" in names
     assert "/model" in names
     assert all(name.startswith("/") for name in names)
@@ -165,6 +166,17 @@ def test_shell_completer_suggests_subcommands_for_list() -> None:
     )
     names = sorted({c.text for c in completions})
     assert names == ["integrations", "mcp", "models", "tools"]
+
+
+def test_shell_completer_suggests_effort_levels() -> None:
+    completions = list(
+        ShellCompleter().get_completions(
+            Document("/effort "),
+            CompleteEvent(text_inserted=True),
+        )
+    )
+    names = sorted({c.text for c in completions})
+    assert names == ["high", "low", "max", "medium", "xhigh"]
 
 
 def test_tab_applies_unique_slash_command_completion() -> None:
