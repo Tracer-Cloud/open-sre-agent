@@ -1056,3 +1056,44 @@ def test_openai_invoke_stream_rate_limit_retries_before_emit(monkeypatch) -> Non
     assert chunks == ["recovered"]
     assert len(attempts) == 2
     assert sleeps == [7.0]
+
+
+# ---------------------------------------------------------------------------
+# _format_openai_connection_error
+# ---------------------------------------------------------------------------
+
+
+def test_format_openai_connection_error_ssl_via_cause() -> None:
+    """SSL fingerprint in __cause__ triggers the TLS-specific message."""
+    ssl_err = Exception("[SSL: WRONG_VERSION_NUMBER] wrong version number")
+    conn_err = Exception("Connection error.")
+    conn_err.__cause__ = ssl_err
+
+    msg = llm_client._format_openai_connection_error(conn_err, "OpenAI")
+
+    assert "SSL/TLS" in msg
+    assert "HTTPS" in msg
+
+
+def test_format_openai_connection_error_ssl_via_context() -> None:
+    """SSL fingerprint buried in __context__ (implicit chain) also triggers TLS message."""
+    ssl_err = Exception("certificate verify failed")
+    conn_err = Exception("Connection error.")
+    conn_err.__cause__ = None
+    conn_err.__context__ = ssl_err
+
+    msg = llm_client._format_openai_connection_error(conn_err, "Gemini")
+
+    assert "SSL/TLS" in msg
+    assert "Gemini" in msg
+
+
+def test_format_openai_connection_error_non_ssl_returns_generic_message() -> None:
+    """A plain connection-refused error lands on the generic network message."""
+    conn_err = Exception("[WinError 10061] connection refused")
+
+    msg = llm_client._format_openai_connection_error(conn_err, "NVIDIA")
+
+    assert "SSL" not in msg
+    assert "network connection" in msg
+    assert "NVIDIA" in msg

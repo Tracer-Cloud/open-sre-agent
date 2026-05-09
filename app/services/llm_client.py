@@ -689,6 +689,8 @@ class OpenAILLMClient:
             except GuardrailBlockedError:
                 raise
             except OpenAIConnectionError as err:
+                if emitted:
+                    raise
                 raise RuntimeError(
                     _format_openai_connection_error(err, self._provider_label)
                 ) from err
