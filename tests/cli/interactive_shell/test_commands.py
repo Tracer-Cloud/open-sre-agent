@@ -1167,9 +1167,6 @@ class TestPrePolicyValidation:
             return "n"
 
         session = ReplSession()
-        # /save also short-circuits when there is no last_state; preset one so we
-        # actually exercise the args validator rather than the state guard.
-        session.last_state = {"root_cause": "x"}
 
         console, buf = _capture()
         dispatch_slash(command, session, console, confirm_fn=_confirm, is_tty=True)
