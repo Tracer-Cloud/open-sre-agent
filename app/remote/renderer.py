@@ -422,20 +422,20 @@ class StreamRenderer:
         ):
             actions = self._final_state.get("planned_actions", [])
             if actions:
-                self._tracker.stop()
-                self._console.print()
-                self._console.print(
-                    Panel(
-                        "\n".join(
-                            f"  [bold green]{i + 1}.[/bold green] [white]{escape(resolve_tool_display_name(act))}[/white]"
-                            for i, act in enumerate(actions)
-                        ),
-                        title="[bold yellow]📋 Investigation Plan Preview[/bold yellow]",
-                        border_style="yellow",
-                        expand=False,
-                    )
+                panel = Panel(
+                    "\n".join(
+                        f"  [bold green]{i + 1}.[/bold green] [white]{escape(resolve_tool_display_name(act))}[/white]"
+                        for i, act in enumerate(actions)
+                    ),
+                    title="[bold yellow]📋 Investigation Plan Preview[/bold yellow]",
+                    border_style="yellow",
+                    expand=False,
                 )
-                self._console.print()
+                if self._tracker._display:
+                    self._tracker._display._live.console.print(panel)
+                else:
+                    self._console.print()
+                    self._console.print(panel)
                 self._plan_preview_printed = True
         self._active_node = None
 
