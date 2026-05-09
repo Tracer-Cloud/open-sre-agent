@@ -913,4 +913,3 @@ class TestStreamRendererDiagnoseThrottle:
         assert "".join(renderer._diagnose.buffer).startswith("c0 ")
         assert "c19" in "".join(renderer._diagnose.buffer)
         assert fake_time[0] == 0.0
->>>>>>> upstream/main
