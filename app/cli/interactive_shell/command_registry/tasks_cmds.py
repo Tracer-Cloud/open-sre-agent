@@ -100,13 +100,13 @@ def _cmd_stop(session: ReplSession, console: Console, args: list[str]) -> bool: 
     return True
 
 
-def _cmd_cancel(session: ReplSession, console: Console, args: list[str]) -> bool:
+def _validate_cancel_args(args: list[str]) -> str | None:
     if not args:
-        console.print(
-            f"[{ERROR}]usage:[/] /cancel <task_id>  — use [{HIGHLIGHT}]/tasks[/] to list ids"
-        )
-        return True
+        return f"[{ERROR}]usage:[/] /cancel <task_id>  — use [{HIGHLIGHT}]/tasks[/] to list ids"
+    return None
 
+
+def _cmd_cancel(session: ReplSession, console: Console, args: list[str]) -> bool:
     needle = args[0]
     candidates = session.task_registry.candidates(needle)
     if not candidates:
@@ -149,6 +149,7 @@ COMMANDS: list[SlashCommand] = [
         "cancel a running task by id ('/cancel <task_id>' — see /tasks)",
         _cmd_cancel,
         execution_tier=ExecutionTier.ELEVATED,
+        validate_args=_validate_cancel_args,
     ),
     SlashCommand(
         "/stop",
