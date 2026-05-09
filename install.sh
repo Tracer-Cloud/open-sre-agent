@@ -708,8 +708,6 @@ print_success_screen() {
   log ""
 }
 
-=======
->>>>>>> 9739c266 (address greptile feedback: drop duplicate preserved-path message + dead SMOKE_TEST_FAILED)
 os="$(uname -s)"
 arch="$(uname -m)"
 
