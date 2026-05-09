@@ -1031,6 +1031,31 @@ class TestStreamRendererPrintAboveRenderable:
         # Should fall back to tracker
         mock_tracker_print.assert_called_once_with(panel)
 
+    @patch("app.remote.renderer.Live")
+    @patch("app.output._EventLogDisplay")
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
+    def test_print_above_renderable_falls_back_to_console_when_tracker_stopped(
+        self, _mock_display, _mock_live
+    ) -> None:
+        from app.remote.renderer import StreamRenderer
+
+        renderer = StreamRenderer()
+
+        # Simulate tracker being stopped
+        renderer._tracker.stop()
+        assert renderer._tracker._display is None
+
+        from unittest.mock import MagicMock
+
+        mock_console = MagicMock()
+        renderer._console = mock_console
+
+        panel = "test-panel"
+        renderer._print_above_renderable(panel)
+
+        # Should fall back to internal console
+        mock_console.print.assert_called_once_with(panel)
+
     def test_merge_chain_start_input_eagerly_updates_metadata(self) -> None:
         """_merge_chain_start_input should pull 'input' payload from data into _final_state."""
         from app.remote.renderer import StreamEvent, StreamRenderer

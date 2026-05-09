@@ -221,10 +221,11 @@ class _DiagnoseStreamRenderer:
 def _clean_markdown_line(line: str) -> str:
     """Strip both bulleted lists (•, ●, -, —, *) and numbered lists (e.g. 1., 2))."""
     stripped = line.strip()
+    # Strip bullet prefix (e.g. "• ", "- ")
+    stripped = stripped.lstrip("•●-—* ").strip()
     # Strip numbered list prefix (e.g. "1. ", "2) ")
     stripped = re.sub(r"^\s*\d+[.)]\s*", "", stripped)
-    # Strip bullet prefix (e.g. "• ", "- ")
-    return stripped.lstrip("•●-—* ").strip()
+    return stripped
 
 
 class StreamRenderer:
@@ -257,8 +258,10 @@ class StreamRenderer:
         """Print a rich renderable permanently above the active live region (even during diagnose)."""
         if self._diagnose._live is not None and self._diagnose._live.is_started:
             self._diagnose._live.console.print(renderable)
-        else:
+        elif self._tracker._display is not None:
             self._tracker.print_above_renderable(renderable)
+        else:
+            self._console.print(renderable)
 
     @property
     def events_received(self) -> int:
