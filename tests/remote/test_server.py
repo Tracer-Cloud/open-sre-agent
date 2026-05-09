@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import collections
+import logging
 import shutil
 import urllib.error
 from pathlib import Path
@@ -89,6 +90,33 @@ def test_ensure_investigations_dir_reraises_configured_dir_permission_error(
         _ensure_investigations_dir(configured_dir)
 
     assert not fallback_dir.exists()
+
+
+def test_ensure_investigations_dir_logs_default_failure_when_fallback_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    default_dir = remote_server._DEFAULT_INVESTIGATIONS_DIR
+    fallback_dir = tmp_path / "fallback" / "investigations"
+
+    def fake_mkdir(self: Path, *_args: object, **_kwargs: object) -> None:
+        if self in {default_dir, fallback_dir}:
+            raise PermissionError(f"cannot create {self}")
+
+    monkeypatch.delenv("INVESTIGATIONS_DIR", raising=False)
+    monkeypatch.setattr(remote_server, "_FALLBACK_INVESTIGATIONS_DIR", fallback_dir)
+    monkeypatch.setattr(Path, "mkdir", fake_mkdir)
+
+    with (
+        caplog.at_level(logging.WARNING, logger=remote_server.logger.name),
+        pytest.raises(PermissionError, match="cannot create"),
+    ):
+        _ensure_investigations_dir(default_dir)
+
+    assert "Unable to create default investigations directory" in caplog.text
+    assert str(default_dir) in caplog.text
+    assert str(fallback_dir) in caplog.text
 
 
 @pytest.mark.parametrize(
