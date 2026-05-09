@@ -6,8 +6,63 @@ from typing import Any
 
 from app.services.cloudwatch_client import get_metric_statistics
 from app.tools.tool_decorator import tool
-from app.tools.utils.availability import cloudwatch_is_available
 from app.tools.utils.compaction import truncate_list
+
+_BATCH_JOB_QUEUE_KEYS = (
+    "job_queue",
+    "jobQueue",
+    "batch_job_queue",
+    "batchJobQueue",
+    "aws_batch_job_queue",
+    "awsBatchJobQueue",
+)
+_BATCH_METRIC_TYPE_KEYS = ("metric_type", "metricType", "batch_metric_type", "batchMetricType")
+_BATCH_LIMIT_KEYS = (
+    "limit",
+    "metric_limit",
+    "metricLimit",
+    "batch_metric_limit",
+    "batchMetricLimit",
+)
+_BATCH_SOURCE_KEYS = ("cloudwatch", "aws_metadata")
+
+
+def _first_source_value(sources: dict[str, dict], keys: tuple[str, ...]) -> str:
+    for source_name in _BATCH_SOURCE_KEYS:
+        source = sources.get(source_name, {})
+        for key in keys:
+            value = source.get(key)
+            if value is None:
+                continue
+            normalized = str(value).strip()
+            if normalized:
+                return normalized
+    return ""
+
+
+def _coerce_limit(value: str, default: int = 50) -> int:
+    try:
+        limit = int(value)
+    except ValueError:
+        return default
+    return limit if limit > 0 else default
+
+
+def _cloudwatch_batch_metrics_available(sources: dict[str, dict]) -> bool:
+    return bool(_first_source_value(sources, _BATCH_JOB_QUEUE_KEYS))
+
+
+def _cloudwatch_batch_metrics_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
+    params: dict[str, Any] = {
+        "job_queue": _first_source_value(sources, _BATCH_JOB_QUEUE_KEYS),
+    }
+    metric_type = _first_source_value(sources, _BATCH_METRIC_TYPE_KEYS)
+    if metric_type:
+        params["metric_type"] = metric_type
+    limit = _first_source_value(sources, _BATCH_LIMIT_KEYS)
+    if limit:
+        params["limit"] = _coerce_limit(limit)
+    return params
 
 
 @tool(
@@ -22,7 +77,8 @@ from app.tools.utils.compaction import truncate_list
     tags=("metrics", "aws"),
     cost_tier="moderate",
     requires=["job_queue"],
-    is_available=cloudwatch_is_available,
+    is_available=_cloudwatch_batch_metrics_available,
+    extract_params=_cloudwatch_batch_metrics_extract_params,
     input_schema={
         "type": "object",
         "properties": {

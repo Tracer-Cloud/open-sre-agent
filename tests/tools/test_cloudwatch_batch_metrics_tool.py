@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
+
+from app.nodes.investigate.execution.execute_actions import _execute_with_retry
 from app.tools.CloudWatchBatchMetricsTool import get_cloudwatch_batch_metrics
 from tests.tools.conftest import BaseToolContract
 
@@ -13,11 +16,60 @@ class TestCloudWatchBatchMetricsToolContract(BaseToolContract):
         return get_cloudwatch_batch_metrics.__opensre_registered_tool__
 
 
-def test_is_available_always_false_by_default() -> None:
-    # no is_available override registered — defaults to always True
+def test_is_not_available_without_batch_queue_context() -> None:
     rt = get_cloudwatch_batch_metrics.__opensre_registered_tool__
-    result = rt.is_available({})
-    assert isinstance(result, bool)
+    assert rt.is_available({}) is False
+
+
+@pytest.mark.parametrize(
+    ("source_name", "queue_key"),
+    [
+        ("cloudwatch", "job_queue"),
+        ("cloudwatch", "jobQueue"),
+        ("aws_metadata", "batch_job_queue"),
+        ("aws_metadata", "batchJobQueue"),
+        ("aws_metadata", "aws_batch_job_queue"),
+        ("aws_metadata", "awsBatchJobQueue"),
+    ],
+)
+def test_is_available_when_batch_queue_context_exists(source_name: str, queue_key: str) -> None:
+    rt = get_cloudwatch_batch_metrics.__opensre_registered_tool__
+    assert rt.is_available({source_name: {queue_key: "critical-jobs"}}) is True
+
+
+def test_is_not_available_for_cloudwatch_logs_without_batch_queue() -> None:
+    rt = get_cloudwatch_batch_metrics.__opensre_registered_tool__
+    assert rt.is_available({"cloudwatch": {"log_group": "/aws/batch/job"}}) is False
+
+
+def test_extract_params_maps_batch_queue_from_aws_metadata() -> None:
+    rt = get_cloudwatch_batch_metrics.__opensre_registered_tool__
+    params = rt.extract_params(
+        {
+            "cloudwatch": {"log_group": "/aws/batch/job"},
+            "aws_metadata": {
+                "batch_job_queue": "critical-jobs",
+                "batch_metric_type": "memory",
+                "batch_metric_limit": "25",
+            },
+        }
+    )
+
+    assert params == {"job_queue": "critical-jobs", "metric_type": "memory", "limit": 25}
+
+
+def test_extract_params_returns_empty_job_queue_when_missing() -> None:
+    rt = get_cloudwatch_batch_metrics.__opensre_registered_tool__
+    assert rt.extract_params({"cloudwatch": {"log_group": "/aws/batch/job"}}) == {"job_queue": ""}
+
+
+def test_extract_params_uses_default_limit_for_invalid_limit() -> None:
+    rt = get_cloudwatch_batch_metrics.__opensre_registered_tool__
+    params = rt.extract_params(
+        {"cloudwatch": {"job_queue": "critical-jobs", "metric_limit": "not-a-number"}}
+    )
+
+    assert params == {"job_queue": "critical-jobs", "limit": 50}
 
 
 def test_run_returns_error_when_no_job_queue() -> None:
@@ -58,3 +110,34 @@ def test_run_handles_exception() -> None:
         result = get_cloudwatch_batch_metrics(job_queue="my-queue")
     assert "error" in result
     assert "CloudWatch not available" in result["error"]
+
+
+def test_execute_with_retry_uses_extracted_batch_queue() -> None:
+    rt = get_cloudwatch_batch_metrics.__opensre_registered_tool__
+    with patch(
+        "app.tools.CloudWatchBatchMetricsTool.get_metric_statistics",
+        return_value=[{"Timestamp": "2024-01-01", "Average": 50.0}],
+    ):
+        result = _execute_with_retry(
+            "get_cloudwatch_batch_metrics",
+            rt,
+            {"aws_metadata": {"batch_job_queue": "critical-jobs"}},
+            max_attempts=1,
+        )
+
+    assert result.success is True
+    assert result.error is None
+    assert result.data["job_queue"] == "critical-jobs"
+
+
+def test_execute_with_retry_returns_tool_error_when_batch_queue_missing() -> None:
+    rt = get_cloudwatch_batch_metrics.__opensre_registered_tool__
+    result = _execute_with_retry(
+        "get_cloudwatch_batch_metrics",
+        rt,
+        {"cloudwatch": {"log_group": "/aws/batch/job"}},
+        max_attempts=1,
+    )
+
+    assert result.success is False
+    assert result.error == "job_queue is required"
