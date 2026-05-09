@@ -2,18 +2,21 @@
 
 from dotenv import load_dotenv
 
-load_dotenv(override=False)
-
-from app.cli import parse_args, write_json  # noqa: E402
-from app.cli.investigation import run_investigation_cli  # noqa: E402
-from app.cli.investigation.alert_templates import build_alert_template  # noqa: E402
-from app.cli.investigation.payload import load_payload  # noqa: E402
-from app.utils.sentry_sdk import init_sentry  # noqa: E402
-
 
 def main(argv: list[str] | None = None) -> int:
     """Main entry point."""
-    init_sentry()
+    # Load .env before importing app modules — they read environment variables
+    # at import time (e.g. Sentry DSN, API keys), so deferring these imports
+    # until after load_dotenv() is required for correct configuration.
+    load_dotenv(override=False)
+
+    from app.cli import parse_args, write_json
+    from app.cli.investigation import run_investigation_cli
+    from app.cli.investigation.alert_templates import build_alert_template
+    from app.cli.investigation.payload import load_payload
+    from app.utils.sentry_sdk import init_sentry
+
+    init_sentry(entrypoint="cli")
     args = parse_args(argv)
     if args.print_template:
         write_json(build_alert_template(args.print_template), args.output)

@@ -12,10 +12,10 @@ from contextlib import contextmanager
 
 from rich.console import Console
 
-from app.cli.interactive_shell.theme import DIM_TEXT_COLOR
+from app.cli.interactive_shell.theme import SECONDARY
 
 # Quiet, secondary-colour spinner — less visual noise than a bright accent.
-_LOADER_COLOR = DIM_TEXT_COLOR
+_LOADER_COLOR = SECONDARY
 _LOADER_SPINNER = "dots"
 
 DEFAULT_LOADER_LABEL = "thinking"

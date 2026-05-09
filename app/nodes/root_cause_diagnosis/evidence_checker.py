@@ -40,6 +40,13 @@ INVESTIGATED_EVIDENCE_KEYS = frozenset(
         "argocd_application",
         "argocd_applications",
         "argocd_diff",
+        # Helm release inspection (CLI) — each mapper writes distinct keys so merge_evidence
+        # does not drop parallel tool results.
+        "helm_releases",
+        "helm_release_status",
+        "helm_release_history",
+        "helm_release_values",
+        "helm_release_manifest",
     }
 )
 
@@ -115,6 +122,13 @@ CLAIM_EVIDENCE_KEYS = INVESTIGATED_EVIDENCE_KEYS | frozenset(
         "eks_failing_pods",
         "eks_high_restart_pods",
         "eks_degraded_deployments",
+        # Helm adjacent
+        "helm_list_all_namespaces",
+        "helm_list_namespace",
+        "helm_release_name",
+        "helm_release_namespace",
+        "helm_values_all_requested",
+        "helm_manifest_truncated",
     }
 )
 
@@ -165,6 +179,11 @@ def check_evidence_availability(
         or evidence.get("argocd_application") is not None
         or evidence.get("argocd_applications") is not None
         or evidence.get("argocd_diff") is not None
+        or evidence.get("helm_releases") is not None
+        or evidence.get("helm_release_status") is not None
+        or evidence.get("helm_release_history") is not None
+        or evidence.get("helm_release_values") is not None
+        or evidence.get("helm_release_manifest") is not None
     )
 
     # Check for evidence in alert annotations or raw text

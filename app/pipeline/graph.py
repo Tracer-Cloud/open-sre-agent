@@ -1,11 +1,5 @@
 """Unified agent pipeline — wires nodes and edges into a LangGraph."""
 
-from __future__ import annotations
-
-import functools
-from collections.abc import Callable
-from typing import Any, cast
-
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
@@ -27,6 +21,7 @@ from app.nodes.chat import (
 from app.nodes.evaluate_opensre import node_opensre_llm_eval
 from app.nodes.investigate.merge import merge_hypothesis_results
 from app.nodes.investigate.parallel import node_investigate_hypothesis
+from app.pipeline.langgraph_node_adapter import _accept_langgraph_config
 from app.pipeline.routing import (
     distribute_hypotheses,
     route_after_extract,
@@ -36,19 +31,6 @@ from app.pipeline.routing import (
     should_call_tools,
 )
 from app.state import AgentState
-from app.types.config import NodeConfig
-
-NodeWithConfig = Callable[[AgentState, NodeConfig | None], dict[str, Any]]
-
-
-def _accept_langgraph_config(func: NodeWithConfig) -> Callable[..., dict[str, Any]]:
-    """Expose an unannotated config kwarg for LangGraph runtime injection."""
-
-    @functools.wraps(func)
-    def _wrapped(state: AgentState, config=None) -> dict[str, Any]:
-        return func(state, cast(NodeConfig | None, config))
-
-    return _wrapped
 
 
 def build_graph(config: None = None) -> CompiledStateGraph:

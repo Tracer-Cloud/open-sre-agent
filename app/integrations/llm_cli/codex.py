@@ -189,7 +189,14 @@ class CodexAdapter:
             )
         return self._probe_binary(binary)
 
-    def build(self, *, prompt: str, model: str | None, workspace: str) -> CLIInvocation:
+    def build(
+        self,
+        *,
+        prompt: str,
+        model: str | None,
+        workspace: str,
+        reasoning_effort: str | None = None,
+    ) -> CLIInvocation:
         binary = self._resolve_binary()
         if not binary:
             raise RuntimeError(
@@ -217,6 +224,8 @@ class CodexAdapter:
         resolved_model = (model or "").strip()
         if resolved_model:
             argv.extend(["-m", resolved_model])
+        if reasoning_effort:
+            argv.extend(["-c", f'model_reasoning_effort="{reasoning_effort}"'])
 
         argv.append("-")
 

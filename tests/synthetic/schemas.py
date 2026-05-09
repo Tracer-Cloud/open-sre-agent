@@ -26,10 +26,17 @@ VALID_FAILURE_MODES = frozenset(
         "cpu_saturation",
         "failover",
         "healthy",
+        "application_load_spike",
     }
 )
 VALID_EVIDENCE_SOURCES = frozenset(
-    {"aws_cloudwatch_metrics", "aws_rds_events", "aws_performance_insights"}
+    {
+        "aws_cloudwatch_metrics",
+        "aws_rds_events",
+        "aws_performance_insights",
+        "ec2_instances_by_tag",
+        "elb_target_health",
+    }
 )
 
 # ---------------------------------------------------------------------------
@@ -175,7 +182,14 @@ class PerformanceInsightsFixture(TypedDict):
 
 
 VALID_TRAJECTORY_ACTIONS = frozenset(
-    {"query_grafana_metrics", "query_grafana_logs", "query_grafana_alert_rules"}
+    {
+        "query_grafana_metrics",
+        "query_grafana_logs",
+        "query_grafana_alert_rules",
+        "describe_rds_instance",
+        "ec2_instances_by_tag",
+        "get_elb_target_health",
+    }
 )
 
 
@@ -206,6 +220,27 @@ class AnswerKeySchema(TypedDict):
 # ---------------------------------------------------------------------------
 
 
+class TopologyTier(TypedDict):
+    """Application tier description for EC2/RDS topology fixtures."""
+
+    name: str
+    instance_ids: list[str]
+    asg: NotRequired[str]
+
+
+class TopologyMetadata(TypedDict, total=False):
+    """Optional EC2/RDS topology block for non-K8s scenarios.
+
+    Present in fixtures that exercise the DNS → LB → Target Group → EC2 → RDS
+    request path. Absent in legacy RDS-only scenarios (000–014).
+    """
+
+    vpc_id: str
+    load_balancer_arn: str
+    target_group_arn: str
+    tiers: list[TopologyTier]
+
+
 class ScenarioMetadataSchema(TypedDict):
     schema_version: str
     scenario_id: str
@@ -221,11 +256,48 @@ class ScenarioMetadataSchema(TypedDict):
     scenario_difficulty: NotRequired[int]  # 1–4 curriculum level
     adversarial_signals: NotRequired[list[str]]  # metrics that are intentional confounders
     depends_on: NotRequired[str]  # e.g. "healthy_rca_state" — CI skip flag
+    topology: NotRequired[TopologyMetadata]
 
 
 # ---------------------------------------------------------------------------
 # Typed evidence container
 # ---------------------------------------------------------------------------
+
+
+class EC2Instance(TypedDict, total=False):
+    instance_id: str
+    tier: str
+    asg: str
+    private_ip: str
+    vpc_id: str
+    subnet_id: str
+    state: str
+    instance_type: str
+    security_groups: list[str]
+
+
+class EC2InstancesByTagFixture(TypedDict):
+    instances: list[EC2Instance]
+
+
+class ELBTargetHealthEntry(TypedDict, total=False):
+    target_group_arn: str
+    instance_id: str
+    port: int
+    state: str
+    reason: str
+    description: str
+
+
+class ELBTargetGroup(TypedDict, total=False):
+    TargetGroupArn: str
+    TargetGroupName: str
+    LoadBalancerArns: list[str]
+
+
+class ELBTargetHealthFixture(TypedDict):
+    target_groups: list[ELBTargetGroup]
+    targets: list[ELBTargetHealthEntry]
 
 
 @dataclass(frozen=True)
@@ -239,6 +311,8 @@ class ScenarioEvidence:
     aws_cloudwatch_metrics: CloudWatchMetricsFixture | None
     aws_rds_events: list[RDSEvent] | None
     aws_performance_insights: PerformanceInsightsFixture | None
+    ec2_instances_by_tag: EC2InstancesByTagFixture | None = None
+    elb_target_health: ELBTargetHealthFixture | None = None
 
     def as_dict(self) -> dict[str, Any]:
         """Return only the non-None sources as a plain dict."""
@@ -249,6 +323,10 @@ class ScenarioEvidence:
             result["aws_rds_events"] = self.aws_rds_events
         if self.aws_performance_insights is not None:
             result["aws_performance_insights"] = self.aws_performance_insights
+        if self.ec2_instances_by_tag is not None:
+            result["ec2_instances_by_tag"] = self.ec2_instances_by_tag
+        if self.elb_target_health is not None:
+            result["elb_target_health"] = self.elb_target_health
         return result
 
     def get(self, key: str) -> Any:
@@ -337,6 +415,34 @@ def validate_performance_insights(data: dict[str, Any]) -> PerformanceInsightsFi
         raise ValueError(f"{ctx}: 'top_users' must be a list")
     if not isinstance(data.get("top_hosts"), list):
         raise ValueError(f"{ctx}: 'top_hosts' must be a list")
+    return data  # type: ignore[return-value]
+
+
+def validate_ec2_instances_by_tag(data: dict[str, Any]) -> EC2InstancesByTagFixture:
+    ctx = "ec2_instances_by_tag.json"
+    instances = data.get("instances")
+    if not isinstance(instances, list):
+        raise ValueError(f"{ctx}: 'instances' must be a list")
+    for i, inst in enumerate(instances):
+        ictx = f"{ctx}:instances[{i}]"
+        if not isinstance(inst, dict):
+            raise ValueError(f"{ictx}: must be an object")
+        _require_str(inst, "instance_id", ctx=ictx)
+    return data  # type: ignore[return-value]
+
+
+def validate_elb_target_health(data: dict[str, Any]) -> ELBTargetHealthFixture:
+    ctx = "elb_target_health.json"
+    if not isinstance(data.get("target_groups"), list):
+        raise ValueError(f"{ctx}: 'target_groups' must be a list")
+    if not isinstance(data.get("targets"), list):
+        raise ValueError(f"{ctx}: 'targets' must be a list")
+    for i, target in enumerate(data["targets"]):
+        tctx = f"{ctx}:targets[{i}]"
+        if not isinstance(target, dict):
+            raise ValueError(f"{tctx}: must be an object")
+        _require_str(target, "instance_id", ctx=tctx)
+        _require_str(target, "state", ctx=tctx)
     return data  # type: ignore[return-value]
 
 

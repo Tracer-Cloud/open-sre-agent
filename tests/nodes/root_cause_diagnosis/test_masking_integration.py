@@ -52,6 +52,7 @@ def _mock_parse_result(root_cause: str) -> object:
         {"claim": "<POD_0> entered CrashLoopBackOff", "validation_status": "validated"}
     ]
     result.non_validated_claims = []
+    result.remediation_steps = []
     return result
 
 

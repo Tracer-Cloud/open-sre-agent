@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
-from app.cli.interactive_shell.router import classify_input
+from pathlib import Path
+
+import yaml
+
+from app.cli.interactive_shell.router import RouteKind, classify_input, route_input
 from app.cli.interactive_shell.session import ReplSession
+
+FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
 class TestClassifyInput:
@@ -200,3 +206,138 @@ class TestClassifyInput:
         catches legitimate docs questions (#1166)."""
         session = ReplSession()
         assert classify_input("in the docs, where is the OAuth flow?", session) == "cli_help"
+
+    def test_route_input_returns_structured_decision(self) -> None:
+        session = ReplSession()
+
+        decision = route_input("/help", session)
+
+        assert decision.route_kind == RouteKind.SLASH
+        assert decision.confidence == 1.0
+        assert decision.matched_signals == ("slash_prefix",)
+        assert decision.fallback_reason is None
+
+    def test_route_input_preserves_legacy_classification(self) -> None:
+        session = ReplSession()
+
+        cases = [
+            "/help",
+            "help",
+            "how do I run an investigation?",
+            "run a sample alert",
+            "api latency spiked and 5xx errors increased",
+            "hello",
+        ]
+
+        for text in cases:
+            assert route_input(text, session).route_kind.value == classify_input(text, session)
+
+    def test_route_input_emits_fallback_reason_for_low_signal_input(self) -> None:
+        session = ReplSession()
+
+        decision = route_input("hello", session)
+
+        assert decision.route_kind == RouteKind.CLI_AGENT
+        assert decision.confidence == 0.45
+        assert decision.matched_signals == ()
+        assert decision.fallback_reason == "no_prior_investigation_and_no_incident_signal"
+
+    def test_cli_action_plan_routes_to_cli_agent_before_investigation(self) -> None:
+        session = ReplSession()
+
+        decision = route_input("show me connected services", session)
+
+        assert decision.route_kind == RouteKind.CLI_AGENT
+        assert decision.matched_signals == ("cli_agent_action_plan",)
+
+    def test_yaml_routing_regression_cases(self) -> None:
+        fixture_path = FIXTURES_DIR / "routing_cases.yml"
+        payload = yaml.safe_load(fixture_path.read_text(encoding="utf-8"))
+
+        session = ReplSession()
+
+        for case in payload:
+            decision = route_input(case["input"], session)
+
+            assert decision.route_kind.value == case["expected"]
+
+    def test_route_input_matched_signals_are_internal_rule_names(self) -> None:
+        session = ReplSession()
+
+        decision = route_input(
+            "api latency spiked and 5xx errors increased",
+            session,
+        )
+
+        assert decision.matched_signals == ("investigation_request",)
+        assert "api latency" not in decision.matched_signals
+
+
+class TestEdgeCaseRegressionFixtures:
+    """Regression fixtures for historical boundary prompts that were ambiguous
+    between the sample-alert launch surface (cli_agent) and real incident
+    investigation (new_alert) during the typed-routing migration (#1375/#1378).
+
+    These fixtures guard the consolidated single-source routing so that the
+    boundary does not silently drift if the canonical SAMPLE_ALERT_RE pattern
+    in intent_parser is ever edited.
+    """
+
+    def test_sample_alert_verb_variants_stay_cli_agent(self) -> None:
+        """All verb forms that launch a built-in test alert must route to
+        cli_agent, not kick off a real LangGraph investigation."""
+        session = ReplSession()
+        for phrase in (
+            "try a sample alert",
+            "run a sample alert",
+            "launch a simple alert",
+            "fire a demo alert",
+            "start a test alert",
+            "send a sample event",
+            "trigger a demo event",
+            "okay launch a simple alert",
+            "try a test event",
+        ):
+            result = classify_input(phrase, session)
+            assert result == "cli_agent", (
+                f"Expected cli_agent for sample-alert phrase {phrase!r}, got {result!r}"
+            )
+
+    def test_real_alert_keywords_alongside_sample_phrasing_still_route_to_new_alert(
+        self,
+    ) -> None:
+        """When a prompt contains alert signal vocabulary alongside a sample-alert
+        phrase, the alert signal wins and the turn goes to new_alert."""
+        session = ReplSession()
+        # "errors" is an alert signal — even though "sample" appears, the
+        # investigation pipeline should handle genuine incident descriptions.
+        assert classify_input("500 errors happening — run a sample check?", session) == "new_alert"
+
+    def test_prior_state_sample_alert_launch_stays_cli_agent(self) -> None:
+        """With a prior investigation present, sample-alert launch must still
+        route to cli_agent and not be misclassified as a follow-up question."""
+        session = ReplSession()
+        session.last_state = {"root_cause": "disk full"}
+        assert classify_input("try a sample alert", session) == "cli_agent"
+        assert classify_input("launch a simple alert", session) == "cli_agent"
+
+    def test_json_alert_payload_is_new_alert_not_cli_agent(self) -> None:
+        """A valid JSON object that looks like an alert payload must route to
+        new_alert regardless of surrounding session state."""
+        session = ReplSession()
+        json_alert = '{"alertname": "HighCPU", "severity": "critical", "service": "checkout"}'
+        assert classify_input(json_alert, session) == "new_alert"
+
+    def test_short_incident_question_without_prior_state_is_new_alert(self) -> None:
+        """Short production-symptom questions with no prior investigation must
+        reach the LangGraph pipeline, not the cli_agent."""
+        session = ReplSession()
+        for phrase in (
+            "why is the database slow?",
+            "why is the pod failing?",
+            "why is the node timing out?",
+        ):
+            result = classify_input(phrase, session)
+            assert result == "new_alert", (
+                f"Expected new_alert for incident question {phrase!r}, got {result!r}"
+            )

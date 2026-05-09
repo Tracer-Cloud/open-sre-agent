@@ -48,7 +48,7 @@ def _capture_invocation(command_parts: list[str]) -> None:
 
 def main() -> None:
     load_dotenv(override=False)
-    init_sentry()
+    init_sentry(entrypoint="integrations")
     install_questionary_escape_cancel()
     args = sys.argv[1:]
 

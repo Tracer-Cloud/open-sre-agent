@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Any
 
 import click
 
+from app.cli.interactive_shell.theme import BRAND, DIM, ERROR, HIGHLIGHT, TEXT, WARNING
+
 if TYPE_CHECKING:
     from app.remote.client import RemoteAgentClient
 
@@ -54,12 +56,12 @@ def _render_remote_health_report(report: dict[str, Any]) -> None:
     started_at = str(report.get("started_at") or "unknown")
     status_text = str(report.get("status", "unknown"))
 
-    version_style = "green" if remote_version == local_version else "yellow"
+    version_style = HIGHLIGHT if remote_version == local_version else WARNING
     status_style = {
-        "passed": "green",
-        "warn": "yellow",
-        "failed": "red",
-    }.get(status_text, "white")
+        "passed": HIGHLIGHT,
+        "warn": WARNING,
+        "failed": ERROR,
+    }.get(status_text, TEXT)
 
     meta = Table.grid(padding=(0, 1))
     meta.add_row("[bold]Remote URL[/bold]", str(report.get("base_url", "-")))
@@ -73,15 +75,15 @@ def _render_remote_health_report(report: dict[str, Any]) -> None:
     meta.add_row("[bold]Uptime[/bold]", uptime_text)
     meta.add_row("[bold]Started at[/bold]", started_at)
 
-    panel = Panel.fit(meta, title="[bold cyan]Remote Health[/bold cyan]", border_style="cyan")
+    panel = Panel.fit(meta, title=f"[bold {BRAND}]Remote Health[/]", border_style=BRAND)
     console.print(panel)
     console.print()
 
     checks = report.get("checks")
     if isinstance(checks, list) and checks:
         table = Table(title="Checks", box=box.SIMPLE_HEAVY, show_lines=False)
-        table.add_column("Check", style="bold cyan")
-        table.add_column("Endpoint", style="dim")
+        table.add_column("Check", style=f"bold {BRAND}")
+        table.add_column("Endpoint", style=DIM)
         table.add_column("Status")
         table.add_column("Detail")
 
@@ -101,7 +103,7 @@ def _render_remote_health_report(report: dict[str, Any]) -> None:
     if isinstance(hints, list) and hints:
         console.print()
         for hint in hints:
-            console.print(f"[yellow]- {hint}[/yellow]")
+            console.print(f"[{WARNING}]- {hint}[/]")
 
 
 def run_remote_health_check(

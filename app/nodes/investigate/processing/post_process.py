@@ -21,6 +21,12 @@ _NON_RETRYABLE_FAILURE_INDICATORS = (
     "action not available",
     "invalid response",
     "not configured",
+    "400",
+    "bad request",
+    "401",
+    "unauthorized",
+    "403",
+    "forbidden",
 )
 _OPENCLAW_NON_RETRYABLE_FAILURE_INDICATORS = (
     "connection closed",
@@ -583,6 +589,54 @@ def _map_argocd_application_diff(data: dict) -> dict:
     }
 
 
+def _map_helm_list_releases(data: dict) -> dict:
+    releases = data.get("releases", [])
+    if not isinstance(releases, list):
+        releases = []
+    return {
+        "helm_releases": releases,
+        "helm_list_all_namespaces": bool(data.get("all_namespaces", False)),
+        "helm_list_namespace": str(data.get("namespace", "") or ""),
+    }
+
+
+def _map_helm_release_status(data: dict) -> dict:
+    return {
+        "helm_release_status": data.get("status") or {},
+        "helm_release_name": str(data.get("release", "") or ""),
+        "helm_release_namespace": str(data.get("namespace", "") or ""),
+    }
+
+
+def _map_helm_release_history(data: dict) -> dict:
+    history = data.get("history", [])
+    if not isinstance(history, list):
+        history = []
+    return {
+        "helm_release_history": history,
+        "helm_release_name": str(data.get("release", "") or ""),
+        "helm_release_namespace": str(data.get("namespace", "") or ""),
+    }
+
+
+def _map_helm_get_release_values(data: dict) -> dict:
+    return {
+        "helm_release_values": data.get("values") or {},
+        "helm_values_all_requested": bool(data.get("all_values", False)),
+        "helm_release_name": str(data.get("release", "") or ""),
+        "helm_release_namespace": str(data.get("namespace", "") or ""),
+    }
+
+
+def _map_helm_get_release_manifest(data: dict) -> dict:
+    return {
+        "helm_release_manifest": str(data.get("manifest", "") or ""),
+        "helm_manifest_truncated": bool(data.get("truncated", False)),
+        "helm_release_name": str(data.get("release", "") or ""),
+        "helm_release_namespace": str(data.get("namespace", "") or ""),
+    }
+
+
 def _map_alertmanager_alerts(data: dict) -> dict:
     return {
         "alertmanager_alerts": data.get("alerts") or [],
@@ -651,6 +705,37 @@ def _map_eks_deployment_status(data: dict) -> dict:
     }
 
 
+def _map_ec2_instances_by_tag(data: dict) -> dict:
+    return {
+        "ec2_instances": data.get("instances", []),
+        "ec2_instances_by_tier": data.get("by_tier", {}),
+        "ec2_tiers_detected": data.get("tiers_detected", []),
+        "ec2_total_instances": data.get("total_instances", 0),
+        # Pre-computed summary block — by_tier_counts, primary_tier, vpcs_in_scope,
+        # azs_in_scope. Pass-through is the whole point of this tool: the agent
+        # quotes these directly without iterating instance lists.
+        "ec2_instances_summary": data.get("summary", {}),
+    }
+
+
+def _map_elb_target_health(data: dict) -> dict:
+    return {
+        "elb_target_groups": data.get("target_groups", []),
+        "elb_healthy_targets": data.get("healthy_targets", []),
+        "elb_unhealthy_targets": data.get("unhealthy_targets", []),
+        "elb_target_instance_ids": data.get("instance_ids", []),
+        # Pre-computed summary block — total_targets, healthy_count, unhealthy_count,
+        # healthy_ratio_pct, unhealthy_states, target_group_count.
+        "elb_target_health_summary": data.get("summary", {}),
+        # Per-TG describe_target_health failures. Non-empty means the agent
+        # is reading partial coverage and must NOT cite a healthy_ratio_pct
+        # without acknowledging the gap. The mapper still runs on
+        # `result.success=True` regardless of `data["available"]`, so we
+        # forward the failure list explicitly.
+        "elb_api_errors": data.get("api_errors", []),
+    }
+
+
 def _map_cloudopsbench_tool(data: dict) -> dict:
     evidence_item = {
         "action_name": data.get("action_name"),
@@ -696,6 +781,11 @@ EVIDENCE_MAPPERS: dict[str, Callable[[dict], dict]] = {
     "get_git_deploy_timeline": _map_git_deploy_timeline,
     "argocd_application_status": _map_argocd_application_status,
     "argocd_application_diff": _map_argocd_application_diff,
+    "helm_list_releases": _map_helm_list_releases,
+    "helm_release_status": _map_helm_release_status,
+    "helm_release_history": _map_helm_release_history,
+    "helm_get_release_values": _map_helm_get_release_values,
+    "helm_get_release_manifest": _map_helm_get_release_manifest,
     "alertmanager_alerts": _map_alertmanager_alerts,
     "alertmanager_silences": _map_alertmanager_silences,
     "list_eks_pods": _map_eks_pods,
@@ -704,6 +794,8 @@ EVIDENCE_MAPPERS: dict[str, Callable[[dict], dict]] = {
     "get_eks_node_health": _map_eks_node_health,
     "get_eks_pod_logs": _map_eks_pod_logs,
     "get_eks_deployment_status": _map_eks_deployment_status,
+    "ec2_instances_by_tag": _map_ec2_instances_by_tag,
+    "get_elb_target_health": _map_elb_target_health,
     "GetResources": _map_cloudopsbench_tool,
     "DescribeResource": _map_cloudopsbench_tool,
     "GetClusterConfiguration": _map_cloudopsbench_tool,
@@ -939,6 +1031,29 @@ def build_evidence_summary(execution_results: dict[str, ActionExecutionResult]) 
                 app_name = str(data.get("application_name", "")).strip() or "?"
                 drift = str(bool(data.get("drift_detected", False))).lower()
                 summary_parts.append(f"argocd:{app_name} drift {drift}")
+            elif action_name == "helm_list_releases" and data.get("releases") is not None:
+                count = len(data.get("releases") or [])
+                scope = "all-ns" if data.get("all_namespaces") else (data.get("namespace") or "?")
+                summary_parts.append(f"helm:{count} releases ({scope})")
+            elif action_name == "helm_release_status" and data.get("status") is not None:
+                rel = str(data.get("release", "")).strip() or "?"
+                status_obj = data.get("status")
+                st = status_obj if isinstance(status_obj, dict) else {}
+                info_obj = st.get("info")
+                info = info_obj if isinstance(info_obj, dict) else {}
+                status = str(info.get("status", "") or "").strip() or "unknown"
+                summary_parts.append(f"helm:{rel} status {status}")
+            elif action_name == "helm_release_history" and data.get("history") is not None:
+                rel = str(data.get("release", "")).strip() or "?"
+                summary_parts.append(f"helm:{rel} history {len(data.get('history') or [])} revs")
+            elif action_name == "helm_get_release_values" and data.get("values") is not None:
+                rel = str(data.get("release", "")).strip() or "?"
+                summary_parts.append(f"helm:{rel} values keys {len(data.get('values') or {})}")
+            elif action_name == "helm_get_release_manifest" and data.get("manifest") is not None:
+                rel = str(data.get("release", "")).strip() or "?"
+                lines = len(str(data.get("manifest", "")).splitlines())
+                trunc = " truncated" if data.get("truncated") else ""
+                summary_parts.append(f"helm:{rel} manifest {lines} lines{trunc}")
             elif action_name == "alertmanager_alerts":
                 firing_count = len(data.get("firing_alerts") or [])
                 total = data.get("total", 0)

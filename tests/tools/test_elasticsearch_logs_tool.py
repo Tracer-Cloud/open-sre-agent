@@ -71,3 +71,66 @@ def test_run_api_error() -> None:
     with patch("app.tools.ElasticsearchLogsTool.make_client", return_value=mock_client):
         result = tool.run(query="*", url="http://localhost:9200")
     assert result["available"] is False
+
+
+def test_extract_params_includes_basic_auth_credentials() -> None:
+    """extract_params reads username/password from the elasticsearch source dict."""
+    tool = ElasticsearchLogsTool()
+    sources = mock_agent_state(
+        overrides={
+            "elasticsearch": {
+                "connection_verified": True,
+                "url": "https://my-cluster.example.com",
+                "username": "admin",
+                "password": "secret",
+                "default_query": "*",
+                "index_pattern": "logs-*",
+            }
+        }
+    )
+    params = tool.extract_params(sources)
+    assert params["username"] == "admin"
+    assert params["password"] == "secret"
+
+
+def test_run_forwards_basic_auth_credentials_to_make_client() -> None:
+    """run() must forward username/password to make_client so the LLM tool can authenticate."""
+    tool = ElasticsearchLogsTool()
+    mock_client = MagicMock()
+    mock_client.search_logs.return_value = {"success": True, "logs": [], "total": 0}
+
+    with patch(
+        "app.tools.ElasticsearchLogsTool.make_client", return_value=mock_client
+    ) as mock_make_client:
+        tool.run(
+            query="*",
+            url="https://my-cluster.example.com",
+            username="admin",
+            password="secret",
+        )
+
+    mock_make_client.assert_called_once()
+    _, kwargs = mock_make_client.call_args
+    assert kwargs["username"] == "admin"
+    assert kwargs["password"] == "secret"
+
+
+def test_make_client_forwards_basic_auth_to_elasticsearch_config() -> None:
+    """make_client must pass username/password into ElasticsearchConfig."""
+    from app.tools.ElasticsearchLogsTool._client import make_client
+
+    with (
+        patch("app.tools.ElasticsearchLogsTool._client.ElasticsearchClient") as mock_client_cls,
+        patch("app.tools.ElasticsearchLogsTool._client.ElasticsearchConfig") as mock_config_cls,
+    ):
+        make_client(
+            url="https://my-cluster.example.com",
+            username="admin",
+            password="secret",
+        )
+
+    mock_config_cls.assert_called_once()
+    _, config_kwargs = mock_config_cls.call_args
+    assert config_kwargs["username"] == "admin"
+    assert config_kwargs["password"] == "secret"
+    mock_client_cls.assert_called_once()

@@ -87,6 +87,36 @@ def test_openai_llm_client_reads_secure_local_api_key(monkeypatch) -> None:
     assert _FakeOpenAI.init_api_keys == ["stored-openai-key"]
 
 
+def test_openai_llm_client_adds_reasoning_effort_for_reasoning_models(monkeypatch) -> None:
+    monkeypatch.setattr(
+        llm_client,
+        "resolve_llm_api_key",
+        lambda env_var: "stored-openai-key" if env_var == "OPENAI_API_KEY" else "",
+    )
+    monkeypatch.setattr(llm_client, "OpenAI", _FakeOpenAI)
+    monkeypatch.setenv("OPENSRE_REASONING_EFFORT", "xhigh")
+
+    client = llm_client.OpenAILLMClient(model="gpt-5.2")
+    kwargs = client._build_request_kwargs("hello")
+
+    assert kwargs["reasoning_effort"] == "xhigh"
+
+
+def test_openai_llm_client_omits_reasoning_effort_for_non_reasoning_models(monkeypatch) -> None:
+    monkeypatch.setattr(
+        llm_client,
+        "resolve_llm_api_key",
+        lambda env_var: "stored-openai-key" if env_var == "OPENAI_API_KEY" else "",
+    )
+    monkeypatch.setattr(llm_client, "OpenAI", _FakeOpenAI)
+    monkeypatch.setenv("OPENSRE_REASONING_EFFORT", "high")
+
+    client = llm_client.OpenAILLMClient(model="gpt-4.1-mini")
+    kwargs = client._build_request_kwargs("hello")
+
+    assert "reasoning_effort" not in kwargs
+
+
 def test_openai_llm_client_invoke_fails_when_key_missing(monkeypatch) -> None:
     monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env_var: "")
     client = llm_client.OpenAILLMClient(model="gpt-4.1-mini")
@@ -740,6 +770,22 @@ def test_create_llm_client_gemini_cli_reads_optional_model_env(monkeypatch) -> N
         llm_client.reset_llm_singletons()
 
 
+# _create_llm_client — missing API key raises RuntimeError (not ValidationError)
+# ---------------------------------------------------------------------------
+
+
+def test_create_llm_client_missing_api_key_raises_runtime_error(monkeypatch) -> None:
+    """Sentry #1678: missing API key must surface as RuntimeError, not pydantic.ValidationError."""
+    monkeypatch.setenv("LLM_PROVIDER", "anthropic")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    llm_client.reset_llm_singletons()
+    try:
+        with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
+            llm_client._create_llm_client("reasoning")
+    finally:
+        llm_client.reset_llm_singletons()
+
+
 # ---------------------------------------------------------------------------
 # LLMClient.invoke / invoke_stream — NotFoundError handling
 # ---------------------------------------------------------------------------
@@ -771,7 +817,8 @@ class _NotFoundMessages:
 
 
 class _NotFoundAnthropic:
-    def __init__(self, *, api_key: str, timeout: float) -> None:  # noqa: ARG002
+    def __init__(self, *, api_key: str, timeout: float) -> None:
+        del api_key, timeout
         self.messages = _NotFoundMessages("not-a-real-model-xyz")
 
 
@@ -829,3 +876,183 @@ def test_anthropic_invoke_stream_not_found_raises_friendly_runtime_error(monkeyp
     msg = str(exc_info.value)
     assert "was not found" in msg
     assert "Check your configured model name" in msg
+
+
+# ---------------------------------------------------------------------------
+# _parse_retry_after — retry delay extraction
+# ---------------------------------------------------------------------------
+
+
+def test_parse_retry_after_reads_body_details() -> None:
+    """Extracts retryDelay from a Google/Gemini-style error body."""
+
+    class _FakeErr(Exception):
+        body = {
+            "error": {
+                "details": [
+                    {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "5s"},
+                ]
+            }
+        }
+
+    assert llm_client._parse_retry_after(_FakeErr()) == 5.0
+
+
+def test_parse_retry_after_reads_message_fallback() -> None:
+    """Falls back to parsing 'retry in Xs' from the error message string."""
+    err = Exception("Please retry in 8.5s due to quota exceeded")
+    assert llm_client._parse_retry_after(err) == 8.5
+
+
+def test_parse_retry_after_caps_at_sixty_seconds() -> None:
+    """Never returns more than 60 seconds to prevent runaway waits."""
+
+    class _FakeErr(Exception):
+        body = {"error": {"details": [{"retryDelay": "120s"}]}}
+
+    assert llm_client._parse_retry_after(_FakeErr()) == 60.0
+
+
+def test_parse_retry_after_returns_zero_when_no_hint() -> None:
+    """Returns 0 when neither body nor message contains a delay."""
+    assert llm_client._parse_retry_after(Exception("quota exceeded")) == 0.0
+
+
+# ---------------------------------------------------------------------------
+# OpenAILLMClient.invoke — RateLimitError handling
+# ---------------------------------------------------------------------------
+
+
+class _FakeRateLimitError(llm_client.OpenAIRateLimitError):
+    """Minimal stand-in for openai.RateLimitError with a Google-style body.
+
+    Inherits from the real class so it's caught by ``except OpenAIRateLimitError``.
+    Calls ``Exception.__init__`` directly to bypass ``APIStatusError.__init__``,
+    which requires a live ``request``/``response`` pair not available in unit tests.
+    This also ensures ``str(err)`` works correctly via ``args``.
+    """
+
+    def __init__(self, retry_delay: str) -> None:
+        Exception.__init__(self, f"quota exceeded, retry in {retry_delay}")
+        self.status_code = 429
+        self.body = {"error": {"details": [{"retryDelay": retry_delay}]}}
+
+
+def _make_fake_rate_limit_error(retry_delay: str = "5s") -> Exception:
+    """Return a fake openai.RateLimitError carrying a Google-style retry body."""
+    return _FakeRateLimitError(retry_delay)
+
+
+def test_openai_invoke_rate_limit_retries_with_suggested_delay(monkeypatch) -> None:
+    """On RateLimitError, invoke() sleeps for the suggested delay and retries."""
+    attempts: list[int] = []
+    sleeps: list[float] = []
+
+    class _Choice:
+        def __init__(self, content: str) -> None:
+            self.message = type("_Msg", (), {"content": content})()
+
+    class _Response:
+        def __init__(self, content: str) -> None:
+            self.choices = [_Choice(content)]
+
+    class _Completions:
+        def create(self, **_kwargs):
+            attempts.append(1)
+            if len(attempts) == 1:
+                raise _make_fake_rate_limit_error("6s")
+            return _Response("ok")
+
+    class _Chat:
+        def __init__(self) -> None:
+            self.completions = _Completions()
+
+    class _OpenAI:
+        def __init__(self, **_kwargs) -> None:
+            self.chat = _Chat()
+
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "OpenAI", _OpenAI)
+    monkeypatch.setattr(llm_client.time, "sleep", lambda s: sleeps.append(s))
+
+    client = llm_client.OpenAILLMClient(model="gemini-test", api_key_env="GEMINI_API_KEY")
+    result = client.invoke("hi")
+
+    assert result.content == "ok"
+    assert len(attempts) == 2
+    # Must sleep for the suggested 6s (>= initial backoff of 1s)
+    assert sleeps == [6.0]
+
+
+def test_openai_invoke_rate_limit_raises_quota_message_after_exhaustion(monkeypatch) -> None:
+    """After all retries on RateLimitError, raise a quota-specific RuntimeError."""
+    sleeps: list[float] = []
+
+    class _Completions:
+        def create(self, **_kwargs):
+            raise _make_fake_rate_limit_error("5s")
+
+    class _Chat:
+        def __init__(self) -> None:
+            self.completions = _Completions()
+
+    class _OpenAI:
+        def __init__(self, **_kwargs) -> None:
+            self.chat = _Chat()
+
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "OpenAI", _OpenAI)
+    monkeypatch.setattr(llm_client.time, "sleep", lambda s: sleeps.append(s))
+
+    client = llm_client.OpenAILLMClient(model="gemini-test", api_key_env="GEMINI_API_KEY")
+
+    with pytest.raises(RuntimeError) as exc_info:
+        client.invoke("hi")
+
+    msg = str(exc_info.value)
+    assert "rate limit" in msg.lower()
+    assert "quota" in msg.lower()
+
+
+def test_openai_invoke_stream_rate_limit_retries_before_emit(monkeypatch) -> None:
+    """RateLimitError before any chunk is emitted should retry with the suggested delay."""
+    attempts: list[int] = []
+    sleeps: list[float] = []
+
+    class _Delta:
+        def __init__(self, content: str) -> None:
+            self.content = content
+
+    class _Choice:
+        def __init__(self, content: str) -> None:
+            self.delta = _Delta(content)
+
+    class _Chunk:
+        def __init__(self, content: str) -> None:
+            self.choices = [_Choice(content)]
+
+    class _Completions:
+        def create(self, **_kwargs):
+            attempts.append(1)
+            if len(attempts) == 1:
+                raise _make_fake_rate_limit_error("7s")
+            return iter([_Chunk("recovered")])
+
+    class _Chat:
+        def __init__(self) -> None:
+            self.completions = _Completions()
+
+    class _OpenAI:
+        def __init__(self, **_kwargs) -> None:
+            self.chat = _Chat()
+
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "OpenAI", _OpenAI)
+    monkeypatch.setattr(llm_client.time, "sleep", lambda s: sleeps.append(s))
+
+    client = llm_client.OpenAILLMClient(model="gemini-test", api_key_env="GEMINI_API_KEY")
+    chunks = list(client.invoke_stream("hi"))
+
+    assert chunks == ["recovered"]
+    assert len(attempts) == 2
+    assert sleeps == [7.0]

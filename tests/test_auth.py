@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from uuid import UUID
+
 from app.nodes.auth import _extract_auth, inject_auth_node
 from app.types.config import NodeConfig
 
@@ -44,6 +46,13 @@ class TestExtractAuth:
         assert result["thread_id"] == "thread-1"
         assert result["run_id"] == "run-1"
         assert "_auth_token" not in result
+
+    def test_run_id_uuid_coerced_to_str(self) -> None:
+        """LangGraph may supply UUID run ids in configurable; AgentState uses str."""
+        uid = UUID("550e8400-e29b-41d4-a716-446655440000")
+        config = _make_config({"run_id": uid})
+        result = _extract_auth({}, config)
+        assert result["run_id"] == "550e8400-e29b-41d4-a716-446655440000"
 
     def test_empty_config_returns_empty_strings(self) -> None:
         """No config, no state — everything defaults to empty string."""

@@ -13,12 +13,17 @@ AgentMode = Literal["chat", "investigation"]
 
 
 class ChatMessage(TypedDict, total=False):
-    role: Literal["system", "user", "assistant"]
+    role: Literal["system", "user", "assistant", "tool"]
     content: str
     tool_calls: list[dict[str, Any]]
+    # Tool-role messages (role: "tool") carry OpenAI-compatible correlation fields.
+    tool_call_id: str
+    name: str
 
 
 class ChatMessageModel(StrictConfigModel):
     role: Literal["system", "user", "assistant", "tool"]
     content: str = ""
     tool_calls: list[dict[str, Any]] = Field(default_factory=list)
+    tool_call_id: str = ""
+    name: str = ""

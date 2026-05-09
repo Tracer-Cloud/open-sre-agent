@@ -521,3 +521,15 @@ def capture_update_completed(*, check_only: bool, updated: bool) -> None:
 
 def capture_update_failed(*, check_only: bool, reason: str) -> None:
     _capture(Event.UPDATE_FAILED, {"check_only": check_only, "reason": reason})
+
+
+def capture_agent_secret_detected(
+    *,
+    rule_names: tuple[str, ...],
+    count: int,
+    blocked: bool,
+) -> None:
+    _capture(
+        Event.AGENT_SECRET_DETECTED,
+        {"rule_names": ",".join(rule_names), "count": count, "blocked": blocked},
+    )

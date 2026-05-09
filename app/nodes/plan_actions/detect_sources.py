@@ -162,6 +162,20 @@ def _extract_issue_id_from_url(value: str) -> str:
     return parts[index + 1].strip()
 
 
+def _extract_incident_io_id_from_url(value: str) -> str:
+    parsed = urlparse(value.strip())
+    host = (parsed.hostname or "").lower()
+    if host != "incident.io" and not host.endswith(".incident.io"):
+        return ""
+    parts = [part for part in parsed.path.split("/") if part]
+    if "incidents" not in parts:
+        return ""
+    index = parts.index("incidents")
+    if index + 1 >= len(parts):
+        return ""
+    return parts[index + 1].strip()
+
+
 def detect_sources(
     raw_alert: dict[str, Any] | str,
     context: dict[str, Any],
@@ -348,11 +362,20 @@ def detect_sources(
         "db_instance",
         "db_instance_identifier",
         "db_cluster",
-        # EC2
+        # EC2 / ELB / Auto Scaling
         "instance_id",
         "vpc_id",
         "subnet_id",
         "security_group",
+        "load_balancer_arn",
+        "load_balancer_name",
+        "target_group_arn",
+        "target_group_name",
+        "auto_scaling_group",
+        "asg_name",
+        # NOTE: 'tier' is intentionally NOT in this list — substring-match on
+        # a 4-letter token would falsely capture 'frontier', 'multi_tier_app',
+        # 'tier_count', etc. Handled with exact-match in the loop below.
         # Lambda (additional metadata beyond function_name)
         "lambda_arn",
         "lambda_alias",
@@ -380,8 +403,15 @@ def detect_sources(
     ]
 
     for key, value in annotations.items():
+        lower_key = key.lower()
+        # Exact-match collection for short tokens prone to false-positive
+        # substring matches (see note above the aws_patterns list).
+        if lower_key == "tier":
+            if value and "tier" not in aws_metadata:
+                aws_metadata["tier"] = value
+            continue
         # Collect fields matching AWS patterns
-        if any(pattern in key.lower() for pattern in aws_patterns):
+        if any(pattern in lower_key for pattern in aws_patterns):
             if value and key not in aws_metadata:
                 aws_metadata[key] = value
         # Also collect any field ending with common AWS suffixes
@@ -745,6 +775,109 @@ def detect_sources(
                 eks_params["connection_verified"] = True
             sources["eks"] = eks_params
 
+    # Detect non-K8s EC2/RDS topology (DNS → LB → Target Group → EC2 → RDS).
+    # Runs in parallel to the EKS block: an alert may trigger both blocks
+    # (e.g. a hybrid stack) without conflict — they write distinct source keys.
+    #
+    # Backend slot convention on resolved_integrations["aws"]:
+    #   - "_backend"     → FixtureEKSBackend, gates the EKS path only
+    #   - "ec2_backend"  → FixtureAWSBackend, gates the EC2/RDS topology path only
+    # The two slots coexist on the same dict so a hybrid synthetic test can
+    # inject both without one block bleeding into the other.
+    _aws_int = (resolved_integrations or {}).get("aws")
+    _injected_ec2_backend = _aws_int.get("ec2_backend") if _aws_int else None
+    _aws_credentialed = bool(
+        _aws_int
+        and (_aws_int.get("role_arn") or _aws_int.get("credentials") or _injected_ec2_backend)
+    )
+    # vpc_id alone is sufficient: a "this RDS in vpc-X is hot" alert is enough
+    # context to enumerate EC2 instances in the same VPC and let the agent
+    # discover tiers from tags. Pre-populated tier / TG / LB annotations are
+    # accepted but not required.
+    _ec2_topology_hints = bool(
+        annotations.get("instance_id")
+        or annotations.get("target_group_arn")
+        or annotations.get("load_balancer_arn")
+        or annotations.get("auto_scaling_group")
+        or annotations.get("asg_name")
+        or annotations.get("tier")
+        or annotations.get("vpc_id")
+    )
+    _rds_topology_hints = bool(
+        annotations.get("db_instance_identifier") or annotations.get("db_instance")
+    )
+
+    if _aws_credentialed and (_ec2_topology_hints or _rds_topology_hints):
+        _aws_region = (
+            annotations.get("aws_region")
+            or annotations.get("region")
+            or (_aws_int.get("region") if _aws_int else None)
+            or "us-east-1"
+        )
+        _vpc_id = annotations.get("vpc_id", "")
+
+        if _ec2_topology_hints:
+            instance_id = annotations.get("instance_id", "")
+            ec2_params: dict[str, Any] = {
+                "region": _aws_region,
+                "vpc_id": _vpc_id,
+                "instance_ids": [instance_id] if instance_id else [],
+                "auto_scaling_groups": [
+                    asg
+                    for asg in (
+                        annotations.get("auto_scaling_group", ""),
+                        annotations.get("asg_name", ""),
+                    )
+                    if asg
+                ],
+                "target_group_arns": [
+                    tg for tg in (annotations.get("target_group_arn", ""),) if tg
+                ],
+                "load_balancer_arns": [
+                    lb for lb in (annotations.get("load_balancer_arn", ""),) if lb
+                ],
+                "tiers": [annotations.get("tier")] if annotations.get("tier") else [],
+                "role_arn": _aws_int.get("role_arn", "") if _aws_int else "",
+                "external_id": _aws_int.get("external_id", "") if _aws_int else "",
+                "credentials": (_aws_int.get("credentials") if _aws_int else None) or None,
+            }
+            if _injected_ec2_backend is not None:
+                ec2_params["_backend"] = _injected_ec2_backend
+            else:
+                ec2_params["connection_verified"] = True
+            sources["ec2"] = ec2_params
+
+        if _rds_topology_hints:
+            db_identifier = (
+                annotations.get("db_instance_identifier") or annotations.get("db_instance") or ""
+            )
+            rds_topology_params: dict[str, Any] = {
+                "db_instance_identifier": db_identifier,
+                "db_cluster_identifier": annotations.get("db_cluster", ""),
+                "engine": annotations.get("engine", ""),
+                "region": _aws_region,
+                "vpc_id": _vpc_id,
+                "topology": {
+                    "consumer_target_groups": [
+                        tg for tg in (annotations.get("target_group_arn", ""),) if tg
+                    ],
+                    "consumer_tiers": (
+                        [annotations.get("tier")] if annotations.get("tier") else []
+                    ),
+                    "consumer_security_groups": [
+                        sg for sg in (annotations.get("security_group", ""),) if sg
+                    ],
+                },
+                "role_arn": _aws_int.get("role_arn", "") if _aws_int else "",
+                "external_id": _aws_int.get("external_id", "") if _aws_int else "",
+                "credentials": (_aws_int.get("credentials") if _aws_int else None) or None,
+            }
+            if _injected_ec2_backend is not None:
+                rds_topology_params["_backend"] = _injected_ec2_backend
+            else:
+                rds_topology_params["connection_verified"] = True
+            sources["rds"] = rds_topology_params
+
     bitbucket_int = (resolved_integrations or {}).get("bitbucket")
     if bitbucket_int and alert_source in ("bitbucket", ""):
         repo_url = str(
@@ -886,6 +1019,8 @@ def detect_sources(
             sources["opensearch"] = {
                 "url": opensearch_url.rstrip("/"),
                 "api_key": str(opensearch_int.get("api_key", "")).strip(),
+                "username": str(opensearch_int.get("username", "")).strip(),
+                "password": str(opensearch_int.get("password", "")).strip(),
                 "index_pattern": str(
                     annotations.get("opensearch_index_pattern")
                     or opensearch_int.get("index_pattern", "*")
@@ -897,6 +1032,12 @@ def detect_sources(
                 "integration_id": str(opensearch_int.get("integration_id", "")).strip(),
                 "connection_verified": True,
             }
+            # OpenSearch is API-compatible with Elasticsearch; expose the same
+            # source dict under both keys so ElasticsearchLogsTool (source="elasticsearch")
+            # and OpenSearchAnalyticsTool (source="opensearch") are both reachable
+            # from a single opensearch wizard configuration. Reference (not copy)
+            # so any downstream mutation stays consistent across both keys.
+            sources["elasticsearch"] = sources["opensearch"]
 
     github_int = (resolved_integrations or {}).get("github")
     if github_int:
@@ -1238,7 +1379,12 @@ def detect_sources(
 
     rds_int = (resolved_integrations or {}).get("rds")
     if rds_int and str(rds_int.get("db_instance_identifier", "")).strip():
+        # Merge into any existing rds source from the EC2/RDS topology block so
+        # ``topology``, ``_backend`` and ``connection_verified`` survive when both
+        # the alert and a legacy rds integration are present.
+        existing_rds = sources.get("rds", {})
         sources["rds"] = {
+            **existing_rds,
             "db_instance_identifier": str(rds_int.get("db_instance_identifier", "")).strip(),
             "region": str(rds_int.get("region") or DEFAULT_RDS_REGION).strip()
             or DEFAULT_RDS_REGION,
@@ -1264,6 +1410,74 @@ def detect_sources(
             "source_hint": source_hint,
             "connection_verified": True,
         }
+
+    helm_int = (resolved_integrations or {}).get("helm")
+    if helm_int:
+        alert_dict: dict[str, Any] = raw_alert if isinstance(raw_alert, dict) else {}
+        merged_labels: dict[str, Any] = {}
+        merged_labels.update(alert_dict.get("commonLabels", {}) or {})
+        merged_labels.update(alert_dict.get("labels", {}) or {})
+
+        release_name = str(
+            annotations.get("helm_release")
+            or annotations.get("helm_release_name")
+            or merged_labels.get("meta.helm.sh/release-name")
+            or alert_dict.get("helm_release", "")
+            or alert_dict.get("helm_release_name", "")
+        ).strip()
+        ann_keys = {str(k).lower() for k in annotations}
+        helm_annotation_hit = any(
+            k in ann_keys
+            for k in (
+                "helm_release",
+                "helm_release_name",
+                "helm_chart",
+                "helm_revision",
+                "helm_namespace",
+            )
+        ) or any(str(k).lower().startswith("meta.helm.sh/") for k in annotations)
+        helm_hint_text = " ".join(
+            str(value)
+            for value in (
+                alert_dict.get("alert_name", ""),
+                alert_dict.get("error_message", ""),
+                annotations.get("summary", ""),
+                annotations.get("description", ""),
+                annotations.get("message", ""),
+            )
+            if value
+        ).lower()
+        helm_markers = (
+            "helm release",
+            "helm chart",
+            "helm upgrade",
+            "helm rollback",
+            "helm install",
+            "helm uninstall",
+            "failed helm",
+            " helm ",
+        )
+        has_helm_phrase = any(marker in helm_hint_text for marker in helm_markers)
+        if release_name or helm_annotation_hit or has_helm_phrase:
+            ns_hint = str(
+                annotations.get("helm_namespace")
+                or annotations.get("k8s_namespace")
+                or annotations.get("kubernetes_namespace")
+                or merged_labels.get("meta.helm.sh/release-namespace")
+                or alert_dict.get("helm_namespace", "")
+                or helm_int.get("default_namespace", "")
+                or ""
+            ).strip()
+            sources["helm"] = {
+                "helm_path": str(helm_int.get("helm_path", "helm") or "helm").strip() or "helm",
+                "kube_context": str(helm_int.get("kube_context", "")).strip(),
+                "kubeconfig": str(helm_int.get("kubeconfig", "")).strip(),
+                "default_namespace": str(helm_int.get("default_namespace", "")).strip(),
+                "release_name": release_name,
+                "namespace": ns_hint,
+                "integration_id": str(helm_int.get("integration_id", "")).strip(),
+                "connection_verified": True,
+            }
 
     argocd_int = (resolved_integrations or {}).get("argocd")
     if argocd_int and str(argocd_int.get("base_url", "")).strip():
@@ -1367,6 +1581,33 @@ def detect_sources(
             "alert_id": alert_id,
             "query": opsgenie_query,
             "connection_verified": True,
+        }
+
+    incident_io_int = (resolved_integrations or {}).get("incident_io")
+    if incident_io_int and str(incident_io_int.get("api_key", "")).strip():
+        incident_id = str(
+            annotations.get("incident_io_incident_id")
+            or raw_alert.get("incident_io_incident_id", "")
+        ).strip()
+        if not incident_id:
+            incident_url = str(
+                annotations.get("incident_io_url")
+                or annotations.get("incident_url")
+                or raw_alert.get("incident_url", "")
+            ).strip()
+            incident_id = _extract_incident_io_id_from_url(incident_url)
+
+        sources["incident_io"] = {
+            "api_key": str(incident_io_int.get("api_key", "")).strip(),
+            "base_url": str(incident_io_int.get("base_url", "")).strip(),
+            "incident_id": incident_id,
+            "status_category": str(
+                annotations.get("incident_io_status_category")
+                or raw_alert.get("incident_io_status_category", "")
+                or "live"
+            ).strip(),
+            "connection_verified": True,
+            "integration_id": str(incident_io_int.get("integration_id", "")).strip(),
         }
 
     jira_int = (resolved_integrations or {}).get("jira")

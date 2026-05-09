@@ -2,79 +2,29 @@
 
 from __future__ import annotations
 
-import copy
 import json
-from importlib import import_module
-from typing import Any, Protocol, cast
+from typing import Any
 
-from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
-from langchain_core.tools import StructuredTool
-
-from app.config import ANTHROPIC_LLM_CONFIG, DEFAULT_MAX_TOKENS, OPENAI_LLM_CONFIG
+from app.config import ANTHROPIC_LLM_CONFIG, OPENAI_LLM_CONFIG
 from app.constants.prompts import GENERAL_SYSTEM_PROMPT, ROUTER_PROMPT, SYSTEM_PROMPT
+from app.guardrails.engine import GuardrailBlockedError
 from app.services import get_llm_for_tools
-from app.state import AgentState, ChatMessage
-from app.tools.registered_tool import RegisteredTool
+from app.services.chat_sdk_adapter import (
+    _coerce_text_field,
+    build_bound_chat_model,
+    messages_to_invocation_dicts,
+)
+from app.state import AgentState
 from app.tools.registry import get_registered_tools
+from app.types.chat import AssistantTurn, BoundChatModel
 from app.types.config import NodeConfig
 from app.utils.cfg_helpers import CfgHelpers
-
-
-def _to_structured_tool(tool: RegisteredTool) -> StructuredTool:
-    """Build a StructuredTool from the canonical registered tool runtime."""
-    return StructuredTool.from_function(
-        func=tool.run,
-        name=tool.name,
-        description=tool.description,
-        return_direct=False,
-    )
-
-
-def get_chat_tools() -> list[StructuredTool]:
-    return [_to_structured_tool(tool) for tool in get_registered_tools("chat")]
-
-
-# LangChain type -> ChatMessage role mapping
-_TYPE_TO_ROLE: dict[str, str] = {
-    "human": "user",
-    "ai": "assistant",
-    "system": "system",
-    "tool": "tool",
-}
-
-
-def _normalize_messages(msgs: list[Any]) -> list[ChatMessage]:
-    """Normalize messages from LangChain format to plain ChatMessage dicts."""
-    result: list[ChatMessage] = []
-    for m in msgs:
-        if hasattr(m, "type") and hasattr(m, "content"):
-            role = _TYPE_TO_ROLE.get(m.type, "user")
-            result.append({"role": role, "content": str(m.content)})  # type: ignore[typeddict-item]
-            continue
-        if not isinstance(m, dict):
-            continue
-        if "role" in m:
-            result.append(m)  # type: ignore[arg-type]
-            continue
-        if "type" in m:
-            role = _TYPE_TO_ROLE.get(m["type"], "user")
-            result.append({"role": role, "content": str(m.get("content", ""))})  # type: ignore[typeddict-item]
-            continue
-        result.append(m)  # type: ignore[arg-type]
-    return result
-
 
 # ── Chat LLM ─────────────────────────────────────────────────────────────
 
 
-class ToolEnabledChatModel(Protocol):
-    def invoke(self, input: object, **kwargs: Any) -> object:
-        pass
-
-
-_chat_llm_cache: dict[str, BaseChatModel] = {}
-_chat_llm_with_tools_cache: dict[str, ToolEnabledChatModel] = {}
+_chat_llm_cache: dict[str, BoundChatModel] = {}
+_chat_llm_with_tools_cache: dict[str, BoundChatModel] = {}
 
 
 def reset_chat_llm_cache() -> None:
@@ -127,51 +77,77 @@ def _resolve_models(provider: str) -> tuple[str, str]:
     raise ValueError(f"Unsupported chat model provider: {provider}")
 
 
-def _build_chat_model(*, provider: str, model_name: str) -> BaseChatModel:
-    """Lazy-build a provider-specific chat model for the chat nodes."""
-    if provider == "openai":
-        openai_module = import_module("langchain_openai")
-        chat_openai_cls: Any = openai_module.ChatOpenAI
-        return cast(
-            BaseChatModel,
-            chat_openai_cls(
-                model=model_name,
-                max_tokens=DEFAULT_MAX_TOKENS,
-                streaming=True,
-            ),
-        )
-    if provider == "anthropic":
-        anthropic_module = import_module("langchain_anthropic")
-        chat_anthropic_cls: Any = anthropic_module.ChatAnthropic
-        return cast(
-            BaseChatModel,
-            chat_anthropic_cls(
-                model=model_name,
-                max_tokens=DEFAULT_MAX_TOKENS,
-                streaming=True,
-            ),
-        )
-    raise ValueError(f"Unsupported chat model provider: {provider}")
-
-
-def _get_chat_llm(*, with_tools: bool = False) -> BaseChatModel | ToolEnabledChatModel:
+def _get_chat_llm(*, with_tools: bool = False) -> BoundChatModel:
     """Get the provider-aware chat model used by chat nodes."""
     provider = CfgHelpers.resolve_llm_provider()
     tool_model, reasoning_model = _resolve_models(provider)
 
     if with_tools:
-        cached_tool_model = _chat_llm_with_tools_cache.get(provider)
+        cache_key = f"{provider}:{tool_model}:tools"
+        cached_tool_model = _chat_llm_with_tools_cache.get(cache_key)
         if cached_tool_model is None:
-            base = _build_chat_model(provider=provider, model_name=tool_model)
-            cached_tool_model = cast(ToolEnabledChatModel, base.bind_tools(get_chat_tools()))
-            _chat_llm_with_tools_cache[provider] = cached_tool_model
+            cached_tool_model = build_bound_chat_model(
+                provider=provider,
+                model_name=tool_model,
+                with_tools=True,
+            )
+            _chat_llm_with_tools_cache[cache_key] = cached_tool_model
         return cached_tool_model
 
-    cached_reasoning_model = _chat_llm_cache.get(provider)
+    cache_key = f"{provider}:{reasoning_model}"
+    cached_reasoning_model = _chat_llm_cache.get(cache_key)
     if cached_reasoning_model is None:
-        cached_reasoning_model = _build_chat_model(provider=provider, model_name=reasoning_model)
-        _chat_llm_cache[provider] = cached_reasoning_model
+        cached_reasoning_model = build_bound_chat_model(
+            provider=provider,
+            model_name=reasoning_model,
+            with_tools=False,
+        )
+        _chat_llm_cache[cache_key] = cached_reasoning_model
     return cached_reasoning_model
+
+
+def _assistant_turn_to_state_message(turn: AssistantTurn) -> dict[str, Any]:
+    """Persist one model turn in the graph state as a plain message dict."""
+    msg: dict[str, Any] = {"role": "assistant", "content": turn.get("content", "")}
+    tcs = turn.get("tool_calls")
+    if tcs:
+        msg["tool_calls"] = list(tcs)
+    return msg
+
+
+def _has_system_message(msgs: list[dict[str, Any]]) -> bool:
+    return any(m.get("role") == "system" for m in msgs)
+
+
+def _prepare_chat_invoke_messages(
+    raw: list[Any],
+    *,
+    default_system: str,
+) -> list[dict[str, Any]]:
+    """Normalize graph messages, ensure a system prompt, apply guardrails once."""
+    msgs = messages_to_invocation_dicts(raw)
+    if not _has_system_message(msgs):
+        msgs = [{"role": "system", "content": default_system}, *msgs]
+    return _apply_guardrails_to_messages(msgs)
+
+
+def _apply_guardrails_to_messages(msgs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return a copy of *msgs* with redacted string ``content``, leaving originals untouched."""
+    from app.guardrails.engine import get_guardrail_engine
+
+    engine = get_guardrail_engine()
+    if not engine.is_active:
+        return msgs
+    result: list[dict[str, Any]] = []
+    for msg in msgs:
+        content = msg.get("content")
+        if isinstance(content, str) and content:
+            redacted = engine.apply(content)
+            if redacted != content:
+                msg = dict(msg)
+                msg["content"] = redacted
+        result.append(msg)
+    return result
 
 
 # ── Node functions ───────────────────────────────────────────────────────
@@ -179,40 +155,18 @@ def _get_chat_llm(*, with_tools: bool = False) -> BaseChatModel | ToolEnabledCha
 
 def router_node(state: AgentState) -> dict[str, Any]:
     """Route chat messages by intent."""
-    msgs = _normalize_messages(list(state.get("messages", [])))
+    msgs = messages_to_invocation_dicts(list(state.get("messages", [])))
     if not msgs or msgs[-1].get("role") != "user":
         return {"route": "general"}
 
     response = get_llm_for_tools().invoke(
         [
             {"role": "system", "content": ROUTER_PROMPT},
-            {"role": "user", "content": str(msgs[-1].get("content", ""))},
+            {"role": "user", "content": _coerce_text_field(msgs[-1].get("content"))},
         ]
     )
     route = str(response.content).strip().lower()
     return {"route": route if route in ("tracer_data", "general") else "general"}
-
-
-def _apply_guardrails_to_messages(msgs: list[Any]) -> list[Any]:
-    """Return a copy of *msgs* with redacted content, leaving originals untouched.
-
-    Operates on copies to avoid mutating shared LangGraph state objects.
-    """
-    from app.guardrails.engine import get_guardrail_engine
-
-    engine = get_guardrail_engine()
-    if not engine.is_active:
-        return msgs
-    result = []
-    for msg in msgs:
-        content = getattr(msg, "content", None)
-        if isinstance(content, str) and content:
-            redacted = engine.apply(content)
-            if redacted != content:
-                msg = copy.copy(msg)
-                msg.content = redacted
-        result.append(msg)
-    return result
 
 
 def chat_agent_node(state: AgentState, _config: NodeConfig | None = None) -> dict[str, Any]:
@@ -221,80 +175,79 @@ def chat_agent_node(state: AgentState, _config: NodeConfig | None = None) -> dic
     Uses the configured provider with bound tools. The LLM can make tool calls
     which will be executed by the tool_executor node.
     """
-    msgs = list(state.get("messages", []))
-
-    has_system = any(
-        (hasattr(m, "type") and m.type == "system")
-        or (isinstance(m, dict) and m.get("type") == "system")
-        for m in msgs
-    )
-    if not has_system:
-        msgs = [SystemMessage(content=SYSTEM_PROMPT), *msgs]
-
-    msgs = _apply_guardrails_to_messages(msgs)
+    raw = list(state.get("messages", []))
+    msgs = _prepare_chat_invoke_messages(raw, default_system=SYSTEM_PROMPT)
     try:
         llm = _get_chat_llm(with_tools=True)
     except UnsupportedChatProviderError as exc:
-        return {"messages": [AIMessage(content=str(exc))]}
-    response = llm.invoke(msgs)
-    return {"messages": [response]}
+        return {"messages": [_assistant_turn_to_state_message({"content": str(exc)})]}
+    turn = llm.invoke(msgs)
+    return {"messages": [_assistant_turn_to_state_message(turn)]}
 
 
 def general_node(state: AgentState, _config: NodeConfig | None = None) -> dict[str, Any]:
     """Direct LLM response without tools for general questions."""
-    msgs = list(state.get("messages", []))
-
-    has_system = any(
-        (hasattr(m, "type") and m.type == "system")
-        or (isinstance(m, dict) and m.get("type") == "system")
-        for m in msgs
-    )
-    if not has_system:
-        msgs = [SystemMessage(content=GENERAL_SYSTEM_PROMPT), *msgs]
-
-    msgs = _apply_guardrails_to_messages(msgs)
+    raw = list(state.get("messages", []))
+    msgs = _prepare_chat_invoke_messages(raw, default_system=GENERAL_SYSTEM_PROMPT)
     try:
         llm = _get_chat_llm(with_tools=False)
     except UnsupportedChatProviderError as exc:
-        return {"messages": [AIMessage(content=str(exc))]}
-    response = llm.invoke(msgs)
-    return {"messages": [response]}
+        return {"messages": [_assistant_turn_to_state_message({"content": str(exc)})]}
+    turn = llm.invoke(msgs)
+    return {"messages": [_assistant_turn_to_state_message(turn)]}
 
 
 def tool_executor_node(state: AgentState) -> dict[str, Any]:
-    """Execute tool calls from the last AI message and return ToolMessages."""
-    msgs = list(state.get("messages", []))
+    """Execute tool calls from the last AI message and return tool result dicts."""
+    msgs = messages_to_invocation_dicts(list(state.get("messages", [])))
     if not msgs:
         return {"messages": []}
 
-    last_ai = None
+    last_ai: dict[str, Any] | None = None
     for m in reversed(msgs):
-        if hasattr(m, "tool_calls") and getattr(m, "tool_calls", None):
+        if m.get("role") != "assistant":
+            continue
+        tcs = m.get("tool_calls")
+        if tcs:
             last_ai = m
             break
 
-    if not last_ai or not last_ai.tool_calls:
+    if not last_ai:
         return {"messages": []}
 
-    tool_map = {tool.name: tool for tool in get_chat_tools()}
+    tool_calls = last_ai.get("tool_calls") or []
 
-    tool_messages = []
-    for tc in last_ai.tool_calls:
-        tool_name = tc["name"]
+    tool_map = {t.name: t for t in get_registered_tools("chat")}
+
+    tool_messages: list[dict[str, Any]] = []
+    for tc in tool_calls:
+        tool_name = str(tc.get("name", ""))
         tool_args = tc.get("args", {})
-        tool_id = tc["id"]
+        if not isinstance(tool_args, dict):
+            tool_args = {}
+        tool_id = str(tc.get("id", ""))
 
         try:
-            tool_fn = tool_map.get(tool_name)
-            if tool_fn is None:
+            reg = tool_map.get(tool_name)
+            if reg is None:
                 result = json.dumps({"error": f"Unknown tool: {tool_name}"})
             else:
-                result = tool_fn.invoke(tool_args)
-                if not isinstance(result, str):
-                    result = json.dumps(result, default=str)
-        except (RuntimeError, ValueError, TypeError, KeyError) as e:
+                out = reg(**tool_args)
+                result = out if isinstance(out, str) else json.dumps(out, default=str)
+        # Catch recoverable tool failures broadly (SDK / IO / import / JSON, etc.).
+        # BaseException is not caught so SystemExit / KeyboardInterrupt still propagate.
+        except GuardrailBlockedError:
+            raise
+        except Exception as e:
             result = json.dumps({"error": str(e)})
 
-        tool_messages.append(ToolMessage(content=result, tool_call_id=tool_id, name=tool_name))
+        tool_messages.append(
+            {
+                "role": "tool",
+                "content": result,
+                "tool_call_id": tool_id,
+                "name": tool_name,
+            }
+        )
 
     return {"messages": tool_messages}

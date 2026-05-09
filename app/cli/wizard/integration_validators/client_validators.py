@@ -12,13 +12,16 @@ from app.integrations.models import (
     GoogleDocsIntegrationConfig,
     GrafanaIntegrationConfig,
     HoneycombIntegrationConfig,
+    IncidentIoIntegrationConfig,
 )
 from app.integrations.sentry import build_sentry_config, validate_sentry_config
 from app.services.alertmanager import make_alertmanager_client
 from app.services.coralogix import CoralogixClient
 from app.services.datadog import DatadogClient, DatadogConfig
+from app.services.elasticsearch.client import ElasticsearchClient, ElasticsearchConfig
 from app.services.grafana import get_grafana_client_from_credentials
 from app.services.honeycomb import HoneycombClient
+from app.services.incident_io import IncidentIoClient
 from app.services.opsgenie import OpsGenieClient, OpsGenieConfig
 from app.services.splunk import SplunkClient, SplunkConfig
 from app.services.vercel import VercelClient, VercelConfig
@@ -422,6 +425,34 @@ def validate_opsgenie_integration(
         )
 
 
+def validate_incident_io_integration(
+    *,
+    api_key: str,
+    base_url: str = "",
+) -> IntegrationHealthResult:
+    """Validate incident.io connectivity by listing one incident."""
+    if not api_key:
+        return IntegrationHealthResult(ok=False, detail="incident.io API key is required.")
+    try:
+        config = IncidentIoIntegrationConfig(api_key=api_key, base_url=base_url)
+        with IncidentIoClient(config) as client:
+            result = client.list_incidents(status_category="", page_size=1)
+        if result.get("success"):
+            return IntegrationHealthResult(
+                ok=True,
+                detail="incident.io validated; API key accepted.",
+            )
+        return IntegrationHealthResult(
+            ok=False,
+            detail=f"incident.io validation failed: {result.get('error', 'unknown error')}",
+        )
+    except Exception as err:
+        return IntegrationHealthResult(
+            ok=False,
+            detail=f"incident.io validation failed: {str(err).replace(api_key, '[REDACTED]')}",
+        )
+
+
 def validate_splunk_integration(
     *,
     base_url: str,
@@ -446,4 +477,45 @@ def validate_splunk_integration(
     return IntegrationHealthResult(
         ok=False,
         detail=f"Splunk validation failed: {result.get('error', 'unknown error')}",
+    )
+
+
+def validate_opensearch_integration(
+    *,
+    url: str,
+    api_key: str = "",
+    username: str = "",
+    password: str = "",
+) -> IntegrationHealthResult:
+    """Validate OpenSearch / Elasticsearch connectivity via GET /_cluster/health.
+
+    Supports three authentication modes:
+    - No authentication (security disabled clusters)
+    - API key (native to Elasticsearch and some OpenSearch deployments)
+    - HTTP Basic Auth (default for most self-hosted OpenSearch clusters)
+    """
+    if not url:
+        return IntegrationHealthResult(ok=False, detail="OpenSearch URL is required.")
+    config = ElasticsearchConfig(
+        url=url,
+        api_key=api_key or None,
+        username=username or None,
+        password=password or None,
+    )
+    client = ElasticsearchClient(config)
+    result = client.get_cluster_health()
+    if result.get("success"):
+        cluster_name = result.get("cluster_name") or "unknown"
+        cluster_status = result.get("status") or "unknown"
+        node_count = result.get("number_of_nodes", 0)
+        return IntegrationHealthResult(
+            ok=True,
+            detail=(
+                f"Connected to OpenSearch cluster '{cluster_name}' "
+                f"({cluster_status}, {node_count} node(s))."
+            ),
+        )
+    return IntegrationHealthResult(
+        ok=False,
+        detail=f"OpenSearch validation failed: {result.get('error', 'unknown error')}",
     )

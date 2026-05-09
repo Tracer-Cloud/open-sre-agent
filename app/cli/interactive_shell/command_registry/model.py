@@ -11,8 +11,17 @@ from rich.markup import escape
 from app.cli.interactive_shell.command_registry import repl_data
 from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
 from app.cli.interactive_shell.rendering import render_models_table
+from app.cli.interactive_shell.repl_choice_menu import (
+    CRUMB_SEP,
+    print_valid_choice_list,
+    repl_choose_one,
+    repl_section_break,
+    repl_tty_interactive,
+)
 from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import PRIMARY, TERMINAL_ERROR, TEXT_DIM, WARNING
+from app.cli.interactive_shell.theme import DIM, ERROR, HIGHLIGHT, WARNING
+
+_ROOT = "/model"  # breadcrumb root label
 
 
 def _format_supported_models(provider_models: tuple[object, ...]) -> str:
@@ -55,10 +64,11 @@ def switch_llm_provider(
     provider_key = provider_name.strip().lower()
     provider = PROVIDER_BY_VALUE.get(provider_key)
     if provider is None:
-        choices = ", ".join(sorted(PROVIDER_BY_VALUE))
-        console.print(
-            f"[{TERMINAL_ERROR}]unknown LLM provider:[/] {escape(provider_name)} "
-            f"[{TEXT_DIM}](choices: {choices})[/]"
+        console.print(f"[{ERROR}]unknown LLM provider:[/] {escape(provider_name)}")
+        print_valid_choice_list(
+            console,
+            title="valid providers:",
+            choices=sorted(PROVIDER_BY_VALUE),
         )
         return False
 
@@ -77,24 +87,21 @@ def switch_llm_provider(
         and not has_llm_api_key(provider.api_key_env)
     ):
         console.print(
-            f"[{TERMINAL_ERROR}]missing credential for {provider.value}:[/] "
+            f"[{ERROR}]missing credential for {provider.value}:[/] "
             f"{provider.api_key_env} is not set in env or the keyring."
         )
         console.print(
-            f"[{TEXT_DIM}]set it with[/] [bold]export {provider.api_key_env}=<your-key>[/bold] "
-            f"[{TEXT_DIM}]or run[/] [bold]opensre onboard[/bold] "
-            f"[{TEXT_DIM}]to save it to the keyring, then rerun this command.[/]"
+            f"[{DIM}]set it with[/] [bold]export {provider.api_key_env}=<your-key>[/bold] "
+            f"[{DIM}]or run[/] [bold]opensre onboard[/bold] "
+            f"[{DIM}]to save it to the keyring, then rerun this command.[/]"
         )
         return False
 
     selected_model = model.strip() if model else provider.default_model
     if selected_model and not _is_model_supported(provider.value, selected_model, provider.models):
+        console.print(f"[{ERROR}]unknown model for {provider.value}:[/] {escape(selected_model)}")
         console.print(
-            f"[{TERMINAL_ERROR}]unknown model for {provider.value}:[/] {escape(selected_model)}"
-        )
-        console.print(
-            "[dim]known reasoning models:[/dim] "
-            f"{escape(_format_supported_models(provider.models))}"
+            f"[{DIM}]known reasoning models:[/] {escape(_format_supported_models(provider.models))}"
         )
         return False
 
@@ -114,11 +121,11 @@ def switch_llm_provider(
             if selected_toolcall:
                 if not _is_model_supported(provider.value, selected_toolcall, provider.models):
                     console.print(
-                        f"[{TERMINAL_ERROR}]unknown model for {provider.value}:[/] "
+                        f"[{ERROR}]unknown model for {provider.value}:[/] "
                         f"{escape(selected_toolcall)}"
                     )
                     console.print(
-                        "[dim]known toolcall models:[/dim] "
+                        f"[{DIM}]known toolcall models:[/] "
                         f"{escape(_format_supported_models(provider.models))}"
                     )
                     return False
@@ -129,17 +136,17 @@ def switch_llm_provider(
     _reset_runtime_llm_caches()
 
     # Be explicit about which slot each model lands in.
-    console.print(f"[{PRIMARY}]switched LLM provider:[/] {provider.value}")
+    console.print(f"[{HIGHLIGHT}]switched LLM provider:[/] {provider.value}")
     console.print(
-        f"[{PRIMARY}]reasoning model:[/] {selected_model or 'provider default'} "
-        f"[{TEXT_DIM}]({provider.model_env})[/]"
+        f"[{HIGHLIGHT}]reasoning model:[/] {selected_model or 'provider default'} "
+        f"[{DIM}]({provider.model_env})[/]"
     )
     if selected_toolcall:
         console.print(
-            f"[{PRIMARY}]toolcall model:[/] {selected_toolcall} "
-            f"[{TEXT_DIM}]({provider.toolcall_model_env})[/]"
+            f"[{HIGHLIGHT}]toolcall model:[/] {selected_toolcall} "
+            f"[{DIM}]({provider.toolcall_model_env})[/]"
         )
-    console.print(f"[{TEXT_DIM}]updated {env_path}[/]")
+    console.print(f"[{DIM}]updated {env_path}[/]")
     render_models_table(console, repl_data.load_llm_settings())
     return True
 
@@ -158,10 +165,11 @@ def switch_toolcall_model(
     resolved_name = (raw_name or "anthropic").strip().lower()
     provider = PROVIDER_BY_VALUE.get(resolved_name)
     if provider is None:
-        choices = ", ".join(sorted(PROVIDER_BY_VALUE))
-        console.print(
-            f"[{TERMINAL_ERROR}]unknown LLM provider:[/] {escape(resolved_name)} "
-            f"[{TEXT_DIM}](choices: {choices})[/]"
+        console.print(f"[{ERROR}]unknown LLM provider:[/] {escape(resolved_name)}")
+        print_valid_choice_list(
+            console,
+            title="valid providers:",
+            choices=sorted(PROVIDER_BY_VALUE),
         )
         return False
     if not provider.toolcall_model_env:
@@ -172,7 +180,7 @@ def switch_toolcall_model(
         return False
     new_model = toolcall_model.strip()
     if not new_model:
-        console.print(f"[{TERMINAL_ERROR}]toolcall model cannot be empty[/]")
+        console.print(f"[{ERROR}]toolcall model cannot be empty[/]")
         return False
 
     values = {provider.toolcall_model_env: new_model}
@@ -181,10 +189,10 @@ def switch_toolcall_model(
     _reset_runtime_llm_caches()
 
     console.print(
-        f"[{PRIMARY}]toolcall model set to:[/] {new_model} "
-        f"[{TEXT_DIM}]({provider.value} · {provider.toolcall_model_env})[/]"
+        f"[{HIGHLIGHT}]toolcall model set to:[/] {new_model} "
+        f"[{DIM}]({provider.value} · {provider.toolcall_model_env})[/]"
     )
-    console.print(f"[{TEXT_DIM}]updated {env_path}[/]")
+    console.print(f"[{DIM}]updated {env_path}[/]")
     render_models_table(console, repl_data.load_llm_settings())
     return True
 
@@ -196,13 +204,204 @@ def restore_default_model(provider_name: str, console: Console) -> bool:
     provider_key = provider_name.strip().lower()
     provider = PROVIDER_BY_VALUE.get(provider_key)
     if provider is None:
-        choices = ", ".join(sorted(PROVIDER_BY_VALUE))
-        console.print(
-            f"[{TERMINAL_ERROR}]unknown LLM provider:[/] {escape(provider_name)} "
-            f"[dim](choices: {choices})[/dim]"
+        console.print(f"[{ERROR}]unknown LLM provider:[/] {escape(provider_name)}")
+        print_valid_choice_list(
+            console,
+            title="valid providers:",
+            choices=sorted(PROVIDER_BY_VALUE),
         )
         return False
     return switch_llm_provider(provider.value, console, model=provider.default_model)
+
+
+def _provider_menu_choices() -> list[tuple[str, str]]:
+    from app.cli.wizard.config import SUPPORTED_PROVIDERS
+
+    current_provider = (os.getenv("LLM_PROVIDER", "anthropic") or "anthropic").strip().lower()
+    options: list[tuple[str, str]] = []
+    for provider in SUPPORTED_PROVIDERS:
+        suffix = "*" if provider.value == current_provider else ""
+        options.append((provider.value, f"{provider.value}{suffix}"))
+    return options
+
+
+def _reasoning_model_menu_choices(provider: object) -> list[tuple[str, str]]:
+    model_options = list(getattr(provider, "models", ()))
+    choices: list[tuple[str, str]] = [
+        ("__provider_default__", "provider default (one step)"),
+    ]
+    for option in model_options:
+        value = str(getattr(option, "value", ""))
+        display = value if value else "cli-default"
+        choices.append((value, display))
+    return choices
+
+
+def _toolcall_model_menu_choices(provider: object) -> list[tuple[str, str]]:
+    model_options = list(getattr(provider, "models", ()))
+    choices: list[tuple[str, str]] = [
+        ("__keep__", "keep"),
+        ("__match_reasoning__", "match-reasoning"),
+    ]
+    for option in model_options:
+        value = str(getattr(option, "value", ""))
+        display = value if value else "cli-default"
+        choices.append((value, display))
+    return choices
+
+
+def _interactive_set_provider(console: Console) -> bool | None:
+    from app.cli.wizard.config import PROVIDER_BY_VALUE
+
+    crumb_set = f"{_ROOT}{CRUMB_SEP}set"
+    while True:
+        provider_value = repl_choose_one(
+            title="LLM provider",
+            breadcrumb=crumb_set,
+            choices=_provider_menu_choices(),
+        )
+        if provider_value is None:
+            return None
+        provider = PROVIDER_BY_VALUE.get(provider_value)
+        if provider is None:
+            return False
+
+        crumb_model = f"{crumb_set}{CRUMB_SEP}{provider_value}"
+        while True:
+            reasoning_choice = repl_choose_one(
+                title="reasoning model",
+                breadcrumb=crumb_model,
+                choices=_reasoning_model_menu_choices(provider),
+            )
+            if reasoning_choice is None:
+                break
+
+            model_choice = (
+                None if reasoning_choice == "__provider_default__" else str(reasoning_choice)
+            )
+            toolcall_model: str | None = None
+            # Default reasoning: switch provider + default reasoning only — do not
+            # prompt for toolcall (matches non-interactive `/model set <provider>`).
+            if provider.toolcall_model_env and reasoning_choice != "__provider_default__":
+                crumb_tc = f"{crumb_model}{CRUMB_SEP}toolcall"
+                while True:
+                    toolcall_value = repl_choose_one(
+                        title="toolcall model",
+                        breadcrumb=crumb_tc,
+                        choices=_toolcall_model_menu_choices(provider),
+                    )
+                    if toolcall_value is None:
+                        return None
+                    if toolcall_value == "__keep__":
+                        break
+                    if toolcall_value == "__match_reasoning__":
+                        toolcall_model = model_choice or provider.default_model
+                        break
+                    toolcall_model = str(toolcall_value)
+                    break
+
+            return switch_llm_provider(
+                provider.value,
+                console,
+                model=model_choice,
+                toolcall_model=toolcall_model,
+            )
+
+
+def _interactive_restore_provider(console: Console) -> bool | None:
+    provider_value = repl_choose_one(
+        title="LLM provider",
+        breadcrumb=f"{_ROOT}{CRUMB_SEP}restore",
+        choices=_provider_menu_choices(),
+    )
+    if provider_value is None:
+        return None
+    return restore_default_model(provider_value, console)
+
+
+def _interactive_set_toolcall(console: Console) -> bool | None:
+    from app.cli.wizard.config import PROVIDER_BY_VALUE
+
+    crumb_tc = f"{_ROOT}{CRUMB_SEP}toolcall"
+    provider_value = repl_choose_one(
+        title="LLM provider",
+        breadcrumb=crumb_tc,
+        choices=_provider_menu_choices(),
+    )
+    if provider_value is None:
+        return None
+    provider = PROVIDER_BY_VALUE.get(provider_value)
+    if provider is None:
+        return False
+    if not provider.toolcall_model_env:
+        console.print(
+            f"[{WARNING}]provider {provider.value} does not expose a separate "
+            "toolcall model[/] — nothing to set."
+        )
+        return False
+    model_value = repl_choose_one(
+        title="toolcall model",
+        breadcrumb=f"{crumb_tc}{CRUMB_SEP}{provider_value}",
+        choices=_toolcall_model_menu_choices(provider),
+    )
+    if model_value is None:
+        return None
+    if model_value == "__keep__":
+        console.print("[dim]toolcall model left unchanged.[/dim]")
+        return True
+    if model_value == "__match_reasoning__":
+        reasoning = (os.getenv(provider.model_env, "") or "").strip() or provider.default_model
+        return switch_toolcall_model(reasoning, console, provider_name=provider.value)
+    return switch_toolcall_model(str(model_value), console, provider_name=provider.value)
+
+
+def _interactive_model_menu(session: ReplSession, console: Console) -> bool:
+    while True:
+        action = repl_choose_one(
+            title="Select Model and Effort",
+            breadcrumb=f"{_ROOT}",
+            choices=[
+                ("show", "show"),
+                ("set", "set"),
+                ("restore", "restore"),
+                ("toolcall", "toolcall"),
+                ("done", "done"),
+            ],
+        )
+        if action is None or action == "done":
+            return True
+        if action == "show":
+            repl_section_break(console)
+            render_models_table(console, repl_data.load_llm_settings())
+            repl_section_break(console)
+            continue
+        if action == "set":
+            switched = _interactive_set_provider(console)
+            if switched is None:
+                continue
+            if not switched:
+                session.mark_latest(ok=False, kind="slash")
+                repl_section_break(console)
+                continue
+            return True
+        if action == "restore":
+            restored = _interactive_restore_provider(console)
+            if restored is None:
+                continue
+            if not restored:
+                session.mark_latest(ok=False, kind="slash")
+                repl_section_break(console)
+                continue
+            return True
+        if action == "toolcall":
+            switched = _interactive_set_toolcall(console)
+            if switched is None:
+                continue
+            if not switched:
+                session.mark_latest(ok=False, kind="slash")
+                repl_section_break(console)
+                continue
+            return True
 
 
 def parse_model_set_args(args: list[str]) -> tuple[str, str | None, str | None]:
@@ -240,6 +439,9 @@ def parse_model_set_args(args: list[str]) -> tuple[str, str | None, str | None]:
 
 
 def _cmd_model(session: ReplSession, console: Console, args: list[str]) -> bool:
+    if not args and repl_tty_interactive():
+        return _interactive_model_menu(session, console)
+
     sub = (args[0].lower() if args else "show").strip()
 
     if sub == "show":
@@ -252,19 +454,19 @@ def _cmd_model(session: ReplSession, console: Console, args: list[str]) -> bool:
             return True
         if len(args) >= 2 and args[1].lower() in ("set", "use", "switch"):
             if len(args) < 3:
-                console.print(f"[{TEXT_DIM}]usage:[/] /model toolcall set <model>")
+                console.print(f"[{DIM}]usage:[/] /model toolcall set <model>")
                 return True
             switch_toolcall_model(args[2], console)
             return True
         console.print(
-            f"[{TEXT_DIM}]usage:[/] /model toolcall set <model> "
-            f"[{TEXT_DIM}](sets the toolcall model for the active provider)[/]"
+            f"[{DIM}]usage:[/] /model toolcall set <model> "
+            f"[{DIM}](sets the toolcall model for the active provider)[/]"
         )
         return True
 
     if sub in ("restore", "default", "reset"):
         if len(args) > 2:
-            console.print("[dim]usage:[/dim] /model restore [provider]")
+            console.print(f"[{DIM}]usage:[/] /model restore [provider]")
             session.mark_latest(ok=False, kind="slash")
             return True
         provider_name = args[1] if len(args) == 2 else os.getenv("LLM_PROVIDER", "anthropic")
@@ -278,10 +480,10 @@ def _cmd_model(session: ReplSession, console: Console, args: list[str]) -> bool:
             provider_name, reasoning_model, tc_model = parse_model_set_args(args[1:])
         except ValueError as exc:
             console.print()
-            console.print(f"[{TERMINAL_ERROR}]{escape(str(exc))}[/]")
+            console.print(f"[{ERROR}]{escape(str(exc))}[/]")
             console.print()
             console.print(
-                f"[{TEXT_DIM}]usage:[/] /model set <provider> [model] [--toolcall-model <model>]"
+                f"[{DIM}]usage:[/] /model set <provider> [model] [--toolcall-model <model>]"
             )
             session.mark_latest(ok=False, kind="slash")
             return True
@@ -296,7 +498,7 @@ def _cmd_model(session: ReplSession, console: Console, args: list[str]) -> bool:
         return True
 
     console.print(
-        f"[{TERMINAL_ERROR}]unknown subcommand:[/] {escape(sub)}  "
+        f"[{ERROR}]unknown subcommand:[/] {escape(sub)}  "
         "(try [bold]/model show[/bold], "
         "[bold]/model set <provider> [model] [--toolcall-model <m>][/bold], "
         "[bold]/model restore [provider][/bold], "
@@ -315,10 +517,12 @@ _MODEL_FIRST_ARGS: tuple[tuple[str, str], ...] = (
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
         "/model",
-        "show or set the active LLM ('/model show', "
-        "'/model set <provider> [model] [--toolcall-model <m>]', "
-        "'/model restore [provider]', "
-        "'/model toolcall set <model>')",
+        "show or set the active LLM (TTY: bare '/model' opens an inline menu — "
+        "show stays open for more actions; set / restore / toolcall exit after success; "
+        "done or Esc closes; TTY set: LLM provider then reasoning — pick "
+        "'provider default (one step)' to skip toolcall tuning (like bare `/model set p`); "
+        "else '/model show', '/model set <provider> [model] [--toolcall-model <m>]', "
+        "'/model restore [provider]', '/model toolcall set <model>')",
         _cmd_model,
         first_arg_completions=_MODEL_FIRST_ARGS,
         execution_tier=ExecutionTier.SAFE,

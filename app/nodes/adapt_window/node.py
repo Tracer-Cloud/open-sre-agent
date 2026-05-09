@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 @traceable(name="node_adapt_window")
 def node_adapt_window(
     state: InvestigationState,
-    config: NodeConfig | None = None,  # noqa: ARG001
+    config: NodeConfig | None = None,
 ) -> dict:
     """Apply the adaptive-window rules and return a state delta.
 
@@ -36,6 +36,7 @@ def node_adapt_window(
     only side effect is a debug log line so operators can audit when an
     expansion happened during a run.
     """
+    del config
     delta = adapt_incident_window(dict(state))
     if delta:
         new_window = delta.get("incident_window") or {}

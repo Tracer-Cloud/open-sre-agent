@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import NoReturn
 
 import pytest
-from pydantic import ValidationError
 
 from app.cli.investigation import (
     resolve_investigation_context,
@@ -124,7 +123,7 @@ def test_run_investigation_cli_fails_fast_for_invalid_llm_config(monkeypatch) ->
         lambda *_args, **_kwargs: pytest.fail("investigation should not start"),
     )
 
-    with pytest.raises(ValidationError, match="OPENAI_API_KEY"):
+    with pytest.raises(OpenSREError, match="OPENAI_API_KEY"):
         run_investigation_cli(raw_alert={"alert_name": "PayloadAlert"})
 
 

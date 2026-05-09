@@ -11,7 +11,7 @@ from rich.markup import escape
 
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.streaming import STREAM_LABEL_ANSWER, stream_to_console
-from app.cli.interactive_shell.theme import TERMINAL_ERROR
+from app.cli.interactive_shell.theme import DIM, ERROR, WARNING
 from app.cli.support.exception_reporting import report_exception
 
 _logger = logging.getLogger(__name__)
@@ -70,11 +70,18 @@ def _summarize_last_state(state: dict[str, Any]) -> str:
     return "\n\n".join(parts) or "(no prior investigation details available)"
 
 
-def answer_follow_up(question: str, session: ReplSession, console: Console) -> None:
-    """Answer a follow-up question about the previous investigation."""
+def answer_follow_up(
+    question: str,
+    session: ReplSession,
+    console: Console,
+) -> None:
+    """Answer a follow-up question about the previous investigation.
+
+    The answer is grounded strictly in the prior investigation state.
+    """
     if session.last_state is None:
         console.print(
-            "[yellow]no prior investigation in this session.[/yellow] "
+            f"[{WARNING}]no prior investigation in this session.[/] "
             "describe an alert first, then ask follow-up questions about it."
         )
         return
@@ -83,7 +90,7 @@ def answer_follow_up(question: str, session: ReplSession, console: Console) -> N
         from app.services.llm_client import get_llm_for_reasoning
     except Exception as exc:
         report_exception(exc, context="interactive_shell.follow_up.import")
-        console.print(f"[{TERMINAL_ERROR}]LLM client unavailable:[/] {escape(str(exc))}")
+        console.print(f"[{ERROR}]LLM client unavailable:[/] {escape(str(exc))}")
         return
 
     context = _summarize_last_state(session.last_state)
@@ -104,11 +111,11 @@ def answer_follow_up(question: str, session: ReplSession, console: Console) -> N
             chunks=client.invoke_stream(prompt),
         )
     except KeyboardInterrupt:
-        console.print("[dim]· cancelled[/dim]")
+        console.print(f"[{DIM}]· cancelled[/]")
         return
     except Exception as exc:
         report_exception(exc, context="interactive_shell.follow_up.stream")
-        console.print(f"[{TERMINAL_ERROR}]follow-up failed:[/] {escape(str(exc))}")
+        console.print(f"[{ERROR}]follow-up failed:[/] {escape(str(exc))}")
         return
 
 

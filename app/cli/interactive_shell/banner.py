@@ -7,7 +7,7 @@ render_splash(console, first_run=False)
     Called once when the CLI starts.
 
 render_ready_box(console, session=None)
-    BORDER-boxed two-column welcome panel:
+    DIM-bordered two-column welcome panel:
       left  → ◉ OpenSRE · provider · model · mode · cwd
       right → "Tips for getting started" + "What's new"
     Called after the splash and on /clear, /welcome, and greeting aliases.
@@ -18,48 +18,63 @@ render_banner(console)
 
 Rendered output legend (colour roles)
 --------------------------------------
-# [PRIMARY_ALT]  ASCII art lines
-# [TEXT_DIM]     "opensre" product name label · cwd · tip / note body
-# [ACCENT_SOFT]  version string
-# [ACCENT]       "Tips for getting started" / "What's new" headers
-# [BORDER]       subtitle description · rule lines · box chrome
-# [PRIMARY]      ◉ glyph
-# [TEXT]         OpenSRE label + provider/model values
-# [WARNING]      read-only or trust-mode notice
+# [HIGHLIGHT]  ASCII art lines · ◉ glyph · OpenSRE brand name
+# [BRAND]      version string · model name · section headers
+# [SECONDARY]  "opensre" product name label · cwd · tip / note body
+# [DIM]        subtitle description · rule lines · box chrome · dividers
+# [TEXT]       provider/model values · greeting
+# [WARNING]    read-only or trust-mode notice
 """
 
 from __future__ import annotations
 
+import getpass
+import math
 import os
 import sys
 
 from rich import box
-from rich.console import Console
+from rich.console import Console, Group
 from rich.panel import Panel
 from rich.rule import Rule
 from rich.table import Table
 from rich.text import Text
 
+from app.cli.interactive_shell.config import WHATS_NEW
 from app.cli.interactive_shell.theme import (
-    ACCENT,
-    ACCENT_SOFT,
-    BORDER,
-    GLYPH_ACTIVE,
-    PRIMARY,
-    PRIMARY_ALT,
+    BRAND,
+    DIM,
+    HIGHLIGHT,
+    SECONDARY,
     TEXT,
-    TEXT_DIM,
     WARNING,
 )
 from app.config import LLMSettings
 from app.version import get_version
 
-# ── ASCII art ────────────────────────────────────────────────────────────────
-# Pre-rendered "big"-style figlet art for "OpenSRE". The figlet output is
-# embedded so the tool works without pyfiglet installed. If pyfiglet IS
-# available, it renders live (allowing font customisation via OPENSRE_FIGLET_FONT).
+# ── Splash art ───────────────────────────────────────────────────────────────
+# Pre-rendered by oh-my-logo (devDependency, see package.json) at build time.
+# Colour codes are stripped; HIGHLIGHT is re-applied at render time.
+# Regenerate with: npm run regen-splash  (or: node scripts/regen_splash.js)
 #
-# Verified ≤ 78 columns (leaving 1-space margin each side inside an 80-col terminal).
+# SPLASH_ART         block font, 59 cols, solid ██ fills
+# SPLASH_ART_NARROW  simpleBlock font, 72 cols, pure ASCII fallback
+# _FALLBACK_ART      minimal art, 44 cols, last resort
+
+SPLASH_ART = """\
+ ██████╗ ██████╗ ███████╗███╗   ██╗███████╗██████╗ ███████╗
+██╔═══██╗██╔══██╗██╔════╝████╗  ██║██╔════╝██╔══██╗██╔════╝
+██║   ██║██████╔╝█████╗  ██╔██╗ ██║███████╗██████╔╝█████╗
+██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║╚════██║██╔══██╗██╔══╝
+╚██████╔╝██║     ███████╗██║ ╚████║███████║██║  ██║███████╗
+ ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝╚══════╝"""
+
+SPLASH_ART_NARROW = """\
+    _|_|    _|_|_|    _|_|_|_|  _|      _|    _|_|_|  _|_|_|    _|_|_|_|
+  _|    _|  _|    _|  _|        _|_|    _|  _|        _|    _|  _|
+  _|    _|  _|_|_|    _|_|_|    _|  _|  _|    _|_|    _|_|_|    _|_|_|
+  _|    _|  _|        _|        _|    _|_|        _|  _|    _|  _|
+    _|_|    _|        _|_|_|_|  _|      _|  _|_|_|    _|    _|  _|_|_|_|"""
 
 _FALLBACK_ART = """\
   ___                    ____  ____  _____
@@ -70,18 +85,35 @@ _FALLBACK_ART = """\
       |_|"""
 
 
-def _render_art() -> str:
-    """Return figlet art, falling back to the embedded string."""
-    font = os.getenv("OPENSRE_FIGLET_FONT", "big")
-    try:
-        import pyfiglet  # type: ignore[import-untyped,import-not-found]
+def _render_art(console_width: int = 80) -> str:
+    """Return the splash art string for the given terminal width.
 
-        rendered: str = pyfiglet.figlet_format("OpenSRE", font=font).rstrip()
-        # Reject if it won't fit in 80 columns.
-        if rendered and all(len(ln) <= 78 for ln in rendered.splitlines()):
-            return rendered
-    except Exception:  # noqa: BLE001
-        pass
+    Priority: SPLASH_ART (grid, 34 cols) → SPLASH_ART_NARROW (simpleBlock, 72 cols)
+    → _FALLBACK_ART (minimal, 44 cols).  OPENSRE_FIGLET_FONT overrides the default
+    when pyfiglet is installed.
+    """
+    custom_font = os.getenv("OPENSRE_FIGLET_FONT")
+    if custom_font:
+        try:
+            import pyfiglet  # type: ignore[import-untyped,import-not-found]
+
+            rendered: str = pyfiglet.figlet_format("OpenSRE", font=custom_font).rstrip()
+            if rendered and all(len(ln) <= console_width - 2 for ln in rendered.splitlines()):
+                return rendered
+        except Exception:
+            # pyfiglet missing or font lookup failed — fall through to ASCII art
+            pass
+
+    art_width = max(len(ln) for ln in SPLASH_ART.splitlines())
+    narrow_width = max(len(ln) for ln in SPLASH_ART_NARROW.splitlines())
+    fallback_width = max(len(ln) for ln in _FALLBACK_ART.splitlines())
+
+    if console_width >= art_width + 4:
+        return SPLASH_ART
+    if console_width >= narrow_width + 4:
+        return SPLASH_ART_NARROW
+    if console_width >= fallback_width + 4:
+        return _FALLBACK_ART
     return _FALLBACK_ART
 
 
@@ -129,7 +161,7 @@ def _is_first_run() -> bool:
         from app.cli.wizard.store import get_store_path
 
         return not get_store_path().exists()
-    except Exception:  # noqa: BLE001
+    except Exception:
         return False
 
 
@@ -140,56 +172,54 @@ def render_splash(console: Console | None = None, *, first_run: bool | None = No
     """Print the branded startup splash.
 
     Rendered output (with colour roles):
-    ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ [BORDER divider]
-      ___                    ____  ____  _____     [PRIMARY_ALT art]
-     / _ \\ _ __   ___ _ __  / ___||  _ \\| ____|
-    | | | | '_ \\ / _ \\ '_ \\ \\___ \\| |_) |  _|
-    | |_| | |_) |  __/ | | | ___) |  _ <| |___
-     \\___/| .__/ \\___|_| |_||____/|_| \\_\\_____|
-          |_|
-      opensre  [TEXT_DIM]  ·  v2026.4.7 [ACCENT_SOFT]
+    ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ [DIM divider]
+    ╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋           [HIGHLIGHT art]
+    ╋┏━━┓╋┏━━┓╋┏━━┓╋┏━┓╋╋┏━━┓╋┏━┓╋┏━━┓
+    ...
+      opensre  [SECONDARY]  ·  v<version> [BRAND]
       open-source SRE agent for automated incident
-      investigation and root cause analysis          [BORDER]
-    ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ [BORDER divider]
+      investigation and root cause analysis          [DIM]
+    ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ [DIM divider]
 
     If first_run (or not set and wizard has never run):
       ⚠  This tool runs AI-powered commands …      [WARNING]
-         Press Enter to continue…                   [TEXT_DIM]
+         Press Enter to continue…                   [SECONDARY]
     """
     console = console or Console(highlight=False, force_terminal=True, color_system="truecolor")
     if first_run is None:
         first_run = _is_first_run()
 
     version = get_version()
-    art = _render_art()
+    art = _render_art(console.width)
 
     console.print()
-    console.print(Rule(style=BORDER))
+    console.print(Rule(style=DIM))
     console.print()
 
     for line in art.splitlines():
         t = Text()
         t.append("  ")
-        t.append(line, style=f"bold {PRIMARY_ALT}")
+        for ch in line:
+            t.append(ch, style=f"bold {HIGHLIGHT}" if ch == "█" else f"bold {BRAND}")
         console.print(t)
 
     console.print()
 
     subtitle = Text()
     subtitle.append("  ")
-    subtitle.append("opensre", style=TEXT_DIM)
-    subtitle.append("  ·  ", style=BORDER)
-    subtitle.append(f"v{version}", style=ACCENT_SOFT)
+    subtitle.append("opensre", style=SECONDARY)
+    subtitle.append("  ·  ", style=DIM)
+    subtitle.append(f"v{version}", style=BRAND)
     console.print(subtitle)
 
     desc = Text()
     desc.append(
         "  open-source SRE agent for automated incident investigation and root cause analysis",
-        style=BORDER,
+        style=DIM,
     )
     console.print(desc)
     console.print()
-    console.print(Rule(style=BORDER))
+    console.print(Rule(style=DIM))
 
     if first_run:
         console.print()
@@ -200,15 +230,16 @@ def render_splash(console: Console | None = None, *, first_run: bool | None = No
             "This tool executes AI-powered commands against your infrastructure.\n"
             "     Review the documentation before connecting production systems.\n"
             "     Source: https://github.com/opensre-dev/opensre",
-            style=TEXT_DIM,
+            style=SECONDARY,
         )
         console.print(notice)
         console.print()
         if sys.stdin.isatty():
             try:
-                console.print(f"  [{TEXT_DIM}]Press Enter to continue…[/]", end="")
+                console.print(f"  [{SECONDARY}]Press Enter to continue…[/]", end="")
                 sys.stdin.readline()
             except (EOFError, KeyboardInterrupt, OSError):
+                # Non-interactive stdin or user abort — skip blocking and continue startup.
                 pass
         console.print()
 
@@ -226,38 +257,38 @@ _TIPS: tuple[str, ...] = (
     "Use /investigate <file> for file alerts",
 )
 
-_WHATS_NEW: tuple[str, ...] = (
-    "Two-column welcome with tips and notes",
-    "/welcome reopens this panel anytime",
-    "Bare 'agent', 'hi', 'menu' show panel",
-)
+# Panel geometry. The body switches to a stacked layout on narrow terminals,
+# and otherwise expands to fill the full console width while keeping the left
+# identity column readable and the right notes column roomy.
+_MIN_LEFT_COL_WIDTH = 34
+_MAX_LEFT_COL_WIDTH = 48
+_MIN_RIGHT_COL_WIDTH = 40
+_DIVIDER_WIDTH = 3
+_PANEL_PADDING_X = 2
+_PANEL_FRAME_WIDTH = 2 + (_PANEL_PADDING_X * 2)
+_MIN_TWO_COLUMN_CONTENT_WIDTH = _MIN_LEFT_COL_WIDTH + _DIVIDER_WIDTH + _MIN_RIGHT_COL_WIDTH
 
-# Column geometry. Left carries identity + branding and is given more breathing
-# room; right is a compact, scannable side-bar that truncates with `…`.
-_LEFT_COL_WIDTH = 46
-_RIGHT_COL_WIDTH = 40
-
-# OpenSRE brand mark — the figlet "big" O glyph used by the splash wordmark,
-# rendered standalone with a thin curved echo tracing its right edge. Each row
-# is (body, echo): body renders in the bright brand colour to match the splash,
-# echo renders dim so it reads as a shadow/outline rather than a second glyph.
+# OpenSRE brand mark — single "O" from oh-my-logo tiny font (half-block chars).
 _LOGO_MARK_ROWS: tuple[tuple[str, str], ...] = (
-    ("  ___  ", " "),
-    (" / _ \\", " \\"),
-    ("| |   |", " |"),
-    ("| |_  |", " |"),
-    (" \\___/", " /"),
+    ("█▀█", ""),
+    ("█▄█", ""),
 )
+
+
+def _get_username() -> str:
+    try:
+        return getpass.getuser()
+    except Exception:
+        return "there"
 
 
 def _build_logo_mark() -> Text:
-    """Return the brand mark as a styled, two-tone Text block."""
+    """Return the brand mark left-aligned (flush with the column's 2-space indent)."""
     logo = Text(no_wrap=True)
-    for index, (body, echo) in enumerate(_LOGO_MARK_ROWS):
+    for index, (body, _echo) in enumerate(_LOGO_MARK_ROWS):
         if index:
             logo.append("\n")
-        logo.append(body, style=f"bold {PRIMARY_ALT}")
-        logo.append(echo, style=TEXT_DIM)
+        logo.append(body, style=f"bold {HIGHLIGHT}")
     return logo
 
 
@@ -269,44 +300,120 @@ def _format_cwd(path: str) -> str:
     return path
 
 
-def _build_identity_block(provider: str, model: str, version: str, *, trust_mode: bool) -> Text:
-    """Left column: brand mark, branding, version, provider/model, mode, cwd."""
+def _build_identity_block(provider: str, model: str, *, trust_mode: bool) -> Text:
+    """Left column: mascot · blank · greeting · blank · identity line (all left-aligned)."""
     logo = _build_logo_mark()
 
-    title = Text()
-    title.append(f"{GLYPH_ACTIVE} ", style=f"bold {PRIMARY}")
-    title.append("OpenSRE", style=f"bold {TEXT}")
-    title.append(f"  v{version}", style=ACCENT_SOFT)
+    greeting = Text()
+    greeting.append(f"Welcome back {_get_username()}!", style=f"bold {TEXT}")
 
-    identity = Text()
-    identity.append(provider, style=TEXT)
-    identity.append("  ·  ", style=BORDER)
-    identity.append(model, style=TEXT)
-
-    mode = Text()
+    # Single flowing line: model · tier · workspace
+    cwd = _format_cwd(os.getcwd())
+    tier = "trust mode" if trust_mode else provider
+    identity = Text(overflow="fold")
+    identity.append(model, style=f"bold {BRAND}")
+    identity.append("  ·  ", style=DIM)
     if trust_mode:
-        mode.append("trust mode", style=f"bold {WARNING}")
-        mode.append("  ·  ", style=BORDER)
-        mode.append("approval prompts off", style=TEXT_DIM)
+        identity.append(tier, style=f"bold {WARNING}")
+        identity.append("  ·  ", style=DIM)
     else:
-        mode.append("investigation mode", style=TEXT_DIM)
+        identity.append(tier, style=SECONDARY)
+        identity.append("  ·  ", style=DIM)
+    identity.append(cwd, style=SECONDARY)
 
-    cwd = Text(_format_cwd(os.getcwd()), style=TEXT_DIM, overflow="ellipsis", no_wrap=True)
-
-    return Text("\n").join([logo, Text(), title, Text(), identity, mode, cwd])
+    return Text("\n").join([logo, Text(), Text(), greeting, Text(), Text(), identity])
 
 
 def _build_notes_block(header_text: str, items: tuple[str, ...]) -> Text:
     """Right column section: bold header followed by dim list items."""
-    parts: list[Text] = [Text(header_text, style=f"bold {ACCENT}")]
+    parts: list[Text] = [Text(header_text, style=f"bold {BRAND}")]
     for item in items:
-        parts.append(Text(item, style=TEXT_DIM, overflow="fold"))
+        parts.append(Text(item, style=SECONDARY, overflow="fold"))
     return Text("\n").join(parts)
 
 
+def _visual_line_count(block: Text, width: int) -> int:
+    """Estimate how many terminal lines a Text block will occupy at ``width``."""
+    safe_width = max(width, 1)
+    total = 0
+    for raw_line in block.plain.split("\n"):
+        total += max(1, math.ceil(max(len(raw_line), 1) / safe_width))
+    return total
+
+
 def _vertical_divider(height: int) -> Text:
-    """Build a single-character vertical rule with ``height`` lines."""
-    return Text("\n".join("│" for _ in range(max(height, 1))), style=TEXT_DIM, no_wrap=True)
+    """Build a padded vertical rule with ``height`` lines."""
+    return Text("\n".join(" │ " for _ in range(max(height, 1))), style=DIM, no_wrap=True)
+
+
+def _two_column_widths(console_width: int) -> tuple[int, int]:
+    """Return responsive left/right widths for the ready panel body."""
+    content_width = max(console_width - _PANEL_FRAME_WIDTH, _MIN_TWO_COLUMN_CONTENT_WIDTH)
+    left_width = int((content_width - _DIVIDER_WIDTH) * 0.42)
+    left_width = max(_MIN_LEFT_COL_WIDTH, min(left_width, _MAX_LEFT_COL_WIDTH))
+    right_width = content_width - _DIVIDER_WIDTH - left_width
+    if right_width < _MIN_RIGHT_COL_WIDTH:
+        right_width = _MIN_RIGHT_COL_WIDTH
+        left_width = content_width - _DIVIDER_WIDTH - right_width
+    return left_width, right_width
+
+
+def build_ready_panel(
+    console: Console | None = None,
+    *,
+    session: object = None,
+) -> Panel:
+    """Build the responsive welcome panel shared by startup and CLI help."""
+    console = console or Console(highlight=False, force_terminal=True, color_system="truecolor")
+    provider, model = detect_provider_model()
+    version = get_version()
+    trust_mode: bool = bool(getattr(session, "trust_mode", False))
+
+    panel_title = Text()
+    panel_title.append(" OpenSRE", style=f"bold {HIGHLIGHT}")
+    panel_title.append(" · ", style=DIM)
+    panel_title.append(f"v{version} ", style=BRAND)
+
+    left = _build_identity_block(provider, model, trust_mode=trust_mode)
+    right = Text("\n").join(
+        [
+            _build_notes_block("Tips for getting started", _TIPS),
+            Text("───", style=DIM),
+            _build_notes_block("What's new", WHATS_NEW),
+        ]
+    )
+
+    body: Group | Table
+    if console.width - _PANEL_FRAME_WIDTH >= _MIN_TWO_COLUMN_CONTENT_WIDTH:
+        left_width, right_width = _two_column_widths(console.width)
+        height = max(
+            _visual_line_count(left, left_width),
+            _visual_line_count(right, right_width),
+        )
+        divider = _vertical_divider(height)
+
+        grid = Table.grid(padding=0, expand=False)
+        grid.add_column(justify="left", vertical="top", width=left_width)
+        grid.add_column(justify="center", vertical="top", width=_DIVIDER_WIDTH)
+        grid.add_column(justify="left", vertical="top", width=right_width)
+        grid.add_row(left, divider, right)
+        body = grid
+    else:
+        body = Group(
+            left,
+            Rule(style=DIM),
+            right,
+        )
+
+    return Panel(
+        body,
+        title=panel_title,
+        title_align="left",
+        border_style=DIM,
+        padding=(1, _PANEL_PADDING_X),
+        expand=True,
+        box=box.ROUNDED,
+    )
 
 
 def render_ready_box(
@@ -314,63 +421,23 @@ def render_ready_box(
     *,
     session: object = None,
 ) -> None:
-    """Print the BORDER-boxed two-column welcome panel.
+    """Print the two-column welcome panel with an embedded title bar.
 
-    Layout (colour roles in brackets):
-    ╭──────────────────────────────────────────────────────────────────────────╮
-    │                                                                          │
-    │  ◉ OpenSRE  v2026.4.7                  │  Tips for getting started       │
-    │                                        │  Paste alert JSON or describe…  │
-    │  anthropic  ·  claude-opus-4-5         │  Type /help to list slash …     │
-    │  investigation mode                    │  ───                            │
-    │  ~/code/opensre                        │  What's new                     │
-    │                                        │  Two-column welcome with tips…  │
-    │                                                                          │
-    ╰──────────────────────────────────────────────────────────────────────────╯
-
-    The left column is weighted wider (identity + branding); the right column
-    is a compact side-bar that truncates with `…`.  A dim vertical rule
-    divides the two columns to mirror the Claude Code welcome panel.
+    Layout:
+    ── OpenSRE · v<version> ────────────────────────────────────────────────╮
+    │                                                                         │
+    │      Welcome back paul!          │  Tips for getting started            │
+    │           █▀█                   │  Paste alert JSON or describe…        │
+    │           █▄█                   │  ───                                  │
+    │                                  │  What's new                          │
+    │  claude-opus-4-7  ·  anthropic  │  Two-column welcome with tips…        │
+    │  · ~/code/opensre                │  /release-notes for more             │
+    │                                                                         │
+    ╰─────────────────────────────────────────────────────────────────────────╯
     """
     console = console or Console(highlight=False, force_terminal=True, color_system="truecolor")
-    provider, model = detect_provider_model()
-    version = get_version()
-    trust_mode: bool = bool(getattr(session, "trust_mode", False))
-
-    left = _build_identity_block(provider, model, version, trust_mode=trust_mode)
-    right = Text("\n").join(
-        [
-            _build_notes_block("Tips for getting started", _TIPS),
-            Text("───", style=BORDER),
-            _build_notes_block("What's new", _WHATS_NEW),
-        ]
-    )
-
-    height = max(left.plain.count("\n"), right.plain.count("\n")) + 1
-    divider = _vertical_divider(height)
-
-    grid = Table.grid(padding=(0, 2), expand=False)
-    grid.add_column(justify="left", vertical="top", width=_LEFT_COL_WIDTH)
-    grid.add_column(justify="center", vertical="top", width=1)
-    grid.add_column(
-        justify="left",
-        vertical="top",
-        width=_RIGHT_COL_WIDTH,
-        no_wrap=True,
-        overflow="ellipsis",
-    )
-    grid.add_row(left, divider, right)
-
     console.print()
-    console.print(
-        Panel(
-            grid,
-            border_style=BORDER,
-            padding=(1, 2),
-            expand=False,
-            box=box.ROUNDED,
-        )
-    )
+    console.print(build_ready_panel(console, session=session))
     console.print()
 
 

@@ -97,7 +97,7 @@ def test_main_treats_onboard_abort_as_clean_cancel(
     monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
-    monkeypatch.setattr("app.cli.__main__.init_sentry", lambda: None)
+    monkeypatch.setattr("app.cli.__main__.init_sentry", lambda **_kw: None)
     monkeypatch.setattr(
         "app.cli.wizard.run_wizard",
         lambda: (_ for _ in ()).throw(click.Abort()),
@@ -113,7 +113,7 @@ def test_main_allows_update_when_sentry_sdk_missing(monkeypatch, capsys) -> None
     monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
 
-    def _raise_missing_sentry() -> None:
+    def _raise_missing_sentry(**_kwargs: object) -> None:
         raise ModuleNotFoundError("No module named 'sentry_sdk'", name="sentry_sdk")
 
     monkeypatch.setattr("app.cli.__main__.init_sentry", _raise_missing_sentry)
@@ -129,7 +129,7 @@ def test_main_allows_update_when_sentry_sdk_missing(monkeypatch, capsys) -> None
 def test_main_non_update_still_raises_when_sentry_sdk_missing(monkeypatch) -> None:
     monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
 
-    def _raise_missing_sentry() -> None:
+    def _raise_missing_sentry(**_kwargs: object) -> None:
         raise ModuleNotFoundError("No module named 'sentry_sdk'", name="sentry_sdk")
 
     monkeypatch.setattr("app.cli.__main__.init_sentry", _raise_missing_sentry)
@@ -155,7 +155,7 @@ def test_main_does_not_capture_analytics_for_help(monkeypatch, capsys) -> None:
     assert captured == []
 
 
-def test_main_captures_unknown_command_to_sentry(monkeypatch, capsys) -> None:
+def test_main_does_not_capture_unknown_command_to_sentry(monkeypatch, capsys) -> None:
     captured: list[str] = []
     captured_errors: list[BaseException] = []
     monkeypatch.setattr(
@@ -175,9 +175,7 @@ def test_main_captures_unknown_command_to_sentry(monkeypatch, capsys) -> None:
     assert exit_code != 0
     assert "No such command" in capsys.readouterr().err
     assert captured == []
-    assert len(captured_errors) == 1
-    assert isinstance(captured_errors[0], click.UsageError)
-    assert str(captured_errors[0]).startswith("No such command ")
+    assert captured_errors == []
 
 
 def test_main_does_not_capture_invalid_option_parse_error(monkeypatch, capsys) -> None:
@@ -323,7 +321,7 @@ def test_main_emits_first_run_install_before_cli_invoked(
     # This test validates analytics event ordering only; avoid real Sentry init
     # side effects (e.g. sdk integration hooks) that are unrelated to the
     # install/cli-invoked event contract.
-    monkeypatch.setattr("app.cli.__main__.init_sentry", lambda: None)
+    monkeypatch.setattr("app.cli.__main__.init_sentry", lambda **_kw: None)
     provider.shutdown_analytics(flush=False)
     provider._instance = None
     provider._cached_anonymous_id = None

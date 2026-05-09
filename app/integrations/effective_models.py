@@ -71,6 +71,7 @@ class EffectiveIntegrations(StrictConfigModel):
     vercel: EffectiveIntegrationEntry | None = None
     jira: EffectiveIntegrationEntry | None = None
     opsgenie: EffectiveIntegrationEntry | None = None
+    incident_io: EffectiveIntegrationEntry | None = None
     notion: EffectiveIntegrationEntry | None = None
     prefect: EffectiveIntegrationEntry | None = None
     posthog: EffectiveIntegrationEntry | None = None
@@ -92,4 +93,5 @@ class EffectiveIntegrations(StrictConfigModel):
     splunk: EffectiveIntegrationEntry | None = None
     airflow: dict[str, Any] | None = None
     argocd: EffectiveIntegrationEntry | None = None
+    helm: EffectiveIntegrationEntry | None = None
     victoria_logs: EffectiveIntegrationEntry | None = None

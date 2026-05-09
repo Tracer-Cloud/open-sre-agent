@@ -22,6 +22,7 @@ class Event(StrEnum):
     INVESTIGATION_STARTED = "investigation_started"
     INVESTIGATION_COMPLETED = "investigation_completed"
     INVESTIGATION_FAILED = "investigation_failed"
+    INTERACTIVE_SHELL_ROUTE_DECISION = "interactive_shell_route_decision"
 
     # Integrations
     INTEGRATION_SETUP_STARTED = "integration_setup_started"
@@ -61,3 +62,6 @@ class Event(StrEnum):
     DEPLOY_STARTED = "deploy_started"
     DEPLOY_COMPLETED = "deploy_completed"
     DEPLOY_FAILED = "deploy_failed"
+
+    # Local agent monitoring (Monitor Local Agents feature)
+    AGENT_SECRET_DETECTED = "agent_secret_detected"

@@ -1,0 +1,17 @@
+- input: "/help"
+  expected: "slash"
+
+- input: "help"
+  expected: "slash"
+
+- input: "how do I run an investigation?"
+  expected: "cli_help"
+
+- input: "run a sample alert"
+  expected: "cli_agent"
+
+- input: "api latency spiked and 5xx errors increased"
+  expected: "new_alert"
+
+- input: "hello"
+  expected: "cli_agent"

@@ -13,6 +13,8 @@ from tests.synthetic.schemas import (
     validate_alert,
     validate_answer_key,
     validate_cloudwatch_metrics,
+    validate_ec2_instances_by_tag,
+    validate_elb_target_health,
     validate_performance_insights,
     validate_rds_events,
     validate_scenario_metadata,
@@ -283,6 +285,8 @@ def _build_evidence(
     aws_cloudwatch_metrics = None
     aws_rds_events = None
     aws_performance_insights = None
+    ec2_instances_by_tag = None
+    elb_target_health = None
 
     if "aws_cloudwatch_metrics" in available_evidence:
         raw = _load_cloudwatch_metrics(scenario_dir, base_dir)
@@ -297,10 +301,20 @@ def _build_evidence(
         path = _resolve_evidence_path(scenario_dir, base_dir, "aws_performance_insights.json")
         aws_performance_insights = validate_performance_insights(_read_json(path))
 
+    if "ec2_instances_by_tag" in available_evidence:
+        path = _resolve_evidence_path(scenario_dir, base_dir, "ec2_instances_by_tag.json")
+        ec2_instances_by_tag = validate_ec2_instances_by_tag(_read_json(path))
+
+    if "elb_target_health" in available_evidence:
+        path = _resolve_evidence_path(scenario_dir, base_dir, "elb_target_health.json")
+        elb_target_health = validate_elb_target_health(_read_json(path))
+
     return ScenarioEvidence(
         aws_cloudwatch_metrics=aws_cloudwatch_metrics,
         aws_rds_events=aws_rds_events,
         aws_performance_insights=aws_performance_insights,
+        ec2_instances_by_tag=ec2_instances_by_tag,
+        elb_target_health=elb_target_health,
     )
 
 

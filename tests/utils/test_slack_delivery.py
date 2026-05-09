@@ -258,6 +258,7 @@ class TestPostViaWebapp:
 class TestSendSlackReport:
     def test_no_thread_ts_no_webhook_returns_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
+        monkeypatch.setattr(slack_delivery, "_configured_webhook_url", lambda: "")
         ok, err = slack_delivery.send_slack_report("hi", channel="C1", thread_ts=None)
         assert ok is False
         assert err == "no_thread_ts"
@@ -273,6 +274,31 @@ class TestSendSlackReport:
         assert ok is True
         assert err == ""
         assert captured["url"] == "https://hooks.slack.test/abc"
+
+    def test_no_thread_ts_uses_store_webhook_when_env_missing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
+        monkeypatch.setattr(
+            "app.integrations.catalog.resolve_effective_integrations",
+            lambda: {
+                "slack": {
+                    "source": "local store",
+                    "config": {"webhook_url": "https://hooks.slack.test/store"},
+                }
+            },
+        )
+        captured: dict[str, Any] = {}
+        monkeypatch.setattr(
+            "app.utils.delivery_transport.httpx.post",
+            lambda url, **kw: captured.update({"url": url}, **kw) or _mock_response(200, None, ""),
+        )
+
+        ok, err = slack_delivery.send_slack_report("hi", channel="C1", thread_ts=None)
+
+        assert ok is True
+        assert err == ""
+        assert captured["url"] == "https://hooks.slack.test/store"
 
     def test_direct_post_used_when_token_and_channel(self, monkeypatch: pytest.MonkeyPatch) -> None:
         captured: list[str] = []

@@ -64,6 +64,48 @@ class TestDispatchSlash:
         dispatch_slash("/trust off", session, console)
         assert session.trust_mode is False
 
+    def test_effort_sets_session_preference(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        class _FakeLLM:
+            provider = "openai"
+
+        monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: _FakeLLM())
+        session = ReplSession()
+        console, buf = _capture()
+
+        dispatch_slash("/effort max", session, console)
+
+        assert session.reasoning_effort == "max"
+        output = buf.getvalue()
+        assert "reasoning effort set to" in output
+        assert "runtime: xhigh" in output
+
+    def test_effort_rejects_unknown_value(self) -> None:
+        session = ReplSession()
+        console, buf = _capture()
+
+        dispatch_slash("/effort turbo", session, console)
+
+        assert session.reasoning_effort is None
+        assert "unknown reasoning effort" in buf.getvalue()
+
+    def test_effort_shows_default_config_when_unset(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        class _FakeLLM:
+            provider = "anthropic"
+            anthropic_reasoning_model = "claude-opus-4-7"
+            anthropic_toolcall_model = "claude-haiku-4-5-20251001"
+
+        monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: _FakeLLM())
+        session = ReplSession()
+        console, buf = _capture()
+
+        dispatch_slash("/effort", session, console)
+
+        output = buf.getvalue()
+        assert "reasoning effort:" in output
+        assert "(default)" in output
+        assert "default config:" in output
+        assert "anthropic does not use reasoning-effort overrides" in output
+
     def test_reset_clears_session(self) -> None:
         session = ReplSession()
         session.record("alert", "test")
@@ -80,10 +122,12 @@ class TestDispatchSlash:
     def test_status_shows_session_fields(self) -> None:
         session = ReplSession()
         session.record("alert", "hello")
+        session.reasoning_effort = "max"
         console, buf = _capture()
         dispatch_slash("/status", session, console)
         output = buf.getvalue()
         assert "interactions" in output
+        assert "reasoning effort" in output
         assert "trust mode" in output
         assert "grounding cli cache" in output
         assert "grounding docs cache" in output
@@ -132,7 +176,8 @@ class TestListCommand:
 
     _FAKE_INTEGRATIONS = [
         {"service": "datadog", "source": "store", "status": "ok", "detail": "API ok"},
-        {"service": "slack", "source": "env", "status": "missing", "detail": "No bot token"},
+        # `missing` integrations are omitted from `/list integrations`; keep slack visible here.
+        {"service": "slack", "source": "env", "status": "failed", "detail": "No bot token"},
         {"service": "github", "source": "store", "status": "ok", "detail": "MCP ok"},
         {"service": "openclaw", "source": "store", "status": "failed", "detail": "401 from server"},
     ]
@@ -315,6 +360,22 @@ class TestIntegrationsCommand:
         dispatch_slash("/integrations bogus", ReplSession(), console)
         assert "unknown subcommand" in buf.getvalue()
 
+    def test_setup_delegates_to_cli(self, monkeypatch: object) -> None:
+        from app.cli.interactive_shell.command_registry import integrations as m
+
+        captured = []
+        monkeypatch.setattr(m, "run_cli_command", lambda _, args: (captured.append(args), True)[1])
+        dispatch_slash("/integrations setup", ReplSession(), Console())
+        assert captured == [["integrations", "setup"]]
+
+    def test_remove_delegates_to_cli(self, monkeypatch: object) -> None:
+        from app.cli.interactive_shell.command_registry import integrations as m
+
+        captured = []
+        monkeypatch.setattr(m, "run_cli_command", lambda _, args: (captured.append(args), True)[1])
+        dispatch_slash("/integrations remove slack", ReplSession(), Console())
+        assert captured == [["integrations", "remove", "slack"]]
+
 
 class TestMcpCommand:
     _FAKE = [
@@ -341,15 +402,21 @@ class TestMcpCommand:
         dispatch_slash("/mcp", ReplSession(), console)
         assert "github" in buf.getvalue()
 
-    def test_connect_prints_hint(self) -> None:
-        console, buf = _capture()
-        dispatch_slash("/mcp connect", ReplSession(), console)
-        assert "integrations setup" in buf.getvalue()
+    def test_connect_delegates_to_cli(self, monkeypatch: object) -> None:
+        from app.cli.interactive_shell.command_registry import integrations as m
 
-    def test_disconnect_prints_hint(self) -> None:
-        console, buf = _capture()
-        dispatch_slash("/mcp disconnect", ReplSession(), console)
-        assert "integrations remove" in buf.getvalue()
+        captured = []
+        monkeypatch.setattr(m, "run_cli_command", lambda _, args: (captured.append(args), True)[1])
+        dispatch_slash("/mcp connect", ReplSession(), Console())
+        assert captured == [["integrations", "setup"]]
+
+    def test_disconnect_delegates_to_cli(self, monkeypatch: object) -> None:
+        from app.cli.interactive_shell.command_registry import integrations as m
+
+        captured = []
+        monkeypatch.setattr(m, "run_cli_command", lambda _, args: (captured.append(args), True)[1])
+        dispatch_slash("/mcp disconnect github", ReplSession(), Console())
+        assert captured == [["integrations", "remove", "github"]]
 
     def test_unknown_subcommand(self, monkeypatch: object) -> None:
         self._patch(monkeypatch)
@@ -378,6 +445,69 @@ class TestModelCommand:
         console, buf = _capture()
         dispatch_slash("/model", ReplSession(), console)
         assert "anthropic" in buf.getvalue()
+
+    def test_model_interactive_set_flow_applies_selection(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        self._patch_llm(monkeypatch)
+        import app.cli.wizard.env_sync as env_sync
+        from app.cli.interactive_shell.command_registry import model as model_cmd
+
+        env_path = tmp_path / ".env"
+        monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setattr(model_cmd, "repl_tty_interactive", lambda: True)
+        selections = iter(["set", "anthropic", "__provider_default__"])
+        monkeypatch.setattr(model_cmd, "repl_choose_one", lambda **_: next(selections))
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+
+        console, buf = _capture()
+        dispatch_slash("/model", ReplSession(), console)
+
+        output = buf.getvalue()
+        assert "switched LLM provider" in output
+        assert "reasoning model:" in output
+        assert "LLM_PROVIDER=anthropic" in env_path.read_text(encoding="utf-8")
+
+    def test_model_interactive_show_then_done_shows_table_once(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        self._patch_llm(monkeypatch)
+        from app.cli.interactive_shell.command_registry import model as model_cmd
+
+        monkeypatch.setattr(model_cmd, "repl_tty_interactive", lambda: True)
+        picks = iter(["show", "done"])
+        monkeypatch.setattr(model_cmd, "repl_choose_one", lambda **_: next(picks))
+        console, buf = _capture()
+        dispatch_slash("/model", ReplSession(), console)
+        assert "anthropic" in buf.getvalue()
+
+    def test_model_interactive_escape_backs_out_without_changes(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        self._patch_llm(monkeypatch)
+        from app.cli.interactive_shell.command_registry import model as model_cmd
+
+        monkeypatch.setattr(model_cmd, "repl_tty_interactive", lambda: True)
+        selections = iter(
+            [
+                "set",  # root -> set
+                "anthropic",  # provider selected
+                None,  # Esc from model selection -> back to provider list
+                None,  # Esc from provider list -> back to root action list
+                None,  # Esc at root -> close menu
+            ]
+        )
+        monkeypatch.setattr(model_cmd, "repl_choose_one", lambda **_: next(selections))
+        session = ReplSession()
+        console, buf = _capture()
+        dispatch_slash("/model", session, console)
+
+        assert "switched LLM provider" not in buf.getvalue()
+        assert session.history[-1]["ok"] is True
 
     def test_set_switches_provider(
         self,
@@ -772,7 +902,7 @@ class TestInvestigateFileCommand:
         console, _ = _capture()
         dispatch_slash(f"/investigate {alert_file}", session, console)
 
-        # The next free-text alert must inherit these — proving accumulation ran.
+        # The next free-text alert must inherit these—proving accumulation ran.
         assert session.accumulated_context == {
             "service": "orders-api",
             "cluster_name": "prod-us-east",
@@ -807,7 +937,6 @@ class TestInvestigateFileCommand:
 
 
 # Task 4 — Session-state commands
-# ---------------------------------------------------------------------------
 
 
 class TestHistoryCommand:
@@ -1009,3 +1138,34 @@ class TestCancelCommand:
         dispatch_slash("/cancel", ReplSession(), console)
         assert "usage" in buf.getvalue().lower()
         assert "/tasks" in buf.getvalue()
+
+
+class TestCliDelegatedCommands:
+    """Coverage for commands that simply delegate to the underlying Click CLI."""
+
+    @pytest.mark.parametrize(
+        "command,expected_args",
+        [
+            ("/onboard", ["onboard"]),
+            ("/deploy ec2", ["deploy", "ec2"]),
+            ("/remote health", ["remote", "health"]),
+            ("/tests list", ["tests", "list"]),
+            ("/guardrails audit", ["guardrails", "audit"]),
+            ("/update", ["update"]),
+            ("/uninstall", ["uninstall"]),
+        ],
+    )
+    def test_command_delegation(
+        self, monkeypatch: object, command: str, expected_args: list[str]
+    ) -> None:
+        from app.cli.interactive_shell.command_registry import cli_parity as m
+
+        captured: list[list[str]] = []
+
+        def _fake_run_cli_command(_console: Console, args: list[str], **kwargs: object) -> bool:
+            captured.append(args)
+            return True
+
+        monkeypatch.setattr(m, "run_cli_command", _fake_run_cli_command)
+        dispatch_slash(command, ReplSession(), Console())
+        assert captured == [expected_args]
