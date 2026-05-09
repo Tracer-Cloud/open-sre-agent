@@ -111,6 +111,19 @@ def node_agent_incident(
     )
     render_investigation_header(details.alert_name, details.pipeline_name, details.severity)
 
+    result: dict[str, Any] = {
+        "is_noise": False,
+        "alert_name": details.alert_name,
+        "pipeline_name": details.pipeline_name,
+        "severity": details.severity,
+        "alert_source": _AGENT_INCIDENT_SOURCE,
+        "alert_json": details.model_dump(),
+        "raw_alert": raw_alert,
+        "problem_md": _make_problem_md(details, payload),
+        "incident_window": resolve_incident_window(raw_alert).to_dict(),
+    }
+    if not state.get("investigation_started_at"):
+        result["investigation_started_at"] = time.monotonic()
     tracker.complete(
         "agent_incident",
         fields_updated=[
@@ -125,18 +138,4 @@ def node_agent_incident(
             "incident_window",
         ],
     )
-
-    result: dict[str, Any] = {
-        "is_noise": False,
-        "alert_name": details.alert_name,
-        "pipeline_name": details.pipeline_name,
-        "severity": details.severity,
-        "alert_source": _AGENT_INCIDENT_SOURCE,
-        "alert_json": details.model_dump(),
-        "raw_alert": raw_alert,
-        "problem_md": _make_problem_md(details, payload),
-        "incident_window": resolve_incident_window(raw_alert).to_dict(),
-    }
-    if not state.get("investigation_started_at"):
-        result["investigation_started_at"] = time.monotonic()
     return result
