@@ -212,9 +212,12 @@ class _DiagnoseStreamRenderer:
             if message:
                 tail += f"  {message}"
             print(tail)
+
+
 def _clean_markdown_line(line: str) -> str:
     """Strip both bulleted lists (•, ●, -, —, *) and numbered lists (e.g. 1., 2))."""
     import re
+
     stripped = line.strip()
     # Strip numbered list prefix (e.g. "1. ", "2) ")
     stripped = re.sub(r"^\s*\d+[.)]\s*", "", stripped)

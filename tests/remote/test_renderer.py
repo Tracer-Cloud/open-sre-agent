@@ -659,9 +659,7 @@ class TestStreamRendererFocusedUXAndParsing:
     @patch("app.remote.renderer.Live")
     @patch("app.output._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
-    def test_report_parsing_with_numbered_lists(
-        self, _mock_display, _mock_live, capfd
-    ) -> None:
+    def test_report_parsing_with_numbered_lists(self, _mock_display, _mock_live, capfd) -> None:
         """Report parser correctly handles numbered lists in Evidence and Next Actions sections."""
         renderer = StreamRenderer()
         renderer._final_state = {
