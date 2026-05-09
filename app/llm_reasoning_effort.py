@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import Literal, cast
 
 ReasoningEffortChoice = Literal["low", "medium", "high", "xhigh", "max"]
@@ -19,6 +20,10 @@ REASONING_EFFORT_OPTIONS: tuple[ReasoningEffortChoice, ...] = (
 
 _RUNTIME_ENV_KEY = "OPENSRE_REASONING_EFFORT"
 _RUNTIME_VALUES = frozenset({"low", "medium", "high", "xhigh"})
+
+_reasoning_effort_session: ContextVar[str | None] = ContextVar(
+    "opensre_reasoning_effort_session", default=None
+)
 
 
 def parse_reasoning_effort(value: str | None) -> ReasoningEffortChoice | None:
@@ -49,7 +54,14 @@ def display_reasoning_effort(choice: ReasoningEffortChoice | None) -> str:
 
 
 def get_active_reasoning_effort() -> str | None:
-    """Return the runtime override currently active for this process."""
+    """Return the runtime reasoning-effort value for this logical context.
+
+    Order: in-REPL session override (``apply_reasoning_effort``), then
+    ``OPENSRE_REASONING_EFFORT`` in the process environment.
+    """
+    session = _reasoning_effort_session.get()
+    if session is not None:
+        return session if session in _RUNTIME_VALUES else None
     value = os.getenv(_RUNTIME_ENV_KEY, "").strip().lower()
     if value in _RUNTIME_VALUES:
         return value
@@ -63,20 +75,23 @@ def provider_supports_reasoning_effort(provider: str | None) -> bool:
 
 @contextmanager
 def apply_reasoning_effort(choice: ReasoningEffortChoice | None) -> Iterator[None]:
-    """Temporarily expose a session effort override to downstream model clients."""
-    previous = os.environ.get(_RUNTIME_ENV_KEY)
+    """Temporarily expose a session effort override to downstream model clients.
+
+    ``choice is None`` means defer to shell/env defaults: do not clear
+    ``OPENSRE_REASONING_EFFORT`` or mutate the process environment.
+
+    Non-None choices use a :class:`contextvars.ContextVar` so concurrent REPL or
+    CLI invocations on different threads/tasks do not race on ``os.environ``.
+    """
+    if choice is None:
+        yield
+        return
     runtime = runtime_reasoning_effort(choice)
-    if runtime is None:
-        os.environ.pop(_RUNTIME_ENV_KEY, None)
-    else:
-        os.environ[_RUNTIME_ENV_KEY] = runtime
+    token = _reasoning_effort_session.set(runtime)
     try:
         yield
     finally:
-        if previous is None:
-            os.environ.pop(_RUNTIME_ENV_KEY, None)
-        else:
-            os.environ[_RUNTIME_ENV_KEY] = previous
+        _reasoning_effort_session.reset(token)
 
 
 __all__ = [
