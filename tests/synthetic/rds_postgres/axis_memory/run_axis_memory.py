@@ -135,9 +135,7 @@ def run(argv: list[str] | None = None) -> list[PairAnnotation]:
         needed_ids.add(pair["base"])
         needed_ids.add(pair["sibling"])
     fixtures = [
-        fixture
-        for fixture in load_all_scenarios(SUITE_DIR)
-        if fixture.scenario_id in needed_ids
+        fixture for fixture in load_all_scenarios(SUITE_DIR) if fixture.scenario_id in needed_ids
     ]
     fixtures_by_id = {fixture.scenario_id: fixture for fixture in fixtures}
 
