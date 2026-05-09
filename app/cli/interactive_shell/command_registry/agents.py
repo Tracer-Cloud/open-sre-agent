@@ -389,10 +389,18 @@ def _render_live_tail(console: Console, label: str, sess: AttachSession) -> None
                 vertical_overflow="visible",
             ) as live,
         ):
-            for _chunk in sess:
+            # Iterating ``sess`` is what drains the reader queue and
+            # appends to ``sess.buffer`` — the loop body only needs the
+            # *side effect* of advancing, not the chunk value, so the
+            # iteration variable is intentionally discarded.
+            for _ in sess:
                 snapshot = _slice_to_utf8_boundary(sess.buffer.snapshot(), _TRACE_RENDER_TAIL_BYTES)
                 live.update(Text.from_ansi(snapshot.decode("utf-8", errors="replace")))
     except KeyboardInterrupt:
+        # kubectl-logs-style: a single Ctrl+C ends the trace and returns
+        # to the REPL prompt without propagating a traceback. The
+        # ``with sess:`` in the caller still runs and joins the reader
+        # thread, so this swallow is safe.
         pass
     console.print(f"[{DIM}]· trace ended[/]")
 

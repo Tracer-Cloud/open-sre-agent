@@ -397,8 +397,7 @@ class TestAttachSession:
     def test_yields_chunks_written_after_attach(self, tmp_path: Path) -> None:
         log = tmp_path / "agent.log"
         log.write_text("")
-        sess = self._make_session(log)
-        try:
+        with self._make_session(log) as sess:
             # Write *after* attach so we exercise the post-EOF poll path.
             with log.open("ab") as fh:
                 fh.write(b"hello\n")
@@ -408,8 +407,6 @@ class TestAttachSession:
             # consumer has seen — the slash-command renderer relies on
             # this so the caller never has to feed ``buffer`` manually.
             assert b"hello" in sess.buffer.snapshot()
-        finally:
-            sess.close()
         assert not sess._thread.is_alive()  # noqa: SLF001 (test inspecting lifecycle)
 
     def test_reader_follows_inode_through_rename(self, tmp_path: Path) -> None:
@@ -419,8 +416,7 @@ class TestAttachSession:
         # is intentionally not a liveness condition.
         log = tmp_path / "agent.log"
         log.write_text("")
-        sess = self._make_session(log)
-        try:
+        with self._make_session(log) as sess:
             with log.open("ab") as writer:
                 # Rename the path mid-flight; the writer fd still points
                 # to the same inode, so the next write lands where the
@@ -430,8 +426,6 @@ class TestAttachSession:
                 writer.flush()
             seen = _drain_until(sess, lambda b: b"after-rotate" in b, timeout=3.0)
             assert b"after-rotate" in seen
-        finally:
-            sess.close()
         assert not sess._thread.is_alive()  # noqa: SLF001
 
     def test_iteration_after_close_raises_stop_iteration(self, tmp_path: Path) -> None:
@@ -450,8 +444,7 @@ class TestAttachSession:
         # are NOT visible. The reader seeks to EOF on construction.
         log = tmp_path / "agent.log"
         log.write_bytes(b"already-here")
-        sess = self._make_session(log)
-        try:
+        with self._make_session(log) as sess:
             # Give the reader a couple of poll cycles to (not) push.
             time.sleep(0.1)
             items: list[object] = []
@@ -462,8 +455,6 @@ class TestAttachSession:
                     break
             byte_items = [i for i in items if isinstance(i, bytes)]
             assert byte_items == []
-        finally:
-            sess.close()
 
     def test_close_is_idempotent(self, tmp_path: Path) -> None:
         log = tmp_path / "agent.log"
@@ -489,8 +480,7 @@ class TestAttachSession:
         log.write_text("")
         # Long poll keeps the reader idle while we exercise _publish.
         target = _ResolvedTarget(pid=os.getpid(), path=log)
-        sess = AttachSession(target, queue_max=2, poll_interval_s=10.0)
-        try:
+        with AttachSession(target, queue_max=2, poll_interval_s=10.0) as sess:
             sess._stop_event.set()  # noqa: SLF001
             sess._thread.join(timeout=2.0)  # noqa: SLF001
             assert not sess._thread.is_alive()  # noqa: SLF001
@@ -510,8 +500,6 @@ class TestAttachSession:
                 except queue.Empty:
                     break
             assert drained == [b"b", b"c"]
-        finally:
-            sess.close()
 
     def test_reader_exits_when_pid_dies(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -527,8 +515,7 @@ class TestAttachSession:
             return calls["n"] <= 1
 
         monkeypatch.setattr(tail_mod, "pid_exists", _fake_pid_exists)
-        sess = self._make_session(log)
-        try:
+        with self._make_session(log) as sess:
             # Wait up to 2s for the reader thread to exit naturally.
             deadline = time.monotonic() + 2.0
             while time.monotonic() < deadline and sess._thread.is_alive():  # noqa: SLF001
@@ -537,8 +524,6 @@ class TestAttachSession:
             # Sentinel should be the next item.
             with pytest.raises(StopIteration):
                 next(iter(sess))
-        finally:
-            sess.close()
 
 
 class TestAttachIntegration:
@@ -554,13 +539,11 @@ class TestAttachIntegration:
             return_value=_ResolvedTarget(pid=os.getpid(), path=log),
         ):
             sess = attach(os.getpid(), poll_interval_s=0.01)
-        try:
+        with sess:
             with log.open("ab") as fh:
                 fh.write(b"world\n")
             seen = _drain_until(sess, lambda b: b"world" in b, timeout=3.0)
             assert b"world" in seen
-        finally:
-            sess.close()
         assert not sess._thread.is_alive()  # noqa: SLF001
 
 
