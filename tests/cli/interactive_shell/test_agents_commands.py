@@ -16,7 +16,9 @@ from app.agents.conflicts import (
     render_conflicts,
 )
 from app.agents.registry import AgentRecord, AgentRegistry
+from app.agents.tail import AttachUnsupported, TailBuffer
 from app.cli.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
+from app.cli.interactive_shell.command_registry import agents as agents_mod
 from app.cli.interactive_shell.session import ReplSession
 
 
@@ -32,8 +34,6 @@ def _isolate_registry(monkeypatch: pytest.MonkeyPatch, path: Path) -> AgentRegis
     that the test can populate.
     """
     registry = AgentRegistry(path=path)
-
-    from app.cli.interactive_shell.command_registry import agents as agents_mod
 
     monkeypatch.setattr(agents_mod, "AgentRegistry", lambda: AgentRegistry(path=path))
     return registry
@@ -59,6 +59,11 @@ class TestAgentsRegistration:
         cmd = SLASH_COMMANDS["/agents"]
         keywords = [pair[0] for pair in cmd.first_arg_completions]
         assert "conflicts" in keywords
+
+    def test_agents_first_arg_completions_include_trace(self) -> None:
+        cmd = SLASH_COMMANDS["/agents"]
+        keywords = [pair[0] for pair in cmd.first_arg_completions]
+        assert "trace" in keywords
 
     def test_default_window_constant_is_ten_seconds(self) -> None:
         assert DEFAULT_WINDOW_SECONDS == 10.0
@@ -111,6 +116,14 @@ class TestAgentsDispatch:
         out = buf.getvalue()
         assert "unknown subcommand" in out.lower()
         assert "bogus" in out
+
+    def test_unknown_subcommand_message_lists_trace(self) -> None:
+        # When the user types a bogus subcommand the help string should
+        # advertise every supported one, including the new ``trace``.
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents bogus", session, console) is True
+        assert "trace" in buf.getvalue().lower()
 
     def test_dollar_hr_cell_reads_from_agents_yaml(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -303,3 +316,154 @@ class TestRenderConflicts:
         assert "/new.py" in out
         assert "/old.py" in out
         assert "aider:3" in out
+
+
+class _FakeSession:
+    """Minimal :class:`AttachSession` stand-in for slash-command tests.
+
+    Lets us drive ``_render_live_tail`` through ``dispatch_slash`` without
+    spawning a reader thread or touching the filesystem.
+    """
+
+    def __init__(self, chunks: list[bytes] | None = None, *, raise_ki: bool = False) -> None:
+        self.buffer = TailBuffer()
+        self._chunks = list(chunks or [])
+        self._raise_ki = raise_ki
+        self.closed = False
+
+    def __iter__(self) -> _FakeSession:
+        return self
+
+    def __next__(self) -> bytes:
+        if self._raise_ki:
+            self._raise_ki = False  # raise once, like a real Ctrl+C
+            raise KeyboardInterrupt
+        if not self._chunks:
+            raise StopIteration
+        chunk = self._chunks.pop(0)
+        # Mirror :class:`AttachSession.__next__`: append-on-yield so the
+        # slash-command renderer only ever needs to read ``sess.buffer``.
+        self.buffer.append(chunk)
+        return chunk
+
+    def close(self) -> None:
+        self.closed = True
+
+    def __enter__(self) -> _FakeSession:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.close()
+
+
+class TestAgentsTrace:
+    def test_no_args_prints_usage(self) -> None:
+        sess_obj = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents trace", sess_obj, console) is True
+        out = buf.getvalue().lower()
+        assert "usage" in out
+        assert "<pid>" in out
+        assert sess_obj.history[-1]["ok"] is False
+
+    def test_non_numeric_pid_rejected(self) -> None:
+        sess_obj = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents trace abc", sess_obj, console) is True
+        out = buf.getvalue().lower()
+        assert "invalid pid" in out
+        assert sess_obj.history[-1]["ok"] is False
+
+    def test_too_many_args_rejected(self) -> None:
+        sess_obj = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents trace 1 2", sess_obj, console) is True
+        assert "usage" in buf.getvalue().lower()
+        assert sess_obj.history[-1]["ok"] is False
+
+    def test_attach_unsupported_renders_reason(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def _refuse(_pid: int) -> _FakeSession:
+            raise AttachUnsupported("stdout is on a terminal; live tail not supported")
+
+        monkeypatch.setattr(agents_mod, "attach", _refuse)
+
+        sess_obj = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents trace 8421", sess_obj, console) is True
+        out = buf.getvalue()
+        assert "cannot trace" in out
+        assert "stdout is on a terminal" in out
+        assert sess_obj.history[-1]["ok"] is False
+
+    def test_unknown_pid_falls_back_to_pid_label(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Header says "pid <n>" when the pid is not in the registry.
+        _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
+        monkeypatch.setattr(agents_mod, "attach", lambda _pid: _FakeSession(chunks=[]))
+
+        sess_obj = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents trace 8421", sess_obj, console) is True
+        out = buf.getvalue()
+        assert "pid 8421" in out
+        assert "trace ended" in out
+
+    def test_known_pid_uses_registered_name_in_header(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        registry = _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
+        registry.register(AgentRecord(name="claude-code", pid=8421, command="claude"))
+        monkeypatch.setattr(agents_mod, "attach", lambda _pid: _FakeSession(chunks=[]))
+
+        sess_obj = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents trace 8421", sess_obj, console) is True
+        out = buf.getvalue()
+        assert "claude-code" in out
+        assert "8421" in out
+
+    def test_renders_chunks_through_live(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Two chunks then StopIteration: the handler should append them
+        # to the buffer and feed Live.update; the rendered text should
+        # land in the captured console output.
+        monkeypatch.setattr(
+            agents_mod,
+            "attach",
+            lambda _pid: _FakeSession(chunks=[b"hello ", b"world\n"]),
+        )
+
+        sess_obj = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents trace 8421", sess_obj, console) is True
+        out = buf.getvalue()
+        assert "hello world" in out
+        assert "trace ended" in out
+
+    def test_swallows_keyboard_interrupt(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Single Ctrl+C inside the Live block must not propagate out of
+        # ``dispatch_slash`` — the REPL should return to its prompt.
+        # This is the kubectl-logs-style UX, deliberately different from
+        # ``stream_to_console``'s double-press pattern.
+        monkeypatch.setattr(agents_mod, "attach", lambda _pid: _FakeSession(raise_ki=True))
+
+        sess_obj = ReplSession()
+        console, buf = _capture()
+        # Must not raise:
+        assert dispatch_slash("/agents trace 8421", sess_obj, console) is True
+        assert "trace ended" in buf.getvalue()
+
+    def test_session_is_closed_even_on_keyboard_interrupt(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Lifecycle guard: the ``with`` block in the handler must close
+        # the AttachSession (and thereby the reader thread) regardless
+        # of whether the iteration completed naturally or was stopped
+        # by a Ctrl+C.
+        fake = _FakeSession(raise_ki=True)
+        monkeypatch.setattr(agents_mod, "attach", lambda _pid: fake)
+
+        sess_obj = ReplSession()
+        console, _ = _capture()
+        assert dispatch_slash("/agents trace 8421", sess_obj, console) is True
+        assert fake.closed is True

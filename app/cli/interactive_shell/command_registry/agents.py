@@ -2,7 +2,8 @@
 
 Bare ``/agents`` renders the registered-agents dashboard; subcommands
 drill into specific surfaces (currently ``budget``, ``claim``, ``conflicts``,
-``release``, with more landing as the monitor-local-agents initiative ships).
+``release``, ``trace``, with more landing as the monitor-local-agents
+initiative ships).
 """
 
 from __future__ import annotations
@@ -12,9 +13,12 @@ import os
 from collections.abc import Callable
 from pathlib import Path
 
+from prompt_toolkit.patch_stdout import patch_stdout
 from pydantic import ValidationError
 from rich.console import Console
+from rich.live import Live
 from rich.markup import escape
+from rich.text import Text
 
 from app.agents.config import (
     agents_config_path,
@@ -30,6 +34,7 @@ from app.agents.conflicts import (
 from app.agents.coordination import BranchClaims
 from app.agents.lifecycle import TerminateResult, terminate
 from app.agents.registry import AgentRegistry
+from app.agents.tail import AttachSession, AttachUnsupported, attach
 from app.analytics.events import Event
 from app.analytics.provider import get_analytics
 from app.cli.interactive_shell.agents_view import render_agents_table
@@ -44,7 +49,16 @@ _AGENTS_FIRST_ARGS: tuple[tuple[str, str], ...] = (
     ("conflicts", "show file-write conflicts between local AI agents"),
     ("kill", "SIGTERM → SIGKILL a local agent by PID"),
     ("release", "release a branch claim"),
+    ("trace", "live tail of an agent's stdout by pid"),
 )
+
+_TRACE_REFRESH_PER_SECOND = 10
+# Cap the on-screen render to the most recent slice of the 4 MiB buffer
+# so we don't reparse a 4 MiB string through Rich at 10 fps under burst
+# writers. A few screens of context is plenty for "what is the agent
+# doing right now"; the full tail is still in ``sess.buffer`` for any
+# future drill-down view.
+_TRACE_RENDER_TAIL_BYTES = 64 * 1024
 
 
 def _opensre_agent_id() -> str:
@@ -331,6 +345,71 @@ def _cmd_agents_kill(
     return True
 
 
+def _render_live_tail(console: Console, label: str, sess: AttachSession) -> None:
+    """kubectl-logs-style render: a single Ctrl+C returns to the prompt.
+
+    Catches :class:`KeyboardInterrupt` inside the ``Live`` block and
+    swallows it so the REPL doesn't see a traceback. ``stream_to_console``
+    in ``streaming.py`` uses a double-press pattern because it's
+    rendering an LLM response that the user might *not* want to abort
+    on a stray keypress; a logs-style view is the inverse — one press
+    is the canonical "stop" signal.
+    """
+    console.print(f"[{BOLD_BRAND}]trace {escape(label)}[/]  [{DIM}]Ctrl+C to stop[/]")
+    try:
+        with (
+            patch_stdout(raw=True),
+            Live(
+                Text(""),
+                console=console,
+                refresh_per_second=_TRACE_REFRESH_PER_SECOND,
+                transient=False,
+                vertical_overflow="visible",
+            ) as live,
+        ):
+            for _chunk in sess:
+                snapshot = sess.buffer.snapshot()
+                if len(snapshot) > _TRACE_RENDER_TAIL_BYTES:
+                    snapshot = snapshot[-_TRACE_RENDER_TAIL_BYTES:]
+                live.update(Text.from_ansi(snapshot.decode("utf-8", errors="replace")))
+    except KeyboardInterrupt:
+        pass
+    console.print(f"[{DIM}]· trace ended[/]")
+
+
+def _cmd_agents_trace(session: ReplSession, console: Console, args: list[str]) -> bool:
+    """Live-tail an agent's stdout by pid; see :func:`_render_live_tail`.
+
+    Validates eagerly (``attach()`` raises :class:`AttachUnsupported`
+    synchronously on bad pid / unsupported fd type / missing file) so
+    we never enter the ``Live`` block on a target we cannot tail.
+    """
+    if len(args) != 1:
+        console.print(f"[{ERROR}]usage:[/] /agents trace <pid>")
+        session.mark_latest(ok=False, kind="slash")
+        return True
+    try:
+        pid = int(args[0])
+    except ValueError:
+        console.print(f"[{ERROR}]invalid pid:[/] {escape(args[0])}")
+        session.mark_latest(ok=False, kind="slash")
+        return True
+
+    record = AgentRegistry().get(pid)
+    label = f"{record.name} (pid {pid})" if record else f"pid {pid}"
+
+    try:
+        sess = attach(pid)
+    except AttachUnsupported as exc:
+        console.print(f"[{ERROR}]cannot trace {escape(label)}:[/] {escape(exc.reason)}")
+        session.mark_latest(ok=False, kind="slash")
+        return True
+
+    with sess:
+        _render_live_tail(console, label, sess)
+    return True
+
+
 def _cmd_agents(session: ReplSession, console: Console, args: list[str]) -> bool:
     if not args:
         return _cmd_agents_list(console)
@@ -351,11 +430,15 @@ def _cmd_agents(session: ReplSession, console: Console, args: list[str]) -> bool
     if sub == "release":
         return _cmd_agents_release(session, console, args[1:])
 
+    if sub == "trace":
+        return _cmd_agents_trace(session, console, args[1:])
+
     console.print(
         f"[{ERROR}]unknown subcommand:[/] {escape(sub)}  "
         "(try [bold]/agents[/bold], [bold]/agents budget[/bold], "
-        "[bold]/agents conflicts[/bold], [bold]/agents kill[/bold], "
-        "[bold]/agents claim[/bold], or [bold]/agents release[/bold])"
+        "[bold]/agents claim[/bold], [bold]/agents conflicts[/bold], "
+        "[bold]/agents kill[/bold], [bold]/agents release[/bold], "
+        "or [bold]/agents trace[/bold])"
     )
     session.mark_latest(ok=False, kind="slash")
     return True
@@ -364,7 +447,7 @@ def _cmd_agents(session: ReplSession, console: Console, args: list[str]) -> bool
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
         "/agents",
-        "show registered local AI agents (subcommands: budget, claim, conflicts, kill, release)",
+        "show registered local AI agents (subcommands: budget, claim, conflicts, kill, release, trace)",
         _cmd_agents,
         first_arg_completions=_AGENTS_FIRST_ARGS,
     ),

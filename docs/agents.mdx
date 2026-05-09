@@ -1,0 +1,97 @@
+---
+title: 'Live agent tail (/agents trace)'
+description: "Live tail of a registered local AI agent's stdout, inline in the OpenSRE interactive shell"
+---
+
+## Overview
+
+`/agents trace <pid>` opens a live tail of an agent's stdout inside the
+OpenSRE interactive shell — the equivalent of `kubectl logs -f` for the
+local AI agent fleet. Use it when the `/agents` dashboard shows an
+agent that looks **stuck**, **looping**, or **noisy** and you want to
+see what it's actually printing without leaving the REPL.
+
+```text
+> /agents trace 8421
+trace claude-code (pid 8421)  Ctrl+C to stop
+… live agent output …
+^C
+· trace ended
+```
+
+## Usage
+
+```text
+/agents trace <pid>
+```
+
+`<pid>` is the operating-system process id of the agent to attach to.
+The pid does **not** have to be in the OpenSRE registry; if it is, the
+agent's registered name is shown in the header. Otherwise the header
+falls back to `pid <n>`.
+
+## Platform support
+
+Only **regular files** backing fd 1 of the target process are
+supported. TTY/PTY/pipe/socket/anon-inode targets are rejected at
+attach time with a precise reason — tailing those would compete with
+the legitimate consumer for bytes and produce corrupted output.
+
+| Platform | Resolver | Supported targets |
+| --- | --- | --- |
+| **Linux** | `os.readlink("/proc/<pid>/fd/1")` | regular files |
+| **macOS** (best-effort) | `lsof -F ftn -p <pid>`, only `t REG` blocks | regular files |
+| **Windows** | not supported | — |
+
+The most common useful case is an agent whose stdout was redirected to
+a log file (for example `claude > ~/.claude/log` or `nohup`-launched
+agents). TTY-bound foreground processes cannot be tailed.
+
+If a target cannot be tailed, `/agents trace` exits with one of:
+
+- `cannot trace …: stdout is on a terminal; live tail not supported`
+- `cannot trace …: stdout is a pipe; live tail not supported`
+- `cannot trace …: stdout is a socket; live tail not supported`
+- `cannot trace …: no such pid <n>`
+- `cannot trace …: stdout target /path no longer exists`
+- `cannot trace …: cannot inspect pid <n> (permission denied)`
+
+## Memory
+
+The live view is bounded by a **4 MiB ring buffer per session**. When
+the buffer fills, the oldest whole chunks are dropped first, so the
+visible tail always reflects the latest output. Internally the reader
+thread also publishes through a bounded queue and drops the oldest
+chunk on overflow — burst writers cannot blow up memory.
+
+There is **no backlog replay**: only output emitted *after* attach is
+shown. The reader seeks the file to EOF on attach.
+
+## Stopping
+
+A single **Ctrl+C** returns to the REPL prompt. The session is closed,
+the reader thread joins, and the file descriptor is released.
+This is deliberately different from the LLM-streaming surface
+(`/agents`, `/investigate` and friends), where a Ctrl+C double-press
+is required so a stray keypress doesn't abort an in-flight response.
+
+## Limitations
+
+- **stdout only.** Stderr (fd 2) is not tailed in this version.
+- **No backlog replay.** Pre-attach bytes are not visible.
+- **Not for TTY/PTY targets.** Foreground processes whose stdout is
+  the controlling terminal cannot be tailed; a future change may add
+  PTY interception for OpenSRE-spawned agents.
+- **Log rotation is not detected.** If the underlying file is rotated
+  or replaced (logrotate-style), the tail keeps following the original
+  inode until the process exits.
+- **No secret redaction.** Output is rendered as raw bytes (with UTF-8
+  decoded under `errors="replace"`). Redaction of secrets in the live
+  tail is tracked separately under the `monitor-local-agents` Phase 3
+  hygiene work.
+
+## Related
+
+- `/agents` — the registered fleet dashboard.
+- `/agents budget` — per-agent hourly budgets.
+- `/agents conflicts` — file-write conflicts between local AI agents.
