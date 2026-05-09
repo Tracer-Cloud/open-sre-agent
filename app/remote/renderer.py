@@ -251,6 +251,13 @@ class StreamRenderer:
         self._alert_header_printed = False
         self._plan_preview_printed = False
 
+    def _print_above_renderable(self, renderable: Any) -> None:
+        """Print a rich renderable permanently above the active live region (even during diagnose)."""
+        if self._diagnose._live is not None and self._diagnose._live.is_started:
+            self._diagnose._live.console.print(renderable)
+        else:
+            self._tracker.print_above_renderable(renderable)
+
     @property
     def events_received(self) -> int:
         return self._events_received
@@ -442,7 +449,7 @@ class StreamRenderer:
                     border_style="yellow",
                     expand=False,
                 )
-                self._tracker.print_above_renderable(panel)
+                self._print_above_renderable(panel)
                 self._plan_preview_printed = True
         self._active_node = None
 
@@ -497,7 +504,7 @@ class StreamRenderer:
                     border_style="cyan",
                     expand=False,
                 )
-                self._tracker.print_above_renderable(panel)
+                self._print_above_renderable(panel)
             else:
                 render_investigation_header(alert_name, pipeline, severity)
             self._alert_header_printed = True

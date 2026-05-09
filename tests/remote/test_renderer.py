@@ -980,3 +980,53 @@ class TestStreamRendererDiagnoseThrottle:
 
         renderer._begin_diagnose("diagnose_root_cause")
         assert renderer._tracker._display is None
+
+
+class TestStreamRendererPrintAboveRenderable:
+    """Tests for the _print_above_renderable safety mechanism.
+
+    Ensures that when the diagnose Live region is active, print_above_renderable
+    is routed through the Live console to prevent terminal corruption, and
+    otherwise falls back to the tracker.
+    """
+
+    @patch("app.remote.renderer.Live")
+    @patch("app.output._EventLogDisplay")
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
+    def test_print_above_renderable_routes_to_live_console_when_started(
+        self, _mock_display, _mock_live
+    ) -> None:
+        renderer = StreamRenderer()
+        renderer._begin_diagnose("diagnose_root_cause")
+
+        # Mock the active Live object's console
+        from unittest.mock import MagicMock
+
+        mock_console = MagicMock()
+        renderer._diagnose._live.console = mock_console
+        renderer._diagnose._live.is_started = True
+
+        panel = "test-panel"
+        renderer._print_above_renderable(panel)
+
+        # Should print directly via active Live console
+        mock_console.print.assert_called_once_with(panel)
+
+    @patch("app.remote.renderer.Live")
+    @patch("app.output._EventLogDisplay")
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
+    def test_print_above_renderable_falls_back_to_tracker_when_live_not_started(
+        self, _mock_display, _mock_live
+    ) -> None:
+        renderer = StreamRenderer()
+        # Mock tracker's print_above_renderable
+        from unittest.mock import MagicMock
+
+        mock_tracker_print = MagicMock()
+        renderer._tracker.print_above_renderable = mock_tracker_print
+
+        panel = "test-panel"
+        renderer._print_above_renderable(panel)
+
+        # Should fall back to tracker
+        mock_tracker_print.assert_called_once_with(panel)
