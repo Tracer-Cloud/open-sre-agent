@@ -449,6 +449,7 @@ class StreamRenderer:
     def _merge_state(self, update: Any) -> None:
         if isinstance(update, dict):
             self._final_state.update(update)
+            self._print_alert_header()
 
     def _merge_chain_end_output(self, event: StreamEvent) -> None:
         """Pull the ``output`` payload from a chain-end event into ``_final_state``.

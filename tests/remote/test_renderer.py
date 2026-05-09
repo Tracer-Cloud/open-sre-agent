@@ -968,8 +968,10 @@ class TestStreamRendererDiagnoseThrottle:
         assert "c19" in "".join(renderer._diagnose.buffer)
         assert fake_time[0] == 0.0
 
+    @patch("app.remote.renderer.Live")
+    @patch("app.output._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
-    def test_diagnose_start_stops_progress_tracker_display(self) -> None:
+    def test_diagnose_start_stops_progress_tracker_display(self, _mock_display, _mock_live) -> None:
         """Calling _begin_diagnose safely stops the active ProgressTracker display and sets it to None."""
         renderer = StreamRenderer()
         # Initialize active display
