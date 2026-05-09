@@ -68,6 +68,8 @@ dependencies = [
     # File locking for atomic store operations
     "filelock>=3.29.0",
     "psutil>=5.9",
+    # Cross-platform filesystem watching (used by app/agents/blast_radius.py)
+    "watchdog>=4.0",
 ]
 
 [project.urls]

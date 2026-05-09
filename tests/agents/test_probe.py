@@ -13,7 +13,18 @@ import psutil
 from app.agents.probe import ProcessSnapshot, probe
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
-_PROBE_MODULE = _REPO_ROOT / "app" / "agents" / "probe.py"
+# Allowlist of modules permitted to import ``psutil``. Each entry must be
+# a deliberate, scoped consumer documented in its parent issue:
+# - ``probe.py`` — issue #1489 (per-PID resource snapshot)
+# - ``blast_radius.py`` — issue #1500 (filesystem blast-radius watcher;
+#   uses ``psutil.Process(pid).cwd()`` to resolve each agent's project
+#   root before scheduling a ``watchdog`` observer on it)
+_PSUTIL_ALLOWED_MODULES = frozenset(
+    {
+        _REPO_ROOT / "app" / "agents" / "probe.py",
+        _REPO_ROOT / "app" / "agents" / "blast_radius.py",
+    }
+)
 
 
 def test_probe_returns_snapshot_for_self() -> None:
@@ -56,15 +67,17 @@ def test_probe_returns_none_for_access_denied_process() -> None:
 
 
 def test_psutil_is_not_imported_outside_probe_module() -> None:
-    """Acceptance criterion #3: ``psutil`` must stay confined to
-    ``app/agents/probe.py`` so the dependency surface is explicit. A
-    static scan over ``app/**/*.py`` catches future regressions
-    deterministically — runtime import-graph checks would be flaky
-    against lazy-import patterns the codebase already uses elsewhere.
+    """Acceptance criterion #3 (issue #1489): ``psutil`` must stay
+    confined to an explicit allowlist of modules so the dependency
+    surface remains explicit. A static scan over ``app/**/*.py`` catches
+    future regressions deterministically — runtime import-graph checks
+    would be flaky against the lazy-import patterns the codebase already
+    uses elsewhere. Modules added to ``_PSUTIL_ALLOWED_MODULES`` must
+    have an issue documenting why they need direct ``psutil`` access.
     """
     leaks: list[str] = []
     for py_file in sorted((_REPO_ROOT / "app").rglob("*.py")):
-        if py_file == _PROBE_MODULE:
+        if py_file in _PSUTIL_ALLOWED_MODULES:
             continue
         text = py_file.read_text(encoding="utf-8")
         for needle in ("import psutil", "from psutil"):
@@ -72,6 +85,4 @@ def test_psutil_is_not_imported_outside_probe_module() -> None:
                 leaks.append(f"{py_file.relative_to(_REPO_ROOT)} contains {needle!r}")
                 break
 
-    assert not leaks, (
-        "psutil leaked into modules other than app/agents/probe.py:\n  " + "\n  ".join(leaks)
-    )
+    assert not leaks, "psutil leaked into modules outside the allowlist:\n  " + "\n  ".join(leaks)

@@ -11,6 +11,7 @@ discovery — without it the ``app.agents.*`` subpackages would be
 silently omitted from the built wheel.
 """
 
+from app.agents.blast_radius import BlastRadiusEvent, BlastRadiusWatcher, find_project_root
 from app.agents.coordination import BranchClaim, BranchClaims
 from app.agents.quality import LoopDetector
 from app.agents.registry import AgentRecord, AgentRegistry
@@ -18,7 +19,10 @@ from app.agents.registry import AgentRecord, AgentRegistry
 __all__ = [
     "AgentRecord",
     "AgentRegistry",
+    "BlastRadiusEvent",
+    "BlastRadiusWatcher",
     "BranchClaim",
     "BranchClaims",
     "LoopDetector",
+    "find_project_root",
 ]

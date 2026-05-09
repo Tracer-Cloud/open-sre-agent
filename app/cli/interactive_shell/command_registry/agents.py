@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import math
 import os
+import time
 from pathlib import Path
 
 from pydantic import ValidationError
 from rich.console import Console
 from rich.markup import escape
 
+from app.agents.blast_radius import collect_recent_write_events
 from app.agents.config import (
     agents_config_path,
     load_agents_config,
@@ -22,7 +24,6 @@ from app.agents.config import (
 )
 from app.agents.conflicts import (
     DEFAULT_WINDOW_SECONDS,
-    WriteEvent,
     detect_conflicts,
     render_conflicts,
 )
@@ -74,10 +75,15 @@ def _cmd_agents_list(console: Console) -> bool:
 
 
 def _cmd_agents_conflicts(console: Console) -> bool:
-    # Real write-event collection comes from #1500 (filesystem blast-radius
-    # watcher), out of scope for this PR. Until that lands, the event source
-    # is empty and `/agents conflicts` reports "no conflicts detected".
-    events: list[WriteEvent] = []
+    # Write-event collection lives in :mod:`app.agents.blast_radius`. The
+    # first call per registered agent lazy-starts a watchdog observer on
+    # that agent's project root; subsequent calls reuse it. The conflict
+    # detector's ``window_seconds`` doubles as the wall-clock pre-filter
+    # cutoff so anchor-based windowing does not surface stale conflicts
+    # when no new writes arrive (see ``conflicts.detect_conflicts``).
+    registry = AgentRegistry()
+    now = time.time()
+    events = collect_recent_write_events(registry.list(), since=now - DEFAULT_WINDOW_SECONDS)
     conflicts = detect_conflicts(
         events,
         window_seconds=DEFAULT_WINDOW_SECONDS,

@@ -3,16 +3,19 @@
 from __future__ import annotations
 
 import io
+import time
 from pathlib import Path
 
 import pytest
 from rich.console import Console
 from rich.table import Table
 
+from app.agents import blast_radius as blast_radius_module
 from app.agents import config as config_mod
 from app.agents.conflicts import (
     DEFAULT_WINDOW_SECONDS,
     FileWriteConflict,
+    WriteEvent,
     render_conflicts,
 )
 from app.agents.registry import AgentRecord, AgentRegistry
@@ -51,6 +54,25 @@ def isolated_agents_yaml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Pat
     return target
 
 
+@pytest.fixture(autouse=True)
+def _isolated_blast_radius(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Autouse: stub :func:`collect_recent_write_events` so ``/agents conflicts``
+    in this test module never triggers a real ``watchdog`` observer.
+
+    The slash command lazy-starts an observer per registered agent on
+    first call (#1500). Without this stub, tests that don't isolate the
+    registry would attempt to read ``cwd`` of live processes on the
+    developer's machine and start filesystem watchers on real
+    directories. Tests that need the integration path (e.g. asserting
+    events flow through to ``detect_conflicts``) override this stub via
+    a tighter ``monkeypatch.setattr`` of their own.
+    """
+    from app.cli.interactive_shell.command_registry import agents as agents_mod
+
+    monkeypatch.setattr(agents_mod, "collect_recent_write_events", lambda *_args, **_kwargs: [])
+    blast_radius_module._reset_watchers_for_tests()
+
+
 class TestAgentsRegistration:
     def test_agents_command_is_registered(self) -> None:
         assert "/agents" in SLASH_COMMANDS
@@ -70,6 +92,43 @@ class TestAgentsDispatch:
         console, buf = _capture()
         assert dispatch_slash("/agents conflicts", session, console) is True
         assert "no conflicts detected" in buf.getvalue()
+
+    def test_conflicts_renders_collisions_when_blast_radius_yields_events(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Pin the integration: when the blast-radius coordinator returns
+        :class:`WriteEvent` records for two distinct agents writing the
+        same path within the window, ``/agents conflicts`` must render
+        the resulting collision through ``detect_conflicts``.
+        """
+        registry = _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
+        registry.register(AgentRecord(name="claude-code", pid=8421, command="claude"))
+        registry.register(AgentRecord(name="cursor-tab", pid=9133, command="cursor"))
+
+        # Override the autouse stub: feed two colliding writes anchored to
+        # the most recent event so detect_conflicts' anchor-based window
+        # keeps both inside.
+        from app.cli.interactive_shell.command_registry import agents as agents_mod
+
+        anchor = time.time()
+        events = [
+            WriteEvent(agent="claude-code:8421", path="/repo/auth.py", timestamp=anchor - 1.0),
+            WriteEvent(agent="cursor-tab:9133", path="/repo/auth.py", timestamp=anchor),
+        ]
+        monkeypatch.setattr(
+            agents_mod,
+            "collect_recent_write_events",
+            lambda *_args, **_kwargs: events,
+        )
+
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents conflicts", session, console) is True
+
+        out = buf.getvalue()
+        assert "/repo/auth.py" in out
+        assert "claude-code:8421" in out
+        assert "cursor-tab:9133" in out
 
     def test_no_subcommand_with_empty_registry_renders_empty_state(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
