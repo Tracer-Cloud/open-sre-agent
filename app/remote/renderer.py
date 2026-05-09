@@ -480,10 +480,8 @@ class StreamRenderer:
         severity = self._final_state.get("severity", "unknown")
 
         if alert_name != "Unknown" or pipeline != "Unknown":
-            if get_output_format() == "rich":
-                self._tracker.stop()
-                self._console.print()
-                self._console.print(
+            if get_output_format() == "rich" and self._tracker._display:
+                self._tracker._display._live.console.print(
                     Panel(
                         f"  • [dim]Source/Name:[/dim] [bold white]{escape(alert_name)}[/bold white]\n"
                         f"  • [dim]Pipeline:[/dim] [cyan]{escape(pipeline)}[/cyan]\n"

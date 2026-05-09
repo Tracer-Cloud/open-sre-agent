@@ -607,8 +607,8 @@ class TestStreamRendererFocusedUXAndParsing:
             "pipeline_name": "infrastructure",
             "severity": "critical",
         }
-        renderer._diagnose.start()
-        assert renderer._alert_header_printed is False
+        renderer._begin_diagnose("diagnose_root_cause")
+        assert renderer._alert_header_printed is True
 
     @patch("app.remote.renderer.Live")
     @patch("app.output._EventLogDisplay")
