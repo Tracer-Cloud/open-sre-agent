@@ -317,7 +317,12 @@ class AttachSession:
                 self._stop_event.wait(self._poll_interval_s)
         finally:
             # The sentinel is the only signal the consumer receives; if
-            # it never lands the iterator hangs on ``queue.get``.
+            # it never lands the iterator hangs on ``queue.get``. This
+            # post is also single-producer (the loop above has exited
+            # and ``_publish`` is no longer reachable), so the
+            # non-atomic drop-oldest dance below is safe — see the
+            # ``_publish`` comment for the invariant a future refactor
+            # has to preserve.
             try:
                 self._queue.put_nowait(_SENTINEL)
             except queue.Full:
@@ -330,6 +335,15 @@ class AttachSession:
                     self._queue.put_nowait(_SENTINEL)
 
     def _publish(self, chunk: bytes) -> None:
+        # **Single-producer invariant.** Only :meth:`_reader_loop` (one
+        # thread per session) calls this. The ``get_nowait`` + ``put_nowait``
+        # pair below is *not* atomic — with a second producer it would
+        # become a real race: the second producer could fill the slot we
+        # just freed, and the next ``put_nowait`` here would either drop
+        # *its* chunk instead of the oldest, or get another ``Full`` and
+        # silently lose the current chunk. If a future change adds
+        # another producer (e.g. multiplexing stderr alongside stdout),
+        # serialize this whole block with a ``threading.Lock`` first.
         try:
             self._queue.put_nowait(chunk)
         except queue.Full:
