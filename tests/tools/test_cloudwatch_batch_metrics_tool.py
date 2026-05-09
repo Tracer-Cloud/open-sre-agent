@@ -22,19 +22,19 @@ def test_is_not_available_without_batch_queue_context() -> None:
 
 
 @pytest.mark.parametrize(
-    ("source_name", "queue_key"),
+    "queue_key",
     [
-        ("cloudwatch", "job_queue"),
-        ("cloudwatch", "jobQueue"),
-        ("aws_metadata", "batch_job_queue"),
-        ("aws_metadata", "batchJobQueue"),
-        ("aws_metadata", "aws_batch_job_queue"),
-        ("aws_metadata", "awsBatchJobQueue"),
+        "job_queue",
+        "jobQueue",
+        "batch_job_queue",
+        "batchJobQueue",
+        "aws_batch_job_queue",
+        "awsBatchJobQueue",
     ],
 )
-def test_is_available_when_batch_queue_context_exists(source_name: str, queue_key: str) -> None:
+def test_is_available_when_batch_queue_context_exists(queue_key: str) -> None:
     rt = get_cloudwatch_batch_metrics.__opensre_registered_tool__
-    assert rt.is_available({source_name: {queue_key: "critical-jobs"}}) is True
+    assert rt.is_available({"aws_metadata": {queue_key: "critical-jobs"}}) is True
 
 
 def test_is_not_available_for_cloudwatch_logs_without_batch_queue() -> None:
@@ -66,7 +66,7 @@ def test_extract_params_returns_empty_job_queue_when_missing() -> None:
 def test_extract_params_uses_default_limit_for_invalid_limit() -> None:
     rt = get_cloudwatch_batch_metrics.__opensre_registered_tool__
     params = rt.extract_params(
-        {"cloudwatch": {"job_queue": "critical-jobs", "metric_limit": "not-a-number"}}
+        {"aws_metadata": {"batch_job_queue": "critical-jobs", "metric_limit": "not-a-number"}}
     )
 
     assert params == {"job_queue": "critical-jobs", "limit": 50}

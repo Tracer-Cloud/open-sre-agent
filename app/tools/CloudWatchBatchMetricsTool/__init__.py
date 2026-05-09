@@ -24,7 +24,8 @@ _BATCH_LIMIT_KEYS = (
     "batch_metric_limit",
     "batchMetricLimit",
 )
-_BATCH_SOURCE_KEYS = ("cloudwatch", "aws_metadata")
+_BATCH_SOURCE_KEYS = ("aws_metadata",)
+_DEFAULT_LIMIT = 50
 
 
 def _first_source_value(sources: dict[str, dict], keys: tuple[str, ...]) -> str:
@@ -40,7 +41,7 @@ def _first_source_value(sources: dict[str, dict], keys: tuple[str, ...]) -> str:
     return ""
 
 
-def _coerce_limit(value: str, default: int = 50) -> int:
+def _coerce_limit(value: str, default: int = _DEFAULT_LIMIT) -> int:
     try:
         limit = int(value)
     except ValueError:
@@ -86,7 +87,7 @@ def _cloudwatch_batch_metrics_extract_params(sources: dict[str, dict]) -> dict[s
             "metric_type": {"type": "string", "enum": ["cpu", "memory"], "default": "cpu"},
             "limit": {
                 "type": "integer",
-                "default": 50,
+                "default": _DEFAULT_LIMIT,
                 "description": "Maximum number of metric data points to return",
             },
         },
@@ -94,7 +95,7 @@ def _cloudwatch_batch_metrics_extract_params(sources: dict[str, dict]) -> dict[s
     },
 )
 def get_cloudwatch_batch_metrics(
-    job_queue: str, metric_type: str = "cpu", limit: int = 50
+    job_queue: str, metric_type: str = "cpu", limit: int = _DEFAULT_LIMIT
 ) -> dict[str, Any]:
     """Get CloudWatch metrics for AWS Batch jobs."""
     if not job_queue:
