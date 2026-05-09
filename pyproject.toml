@@ -68,6 +68,7 @@ dependencies = [
     # File locking for atomic store operations
     "filelock>=3.29.0",
     "psutil>=5.9",
+    "textual>=8.2.5",
 ]
 
 [project.urls]

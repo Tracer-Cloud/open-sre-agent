@@ -1,28 +1,48 @@
-"""Live token streaming for interactive-shell LLM responses."""
+"""Live token streaming for interactive-shell LLM responses.
+
+Inside the persistent prompt_toolkit Application (#1679), the input box is
+pinned at the bottom of the terminal via ``patch_stdout``. To keep the
+input editable while a response streams (type-ahead), we cannot use
+:class:`rich.live.Live` here — ``Live`` does cursor manipulation
+(cursor-up + erase-line) for in-place redraw, which fights ``patch_stdout``
+and blocks the input buffer from accepting keystrokes.
+
+So this path streams chunks **silently**: chunks accumulate into a buffer
+and the complete response is rendered as Markdown once the stream ends.
+The streaming-progress indicator (``⟳ thinking… (Ns · ↓ Xk tokens)``) is
+drawn by the persistent Application's status Window, which is updated by
+``PersistentRepl._run_dispatch`` — orthogonal to this module.
+
+Trade-off accepted: streaming loses on-the-fly Markdown formatting (no
+live bold/headers/lists), but in exchange the input row stays pinned and
+type-ahead works exactly as it does in Claude CLI's interactive surface.
+The non-TTY path still renders the full Markdown at end — same as before.
+"""
 
 from __future__ import annotations
 
 import time
 from collections.abc import Iterator
 
-from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
-from rich.live import Live
 from rich.markdown import Markdown
-from rich.spinner import Spinner
-from rich.text import Text
 
-from app.cli.interactive_shell.theme import BOLD_BRAND, DIM, HIGHLIGHT, MARKDOWN_THEME
-from app.cli.support.prompt_support import CTRL_C_DOUBLE_PRESS_WINDOW_S
+from app.cli.interactive_shell.theme import BOLD_BRAND, DIM, MARKDOWN_THEME
 
-_SPINNER_NAME = "dots12"
-_SPINNER_COLOR = HIGHLIGHT
-_SPINNER_LABEL = "thinking"
-_LIVE_REFRESH_PER_SECOND = 10
-_STREAM_CANCEL_HINT = "Press Ctrl+C again to stop"
+# Approximate characters per token. Same heuristic as
+# ``persistent_app.app._CHARS_PER_TOKEN`` — used here for the post-stream
+# elapsed footer.
+_CHARS_PER_TOKEN = 4
 
 STREAM_LABEL_ASSISTANT = "assistant"
 STREAM_LABEL_ANSWER = "answer"
+
+
+def _format_tokens(token_count: int) -> str:
+    """Render the token count Claude-Code-style: ``42`` / ``1.2k`` / ``5.2k``."""
+    if token_count >= 1000:
+        return f"{token_count / 1000:.1f}k tokens"
+    return f"{token_count} tokens"
 
 
 def stream_to_console(
@@ -32,14 +52,12 @@ def stream_to_console(
     chunks: Iterator[str],
     suppress_if_starts_with: str | None = None,
 ) -> str:
-    """Render a streaming LLM response live and return the accumulated text.
+    """Stream chunks to ``console`` and return the accumulated text.
 
-    Uses patch_stdout so prompt_toolkit keeps the input frame rendered at the
-    bottom of the terminal while output streams above it.
-
-    ``suppress_if_starts_with`` allows callers to skip live rendering when the
-    initial non-whitespace token indicates machine-readable payloads (for
-    example JSON action plans).
+    ``suppress_if_starts_with`` allows callers to skip live rendering when
+    the first non-whitespace token indicates a machine-readable payload
+    (e.g. JSON action plans). The return value still contains the full
+    accumulated text in that case.
     """
     if not console.is_terminal:
         text = "".join(chunks)
@@ -57,28 +75,12 @@ def stream_to_console(
 
     chunks_iter = iter(chunks)
     peeked: list[str] = []
-    first_interrupt_at: float | None = None
-
-    def _note_stream_interrupt() -> None:
-        nonlocal first_interrupt_at
-        now = time.monotonic()
-        if (
-            first_interrupt_at is not None
-            and now - first_interrupt_at <= CTRL_C_DOUBLE_PRESS_WINDOW_S
-        ):
-            first_interrupt_at = None
-            raise KeyboardInterrupt
-        first_interrupt_at = now
-        console.print(f"[{DIM}]{_STREAM_CANCEL_HINT}[/]")
 
     def _next_chunk(it: Iterator[str]) -> str | None:
-        while True:
-            try:
-                return next(it)
-            except StopIteration:
-                return None
-            except KeyboardInterrupt:
-                _note_stream_interrupt()
+        try:
+            return next(it)
+        except StopIteration:
+            return None
 
     if suppress_if_starts_with is not None:
         while True:
@@ -99,44 +101,30 @@ def stream_to_console(
                 return "".join(peeked) + "".join(drained)
             break
 
-    buffer: list[str] = list(peeked)
-    spinner = Spinner(
-        _SPINNER_NAME,
-        text=Text(f"{_SPINNER_LABEL}…", style=f"bold {_SPINNER_COLOR}"),
-        style=f"bold {_SPINNER_COLOR}",
-    )
-
     console.print()
     console.print(f"[{BOLD_BRAND}]{label}:[/]")
 
+    # Buffer chunks silently; the persistent Application's status Window
+    # shows the streaming progress indicator. The ``finally`` ensures the
+    # partial buffer renders even on exceptions so the caller can surface
+    # an error label below it.
+    buffer: list[str] = list(peeked)
     started = time.monotonic()
     try:
-        with (
-            console.use_theme(MARKDOWN_THEME),
-            patch_stdout(raw=True),
-            Live(
-                spinner,
-                console=console,
-                refresh_per_second=_LIVE_REFRESH_PER_SECOND,
-                transient=False,
-                vertical_overflow="visible",
-            ) as live,
-        ):
-            if buffer:
-                live.update(Markdown("".join(buffer), code_theme="ansi_dark"))
-            while True:
-                chunk = _next_chunk(chunks_iter)
-                if chunk is None:
-                    break
-                if not chunk:
-                    continue
-                buffer.append(chunk)
-                live.update(Markdown("".join(buffer), code_theme="ansi_dark"))
-            if not buffer:
-                live.update(Text(""))
-        if buffer:
-            console.print(f"[{DIM}]· {time.monotonic() - started:.1f}s[/]")
+        while True:
+            chunk = _next_chunk(chunks_iter)
+            if chunk is None:
+                break
+            if not chunk:
+                continue
+            buffer.append(chunk)
     finally:
+        elapsed = time.monotonic() - started
+        if buffer:
+            with console.use_theme(MARKDOWN_THEME):
+                console.print(Markdown("".join(buffer), code_theme="ansi_dark"))
+            tokens = _format_tokens(sum(len(c) for c in buffer) // _CHARS_PER_TOKEN)
+            console.print(f"[{DIM}]· {elapsed:.1f}s · ↓ {tokens}[/]")
         console.print()
 
     return "".join(buffer)

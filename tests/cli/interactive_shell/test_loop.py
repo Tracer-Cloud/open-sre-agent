@@ -18,7 +18,7 @@ from prompt_toolkit.input.defaults import create_pipe_input
 from prompt_toolkit.keys import Keys
 from prompt_toolkit.output import DummyOutput
 
-from app.cli.interactive_shell import loop
+from app.cli.interactive_shell import loop, prompt_surface
 from app.cli.interactive_shell.prompt_surface import (
     _SHIFT_ENTER_SEQUENCE,
     ReplInputLexer,
@@ -58,7 +58,7 @@ def test_build_prompt_session_uses_persistent_history(
     monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
 
     with create_app_session(input=DummyInput(), output=DummyOutput()):
-        prompt = loop._build_prompt_session()
+        prompt = prompt_surface._build_prompt_session()
 
     assert isinstance(prompt.history, FileHistory)
     assert prompt.history.filename == str(tmp_path / "interactive_history")
@@ -80,7 +80,7 @@ def test_build_prompt_session_falls_back_to_memory_history(
     monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", blocked_home)
 
     with create_app_session(input=DummyInput(), output=DummyOutput()):
-        prompt = loop._build_prompt_session()
+        prompt = prompt_surface._build_prompt_session()
 
     assert isinstance(prompt.history, InMemoryHistory)
 
@@ -94,13 +94,13 @@ def test_repl_session_prompt_history_backend_matches_prompt_toolkit_history(
     monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
     with create_app_session(input=DummyInput(), output=DummyOutput()):
         session = ReplSession()
-        prompt = loop._build_prompt_session()
+        prompt = prompt_surface._build_prompt_session()
         session.prompt_history_backend = prompt.history
     assert session.prompt_history_backend is prompt.history
 
 
 def test_prompt_message_uses_accent_glyph() -> None:
-    rendered = loop._prompt_message(ReplSession()).value
+    rendered = prompt_surface._prompt_message(ReplSession()).value
 
     assert PROMPT_ACCENT_ANSI in rendered
     assert "❯" in rendered
@@ -120,7 +120,7 @@ def test_shift_enter_inserts_newline_before_submit(
             create_pipe_input() as pipe_input,
             create_app_session(input=pipe_input, output=DummyOutput()),
         ):
-            prompt = loop._build_prompt_session()
+            prompt = prompt_surface._build_prompt_session()
             task = asyncio.create_task(prompt.prompt_async(""))
             pipe_input.send_bytes(b"first line")
             pipe_input.send_bytes(_SHIFT_ENTER_SEQUENCE.encode())
@@ -349,14 +349,13 @@ def test_run_new_alert_does_not_report_opensre_error(monkeypatch: pytest.MonkeyP
     assert captured_errors == []
 
 
-def test_run_one_turn_reports_slash_dispatch_error(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_dispatch_one_turn_reports_slash_dispatch_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from rich.console import Console
 
-    class _Prompt:
-        async def prompt_async(self, _prompt: object) -> str:
-            return "/boom"
-
     captured_errors: list[BaseException] = []
+    exit_calls: list[None] = []
 
     def _boom(*_args: object, **_kwargs: object) -> bool:
         raise RuntimeError("handler crashed")
@@ -369,38 +368,65 @@ def test_run_one_turn_reports_slash_dispatch_error(monkeypatch: pytest.MonkeyPat
     session = ReplSession()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
 
-    should_continue = asyncio.run(loop._run_one_turn(_Prompt(), session, console))
+    loop._dispatch_one_turn("/boom", session, console, on_exit=lambda: exit_calls.append(None))
 
-    assert should_continue is True
+    # The error path catches the exception, prints a "command error" line,
+    # and continues — must NOT request exit, since the REPL stays alive.
+    assert exit_calls == []
     assert len(captured_errors) == 1
     assert isinstance(captured_errors[0], RuntimeError)
 
 
-def test_run_one_turn_renders_submitted_prompt_before_handler(
+def test_dispatch_one_turn_routes_to_cli_help_for_help_questions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Verify the routing decision drives the right handler.
+
+    Replaces the old ``test_run_one_turn_renders_submitted_prompt_before_handler``
+    which asserted on PromptSession echo behaviour — that responsibility now
+    lives in :class:`PersistentRepl._on_submit`, exercised separately.
+    """
     from rich.console import Console
 
-    class _Prompt:
-        async def prompt_async(self, _prompt: object) -> str:
-            return "explain deploy"
+    answered_with: list[str] = []
 
     monkeypatch.setattr(
         loop,
         "route_input",
         lambda *_args: RouteDecision(RouteKind.CLI_HELP, 0.9, ("test",)),
     )
-    monkeypatch.setattr(loop, "answer_cli_help", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        loop,
+        "answer_cli_help",
+        lambda text, _session, _console: answered_with.append(text),
+    )
 
-    buf = io.StringIO()
-    console = Console(file=buf, force_terminal=True, color_system=None, highlight=False)
+    session = ReplSession()
+    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
+    loop._dispatch_one_turn("explain deploy", session, console, on_exit=lambda: None)
 
-    should_continue = asyncio.run(loop._run_one_turn(_Prompt(), ReplSession(), console))
+    assert answered_with == ["explain deploy"]
 
-    output = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", buf.getvalue())
-    assert should_continue is True
-    assert "❯" in output
-    assert "explain deploy" in output
+
+def test_dispatch_one_turn_calls_on_exit_when_slash_returns_false(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Slash commands like /exit return False from dispatch_slash.
+
+    The persistent REPL relies on ``on_exit`` to translate that signal into
+    ``app.exit()`` — without this, /exit would silently no-op.
+    """
+    from rich.console import Console
+
+    monkeypatch.setattr(loop, "dispatch_slash", lambda *_args, **_kwargs: False)
+
+    session = ReplSession()
+    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
+    exit_calls: list[None] = []
+
+    loop._dispatch_one_turn("/exit", session, console, on_exit=lambda: exit_calls.append(None))
+
+    assert exit_calls == [None]
 
 
 class TestLooksLikeCorrection:
