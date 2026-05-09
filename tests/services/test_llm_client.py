@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import pytest
+from anthropic import BadRequestError as AnthropicBadRequestError
+from anthropic import NotFoundError, PermissionDeniedError
 
 from app.services import llm_client
 
@@ -1056,3 +1058,171 @@ def test_openai_invoke_stream_rate_limit_retries_before_emit(monkeypatch) -> Non
     assert chunks == ["recovered"]
     assert len(attempts) == 2
     assert sleeps == [7.0]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BedrockLLMClient – non-transient error handling
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _make_anthropic_http_response(status_code: int, body: dict) -> object:
+    """Return a minimal fake httpx.Response accepted by the anthropic SDK error types."""
+    import json
+
+    class _FakeRequest:
+        method = "POST"
+        url = "https://bedrock.example.com"
+
+    _sc = status_code
+    _body = body
+
+    class _FakeResponse:
+        request = _FakeRequest()
+        status_code = _sc
+        headers: dict = {}
+
+        def json(self):
+            return _body
+
+        def read(self):
+            return json.dumps(_body).encode()
+
+        def iter_lines(self):
+            return iter([])
+
+    return _FakeResponse()
+
+
+def _make_bedrock_anthropic_client(exc: Exception) -> object:
+    """Return a fake AnthropicBedrock whose messages.create() raises *exc*."""
+
+    class _Messages:
+        def create(self, **_kwargs):
+            raise exc
+
+    class _Client:
+        messages = _Messages()
+
+    return _Client()
+
+
+class _InactiveGuardrailEngine:
+    is_active = False
+
+    def __call__(self):
+        return self
+
+
+def test_bedrock_invoke_anthropic_not_found_raises_immediately(monkeypatch) -> None:
+    """NotFoundError (EOL model) must raise RuntimeError without retrying."""
+    monkeypatch.setattr(
+        "app.guardrails.engine.get_guardrail_engine",
+        _InactiveGuardrailEngine,
+    )
+    sleeps: list[float] = []
+    monkeypatch.setattr(llm_client.time, "sleep", lambda s: sleeps.append(s))
+
+    resp = _make_anthropic_http_response(
+        404, {"error": {"type": "not_found_error", "message": "not found"}}
+    )
+    err = NotFoundError(message="not found", response=resp, body={})  # type: ignore[arg-type]
+    monkeypatch.setattr(
+        llm_client, "AnthropicBedrock", lambda **_: _make_bedrock_anthropic_client(err)
+    )
+
+    client = llm_client.BedrockLLMClient(model="anthropic.claude-old-v1:0")
+    with pytest.raises(RuntimeError, match="end-of-life"):
+        client.invoke("hello")
+
+    assert sleeps == [], "non-transient errors must not be retried"
+
+
+def test_bedrock_invoke_anthropic_bad_request_inference_profile(monkeypatch) -> None:
+    """BadRequestError with 'on-demand throughput' hint must suggest inference profile."""
+    monkeypatch.setattr(
+        "app.guardrails.engine.get_guardrail_engine",
+        _InactiveGuardrailEngine,
+    )
+    sleeps: list[float] = []
+    monkeypatch.setattr(llm_client.time, "sleep", lambda s: sleeps.append(s))
+
+    resp = _make_anthropic_http_response(
+        400,
+        {
+            "error": {
+                "type": "invalid_request_error",
+                "message": "on-demand throughput isn't supported",
+            }
+        },
+    )
+    err = AnthropicBadRequestError(
+        message="on-demand throughput isn't supported", response=resp, body={}
+    )  # type: ignore[arg-type]
+    monkeypatch.setattr(
+        llm_client, "AnthropicBedrock", lambda **_: _make_bedrock_anthropic_client(err)
+    )
+
+    client = llm_client.BedrockLLMClient(model="anthropic.claude-opus-4-1-20250805-v1:0")
+    with pytest.raises(RuntimeError, match="inference profile"):
+        client.invoke("hello")
+
+    assert sleeps == [], "non-transient errors must not be retried"
+
+
+def test_bedrock_invoke_anthropic_permission_denied_raises_immediately(monkeypatch) -> None:
+    """PermissionDeniedError must raise RuntimeError without retrying."""
+    monkeypatch.setattr(
+        "app.guardrails.engine.get_guardrail_engine",
+        _InactiveGuardrailEngine,
+    )
+    sleeps: list[float] = []
+    monkeypatch.setattr(llm_client.time, "sleep", lambda s: sleeps.append(s))
+
+    resp = _make_anthropic_http_response(
+        403,
+        {"error": {"type": "permission_error", "message": "not available for this account"}},
+    )
+    err = PermissionDeniedError(message="not available for this account", response=resp, body={})  # type: ignore[arg-type]
+    monkeypatch.setattr(
+        llm_client, "AnthropicBedrock", lambda **_: _make_bedrock_anthropic_client(err)
+    )
+
+    client = llm_client.BedrockLLMClient(model="anthropic.claude-opus-4-7")
+    with pytest.raises(RuntimeError, match="not available for your account"):
+        client.invoke("hello")
+
+    assert sleeps == [], "non-transient errors must not be retried"
+
+
+def test_bedrock_invoke_converse_validation_exception_raises_immediately(monkeypatch) -> None:
+    """ValidationException from boto3 converse must raise RuntimeError without retrying."""
+    monkeypatch.setattr(
+        "app.guardrails.engine.get_guardrail_engine",
+        _InactiveGuardrailEngine,
+    )
+    sleeps: list[float] = []
+    monkeypatch.setattr(llm_client.time, "sleep", lambda s: sleeps.append(s))
+
+    import botocore.exceptions
+
+    boto_err = botocore.exceptions.ClientError(
+        {
+            "Error": {
+                "Code": "ValidationException",
+                "Message": "The provided model identifier is invalid.",
+            }
+        },
+        "Converse",
+    )
+
+    class _FailingRuntime:
+        def converse(self, **_kwargs):
+            raise boto_err
+
+    monkeypatch.setattr(llm_client.boto3, "client", lambda *_a, **_k: _FailingRuntime())
+
+    client = llm_client.BedrockLLMClient(model="invalid-model-xyz")
+    with pytest.raises(RuntimeError, match="invalid"):
+        client.invoke("hello")
+
+    assert sleeps == [], "non-transient errors must not be retried"

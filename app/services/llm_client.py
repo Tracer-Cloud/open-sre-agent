@@ -19,7 +19,17 @@ if TYPE_CHECKING:
     from app.integrations.llm_cli.registry import CLIProviderRegistration
 
 import boto3
-from anthropic import Anthropic, AnthropicBedrock, AuthenticationError, NotFoundError
+import botocore.exceptions
+from anthropic import (
+    Anthropic,
+    AnthropicBedrock,
+    AuthenticationError,
+    NotFoundError,
+    PermissionDeniedError,
+)
+from anthropic import (
+    BadRequestError as AnthropicBadRequestError,
+)
 from openai import AuthenticationError as OpenAIAuthError
 from openai import NotFoundError as OpenAINotFoundError
 from openai import OpenAI
@@ -325,6 +335,28 @@ class BedrockLLMClient:
                 break
             except GuardrailBlockedError:
                 raise
+            except NotFoundError as err:
+                raise RuntimeError(
+                    f"Bedrock model '{self._model}' was not found or has reached end-of-life. "
+                    "Update BEDROCK_REASONING_MODEL or BEDROCK_TOOLCALL_MODEL to a supported model."
+                ) from err
+            except AnthropicBadRequestError as err:
+                msg = str(err)
+                if "on-demand throughput" in msg or "inference profile" in msg:
+                    raise RuntimeError(
+                        f"Bedrock model '{self._model}' requires a cross-region inference profile. "
+                        f"Try prefixing with 'us.' (e.g. 'us.{self._model}') and update "
+                        "BEDROCK_REASONING_MODEL or BEDROCK_TOOLCALL_MODEL."
+                    ) from err
+                raise RuntimeError(
+                    f"Bedrock API bad request for model '{self._model}': {err}"
+                ) from err
+            except PermissionDeniedError as err:
+                raise RuntimeError(
+                    f"Bedrock model '{self._model}' is not available for your account. "
+                    "Check your AWS Marketplace subscription and account permissions, "
+                    "or update BEDROCK_REASONING_MODEL / BEDROCK_TOOLCALL_MODEL."
+                ) from err
             except Exception as err:
                 last_err = err
                 if attempt == max_attempts - 1:
@@ -377,6 +409,25 @@ class BedrockLLMClient:
                 break
             except GuardrailBlockedError:
                 raise
+            except botocore.exceptions.ClientError as err:
+                code = err.response.get("Error", {}).get("Code", "")
+                if code == "ValidationException":
+                    raise RuntimeError(
+                        f"Bedrock model ID '{self._model}' is invalid. "
+                        "Check BEDROCK_REASONING_MODEL or BEDROCK_TOOLCALL_MODEL."
+                    ) from err
+                if code in ("AccessDeniedException", "UnauthorizedException"):
+                    raise RuntimeError(
+                        f"Access denied for Bedrock model '{self._model}'. "
+                        "Check your AWS IAM permissions and account configuration."
+                    ) from err
+                last_err = err
+                if attempt == max_attempts - 1:
+                    raise RuntimeError(
+                        f"Bedrock API request failed after {max_attempts} attempts: {type(err).__name__}: {err}"
+                    ) from err
+                time.sleep(backoff_seconds)
+                backoff_seconds *= 2
             except Exception as err:
                 last_err = err
                 if attempt == max_attempts - 1:
