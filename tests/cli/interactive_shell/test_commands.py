@@ -9,12 +9,18 @@ import pytest
 from prompt_toolkit.history import FileHistory
 from rich.console import Console
 
-import app.cli.interactive_shell.grounding_diagnostics as grounding_diagnostics
+from app.cli.interactive_shell import (
+    agents_md_reference,
+    cli_reference,
+    docs_reference,
+)
 from app.cli.interactive_shell.command_registry import repl_data as repl_data_module
 from app.cli.interactive_shell.commands import SLASH_COMMANDS, dispatch_slash
 from app.cli.interactive_shell.grounding_diagnostics import (
     GroundingSource,
+    iter_grounding_sources,
     register_grounding_source,
+    unregister_grounding_source,
 )
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.tasks import TaskKind, TaskStatus
@@ -27,12 +33,16 @@ def _capture() -> tuple[Console, io.StringIO]:
 
 @pytest.fixture(autouse=True)
 def restore_grounding_source_registry() -> None:
-    original_registry = grounding_diagnostics._GROUNDING_SOURCE_REGISTRY.copy()
+    snapshot_names = {source.name for source in iter_grounding_sources()}
     try:
         yield
     finally:
-        grounding_diagnostics._GROUNDING_SOURCE_REGISTRY.clear()
-        grounding_diagnostics._GROUNDING_SOURCE_REGISTRY.update(original_registry)
+        for source in list(iter_grounding_sources()):
+            if source.name not in snapshot_names:
+                unregister_grounding_source(source.name)
+        cli_reference._register_grounding_source()
+        docs_reference._register_grounding_source()
+        agents_md_reference._register_grounding_source()
 
 
 class TestDispatchSlash:

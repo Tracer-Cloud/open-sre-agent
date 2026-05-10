@@ -11,8 +11,6 @@ from typing import Any
 
 _logger = logging.getLogger(__name__)
 
-_GROUNDING_SOURCE_REGISTRY: OrderedDict[str, GroundingSource] = OrderedDict()
-
 
 def _format_grounding_stats(stats: dict[str, Any]) -> str:
     hits = stats.get("hits", 0)
@@ -31,21 +29,18 @@ class GroundingSource:
     format_fn: Callable[[dict[str, Any]], str] = _format_grounding_stats
 
 
+_GROUNDING_SOURCE_REGISTRY: OrderedDict[str, GroundingSource] = OrderedDict()
+
+
 def register_grounding_source(source: GroundingSource) -> None:
     _GROUNDING_SOURCE_REGISTRY[source.name] = source
 
 
-def _ensure_builtin_grounding_sources_registered() -> None:
-    if "cli" not in _GROUNDING_SOURCE_REGISTRY:
-        from app.cli.interactive_shell import cli_reference  # noqa: F401
-    if "docs" not in _GROUNDING_SOURCE_REGISTRY:
-        from app.cli.interactive_shell import docs_reference  # noqa: F401
-    if "agents_md" not in _GROUNDING_SOURCE_REGISTRY:
-        from app.cli.interactive_shell import agents_md_reference  # noqa: F401
+def unregister_grounding_source(name: str) -> None:
+    _GROUNDING_SOURCE_REGISTRY.pop(name, None)
 
 
 def iter_grounding_sources() -> Iterable[GroundingSource]:
-    _ensure_builtin_grounding_sources_registered()
     return tuple(_GROUNDING_SOURCE_REGISTRY.values())
 
 
@@ -66,4 +61,5 @@ __all__ = [
     "iter_grounding_sources",
     "log_grounding_cache_diagnostics",
     "register_grounding_source",
+    "unregister_grounding_source",
 ]
