@@ -413,6 +413,48 @@ def test_run_opensre_agents_scan_register_explains_confirmation(
     }
 
 
+def test_run_opensre_agents_watch_runs_in_foreground(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        assert command[-3:] == ["agents", "watch", "1234"]
+        assert kwargs["capture_output"] is True
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=0,
+            stdout="pid 1234 exited\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr("app.cli.interactive_shell.action_executor.subprocess.run", _fake_run)
+
+    session = ReplSession()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    assert (
+        run_opensre_cli_command(
+            "agents watch 1234",
+            session,
+            console,
+            confirm_fn=lambda _prompt: "y",
+            is_tty=True,
+        )
+        is True
+    )
+
+    out = buf.getvalue()
+    assert "$ opensre agents watch 1234" in out
+    assert "pid 1234 exited" in out
+    assert "started" not in out
+    assert session.task_registry.list_recent() == []
+    assert session.history[-1] == {
+        "type": "cli_command",
+        "text": "opensre agents watch 1234",
+        "ok": True,
+    }
+
+
 def test_start_background_cli_task_uses_pty_for_live_terminal_output(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

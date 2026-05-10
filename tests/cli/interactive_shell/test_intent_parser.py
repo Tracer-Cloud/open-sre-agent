@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import pytest
+
+import app.cli.interactive_shell.intent_parser as intent_parser
 from app.cli.interactive_shell.intent_parser import (
     SAMPLE_ALERT_RE,
     extract_implementation_request,
+    extract_shell_command,
     normalize_shell_command,
     split_prompt_clauses,
 )
@@ -45,6 +49,19 @@ def test_extract_implementation_request_allows_context_dependent_bare_implement(
     assert action is not None
     assert action.kind == "implementation"
     assert action.content == "implement"
+
+
+def test_code_editor_command_is_not_implementation_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(intent_parser.shutil, "which", lambda _command: "/usr/bin/code")
+    clause = PromptClause(text="code .", position=0)
+
+    assert extract_implementation_request(clause) is None
+    action = extract_shell_command(clause)
+    assert action is not None
+    assert action.kind == "shell"
+    assert action.content == "code ."
 
 
 class TestSampleAlertRE:

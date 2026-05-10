@@ -199,15 +199,17 @@ def start_background_cli_task(
     stderr_buf: tempfile.SpooledTemporaryFile[bytes] = tempfile.SpooledTemporaryFile(  # type: ignore[type-arg] # noqa: SIM115
         max_size=_SYNTHETIC_DIAG_CHARS * 2
     )
-    stdout_buf: tempfile.SpooledTemporaryFile[bytes] = tempfile.SpooledTemporaryFile(  # type: ignore[type-arg] # noqa: SIM115
-        max_size=_MAX_COMMAND_OUTPUT_CHARS
-    )
     pty_fds: tuple[int, int] | None = None
     if _should_use_pty(console, use_pty):
         try:
             pty_fds = os.openpty()
         except OSError:
             pty_fds = None
+    stdout_buf: tempfile.SpooledTemporaryFile[bytes] | None = None  # type: ignore[type-arg]
+    if pty_fds is None:
+        stdout_buf = tempfile.SpooledTemporaryFile(  # type: ignore[type-arg] # noqa: SIM115
+            max_size=_MAX_COMMAND_OUTPUT_CHARS
+        )
     proc: subprocess.Popen[Any]
     try:
         if pty_fds is None:
@@ -233,7 +235,8 @@ def start_background_cli_task(
             for fd in pty_fds:
                 with contextlib.suppress(OSError):
                     os.close(fd)
-        stdout_buf.close()
+        if stdout_buf is not None:
+            stdout_buf.close()
         stderr_buf.close()
         task.mark_failed(str(exc))
         console.print(f"[{ERROR}]failed to start:[/] {escape(str(exc))}")
@@ -300,7 +303,8 @@ def start_background_cli_task(
             console.print(f"[{ERROR}]error:[/] {escape(str(exc))}")
         finally:
             _join_task_output_streams(output_threads)
-            stdout_buf.close()
+            if stdout_buf is not None:
+                stdout_buf.close()
             stderr_buf.close()
 
     thread = threading.Thread(target=_watch, daemon=True)
@@ -757,7 +761,7 @@ def _should_run_opensre_in_foreground(tokens: list[str]) -> bool:
         return True
     if first_token == "agents":
         subcommand = tokens[1].lower() if len(tokens) > 1 else "list"
-        return subcommand in {"list", "register", "forget", "scan"}
+        return subcommand in {"list", "register", "forget", "scan", "watch"}
     return False
 
 

@@ -127,7 +127,7 @@ SYNTHETIC_RDS_TEST_RE = re.compile(
 IMPLEMENTATION_RE = re.compile(
     r"^\s*(?:please\s+)?(?:can\s+you\s+)?"
     r"(?:(?:use|launch|run)\s+claude(?:\s+code)?\s+(?:to\s+)?)?"
-    r"(?P<trigger>implement|code|make\s+the\s+change|make\s+those\s+changes)"
+    r"(?P<trigger>implement|make\s+the\s+change|make\s+those\s+changes)"
     r"(?P<request>\b.*)?$",
     re.IGNORECASE | re.DOTALL,
 )
