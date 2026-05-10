@@ -55,6 +55,15 @@ def get_output_format() -> str:
     return "rich" if sys.stdout.isatty() else "text"
 
 
+def _safe_print(text: str) -> None:
+    """Print text, replacing unencodable characters (e.g. on Windows cp1252)."""
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        enc = sys.stdout.encoding or "utf-8"
+        print(text.encode(enc, errors="replace").decode(enc))
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Badge registry
 # ─────────────────────────────────────────────────────────────────────────────
@@ -181,7 +190,7 @@ def render_divider(width: int = 80) -> None:
     if get_output_format() == "rich":
         _get_console().print(Text("┄" * width, style=DIM))
     else:
-        print("─" * width)
+        _safe_print("─" * width)
 
 
 def render_footer(phase: str, elapsed: float, model: str, mode: str) -> None:
@@ -197,7 +206,7 @@ def render_footer(phase: str, elapsed: float, model: str, mode: str) -> None:
         t.append("esc to cancel", style=DIM)
         _get_console().print(t)
     else:
-        print(f"● {phase}  {elapsed:.1f}s  {model}  {mode}")
+        _safe_print(f"● {phase}  {elapsed:.1f}s  {model}  {mode}")
 
 
 def render_event(
@@ -236,7 +245,7 @@ def render_event(
         line = f"  {mark}  [{event_type}]  {message}"
         if insight:
             line += f"  ↳ {insight}"
-        print(line)
+        _safe_print(line)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -425,7 +434,7 @@ class ProgressTracker:
             elif self._display:
                 self._display.step_start(node_name)
         else:
-            print(f"  … {_node_label(node_name)}")
+            _safe_print(f"  … {_node_label(node_name)}")
 
     def complete(
         self, node_name: str, fields_updated: list[str] | None = None, message: str | None = None
@@ -480,7 +489,7 @@ class ProgressTracker:
         line = f"  {mark} {_node_label(node_name)}  {_fmt_timing(elapsed_ms)}"
         if msg := _humanise_message(message or ""):
             line += f"  {msg}"
-        print(line)
+        _safe_print(line)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
