@@ -175,7 +175,7 @@ async def _run_one_turn(
         session.record_intervention("correction")
     if kind == "slash":
         # Rewrite bare-word commands to their slash form before dispatch.
-        cmd_text = text if text.startswith("/") else f"/{text}"
+        cmd_text = _router.slash_dispatch_text(text)
         try:
             should_continue = dispatch_slash(cmd_text, session, console)
         except Exception as exc:
@@ -267,7 +267,7 @@ async def _repl_main(initial_input: str | None = None, _config: ReplConfig | Non
                 decision.to_event_payload(),
             )
             if kind == "slash":
-                cmd_text = stripped if stripped.startswith("/") else f"/{stripped}"
+                cmd_text = _router.slash_dispatch_text(stripped)
                 if not dispatch_slash(cmd_text, session, console):
                     return 0
                 console.print()

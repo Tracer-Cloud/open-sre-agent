@@ -60,7 +60,7 @@ def test_score_result_does_not_apply_failover_wording_to_storage_scenario() -> N
             "The RDS instance ran out of storage space, and storage space exhaustion is "
             "confirmed by the RDS event plus collapsing WriteIOPS."
         ),
-        "root_cause_category": "resource_exhaustion",
+        "root_cause_category": "storage_exhaustion",
         "validated_claims": [
             {"claim": 'RDS event states "DB instance ran out of storage space".'},
         ],
@@ -185,7 +185,7 @@ def test_score_result_uses_semantic_keyword_matching_for_write_heavy_workload() 
             "which increases WAL generation faster than the replica can replay; "
             "Top SQL Activity and Avg Load confirm replay pressure."
         ),
-        "root_cause_category": "resource_exhaustion",
+        "root_cause_category": "replication_lag",
         "validated_claims": [
             {"claim": "Replica lag and WAL replay pressure are both elevated."},
         ],

@@ -283,13 +283,12 @@ def _expects_vendor_evidence(
             return True
 
     s3_audit_payload = evidence.get("s3_audit_payload", {})
-    if isinstance(s3_audit_payload, dict) and (s3_audit_payload.get("key") or s3_audit_payload.get("found")):
+    if isinstance(s3_audit_payload, dict) and (
+        s3_audit_payload.get("key") or s3_audit_payload.get("found")
+    ):
         return True
 
-    if evidence.get("vendor_audit_from_logs"):
-        return True
-
-    return False
+    return bool(evidence.get("vendor_audit_from_logs"))
 
 
 def check_vendor_evidence_missing(

@@ -377,10 +377,7 @@ External reference:
 - Scoutflo SRE playbook library:
   https://github.com/Scoutflo/Scoutflo-SRE-Playbooks
 """,
-        source=(
-            "SRE Workbook Ch.13 - Create and Maintain Documentation; "
-            "Scoutflo SRE Playbooks"
-        ),
+        source=("SRE Workbook Ch.13 - Create and Maintain Documentation; Scoutflo SRE Playbooks"),
     ),
     "workflow_patterns": SREKnowledgeTopic(
         name="Continuous Pipeline Patterns",

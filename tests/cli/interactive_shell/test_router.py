@@ -250,6 +250,14 @@ class TestClassifyInput:
         assert decision.route_kind == RouteKind.CLI_AGENT
         assert decision.matched_signals == ("cli_agent_action_plan",)
 
+    def test_typoed_synthetic_prompt_routes_to_cli_agent_action_plan(self) -> None:
+        session = ReplSession()
+
+        decision = route_input("run syntehtic test 002-connection-exhaustion", session)
+
+        assert decision.route_kind == RouteKind.CLI_AGENT
+        assert decision.matched_signals == ("cli_agent_action_plan",)
+
     def test_remote_deployment_inventory_questions_route_to_cli_agent(self) -> None:
         session = ReplSession()
 
@@ -277,6 +285,10 @@ class TestClassifyInput:
             "How many deployments are configured?",
         ):
             assert classify_input(text, session) == "cli_agent", text
+
+    def test_typoed_help_bare_alias_routes_to_slash(self) -> None:
+        session = ReplSession()
+        assert classify_input("hlep", session) == "slash"
 
     def test_docs_and_capability_questions_with_incident_vocab_avoid_investigation(self) -> None:
         session = ReplSession()

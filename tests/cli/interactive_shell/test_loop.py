@@ -388,6 +388,36 @@ def test_run_one_turn_reports_slash_dispatch_error(monkeypatch: pytest.MonkeyPat
     assert isinstance(captured_errors[0], RuntimeError)
 
 
+def test_run_one_turn_typoed_bare_alias_dispatches_canonical_slash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from rich.console import Console
+
+    class _Prompt:
+        async def prompt_async(self, _prompt: object) -> str:
+            return "hlep"
+
+    dispatched: list[str] = []
+
+    def _dispatch(command: str, *_args: object, **_kwargs: object) -> bool:
+        dispatched.append(command)
+        return True
+
+    monkeypatch.setattr(
+        loop,
+        "route_input",
+        lambda *_args: RouteDecision(RouteKind.SLASH, 0.98, ("bare_command_alias",)),
+    )
+    monkeypatch.setattr(loop, "dispatch_slash", _dispatch)
+    session = ReplSession()
+    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
+
+    should_continue = asyncio.run(loop._run_one_turn(_Prompt(), session, console))
+
+    assert should_continue is True
+    assert dispatched == ["/help"]
+
+
 def test_run_one_turn_renders_submitted_prompt_before_handler(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

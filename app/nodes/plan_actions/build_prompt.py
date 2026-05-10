@@ -433,6 +433,9 @@ Planning rules:
    - background processes (e.g. WAL, vacuum, or audit logging systems depending on the database engine)
    - storage growth sources such as audit logs (for PostgreSQL/Aurora) or other logging mechanisms
    Prefer actions that reveal these mechanisms when relevant signals (CPU, connections, storage) are elevated.
+11. Treat get_sre_guidance as a synthesis helper, not a primary evidence action:
+   - only select it after at least one telemetry action (metrics/logs/events/alerts) succeeds
+   - do not use it when concrete product telemetry actions are still available and untried
 
 When selecting actions, optimize for:
 - ruling out competing explanations

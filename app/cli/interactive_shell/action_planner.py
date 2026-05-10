@@ -16,6 +16,7 @@ from app.cli.interactive_shell.intent_parser import (
     extract_llm_provider_switch,
     extract_shell_command,
     extract_task_cancel_request,
+    normalize_intent_text,
     sample_alert_action,
     slash_action,
     split_prompt_clauses,
@@ -50,12 +51,16 @@ def plan_clause_actions(
     *,
     seen_slash: set[str],
 ) -> list[PlannedAction]:
+    normalized_clause = PromptClause(
+        text=normalize_intent_text(clause.text),
+        position=clause.position,
+    )
     planned: list[PlannedAction] = []
-    mentioned_services = mentioned_integration_services(clause.text)
+    mentioned_services = mentioned_integration_services(normalized_clause.text)
     matched_slash_registry = False
 
     for pattern, command in ACTION_PATTERNS:
-        match = pattern.search(clause.text)
+        match = pattern.search(normalized_clause.text)
         if match is None or command in seen_slash:
             continue
         if command == "cli_command":
@@ -77,18 +82,20 @@ def plan_clause_actions(
         seen_slash.add(command)
         matched_slash_registry = True
 
-    lower = clause.text.lower()
+    lower = normalized_clause.text.lower()
     for service in mentioned_services:
         match = re.search(rf"\b{re.escape(service.replace('_', ' '))}\b", lower)
-        position = clause.position + (match.start() if match else 0)
+        position = normalized_clause.position + (match.start() if match else 0)
 
         # Capability questions should get an answer, not only configured-status output.
-        relative_position = position - clause.position
+        relative_position = position - normalized_clause.position
         window_start = max(0, relative_position - 80)
-        window_end = min(len(clause.text), relative_position + 120)
-        window = clause.text[window_start:window_end]
-        detail_window = clause.text[
-            max(0, relative_position - 30) : min(len(clause.text), relative_position + 70)
+        window_end = min(len(normalized_clause.text), relative_position + 120)
+        window = normalized_clause.text[window_start:window_end]
+        detail_window = normalized_clause.text[
+            max(0, relative_position - 30) : min(
+                len(normalized_clause.text), relative_position + 70
+            )
         ]
 
         slash = f"/integrations show {service}"
@@ -106,36 +113,38 @@ def plan_clause_actions(
     if planned:
         return planned
 
-    provider_switch_action = extract_llm_provider_switch(clause)
+    provider_switch_action = extract_llm_provider_switch(normalized_clause)
     if provider_switch_action is not None:
         planned.append(provider_switch_action)
         return planned
 
-    synthetic_match = SYNTHETIC_RDS_TEST_RE.search(clause.text)
+    synthetic_match = SYNTHETIC_RDS_TEST_RE.search(normalized_clause.text)
     if synthetic_match is not None:
         synthetic_content, synthetic_position = _synthetic_action_content(
-            clause,
+            normalized_clause,
             synthetic_start=synthetic_match.start(),
         )
         planned.append(synthetic_test_action(synthetic_content, synthetic_position))
         return planned
 
-    sample_match = SAMPLE_ALERT_RE.search(clause.text)
+    sample_match = SAMPLE_ALERT_RE.search(normalized_clause.text)
     if sample_match is not None:
-        planned.append(sample_alert_action("generic", clause.position + sample_match.start()))
+        planned.append(
+            sample_alert_action("generic", normalized_clause.position + sample_match.start())
+        )
         return planned
 
-    implementation = extract_implementation_request(clause)
+    implementation = extract_implementation_request(normalized_clause)
     if implementation is not None:
         planned.append(implementation)
         return planned
 
-    task_cancel = extract_task_cancel_request(clause)
+    task_cancel = extract_task_cancel_request(normalized_clause)
     if task_cancel is not None:
         planned.append(task_cancel)
         return planned
 
-    planned_shell = extract_shell_command(clause)
+    planned_shell = extract_shell_command(normalized_clause)
     if planned_shell is not None:
         planned.append(planned_shell)
 

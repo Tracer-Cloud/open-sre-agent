@@ -9,7 +9,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Literal, Protocol
 
-from app.cli.interactive_shell.action_planner import plan_cli_actions
+from app.cli.interactive_shell.action_planner import plan_actions_with_unhandled
+from app.cli.interactive_shell.intent_parser import normalize_intent_text
 from app.cli.interactive_shell.terminal_intent import (
     is_sample_alert_launch_intent,
     mentions_alert_signal,
@@ -61,23 +62,25 @@ def _is_slash_prefix(text: str, _session: RoutingSession) -> bool:
 
 
 def _is_bare_command_alias(text: str, _session: RoutingSession) -> bool:
-    return text.strip().lower() in BARE_COMMAND_ALIASES
+    normalized = normalize_intent_text(text.strip())
+    return normalized in BARE_COMMAND_ALIASES
 
 
 def _is_cli_help_rule(text: str, _session: RoutingSession) -> bool:
-    return _is_cli_help_intent(text.strip())
+    return _is_cli_help_intent(normalize_intent_text(text.strip()))
 
 
 def _is_sample_alert_rule(text: str, _session: RoutingSession) -> bool:
-    return is_sample_alert_launch_intent(text.strip())
+    return is_sample_alert_launch_intent(normalize_intent_text(text.strip()))
 
 
 def _is_cli_agent_action_rule(
     text: str,
     _session: RoutingSession,
 ) -> bool:
-    stripped = text.strip()
-    return bool(plan_cli_actions(stripped)) and not mentions_alert_signal(stripped)
+    normalized = normalize_intent_text(text.strip())
+    actions, _unhandled = plan_actions_with_unhandled(normalized)
+    return bool(actions)
 
 
 def _is_new_alert_without_prior_state(
@@ -349,7 +352,7 @@ _CLI_HELP_PATTERNS: tuple[re.Pattern[str], ...] = (
 
 
 def _is_short_question(text: str) -> bool:
-    stripped = text.strip()
+    stripped = normalize_intent_text(text.strip())
     if not stripped:
         return False
     if len(stripped) >= 90:
@@ -374,10 +377,11 @@ def _looks_like_json_payload(text: str) -> bool:
 
 def _short_question_mentions_incident_vocab(text: str) -> bool:
     """True when a short question looks like a production issue, not small talk."""
-    if not _is_short_question(text):
+    normalized = normalize_intent_text(text)
+    if not _is_short_question(normalized):
         return False
-    lower = text.lower()
-    if _INFORMATIONAL_QUESTION_RE.search(text) and any(
+    lower = normalized.lower()
+    if _INFORMATIONAL_QUESTION_RE.search(normalized) and any(
         word in lower for word in _INFORMATIONAL_QUESTION_WORDS
     ):
         return False
@@ -394,14 +398,16 @@ def _reads_like_investigation_request(text: str) -> bool:
         return False
     if _looks_like_json_payload(stripped):
         return True
+    normalized = normalize_intent_text(stripped)
     if len(stripped) >= _MIN_INVESTIGATION_LINE_LEN:
-        return _long_line_suggests_incident_narrative(stripped)
-    return mentions_alert_signal(stripped) or _short_question_mentions_incident_vocab(stripped)
+        return _long_line_suggests_incident_narrative(normalized)
+    return mentions_alert_signal(normalized) or _short_question_mentions_incident_vocab(normalized)
 
 
 def _is_cli_help_intent(text: str) -> bool:
     """True for meta-questions about how to use OpenSRE, the CLI, or the shell."""
-    return any(pattern.search(text) for pattern in _CLI_HELP_PATTERNS)
+    normalized = normalize_intent_text(text)
+    return any(pattern.search(normalized) for pattern in _CLI_HELP_PATTERNS)
 
 
 def route_input(text: str, session: RoutingSession) -> RouteDecision:
@@ -435,3 +441,15 @@ def route_input(text: str, session: RoutingSession) -> RouteDecision:
 def classify_input(text: str, session: RoutingSession) -> InputKind:
     """Legacy InputKind adapter built on top of route_input()."""
     return route_input(text, session).route_kind.value
+
+
+def slash_dispatch_text(text: str) -> str:
+    """Return slash command text, including typo-tolerant bare alias mapping."""
+    stripped = text.strip()
+    if stripped.startswith("/"):
+        return stripped
+    normalized = normalize_intent_text(stripped)
+    mapped = BARE_COMMAND_ALIAS_MAP.get(normalized)
+    if mapped is not None:
+        return mapped
+    return f"/{stripped}"

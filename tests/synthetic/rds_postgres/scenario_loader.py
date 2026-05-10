@@ -8,6 +8,7 @@ from typing import Any, Literal, cast
 import yaml
 
 from tests.synthetic.schemas import (
+    GoldenTrajectorySchema,
     ScenarioEvidence,
     ScenarioMetadataSchema,
     validate_alert,
@@ -89,16 +90,15 @@ def _parse_trajectory_matching(value: Any) -> TrajectoryMatching:
     )
 
 
-def _parse_non_negative_int(golden_trajectory: dict[str, Any], field: str) -> int | None:
+def _parse_non_negative_int(golden_trajectory: GoldenTrajectorySchema, field: str) -> int | None:
     value = golden_trajectory.get(field)
     if value is None:
         return None
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         raise ValueError(
-            f"answer.yml: 'golden_trajectory.{field}' must be a non-negative integer "
-            "when present"
+            f"answer.yml: 'golden_trajectory.{field}' must be a non-negative integer when present"
         )
-    return value
+    return cast(int, value)
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -274,12 +274,8 @@ def _parse_answer_yaml(path: Path) -> ScenarioAnswerKey:
         golden_trajectory = GoldenTrajectoryConfig(
             ordered_actions=ordered_actions,
             matching=matching,
-            max_edit_distance=_parse_non_negative_int(
-                golden_trajectory_raw, "max_edit_distance"
-            ),
-            max_extra_actions=_parse_non_negative_int(
-                golden_trajectory_raw, "max_extra_actions"
-            ),
+            max_edit_distance=_parse_non_negative_int(golden_trajectory_raw, "max_edit_distance"),
+            max_extra_actions=_parse_non_negative_int(golden_trajectory_raw, "max_extra_actions"),
             max_redundancy=_parse_non_negative_int(golden_trajectory_raw, "max_redundancy"),
             max_loops=_parse_non_negative_int(golden_trajectory_raw, "max_loops"),
         )

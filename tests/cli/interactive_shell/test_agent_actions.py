@@ -56,6 +56,12 @@ def test_generic_synthetic_test_request_plans_synthetic_action() -> None:
     assert plan_terminal_tasks("Can you run a synthetic test?") == ["synthetic_test"]
 
 
+def test_typoed_synthetic_test_request_plans_synthetic_action() -> None:
+    message = "can you rnu a syntehtic tset 002-connection-exhaustion"
+    assert plan_terminal_tasks(message) == ["synthetic_test"]
+    assert plan_cli_actions(message) == []
+
+
 def test_kill_synthetic_test_request_plans_cancel_action() -> None:
     message = "kill the syntehtic_test because it is runnign way too long"
 

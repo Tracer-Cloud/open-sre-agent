@@ -345,9 +345,7 @@ def score_trajectory(
     calibration_ok = action_loops_used <= max_loops
     extra_actions_count = len([action for action in actual_sequence if action not in set(expected)])
     trajectory_budget_ok = extra_actions_count == 0
-    efficiency_score = (
-        int(sequencing_ok) + int(calibration_ok) + int(trajectory_budget_ok)
-    ) / 3.0
+    efficiency_score = (int(sequencing_ok) + int(calibration_ok) + int(trajectory_budget_ok)) / 3.0
 
     return TrajectoryScore(
         actual_sequence=actual_sequence,
@@ -445,7 +443,9 @@ def score_result(
     semantic_missing_keywords: list[str] = []
     normalization_used: set[str] = {"casefold_whitespace_normalization"}
     for keyword in fixture.answer_key.required_keywords:
-        semantic_match, match_mode, _matched_alias = _keyword_match_details(normalized_output, keyword)
+        semantic_match, match_mode, _matched_alias = _keyword_match_details(
+            normalized_output, keyword
+        )
         if semantic_match:
             semantic_matched_keywords.append(keyword)
             normalization_used.add(match_mode)
@@ -503,10 +503,7 @@ def score_result(
         "required_keyword_match",
         semantic_keyword_match,
         "all required keywords matched (semantic)",
-        (
-            f"missing_semantic={semantic_missing_keywords}, "
-            f"missing_exact={exact_missing_keywords}"
-        ),
+        (f"missing_semantic={semantic_missing_keywords}, missing_exact={exact_missing_keywords}"),
     )
 
     _mark_gate(
