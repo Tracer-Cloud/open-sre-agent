@@ -221,10 +221,13 @@ class _DiagnoseStreamRenderer:
 def _clean_markdown_line(line: str) -> str:
     """Strip both bulleted lists (•, ●, -, —, *) and numbered lists (e.g. 1., 2))."""
     stripped = line.strip()
-    # Strip bullet prefix (e.g. "• ", "- ")
-    stripped = stripped.lstrip("•●-—* ").strip()
-    # Strip numbered list prefix (e.g. "1. ", "2) ")
-    stripped = re.sub(r"^\s*\d+[.)]\s*", "", stripped)
+    prev = ""
+    while stripped != prev:
+        prev = stripped
+        # Strip bullet prefix (requires space after bullet to preserve **bold**)
+        stripped = re.sub(r"^[-•●—*]\s+", "", stripped)
+        # Strip numbered list prefix (e.g. "1. ", "2) ")
+        stripped = re.sub(r"^\d+[.)]\s+", "", stripped)
     return stripped
 
 
@@ -637,8 +640,10 @@ class StreamRenderer:
 
                     clean_line = _clean_markdown_line(stripped)
                     tokens = clean_line.lower().split()
-                    if tokens and tokens[0] in action_verbs:
-                        next_actions.append(clean_line)
+                    if tokens:
+                        first_word = tokens[0].strip("*_`")
+                        if first_word in action_verbs:
+                            next_actions.append(clean_line)
 
             content = f"[bold white][Root Cause][/bold white]\n  {escape(root_cause)}\n\n"
             content += f"[bold white][Confidence][/bold white]\n  [bold green]{escape(confidence_str)}[/bold green]\n\n"
