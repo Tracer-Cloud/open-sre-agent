@@ -25,7 +25,6 @@ conventions: input pinned at bottom, history scrolls naturally.
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import random
 import re
 import sys
@@ -34,7 +33,6 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from prompt_toolkit.application.current import get_app_or_none
 from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.key_binding import KeyBindings, merge_key_bindings
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent
@@ -571,12 +569,22 @@ async def _run_interactive(
     cancel_kb = _build_cancel_key_bindings(state)
     _install_session_key_bindings(pt_session, cancel_kb)
 
+    # Capture the prompt-toolkit ``Application`` and the running asyncio
+    # loop on the main coroutine. ``_request_exit`` is invoked from the
+    # dispatch *worker thread* (via ``_dispatch_one_turn``'s ``on_exit``
+    # when a slash command like ``/exit`` returns False); from there
+    # ``get_app_or_none()`` returns ``None`` because the worker thread
+    # never had the prompt_toolkit ``_current_app`` ContextVar. Cached
+    # references + ``call_soon_threadsafe`` avoid that ContextVar
+    # dependency so ``/exit`` actually dismisses the prompt instead of
+    # leaving the user staring at an idle one until they hit Enter.
+    pt_app = pt_session.app
+    main_loop = asyncio.get_running_loop()
+
     def _request_exit() -> None:
         state.exit_requested = True
         state.cancel_current_dispatch()
-        app = get_app_or_none()
-        if app is not None:
-            app.exit()
+        main_loop.call_soon_threadsafe(pt_app.exit)
 
     def _route_confirm_through_prompt(prompt_text: str) -> str:
         """Worker-thread confirmation handler. Asks the user via the
@@ -647,8 +655,17 @@ async def _run_interactive(
                 state.queue.task_done()
                 return
             state.current_task = asyncio.create_task(_run_one_dispatch(text))
-            with contextlib.suppress(asyncio.CancelledError, Exception):
+            # ``try/except/pass`` (instead of ``contextlib.suppress``)
+            # because CodeQL flags ``await x`` inside ``contextlib.suppress``
+            # as "statement has no effect" even though the await IS the
+            # effect. The ruff SIM105 suggestion is suppressed locally.
+            # Errors are surfaced inside ``_run_one_dispatch`` (it
+            # prints ``· interrupted`` or the dispatch error). Swallow
+            # here so the queue keeps draining the next item.
+            try:  # noqa: SIM105
                 await state.current_task
+            except (asyncio.CancelledError, Exception):
+                pass
             state.current_task = None
             state.queue.task_done()
 
@@ -732,8 +749,15 @@ async def _run_interactive(
         state.exit_requested = True
         state.cancel_current_dispatch()
         processor_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError, Exception):
+        # ``try/except/pass`` here (not ``contextlib.suppress``) so
+        # CodeQL doesn't flag the bare ``await`` as ineffectual; SIM105
+        # ruff suggestion is suppressed locally.
+        # Processor cleanup must never raise — we're already in the
+        # REPL's outer ``finally``. Session is shutting down.
+        try:  # noqa: SIM105
             await processor_task
+        except (asyncio.CancelledError, Exception):
+            pass
 
 
 def _build_cancel_key_bindings(state: _ReplState) -> KeyBindings:

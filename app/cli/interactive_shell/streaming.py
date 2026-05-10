@@ -196,6 +196,29 @@ def stream_to_console(
                 _render_paragraph(tail)
             para_buffer = []
 
+    def _maybe_flush_after_append(chunk: str) -> None:
+        """Cheap fast-path before the O(buffer) join inside ``_flush_paragraphs``.
+
+        A paragraph boundary requires ``\\n\\n``. The second ``\\n`` must be in
+        the *current* chunk (any earlier chunks were already flushed or had
+        no boundary). Skip the full flush when ``\\n`` is absent here AND
+        the buffer/chunk seam can't form a boundary either. Without this
+        guard, a long single-paragraph response (e.g. 4k chunks, no
+        blank-line separators) becomes O(n²) because every chunk
+        triggers a full ``"".join(para_buffer)``.
+        """
+        if not chunk:
+            return
+        if "\n\n" in chunk:
+            _flush_paragraphs()
+            return
+        if "\n" in chunk and len(para_buffer) >= 2:
+            # Cross-chunk boundary: previous chunk ended with ``\n`` and
+            # this chunk's leading ``\n`` completes the ``\n\n``.
+            prev = para_buffer[-2]
+            if prev.endswith("\n") and chunk.startswith("\n"):
+                _flush_paragraphs()
+
     if peeked:
         last_progress_at = _maybe_update_progress(time.monotonic(), force=True)
         _flush_paragraphs()
@@ -213,7 +236,7 @@ def stream_to_console(
             para_buffer.append(chunk)
             total_bytes += len(chunk)
             last_progress_at = _maybe_update_progress(time.monotonic())
-            _flush_paragraphs()
+            _maybe_flush_after_append(chunk)
     finally:
         # Render whatever's left in the paragraph buffer so the user
         # sees the full response even if it didn't end on ``\n\n``.

@@ -403,6 +403,81 @@ class TestProgressHook:
         assert result == "full answer"
 
 
+class TestParagraphFlushThrottle:
+    """Long single-paragraph streams must not pay O(n²) work re-joining
+    the buffer on every chunk. The fast-path skips the join when no
+    paragraph boundary could possibly land in the new chunk.
+    """
+
+    def _spy_markdown_parses(self, monkeypatch: pytest.MonkeyPatch) -> list[int]:
+        """Wrap ``streaming.Markdown`` so each construction increments a counter."""
+        from app.cli.interactive_shell import streaming as streaming_module
+
+        parse_count = [0]
+        real_markdown = streaming_module.Markdown
+
+        class _SpyMarkdown(real_markdown):  # type: ignore[misc, valid-type]
+            def __init__(self, text: str, **kwargs) -> None:
+                parse_count[0] += 1
+                super().__init__(text, **kwargs)
+
+        monkeypatch.setattr(streaming_module, "Markdown", _SpyMarkdown)
+        return parse_count
+
+    def test_long_single_paragraph_renders_once(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """No ``\\n\\n`` in any chunk → the only Markdown parse is the
+        end-of-stream force-flush. Proves the fast-path skips the join
+        on every intermediate chunk."""
+        parse_count = self._spy_markdown_parses(monkeypatch)
+        console, _ = _tty_console()
+
+        # 500 chunks, each a few words, no paragraph breaks.
+        chunks = [f"word{i} " for i in range(500)]
+        result = stream_to_console(console, label="assistant", chunks=_yield_chunks(chunks))
+
+        assert "word0" in result
+        assert "word499" in result
+        # End-of-stream force-flush is the only Markdown construction.
+        assert parse_count[0] == 1, f"expected 1 parse (force-flush), got {parse_count[0]}"
+
+    def test_paragraph_boundary_per_chunk_renders_once_per_paragraph(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Each ``\\n\\n`` boundary triggers exactly one Markdown
+        parse — the trailing tail is force-flushed at end."""
+        parse_count = self._spy_markdown_parses(monkeypatch)
+        console, _ = _tty_console()
+
+        chunks = [
+            "para 1.\n\n",
+            "para 2.\n\n",
+            "para 3.\n\n",
+            "trailing tail",
+        ]
+        stream_to_console(console, label="assistant", chunks=_yield_chunks(chunks))
+
+        # 3 in-loop renders + 1 force-flush at end = 4 total.
+        assert parse_count[0] == 4
+
+    def test_chunks_with_only_single_newlines_skip_flush(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Lists / code with single ``\\n`` separators don't trigger
+        flush until a real ``\\n\\n`` boundary closes the block."""
+        parse_count = self._spy_markdown_parses(monkeypatch)
+        console, _ = _tty_console()
+
+        chunks = [
+            "- item 1\n",
+            "- item 2\n",
+            "- item 3\n",
+            # No \n\n — only force-flush at end.
+        ]
+        stream_to_console(console, label="assistant", chunks=_yield_chunks(chunks))
+
+        assert parse_count[0] == 1
+
+
 class TestCancelPolling:
     """``stream_to_console`` polls ``console.cancel_requested`` between
     chunks so an Esc-driven cancel signal stops the worker-thread stream
