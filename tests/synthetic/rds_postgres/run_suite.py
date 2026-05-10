@@ -11,6 +11,7 @@ from typing import Any
 
 from rich.console import Console
 
+from app.pipeline.runners import run_investigation
 from tests.synthetic.mock_aws_backend import FixtureAWSBackend
 from tests.synthetic.mock_grafana_backend.backend import FixtureGrafanaBackend
 from tests.synthetic.rds_postgres.observations import (
@@ -471,8 +472,6 @@ def run_scenario(
     use_mock_grafana: bool = False,
     grafana_backend: Any = None,
 ) -> tuple[dict[str, Any], ScenarioScore]:
-    from app.pipeline.runners import run_investigation
-
     alert = fixture.alert
     labels = alert.get("commonLabels", {}) or {}
 
