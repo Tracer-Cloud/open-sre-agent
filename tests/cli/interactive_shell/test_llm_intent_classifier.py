@@ -650,3 +650,103 @@ class TestClearClassifyCache:
             clear_classify_cache()
             classify_intent_with_llm("run synthetic test 001", session)
         assert mock_client.invoke.call_count == 2
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 8. Safety behaviours (Greptile P1 + security fixes)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestSafetyBehaviours:
+    """Verify the three safety guarantees added after Greptile review."""
+
+    # ── P1: transient LLM failures must not be permanently cached ────────────
+
+    def test_transient_failure_not_cached(self) -> None:
+        """A failed LLM call must not block subsequent retries for the same text."""
+        session = _fresh_session()
+        fail_client = MagicMock()
+        fail_client.invoke.side_effect = RuntimeError("network error")
+        ok_client = _mock_llm_response("cli_agent")
+
+        with patch("app.services.llm_client.get_llm_for_tools", return_value=fail_client):
+            result_1 = classify_intent_with_llm("run test", session)
+
+        with patch("app.services.llm_client.get_llm_for_tools", return_value=ok_client):
+            result_2 = classify_intent_with_llm("run test", session)
+
+        assert result_1 is None
+        assert result_2 is not None
+        assert result_2.route_kind == RouteKind.CLI_AGENT
+
+    def test_none_response_cleared_from_cache(self) -> None:
+        """Unparseable LLM response must also be retried on the next call."""
+        session = _fresh_session()
+        garbage_client = _mock_llm_response("I have no idea")
+        ok_client = _mock_llm_response("new_alert")
+
+        with patch("app.services.llm_client.get_llm_for_tools", return_value=garbage_client):
+            first = classify_intent_with_llm("orders api 502", session)
+
+        with patch("app.services.llm_client.get_llm_for_tools", return_value=ok_client):
+            second = classify_intent_with_llm("orders api 502", session)
+
+        assert first is None
+        assert second is not None
+        assert second.route_kind == RouteKind.NEW_ALERT
+
+    # ── P1: LLM must not return follow_up without prior state ────────────────
+
+    def test_follow_up_without_prior_state_overridden_to_cli_agent(self) -> None:
+        """If LLM returns follow_up but session has no prior state, override to cli_agent."""
+        session = _fresh_session(with_prior_state=False)
+        with patch(
+            "app.services.llm_client.get_llm_for_tools",
+            return_value=_mock_llm_response("follow_up"),
+        ):
+            decision = classify_intent_with_llm("why did it fail?", session)
+        assert decision is not None
+        assert decision.route_kind == RouteKind.CLI_AGENT
+
+    def test_follow_up_with_prior_state_allowed(self) -> None:
+        """follow_up is only suppressed when session.last_state is None."""
+        session = _fresh_session(with_prior_state=True)
+        with patch(
+            "app.services.llm_client.get_llm_for_tools",
+            return_value=_mock_llm_response("follow_up"),
+        ):
+            decision = classify_intent_with_llm("why did it fail?", session)
+        assert decision is not None
+        assert decision.route_kind == RouteKind.FOLLOW_UP
+
+    # ── Security: prompt injection via control characters / long input ────────
+
+    def test_long_input_truncated_before_llm_call(self) -> None:
+        """Input longer than _MAX_TEXT_LEN must be truncated before entering the prompt."""
+        from app.cli.interactive_shell import llm_intent_classifier
+
+        session = _fresh_session()
+        long_text = "run test " + "A" * 600
+        mock_client = _mock_llm_response("cli_agent")
+
+        with patch("app.services.llm_client.get_llm_for_tools", return_value=mock_client):
+            classify_intent_with_llm(long_text, session)
+
+        assert mock_client.invoke.call_count == 1
+        prompt_used: str = mock_client.invoke.call_args[0][0]
+        assert len(prompt_used) < len(long_text) + len(llm_intent_classifier._SYSTEM_PROMPT) + 100
+
+    def test_control_characters_stripped_before_prompt(self) -> None:
+        """Null bytes and escape sequences must be removed before embedding in the prompt."""
+        session = _fresh_session()
+        injected = "run test\x00\x01\x1b[31mevil\x1b[0m"
+        mock_client = _mock_llm_response("cli_agent")
+
+        with patch("app.services.llm_client.get_llm_for_tools", return_value=mock_client):
+            decision = classify_intent_with_llm(injected, session)
+
+        assert decision is not None
+        prompt_used: str = mock_client.invoke.call_args[0][0]
+        assert "\x00" not in prompt_used
+        assert "\x01" not in prompt_used
+        assert "\x1b" not in prompt_used

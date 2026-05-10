@@ -26,7 +26,7 @@ from typing import Literal, Protocol
 
 from app.cli.interactive_shell.action_planner import plan_actions_with_unhandled
 from app.cli.interactive_shell.intent_parser import (
-    _damerau_levenshtein_distance,
+    is_single_edit_typo,
     normalize_intent_text,
 )
 from app.cli.interactive_shell.terminal_intent import (
@@ -103,7 +103,7 @@ def _is_bare_command_alias(text: str, _session: RoutingSession) -> bool:
     normalized = normalize_intent_text(stripped)
     if normalized not in BARE_COMMAND_ALIASES:
         return False
-    return _damerau_levenshtein_distance(stripped.lower(), normalized) <= 1
+    return is_single_edit_typo(stripped.lower(), normalized)
 
 
 def _is_cli_help_rule(text: str, _session: RoutingSession) -> bool:
