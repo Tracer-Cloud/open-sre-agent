@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import io
 import re
 from pathlib import Path
@@ -476,3 +477,220 @@ class TestLooksLikeCorrection:
     )
     def test_non_correction_text_does_not_match(self, text: str) -> None:
         assert loop._looks_like_correction(text) is False
+
+
+# ── Spinner state tests ──────────────────────────────────────────────────────
+
+
+def _strip_ansi(text: str) -> str:
+    return re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", text)
+
+
+class TestSpinnerState:
+    """``_SpinnerState`` holds the live-stream indicator state and renders
+    two ANSI views: the inline spinner above the input frame
+    (``inline_spinner_ansi``) and the bottom toolbar hint
+    (``toolbar_ansi``).
+    """
+
+    def test_idle_state_emits_no_inline_spinner(self) -> None:
+        spinner = loop._SpinnerState()
+        assert spinner.streaming is False
+        assert spinner.inline_spinner_ansi() == ""
+
+    def test_streaming_inline_spinner_includes_glyph_and_token_count(self) -> None:
+        spinner = loop._SpinnerState()
+        spinner.start()
+        spinner.bytes_in = 1234 * loop._SpinnerState._CHARS_PER_TOKEN  # = 1234 tokens
+        rendered = _strip_ansi(spinner.inline_spinner_ansi())
+        # The verb is randomly picked from ``_THINKING_VERBS`` per turn —
+        # any of them followed by ``…`` is acceptable.
+        assert any(f"{verb}…" in rendered for verb in spinner._THINKING_VERBS)
+        # 1234 tokens → "1.2k" via format_token_count_short.
+        assert "1.2k tokens" in rendered
+        # Spinner glyph from the brail palette.
+        assert any(g in rendered for g in spinner._SPINNER_FRAMES)
+
+    def test_streaming_inline_spinner_verb_stays_constant_across_calls(self) -> None:
+        """A turn's verb is fixed at ``start()`` so the indicator
+        doesn't flicker between words mid-stream."""
+        spinner = loop._SpinnerState()
+        spinner.start()
+        verbs_seen: set[str] = set()
+        for _ in range(20):
+            rendered = _strip_ansi(spinner.inline_spinner_ansi())
+            for verb in spinner._THINKING_VERBS:
+                if f"{verb}…" in rendered:
+                    verbs_seen.add(verb)
+                    break
+        assert len(verbs_seen) == 1, f"verb changed mid-turn — saw {verbs_seen}"
+
+    def test_inline_spinner_glyph_animates_across_calls(self) -> None:
+        """Each render advances the frame index — animation in place."""
+        spinner = loop._SpinnerState()
+        spinner.start()
+        seen = {
+            _extract_glyph(spinner.inline_spinner_ansi(), spinner._SPINNER_FRAMES)
+            for _ in range(len(spinner._SPINNER_FRAMES) * 2)
+        }
+        # Over two full rotations we should see every frame.
+        assert seen == set(spinner._SPINNER_FRAMES)
+
+    def test_stop_returns_to_idle_state(self) -> None:
+        spinner = loop._SpinnerState()
+        spinner.start()
+        assert spinner.streaming is True
+        spinner.stop()
+        assert spinner.streaming is False
+        assert spinner.inline_spinner_ansi() == ""
+
+    def test_toolbar_idle_hint_lists_shortcut_keys(self) -> None:
+        """When idle, toolbar should advertise the keys the user can press."""
+        spinner = loop._SpinnerState()
+        rendered = _strip_ansi(spinner.toolbar_ansi().value)
+        assert "esc to clear" in rendered
+        assert "/ for commands" in rendered
+        assert "history" in rendered
+
+    def test_toolbar_streaming_hint_says_interrupt(self) -> None:
+        """During streaming the toolbar hint switches to ``esc to interrupt``."""
+        spinner = loop._SpinnerState()
+        spinner.start()
+        rendered = _strip_ansi(spinner.toolbar_ansi().value)
+        assert "esc to interrupt" in rendered
+        # Idle hint should NOT be shown when streaming.
+        assert "esc to clear" not in rendered
+
+
+def _extract_glyph(ansi_text: str, frames: tuple[str, ...]) -> str:
+    plain = _strip_ansi(ansi_text)
+    for g in frames:
+        if g in plain:
+            return g
+    return ""
+
+
+# ── Streaming-console adapter tests ──────────────────────────────────────────
+
+
+class TestStreamingConsole:
+    """``_StreamingConsole`` is the bridge between the streaming layer and
+    the prompt-toolkit spinner. It is the only way the dispatch worker
+    thread can signal back to the prompt: progress updates and
+    cancellation polling go through this object's optional methods.
+    """
+
+    def test_update_progress_writes_to_spinner_state(self) -> None:
+        import threading as _threading
+
+        spinner = loop._SpinnerState()
+        spinner.start()
+        cancel = _threading.Event()
+        console = loop._StreamingConsole(
+            spinner,
+            cancel,
+            highlight=False,
+            force_terminal=True,
+            color_system=None,
+        )
+        console.update_streaming_progress(4096)
+        assert spinner.bytes_in == 4096
+
+    def test_cancel_requested_reflects_event_state(self) -> None:
+        import threading as _threading
+
+        spinner = loop._SpinnerState()
+        cancel = _threading.Event()
+        console = loop._StreamingConsole(
+            spinner,
+            cancel,
+            highlight=False,
+            force_terminal=True,
+            color_system=None,
+        )
+        assert console.cancel_requested is False
+        cancel.set()
+        assert console.cancel_requested is True
+        cancel.clear()
+        assert console.cancel_requested is False
+
+
+# ── ReplState dataclass tests ────────────────────────────────────────────────
+
+
+class TestReplState:
+    """``_ReplState`` is the single owner of the cancellation primitives
+    shared between the prompt loop, the queue processor, and the
+    Esc/Ctrl+L key bindings. Its methods exist so callers don't poke
+    raw fields and re-derive ``is_running`` everywhere.
+    """
+
+    def test_default_state_is_idle(self) -> None:
+        state = loop._ReplState()
+        assert state.is_dispatch_running() is False
+        assert state.exit_requested is False
+        assert state.cancel_event.is_set() is False
+        assert state.queue.empty()
+
+    def test_is_dispatch_running_tracks_task_lifecycle(self) -> None:
+        async def _scenario() -> None:
+            state = loop._ReplState()
+
+            async def _slow() -> None:
+                await asyncio.sleep(0.05)
+
+            state.current_task = asyncio.create_task(_slow())
+            assert state.is_dispatch_running() is True
+            await state.current_task
+            assert state.is_dispatch_running() is False
+
+        asyncio.run(_scenario())
+
+    def test_cancel_current_dispatch_signals_event_and_task(self) -> None:
+        async def _scenario() -> None:
+            state = loop._ReplState()
+
+            async def _waits_forever() -> None:
+                # Long sleep — only the cancel can interrupt this.
+                await asyncio.sleep(1.0)
+
+            state.current_task = asyncio.create_task(_waits_forever())
+            state.cancel_current_dispatch()
+
+            # Both signals must fire.
+            assert state.cancel_event.is_set() is True
+            with contextlib.suppress(asyncio.CancelledError):
+                await state.current_task
+            assert state.current_task.cancelled() is True
+
+        asyncio.run(_scenario())
+
+    def test_cancel_when_no_task_only_sets_event(self) -> None:
+        """``cancel_current_dispatch`` is idempotent — safe to call when
+        nothing is running. Just sets the event for any in-flight worker
+        thread that may still be polling."""
+        state = loop._ReplState()
+        state.cancel_current_dispatch()
+        assert state.cancel_event.is_set() is True
+        assert state.is_dispatch_running() is False
+
+
+# ── Cancel key bindings ──────────────────────────────────────────────────────
+
+
+class TestBuildCancelKeyBindings:
+    """``_build_cancel_key_bindings`` returns a ``KeyBindings`` with two
+    handlers — Esc and Ctrl+L. The handlers are extracted out of the
+    prompt loop so they can be exercised without the full async
+    machinery; this test instantiates the bindings and verifies they
+    were registered for the right keys."""
+
+    def test_returns_bindings_for_escape_and_ctrl_l(self) -> None:
+        state = loop._ReplState()
+        kb = loop._build_cancel_key_bindings(state)
+        # Flatten each binding's keys tuple. ``Keys`` enum members have
+        # ``.value`` strings like ``"escape"``/``"c-l"`` matching the
+        # decorator argument; plain string keys are themselves.
+        registered = {getattr(k, "value", k) for b in kb.bindings for k in b.keys}
+        assert "escape" in registered, f"escape binding missing — registered: {registered}"
+        assert "c-l" in registered, f"Ctrl+L binding missing — registered: {registered}"

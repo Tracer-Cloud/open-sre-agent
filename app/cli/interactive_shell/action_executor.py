@@ -276,11 +276,23 @@ _READ_ONLY_OPENSRE_SUBCOMMANDS: frozenset[str] = frozenset(
 )
 
 
-def run_opensre_cli_command(args: str, session: ReplSession, console: Console) -> bool:
+def run_opensre_cli_command(
+    args: str,
+    session: ReplSession,
+    console: Console,
+    *,
+    confirm_fn: Callable[[str], str] | None = None,
+    is_tty: bool | None = None,
+) -> bool:
     """Run an opensre subcommand (not agent).
 
     Returns True if the command was attempted (regardless of success),
     False if the subcommand is blocked or args are empty.
+
+    ``confirm_fn`` is forwarded to :func:`execution_allowed` so the
+    interactive REPL can route mid-dispatch ``Proceed? [y/N]`` prompts
+    through its active prompt_toolkit input — the stdlib ``input()``
+    deadlocks against the running ``prompt_async``.
     """
     try:
         tokens = shlex.split(args)
@@ -321,8 +333,8 @@ def run_opensre_cli_command(args: str, session: ReplSession, console: Console) -
         session=session,
         console=console,
         action_summary=f"$ opensre {' '.join(tokens)}",
-        confirm_fn=None,
-        is_tty=None,
+        confirm_fn=confirm_fn,
+        is_tty=is_tty,
         action_already_listed=True,
     ):
         session.record("cli_command", f"opensre {' '.join(tokens)}", ok=False)

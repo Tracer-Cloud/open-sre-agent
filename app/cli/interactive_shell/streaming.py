@@ -38,11 +38,20 @@ STREAM_LABEL_ASSISTANT = "assistant"
 STREAM_LABEL_ANSWER = "answer"
 
 
-def _format_tokens(token_count: int) -> str:
-    """Render the token count Claude-Code-style: ``42`` / ``1.2k`` / ``5.2k``."""
+def format_token_count_short(token_count: int) -> str:
+    """Format a token count as a short string — ``42`` / ``1.2k`` / ``5.2k``.
+
+    Shared with :class:`app.cli.interactive_shell.loop._SpinnerState` so
+    the streaming footer (``· 9.5s · ↓ 1.2k tokens``) and the live
+    spinner (``⠋ thinking… (5s · ↓ 1.2k tokens)``) format identically.
+    """
     if token_count >= 1000:
-        return f"{token_count / 1000:.1f}k tokens"
-    return f"{token_count} tokens"
+        return f"{token_count / 1000:.1f}k"
+    return str(token_count)
+
+
+def _format_tokens(token_count: int) -> str:
+    return f"{format_token_count_short(token_count)} tokens"
 
 
 def stream_to_console(
@@ -67,7 +76,13 @@ def stream_to_console(
             return text
         if text:
             console.print()
-            console.print(f"[{BOLD_BRAND}]{label}:[/]")
+            # Bullet marker before the response — visually distinct from
+            # the user's input echo (which uses the ``❯`` chevron). The
+            # ``label`` param is kept in the signature for callers that
+            # already pass ``STREAM_LABEL_*`` constants but is no longer
+            # rendered: a single ``●`` matches Claude Code's row layout
+            # and reads more cleanly than ``assistant:`` as a header.
+            console.print(f"[{BOLD_BRAND}]●[/] [{DIM}]{label}[/]")
             with console.use_theme(MARKDOWN_THEME):
                 console.print(Markdown(text, code_theme="ansi_dark"))
             console.print()
@@ -102,22 +117,24 @@ def stream_to_console(
             break
 
     console.print()
-    console.print(f"[{BOLD_BRAND}]{label}:[/]")
+    # Bullet marker before the response — visually distinct from the
+    # user's ``❯`` echo. ``label`` is shown dim alongside for context
+    # (``answer`` / ``assistant``) but the bullet is the primary visual
+    # row marker, matching Claude Code's layout.
+    console.print(f"[{BOLD_BRAND}]●[/] [{DIM}]{label}[/]")
 
-    # Buffer chunks silently; the persistent Application's status Window
-    # shows the streaming progress indicator. The ``finally`` ensures the
-    # partial buffer renders even on exceptions so the caller can surface
-    # an error label below it.
+    # Paragraph-level streaming: chunks accumulate in ``para_buffer``
+    # until a paragraph boundary (``\n\n`` outside a code block) closes
+    # the paragraph, at which point we render that paragraph as
+    # Markdown via ``console.print(Markdown(...))``. Visible "streaming"
+    # is per-paragraph rather than per-chunk — a true live re-render
+    # would need cursor manipulation that fights ``patch_stdout``. The
+    # spinner (``⠋ thinking… (Ns · ↓ X tokens)``) ticks during long
+    # paragraphs to confirm chunks are still arriving, and code blocks
+    # are kept whole (we never split on ``\n\n`` while a fence is open).
     buffer: list[str] = list(peeked)
+    para_buffer: list[str] = list(peeked)
     started = time.monotonic()
-    # When ``console`` is the textual ``TextualConsole`` adapter, push
-    # cumulative byte count into the ``StatusLine`` so the user sees the
-    # ``thinking… (Ns · ↓ Xk tokens)`` indicator update live. ``getattr``
-    # avoids importing the adapter here (would create an import cycle).
-    # Throttled to ~10/s so the worker thread isn't bottlenecked queueing
-    # ``call_from_thread`` events for every chunk on long streams. A
-    # bare ``except`` makes failure here non-fatal — a flaky status
-    # widget must never truncate the response buffer.
     progress_hook = getattr(console, "update_streaming_progress", None)
     total_bytes = sum(len(c) for c in peeked)
     last_progress_at = 0.0
@@ -142,8 +159,43 @@ def stream_to_console(
         # so this stays False for them.
         return bool(getattr(console, "cancel_requested", False))
 
+    def _render_paragraph(text: str) -> None:
+        if not text.strip():
+            return
+        with console.use_theme(MARKDOWN_THEME):
+            console.print(Markdown(text.rstrip(), code_theme="ansi_dark"))
+
+    def _flush_paragraphs(*, force: bool = False) -> None:
+        """Emit any complete paragraphs from ``para_buffer``.
+
+        Splits on ``\\n\\n`` but only when an even number of triple-
+        backtick fences are present in the proposed prefix — that's
+        enough to keep code blocks whole without tracking fence type.
+        ``force`` flushes any remaining buffer at end-of-stream.
+        """
+        nonlocal para_buffer
+        while True:
+            text = "".join(para_buffer)
+            idx = text.find("\n\n")
+            if idx < 0:
+                break
+            paragraph = text[: idx + 2]
+            # Odd backtick-fence count means a fence is still open;
+            # don't render the partial code block.
+            if paragraph.count("```") % 2 == 1:
+                break
+            _render_paragraph(paragraph)
+            para_buffer = [text[idx + 2 :]] if text[idx + 2 :] else []
+        if force:
+            tail = "".join(para_buffer)
+            if tail.strip():
+                _render_paragraph(tail)
+            para_buffer = []
+
     if peeked:
         last_progress_at = _maybe_update_progress(time.monotonic(), force=True)
+        _flush_paragraphs()
+
     try:
         while True:
             if _is_cancelled():
@@ -154,13 +206,16 @@ def stream_to_console(
             if not chunk:
                 continue
             buffer.append(chunk)
+            para_buffer.append(chunk)
             total_bytes += len(chunk)
             last_progress_at = _maybe_update_progress(time.monotonic())
+            _flush_paragraphs()
     finally:
+        # Render whatever's left in the paragraph buffer so the user
+        # sees the full response even if it didn't end on ``\n\n``.
+        _flush_paragraphs(force=True)
         elapsed = time.monotonic() - started
         if buffer:
-            with console.use_theme(MARKDOWN_THEME):
-                console.print(Markdown("".join(buffer), code_theme="ansi_dark"))
             tokens = _format_tokens(sum(len(c) for c in buffer) // _CHARS_PER_TOKEN)
             console.print(f"[{DIM}]· {elapsed:.1f}s · ↓ {tokens}[/]")
         console.print()
@@ -168,4 +223,9 @@ def stream_to_console(
     return "".join(buffer)
 
 
-__all__ = ["STREAM_LABEL_ANSWER", "STREAM_LABEL_ASSISTANT", "stream_to_console"]
+__all__ = [
+    "STREAM_LABEL_ANSWER",
+    "STREAM_LABEL_ASSISTANT",
+    "format_token_count_short",
+    "stream_to_console",
+]

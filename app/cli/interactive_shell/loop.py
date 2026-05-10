@@ -26,11 +26,13 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import random
 import re
 import sys
 import threading
 import time
 from collections.abc import Callable
+from dataclasses import dataclass, field
 
 from prompt_toolkit.application.current import get_app_or_none
 from prompt_toolkit.formatted_text import ANSI
@@ -59,11 +61,13 @@ from app.cli.interactive_shell.prompt_surface import (
 )
 from app.cli.interactive_shell.router import route_input
 from app.cli.interactive_shell.session import ReplSession
+from app.cli.interactive_shell.streaming import format_token_count_short
 from app.cli.interactive_shell.theme import (
     ANSI_DIM,
     ANSI_RESET,
     DIM,
     ERROR,
+    PROMPT_ACCENT_ANSI,
     WARNING,
 )
 from app.cli.support.errors import OpenSREError
@@ -165,6 +169,7 @@ def _dispatch_one_turn(
     console: Console,
     *,
     on_exit: Callable[[], None],
+    confirm_fn: Callable[[str], str] | None = None,
 ) -> None:
     """Route + dispatch one accepted line. Pure synchronous body.
 
@@ -205,7 +210,7 @@ def _dispatch_one_turn(
         return
 
     if kind == "cli_agent":
-        turn = execute_cli_actions_with_metrics(text, session, console)
+        turn = execute_cli_actions_with_metrics(text, session, console, confirm_fn=confirm_fn)
         fallback_to_llm = not turn.handled
         snapshot = session.record_terminal_turn(
             executed_count=turn.executed_count,
@@ -224,12 +229,12 @@ def _dispatch_one_turn(
         )
         if turn.handled:
             return
-        answer_cli_agent(text, session, console)
+        answer_cli_agent(text, session, console, confirm_fn=confirm_fn)
         session.record("cli_agent", text)
         return
 
     if kind == "new_alert":
-        _run_new_alert(text, session, console)
+        _run_new_alert(text, session, console, confirm_fn=confirm_fn)
         return
 
     # follow_up — grounded answer against session.last_state
@@ -293,6 +298,68 @@ def run_repl(initial_input: str | None = None, config: ReplConfig | None = None)
     return 0
 
 
+# How often the prompt's ``bottom_toolbar`` and ``message`` callables
+# re-evaluate. 100 ms paces the spinner glyph animation and the token
+# counter without burning CPU on the prompt-toolkit render loop.
+_PROMPT_REFRESH_INTERVAL_S = 0.1
+
+
+@dataclass
+class _ReplState:
+    """REPL session state shared between the prompt loop, the queue
+    processor, and the cancel/exit key bindings.
+
+    Replaces the dict-cell idiom (``current_dispatch = {"task": None}``)
+    with a single explicit owner of the cancellation primitives. Methods
+    expose intent (``cancel_current_dispatch``, ``is_dispatch_running``)
+    so callers don't have to re-derive it from the raw fields.
+    """
+
+    queue: asyncio.Queue[str] = field(default_factory=asyncio.Queue)
+    current_task: asyncio.Task[None] | None = None
+    # ``threading.Event`` because the dispatch runs in a worker thread
+    # via ``asyncio.to_thread`` — ``task.cancel()`` alone doesn't reach
+    # the worker. Streaming.py polls ``console.cancel_requested``
+    # between chunks; setting this event here breaks that loop.
+    cancel_event: threading.Event = field(default_factory=threading.Event)
+    exit_requested: bool = False
+    # Confirmation routing: when an in-flight dispatch needs ``Proceed?
+    # [y/N]`` input, it parks ``confirm_event`` + ``confirm_response``
+    # here. The main prompt loop checks them after each ``prompt_async``
+    # return and, if a confirmation is pending, delivers the typed text
+    # to the worker thread instead of queueing a new turn.
+    confirm_event: threading.Event | None = None
+    confirm_response: list[str] = field(default_factory=list)
+
+    def is_dispatch_running(self) -> bool:
+        return self.current_task is not None and not self.current_task.done()
+
+    def is_awaiting_confirmation(self) -> bool:
+        return self.confirm_event is not None
+
+    def deliver_confirmation(self, answer: str) -> None:
+        """Hand the user's typed text to the parked worker thread."""
+        if self.confirm_event is None:
+            return
+        self.confirm_response.append(answer)
+        self.confirm_event.set()
+
+    def cancel_current_dispatch(self) -> None:
+        """Signal cancellation through both channels.
+
+        ``cancel_event`` is what stops the streaming loop in
+        :func:`stream_to_console` (worker thread); ``Task.cancel()`` is
+        what unblocks the asyncio waiter in :meth:`_run_one_dispatch`
+        (main thread). Both are needed. Also unparks any worker thread
+        waiting on a confirmation prompt so it doesn't hang on Esc.
+        """
+        self.cancel_event.set()
+        if self.confirm_event is not None:
+            self.confirm_event.set()
+        if self.current_task is not None and not self.current_task.done():
+            self.current_task.cancel()
+
+
 class _SpinnerState:
     """Mutable state read by the prompt's bottom-toolbar callback.
 
@@ -305,18 +372,38 @@ class _SpinnerState:
 
     _SPINNER_FRAMES = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
     _CHARS_PER_TOKEN = 4
+    # Claude Code-style verb rotation — one verb is picked per turn so
+    # the indicator doesn't always say the same word. Adds personality
+    # without flicker (the verb stays fixed for the whole turn).
+    _THINKING_VERBS = (
+        "thinking",
+        "pondering",
+        "exploring",
+        "reasoning",
+        "considering",
+        "analysing",
+        "investigating",
+        "deliberating",
+        "ruminating",
+        "deducing",
+        "noodling",
+    )
 
     def __init__(self) -> None:
         self.streaming: bool = False
         self.started_at: float = 0.0
         self.bytes_in: int = 0
         self._frame_idx: int = 0
+        self._verb: str = self._THINKING_VERBS[0]
 
     def start(self) -> None:
         self.streaming = True
         self.started_at = time.monotonic()
         self.bytes_in = 0
         self._frame_idx = 0
+        # Pick a fresh verb per turn — stays constant for the duration
+        # so the indicator doesn't flicker between words mid-stream.
+        self._verb = random.choice(self._THINKING_VERBS)
 
     def stop(self) -> None:
         self.streaming = False
@@ -347,15 +434,11 @@ class _SpinnerState:
         if not self.streaming:
             return ""
         elapsed = time.monotonic() - self.started_at
-        tokens = self.bytes_in // self._CHARS_PER_TOKEN
-        if tokens >= 1000:
-            tokens_str = f"{tokens / 1000:.1f}k"
-        else:
-            tokens_str = str(tokens)
+        tokens_str = format_token_count_short(self.bytes_in // self._CHARS_PER_TOKEN)
         glyph = self._SPINNER_FRAMES[self._frame_idx % len(self._SPINNER_FRAMES)]
         self._frame_idx += 1
         return (
-            f"\x1b[1;38;2;185;237;175m{glyph} thinking…{ANSI_RESET}"
+            f"{PROMPT_ACCENT_ANSI}{glyph} {self._verb}…{ANSI_RESET}"
             f"{ANSI_DIM} ({elapsed:.0f}s · ↓ {tokens_str} tokens){ANSI_RESET}"
         )
 
@@ -408,67 +491,53 @@ async def _run_interactive(session: ReplSession) -> None:
     """
     pt_session = _build_prompt_session(session)
     spinner = _SpinnerState()
+    state = _ReplState()
 
-    queue: asyncio.Queue[str] = asyncio.Queue()
-    current_dispatch: dict[str, asyncio.Task[None] | None] = {"task": None}
-    exit_requested = {"flag": False}
-    # ``threading.Event`` because the dispatch runs in a worker thread
-    # via ``asyncio.to_thread`` — ``task.cancel()`` alone doesn't reach
-    # the worker. Streaming.py polls ``console.cancel_requested``
-    # between chunks; setting this event here breaks that loop.
-    cancel_event = threading.Event()
-
-    def _cancel_current() -> None:
-        cancel_event.set()
-        task = current_dispatch["task"]
-        if task is not None and not task.done():
-            task.cancel()
-
-    cancel_kb = KeyBindings()
-
-    @cancel_kb.add("escape", eager=True)
-    def _on_escape(event: KeyPressEvent) -> None:
-        # Claude Code parity: Esc cancels the active stream when one is
-        # running; otherwise it clears the input buffer (faster than
-        # selecting + Backspacing a long typed prompt).
-        task = current_dispatch["task"]
-        if task is not None and not task.done():
-            _cancel_current()
-            return
-        if event.current_buffer.text:
-            event.current_buffer.reset()
-
-    @cancel_kb.add("c-l")
-    def _on_ctrl_l(event: KeyPressEvent) -> None:
-        # Clear the screen (terminal-native shortcut). The prompt
-        # repaints automatically on the next render tick.
-        event.app.renderer.clear()
-
-    # Mutate the session's bindings BEFORE any ``prompt_async`` call —
-    # ``PromptSession`` caches the underlying ``Application`` on first
-    # use and ``prompt_async(key_bindings=...)`` doesn't reliably
-    # invalidate that cache, so per-call overrides can be silently
-    # ignored. Setting ``pt_session.key_bindings`` upfront ensures the
-    # cancel binding is baked into the cached app from the start.
-    existing_kb = pt_session.key_bindings
-    pt_session.key_bindings = (
-        merge_key_bindings([existing_kb, cancel_kb]) if existing_kb is not None else cancel_kb
-    )
+    cancel_kb = _build_cancel_key_bindings(state)
+    _install_session_key_bindings(pt_session, cancel_kb)
 
     def _request_exit() -> None:
-        exit_requested["flag"] = True
-        _cancel_current()
+        state.exit_requested = True
+        state.cancel_current_dispatch()
         app = get_app_or_none()
         if app is not None:
             app.exit()
 
+    def _route_confirm_through_prompt(prompt_text: str) -> str:
+        """Worker-thread confirmation handler. Asks the user via the
+        active prompt_toolkit input instead of stdlib ``input()``
+        (which would deadlock against the running ``prompt_async``).
+
+        Prints the confirmation prompt above the input, parks itself
+        on a ``threading.Event``, and waits for the next text the user
+        submits. Esc cancels and returns ``""`` (which execution_policy
+        treats as "decline").
+        """
+        sys.stdout.write(prompt_text)
+        sys.stdout.flush()
+
+        response_event = threading.Event()
+        state.confirm_event = response_event
+        state.confirm_response = []
+        try:
+            # Poll instead of wait-forever so cancel propagates within
+            # one ``_PROMPT_REFRESH_INTERVAL_S`` tick.
+            while not response_event.is_set():
+                if state.cancel_event.is_set():
+                    return ""
+                response_event.wait(timeout=_PROMPT_REFRESH_INTERVAL_S)
+            return state.confirm_response[0] if state.confirm_response else ""
+        finally:
+            state.confirm_event = None
+            state.confirm_response = []
+
     async def _run_one_dispatch(text: str) -> None:
         # Reset the cancel event for this turn — Esc on a previous turn
         # would otherwise keep this one from running at all.
-        cancel_event.clear()
+        state.cancel_event.clear()
         console = _StreamingConsole(
             spinner,
-            cancel_event,
+            state.cancel_event,
             highlight=False,
             force_terminal=True,
             color_system="truecolor",
@@ -481,6 +550,7 @@ async def _run_interactive(session: ReplSession) -> None:
                 session,
                 console,
                 on_exit=_request_exit,
+                confirm_fn=_route_confirm_through_prompt,
             )
         except asyncio.CancelledError:
             console.print(f"[{WARNING}]· interrupted[/]")
@@ -493,20 +563,19 @@ async def _run_interactive(session: ReplSession) -> None:
 
     async def _processor() -> None:
         """Drain queued prompts one dispatch at a time."""
-        while not exit_requested["flag"]:
+        while not state.exit_requested:
             try:
-                text = await queue.get()
+                text = await state.queue.get()
             except asyncio.CancelledError:
                 return
-            if exit_requested["flag"]:
-                queue.task_done()
+            if state.exit_requested:
+                state.queue.task_done()
                 return
-            task = asyncio.create_task(_run_one_dispatch(text))
-            current_dispatch["task"] = task
+            state.current_task = asyncio.create_task(_run_one_dispatch(text))
             with contextlib.suppress(asyncio.CancelledError, Exception):
-                await task
-            current_dispatch["task"] = None
-            queue.task_done()
+                await state.current_task
+            state.current_task = None
+            state.queue.task_done()
 
     def _message_with_spinner() -> ANSI:
         """Prompt message — spinner line (when streaming) above the
@@ -520,6 +589,20 @@ async def _run_interactive(session: ReplSession) -> None:
             return ANSI(f"{spinner_part}\n{base}")
         return ANSI(base)
 
+    # ``erase_when_done=True`` on ``PromptSession`` clears the input box
+    # the moment the user submits, so without an explicit echo their
+    # question would never appear in terminal scrollback. Echo it via a
+    # real ``Console`` (``patch_stdout`` routes the write above the
+    # active prompt) so each turn looks like Claude Code:
+    #
+    #     [1] ❯ what is opensre?
+    #     <response>
+    #     · 5s · ↓ 100 tokens
+    #
+    #     [2] ❯ tell me more
+    #     ...
+    echo_console = Console(highlight=False, force_terminal=True, color_system="truecolor")
+
     processor_task = asyncio.create_task(_processor())
     try:
         with patch_stdout(raw=True):
@@ -528,30 +611,80 @@ async def _run_interactive(session: ReplSession) -> None:
                     text = await pt_session.prompt_async(
                         message=_message_with_spinner,
                         bottom_toolbar=spinner.toolbar_ansi,
-                        refresh_interval=0.1,
+                        refresh_interval=_PROMPT_REFRESH_INTERVAL_S,
                     )
                 except (EOFError, KeyboardInterrupt):
                     # Ctrl+C / Ctrl+D cancels the currently-running
                     # turn if one is active; otherwise exits the REPL.
-                    if current_dispatch["task"] is not None and not current_dispatch["task"].done():
-                        _cancel_current()
+                    if state.is_dispatch_running():
+                        state.cancel_current_dispatch()
                         continue
                     return
 
-                if exit_requested["flag"]:
+                if state.exit_requested:
                     return
+
+                # If a worker thread is parked on a confirmation prompt,
+                # the next text the user submits is the *answer* to that
+                # prompt, not a new turn. Deliver it and resume; do NOT
+                # echo it as a turn or enqueue it.
+                if state.is_awaiting_confirmation():
+                    state.deliver_confirmation(text or "")
+                    continue
 
                 stripped = (text or "").strip()
                 if not stripped:
                     continue
 
-                await queue.put(stripped)
+                render_submitted_prompt(echo_console, session, stripped)
+                await state.queue.put(stripped)
     finally:
-        exit_requested["flag"] = True
-        _cancel_current()
+        state.exit_requested = True
+        state.cancel_current_dispatch()
         processor_task.cancel()
         with contextlib.suppress(asyncio.CancelledError, Exception):
             await processor_task
+
+
+def _build_cancel_key_bindings(state: _ReplState) -> KeyBindings:
+    """Esc + Ctrl+L bindings — pulled out so the handlers can be reasoned
+    about (and tested) independently of the prompt loop's coroutine
+    machinery. ``state`` is the only mutable dependency; everything else
+    is pure key-event handling.
+    """
+    kb = KeyBindings()
+
+    @kb.add("escape", eager=True)
+    def _on_escape(event: KeyPressEvent) -> None:
+        # Claude Code parity: Esc cancels the active stream when one is
+        # running; otherwise it clears the input buffer (faster than
+        # selecting + Backspacing a long typed prompt).
+        if state.is_dispatch_running():
+            state.cancel_current_dispatch()
+            return
+        if event.current_buffer.text:
+            event.current_buffer.reset()
+
+    @kb.add("c-l")
+    def _on_ctrl_l(event: KeyPressEvent) -> None:
+        # Clear the screen (terminal-native shortcut). The prompt
+        # repaints automatically on the next render tick.
+        event.app.renderer.clear()
+
+    return kb
+
+
+def _install_session_key_bindings(pt_session: object, extra_kb: KeyBindings) -> None:
+    """Merge ``extra_kb`` into ``pt_session.key_bindings`` *before* the
+    first ``prompt_async`` call. ``PromptSession`` caches the underlying
+    ``Application`` on first use; ``prompt_async(key_bindings=...)``
+    doesn't reliably invalidate that cache, so per-call overrides can
+    be silently ignored. Mutating the session here ensures the cancel
+    binding is baked into the cached app from the start.
+    """
+    existing = getattr(pt_session, "key_bindings", None)
+    merged = merge_key_bindings([existing, extra_kb]) if existing is not None else extra_kb
+    pt_session.key_bindings = merged  # type: ignore[attr-defined]
 
 
 __all__ = ["run_repl"]

@@ -141,7 +141,8 @@ class TestAnswerCliHelp:
         answer_cli_help("how do I run an investigation?", ReplSession(), console)
 
         output = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", buf.getvalue())
-        # Markdown is rendered: the literal **bold** markers must not leak.
+        # Paragraph-level Markdown render strips the literal ``**``
+        # delimiters around "opensre investigate" at end-of-stream.
         assert "**opensre investigate**" not in output
         assert "opensre investigate" in output
 

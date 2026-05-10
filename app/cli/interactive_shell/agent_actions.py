@@ -34,7 +34,7 @@ from app.cli.interactive_shell.execution_policy import (
 )
 from app.cli.interactive_shell.rendering import print_planned_actions
 from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import BOLD_BRAND
+from app.cli.interactive_shell.theme import BOLD_BRAND, DIM
 
 
 @dataclass(frozen=True)
@@ -74,7 +74,9 @@ def execute_cli_actions(
         return False
 
     console.print()
-    console.print(f"[{BOLD_BRAND}]assistant:[/]")
+    # Match streaming.py's bullet-row marker — same visual cue across
+    # the planned-actions path and the regular streamed-response path.
+    console.print(f"[{BOLD_BRAND}]●[/] [{DIM}]assistant[/]")
     print_planned_actions(console, actions)
     if not has_unhandled_clause:
         session.record("cli_agent", message)
@@ -155,7 +157,13 @@ def execute_cli_actions(
                 action_already_listed=True,
             )
         elif action.kind == "cli_command":
-            run_opensre_cli_command(action.content, session, console)
+            run_opensre_cli_command(
+                action.content,
+                session,
+                console,
+                confirm_fn=confirm_fn,
+                is_tty=is_tty,
+            )
         elif action.kind == "sample_alert":
             run_sample_alert(
                 action.content,
@@ -180,9 +188,19 @@ def execute_cli_actions(
 
 
 def execute_cli_actions_with_metrics(
-    message: str, session: ReplSession, console: Console
+    message: str,
+    session: ReplSession,
+    console: Console,
+    *,
+    confirm_fn: Callable[[str], str] | None = None,
 ) -> TerminalActionExecutionResult:
-    """Execute deterministic actions and return per-turn action counters."""
+    """Execute deterministic actions and return per-turn action counters.
+
+    ``confirm_fn`` is forwarded to :func:`execute_cli_actions` so the
+    interactive REPL can route mid-dispatch ``Proceed? [y/N]`` prompts
+    through its active prompt_toolkit input instead of the stdlib
+    ``input()`` (which deadlocks against the running ``prompt_async``).
+    """
     from app.analytics.cli import (
         capture_terminal_actions_executed,
         capture_terminal_actions_planned,
@@ -203,7 +221,7 @@ def execute_cli_actions_with_metrics(
         )
 
     history_start = len(session.history)
-    handled = execute_cli_actions(message, session, console)
+    handled = execute_cli_actions(message, session, console, confirm_fn=confirm_fn)
     executed_entries = [
         item
         for item in session.history[history_start:]
