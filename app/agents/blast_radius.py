@@ -53,12 +53,15 @@ from app.agents.registry import AgentRecord
 logger = logging.getLogger(__name__)
 
 
-# Per-watcher upper bound on retained events. Bounded ``deque`` (with
-# ``maxlen``) is atomic for ``append`` / ``popleft`` under the GIL, so a
-# watchdog callback writing while ``events()`` reads is safe without an
-# explicit lock. 10K events at typical observed rates (~10/s during a
-# heavy build) gives ~16 minutes of history before eviction — comfortably
-# more than the conflict detector's ``window_seconds`` (10s default).
+# Per-watcher upper bound on retained events. Individual deque operations
+# (``append``, ``popleft``) are GIL-atomic, but ``list(deque)`` iteration
+# is NOT — a concurrent ``append`` on the watchdog callback thread races
+# with iteration on the main thread and raises
+# ``RuntimeError("deque mutated during iteration")``. A ``threading.Lock``
+# shared with ``_BlastRadiusEventHandler`` serializes writes against reads.
+# 10K events at typical observed rates (~10/s during a heavy build) gives
+# ~16 minutes of history before eviction — comfortably more than the
+# conflict detector's ``window_seconds`` (10s default).
 _DEFAULT_MAX_EVENTS = 10_000
 
 
@@ -280,6 +283,12 @@ class BlastRadiusWatcher:
 # under ``_WATCHERS_LOCK`` because Python dict insertion isn't atomic
 # across two threads racing to start the same watcher.
 _WATCHERS: dict[str, BlastRadiusWatcher] = {}
+# Negative cache of agent keys whose project root could not be resolved
+# (dead/zombie PID, access denied, or no ``.git`` ancestor). Without this
+# set, every ``/agents conflicts`` invocation would re-enter ``psutil`` for
+# the same stale registry entry; with it, the second call short-circuits
+# to ``None`` without touching ``psutil``. Guarded by ``_WATCHERS_LOCK``.
+_UNRESOLVABLE: set[str] = set()
 _WATCHERS_LOCK = threading.Lock()
 
 
@@ -305,17 +314,24 @@ def _get_or_start_watcher(record: AgentRecord) -> BlastRadiusWatcher | None:
     """Return the running watcher for ``record``, starting it on first call.
 
     Returns ``None`` if a project root can't be resolved (PID gone, no
-    ``.git`` ancestor, or access denied). Cleanup is registered via
-    ``atexit`` outside the lock so atexit's internal lock acquisition
-    can never contend with future watcher operations.
+    ``.git`` ancestor, or access denied). The unresolvable key is recorded
+    in ``_UNRESOLVABLE`` so subsequent calls for the same stale registry
+    entry short-circuit without re-invoking ``psutil`` — important for
+    long-running REPL sessions where ``/agents conflicts`` may run
+    repeatedly against entries whose PIDs never come back. Cleanup is
+    registered via ``atexit`` outside the lock so atexit's internal lock
+    acquisition can never contend with future watcher operations.
     """
     key = f"{record.name}:{record.pid}"
     with _WATCHERS_LOCK:
         cached = _WATCHERS.get(key)
         if cached is not None:
             return cached
+        if key in _UNRESOLVABLE:
+            return None
         project_root = _resolve_agent_project_root(record)
         if project_root is None:
+            _UNRESOLVABLE.add(key)
             return None
         watcher = BlastRadiusWatcher(record, project_root)
         watcher.start()
@@ -360,6 +376,7 @@ def _reset_watchers_for_tests() -> None:
     with _WATCHERS_LOCK:
         watchers = list(_WATCHERS.values())
         _WATCHERS.clear()
+        _UNRESOLVABLE.clear()
     for w in watchers:
         w.stop()
 

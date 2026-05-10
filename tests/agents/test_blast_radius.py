@@ -302,6 +302,24 @@ class TestCollectRecentWriteEvents:
         assert out == []
         assert blast_radius_module._WATCHERS == {}
 
+    def test_unresolvable_pid_is_negative_cached(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Second call must not re-enter the resolver (which on real
+        # systems calls ``psutil.Process(pid).cwd()`` — the bug Greptile
+        # flagged). Once a PID has been classified unresolvable, the key
+        # short-circuits to ``None``.
+        calls: list[int] = []
+
+        def failing_resolver(record: AgentRecord) -> None:
+            calls.append(record.pid)
+            return None
+
+        monkeypatch.setattr(blast_radius_module, "_resolve_agent_project_root", failing_resolver)
+        records = [_record(pid=99999)]
+        collect_recent_write_events(records, since=0.0)
+        collect_recent_write_events(records, since=0.0)
+        assert calls == [99999]
+        assert "claude-code:99999" in blast_radius_module._UNRESOLVABLE
+
     def test_since_is_forwarded_per_watcher(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
