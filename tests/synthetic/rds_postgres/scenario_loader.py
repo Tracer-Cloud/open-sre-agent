@@ -90,7 +90,9 @@ def _parse_trajectory_matching(value: Any) -> TrajectoryMatching:
     )
 
 
-def _parse_non_negative_int(golden_trajectory: GoldenTrajectorySchema, field: str) -> int | None:
+def _parse_non_negative_int(
+    golden_trajectory: GoldenTrajectorySchema | dict[str, Any], field: str
+) -> int | None:
     value = golden_trajectory.get(field)
     if value is None:
         return None
