@@ -11,6 +11,7 @@ from rich.markup import escape
 
 from app.cli.interactive_shell.agents_md_reference import build_agents_md_reference_text
 from app.cli.interactive_shell.cli_reference import build_cli_reference_text
+from app.cli.interactive_shell.graph_pipeline_reference import build_graph_pipeline_reference_text
 from app.cli.interactive_shell.grounding_diagnostics import log_grounding_cache_diagnostics
 from app.cli.interactive_shell.prompt_rules import (
     CLI_ASSISTANT_MARKDOWN_RULE,
@@ -66,32 +67,47 @@ def _format_history_for_prompt(session: ReplSession) -> str:
     return "\n".join(lines) if lines else "(no prior messages in this CLI thread)"
 
 
-def _build_system_prompt(reference: str, history: str, agents_md: str = "") -> str:
+def _build_system_prompt(
+    reference: str,
+    history: str,
+    agents_md: str = "",
+    graph_pipeline: str = "",
+) -> str:
     """Build the system prompt for one assistant turn.
 
     Split out so tests can assert on terminology / formatting rules without
     invoking an LLM. ``agents_md`` is the optional repo-map block from
     :mod:`app.cli.interactive_shell.agents_md_reference`; when empty the
     section is omitted so callers in environments that ship no AGENTS.md
-    files don't waste tokens on an empty header.
+    files don't waste tokens on an empty header. ``graph_pipeline`` is a
+    concise reference to the LangGraph pipeline used by investigations.
     """
     repo_map_block = f"--- Repo map (AGENTS.md) ---\n{agents_md}\n\n" if agents_md else ""
+    graph_pipeline_block = (
+        f"--- Graph pipeline reference ---\n{graph_pipeline}\n\n" if graph_pipeline else ""
+    )
     return (
         "You are the OpenSRE terminal assistant. You help with OpenSRE CLI "
         "usage, the interactive shell, and onboarding. A deterministic pre-pass "
         "runs first: it executes eligible local commands as argv (no shell) "
         "under a read-only allowlist; users must prefix with ! for full-shell "
         "semantics (pipes, redirects, mutating commands). Do not tell users the "
-        "interactive shell cannot execute commands. You do NOT run incident investigations yourself "
-        "(those use a separate LangGraph pipeline).\n"
+        "interactive shell cannot execute commands. You do NOT run incident "
+        "investigations yourself "
+        "(those use a separate LangGraph pipeline), but you are grounded on that "
+        "pipeline's architecture below and can answer questions about its nodes, "
+        "edges, routing, and source files.\n"
         "When the user wants to investigate an alert, tell them to paste "
         "alert text, JSON, or a concrete incident description (errors, "
         "services, symptoms). Mention `opensre investigate` and pasting "
         "into this interactive shell.\n"
         "Be brief and friendly. Ground CLI facts in the reference below; do "
-        "not invent subcommands.\n\n"
+        "not invent subcommands. For graph pipeline questions, use the graph "
+        "pipeline reference below and do not claim the graph definition is "
+        "unavailable.\n\n"
         f"{_TERMINOLOGY_RULE}\n{_MARKDOWN_RULE}\n{_ACTION_RULE}\n\n"
         f"--- CLI reference ---\n{reference}\n\n"
+        f"{graph_pipeline_block}"
         f"{repo_map_block}"
         f"--- Recent CLI conversation ---\n{history}\n"
     )
@@ -342,9 +358,15 @@ def answer_cli_agent(
 
     reference = build_cli_reference_text()
     agents_md = build_agents_md_reference_text()
+    graph_pipeline = build_graph_pipeline_reference_text()
     log_grounding_cache_diagnostics("cli_agent_grounding")
     history = _format_history_for_prompt(session)
-    system = _build_system_prompt(reference, history, agents_md=agents_md)
+    system = _build_system_prompt(
+        reference,
+        history,
+        agents_md=agents_md,
+        graph_pipeline=graph_pipeline,
+    )
     user_block = f"--- User message ---\n{message}"
     prompt = f"{system}\n{user_block}"
 

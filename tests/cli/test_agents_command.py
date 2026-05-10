@@ -1,16 +1,13 @@
-"""Smoke tests for the ``opensre agents`` command group (issue #1486).
-
-Phase-0 of the ``monitor-local-agents`` initiative: ensure the new top-level
-group is reachable and each placeholder subcommand exits cleanly. Real
-behavior is added by later tickets in the same series.
-"""
+"""Smoke tests for the ``opensre agents`` command group."""
 
 from __future__ import annotations
 
 import pytest
 from click.testing import CliRunner
 
+from app.agents.registry import AgentRecord
 from app.cli.__main__ import cli
+from app.cli.commands import agent as agent_cmd_mod
 
 
 def test_agents_help_lists_all_subcommands() -> None:
@@ -24,7 +21,30 @@ def test_agents_help_lists_all_subcommands() -> None:
         assert subcommand in result.output, f"missing {subcommand!r} in help: {result.output}"
 
 
-@pytest.mark.parametrize("subcommand", ["list", "register", "forget"])
+def test_agents_list_renders_discovered_agents(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        agent_cmd_mod,
+        "registered_and_discovered_agents",
+        lambda: [
+            AgentRecord(
+                name="cursor-claude-code",
+                pid=80435,
+                command="claude --output-format stream-json",
+                source="discovered",
+            )
+        ],
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["agents", "list"])
+
+    assert result.exit_code == 0, result.output
+    assert "cursor-claude-code" in result.output
+    assert "80435" in result.output
+    assert "discovered" in result.output
+
+
+@pytest.mark.parametrize("subcommand", ["register", "forget"])
 def test_agents_subcommand_prints_placeholder(subcommand: str) -> None:
     """Each stub subcommand must run successfully and print the placeholder."""
     runner = CliRunner()

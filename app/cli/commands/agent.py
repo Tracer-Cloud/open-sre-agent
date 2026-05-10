@@ -1,14 +1,12 @@
-"""Local agent fleet management CLI commands.
-
-Phase-0 skeleton for the ``monitor-local-agents`` initiative. The subcommands
-intentionally print a placeholder message; real functionality lands in later
-phases (registry persistence, psutil probing, slash-command surfacing in the
-interactive shell).
-"""
+"""Local agent fleet management CLI commands."""
 
 from __future__ import annotations
 
 import click
+from rich.console import Console
+
+from app.agents.discovery import registered_and_discovered_agents
+from app.cli.interactive_shell.agents_view import render_agents_table
 
 _NOT_IMPLEMENTED_MESSAGE = "not implemented yet"
 
@@ -20,8 +18,8 @@ def agents() -> None:
 
 @agents.command(name="list")
 def list_agents() -> None:
-    """List tracked local agents."""
-    click.echo(_NOT_IMPLEMENTED_MESSAGE)
+    """List registered and auto-discovered local agents."""
+    Console().print(render_agents_table(registered_and_discovered_agents()))
 
 
 @agents.command(name="register")
