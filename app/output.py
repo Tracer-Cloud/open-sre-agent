@@ -493,12 +493,12 @@ class ProgressTracker:
             if self._display:
                 self._display.step_complete(node_name, event)
             else:
-                # Display was stopped (publish_findings path) — print a plain Rich line
+                # Display was stopped (e.g. diagnose path) — route safely above active live console
                 mark = "✗" if status == "error" else "●"
                 line = f"  {mark} {_node_label(node_name)}  {_fmt_timing(elapsed_ms)}"
                 if msg := _humanise_message(message or ""):
                     line += f"  {msg}"
-                Console(highlight=False).print(line)
+                self.print_above_renderable(line)
             return
 
         # text mode

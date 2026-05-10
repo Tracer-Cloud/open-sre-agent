@@ -23,6 +23,7 @@ from rich.panel import Panel
 from rich.spinner import Spinner
 from rich.text import Text
 
+import app.output
 from app.cli.interactive_shell.theme import (
     ANSI_BOLD,
     ANSI_DIM,
@@ -155,6 +156,9 @@ class _DiagnoseStreamRenderer:
         else:
             stop_display()
 
+        # Register console globally so that print_above_renderable fallbacks
+        # correctly print above this live region during the diagnose phase.
+        app.output._live_console = self._console
         self._live.start()
 
     def append_chunk(self, event: StreamEvent) -> None:
@@ -200,6 +204,9 @@ class _DiagnoseStreamRenderer:
                 self._live.stop()
             finally:
                 self._live = None
+                # Unregister only if we own it (safeguard against subsequent activations)
+                if getattr(app.output, "_live_console", None) is self._console:
+                    app.output._live_console = None
             sys.stdout.write(
                 f"  {_GREEN}●{_RESET}  {_BOLD}{_WHITE}{_DIAGNOSE_NODE}{_RESET}"
                 f"  {_DIM}{elapsed:.1f}s{_RESET}"
@@ -383,6 +390,8 @@ class StreamRenderer:
                 if canonical not in self._node_names_seen:
                     self._node_names_seen.append(canonical)
                 self._tracker.start(canonical)
+                # Trigger alert header as early as possible (often on the first node)
+                self._print_alert_header()
             return
 
         if kind in _NODE_END_KINDS and self._is_graph_node_event(event):
@@ -557,7 +566,8 @@ class StreamRenderer:
                     return False
                 if len(stripped_clean) > 60:
                     return False
-                if stripped_clean[-1] in {".", "?", "!"}:
+                # Safe endswith check guarantees no IndexError regardless of line length
+                if stripped_clean.endswith((".", "?", "!")):
                     return False
 
                 if len(stripped_clean.split()) > 6:
