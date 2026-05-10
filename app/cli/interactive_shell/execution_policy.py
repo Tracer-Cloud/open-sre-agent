@@ -286,6 +286,14 @@ def evaluate_synthetic_test_launch() -> ExecutionPolicyResult:
     )
 
 
+def evaluate_code_agent_launch() -> ExecutionPolicyResult:
+    return ExecutionPolicyResult(
+        verdict="ask",
+        action_type="code_agent",
+        reason="Claude Code may edit files, run tools, and consume LLM quota",
+    )
+
+
 def evaluate_llm_runtime_switch(*, action_type: str) -> ExecutionPolicyResult:
     return ExecutionPolicyResult(
         verdict="ask",
@@ -298,6 +306,7 @@ __all__ = [
     "DEFAULT_CONFIRM_FN",
     "ExecutionPolicyResult",
     "ExecutionVerdict",
+    "evaluate_code_agent_launch",
     "evaluate_investigation_launch",
     "evaluate_llm_runtime_switch",
     "evaluate_shell_command",

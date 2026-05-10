@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from app.cli.interactive_shell.intent_parser import (
     SAMPLE_ALERT_RE,
+    extract_implementation_request,
     normalize_shell_command,
     split_prompt_clauses,
 )
+from app.cli.interactive_shell.interaction_models import PromptClause
 
 
 def test_split_prompt_clauses_preserves_positions() -> None:
@@ -24,6 +26,25 @@ def test_normalize_shell_command_rejects_multiline() -> None:
 
 def test_normalize_shell_command_strips_ticks() -> None:
     assert normalize_shell_command("`whoami`") == "whoami"
+
+
+def test_extract_implementation_request_matches_explicit_implement_phrase() -> None:
+    action = extract_implementation_request(
+        PromptClause(text="please implement /history search", position=3)
+    )
+
+    assert action is not None
+    assert action.kind == "implementation"
+    assert action.content == "/history search"
+    assert action.position == 10
+
+
+def test_extract_implementation_request_allows_context_dependent_bare_implement() -> None:
+    action = extract_implementation_request(PromptClause(text="implement", position=0))
+
+    assert action is not None
+    assert action.kind == "implementation"
+    assert action.content == "implement"
 
 
 class TestSampleAlertRE:

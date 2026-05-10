@@ -135,7 +135,8 @@ def _cmd_cancel(session: ReplSession, console: Console, args: list[str]) -> bool
         )
     else:
         console.print(
-            f"[{HIGHLIGHT}]stop requested[/] [{DIM}]for synthetic test {escape(task.task_id)}.[/] "
+            f"[{HIGHLIGHT}]stop requested[/] "
+            f"[{DIM}]for {escape(task.kind.value)} {escape(task.task_id)}.[/] "
             f"[{DIM}]use[/] [{HIGHLIGHT}]/tasks[/] [{DIM}]to confirm status.[/]"
         )
     return True

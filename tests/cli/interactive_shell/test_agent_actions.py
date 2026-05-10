@@ -47,6 +47,11 @@ def test_provider_switch_plans_provider_action() -> None:
     assert plan_cli_actions(message) == []
 
 
+def test_implementation_request_plans_implementation_action() -> None:
+    assert plan_terminal_tasks("please implement /history search") == ["implementation"]
+    assert plan_cli_actions("please implement /history search") == []
+
+
 def test_generic_synthetic_test_request_plans_synthetic_action() -> None:
     assert plan_terminal_tasks("Can you run a synthetic test?") == ["synthetic_test"]
 
@@ -181,6 +186,40 @@ def test_execute_cli_actions_records_llm_provider_failure(monkeypatch: object) -
 
     assert handled is True
     assert session.history[-1] == {"type": "slash", "text": "/model set anthropic", "ok": False}
+
+
+def test_execute_cli_actions_runs_implementation_action(monkeypatch: object) -> None:
+    calls: list[str] = []
+
+    def _fake_run_implementation(
+        request: str,
+        session: ReplSession,
+        console: Console,
+        **_kwargs: object,
+    ) -> None:
+        calls.append(request)
+        session.record("implementation", request, ok=True)
+        console.print(f"implemented {request}")
+
+    monkeypatch.setattr(
+        agent_actions,
+        "run_claude_code_implementation",
+        _fake_run_implementation,
+    )
+
+    session = ReplSession()
+    console, buf = _capture()
+    handled = execute_cli_actions("please implement /history search", session, console)
+
+    assert handled is True
+    assert calls == ["/history search"]
+    assert session.history == [
+        {"type": "cli_agent", "text": "please implement /history search", "ok": True},
+        {"type": "implementation", "text": "/history search", "ok": True},
+    ]
+    output = buf.getvalue()
+    assert "implementation" in output
+    assert "implemented /history search" in output
 
 
 def test_execute_cli_actions_answers_discord_then_dispatches_datadog(

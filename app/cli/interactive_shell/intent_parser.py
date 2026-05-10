@@ -124,6 +124,13 @@ SYNTHETIC_RDS_TEST_RE = re.compile(
     r"(?:.{0,80}?\b(?:r\s*d\s*s|postgres(?:ql)?|database|db)\b)?",
     re.IGNORECASE | re.DOTALL,
 )
+IMPLEMENTATION_RE = re.compile(
+    r"^\s*(?:please\s+)?(?:can\s+you\s+)?"
+    r"(?:(?:use|launch|run)\s+claude(?:\s+code)?\s+(?:to\s+)?)?"
+    r"(?P<trigger>implement|code|make\s+the\s+change|make\s+those\s+changes)"
+    r"(?P<request>\b.*)?$",
+    re.IGNORECASE | re.DOTALL,
+)
 _LLM_PROVIDER_NAMES = frozenset(
     {
         "anthropic",
@@ -215,6 +222,10 @@ def synthetic_test_action(suite_name: str, position: int) -> PlannedAction:
     return PlannedAction(kind="synthetic_test", content=suite_name, position=position)
 
 
+def implementation_action(request: str, position: int) -> PlannedAction:
+    return PlannedAction(kind="implementation", content=request, position=position)
+
+
 def llm_provider_action(provider: str, position: int) -> PlannedAction:
     return PlannedAction(kind="llm_provider", content=provider, position=position)
 
@@ -293,6 +304,16 @@ def extract_shell_command(clause: PromptClause) -> PlannedAction | None:
     return None
 
 
+def extract_implementation_request(clause: PromptClause) -> PlannedAction | None:
+    match = IMPLEMENTATION_RE.match(clause.text)
+    if match is None:
+        return None
+    request = (match.group("request") or "").strip()
+    content = request or clause.text.strip()
+    position = clause.position + match.start("trigger")
+    return implementation_action(content, position)
+
+
 def split_prompt_clauses(message: str) -> list[PromptClause]:
     """Split compound prompts while preserving each clause's source position."""
     clauses: list[PromptClause] = []
@@ -327,6 +348,7 @@ def extract_llm_provider_switch(clause: PromptClause) -> PlannedAction | None:
 
 __all__ = [
     "ACTION_PATTERNS",
+    "IMPLEMENTATION_RE",
     "INTEGRATION_CAPABILITY_RE",
     "INTEGRATION_CONFIG_DETAIL_RE",
     "INTEGRATION_DETAIL_RE",
@@ -334,8 +356,10 @@ __all__ = [
     "SAMPLE_ALERT_RE",
     "SYNTHETIC_RDS_TEST_RE",
     "cli_command_action",
+    "extract_implementation_request",
     "extract_llm_provider_switch",
     "extract_shell_command",
+    "implementation_action",
     "looks_like_direct_shell_command",
     "sample_alert_action",
     "slash_action",

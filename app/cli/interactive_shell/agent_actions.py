@@ -11,6 +11,7 @@ from rich.markup import escape
 from rich.spinner import Spinner
 
 from app.cli.interactive_shell.action_executor import (
+    run_claude_code_implementation,
     run_opensre_cli_command,
     run_sample_alert,
     run_shell_command,
@@ -155,7 +156,22 @@ def execute_cli_actions(
                 action_already_listed=True,
             )
         elif action.kind == "cli_command":
-            run_opensre_cli_command(action.content, session, console)
+            run_opensre_cli_command(
+                action.content,
+                session,
+                console,
+                confirm_fn=confirm_fn,
+                is_tty=is_tty,
+            )
+        elif action.kind == "implementation":
+            run_claude_code_implementation(
+                action.content,
+                session,
+                console,
+                confirm_fn=confirm_fn,
+                is_tty=is_tty,
+                action_already_listed=True,
+            )
         elif action.kind == "sample_alert":
             run_sample_alert(
                 action.content,
@@ -207,7 +223,7 @@ def execute_cli_actions_with_metrics(
     executed_entries = [
         item
         for item in session.history[history_start:]
-        if item.get("type") in {"slash", "shell", "alert", "synthetic_test"}
+        if item.get("type") in {"slash", "shell", "alert", "synthetic_test", "implementation"}
     ]
     executed_count = len(executed_entries)
     executed_success_count = sum(1 for item in executed_entries if item.get("ok", True))

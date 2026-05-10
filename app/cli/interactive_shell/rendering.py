@@ -128,6 +128,7 @@ def print_planned_actions(console: Console, actions: list[PlannedAction]) -> Non
             "slash": "command",
             "synthetic_test": "synthetic test",
             "cli_command": "opensre",
+            "implementation": "implementation",
         }[action.kind]
         console.print(f"[{DIM}]{index}.[/] [{BOLD_BRAND}]{label}[/] {escape(action.content)}")
 

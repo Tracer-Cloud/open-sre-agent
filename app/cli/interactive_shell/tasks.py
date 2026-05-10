@@ -28,6 +28,7 @@ class TaskKind(StrEnum):
     INVESTIGATION = "investigation"
     SYNTHETIC_TEST = "synthetic_test"
     CLI_COMMAND = "cli_command"
+    CODE_AGENT = "code_agent"
 
 
 @dataclass

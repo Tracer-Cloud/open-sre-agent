@@ -30,6 +30,7 @@ from app.cli.interactive_shell.command_registry.repl_data import (
     load_verified_integrations,
 )
 from app.cli.interactive_shell.command_registry.session_cmds import COMMANDS as SESSION_COMMANDS
+from app.cli.interactive_shell.command_registry.suggestions import closest_choice
 from app.cli.interactive_shell.command_registry.system import COMMANDS as SYSTEM_COMMANDS
 from app.cli.interactive_shell.command_registry.tasks_cmds import COMMANDS as TASK_COMMANDS
 from app.cli.interactive_shell.command_registry.types import SlashCommand
@@ -107,9 +108,17 @@ def dispatch_slash(
     args = parts[1:]
     cmd = SLASH_COMMANDS.get(name)
     if cmd is None:
+        suggestion = closest_choice(name, tuple(SLASH_COMMANDS))
         session.record("slash", stripped, ok=False)
         console.print()
-        console.print(f"[{ERROR}]unknown command:[/] {escape(name)}  (type [bold]/help[/bold])")
+        if suggestion is None:
+            console.print(f"[{ERROR}]unknown command:[/] {escape(name)}  (type [bold]/help[/bold])")
+        else:
+            console.print(
+                f"[{ERROR}]unknown command:[/] {escape(name)}  "
+                f"Did you mean [bold]{escape(suggestion)}[/bold]? "
+                "(type [bold]/help[/bold])"
+            )
         return True
     if cmd.validate_args is not None:
         validation_error = cmd.validate_args(args)

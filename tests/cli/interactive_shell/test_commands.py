@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import sys
 from pathlib import Path
 
 import pytest
@@ -142,6 +143,15 @@ class TestDispatchSlash:
         console, buf = _capture()
         assert dispatch_slash("/made-up", session, console) is True
         assert "unknown command" in buf.getvalue()
+
+    def test_unknown_command_suggests_close_match(self) -> None:
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/modle", session, console) is True
+        output = buf.getvalue()
+        assert "unknown command" in output
+        assert "Did you mean" in output
+        assert "/model" in output
 
     def test_local_llm_is_not_a_builtin_slash_action(self) -> None:
         assert "/local-llm" not in SLASH_COMMANDS
@@ -1275,3 +1285,85 @@ class TestCliDelegatedCommands:
         monkeypatch.setattr(m, "run_cli_command", _fake_run_cli_command)
         dispatch_slash(command, ReplSession(), Console())
         assert captured == [expected_args]
+
+    def test_tests_run_subcommand_starts_background_task(self, monkeypatch: object) -> None:
+        from app.cli.interactive_shell.command_registry import cli_parity as m
+
+        started: list[tuple[str, list[str], TaskKind, bool]] = []
+
+        def _fake_start_background_cli_task(
+            *,
+            display_command: str,
+            argv_list: list[str],
+            session: ReplSession,
+            console: Console,
+            timeout_seconds: int,
+            kind: TaskKind,
+            use_pty: bool,
+        ) -> object:
+            del session, console, timeout_seconds
+            started.append((display_command, argv_list, kind, use_pty))
+            return object()
+
+        monkeypatch.setattr(m, "start_background_cli_task", _fake_start_background_cli_task)
+        dispatch_slash("/tests synthetic --scenario 001-replication-lag", ReplSession(), Console())
+
+        assert started == [
+            (
+                "opensre tests synthetic --scenario 001-replication-lag",
+                [
+                    sys.executable,
+                    "-m",
+                    "app.cli",
+                    "tests",
+                    "synthetic",
+                    "--scenario",
+                    "001-replication-lag",
+                ],
+                TaskKind.SYNTHETIC_TEST,
+                True,
+            )
+        ]
+
+    def test_tests_flag_first_invocation_delegates_to_cli(self, monkeypatch: object) -> None:
+        from app.cli.interactive_shell.command_registry import cli_parity as m
+
+        delegated: list[list[str]] = []
+        monkeypatch.setattr(
+            m,
+            "run_cli_command",
+            lambda _console, args, **_kwargs: (delegated.append(args), True)[1],
+        )
+
+        dispatch_slash("/tests --help", ReplSession(), Console())
+
+        assert delegated == [["tests", "--help"]]
+
+    def test_tests_subcommand_typo_suggests_synthetic(self, monkeypatch: object) -> None:
+        from app.cli.interactive_shell.command_registry import cli_parity as m
+
+        delegated: list[list[str]] = []
+        started: list[list[str]] = []
+
+        monkeypatch.setattr(
+            m,
+            "run_cli_command",
+            lambda _console, args, **_kwargs: (delegated.append(args), True)[1],
+        )
+        monkeypatch.setattr(
+            m,
+            "start_background_cli_task",
+            lambda **kwargs: started.append(kwargs["argv_list"]),
+        )
+
+        session = ReplSession()
+        console, buf = _capture()
+        dispatch_slash("/tests synthetics", session, console)
+
+        output = buf.getvalue()
+        assert "unknown tests subcommand" in output
+        assert "Did you mean" in output
+        assert "/tests synthetic" in output
+        assert session.history[-1]["ok"] is False
+        assert delegated == []
+        assert started == []

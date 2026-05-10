@@ -26,6 +26,16 @@ def test_plan_terminal_tasks_returns_kinds() -> None:
     assert plan_terminal_tasks(msg) == ["slash", "slash"]
 
 
+def test_plan_terminal_tasks_returns_implementation_action() -> None:
+    msg = "please implement process auto-discovery"
+    actions, unhandled = plan_actions_with_unhandled(msg)
+
+    assert not unhandled
+    assert [(a.kind, a.content) for a in actions] == [("implementation", "process auto-discovery")]
+    assert plan_terminal_tasks(msg) == ["implementation"]
+    assert plan_cli_actions(msg) == []
+
+
 def test_plan_cli_actions_remote_deployment_inventory_questions() -> None:
     messages = (
         "Which remote deployments are connected?",

@@ -8,6 +8,7 @@ import sys
 from collections.abc import Callable
 
 from prompt_toolkit import PromptSession
+from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
 from rich.markup import escape
 
@@ -136,7 +137,8 @@ async def _run_one_turn(
     """Read one line of input and dispatch. Returns False to exit."""
     while True:
         try:
-            text = await prompt.prompt_async(lambda: _prompt_message(session))
+            with patch_stdout(raw=True):
+                text = await prompt.prompt_async(lambda: _prompt_message(session))
         except EOFError:
             console.print()
             return False

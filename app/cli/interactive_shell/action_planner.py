@@ -12,6 +12,7 @@ from app.cli.interactive_shell.intent_parser import (
     SAMPLE_ALERT_RE,
     SYNTHETIC_RDS_TEST_RE,
     cli_command_action,
+    extract_implementation_request,
     extract_llm_provider_switch,
     extract_shell_command,
     sample_alert_action,
@@ -99,6 +100,11 @@ def plan_clause_actions(
     sample_match = SAMPLE_ALERT_RE.search(clause.text)
     if sample_match is not None:
         planned.append(sample_alert_action("generic", clause.position + sample_match.start()))
+        return planned
+
+    implementation = extract_implementation_request(clause)
+    if implementation is not None:
+        planned.append(implementation)
         return planned
 
     planned_shell = extract_shell_command(clause)
