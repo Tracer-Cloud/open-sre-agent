@@ -9,6 +9,7 @@ import pytest
 from tests.synthetic.rds_postgres.run_suite import run_scenario, score_result
 from tests.synthetic.rds_postgres.scenario_loader import (
     SUITE_DIR,
+    GoldenTrajectoryConfig,
     load_all_scenarios,
     load_scenario,
 )
@@ -439,3 +440,50 @@ class TestScenarioInheritance:
         assert fixture.metadata.scenario_id == "000-healthy"
         assert fixture.metadata.failure_mode == "healthy"
         assert fixture.evidence.aws_cloudwatch_metrics is not None
+
+    def test_golden_trajectory_is_loaded_as_typed_config(self) -> None:
+        """golden_trajectory is normalized into a typed config object."""
+        real_dir = SUITE_DIR / "999-test-golden-trajectory"
+        real_dir.mkdir(exist_ok=True)
+        try:
+            (real_dir / "scenario.yml").write_text(
+                textwrap.dedent("""\
+                base: 000-healthy
+                scenario_id: 999-test-golden-trajectory
+                failure_mode: replication_lag
+                severity: critical
+            """)
+            )
+            (real_dir / "answer.yml").write_text(
+                textwrap.dedent("""\
+                root_cause_category: resource_exhaustion
+                required_keywords:
+                  - replication lag
+                model_response: "Replication lag from write pressure."
+                golden_trajectory:
+                  ordered_actions:
+                    - query_grafana_metrics
+                    - query_grafana_logs
+                  matching: strict
+                  max_edit_distance: 1
+                  max_extra_actions: 0
+                  max_redundancy: 0
+                  max_loops: 2
+            """)
+            )
+
+            fixture = load_scenario(real_dir)
+            expected = GoldenTrajectoryConfig(
+                ordered_actions=["query_grafana_metrics", "query_grafana_logs"],
+                matching="strict",
+                max_edit_distance=1,
+                max_extra_actions=0,
+                max_redundancy=0,
+                max_loops=2,
+            )
+
+            assert fixture.answer_key.golden_trajectory == expected
+        finally:
+            for f in real_dir.iterdir():
+                f.unlink()
+            real_dir.rmdir()
