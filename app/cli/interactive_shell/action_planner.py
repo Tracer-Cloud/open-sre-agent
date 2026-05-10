@@ -15,6 +15,7 @@ from app.cli.interactive_shell.intent_parser import (
     extract_implementation_request,
     extract_llm_provider_switch,
     extract_shell_command,
+    extract_task_cancel_request,
     sample_alert_action,
     slash_action,
     split_prompt_clauses,
@@ -105,6 +106,11 @@ def plan_clause_actions(
     implementation = extract_implementation_request(clause)
     if implementation is not None:
         planned.append(implementation)
+        return planned
+
+    task_cancel = extract_task_cancel_request(clause)
+    if task_cancel is not None:
+        planned.append(task_cancel)
         return planned
 
     planned_shell = extract_shell_command(clause)

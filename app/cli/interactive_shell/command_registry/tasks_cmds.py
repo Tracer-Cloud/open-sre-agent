@@ -37,6 +37,8 @@ def _task_detail_label(task: TaskRecord) -> str:
         return str(task.error)
     if task.result:
         return str(task.result)
+    if task.command:
+        return str(task.command)
     return "—"
 
 

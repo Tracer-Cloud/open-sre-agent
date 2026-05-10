@@ -22,7 +22,7 @@ from app.cli.interactive_shell.action_planner import (
     plan_cli_actions,
     plan_terminal_tasks,
 )
-from app.cli.interactive_shell.command_registry import (
+from app.cli.interactive_shell.commands import (
     SLASH_COMMANDS,
     dispatch_slash,
     switch_llm_provider,
@@ -35,6 +35,7 @@ from app.cli.interactive_shell.execution_policy import (
 )
 from app.cli.interactive_shell.rendering import print_planned_actions
 from app.cli.interactive_shell.session import ReplSession
+from app.cli.interactive_shell.tasks import TaskKind, TaskRecord, TaskStatus
 from app.cli.interactive_shell.theme import BOLD_BRAND
 
 
@@ -55,6 +56,96 @@ def _plan_with_spinner(
     spinner = Spinner("dots12", text="thinking...", style=BOLD_BRAND)
     with Live(spinner, console=console, refresh_per_second=20, transient=True):
         return plan_actions_with_unhandled(message)
+
+
+def _running_task_matches(session: ReplSession, target: str) -> list[TaskRecord]:
+    running = [
+        task
+        for task in session.task_registry.list_recent(n=50)
+        if task.status == TaskStatus.RUNNING
+    ]
+    if target == "synthetic_test":
+        return [task for task in running if task.kind == TaskKind.SYNTHETIC_TEST]
+    if target == "task":
+        return running
+    return []
+
+
+def _resolve_task_cancel_target(
+    target: str,
+    session: ReplSession,
+    console: Console,
+) -> str | None:
+    if target in {"synthetic_test", "task"}:
+        matches = _running_task_matches(session, target)
+        if not matches:
+            console.print(
+                f"[dim]no running {escape(target)} task found. use[/] [bold]/tasks[/bold]"
+            )
+            session.record("slash", f"/cancel {target}", ok=False)
+            return None
+        if len(matches) > 1:
+            ids = ", ".join(task.task_id for task in matches)
+            console.print(
+                f"[yellow]multiple running tasks match {escape(target)}:[/] "
+                f"{escape(ids)} [dim](run /cancel <id>)[/]"
+            )
+            session.record("slash", f"/cancel {target}", ok=False)
+            return None
+        return matches[0].task_id
+
+    candidates = session.task_registry.candidates(target)
+    if not candidates:
+        console.print(f"[red]no task matches id:[/] {escape(target)}")
+        session.record("slash", f"/cancel {target}", ok=False)
+        return None
+    if len(candidates) > 1:
+        console.print(
+            f"[red]ambiguous id prefix:[/] {escape(target)} "
+            f"[dim]({len(candidates)} matches — use a longer prefix)[/]"
+        )
+        session.record("slash", f"/cancel {target}", ok=False)
+        return None
+    return candidates[0].task_id
+
+
+def _execute_task_cancel_action(
+    target: str,
+    session: ReplSession,
+    console: Console,
+    *,
+    confirm_fn: Callable[[str], str] | None = None,
+    is_tty: bool | None = None,
+) -> None:
+    task_id = _resolve_task_cancel_target(target, session, console)
+    if task_id is None:
+        return
+
+    command = f"/cancel {task_id}"
+    cmd = SLASH_COMMANDS["/cancel"]
+    tier = resolve_slash_execution_tier("/cancel", [task_id], cmd.execution_tier)
+    policy = evaluate_slash_tier(tier)
+    if not execution_allowed(
+        policy,
+        session=session,
+        console=console,
+        action_summary=command,
+        confirm_fn=confirm_fn,
+        is_tty=is_tty,
+        action_already_listed=True,
+    ):
+        session.record("slash", command, ok=False)
+        return
+
+    console.print(f"[bold]$ {escape(command)}[/bold]")
+    dispatch_slash(
+        command,
+        session,
+        console,
+        confirm_fn=confirm_fn,
+        is_tty=is_tty,
+        policy_precleared=True,
+    )
 
 
 def execute_cli_actions(
@@ -157,6 +248,14 @@ def execute_cli_actions(
             )
         elif action.kind == "cli_command":
             run_opensre_cli_command(
+                action.content,
+                session,
+                console,
+                confirm_fn=confirm_fn,
+                is_tty=is_tty,
+            )
+        elif action.kind == "task_cancel":
+            _execute_task_cancel_action(
                 action.content,
                 session,
                 console,

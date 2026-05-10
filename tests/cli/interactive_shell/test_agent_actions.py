@@ -56,6 +56,13 @@ def test_generic_synthetic_test_request_plans_synthetic_action() -> None:
     assert plan_terminal_tasks("Can you run a synthetic test?") == ["synthetic_test"]
 
 
+def test_kill_synthetic_test_request_plans_cancel_action() -> None:
+    message = "kill the syntehtic_test because it is runnign way too long"
+
+    assert plan_terminal_tasks(message) == ["task_cancel"]
+    assert plan_cli_actions(message) == []
+
+
 def test_integration_prompt_plans_datadog_lookup_only() -> None:
     message = (
         "tell me about what the discord integration can do and then tell me what "
@@ -542,6 +549,39 @@ def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch:
     assert output.index("2.") < output.index("$ /list integrations")
     assert output.index("synthetic test") < output.index("$ opensre tests synthetic")
     assert output.index("$ /list integrations") < output.index("$ opensre tests synthetic")
+
+
+def test_execute_cli_actions_cancels_single_running_synthetic_task() -> None:
+    session = ReplSession()
+    session.trust_mode = True
+    task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
+    task.mark_running()
+    proc = MagicMock()
+    proc.poll.return_value = None
+    task.attach_process(proc)
+
+    console, buf = _capture()
+    handled = execute_cli_actions(
+        "kill the syntehtic_test because it is runnign way too long",
+        session,
+        console,
+    )
+
+    assert handled is True
+    assert task.cancel_requested.is_set()
+    proc.terminate.assert_called_once()
+    assert session.history == [
+        {
+            "type": "cli_agent",
+            "text": "kill the syntehtic_test because it is runnign way too long",
+            "ok": True,
+        },
+        {"type": "slash", "text": f"/cancel {task.task_id}", "ok": True},
+    ]
+    output = buf.getvalue()
+    assert "cancel task" in output
+    assert f"$ /cancel {task.task_id}" in output
+    assert "stop requested" in output
 
 
 def test_partial_match_reports_unhandled_clause(monkeypatch: object) -> None:

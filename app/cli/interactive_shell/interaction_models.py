@@ -16,6 +16,7 @@ class PlannedAction:
         "shell",
         "sample_alert",
         "synthetic_test",
+        "task_cancel",
         "cli_command",
         "implementation",
     ]

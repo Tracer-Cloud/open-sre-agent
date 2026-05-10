@@ -127,6 +127,7 @@ def print_planned_actions(console: Console, actions: list[PlannedAction]) -> Non
             "shell": "shell",
             "slash": "command",
             "synthetic_test": "synthetic test",
+            "task_cancel": "cancel task",
             "cli_command": "opensre",
             "implementation": "implementation",
         }[action.kind]

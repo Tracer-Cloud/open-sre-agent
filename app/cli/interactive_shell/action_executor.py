@@ -194,7 +194,7 @@ def start_background_cli_task(
 ) -> TaskRecord | None:
     """Start a subprocess as a REPL task while streaming output above the prompt."""
     console.print(f"[bold]$ {display_command}[/bold]")
-    task = session.task_registry.create(kind)
+    task = session.task_registry.create(kind, command=display_command)
     task.mark_running()
     stderr_buf: tempfile.SpooledTemporaryFile[bytes] = tempfile.SpooledTemporaryFile(  # type: ignore[type-arg] # noqa: SIM115
         max_size=_SYNTHETIC_DIAG_CHARS * 2
@@ -220,6 +220,7 @@ def start_background_cli_task(
                 text=True,
                 encoding="utf-8",
                 errors="replace",
+                start_new_session=True,
             )
         else:
             _master_fd, slave_fd = pty_fds
@@ -229,6 +230,7 @@ def start_background_cli_task(
                 stdout=slave_fd,
                 stderr=slave_fd,
                 close_fds=True,
+                start_new_session=True,
             )
     except Exception as exc:  # noqa: BLE001
         if pty_fds is not None:
@@ -506,7 +508,7 @@ def run_claude_code_implementation(
 
     display_command = "claude -p"
     console.print(f"[bold]$ {display_command}[/bold]")
-    task = session.task_registry.create(TaskKind.CODE_AGENT)
+    task = session.task_registry.create(TaskKind.CODE_AGENT, command=display_command)
     task.mark_running()
     history_gen_when_started = session.history_generation
 
@@ -521,6 +523,7 @@ def run_claude_code_implementation(
             errors="replace",
             cwd=invocation.cwd,
             env=build_cli_subprocess_env(invocation.env),
+            start_new_session=True,
         )
     except Exception as exc:
         task.mark_failed(str(exc))
@@ -937,7 +940,9 @@ def run_sample_alert(
         return
 
     console.print(f"[bold]sample alert:[/bold] {escape(template_name)}")
-    task = session.task_registry.create(TaskKind.INVESTIGATION)
+    task = session.task_registry.create(
+        TaskKind.INVESTIGATION, command=f"sample alert:{template_name}"
+    )
     task.mark_running()
     try:
         final_state = run_sample_alert_for_session(
@@ -1000,7 +1005,7 @@ def run_synthetic_test(
 
     display_command = "opensre tests synthetic"
     console.print(f"[bold]$ {display_command}[/bold]")
-    task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
+    task = session.task_registry.create(TaskKind.SYNTHETIC_TEST, command=display_command)
     task.mark_running()
     # Lifetime managed by the watcher thread's finally block; SIM115 ignored
     # for this file in ruff.toml.
@@ -1015,6 +1020,7 @@ def run_synthetic_test(
             text=True,
             encoding="utf-8",
             errors="replace",
+            start_new_session=True,
         )
     except Exception as exc:
         stderr_buf.close()

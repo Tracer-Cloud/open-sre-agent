@@ -134,7 +134,7 @@ class ReplSession:
         self.accumulated_context.clear()
         self.token_usage.clear()
         self.cli_agent_messages.clear()
-        self.task_registry = TaskRegistry()
+        self.task_registry.clear()
 
         self.terminal_turn_count = 0
         self.terminal_fallback_count = 0

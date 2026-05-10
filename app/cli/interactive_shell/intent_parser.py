@@ -124,6 +124,13 @@ SYNTHETIC_RDS_TEST_RE = re.compile(
     r"(?:.{0,80}?\b(?:r\s*d\s*s|postgres(?:ql)?|database|db)\b)?",
     re.IGNORECASE | re.DOTALL,
 )
+TASK_CANCEL_TRIGGER_RE = re.compile(r"\b(?:abort|cancel|kill|stop|terminate)\b", re.IGNORECASE)
+TASK_CANCEL_ID_RE = re.compile(r"\b(?P<task_id>[0-9a-f]{4,16})\b", re.IGNORECASE)
+TASK_CANCEL_SYNTHETIC_RE = re.compile(
+    r"\b(?:synthetic|syntehtic)(?:[_\s-]?tests?)?\b|\bbenchmark\b",
+    re.IGNORECASE,
+)
+TASK_CANCEL_GENERIC_RE = re.compile(r"\b(?:job|process|run|task|work)\b", re.IGNORECASE)
 IMPLEMENTATION_RE = re.compile(
     r"^\s*(?:please\s+)?(?:can\s+you\s+)?"
     r"(?:(?:use|launch|run)\s+claude(?:\s+code)?\s+(?:to\s+)?)?"
@@ -222,6 +229,10 @@ def synthetic_test_action(suite_name: str, position: int) -> PlannedAction:
     return PlannedAction(kind="synthetic_test", content=suite_name, position=position)
 
 
+def task_cancel_action(target: str, position: int) -> PlannedAction:
+    return PlannedAction(kind="task_cancel", content=target, position=position)
+
+
 def implementation_action(request: str, position: int) -> PlannedAction:
     return PlannedAction(kind="implementation", content=request, position=position)
 
@@ -304,6 +315,28 @@ def extract_shell_command(clause: PromptClause) -> PlannedAction | None:
     return None
 
 
+def extract_task_cancel_request(clause: PromptClause) -> PlannedAction | None:
+    trigger = TASK_CANCEL_TRIGGER_RE.search(clause.text)
+    if trigger is None:
+        return None
+
+    task_id = TASK_CANCEL_ID_RE.search(clause.text)
+    if task_id is not None:
+        return task_cancel_action(
+            task_id.group("task_id").lower(), clause.position + task_id.start()
+        )
+
+    synthetic = TASK_CANCEL_SYNTHETIC_RE.search(clause.text)
+    if synthetic is not None:
+        return task_cancel_action("synthetic_test", clause.position + synthetic.start())
+
+    generic = TASK_CANCEL_GENERIC_RE.search(clause.text)
+    if generic is not None:
+        return task_cancel_action("task", clause.position + generic.start())
+
+    return None
+
+
 def extract_implementation_request(clause: PromptClause) -> PlannedAction | None:
     match = IMPLEMENTATION_RE.match(clause.text)
     if match is None:
@@ -359,6 +392,7 @@ __all__ = [
     "extract_implementation_request",
     "extract_llm_provider_switch",
     "extract_shell_command",
+    "extract_task_cancel_request",
     "implementation_action",
     "looks_like_direct_shell_command",
     "sample_alert_action",
@@ -366,4 +400,5 @@ __all__ = [
     "shell_action",
     "split_prompt_clauses",
     "synthetic_test_action",
+    "task_cancel_action",
 ]

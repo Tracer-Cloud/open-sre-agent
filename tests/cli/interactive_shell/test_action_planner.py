@@ -36,6 +36,16 @@ def test_plan_terminal_tasks_returns_implementation_action() -> None:
     assert plan_cli_actions(msg) == []
 
 
+def test_plan_task_cancel_before_shell_kill() -> None:
+    msg = "kill the syntehtic_test because it is running way too long"
+    actions, unhandled = plan_actions_with_unhandled(msg)
+
+    assert not unhandled
+    assert [(a.kind, a.content) for a in actions] == [("task_cancel", "synthetic_test")]
+    assert plan_terminal_tasks(msg) == ["task_cancel"]
+    assert plan_cli_actions(msg) == []
+
+
 def test_plan_cli_actions_remote_deployment_inventory_questions() -> None:
     messages = (
         "Which remote deployments are connected?",

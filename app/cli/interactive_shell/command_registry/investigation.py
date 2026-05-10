@@ -100,7 +100,7 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
         session.mark_latest(ok=False, kind="slash")
         return True
 
-    task = session.task_registry.create(TaskKind.INVESTIGATION)
+    task = session.task_registry.create(TaskKind.INVESTIGATION, command=f"/investigate {path}")
     task.mark_running()
     try:
         with apply_reasoning_effort(session.reasoning_effort):

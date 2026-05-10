@@ -10,7 +10,9 @@ import pytest
 from prompt_toolkit.history import FileHistory
 from rich.console import Console
 
+from app.cli.interactive_shell import command_registry as registry_module
 from app.cli.interactive_shell.command_registry import repl_data as repl_data_module
+from app.cli.interactive_shell.command_registry import types as command_types
 from app.cli.interactive_shell.command_registry.investigation import (
     _validate_investigate_args,
     _validate_save_args,
@@ -156,6 +158,29 @@ class TestDispatchSlash:
     def test_local_llm_is_not_a_builtin_slash_action(self) -> None:
         assert "/local-llm" not in SLASH_COMMANDS
         assert "/local_llm" not in SLASH_COMMANDS
+
+    def test_slash_commands_proxy_reads_current_registry(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        command = command_types.SlashCommand("/hot", "hot reload test", lambda *_args: True)
+        monkeypatch.setattr(registry_module, "SLASH_COMMANDS", {"/hot": command})
+
+        assert SLASH_COMMANDS.get("/hot") is command
+        assert list(SLASH_COMMANDS) == ["/hot"]
+
+    def test_dispatch_slash_proxy_calls_current_registry(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        calls: list[str] = []
+
+        def _fake_dispatch(command_line: str, *_args: object, **_kwargs: object) -> bool:
+            calls.append(command_line)
+            return False
+
+        monkeypatch.setattr(registry_module, "dispatch_slash", _fake_dispatch)
+
+        assert dispatch_slash("/hot", ReplSession(), _capture()[0]) is False
+        assert calls == ["/hot"]
 
     def test_empty_input_is_noop(self) -> None:
         session = ReplSession()
