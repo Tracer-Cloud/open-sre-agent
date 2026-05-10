@@ -23,7 +23,6 @@ from rich.panel import Panel
 from rich.spinner import Spinner
 from rich.text import Text
 
-import app.output
 from app.cli.interactive_shell.theme import (
     ANSI_BOLD,
     ANSI_DIM,
@@ -158,6 +157,8 @@ class _DiagnoseStreamRenderer:
 
         # Register console globally so that print_above_renderable fallbacks
         # correctly print above this live region during the diagnose phase.
+        import app.output
+
         app.output._live_console = self._console
         self._live.start()
 
@@ -205,6 +206,8 @@ class _DiagnoseStreamRenderer:
             finally:
                 self._live = None
                 # Unregister only if we own it (safeguard against subsequent activations)
+                import app.output
+
                 if getattr(app.output, "_live_console", None) is self._console:
                     app.output._live_console = None
             sys.stdout.write(
