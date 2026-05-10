@@ -1,22 +1,26 @@
 """Live token streaming for interactive-shell LLM responses.
 
-Inside the persistent prompt_toolkit Application (#1679), the input box is
-pinned at the bottom of the terminal via ``patch_stdout``. To keep the
-input editable while a response streams (type-ahead), we cannot use
-:class:`rich.live.Live` here — ``Live`` does cursor manipulation
-(cursor-up + erase-line) for in-place redraw, which fights ``patch_stdout``
-and blocks the input buffer from accepting keystrokes.
+Inside the prompt_toolkit REPL (#1679), the input box is pinned at the
+bottom of the terminal via ``patch_stdout``. To keep the input editable
+while a response streams (type-ahead) we can't use :class:`rich.live.Live`
+— ``Live`` does cursor manipulation (cursor-up + erase-line) for in-place
+redraw, which fights ``patch_stdout`` and blocks the input buffer from
+accepting keystrokes.
 
-So this path streams chunks **silently**: chunks accumulate into a buffer
-and the complete response is rendered as Markdown once the stream ends.
-The streaming-progress indicator (``⟳ thinking… (Ns · ↓ Xk tokens)``) is
-drawn by the persistent Application's status Window, which is updated by
-``PersistentRepl._run_dispatch`` — orthogonal to this module.
+Instead this path streams **paragraph-by-paragraph**: chunks accumulate
+in ``para_buffer`` and a complete paragraph (text up to the next
+``\\n\\n`` outside an open code-fence) renders as ``rich.Markdown`` the
+moment its boundary is seen. The trailing partial paragraph is
+force-flushed at end-of-stream. Code blocks are kept whole — we never
+split on ``\\n\\n`` while a triple-backtick fence is unclosed.
 
-Trade-off accepted: streaming loses on-the-fly Markdown formatting (no
-live bold/headers/lists), but in exchange the input row stays pinned and
-type-ahead works exactly as it does in Claude CLI's interactive surface.
-The non-TTY path still renders the full Markdown at end — same as before.
+Streaming progress and cancellation are surfaced through optional
+attributes on the ``console``: ``update_streaming_progress(bytes)`` is
+called per chunk (throttled to ~10/s) so the bottom-toolbar token
+counter updates live, and ``cancel_requested`` is polled between chunks
+so an Esc press in the prompt cancels promptly. The ``getattr``
+indirection keeps this module decoupled from the loop's
+``_StreamingConsole`` shim.
 """
 
 from __future__ import annotations

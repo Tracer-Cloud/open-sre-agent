@@ -385,7 +385,8 @@ def test_dispatch_one_turn_routes_to_cli_help_for_help_questions(
 
     Replaces the old ``test_run_one_turn_renders_submitted_prompt_before_handler``
     which asserted on PromptSession echo behaviour — that responsibility now
-    lives in :class:`PersistentRepl._on_submit`, exercised separately.
+    lives in :func:`_run_interactive` (the prompt-toolkit loop, which calls
+    :func:`render_submitted_prompt` after each ``prompt_async`` return).
     """
     from rich.console import Console
 

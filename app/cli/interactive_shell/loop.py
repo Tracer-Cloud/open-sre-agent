@@ -173,11 +173,13 @@ def _dispatch_one_turn(
 ) -> None:
     """Route + dispatch one accepted line. Pure synchronous body.
 
-    Used both from :class:`PersistentRepl` (wrapped in ``asyncio.to_thread``)
-    and from the ``initial_input`` pre-seeding path. ``on_exit`` is called
-    when a slash command requests REPL exit (e.g. ``/exit``); the caller
-    decides what that means (in the persistent path, ``app.exit()``; in the
-    pre-seeded path, an early return).
+    Used both from :func:`_run_one_dispatch` (wrapped in
+    ``asyncio.to_thread`` so the worker runs off the prompt-toolkit
+    main thread) and from the ``initial_input`` pre-seeding path.
+    ``on_exit`` is called when a slash command requests REPL exit
+    (e.g. ``/exit``); the caller decides what that means (in the
+    interactive path, ``app.exit()``; in the pre-seeded path, an early
+    return).
     """
     decision = route_input(text, session)
     kind = decision.route_kind.value
