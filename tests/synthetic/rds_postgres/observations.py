@@ -49,6 +49,8 @@ class TrajectoryPolicyResult:
 
 @dataclass(frozen=True)
 class RunObservation:
+    report_schema_version: str
+    scoring_formula_version: str
     scenario_id: str
     started_at: str
     wall_time_s: float
@@ -58,7 +60,9 @@ class RunObservation:
     trajectory: TrajectoryMetrics
     evaluated_golden_actions: list[str]
     trajectory_policy: TrajectoryPolicyResult | None
+    trajectory_policy_version: str
     reasoning: dict[str, Any] | None
+    reasoning_status: str
     observed_evidence_sources: list[str]
     required_evidence_sources: list[str]
     missing_required_evidence_sources: list[str]
@@ -138,23 +142,6 @@ def _unique_in_order(items: list[str]) -> list[str]:
     return ordered
 
 
-def _resolved_evidence_sources(
-    evidence: dict[str, Any],
-    available_evidence_sources: list[str],
-    required_evidence_sources: list[str],
-) -> tuple[list[str], list[str], list[str]]:
-    coverage = _source_aware_evidence_coverage(
-        evidence=evidence,
-        available_evidence_sources=available_evidence_sources,
-        required_evidence_sources=required_evidence_sources,
-    )
-    return (
-        list(coverage["observed_sources"]),
-        list(coverage["required_sources"]),
-        list(coverage["missing_required_sources"]),
-    )
-
-
 def _source_aware_evidence_coverage(
     evidence: dict[str, Any],
     available_evidence_sources: list[str],
@@ -207,10 +194,23 @@ def _canonical_report_payload(
             "violations": list(trajectory_policy.violations),
         }
 
+    failure_reasons = score.get("failure_reasons") or []
+    gates = score.get("gates") or {}
     return {
+        "report_schema_version": "report_v2",
+        "scoring_formula_version": "v2_gated_semantic",
         "status": "pass" if bool(score.get("passed")) else "fail",
         "category": score.get("actual_category"),
-        "failure_reason": score.get("failure_reason"),
+        "failure_reasons": list(failure_reasons),
+        "gates": dict(gates),
+        "verdict_definitions": {
+            "strict_match": (
+                "Strict trajectory match requires exact action order and membership equality."
+            ),
+            "sequencing_ok": (
+                "Sequencing checks expected action coverage only; order is ignored due to parallelism."
+            ),
+        },
         "evidence": {
             "observed_sources": list(evidence_source_coverage["observed_sources"]),
             "required_sources": list(evidence_source_coverage["required_sources"]),
@@ -250,6 +250,8 @@ def _process_metrics_summary(trajectory: TrajectoryMetrics) -> dict[str, Any]:
         "missing_actions_count": len(trajectory.missing_actions),
         "redundancy_count": trajectory.redundancy_count,
         "failed_action_count": trajectory.failed_action_count,
+        "action_loops_detected": len(trajectory.actions_per_loop),
+        "loop_count_consistent": trajectory.loops_used == len(trajectory.actions_per_loop),
         "definitions": {
             "extra_actions_count": (
                 "Actions executed but not present in the evaluated golden trajectory."
@@ -263,6 +265,9 @@ def _process_metrics_summary(trajectory: TrajectoryMetrics) -> dict[str, Any]:
             ),
             "strict_match": (
                 "True only when executed actions exactly match golden order and membership."
+            ),
+            "sequencing_ok": (
+                "Coverage-only trajectory check: expected actions appear at least once; order not required."
             ),
         },
     }
@@ -387,14 +392,14 @@ def build_observation(
         available_evidence_sources=available_evidence_sources,
         required_evidence_sources=required_evidence_sources,
     )
-    observed_sources, required_sources, missing_required_sources = _resolved_evidence_sources(
-        evidence=evidence,
-        available_evidence_sources=available_evidence_sources,
-        required_evidence_sources=required_evidence_sources,
-    )
+    observed_sources = list(evidence_source_coverage["observed_sources"])
+    required_sources = list(evidence_source_coverage["required_sources"])
+    missing_required_sources = list(evidence_source_coverage["missing_required_sources"])
     score_payload = _score_with_process_metrics(score, trajectory)
 
     return RunObservation(
+        report_schema_version="report_v2",
+        scoring_formula_version="v2_gated_semantic",
         scenario_id=scenario_id,
         started_at=started_at.astimezone(UTC).isoformat(),
         wall_time_s=round(wall_time_s, 3),
@@ -404,7 +409,9 @@ def build_observation(
         trajectory=trajectory,
         evaluated_golden_actions=evaluated_golden_actions,
         trajectory_policy=trajectory_policy,
+        trajectory_policy_version="default_v1",
         reasoning=reasoning,
+        reasoning_status="captured" if reasoning is not None else "not_captured",
         observed_evidence_sources=observed_sources,
         required_evidence_sources=required_sources,
         missing_required_evidence_sources=missing_required_sources,
@@ -428,7 +435,7 @@ def write_observation(observation: RunObservation, observations_dir: Path) -> Pa
     stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%SZ")
     target = scenario_dir / f"{stamp}__{status}.json"
 
-    payload = asdict(observation)
+    payload = _drop_none_fields(asdict(observation))
     payload["observation_path"] = str(target.relative_to(observations_dir))
     canonical_payload = dict(payload.get("canonical_report_payload") or {})
     canonical_payload["observation_path"] = payload["observation_path"]
@@ -438,6 +445,18 @@ def write_observation(observation: RunObservation, observations_dir: Path) -> Pa
     latest = scenario_dir / "latest.json"
     latest.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return target
+
+
+def _drop_none_fields(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _drop_none_fields(item)
+            for key, item in value.items()
+            if item is not None
+        }
+    if isinstance(value, list):
+        return [_drop_none_fields(item) for item in value if item is not None]
+    return value
 
 
 def _fmt_ratio(value: float | None) -> str:
@@ -466,15 +485,20 @@ def render_report_to_console(observation: RunObservation, console: Console) -> N
     missing_keywords = score.get("missing_keywords") or []
     matched_keywords = score.get("matched_keywords") or []
     total_keywords = len(matched_keywords) + len(missing_keywords)
+    gates = score.get("gates") or {}
 
     correctness.add_row("Required keywords", f"{len(matched_keywords)}/{total_keywords} matched")
     correctness.add_row(
         "Forbidden keywords",
-        "clear" if not score.get("failure_reason", "").startswith("forbidden keywords") else "hit",
+        "clear"
+        if (gates.get("forbidden_keyword_clear") or {}).get("status") != "fail"
+        else "hit",
     )
     correctness.add_row(
         "Forbidden categories",
-        "clear" if not score.get("failure_reason", "").startswith("forbidden category") else "hit",
+        "clear"
+        if (gates.get("forbidden_category_clear") or {}).get("status") != "fail"
+        else "hit",
     )
     correctness.add_row("Observed evidence", _fmt_list(observation.observed_evidence_sources))
     if observation.required_evidence_sources:

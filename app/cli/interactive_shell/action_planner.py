@@ -28,14 +28,14 @@ _SYNTHETIC_SCENARIO_ID_RE = re.compile(
     r"\b(?P<scenario>\d{3}-[a-z0-9][a-z0-9-]*)\b",
     re.IGNORECASE,
 )
-_DEFAULT_SYNTHETIC_SCENARIO = "001-replication-lag"
+DEFAULT_SYNTHETIC_SCENARIO = "001-replication-lag"
 
 
 def _synthetic_action_content(clause: PromptClause, *, synthetic_start: int) -> tuple[str, int]:
     scenario_match = _SYNTHETIC_SCENARIO_ID_RE.search(clause.text)
     if scenario_match is None:
         return (
-            f"rds_postgres:{_DEFAULT_SYNTHETIC_SCENARIO}",
+            f"rds_postgres:{DEFAULT_SYNTHETIC_SCENARIO}",
             clause.position + synthetic_start,
         )
     scenario_id = scenario_match.group("scenario").lower()

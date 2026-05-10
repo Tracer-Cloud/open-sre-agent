@@ -176,6 +176,45 @@ def test_score_result_accepts_failover_event_reasoning() -> None:
     assert score.passed is True
 
 
+def test_score_result_uses_semantic_keyword_matching_for_write_heavy_workload() -> None:
+    fixture = load_scenario(SUITE_DIR / "001-replication-lag")
+
+    final_state = {
+        "root_cause": (
+            "Replication lag is driven by a write-heavy UPDATE on the orders table, "
+            "which increases WAL generation faster than the replica can replay; "
+            "Top SQL Activity and Avg Load confirm replay pressure."
+        ),
+        "root_cause_category": "resource_exhaustion",
+        "validated_claims": [
+            {"claim": "Replica lag and WAL replay pressure are both elevated."},
+        ],
+        "non_validated_claims": [],
+        "causal_chain": [],
+        "evidence": {
+            "grafana_metrics": [{"metric_name": "ReplicaLag"}],
+            "grafana_logs": [{"message": "replica lag spike observed"}],
+        },
+        "executed_hypotheses": [
+            {
+                "actions": [
+                    "query_grafana_metrics",
+                    "query_grafana_logs",
+                    "query_grafana_alert_rules",
+                ]
+            }
+        ],
+    }
+
+    score = score_result(fixture, final_state)
+
+    assert score.semantic_keyword_match is True
+    assert score.exact_keyword_match is False
+    assert score.gates["required_keyword_match"].status == "pass"
+    assert "write-heavy workload" in score.semantic_matched_keywords
+    assert score.passed is True
+
+
 _ALL_SCENARIOS = load_all_scenarios()
 _LLM_ATTEMPTS = 2
 

@@ -148,12 +148,12 @@ def test_tty_ask_when_action_already_listed_omits_repeat_of_summary() -> None:
     assert "configuration" in out
 
 
-def test_tty_ask_accepts_empty_confirmation_by_default() -> None:
+def test_tty_ask_rejects_empty_confirmation_by_default() -> None:
     session = ReplSession()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
     r = evaluate_slash_tier(ExecutionTier.ELEVATED)
-    assert execution_allowed(
+    assert not execution_allowed(
         r,
         session=session,
         console=console,

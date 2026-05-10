@@ -50,6 +50,51 @@ def _sample_score_payload() -> dict[str, Any]:
         "actual_category": "resource_exhaustion",
         "missing_keywords": [],
         "matched_keywords": ["replication lag", "wal"],
+        "exact_matched_keywords": ["replication lag", "wal"],
+        "exact_missing_keywords": [],
+        "semantic_matched_keywords": ["replication lag", "wal"],
+        "semantic_missing_keywords": [],
+        "exact_keyword_match": True,
+        "semantic_keyword_match": True,
+        "normalization_used": ["casefold_whitespace_normalization", "exact_phrase"],
+        "gates": {
+            "category_match": {
+                "status": "pass",
+                "threshold": "actual_category == 'resource_exhaustion'",
+                "actual": "root_cause_present=True, actual_category='resource_exhaustion'",
+            },
+            "required_keyword_match": {
+                "status": "pass",
+                "threshold": "all required keywords matched (semantic)",
+                "actual": "missing_semantic=[], missing_exact=[]",
+            },
+            "required_evidence_sources": {
+                "status": "pass",
+                "threshold": "all required evidence sources populated",
+                "actual": "missing_required_evidence=[]",
+            },
+            "trajectory_budget": {
+                "status": "pass",
+                "threshold": "extra_actions_count == 0",
+                "actual": "extra_actions_count=0",
+            },
+            "forbidden_category_clear": {
+                "status": "pass",
+                "threshold": "actual_category not in forbidden_categories",
+                "actual": "actual_category='resource_exhaustion', forbidden=[]",
+            },
+            "forbidden_keyword_clear": {
+                "status": "pass",
+                "threshold": "no forbidden keywords appear in graded output text",
+                "actual": "forbidden_hits=[]",
+            },
+            "failover_event_reasoning": {
+                "status": "pass",
+                "threshold": "not required unless failover sequence keywords are in answer key",
+                "actual": "not_applicable",
+            },
+        },
+        "failure_reasons": [],
         "failure_reason": "",
         "trajectory": {
             "expected_sequence": [
@@ -133,8 +178,11 @@ def test_observation_roundtrip_and_report_rendering(tmp_path: Path) -> None:
     output_path = write_observation(observation, tmp_path)
     payload = json.loads(output_path.read_text(encoding="utf-8"))
     assert payload["scenario_id"] == "001-replication-lag"
+    assert payload["report_schema_version"] == "report_v2"
+    assert payload["scoring_formula_version"] == "v2_gated_semantic"
     assert "process_metrics" in payload["score"]
     assert payload["score"]["process_metrics"]["redundancy_count"] == 0
+    assert payload["score"]["process_metrics"]["loop_count_consistent"] is True
     assert (
         "Duplicate action executions"
         in payload["score"]["process_metrics"]["definitions"]["redundancy_count"]
@@ -153,6 +201,10 @@ def test_observation_roundtrip_and_report_rendering(tmp_path: Path) -> None:
         "aws_rds_events": False,
     }
     assert payload["canonical_report_payload"]["status"] == "pass"
+    assert payload["canonical_report_payload"]["report_schema_version"] == "report_v2"
+    assert payload["canonical_report_payload"]["scoring_formula_version"] == "v2_gated_semantic"
+    assert "failure_reason" not in payload["canonical_report_payload"]
+    assert payload["canonical_report_payload"]["failure_reasons"] == []
     assert payload["canonical_report_payload"]["trajectory"]["golden"] == [
         "query_grafana_metrics",
         "query_grafana_logs",
@@ -171,6 +223,9 @@ def test_observation_roundtrip_and_report_rendering(tmp_path: Path) -> None:
         payload["canonical_report_payload"]["observation_path"]
         == payload["observation_path"]
     )
+    assert payload["reasoning_status"] == "not_captured"
+    assert "reasoning" not in payload
+    assert payload["trajectory_policy_version"] == "default_v1"
     assert (tmp_path / "001-replication-lag" / "latest.json").exists()
 
     report_text = render_report_to_string(observation)

@@ -21,6 +21,7 @@ from rich.markup import escape
 from rich.text import Text
 
 import app.cli.interactive_shell.intent_parser as _intent_parser
+from app.cli.interactive_shell.action_planner import DEFAULT_SYNTHETIC_SCENARIO
 from app.cli.interactive_shell.execution_policy import (
     evaluate_code_agent_launch,
     evaluate_investigation_launch,
@@ -50,7 +51,6 @@ _MAX_COMMAND_OUTPUT_CHARS = 24_000
 _SYNTHETIC_DIAG_CHARS = 2_000  # max stderr bytes captured from a failing synthetic run
 _SIGTERM_GRACE_SECONDS = 10  # wait for clean exit after SIGTERM before escalating to SIGKILL
 _TASK_OUTPUT_JOIN_TIMEOUT_SECONDS = 2
-_DEFAULT_SYNTHETIC_SCENARIO = "001-replication-lag"
 _SYNTHETIC_SCENARIO_ID_RE = re.compile(r"^\d{3}-[a-z0-9][a-z0-9-]*$")
 _IMPLEMENT_PERMISSION_MODE_ENV = "CLAUDE_CODE_IMPLEMENT_PERMISSION_MODE"
 _DEFAULT_IMPLEMENT_PERMISSION_MODE = "acceptEdits"
@@ -990,7 +990,7 @@ def run_synthetic_test(
 ) -> None:
     suite_spec = suite_name.strip().lower()
     resolved_suite_name = ""
-    resolved_scenario = _DEFAULT_SYNTHETIC_SCENARIO
+    resolved_scenario = DEFAULT_SYNTHETIC_SCENARIO
     if suite_spec == "rds_postgres":
         resolved_suite_name = "rds_postgres"
     elif suite_spec.startswith("rds_postgres:"):
