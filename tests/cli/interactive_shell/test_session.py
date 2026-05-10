@@ -74,7 +74,9 @@ class TestReplSession:
         session = ReplSession()
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
         session.task_registry = TaskRegistry.persistent()
-        task = session.task_registry.create(TaskKind.SYNTHETIC_TEST, command="opensre tests synthetic")
+        task = session.task_registry.create(
+            TaskKind.SYNTHETIC_TEST, command="opensre tests synthetic"
+        )
         task.mark_running()
 
         session.clear()
