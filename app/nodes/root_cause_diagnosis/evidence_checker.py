@@ -261,7 +261,40 @@ def is_clearly_healthy(raw_alert: dict[str, Any] | str, evidence: dict[str, Any]
     return any(k in evidence for k in INVESTIGATED_EVIDENCE_KEYS)
 
 
-def check_vendor_evidence_missing(evidence: dict[str, Any]) -> bool:
+def _expects_vendor_evidence(
+    evidence: dict[str, Any],
+    available_sources: dict[str, Any] | None = None,
+) -> bool:
+    """Return True when the incident context indicates upstream vendor tracing is relevant.
+
+    We only request extra audit evidence when there are explicit breadcrumbs such as:
+    - an ``s3_audit`` source already discovered by planning
+    - an ``audit_key`` on an inspected S3 object
+    - parsed vendor audit data from Lambda logs
+    """
+    source_map = available_sources or {}
+    if "s3_audit" in source_map:
+        return True
+
+    s3_object = evidence.get("s3_object", {})
+    if isinstance(s3_object, dict):
+        metadata = s3_object.get("metadata", {})
+        if isinstance(metadata, dict) and metadata.get("audit_key"):
+            return True
+
+    s3_audit_payload = evidence.get("s3_audit_payload", {})
+    if isinstance(s3_audit_payload, dict) and (
+        s3_audit_payload.get("key") or s3_audit_payload.get("found")
+    ):
+        return True
+
+    return bool(evidence.get("vendor_audit_from_logs"))
+
+
+def check_vendor_evidence_missing(
+    evidence: dict[str, Any],
+    available_sources: dict[str, Any] | None = None,
+) -> bool:
     """
     Check if vendor/external API evidence is missing.
 
@@ -273,6 +306,9 @@ def check_vendor_evidence_missing(evidence: dict[str, Any]) -> bool:
     Returns:
         True if vendor evidence is missing
     """
+    if not _expects_vendor_evidence(evidence, available_sources):
+        return False
+
     vendor_evidence_present = bool(
         evidence.get("vendor_audit_from_logs")  # Parsed from Lambda logs
         or (

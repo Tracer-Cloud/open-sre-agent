@@ -209,7 +209,8 @@ def _dispatch_one_turn(
         session.record_intervention("correction")
 
     if kind == "slash":
-        cmd_text = text if text.startswith("/") else f"/{text}"
+        # Rewrite bare-word commands to their slash form before dispatch.
+        cmd_text = _router.slash_dispatch_text(text)
         try:
             should_continue = dispatch_slash(cmd_text, session, console)
         except Exception as exc:
@@ -659,12 +660,12 @@ async def _run_interactive(
             # because CodeQL flags ``await x`` inside ``contextlib.suppress``
             # as "statement has no effect" even though the await IS the
             # effect. The ruff SIM105 suggestion is suppressed locally.
-            # Errors are surfaced inside ``_run_one_dispatch`` (it
-            # prints ``· interrupted`` or the dispatch error). Swallow
-            # here so the queue keeps draining the next item.
             try:  # noqa: SIM105
                 await state.current_task
             except (asyncio.CancelledError, Exception):
+                # Errors are already surfaced inside ``_run_one_dispatch``
+                # (it prints ``· interrupted`` or the dispatch error).
+                # Swallow here so the queue keeps draining the next item.
                 pass
             state.current_task = None
             state.queue.task_done()
@@ -752,11 +753,12 @@ async def _run_interactive(
         # ``try/except/pass`` here (not ``contextlib.suppress``) so
         # CodeQL doesn't flag the bare ``await`` as ineffectual; SIM105
         # ruff suggestion is suppressed locally.
-        # Processor cleanup must never raise — we're already in the
-        # REPL's outer ``finally``. Session is shutting down.
         try:  # noqa: SIM105
             await processor_task
         except (asyncio.CancelledError, Exception):
+            # Processor cleanup must never raise — we're already in the
+            # REPL's outer ``finally`` and the session is shutting down.
+            # Suppress so the exit path completes cleanly.
             pass
 
 

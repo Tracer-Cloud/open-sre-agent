@@ -281,7 +281,13 @@ def diagnose_root_cause(state: InvestigationState) -> dict:
     loop_count = state.get("investigation_loop_count", 0)
 
     recommendations: list[str] = []
-    if check_vendor_evidence_missing(evidence) and loop_count < MAX_INVESTIGATION_LOOPS:
+    if (
+        check_vendor_evidence_missing(
+            evidence,
+            available_sources=state.get("available_sources", {}),
+        )
+        and loop_count < MAX_INVESTIGATION_LOOPS
+    ):
         recommendations.append("Fetch audit payload from S3 to trace external vendor interactions")
     next_loop_count = loop_count + 1 if recommendations else loop_count
 

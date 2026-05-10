@@ -390,6 +390,42 @@ def test_dispatch_one_turn_reports_slash_dispatch_error(
     assert isinstance(captured_errors[0], RuntimeError)
 
 
+def test_dispatch_one_turn_typoed_bare_alias_dispatches_canonical_slash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bare-alias typos (e.g. ``hlep`` → ``/help``) are normalised by
+    ``_router.slash_dispatch_text`` before reaching ``dispatch_slash``.
+
+    Adapted from main's ``test_run_one_turn_typoed_bare_alias_...``: that
+    test exercised main's ``_run_one_turn`` async wrapper, which doesn't
+    exist in this branch's queue + processor architecture. The behaviour
+    being verified — that bare aliases route to canonical slash form —
+    lives inside ``_dispatch_one_turn`` (the slash-kind branch calls
+    ``_router.slash_dispatch_text``), so the test now drives that
+    function directly.
+    """
+    from rich.console import Console
+
+    dispatched: list[str] = []
+
+    def _dispatch(command: str, *_args: object, **_kwargs: object) -> bool:
+        dispatched.append(command)
+        return True
+
+    monkeypatch.setattr(
+        loop,
+        "route_input",
+        lambda *_args: RouteDecision(RouteKind.SLASH, 0.98, ("bare_command_alias",)),
+    )
+    monkeypatch.setattr(loop, "dispatch_slash", _dispatch)
+    session = ReplSession()
+    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
+
+    loop._dispatch_one_turn("hlep", session, console, on_exit=lambda: None)
+
+    assert dispatched == ["/help"]
+
+
 def test_dispatch_one_turn_routes_to_cli_help_for_help_questions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

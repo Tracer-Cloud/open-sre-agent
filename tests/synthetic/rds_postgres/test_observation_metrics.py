@@ -6,9 +6,11 @@ from pathlib import Path
 from typing import Any
 
 from tests.synthetic.rds_postgres.observations import (
+    TrajectoryPolicy,
     build_observation,
     compute_trajectory_metrics,
     edit_distance,
+    evaluate_trajectory_policy,
     lcs_length,
     render_report_to_string,
     write_observation,
@@ -21,6 +23,16 @@ def _sample_final_state() -> dict[str, Any]:
         "evidence": {
             "grafana_metrics": [{"metric_name": "CPUUtilization"}],
             "grafana_logs": [{"message": "replica lag detected"}],
+            "aws_cloudwatch_metrics": {
+                "db_instance_identifier": "db-1",
+                "metrics": [{"metric_name": "CPUUtilization"}],
+                "observations": ["CPU is elevated"],
+            },
+            "aws_performance_insights": {
+                "observations": ["Top SQL Activity: select 1 | Avg Load: 2.0 AAS | Waits: CPU"],
+                "top_sql": [{"sql": "select 1", "db_load": 2.0, "wait_event": "CPU"}],
+                "wait_events": [],
+            },
         },
         "executed_hypotheses": [
             {"actions": ["query_grafana_metrics", "query_grafana_logs"], "failed_actions": []}
@@ -38,6 +50,51 @@ def _sample_score_payload() -> dict[str, Any]:
         "actual_category": "resource_exhaustion",
         "missing_keywords": [],
         "matched_keywords": ["replication lag", "wal"],
+        "exact_matched_keywords": ["replication lag", "wal"],
+        "exact_missing_keywords": [],
+        "semantic_matched_keywords": ["replication lag", "wal"],
+        "semantic_missing_keywords": [],
+        "exact_keyword_match": True,
+        "semantic_keyword_match": True,
+        "normalization_used": ["casefold_whitespace_normalization", "exact_phrase"],
+        "gates": {
+            "category_match": {
+                "status": "pass",
+                "threshold": "actual_category == 'resource_exhaustion'",
+                "actual": "root_cause_present=True, actual_category='resource_exhaustion'",
+            },
+            "required_keyword_match": {
+                "status": "pass",
+                "threshold": "all required keywords matched (semantic)",
+                "actual": "missing_semantic=[], missing_exact=[]",
+            },
+            "required_evidence_sources": {
+                "status": "pass",
+                "threshold": "all required evidence sources populated",
+                "actual": "missing_required_evidence=[]",
+            },
+            "trajectory_budget": {
+                "status": "pass",
+                "threshold": "extra_actions_count == 0",
+                "actual": "extra_actions_count=0",
+            },
+            "forbidden_category_clear": {
+                "status": "pass",
+                "threshold": "actual_category not in forbidden_categories",
+                "actual": "actual_category='resource_exhaustion', forbidden=[]",
+            },
+            "forbidden_keyword_clear": {
+                "status": "pass",
+                "threshold": "no forbidden keywords appear in graded output text",
+                "actual": "forbidden_hits=[]",
+            },
+            "failover_event_reasoning": {
+                "status": "pass",
+                "threshold": "not required unless failover sequence keywords are in answer key",
+                "actual": "not_applicable",
+            },
+        },
+        "failure_reasons": [],
         "failure_reason": "",
         "trajectory": {
             "expected_sequence": [
@@ -101,7 +158,19 @@ def test_observation_roundtrip_and_report_rendering(tmp_path: Path) -> None:
         score=score,
         reasoning=None,
         trajectory=trajectory,
+        evaluated_golden_actions=list(score["trajectory"]["expected_sequence"]),
+        trajectory_policy=evaluate_trajectory_policy(
+            metrics=trajectory,
+            golden_actions=list(score["trajectory"]["expected_sequence"]),
+            policy=TrajectoryPolicy(matching="lcs"),
+        ),
         final_state=final_state,
+        available_evidence_sources=[
+            "aws_cloudwatch_metrics",
+            "aws_performance_insights",
+            "aws_rds_events",
+        ],
+        required_evidence_sources=["aws_performance_insights", "aws_rds_events"],
         started_at=datetime.now(UTC),
         wall_time_s=1.2,
     )
@@ -109,12 +178,59 @@ def test_observation_roundtrip_and_report_rendering(tmp_path: Path) -> None:
     output_path = write_observation(observation, tmp_path)
     payload = json.loads(output_path.read_text(encoding="utf-8"))
     assert payload["scenario_id"] == "001-replication-lag"
+    assert payload["report_schema_version"] == "report_v2"
+    assert payload["scoring_formula_version"] == "v2_gated_semantic"
+    assert "process_metrics" in payload["score"]
+    assert payload["score"]["process_metrics"]["redundancy_count"] == 0
+    assert payload["score"]["process_metrics"]["loop_count_consistent"] is True
+    assert (
+        "Duplicate action executions"
+        in payload["score"]["process_metrics"]["definitions"]["redundancy_count"]
+    )
     assert payload["score"]["actual_category"] == "resource_exhaustion"
+    assert payload["observed_evidence_sources"] == [
+        "aws_cloudwatch_metrics",
+        "aws_performance_insights",
+    ]
+    assert payload["missing_required_evidence_sources"] == ["aws_rds_events"]
+    assert payload["evidence_source_coverage"]["required_coverage"] == 0.5
+    assert payload["evidence_source_coverage"]["available_coverage"] == 2 / 3
+    assert payload["evidence_source_coverage"]["source_presence"] == {
+        "aws_cloudwatch_metrics": True,
+        "aws_performance_insights": True,
+        "aws_rds_events": False,
+    }
+    assert payload["canonical_report_payload"]["status"] == "pass"
+    assert payload["canonical_report_payload"]["report_schema_version"] == "report_v2"
+    assert payload["canonical_report_payload"]["scoring_formula_version"] == "v2_gated_semantic"
+    assert "failure_reason" not in payload["canonical_report_payload"]
+    assert payload["canonical_report_payload"]["failure_reasons"] == []
+    assert payload["canonical_report_payload"]["trajectory"]["golden"] == [
+        "query_grafana_metrics",
+        "query_grafana_logs",
+        "query_grafana_alert_rules",
+    ]
+    assert payload["canonical_report_payload"]["trajectory"]["policy"] == {
+        "passed": False,
+        "matching": "lcs",
+        "violations": ["lcs_ratio=0.67 < 1.00"],
+    }
+    assert payload["canonical_report_payload"]["evidence"]["missing_required_sources"] == [
+        "aws_rds_events"
+    ]
+    assert payload["canonical_report_payload"]["observation_path"] == payload["observation_path"]
+    assert payload["reasoning_status"] == "not_captured"
+    assert "reasoning" not in payload
+    assert payload["trajectory_policy_version"] == "default_v1"
     assert (tmp_path / "001-replication-lag" / "latest.json").exists()
 
     report_text = render_report_to_string(observation)
     assert "Synthetic RDS Run - 001-replication-lag" in report_text
     assert "PASS" in report_text
+    assert "Observed evidence" in report_text
+    assert "aws_performance_insights" in report_text
+    assert "Missing evidence" in report_text
+    assert "policy" in report_text
     assert "Trajectory" in report_text
     assert "lcs=0.67" in report_text
     assert "Observation:" in report_text

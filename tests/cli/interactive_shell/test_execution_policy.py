@@ -146,3 +146,18 @@ def test_tty_ask_when_action_already_listed_omits_repeat_of_summary() -> None:
     assert "/integrations verify foo" not in out
     assert "Confirm:" in out
     assert "configuration" in out
+
+
+def test_tty_ask_rejects_empty_confirmation_by_default() -> None:
+    session = ReplSession()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+    r = evaluate_slash_tier(ExecutionTier.ELEVATED)
+    assert not execution_allowed(
+        r,
+        session=session,
+        console=console,
+        action_summary="/integrations verify foo",
+        confirm_fn=lambda _: "",
+        is_tty=True,
+    )

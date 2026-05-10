@@ -4,24 +4,28 @@ import argparse
 import json
 import re
 import time
-from dataclasses import asdict, dataclass, replace
+from collections.abc import Callable
+from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from rich.console import Console
 
-from app.pipeline.runners import run_investigation
 from tests.synthetic.mock_aws_backend import FixtureAWSBackend
 from tests.synthetic.mock_grafana_backend.backend import FixtureGrafanaBackend
 from tests.synthetic.rds_postgres.observations import (
+    TrajectoryPolicy,
+    TrajectoryPolicyResult,
     build_observation,
     compute_trajectory_metrics,
+    evaluate_trajectory_policy,
     render_report_to_console,
     write_observation,
 )
 from tests.synthetic.rds_postgres.scenario_loader import (
     SUITE_DIR,
+    GoldenTrajectoryConfig,
     ScenarioFixture,
     load_all_scenarios,
 )
@@ -34,15 +38,44 @@ _EVIDENCE_KEY_MAP: dict[str, str] = {
 }
 
 
+def _run_investigation_lazy(**kwargs: Any) -> Any:
+    from app.pipeline.runners import run_investigation as _run_investigation
+
+    return _run_investigation(**kwargs)
+
+
+# Keep this as a module symbol so tests can monkeypatch it without importing
+# heavy optional dependencies during test collection.
+run_investigation: Callable[..., Any] = _run_investigation_lazy
+
+
 @dataclass(frozen=True)
 class TrajectoryScore:
     actual_sequence: list[str]  # flattened actions from executed_hypotheses
     expected_sequence: list[str]  # from answer_key.optimal_trajectory
     loops_used: int
+    reported_loops_used: int
+    loop_count_consistent: bool
+    actions_per_loop: list[int]
     max_loops: int
     sequencing_ok: bool  # all expected actions appear in actual (set membership)
     calibration_ok: bool  # loops_used <= max_loops
-    efficiency_score: float  # mean(sequencing_ok, calibration_ok)
+    trajectory_budget_ok: bool  # no extra actions beyond expected trajectory
+    extra_actions_count: int
+    efficiency_score: float  # mean(sequencing_ok, calibration_ok, trajectory_budget_ok)
+
+
+@dataclass(frozen=True)
+class FailureDetail:
+    code: str
+    detail: str
+
+
+@dataclass(frozen=True)
+class GateResult:
+    status: str
+    threshold: str
+    actual: str
 
 
 @dataclass(frozen=True)
@@ -70,10 +103,40 @@ class ScenarioScore:
     actual_category: str
     missing_keywords: list[str]
     matched_keywords: list[str]
-    root_cause: str
+    exact_missing_keywords: list[str] = field(default_factory=list)
+    exact_matched_keywords: list[str] = field(default_factory=list)
+    semantic_missing_keywords: list[str] = field(default_factory=list)
+    semantic_matched_keywords: list[str] = field(default_factory=list)
+    exact_keyword_match: bool = False
+    semantic_keyword_match: bool = False
+    normalization_used: list[str] = field(default_factory=list)
+    gates: dict[str, GateResult] = field(default_factory=dict)
+    failure_reasons: list[FailureDetail] = field(default_factory=list)
+    root_cause: str = ""
     failure_reason: str = ""
     trajectory: TrajectoryScore | None = None
     reasoning: ReasoningScore | None = None
+
+
+_REQUIRED_GATE_NAMES = {
+    "category_match",
+    "required_keyword_match",
+    "required_evidence_sources",
+    "trajectory_budget",
+    "forbidden_category_clear",
+    "forbidden_keyword_clear",
+    "failover_event_reasoning",
+    "trajectory_policy",
+}
+
+
+def _all_required_gates_pass(gates: dict[str, GateResult]) -> bool:
+    for gate_name, gate in gates.items():
+        if gate_name not in _REQUIRED_GATE_NAMES:
+            continue
+        if gate.status != "pass":
+            return False
+    return True
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -166,9 +229,19 @@ def _normalize_query_token(value: str) -> str:
 
 
 def _matches_required_keyword(normalized_output: str, keyword: str) -> bool:
+    semantic_match, _, _ = _keyword_match_details(normalized_output, keyword)
+    return semantic_match
+
+
+def _matches_required_keyword_exact(normalized_output: str, keyword: str) -> bool:
+    normalized_keyword = _normalize_text(keyword)
+    return bool(normalized_keyword) and normalized_keyword in normalized_output
+
+
+def _keyword_match_details(normalized_output: str, keyword: str) -> tuple[bool, str, str | None]:
     normalized_keyword = _normalize_text(keyword)
     if normalized_keyword in normalized_output:
-        return True
+        return True, "exact_phrase", None
 
     keyword_aliases = {
         "max_connections": (
@@ -195,17 +268,29 @@ def _matches_required_keyword(normalized_output: str, keyword: str) -> bool:
             "sessions remain open",
             "open sessions",
         ),
+        "write-heavyworkload": (
+            "write heavy workload",
+            "write-heavy update",
+            "update-heavy workload",
+            "heavy update workload",
+        ),
+        "replicationlag": (
+            "replica lag",
+            "replication delay",
+        ),
     }
     for alias in keyword_aliases.get(normalized_keyword.replace(" ", ""), ()):
         if _normalize_text(alias) in normalized_output:
-            return True
+            return True, "alias_lookup", alias
 
     keyword_tokens = set(re.findall(r"[a-z0-9]+", normalized_keyword))
     if not keyword_tokens:
-        return False
+        return False, "none", None
 
     output_tokens = set(re.findall(r"[a-z0-9]+", normalized_output))
-    return keyword_tokens.issubset(output_tokens)
+    if keyword_tokens.issubset(output_tokens):
+        return True, "token_subset", None
+    return False, "none", None
 
 
 def _scored_output_text(final_state: dict[str, Any]) -> str:
@@ -241,11 +326,15 @@ def score_trajectory(
     # Flatten all actions across every investigation loop (order preserved)
     executed_hypotheses: list[dict[str, Any]] = final_state.get("executed_hypotheses") or []
     actual_sequence: list[str] = []
+    actions_per_loop: list[int] = []
     for hyp in executed_hypotheses:
-        for action in hyp.get("actions", []):
-            actual_sequence.append(action)
+        actions = [str(action) for action in hyp.get("actions", [])]
+        actions_per_loop.append(len(actions))
+        actual_sequence.extend(actions)
 
-    loops_used: int = int(final_state.get("investigation_loop_count") or len(executed_hypotheses))
+    action_loops_used = len(executed_hypotheses)
+    reported_loops_used = int(final_state.get("investigation_loop_count") or action_loops_used)
+    loop_count_consistent = reported_loops_used == action_loops_used
 
     # Sequencing: all expected actions must appear in the actual sequence.
     # Actions run in parallel so completion order is non-deterministic; we check
@@ -253,16 +342,23 @@ def score_trajectory(
     # it may skip actions entirely — that will surface as sequencing_ok=False.
     sequencing_ok = set(expected) <= set(actual_sequence)
 
-    calibration_ok = loops_used <= max_loops
-    efficiency_score = (int(sequencing_ok) + int(calibration_ok)) / 2.0
+    calibration_ok = action_loops_used <= max_loops
+    extra_actions_count = len([action for action in actual_sequence if action not in set(expected)])
+    trajectory_budget_ok = extra_actions_count == 0
+    efficiency_score = (int(sequencing_ok) + int(calibration_ok) + int(trajectory_budget_ok)) / 3.0
 
     return TrajectoryScore(
         actual_sequence=actual_sequence,
         expected_sequence=expected,
-        loops_used=loops_used,
+        loops_used=action_loops_used,
+        reported_loops_used=reported_loops_used,
+        loop_count_consistent=loop_count_consistent,
+        actions_per_loop=actions_per_loop,
         max_loops=max_loops,
         sequencing_ok=sequencing_ok,
         calibration_ok=calibration_ok,
+        trajectory_budget_ok=trajectory_budget_ok,
+        extra_actions_count=extra_actions_count,
         efficiency_score=efficiency_score,
     )
 
@@ -333,43 +429,139 @@ def score_result(
     evidence_text = _scored_output_text(final_state)
     normalized_output = _normalize_text(evidence_text)
 
-    matched_keywords = [
+    exact_matched_keywords = [
         keyword
         for keyword in fixture.answer_key.required_keywords
-        if _matches_required_keyword(normalized_output, keyword)
+        if _matches_required_keyword_exact(normalized_output, keyword)
     ]
-    missing_keywords = [
+    exact_missing_keywords = [
         keyword
         for keyword in fixture.answer_key.required_keywords
-        if keyword not in matched_keywords
+        if keyword not in exact_matched_keywords
     ]
+    semantic_matched_keywords: list[str] = []
+    semantic_missing_keywords: list[str] = []
+    normalization_used: set[str] = {"casefold_whitespace_normalization"}
+    for keyword in fixture.answer_key.required_keywords:
+        semantic_match, match_mode, _matched_alias = _keyword_match_details(
+            normalized_output, keyword
+        )
+        if semantic_match:
+            semantic_matched_keywords.append(keyword)
+            normalization_used.add(match_mode)
+        else:
+            semantic_missing_keywords.append(keyword)
+
+    # Backward-compatible aggregate aliases retained for existing consumers.
+    matched_keywords = list(semantic_matched_keywords)
+    missing_keywords = list(semantic_missing_keywords)
+    exact_keyword_match = not exact_missing_keywords
+    semantic_keyword_match = not semantic_missing_keywords
 
     answer_key = fixture.answer_key
-    failure_reason = ""
+    trajectory = score_trajectory(fixture, final_state)
+    reasoning = score_reasoning(fixture, final_state, queried_metrics)
+    failures: list[FailureDetail] = []
+
+    gates: dict[str, GateResult] = {}
+
+    def _mark_gate(name: str, passed: bool, threshold: str, actual: str) -> None:
+        gates[name] = GateResult(
+            status="pass" if passed else "fail",
+            threshold=threshold,
+            actual=actual,
+        )
 
     # 1. Category match
     if not root_cause_present:
-        failure_reason = "no root cause in output"
+        failures.append(FailureDetail(code="NO_ROOT_CAUSE", detail="no root cause in output"))
     elif actual_category != answer_key.root_cause_category:
-        failure_reason = (
-            f"wrong category: got {actual_category!r}, expected {answer_key.root_cause_category!r}"
+        failures.append(
+            FailureDetail(
+                code="WRONG_CATEGORY",
+                detail=(
+                    f"wrong category: got {actual_category!r}, expected "
+                    f"{answer_key.root_cause_category!r}"
+                ),
+            )
         )
-    elif missing_keywords:
-        failure_reason = f"missing required keywords: {missing_keywords}"
+    _mark_gate(
+        "category_match",
+        root_cause_present and actual_category == answer_key.root_cause_category,
+        f"actual_category == {answer_key.root_cause_category!r}",
+        f"root_cause_present={root_cause_present}, actual_category={actual_category!r}",
+    )
+
+    if semantic_missing_keywords:
+        failures.append(
+            FailureDetail(
+                code="MISSING_REQUIRED_KEYWORD",
+                detail=f"missing required keywords: {semantic_missing_keywords}",
+            )
+        )
+    _mark_gate(
+        "required_keyword_match",
+        semantic_keyword_match,
+        "all required keywords matched (semantic)",
+        (f"missing_semantic={semantic_missing_keywords}, missing_exact={exact_missing_keywords}"),
+    )
+
+    _mark_gate(
+        "exact_keyword_match",
+        exact_keyword_match,
+        "all required keywords matched verbatim",
+        f"missing_exact={exact_missing_keywords}",
+    )
+    _mark_gate(
+        "semantic_keyword_match",
+        semantic_keyword_match,
+        "all required keywords matched semantically",
+        f"missing_semantic={semantic_missing_keywords}",
+    )
+
     # 2. Forbidden category check (level 2+ adversarial)
-    elif answer_key.forbidden_categories and actual_category in answer_key.forbidden_categories:
-        failure_reason = f"forbidden category in output: {actual_category!r}"
+    forbidden_category_hit = bool(
+        answer_key.forbidden_categories and actual_category in answer_key.forbidden_categories
+    )
+    if forbidden_category_hit:
+        failures.append(
+            FailureDetail(
+                code="FORBIDDEN_CATEGORY_PRESENT",
+                detail=f"forbidden category in output: {actual_category!r}",
+            )
+        )
+    _mark_gate(
+        "forbidden_category_clear",
+        not forbidden_category_hit,
+        "actual_category not in forbidden_categories",
+        f"actual_category={actual_category!r}, forbidden={answer_key.forbidden_categories}",
+    )
+
     # 3. Forbidden keyword check — none of these may appear in evidence_text
-    elif answer_key.forbidden_keywords:
+    forbidden_hits: list[str] = []
+    if answer_key.forbidden_keywords:
         forbidden_hits = [
             kw for kw in answer_key.forbidden_keywords if _normalize_text(kw) in normalized_output
         ]
         if forbidden_hits:
-            failure_reason = f"forbidden keywords in output: {forbidden_hits}"
+            failures.append(
+                FailureDetail(
+                    code="FORBIDDEN_KEYWORD_PRESENT",
+                    detail=f"forbidden keywords in output: {forbidden_hits}",
+                )
+            )
+    _mark_gate(
+        "forbidden_keyword_clear",
+        not forbidden_hits,
+        "no forbidden keywords appear in graded output text",
+        f"forbidden_hits={forbidden_hits}",
+    )
+
     # 4. Evidence path check — required sources must be non-empty in final_state["evidence"].
     # Fixture schema keys (aws_cloudwatch_metrics, aws_rds_events, aws_performance_insights) map to the agent's
     # internal evidence keys (grafana_metrics, grafana_logs) set by _map_grafana_*.
-    if not failure_reason and answer_key.required_evidence_sources:
+    missing_required_evidence: list[str] = []
+    if answer_key.required_evidence_sources:
         evidence = final_state.get("evidence") or {}
         performance_insights_tokens = (
             "top sql activity",
@@ -390,15 +582,38 @@ def score_result(
                 )
 
                 if not (has_state_evidence and has_pi_signal):
-                    failure_reason = f"required evidence not gathered: {source_key!r}"
-                    break
+                    missing_required_evidence.append(source_key)
 
                 continue
 
             state_key = _EVIDENCE_KEY_MAP.get(source_key, source_key)
             if not evidence.get(state_key):
-                failure_reason = f"required evidence not gathered: {source_key!r}"
-                break
+                missing_required_evidence.append(source_key)
+
+    if missing_required_evidence:
+        failures.append(
+            FailureDetail(
+                code="MISSING_REQUIRED_EVIDENCE_SOURCE",
+                detail=f"required evidence not gathered: {missing_required_evidence}",
+            )
+        )
+    _mark_gate(
+        "required_evidence_sources",
+        not missing_required_evidence,
+        "all required evidence sources populated",
+        f"missing_required_evidence={missing_required_evidence}",
+    )
+
+    _mark_gate(
+        "trajectory_budget",
+        trajectory.trajectory_budget_ok if trajectory is not None else True,
+        "extra_actions_count == 0",
+        (
+            f"extra_actions_count={trajectory.extra_actions_count}"
+            if trajectory is not None
+            else "not_applicable"
+        ),
+    )
 
     # 5. Primary evidence + explicit sequence check — only for scenarios that
     # explicitly require the failover event timeline wording.
@@ -416,7 +631,7 @@ def score_result(
         normalized_required_keywords
     )
 
-    if not failure_reason and requires_failover_event_reasoning:
+    if requires_failover_event_reasoning:
         root_cause_text = _normalize_text(root_cause)
         validated_text = _normalize_text(
             " ".join(claim.get("claim", "") for claim in final_state.get("validated_claims", []))
@@ -432,7 +647,12 @@ def score_result(
         )
 
         if not mentions_event_reasoning:
-            failure_reason = "RDS events gathered but not used as primary reasoning signal"
+            failures.append(
+                FailureDetail(
+                    code="FAILOVER_REASONING_NOT_PRIMARY",
+                    detail="RDS events gathered but not used as primary reasoning signal",
+                )
+            )
 
         required_sequence_tokens = (
             "failover initiated",
@@ -443,12 +663,32 @@ def score_result(
 
         sequence_present = all(token in reasoning_text for token in required_sequence_tokens)
 
-        if not failure_reason and not sequence_present:
-            failure_reason = "RDS event sequence not explicitly listed in required form"
+        if not sequence_present:
+            failures.append(
+                FailureDetail(
+                    code="FAILOVER_SEQUENCE_INCOMPLETE",
+                    detail="RDS event sequence not explicitly listed in required form",
+                )
+            )
+        _mark_gate(
+            "failover_event_reasoning",
+            mentions_event_reasoning and sequence_present,
+            "mentions primary RDS event reasoning and full failover sequence tokens",
+            (
+                f"mentions_event_reasoning={mentions_event_reasoning}, "
+                f"sequence_present={sequence_present}"
+            ),
+        )
+    else:
+        _mark_gate(
+            "failover_event_reasoning",
+            True,
+            "not required unless failover sequence keywords are in answer key",
+            "not_applicable",
+        )
 
-    passed = not failure_reason
-    trajectory = score_trajectory(fixture, final_state)
-    reasoning = score_reasoning(fixture, final_state, queried_metrics)
+    passed = _all_required_gates_pass(gates) and not failures
+    failure_reason = "; ".join(detail.detail for detail in failures)
     return ScenarioScore(
         scenario_id=fixture.scenario_id,
         passed=passed,
@@ -457,6 +697,15 @@ def score_result(
         actual_category=actual_category,
         missing_keywords=missing_keywords,
         matched_keywords=matched_keywords,
+        exact_missing_keywords=exact_missing_keywords,
+        exact_matched_keywords=exact_matched_keywords,
+        semantic_missing_keywords=semantic_missing_keywords,
+        semantic_matched_keywords=semantic_matched_keywords,
+        exact_keyword_match=exact_keyword_match,
+        semantic_keyword_match=semantic_keyword_match,
+        normalization_used=sorted(normalization_used),
+        gates=gates,
+        failure_reasons=failures,
         root_cause=root_cause,
         failure_reason=failure_reason,
         trajectory=trajectory,
@@ -497,15 +746,71 @@ def run_scenario(
     return state_dict, score_result(fixture, state_dict, queried_metrics=queried_metrics)
 
 
-def _resolved_golden_trajectory(fixture: ScenarioFixture) -> tuple[list[str], int | None]:
-    golden_cfg = fixture.answer_key.golden_trajectory or {}
-    ordered = golden_cfg.get("ordered_actions")
-    if isinstance(ordered, list) and ordered:
-        max_loops = golden_cfg.get("max_loops")
-        if isinstance(max_loops, int):
-            return [str(action) for action in ordered], max_loops
-        return [str(action) for action in ordered], fixture.answer_key.max_investigation_loops
-    return list(fixture.answer_key.optimal_trajectory), fixture.answer_key.max_investigation_loops
+def _resolved_golden_trajectory(
+    fixture: ScenarioFixture,
+) -> tuple[list[str], int | None, GoldenTrajectoryConfig | None]:
+    golden_cfg = fixture.answer_key.golden_trajectory
+    if golden_cfg is not None and golden_cfg.ordered_actions:
+        if golden_cfg.max_loops is not None:
+            return list(golden_cfg.ordered_actions), golden_cfg.max_loops, golden_cfg
+        return (
+            list(golden_cfg.ordered_actions),
+            fixture.answer_key.max_investigation_loops,
+            golden_cfg,
+        )
+    return (
+        list(fixture.answer_key.optimal_trajectory),
+        fixture.answer_key.max_investigation_loops,
+        None,
+    )
+
+
+def _trajectory_policy_for_fixture(
+    *,
+    max_loops: int | None,
+    golden_cfg: GoldenTrajectoryConfig | None,
+) -> TrajectoryPolicy | None:
+    if golden_cfg is None:
+        return None
+    return TrajectoryPolicy(
+        matching=golden_cfg.matching,
+        max_edit_distance=golden_cfg.max_edit_distance,
+        max_extra_actions=golden_cfg.max_extra_actions,
+        max_redundancy=golden_cfg.max_redundancy,
+        # Enforce the resolved loop threshold even if golden_trajectory omits max_loops.
+        max_loops=max_loops,
+    )
+
+
+def _apply_trajectory_policy_to_score(
+    score: ScenarioScore,
+    trajectory_policy: TrajectoryPolicyResult | None,
+) -> ScenarioScore:
+    if trajectory_policy is None or trajectory_policy.passed:
+        return score
+
+    policy_reason = "trajectory policy failed: " + "; ".join(
+        trajectory_policy.violations or ["unknown violation"]
+    )
+    failures = list(score.failure_reasons)
+    if not any(detail.code == "TRAJECTORY_POLICY_FAILED" for detail in failures):
+        failures.append(FailureDetail(code="TRAJECTORY_POLICY_FAILED", detail=policy_reason))
+
+    gates = dict(score.gates)
+    gates["trajectory_policy"] = GateResult(
+        status="pass" if trajectory_policy.passed else "fail",
+        threshold="policy violations list must be empty",
+        actual=f"violations={trajectory_policy.violations}",
+    )
+    combined_reason = "; ".join(detail.detail for detail in failures)
+
+    return replace(
+        score,
+        passed=_all_required_gates_pass(gates) and not failures,
+        gates=gates,
+        failure_reasons=failures,
+        failure_reason=combined_reason,
+    )
 
 
 def _print_gap_report(
@@ -568,17 +873,32 @@ def run_suite(argv: list[str] | None = None) -> list[ScenarioScore]:
         final_state, score = run_scenario(fixture, use_mock_grafana=args.mock_grafana)
         wall_time_s = time.monotonic() - started_monotonic
 
-        results.append(score)
-
         executed_hypotheses = final_state.get("executed_hypotheses") or []
-        loops_used = int(final_state.get("investigation_loop_count") or len(executed_hypotheses))
-        golden_trajectory, max_loops = _resolved_golden_trajectory(fixture)
+        loops_used = len(executed_hypotheses)
+        golden_trajectory, max_loops, golden_cfg = _resolved_golden_trajectory(fixture)
         trajectory_metrics = compute_trajectory_metrics(
             executed_hypotheses=executed_hypotheses,
             golden=golden_trajectory,
             loops_used=loops_used,
             max_loops=max_loops,
         )
+        trajectory_policy = (
+            evaluate_trajectory_policy(
+                metrics=trajectory_metrics,
+                golden_actions=golden_trajectory,
+                policy=_trajectory_policy_for_fixture(
+                    max_loops=max_loops,
+                    golden_cfg=golden_cfg,
+                ),
+            )
+            if golden_cfg is not None
+            else None
+        )
+
+        score = _apply_trajectory_policy_to_score(score, trajectory_policy)
+
+        results.append(score)
+
         observation = build_observation(
             scenario_id=fixture.scenario_id,
             suite="axis1",
@@ -586,15 +906,20 @@ def run_suite(argv: list[str] | None = None) -> list[ScenarioScore]:
             score=asdict(score),
             reasoning=asdict(score.reasoning) if score.reasoning is not None else None,
             trajectory=trajectory_metrics,
+            evaluated_golden_actions=golden_trajectory,
+            trajectory_policy=trajectory_policy,
             final_state=final_state,
+            available_evidence_sources=list(fixture.metadata.available_evidence),
+            required_evidence_sources=list(fixture.answer_key.required_evidence_sources),
             started_at=started_at,
             wall_time_s=wall_time_s,
         )
         observation_path = write_observation(observation, observations_dir)
         relative_observation_path = str(observation_path.relative_to(observations_dir))
+        display_observation_path = str(observation_path.resolve())
         observation_for_report = replace(
             observation,
-            observation_path=relative_observation_path,
+            observation_path=f"{relative_observation_path} ({display_observation_path})",
         )
 
         if should_report:

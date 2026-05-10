@@ -3,11 +3,12 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import yaml
 
 from tests.synthetic.schemas import (
+    GoldenTrajectorySchema,
     ScenarioEvidence,
     ScenarioMetadataSchema,
     validate_alert,
@@ -41,6 +42,19 @@ class ScenarioMetadata:
     depends_on: str = ""
 
 
+TrajectoryMatching = Literal["strict", "lcs", "set"]
+
+
+@dataclass(frozen=True)
+class GoldenTrajectoryConfig:
+    ordered_actions: list[str]
+    matching: TrajectoryMatching = "lcs"
+    max_edit_distance: int | None = None
+    max_extra_actions: int | None = None
+    max_redundancy: int | None = None
+    max_loops: int | None = None
+
+
 @dataclass(frozen=True)
 class ScenarioAnswerKey:
     root_cause_category: str
@@ -53,7 +67,7 @@ class ScenarioAnswerKey:
     max_investigation_loops: int = 1
     ruling_out_keywords: list[str] = ()  # type: ignore[assignment]
     required_queries: list[str] = ()  # type: ignore[assignment]
-    golden_trajectory: dict[str, Any] | None = None
+    golden_trajectory: GoldenTrajectoryConfig | None = None
 
 
 @dataclass(frozen=True)
@@ -65,6 +79,28 @@ class ScenarioFixture:
     metadata: ScenarioMetadata
     answer_key: ScenarioAnswerKey
     problem_md: str
+
+
+def _parse_trajectory_matching(value: Any) -> TrajectoryMatching:
+    if value in {"strict", "lcs", "set"}:
+        return cast(TrajectoryMatching, value)
+    raise ValueError(
+        "answer.yml: 'golden_trajectory.matching' must be one of "
+        "'strict', 'lcs', or 'set' when present"
+    )
+
+
+def _parse_non_negative_int(
+    golden_trajectory: GoldenTrajectorySchema | dict[str, Any], field: str
+) -> int | None:
+    value = golden_trajectory.get(field)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(
+            f"answer.yml: 'golden_trajectory.{field}' must be a non-negative integer when present"
+        )
+    return cast(int, value)
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -226,6 +262,26 @@ def _parse_scenario_yaml(path: Path) -> tuple[ScenarioMetadata, Path | None]:
 def _parse_answer_yaml(path: Path) -> ScenarioAnswerKey:
     payload = _read_yaml(path)
     validated = validate_answer_key(payload)
+    golden_trajectory_raw = validated.get("golden_trajectory")
+    golden_trajectory: GoldenTrajectoryConfig | None = None
+    if isinstance(golden_trajectory_raw, dict):
+        ordered_actions_raw = golden_trajectory_raw.get("ordered_actions")
+        if not isinstance(ordered_actions_raw, list) or not ordered_actions_raw:
+            raise ValueError(
+                "answer.yml: 'golden_trajectory.ordered_actions' must be a non-empty list "
+                "of strings when present"
+            )
+        ordered_actions = [action.strip() for action in ordered_actions_raw]
+        matching = _parse_trajectory_matching(golden_trajectory_raw.get("matching", "lcs"))
+        golden_trajectory = GoldenTrajectoryConfig(
+            ordered_actions=ordered_actions,
+            matching=matching,
+            max_edit_distance=_parse_non_negative_int(golden_trajectory_raw, "max_edit_distance"),
+            max_extra_actions=_parse_non_negative_int(golden_trajectory_raw, "max_extra_actions"),
+            max_redundancy=_parse_non_negative_int(golden_trajectory_raw, "max_redundancy"),
+            max_loops=_parse_non_negative_int(golden_trajectory_raw, "max_loops"),
+        )
+
     return ScenarioAnswerKey(
         root_cause_category=validated["root_cause_category"].strip(),
         required_keywords=[k.strip() for k in validated["required_keywords"]],
@@ -237,11 +293,7 @@ def _parse_answer_yaml(path: Path) -> ScenarioAnswerKey:
         max_investigation_loops=int(validated.get("max_investigation_loops") or 1),
         ruling_out_keywords=list(validated.get("ruling_out_keywords") or []),
         required_queries=list(validated.get("required_queries") or []),
-        golden_trajectory=(
-            dict(validated["golden_trajectory"])
-            if isinstance(validated.get("golden_trajectory"), dict)
-            else None
-        ),
+        golden_trajectory=golden_trajectory,
     )
 
 

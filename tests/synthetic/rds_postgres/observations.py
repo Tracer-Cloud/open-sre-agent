@@ -32,7 +32,25 @@ class TrajectoryMetrics:
 
 
 @dataclass(frozen=True)
+class TrajectoryPolicy:
+    matching: str
+    max_edit_distance: int | None = None
+    max_extra_actions: int | None = None
+    max_redundancy: int | None = None
+    max_loops: int | None = None
+
+
+@dataclass(frozen=True)
+class TrajectoryPolicyResult:
+    passed: bool
+    matching: str
+    violations: list[str]
+
+
+@dataclass(frozen=True)
 class RunObservation:
+    report_schema_version: str
+    scoring_formula_version: str
     scenario_id: str
     started_at: str
     wall_time_s: float
@@ -40,8 +58,16 @@ class RunObservation:
     backend: str
     score: dict[str, Any]
     trajectory: TrajectoryMetrics
+    evaluated_golden_actions: list[str]
+    trajectory_policy: TrajectoryPolicyResult | None
+    trajectory_policy_version: str
     reasoning: dict[str, Any] | None
-    evidence_keys_present: list[str]
+    reasoning_status: str
+    observed_evidence_sources: list[str]
+    required_evidence_sources: list[str]
+    missing_required_evidence_sources: list[str]
+    evidence_source_coverage: dict[str, Any]
+    canonical_report_payload: dict[str, Any]
     final_state_digest: str
     observation_path: str = ""
 
@@ -116,6 +142,181 @@ def _unique_in_order(items: list[str]) -> list[str]:
     return ordered
 
 
+def _source_aware_evidence_coverage(
+    evidence: dict[str, Any],
+    available_evidence_sources: list[str],
+    required_evidence_sources: list[str],
+) -> dict[str, Any]:
+    available_sources = _unique_in_order(available_evidence_sources)
+    required_sources = _unique_in_order(required_evidence_sources)
+    candidate_sources = _unique_in_order([*available_sources, *required_sources])
+    source_presence = {source: bool(evidence.get(source)) for source in candidate_sources}
+    observed_sources = [source for source, present in source_presence.items() if present]
+
+    missing_required_sources = [
+        source for source in required_sources if not source_presence.get(source, False)
+    ]
+
+    required_observed = sum(1 for source in required_sources if source_presence.get(source, False))
+    available_observed = sum(
+        1 for source in available_sources if source_presence.get(source, False)
+    )
+
+    required_coverage = required_observed / len(required_sources) if required_sources else 1.0
+    available_coverage = available_observed / len(available_sources) if available_sources else 1.0
+
+    return {
+        "available_sources": available_sources,
+        "required_sources": required_sources,
+        "observed_sources": observed_sources,
+        "missing_required_sources": missing_required_sources,
+        "source_presence": source_presence,
+        "required_coverage": required_coverage,
+        "available_coverage": available_coverage,
+    }
+
+
+def _canonical_report_payload(
+    *,
+    score: dict[str, Any],
+    trajectory: TrajectoryMetrics,
+    evaluated_golden_actions: list[str],
+    trajectory_policy: TrajectoryPolicyResult | None,
+    evidence_source_coverage: dict[str, Any],
+) -> dict[str, Any]:
+    policy_payload: dict[str, Any] | None = None
+    if trajectory_policy is not None:
+        policy_payload = {
+            "passed": trajectory_policy.passed,
+            "matching": trajectory_policy.matching,
+            "violations": list(trajectory_policy.violations),
+        }
+
+    failure_reasons = score.get("failure_reasons") or []
+    gates = score.get("gates") or {}
+    return {
+        "report_schema_version": "report_v2",
+        "scoring_formula_version": "v2_gated_semantic",
+        "status": "pass" if bool(score.get("passed")) else "fail",
+        "category": score.get("actual_category"),
+        "failure_reasons": list(failure_reasons),
+        "gates": dict(gates),
+        "verdict_definitions": {
+            "strict_match": (
+                "Strict trajectory match requires exact action order and membership equality."
+            ),
+            "sequencing_ok": (
+                "Sequencing checks expected action coverage only; order is ignored due to parallelism."
+            ),
+        },
+        "evidence": {
+            "observed_sources": list(evidence_source_coverage["observed_sources"]),
+            "required_sources": list(evidence_source_coverage["required_sources"]),
+            "missing_required_sources": list(evidence_source_coverage["missing_required_sources"]),
+            "source_presence": dict(evidence_source_coverage["source_presence"]),
+            "required_coverage": evidence_source_coverage["required_coverage"],
+            "available_coverage": evidence_source_coverage["available_coverage"],
+        },
+        "trajectory": {
+            "golden": list(evaluated_golden_actions),
+            "actual": list(trajectory.flat_actions),
+            "strict_match": trajectory.strict_match,
+            "lcs_ratio": trajectory.lcs_ratio,
+            "edit_distance": trajectory.edit_distance,
+            "coverage": trajectory.coverage,
+            "extra_actions": list(trajectory.extra_actions),
+            "missing_actions": list(trajectory.missing_actions),
+            "redundancy_count": trajectory.redundancy_count,
+            "failed_action_count": trajectory.failed_action_count,
+            "policy": policy_payload,
+        },
+    }
+
+
+def _process_metrics_summary(trajectory: TrajectoryMetrics) -> dict[str, Any]:
+    """Human-readable process metrics surfaced at the top of ``score``."""
+    return {
+        "loops_used": trajectory.loops_used,
+        "max_loops": trajectory.max_loops,
+        "strict_match": trajectory.strict_match,
+        "lcs_ratio": trajectory.lcs_ratio,
+        "edit_distance": trajectory.edit_distance,
+        "coverage": trajectory.coverage,
+        "extra_actions_count": len(trajectory.extra_actions),
+        "missing_actions_count": len(trajectory.missing_actions),
+        "redundancy_count": trajectory.redundancy_count,
+        "failed_action_count": trajectory.failed_action_count,
+        "action_loops_detected": len(trajectory.actions_per_loop),
+        "loop_count_consistent": trajectory.loops_used == len(trajectory.actions_per_loop),
+        "definitions": {
+            "extra_actions_count": (
+                "Actions executed but not present in the evaluated golden trajectory."
+            ),
+            "missing_actions_count": (
+                "Golden-trajectory actions that never appeared in execution."
+            ),
+            "redundancy_count": (
+                "Duplicate action executions (same action run more than once). "
+                "This is different from extra actions."
+            ),
+            "strict_match": (
+                "True only when executed actions exactly match golden order and membership."
+            ),
+            "sequencing_ok": (
+                "Coverage-only trajectory check: expected actions appear at least once; order not required."
+            ),
+        },
+    }
+
+
+def _score_with_process_metrics(
+    score: dict[str, Any],
+    trajectory: TrajectoryMetrics,
+) -> dict[str, Any]:
+    """Return score payload with process metrics first for readability."""
+    return {"process_metrics": _process_metrics_summary(trajectory), **score}
+
+
+def evaluate_trajectory_policy(
+    metrics: TrajectoryMetrics,
+    golden_actions: list[str],
+    policy: TrajectoryPolicy | None,
+) -> TrajectoryPolicyResult | None:
+    if not golden_actions or policy is None:
+        return None
+
+    violations: list[str] = []
+    matching = policy.matching
+
+    if matching == "strict" and metrics.strict_match is not True:
+        violations.append("strict sequence mismatch")
+    elif matching == "lcs" and metrics.lcs_ratio != 1.0:
+        violations.append(f"lcs_ratio={_fmt_ratio(metrics.lcs_ratio)} < 1.00")
+    elif matching == "set" and metrics.missing_actions:
+        violations.append(f"missing actions: {', '.join(metrics.missing_actions)}")
+
+    if (
+        policy.max_edit_distance is not None
+        and metrics.edit_distance is not None
+        and metrics.edit_distance > policy.max_edit_distance
+    ):
+        violations.append(f"edit_distance={metrics.edit_distance} > {policy.max_edit_distance}")
+    if policy.max_extra_actions is not None:
+        extra_count = len(metrics.extra_actions)
+        if extra_count > policy.max_extra_actions:
+            violations.append(f"extra_actions={extra_count} > {policy.max_extra_actions}")
+    if policy.max_redundancy is not None and metrics.redundancy_count > policy.max_redundancy:
+        violations.append(f"redundancy_count={metrics.redundancy_count} > {policy.max_redundancy}")
+    if policy.max_loops is not None and metrics.loops_used > policy.max_loops:
+        violations.append(f"loops_used={metrics.loops_used} > {policy.max_loops}")
+
+    return TrajectoryPolicyResult(
+        passed=not violations,
+        matching=matching,
+        violations=violations,
+    )
+
+
 def compute_trajectory_metrics(
     executed_hypotheses: list[dict[str, Any]],
     golden: list[str],
@@ -173,23 +374,51 @@ def build_observation(
     score: dict[str, Any],
     reasoning: dict[str, Any] | None,
     trajectory: TrajectoryMetrics,
+    evaluated_golden_actions: list[str],
+    trajectory_policy: TrajectoryPolicyResult | None,
     final_state: dict[str, Any],
+    available_evidence_sources: list[str],
+    required_evidence_sources: list[str],
     started_at: datetime,
     wall_time_s: float,
 ) -> RunObservation:
     evidence = final_state.get("evidence") or {}
-    evidence_keys = sorted(str(key) for key in evidence if evidence.get(key))
+    evidence_source_coverage = _source_aware_evidence_coverage(
+        evidence=evidence,
+        available_evidence_sources=available_evidence_sources,
+        required_evidence_sources=required_evidence_sources,
+    )
+    observed_sources = list(evidence_source_coverage["observed_sources"])
+    required_sources = list(evidence_source_coverage["required_sources"])
+    missing_required_sources = list(evidence_source_coverage["missing_required_sources"])
+    score_payload = _score_with_process_metrics(score, trajectory)
 
     return RunObservation(
+        report_schema_version="report_v2",
+        scoring_formula_version="v2_gated_semantic",
         scenario_id=scenario_id,
         started_at=started_at.astimezone(UTC).isoformat(),
         wall_time_s=round(wall_time_s, 3),
         suite=suite,
         backend=backend,
-        score=score,
+        score=score_payload,
         trajectory=trajectory,
+        evaluated_golden_actions=evaluated_golden_actions,
+        trajectory_policy=trajectory_policy,
+        trajectory_policy_version="default_v1",
         reasoning=reasoning,
-        evidence_keys_present=evidence_keys,
+        reasoning_status="captured" if reasoning is not None else "not_captured",
+        observed_evidence_sources=observed_sources,
+        required_evidence_sources=required_sources,
+        missing_required_evidence_sources=missing_required_sources,
+        evidence_source_coverage=evidence_source_coverage,
+        canonical_report_payload=_canonical_report_payload(
+            score=score,
+            trajectory=trajectory,
+            evaluated_golden_actions=evaluated_golden_actions,
+            trajectory_policy=trajectory_policy,
+            evidence_source_coverage=evidence_source_coverage,
+        ),
         final_state_digest=final_state_digest(final_state),
     )
 
@@ -202,13 +431,24 @@ def write_observation(observation: RunObservation, observations_dir: Path) -> Pa
     stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%SZ")
     target = scenario_dir / f"{stamp}__{status}.json"
 
-    payload = asdict(observation)
+    payload = _drop_none_fields(asdict(observation))
     payload["observation_path"] = str(target.relative_to(observations_dir))
+    canonical_payload = dict(payload.get("canonical_report_payload") or {})
+    canonical_payload["observation_path"] = payload["observation_path"]
+    payload["canonical_report_payload"] = canonical_payload
     target.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     latest = scenario_dir / "latest.json"
     latest.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return target
+
+
+def _drop_none_fields(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _drop_none_fields(item) for key, item in value.items() if item is not None}
+    if isinstance(value, list):
+        return [_drop_none_fields(item) for item in value if item is not None]
+    return value
 
 
 def _fmt_ratio(value: float | None) -> str:
@@ -237,25 +477,31 @@ def render_report_to_console(observation: RunObservation, console: Console) -> N
     missing_keywords = score.get("missing_keywords") or []
     matched_keywords = score.get("matched_keywords") or []
     total_keywords = len(matched_keywords) + len(missing_keywords)
+    gates = score.get("gates") or {}
 
     correctness.add_row("Required keywords", f"{len(matched_keywords)}/{total_keywords} matched")
     correctness.add_row(
         "Forbidden keywords",
-        "clear" if not score.get("failure_reason", "").startswith("forbidden keywords") else "hit",
+        "clear" if (gates.get("forbidden_keyword_clear") or {}).get("status") != "fail" else "hit",
     )
     correctness.add_row(
         "Forbidden categories",
-        "clear" if not score.get("failure_reason", "").startswith("forbidden category") else "hit",
+        "clear" if (gates.get("forbidden_category_clear") or {}).get("status") != "fail" else "hit",
     )
-    correctness.add_row("Evidence sources", _fmt_list(observation.evidence_keys_present))
+    correctness.add_row("Observed evidence", _fmt_list(observation.observed_evidence_sources))
+    if observation.required_evidence_sources:
+        correctness.add_row("Required evidence", _fmt_list(observation.required_evidence_sources))
+        correctness.add_row(
+            "Missing evidence",
+            _fmt_list(observation.missing_required_evidence_sources),
+        )
 
     trajectory = observation.trajectory
     trajectory_table = Table.grid(padding=(0, 2))
     trajectory_table.add_column(style="cyan", no_wrap=True)
     trajectory_table.add_column()
 
-    score_trajectory = score.get("trajectory") or {}
-    golden = score_trajectory.get("expected_sequence") or []
+    golden = observation.evaluated_golden_actions
     trajectory_table.add_row("golden", " -> ".join(golden) if golden else "-")
     trajectory_table.add_row("actual", _fmt_list(trajectory.flat_actions))
     if trajectory.lcs_ratio is not None:
@@ -269,6 +515,12 @@ def render_report_to_console(observation: RunObservation, console: Console) -> N
     trajectory_table.add_row("redundant", str(trajectory.redundancy_count))
     trajectory_table.add_row("per-loop", str(trajectory.actions_per_loop))
     trajectory_table.add_row("failed", str(trajectory.failed_action_count))
+    if observation.trajectory_policy is not None:
+        policy = observation.trajectory_policy
+        policy_status = "pass" if policy.passed else "fail"
+        trajectory_table.add_row("policy", f"{policy_status} ({policy.matching})")
+        if policy.violations:
+            trajectory_table.add_row("violations", "; ".join(policy.violations))
 
     body = Group(
         status_line,

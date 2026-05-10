@@ -47,6 +47,7 @@ from app.config import (
 )
 from app.llm_credentials import resolve_llm_api_key
 from app.llm_reasoning_effort import get_active_reasoning_effort
+from app.types.root_cause_categories import VALID_ROOT_CAUSE_CATEGORIES
 
 logger = logging.getLogger(__name__)
 
@@ -55,18 +56,10 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-_VALID_ROOT_CAUSE_CATEGORIES = frozenset(
-    {
-        "configuration_error",
-        "code_defect",
-        "data_quality",
-        "resource_exhaustion",
-        "dependency_failure",
-        "infrastructure",
-        "healthy",
-        "unknown",
-    }
-)
+# The canonical taxonomy for root cause categories lives in
+# ``app.types.root_cause_categories``. This module only consumes the
+# resulting set (``VALID_ROOT_CAUSE_CATEGORIES``) for membership checks
+# while parsing LLM responses; it does not own or extend the taxonomy.
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1144,7 +1137,7 @@ def parse_root_cause(response: str) -> RootCauseResult:
             after = parts[1]
             for line in after.split("\n"):
                 candidate = line.strip().lower()
-                if candidate and candidate in _VALID_ROOT_CAUSE_CATEGORIES:
+                if candidate and candidate in VALID_ROOT_CAUSE_CATEGORIES:
                     root_cause_category = candidate
                     break
 

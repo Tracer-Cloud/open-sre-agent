@@ -16,6 +16,7 @@ from app.cli.interactive_shell.intent_parser import (
     extract_llm_provider_switch,
     extract_shell_command,
     extract_task_cancel_request,
+    normalize_intent_text,
     sample_alert_action,
     slash_action,
     split_prompt_clauses,
@@ -23,6 +24,26 @@ from app.cli.interactive_shell.intent_parser import (
 )
 from app.cli.interactive_shell.interaction_models import PlannedAction, PromptClause
 from app.cli.interactive_shell.terminal_intent import mentioned_integration_services
+
+_SYNTHETIC_SCENARIO_ID_RE = re.compile(
+    r"\b(?P<scenario>\d{3}-[a-z0-9][a-z0-9-]*)\b",
+    re.IGNORECASE,
+)
+DEFAULT_SYNTHETIC_SCENARIO = "001-replication-lag"
+
+
+def _synthetic_action_content(clause: PromptClause, *, synthetic_start: int) -> tuple[str, int]:
+    scenario_match = _SYNTHETIC_SCENARIO_ID_RE.search(clause.text)
+    if scenario_match is None:
+        return (
+            f"rds_postgres:{DEFAULT_SYNTHETIC_SCENARIO}",
+            clause.position + synthetic_start,
+        )
+    scenario_id = scenario_match.group("scenario").lower()
+    return (
+        f"rds_postgres:{scenario_id}",
+        clause.position + scenario_match.start("scenario"),
+    )
 
 
 def plan_clause_actions(
@@ -91,11 +112,17 @@ def plan_clause_actions(
         planned.append(provider_switch_action)
         return planned
 
-    synthetic_match = SYNTHETIC_RDS_TEST_RE.search(clause.text)
+    # Normalize only for SYNTHETIC_RDS_TEST_RE to handle typos like "syntehtic" → "synthetic".
+    # Using normalized text only here avoids false positives in shell command extraction.
+    normalized_text = normalize_intent_text(clause.text)
+    synthetic_match = SYNTHETIC_RDS_TEST_RE.search(normalized_text)
     if synthetic_match is not None:
-        planned.append(
-            synthetic_test_action("rds_postgres", clause.position + synthetic_match.start())
+        normalized_clause = PromptClause(text=normalized_text, position=clause.position)
+        synthetic_content, synthetic_position = _synthetic_action_content(
+            normalized_clause,
+            synthetic_start=synthetic_match.start(),
         )
+        planned.append(synthetic_test_action(synthetic_content, synthetic_position))
         return planned
 
     sample_match = SAMPLE_ALERT_RE.search(clause.text)

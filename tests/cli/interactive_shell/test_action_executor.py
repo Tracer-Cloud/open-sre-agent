@@ -541,6 +541,7 @@ def test_run_synthetic_test_streams_subprocess_output(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     popen_kwargs: list[dict[str, object]] = []
+    popen_commands: list[list[str]] = []
 
     class _FakeProcess:
         returncode = 0
@@ -550,7 +551,8 @@ def test_run_synthetic_test_streams_subprocess_output(
         def poll(self) -> int:
             return 0
 
-    def _fake_popen(_command: list[str], **kwargs: object) -> _FakeProcess:
+    def _fake_popen(command: list[str], **kwargs: object) -> _FakeProcess:
+        popen_commands.append(command)
         popen_kwargs.append(kwargs)
         return _FakeProcess()
 
@@ -572,6 +574,8 @@ def test_run_synthetic_test_streams_subprocess_output(
         is_tty=True,
     )
 
+    assert popen_commands[0][1] == "-u"
+    assert popen_commands[0][-2:] == ["--scenario", "001-replication-lag"]
     assert popen_kwargs[0]["stdout"] is not None
     assert popen_kwargs[0]["stderr"] is not None
     assert popen_kwargs[0]["text"] is True
@@ -581,3 +585,42 @@ def test_run_synthetic_test_streams_subprocess_output(
     assert "warning: slow cloudwatch response" in out
     task = session.task_registry.list_recent(1)[0]
     assert task.status == TaskStatus.COMPLETED
+
+
+def test_run_synthetic_test_honours_explicit_scenario(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    popen_commands: list[list[str]] = []
+
+    class _FakeProcess:
+        returncode = 0
+        stdout = io.StringIO("scenario run\n")
+        stderr = io.StringIO("")
+
+        def poll(self) -> int:
+            return 0
+
+    def _fake_popen(command: list[str], **_kwargs: object) -> _FakeProcess:
+        popen_commands.append(command)
+        return _FakeProcess()
+
+    monkeypatch.setattr("app.cli.interactive_shell.action_executor.subprocess.Popen", _fake_popen)
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.action_executor.threading.Thread",
+        _ImmediateThread,
+    )
+
+    session = ReplSession()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    run_synthetic_test(
+        "rds_postgres:005-failover",
+        session,
+        console,
+        confirm_fn=lambda _prompt: "y",
+        is_tty=True,
+    )
+
+    assert popen_commands[0][-2:] == ["--scenario", "005-failover"]
+    assert "opensre tests synthetic --scenario 005-failover" in buf.getvalue()

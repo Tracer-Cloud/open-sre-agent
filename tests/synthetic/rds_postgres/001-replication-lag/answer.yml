@@ -1,4 +1,4 @@
-root_cause_category: resource_exhaustion
+root_cause_category: replication_lag
 required_keywords:
   - replication lag
   - write-heavy workload
@@ -18,7 +18,7 @@ optimal_trajectory:
 max_investigation_loops: 4
 model_response: |
   ROOT_CAUSE: The database hit replication lag because a write-heavy workload on the primary generated WAL faster than the read replica could replay it. The symptom is stale replica reads rather than a primary availability outage.
-  ROOT_CAUSE_CATEGORY: resource_exhaustion
+  ROOT_CAUSE_CATEGORY: replication_lag
 
   VALIDATED_CLAIMS:
   - ReplicaLag stayed above 900 seconds on payments-prod-replica-1. [evidence: aws_cloudwatch_metrics]

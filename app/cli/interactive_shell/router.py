@@ -1,21 +1,53 @@
-"""Classify interactive-shell input: slash, CLI help, agent, investigation, or follow-up."""
+"""Classify interactive-shell input: slash, CLI help, agent, investigation, or follow-up.
+
+Routing pipeline (highest confidence wins, evaluated left-to-right):
+
+1. **Deterministic fast-path** – slash prefix, bare command aliases.  Always
+   correct; never calls the LLM.
+2. **LLM intent classification** – for inputs that cleared the fast-path but
+   are still ambiguous (e.g. distinguishing "run synthetic test …" from a
+   real alert description).  Uses the lightweight toolcall model so latency
+   impact is minimal.  If the LLM is unavailable the router falls through to
+   step 3 transparently.
+3. **Regex rule-set fallback** – the legacy pattern-based rules that were the
+   sole classifier before the LLM layer was added.  These remain as a
+   reliable offline / zero-latency fallback.
+"""
 
 from __future__ import annotations
 
 import json
+import os
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Literal, Protocol
 
-from app.cli.interactive_shell.action_planner import plan_cli_actions
+from app.cli.interactive_shell.action_planner import plan_actions_with_unhandled
+from app.cli.interactive_shell.intent_parser import (
+    _damerau_levenshtein_distance,
+    normalize_intent_text,
+)
 from app.cli.interactive_shell.terminal_intent import (
     is_sample_alert_launch_intent,
     mentions_alert_signal,
 )
 
+# Set OPENSRE_DISABLE_LLM_ROUTING=1 to skip the LLM classification step and
+# use only the regex rules.  Useful for unit tests that should not make real
+# LLM calls and for offline / low-latency scenarios.
+_LLM_ROUTING_DISABLED: bool = os.environ.get("OPENSRE_DISABLE_LLM_ROUTING", "").strip() in {
+    "1",
+    "true",
+    "yes",
+}
+
 InputKind = Literal["slash", "cli_help", "cli_agent", "new_alert", "follow_up"]
+
+# Rule names that are part of the deterministic fast-path and must never be
+# handed to the LLM classifier (they are always correct by definition).
+_FAST_PATH_RULE_NAMES: frozenset[str] = frozenset({"slash_prefix", "bare_command_alias"})
 
 
 class RoutingSession(Protocol):
@@ -61,7 +93,17 @@ def _is_slash_prefix(text: str, _session: RoutingSession) -> bool:
 
 
 def _is_bare_command_alias(text: str, _session: RoutingSession) -> bool:
-    return text.strip().lower() in BARE_COMMAND_ALIASES
+    stripped = text.strip()
+    # Check exact (case-insensitive) match first so the typo corrector cannot
+    # mis-correct a valid command word (e.g. "reset" → "test").
+    if stripped.lower() in BARE_COMMAND_ALIASES:
+        return True
+    # Fall back to normalized form only for single-edit typos (distance ≤ 1).
+    # Distance 2 matches too many unrelated words (e.g. "hello" → "help").
+    normalized = normalize_intent_text(stripped)
+    if normalized not in BARE_COMMAND_ALIASES:
+        return False
+    return _damerau_levenshtein_distance(stripped.lower(), normalized) <= 1
 
 
 def _is_cli_help_rule(text: str, _session: RoutingSession) -> bool:
@@ -77,7 +119,15 @@ def _is_cli_agent_action_rule(
     _session: RoutingSession,
 ) -> bool:
     stripped = text.strip()
-    return bool(plan_cli_actions(stripped)) and not mentions_alert_signal(stripped)
+    actions, _unhandled = plan_actions_with_unhandled(stripped)
+    if not actions:
+        return False
+    # Synthetic-test and sample-alert commands may contain incident vocabulary
+    # in their scenario IDs (e.g. "002-connection-exhaustion"); allow them through
+    # even when mentions_alert_signal fires on those words.
+    if any(a.kind in {"synthetic_test", "sample_alert"} for a in actions):
+        return True
+    return not mentions_alert_signal(stripped)
 
 
 def _is_new_alert_without_prior_state(
@@ -405,10 +455,41 @@ def _is_cli_help_intent(text: str) -> bool:
 
 
 def route_input(text: str, session: RoutingSession) -> RouteDecision:
-    """Return a structured routing decision for interactive-shell input."""
+    """Return a structured routing decision for interactive-shell input.
+
+    Evaluation order:
+    1. High-confidence deterministic rules (slash prefix, bare aliases) — never
+       deferred to the LLM.
+    2. LLM intent classification — resolves ambiguous mid-tier inputs that the
+       regex ruleset cannot reliably separate (e.g. alert vocabulary appearing
+       inside synthetic-test IDs).  Skipped when ``_LLM_ROUTING_DISABLED`` is
+       True or the LLM client is unavailable.
+    3. Regex rule-set fallback — legacy offline path; always available.
+    4. Low-confidence default to ``cli_agent``.
+    """
     stripped = text.strip()
 
+    # ── Phase 1: high-confidence deterministic fast-path ──────────────────────
     for rule in ROUTE_RULES:
+        if rule.name in _FAST_PATH_RULE_NAMES and rule.matcher(stripped, session):
+            return RouteDecision(
+                route_kind=rule.route_kind,
+                confidence=rule.confidence,
+                matched_signals=(rule.name,),
+            )
+
+    # ── Phase 2: LLM intent classification ────────────────────────────────────
+    if not _LLM_ROUTING_DISABLED:
+        from app.cli.interactive_shell.llm_intent_classifier import classify_intent_with_llm
+
+        llm_decision = classify_intent_with_llm(stripped, session)
+        if llm_decision is not None:
+            return llm_decision
+
+    # ── Phase 3: regex rule-set fallback ──────────────────────────────────────
+    for rule in ROUTE_RULES:
+        if rule.name in _FAST_PATH_RULE_NAMES:
+            continue  # already evaluated in phase 1
         if rule.matcher(stripped, session):
             return RouteDecision(
                 route_kind=rule.route_kind,
@@ -416,6 +497,7 @@ def route_input(text: str, session: RoutingSession) -> RouteDecision:
                 matched_signals=(rule.name,),
             )
 
+    # ── Phase 4: low-confidence default ───────────────────────────────────────
     if session.last_state is None:
         return RouteDecision(
             RouteKind.CLI_AGENT,
@@ -435,3 +517,15 @@ def route_input(text: str, session: RoutingSession) -> RouteDecision:
 def classify_input(text: str, session: RoutingSession) -> InputKind:
     """Legacy InputKind adapter built on top of route_input()."""
     return route_input(text, session).route_kind.value
+
+
+def slash_dispatch_text(text: str) -> str:
+    """Return slash command text, including typo-tolerant bare alias mapping."""
+    stripped = text.strip()
+    if stripped.startswith("/"):
+        return stripped
+    normalized = normalize_intent_text(stripped)
+    mapped = BARE_COMMAND_ALIAS_MAP.get(normalized)
+    if mapped is not None:
+        return mapped
+    return f"/{stripped}"
