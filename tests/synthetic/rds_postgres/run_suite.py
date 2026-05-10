@@ -4,10 +4,11 @@ import argparse
 import json
 import re
 import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from rich.console import Console
 
