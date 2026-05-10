@@ -14,6 +14,7 @@ import os
 import select
 import shutil
 import sys
+from typing import Any, cast
 
 from rich.console import Console
 from rich.markup import escape
@@ -69,18 +70,20 @@ def _read_action() -> str:
     import tty
 
     fd = sys.stdin.fileno()
-    old = termios.tcgetattr(fd)
+    # ``termios`` / ``tty`` are POSIX-only; stubs expose no attributes when
+    # typechecking with ``mypy --platform win32``.
+    old_attrs: Any = termios.tcgetattr(fd)  # type: ignore[attr-defined]
     try:
-        tty.setraw(fd)
+        tty.setraw(fd)  # type: ignore[attr-defined]
         data = os.read(fd, 1)
         if not data:
             return "eof"
-        c = data[0]
-        if c in (3, 4):
+        key_code = cast(int, data[0])
+        if key_code in (3, 4):
             return "cancel"
-        if c in (10, 13):
+        if key_code in (10, 13):
             return "enter"
-        if c == 27:
+        if key_code == 27:
             if select.select([fd], [], [], 0.05)[0]:
                 seq = os.read(fd, 1)
                 if seq == b"[":
@@ -92,7 +95,7 @@ def _read_action() -> str:
             return "cancel"
         return "cancel"
     finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_attrs)  # type: ignore[attr-defined]
 
 
 # ── rendering helpers ────────────────────────────────────────────────────────

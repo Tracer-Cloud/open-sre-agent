@@ -13,6 +13,7 @@ silently omitted from the built wheel.
 
 from app.agents.blast_radius import BlastRadiusEvent, BlastRadiusWatcher, find_project_root
 from app.agents.coordination import BranchClaim, BranchClaims
+from app.agents.lifecycle import TerminateResult, terminate
 from app.agents.quality import LoopDetector
 from app.agents.registry import AgentRecord, AgentRegistry
 
@@ -24,5 +25,7 @@ __all__ = [
     "BranchClaim",
     "BranchClaims",
     "LoopDetector",
+    "TerminateResult",
     "find_project_root",
+    "terminate",
 ]

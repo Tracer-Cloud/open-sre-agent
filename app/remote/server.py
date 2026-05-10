@@ -58,7 +58,9 @@ from app.version import get_version
 load_dotenv(override=False)
 init_sentry(entrypoint="remote")
 
-INVESTIGATIONS_DIR = Path(os.getenv("INVESTIGATIONS_DIR", "/opt/opensre/investigations"))
+INVESTIGATIONS_DIR = Path(
+    os.getenv("INVESTIGATIONS_DIR", str(Path.home() / ".opensre" / "investigations"))
+)
 _AUTH_KEY = os.getenv("OPENSRE_API_KEY")
 _AUTH_EXEMPT_PATHS = {
     "/discord/interactions",

@@ -1,6 +1,6 @@
 """Tests for parallel investigate hypothesis routing and merging."""
 
-from langgraph.constants import Send
+from langgraph.types import Send
 
 from app.nodes.investigate.parallel import node_investigate_hypothesis
 from app.pipeline.routing import distribute_hypotheses

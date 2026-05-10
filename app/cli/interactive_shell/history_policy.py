@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar
@@ -139,6 +140,11 @@ class RedactingFileHistory(FileHistory):
         self._rules = rules
         self._max_entries = max_entries
         self._entry_count: int | None = None
+
+    def load_history_strings(self) -> Iterator[str]:
+        """Yield entries with CRLF artifacts from the on-disk format normalized away."""
+        for item in super().load_history_strings():
+            yield item.rstrip("\r\n")
 
     @property
     def max_entries(self) -> int:
