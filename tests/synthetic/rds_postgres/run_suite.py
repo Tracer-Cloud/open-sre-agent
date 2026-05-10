@@ -571,9 +571,7 @@ def run_suite(argv: list[str] | None = None) -> list[ScenarioScore]:
         results.append(score)
 
         executed_hypotheses = final_state.get("executed_hypotheses") or []
-        loops_used = int(
-            final_state.get("investigation_loop_count") or len(executed_hypotheses)
-        )
+        loops_used = int(final_state.get("investigation_loop_count") or len(executed_hypotheses))
         golden_trajectory, max_loops = _resolved_golden_trajectory(fixture)
         trajectory_metrics = compute_trajectory_metrics(
             executed_hypotheses=executed_hypotheses,
