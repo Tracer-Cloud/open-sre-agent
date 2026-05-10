@@ -201,15 +201,12 @@ class NetworkEgressWatcher:
             remote_host = raddr.ip
             remote_port = int(raddr.port)
             key = (remote_host, remote_port, family)
-            evt = NetworkEgressEvent(
-                agent=self.agent_id,
-                remote_host=remote_host,
-                remote_port=remote_port,
-                family=family,
-                timestamp=time.time(),
-            )
             with self._events_lock:
                 if key in self._seen_destinations:
+                    # Skip BEFORE constructing the event — a busy agent
+                    # may report the same already-known destination on
+                    # every poll and allocating then discarding a
+                    # dataclass for each is pure GC pressure.
                     continue
                 # Co-bound the dedup set with the deque: when the deque
                 # is at capacity the next ``append`` will evict the
@@ -225,7 +222,15 @@ class NetworkEgressWatcher:
                     self._seen_destinations.discard(
                         (oldest.remote_host, oldest.remote_port, oldest.family)
                     )
-                self._events.append(evt)
+                self._events.append(
+                    NetworkEgressEvent(
+                        agent=self.agent_id,
+                        remote_host=remote_host,
+                        remote_port=remote_port,
+                        family=family,
+                        timestamp=time.time(),
+                    )
+                )
                 self._seen_destinations.add(key)
 
 

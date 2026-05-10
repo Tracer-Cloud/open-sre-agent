@@ -426,9 +426,19 @@ def _project_root_for_inspect(record: AgentRecord) -> str | None:
     # Imported lazily to avoid pulling watchdog into modules that don't
     # actually use the watcher (the conflict detector and inspect panel
     # both need it; modules like /agents budget don't).
-    from app.agents.blast_radius import _WATCHERS, _resolve_agent_project_root
+    from app.agents.blast_radius import (
+        _WATCHERS,
+        _WATCHERS_LOCK,
+        _resolve_agent_project_root,
+    )
 
-    cached = _WATCHERS.get(f"{record.name}:{record.pid}")
+    # Acquire ``_WATCHERS_LOCK`` for the read even though dict ``.get``
+    # is GIL-atomic on its own — taking the lock keeps this consistent
+    # with the rest of ``blast_radius``'s locking discipline so future
+    # reviewers don't have to reason about whether each access pattern
+    # is "safe enough".
+    with _WATCHERS_LOCK:
+        cached = _WATCHERS.get(f"{record.name}:{record.pid}")
     if cached is not None:
         return str(cached.project_root)
     root = _resolve_agent_project_root(record)
