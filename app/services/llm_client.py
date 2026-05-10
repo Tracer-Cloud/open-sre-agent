@@ -779,8 +779,6 @@ class OpenAILLMClient:
                     _format_openai_connection_error(err, self._provider_label)
                 ) from err
             except OpenAIRateLimitError as err:
-                if emitted:
-                    raise
                 body = getattr(err, "body", None)
                 if (
                     isinstance(body, dict)
@@ -790,6 +788,8 @@ class OpenAILLMClient:
                         f"{self._provider_label} billing quota exceeded. "
                         "Check your plan and billing details."
                     ) from err
+                if emitted:
+                    raise
                 if attempt == max_attempts - 1:
                     raise RuntimeError(
                         f"{self._provider_label} rate limit exceeded (HTTP 429) after multiple retries. "
