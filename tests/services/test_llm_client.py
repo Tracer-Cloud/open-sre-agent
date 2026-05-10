@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import pytest
+from anthropic import AuthenticationError, NotFoundError, PermissionDeniedError
+from anthropic import BadRequestError as AnthropicBadRequestError
 
 from app.services import llm_client
 
@@ -87,6 +89,36 @@ def test_openai_llm_client_reads_secure_local_api_key(monkeypatch) -> None:
     assert _FakeOpenAI.init_api_keys == ["stored-openai-key"]
 
 
+def test_openai_llm_client_adds_reasoning_effort_for_reasoning_models(monkeypatch) -> None:
+    monkeypatch.setattr(
+        llm_client,
+        "resolve_llm_api_key",
+        lambda env_var: "stored-openai-key" if env_var == "OPENAI_API_KEY" else "",
+    )
+    monkeypatch.setattr(llm_client, "OpenAI", _FakeOpenAI)
+    monkeypatch.setenv("OPENSRE_REASONING_EFFORT", "xhigh")
+
+    client = llm_client.OpenAILLMClient(model="gpt-5.2")
+    kwargs = client._build_request_kwargs("hello")
+
+    assert kwargs["reasoning_effort"] == "xhigh"
+
+
+def test_openai_llm_client_omits_reasoning_effort_for_non_reasoning_models(monkeypatch) -> None:
+    monkeypatch.setattr(
+        llm_client,
+        "resolve_llm_api_key",
+        lambda env_var: "stored-openai-key" if env_var == "OPENAI_API_KEY" else "",
+    )
+    monkeypatch.setattr(llm_client, "OpenAI", _FakeOpenAI)
+    monkeypatch.setenv("OPENSRE_REASONING_EFFORT", "high")
+
+    client = llm_client.OpenAILLMClient(model="gpt-4.1-mini")
+    kwargs = client._build_request_kwargs("hello")
+
+    assert "reasoning_effort" not in kwargs
+
+
 def test_openai_llm_client_invoke_fails_when_key_missing(monkeypatch) -> None:
     monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env_var: "")
     client = llm_client.OpenAILLMClient(model="gpt-4.1-mini")
@@ -123,6 +155,30 @@ class _RecordingBedrockRuntime:
     def converse(self, **kwargs) -> dict:
         self.converse_calls.append(kwargs)
         return self.response
+
+
+def _make_fake_anthropic_bad_request_error(message: str = "invalid request") -> Exception:
+    """Return a minimal Anthropic BadRequestError without constructing an HTTP response."""
+    err = llm_client.AnthropicBadRequestError.__new__(llm_client.AnthropicBadRequestError)
+    Exception.__init__(err, message)
+    err.status_code = 400  # type: ignore[attr-defined]
+    err.message = message  # type: ignore[attr-defined]
+    err.body = {}  # type: ignore[attr-defined]
+    err.request = None  # type: ignore[attr-defined]
+    err.response = None  # type: ignore[attr-defined]
+    return err
+
+
+def _make_fake_openai_bad_request_error(message: str = "invalid request") -> Exception:
+    """Return a minimal OpenAI BadRequestError without constructing an HTTP response."""
+    err = llm_client.OpenAIBadRequestError.__new__(llm_client.OpenAIBadRequestError)
+    Exception.__init__(err, message)
+    err.status_code = 400  # type: ignore[attr-defined]
+    err.message = message  # type: ignore[attr-defined]
+    err.body = {}  # type: ignore[attr-defined]
+    err.request = None  # type: ignore[attr-defined]
+    err.response = None  # type: ignore[attr-defined]
+    return err
 
 
 def test_is_anthropic_bedrock_model_claude_ids() -> None:
@@ -230,6 +286,62 @@ def test_bedrock_application_inference_profile_arn_uses_converse(monkeypatch) ->
 
     assert client._use_anthropic is False
     assert client.invoke("hi").content == "via-converse"
+
+
+def test_bedrock_anthropic_bad_request_does_not_retry(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.guardrails.engine.get_guardrail_engine",
+        _InactiveGuardrailEngine,
+    )
+    attempts: list[int] = []
+    sleeps: list[float] = []
+
+    class _Messages:
+        def create(self, **_kwargs):
+            attempts.append(1)
+            raise _make_fake_anthropic_bad_request_error("invalid bedrock request")
+
+    class _AnthropicBedrock:
+        def __init__(self, **_kwargs) -> None:
+            self.messages = _Messages()
+
+    monkeypatch.setattr(llm_client, "AnthropicBedrock", _AnthropicBedrock)
+    monkeypatch.setattr(llm_client.time, "sleep", lambda s: sleeps.append(s))
+
+    client = llm_client.BedrockLLMClient(model="anthropic.claude-test")
+    with pytest.raises(RuntimeError, match="Bedrock Anthropic request rejected"):
+        client.invoke("hello")
+
+    assert attempts == [1]
+    assert sleeps == []
+
+
+def test_bedrock_anthropic_stream_bad_request_does_not_retry(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.guardrails.engine.get_guardrail_engine",
+        _InactiveGuardrailEngine,
+    )
+    attempts: list[int] = []
+    sleeps: list[float] = []
+
+    class _Messages:
+        def create(self, **_kwargs):
+            attempts.append(1)
+            raise _make_fake_anthropic_bad_request_error("invalid bedrock stream request")
+
+    class _AnthropicBedrock:
+        def __init__(self, **_kwargs) -> None:
+            self.messages = _Messages()
+
+    monkeypatch.setattr(llm_client, "AnthropicBedrock", _AnthropicBedrock)
+    monkeypatch.setattr(llm_client.time, "sleep", lambda s: sleeps.append(s))
+
+    client = llm_client.BedrockLLMClient(model="anthropic.claude-test")
+    with pytest.raises(RuntimeError, match="Bedrock Anthropic request rejected"):
+        list(client.invoke_stream("hello"))
+
+    assert attempts == [1]
+    assert sleeps == []
 
 
 def test_anthropic_llm_client_reads_secure_local_api_key(monkeypatch) -> None:
@@ -354,6 +466,31 @@ def test_anthropic_invoke_forwards_built_kwargs_to_messages_create(monkeypatch) 
     assert captured["kwargs"]["messages"] == [{"role": "user", "content": "hi"}]
 
 
+def test_anthropic_invoke_bad_request_does_not_retry(monkeypatch) -> None:
+    attempts: list[int] = []
+    sleeps: list[float] = []
+
+    class _Messages:
+        def create(self, **_kwargs):
+            attempts.append(1)
+            raise _make_fake_anthropic_bad_request_error("invalid anthropic request")
+
+    class _Anthropic:
+        def __init__(self, **_kwargs) -> None:
+            self.messages = _Messages()
+
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "Anthropic", _Anthropic)
+    monkeypatch.setattr(llm_client.time, "sleep", lambda s: sleeps.append(s))
+
+    client = llm_client.LLMClient(model="claude-test")
+    with pytest.raises(RuntimeError, match="Anthropic request rejected"):
+        client.invoke("hello")
+
+    assert attempts == [1]
+    assert sleeps == []
+
+
 def test_anthropic_invoke_stream_yields_text_stream_chunks(monkeypatch) -> None:
     """invoke_stream() routes through the same builder and yields SDK chunks in order."""
     fake, captured = _make_capturing_anthropic(chunks=["Hel", "lo, ", "world"])
@@ -366,6 +503,31 @@ def test_anthropic_invoke_stream_yields_text_stream_chunks(monkeypatch) -> None:
     assert chunks == ["Hel", "lo, ", "world"]
     assert captured["kwargs"]["model"] == "claude-test"
     assert captured["kwargs"]["messages"] == [{"role": "user", "content": "hi"}]
+
+
+def test_anthropic_invoke_stream_bad_request_does_not_retry(monkeypatch) -> None:
+    attempts: list[int] = []
+    sleeps: list[float] = []
+
+    class _Messages:
+        def stream(self, **_kwargs):
+            attempts.append(1)
+            raise _make_fake_anthropic_bad_request_error("invalid anthropic stream request")
+
+    class _Anthropic:
+        def __init__(self, **_kwargs) -> None:
+            self.messages = _Messages()
+
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "Anthropic", _Anthropic)
+    monkeypatch.setattr(llm_client.time, "sleep", lambda s: sleeps.append(s))
+
+    client = llm_client.LLMClient(model="claude-test")
+    with pytest.raises(RuntimeError, match="Anthropic request rejected"):
+        list(client.invoke_stream("hello"))
+
+    assert attempts == [1]
+    assert sleeps == []
 
 
 def test_anthropic_invoke_stream_applies_guardrails_to_input(monkeypatch) -> None:
@@ -475,6 +637,62 @@ def test_anthropic_invoke_stream_does_not_retry_after_yielding(monkeypatch) -> N
     assert len(attempts) == 1, "Must not retry after emitting any chunk"
 
 
+def test_anthropic_invoke_stream_overloaded_via_body_raises_friendly_error(
+    monkeypatch,
+) -> None:
+    """APIStatusError with overloaded_error body (SSE path, no HTTP 529) raises the
+    friendly overloaded message, not the raw 'APIStatusError' class name."""
+
+    class _OverloadedBodyError(Exception):
+        """Simulates APIStatusError raised from the SSE stream body (status_code absent)."""
+
+        def __init__(self) -> None:
+            super().__init__("Overloaded")
+            self.body = {"error": {"type": "overloaded_error", "message": "Overloaded"}}
+
+    def _yield_overloaded():
+        raise _OverloadedBodyError()
+        yield  # make it a generator
+
+    class _Stream:
+        def __init__(self) -> None:
+            self.text_stream = _yield_overloaded()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    class _Messages:
+        def stream(self, **_kwargs):
+            return _Stream()
+
+    class _Anthropic:
+        def __init__(self, **_kwargs) -> None:
+            self.messages = _Messages()
+
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "Anthropic", _Anthropic)
+    monkeypatch.setattr(llm_client.time, "sleep", lambda _s: None)
+
+    client = llm_client.LLMClient(model="claude-test")
+    with pytest.raises(RuntimeError, match="overloaded"):
+        list(client.invoke_stream("hi"))
+
+
+def test_format_anthropic_retry_error_handles_non_dict_body_error() -> None:
+    """Unexpected Anthropic body shapes should not mask the original error class."""
+
+    class _ApiStatusError(Exception):
+        body = {"error": "overloaded_error"}
+
+    assert (
+        llm_client._format_anthropic_retry_error(_ApiStatusError())
+        == "Anthropic API request failed after multiple retries: _ApiStatusError."
+    )
+
+
 # ---------------------------------------------------------------------------
 # OpenAILLMClient.invoke / invoke_stream — kwargs builder + streaming behavior
 # ---------------------------------------------------------------------------
@@ -556,6 +774,35 @@ def test_openai_invoke_forwards_built_kwargs_to_chat_completions_create(monkeypa
     assert "stream" not in captured["kwargs"]
 
 
+def test_openai_invoke_bad_request_does_not_retry(monkeypatch) -> None:
+    attempts: list[int] = []
+    sleeps: list[float] = []
+
+    class _Completions:
+        def create(self, **_kwargs):
+            attempts.append(1)
+            raise _make_fake_openai_bad_request_error("invalid openai request")
+
+    class _Chat:
+        def __init__(self) -> None:
+            self.completions = _Completions()
+
+    class _OpenAI:
+        def __init__(self, **_kwargs) -> None:
+            self.chat = _Chat()
+
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "OpenAI", _OpenAI)
+    monkeypatch.setattr(llm_client.time, "sleep", lambda s: sleeps.append(s))
+
+    client = llm_client.OpenAILLMClient(model="gpt-test")
+    with pytest.raises(RuntimeError, match="request rejected"):
+        client.invoke("hello")
+
+    assert attempts == [1]
+    assert sleeps == []
+
+
 def test_openai_invoke_stream_yields_delta_content_chunks(monkeypatch) -> None:
     """invoke_stream() routes through the same builder and yields delta.content in order."""
     fake, captured = _make_capturing_openai(chunk_contents=["Hel", "lo, ", "world"])
@@ -569,6 +816,35 @@ def test_openai_invoke_stream_yields_delta_content_chunks(monkeypatch) -> None:
     assert captured["kwargs"]["stream"] is True
     assert captured["kwargs"]["model"] == "gpt-test"
     assert captured["kwargs"]["messages"] == [{"role": "user", "content": "hi"}]
+
+
+def test_openai_invoke_stream_bad_request_does_not_retry(monkeypatch) -> None:
+    attempts: list[int] = []
+    sleeps: list[float] = []
+
+    class _Completions:
+        def create(self, **_kwargs):
+            attempts.append(1)
+            raise _make_fake_openai_bad_request_error("invalid openai stream request")
+
+    class _Chat:
+        def __init__(self) -> None:
+            self.completions = _Completions()
+
+    class _OpenAI:
+        def __init__(self, **_kwargs) -> None:
+            self.chat = _Chat()
+
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "OpenAI", _OpenAI)
+    monkeypatch.setattr(llm_client.time, "sleep", lambda s: sleeps.append(s))
+
+    client = llm_client.OpenAILLMClient(model="gpt-test")
+    with pytest.raises(RuntimeError, match="request rejected"):
+        list(client.invoke_stream("hello"))
+
+    assert attempts == [1]
+    assert sleeps == []
 
 
 def test_openai_invoke_stream_skips_empty_deltas_and_choiceless_chunks(monkeypatch) -> None:
@@ -1026,3 +1302,411 @@ def test_openai_invoke_stream_rate_limit_retries_before_emit(monkeypatch) -> Non
     assert chunks == ["recovered"]
     assert len(attempts) == 2
     assert sleeps == [7.0]
+
+
+class _FakeInsufficientQuotaError(llm_client.OpenAIRateLimitError):
+    """Fake RateLimitError with ``insufficient_quota`` error code (billing limit)."""
+
+    def __init__(self) -> None:
+        Exception.__init__(self, "You exceeded your current quota")
+        self.status_code = 429
+        self.body = {
+            "error": {
+                "message": "You exceeded your current quota",
+                "type": "insufficient_quota",
+                "code": "insufficient_quota",
+            }
+        }
+
+
+def test_openai_invoke_rate_limit_insufficient_quota_raises_immediately(monkeypatch) -> None:
+    """insufficient_quota (billing limit) must raise RuntimeError without retrying."""
+    call_count = 0
+
+    class _Completions:
+        def create(self, **_kwargs):
+            nonlocal call_count
+            call_count += 1
+            raise _FakeInsufficientQuotaError()
+
+    class _Chat:
+        def __init__(self) -> None:
+            self.completions = _Completions()
+
+    class _OpenAI:
+        def __init__(self, **_kwargs) -> None:
+            self.chat = _Chat()
+
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "OpenAI", _OpenAI)
+    sleeps: list[float] = []
+    monkeypatch.setattr(llm_client.time, "sleep", lambda s: sleeps.append(s))
+
+    client = llm_client.OpenAILLMClient(model="gpt-4", api_key_env="OPENAI_API_KEY")
+    with pytest.raises(RuntimeError) as exc_info:
+        client.invoke("hi")
+
+    assert call_count == 1, "insufficient_quota must not be retried"
+    assert sleeps == [], "insufficient_quota must not sleep before raising"
+    msg = str(exc_info.value).lower()
+    assert "quota" in msg or "billing" in msg
+
+
+def test_openai_invoke_stream_rate_limit_insufficient_quota_raises_immediately(
+    monkeypatch,
+) -> None:
+    """insufficient_quota in invoke_stream() must raise immediately without retry."""
+    call_count = 0
+
+    class _Completions:
+        def create(self, **_kwargs):
+            nonlocal call_count
+            call_count += 1
+            raise _FakeInsufficientQuotaError()
+
+    class _Chat:
+        def __init__(self) -> None:
+            self.completions = _Completions()
+
+    class _OpenAI:
+        def __init__(self, **_kwargs) -> None:
+            self.chat = _Chat()
+
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "OpenAI", _OpenAI)
+    sleeps: list[float] = []
+    monkeypatch.setattr(llm_client.time, "sleep", lambda s: sleeps.append(s))
+
+    client = llm_client.OpenAILLMClient(model="gpt-4", api_key_env="OPENAI_API_KEY")
+    with pytest.raises(RuntimeError) as exc_info:
+        list(client.invoke_stream("hi"))
+
+    assert call_count == 1, "insufficient_quota must not be retried in invoke_stream"
+    assert sleeps == []
+    msg = str(exc_info.value).lower()
+    assert "quota" in msg or "billing" in msg
+
+
+def test_openai_invoke_stream_rate_limit_insufficient_quota_after_emit_is_wrapped(
+    monkeypatch,
+) -> None:
+    """insufficient_quota after a streamed token still uses the friendly quota error."""
+    call_count = 0
+
+    class _Delta:
+        def __init__(self, content: str) -> None:
+            self.content = content
+
+    class _Choice:
+        def __init__(self, content: str) -> None:
+            self.delta = _Delta(content)
+
+    class _Chunk:
+        def __init__(self, content: str) -> None:
+            self.choices = [_Choice(content)]
+
+    class _Completions:
+        def create(self, **_kwargs):
+            nonlocal call_count
+            call_count += 1
+
+            def _stream():
+                yield _Chunk("partial")
+                raise _FakeInsufficientQuotaError()
+
+            return _stream()
+
+    class _Chat:
+        def __init__(self) -> None:
+            self.completions = _Completions()
+
+    class _OpenAI:
+        def __init__(self, **_kwargs) -> None:
+            self.chat = _Chat()
+
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "OpenAI", _OpenAI)
+    sleeps: list[float] = []
+    monkeypatch.setattr(llm_client.time, "sleep", lambda s: sleeps.append(s))
+
+    client = llm_client.OpenAILLMClient(model="gpt-4", api_key_env="OPENAI_API_KEY")
+    stream = client.invoke_stream("hi")
+
+    assert next(stream) == "partial"
+    with pytest.raises(RuntimeError) as exc_info:
+        next(stream)
+
+    assert call_count == 1, "mid-stream insufficient_quota must not be retried"
+    assert sleeps == []
+    msg = str(exc_info.value).lower()
+    assert "quota" in msg or "billing" in msg
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BedrockLLMClient – non-transient error handling
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _make_anthropic_http_response(status_code: int, body: dict) -> object:
+    """Return a minimal fake httpx.Response accepted by the anthropic SDK error types."""
+    import json
+
+    class _FakeRequest:
+        method = "POST"
+        url = "https://bedrock.example.com"
+
+    _sc = status_code
+    _body = body
+
+    class _FakeResponse:
+        request = _FakeRequest()
+        status_code = _sc
+        headers: dict = {}
+
+        def json(self):
+            return _body
+
+        def read(self):
+            return json.dumps(_body).encode()
+
+        def iter_lines(self):
+            return iter([])
+
+    return _FakeResponse()
+
+
+def _make_bedrock_anthropic_client(exc: Exception) -> object:
+    """Return a fake AnthropicBedrock whose messages.create() raises *exc*."""
+
+    class _Messages:
+        def create(self, **_kwargs):
+            raise exc
+
+    class _Client:
+        messages = _Messages()
+
+    return _Client()
+
+
+class _InactiveGuardrailEngine:
+    is_active = False
+
+    def __call__(self):
+        return self
+
+
+def test_bedrock_invoke_anthropic_not_found_raises_immediately(monkeypatch) -> None:
+    """NotFoundError (EOL model) must raise RuntimeError without retrying."""
+    monkeypatch.setattr(
+        "app.guardrails.engine.get_guardrail_engine",
+        _InactiveGuardrailEngine,
+    )
+    sleeps: list[float] = []
+    monkeypatch.setattr(llm_client.time, "sleep", lambda s: sleeps.append(s))
+
+    resp = _make_anthropic_http_response(
+        404, {"error": {"type": "not_found_error", "message": "not found"}}
+    )
+    err = NotFoundError(message="not found", response=resp, body={})  # type: ignore[arg-type]
+    monkeypatch.setattr(
+        llm_client, "AnthropicBedrock", lambda **_: _make_bedrock_anthropic_client(err)
+    )
+
+    client = llm_client.BedrockLLMClient(model="anthropic.claude-old-v1:0")
+    with pytest.raises(RuntimeError, match="end-of-life"):
+        client.invoke("hello")
+
+    assert sleeps == [], "non-transient errors must not be retried"
+
+
+def test_bedrock_invoke_anthropic_authentication_raises_immediately(monkeypatch) -> None:
+    """AuthenticationError must raise RuntimeError without retrying."""
+    monkeypatch.setattr(
+        "app.guardrails.engine.get_guardrail_engine",
+        _InactiveGuardrailEngine,
+    )
+    sleeps: list[float] = []
+    monkeypatch.setattr(llm_client.time, "sleep", lambda s: sleeps.append(s))
+
+    resp = _make_anthropic_http_response(
+        401,
+        {"error": {"type": "authentication_error", "message": "bad credentials"}},
+    )
+    err = AuthenticationError(message="bad credentials", response=resp, body={})  # type: ignore[arg-type]
+    monkeypatch.setattr(
+        llm_client, "AnthropicBedrock", lambda **_: _make_bedrock_anthropic_client(err)
+    )
+
+    client = llm_client.BedrockLLMClient(model="anthropic.claude-test")
+    with pytest.raises(RuntimeError, match="authentication failed"):
+        client.invoke("hello")
+
+    assert sleeps == [], "non-transient errors must not be retried"
+
+
+def test_bedrock_invoke_anthropic_bad_request_inference_profile(monkeypatch) -> None:
+    """BadRequestError with 'on-demand throughput' hint must suggest inference profile."""
+    monkeypatch.setattr(
+        "app.guardrails.engine.get_guardrail_engine",
+        _InactiveGuardrailEngine,
+    )
+    sleeps: list[float] = []
+    monkeypatch.setattr(llm_client.time, "sleep", lambda s: sleeps.append(s))
+
+    resp = _make_anthropic_http_response(
+        400,
+        {
+            "error": {
+                "type": "invalid_request_error",
+                "message": "on-demand throughput isn't supported",
+            }
+        },
+    )
+    err = AnthropicBadRequestError(
+        message="on-demand throughput isn't supported", response=resp, body={}
+    )  # type: ignore[arg-type]
+    monkeypatch.setattr(
+        llm_client, "AnthropicBedrock", lambda **_: _make_bedrock_anthropic_client(err)
+    )
+
+    client = llm_client.BedrockLLMClient(model="anthropic.claude-opus-4-1-20250805-v1:0")
+    with pytest.raises(RuntimeError, match="inference profile"):
+        client.invoke("hello")
+
+    assert sleeps == [], "non-transient errors must not be retried"
+
+
+def test_bedrock_invoke_anthropic_permission_denied_raises_immediately(monkeypatch) -> None:
+    """PermissionDeniedError must raise RuntimeError without retrying."""
+    monkeypatch.setattr(
+        "app.guardrails.engine.get_guardrail_engine",
+        _InactiveGuardrailEngine,
+    )
+    sleeps: list[float] = []
+    monkeypatch.setattr(llm_client.time, "sleep", lambda s: sleeps.append(s))
+
+    resp = _make_anthropic_http_response(
+        403,
+        {"error": {"type": "permission_error", "message": "not available for this account"}},
+    )
+    err = PermissionDeniedError(message="not available for this account", response=resp, body={})  # type: ignore[arg-type]
+    monkeypatch.setattr(
+        llm_client, "AnthropicBedrock", lambda **_: _make_bedrock_anthropic_client(err)
+    )
+
+    client = llm_client.BedrockLLMClient(model="anthropic.claude-opus-4-7")
+    with pytest.raises(RuntimeError, match="not available for your account"):
+        client.invoke("hello")
+
+    assert sleeps == [], "non-transient errors must not be retried"
+
+
+def test_bedrock_invoke_converse_validation_exception_raises_immediately(monkeypatch) -> None:
+    """ValidationException from boto3 converse must raise RuntimeError without retrying."""
+    monkeypatch.setattr(
+        "app.guardrails.engine.get_guardrail_engine",
+        _InactiveGuardrailEngine,
+    )
+    sleeps: list[float] = []
+    monkeypatch.setattr(llm_client.time, "sleep", lambda s: sleeps.append(s))
+
+    import botocore.exceptions
+
+    boto_err = botocore.exceptions.ClientError(
+        {
+            "Error": {
+                "Code": "ValidationException",
+                "Message": "The provided model identifier is invalid.",
+            }
+        },
+        "Converse",
+    )
+
+    class _FailingRuntime:
+        def converse(self, **_kwargs):
+            raise boto_err
+
+    monkeypatch.setattr(llm_client.boto3, "client", lambda *_a, **_k: _FailingRuntime())
+
+    client = llm_client.BedrockLLMClient(model="invalid-model-xyz")
+    with pytest.raises(RuntimeError, match="invalid"):
+        client.invoke("hello")
+
+    assert sleeps == [], "non-transient errors must not be retried"
+
+
+@pytest.mark.parametrize(
+    "code",
+    ["AccessDeniedException", "ResourceNotFoundException"],
+)
+def test_bedrock_invoke_converse_hard_client_errors_raise_immediately(
+    monkeypatch,
+    code: str,
+) -> None:
+    """Permanent boto3 ClientError codes must raise RuntimeError without retrying."""
+    monkeypatch.setattr(
+        "app.guardrails.engine.get_guardrail_engine",
+        _InactiveGuardrailEngine,
+    )
+    sleeps: list[float] = []
+    monkeypatch.setattr(llm_client.time, "sleep", lambda s: sleeps.append(s))
+
+    import botocore.exceptions
+
+    boto_err = botocore.exceptions.ClientError(
+        {
+            "Error": {
+                "Code": code,
+                "Message": "Bedrock hard failure.",
+            }
+        },
+        "Converse",
+    )
+
+    class _FailingRuntime:
+        def converse(self, **_kwargs):
+            raise boto_err
+
+    monkeypatch.setattr(llm_client.boto3, "client", lambda *_a, **_k: _FailingRuntime())
+
+    client = llm_client.BedrockLLMClient(model="mistral.some-model")
+    with pytest.raises(RuntimeError):
+        client.invoke("hello")
+
+    assert sleeps == [], "non-transient errors must not be retried"
+
+
+def test_format_openai_connection_error_ssl_via_cause() -> None:
+    """SSL fingerprint in __cause__ triggers the TLS-specific message."""
+    ssl_err = Exception("[SSL: WRONG_VERSION_NUMBER] wrong version number")
+    conn_err = Exception("Connection error.")
+    conn_err.__cause__ = ssl_err
+
+    msg = llm_client._format_openai_connection_error(conn_err, "OpenAI")
+
+    assert "SSL/TLS" in msg
+    assert "HTTPS" in msg
+
+
+def test_format_openai_connection_error_ssl_via_context() -> None:
+    """SSL fingerprint buried in __context__ also triggers the TLS-specific message."""
+    ssl_err = Exception("certificate verify failed")
+    conn_err = Exception("Connection error.")
+    conn_err.__cause__ = None
+    conn_err.__context__ = ssl_err
+
+    msg = llm_client._format_openai_connection_error(conn_err, "Gemini")
+
+    assert "SSL/TLS" in msg
+    assert "Gemini" in msg
+
+
+def test_format_openai_connection_error_non_ssl_returns_generic_message() -> None:
+    """A plain connection-refused error lands on the generic network message."""
+    conn_err = Exception("[WinError 10061] connection refused")
+
+    msg = llm_client._format_openai_connection_error(conn_err, "NVIDIA")
+
+    assert "SSL" not in msg
+    assert "network connection" in msg
+    assert "NVIDIA" in msg

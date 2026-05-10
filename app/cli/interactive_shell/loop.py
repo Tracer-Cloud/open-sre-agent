@@ -46,22 +46,23 @@ from app.agents.sweep import run_startup_sweep
 from app.analytics.cli import capture_terminal_turn_summarized
 from app.analytics.events import Event
 from app.analytics.provider import get_analytics
-from app.cli.interactive_shell.agent_actions import execute_cli_actions_with_metrics
+from app.cli.interactive_shell import agent_actions as _agent_actions
+from app.cli.interactive_shell import cli_agent as _cli_agent
+from app.cli.interactive_shell import cli_help as _cli_help
+from app.cli.interactive_shell import commands as _commands
+from app.cli.interactive_shell import follow_up as _follow_up
+from app.cli.interactive_shell import prompt_surface as _prompt_surface
+from app.cli.interactive_shell import router as _router
 from app.cli.interactive_shell.banner import render_banner
-from app.cli.interactive_shell.cli_agent import answer_cli_agent
-from app.cli.interactive_shell.cli_help import answer_cli_help
-from app.cli.interactive_shell.commands import dispatch_slash
 from app.cli.interactive_shell.config import ReplConfig
-from app.cli.interactive_shell.follow_up import answer_follow_up
+from app.cli.interactive_shell.hot_reload import HotReloadCoordinator
 from app.cli.interactive_shell.prompt_surface import (
-    _build_prompt_session,
-    _prompt_message,
     _prompt_rule_ansi,
     render_submitted_prompt,
 )
-from app.cli.interactive_shell.router import route_input
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.streaming import format_token_count_short
+from app.cli.interactive_shell.tasks import TaskRegistry
 from app.cli.interactive_shell.theme import (
     ANSI_DIM,
     ANSI_RESET,
@@ -72,6 +73,19 @@ from app.cli.interactive_shell.theme import (
 )
 from app.cli.support.errors import OpenSREError
 from app.cli.support.exception_reporting import report_exception
+from app.cli.support.prompt_support import repl_prompt_note_ctrl_c, repl_reset_ctrl_c_gate
+from app.llm_reasoning_effort import apply_reasoning_effort
+
+# Module-alias pattern (introduced by main for testability + hot-reload).
+# Local rebindings expose the same names the rest of this module uses.
+_build_prompt_session = _prompt_surface._build_prompt_session
+_prompt_message = _prompt_surface._prompt_message
+route_input = _router.route_input
+answer_cli_help = _cli_help.answer_cli_help
+answer_cli_agent = _cli_agent.answer_cli_agent
+answer_follow_up = _follow_up.answer_follow_up
+execute_cli_actions_with_metrics = _agent_actions.execute_cli_actions_with_metrics
+dispatch_slash = _commands.dispatch_slash
 
 _INTERVENTION_CORRECTION_RE = re.compile(
     r"("
@@ -128,14 +142,15 @@ def _run_new_alert(
         session.record("alert", text, ok=False)
         return
 
-    task = session.task_registry.create(TaskKind.INVESTIGATION)
+    task = session.task_registry.create(TaskKind.INVESTIGATION, command="free-text investigation")
     task.mark_running()
     try:
-        final_state = run_investigation_for_session(
-            alert_text=text,
-            context_overrides=session.accumulated_context or None,
-            cancel_requested=task.cancel_requested,
-        )
+        with apply_reasoning_effort(session.reasoning_effort):
+            final_state = run_investigation_for_session(
+                alert_text=text,
+                context_overrides=session.accumulated_context or None,
+                cancel_requested=task.cancel_requested,
+            )
     except KeyboardInterrupt:
         task.mark_cancelled()
         session.record_intervention("ctrl_c")
@@ -180,6 +195,10 @@ def _dispatch_one_turn(
     (e.g. ``/exit``); the caller decides what that means (in the
     interactive path, ``app.exit()``; in the pre-seeded path, an early
     return).
+
+    LLM-bound branches (``cli_help``, ``cli_agent``, ``follow_up``) are
+    wrapped in :func:`apply_reasoning_effort` so the per-session
+    ``/effort`` setting from main propagates into the model call.
     """
     decision = route_input(text, session)
     kind = decision.route_kind.value
@@ -207,7 +226,8 @@ def _dispatch_one_turn(
         return
 
     if kind == "cli_help":
-        answer_cli_help(text, session, console)
+        with apply_reasoning_effort(session.reasoning_effort):
+            answer_cli_help(text, session, console)
         session.record("cli_help", text)
         return
 
@@ -231,7 +251,8 @@ def _dispatch_one_turn(
         )
         if turn.handled:
             return
-        answer_cli_agent(text, session, console, confirm_fn=confirm_fn)
+        with apply_reasoning_effort(session.reasoning_effort):
+            answer_cli_agent(text, session, console, confirm_fn=confirm_fn)
         session.record("cli_agent", text)
         return
 
@@ -240,13 +261,28 @@ def _dispatch_one_turn(
         return
 
     # follow_up — grounded answer against session.last_state
-    answer_follow_up(text, session, console)
+    with apply_reasoning_effort(session.reasoning_effort):
+        answer_follow_up(text, session, console)
     session.record("follow_up", text)
 
 
-def _run_initial_input(initial_input: str, session: ReplSession) -> int:
-    """Test-harness path — drain pre-seeded input through the same dispatch logic."""
-    console = Console(highlight=False, force_terminal=True, color_system="truecolor")
+def _run_initial_input(
+    initial_input: str,
+    session: ReplSession,
+    hot_reloader: HotReloadCoordinator | None = None,
+) -> int:
+    """Test-harness path — drain pre-seeded input through the same dispatch logic.
+
+    ``hot_reloader`` (introduced in main) is consulted before each
+    seeded line so dev-time module changes are picked up between turns
+    even in the seeded-input flow.
+    """
+    console = Console(
+        highlight=False,
+        force_terminal=True,
+        color_system="truecolor",
+        legacy_windows=False,
+    )
     render_banner(console)
     exit_requested = [False]
 
@@ -254,6 +290,8 @@ def _run_initial_input(initial_input: str, session: ReplSession) -> int:
         exit_requested[0] = True
 
     for line in initial_input.splitlines():
+        if hot_reloader is not None:
+            hot_reloader.check_and_reload(console)
         stripped = line.strip()
         if not stripped:
             continue
@@ -261,6 +299,33 @@ def _run_initial_input(initial_input: str, session: ReplSession) -> int:
         _dispatch_one_turn(stripped, session, console, on_exit=_early_exit)
         if exit_requested[0]:
             return 0
+    return 0
+
+
+async def _repl_main(
+    initial_input: str | None = None,
+    _config: ReplConfig | None = None,
+) -> int:
+    """Async REPL entrypoint — wires session, prompt history, persistent
+    task registry, and the optional :class:`HotReloadCoordinator` before
+    delegating to either :func:`_run_initial_input` (seeded path) or
+    :func:`_run_interactive` (interactive prompt-toolkit path).
+
+    Tests reach this directly with seeded input + a custom config; the
+    public :func:`run_repl` wraps it in ``asyncio.run`` for the CLI
+    entrypoint.
+    """
+    cfg = _config or ReplConfig.load()
+    session = ReplSession()
+    session.task_registry = TaskRegistry.persistent()
+    pt_session = _build_prompt_session()
+    session.prompt_history_backend = pt_session.history
+    hot_reloader = HotReloadCoordinator() if cfg.reload else None
+
+    if initial_input:
+        return _run_initial_input(initial_input, session, hot_reloader)
+
+    await _run_interactive(session, hot_reloader)
     return 0
 
 
@@ -280,24 +345,24 @@ def run_repl(initial_input: str | None = None, config: ReplConfig | None = None)
     # starts. Errors are caught inside; a sweep failure must never prevent
     # the REPL from starting.
     run_startup_sweep()
-    session = ReplSession()
 
-    if initial_input:
-        try:
-            return _run_initial_input(initial_input, session)
-        except (EOFError, KeyboardInterrupt):
-            return 0
+    # Banner prints to real stdout (interactive mode only — the seeded
+    # path renders its own console). It lives in the user's terminal
+    # scrollback above all subsequent turns, so native terminal scroll
+    # reveals everything from the session top downward.
+    if not initial_input:
+        real_console = Console(
+            highlight=False,
+            force_terminal=True,
+            color_system="truecolor",
+            legacy_windows=False,
+        )
+        render_banner(real_console)
 
-    # Banner prints to real stdout and lives in the user's terminal
-    # scrollback above all subsequent turns — same place as past responses,
-    # so native terminal scroll reveals everything from the session top
-    # downward, no widget-internal scroll axis.
-    real_console = Console(highlight=False, force_terminal=True, color_system="truecolor")
-    render_banner(real_console)
-
-    with contextlib.suppress(EOFError, KeyboardInterrupt):
-        asyncio.run(_run_interactive(session))
-    return 0
+    try:
+        return asyncio.run(_repl_main(initial_input=initial_input, _config=cfg))
+    except (EOFError, KeyboardInterrupt):
+        return 0
 
 
 # How often the prompt's ``bottom_toolbar`` and ``message`` callables
@@ -478,7 +543,10 @@ class _StreamingConsole(Console):
         return self._cancel_event.is_set()
 
 
-async def _run_interactive(session: ReplSession) -> None:
+async def _run_interactive(
+    session: ReplSession,
+    hot_reloader: HotReloadCoordinator | None = None,
+) -> None:
     """Per-turn ``prompt_async`` cycle backed by a queue + background
     processor. Submitting a new prompt while a turn is streaming
     **enqueues** it — the active turn finishes naturally and the queued
@@ -490,8 +558,13 @@ async def _run_interactive(session: ReplSession) -> None:
     running on the main coroutine while the processor drains the queue
     in the background — the user can type and queue further prompts
     without waiting for the active turn to complete.
+
+    ``hot_reloader`` (from main, optional) is consulted at the start of
+    each prompt iteration so dev-time edits to dispatch handlers are
+    picked up between turns.
     """
-    pt_session = _build_prompt_session(session)
+    pt_session = _build_prompt_session()
+    session.prompt_history_backend = pt_session.history
     spinner = _SpinnerState()
     state = _ReplState()
 
@@ -609,19 +682,34 @@ async def _run_interactive(session: ReplSession) -> None:
     try:
         with patch_stdout(raw=True):
             while True:
+                # Hot-reload check (introduced in main) — picks up dev
+                # edits to dispatch handlers between turns. No-op when
+                # ``cfg.reload`` was off (hot_reloader is None).
+                if hot_reloader is not None and not state.is_dispatch_running():
+                    hot_reloader.check_and_reload(echo_console)
                 try:
                     text = await pt_session.prompt_async(
                         message=_message_with_spinner,
                         bottom_toolbar=spinner.toolbar_ansi,
                         refresh_interval=_PROMPT_REFRESH_INTERVAL_S,
                     )
-                except (EOFError, KeyboardInterrupt):
-                    # Ctrl+C / Ctrl+D cancels the currently-running
-                    # turn if one is active; otherwise exits the REPL.
+                except EOFError:
                     if state.is_dispatch_running():
                         state.cancel_current_dispatch()
                         continue
                     return
+                except KeyboardInterrupt:
+                    # Cancel the active turn first; if nothing's running,
+                    # use main's two-press protocol — first Ctrl+C shows
+                    # a hint, second exits.
+                    if state.is_dispatch_running():
+                        state.cancel_current_dispatch()
+                        continue
+                    if repl_prompt_note_ctrl_c(echo_console):
+                        return
+                    continue
+                else:
+                    repl_reset_ctrl_c_gate()
 
                 if state.exit_requested:
                     return

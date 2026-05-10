@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import io
+import json
+import os
 import tempfile
 from collections.abc import Callable, Iterator
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -105,6 +108,90 @@ class TestTaskRegistry:
         recent_ids = [t.task_id for t in reg.list_recent(10)]
         assert first.task_id not in recent_ids
         assert len(recent_ids) == 3
+
+    def test_persistent_registry_reloads_running_pid(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        import app.constants as const_module
+
+        monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        reg = TaskRegistry.persistent()
+        task = reg.create(TaskKind.SYNTHETIC_TEST, command="opensre tests synthetic")
+        task.mark_running()
+        task.attach_pid(os.getpid())
+
+        reloaded = TaskRegistry.persistent()
+        [loaded] = reloaded.list_recent()
+        assert loaded.task_id == task.task_id
+        assert loaded.status == TaskStatus.RUNNING
+        assert loaded.pid == os.getpid()
+        assert loaded.command == "opensre tests synthetic"
+
+    def test_persistent_registry_marks_missing_pid_finished(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        import app.constants as const_module
+
+        monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        store_path = tmp_path / "interactive_tasks.json"
+        store_path.parent.mkdir(parents=True, exist_ok=True)
+        store_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "task_id": "abc12345",
+                        "kind": "synthetic_test",
+                        "status": "running",
+                        "started_at": 1.0,
+                        "ended_at": None,
+                        "result": None,
+                        "error": None,
+                        "pid": 999_999,
+                        "command": "opensre tests synthetic",
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(
+            "app.cli.interactive_shell.tasks.os.kill",
+            lambda _pid, _sig: (_ for _ in ()).throw(ProcessLookupError()),
+        )
+
+        reloaded = TaskRegistry.persistent()
+        [loaded] = reloaded.list_recent()
+        assert loaded.status == TaskStatus.COMPLETED
+        assert loaded.result == "process exited while shell was closed"
+
+    def test_cancel_rehydrated_task_does_not_signal_pid(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        import app.constants as const_module
+
+        monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        calls: list[tuple[int, int]] = []
+
+        def _fake_kill(pid: int, sig: int) -> None:
+            calls.append((pid, sig))
+
+        monkeypatch.setattr("app.cli.interactive_shell.tasks.os.kill", _fake_kill)
+        reg = TaskRegistry.persistent()
+        task = reg.create(TaskKind.SYNTHETIC_TEST, command="opensre tests synthetic")
+        task.mark_running()
+        task.attach_pid(12345)
+
+        reloaded = TaskRegistry.persistent()
+        loaded = reloaded.get(task.task_id)
+        assert loaded is not None
+        assert loaded.request_cancel() is True
+        assert loaded.status == TaskStatus.CANCELLED
+        assert (12345, 15) not in calls
 
 
 class TestSlashTaskCommands:

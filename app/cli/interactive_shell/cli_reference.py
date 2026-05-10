@@ -7,13 +7,13 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from click.testing import CliRunner
+import click
 
 _logger = logging.getLogger(__name__)
 
 _MAX_REFERENCE_CHARS = 28_000
 
-# Heuristic: truncated or failed CliRunner output must not be cached or the
+# Heuristic: truncated or failed reference output must not be cached or the
 # assistant would keep an empty reference for the whole process.
 _MIN_CACHEABLE_CLI_REFERENCE_CHARS = 80
 _CLI_REFERENCE_SENTINEL = "=== opensre --help ==="
@@ -55,26 +55,94 @@ def _current_cli_signature() -> str:
     return f"opensre={get_version()}|commands={cmd_names}|slash={slash_names}"
 
 
+def _format_param(param: click.Parameter) -> str:
+    """Return a compact, side-effect-free description of a Click parameter."""
+    if isinstance(param, click.Option):
+        names = ", ".join((*param.opts, *param.secondary_opts))
+        if not names:
+            names = param.name or "(option)"
+        value_hint = ""
+        if not param.is_flag and not param.count:
+            value_hint = " " + (param.metavar or param.name or "VALUE").upper()
+        default = ""
+        if param.show_default and param.default not in (None, "", ()):
+            default = f" [default: {param.default}]"
+        help_text = (param.help or "").strip()
+        return f"  {names}{value_hint} - {help_text}{default}".rstrip()
+
+    if isinstance(param, click.Argument):
+        name = (param.name or "ARG").upper()
+        required = "" if param.required else " (optional)"
+        return f"  {name}{required}"
+
+    return f"  {param.name or type(param).__name__}"
+
+
+def _format_command_reference(
+    command: click.Command,
+    *,
+    path: str,
+    include_subcommands: bool = True,
+) -> str:
+    """Render Click command metadata without invoking help callbacks.
+
+    ``click.Command.get_help()`` eventually calls ``format_help()``. The root
+    OpenSRE group overrides that path to render via Rich's live console, which
+    can leak into the interactive terminal when the assistant builds grounding
+    context. This renderer inspects command objects directly instead.
+    """
+    lines = [f"Usage: {path} [OPTIONS]"]
+    if isinstance(command, click.Group):
+        lines[0] += " COMMAND [ARGS]..."
+    elif command.params:
+        arg_names = [
+            (param.name or "ARG").upper()
+            for param in command.params
+            if isinstance(param, click.Argument)
+        ]
+        if arg_names:
+            lines[0] += " " + " ".join(arg_names)
+
+    help_text = (command.help or command.short_help or "").strip()
+    if help_text:
+        lines.extend(["", help_text])
+
+    params = [param for param in command.params if not getattr(param, "hidden", False)]
+    if params:
+        lines.extend(["", "Options/Arguments:"])
+        lines.extend(_format_param(param) for param in params)
+
+    if include_subcommands and isinstance(command, click.Group):
+        command_rows: list[tuple[str, str]] = []
+        with click.Context(command, info_name=path.rsplit(" ", 1)[-1]) as ctx:
+            for name in command.list_commands(ctx):
+                subcommand = command.get_command(ctx, name)
+                if subcommand is None or subcommand.hidden:
+                    continue
+                command_rows.append((name, subcommand.get_short_help_str(limit=160)))
+        if command_rows:
+            lines.extend(["", "Commands:"])
+            lines.extend(f"  {name} - {summary}".rstrip() for name, summary in command_rows)
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def _build_cli_reference_text_uncached() -> str:
-    """Build reference via CliRunner without caching."""
+    """Build a side-effect-free CLI reference without invoking Click commands."""
     from app.cli.__main__ import cli
 
-    runner = CliRunner()
     parts: list[str] = []
 
-    def _invoke(args: list[str]) -> str:
-        result = runner.invoke(cli, args, catch_exceptions=True)
-        out = getattr(result, "output", "") or ""
-        if result.exit_code != 0:
-            _logger.warning("cli help invoke failed for %s: exit %s", args, result.exit_code)
-        return out
-
     parts.append("=== opensre --help ===\n")
-    parts.append(_invoke(["--help"]))
+    parts.append(_format_command_reference(cli, path="opensre"))
 
-    for name in sorted(cli.commands.keys()):
-        parts.append(f"\n=== opensre {name} --help ===\n")
-        parts.append(_invoke([name, "--help"]))
+    with click.Context(cli, info_name="opensre") as ctx:
+        for name in sorted(cli.commands.keys()):
+            command = cli.get_command(ctx, name)
+            if command is None or command.hidden:
+                continue
+            parts.append(f"\n=== opensre {name} --help ===\n")
+            parts.append(_format_command_reference(command, path=f"opensre {name}"))
 
     parts.append("\n=== Interactive-shell slash commands ===\n")
     parts.append(_interactive_shell_slash_hints())

@@ -208,6 +208,16 @@ def test_build_adds_model_flag_when_not_default(mock_which: MagicMock) -> None:
     mock_which.assert_called()
 
 
+@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/codex")
+def test_build_adds_reasoning_effort_override(mock_which: MagicMock) -> None:
+    inv = CodexAdapter().build(prompt="p", model=None, workspace="", reasoning_effort="xhigh")
+
+    assert "-c" in inv.argv
+    idx = inv.argv.index("-c")
+    assert inv.argv[idx + 1] == 'model_reasoning_effort="xhigh"'
+    mock_which.assert_called()
+
+
 @patch("app.integrations.llm_cli.runner.subprocess.run")
 def test_cli_backed_client_invoke(mock_run: MagicMock) -> None:
     from app.integrations.llm_cli.runner import CLIBackedLLMClient
@@ -256,6 +266,45 @@ def test_cli_backed_client_invoke(mock_run: MagicMock) -> None:
     assert env["CODEX_BIN"] == "/custom/codex"
     assert "ANTHROPIC_API_KEY" not in env
     assert "OPENAI_API_KEY" not in env
+
+
+@patch("app.integrations.llm_cli.runner.subprocess.run")
+def test_cli_backed_client_passes_reasoning_effort_to_adapter(mock_run: MagicMock) -> None:
+    from app.integrations.llm_cli.runner import CLIBackedLLMClient
+
+    mock_adapter = MagicMock()
+    mock_adapter.name = "codex"
+    mock_adapter.detect.return_value = MagicMock(
+        installed=True,
+        bin_path="/usr/bin/codex",
+        logged_in=True,
+        detail="ok",
+    )
+    mock_adapter.build.return_value = MagicMock(
+        argv=["/usr/bin/codex", "exec", "-"],
+        stdin="hello",
+        cwd="/tmp",
+        env=None,
+        timeout_sec=30.0,
+    )
+    mock_adapter.parse.return_value = "answer"
+    mock_adapter.explain_failure.return_value = "fail"
+    mock_run.return_value = MagicMock(returncode=0, stdout="answer\n", stderr="")
+
+    with (
+        patch("app.guardrails.engine.get_guardrail_engine") as gr,
+        patch.dict(os.environ, {"OPENSRE_REASONING_EFFORT": "high"}, clear=False),
+    ):
+        gr.return_value.is_active = False
+        client = CLIBackedLLMClient(mock_adapter, model="codex", max_tokens=256)
+        client.invoke("hello")
+
+    mock_adapter.build.assert_called_once_with(
+        prompt="hello",
+        model="codex",
+        workspace="",
+        reasoning_effort="high",
+    )
 
 
 @patch("app.integrations.llm_cli.runner.subprocess.run")

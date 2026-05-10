@@ -250,6 +250,44 @@ class TestClassifyInput:
         assert decision.route_kind == RouteKind.CLI_AGENT
         assert decision.matched_signals == ("cli_agent_action_plan",)
 
+    def test_remote_deployment_inventory_questions_route_to_cli_agent(self) -> None:
+        session = ReplSession()
+
+        for text in (
+            "Which remote deployments are connected?",
+            "Which remote's deployments are connected?",
+            "What remote deployments are connected?",
+            "show remote deployments",
+            "list remote deployments",
+        ):
+            decision = route_input(text, session)
+            assert decision.route_kind == RouteKind.CLI_AGENT, text
+            assert decision.matched_signals == ("cli_agent_action_plan",)
+
+    def test_normal_informational_questions_do_not_start_investigations(self) -> None:
+        session = ReplSession()
+
+        for text in (
+            "Which deployment options are available?",
+            "What deployment environments do I have?",
+            "Which clusters are configured?",
+            "What nodes are available?",
+            "Which services can I connect?",
+            "What is a replica?",
+            "How many deployments are configured?",
+        ):
+            assert classify_input(text, session) == "cli_agent", text
+
+    def test_docs_and_capability_questions_with_incident_vocab_avoid_investigation(self) -> None:
+        session = ReplSession()
+
+        for text in (
+            "What does OpenSRE deployment support?",
+            "Can OpenSRE deploy to a cluster?",
+            "Does OpenSRE support node-level logs?",
+        ):
+            assert classify_input(text, session) == "cli_help", text
+
     def test_yaml_routing_regression_cases(self) -> None:
         fixture_path = FIXTURES_DIR / "routing_cases.yml"
         payload = yaml.safe_load(fixture_path.read_text(encoding="utf-8"))

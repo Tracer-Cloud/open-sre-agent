@@ -228,6 +228,28 @@ _INCIDENT_QUESTION_WORDS = frozenset(
         "degraded",
     }
 )
+_INFORMATIONAL_QUESTION_RE = re.compile(
+    r"^\s*(?:what(?!\s+caused?\b)|which|how\s+many)\b",
+    re.IGNORECASE,
+)
+_INFORMATIONAL_QUESTION_WORDS = frozenset(
+    {
+        "available",
+        "connect",
+        "configured",
+        "connected",
+        "deployment",
+        "deployments",
+        "environment",
+        "environments",
+        "option",
+        "options",
+        "replica",
+        "remote",
+        "support",
+        "supported",
+    }
+)
 
 # Narrative signals for long pasted text; replaces "any line >=48 chars" with LangGraph.
 _LONG_LINE_INCIDENT_RE: tuple[re.Pattern[str], ...] = (
@@ -355,6 +377,10 @@ def _short_question_mentions_incident_vocab(text: str) -> bool:
     if not _is_short_question(text):
         return False
     lower = text.lower()
+    if _INFORMATIONAL_QUESTION_RE.search(text) and any(
+        word in lower for word in _INFORMATIONAL_QUESTION_WORDS
+    ):
+        return False
     if any(w in lower for w in _INCIDENT_QUESTION_WORDS):
         return True
     # "why is X failing" without a vocab hit still often means an incident.

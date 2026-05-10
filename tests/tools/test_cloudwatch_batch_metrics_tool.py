@@ -25,6 +25,13 @@ def test_run_returns_error_when_no_job_queue() -> None:
     assert "error" in result
 
 
+def test_run_returns_error_when_called_with_no_args() -> None:
+    # execute_actions calls action.run(**{}) when extract_params returns {};
+    # the default prevents TypeError and the guard returns a proper error dict.
+    result = get_cloudwatch_batch_metrics()
+    assert "error" in result
+
+
 def test_run_returns_error_for_invalid_metric_type() -> None:
     result = get_cloudwatch_batch_metrics(job_queue="my-queue", metric_type="invalid")
     assert "error" in result

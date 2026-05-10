@@ -9,7 +9,7 @@ Rendered output (colour roles):
   ✓  env_file        .env (12 keys)
   ⚠  integrations    no integrations         [WARNING ⚠]
   ✗  llm_provider    ANTHROPIC_API_KEY unset [ERROR ✗]
-  ✓  version         2026.4.7 (up to date)
+  ✓  version         <version> (up to date)
   ✓  network         github.com reachable
 
 ──────────────────────────────────────────── [DIM rule]
@@ -104,8 +104,11 @@ def _check_llm_provider() -> tuple[bool, str]:
         return True, f"provider={provider}, CLI ready ({probe.detail})"
 
     expected_key = key_vars.get(provider)
-    if expected_key and not os.getenv(expected_key):
-        return False, f"provider={provider}, but {expected_key} is not set"
+    if expected_key:
+        from app.llm_credentials import has_llm_api_key
+
+        if not has_llm_api_key(expected_key):
+            return False, f"provider={provider}, but {expected_key} is not set"
     return True, f"provider={provider}"
 
 
@@ -237,7 +240,12 @@ def doctor_command() -> None:
     if is_json_output():
         click.echo(json.dumps(results, indent=2))
     else:
-        console = Console(highlight=False, force_terminal=True, color_system="truecolor")
+        console = Console(
+            highlight=False,
+            force_terminal=True,
+            color_system="truecolor",
+            legacy_windows=False,
+        )
         _render_doctor_results(console, results)
 
     has_errors = any(r["status"] == "error" for r in results)

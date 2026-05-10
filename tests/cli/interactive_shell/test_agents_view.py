@@ -96,15 +96,11 @@ def test_empty_records_renders_table_with_zero_rows() -> None:
 
 
 def test_empty_records_caption_announces_empty_state() -> None:
-    """Empty-state UX: the table caption tells the user the registry
+    """Empty-state UX: the table caption tells the user the fleet
     is empty rather than leaving a blank table that looks like a bug.
-
-    The caption deliberately doesn't suggest a registration command —
-    the ``register`` subcommand is currently a stub. When that gains
-    real behavior, this caption can grow a hint pointing at it.
     """
     _, out = _render([])
-    assert "no agents registered yet" in out
+    assert "no agents discovered or registered yet" in out
 
 
 def test_non_empty_records_have_no_caption() -> None:
@@ -126,16 +122,14 @@ def test_row_contains_agent_name_and_pid() -> None:
 
 
 def test_metric_cells_are_placeholders_until_wired() -> None:
-    """``uptime``, ``cpu%``, ``tokens/min``, ``$/hr``, ``status`` all
-    render as ``-`` placeholders for now. The wiring in #1490 / #1494
-    fills them; this PR only owns the column shape."""
+    """``uptime``, ``cpu%``, ``tokens/min``, and ``$/hr`` render as
+    placeholders for now; ``status`` shows the row source."""
     table, _ = _render([AgentRecord(name="claude-code", pid=8421, command="claude")])
     # row_count == 1, so iterate directly to inspect the rendered cells
     assert table.row_count == 1
-    # The rendered output contains five dashes per row (one per metric column)
     rendered_cells = [list(col.cells)[0] for col in table.columns]
-    # cells[0] = agent, cells[1] = pid, then 5 placeholder cells
-    assert rendered_cells[2:] == ["-", "-", "-", "-", "-"]
+    # cells[0] = agent, cells[1] = pid, then metric cells and row source.
+    assert rendered_cells[2:] == ["-", "-", "-", "-", "registered"]
 
 
 def test_multiple_records_are_each_rendered_in_order() -> None:

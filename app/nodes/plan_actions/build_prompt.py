@@ -251,6 +251,17 @@ def _build_available_sources_hint(available_sources: dict[str, dict]) -> str:
 - Use query_opensearch_analytics for bounded OpenSearch-compatible evidence"""
         )
 
+    if "incident_io" in available_sources:
+        incident_io = available_sources["incident_io"]
+        hints.append(
+            f"""incident.io Available:
+- Incident ID: {incident_io.get("incident_id") or "unknown"}
+- Status category: {incident_io.get("status_category") or "live"}
+- Use incident_io_incidents action="context" when an incident ID is available to read metadata and incident updates
+- Use incident_io_incidents action="list" to find live incidents if no incident ID is known
+- Only use action="append_summary" when findings are ready to write back to the incident summary"""
+        )
+
     if "eks" in available_sources:
         eks = available_sources["eks"]
         if getattr(eks.get("_backend"), "is_cloudopsbench_backend", False):

@@ -18,6 +18,10 @@ class TestReplConfigDefaults:
         cfg = ReplConfig.load()
         assert cfg.layout == "classic"
 
+    def test_default_reload_is_true(self) -> None:
+        cfg = ReplConfig.load()
+        assert cfg.reload is True
+
 
 class TestEnvVarResolution:
     def test_opensre_interactive_0_disables_repl(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -48,6 +52,22 @@ class TestEnvVarResolution:
         monkeypatch.setenv("OPENSRE_LAYOUT", "fullscreen")
         assert ReplConfig.load().layout == "classic"
 
+    def test_opensre_reload_false_disables_reload(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENSRE_RELOAD", "false")
+        assert ReplConfig.load().reload is False
+
+    def test_opensre_reload_0_disables_reload(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENSRE_RELOAD", "0")
+        assert ReplConfig.load().reload is False
+
+    def test_opensre_reload_empty_disables_reload(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENSRE_RELOAD", "")
+        assert ReplConfig.load().reload is False
+
+    def test_opensre_reload_1_enables_reload(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENSRE_RELOAD", "1")
+        assert ReplConfig.load().reload is True
+
 
 class TestCliOverride:
     def test_cli_enabled_false_wins_over_env_true(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -74,6 +94,16 @@ class TestCliOverride:
         monkeypatch.setenv("OPENSRE_INTERACTIVE", "0")
         cfg = ReplConfig.load(cli_enabled=None)
         assert cfg.enabled is False
+
+    def test_cli_reload_false_wins_over_env_true(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENSRE_RELOAD", "1")
+        cfg = ReplConfig.load(cli_reload=False)
+        assert cfg.reload is False
+
+    def test_cli_reload_none_does_not_override_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENSRE_RELOAD", "false")
+        cfg = ReplConfig.load(cli_reload=None)
+        assert cfg.reload is False
 
 
 class TestFileResolution:
@@ -120,6 +150,26 @@ class TestFileResolution:
 
         cfg = ReplConfig.load()
         assert cfg.layout == "pinned"
+
+    def test_file_reload_false_is_read(
+        self, tmp_path: pytest.FixtureDef, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        config_file = tmp_path / "config.yml"
+        config_file.write_text(
+            textwrap.dedent("""\
+                interactive:
+                  reload: false
+            """),
+            encoding="utf-8",
+        )
+        monkeypatch.delenv("OPENSRE_RELOAD", raising=False)
+
+        import app.constants as const_module
+
+        monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+
+        cfg = ReplConfig.load()
+        assert cfg.reload is False
 
     def test_env_overrides_file(
         self, tmp_path: pytest.FixtureDef, monkeypatch: pytest.MonkeyPatch

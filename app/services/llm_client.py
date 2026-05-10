@@ -19,8 +19,18 @@ if TYPE_CHECKING:
     from app.integrations.llm_cli.registry import CLIProviderRegistration
 
 import boto3
-from anthropic import Anthropic, AnthropicBedrock, AuthenticationError, NotFoundError
+import botocore.exceptions
+from anthropic import (
+    Anthropic,
+    AnthropicBedrock,
+    AuthenticationError,
+    NotFoundError,
+    PermissionDeniedError,
+)
+from anthropic import BadRequestError as AnthropicBadRequestError
+from openai import APIConnectionError as OpenAIConnectionError
 from openai import AuthenticationError as OpenAIAuthError
+from openai import BadRequestError as OpenAIBadRequestError
 from openai import NotFoundError as OpenAINotFoundError
 from openai import OpenAI
 from openai import RateLimitError as OpenAIRateLimitError
@@ -36,6 +46,7 @@ from app.config import (
     LLMSettings,
 )
 from app.llm_credentials import resolve_llm_api_key
+from app.llm_reasoning_effort import get_active_reasoning_effort
 
 logger = logging.getLogger(__name__)
 
@@ -173,6 +184,8 @@ class LLMClient:
                     f"Anthropic model '{self._model}' was not found. "
                     "Check your configured model name and try again."
                 ) from err
+            except AnthropicBadRequestError as err:
+                raise RuntimeError(f"Anthropic request rejected (HTTP 400): {err.message}") from err
             except GuardrailBlockedError:
                 raise
             except Exception as err:
@@ -219,6 +232,8 @@ class LLMClient:
                     f"Anthropic model '{self._model}' was not found. "
                     "Check your configured model name and try again."
                 ) from err
+            except AnthropicBadRequestError as err:
+                raise RuntimeError(f"Anthropic request rejected (HTTP 400): {err.message}") from err
             except GuardrailBlockedError:
                 raise
             except Exception as err:
@@ -322,8 +337,36 @@ class BedrockLLMClient:
             try:
                 response = self._anthropic_client.messages.create(**kwargs)
                 break
+            except AnthropicBadRequestError as err:
+                err_msg = str(err)
+                if "on-demand throughput" in err_msg or "inference profile" in err_msg.lower():
+                    raise RuntimeError(
+                        f"Bedrock model '{self._model}' requires a cross-region inference profile. "
+                        f"Try prefixing with 'us.' (e.g. 'us.{self._model}') and update "
+                        "BEDROCK_REASONING_MODEL or BEDROCK_TOOLCALL_MODEL."
+                    ) from err
+                raise RuntimeError(
+                    f"Bedrock Anthropic request rejected (HTTP 400) for model "
+                    f"'{self._model}': {err.message}"
+                ) from err
             except GuardrailBlockedError:
                 raise
+            except AuthenticationError as err:
+                raise RuntimeError(
+                    f"Bedrock authentication failed for model '{self._model}'. "
+                    "Check AWS credentials, region configuration, and Bedrock access."
+                ) from err
+            except NotFoundError as err:
+                raise RuntimeError(
+                    f"Bedrock model '{self._model}' was not found or has reached end-of-life. "
+                    "Update BEDROCK_REASONING_MODEL or BEDROCK_TOOLCALL_MODEL to a supported model."
+                ) from err
+            except PermissionDeniedError as err:
+                raise RuntimeError(
+                    f"Bedrock model '{self._model}' is not available for your account. "
+                    "Check your AWS Marketplace subscription and account permissions, "
+                    "or update BEDROCK_REASONING_MODEL / BEDROCK_TOOLCALL_MODEL."
+                ) from err
             except Exception as err:
                 last_err = err
                 if attempt == max_attempts - 1:
@@ -376,6 +419,30 @@ class BedrockLLMClient:
                 break
             except GuardrailBlockedError:
                 raise
+            except botocore.exceptions.ClientError as err:
+                code = err.response.get("Error", {}).get("Code", "")
+                if code == "ValidationException":
+                    raise RuntimeError(
+                        f"Bedrock model ID '{self._model}' is invalid. "
+                        "Check BEDROCK_REASONING_MODEL or BEDROCK_TOOLCALL_MODEL."
+                    ) from err
+                if code == "ResourceNotFoundException":
+                    raise RuntimeError(
+                        f"Bedrock model '{self._model}' was not found in the configured region. "
+                        "Check the model ID, region, or inference profile."
+                    ) from err
+                if code in ("AccessDeniedException", "UnauthorizedException"):
+                    raise RuntimeError(
+                        f"Access denied for Bedrock model '{self._model}'. "
+                        "Check your AWS IAM permissions and account configuration."
+                    ) from err
+                last_err = err
+                if attempt == max_attempts - 1:
+                    raise RuntimeError(
+                        f"Bedrock API request failed after {max_attempts} attempts: {type(err).__name__}: {err}"
+                    ) from err
+                time.sleep(backoff_seconds)
+                backoff_seconds *= 2
             except Exception as err:
                 last_err = err
                 if attempt == max_attempts - 1:
@@ -431,12 +498,41 @@ def _format_anthropic_retry_error(err: Exception) -> str:
             "Anthropic API connection failed after multiple retries. "
             "Check network access and try again."
         )
-    if status_code == 529:
+    # Detect overloaded via HTTP status (error-response path) or via body error
+    # type (SSE streaming path: the SDK raises APIStatusError from body events
+    # where the initial HTTP response was 200, so status_code is absent/not 529).
+    body = getattr(err, "body", None)
+    error_obj = body.get("error") if isinstance(body, dict) else None
+    body_error_type = error_obj.get("type", "") if isinstance(error_obj, dict) else ""
+    if status_code == 529 or body_error_type == "overloaded_error":
         return (
             "Anthropic API is overloaded (HTTP 529) after multiple retries. "
             "Try again in a few seconds."
         )
     return f"Anthropic API request failed after multiple retries: {error_name}."
+
+
+def _format_openai_connection_error(err: Exception, provider_label: str) -> str:
+    """Return a user-facing message for an OpenAI APIConnectionError."""
+    cause: BaseException | None = err
+    cause_text_parts: list[str] = []
+    while cause is not None:
+        cause_text_parts.append(str(cause).lower())
+        next_cause = getattr(cause, "__cause__", None)
+        if next_cause is None:
+            next_cause = getattr(cause, "__context__", None)
+        cause = next_cause
+
+    cause_text = " ".join(cause_text_parts)
+    if "ssl" in cause_text or "wrong_version_number" in cause_text or "certificate" in cause_text:
+        return (
+            f"Cannot connect to {provider_label} API (SSL/TLS error). "
+            "Verify the endpoint URL uses HTTPS and that no proxy is stripping TLS."
+        )
+    return (
+        f"Cannot connect to {provider_label} API. "
+        "Check your network connection and that the endpoint URL is reachable."
+    )
 
 
 def _parse_retry_after(err: Exception) -> float:
@@ -466,6 +562,13 @@ def _parse_retry_after(err: Exception) -> float:
 def _uses_max_completion_tokens(model: str) -> bool:
     """Reasoning models (o1, o3, o4, gpt-5 series) require max_completion_tokens."""
     return model.startswith(("o1", "o3", "o4", "gpt-5"))
+
+
+def _resolve_openai_reasoning_effort(*, model: str, api_key_env: str) -> str | None:
+    """Session override for OpenAI reasoning models in the interactive shell."""
+    if api_key_env != "OPENAI_API_KEY" or not _uses_max_completion_tokens(model):
+        return None
+    return get_active_reasoning_effort()
 
 
 class OpenAILLMClient:
@@ -544,6 +647,12 @@ class OpenAILLMClient:
             token_param: self._max_tokens,
             "messages": messages,
         }
+        reasoning_effort = _resolve_openai_reasoning_effort(
+            model=self._model,
+            api_key_env=self._api_key_env,
+        )
+        if reasoning_effort is not None:
+            kwargs["reasoning_effort"] = reasoning_effort
         if self._temperature is not None:
             kwargs["temperature"] = self._temperature
         return kwargs
@@ -573,9 +682,26 @@ class OpenAILLMClient:
                     f"{self._provider_label} model '{self._model}' was not found. "
                     "Check your configured model name or endpoint."
                 ) from err
+            except OpenAIBadRequestError as err:
+                raise RuntimeError(
+                    f"{self._provider_label} request rejected (HTTP 400): {err.message}"
+                ) from err
             except GuardrailBlockedError:
                 raise
+            except OpenAIConnectionError as err:
+                raise RuntimeError(
+                    _format_openai_connection_error(err, self._provider_label)
+                ) from err
             except OpenAIRateLimitError as err:
+                body = getattr(err, "body", None)
+                if (
+                    isinstance(body, dict)
+                    and body.get("error", {}).get("code") == "insufficient_quota"
+                ):
+                    raise RuntimeError(
+                        f"{self._provider_label} billing quota exceeded. "
+                        "Check your plan and billing details."
+                    ) from err
                 last_err = err
                 if attempt == max_attempts - 1:
                     raise RuntimeError(
@@ -640,9 +766,28 @@ class OpenAILLMClient:
                     f"{self._provider_label} model '{self._model}' was not found. "
                     "Check your configured model name or endpoint."
                 ) from err
+            except OpenAIBadRequestError as err:
+                raise RuntimeError(
+                    f"{self._provider_label} request rejected (HTTP 400): {err.message}"
+                ) from err
             except GuardrailBlockedError:
                 raise
+            except OpenAIConnectionError as err:
+                if emitted:
+                    raise
+                raise RuntimeError(
+                    _format_openai_connection_error(err, self._provider_label)
+                ) from err
             except OpenAIRateLimitError as err:
+                body = getattr(err, "body", None)
+                if (
+                    isinstance(body, dict)
+                    and body.get("error", {}).get("code") == "insufficient_quota"
+                ):
+                    raise RuntimeError(
+                        f"{self._provider_label} billing quota exceeded. "
+                        "Check your plan and billing details."
+                    ) from err
                 if emitted:
                     raise
                 if attempt == max_attempts - 1:

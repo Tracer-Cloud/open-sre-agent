@@ -10,6 +10,8 @@ Welcome to OpenSRE
 
 ## How to Contribute
 
+Looking for a safe first contribution? See [Good First Issues](docs/good-first-issues/README.md).
+
 Use the path that matches the kind of contribution you want to make:
 
 1. **Bugs & small fixes** -> Open a PR. If you need to file an issue first, use the [bug report template](https://github.com/Tracer-Cloud/opensre/issues/new?template=bug_report.yml).
@@ -28,7 +30,7 @@ This repo ships with a generated codebase map at `.understand-anything/` — a k
 
 ### Environment Setup
 
-See **[SETUP.md](SETUP.md)** for detailed setup instructions including Windows-specific guidance.
+See **[SETUP.md](SETUP.md)** for detailed setup instructions including Windows-specific guidance. For benchmark, deployment detail, and telemetry reference, see **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)**.
 
 **Quick start:**
 
@@ -38,7 +40,7 @@ See **[SETUP.md](SETUP.md)** for detailed setup instructions including Windows-s
     - When invoking the CLI from your checkout, prefer **`uv run opensre …`** (see `SETUP.md` troubleshooting if another `opensre` shadows `.venv`).
 4. Build release artifacts when needed: `make build`
 
-If you prefer VS Code, you can use the repo's devcontainer at [.devcontainer/devcontainer.json](.devcontainer/devcontainer.json) instead of setting up Python manually.
+If you prefer VS Code, use the devcontainer at [.devcontainer/devcontainer.json](.devcontainer/devcontainer.json). Details: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#vs-code-dev-container).
 
 ---
 
@@ -141,12 +143,13 @@ All four must pass. **CI will block merging if any fail.**
 
 Replace the placeholders with your actual file or test name:
 
-````bash
+```bash
 pytest tests/cli/test_.py                                       # single file
 pytest tests/cli/test_.py::test_                                # single function
 pytest tests/tools/ -k "test_registry"                          # tools example
 pytest tests/synthetic/ -k "test_scenario"                      # no live infra needed
-````
+```
+
 ### 5. Open a Pull Request
 
 Follow the PR template (see below). Link the relevant issue and describe what changed and why.
@@ -232,7 +235,7 @@ make lint          # Auto-fixes many style issues
 make format-check  # Checks formatting without modifying files
 make typecheck     # Catches type errors
 make test-cov      # Ensures tests pass and coverage is tracked
-````
+```
 
 To verify the package can be shipped, run:
 

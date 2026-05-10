@@ -23,7 +23,8 @@ from app.cli.interactive_shell.session import ReplSession
 
 
 def test_commands_shim_reexports_same_registry() -> None:
-    assert COMMANDS_EXPORT is SLASH_COMMANDS
+    assert COMMANDS_EXPORT["/help"] is SLASH_COMMANDS["/help"]
+    assert list(COMMANDS_EXPORT) == list(SLASH_COMMANDS)
 
 
 def _capture() -> tuple[Console, io.StringIO]:

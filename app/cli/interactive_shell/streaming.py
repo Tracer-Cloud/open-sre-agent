@@ -34,7 +34,7 @@ from rich.markdown import Markdown
 from app.cli.interactive_shell.theme import BOLD_BRAND, DIM, MARKDOWN_THEME
 
 # Approximate characters per token. Same heuristic as
-# ``persistent_app.app._CHARS_PER_TOKEN`` — used here for the post-stream
+# ``loop._SpinnerState._CHARS_PER_TOKEN`` — used here for the post-stream
 # elapsed footer.
 _CHARS_PER_TOKEN = 4
 

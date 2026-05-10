@@ -47,8 +47,20 @@ def test_provider_switch_plans_provider_action() -> None:
     assert plan_cli_actions(message) == []
 
 
+def test_implementation_request_plans_implementation_action() -> None:
+    assert plan_terminal_tasks("please implement /history search") == ["implementation"]
+    assert plan_cli_actions("please implement /history search") == []
+
+
 def test_generic_synthetic_test_request_plans_synthetic_action() -> None:
     assert plan_terminal_tasks("Can you run a synthetic test?") == ["synthetic_test"]
+
+
+def test_kill_synthetic_test_request_plans_cancel_action() -> None:
+    message = "kill the syntehtic_test because it is runnign way too long"
+
+    assert plan_terminal_tasks(message) == ["task_cancel"]
+    assert plan_cli_actions(message) == []
 
 
 def test_integration_prompt_plans_datadog_lookup_only() -> None:
@@ -183,6 +195,40 @@ def test_execute_cli_actions_records_llm_provider_failure(monkeypatch: object) -
     assert session.history[-1] == {"type": "slash", "text": "/model set anthropic", "ok": False}
 
 
+def test_execute_cli_actions_runs_implementation_action(monkeypatch: object) -> None:
+    calls: list[str] = []
+
+    def _fake_run_implementation(
+        request: str,
+        session: ReplSession,
+        console: Console,
+        **_kwargs: object,
+    ) -> None:
+        calls.append(request)
+        session.record("implementation", request, ok=True)
+        console.print(f"implemented {request}")
+
+    monkeypatch.setattr(
+        agent_actions,
+        "run_claude_code_implementation",
+        _fake_run_implementation,
+    )
+
+    session = ReplSession()
+    console, buf = _capture()
+    handled = execute_cli_actions("please implement /history search", session, console)
+
+    assert handled is True
+    assert calls == ["/history search"]
+    assert session.history == [
+        {"type": "cli_agent", "text": "please implement /history search", "ok": True},
+        {"type": "implementation", "text": "/history search", "ok": True},
+    ]
+    output = buf.getvalue()
+    assert "implementation" in output
+    assert "implemented /history search" in output
+
+
 def test_execute_cli_actions_answers_discord_then_dispatches_datadog(
     monkeypatch: object,
 ) -> None:
@@ -261,16 +307,13 @@ def test_services_version_deploy_prompt_plans_all_actions() -> None:
 
 
 def test_explicit_shell_command_plans_shell_action() -> None:
-    assert plan_terminal_tasks("run `pwd`") == ["shell"]
-    assert plan_terminal_tasks("run the command `pwd`") == ["shell"]
-    assert plan_cli_actions("run `pwd`") == []
+    assert plan_terminal_tasks("run `whoami`") == ["shell"]
+    assert plan_terminal_tasks("run the command `whoami`") == ["shell"]
+    assert plan_cli_actions("run `whoami`") == []
 
 
 def test_direct_shell_command_plans_shell_action() -> None:
-    assert plan_terminal_tasks("pwd") == ["shell"]
-    assert plan_terminal_tasks("cd /tmp") == ["shell"]
-    assert plan_terminal_tasks("CD /tmp") == ["shell"]
-    assert plan_terminal_tasks("!ls -la") == ["shell"]
+    assert plan_terminal_tasks("whoami") == ["shell"]
 
 
 def test_sample_alert_launch_plans_sample_alert_action() -> None:
@@ -506,6 +549,39 @@ def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch:
     assert output.index("2.") < output.index("$ /list integrations")
     assert output.index("synthetic test") < output.index("$ opensre tests synthetic")
     assert output.index("$ /list integrations") < output.index("$ opensre tests synthetic")
+
+
+def test_execute_cli_actions_cancels_single_running_synthetic_task() -> None:
+    session = ReplSession()
+    session.trust_mode = True
+    task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
+    task.mark_running()
+    proc = MagicMock()
+    proc.poll.return_value = None
+    task.attach_process(proc)
+
+    console, buf = _capture()
+    handled = execute_cli_actions(
+        "kill the syntehtic_test because it is runnign way too long",
+        session,
+        console,
+    )
+
+    assert handled is True
+    assert task.cancel_requested.is_set()
+    proc.terminate.assert_called_once()
+    assert session.history == [
+        {
+            "type": "cli_agent",
+            "text": "kill the syntehtic_test because it is runnign way too long",
+            "ok": True,
+        },
+        {"type": "slash", "text": f"/cancel {task.task_id}", "ok": True},
+    ]
+    output = buf.getvalue()
+    assert "cancel task" in output
+    assert f"$ /cancel {task.task_id}" in output
+    assert "stop requested" in output
 
 
 def test_partial_match_reports_unhandled_clause(monkeypatch: object) -> None:

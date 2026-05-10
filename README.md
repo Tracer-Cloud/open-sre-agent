@@ -48,13 +48,11 @@
 - [Why OpenSRE?](#why-opensre)
 - [Install](#install)
 - [Quick Start](#quick-start)
-- [Official Deployment (LangGraph)](#official-deployment-langgraph-platform)
-- [Development](#development)
+- [Deployment](#deployment)
 - [How OpenSRE Works](#how-opensre-works)
 - [Benchmark](#benchmark)
-- [Capabilities](#capabilities)
-- [Integrations](#integrations)
-- [Contributing](#contributing)
+- [Capabilities & integrations](#capabilities--integrations)
+- [Contributing & development](#contributing--development)
 - [Security](#security)
 - [Telemetry](#telemetry)
 - [License](#license)
@@ -103,10 +101,14 @@ Latest build from `main`:
 curl -fsSL https://install.opensre.com | bash -s -- --main
 ```
 
+Homebrew:
+
 ```bash
 brew tap tracer-cloud/tap
 brew install tracer-cloud/tap/opensre
 ```
+
+Windows (PowerShell):
 
 ```powershell
 irm https://install.opensre.com | iex
@@ -127,13 +129,13 @@ Configure once, then pick how you want to run investigations:
 opensre onboard
 ```
 
-**Interactive prompt shell** — run `opensre` with no subcommand to enter the REPL (TTY required). Describe incidents in plain language, stream investigations, and use slash commands:
+**Interactive shell** — with no subcommand, `opensre` starts a REPL (TTY required). Describe incidents in plain language, stream investigations, and use slash commands such as `/help`, `/status`, `/clear`, `/reset`, `/trust`, `/effort`, `/exit`. `/effort` sets reasoning depth for **OpenAI** and **Codex** providers (`low`, `medium`, `high`, `xhigh`, or `max`; other providers ignore it). Ctrl+C cancels an in-flight investigation without losing session state.
 
 ```bash
 opensre
 ```
 
-**Direct investigation** — run the agent once from your terminal against an alert file (no interactive shell):
+**One-shot investigation** — run the agent once against an alert file:
 
 ```bash
 opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
@@ -146,122 +148,24 @@ opensre update
 opensre uninstall   # remove opensre and all local data
 ```
 
-### Interactive mode
-
-With no subcommand, `opensre` starts a persistent REPL session — an incident response terminal in the style of Claude Code. Describe an alert in plain text, watch the investigation stream live, then ask follow-up questions that stay grounded in what just ran.
-
-```bash
-opensre
-# › MongoDB orders cluster is dropping connections since 14:00 UTC
-# ...live streaming investigation...
-# › why was the connection pool exhausted?
-# ...grounded follow-up answer...
-# › /status
-# › /exit
-```
-
-Slash commands: `/help`, `/status`, `/clear`, `/reset`, `/trust`, `/exit`. Ctrl+C cancels an in-flight investigation while keeping the session state intact.
-
 ---
 
-## Official Deployment: LangGraph Platform
+## Deployment
 
-OpenSRE's official deployment path is LangGraph Platform.
+The official hosted path is **LangGraph Platform**: connect this repo, keep [`langgraph.json`](langgraph.json) at the root, and set `LLM_PROVIDER` plus the matching API key (see [`.env.example`](.env.example)). **Railway** remains supported as a self-hosted alternative; hosted Postgres and Redis (`DATABASE_URI`, `REDIS_URI`) are required for that layout.
 
-1. Create a deployment on LangGraph Platform and connect this repository.
-2. Keep `langgraph.json` at the repo root so LangGraph can load the graph entrypoint.
-3. Add your model provider in environment variables (for example `LLM_PROVIDER=anthropic`).
-4. Add the matching API key for your provider (for example `ANTHROPIC_API_KEY` or
-   `OPENAI_API_KEY`).
-5. Add any additional runtime env vars your deployment needs (for example integration
-   credentials and optional storage settings).
-
-Minimum LLM env setup:
-
-```bash
-LLM_PROVIDER=anthropic
-ANTHROPIC_API_KEY=...
-```
-
-For other providers, set the same `LLM_PROVIDER` plus the matching key from
-`.env.example` (for example `OPENAI_API_KEY`, `GEMINI_API_KEY`, or
-`OPENROUTER_API_KEY`).
-
-## Railway Deployment (Self-Hosted Alternative)
-
-If you prefer a self-hosted path, you can still deploy to Railway.
-
-Before running `opensre deploy railway`, make sure the target Railway project has
-both Postgres and Redis services, and that your OpenSRE service has `DATABASE_URI`
-and `REDIS_URI` set to those connection strings. The containerized LangGraph runtime
-will not boot without those backing services wired in.
-
-```bash
-# create/link Railway Postgres and Redis first, then set DATABASE_URI and REDIS_URI
-opensre deploy railway --project <project> --service <service> --yes
-```
-
-If the deploy starts but the service never becomes healthy, verify that
-`DATABASE_URI` and `REDIS_URI` are present on the Railway service and point to the
-project Postgres and Redis instances.
-
-### Remote Hosted Ops
-
-After deploying a hosted service, you can run post-deploy operations from the CLI:
-
-```bash
-# inspect service status, URL, deployment metadata
-opensre remote ops --provider railway --project <project> --service <service> status
-
-# tail recent logs
-opensre remote ops --provider railway --project <project> --service <service> logs --lines 200
-
-# stream logs live
-opensre remote ops --provider railway --project <project> --service <service> logs --follow
-
-# trigger restart/redeploy
-opensre remote ops --provider railway --project <project> --service <service> restart --yes
-```
-
-OpenSRE saves your last used `provider`, so you can run:
-
-```bash
-opensre remote ops status
-opensre remote ops logs --follow
-```
-
----
-
-## Development
-
-> **New to OpenSRE?** See [SETUP.md](SETUP.md) for detailed platform-specific setup instructions, including Windows setup, environment configuration, and more.
-
-Local development installs use [uv](https://docs.astral.sh/uv/getting-started/installation/) and a committed `uv.lock` (`make install` runs `uv sync --frozen --extra dev`). Install uv first, then:
-
-```bash
-git clone https://github.com/Tracer-Cloud/opensre
-cd opensre
-make install
-# run opensre onboard to configure your local LLM provider
-# and optionally validate/save Grafana, Datadog, Honeycomb, Coralogix, Slack, AWS, GitHub MCP, and Sentry integrations
-opensre onboard
-opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
-```
-
-If you use VS Code, the repo now includes a ready-to-use devcontainer under [`.devcontainer/devcontainer.json`](.devcontainer/devcontainer.json). Open the repo in VS Code and run `Dev Containers: Reopen in Container` to get the project on Python 3.13 with the contributor toolchain preinstalled. Keep Docker Desktop, OrbStack, Colima, or another Docker-compatible runtime running on the host, since VS Code devcontainers rely on your local Docker engine.
+**[Full deployment steps, Railway notes, and `opensre remote ops` → docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#deployment)**
 
 ---
 
 ## How OpenSRE Works
 
-<img 
-  src="https://github.com/user-attachments/assets/936ab1f2-9bda-438d-9897-e8e9cd98e335" 
-  width="1064" 
-  height="568" 
-  alt="opensre-how-it-works-github" 
+<img
+  src="https://github.com/user-attachments/assets/936ab1f2-9bda-438d-9897-e8e9cd98e335"
+  width="1064"
+  height="568"
+  alt="opensre-how-it-works-github"
 />
-
-### Investigation Workflow
 
 When an alert fires, OpenSRE automatically:
 
@@ -269,21 +173,23 @@ When an alert fires, OpenSRE automatically:
 2. **Reasons** across your connected systems to identify anomalies
 3. **Generates** a structured investigation report with probable root cause
 4. **Suggests** next steps and, optionally, executes remediation actions
-5. **Posts** a summary directly to Slack or PagerDuty - no context switching needed
+5. **Posts** a summary directly to Slack or PagerDuty — no context switching needed
 
 ---
 
 ## Benchmark
 
-Generate the benchmark report:
+Regenerate numbers with **`make benchmark`**; refresh this table from cached results via **`make benchmark-update-readme`**. See **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#benchmark)** for details.
 
-```shell
-make benchmark
-```
+<!-- BENCHMARK-START -->
+
+_No benchmark results yet._
+
+<!-- BENCHMARK-END -->
 
 ---
 
-## Capabilities
+## Capabilities & integrations
 
 |                                          |                                                                                  |
 | ---------------------------------------- | -------------------------------------------------------------------------------- |
@@ -292,6 +198,8 @@ make benchmark
 | 🔮 **Predictive failure detection**      | Catch emerging issues before they page you                                       |
 | 🔗 **Evidence-backed root cause**        | Every conclusion is linked to the data behind it                                 |
 | 🤖 **Full LLM flexibility**              | Bring your own model — Anthropic, OpenAI, Ollama, Gemini, OpenRouter, NVIDIA NIM |
+
+OpenSRE connects to **60+** tools across LLMs, observability, cloud infrastructure, data platforms, incident management, and MCP. The full matrix (with roadmap links) lives in the **[product docs](https://www.opensre.com/docs)**; a detailed catalog is also maintained in-repo as the project grows.
 
 ---
 
@@ -312,26 +220,17 @@ OpenSRE connects to 60+ tools and services across the modern cloud stack, from L
 | **Agent Deployment**    | <img src="docs/assets/icons/vercel.png" width="16"> Vercel · <img src="docs/assets/icons/langsmith.png" width="16"> LangSmith · <img src="docs/assets/icons/aws.png" width="16"> EC2 · <img src="docs/assets/icons/aws.png" width="16"> ECS · Railway                                                                                                  |                                                                                                                                                                                                                                                                    |
 | **Protocols**           | <img src="docs/assets/icons/mcp.svg" width="16"> MCP · <img src="docs/assets/icons/acp.png" width="16"> ACP · <img src="docs/assets/icons/openclaw.jpg" width="16"> OpenClaw                                                                                                                                                                           |                                                                                                                                                                                                                                                                    |
 
----
+OpenSRE is community-built. Looking for a safe first contribution? Browse [`good first issue`](https://github.com/Tracer-Cloud/opensre/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) tickets or see the [Good First Issues guide](docs/good-first-issues/README.md). See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full workflow.
 
-## Contributing
+**Local environment:** **[SETUP.md](SETUP.md)** (all platforms, Windows, MCP/OpenClaw).
 
-OpenSRE is community-built. Every integration, improvement, and bug fix makes it better for thousands of engineers. We actively review PRs and welcome contributors of all experience levels.
+**Developing in this repo:** **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** (install from source, CI parity checks, dev container, benchmark, deployment detail, telemetry reference).
 
 <p>
   <a href="https://discord.gg/7NTpevXf7w">
     <img src="https://img.shields.io/badge/Join%20our%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join our Discord" />
   </a>
 </p>
-
-Good first issues are labeled [`good first issue`](https://github.com/Tracer-Cloud/opensre/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22). Ways to contribute:
-
-- 🐛 Report bugs or missing edge cases
-- 🔌 Add a new tool integration
-- 📖 Improve documentation or runbook examples
-- ⭐ Star the repo - it helps other engineers find OpenSRE
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
 
 <p align="center">
   <a href="https://www.star-history.com/#Tracer-Cloud/opensre&Date">
@@ -351,66 +250,26 @@ Thanks goes to these amazing people:
 
 ## Security
 
-OpenSRE is designed with production environments in mind:
-
-- No storing of raw log data beyond the investigation session
-- All LLM calls use structured, auditable prompts
-- Log transcripts are kept locally - never sent externally by default
-
-See [SECURITY.md](SECURITY.md) for responsible disclosure.
+OpenSRE is designed with production environments in mind: structured and auditable LLM prompts, local transcript handling by default, and no silent bulk export of raw logs. See **[SECURITY.md](SECURITY.md)** for responsible disclosure.
 
 ---
 
-## Telemetry & privacy
+## Telemetry
 
-`opensre` ships with two telemetry stacks, both opt-out:
-
-- **PostHog** for anonymous product analytics (which commands are used, success/failure, rough runtime, CLI version, Python version, OS family, machine architecture, and a small amount of command-specific metadata such as which subcommand ran). For `opensre onboard` and `opensre investigate`, we may also collect the selected model/provider and whether the command used flags such as `--interactive` or `--input`.
-- **Sentry** for crash and error reports (stack traces, environment, release tag).
-  - Every event is tagged with `entrypoint` (`cli`, `webapp`, `remote`, `mcp`, `integrations`, `wizard`, `graph_pipeline`), `opensre.runtime` (`cli` for user-driven CLI/wizard surfaces, `hosted` for `webapp`/`remote`/`mcp`/`graph_pipeline` server surfaces — derived from the entrypoint, not the `ENV` var; the `opensre.` prefix avoids colliding with Sentry's built-in `runtime` Python-runtime context), and `deployment_method` (`railway`, `langsmith`, `local`). `in_app_include=["app"]` keeps agent frames marked in-app, and `LoggingIntegration`, `AsyncioIntegration` and `HttpxIntegration` are wired explicitly.
-  - Scrubbing before transport: home-directory paths in stack traces; sensitive headers (`Authorization`, `Cookie`, `Set-Cookie`, `X-API-Key`); query strings on `http`/`httpx` breadcrumbs and the same headers on `http`/`httpx`/`aiohttp` breadcrumbs (defensive — the aiohttp filter only fires if a breadcrumb of that category is emitted); secret-looking keys, both by suffix (`*_token`, `*_key`, `*_secret`, `*_password`) and by substring (`prompt`, `messages`, `system_prompt`, `dsn`, `bearer`, `cookie`, `auth`, `credential`). The substring sweep is intentionally aggressive: keys like `auth_method` or `chat_messages` will be redacted. Request bodies (`request.data`/`request.body`) and `extra` payloads are walked recursively, so nested LLM payloads cannot leak through.
-
-A randomly generated anonymous install ID is created on first run and stored in `~/.config/opensre/anonymous_id`. PostHog `distinct_id` values are scoped to that install ID, so unique-user counts represent unique CLI installs/devices rather than command invocations. One-time lifecycle events use deterministic event IDs to avoid duplicate rows if they are retried.
-
-We never collect alert contents, file contents, hostnames, credentials, raw command arguments, or any other personally identifiable information. Telemetry is automatically disabled in GitHub Actions and pytest runs.
-
-### Kill-switch matrix
-
-| Env var | PostHog | Sentry |
-| --- | --- | --- |
-| `OPENSRE_NO_TELEMETRY=1` | disabled | disabled |
-| `DO_NOT_TRACK=1` | disabled | disabled |
-| `OPENSRE_ANALYTICS_DISABLED=1` | disabled | unaffected |
-| `OPENSRE_SENTRY_DISABLED=1` | unaffected | disabled |
-
-For full opt-out:
+PostHog (product analytics) and Sentry (errors) are **opt-out**. Quick disable:
 
 ```bash
 export OPENSRE_NO_TELEMETRY=1
 ```
 
-### Overriding the Sentry DSN
+**[Full matrix, DSN override, and local event logging → docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#telemetry-and-privacy)**
 
-Self-hosted users can route errors to their own Sentry project by setting `SENTRY_DSN` in the environment before invoking `opensre`. Leaving it unset uses the bundled default DSN. Setting `SENTRY_DSN=` (empty) drops all events at the `before_send` hook.
-
-### Tagging deployments
-
-Set `OPENSRE_DEPLOYMENT_METHOD` to `railway`, `langsmith`, or `local` (default `local`) to tag Sentry events with the host environment. This is a label only — it has no effect on transport or sampling.
-
-### Inspecting outbound events
-
-To inspect what `opensre` is sending to PostHog, every event is also appended to `~/.config/opensre/posthog_events.txt` by default. The file rotates at 1000 lines (older lines move to `posthog_events.txt.1`, overwriting any prior backup) so it never grows unbounded. To disable local logging:
-
-```bash
-export OPENSRE_ANALYTICS_LOG_EVENTS=0
-```
+---
 
 ## License
 
-Apache 2.0 - see [LICENSE](LICENSE) for details.
+Apache 2.0 — see [LICENSE](LICENSE).
 
 ## Citations
 
 <sup>1</sup> https://arxiv.org/abs/2310.06770
-
-<!-- No visible change: test for post-merge PR comment workflow. -->

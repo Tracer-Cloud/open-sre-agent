@@ -25,6 +25,7 @@ from app.integrations.config_models import (
     GrafanaIntegrationConfig,
     HelmIntegrationConfig,
     HoneycombIntegrationConfig,
+    IncidentIoIntegrationConfig,
     JiraIntegrationConfig,
     OpsGenieIntegrationConfig,
     SlackWebhookConfig,
@@ -404,6 +405,21 @@ def _classify_service_instance(
             return None, None
         if opsgenie_config.api_key:
             return opsgenie_config.model_dump(), "opsgenie"
+        return None, None
+
+    if key == "incident_io":
+        try:
+            incident_io_config = IncidentIoIntegrationConfig.model_validate(
+                {
+                    "api_key": credentials.get("api_key", ""),
+                    "base_url": credentials.get("base_url", ""),
+                    "integration_id": record_id,
+                }
+            )
+        except Exception:
+            return None, None
+        if incident_io_config.api_key:
+            return incident_io_config.model_dump(), "incident_io"
         return None, None
 
     if key == "jira":
@@ -1198,6 +1214,25 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 opsgenie_config.model_dump(exclude={"integration_id"}),
             )
         )
+
+    incident_io_api_key = os.getenv("INCIDENT_IO_API_KEY", "").strip()
+    if incident_io_api_key:
+        try:
+            incident_io_config = IncidentIoIntegrationConfig.model_validate(
+                {
+                    "api_key": incident_io_api_key,
+                    "base_url": os.getenv("INCIDENT_IO_BASE_URL", "").strip(),
+                }
+            )
+        except Exception:
+            logger.debug("Failed to load incident.io config from env", exc_info=True)
+        else:
+            integrations.append(
+                _active_env_record(
+                    "incident_io",
+                    incident_io_config.model_dump(exclude={"integration_id"}),
+                )
+            )
 
     jira_base_url = os.getenv("JIRA_BASE_URL", "").strip()
     jira_email = os.getenv("JIRA_EMAIL", "").strip()

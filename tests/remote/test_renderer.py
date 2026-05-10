@@ -434,7 +434,8 @@ class TestStreamRendererDiagnoseStreaming:
         renderer = StreamRenderer()
         renderer.render_stream(_events_mode_stream())
 
-        assert renderer._diagnose_buffer == []
+        assert renderer._diagnose.buffer == []
+        assert renderer._diagnose._live is None
         assert "diagnose_root_cause" not in renderer.node_names_seen
 
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "text"})
@@ -459,7 +460,7 @@ class TestStreamRendererDiagnoseStreaming:
         renderer.render_stream(_investigation_events())
 
         out, _ = capfd.readouterr()
-        # Updates mode never populates _diagnose_buffer, so the section prints.
+        # Updates mode never populates the diagnose buffer, so the section prints.
         assert "Root Cause" in out
         assert "Schema mismatch" in out
 
@@ -584,5 +585,172 @@ class TestStreamRendererDiagnoseStreaming:
             assert "LLM quota exhausted" in str(exc)
 
         # _finish_active_node runs in the finally block and routes diagnose
-        # through _finish_diagnose_streaming, which clears _active_node.
+        # through _end_diagnose, which closes the Live region and clears
+        # _active_node.
+        assert renderer._diagnose._live is None
         assert renderer._active_node is None
+
+
+class TestStreamRendererDiagnoseThrottle:
+    """Pin the throttle: ``Markdown(buffer)`` is constructed at most once
+    per refresh window plus a final flush, even on long streams.
+
+    The diagnose node previously called ``live.update(Markdown(buffer))`` on
+    every token chunk, so a 10k-token reasoning trace caused ~10k full
+    Markdown re-parses (each O(n) on a growing buffer) — visibly stalling
+    long streams. These tests use a fake clock + Markdown spy so the parse
+    count is deterministic.
+    """
+
+    @staticmethod
+    def _make_diagnose_chunk(content: object) -> StreamEvent:
+        return _make_event(
+            "events",
+            "diagnose",
+            {
+                "name": "diagnose",
+                "data": {"chunk": {"content": content}},
+                "metadata": {"langgraph_node": "diagnose"},
+            },
+            kind="on_chat_model_stream",
+            tags=[],
+        )
+
+    @staticmethod
+    def _make_diagnose_start() -> StreamEvent:
+        return _make_event(
+            "events",
+            "diagnose",
+            {"name": "diagnose", "data": {}, "metadata": {"langgraph_node": "diagnose"}},
+            kind="on_chain_start",
+            tags=["graph:step:1"],
+        )
+
+    @staticmethod
+    def _make_diagnose_end() -> StreamEvent:
+        return _make_event(
+            "events",
+            "diagnose",
+            {
+                "name": "diagnose",
+                "data": {"output": {"root_cause": "x"}},
+                "metadata": {"langgraph_node": "diagnose"},
+            },
+            kind="on_chain_end",
+            tags=["graph:step:1"],
+        )
+
+    def _install_clock_and_spy(self, monkeypatch) -> tuple[list[float], list[int]]:
+        """Patch ``time.monotonic`` and ``Markdown`` in the renderer module.
+
+        Returns ``(fake_time, parse_count)`` mutable cells the test drives.
+        """
+        from app.remote import renderer as renderer_module
+
+        fake_time = [0.0]
+        parse_count = [0]
+        real_markdown = renderer_module.Markdown
+
+        class _SpyMarkdown(real_markdown):
+            def __init__(self, text: str) -> None:
+                parse_count[0] += 1
+                super().__init__(text)
+
+        monkeypatch.setattr(renderer_module.time, "monotonic", lambda: fake_time[0])
+        monkeypatch.setattr(renderer_module, "Markdown", _SpyMarkdown)
+        return fake_time, parse_count
+
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
+    def test_chunks_in_one_window_collapse_to_a_single_final_flush(self, monkeypatch) -> None:
+        """100 chunks while the clock is stuck → exactly one Markdown parse."""
+        fake_time, parse_count = self._install_clock_and_spy(monkeypatch)
+        # Force rich mode so the Live region opens and the throttle gates
+        # actual ``live.update`` calls. In text mode (pytest default — stdout
+        # isn't a tty) ``_diagnose._live`` stays None and the throttle never
+        # fires, which is the wrong path to test here.
+        renderer = StreamRenderer()
+
+        renderer._handle_event(self._make_diagnose_start())
+        for i in range(100):
+            renderer._handle_event(self._make_diagnose_chunk(f"c{i} "))
+        renderer._handle_event(self._make_diagnose_end())
+
+        # Clock never advanced past 0.0 — every per-chunk render was gated.
+        # Only the unconditional final flush in _DiagnoseStreamRenderer.finish
+        # fires, producing exactly one Markdown parse.
+        assert parse_count[0] == 1, (
+            f"expected 1 parse (final flush only), got {parse_count[0]}; "
+            "throttle is letting intra-window updates through"
+        )
+        # Buffer still contains all chunks even though we only rendered once.
+        assert "c0 " in "".join(renderer._diagnose.buffer)
+        assert "c99 " in "".join(renderer._diagnose.buffer)
+        # silence unused-var while keeping the fixture wired.
+        assert fake_time[0] == 0.0
+
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
+    def test_chunks_across_multiple_windows_render_periodically(self, monkeypatch) -> None:
+        """Chunks spaced past the throttle interval render multiple times."""
+        from app.remote import renderer as renderer_module
+
+        fake_time, parse_count = self._install_clock_and_spy(monkeypatch)
+        interval = renderer_module._DIAGNOSE_RENDER_INTERVAL_S
+        renderer = StreamRenderer()
+
+        renderer._handle_event(self._make_diagnose_start())
+        # 10 chunks, each crossing a fresh render window (2× interval apart).
+        for i in range(10):
+            fake_time[0] = (i + 1) * (interval * 2)
+            renderer._handle_event(self._make_diagnose_chunk(f"c{i} "))
+        renderer._handle_event(self._make_diagnose_end())
+
+        # 10 in-loop renders + 1 final flush. Tolerance for boundary effects.
+        assert 9 <= parse_count[0] <= 12, (
+            f"expected ~10–11 parses across 10 windows, got {parse_count[0]}"
+        )
+        # Throttle's purpose: parse count must stay << total chunks.
+        assert parse_count[0] < 50
+
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
+    def test_final_flush_renders_chunks_pending_in_last_window(self, monkeypatch) -> None:
+        """Chunks arriving in the trailing throttle window must still appear."""
+        from app.remote import renderer as renderer_module
+
+        fake_time, parse_count = self._install_clock_and_spy(monkeypatch)
+        interval = renderer_module._DIAGNOSE_RENDER_INTERVAL_S
+        renderer = StreamRenderer()
+
+        renderer._handle_event(self._make_diagnose_start())
+        # First chunk crosses one window — renders.
+        fake_time[0] = interval * 2
+        renderer._handle_event(self._make_diagnose_chunk("early "))
+        # Remaining chunks fall within the same window — throttle blocks them.
+        renderer._handle_event(self._make_diagnose_chunk("tail-1 "))
+        renderer._handle_event(self._make_diagnose_chunk("tail-2"))
+        renderer._handle_event(self._make_diagnose_end())
+
+        # All chunks must be in the buffer at finish (final flush picks them up).
+        assert "".join(renderer._diagnose.buffer) == "early tail-1 tail-2"
+        # Two parses: one in-loop render at "early " + one final flush.
+        assert parse_count[0] == 2
+
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
+    def test_anthropic_block_chunks_throttle_correctly(self, monkeypatch) -> None:
+        """List-shaped Anthropic content blocks honor the same throttle gate."""
+        fake_time, parse_count = self._install_clock_and_spy(monkeypatch)
+        renderer = StreamRenderer()
+
+        renderer._handle_event(self._make_diagnose_start())
+        # Mixed: dict-form text blocks + tool-use (skipped) + object-form.
+        # Clock stuck → all gated, only final flush fires.
+        for i in range(20):
+            content = [{"type": "text", "text": f"c{i} "}]
+            renderer._handle_event(self._make_diagnose_chunk(content))
+        renderer._handle_event(self._make_diagnose_end())
+
+        # Exactly one Markdown parse — the final flush.
+        assert parse_count[0] == 1
+        # Block list shapes flatten correctly through the throttle path too.
+        assert "".join(renderer._diagnose.buffer).startswith("c0 ")
+        assert "c19" in "".join(renderer._diagnose.buffer)
+        assert fake_time[0] == 0.0

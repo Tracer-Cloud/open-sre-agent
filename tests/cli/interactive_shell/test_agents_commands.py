@@ -36,6 +36,11 @@ def _isolate_registry(monkeypatch: pytest.MonkeyPatch, path: Path) -> AgentRegis
     from app.cli.interactive_shell.command_registry import agents as agents_mod
 
     monkeypatch.setattr(agents_mod, "AgentRegistry", lambda: AgentRegistry(path=path))
+    monkeypatch.setattr(
+        agents_mod,
+        "registered_and_discovered_agents",
+        lambda _registry=None: AgentRegistry(path=path).list(),
+    )
     return registry
 
 
@@ -82,7 +87,7 @@ class TestAgentsDispatch:
 
         out = buf.getvalue()
         # Caption from agents_view.render_agents_table:
-        assert "no agents registered" in out
+        assert "no agents discovered or registered" in out
         # Header row still rendered with the dashboard column structure:
         assert "agent" in out
         assert "pid" in out
@@ -103,6 +108,31 @@ class TestAgentsDispatch:
         assert "8421" in out
         assert "cursor-tab" in out
         assert "9133" in out
+
+    def test_no_subcommand_renders_discovered_agents(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.cli.interactive_shell.command_registry import agents as agents_mod
+
+        monkeypatch.setattr(
+            agents_mod,
+            "registered_and_discovered_agents",
+            lambda _registry=None: [
+                AgentRecord(
+                    name="cursor-claude-code",
+                    pid=80435,
+                    command="claude --output-format stream-json",
+                    source="discovered",
+                )
+            ],
+        )
+
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents", session, console) is True
+
+        out = buf.getvalue()
+        assert "cursor-claude-code" in out
+        assert "80435" in out
+        assert "discovered" in out
 
     def test_unknown_subcommand_prints_error(self) -> None:
         session = ReplSession()

@@ -30,6 +30,9 @@ _NON_LEADING_SYSTEM_MARK = "[system]"
 def _openai_chat_completions_with_retry(client: Any, kwargs: dict[str, Any]) -> Any:
     """Call OpenAI chat completions with retry; raises ``RuntimeError`` on final failure."""
     from openai import AuthenticationError as OpenAIAuthError
+    from openai import BadRequestError as OpenAIBadRequestError
+    from openai import NotFoundError as OpenAINotFoundError
+    from openai import RateLimitError as OpenAIRateLimitError
 
     backoff = _RETRY_INITIAL_BACKOFF_SEC
     for attempt in range(_RETRY_MAX_ATTEMPTS):
@@ -39,6 +42,24 @@ def _openai_chat_completions_with_retry(client: Any, kwargs: dict[str, Any]) -> 
             raise RuntimeError(
                 "OpenAI authentication failed. Check OPENAI_API_KEY in your environment or .env."
             ) from err
+        except OpenAINotFoundError as err:
+            raise RuntimeError(
+                "OpenAI model not found. Check your configured model name or endpoint."
+            ) from err
+        except OpenAIBadRequestError as err:
+            raise RuntimeError(f"OpenAI request rejected (HTTP 400): {err}") from err
+        except OpenAIRateLimitError as err:
+            body = getattr(err, "body", None)
+            if isinstance(body, dict) and body.get("error", {}).get("code") == "insufficient_quota":
+                raise RuntimeError(
+                    "OpenAI billing quota exceeded. Check your plan and billing details."
+                ) from err
+            if attempt == _RETRY_MAX_ATTEMPTS - 1:
+                raise RuntimeError(
+                    "OpenAI API request failed after multiple retries. Try again in a few seconds."
+                ) from err
+            time.sleep(backoff)
+            backoff *= 2
         except Exception as err:
             if attempt == _RETRY_MAX_ATTEMPTS - 1:
                 raise RuntimeError(
@@ -52,6 +73,9 @@ def _openai_chat_completions_with_retry(client: Any, kwargs: dict[str, Any]) -> 
 def _anthropic_messages_create_with_retry(client: Any, kwargs: dict[str, Any]) -> Any:
     """Call Anthropic ``messages.create`` with retry."""
     from anthropic import AuthenticationError as AnthropicAuthError
+    from anthropic import BadRequestError as AnthropicBadRequestError
+    from anthropic import NotFoundError as AnthropicNotFoundError
+    from anthropic import PermissionDeniedError as AnthropicPermissionDeniedError
 
     backoff = _RETRY_INITIAL_BACKOFF_SEC
     for attempt in range(_RETRY_MAX_ATTEMPTS):
@@ -61,6 +85,16 @@ def _anthropic_messages_create_with_retry(client: Any, kwargs: dict[str, Any]) -
             raise RuntimeError(
                 "Anthropic authentication failed. Check ANTHROPIC_API_KEY in your environment or .env."
             ) from err
+        except AnthropicNotFoundError as err:
+            raise RuntimeError(
+                "Anthropic model not found. Check your configured model name."
+            ) from err
+        except AnthropicPermissionDeniedError as err:
+            raise RuntimeError(
+                "Anthropic API access denied. Check your API key permissions."
+            ) from err
+        except AnthropicBadRequestError as err:
+            raise RuntimeError(f"Anthropic request rejected (HTTP 400): {err}") from err
         except Exception as err:
             if attempt == _RETRY_MAX_ATTEMPTS - 1:
                 raise RuntimeError(

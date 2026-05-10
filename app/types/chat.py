@@ -27,4 +27,4 @@ class BoundChatModel(Protocol):
 
     def invoke(self, messages: list[Any]) -> AssistantTurn:
         """Run one model invocation and return a framework-neutral turn."""
-        ...
+        raise NotImplementedError

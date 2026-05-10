@@ -38,7 +38,7 @@ from app.tools.utils.compaction import truncate_list
     },
 )
 def get_cloudwatch_batch_metrics(
-    job_queue: str, metric_type: str = "cpu", limit: int = 50
+    job_queue: str = "", metric_type: str = "cpu", limit: int = 50
 ) -> dict[str, Any]:
     """Get CloudWatch metrics for AWS Batch jobs."""
     if not job_queue:

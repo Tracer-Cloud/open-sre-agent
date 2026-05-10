@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 _VALID_LAYOUTS = ("classic", "pinned")
+_FALSE_VALUES = ("", "0", "false", "off", "no")
 
 # ── Release notes ─────────────────────────────────────────────────────────────
 # Shown in the "What's new" panel on startup. Update this each release with
@@ -64,10 +65,25 @@ class ReplConfig:
         is accepted and stored so the flag round-trips cleanly once P3 lands.
         Controlled by ``--layout`` CLI option, ``OPENSRE_LAYOUT`` env var, or
         ``interactive.layout`` in ``~/.config/opensre/config.yml``.
+
+    reload : bool
+        When True, the interactive shell watches repo-local Python files and
+        reloads changed modules between prompt turns. Controlled by the
+        ``--reload`` / ``--no-reload`` CLI option, ``OPENSRE_RELOAD`` env var,
+        or ``interactive.reload`` in ``~/.config/opensre/config.yml``.
     """
 
     enabled: bool = True
     layout: str = "classic"
+    reload: bool = True
+
+    @staticmethod
+    def _coerce_bool(value: Any, *, default: bool) -> bool:
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return default
+        return str(value).strip().lower() not in _FALSE_VALUES
 
     @classmethod
     def load(
@@ -75,12 +91,13 @@ class ReplConfig:
         *,
         cli_enabled: bool | None = None,
         cli_layout: str | None = None,
+        cli_reload: bool | None = None,
     ) -> ReplConfig:
         """Resolve config from all three tiers.
 
         Priority (highest wins):
-            1. CLI flag   — ``cli_enabled`` / ``cli_layout`` params
-            2. Env var    — ``OPENSRE_INTERACTIVE`` / ``OPENSRE_LAYOUT``
+            1. CLI flag   — ``cli_enabled`` / ``cli_layout`` / ``cli_reload`` params
+            2. Env var    — ``OPENSRE_INTERACTIVE`` / ``OPENSRE_LAYOUT`` / ``OPENSRE_RELOAD``
             3. Config file — ``~/.config/opensre/config.yml`` ``interactive`` section
             4. Built-in defaults (enabled=True, layout="classic")
         """
@@ -90,10 +107,9 @@ class ReplConfig:
         if cli_enabled is not None:
             enabled = cli_enabled
         elif (env_val := os.getenv("OPENSRE_INTERACTIVE")) is not None:
-            enabled = env_val.lower() not in ("0", "false", "off")
+            enabled = cls._coerce_bool(env_val, default=True)
         else:
-            raw = file_conf.get("enabled", True)
-            enabled = bool(raw)
+            enabled = cls._coerce_bool(file_conf.get("enabled"), default=True)
 
         # --- layout ---
         if cli_layout is not None:
@@ -106,7 +122,15 @@ class ReplConfig:
         if layout not in _VALID_LAYOUTS:
             layout = "classic"
 
-        return cls(enabled=enabled, layout=layout)
+        # --- reload ---
+        if cli_reload is not None:
+            reload = cli_reload
+        elif (env_val := os.getenv("OPENSRE_RELOAD")) is not None:
+            reload = cls._coerce_bool(env_val, default=True)
+        else:
+            reload = cls._coerce_bool(file_conf.get("reload"), default=True)
+
+        return cls(enabled=enabled, layout=layout, reload=reload)
 
     @classmethod
     def from_env(cls) -> ReplConfig:

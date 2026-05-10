@@ -143,6 +143,43 @@ class TestSystemPromptAgentsMdGrounding:
         assert "--- Repo map (AGENTS.md) ---" not in prompt
 
 
+class TestSystemPromptGraphPipelineGrounding:
+    """The conversational shell knows the actual LangGraph pipeline shape."""
+
+    def test_graph_pipeline_section_present_when_reference_provided(self) -> None:
+        prompt = _build_system_prompt(
+            reference="(ref)",
+            history="(hist)",
+            graph_pipeline="inject_auth -> extract_alert -> publish",
+        )
+
+        assert "--- Graph pipeline reference ---" in prompt
+        assert "inject_auth -> extract_alert -> publish" in prompt
+        assert "do not claim the graph definition is unavailable" in prompt
+
+    def test_graph_pipeline_section_omitted_when_reference_empty(self) -> None:
+        prompt = _build_system_prompt(reference="(ref)", history="(hist)", graph_pipeline="")
+
+        assert "--- Graph pipeline reference ---" not in prompt
+
+    def test_answer_cli_agent_injects_graph_pipeline_reference(self, monkeypatch: Any) -> None:
+        client = _patch_llm(monkeypatch, "Yes, I can describe the pipeline.")
+        monkeypatch.setattr(cli_agent, "build_cli_reference_text", lambda: "(ref)")
+        monkeypatch.setattr(cli_agent, "build_agents_md_reference_text", lambda: "")
+        monkeypatch.setattr(
+            cli_agent,
+            "build_graph_pipeline_reference_text",
+            lambda: "diagnose -> adapt_window -> plan_actions",
+        )
+
+        console, _ = _capture()
+        answer_cli_agent("Can you see your own graph pipeline?", ReplSession(), console)
+
+        assert client.last_prompt is not None
+        assert "--- Graph pipeline reference ---" in client.last_prompt
+        assert "diagnose -> adapt_window -> plan_actions" in client.last_prompt
+
+
 class TestActionPlanParsing:
     def test_parses_prose_wrapped_json(self) -> None:
         actions = _parse_action_plan(

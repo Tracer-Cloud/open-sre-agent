@@ -332,6 +332,22 @@ def _setup_betterstack() -> None:
     )
 
 
+def _setup_incident_io() -> None:
+    api_key = _p("incident.io API key", secret=True)
+    base_url = _p("API base URL override (optional)")
+    if not api_key:
+        _die("api_key is required.")
+    upsert_integration(
+        "incident_io",
+        {
+            "credentials": {
+                "api_key": api_key,
+                "base_url": base_url,
+            }
+        },
+    )
+
+
 def _setup_github() -> None:
     from app.integrations.github_mcp import (
         GitHubMcpRepoView,
@@ -683,6 +699,7 @@ _HANDLERS: dict[str, Any] = {
     "datadog": _setup_datadog,
     "grafana": _setup_grafana,
     "honeycomb": _setup_honeycomb,
+    "incident_io": _setup_incident_io,
     "mariadb": _setup_mariadb,
     "mongodb_atlas": _setup_mongodb_atlas,
     "slack": _setup_slack,

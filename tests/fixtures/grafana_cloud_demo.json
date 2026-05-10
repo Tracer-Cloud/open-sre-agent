@@ -1,0 +1,41 @@
+{
+  "title": "[FIRING:1] HighMemoryUsage tracer-ai-agent (grafanacloud-prom)",
+  "state": "alerting",
+  "commonLabels": {
+    "alertname": "HighMemoryUsage",
+    "grafana_folder": "tracer-ai-agent",
+    "severity": "warning",
+    "service_name": "tracer-api"
+  },
+  "commonAnnotations": {
+    "summary": "tracer-api memory usage above 85% for 10 minutes",
+    "description": "Container memory usage for tracer-api has been above 85% of its limit (512Mi) for the past 10 minutes. Current usage: 445Mi.",
+    "runbook_url": "https://tracerbio.grafana.net/alerting/grafana/demo/view"
+  },
+  "alerts": [
+    {
+      "status": "firing",
+      "labels": {
+        "alertname": "HighMemoryUsage",
+        "grafana_folder": "tracer-ai-agent",
+        "severity": "warning",
+        "service_name": "tracer-api",
+        "container": "tracer-api",
+        "namespace": "production"
+      },
+      "annotations": {
+        "summary": "tracer-api memory usage above 85% for 10 minutes",
+        "value": "445Mi / 512Mi (86.9%)"
+      },
+      "startsAt": "2026-05-08T00:00:00Z",
+      "endsAt": "0001-01-01T00:00:00Z",
+      "generatorURL": "https://tracerbio.grafana.net/alerting/grafana/demo/view?orgId=1",
+      "fingerprint": "demo-high-memory-001"
+    }
+  ],
+  "externalURL": "https://tracerbio.grafana.net",
+  "version": "1",
+  "groupKey": "{}:{alertname=\"HighMemoryUsage\", grafana_folder=\"tracer-ai-agent\"}",
+  "truncatedAlerts": 0,
+  "orgId": 1
+}

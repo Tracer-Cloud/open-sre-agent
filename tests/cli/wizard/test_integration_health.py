@@ -16,6 +16,7 @@ from app.cli.wizard.integration_health import (
     validate_github_mcp_integration,
     validate_grafana_integration,
     validate_honeycomb_integration,
+    validate_incident_io_integration,
     validate_sentry_integration,
     validate_slack_webhook,
     validate_vercel_integration,
@@ -40,6 +41,7 @@ def test_legacy_integration_health_import_surface_still_exports_validators() -> 
         "validate_google_docs_integration",
         "validate_grafana_integration",
         "validate_honeycomb_integration",
+        "validate_incident_io_integration",
         "validate_jira_integration",
         "validate_notion_integration",
         "validate_openclaw_integration",
@@ -138,6 +140,31 @@ def test_validate_honeycomb_integration_succeeds(monkeypatch) -> None:
 
     assert result.ok is True
     assert "dataset prod-api" in result.detail.lower()
+
+
+def test_validate_incident_io_integration_succeeds(monkeypatch) -> None:
+    class _FakeIncidentIoClient:
+        def __init__(self, _config) -> None:
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            pass
+
+        def list_incidents(self, **_kwargs):
+            return {"success": True}
+
+    monkeypatch.setattr(
+        "app.cli.wizard.integration_validators.client_validators.IncidentIoClient",
+        _FakeIncidentIoClient,
+    )
+
+    result = validate_incident_io_integration(api_key="iio_test")
+
+    assert result.ok is True
+    assert "api key accepted" in result.detail.lower()
 
 
 def test_validate_coralogix_integration_fails(monkeypatch) -> None:

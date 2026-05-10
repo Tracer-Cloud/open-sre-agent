@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from langgraph.constants import Send
+from langgraph.types import Send
 
 from app.investigation_constants import MAX_INVESTIGATION_LOOPS
 from app.output import debug_print

@@ -21,6 +21,8 @@ opensre
 
 Then describe the incident or paste alert context at the prompt. Use `/help` for slash commands and `/exit` when finished.
 
+When `LLM_PROVIDER` is `openai` or `codex`, `/effort` sets how much reasoning the model applies for that REPL session (`low`, `medium`, `high`, `xhigh`, or `max`). Run `/effort` with no arguments to print the current level and usage; `/status` includes the same field. Other providers ignore this setting (the shell prints a hint). You can also set `OPENSRE_REASONING_EFFORT` to `low`, `medium`, `high`, or `xhigh` in the environment for non-interactive defaults.
+
 ### Direct investigation (`opensre investigate`)
 
 Pass an alert payload to `opensre investigate`:

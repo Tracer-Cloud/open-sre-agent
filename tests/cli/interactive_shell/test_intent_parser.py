@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import pytest
+
 from app.cli.interactive_shell.intent_parser import (
     SAMPLE_ALERT_RE,
+    extract_implementation_request,
+    extract_shell_command,
     normalize_shell_command,
+    shutil,
     split_prompt_clauses,
 )
+from app.cli.interactive_shell.interaction_models import PromptClause
 
 
 def test_split_prompt_clauses_preserves_positions() -> None:
@@ -24,6 +30,38 @@ def test_normalize_shell_command_rejects_multiline() -> None:
 
 def test_normalize_shell_command_strips_ticks() -> None:
     assert normalize_shell_command("`whoami`") == "whoami"
+
+
+def test_extract_implementation_request_matches_explicit_implement_phrase() -> None:
+    action = extract_implementation_request(
+        PromptClause(text="please implement /history search", position=3)
+    )
+
+    assert action is not None
+    assert action.kind == "implementation"
+    assert action.content == "/history search"
+    assert action.position == 10
+
+
+def test_extract_implementation_request_allows_context_dependent_bare_implement() -> None:
+    action = extract_implementation_request(PromptClause(text="implement", position=0))
+
+    assert action is not None
+    assert action.kind == "implementation"
+    assert action.content == "implement"
+
+
+def test_code_editor_command_is_not_implementation_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(shutil, "which", lambda _command: "/usr/bin/code")
+    clause = PromptClause(text="code .", position=0)
+
+    assert extract_implementation_request(clause) is None
+    action = extract_shell_command(clause)
+    assert action is not None
+    assert action.kind == "shell"
+    assert action.content == "code ."
 
 
 class TestSampleAlertRE:
