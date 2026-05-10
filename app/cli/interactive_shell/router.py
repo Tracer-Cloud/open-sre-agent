@@ -62,25 +62,30 @@ def _is_slash_prefix(text: str, _session: RoutingSession) -> bool:
 
 
 def _is_bare_command_alias(text: str, _session: RoutingSession) -> bool:
-    normalized = normalize_intent_text(text.strip())
-    return normalized in BARE_COMMAND_ALIASES
+    stripped = text.strip()
+    # Check exact (case-insensitive) match first so the typo corrector cannot
+    # mis-correct a valid command word (e.g. "reset" → "test").
+    if stripped.lower() in BARE_COMMAND_ALIASES:
+        return True
+    # Fall back to normalized form to support obvious typos (e.g. "hlep" → "help").
+    return normalize_intent_text(stripped) in BARE_COMMAND_ALIASES
 
 
 def _is_cli_help_rule(text: str, _session: RoutingSession) -> bool:
-    return _is_cli_help_intent(normalize_intent_text(text.strip()))
+    return _is_cli_help_intent(text.strip())
 
 
 def _is_sample_alert_rule(text: str, _session: RoutingSession) -> bool:
-    return is_sample_alert_launch_intent(normalize_intent_text(text.strip()))
+    return is_sample_alert_launch_intent(text.strip())
 
 
 def _is_cli_agent_action_rule(
     text: str,
     _session: RoutingSession,
 ) -> bool:
-    normalized = normalize_intent_text(text.strip())
-    actions, _unhandled = plan_actions_with_unhandled(normalized)
-    return bool(actions)
+    stripped = text.strip()
+    actions, _unhandled = plan_actions_with_unhandled(stripped)
+    return bool(actions) and not mentions_alert_signal(stripped)
 
 
 def _is_new_alert_without_prior_state(
@@ -406,8 +411,7 @@ def _reads_like_investigation_request(text: str) -> bool:
 
 def _is_cli_help_intent(text: str) -> bool:
     """True for meta-questions about how to use OpenSRE, the CLI, or the shell."""
-    normalized = normalize_intent_text(text)
-    return any(pattern.search(normalized) for pattern in _CLI_HELP_PATTERNS)
+    return any(pattern.search(text) for pattern in _CLI_HELP_PATTERNS)
 
 
 def route_input(text: str, session: RoutingSession) -> RouteDecision:
