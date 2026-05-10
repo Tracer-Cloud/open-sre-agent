@@ -1,7 +1,5 @@
 import os
 import sys
-import time
-from typing import Optional
 
 # Ensure we can import app
 sys.path.append(os.getcwd())

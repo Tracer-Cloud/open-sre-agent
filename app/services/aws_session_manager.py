@@ -195,6 +195,8 @@ class AWSSessionManager:
                 if not role_arn or not self._is_session_expired(role_arn, external_id=external_id):
                     return self._client_cache[cache_key]
                 # Client exists but session expired — mark for forced replacement
+                # and evict immediately to prevent other threads from using it
+                del self._client_cache[cache_key]
                 was_expired = True
 
         # Create new client (network bound)
