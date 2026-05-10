@@ -11,7 +11,6 @@ from typing import Any
 
 from rich.console import Console
 
-from app.pipeline.runners import run_investigation
 from tests.synthetic.mock_aws_backend import FixtureAWSBackend
 from tests.synthetic.mock_grafana_backend.backend import FixtureGrafanaBackend
 from tests.synthetic.rds_postgres.observations import (
@@ -472,6 +471,8 @@ def run_scenario(
     use_mock_grafana: bool = False,
     grafana_backend: Any = None,
 ) -> tuple[dict[str, Any], ScenarioScore]:
+    from app.pipeline.runners import run_investigation
+
     alert = fixture.alert
     labels = alert.get("commonLabels", {}) or {}
 
@@ -513,6 +514,48 @@ def _resolved_golden_trajectory(
             golden_cfg,
         )
     return list(fixture.answer_key.optimal_trajectory), fixture.answer_key.max_investigation_loops, None
+
+
+def _trajectory_policy_for_fixture(
+    *,
+    max_loops: int | None,
+    golden_cfg: GoldenTrajectoryConfig | None,
+) -> TrajectoryPolicy | None:
+    if golden_cfg is None:
+        return None
+    return TrajectoryPolicy(
+        matching=golden_cfg.matching,
+        max_edit_distance=golden_cfg.max_edit_distance,
+        max_extra_actions=golden_cfg.max_extra_actions,
+        max_redundancy=golden_cfg.max_redundancy,
+        # Enforce the resolved loop threshold even if golden_trajectory omits max_loops.
+        max_loops=max_loops,
+    )
+
+
+def _apply_trajectory_policy_to_score(
+    score: ScenarioScore,
+    trajectory_policy: Any,
+) -> ScenarioScore:
+    if trajectory_policy is None or trajectory_policy.passed:
+        return score
+
+    policy_reason = "trajectory policy failed: " + "; ".join(
+        trajectory_policy.violations or ["unknown violation"]
+    )
+    if score.failure_reason:
+        if "trajectory policy failed:" in score.failure_reason:
+            combined_reason = score.failure_reason
+        else:
+            combined_reason = f"{score.failure_reason}; {policy_reason}"
+    else:
+        combined_reason = policy_reason
+
+    return replace(
+        score,
+        passed=False,
+        failure_reason=combined_reason,
+    )
 
 
 def _print_gap_report(
@@ -588,27 +631,16 @@ def run_suite(argv: list[str] | None = None) -> list[ScenarioScore]:
             evaluate_trajectory_policy(
                 metrics=trajectory_metrics,
                 golden_actions=golden_trajectory,
-                policy=TrajectoryPolicy(
-                    matching=golden_cfg.matching,
-                    max_edit_distance=golden_cfg.max_edit_distance,
-                    max_extra_actions=golden_cfg.max_extra_actions,
-                    max_redundancy=golden_cfg.max_redundancy,
-                    max_loops=golden_cfg.max_loops,
+                policy=_trajectory_policy_for_fixture(
+                    max_loops=max_loops,
+                    golden_cfg=golden_cfg,
                 ),
             )
             if golden_cfg is not None
             else None
         )
 
-        if score.passed and trajectory_policy is not None and not trajectory_policy.passed:
-            score = replace(
-                score,
-                passed=False,
-                failure_reason=(
-                    "trajectory policy failed: "
-                    + "; ".join(trajectory_policy.violations or ["unknown violation"])
-                ),
-            )
+        score = _apply_trajectory_policy_to_score(score, trajectory_policy)
 
         results.append(score)
 
