@@ -36,7 +36,9 @@ from app.output import (
     ProgressTracker,
     get_output_format,
     render_investigation_header,
+    set_live_console,
     stop_display,
+    unregister_live_console,
 )
 from app.remote.reasoning import reasoning_text
 from app.remote.stream import StreamEvent
@@ -157,9 +159,7 @@ class _DiagnoseStreamRenderer:
 
         # Register console globally so that print_above_renderable fallbacks
         # correctly print above this live region during the diagnose phase.
-        import app.output
-
-        app.output._live_console = self._console
+        set_live_console(self._console)
         self._live.start()
 
     def append_chunk(self, event: StreamEvent) -> None:
@@ -206,10 +206,7 @@ class _DiagnoseStreamRenderer:
             finally:
                 self._live = None
                 # Unregister only if we own it (safeguard against subsequent activations)
-                import app.output
-
-                if getattr(app.output, "_live_console", None) is self._console:
-                    app.output._live_console = None
+                unregister_live_console(self._console)
             sys.stdout.write(
                 f"  {_GREEN}●{_RESET}  {_BOLD}{_WHITE}{_DIAGNOSE_NODE}{_RESET}"
                 f"  {_DIM}{elapsed:.1f}s{_RESET}"

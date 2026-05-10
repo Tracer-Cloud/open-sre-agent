@@ -164,6 +164,19 @@ def _get_console() -> Console:
     return _live_console or Console(highlight=False)
 
 
+def set_live_console(console: Console | None) -> None:
+    """Register an active console globally for top-level routing."""
+    global _live_console
+    _live_console = console
+
+
+def unregister_live_console(expected: Console) -> None:
+    """Safely clear the active console registry ONLY if it matches the owner."""
+    global _live_console
+    if _live_console is expected:
+        _live_console = None
+
+
 def stop_display() -> None:
     """Stop any running live display. Call before printing final report output."""
     global _active_display
