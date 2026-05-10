@@ -116,14 +116,18 @@ def probe(pid: int, *, cpu_interval: float = 0.1) -> ProcessSnapshot | None:
 def _safe_num_fds(proc: psutil.Process) -> int | None:
     """File-descriptor count is POSIX-only; ``None`` on Windows.
 
-    EAFP rather than ``hasattr`` because typeshed's ``psutil.Process``
-    declares ``num_fds`` unconditionally — the platform check only
-    fires at runtime as ``AttributeError``.
+    ``Process.num_fds`` is missing from the Windows-facing typeshed shape
+    and is absent at runtime; use ``getattr`` so ``mypy --platform win32``
+    stays clean.
     """
-    try:
-        return proc.num_fds()
-    except (AttributeError, psutil.AccessDenied, NotImplementedError):
+    num_fds_fn = getattr(proc, "num_fds", None)
+    if num_fds_fn is None:
         return None
+    try:
+        n = num_fds_fn()
+    except (psutil.AccessDenied, NotImplementedError, TypeError, ValueError):
+        return None
+    return int(n)
 
 
 def _safe_num_connections(proc: psutil.Process) -> int | None:

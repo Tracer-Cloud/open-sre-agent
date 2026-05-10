@@ -306,7 +306,15 @@ class ClaudeCodeAdapter:
             )
         return self._probe_binary(binary)
 
-    def build(self, *, prompt: str, model: str | None, workspace: str) -> CLIInvocation:
+    def build(
+        self,
+        *,
+        prompt: str,
+        model: str | None,
+        workspace: str,
+        reasoning_effort: str | None = None,
+    ) -> CLIInvocation:
+        _ = reasoning_effort
         binary = self._resolve_binary()
         if not binary:
             raise RuntimeError(

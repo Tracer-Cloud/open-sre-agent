@@ -373,10 +373,18 @@ def _handle_insufficient_evidence(state: InvestigationState, tracker) -> dict:
 
     # If Grafana service names were just discovered but logs haven't been fetched yet,
     # loop back so node_plan_actions can query logs with the correct service name.
+    # Skip if query_grafana_logs has already failed — retrying a failed query wastes loops.
+    executed_hypotheses = state.get("executed_hypotheses", [])
+    logs_already_failed = any(
+        failed.get("action") == "query_grafana_logs"
+        for h in executed_hypotheses
+        for failed in h.get("failed_actions", [])
+    )
     recommendations: list[str] = []
     if (
         evidence.get("grafana_service_names")
         and not evidence.get("grafana_logs")
+        and not logs_already_failed
         and loop_count < MAX_INVESTIGATION_LOOPS
     ):
         recommendations.append("Query Grafana logs using discovered service names")

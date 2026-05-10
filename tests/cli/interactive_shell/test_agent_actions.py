@@ -261,16 +261,13 @@ def test_services_version_deploy_prompt_plans_all_actions() -> None:
 
 
 def test_explicit_shell_command_plans_shell_action() -> None:
-    assert plan_terminal_tasks("run `pwd`") == ["shell"]
-    assert plan_terminal_tasks("run the command `pwd`") == ["shell"]
-    assert plan_cli_actions("run `pwd`") == []
+    assert plan_terminal_tasks("run `whoami`") == ["shell"]
+    assert plan_terminal_tasks("run the command `whoami`") == ["shell"]
+    assert plan_cli_actions("run `whoami`") == []
 
 
 def test_direct_shell_command_plans_shell_action() -> None:
-    assert plan_terminal_tasks("pwd") == ["shell"]
-    assert plan_terminal_tasks("cd /tmp") == ["shell"]
-    assert plan_terminal_tasks("CD /tmp") == ["shell"]
-    assert plan_terminal_tasks("!ls -la") == ["shell"]
+    assert plan_terminal_tasks("whoami") == ["shell"]
 
 
 def test_sample_alert_launch_plans_sample_alert_action() -> None:

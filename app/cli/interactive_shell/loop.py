@@ -33,6 +33,7 @@ from app.cli.interactive_shell.theme import DIM, ERROR, WARNING
 from app.cli.support.errors import OpenSREError
 from app.cli.support.exception_reporting import report_exception
 from app.cli.support.prompt_support import repl_prompt_note_ctrl_c, repl_reset_ctrl_c_gate
+from app.llm_reasoning_effort import apply_reasoning_effort
 
 _INTERVENTION_CORRECTION_RE = re.compile(
     r"("
@@ -92,11 +93,12 @@ def _run_new_alert(
     task = session.task_registry.create(TaskKind.INVESTIGATION)
     task.mark_running()
     try:
-        final_state = run_investigation_for_session(
-            alert_text=text,
-            context_overrides=session.accumulated_context or None,
-            cancel_requested=task.cancel_requested,
-        )
+        with apply_reasoning_effort(session.reasoning_effort):
+            final_state = run_investigation_for_session(
+                alert_text=text,
+                context_overrides=session.accumulated_context or None,
+                cancel_requested=task.cancel_requested,
+            )
     except KeyboardInterrupt:
         task.mark_cancelled()
         session.record_intervention("ctrl_c")
@@ -176,7 +178,8 @@ async def _run_one_turn(
         return should_continue
 
     if kind == "cli_help":
-        answer_cli_help(text, session, console)
+        with apply_reasoning_effort(session.reasoning_effort):
+            answer_cli_help(text, session, console)
         session.record("cli_help", text)
         return True
 
@@ -200,7 +203,8 @@ async def _run_one_turn(
         )
         if turn.handled:
             return True
-        answer_cli_agent(text, session, console)
+        with apply_reasoning_effort(session.reasoning_effort):
+            answer_cli_agent(text, session, console)
         session.record("cli_agent", text)
         return True
 
@@ -209,7 +213,8 @@ async def _run_one_turn(
         return True
 
     # follow_up — grounded answer against session.last_state
-    answer_follow_up(text, session, console)
+    with apply_reasoning_effort(session.reasoning_effort):
+        answer_follow_up(text, session, console)
     session.record("follow_up", text)
     return True
 
@@ -219,7 +224,9 @@ async def _repl_main(initial_input: str | None = None, _config: ReplConfig | Non
     # prompt_toolkit has claimed and released stdout for input handling.
     # Without this, slash-command output after the first prompt renders as
     # literal escape codes in some terminal emulators.
-    console = Console(highlight=False, force_terminal=True, color_system="truecolor")
+    console = Console(
+        highlight=False, force_terminal=True, color_system="truecolor", legacy_windows=False
+    )
     render_banner(console)
     # Prune dead-PID agent records and stale lockfiles before the user's
     # first ``/agents`` call. Errors are caught inside; a sweep failure
@@ -250,7 +257,8 @@ async def _repl_main(initial_input: str | None = None, _config: ReplConfig | Non
                     return 0
                 console.print()
             elif kind == "cli_help":
-                answer_cli_help(stripped, session, console)
+                with apply_reasoning_effort(session.reasoning_effort):
+                    answer_cli_help(stripped, session, console)
                 session.record("cli_help", stripped)
             elif kind == "cli_agent":
                 turn = execute_cli_actions_with_metrics(stripped, session, console)
@@ -271,12 +279,14 @@ async def _repl_main(initial_input: str | None = None, _config: ReplConfig | Non
                     session_fallback_rate_percent=snapshot.fallback_rate_percent,
                 )
                 if not turn.handled:
-                    answer_cli_agent(stripped, session, console)
+                    with apply_reasoning_effort(session.reasoning_effort):
+                        answer_cli_agent(stripped, session, console)
                     session.record("cli_agent", stripped)
             elif kind == "new_alert":
                 _run_new_alert(stripped, session, console)
             else:
-                answer_follow_up(stripped, session, console)
+                with apply_reasoning_effort(session.reasoning_effort):
+                    answer_follow_up(stripped, session, console)
                 session.record("follow_up", stripped)
 
     while True:

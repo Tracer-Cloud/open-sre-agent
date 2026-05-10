@@ -42,7 +42,9 @@ from app.llm_credentials import (
 )
 from app.version import get_version
 
-_console = Console(highlight=False, force_terminal=True, color_system="truecolor")
+_console = Console(
+    highlight=False, force_terminal=True, color_system="truecolor", legacy_windows=False
+)
 DEFAULT_GITHUB_MCP_URL = "https://api.githubcopilot.com/mcp/"
 DEFAULT_GITHUB_MCP_MODE = "streamable-http"
 DEFAULT_OPENCLAW_MCP_URL = "http://127.0.0.1:18789/"
@@ -175,6 +177,12 @@ def validate_opensearch_integration(**kwargs):
 
 def validate_opsgenie_integration(**kwargs):
     from app.cli.wizard.integration_health import validate_opsgenie_integration as _validate
+
+    return _validate(**kwargs)
+
+
+def validate_incident_io_integration(**kwargs):
+    from app.cli.wizard.integration_health import validate_incident_io_integration as _validate
 
     return _validate(**kwargs)
 
@@ -429,7 +437,7 @@ def _render_header() -> None:
       ─────────────────────────────────────────  [DIM rule]
         ___                    ____  ____  _____ [HIGHLIGHT art]
        / _ \\ ...
-      opensre  ·  v2026.4.7                      [SECONDARY name] [DIM ·] [BRAND version]
+      opensre  ·  v<version>                     [SECONDARY name] [DIM ·] [BRAND version]
       open-source SRE agent for automated …      [DIM description]
       ─────────────────────────────────────────  [DIM rule]
       Setup — Configure your local AI stack …    [SECONDARY subtitle]
@@ -578,10 +586,15 @@ def _render_integration_result(
 
 def _configure_grafana() -> tuple[str, str]:
     _, credentials = _integration_defaults("grafana")
+    saved_endpoint = _string_value(credentials.get("endpoint"))
+    # Don't pre-fill a localhost URL — it's a local dev default, not a real instance.
+    endpoint_default = (
+        saved_endpoint if saved_endpoint and "localhost" not in saved_endpoint else ""
+    )
     while True:
         endpoint = _prompt_value(
             "Grafana instance URL",
-            default=_string_value(credentials.get("endpoint")),
+            default=endpoint_default,
         )
         api_key = _prompt_value(
             "Grafana service account token",
@@ -1462,6 +1475,41 @@ def _configure_opsgenie() -> tuple[str, str]:
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 
 
+def _configure_incident_io() -> tuple[str, str]:
+    _, credentials = _integration_defaults("incident_io")
+    while True:
+        api_key = _prompt_value(
+            "incident.io API key",
+            default=_string_value(credentials.get("api_key")),
+            secret=True,
+        )
+        base_url = _prompt_value(
+            "API base URL override (optional)",
+            default=_string_value(credentials.get("base_url")),
+            allow_empty=True,
+        )
+        with _console.status("Validating incident.io integration...", spinner="dots"):
+            result = validate_incident_io_integration(
+                api_key=api_key,
+                base_url=base_url,
+            )
+        _render_integration_result("incident.io", result)
+        if result.ok:
+            credentials_payload = {
+                "api_key": api_key,
+                "base_url": base_url,
+            }
+            upsert_integration("incident_io", {"credentials": credentials_payload})
+            env_path = sync_env_values(
+                {
+                    "INCIDENT_IO_API_KEY": api_key,
+                    "INCIDENT_IO_BASE_URL": base_url,
+                }
+            )
+            return "incident.io", str(env_path)
+        _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
+
+
 def _configure_discord() -> tuple[str, str]:
     _, credentials = _integration_defaults("discord")
     _console.print(
@@ -1742,6 +1790,11 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
             hint="Investigate alerts and triage state from OpsGenie",
         ),
         Choice(
+            value="incident_io",
+            label="incident.io",
+            hint="Read incident context and updates from incident.io",
+        ),
+        Choice(
             value="notion",
             label="Notion",
             hint="Post investigation reports to a Notion database",
@@ -1789,6 +1842,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "jira": _configure_jira,
         "alertmanager": _configure_alertmanager,
         "opsgenie": _configure_opsgenie,
+        "incident_io": _configure_incident_io,
         "notion": _configure_notion,
         "openclaw": _configure_openclaw,
         "opensearch": _configure_opensearch,
@@ -1811,6 +1865,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "jira": "jira",
         "alertmanager": "alertmanager",
         "opsgenie": "opsgenie",
+        "incident_io": "incident.io",
         "notion": "notion",
         "openclaw": "openclaw",
         "opensearch": "opensearch",

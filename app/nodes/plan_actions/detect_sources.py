@@ -162,6 +162,20 @@ def _extract_issue_id_from_url(value: str) -> str:
     return parts[index + 1].strip()
 
 
+def _extract_incident_io_id_from_url(value: str) -> str:
+    parsed = urlparse(value.strip())
+    host = (parsed.hostname or "").lower()
+    if host != "incident.io" and not host.endswith(".incident.io"):
+        return ""
+    parts = [part for part in parsed.path.split("/") if part]
+    if "incidents" not in parts:
+        return ""
+    index = parts.index("incidents")
+    if index + 1 >= len(parts):
+        return ""
+    return parts[index + 1].strip()
+
+
 def detect_sources(
     raw_alert: dict[str, Any] | str,
     context: dict[str, Any],
@@ -1567,6 +1581,33 @@ def detect_sources(
             "alert_id": alert_id,
             "query": opsgenie_query,
             "connection_verified": True,
+        }
+
+    incident_io_int = (resolved_integrations or {}).get("incident_io")
+    if incident_io_int and str(incident_io_int.get("api_key", "")).strip():
+        incident_id = str(
+            annotations.get("incident_io_incident_id")
+            or raw_alert.get("incident_io_incident_id", "")
+        ).strip()
+        if not incident_id:
+            incident_url = str(
+                annotations.get("incident_io_url")
+                or annotations.get("incident_url")
+                or raw_alert.get("incident_url", "")
+            ).strip()
+            incident_id = _extract_incident_io_id_from_url(incident_url)
+
+        sources["incident_io"] = {
+            "api_key": str(incident_io_int.get("api_key", "")).strip(),
+            "base_url": str(incident_io_int.get("base_url", "")).strip(),
+            "incident_id": incident_id,
+            "status_category": str(
+                annotations.get("incident_io_status_category")
+                or raw_alert.get("incident_io_status_category", "")
+                or "live"
+            ).strip(),
+            "connection_verified": True,
+            "integration_id": str(incident_io_int.get("integration_id", "")).strip(),
         }
 
     jira_int = (resolved_integrations or {}).get("jira")

@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from prompt_toolkit.history import History
 
 from app.cli.interactive_shell.tasks import TaskRegistry
+from app.llm_reasoning_effort import ReasoningEffortChoice
 
 InterventionKind = Literal["ctrl_c", "correction"]
 
@@ -48,6 +49,9 @@ class ReplSession:
 
     trust_mode: bool = False
     """When True, confirmation prompts for elevated REPL actions are skipped."""
+
+    reasoning_effort: ReasoningEffortChoice | None = None
+    """Session-scoped reasoning effort preference for REPL-driven LLM calls."""
 
     token_usage: dict[str, int] = field(default_factory=dict)
     """Accumulated token counts: {"input": N, "output": N}. Populated when available."""
@@ -139,7 +143,7 @@ class ReplSession:
 
         self.ctrl_c_intervention_count = 0
         self.correction_intervention_count = 0
-        # trust_mode is intentionally preserved across /reset
+        # trust_mode and reasoning_effort are intentionally preserved across /reset
 
     def record_intervention(self, kind: InterventionKind) -> None:
         """Increment the per-kind intervention counter (Ctrl-C or correction)."""

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import warnings
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -359,6 +360,34 @@ def test_init_sentry_passes_explicit_integrations(monkeypatch) -> None:
     assert "LoggingIntegration" in integration_names
     assert "AsyncioIntegration" in integration_names
     assert "HttpxIntegration" in integration_names
+
+
+def test_init_sentry_suppresses_langgraph_allowed_objects_warning(monkeypatch) -> None:
+    from langchain_core._api.deprecation import LangChainPendingDeprecationWarning
+
+    _clear_kill_switches(monkeypatch)
+    init_mock, _ = _install_full_sentry_mock(monkeypatch)
+
+    init_mock.side_effect = lambda **_kwargs: warnings.warn(
+        (
+            "The default value of `allowed_objects` will change in a future version. "
+            "Pass an explicit value (e.g., allowed_objects='messages' or "
+            "allowed_objects='core') to suppress this warning."
+        ),
+        category=LangChainPendingDeprecationWarning,
+        stacklevel=1,
+    )
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        sentry_mod.init_sentry(entrypoint="cli")
+
+    assert init_mock.call_count == 1
+    assert not [
+        warning
+        for warning in caught
+        if isinstance(warning.message, LangChainPendingDeprecationWarning)
+    ]
 
 
 def test_init_sentry_sets_in_app_include_app(monkeypatch) -> None:

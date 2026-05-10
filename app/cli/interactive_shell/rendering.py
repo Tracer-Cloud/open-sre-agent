@@ -51,7 +51,11 @@ MCP_INTEGRATION_SERVICES = frozenset({"github", "openclaw"})
 
 
 def render_integrations_table(console: Console, results: list[dict[str, str]]) -> None:
-    rows = [r for r in results if r.get("service") not in MCP_INTEGRATION_SERVICES]
+    rows = [
+        r
+        for r in results
+        if r.get("service") not in MCP_INTEGRATION_SERVICES and r.get("status") != "missing"
+    ]
     if not rows:
         console.print(f"[{DIM}]no integrations configured.  try `opensre onboard` to add one.[/]")
         return

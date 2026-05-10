@@ -24,6 +24,7 @@ from app.cli.interactive_shell.theme import (
 )
 from app.cli.support.errors import OpenSREError
 from app.cli.support.exception_reporting import report_exception
+from app.llm_reasoning_effort import apply_reasoning_effort
 
 
 def _interactive_template_menu(session: ReplSession, console: Console) -> bool:
@@ -71,13 +72,20 @@ def _cmd_template(session: ReplSession, console: Console, args: list[str]) -> bo
     return True
 
 
+def _validate_investigate_args(args: list[str]) -> str | None:
+    if not args:
+        return f"[{DIM}]usage:[/] /investigate <file>"
+    return None
+
+
+def _validate_save_args(args: list[str]) -> str | None:
+    if not args:
+        return f"[{DIM}]usage:[/] /save <path>  (e.g. /save report.md or /save out.json)"
+    return None
+
+
 def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str]) -> bool:
     from app.cli.investigation import run_investigation_for_session
-
-    if not args:
-        console.print(f"[{DIM}]usage:[/] /investigate <file>")
-        session.mark_latest(ok=False, kind="slash")
-        return True
 
     path = Path(args[0])
     if not path.exists():
@@ -95,11 +103,12 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
     task = session.task_registry.create(TaskKind.INVESTIGATION)
     task.mark_running()
     try:
-        final_state = run_investigation_for_session(
-            alert_text=text,
-            context_overrides=session.accumulated_context or None,
-            cancel_requested=task.cancel_requested,
-        )
+        with apply_reasoning_effort(session.reasoning_effort):
+            final_state = run_investigation_for_session(
+                alert_text=text,
+                context_overrides=session.accumulated_context or None,
+                cancel_requested=task.cancel_requested,
+            )
     except KeyboardInterrupt:
         task.mark_cancelled()
         console.print(f"[{WARNING}]investigation cancelled.[/]")
@@ -163,10 +172,6 @@ def _cmd_save(session: ReplSession, console: Console, args: list[str]) -> bool:
         console.print(f"[{DIM}]nothing to save — run an investigation first.[/]")
         return True
 
-    if not args:
-        console.print(f"[{DIM}]usage:[/] /save <path>  (e.g. /save report.md or /save out.json)")
-        return True
-
     dest = Path(args[0])
     try:
         if dest.suffix.lower() == ".json":
@@ -212,6 +217,7 @@ COMMANDS: list[SlashCommand] = [
         "run an RCA investigation from a file ('/investigate <file>')",
         _cmd_investigate_file,
         execution_tier=ExecutionTier.ELEVATED,
+        validate_args=_validate_investigate_args,
     ),
     SlashCommand(
         "/last",
@@ -224,6 +230,7 @@ COMMANDS: list[SlashCommand] = [
         "save last investigation to a file ('/save <path>')",
         _cmd_save,
         execution_tier=ExecutionTier.ELEVATED,
+        validate_args=_validate_save_args,
     ),
 ]
 

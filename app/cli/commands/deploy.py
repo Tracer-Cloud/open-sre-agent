@@ -295,6 +295,18 @@ def _ec2_deploy_not_bundled_error() -> OpenSREError:
     )
 
 
+def _aws_credentials_error(action: str) -> OpenSREError:
+    return OpenSREError(
+        "AWS credentials not found.",
+        suggestion=(
+            f"Configure AWS credentials before {action}:\n"
+            "  1. Run 'aws configure' to set up ~/.aws/credentials\n"
+            "  2. Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY env vars\n"
+            "  3. Attach an IAM role if running on EC2"
+        ),
+    )
+
+
 def _build_remote_url(outputs: Mapping[str, object]) -> str | None:
     ip = str(outputs.get("PublicIpAddress", "")).strip()
     if not ip:
@@ -341,6 +353,8 @@ def deploy_ec2(down: bool, branch: str) -> None:
       opensre deploy ec2 --down          # tear it down
       opensre deploy ec2 --branch main   # deploy from a specific branch
     """
+    from botocore.exceptions import NoCredentialsError, PartialCredentialsError
+
     if down:
         try:
             from tests.deployment.ec2.infrastructure_sdk.destroy_remote import destroy
@@ -355,16 +369,8 @@ def deploy_ec2(down: bool, branch: str) -> None:
 
         try:
             destroy()
-        except Exception as exc:
-            if exc.__class__.__name__ == "NoCredentialsError":
-                raise OpenSREError(
-                    "AWS credentials not found.",
-                    suggestion=(
-                        "Run 'aws configure' or export AWS_ACCESS_KEY_ID and "
-                        "AWS_SECRET_ACCESS_KEY before tearing down an EC2 deployment."
-                    ),
-                ) from exc
-            raise
+        except (NoCredentialsError, PartialCredentialsError) as exc:
+            raise _aws_credentials_error("tearing down an EC2 deployment") from exc
         return
 
     from app.cli.commands.remote_health import run_remote_health_check
@@ -378,16 +384,8 @@ def deploy_ec2(down: bool, branch: str) -> None:
 
     try:
         outputs = run_deploy(branch=branch)
-    except Exception as exc:
-        if exc.__class__.__name__ == "NoCredentialsError":
-            raise OpenSREError(
-                "AWS credentials not found.",
-                suggestion=(
-                    "Run 'aws configure' or export AWS_ACCESS_KEY_ID and "
-                    "AWS_SECRET_ACCESS_KEY before deploying to EC2."
-                ),
-            ) from exc
-        raise
+    except (NoCredentialsError, PartialCredentialsError) as exc:
+        raise _aws_credentials_error("deploying to EC2") from exc
     _persist_remote_url(outputs)
 
     remote_url = _build_remote_url(outputs)

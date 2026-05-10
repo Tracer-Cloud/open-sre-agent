@@ -1,0 +1,43 @@
+{
+  "title": "[FIRING:1] DatasourceNoData tracer-ai-agent (grafanacloud-prom A Pipeline Failure Rate High)",
+  "state": "alerting",
+  "commonLabels": {
+    "alertname": "DatasourceNoData",
+    "datasource_uid": "grafanacloud-prom",
+    "grafana_folder": "tracer-ai-agent",
+    "ref_id": "A",
+    "rulename": "Pipeline Failure Rate High"
+  },
+  "commonAnnotations": {
+    "summary": "Pipeline Failure Rate High alert has no data from datasource grafanacloud-prom",
+    "description": "The alert rule 'Pipeline Failure Rate High' in folder 'tracer-ai-agent' received no data from the Prometheus datasource (grafanacloud-prom) for query ref A.",
+    "__dashboardUid__": "",
+    "__panelId__": ""
+  },
+  "alerts": [
+    {
+      "status": "firing",
+      "labels": {
+        "alertname": "DatasourceNoData",
+        "datasource_uid": "grafanacloud-prom",
+        "grafana_folder": "tracer-ai-agent",
+        "ref_id": "A",
+        "rulename": "Pipeline Failure Rate High"
+      },
+      "annotations": {
+        "summary": "Pipeline Failure Rate High alert has no data from datasource grafanacloud-prom"
+      },
+      "startsAt": "2026-05-08T00:00:00Z",
+      "endsAt": "0001-01-01T00:00:00Z",
+      "generatorURL": "https://tracerbio.grafana.net/alerting/grafana/dfcxktck7ej9cb/view?orgId=1",
+      "silenceURL": "https://tracerbio.grafana.net/alerting/silence/new?alertmanager=grafana&matcher=__alert_rule_uid__%3Ddfcxktck7ej9cb&matcher=datasource_uid%3Dgrafanacloud-prom&matcher=ref_id%3DA&matcher=rulename%3DPipeline+Failure+Rate+High&orgId=1",
+      "fingerprint": "dfcxktck7ej9cb"
+    }
+  ],
+  "externalURL": "https://tracerbio.grafana.net",
+  "version": "1",
+  "groupKey": "{}:{alertname=\"DatasourceNoData\", grafana_folder=\"tracer-ai-agent\"}",
+  "truncatedAlerts": 0,
+  "orgId": 1,
+  "title_raw": "[FIRING:1] DatasourceNoData tracer-ai-agent (grafanacloud-prom A Pipeline Failure Rate High)"
+}

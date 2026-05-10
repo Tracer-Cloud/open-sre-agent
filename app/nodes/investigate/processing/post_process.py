@@ -21,6 +21,12 @@ _NON_RETRYABLE_FAILURE_INDICATORS = (
     "action not available",
     "invalid response",
     "not configured",
+    "400",
+    "bad request",
+    "401",
+    "unauthorized",
+    "403",
+    "forbidden",
 )
 _OPENCLAW_NON_RETRYABLE_FAILURE_INDICATORS = (
     "connection closed",
