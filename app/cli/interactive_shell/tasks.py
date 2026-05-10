@@ -6,7 +6,6 @@ import contextlib
 import json
 import os
 import secrets
-import signal
 import threading
 import time
 from collections import deque
@@ -130,10 +129,6 @@ class TaskRecord:
                 proc.terminate()
         elif was_active and pid is not None and rehydrated:
             mark_cancelled_without_watcher = True
-        elif was_active and pid is not None and _process_alive(pid):
-            with contextlib.suppress(OSError):
-                os.kill(pid, signal.SIGTERM)
-                mark_cancelled_without_watcher = True
         if mark_cancelled_without_watcher:
             self.mark_cancelled()
         else:
@@ -272,12 +267,18 @@ class TaskRegistry:
         with self._persist_lock:
             with self._lock:
                 payload = [task.to_dict() for task in self._tasks]
+            tmp_path: Path | None = None
             try:
                 self._persist_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-                tmp_path = self._persist_path.with_suffix(f"{self._persist_path.suffix}.tmp")
+                tmp_path = self._persist_path.with_name(
+                    f"{self._persist_path.name}.{threading.get_ident()}.{secrets.token_hex(4)}.tmp"
+                )
                 tmp_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
                 tmp_path.replace(self._persist_path)
             except OSError:
+                if tmp_path is not None:
+                    with contextlib.suppress(OSError):
+                        tmp_path.unlink()
                 return
 
     def _refresh_rehydrated(self) -> None:
