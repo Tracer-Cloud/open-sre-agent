@@ -51,9 +51,7 @@ class TestSupabaseConfig:
         assert config.is_configured is False
 
     def test_build_supabase_config_from_dict(self) -> None:
-        config = build_supabase_config(
-            {"url": "https://proj.supabase.co", "service_key": "svc"}
-        )
+        config = build_supabase_config({"url": "https://proj.supabase.co", "service_key": "svc"})
         assert config.url == "https://proj.supabase.co"
         assert config.service_key == "svc"
 
@@ -273,9 +271,7 @@ class TestGetStorageBuckets:
             {"id": "avatars", "name": "avatars", "public": True, "created_at": "2024-01-01"},
             {"id": "docs", "name": "docs", "public": False, "created_at": "2024-01-02"},
         ]
-        with patch(
-            "app.integrations.supabase._make_request", return_value=(200, mock_buckets)
-        ):
+        with patch("app.integrations.supabase._make_request", return_value=(200, mock_buckets)):
             result = get_storage_buckets(config)
         assert result["available"] is True
         assert result["total_buckets"] == 2
@@ -301,20 +297,14 @@ class TestGetStorageBuckets:
 
     def test_handles_exception(self) -> None:
         config = SupabaseConfig(url="https://proj.supabase.co", service_key="key")
-        with patch(
-            "app.integrations.supabase._make_request", side_effect=RuntimeError("boom")
-        ):
+        with patch("app.integrations.supabase._make_request", side_effect=RuntimeError("boom")):
             result = get_storage_buckets(config)
         assert result["available"] is False
         assert "boom" in result["error"]
 
     def test_caps_results_at_max_results(self) -> None:
-        config = SupabaseConfig(
-            url="https://proj.supabase.co", service_key="key", max_results=2
-        )
+        config = SupabaseConfig(url="https://proj.supabase.co", service_key="key", max_results=2)
         mock_buckets = [{"id": str(i), "name": f"bucket-{i}"} for i in range(10)]
-        with patch(
-            "app.integrations.supabase._make_request", return_value=(200, mock_buckets)
-        ):
+        with patch("app.integrations.supabase._make_request", return_value=(200, mock_buckets)):
             result = get_storage_buckets(config)
         assert result["total_buckets"] == 2

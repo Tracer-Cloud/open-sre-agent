@@ -561,6 +561,7 @@ _verify_victoria_logs = build_probe_verifier(
 def _verify_slack_without_test(source: str, config: dict[str, Any]) -> dict[str, str]:
     return _verify_slack(source, config, send_slack_test=False)
 
+
 def _verify_supabase(service: str, config: dict[str, Any]) -> dict[str, str]:
     return _verify_with_validation_result(
         service,
@@ -569,6 +570,7 @@ def _verify_supabase(service: str, config: dict[str, Any]) -> dict[str, str]:
         build_config=build_supabase_config,
         validate_config=validate_supabase_config,
     )
+
 
 __all__ = [
     "VerifierFn",

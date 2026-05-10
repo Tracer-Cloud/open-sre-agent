@@ -96,9 +96,7 @@ def resolve_supabase_config(project_url: str) -> SupabaseConfig:
     normalized = project_url.rstrip("/")
 
     if env_config is None:
-        raise ValueError(
-            "Supabase is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_KEY."
-        )
+        raise ValueError("Supabase is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_KEY.")
 
     if not _same_origin(env_config.url, normalized):
         raise ValueError(
