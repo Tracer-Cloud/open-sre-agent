@@ -23,6 +23,8 @@ from rich.panel import Panel
 from rich.spinner import Spinner
 from rich.text import Text
 
+from app.analytics.events import Event
+from app.analytics.provider import get_analytics
 from app.cli.interactive_shell.theme import (
     ANSI_BOLD,
     ANSI_DIM,
@@ -99,7 +101,11 @@ class _DiagnoseStreamRenderer:
     """
 
     def __init__(
-        self, console: Console | None = None, tracker: ProgressTracker | None = None
+        self,
+        console: Console | None = None,
+        tracker: ProgressTracker | None = None,
+        *,
+        local: bool = False,
     ) -> None:
         self.buffer: list[str] = []
         self._live: Live | None = None
@@ -110,6 +116,7 @@ class _DiagnoseStreamRenderer:
         self._last_render: float = 0.0
         self._console: Console | None = console
         self._tracker: ProgressTracker | None = tracker
+        self._local = local
 
     @property
     def streamed(self) -> bool:
@@ -178,6 +185,16 @@ class _DiagnoseStreamRenderer:
         if not text:
             return
         self.buffer.append(text)
+        if len(self.buffer) == 1:
+            latency_ms = (time.monotonic() - self._started) * 1000
+            get_analytics().capture(
+                Event.INVESTIGATION_FIRST_HYPOTHESIS_RENDERED,
+                {
+                    "latency_ms": int(latency_ms),
+                    "stage": _DIAGNOSE_NODE,
+                    "source": "interactive_shell" if self._local else "remote_api",
+                },
+            )
         if self._live is None:
             return
         # Throttle Markdown re-parse to once per refresh window; the final
@@ -260,7 +277,7 @@ class StreamRenderer:
         # buffer + Live region + throttle state; the renderer only
         # orchestrates lifecycle (active_node tracking, finish-on-end).
         self._console = Console(highlight=False)
-        self._diagnose = _DiagnoseStreamRenderer(self._console, self._tracker)
+        self._diagnose = _DiagnoseStreamRenderer(self._console, self._tracker, local=self._local)
         self._alert_header_printed = False
         self._plan_preview_printed = False
 
@@ -300,6 +317,15 @@ class StreamRenderer:
         try:
             for event in events:
                 self._handle_event(event)
+        except (KeyboardInterrupt, GeneratorExit):
+            get_analytics().capture(
+                Event.INVESTIGATION_ABANDONED,
+                {
+                    "stage": self._active_node or "unstarted",
+                    "source": "interactive_shell" if self._local else "remote_api",
+                },
+            )
+            raise
         finally:
             # Always stop the active spinner thread and flush whatever
             # final state was accumulated, even if the stream raises
