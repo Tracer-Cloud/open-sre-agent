@@ -8,6 +8,7 @@ from typing import Any, Literal, cast
 import yaml
 
 from tests.synthetic.schemas import (
+    GoldenTrajectorySchema,
     ScenarioEvidence,
     ScenarioMetadataSchema,
     validate_alert,
@@ -89,7 +90,9 @@ def _parse_trajectory_matching(value: Any) -> TrajectoryMatching:
     )
 
 
-def _parse_non_negative_int(golden_trajectory: dict[str, Any], field: str) -> int | None:
+def _parse_non_negative_int(
+    golden_trajectory: GoldenTrajectorySchema | dict[str, Any], field: str
+) -> int | None:
     value = golden_trajectory.get(field)
     if value is None:
         return None
@@ -97,7 +100,7 @@ def _parse_non_negative_int(golden_trajectory: dict[str, Any], field: str) -> in
         raise ValueError(
             f"answer.yml: 'golden_trajectory.{field}' must be a non-negative integer when present"
         )
-    return value
+    return cast(int, value)
 
 
 def _read_json(path: Path) -> dict[str, Any]:
