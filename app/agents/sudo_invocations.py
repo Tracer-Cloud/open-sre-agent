@@ -192,7 +192,6 @@ class SudoInvocationWatcher:
             head = cmdline[0].rsplit("/", 1)[-1]
             if head not in _SUDO_BINARIES:
                 continue
-            self._seen_pids.add(child.pid)
             evt = SudoInvocationEvent(
                 agent=self.agent_id,
                 command=" ".join(cmdline),
@@ -200,7 +199,21 @@ class SudoInvocationWatcher:
                 timestamp=time.time(),
             )
             with self._events_lock:
+                # Co-bound the dedup set with the deque: when the deque
+                # is at capacity the next ``append`` will evict the
+                # oldest event, so drop its child PID from ``_seen_pids``
+                # to keep the set in lockstep. Without this, the set
+                # would grow without bound for the lifetime of the REPL
+                # session even though the deque caps at ``maxlen``. A
+                # PID that re-appears after eviction (extremely rare in
+                # practice — would require both PID reuse and a fresh
+                # sudo invocation under the same PID) emits a fresh
+                # event, which is the correct behavior.
+                if len(self._events) == self._events.maxlen:
+                    oldest = self._events[0]
+                    self._seen_pids.discard(oldest.child_pid)
                 self._events.append(evt)
+                self._seen_pids.add(child.pid)
 
 
 # Process-global watcher cache. Keyed by ``f"{name}:{pid}"`` so two

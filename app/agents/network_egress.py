@@ -201,9 +201,6 @@ class NetworkEgressWatcher:
             remote_host = raddr.ip
             remote_port = int(raddr.port)
             key = (remote_host, remote_port, family)
-            if key in self._seen_destinations:
-                continue
-            self._seen_destinations.add(key)
             evt = NetworkEgressEvent(
                 agent=self.agent_id,
                 remote_host=remote_host,
@@ -212,7 +209,24 @@ class NetworkEgressWatcher:
                 timestamp=time.time(),
             )
             with self._events_lock:
+                if key in self._seen_destinations:
+                    continue
+                # Co-bound the dedup set with the deque: when the deque
+                # is at capacity the next ``append`` will evict the
+                # oldest event, so drop its key from ``_seen_destinations``
+                # to keep the set in lockstep. Without this, the set
+                # would grow without bound for the lifetime of the REPL
+                # session even though the deque caps at ``maxlen``. A
+                # destination that re-appears after eviction will emit
+                # a fresh event — that's the correct behavior because
+                # the watcher has genuinely forgotten it.
+                if len(self._events) == self._events.maxlen:
+                    oldest = self._events[0]
+                    self._seen_destinations.discard(
+                        (oldest.remote_host, oldest.remote_port, oldest.family)
+                    )
                 self._events.append(evt)
+                self._seen_destinations.add(key)
 
 
 # Process-global watcher cache.

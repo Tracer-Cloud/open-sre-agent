@@ -184,6 +184,40 @@ class TestSudoInvocationWatcherPolling:
             watcher._poll_once()
         assert watcher.events() == []
 
+    def test_seen_pids_is_co_bounded_with_events_deque(self) -> None:
+        # Greptile P1: ``_seen_pids`` must shrink in lockstep with
+        # ``_events`` so the dedup set can't grow without bound for
+        # the lifetime of the REPL session. With ``max_events=3`` and
+        # four distinct sudo children, the oldest PID must drop out of
+        # both the deque AND the set; if that PID later reappears it
+        # should emit a fresh event (proving the dedup memory was
+        # reclaimed).
+        watcher = SudoInvocationWatcher(_record(), poll_interval=10.0, max_events=3)
+        first_round = _FakeProcess(
+            [
+                _FakeChild(101, ["sudo", "a"]),
+                _FakeChild(102, ["sudo", "b"]),
+                _FakeChild(103, ["sudo", "c"]),
+                _FakeChild(104, ["sudo", "d"]),
+            ]
+        )
+        with patch("app.agents.sudo_invocations.psutil.Process", return_value=first_round):
+            watcher._poll_once()
+        # Deque caps at 3; oldest (pid 101) was evicted.
+        assert len(watcher.events()) == 3
+        assert 101 not in watcher._seen_pids
+        assert len(watcher._seen_pids) == 3
+
+        # If the same PID is observed again later (PID reuse / new sudo
+        # under the freed PID), it must emit a fresh event because the
+        # dedup memory has been reclaimed.
+        replay = _FakeProcess([_FakeChild(101, ["sudo", "again"])])
+        with patch("app.agents.sudo_invocations.psutil.Process", return_value=replay):
+            watcher._poll_once()
+        assert len(watcher.events()) == 3
+        assert len(watcher._seen_pids) == 3
+        assert 101 in watcher._seen_pids
+
     def test_events_since_filters_by_timestamp(self) -> None:
         watcher = self._watcher()
         # Hand-inject events to avoid timing flake on the real clock.

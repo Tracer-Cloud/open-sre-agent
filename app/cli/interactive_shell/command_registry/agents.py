@@ -379,20 +379,25 @@ def _cmd_agents_inspect(session: ReplSession, console: Console, args: list[str])
         session.mark_latest(ok=False, kind="slash")
         return True
 
+    # ``since=0.0`` so we get every event the watchers have collected;
+    # the inspect panel is the "what's happened since I started
+    # watching" view, not a sliding window. Lazy-start happens inside
+    # each coordinator on first call per ``(name, pid)``.
+    #
+    # Order matters: collectors run FIRST so the BlastRadiusWatcher
+    # is in the cache by the time we need its ``project_root`` for the
+    # header. Reading from the cache avoids a second
+    # ``psutil.Process(pid).cwd()`` call per render.
+    write_events = collect_recent_outside_writes([record], since=0.0)
+    sudo_events = collect_recent_sudo_events([record], since=0.0)
+    egress_events = collect_recent_egress_events([record], since=0.0)
+
     # Best-effort process metadata. Both fall back to ``None`` if the
     # process is gone or inaccessible — the panel renders with degraded
     # header rather than failing the command.
     snapshot = probe(pid, cpu_interval=0.0)
     started_at = snapshot.started_at if snapshot is not None else None
     project_root = _project_root_for_inspect(record)
-
-    # ``since=0.0`` so we get every event the watchers have collected;
-    # the inspect panel is the "what's happened since I started
-    # watching" view, not a sliding window. Lazy-start happens inside
-    # each coordinator on first call per ``(name, pid)``.
-    write_events = collect_recent_outside_writes([record], since=0.0)
-    sudo_events = collect_recent_sudo_events([record], since=0.0)
-    egress_events = collect_recent_egress_events([record], since=0.0)
 
     panel = render_blast_radius_panel(
         record=record,
@@ -409,15 +414,23 @@ def _cmd_agents_inspect(session: ReplSession, console: Console, args: list[str])
 def _project_root_for_inspect(record: AgentRecord) -> str | None:
     """Best-effort project-root resolver for the inspect panel header.
 
-    Reuses :func:`app.agents.blast_radius._resolve_agent_project_root`
-    when possible. ``None`` if the PID is gone or has no ``.git``
-    ancestor — the panel header degrades gracefully.
+    Prefers the cached :class:`app.agents.blast_radius.BlastRadiusWatcher`'s
+    already-resolved ``project_root`` so we don't re-issue
+    ``psutil.Process(pid).cwd()`` every render. Falls back to a fresh
+    resolution only when the watcher hasn't started yet (rare — the
+    inspect handler runs the collectors first specifically so the
+    watcher is in the cache by the time this is called). Returns
+    ``None`` if the PID has no ``.git`` ancestor or is inaccessible —
+    the panel header degrades gracefully.
     """
     # Imported lazily to avoid pulling watchdog into modules that don't
     # actually use the watcher (the conflict detector and inspect panel
     # both need it; modules like /agents budget don't).
-    from app.agents.blast_radius import _resolve_agent_project_root
+    from app.agents.blast_radius import _WATCHERS, _resolve_agent_project_root
 
+    cached = _WATCHERS.get(f"{record.name}:{record.pid}")
+    if cached is not None:
+        return str(cached.project_root)
     root = _resolve_agent_project_root(record)
     return str(root) if root is not None else None
 

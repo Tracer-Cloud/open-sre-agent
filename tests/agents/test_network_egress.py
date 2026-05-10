@@ -167,6 +167,45 @@ class TestNetworkEgressWatcherPolling:
             watcher._poll_once()
         assert watcher.events() == []
 
+    def test_seen_destinations_is_co_bounded_with_events_deque(self) -> None:
+        # Greptile P1: ``_seen_destinations`` must shrink in lockstep
+        # with ``_events`` so the dedup set can't grow without bound
+        # for the lifetime of the REPL session. With ``max_events=3``
+        # and four distinct destinations, the oldest one must drop out
+        # of both the deque AND the set, and re-appearing it should
+        # emit a fresh event (proving the dedup memory was reclaimed).
+        watcher = NetworkEgressWatcher(_record(), poll_interval=10.0, max_events=3)
+        first_round = _FakeProcess(
+            [
+                _FakeConn(status=psutil.CONN_ESTABLISHED, raddr=_FakeAddr("1.1.1.1", 443)),
+                _FakeConn(status=psutil.CONN_ESTABLISHED, raddr=_FakeAddr("2.2.2.2", 443)),
+                _FakeConn(status=psutil.CONN_ESTABLISHED, raddr=_FakeAddr("3.3.3.3", 443)),
+                _FakeConn(status=psutil.CONN_ESTABLISHED, raddr=_FakeAddr("4.4.4.4", 443)),
+            ]
+        )
+        with patch("app.agents.network_egress.psutil.Process", return_value=first_round):
+            watcher._poll_once()
+        # Deque caps at 3; oldest (1.1.1.1) was evicted.
+        assert len(watcher.events()) == 3
+        assert ("1.1.1.1", 443, "ipv4") not in watcher._seen_destinations
+        assert len(watcher._seen_destinations) == 3
+
+        # Re-poll with the originally-evicted destination: because it's
+        # no longer in ``_seen_destinations``, it should emit a fresh
+        # event. Without the co-eviction fix the watcher would silently
+        # skip it and the set would have grown unbounded.
+        replay = _FakeProcess(
+            [_FakeConn(status=psutil.CONN_ESTABLISHED, raddr=_FakeAddr("1.1.1.1", 443))]
+        )
+        with patch("app.agents.network_egress.psutil.Process", return_value=replay):
+            watcher._poll_once()
+        # Deque is still 3 — another eviction happened — and the set
+        # remains size 3 (lockstep with the deque).
+        assert len(watcher.events()) == 3
+        assert len(watcher._seen_destinations) == 3
+        # The replayed destination is now back in both.
+        assert ("1.1.1.1", 443, "ipv4") in watcher._seen_destinations
+
     def test_events_since_filters_by_timestamp(self) -> None:
         watcher = self._watcher()
         watcher._events.append(
