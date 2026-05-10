@@ -557,6 +557,9 @@ class StreamRenderer:
                 if stripped_clean[-1] in {".", "?", "!"}:
                     return False
 
+                if len(stripped_clean.split()) > 6:
+                    return False
+
                 # Structural prefix requirement: starts with #, [, **, or is all-caps.
                 # Note-style brackets like "[Note: ...]" are excluded by requiring no colon.
                 is_bracket = (
@@ -564,11 +567,11 @@ class StreamRenderer:
                     and stripped_clean.endswith("]")
                     and ":" not in stripped
                 )
+                is_bold = stripped.startswith("**") and (
+                    stripped.endswith("**") or stripped.endswith("**:")
+                )
                 has_prefix = (
-                    stripped.startswith("#")
-                    or is_bracket
-                    or stripped.startswith("**")
-                    or stripped_clean.isupper()
+                    stripped.startswith("#") or is_bracket or is_bold or stripped_clean.isupper()
                 )
                 if not has_prefix:
                     return False
@@ -625,6 +628,13 @@ class StreamRenderer:
                     stripped = line.strip()
                     if not stripped:
                         continue
+
+                    # Verb fallback only applies to lines formatted as list items
+                    is_bullet = stripped.startswith(("-", "•", "*", "●", "—"))
+                    is_numbered = bool(re.match(r"^\s*\d+[.)]\s*", stripped))
+                    if not (is_bullet or is_numbered):
+                        continue
+
                     clean_line = _clean_markdown_line(stripped)
                     tokens = clean_line.lower().split()
                     if tokens and tokens[0] in action_verbs:
