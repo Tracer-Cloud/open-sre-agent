@@ -32,6 +32,7 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.formatted_text import ANSI
@@ -531,9 +532,14 @@ class _StreamingConsole(Console):
         self,
         spinner: _SpinnerState,
         cancel_event: threading.Event,
-        **kwargs: object,
+        **kwargs: Any,
     ) -> None:
-        super().__init__(**kwargs)  # type: ignore[arg-type]
+        # ``**kwargs: Any`` (rather than ``object``) so we don't need a
+        # ``# type: ignore`` on the super call — Rich's Console accepts
+        # a wide kwargs surface (highlight, force_terminal, color_system,
+        # legacy_windows, …) that mypy can't narrow from a generic
+        # ``object`` mapping.
+        super().__init__(**kwargs)
         self._spinner = spinner
         self._cancel_event = cancel_event
 

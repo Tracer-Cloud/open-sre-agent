@@ -38,8 +38,29 @@ from app.cli.interactive_shell.theme import BOLD_BRAND, DIM, MARKDOWN_THEME
 # elapsed footer.
 _CHARS_PER_TOKEN = 4
 
+# Throttle for the optional ``update_streaming_progress`` hook on the
+# console — caps cross-thread queueing on long bursts of chunks. Same
+# value (and intent) as ``loop._PROMPT_REFRESH_INTERVAL_S``.
+_PROGRESS_INTERVAL_S = 0.1
+
+# Markdown rendering constants — extracted so streaming.py and any
+# external caller (e.g. agent_actions.py for the planned-actions
+# bullet header) stay in lock-step.
+_PARAGRAPH_BREAK = "\n\n"
+_CODE_FENCE = "```"
+_MARKDOWN_CODE_THEME = "ansi_dark"
+
 STREAM_LABEL_ASSISTANT = "assistant"
 STREAM_LABEL_ANSWER = "answer"
+
+
+def render_response_header(console: Console, label: str) -> None:
+    """Print the ``●`` bullet row marker that opens every assistant
+    response (Claude Code-style row layout). Shared with
+    ``agent_actions.execute_cli_actions`` so the planned-actions path
+    and the streaming response path use the exact same prefix.
+    """
+    console.print(f"[{BOLD_BRAND}]●[/] [{DIM}]{label}[/]")
 
 
 def format_token_count_short(token_count: int) -> str:
@@ -80,15 +101,9 @@ def stream_to_console(
             return text
         if text:
             console.print()
-            # Bullet marker before the response — visually distinct from
-            # the user's input echo (which uses the ``❯`` chevron). The
-            # ``label`` param is kept in the signature for callers that
-            # already pass ``STREAM_LABEL_*`` constants but is no longer
-            # rendered: a single ``●`` matches Claude Code's row layout
-            # and reads more cleanly than ``assistant:`` as a header.
-            console.print(f"[{BOLD_BRAND}]●[/] [{DIM}]{label}[/]")
+            render_response_header(console, label)
             with console.use_theme(MARKDOWN_THEME):
-                console.print(Markdown(text, code_theme="ansi_dark"))
+                console.print(Markdown(text, code_theme=_MARKDOWN_CODE_THEME))
             console.print()
         return text
 
@@ -121,11 +136,7 @@ def stream_to_console(
             break
 
     console.print()
-    # Bullet marker before the response — visually distinct from the
-    # user's ``❯`` echo. ``label`` is shown dim alongside for context
-    # (``answer`` / ``assistant``) but the bullet is the primary visual
-    # row marker, matching Claude Code's layout.
-    console.print(f"[{BOLD_BRAND}]●[/] [{DIM}]{label}[/]")
+    render_response_header(console, label)
 
     # Paragraph-level streaming: chunks accumulate in ``para_buffer``
     # until a paragraph boundary (``\n\n`` outside a code block) closes
@@ -142,7 +153,6 @@ def stream_to_console(
     progress_hook = getattr(console, "update_streaming_progress", None)
     total_bytes = sum(len(c) for c in peeked)
     last_progress_at = 0.0
-    _PROGRESS_INTERVAL_S = 0.1
 
     def _maybe_update_progress(now: float, *, force: bool = False) -> float:
         nonlocal progress_hook
@@ -167,62 +177,78 @@ def stream_to_console(
         if not text.strip():
             return
         with console.use_theme(MARKDOWN_THEME):
-            console.print(Markdown(text.rstrip(), code_theme="ansi_dark"))
+            console.print(Markdown(text.rstrip(), code_theme=_MARKDOWN_CODE_THEME))
 
     def _flush_paragraphs(*, force: bool = False) -> None:
         """Emit any complete paragraphs from ``para_buffer``.
 
-        Splits on ``\\n\\n`` but only when an even number of triple-
-        backtick fences are present in the proposed prefix — that's
-        enough to keep code blocks whole without tracking fence type.
-        ``force`` flushes any remaining buffer at end-of-stream.
+        Splits on ``\\n\\n`` (``_PARAGRAPH_BREAK``) but only when an
+        even number of triple-backtick fences (``_CODE_FENCE``) are
+        present in the proposed prefix — that's enough to keep code
+        blocks whole without tracking fence type. ``force`` flushes any
+        remaining buffer at end-of-stream.
         """
         nonlocal para_buffer
+        break_len = len(_PARAGRAPH_BREAK)
         while True:
             text = "".join(para_buffer)
-            idx = text.find("\n\n")
+            idx = text.find(_PARAGRAPH_BREAK)
             if idx < 0:
                 break
-            paragraph = text[: idx + 2]
+            paragraph = text[: idx + break_len]
             # Odd backtick-fence count means a fence is still open;
             # don't render the partial code block.
-            if paragraph.count("```") % 2 == 1:
+            if paragraph.count(_CODE_FENCE) % 2 == 1:
                 break
             _render_paragraph(paragraph)
-            para_buffer = [text[idx + 2 :]] if text[idx + 2 :] else []
+            tail = text[idx + break_len :]
+            para_buffer = [tail] if tail else []
         if force:
             tail = "".join(para_buffer)
             if tail.strip():
                 _render_paragraph(tail)
             para_buffer = []
 
-    def _maybe_flush_after_append(chunk: str) -> None:
+    def _maybe_flush_after_append(chunk: str, prev_chunk: str | None) -> None:
         """Cheap fast-path before the O(buffer) join inside ``_flush_paragraphs``.
 
-        A paragraph boundary requires ``\\n\\n``. The second ``\\n`` must be in
-        the *current* chunk (any earlier chunks were already flushed or had
-        no boundary). Skip the full flush when ``\\n`` is absent here AND
-        the buffer/chunk seam can't form a boundary either. Without this
-        guard, a long single-paragraph response (e.g. 4k chunks, no
-        blank-line separators) becomes O(n²) because every chunk
-        triggers a full ``"".join(para_buffer)``.
+        A paragraph boundary requires ``\\n\\n``. The second ``\\n``
+        must be in the *current* chunk (any earlier chunks were already
+        flushed or had no boundary). Skip the full flush when ``\\n``
+        is absent here AND the chunk-to-chunk seam can't form a
+        boundary either. Without this guard, a long single-paragraph
+        response (e.g. 4k chunks, no blank-line separators) becomes
+        O(n²) because every chunk triggers a full
+        ``"".join(para_buffer)``.
+
+        ``prev_chunk`` is the chunk immediately before this one — the
+        caller threads it explicitly so we don't reach into
+        ``para_buffer[-2]`` and read like magic indexing.
         """
         if not chunk:
             return
-        if "\n\n" in chunk:
+        if _PARAGRAPH_BREAK in chunk:
             _flush_paragraphs()
             return
-        if "\n" in chunk and len(para_buffer) >= 2:
-            # Cross-chunk boundary: previous chunk ended with ``\n`` and
-            # this chunk's leading ``\n`` completes the ``\n\n``.
-            prev = para_buffer[-2]
-            if prev.endswith("\n") and chunk.startswith("\n"):
-                _flush_paragraphs()
+        # Cross-chunk boundary: previous chunk ended with ``\n`` and
+        # this chunk's leading ``\n`` completes the ``\n\n``.
+        newline = _PARAGRAPH_BREAK[0]
+        if (
+            prev_chunk is not None
+            and newline in chunk
+            and prev_chunk.endswith(newline)
+            and chunk.startswith(newline)
+        ):
+            _flush_paragraphs()
 
     if peeked:
         last_progress_at = _maybe_update_progress(time.monotonic(), force=True)
         _flush_paragraphs()
 
+    # Track the chunk immediately preceding the current one so the
+    # cross-chunk seam check can detect ``\n\n`` straddling the
+    # boundary without reaching into ``para_buffer`` by index.
+    prev_chunk: str | None = peeked[-1] if peeked else None
     try:
         while True:
             if _is_cancelled():
@@ -236,7 +262,8 @@ def stream_to_console(
             para_buffer.append(chunk)
             total_bytes += len(chunk)
             last_progress_at = _maybe_update_progress(time.monotonic())
-            _maybe_flush_after_append(chunk)
+            _maybe_flush_after_append(chunk, prev_chunk)
+            prev_chunk = chunk
     finally:
         # Render whatever's left in the paragraph buffer so the user
         # sees the full response even if it didn't end on ``\n\n``.
@@ -254,5 +281,6 @@ __all__ = [
     "STREAM_LABEL_ANSWER",
     "STREAM_LABEL_ASSISTANT",
     "format_token_count_short",
+    "render_response_header",
     "stream_to_console",
 ]

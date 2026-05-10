@@ -12,6 +12,7 @@ from rich.console import Console
 
 from app.cli.interactive_shell.streaming import (
     format_token_count_short,
+    render_response_header,
     stream_to_console,
 )
 
@@ -126,6 +127,82 @@ class TestTtyParagraphRender:
         assert "First para." in output
         assert "Second para." in output
         assert "**para**" not in output
+
+    def test_paragraph_break_across_chunk_boundary_flushes(self) -> None:
+        """The cross-chunk seam — chunk N ends with ``\\n``, chunk N+1
+        starts with ``\\n`` — must be detected as a paragraph break.
+
+        Without the seam check the fast-path skips the join (no
+        ``\\n\\n`` *inside* either chunk) and the boundary is missed
+        until end-of-stream.
+        """
+        from app.cli.interactive_shell import streaming as streaming_module
+
+        parse_count = [0]
+        real_markdown = streaming_module.Markdown
+
+        class _SpyMarkdown(real_markdown):  # type: ignore[misc, valid-type]
+            def __init__(self, text: str, **kwargs) -> None:
+                parse_count[0] += 1
+                super().__init__(text, **kwargs)
+
+        # Patch only on this thread; restored by the test fixture's GC.
+        original_markdown = streaming_module.Markdown
+        streaming_module.Markdown = _SpyMarkdown
+        try:
+            console, _ = _tty_console()
+            # ``"first.\n"`` then ``"\nsecond."`` — neither chunk
+            # contains ``\n\n`` standalone, but joined they form a
+            # paragraph break at the seam.
+            stream_to_console(
+                console,
+                label="assistant",
+                chunks=_yield_chunks(["first.\n", "\nsecond."]),
+            )
+        finally:
+            streaming_module.Markdown = original_markdown
+
+        # 2 parses: first paragraph flushed at the seam, then second
+        # tail force-flushed at end-of-stream.
+        assert parse_count[0] == 2, (
+            f"seam check missed the cross-chunk break — got {parse_count[0]} parses"
+        )
+
+    def test_peeked_chunks_seed_prev_chunk_for_seam_detection(self) -> None:
+        """When ``suppress_if_starts_with`` peeks chunks but doesn't
+        suppress, those peeked chunks become history for the seam
+        check on the very first main-loop chunk.
+
+        Concretely: suppression-peek pulls ``"hello\\n"`` (didn't match
+        ``"{"``); main loop starts with ``"\\nworld"``. The seam should
+        be detected — ``peeked[-1]`` is the initial ``prev_chunk``.
+        """
+        from app.cli.interactive_shell import streaming as streaming_module
+
+        parse_count = [0]
+        real_markdown = streaming_module.Markdown
+
+        class _SpyMarkdown(real_markdown):  # type: ignore[misc, valid-type]
+            def __init__(self, text: str, **kwargs) -> None:
+                parse_count[0] += 1
+                super().__init__(text, **kwargs)
+
+        original_markdown = streaming_module.Markdown
+        streaming_module.Markdown = _SpyMarkdown
+        try:
+            console, _ = _tty_console()
+            stream_to_console(
+                console,
+                label="assistant",
+                chunks=_yield_chunks(["hello\n", "\nworld"]),
+                suppress_if_starts_with="{",
+            )
+        finally:
+            streaming_module.Markdown = original_markdown
+
+        # 2 parses — peeked chunk + first main-loop chunk form a seam,
+        # producing one paragraph; tail is force-flushed at EOS.
+        assert parse_count[0] == 2
 
     def test_open_code_block_is_not_split_mid_fence(self) -> None:
         """``\\n\\n`` inside an open code block must NOT trigger a
@@ -275,6 +352,28 @@ class TestTimingFooter:
 
         output = _strip_ansi(buf.getvalue())
         assert re.search(r"·\s+\d+\.\d+s", output) is None
+
+
+class TestRenderResponseHeader:
+    """``render_response_header`` is the bullet-row marker shared with
+    ``agent_actions.execute_cli_actions`` — three call sites collapsed
+    to one helper, so we lock in the visible output here.
+    """
+
+    def test_emits_bullet_glyph_and_label(self) -> None:
+        console, buf = _tty_console()
+        render_response_header(console, "assistant")
+        output = _strip_ansi(buf.getvalue())
+        assert "●" in output
+        assert "assistant" in output
+
+    def test_label_is_passthrough(self) -> None:
+        """The function takes the label verbatim — callers pass either
+        ``STREAM_LABEL_ANSWER`` or ``STREAM_LABEL_ASSISTANT`` (or any
+        free-form word). No filtering, no defaults."""
+        console, buf = _tty_console()
+        render_response_header(console, "answer")
+        assert "answer" in _strip_ansi(buf.getvalue())
 
 
 class TestFormatTokenCountShort:

@@ -35,8 +35,9 @@ from app.cli.interactive_shell.execution_policy import (
 )
 from app.cli.interactive_shell.rendering import print_planned_actions
 from app.cli.interactive_shell.session import ReplSession
+from app.cli.interactive_shell.streaming import render_response_header
 from app.cli.interactive_shell.tasks import TaskKind, TaskRecord, TaskStatus
-from app.cli.interactive_shell.theme import BOLD_BRAND, DIM
+from app.cli.interactive_shell.theme import BOLD_BRAND
 
 
 @dataclass(frozen=True)
@@ -166,9 +167,7 @@ def execute_cli_actions(
         return False
 
     console.print()
-    # Match streaming.py's bullet-row marker — same visual cue across
-    # the planned-actions path and the regular streamed-response path.
-    console.print(f"[{BOLD_BRAND}]●[/] [{DIM}]assistant[/]")
+    render_response_header(console, "assistant")
     print_planned_actions(console, actions)
     if not has_unhandled_clause:
         session.record("cli_agent", message)

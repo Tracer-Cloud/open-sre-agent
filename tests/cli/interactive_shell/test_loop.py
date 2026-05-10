@@ -736,6 +736,44 @@ class TestReplState:
         assert state.is_dispatch_running() is False
         assert state.current_cancel_event is None
 
+    def test_per_dispatch_cancel_events_are_isolated(self) -> None:
+        """Regression guard for the shared-event race that used to let
+        a previous turn's worker-thread observation get clobbered by
+        the next turn's ``Event.clear()``.
+
+        The fix: each ``_run_one_dispatch`` allocates a fresh
+        ``threading.Event`` and parks it at ``state.current_cancel_event``.
+        The previous turn's worker keeps a strong reference to its OWN
+        event; a new turn replacing the parked one never resets the
+        old worker's signal.
+        """
+        import threading as _threading
+
+        state = loop._ReplState()
+
+        # Turn 1: park its event, fire cancel — that event is now set.
+        old_event = _threading.Event()
+        state.current_cancel_event = old_event
+        state.cancel_current_dispatch()
+        assert old_event.is_set() is True
+
+        # Turn 2 starts: a fresh event is parked. The OLD event must
+        # still be set (its worker is still polling it from the prior
+        # turn); the new event must not be — turn 2 hasn't been
+        # cancelled yet.
+        new_event = _threading.Event()
+        state.current_cancel_event = new_event
+        assert old_event.is_set() is True, (
+            "old turn's event must not be cleared by a new turn parking"
+        )
+        assert new_event.is_set() is False
+
+        # Cancelling the new turn flips ONLY the new event.
+        state.cancel_current_dispatch()
+        assert new_event.is_set() is True
+        # Old event still set independently.
+        assert old_event.is_set() is True
+
 
 # ── Cancel key bindings ──────────────────────────────────────────────────────
 
