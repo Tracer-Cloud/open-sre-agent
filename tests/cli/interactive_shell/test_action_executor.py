@@ -52,7 +52,7 @@ class _ImmediateThread:
         self._target(*self._args, **self._kwargs)
 
     def join(self, timeout: float | None = None) -> None:
-        del timeout
+        self.join_timeout = timeout
 
 
 def test_terminate_child_process_noop_when_exited() -> None:
