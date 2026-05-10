@@ -10,7 +10,10 @@ from enum import StrEnum
 from typing import Literal, Protocol
 
 from app.cli.interactive_shell.action_planner import plan_actions_with_unhandled
-from app.cli.interactive_shell.intent_parser import normalize_intent_text
+from app.cli.interactive_shell.intent_parser import (
+    _damerau_levenshtein_distance,
+    normalize_intent_text,
+)
 from app.cli.interactive_shell.terminal_intent import (
     is_sample_alert_launch_intent,
     mentions_alert_signal,
@@ -67,8 +70,12 @@ def _is_bare_command_alias(text: str, _session: RoutingSession) -> bool:
     # mis-correct a valid command word (e.g. "reset" → "test").
     if stripped.lower() in BARE_COMMAND_ALIASES:
         return True
-    # Fall back to normalized form to support obvious typos (e.g. "hlep" → "help").
-    return normalize_intent_text(stripped) in BARE_COMMAND_ALIASES
+    # Fall back to normalized form only for single-edit typos (distance ≤ 1).
+    # Distance 2 matches too many unrelated words (e.g. "hello" → "help").
+    normalized = normalize_intent_text(stripped)
+    if normalized not in BARE_COMMAND_ALIASES:
+        return False
+    return _damerau_levenshtein_distance(stripped.lower(), normalized) <= 1
 
 
 def _is_cli_help_rule(text: str, _session: RoutingSession) -> bool:
@@ -85,7 +92,14 @@ def _is_cli_agent_action_rule(
 ) -> bool:
     stripped = text.strip()
     actions, _unhandled = plan_actions_with_unhandled(stripped)
-    return bool(actions) and not mentions_alert_signal(stripped)
+    if not actions:
+        return False
+    # Synthetic-test and sample-alert commands may contain incident vocabulary
+    # in their scenario IDs (e.g. "002-connection-exhaustion"); allow them through
+    # even when mentions_alert_signal fires on those words.
+    if any(a.kind in {"synthetic_test", "sample_alert"} for a in actions):
+        return True
+    return not mentions_alert_signal(stripped)
 
 
 def _is_new_alert_without_prior_state(
@@ -357,7 +371,7 @@ _CLI_HELP_PATTERNS: tuple[re.Pattern[str], ...] = (
 
 
 def _is_short_question(text: str) -> bool:
-    stripped = normalize_intent_text(text.strip())
+    stripped = text.strip()
     if not stripped:
         return False
     if len(stripped) >= 90:
@@ -382,11 +396,10 @@ def _looks_like_json_payload(text: str) -> bool:
 
 def _short_question_mentions_incident_vocab(text: str) -> bool:
     """True when a short question looks like a production issue, not small talk."""
-    normalized = normalize_intent_text(text)
-    if not _is_short_question(normalized):
+    if not _is_short_question(text):
         return False
-    lower = normalized.lower()
-    if _INFORMATIONAL_QUESTION_RE.search(normalized) and any(
+    lower = text.lower()
+    if _INFORMATIONAL_QUESTION_RE.search(text) and any(
         word in lower for word in _INFORMATIONAL_QUESTION_WORDS
     ):
         return False
@@ -403,10 +416,9 @@ def _reads_like_investigation_request(text: str) -> bool:
         return False
     if _looks_like_json_payload(stripped):
         return True
-    normalized = normalize_intent_text(stripped)
     if len(stripped) >= _MIN_INVESTIGATION_LINE_LEN:
-        return _long_line_suggests_incident_narrative(normalized)
-    return mentions_alert_signal(normalized) or _short_question_mentions_incident_vocab(normalized)
+        return _long_line_suggests_incident_narrative(stripped)
+    return mentions_alert_signal(stripped) or _short_question_mentions_incident_vocab(stripped)
 
 
 def _is_cli_help_intent(text: str) -> bool:

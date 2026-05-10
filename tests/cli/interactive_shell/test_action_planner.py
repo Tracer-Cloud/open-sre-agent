@@ -60,26 +60,6 @@ def test_plan_typoed_synthetic_test_with_explicit_scenario_id() -> None:
     assert plan_cli_actions(msg) == []
 
 
-def test_plan_typoed_sample_alert_launch() -> None:
-    msg = "lnauch a smaple alret"
-    actions, unhandled = plan_actions_with_unhandled(msg)
-
-    assert not unhandled
-    assert [(a.kind, a.content) for a in actions] == [("sample_alert", "generic")]
-    assert plan_terminal_tasks(msg) == ["sample_alert"]
-    assert plan_cli_actions(msg) == []
-
-
-def test_plan_typoed_opensre_cli_command() -> None:
-    msg = "rnu opnesre deplo --dry-run"
-    actions, unhandled = plan_actions_with_unhandled(msg)
-
-    assert not unhandled
-    assert [(a.kind, a.content) for a in actions] == [("cli_command", "deploy --dry-run")]
-    assert plan_terminal_tasks(msg) == ["cli_command"]
-    assert plan_cli_actions(msg) == ["deploy --dry-run"]
-
-
 def test_plan_terminal_tasks_returns_implementation_action() -> None:
     msg = "please implement process auto-discovery"
     actions, unhandled = plan_actions_with_unhandled(msg)

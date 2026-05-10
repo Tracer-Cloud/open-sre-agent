@@ -89,9 +89,7 @@ def plan_clause_actions(
         window_end = min(len(clause.text), relative_position + 120)
         window = clause.text[window_start:window_end]
         detail_window = clause.text[
-            max(0, relative_position - 30) : min(
-                len(clause.text), relative_position + 70
-            )
+            max(0, relative_position - 30) : min(len(clause.text), relative_position + 70)
         ]
 
         slash = f"/integrations show {service}"
@@ -129,9 +127,7 @@ def plan_clause_actions(
 
     sample_match = SAMPLE_ALERT_RE.search(clause.text)
     if sample_match is not None:
-        planned.append(
-            sample_alert_action("generic", clause.position + sample_match.start())
-        )
+        planned.append(sample_alert_action("generic", clause.position + sample_match.start()))
         return planned
 
     implementation = extract_implementation_request(clause)
