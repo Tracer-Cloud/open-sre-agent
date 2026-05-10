@@ -6,9 +6,11 @@ from pathlib import Path
 from typing import Any
 
 from tests.synthetic.rds_postgres.observations import (
+    TrajectoryPolicy,
     build_observation,
     compute_trajectory_metrics,
     edit_distance,
+    evaluate_trajectory_policy,
     lcs_length,
     render_report_to_string,
     write_observation,
@@ -21,6 +23,18 @@ def _sample_final_state() -> dict[str, Any]:
         "evidence": {
             "grafana_metrics": [{"metric_name": "CPUUtilization"}],
             "grafana_logs": [{"message": "replica lag detected"}],
+            "aws_cloudwatch_metrics": {
+                "db_instance_identifier": "db-1",
+                "metrics": [{"metric_name": "CPUUtilization"}],
+                "observations": ["CPU is elevated"],
+            },
+            "aws_performance_insights": {
+                "observations": [
+                    "Top SQL Activity: select 1 | Avg Load: 2.0 AAS | Waits: CPU"
+                ],
+                "top_sql": [{"sql": "select 1", "db_load": 2.0, "wait_event": "CPU"}],
+                "wait_events": [],
+            },
         },
         "executed_hypotheses": [
             {"actions": ["query_grafana_metrics", "query_grafana_logs"], "failed_actions": []}
@@ -101,7 +115,19 @@ def test_observation_roundtrip_and_report_rendering(tmp_path: Path) -> None:
         score=score,
         reasoning=None,
         trajectory=trajectory,
+        evaluated_golden_actions=list(score["trajectory"]["expected_sequence"]),
+        trajectory_policy=evaluate_trajectory_policy(
+            metrics=trajectory,
+            golden_actions=list(score["trajectory"]["expected_sequence"]),
+            policy=TrajectoryPolicy(matching="lcs"),
+        ),
         final_state=final_state,
+        available_evidence_sources=[
+            "aws_cloudwatch_metrics",
+            "aws_performance_insights",
+            "aws_rds_events",
+        ],
+        required_evidence_sources=["aws_performance_insights", "aws_rds_events"],
         started_at=datetime.now(UTC),
         wall_time_s=1.2,
     )
@@ -110,11 +136,20 @@ def test_observation_roundtrip_and_report_rendering(tmp_path: Path) -> None:
     payload = json.loads(output_path.read_text(encoding="utf-8"))
     assert payload["scenario_id"] == "001-replication-lag"
     assert payload["score"]["actual_category"] == "resource_exhaustion"
+    assert payload["observed_evidence_sources"] == [
+        "aws_cloudwatch_metrics",
+        "aws_performance_insights",
+    ]
+    assert payload["missing_required_evidence_sources"] == ["aws_rds_events"]
     assert (tmp_path / "001-replication-lag" / "latest.json").exists()
 
     report_text = render_report_to_string(observation)
     assert "Synthetic RDS Run - 001-replication-lag" in report_text
     assert "PASS" in report_text
+    assert "Observed evidence" in report_text
+    assert "aws_performance_insights" in report_text
+    assert "Missing evidence" in report_text
+    assert "policy" in report_text
     assert "Trajectory" in report_text
     assert "lcs=0.67" in report_text
     assert "Observation:" in report_text

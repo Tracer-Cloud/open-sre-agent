@@ -15,13 +15,16 @@ from app.pipeline.runners import run_investigation
 from tests.synthetic.mock_aws_backend import FixtureAWSBackend
 from tests.synthetic.mock_grafana_backend.backend import FixtureGrafanaBackend
 from tests.synthetic.rds_postgres.observations import (
+    TrajectoryPolicy,
     build_observation,
     compute_trajectory_metrics,
+    evaluate_trajectory_policy,
     render_report_to_console,
     write_observation,
 )
 from tests.synthetic.rds_postgres.scenario_loader import (
     SUITE_DIR,
+    GoldenTrajectoryConfig,
     ScenarioFixture,
     load_all_scenarios,
 )
@@ -497,15 +500,19 @@ def run_scenario(
     return state_dict, score_result(fixture, state_dict, queried_metrics=queried_metrics)
 
 
-def _resolved_golden_trajectory(fixture: ScenarioFixture) -> tuple[list[str], int | None]:
-    golden_cfg = fixture.answer_key.golden_trajectory or {}
-    ordered = golden_cfg.get("ordered_actions")
-    if isinstance(ordered, list) and ordered:
-        max_loops = golden_cfg.get("max_loops")
-        if isinstance(max_loops, int):
-            return [str(action) for action in ordered], max_loops
-        return [str(action) for action in ordered], fixture.answer_key.max_investigation_loops
-    return list(fixture.answer_key.optimal_trajectory), fixture.answer_key.max_investigation_loops
+def _resolved_golden_trajectory(
+    fixture: ScenarioFixture,
+) -> tuple[list[str], int | None, GoldenTrajectoryConfig | None]:
+    golden_cfg = fixture.answer_key.golden_trajectory
+    if golden_cfg is not None and golden_cfg.ordered_actions:
+        if golden_cfg.max_loops is not None:
+            return list(golden_cfg.ordered_actions), golden_cfg.max_loops, golden_cfg
+        return (
+            list(golden_cfg.ordered_actions),
+            fixture.answer_key.max_investigation_loops,
+            golden_cfg,
+        )
+    return list(fixture.answer_key.optimal_trajectory), fixture.answer_key.max_investigation_loops, None
 
 
 def _print_gap_report(
@@ -568,19 +575,43 @@ def run_suite(argv: list[str] | None = None) -> list[ScenarioScore]:
         final_state, score = run_scenario(fixture, use_mock_grafana=args.mock_grafana)
         wall_time_s = time.monotonic() - started_monotonic
 
-        results.append(score)
-
         executed_hypotheses = final_state.get("executed_hypotheses") or []
-        loops_used = int(
-            final_state.get("investigation_loop_count") or len(executed_hypotheses)
-        )
-        golden_trajectory, max_loops = _resolved_golden_trajectory(fixture)
+        loops_used = int(final_state.get("investigation_loop_count") or len(executed_hypotheses))
+        golden_trajectory, max_loops, golden_cfg = _resolved_golden_trajectory(fixture)
         trajectory_metrics = compute_trajectory_metrics(
             executed_hypotheses=executed_hypotheses,
             golden=golden_trajectory,
             loops_used=loops_used,
             max_loops=max_loops,
         )
+        trajectory_policy = (
+            evaluate_trajectory_policy(
+                metrics=trajectory_metrics,
+                golden_actions=golden_trajectory,
+                policy=TrajectoryPolicy(
+                    matching=golden_cfg.matching,
+                    max_edit_distance=golden_cfg.max_edit_distance,
+                    max_extra_actions=golden_cfg.max_extra_actions,
+                    max_redundancy=golden_cfg.max_redundancy,
+                    max_loops=golden_cfg.max_loops,
+                ),
+            )
+            if golden_cfg is not None
+            else None
+        )
+
+        if score.passed and trajectory_policy is not None and not trajectory_policy.passed:
+            score = replace(
+                score,
+                passed=False,
+                failure_reason=(
+                    "trajectory policy failed: "
+                    + "; ".join(trajectory_policy.violations or ["unknown violation"])
+                ),
+            )
+
+        results.append(score)
+
         observation = build_observation(
             scenario_id=fixture.scenario_id,
             suite="axis1",
@@ -588,7 +619,11 @@ def run_suite(argv: list[str] | None = None) -> list[ScenarioScore]:
             score=asdict(score),
             reasoning=asdict(score.reasoning) if score.reasoning is not None else None,
             trajectory=trajectory_metrics,
+            evaluated_golden_actions=golden_trajectory,
+            trajectory_policy=trajectory_policy,
             final_state=final_state,
+            available_evidence_sources=list(fixture.metadata.available_evidence),
+            required_evidence_sources=list(fixture.answer_key.required_evidence_sources),
             started_at=started_at,
             wall_time_s=wall_time_s,
         )
