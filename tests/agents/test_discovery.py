@@ -84,6 +84,18 @@ def test_discovers_agent_cli_from_cursor_terminal_metadata(tmp_path: Path) -> No
     ]
 
 
+def test_ignores_plain_claude_commands_with_code_prefix_arguments() -> None:
+    records = discover_agents(
+        process_rows=[
+            ProcessRow(pid=601, command="claude codebase.py"),
+            ProcessRow(pid=602, command="claude codegen --project src"),
+        ],
+        cursor_projects_dir=Path("/does/not/exist"),
+    )
+
+    assert records == []
+
+
 def test_registered_records_win_over_discovered_pid(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -114,3 +126,21 @@ def test_registered_records_win_over_discovered_pid(
     assert len(records) == 1
     assert records[0].name == "manual-claude"
     assert records[0].source == "registered"
+
+
+def test_registered_and_discovered_agents_returns_sorted_rows(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    registry = AgentRegistry(path=tmp_path / "agents.jsonl")
+    registry.register(AgentRecord(name="z-manual", pid=20, command="manual"))
+
+    monkeypatch.setattr(
+        "app.agents.discovery.discover_agents",
+        lambda: [
+            AgentRecord(name="aider", pid=10, command="aider", source="discovered"),
+        ],
+    )
+
+    records = registered_and_discovered_agents(registry)
+
+    assert [(record.name, record.pid) for record in records] == [("aider", 10), ("z-manual", 20)]

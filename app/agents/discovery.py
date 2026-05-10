@@ -64,7 +64,7 @@ def registered_and_discovered_agents(
     records_by_pid = {record.pid: record for record in registry.list()}
     for record in discover_agents():
         records_by_pid.setdefault(record.pid, record)
-    return list(records_by_pid.values())
+    return sorted(records_by_pid.values(), key=lambda record: (record.name, record.pid))
 
 
 def _current_process_rows() -> list[ProcessRow]:
@@ -154,7 +154,7 @@ def _agent_name_for_command(command: str) -> str | None:
         return "cursor-agent-exec"
     if "cursor-agent" in lower or "cursor agent" in lower:
         return "cursor-agent"
-    if _has_command_token(lower, "claude") and " code" in f" {lower} ":
+    if _has_command_token(lower, "claude") and _has_command_token(lower, "code"):
         return "claude-code"
     if _has_command_token(lower, "codex"):
         return "codex"
