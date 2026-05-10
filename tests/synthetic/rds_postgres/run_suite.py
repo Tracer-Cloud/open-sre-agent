@@ -7,11 +7,10 @@ import time
 from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from rich.console import Console
 
-from app.pipeline.runners import run_investigation
 from tests.synthetic.mock_aws_backend import FixtureAWSBackend
 from tests.synthetic.mock_grafana_backend.backend import FixtureGrafanaBackend
 from tests.synthetic.rds_postgres.observations import (
@@ -35,6 +34,17 @@ _EVIDENCE_KEY_MAP: dict[str, str] = {
     "aws_rds_events": "grafana_logs",
     "aws_performance_insights": "grafana_metrics",
 }
+
+
+def _run_investigation_lazy(**kwargs: Any) -> Any:
+    from app.pipeline.runners import run_investigation as _run_investigation
+
+    return _run_investigation(**kwargs)
+
+
+# Keep this as a module symbol so tests can monkeypatch it without importing
+# heavy optional dependencies during test collection.
+run_investigation: Callable[..., Any] = _run_investigation_lazy
 
 
 @dataclass(frozen=True)
