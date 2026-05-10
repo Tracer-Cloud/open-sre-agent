@@ -80,31 +80,50 @@ def _same_origin(url_a: str, url_b: str) -> bool:
     a, b = urlparse(url_a), urlparse(url_b)
     return a.scheme == b.scheme and a.netloc == b.netloc
 
-
 def resolve_supabase_config(project_url: str) -> SupabaseConfig:
-    """Build a config for the given project URL, resolving credentials from env.
+    """Build a config for the given project URL, resolving credentials from
+    the integration store (UI-registered) or environment variables.
 
     The LLM supplies only the identifying param (project_url).
-    Credentials are resolved from environment variables so they never appear
-    in tool signatures and are never seen by the LLM.
+    Credentials are resolved internally and never appear in tool signatures.
 
-    Raises ValueError if project_url does not match the configured SUPABASE_URL.
-    This prevents prompt-injection attacks from exfiltrating the service key
-    to an attacker-controlled domain.
+    Raises ValueError if no matching credentials are found for the given URL,
+    or if the URL origin doesn't match any configured Supabase integration.
     """
-    env_config = supabase_config_from_env()
     normalized = project_url.rstrip("/")
 
-    if env_config is None:
-        raise ValueError("Supabase is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_KEY.")
+    # Check the integration store first — covers users who registered via the UI
+    # wizard without setting environment variables.
+    try:
+        from app.integrations.store import load_integrations
 
+        for record in load_integrations():
+            if str(record.get("service", "")).lower() != "supabase":
+                continue
+            creds = record.get("credentials", {}) or {}
+            stored_url = str(creds.get("url", "")).rstrip("/")
+            if _same_origin(stored_url, normalized):
+                service_key = str(creds.get("service_key", "")).strip()
+                if service_key:
+                    return build_supabase_config(
+                        {"url": normalized, "service_key": service_key}
+                    )
+    except Exception:
+        pass
+
+    # Fall back to environment variables.
+    env_config = supabase_config_from_env()
+    if env_config is None:
+        raise ValueError(
+            "Supabase is not configured. "
+            "Register the integration via the UI or set SUPABASE_URL and SUPABASE_SERVICE_KEY."
+        )
     if not _same_origin(env_config.url, normalized):
         raise ValueError(
             f"project_url '{normalized}' does not match the configured "
             f"SUPABASE_URL origin. Refusing to attach credentials to an "
             f"unrecognised host."
         )
-
     return build_supabase_config({"url": normalized, "service_key": env_config.service_key})
 
 
