@@ -80,6 +80,27 @@ class ScenarioFixture:
     problem_md: str
 
 
+def _parse_trajectory_matching(value: Any) -> TrajectoryMatching:
+    if value in {"strict", "lcs", "set"}:
+        return cast(TrajectoryMatching, value)
+    raise ValueError(
+        "answer.yml: 'golden_trajectory.matching' must be one of "
+        "'strict', 'lcs', or 'set' when present"
+    )
+
+
+def _parse_non_negative_int(golden_trajectory: dict[str, Any], field: str) -> int | None:
+    value = golden_trajectory.get(field)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(
+            f"answer.yml: 'golden_trajectory.{field}' must be a non-negative integer "
+            "when present"
+        )
+    return value
+
+
 def _read_json(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
@@ -242,44 +263,26 @@ def _parse_answer_yaml(path: Path) -> ScenarioAnswerKey:
     golden_trajectory_raw = validated.get("golden_trajectory")
     golden_trajectory: GoldenTrajectoryConfig | None = None
     if isinstance(golden_trajectory_raw, dict):
-        ordered_actions = [
-            str(action)
-            for action in (golden_trajectory_raw.get("ordered_actions") or [])
-            if isinstance(action, str) and action.strip()
-        ]
-        if ordered_actions:
-            matching_value = golden_trajectory_raw.get("matching")
-            matching: TrajectoryMatching = (
-                "strict"
-                if matching_value == "strict"
-                else "set"
-                if matching_value == "set"
-                else "lcs"
+        ordered_actions_raw = golden_trajectory_raw.get("ordered_actions")
+        if not isinstance(ordered_actions_raw, list) or not ordered_actions_raw:
+            raise ValueError(
+                "answer.yml: 'golden_trajectory.ordered_actions' must be a non-empty list "
+                "of strings when present"
             )
-            golden_trajectory = GoldenTrajectoryConfig(
-                ordered_actions=ordered_actions,
-                matching=matching,
-                max_edit_distance=(
-                    int(golden_trajectory_raw["max_edit_distance"])
-                    if isinstance(golden_trajectory_raw.get("max_edit_distance"), int)
-                    else None
-                ),
-                max_extra_actions=(
-                    int(golden_trajectory_raw["max_extra_actions"])
-                    if isinstance(golden_trajectory_raw.get("max_extra_actions"), int)
-                    else None
-                ),
-                max_redundancy=(
-                    int(golden_trajectory_raw["max_redundancy"])
-                    if isinstance(golden_trajectory_raw.get("max_redundancy"), int)
-                    else None
-                ),
-                max_loops=(
-                    int(golden_trajectory_raw["max_loops"])
-                    if isinstance(golden_trajectory_raw.get("max_loops"), int)
-                    else None
-                ),
-            )
+        ordered_actions = [action.strip() for action in ordered_actions_raw]
+        matching = _parse_trajectory_matching(golden_trajectory_raw.get("matching", "lcs"))
+        golden_trajectory = GoldenTrajectoryConfig(
+            ordered_actions=ordered_actions,
+            matching=matching,
+            max_edit_distance=_parse_non_negative_int(
+                golden_trajectory_raw, "max_edit_distance"
+            ),
+            max_extra_actions=_parse_non_negative_int(
+                golden_trajectory_raw, "max_extra_actions"
+            ),
+            max_redundancy=_parse_non_negative_int(golden_trajectory_raw, "max_redundancy"),
+            max_loops=_parse_non_negative_int(golden_trajectory_raw, "max_loops"),
+        )
 
     return ScenarioAnswerKey(
         root_cause_category=validated["root_cause_category"].strip(),
