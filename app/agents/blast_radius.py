@@ -396,6 +396,35 @@ def collect_recent_outside_writes(
     return events
 
 
+def get_project_root(record: AgentRecord) -> Path | None:
+    """Resolve ``record``'s project root using the watcher cache when possible.
+
+    Public surface for callers (currently the ``/agents inspect`` panel
+    header) that want a project root without implicitly re-firing
+    ``psutil.Process(pid).cwd()`` on every call. Fast-path: read from
+    a cached :class:`BlastRadiusWatcher`'s already-resolved
+    ``project_root``. Negative-cache path: short-circuit to ``None``
+    for PIDs already classified unresolvable. Slow path (only on first
+    call before the watcher has started): fresh psutil resolution.
+
+    Crucially, the slow path also consults ``_UNRESOLVABLE`` so a dead
+    agent doesn't re-fire psutil on every render. The earlier
+    ``_project_root_for_inspect`` helper open-coded the watcher lookup
+    and skipped this check, re-running ``Process.cwd()`` against every
+    stale registry entry per ``/agents inspect`` invocation — a
+    regression of the same negative-cache that the coordinator path
+    already had.
+    """
+    key = f"{record.name}:{record.pid}"
+    with _WATCHERS_LOCK:
+        cached = _WATCHERS.get(key)
+        if cached is not None:
+            return cached.project_root
+        if key in _UNRESOLVABLE:
+            return None
+    return _resolve_agent_project_root(record)
+
+
 def _reset_watchers_for_tests() -> None:
     """Stop all running watchers and clear the cache. Test-only helper.
 
@@ -416,4 +445,5 @@ __all__ = [
     "collect_recent_outside_writes",
     "collect_recent_write_events",
     "find_project_root",
+    "get_project_root",
 ]

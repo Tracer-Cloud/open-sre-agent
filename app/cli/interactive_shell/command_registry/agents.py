@@ -414,34 +414,18 @@ def _cmd_agents_inspect(session: ReplSession, console: Console, args: list[str])
 def _project_root_for_inspect(record: AgentRecord) -> str | None:
     """Best-effort project-root resolver for the inspect panel header.
 
-    Prefers the cached :class:`app.agents.blast_radius.BlastRadiusWatcher`'s
-    already-resolved ``project_root`` so we don't re-issue
-    ``psutil.Process(pid).cwd()`` every render. Falls back to a fresh
-    resolution only when the watcher hasn't started yet (rare — the
-    inspect handler runs the collectors first specifically so the
-    watcher is in the cache by the time this is called). Returns
-    ``None`` if the PID has no ``.git`` ancestor or is inaccessible —
-    the panel header degrades gracefully.
+    Thin wrapper around :func:`app.agents.blast_radius.get_project_root`
+    that stringifies the result. The blast-radius helper handles the
+    cache lookup and the negative-cache short-circuit so we don't
+    re-fire ``psutil.Process(pid).cwd()`` against stale registry
+    entries on every render.
     """
     # Imported lazily to avoid pulling watchdog into modules that don't
     # actually use the watcher (the conflict detector and inspect panel
     # both need it; modules like /agents budget don't).
-    from app.agents.blast_radius import (
-        _WATCHERS,
-        _WATCHERS_LOCK,
-        _resolve_agent_project_root,
-    )
+    from app.agents.blast_radius import get_project_root
 
-    # Acquire ``_WATCHERS_LOCK`` for the read even though dict ``.get``
-    # is GIL-atomic on its own — taking the lock keeps this consistent
-    # with the rest of ``blast_radius``'s locking discipline so future
-    # reviewers don't have to reason about whether each access pattern
-    # is "safe enough".
-    with _WATCHERS_LOCK:
-        cached = _WATCHERS.get(f"{record.name}:{record.pid}")
-    if cached is not None:
-        return str(cached.project_root)
-    root = _resolve_agent_project_root(record)
+    root = get_project_root(record)
     return str(root) if root is not None else None
 
 

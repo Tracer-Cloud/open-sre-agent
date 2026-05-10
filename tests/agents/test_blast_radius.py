@@ -344,6 +344,82 @@ class TestCollectRecentWriteEvents:
         assert [e.path for e in out] == ["/new"]
 
 
+class TestGetProjectRoot:
+    """Pin the public :func:`get_project_root` helper's three paths.
+
+    The negative-cache path is the regression Greptile flagged on
+    PR #1739: the prior open-coded helper in ``agents.py`` checked the
+    watcher cache but skipped ``_UNRESOLVABLE``, re-firing
+    ``psutil.Process(pid).cwd()`` against every dead PID per
+    ``/agents inspect`` invocation.
+    """
+
+    def test_returns_cached_watcher_project_root(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        # Coordinator first call lazy-starts a watcher and caches it.
+        (tmp_path / ".git").mkdir()
+        monkeypatch.setattr(
+            blast_radius_module, "_resolve_agent_project_root", lambda _record: tmp_path
+        )
+        records = [_record(pid=1)]
+        collect_recent_write_events(records, since=0.0)
+
+        from app.agents.blast_radius import get_project_root
+
+        # Now invalidate the resolver: get_project_root must NOT fall
+        # through to it — the cached watcher's project_root wins.
+        monkeypatch.setattr(
+            blast_radius_module,
+            "_resolve_agent_project_root",
+            lambda _record: pytest.fail("resolver was called despite cached watcher"),
+        )
+        assert get_project_root(records[0]) == tmp_path
+
+    def test_short_circuits_unresolvable_keys_without_psutil_call(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Greptile-flagged regression: negative cache must apply to inspect path too."""
+        # Seed the unresolvable cache via a failing coordinator call.
+        monkeypatch.setattr(
+            blast_radius_module, "_resolve_agent_project_root", lambda _record: None
+        )
+        records = [_record(pid=99999)]
+        collect_recent_write_events(records, since=0.0)
+        assert "claude-code:99999" in blast_radius_module._UNRESOLVABLE
+
+        from app.agents.blast_radius import get_project_root
+
+        # Replace the resolver with a fail-loud sentinel; the negative
+        # cache must short-circuit before we reach it.
+        monkeypatch.setattr(
+            blast_radius_module,
+            "_resolve_agent_project_root",
+            lambda _record: pytest.fail(
+                "resolver was called despite negative-cache hit on _UNRESOLVABLE"
+            ),
+        )
+        assert get_project_root(records[0]) is None
+
+    def test_falls_through_to_resolver_for_unknown_keys(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        # Clean state — neither cached nor unresolvable. The slow path
+        # (fresh psutil resolution) must be reachable.
+        called: list[int] = []
+
+        def fake_resolver(record: AgentRecord) -> Path:
+            called.append(record.pid)
+            return tmp_path
+
+        monkeypatch.setattr(blast_radius_module, "_resolve_agent_project_root", fake_resolver)
+
+        from app.agents.blast_radius import get_project_root
+
+        assert get_project_root(_record(pid=7777)) == tmp_path
+        assert called == [7777]
+
+
 @pytest.mark.slow
 class TestE2ESmoke:
     def test_real_watchdog_captures_a_real_write(self, tmp_path: Path) -> None:
