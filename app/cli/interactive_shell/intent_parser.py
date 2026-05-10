@@ -597,6 +597,11 @@ def extract_llm_provider_switch(clause: PromptClause) -> PlannedAction | None:
     return llm_provider_action(provider, clause.position + target.start("provider"))
 
 
+def is_single_edit_typo(a: str, b: str) -> bool:
+    """Return True when *a* and *b* are within one Damerau–Levenshtein edit of each other."""
+    return _damerau_levenshtein_distance(a, b) <= 1
+
+
 __all__ = [
     "ACTION_PATTERNS",
     "IMPLEMENTATION_RE",
@@ -612,6 +617,7 @@ __all__ = [
     "extract_shell_command",
     "extract_task_cancel_request",
     "implementation_action",
+    "is_single_edit_typo",
     "looks_like_direct_shell_command",
     "sample_alert_action",
     "slash_action",
