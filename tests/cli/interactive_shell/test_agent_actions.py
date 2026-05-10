@@ -330,6 +330,11 @@ def test_compound_services_and_synthetic_rds_plans_all_actions() -> None:
     assert plan_cli_actions(message) == ["/list integrations"]
 
 
+def test_synthetic_scenario_id_plans_synthetic_action_kind() -> None:
+    assert plan_terminal_tasks("run synthetic test 005-failover") == ["synthetic_test"]
+    assert plan_cli_actions("run synthetic test 005-failover") == []
+
+
 def test_compound_prompt_executes_all_supported_tasks(monkeypatch: object) -> None:
     dispatched: list[str] = []
 
@@ -512,10 +517,13 @@ def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch:
     assert len(popen_calls) == 1
     assert popen_calls[0][0] == [
         sys.executable,
+        "-u",
         "-m",
         "app.cli",
         "tests",
         "synthetic",
+        "--scenario",
+        "001-replication-lag",
     ]
 
     assert session.history[:2] == [
@@ -547,8 +555,30 @@ def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch:
     output = buf.getvalue()
     assert output.index("1.") < output.index("$ /list integrations")
     assert output.index("2.") < output.index("$ /list integrations")
+    assert "synthetic test rds_postgres:001-replication-lag" in output
     assert output.index("synthetic test") < output.index("$ opensre tests synthetic")
     assert output.index("$ /list integrations") < output.index("$ opensre tests synthetic")
+
+
+def test_execute_cli_actions_runs_requested_synthetic_scenario(monkeypatch: object) -> None:
+    popen_calls: list[tuple[list[str], dict[str, object]]] = []
+
+    def _fake_popen(command: list[str], **kwargs: object) -> MagicMock:
+        popen_calls.append((command, kwargs))
+        proc = MagicMock()
+        proc.poll.return_value = 0
+        proc.returncode = 0
+        return proc
+
+    monkeypatch.setattr(action_executor.subprocess, "Popen", _fake_popen)
+
+    session = ReplSession()
+    console, buf = _capture()
+    handled = execute_cli_actions("run synthetic test 005-failover", session, console)
+
+    assert handled is True
+    assert popen_calls[0][0][-2:] == ["--scenario", "005-failover"]
+    assert "$ opensre tests synthetic --scenario 005-failover" in buf.getvalue()
 
 
 def test_execute_cli_actions_cancels_single_running_synthetic_task() -> None:

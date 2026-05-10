@@ -149,6 +149,45 @@ def _resolved_evidence_sources(
     return observed_sources, required_evidence_sources, missing_required_sources
 
 
+def _process_metrics_summary(trajectory: TrajectoryMetrics) -> dict[str, Any]:
+    """Human-readable process metrics surfaced at the top of ``score``."""
+    return {
+        "loops_used": trajectory.loops_used,
+        "max_loops": trajectory.max_loops,
+        "strict_match": trajectory.strict_match,
+        "lcs_ratio": trajectory.lcs_ratio,
+        "edit_distance": trajectory.edit_distance,
+        "coverage": trajectory.coverage,
+        "extra_actions_count": len(trajectory.extra_actions),
+        "missing_actions_count": len(trajectory.missing_actions),
+        "redundancy_count": trajectory.redundancy_count,
+        "failed_action_count": trajectory.failed_action_count,
+        "definitions": {
+            "extra_actions_count": (
+                "Actions executed but not present in the evaluated golden trajectory."
+            ),
+            "missing_actions_count": (
+                "Golden-trajectory actions that never appeared in execution."
+            ),
+            "redundancy_count": (
+                "Duplicate action executions (same action run more than once). "
+                "This is different from extra actions."
+            ),
+            "strict_match": (
+                "True only when executed actions exactly match golden order and membership."
+            ),
+        },
+    }
+
+
+def _score_with_process_metrics(
+    score: dict[str, Any],
+    trajectory: TrajectoryMetrics,
+) -> dict[str, Any]:
+    """Return score payload with process metrics first for readability."""
+    return {"process_metrics": _process_metrics_summary(trajectory), **score}
+
+
 def evaluate_trajectory_policy(
     metrics: TrajectoryMetrics,
     golden_actions: list[str],
@@ -178,9 +217,7 @@ def evaluate_trajectory_policy(
         if extra_count > policy.max_extra_actions:
             violations.append(f"extra_actions={extra_count} > {policy.max_extra_actions}")
     if policy.max_redundancy is not None and metrics.redundancy_count > policy.max_redundancy:
-        violations.append(
-            f"redundancy_count={metrics.redundancy_count} > {policy.max_redundancy}"
-        )
+        violations.append(f"redundancy_count={metrics.redundancy_count} > {policy.max_redundancy}")
     if policy.max_loops is not None and metrics.loops_used > policy.max_loops:
         violations.append(f"loops_used={metrics.loops_used} > {policy.max_loops}")
 
@@ -262,6 +299,7 @@ def build_observation(
         available_evidence_sources=available_evidence_sources,
         required_evidence_sources=required_evidence_sources,
     )
+    score_payload = _score_with_process_metrics(score, trajectory)
 
     return RunObservation(
         scenario_id=scenario_id,
@@ -269,7 +307,7 @@ def build_observation(
         wall_time_s=round(wall_time_s, 3),
         suite=suite,
         backend=backend,
-        score=score,
+        score=score_payload,
         trajectory=trajectory,
         evaluated_golden_actions=evaluated_golden_actions,
         trajectory_policy=trajectory_policy,

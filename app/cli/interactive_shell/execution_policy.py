@@ -169,8 +169,8 @@ def execution_allowed(
         )
     else:
         console.print(f"[{WARNING}]Confirm:[/] [{DIM}]{escape(reason)}[/]")
-    answer = confirm("Proceed? [y/N] ").strip().lower()
-    if answer not in {"y", "yes"}:
+    answer = confirm("Proceed? [Y/n] ").strip().lower()
+    if answer not in {"", "y", "yes"}:
         _emit_decision(
             action_type=result.action_type,
             policy_verdict="ask",

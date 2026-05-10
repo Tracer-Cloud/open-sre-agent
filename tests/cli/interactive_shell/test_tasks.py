@@ -193,6 +193,28 @@ class TestTaskRegistry:
         assert loaded.status == TaskStatus.CANCELLED
         assert (12345, 15) not in calls
 
+    def test_session_reset_does_not_truncate_persistent_task_store(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        import app.constants as const_module
+
+        monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        session = ReplSession()
+        session.task_registry = TaskRegistry.persistent()
+        task = session.task_registry.create(TaskKind.SYNTHETIC_TEST, command="opensre tests")
+        task.mark_running()
+        task.mark_completed(result="ok")
+
+        session.clear()
+
+        reloaded = TaskRegistry.persistent()
+        [loaded] = reloaded.list_recent()
+        assert loaded.task_id == task.task_id
+        assert loaded.command == "opensre tests"
+        assert session.task_registry.list_recent() == []
+
 
 class TestSlashTaskCommands:
     def test_tasks_empty_message(self) -> None:

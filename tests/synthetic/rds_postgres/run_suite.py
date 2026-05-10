@@ -512,7 +512,11 @@ def _resolved_golden_trajectory(
             fixture.answer_key.max_investigation_loops,
             golden_cfg,
         )
-    return list(fixture.answer_key.optimal_trajectory), fixture.answer_key.max_investigation_loops, None
+    return (
+        list(fixture.answer_key.optimal_trajectory),
+        fixture.answer_key.max_investigation_loops,
+        None,
+    )
 
 
 def _print_gap_report(
@@ -629,9 +633,10 @@ def run_suite(argv: list[str] | None = None) -> list[ScenarioScore]:
         )
         observation_path = write_observation(observation, observations_dir)
         relative_observation_path = str(observation_path.relative_to(observations_dir))
+        display_observation_path = str(observation_path.resolve())
         observation_for_report = replace(
             observation,
-            observation_path=relative_observation_path,
+            observation_path=f"{relative_observation_path} ({display_observation_path})",
         )
 
         if should_report:

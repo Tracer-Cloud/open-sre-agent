@@ -29,9 +29,7 @@ def _sample_final_state() -> dict[str, Any]:
                 "observations": ["CPU is elevated"],
             },
             "aws_performance_insights": {
-                "observations": [
-                    "Top SQL Activity: select 1 | Avg Load: 2.0 AAS | Waits: CPU"
-                ],
+                "observations": ["Top SQL Activity: select 1 | Avg Load: 2.0 AAS | Waits: CPU"],
                 "top_sql": [{"sql": "select 1", "db_load": 2.0, "wait_event": "CPU"}],
                 "wait_events": [],
             },
@@ -135,6 +133,12 @@ def test_observation_roundtrip_and_report_rendering(tmp_path: Path) -> None:
     output_path = write_observation(observation, tmp_path)
     payload = json.loads(output_path.read_text(encoding="utf-8"))
     assert payload["scenario_id"] == "001-replication-lag"
+    assert "process_metrics" in payload["score"]
+    assert payload["score"]["process_metrics"]["redundancy_count"] == 0
+    assert (
+        "Duplicate action executions"
+        in payload["score"]["process_metrics"]["definitions"]["redundancy_count"]
+    )
     assert payload["score"]["actual_category"] == "resource_exhaustion"
     assert payload["observed_evidence_sources"] == [
         "aws_cloudwatch_metrics",

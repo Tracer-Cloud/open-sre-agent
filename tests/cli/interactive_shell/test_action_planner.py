@@ -26,6 +26,28 @@ def test_plan_terminal_tasks_returns_kinds() -> None:
     assert plan_terminal_tasks(msg) == ["slash", "slash"]
 
 
+def test_plan_synthetic_test_without_scenario_uses_default() -> None:
+    msg = "run a single synthetic test"
+    actions, unhandled = plan_actions_with_unhandled(msg)
+
+    assert not unhandled
+    assert [(a.kind, a.content) for a in actions] == [
+        ("synthetic_test", "rds_postgres:001-replication-lag")
+    ]
+
+
+def test_plan_synthetic_test_with_explicit_scenario_id() -> None:
+    msg = "run synthetic test 005-failover"
+    actions, unhandled = plan_actions_with_unhandled(msg)
+
+    assert not unhandled
+    assert [(a.kind, a.content) for a in actions] == [
+        ("synthetic_test", "rds_postgres:005-failover")
+    ]
+    assert plan_terminal_tasks(msg) == ["synthetic_test"]
+    assert plan_cli_actions(msg) == []
+
+
 def test_plan_terminal_tasks_returns_implementation_action() -> None:
     msg = "please implement process auto-discovery"
     actions, unhandled = plan_actions_with_unhandled(msg)

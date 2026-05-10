@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import errno
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -49,6 +50,8 @@ _MAX_COMMAND_OUTPUT_CHARS = 24_000
 _SYNTHETIC_DIAG_CHARS = 2_000  # max stderr bytes captured from a failing synthetic run
 _SIGTERM_GRACE_SECONDS = 10  # wait for clean exit after SIGTERM before escalating to SIGKILL
 _TASK_OUTPUT_JOIN_TIMEOUT_SECONDS = 2
+_DEFAULT_SYNTHETIC_SCENARIO = "001-replication-lag"
+_SYNTHETIC_SCENARIO_ID_RE = re.compile(r"^\d{3}-[a-z0-9][a-z0-9-]*$")
 _IMPLEMENT_PERMISSION_MODE_ENV = "CLAUDE_CODE_IMPLEMENT_PERMISSION_MODE"
 _DEFAULT_IMPLEMENT_PERMISSION_MODE = "acceptEdits"
 
@@ -985,7 +988,17 @@ def run_synthetic_test(
     is_tty: bool | None = None,
     action_already_listed: bool = False,
 ) -> None:
-    if suite_name != "rds_postgres":
+    suite_spec = suite_name.strip().lower()
+    resolved_suite_name = ""
+    resolved_scenario = _DEFAULT_SYNTHETIC_SCENARIO
+    if suite_spec == "rds_postgres":
+        resolved_suite_name = "rds_postgres"
+    elif suite_spec.startswith("rds_postgres:"):
+        requested_scenario = suite_spec.split(":", 1)[1].strip()
+        if requested_scenario and _SYNTHETIC_SCENARIO_ID_RE.fullmatch(requested_scenario):
+            resolved_suite_name = "rds_postgres"
+            resolved_scenario = requested_scenario
+    if resolved_suite_name != "rds_postgres":
         console.print(f"[{ERROR}]unknown synthetic suite:[/] {escape(suite_name)}")
         session.record("synthetic_test", suite_name, ok=False)
         return
@@ -995,7 +1008,7 @@ def run_synthetic_test(
         policy,
         session=session,
         console=console,
-        action_summary="opensre tests synthetic",
+        action_summary=f"opensre tests synthetic --scenario {resolved_scenario}",
         confirm_fn=confirm_fn,
         is_tty=is_tty,
         action_already_listed=action_already_listed,
@@ -1003,7 +1016,7 @@ def run_synthetic_test(
         session.record("synthetic_test", suite_name, ok=False)
         return
 
-    display_command = "opensre tests synthetic"
+    display_command = f"opensre tests synthetic --scenario {resolved_scenario}"
     console.print(f"[bold]$ {display_command}[/bold]")
     task = session.task_registry.create(TaskKind.SYNTHETIC_TEST, command=display_command)
     task.mark_running()
@@ -1014,7 +1027,16 @@ def run_synthetic_test(
     )
     try:
         proc = subprocess.Popen(
-            [sys.executable, "-m", "app.cli", "tests", "synthetic"],
+            [
+                sys.executable,
+                "-u",
+                "-m",
+                "app.cli",
+                "tests",
+                "synthetic",
+                "--scenario",
+                resolved_scenario,
+            ],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -1031,7 +1053,14 @@ def run_synthetic_test(
         return
 
     task.attach_process(proc)
-    watch_synthetic_subprocess(task, proc, session, suite_name, stderr_buf, console)
+    watch_synthetic_subprocess(
+        task,
+        proc,
+        session,
+        f"{resolved_suite_name}:{resolved_scenario}",
+        stderr_buf,
+        console,
+    )
     console.print(
         f"[{DIM}]synthetic test started — task[/] [bold]{escape(task.task_id)}[/bold]. "
         f"[{HIGHLIGHT}]/tasks[/] [{DIM}]to monitor,[/] "
