@@ -24,6 +24,7 @@ from app.cli.interactive_shell.prompt_rules import (
 )
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.streaming import STREAM_LABEL_ASSISTANT, stream_to_console
+from app.cli.interactive_shell.theme import DIM, ERROR
 from app.cli.support.exception_reporting import report_exception
 
 # Match the cli_agent terminology / formatting rules so docs answers feel
@@ -94,7 +95,7 @@ def answer_cli_help(
         from app.services.llm_client import get_llm_for_reasoning
     except Exception as exc:
         report_exception(exc, context="interactive_shell.cli_help.import")
-        console.print(f"[red]LLM client unavailable:[/red] {escape(str(exc))}")
+        console.print(f"[{ERROR}]LLM client unavailable:[/] {escape(str(exc))}")
         return
 
     cli_reference = build_cli_reference_text()
@@ -110,11 +111,11 @@ def answer_cli_help(
             chunks=client.invoke_stream(prompt),
         )
     except KeyboardInterrupt:
-        console.print("[dim]· cancelled[/dim]")
+        console.print(f"[{DIM}]· cancelled[/]")
         return
     except Exception as exc:
         report_exception(exc, context="interactive_shell.cli_help.stream")
-        console.print(f"[red]assistant failed:[/red] {escape(str(exc))}")
+        console.print(f"[{ERROR}]assistant failed:[/] {escape(str(exc))}")
         return
 
 

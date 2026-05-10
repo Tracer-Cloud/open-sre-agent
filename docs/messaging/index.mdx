@@ -1,0 +1,65 @@
+---
+title: "Messaging"
+description: "Deliver investigation findings and trigger investigations from Slack, Discord, or Telegram."
+---
+
+OpenSRE can deliver investigation findings — and accept investigation triggers — through three messaging platforms. Pick the one that matches where your team already responds to incidents.
+
+## Pick a platform
+
+| Platform | Best for | Trigger investigations from chat? | Configured by | Setup time |
+|---|---|---|---|---|
+| [**Slack**](/messaging/slack) | Teams already paged in Slack channels | ❌ delivery only (incoming webhook) | `opensre integrations setup slack` | ~5 min |
+| [**Discord**](/messaging/discord) | Communities and teams using Discord servers | ✅ `/investigate` slash command in any channel the bot is in | `opensre onboard` or `opensre integrations setup discord` | ~10 min |
+| [**Telegram**](/messaging/telegram) | Mobile-first and on-call rotations | ❌ delivery only | Environment variables (no wizard yet) | ~5 min |
+
+If you're not sure, start with Slack — it has the simplest setup. Pick Discord if you want chat-driven investigations with threaded follow-ups.
+
+You can configure more than one. Each is independent and uses its own credentials.
+
+## What every guide covers
+
+Each platform guide walks you through:
+
+1. **Prerequisites** — what you need before you start (workspace/server admin rights, a phone number for Telegram, etc.).
+2. **Create the bot/app** — the platform-side setup (BotFather, Discord Developer Portal, Slack App).
+3. **Credentials** — the exact tokens, IDs, and keys to copy.
+4. **OpenSRE wizard** — the `opensre onboard` flow, what it asks for, and what it writes to `.env`.
+5. **Verify** — how to confirm delivery is working.
+6. **Troubleshooting** — common failures and how to read the error.
+
+---
+
+## Common environment variables
+
+Discord and Telegram credentials can also be set directly in `.env` instead of (or alongside) the CLI configuration:
+
+```bash
+# Slack — read as a fallback when no Slack entry exists in
+# ~/.config/opensre/integrations.json
+SLACK_WEBHOOK_URL=
+
+# Discord
+DISCORD_BOT_TOKEN=
+DISCORD_APPLICATION_ID=
+DISCORD_PUBLIC_KEY=
+DISCORD_DEFAULT_CHANNEL_ID=
+
+# Telegram
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_DEFAULT_CHAT_ID=
+```
+
+After editing `.env`, run `opensre integrations verify <service>` (e.g. `opensre integrations verify telegram`) to confirm the credentials work. Note that `opensre doctor` only inspects the integrations store (`~/.config/opensre/integrations.json`), so it does **not** detect env-var-only configurations like Telegram or Slack-via-`SLACK_WEBHOOK_URL`.
+
+---
+
+## Re-running the wizard
+
+You can re-run the Discord wizard at any time to update credentials:
+
+```bash
+opensre onboard
+```
+
+Existing values are pre-populated, so you can press Enter to keep what you have. Slack and Telegram do not currently have wizard steps that persist credentials — use `opensre integrations setup slack` for Slack and `.env` for Telegram (see [#1481](https://github.com/Tracer-Cloud/opensre/issues/1481)).

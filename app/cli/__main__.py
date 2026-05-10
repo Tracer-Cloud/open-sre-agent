@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import signal
 import sys
+from contextlib import suppress
 
 import click
 from dotenv import load_dotenv
@@ -26,12 +27,23 @@ from app.cli.support.prompt_support import (
     install_questionary_ctrl_c_double_exit,
     install_questionary_escape_cancel,
 )
-from app.utils.sentry_sdk import init_sentry
+from app.utils.sentry_sdk import capture_exception, init_sentry
 from app.version import get_version
 
 _CAPTURE_CLI_ANALYTICS = "capture_cli_analytics"
 _CLI_ANALYTICS_CAPTURED = "cli_analytics_captured"
 _CLI_ARGV = "cli_argv"
+
+
+def _ensure_utf8_stdio() -> None:
+    """Force UTF-8 on stdout/stderr so the themed UI renders on legacy
+    Windows consoles (cp1252) without UnicodeEncodeError."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        with suppress(Exception):
+            reconfigure(encoding="utf-8", errors="replace")
 
 
 def _option_value_count(command: click.Command, token: str) -> int:
@@ -195,6 +207,7 @@ def _should_capture_cli_exception(exc: click.ClickException) -> bool:
 
 def main(argv: list[str] | None = None) -> int:
     """Entry point for the ``opensre`` console script."""
+    _ensure_utf8_stdio()
     load_dotenv(override=False)
     cli_argv = list(sys.argv[1:] if argv is None else argv)
     try:
@@ -238,6 +251,14 @@ def main(argv: list[str] | None = None) -> int:
             click.echo(exc.code, err=True)
             return 1
         return 0
+    except BaseException as exc:
+        if not isinstance(exc, KeyboardInterrupt):
+            capture_exception(exc, context="cli.main.unhandled")
+            with suppress(Exception):
+                import sentry_sdk as _sentry_sdk
+
+                _sentry_sdk.flush(timeout=2)
+        raise
     finally:
         shutdown_analytics(flush=True)
     return 0

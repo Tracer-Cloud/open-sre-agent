@@ -11,6 +11,7 @@ from rich.markup import escape
 from rich.spinner import Spinner
 
 from app.cli.interactive_shell.action_executor import (
+    run_opensre_cli_command,
     run_sample_alert,
     run_shell_command,
     run_synthetic_test,
@@ -33,7 +34,7 @@ from app.cli.interactive_shell.execution_policy import (
 )
 from app.cli.interactive_shell.rendering import print_planned_actions
 from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
+from app.cli.interactive_shell.theme import BOLD_BRAND
 
 
 @dataclass(frozen=True)
@@ -50,7 +51,7 @@ def _plan_with_spinner(
     console: Console,
 ) -> tuple[list, bool]:
     """Plan actions while showing a thinking spinner."""
-    spinner = Spinner("dots12", text="thinking...", style="bold orange1")
+    spinner = Spinner("dots12", text="thinking...", style=BOLD_BRAND)
     with Live(spinner, console=console, refresh_per_second=20, transient=True):
         return plan_actions_with_unhandled(message)
 
@@ -73,7 +74,7 @@ def execute_cli_actions(
         return False
 
     console.print()
-    console.print(f"[{TERMINAL_ACCENT_BOLD}]assistant:[/]")
+    console.print(f"[{BOLD_BRAND}]assistant:[/]")
     print_planned_actions(console, actions)
     if not has_unhandled_clause:
         session.record("cli_agent", message)
@@ -153,6 +154,8 @@ def execute_cli_actions(
                 is_tty=is_tty,
                 action_already_listed=True,
             )
+        elif action.kind == "cli_command":
+            run_opensre_cli_command(action.content, session, console)
         elif action.kind == "sample_alert":
             run_sample_alert(
                 action.content,

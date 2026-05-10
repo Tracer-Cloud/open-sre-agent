@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.nodes.publish_findings.formatters.report import format_slack_message
+from app.nodes.publish_findings.formatters.report import build_slack_blocks, format_slack_message
 from app.nodes.publish_findings.report_context import build_report_context
 
 
@@ -58,6 +58,27 @@ def test_format_slack_message_shows_provenance() -> None:
     assert "*Provenance:*" in message
     assert "Grafana: instance=myorg.grafana.net" in message
     assert "AWS EKS: cluster=prod-cluster, namespace=payments, region=us-east-1" in message
+
+
+def test_format_slack_message_shows_recommended_actions() -> None:
+    state = _make_state()
+    state["remediation_steps"] = [
+        "Increase memory limit for payments-api deployment",
+        "Add Datadog monitor for memory usage at 80% threshold",
+    ]
+    ctx = build_report_context(state)
+    message = format_slack_message(ctx)
+
+    assert "## Recommended Actions" in message
+    assert "• Increase memory limit for payments-api deployment" in message
+    assert "• Add Datadog monitor for memory usage at 80% threshold" in message
+
+
+def test_format_slack_message_omits_recommended_actions_when_empty() -> None:
+    ctx = build_report_context(_make_state())  # remediation_steps=[] by default
+    message = format_slack_message(ctx)
+
+    assert "## Recommended Actions" not in message
     assert (
         "provenance: instance=myorg.grafana.net, service=checkout-api, pipeline=checkout-service"
         in message
@@ -129,3 +150,29 @@ def test_format_slack_message_sanitizes_provenance_content() -> None:
 
     assert "service=*checkout-api*" in message
     assert "service=**checkout-api**" not in message
+
+
+def test_build_slack_blocks_shows_recommended_actions() -> None:
+    state = _make_state()
+    state["remediation_steps"] = [
+        "Increase memory limit for payments-api deployment",
+        "Add Datadog monitor for memory usage at 80% threshold",
+    ]
+    ctx = build_report_context(state)
+    blocks = build_slack_blocks(ctx)
+
+    block_texts = [
+        b.get("text", {}).get("text", "") if isinstance(b.get("text"), dict) else "" for b in blocks
+    ]
+    header_texts = [b.get("text", {}).get("text", "") for b in blocks if b.get("type") == "header"]
+    assert any("Recommended Actions" in t for t in header_texts)
+    assert any("Increase memory limit" in t for t in block_texts)
+    assert any(b.get("type") == "divider" for b in blocks)
+
+
+def test_build_slack_blocks_omits_recommended_actions_when_empty() -> None:
+    ctx = build_report_context(_make_state())  # remediation_steps=[] by default
+    blocks = build_slack_blocks(ctx)
+
+    header_texts = [b.get("text", {}).get("text", "") for b in blocks if b.get("type") == "header"]
+    assert not any("Recommended Actions" in t for t in header_texts)

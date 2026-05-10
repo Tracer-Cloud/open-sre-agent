@@ -1,3 +1,6 @@
 python 3.13.11
 nodejs 22.1.0
 pnpm 10.28.0
+uv 0.11.11
+ruff 0.15.12
+mypy 1.20.2

@@ -44,7 +44,14 @@ class LLMCLIAdapter(Protocol):
         """Resolve binary, version, and auth. Never raises; returns a structured probe."""
         pass
 
-    def build(self, *, prompt: str, model: str | None, workspace: str) -> CLIInvocation:
+    def build(
+        self,
+        *,
+        prompt: str,
+        model: str | None,
+        workspace: str,
+        reasoning_effort: str | None = None,
+    ) -> CLIInvocation:
         """Build argv for a non-interactive run (no approval prompts, no TTY)."""
         pass
 

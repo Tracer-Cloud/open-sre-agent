@@ -10,7 +10,7 @@ from typing import Literal
 class PlannedAction:
     """A deterministic action inferred from a natural-language terminal request."""
 
-    kind: Literal["llm_provider", "slash", "shell", "sample_alert", "synthetic_test"]
+    kind: Literal["llm_provider", "slash", "shell", "sample_alert", "synthetic_test", "cli_command"]
     content: str
     position: int
 

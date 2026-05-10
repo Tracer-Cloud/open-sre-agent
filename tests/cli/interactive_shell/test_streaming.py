@@ -291,3 +291,148 @@ class TestSuppressionPeek:
         assert result == '  \n{"action":"slash"}'
         output = _strip_ansi(buf.getvalue())
         assert "assistant:" not in output
+
+
+class TestMarkdownReparseThrottle:
+    """The Markdown re-parse on every chunk is O(n²) total — long streams stalled.
+
+    These tests pin the throttle behavior: ``Markdown(buffer)`` is constructed
+    at most once per refresh window plus a final flush, regardless of how
+    many chunks arrive. They use a fake clock + spy on ``Markdown`` so the
+    parse count is deterministic and the test runs in microseconds.
+    """
+
+    def _install_clock_and_spy(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> tuple[list[float], list[int]]:
+        """Patch ``time.monotonic`` and ``Markdown`` in the streaming module.
+
+        Returns ``(fake_time, parse_count)`` lists — single-element lists used
+        as mutable cells. Tests set ``fake_time[0]`` to advance the clock and
+        read ``parse_count[0]`` to assert how often the buffer was re-parsed.
+        """
+        from app.cli.interactive_shell import streaming as streaming_module
+
+        fake_time = [0.0]
+        parse_count = [0]
+        real_markdown = streaming_module.Markdown
+
+        class _SpyMarkdown(real_markdown):  # type: ignore[misc, valid-type]
+            def __init__(self, text: str, **kwargs) -> None:
+                parse_count[0] += 1
+                super().__init__(text, **kwargs)
+
+        monkeypatch.setattr(streaming_module.time, "monotonic", lambda: fake_time[0])
+        monkeypatch.setattr(streaming_module, "Markdown", _SpyMarkdown)
+        return fake_time, parse_count
+
+    def test_chunks_in_one_throttle_window_collapse_to_one_render(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """100 chunks within the same refresh window → exactly one final flush."""
+        fake_time, parse_count = self._install_clock_and_spy(monkeypatch)
+        console, _ = _tty_console()
+
+        # Clock never advances → throttle blocks every intra-loop render.
+        chunks = (f"chunk{i} " for i in range(100))
+        result = stream_to_console(console, label="assistant", chunks=chunks)
+
+        assert "chunk0" in result
+        assert "chunk99" in result
+        # Only the final flush triggers a Markdown parse.
+        assert parse_count[0] == 1, (
+            f"expected 1 parse (final flush), got {parse_count[0]}; "
+            "throttle is letting intra-window updates through"
+        )
+        # silence unused-var warning while keeping the fixture wired.
+        assert fake_time[0] == 0.0
+
+    def test_chunks_across_many_windows_render_periodically(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Chunks spaced past the throttle interval render multiple times."""
+        from app.cli.interactive_shell import streaming as streaming_module
+
+        fake_time, parse_count = self._install_clock_and_spy(monkeypatch)
+        console, _ = _tty_console()
+        interval = streaming_module._LIVE_RENDER_INTERVAL_S
+
+        def chunks() -> Iterator[str]:
+            # Each chunk advances the clock 2× the throttle interval, so
+            # every chunk crosses a new render window.
+            for i in range(10):
+                fake_time[0] = i * (interval * 2)
+                yield f"chunk{i} "
+
+        stream_to_console(console, label="assistant", chunks=chunks())
+
+        # The first chunk lands at fake_time=0 with last_render=0, so it
+        # fails the gate (0 - 0 not >= interval) and skips its render.
+        # The remaining 9 chunks each cross a fresh render window, then
+        # the final flush in the inner ``finally`` adds one more parse.
+        # Net: 9 in-loop renders + 1 final flush = 10 total parses.
+        # Range allows ±2 for any clock-edge ambiguity if interval drifts.
+        assert 8 <= parse_count[0] <= 12, (
+            f"expected ~10 parses (9 in-loop + 1 final flush), got {parse_count[0]}"
+        )
+        # Render count must stay << total chunks; the throttle is what
+        # this test exists to prove.
+        assert parse_count[0] < 50
+
+    def test_final_flush_renders_chunks_pending_in_last_window(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Last chunks within the trailing throttle window must still appear."""
+        fake_time, parse_count = self._install_clock_and_spy(monkeypatch)
+        console, buf = _tty_console()
+
+        # Two batches: render allowed at chunk 1 (clock at 1.0s), then
+        # remaining chunks fall within the same 1.0s window so the
+        # throttle blocks them mid-loop.
+        def chunks() -> Iterator[str]:
+            fake_time[0] = 1.0
+            yield "early "
+            # Clock stays at 1.0 — every following chunk is intra-window.
+            yield "tail-1 "
+            yield "tail-2 "
+            yield "tail-3"
+
+        stream_to_console(console, label="assistant", chunks=chunks())
+
+        output = _strip_ansi(buf.getvalue())
+        # All four chunks must appear; the final flush is what guarantees
+        # the trailing intra-window content.
+        assert "early tail-1 tail-2 tail-3" in output
+        # Two parses total: one mid-loop render at the first chunk + one
+        # final flush.
+        assert parse_count[0] == 2
+
+    def test_partial_buffer_visible_when_stream_raises(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Mid-stream exception must still flush the buffered partial response.
+
+        Regression guard for the throttle path: chunks waiting in the
+        last window were previously rendered on every chunk; with the
+        throttle, an exception could land before the next render and
+        drop visible content. The inner ``finally`` flushes before Live
+        closes.
+        """
+        fake_time, _ = self._install_clock_and_spy(monkeypatch)
+        console, buf = _tty_console()
+
+        def broken_stream() -> Iterator[str]:
+            # Clock never advances → throttle blocks the per-chunk render
+            # for both yields. The final flush in the inner finally is
+            # what saves us.
+            yield "partial "
+            yield "answer"
+            raise RuntimeError("upstream 503")
+
+        with pytest.raises(RuntimeError, match="upstream 503"):
+            stream_to_console(console, label="assistant", chunks=broken_stream())
+
+        output = _strip_ansi(buf.getvalue())
+        assert "partial answer" in output
+        # silence unused-var warning while keeping the fixture wired.
+        assert fake_time[0] == 0.0

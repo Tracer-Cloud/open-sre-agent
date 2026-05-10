@@ -67,6 +67,21 @@ class _MetricStats:
     min_value: float
     max_ts: float
     max_value: float
+    mean_value: float
+    p95_value: float
+
+
+def _percentile(sorted_values: list[float], pct: float) -> float:
+    """Linear-interpolated percentile on a pre-sorted list of floats."""
+    if not sorted_values:
+        return 0.0
+    if len(sorted_values) == 1:
+        return sorted_values[0]
+    rank = (pct / 100.0) * (len(sorted_values) - 1)
+    lo = int(rank)
+    hi = min(lo + 1, len(sorted_values) - 1)
+    weight = rank - lo
+    return sorted_values[lo] * (1 - weight) + sorted_values[hi] * weight
 
 
 def summarize_prometheus_metrics(series: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -93,6 +108,7 @@ def summarize_prometheus_metrics(series: list[dict[str, Any]]) -> list[dict[str,
             "summary": _build_summary_line(display_name, raw_name, labels, stats),
         }
         if stats:
+            window_seconds = stats.latest_ts - stats.first_ts
             summary.update(
                 {
                     "first": stats.first_value,
@@ -103,10 +119,17 @@ def summarize_prometheus_metrics(series: list[dict[str, Any]]) -> list[dict[str,
                     "min_timestamp": _format_timestamp(stats.min_ts),
                     "max": stats.max_value,
                     "max_timestamp": _format_timestamp(stats.max_ts),
+                    "mean": round(stats.mean_value, 4),
+                    "p95": round(stats.p95_value, 4),
                     "peak": stats.max_value,
                     "peak_timestamp": _format_timestamp(stats.max_ts),
                     "trend": _trend(stats.first_value, stats.latest_value),
+                    "delta": round(stats.latest_value - stats.first_value, 4),
+                    "delta_pct": _change(stats.first_value, stats.latest_value),
                     "peak_to_latest_change": _change(stats.max_value, stats.latest_value),
+                    "window_minutes": (
+                        round(window_seconds / 60.0, 1) if window_seconds > 0 else 0.0
+                    ),
                 }
             )
         else:
@@ -129,6 +152,10 @@ def _compute_stats(values: list[tuple[float, float]]) -> _MetricStats | None:
         if value > max_value:
             max_ts, max_value = timestamp, value
 
+    raw_values = [v for _, v in values]
+    mean_value = sum(raw_values) / len(raw_values)
+    p95_value = _percentile(sorted(raw_values), 95.0)
+
     return _MetricStats(
         datapoint_count=len(values),
         first_ts=first_ts,
@@ -139,6 +166,8 @@ def _compute_stats(values: list[tuple[float, float]]) -> _MetricStats | None:
         min_value=min_value,
         max_ts=max_ts,
         max_value=max_value,
+        mean_value=mean_value,
+        p95_value=p95_value,
     )
 
 

@@ -21,7 +21,9 @@ from app.integrations._verification_adapters import (
     _verify_github,
     _verify_google_docs,
     _verify_grafana,
+    _verify_helm,
     _verify_honeycomb,
+    _verify_incident_io,
     _verify_kafka,
     _verify_mariadb,
     _verify_mongodb,
@@ -187,6 +189,14 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         verify_order=21,
     ),
     IntegrationSpec(
+        service="incident_io",
+        aliases=("incident.io", "incidentio"),
+        verifier=_verify_incident_io,
+        direct_effective=True,
+        setup_order=22,
+        verify_order=22,
+    ),
+    IntegrationSpec(
         service="jira",
         verifier=None,
         direct_effective=True,
@@ -279,6 +289,12 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         verifier=_verify_argocd,
         direct_effective=True,
         verify_order=1,
+    ),
+    IntegrationSpec(
+        service="helm",
+        verifier=_verify_helm,
+        direct_effective=True,
+        verify_order=34,
     ),
     IntegrationSpec(
         service="victoria_logs",

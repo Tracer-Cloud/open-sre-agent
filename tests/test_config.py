@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.config import LLMSettings
+from app.config import LLMSettings, has_credentials_for_active_llm_provider
 
 
 def test_llm_settings_reject_provider_typos_with_suggestion() -> None:
@@ -118,3 +118,50 @@ def test_llm_settings_from_env_gemini_cli_without_api_key(monkeypatch) -> None:
     settings = LLMSettings.from_env()
 
     assert settings.provider == "gemini-cli"
+
+
+def test_has_credentials_for_active_llm_provider_missing_key(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "anthropic")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setattr("app.config.resolve_llm_api_key", lambda _: "")
+
+    assert has_credentials_for_active_llm_provider() is False
+
+
+def test_has_credentials_for_active_llm_provider_with_key(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setattr(
+        "app.config.resolve_llm_api_key",
+        lambda env_var: "sk-x" if env_var == "OPENAI_API_KEY" else "",
+    )
+
+    assert has_credentials_for_active_llm_provider() is True
+
+
+def test_has_credentials_for_active_llm_provider_ollama_never_requires_key(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.setattr("app.config.resolve_llm_api_key", lambda _: "")
+
+    assert has_credentials_for_active_llm_provider() is True
+
+
+def test_has_credentials_for_active_llm_provider_re_raises_non_key_validation_errors(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("LLM_MAX_TOKENS", "0")
+    monkeypatch.setattr(
+        "app.config.resolve_llm_api_key",
+        lambda env_var: "sk" if env_var == "OPENAI_API_KEY" else "",
+    )
+
+    with pytest.raises(ValidationError, match="greater than 0"):
+        has_credentials_for_active_llm_provider()
+
+
+def test_has_credentials_for_active_llm_provider_re_raises_invalid_provider(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "not-a-real-provider")
+    monkeypatch.setattr("app.config.resolve_llm_api_key", lambda _: "")
+
+    with pytest.raises(ValidationError, match="Unsupported LLM provider"):
+        has_credentials_for_active_llm_provider()

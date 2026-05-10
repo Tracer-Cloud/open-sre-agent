@@ -6,6 +6,7 @@ import pytest
 
 from app.pipeline import runners
 from app.state import AgentState
+from app.utils import errors
 
 
 def test_run_chat_initializes_sentry_and_captures_unhandled_errors(
@@ -18,8 +19,11 @@ def test_run_chat_initializes_sentry_and_captures_unhandled_errors(
     def failing_router(_state: AgentState) -> dict[str, object]:
         raise expected_error
 
+    def capture_stub(exc: BaseException, **_kwargs: object) -> None:
+        captured_errors.append(exc)
+
     monkeypatch.setattr(runners, "init_sentry", lambda **_kw: sentry_init_calls.append(None))
-    monkeypatch.setattr(runners, "capture_exception", captured_errors.append)
+    monkeypatch.setattr(errors, "capture_exception", capture_stub)
     monkeypatch.setattr(runners, "router_node", failing_router)
 
     with pytest.raises(RuntimeError, match="router failed"):

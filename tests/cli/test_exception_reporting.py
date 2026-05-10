@@ -7,8 +7,8 @@ from app.cli.support.errors import OpenSREError
 from app.cli.support.exception_reporting import report_exception, should_report_exception
 
 
-def test_should_report_unknown_command_usage_error() -> None:
-    assert should_report_exception(click.UsageError("No such command 'bogus'.")) is True
+def test_should_not_report_unknown_command_usage_error() -> None:
+    assert should_report_exception(click.UsageError("No such command 'bogus'.")) is False
 
 
 def test_should_not_report_expected_cli_errors() -> None:
