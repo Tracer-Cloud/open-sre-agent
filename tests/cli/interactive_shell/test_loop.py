@@ -678,7 +678,8 @@ class TestReplState:
         state = loop._ReplState()
         assert state.is_dispatch_running() is False
         assert state.exit_requested is False
-        assert state.cancel_event.is_set() is False
+        # No active dispatch → no cancel event parked.
+        assert state.current_cancel_event is None
         assert state.queue.empty()
 
     def test_is_dispatch_running_tracks_task_lifecycle(self) -> None:
@@ -697,7 +698,11 @@ class TestReplState:
 
     def test_cancel_current_dispatch_signals_event_and_task(self) -> None:
         async def _scenario() -> None:
+            import threading as _threading
+
             state = loop._ReplState()
+            dispatch_cancel = _threading.Event()
+            state.current_cancel_event = dispatch_cancel
 
             async def _waits_forever() -> None:
                 # Long sleep — only the cancel can interrupt this.
@@ -706,22 +711,23 @@ class TestReplState:
             state.current_task = asyncio.create_task(_waits_forever())
             state.cancel_current_dispatch()
 
-            # Both signals must fire.
-            assert state.cancel_event.is_set() is True
+            # Both signals must fire — per-dispatch event flipped AND
+            # the asyncio task cancelled.
+            assert dispatch_cancel.is_set() is True
             with contextlib.suppress(asyncio.CancelledError):
                 await state.current_task
             assert state.current_task.cancelled() is True
 
         asyncio.run(_scenario())
 
-    def test_cancel_when_no_task_only_sets_event(self) -> None:
+    def test_cancel_when_no_task_is_a_no_op(self) -> None:
         """``cancel_current_dispatch`` is idempotent — safe to call when
-        nothing is running. Just sets the event for any in-flight worker
-        thread that may still be polling."""
+        nothing is running. With no active dispatch parked,
+        ``current_cancel_event`` is ``None`` and there's nothing to flip."""
         state = loop._ReplState()
         state.cancel_current_dispatch()
-        assert state.cancel_event.is_set() is True
         assert state.is_dispatch_running() is False
+        assert state.current_cancel_event is None
 
 
 # ── Cancel key bindings ──────────────────────────────────────────────────────

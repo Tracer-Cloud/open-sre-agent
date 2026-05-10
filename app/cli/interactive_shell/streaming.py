@@ -1,10 +1,10 @@
 """Live token streaming for interactive-shell LLM responses.
 
-Inside the prompt_toolkit REPL (#1679), the input box is pinned at the
-bottom of the terminal via ``patch_stdout``. To keep the input editable
-while a response streams (type-ahead) we can't use :class:`rich.live.Live`
-— ``Live`` does cursor manipulation (cursor-up + erase-line) for in-place
-redraw, which fights ``patch_stdout`` and blocks the input buffer from
+The interactive REPL pins the input box at the bottom of the terminal
+via ``patch_stdout``. To keep the input editable while a response
+streams (type-ahead) we can't use :class:`rich.live.Live` — ``Live``
+does cursor manipulation (cursor-up + erase-line) for in-place redraw,
+which fights ``patch_stdout`` and blocks the input buffer from
 accepting keystrokes.
 
 Instead this path streams **paragraph-by-paragraph**: chunks accumulate

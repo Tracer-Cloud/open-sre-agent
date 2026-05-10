@@ -13,10 +13,10 @@ Type-ahead during streaming works because the dispatch runs as an
 starts immediately, so the input frame stays editable while output
 continues to flow above it.
 
-Earlier iterations of #1679 used a textual-based persistent app with an
-inline ``RichLog``. That fought with macOS Terminal.app's native scroll
+An earlier prototype used a textual-based persistent app with an inline
+``RichLog``. That fought with macOS Terminal.app's native scroll
 (content stayed inside a widget instead of going to terminal scrollback)
-and with the user's expectation of a single, native scroll axis. The
+and with the expectation of a single, native scroll axis. The
 ``prompt_toolkit`` + ``patch_stdout`` shape — which is how Claude Code
 behaves — gives up the declarative widget tree but matches terminal
 conventions: input pinned at bottom, history scrolls naturally.
@@ -383,11 +383,13 @@ class _ReplState:
 
     queue: asyncio.Queue[str] = field(default_factory=asyncio.Queue)
     current_task: asyncio.Task[None] | None = None
-    # ``threading.Event`` because the dispatch runs in a worker thread
-    # via ``asyncio.to_thread`` — ``task.cancel()`` alone doesn't reach
-    # the worker. Streaming.py polls ``console.cancel_requested``
-    # between chunks; setting this event here breaks that loop.
-    cancel_event: threading.Event = field(default_factory=threading.Event)
+    # The currently-active dispatch's cancel event. Each turn allocates
+    # a fresh ``threading.Event`` inside :func:`_run_one_dispatch` and
+    # parks it here so :meth:`cancel_current_dispatch` can flip it. A
+    # *previous* turn's worker thread keeps polling its own (already
+    # released) event, so a fresh ``Event.clear()`` for the new turn
+    # never races with a still-draining iterator from the previous one.
+    current_cancel_event: threading.Event | None = None
     exit_requested: bool = False
     # Confirmation routing: when an in-flight dispatch needs ``Proceed?
     # [y/N]`` input, it parks ``confirm_event`` + ``confirm_response``
@@ -413,13 +415,15 @@ class _ReplState:
     def cancel_current_dispatch(self) -> None:
         """Signal cancellation through both channels.
 
-        ``cancel_event`` is what stops the streaming loop in
-        :func:`stream_to_console` (worker thread); ``Task.cancel()`` is
-        what unblocks the asyncio waiter in :meth:`_run_one_dispatch`
-        (main thread). Both are needed. Also unparks any worker thread
-        waiting on a confirmation prompt so it doesn't hang on Esc.
+        The active dispatch's per-turn ``current_cancel_event`` is what
+        stops the streaming loop in :func:`stream_to_console` (worker
+        thread); ``Task.cancel()`` is what unblocks the asyncio waiter
+        in :func:`_run_one_dispatch` (main thread). Both are needed.
+        Also unparks any worker thread waiting on a confirmation prompt
+        so it doesn't hang on Esc.
         """
-        self.cancel_event.set()
+        if self.current_cancel_event is not None:
+            self.current_cancel_event.set()
         if self.confirm_event is not None:
             self.confirm_event.set()
         if self.current_task is not None and not self.current_task.done():
@@ -605,9 +609,12 @@ async def _run_interactive(
         state.confirm_response = []
         try:
             # Poll instead of wait-forever so cancel propagates within
-            # one ``_PROMPT_REFRESH_INTERVAL_S`` tick.
+            # one ``_PROMPT_REFRESH_INTERVAL_S`` tick. Poll the *active*
+            # dispatch's cancel event (not a shared one) so a stale
+            # cancel from a prior turn never shows up here.
             while not response_event.is_set():
-                if state.cancel_event.is_set():
+                cancel = state.current_cancel_event
+                if cancel is not None and cancel.is_set():
                     return ""
                 response_event.wait(timeout=_PROMPT_REFRESH_INTERVAL_S)
             return state.confirm_response[0] if state.confirm_response else ""
@@ -616,12 +623,16 @@ async def _run_interactive(
             state.confirm_response = []
 
     async def _run_one_dispatch(text: str) -> None:
-        # Reset the cancel event for this turn — Esc on a previous turn
-        # would otherwise keep this one from running at all.
-        state.cancel_event.clear()
+        # Per-turn cancel event — fresh ``threading.Event`` so a worker
+        # thread from a previous turn (still draining its iterator at
+        # cancel time) keeps polling its OWN event and never observes a
+        # cleared shared one. ``cancel_current_dispatch`` flips this
+        # event via ``state.current_cancel_event``.
+        dispatch_cancel = threading.Event()
+        state.current_cancel_event = dispatch_cancel
         console = _StreamingConsole(
             spinner,
-            state.cancel_event,
+            dispatch_cancel,
             highlight=False,
             force_terminal=True,
             color_system="truecolor",
@@ -644,6 +655,12 @@ async def _run_interactive(
             console.print(f"[{ERROR}]dispatch error:[/] {escape(str(exc))}")
         finally:
             spinner.stop()
+            # Release the per-turn cancel event only if it's still ours.
+            # A stale-but-still-running prior-turn worker keeps a strong
+            # reference to its own ``dispatch_cancel``; nothing else
+            # holds a reference once we drop it here.
+            if state.current_cancel_event is dispatch_cancel:
+                state.current_cancel_event = None
 
     async def _processor() -> None:
         """Drain queued prompts one dispatch at a time."""
