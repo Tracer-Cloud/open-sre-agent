@@ -4,9 +4,10 @@ Produces the structural shape of the dashboard with the columns
 documented in #1486's preview (``agent``, ``pid``, ``uptime``,
 ``cpu%``, ``tokens/min``, ``$/hr``, ``status``). The ``$/hr`` cell
 reads from ``agents.yaml`` via :func:`app.agents.config.load_agents_config`;
-the remaining metric columns still render as ``-`` until #1490 wires
-the per-PID sampler (``cpu%`` / ``uptime`` / ``status``) and the
-token-meter consumer (``tokens/min``).
+the ``status`` cell shows whether the row came from the explicit
+registry or read-only process discovery; remaining metric columns still
+render as ``-`` until #1490 wires the per-PID sampler and token-meter
+consumer.
 
 This module lives outside ``app/agents/`` deliberately: the agents
 package is for *collectors* (probe, registry, sweep, meters) and
@@ -55,24 +56,18 @@ def render_agents_table(records: Iterable[AgentRecord]) -> Table:
     The returned table always has the full column structure, even
     when no records exist; the caller passes it to ``console.print()``.
     An empty record list produces a table with no body rows and an
-    explanatory caption pointing the user at the registration command.
+    explanatory caption.
 
     The ``$/hr`` cell reads ``hourly_budget_usd`` from ``agents.yaml``
     when configured. The other metric cells (``uptime``, ``cpu%``,
-    ``tokens/min``, ``status``) still render as ``-`` placeholders;
-    filling them is out of scope here.
+    ``tokens/min``) still render as ``-`` placeholders; filling them is
+    out of scope here.
     """
     materialized = list(records)
-    # The empty-state caption deliberately doesn't suggest a registration
-    # command: ``opensre agents register`` is currently a stub
-    # (``feat(cli): register agents command group skeleton (#1486)``)
-    # that prints "not implemented yet". Pointing users at it would be
-    # misleading. The wording will gain a "register one with X" hint
-    # when that ticket grows real behavior.
     table = Table(
         title="agents",
         title_style=BOLD_BRAND,
-        caption="no agents registered yet" if not materialized else None,
+        caption="no agents discovered or registered yet" if not materialized else None,
     )
     for header, justify in _COLUMNS:
         table.add_column(header, justify=justify)
@@ -101,7 +96,7 @@ def render_agents_table(records: Iterable[AgentRecord]) -> Table:
             _UNFILLED,  # cpu%
             _UNFILLED,  # tokens/min
             hourly_cell,
-            _UNFILLED,  # status
+            escape(record.source),
         )
     return table
 

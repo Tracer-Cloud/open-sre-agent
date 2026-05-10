@@ -28,6 +28,7 @@ from app.agents.conflicts import (
     render_conflicts,
 )
 from app.agents.coordination import BranchClaims
+from app.agents.discovery import registered_and_discovered_agents
 from app.agents.lifecycle import TerminateResult, terminate
 from app.agents.registry import AgentRegistry
 from app.analytics.events import Event
@@ -64,16 +65,14 @@ def _print_config_error(console: Console, exc: ValidationError) -> None:
 
 
 def _cmd_agents_list(console: Console) -> bool:
-    """Render the registered ``AgentRecord`` set as a Rich table.
+    """Render registered plus read-only discovered agents as a Rich table.
 
-    Bare ``/agents`` resolves here. The ``$/hr`` cell reads
-    ``hourly_budget_usd`` from ``agents.yaml``; the remaining metric
-    cells (``cpu%``, ``tokens/min``, ``status``, ``uptime``) still
-    render as placeholders until the per-PID sampler and token-meter
-    consumer from #1490 land.
+    Bare ``/agents`` resolves here. Explicit registry rows keep winning
+    on PID collisions; process discovery fills in Cursor, Claude Code,
+    Codex, Aider, and Gemini CLI sessions that the user never registered.
     """
     registry = AgentRegistry()
-    table = render_agents_table(registry.list())
+    table = render_agents_table(registered_and_discovered_agents(registry))
     console.print(table)
     return True
 

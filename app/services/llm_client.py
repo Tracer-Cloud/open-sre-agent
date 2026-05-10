@@ -693,6 +693,15 @@ class OpenAILLMClient:
                     _format_openai_connection_error(err, self._provider_label)
                 ) from err
             except OpenAIRateLimitError as err:
+                body = getattr(err, "body", None)
+                if (
+                    isinstance(body, dict)
+                    and body.get("error", {}).get("code") == "insufficient_quota"
+                ):
+                    raise RuntimeError(
+                        f"{self._provider_label} billing quota exceeded. "
+                        "Check your plan and billing details."
+                    ) from err
                 last_err = err
                 if attempt == max_attempts - 1:
                     raise RuntimeError(
@@ -770,6 +779,15 @@ class OpenAILLMClient:
                     _format_openai_connection_error(err, self._provider_label)
                 ) from err
             except OpenAIRateLimitError as err:
+                body = getattr(err, "body", None)
+                if (
+                    isinstance(body, dict)
+                    and body.get("error", {}).get("code") == "insufficient_quota"
+                ):
+                    raise RuntimeError(
+                        f"{self._provider_label} billing quota exceeded. "
+                        "Check your plan and billing details."
+                    ) from err
                 if emitted:
                     raise
                 if attempt == max_attempts - 1:

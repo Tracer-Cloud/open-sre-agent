@@ -24,6 +24,7 @@ class AgentRecord:
     pid: int
     command: str
     registered_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    source: str = "registered"
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -37,6 +38,7 @@ class AgentRecord:
             pid=pid,
             command=str(data["command"]),
             registered_at=str(data.get("registered_at", datetime.now(UTC).isoformat())),
+            source=str(data.get("source", "registered")),
         )
 
 

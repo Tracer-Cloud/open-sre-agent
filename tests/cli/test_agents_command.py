@@ -8,15 +8,20 @@ import pytest
 from click.testing import CliRunner
 
 from app.agents.discovery import DiscoveredAgent
-from app.agents.registry import AgentRegistry
+from app.agents.registry import AgentRecord, AgentRegistry
 from app.cli.__main__ import cli
-from app.cli.commands import agent as agent_mod
+from app.cli.commands import agent as agent_cmd_mod
 
 
 @pytest.fixture
 def isolated_registry_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     path = tmp_path / "agents.jsonl"
-    monkeypatch.setattr(agent_mod, "AgentRegistry", lambda: AgentRegistry(path=path))
+
+    def _registered_only(registry: AgentRegistry | None = None) -> list[AgentRecord]:
+        return (registry or AgentRegistry(path=path)).list()
+
+    monkeypatch.setattr(agent_cmd_mod, "AgentRegistry", lambda: AgentRegistry(path=path))
+    monkeypatch.setattr(agent_cmd_mod, "registered_and_discovered_agents", _registered_only)
     return path
 
 
@@ -30,6 +35,29 @@ def test_agents_help_lists_all_subcommands() -> None:
     for subcommand in ("list", "register", "forget", "scan", "watch"):
         assert subcommand in result.output, f"missing {subcommand!r} in help: {result.output}"
     assert "--all" in runner.invoke(cli, ["agents", "scan", "--help"]).output
+
+
+def test_agents_list_renders_discovered_agents(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        agent_cmd_mod,
+        "registered_and_discovered_agents",
+        lambda _registry=None: [
+            AgentRecord(
+                name="cursor-claude-code",
+                pid=80435,
+                command="claude --output-format stream-json",
+                source="discovered",
+            )
+        ],
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["agents", "list"])
+
+    assert result.exit_code == 0, result.output
+    assert "cursor-claude-code" in result.output
+    assert "80435" in result.output
+    assert "discovered" in result.output
 
 
 def test_agents_register_list_and_forget(isolated_registry_path: Path) -> None:
@@ -46,11 +74,13 @@ def test_agents_register_list_and_forget(isolated_registry_path: Path) -> None:
     assert register.exit_code == 0, register.output
     assert "registered claude-code" in register.output
     assert listed.exit_code == 0, listed.output
-    assert "1234\tclaude-code\tclaude" in listed.output
+    assert "1234" in listed.output
+    assert "claude-code" in listed.output
+    assert "claude" in listed.output
     assert forgotten.exit_code == 0, forgotten.output
     assert "forgot claude-code" in forgotten.output
     assert listed_again.exit_code == 0, listed_again.output
-    assert "no agents registered" in listed_again.output
+    assert "no agents discovered or registered yet" in listed_again.output
     assert AgentRegistry(path=isolated_registry_path).list() == []
 
 
@@ -58,7 +88,7 @@ def test_agents_scan_can_register_discovered_processes(
     isolated_registry_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        agent_mod,
+        agent_cmd_mod,
         "discover_agent_processes",
         lambda **_kwargs: [DiscoveredAgent(name="claude-code-777", pid=777, command="claude code")],
     )
@@ -80,7 +110,7 @@ def test_agents_scan_can_register_discovered_processes(
 
 def test_agents_scan_truncates_long_commands(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        agent_mod,
+        agent_cmd_mod,
         "discover_agent_processes",
         lambda **_kwargs: [
             DiscoveredAgent(
@@ -107,7 +137,7 @@ def test_agents_scan_all_passes_include_all(monkeypatch: pytest.MonkeyPatch) -> 
         received.append(include_all)
         return [DiscoveredAgent(name="cursor-888", pid=888, command="Cursor Helper")]
 
-    monkeypatch.setattr(agent_mod, "discover_agent_processes", _discover)
+    monkeypatch.setattr(agent_cmd_mod, "discover_agent_processes", _discover)
     runner = CliRunner()
 
     result = runner.invoke(cli, ["agents", "scan", "--all"])
@@ -118,7 +148,7 @@ def test_agents_scan_all_passes_include_all(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 def test_agents_scan_empty_state_mentions_all_mode(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(agent_mod, "discover_agent_processes", lambda **_kwargs: [])
+    monkeypatch.setattr(agent_cmd_mod, "discover_agent_processes", lambda **_kwargs: [])
     runner = CliRunner()
 
     result = runner.invoke(cli, ["agents", "scan"])
@@ -129,7 +159,7 @@ def test_agents_scan_empty_state_mentions_all_mode(monkeypatch: pytest.MonkeyPat
 
 
 def test_agents_watch_reports_already_exited(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(agent_mod, "pid_exists", lambda _pid: False)
+    monkeypatch.setattr(agent_cmd_mod, "pid_exists", lambda _pid: False)
     runner = CliRunner()
 
     result = runner.invoke(cli, ["agents", "watch", "9876"])

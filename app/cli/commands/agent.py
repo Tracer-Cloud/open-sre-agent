@@ -8,9 +8,15 @@ import click
 from rich.console import Console
 from rich.markup import escape
 
-from app.agents.discovery import discover_agent_processes, display_command, process_command
+from app.agents.discovery import (
+    discover_agent_processes,
+    display_command,
+    process_command,
+    registered_and_discovered_agents,
+)
 from app.agents.probe import pid_exists
 from app.agents.registry import AgentRecord, AgentRegistry
+from app.cli.interactive_shell.agents_view import render_agents_table
 from app.cli.interactive_shell.rendering import repl_table
 from app.cli.interactive_shell.theme import BOLD_BRAND, DIM, HIGHLIGHT
 
@@ -22,14 +28,8 @@ def agents() -> None:
 
 @agents.command(name="list")
 def list_agents() -> None:
-    """List tracked local agents."""
-    records = AgentRegistry().list()
-    if not records:
-        click.echo("no agents registered")
-        return
-
-    for record in records:
-        click.echo(f"{record.pid}\t{record.name}\t{record.command}")
+    """List registered and auto-discovered local agents."""
+    Console().print(render_agents_table(registered_and_discovered_agents(AgentRegistry())))
 
 
 @agents.command(name="register")
