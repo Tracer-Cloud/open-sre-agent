@@ -65,3 +65,5 @@ class Event(StrEnum):
 
     # Local agent monitoring (Monitor Local Agents feature)
     AGENT_SECRET_DETECTED = "agent_secret_detected"
+    AGENT_KILLED = "agent_killed"
+    AGENT_KILL_FAILED = "agent_kill_failed"

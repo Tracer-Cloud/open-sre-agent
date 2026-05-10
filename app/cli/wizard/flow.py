@@ -42,7 +42,9 @@ from app.llm_credentials import (
 )
 from app.version import get_version
 
-_console = Console(highlight=False, force_terminal=True, color_system="truecolor")
+_console = Console(
+    highlight=False, force_terminal=True, color_system="truecolor", legacy_windows=False
+)
 DEFAULT_GITHUB_MCP_URL = "https://api.githubcopilot.com/mcp/"
 DEFAULT_GITHUB_MCP_MODE = "streamable-http"
 DEFAULT_OPENCLAW_MCP_URL = "http://127.0.0.1:18789/"

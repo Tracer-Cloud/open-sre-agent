@@ -185,7 +185,12 @@ def render_splash(console: Console | None = None, *, first_run: bool | None = No
       ⚠  This tool runs AI-powered commands …      [WARNING]
          Press Enter to continue…                   [SECONDARY]
     """
-    console = console or Console(highlight=False, force_terminal=True, color_system="truecolor")
+    console = console or Console(
+        highlight=False,
+        force_terminal=True,
+        color_system="truecolor",
+        legacy_windows=False,
+    )
     if first_run is None:
         first_run = _is_first_run()
 
@@ -364,7 +369,12 @@ def build_ready_panel(
     session: object = None,
 ) -> Panel:
     """Build the responsive welcome panel shared by startup and CLI help."""
-    console = console or Console(highlight=False, force_terminal=True, color_system="truecolor")
+    console = console or Console(
+        highlight=False,
+        force_terminal=True,
+        color_system="truecolor",
+        legacy_windows=False,
+    )
     provider, model = detect_provider_model()
     version = get_version()
     trust_mode: bool = bool(getattr(session, "trust_mode", False))
@@ -435,7 +445,12 @@ def render_ready_box(
     │                                                                         │
     ╰─────────────────────────────────────────────────────────────────────────╯
     """
-    console = console or Console(highlight=False, force_terminal=True, color_system="truecolor")
+    console = console or Console(
+        highlight=False,
+        force_terminal=True,
+        color_system="truecolor",
+        legacy_windows=False,
+    )
     console.print()
     console.print(build_ready_panel(console, session=session))
     console.print()
@@ -449,6 +464,11 @@ def render_banner(console: Console | None = None) -> None:
 
     Existing callers (loop.py _repl_main) continue to work unchanged.
     """
-    _console = console or Console(highlight=False, force_terminal=True, color_system="truecolor")
+    _console = console or Console(
+        highlight=False,
+        force_terminal=True,
+        color_system="truecolor",
+        legacy_windows=False,
+    )
     render_splash(_console)
     render_ready_box(_console)

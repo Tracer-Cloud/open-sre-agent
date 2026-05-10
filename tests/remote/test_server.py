@@ -5,6 +5,7 @@ import collections
 import shutil
 import urllib.error
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -274,6 +275,22 @@ async def test_lifespan_starts_and_cancels_vercel_poller(
         await asyncio.wait_for(started.wait(), timeout=1)
 
     assert cancelled.is_set()
+
+
+@pytest.mark.asyncio
+async def test_lifespan_raises_helpful_error_on_permission_denied(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    unwritable = MagicMock()
+    unwritable.mkdir.side_effect = PermissionError("Permission denied: '/opt/opensre'")
+    unwritable.__str__ = lambda _: "/opt/opensre/investigations"
+    unwritable.parent.__str__ = lambda _: "/opt/opensre"
+
+    monkeypatch.setattr(remote_server, "INVESTIGATIONS_DIR", unwritable)
+
+    with pytest.raises(RuntimeError, match="Cannot create investigations directory"):
+        async with _lifespan(object()):
+            pass
 
 
 # ---------------------------------------------------------------------------

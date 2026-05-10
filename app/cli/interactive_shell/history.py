@@ -48,7 +48,8 @@ def load_command_history_entries() -> list[str]:
         path = prompt_history_path()
         path.parent.mkdir(parents=True, exist_ok=True)
         history = FileHistory(str(path))
-        return list(reversed(list(history.load_history_strings())))
+        raw = list(reversed(list(history.load_history_strings())))
+        return [line.rstrip("\r\n") for line in raw]
     except OSError:
         return []
 

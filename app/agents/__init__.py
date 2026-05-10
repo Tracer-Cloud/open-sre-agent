@@ -12,6 +12,7 @@ silently omitted from the built wheel.
 """
 
 from app.agents.coordination import BranchClaim, BranchClaims
+from app.agents.lifecycle import TerminateResult, terminate
 from app.agents.quality import LoopDetector
 from app.agents.registry import AgentRecord, AgentRegistry
 
@@ -21,4 +22,6 @@ __all__ = [
     "BranchClaim",
     "BranchClaims",
     "LoopDetector",
+    "TerminateResult",
+    "terminate",
 ]
