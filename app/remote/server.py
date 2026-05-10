@@ -92,18 +92,13 @@ def _ensure_investigations_dir(path: Path) -> Path:
         if not _using_default_investigations_dir(path):
             raise
 
-        logger.warning(
-            "Unable to create default investigations directory %s; falling back to %s",
-            path,
-            _FALLBACK_INVESTIGATIONS_DIR,
-            exc_info=True,
-        )
-
-    _FALLBACK_INVESTIGATIONS_DIR.mkdir(parents=True, exist_ok=True)
-    logger.info(
-        "Using fallback investigations directory %s after default path was unavailable",
+    logger.warning(
+        "Unable to create default investigations directory %s; falling back to %s",
+        path,
         _FALLBACK_INVESTIGATIONS_DIR,
     )
+
+    _FALLBACK_INVESTIGATIONS_DIR.mkdir(parents=True, exist_ok=True)
     return _FALLBACK_INVESTIGATIONS_DIR
 
 
