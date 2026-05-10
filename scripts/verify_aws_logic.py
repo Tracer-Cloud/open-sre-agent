@@ -22,7 +22,7 @@ try:
     from app.services.aws_sdk_client import execute_aws_sdk_call
     print("Integration check: PASSED")
 
-    print("\n✅ SMOKE TEST PASSED: Core logic is runtime-stable.")
+    print("\nSMOKE TEST PASSED: Core logic is runtime-stable.")
 except Exception as e:
-    print(f"\n❌ SMOKE TEST FAILED: {e}")
+    print(f"\n SMOKE TEST FAILED: {e}")
     sys.exit(1)
