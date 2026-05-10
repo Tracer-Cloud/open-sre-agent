@@ -95,8 +95,7 @@ def _parse_non_negative_int(golden_trajectory: dict[str, Any], field: str) -> in
         return None
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         raise ValueError(
-            f"answer.yml: 'golden_trajectory.{field}' must be a non-negative integer "
-            "when present"
+            f"answer.yml: 'golden_trajectory.{field}' must be a non-negative integer when present"
         )
     return value
 
@@ -274,12 +273,8 @@ def _parse_answer_yaml(path: Path) -> ScenarioAnswerKey:
         golden_trajectory = GoldenTrajectoryConfig(
             ordered_actions=ordered_actions,
             matching=matching,
-            max_edit_distance=_parse_non_negative_int(
-                golden_trajectory_raw, "max_edit_distance"
-            ),
-            max_extra_actions=_parse_non_negative_int(
-                golden_trajectory_raw, "max_extra_actions"
-            ),
+            max_edit_distance=_parse_non_negative_int(golden_trajectory_raw, "max_edit_distance"),
+            max_extra_actions=_parse_non_negative_int(golden_trajectory_raw, "max_extra_actions"),
             max_redundancy=_parse_non_negative_int(golden_trajectory_raw, "max_redundancy"),
             max_loops=_parse_non_negative_int(golden_trajectory_raw, "max_loops"),
         )

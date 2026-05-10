@@ -215,14 +215,10 @@ def test_observation_roundtrip_and_report_rendering(tmp_path: Path) -> None:
         "matching": "lcs",
         "violations": ["lcs_ratio=0.67 < 1.00"],
     }
-    assert (
-        payload["canonical_report_payload"]["evidence"]["missing_required_sources"]
-        == ["aws_rds_events"]
-    )
-    assert (
-        payload["canonical_report_payload"]["observation_path"]
-        == payload["observation_path"]
-    )
+    assert payload["canonical_report_payload"]["evidence"]["missing_required_sources"] == [
+        "aws_rds_events"
+    ]
+    assert payload["canonical_report_payload"]["observation_path"] == payload["observation_path"]
     assert payload["reasoning_status"] == "not_captured"
     assert "reasoning" not in payload
     assert payload["trajectory_policy_version"] == "default_v1"

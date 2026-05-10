@@ -99,7 +99,9 @@ def test_run_suite_applies_trajectory_policy_failure(
     render_calls: list[str] = []
 
     monkeypatch.setattr(run_suite_module, "load_all_scenarios", lambda _suite_dir: [fixture])
-    monkeypatch.setattr(run_suite_module, "run_scenario", lambda *_args, **_kwargs: (_fake_final_state(), score))
+    monkeypatch.setattr(
+        run_suite_module, "run_scenario", lambda *_args, **_kwargs: (_fake_final_state(), score)
+    )
     monkeypatch.setattr(run_suite_module, "write_observation", _fake_write_observation)
     monkeypatch.setattr(
         run_suite_module,
@@ -206,7 +208,9 @@ def test_run_suite_json_mode_suppresses_report_render(
     render_calls: list[str] = []
 
     monkeypatch.setattr(run_suite_module, "load_all_scenarios", lambda _suite_dir: [fixture])
-    monkeypatch.setattr(run_suite_module, "run_scenario", lambda *_args, **_kwargs: (_fake_final_state(), score))
+    monkeypatch.setattr(
+        run_suite_module, "run_scenario", lambda *_args, **_kwargs: (_fake_final_state(), score)
+    )
     monkeypatch.setattr(run_suite_module, "write_observation", _fake_write_observation)
     monkeypatch.setattr(
         run_suite_module,

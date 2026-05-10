@@ -158,14 +158,12 @@ def _source_aware_evidence_coverage(
     ]
 
     required_observed = sum(1 for source in required_sources if source_presence.get(source, False))
-    available_observed = sum(1 for source in available_sources if source_presence.get(source, False))
+    available_observed = sum(
+        1 for source in available_sources if source_presence.get(source, False)
+    )
 
-    required_coverage = (
-        required_observed / len(required_sources) if required_sources else 1.0
-    )
-    available_coverage = (
-        available_observed / len(available_sources) if available_sources else 1.0
-    )
+    required_coverage = required_observed / len(required_sources) if required_sources else 1.0
+    available_coverage = available_observed / len(available_sources) if available_sources else 1.0
 
     return {
         "available_sources": available_sources,
@@ -214,9 +212,7 @@ def _canonical_report_payload(
         "evidence": {
             "observed_sources": list(evidence_source_coverage["observed_sources"]),
             "required_sources": list(evidence_source_coverage["required_sources"]),
-            "missing_required_sources": list(
-                evidence_source_coverage["missing_required_sources"]
-            ),
+            "missing_required_sources": list(evidence_source_coverage["missing_required_sources"]),
             "source_presence": dict(evidence_source_coverage["source_presence"]),
             "required_coverage": evidence_source_coverage["required_coverage"],
             "available_coverage": evidence_source_coverage["available_coverage"],
@@ -449,11 +445,7 @@ def write_observation(observation: RunObservation, observations_dir: Path) -> Pa
 
 def _drop_none_fields(value: Any) -> Any:
     if isinstance(value, dict):
-        return {
-            key: _drop_none_fields(item)
-            for key, item in value.items()
-            if item is not None
-        }
+        return {key: _drop_none_fields(item) for key, item in value.items() if item is not None}
     if isinstance(value, list):
         return [_drop_none_fields(item) for item in value if item is not None]
     return value
@@ -490,15 +482,11 @@ def render_report_to_console(observation: RunObservation, console: Console) -> N
     correctness.add_row("Required keywords", f"{len(matched_keywords)}/{total_keywords} matched")
     correctness.add_row(
         "Forbidden keywords",
-        "clear"
-        if (gates.get("forbidden_keyword_clear") or {}).get("status") != "fail"
-        else "hit",
+        "clear" if (gates.get("forbidden_keyword_clear") or {}).get("status") != "fail" else "hit",
     )
     correctness.add_row(
         "Forbidden categories",
-        "clear"
-        if (gates.get("forbidden_category_clear") or {}).get("status") != "fail"
-        else "hit",
+        "clear" if (gates.get("forbidden_category_clear") or {}).get("status") != "fail" else "hit",
     )
     correctness.add_row("Observed evidence", _fmt_list(observation.observed_evidence_sources))
     if observation.required_evidence_sources:
