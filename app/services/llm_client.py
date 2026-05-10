@@ -87,16 +87,6 @@ _RETRY_MAX_ATTEMPTS = 3
 # silent network drops.
 _CLIENT_TIMEOUT_SEC = 60.0
 
-# Bedrock boto3 error codes that must not be retried (invalid config, no access).
-_BEDROCK_NON_RETRYABLE_CODES = frozenset(
-    {
-        "ValidationException",
-        "AccessDeniedException",
-        "ResourceNotFoundException",
-        "UnauthorizedException",
-    }
-)
-
 
 @dataclass(frozen=True)
 class RootCauseResult:
@@ -453,12 +443,6 @@ class BedrockLLMClient:
                 time.sleep(backoff_seconds)
                 backoff_seconds *= 2
             except Exception as err:
-                if isinstance(err, botocore.exceptions.ClientError):
-                    code = err.response.get("Error", {}).get("Code", "")
-                    if code in _BEDROCK_NON_RETRYABLE_CODES:
-                        raise RuntimeError(
-                            f"Bedrock API request failed: {type(err).__name__}: {err}"
-                        ) from err
                 last_err = err
                 if attempt == max_attempts - 1:
                     raise RuntimeError(
