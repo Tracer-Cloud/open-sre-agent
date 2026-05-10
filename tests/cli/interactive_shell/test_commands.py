@@ -1325,6 +1325,56 @@ class TestCliDelegatedCommands:
             )
         ]
 
+    def test_tests_picker_closes_selection_file_before_subprocess(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        from app.cli.interactive_shell.command_registry import cli_parity as m
+
+        selection_path = tmp_path / "selection.json"
+
+        class _SelectionFile:
+            name = str(selection_path)
+            closed = False
+
+            def __init__(self) -> None:
+                selection_path.touch()
+
+            def close(self) -> None:
+                self.closed = True
+
+        handle = _SelectionFile()
+        started: list[str] = []
+
+        def _fake_run(_command: list[str], **kwargs: object) -> object:
+            assert handle.closed is True
+            env = kwargs["env"]
+            assert isinstance(env, dict)
+            selection_path.write_text(
+                '[{"command": ["opensre", "tests", "synthetic"], '
+                '"command_display": "opensre tests synthetic"}]',
+                encoding="utf-8",
+            )
+
+            class _Result:
+                returncode = 0
+
+            return _Result()
+
+        monkeypatch.setattr(m.tempfile, "NamedTemporaryFile", lambda **_kwargs: handle)
+        monkeypatch.setattr(m.subprocess, "run", _fake_run)
+        monkeypatch.setattr(
+            m,
+            "start_background_cli_task",
+            lambda **kwargs: started.append(kwargs["display_command"]),
+        )
+
+        dispatch_slash("/tests", ReplSession(), Console())
+
+        assert started == ["opensre tests synthetic"]
+        assert not selection_path.exists()
+
     def test_tests_flag_first_invocation_delegates_to_cli(self, monkeypatch: object) -> None:
         from app.cli.interactive_shell.command_registry import cli_parity as m
 

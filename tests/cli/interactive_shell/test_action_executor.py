@@ -416,17 +416,20 @@ def test_run_opensre_agents_scan_register_explains_confirmation(
 def test_run_opensre_agents_watch_runs_in_foreground(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def _fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        assert command[-3:] == ["agents", "watch", "1234"]
-        assert kwargs["capture_output"] is True
-        return subprocess.CompletedProcess(
-            args=command,
-            returncode=0,
-            stdout="pid 1234 exited\n",
-            stderr="",
-        )
+    popen_kwargs: list[dict[str, object]] = []
 
-    monkeypatch.setattr("app.cli.interactive_shell.action_executor.subprocess.run", _fake_run)
+    class _FakeProcess:
+        stdout = iter(["watching pid 1234; press Ctrl+C to stop\n", "pid 1234 exited\n"])
+
+        def wait(self) -> int:
+            return 0
+
+    def _fake_popen(command: list[str], **kwargs: object) -> _FakeProcess:
+        assert command[-3:] == ["agents", "watch", "1234"]
+        popen_kwargs.append(kwargs)
+        return _FakeProcess()
+
+    monkeypatch.setattr("app.cli.interactive_shell.action_executor.subprocess.Popen", _fake_popen)
 
     session = ReplSession()
     buf = io.StringIO()
@@ -445,8 +448,11 @@ def test_run_opensre_agents_watch_runs_in_foreground(
 
     out = buf.getvalue()
     assert "$ opensre agents watch 1234" in out
+    assert "watching pid 1234" in out
     assert "pid 1234 exited" in out
     assert "started" not in out
+    assert "timeout" not in popen_kwargs[0]
+    assert popen_kwargs[0]["stderr"] is subprocess.STDOUT
     assert session.task_registry.list_recent() == []
     assert session.history[-1] == {
         "type": "cli_command",

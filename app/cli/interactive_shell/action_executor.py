@@ -804,6 +804,38 @@ def _run_opensre_foreground(
     session.record("cli_command", display_command, ok=ok)
 
 
+def _run_opensre_foreground_streaming(
+    argv_list: list[str],
+    display_command: str,
+    session: ReplSession,
+    console: Console,
+) -> None:
+    console.print(f"[bold]$ {escape(display_command)}[/bold]")
+    try:
+        proc = subprocess.Popen(
+            argv_list,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except Exception as exc:  # noqa: BLE001
+        report_exception(exc, context="interactive_shell.opensre_cli.start")
+        console.print(f"[{ERROR}]failed to start:[/] {escape(str(exc))}")
+        session.record("cli_command", display_command, ok=False)
+        return
+
+    if proc.stdout is not None:
+        for line in proc.stdout:
+            print_command_output(console, line)
+    code = proc.wait()
+    ok = code == 0
+    if not ok:
+        console.print(f"[{ERROR}]command failed (exit {code}):[/]")
+    session.record("cli_command", display_command, ok=ok)
+
+
 def run_opensre_cli_command(
     args: str,
     session: ReplSession,
@@ -864,6 +896,9 @@ def run_opensre_cli_command(
     argv_list = [sys.executable, "-m", "app.cli"] + tokens
     display_command = f"opensre {' '.join(tokens)}"
     if _should_run_opensre_in_foreground(tokens):
+        if [token.lower() for token in tokens[:2]] == ["agents", "watch"]:
+            _run_opensre_foreground_streaming(argv_list, display_command, session, console)
+            return True
         _run_opensre_foreground(argv_list, display_command, session, console)
         return True
 

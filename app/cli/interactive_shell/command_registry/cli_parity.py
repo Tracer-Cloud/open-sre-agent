@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import shlex
@@ -106,8 +107,14 @@ def _start_test_command(
 
 def _run_test_picker_for_background(session: ReplSession, console: Console) -> bool:
     console.print()
-    with tempfile.NamedTemporaryFile(prefix="opensre-test-selection-", suffix=".json") as handle:
-        selection_path = Path(handle.name)
+    handle = tempfile.NamedTemporaryFile(  # noqa: SIM115
+        prefix="opensre-test-selection-",
+        suffix=".json",
+        delete=False,
+    )
+    selection_path = Path(handle.name)
+    handle.close()
+    try:
         env = dict(os.environ)
         env[_TEST_PICKER_SELECTION_FILE_ENV] = str(selection_path)
         result = subprocess.run(
@@ -123,6 +130,9 @@ def _run_test_picker_for_background(session: ReplSession, console: Console) -> b
             console.print()
             return True
         payload = json.loads(selection_path.read_text(encoding="utf-8"))
+    finally:
+        with contextlib.suppress(OSError):
+            selection_path.unlink()
 
     if not isinstance(payload, list):
         console.print(f"[{ERROR}]test picker returned an invalid selection[/]")
