@@ -19,7 +19,14 @@ if TYPE_CHECKING:
     from app.integrations.llm_cli.registry import CLIProviderRegistration
 
 import boto3
-from anthropic import Anthropic, AnthropicBedrock, AuthenticationError, NotFoundError
+import botocore.exceptions
+from anthropic import (
+    Anthropic,
+    AnthropicBedrock,
+    AuthenticationError,
+    NotFoundError,
+    PermissionDeniedError,
+)
 from anthropic import BadRequestError as AnthropicBadRequestError
 from openai import AuthenticationError as OpenAIAuthError
 from openai import BadRequestError as OpenAIBadRequestError
@@ -38,6 +45,7 @@ from app.config import (
     LLMSettings,
 )
 from app.llm_credentials import resolve_llm_api_key
+from app.llm_reasoning_effort import get_active_reasoning_effort
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +86,16 @@ _RETRY_MAX_ATTEMPTS = 3
 # generations (Opus, GPT-5) headroom while preventing indefinite hangs on
 # silent network drops.
 _CLIENT_TIMEOUT_SEC = 60.0
+
+# Bedrock boto3 error codes that must not be retried (invalid config, no access).
+_BEDROCK_NON_RETRYABLE_CODES = frozenset(
+    {
+        "ValidationException",
+        "AccessDeniedException",
+        "ResourceNotFoundException",
+        "UnauthorizedException",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -334,6 +352,14 @@ class BedrockLLMClient:
                 ) from err
             except GuardrailBlockedError:
                 raise
+            except (
+                AuthenticationError,
+                PermissionDeniedError,
+                NotFoundError,
+            ) as err:
+                raise RuntimeError(
+                    f"Bedrock API request failed: {type(err).__name__}: {err}"
+                ) from err
             except Exception as err:
                 last_err = err
                 if attempt == max_attempts - 1:
@@ -387,6 +413,12 @@ class BedrockLLMClient:
             except GuardrailBlockedError:
                 raise
             except Exception as err:
+                if isinstance(err, botocore.exceptions.ClientError):
+                    code = err.response.get("Error", {}).get("Code", "")
+                    if code in _BEDROCK_NON_RETRYABLE_CODES:
+                        raise RuntimeError(
+                            f"Bedrock API request failed: {type(err).__name__}: {err}"
+                        ) from err
                 last_err = err
                 if attempt == max_attempts - 1:
                     raise RuntimeError(
@@ -441,7 +473,13 @@ def _format_anthropic_retry_error(err: Exception) -> str:
             "Anthropic API connection failed after multiple retries. "
             "Check network access and try again."
         )
-    if status_code == 529:
+    # Detect overloaded via HTTP status (error-response path) or via body error
+    # type (SSE streaming path: the SDK raises APIStatusError from body events
+    # where the initial HTTP response was 200, so status_code is absent/not 529).
+    body = getattr(err, "body", None)
+    error_obj = body.get("error") if isinstance(body, dict) else None
+    body_error_type = error_obj.get("type", "") if isinstance(error_obj, dict) else ""
+    if status_code == 529 or body_error_type == "overloaded_error":
         return (
             "Anthropic API is overloaded (HTTP 529) after multiple retries. "
             "Try again in a few seconds."
@@ -476,6 +514,13 @@ def _parse_retry_after(err: Exception) -> float:
 def _uses_max_completion_tokens(model: str) -> bool:
     """Reasoning models (o1, o3, o4, gpt-5 series) require max_completion_tokens."""
     return model.startswith(("o1", "o3", "o4", "gpt-5"))
+
+
+def _resolve_openai_reasoning_effort(*, model: str, api_key_env: str) -> str | None:
+    """Session override for OpenAI reasoning models in the interactive shell."""
+    if api_key_env != "OPENAI_API_KEY" or not _uses_max_completion_tokens(model):
+        return None
+    return get_active_reasoning_effort()
 
 
 class OpenAILLMClient:
@@ -554,6 +599,12 @@ class OpenAILLMClient:
             token_param: self._max_tokens,
             "messages": messages,
         }
+        reasoning_effort = _resolve_openai_reasoning_effort(
+            model=self._model,
+            api_key_env=self._api_key_env,
+        )
+        if reasoning_effort is not None:
+            kwargs["reasoning_effort"] = reasoning_effort
         if self._temperature is not None:
             kwargs["temperature"] = self._temperature
         return kwargs
@@ -834,7 +885,10 @@ def _get_cli_provider_registration(provider: str) -> CLIProviderRegistration | N
 
 
 def _create_llm_client(model_type: str) -> _LLMClientType:
-    settings = LLMSettings.from_env()
+    try:
+        settings = LLMSettings.from_env()
+    except ValidationError as exc:
+        raise RuntimeError(str(exc)) from exc
     provider = settings.provider
     if provider == "openai":
         config = OPENAI_LLM_CONFIG

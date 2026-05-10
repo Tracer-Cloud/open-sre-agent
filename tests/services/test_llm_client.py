@@ -87,6 +87,36 @@ def test_openai_llm_client_reads_secure_local_api_key(monkeypatch) -> None:
     assert _FakeOpenAI.init_api_keys == ["stored-openai-key"]
 
 
+def test_openai_llm_client_adds_reasoning_effort_for_reasoning_models(monkeypatch) -> None:
+    monkeypatch.setattr(
+        llm_client,
+        "resolve_llm_api_key",
+        lambda env_var: "stored-openai-key" if env_var == "OPENAI_API_KEY" else "",
+    )
+    monkeypatch.setattr(llm_client, "OpenAI", _FakeOpenAI)
+    monkeypatch.setenv("OPENSRE_REASONING_EFFORT", "xhigh")
+
+    client = llm_client.OpenAILLMClient(model="gpt-5.2")
+    kwargs = client._build_request_kwargs("hello")
+
+    assert kwargs["reasoning_effort"] == "xhigh"
+
+
+def test_openai_llm_client_omits_reasoning_effort_for_non_reasoning_models(monkeypatch) -> None:
+    monkeypatch.setattr(
+        llm_client,
+        "resolve_llm_api_key",
+        lambda env_var: "stored-openai-key" if env_var == "OPENAI_API_KEY" else "",
+    )
+    monkeypatch.setattr(llm_client, "OpenAI", _FakeOpenAI)
+    monkeypatch.setenv("OPENSRE_REASONING_EFFORT", "high")
+
+    client = llm_client.OpenAILLMClient(model="gpt-4.1-mini")
+    kwargs = client._build_request_kwargs("hello")
+
+    assert "reasoning_effort" not in kwargs
+
+
 def test_openai_llm_client_invoke_fails_when_key_missing(monkeypatch) -> None:
     monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env_var: "")
     client = llm_client.OpenAILLMClient(model="gpt-4.1-mini")
@@ -605,6 +635,62 @@ def test_anthropic_invoke_stream_does_not_retry_after_yielding(monkeypatch) -> N
     assert len(attempts) == 1, "Must not retry after emitting any chunk"
 
 
+def test_anthropic_invoke_stream_overloaded_via_body_raises_friendly_error(
+    monkeypatch,
+) -> None:
+    """APIStatusError with overloaded_error body (SSE path, no HTTP 529) raises the
+    friendly overloaded message, not the raw 'APIStatusError' class name."""
+
+    class _OverloadedBodyError(Exception):
+        """Simulates APIStatusError raised from the SSE stream body (status_code absent)."""
+
+        def __init__(self) -> None:
+            super().__init__("Overloaded")
+            self.body = {"error": {"type": "overloaded_error", "message": "Overloaded"}}
+
+    def _yield_overloaded():
+        raise _OverloadedBodyError()
+        yield  # make it a generator
+
+    class _Stream:
+        def __init__(self) -> None:
+            self.text_stream = _yield_overloaded()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    class _Messages:
+        def stream(self, **_kwargs):
+            return _Stream()
+
+    class _Anthropic:
+        def __init__(self, **_kwargs) -> None:
+            self.messages = _Messages()
+
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "Anthropic", _Anthropic)
+    monkeypatch.setattr(llm_client.time, "sleep", lambda _s: None)
+
+    client = llm_client.LLMClient(model="claude-test")
+    with pytest.raises(RuntimeError, match="overloaded"):
+        list(client.invoke_stream("hi"))
+
+
+def test_format_anthropic_retry_error_handles_non_dict_body_error() -> None:
+    """Unexpected Anthropic body shapes should not mask the original error class."""
+
+    class _ApiStatusError(Exception):
+        body = {"error": "overloaded_error"}
+
+    assert (
+        llm_client._format_anthropic_retry_error(_ApiStatusError())
+        == "Anthropic API request failed after multiple retries: _ApiStatusError."
+    )
+
+
 # ---------------------------------------------------------------------------
 # OpenAILLMClient.invoke / invoke_stream — kwargs builder + streaming behavior
 # ---------------------------------------------------------------------------
@@ -924,6 +1010,22 @@ def test_create_llm_client_gemini_cli_reads_optional_model_env(monkeypatch) -> N
         client = llm_client._create_llm_client("reasoning")
 
         assert client._model == "gemini-2.5-pro"
+    finally:
+        llm_client.reset_llm_singletons()
+
+
+# _create_llm_client — missing API key raises RuntimeError (not ValidationError)
+# ---------------------------------------------------------------------------
+
+
+def test_create_llm_client_missing_api_key_raises_runtime_error(monkeypatch) -> None:
+    """Sentry #1678: missing API key must surface as RuntimeError, not pydantic.ValidationError."""
+    monkeypatch.setenv("LLM_PROVIDER", "anthropic")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    llm_client.reset_llm_singletons()
+    try:
+        with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
+            llm_client._create_llm_client("reasoning")
     finally:
         llm_client.reset_llm_singletons()
 

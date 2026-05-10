@@ -18,7 +18,9 @@ from app.integrations.config_models import (
     CoralogixIntegrationConfig,
     GoogleDocsIntegrationConfig,
     GrafanaIntegrationConfig,
+    HelmIntegrationConfig,
     HoneycombIntegrationConfig,
+    IncidentIoIntegrationConfig,
     SlackWebhookConfig,
     TracerIntegrationConfig,
 )
@@ -36,7 +38,9 @@ from app.services.argocd import ArgoCDClient, ArgoCDConfig
 from app.services.coralogix import CoralogixClient
 from app.services.datadog.client import DatadogClient, DatadogConfig
 from app.services.google_docs import GoogleDocsClient
+from app.services.helm import HelmClient
 from app.services.honeycomb import HoneycombClient
+from app.services.incident_io import IncidentIoClient
 from app.services.opsgenie import OpsGenieClient, OpsGenieConfig
 from app.services.splunk import SplunkClient, SplunkConfig
 from app.services.tracer_client.client import TracerClient
@@ -535,6 +539,11 @@ _verify_opsgenie = build_probe_verifier(
     build_config=OpsGenieConfig.model_validate,
     client_factory=OpsGenieClient,
 )
+_verify_incident_io = build_probe_verifier(
+    "incident_io",
+    build_config=IncidentIoIntegrationConfig.model_validate,
+    client_factory=IncidentIoClient,
+)
 _verify_alertmanager = build_probe_verifier(
     "alertmanager",
     build_config=AlertmanagerConfig.model_validate,
@@ -544,6 +553,11 @@ _verify_argocd = build_probe_verifier(
     "argocd",
     build_config=ArgoCDConfig.model_validate,
     client_factory=ArgoCDClient,
+)
+_verify_helm = build_probe_verifier(
+    "helm",
+    build_config=HelmIntegrationConfig.model_validate,
+    client_factory=HelmClient,
 )
 _verify_splunk = build_probe_verifier(
     "splunk",
@@ -578,6 +592,8 @@ __all__ = [
     "_verify_google_docs",
     "_verify_grafana",
     "_verify_honeycomb",
+    "_verify_helm",
+    "_verify_incident_io",
     "_verify_kafka",
     "_verify_mariadb",
     "_verify_mongodb",

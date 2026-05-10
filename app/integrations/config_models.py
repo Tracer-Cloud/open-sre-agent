@@ -26,6 +26,7 @@ DEFAULT_OPSGENIE_BASE_URLS: dict[str, str] = {
     "us": "https://api.opsgenie.com",
     "eu": "https://api.eu.opsgenie.com",
 }
+DEFAULT_INCIDENT_IO_BASE_URL = "https://api.incident.io"
 
 
 # ---------------------------------------------------------------------------
@@ -205,6 +206,32 @@ class OpsGenieIntegrationConfig(StrictConfigModel):
         }
 
 
+class IncidentIoIntegrationConfig(StrictConfigModel):
+    """Normalized incident.io credentials used by investigation and verification flows."""
+
+    api_key: str
+    base_url: str = DEFAULT_INCIDENT_IO_BASE_URL
+    integration_id: str = ""
+
+    @field_validator("base_url", mode="before")
+    @classmethod
+    def _normalize_base_url(cls, value: object) -> str:
+        normalized = normalize_url(DEFAULT_INCIDENT_IO_BASE_URL)(value)
+        return validate_https_or_loopback_http_url(normalized, service_name="incident.io")
+
+    @field_validator("api_key", mode="before")
+    @classmethod
+    def _normalize_api_key(cls, value: object) -> str:
+        return normalize_str()(value)
+
+    @property
+    def headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+
 class AlertmanagerIntegrationConfig(StrictConfigModel):
     """Normalized Alertmanager credentials used by resolution and verification flows."""
 
@@ -334,6 +361,27 @@ class ArgoCDIntegrationConfig(StrictConfigModel):
     @property
     def is_configured(self) -> bool:
         return bool(self.base_url and (self.bearer_token or (self.username and self.password)))
+
+
+class HelmIntegrationConfig(StrictConfigModel):
+    """Normalized Helm CLI settings for read-only Kubernetes release inspection."""
+
+    helm_path: str = "helm"
+    kube_context: str = ""
+    kubeconfig: str = ""
+    default_namespace: str = ""
+    integration_id: str = ""
+
+    _normalize_helm_path = field_validator("helm_path", mode="before")(
+        normalize_with_default("helm")
+    )
+    _normalize_strs = field_validator(
+        "kube_context", "kubeconfig", "default_namespace", "integration_id", mode="before"
+    )(normalize_str())
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(str(self.helm_path or "").strip())
 
 
 class GitLabIntegrationConfig(StrictConfigModel):

@@ -21,3 +21,16 @@ def test_banner_shows_ollama_model(monkeypatch: object) -> None:
     assert "ollama" in output
     assert "qwen2.5:7b" in output
     assert "ollama · default" not in output
+
+
+def test_ready_box_expands_to_console_width() -> None:
+    console_file = io.StringIO()
+    console = Console(file=console_file, force_terminal=False, highlight=False, width=120)
+
+    banner_module.render_ready_box(console)
+
+    lines = [
+        line for line in console_file.getvalue().splitlines() if line.startswith(("╭", "╰", "│"))
+    ]
+    assert lines
+    assert max(len(line) for line in lines) == 120

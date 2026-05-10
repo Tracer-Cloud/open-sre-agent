@@ -5,6 +5,7 @@ import re
 from rich.console import Console
 from rich.text import Text
 
+from app.cli.interactive_shell.theme import BRAND, DIM, HIGHLIGHT, TEXT, WARNING
 from app.output import get_output_format
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -27,7 +28,7 @@ def _rich_line_with_links(text: str) -> Text:
             result.append(text[cursor : m.start()])
         url = m.group(1)
         label = m.group(2) or url
-        result.append(label, style=f"link {url} bold blue underline")
+        result.append(label, style=f"link {url} bold {BRAND} underline")
         cursor = m.end()
 
     remaining = text[cursor:]
@@ -37,7 +38,7 @@ def _rich_line_with_links(text: str) -> Text:
         if m.start() > sub_cursor:
             result.append(remaining[sub_cursor : m.start()])
         url = m.group(0).rstrip(".,;)")
-        result.append(url, style=f"link {url} bold blue underline")
+        result.append(url, style=f"link {url} bold {BRAND} underline")
         sub_cursor = m.end()
     if sub_cursor < len(remaining):
         result.append(remaining[sub_cursor:])
@@ -72,7 +73,7 @@ _BOLD_RE = re.compile(r"\*\*?([^*]+)\*\*?")
 def _render_rich_section_heading(console: Console, title: str) -> None:
     console.print()
     t = Text()
-    t.append(f"  {title}", style="bold white")
+    t.append(f"  {title}", style=f"bold {TEXT}")
     console.print(t)
 
 
@@ -92,7 +93,7 @@ def _render_rich_numbered(console: Console, line: str) -> None:
         return
     num, body = m.group(1), m.group(2)
     t = Text(f"    {num}. ")
-    t.style = "dim"
+    t.style = DIM
     t.append_text(_rich_line_with_links(body))
     console.print(t)
 
@@ -119,7 +120,9 @@ def render_report(slack_message: str, root_cause_category: str | None = None) ->
 
     if not slack_message:
         if fmt == "rich":
-            Console().print(Text.assemble(("  ● ", "bold yellow"), ("No report generated.", "dim")))
+            Console().print(
+                Text.assemble(("  ● ", f"bold {WARNING}"), ("No report generated.", DIM))
+            )
         else:
             print("No report generated.")
         return
@@ -137,11 +140,11 @@ def _render_rich_report(slack_message: str, root_cause_category: str | None = No
     # Header varies by outcome
     done = Text()
     if root_cause_category == "healthy":
-        done.append("  ✓ ", style="bold green")
-        done.append("Systems healthy", style="bold green")
+        done.append("  ✓ ", style=f"bold {HIGHLIGHT}")
+        done.append("Systems healthy", style=f"bold {HIGHLIGHT}")
     else:
-        done.append("  ● ", style="bold green")
-        done.append("Investigation complete", style="bold white")
+        done.append("  ● ", style=f"bold {HIGHLIGHT}")
+        done.append("Investigation complete", style=f"bold {TEXT}")
     console.print(done)
     console.print()
 
@@ -181,7 +184,7 @@ def _render_rich_report(slack_message: str, root_cause_category: str | None = No
 
         # Code spans  "`…`"
         if stripped.startswith("`") and stripped.endswith("`"):
-            t = Text(f"    {stripped}", style="dim cyan")
+            t = Text(f"    {stripped}", style=BRAND)
             console.print(t)
             continue
 
@@ -192,7 +195,7 @@ def _render_rich_report(slack_message: str, root_cause_category: str | None = No
         # Alert ID meta
         if stripped.startswith(("*Alert ID:*", "Alert ID:")):
             clean = _BOLD_RE.sub(r"\1", stripped)
-            console.print(Text(f"    {clean}", style="dim"))
+            console.print(Text(f"    {clean}", style=DIM))
             continue
 
         # Blank lines — pass through (skip double blanks)

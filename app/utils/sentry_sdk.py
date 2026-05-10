@@ -11,8 +11,9 @@ import json
 import logging
 import os
 import re
-from collections.abc import Mapping
-from contextlib import suppress
+import warnings
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager, suppress
 from functools import cache
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
@@ -271,6 +272,32 @@ def _build_sentry_integrations() -> list[Any]:
     ]
 
 
+@contextmanager
+def _suppress_langgraph_allowed_objects_warning() -> Iterator[None]:
+    """Hide the upstream LangGraph serializer warning during Sentry auto-discovery.
+
+    Sentry's auto-enabled LangGraph integration imports ``langgraph.graph`` during
+    ``sentry_sdk.init()``, which currently triggers a LangChain pending-deprecation
+    warning about ``allowed_objects`` defaults inside LangGraph's serializer setup.
+    OpenSRE does not control that import path and the current runtime behavior
+    remains unchanged (LangChain still defaults to ``allowed_objects='core'``), so
+    we suppress only this one known startup warning until the upstream packages
+    expose an explicit configuration hook.
+    """
+    with warnings.catch_warnings():
+        category: type[Warning] = Warning
+        with suppress(Exception):
+            from langchain_core._api.deprecation import LangChainPendingDeprecationWarning
+
+            category = LangChainPendingDeprecationWarning
+        warnings.filterwarnings(
+            "ignore",
+            message=r"The default value of `allowed_objects` will change in a future version\..*",
+            category=category,
+        )
+        yield
+
+
 @cache
 def _init_sentry_once(
     dsn: str,
@@ -289,20 +316,24 @@ def _init_sentry_once(
     """
     import sentry_sdk
 
-    sentry_sdk.init(
-        dsn=dsn,
-        environment=environment,
-        release=release,
-        send_default_pii=False,
-        attach_stacktrace=True,
-        sample_rate=sample_rate,
-        traces_sample_rate=traces_sample_rate,
-        max_breadcrumbs=SENTRY_MAX_BREADCRUMBS,
-        in_app_include=list(SENTRY_IN_APP_INCLUDE),
-        integrations=_build_sentry_integrations(),
-        before_send=_before_send,
-        before_breadcrumb=_before_breadcrumb,
-    )
+    from app.integrations.llm_cli.errors import CLIAuthenticationRequired, CLITimeoutError
+
+    with _suppress_langgraph_allowed_objects_warning():
+        sentry_sdk.init(
+            dsn=dsn,
+            environment=environment,
+            release=release,
+            send_default_pii=False,
+            attach_stacktrace=True,
+            sample_rate=sample_rate,
+            traces_sample_rate=traces_sample_rate,
+            max_breadcrumbs=SENTRY_MAX_BREADCRUMBS,
+            in_app_include=list(SENTRY_IN_APP_INCLUDE),
+            integrations=_build_sentry_integrations(),
+            before_send=_before_send,
+            before_breadcrumb=_before_breadcrumb,
+            ignore_errors=[CLIAuthenticationRequired, CLITimeoutError],
+        )
 
 
 def _apply_scope_tags(entrypoint: str | None) -> None:

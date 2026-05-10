@@ -11,16 +11,16 @@ without ever surfacing a raw Python traceback. Format:
 
   ✗  ExceptionType                       ← ERROR
      message text                        ← TEXT
-     path/to/file.py:42 in fn_name      ← ACCENT_DIM
-     Run opensre doctor to diagnose      ← TEXT_DIM hint
+     path/to/file.py:42 in fn_name      ← DIM
+     Run opensre doctor to diagnose      ← SECONDARY hint
 
 Example rendered output (colour roles):
-  ┌──────────────────────────────────────────────────────┐ [BORDER]
+  ┌──────────────────────────────────────────────────────┐ [DIM]
   │  ✗  ValueError                                       │ [ERROR glyph + type]
   │     argument must be positive                        │ [TEXT message]
-  │     app/nodes/plan_actions/node.py:88 in _build      │ [ACCENT_DIM location]
-  │     Run opensre doctor to diagnose connection issues  │ [TEXT_DIM hint]
-  └──────────────────────────────────────────────────────┘ [BORDER]
+  │     app/nodes/plan_actions/node.py:88 in _build      │ [DIM location]
+  │     Run opensre doctor to diagnose connection issues  │ [SECONDARY hint]
+  └──────────────────────────────────────────────────────┘ [DIM]
 """
 
 from __future__ import annotations
@@ -93,17 +93,16 @@ def render_error(
     Rendered output (colour roles):
       ✗  ValueError                             ← GLYPH_ERROR + type name in ERROR
          argument must be positive              ← TEXT (message)
-         app/nodes/plan.py:88 in _build        ← ACCENT_DIM (file:line in fn)
-         Run `opensre doctor` to diagnose       ← TEXT_DIM (hint)
+         app/nodes/plan.py:88 in _build        ← DIM (file:line in fn)
+         Run `opensre doctor` to diagnose       ← SECONDARY (hint)
     """
     # Lazy import avoids circular dependency: errors ← interactive_shell ← errors.
     from app.cli.interactive_shell.theme import (
-        ACCENT_DIM,
-        BORDER,
+        DIM,
         ERROR,
         GLYPH_ERROR,
+        SECONDARY,
         TEXT,
-        TEXT_DIM,
     )
 
     _console = console or Console(stderr=True, highlight=False)
@@ -143,12 +142,12 @@ def render_error(
 
     # file:line in fn_name
     if frame_line:
-        body.append(f"     {frame_line}", style=ACCENT_DIM)
+        body.append(f"     {frame_line}", style=DIM)
         body.append("\n")
 
     # hint
-    body.append(f"     {_hint}", style=TEXT_DIM)
+    body.append(f"     {_hint}", style=SECONDARY)
 
     _console.print()
-    _console.print(Panel(body, border_style=BORDER, padding=(0, 1), expand=False))
+    _console.print(Panel(body, border_style=DIM, padding=(0, 1), expand=False))
     _console.print()

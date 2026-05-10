@@ -100,6 +100,7 @@
               "datadog",
               "grafana",
               "honeycomb",
+              "incident_io",
               "opsgenie",
               "sentry",
               "splunk"
@@ -114,6 +115,7 @@
               "github",
               "gitlab",
               "google-docs",
+              "helm",
               "jira",
               "vercel"
             ]

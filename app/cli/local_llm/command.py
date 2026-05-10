@@ -5,6 +5,7 @@ from __future__ import annotations
 import questionary
 from rich.console import Console
 
+from app.cli.interactive_shell.theme import DIM, ERROR, HIGHLIGHT, WARNING
 from app.cli.local_llm.hardware import detect_hardware, recommend_model
 from app.cli.local_llm.ollama import (
     install,
@@ -26,7 +27,7 @@ _console = Console()
 
 def run_local_llm_setup() -> int:
     _console.rule("[bold]OpenSRE · Local LLM Setup[/bold]")
-    _console.print("[dim]No API key required — runs entirely on your machine.[/dim]\n")
+    _console.print(f"[{DIM}]No API key required — runs entirely on your machine.[/]\n")
 
     with _console.status("Detecting hardware...", spinner="dots"):
         hw = detect_hardware()
@@ -34,17 +35,17 @@ def run_local_llm_setup() -> int:
     _console.print(f"Hardware: [bold]{hw.total_ram_gb:.0f}GB RAM[/bold] · {arch_label}")
 
     if not is_installed():
-        _console.print("\n[yellow]Ollama is not installed.[/yellow]")
+        _console.print(f"\n[{WARNING}]Ollama is not installed.[/]")
         if not install(_console):
-            _console.print("[red]Ollama installation failed or was skipped.[/red]")
+            _console.print(f"[{ERROR}]Ollama installation failed or was skipped.[/]")
             _console.print(
                 "Install manually from https://ollama.com and rerun: [bold]opensre onboard local_llm[/bold]"
             )
             return 1
         if not is_installed():
-            _console.print("[red]Ollama still not found after install. Check your PATH.[/red]")
+            _console.print(f"[{ERROR}]Ollama still not found after install. Check your PATH.[/]")
             return 1
-        _console.print("[green]Ollama installed.[/green]")
+        _console.print(f"[{HIGHLIGHT}]Ollama installed.[/]")
 
     host = DEFAULT_OLLAMA_HOST
     if not is_server_running(host):
@@ -53,16 +54,16 @@ def run_local_llm_setup() -> int:
         with _console.status("Waiting for Ollama to be ready...", spinner="dots"):
             if not wait_for_server(host):
                 server_proc.terminate()
-                _console.print(f"[red]Ollama server did not start within 30s at {host}.[/red]")
+                _console.print(f"[{ERROR}]Ollama server did not start within 30s at {host}.[/]")
                 _console.print(
                     "Try running [bold]ollama serve[/bold] in a separate terminal, then rerun."
                 )
                 return 1
-    _console.print(f"[green]Ollama server running[/green] at {host}")
+    _console.print(f"[{HIGHLIGHT}]Ollama server running[/] at {host}")
 
     model, reason = recommend_model(hw)
     _console.print(f"\nRecommended model: [bold]{model}[/bold]")
-    _console.print(f"[dim]{reason}[/dim]")
+    _console.print(f"[{DIM}]{reason}[/]")
     chosen = questionary.text(
         "Model to use (press Enter to accept recommendation):",
         default=model,
@@ -73,13 +74,13 @@ def run_local_llm_setup() -> int:
 
     _console.print()
     if not pull_model(chosen, _console, host=host):
-        _console.print(f"[red]Failed to pull model '{chosen}'.[/red]")
+        _console.print(f"[{ERROR}]Failed to pull model '{chosen}'.[/]")
         _console.print("Check the model name and try: [bold]ollama pull " + chosen + "[/bold]")
         return 1
 
     result = _check_ollama(host=host, model=chosen)
     if not result.ok:
-        _console.print(f"[red]{result.detail}[/red]")
+        _console.print(f"[{ERROR}]{result.detail}[/]")
         return 1
 
     provider = PROVIDER_BY_VALUE["ollama"]
@@ -98,11 +99,11 @@ def run_local_llm_setup() -> int:
 
     # 8. Summary
     _console.print()
-    _console.rule("[green]Setup complete[/green]")
+    _console.rule(f"[{HIGHLIGHT}]Setup complete[/]")
     _console.print("Provider:  [bold]Ollama (local)[/bold]")
     _console.print(f"Model:     [bold]{chosen}[/bold]")
-    _console.print(f"Config:    [dim]{env_path}[/dim]")
-    _console.print(f"Store:     [dim]{store_path}[/dim]")
+    _console.print(f"Config:    [{DIM}]{env_path}[/]")
+    _console.print(f"Store:     [{DIM}]{store_path}[/]")
     _console.print("\nTry it now:")
     _console.print(
         "  [bold]opensre investigate[/bold]   — launches interactive mode, try a sample alert"
