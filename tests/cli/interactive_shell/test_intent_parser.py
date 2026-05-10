@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-import app.cli.interactive_shell.intent_parser as intent_parser
 from app.cli.interactive_shell.intent_parser import (
     SAMPLE_ALERT_RE,
     extract_implementation_request,
     extract_shell_command,
     normalize_shell_command,
+    shutil,
     split_prompt_clauses,
 )
 from app.cli.interactive_shell.interaction_models import PromptClause
@@ -54,7 +54,7 @@ def test_extract_implementation_request_allows_context_dependent_bare_implement(
 def test_code_editor_command_is_not_implementation_request(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(intent_parser.shutil, "which", lambda _command: "/usr/bin/code")
+    monkeypatch.setattr(shutil, "which", lambda _command: "/usr/bin/code")
     clause = PromptClause(text="code .", position=0)
 
     assert extract_implementation_request(clause) is None
