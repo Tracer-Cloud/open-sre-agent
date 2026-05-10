@@ -93,6 +93,9 @@ def node_plan_actions(state: InvestigationState, config: NodeConfig | None = Non
             "query_betterstack_logs",
             "get_cloudwatch_logs",
             "get_host_metrics",
+            "describe_rds_instance",
+            "ec2_instances_by_tag",
+            "get_elb_target_health",
             "list_eks_pods",
             "get_eks_events",
         ]

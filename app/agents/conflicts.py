@@ -113,13 +113,13 @@ def render_conflicts(conflicts: list[FileWriteConflict]) -> Table | str:
     # initialises its REPL graph, which imports the /agents slash command, which
     # imports this module.
     from app.cli.interactive_shell.rendering import repl_table
-    from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
+    from app.cli.interactive_shell.theme import BOLD_BRAND, DIM
 
-    table = repl_table(title="Agent file-write conflicts", title_style=TERMINAL_ACCENT_BOLD)
+    table = repl_table(title="Agent file-write conflicts", title_style=BOLD_BRAND)
     table.add_column("path", style="bold", overflow="fold")
     table.add_column("agents", overflow="fold")
-    table.add_column("first seen", style="dim")
-    table.add_column("last seen", style="dim")
+    table.add_column("first seen", style=DIM)
+    table.add_column("last seen", style=DIM)
 
     for conflict in conflicts:
         table.add_row(

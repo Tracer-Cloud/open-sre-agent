@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING, Any
 
 from typing_extensions import TypedDict
 
+from app.cli.interactive_shell.theme import BRAND, DIM, ERROR, HIGHLIGHT, WARNING
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -298,20 +300,20 @@ def run_deploy(
     console = Console(highlight=False)
 
     if target != "railway":
-        console.print(f"[red]Error: Unsupported deployment target '{target}'")
-        console.print("[dim]Currently only 'railway' is supported.")
+        console.print(f"[{ERROR}]Error: Unsupported deployment target '{target}'[/]")
+        console.print(f"[{DIM}]Currently only 'railway' is supported.[/]")
         return 1
 
     # Check prerequisites
     if not is_railway_cli_installed():
-        console.print("[red]Error: Railway CLI is not installed[/red]")
-        console.print("[dim]Install with: npm install -g @railway/cli[/dim]")
+        console.print(f"[{ERROR}]Error: Railway CLI is not installed[/]")
+        console.print(f"[{DIM}]Install with: npm install -g @railway/cli[/]")
         return 1
 
     auth = get_railway_auth_status()
     if not auth["authenticated"]:
-        console.print("[red]Error: Not authenticated with Railway[/red]")
-        console.print("[dim]Run: railway login[/dim]")
+        console.print(f"[{ERROR}]Error: Not authenticated with Railway[/]")
+        console.print(f"[{DIM}]Run: railway login[/]")
         return 1
 
     # Confirm deployment unless --yes
@@ -324,17 +326,17 @@ def run_deploy(
                 default=True,
             ).ask()
             if not confirmed:
-                console.print("[dim]Deployment cancelled.")
+                console.print(f"[{DIM}]Deployment cancelled.[/]")
                 return 0
         except (EOFError, KeyboardInterrupt):
-            console.print("\n[dim]Aborted.")
+            console.print(f"\n[{DIM}]Aborted.[/]")
             return 1
 
     # Run deployment
     if dry_run:
-        console.print("[dim]Dry-run mode: simulating deployment...")
+        console.print(f"[{DIM}]Dry-run mode: simulating deployment...[/]")
 
-    console.print(f"[cyan]Deploying to {target}...")
+    console.print(f"[{BRAND}]Deploying to {target}...[/]")
 
     result = deploy_to_railway(
         project_name=project_name,
@@ -350,15 +352,15 @@ def run_deploy(
 
     if result["success"]:
         if result.get("url"):
-            console.print("\n[green]Deployment successful![/green]")
-            console.print(f"[dim]URL: {result['url']}[/dim]")
+            console.print(f"\n[{HIGHLIGHT}]Deployment successful![/]")
+            console.print(f"[{DIM}]URL: {result['url']}[/]")
             if result.get("health_ok"):
-                console.print("[green]Health check: PASSED[/green]")
+                console.print(f"[{HIGHLIGHT}]Health check: PASSED[/]")
             else:
-                console.print("[yellow]Health check: PENDING (may still be starting)[/yellow]")
+                console.print(f"[{WARNING}]Health check: PENDING (may still be starting)[/]")
         else:
-            console.print("\n[green]Deployment initiated![/green]")
+            console.print(f"\n[{HIGHLIGHT}]Deployment initiated![/]")
         return 0
 
-    console.print(f"\n[red]Deployment failed: {result.get('error', 'Unknown error')}[/red]")
+    console.print(f"\n[{ERROR}]Deployment failed: {result.get('error', 'Unknown error')}[/]")
     return 1

@@ -1,0 +1,157 @@
+---
+title: "Telegram"
+description: "Deliver investigation findings to a Telegram chat or channel."
+---
+
+OpenSRE's Telegram integration delivers investigation findings to any chat your bot has been added to — useful for mobile-first on-call rotations and personal alerting.
+
+<Note>
+Unlike Slack and Discord, Telegram is **not** included in the interactive `opensre onboard` wizard today. Configure it via environment variables or by editing `~/.config/opensre/integrations.json` directly. Tracked at [#1481](https://github.com/Tracer-Cloud/opensre/issues/1481).
+</Note>
+
+---
+
+## Prerequisites
+
+- A Telegram account.
+- The Telegram mobile or desktop app, signed in.
+- The chat (group, channel, or direct message) where you want to receive findings.
+
+---
+
+## Step 1: Create a bot with BotFather
+
+[BotFather](https://t.me/BotFather) is Telegram's official bot for creating other bots.
+
+1. Open Telegram and search for `@BotFather`. Open the chat and tap **Start**.
+2. Send `/newbot`.
+3. When prompted, send a **display name** for your bot (e.g. `OpenSRE Alerts`).
+4. Send a **username** that ends in `bot` (e.g. `opensre_alerts_bot`). It must be globally unique.
+5. BotFather replies with an **HTTP API token** of the form `<numeric-id>:<token-secret>`. Copy it — it is your **bot token**. Treat it like a password. Anyone holding it can send messages as your bot.
+
+<Tip>
+You can change the bot's name, picture, and description later by sending `/mybots` to BotFather and selecting your bot.
+</Tip>
+
+---
+
+## Step 2: Add the bot to a chat
+
+The bot can deliver to three kinds of destinations. Pick the one that fits your team:
+
+<Tabs>
+  <Tab title="Group chat">
+    1. Open the group where you want findings to land.
+    2. Tap the group name → **Add members** → search for your bot's username → **Add**.
+    3. By default, bots in groups only see messages addressed to them, which is fine for delivery-only.
+  </Tab>
+  <Tab title="Channel">
+    1. Open your channel and tap its name.
+    2. Tap **Administrators → Add Administrator**, search for your bot, and add it.
+    3. Grant the **Post Messages** permission. No other admin permissions are required.
+  </Tab>
+  <Tab title="Direct message">
+    Open a chat with your bot directly (search its username) and send `/start`. The bot will not reply, but Telegram registers the chat so the bot can message you.
+  </Tab>
+</Tabs>
+
+---
+
+## Step 3: Find your `chat_id`
+
+The **chat ID** identifies where the bot should post.
+
+1. Send any message in the destination chat — for a channel, post anything; for a DM, send `/start` to your bot.
+2. In a browser, open:
+
+   ```
+   https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates
+   ```
+
+   (replace `<YOUR_BOT_TOKEN>` with the token from Step 1)
+
+3. In the JSON response, look for a `chat.id` field. The value depends on the chat type:
+
+   | Chat type | Format | Example |
+   |---|---|---|
+   | Direct message with a user | Positive integer | `123456789` |
+   | Group | Negative integer | `-987654321` |
+   | Supergroup or channel | Negative integer starting with `-100` | `-1001234567890` |
+
+   Copy the entire value, **including the leading minus sign** for groups and channels.
+
+<Note>
+If `getUpdates` returns an empty array, post a fresh message in the chat and reload — Telegram only buffers recent updates.
+</Note>
+
+---
+
+## Step 4: Configure the integration
+
+Set two environment variables in your `.env` file:
+
+```bash
+TELEGRAM_BOT_TOKEN=<numeric-id>:<token-secret>
+TELEGRAM_DEFAULT_CHAT_ID=<chat-id>
+```
+
+| Variable | Description |
+|---|---|
+| `TELEGRAM_BOT_TOKEN` | Bot HTTP API token from BotFather. Required. |
+| `TELEGRAM_DEFAULT_CHAT_ID` | Default delivery destination. Required for delivery to work. |
+
+OpenSRE picks these up at startup and registers Telegram as an active integration.
+
+---
+
+## Step 5: Verify
+
+```bash
+opensre integrations verify telegram
+```
+
+This calls Telegram's [`getMe`](https://core.telegram.org/bots/api#getme) endpoint. On success it reports the bot's `@username`. On failure it reports the Telegram API error message verbatim.
+
+You can also trigger a real investigation against a bundled fixture:
+
+```bash
+opensre investigate --input tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
+```
+
+Findings should appear in the configured chat. Long reports are truncated to Telegram's 4,096-character message limit.
+
+---
+
+## Troubleshooting
+
+`opensre integrations verify telegram` only calls Telegram's `getMe` endpoint, so it surfaces token-validity errors but cannot detect chat-routing problems. Delivery-time errors only show up when an investigation actually posts.
+
+### Errors from `opensre integrations verify telegram`
+
+**`Missing bot_token`**
+
+`TELEGRAM_BOT_TOKEN` is empty. Re-check `.env` and restart any long-running OpenSRE process so it re-reads the file.
+
+**`Telegram API check failed: 401 Client Error: Unauthorized for url: …`**
+
+The bot token is invalid or has been revoked. Generate a new one in BotFather (`/mybots → your bot → API Token → Revoke current token`) and update `.env`.
+
+<Warning>
+The verifier currently does not redact secrets from this error: the `for url:` portion of the message includes the bot token (Telegram's API endpoint embeds the token in the path). Redact the token before sharing this error in bug reports or chat. The verifier-side redaction fix is tracked separately from the wizard work — file a new issue if one does not yet exist.
+</Warning>
+
+### Errors that only surface during delivery
+
+These are Telegram API responses that come back when OpenSRE actually tries to post a finding. `verify` only calls `getMe`, so it cannot catch them. They appear in OpenSRE logs as `[telegram] post message failed: <description>` with the Telegram description copied verbatim.
+
+**`description: chat not found`**
+
+The bot is not in the chat, or `TELEGRAM_DEFAULT_CHAT_ID` is wrong. Re-add the bot and re-fetch `chat_id` from `getUpdates`.
+
+**`description: bot was kicked from the supergroup …` (or similar)**
+
+Re-add the bot. For channels, the bot must be an administrator with **Post Messages** permission.
+
+**Findings never arrive, but `verify` passes**
+
+`getMe` only confirms the token is valid; it does not test delivery. Send a fresh message in the destination chat and re-fetch `chat_id` from `getUpdates` — your `chat_id` may have changed (for example, if a group was upgraded to a supergroup, the ID is renamed with a `-100` prefix).

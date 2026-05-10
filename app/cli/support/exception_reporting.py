@@ -17,9 +17,7 @@ def should_report_exception(exc: BaseException, *, expected: bool = False) -> bo
         return False
     if isinstance(exc, (KeyboardInterrupt, EOFError, OpenSREError, click.Abort)):
         return False
-    if isinstance(exc, click.UsageError):
-        return str(exc).startswith("No such command ")
-    return True
+    return not isinstance(exc, click.UsageError)
 
 
 def report_exception(

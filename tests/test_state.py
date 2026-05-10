@@ -69,6 +69,25 @@ def test_make_chat_state_validates_messages() -> None:
     assert state["messages"][0]["content"] == "hello"
 
 
+def test_make_chat_state_accepts_tool_message_with_tool_call_id_and_name() -> None:
+    """Regression: StrictConfigModel must allow tool-role correlation fields (#1530 Greptile)."""
+    state = make_chat_state(
+        messages=[
+            {
+                "role": "tool",
+                "content": '{"ok": true}',
+                "tool_call_id": "call_abc",
+                "name": "my_chat_tool",
+            }
+        ]
+    )
+    msg = state["messages"][0]
+    assert msg["role"] == "tool"
+    assert msg["content"] == '{"ok": true}'
+    assert msg["tool_call_id"] == "call_abc"
+    assert msg["name"] == "my_chat_tool"
+
+
 def test_agent_state_model_rejects_unknown_fields() -> None:
     with pytest.raises(ValidationError, match="mesages.*messages"):
         AgentStateModel.model_validate({"mode": "chat", "mesages": []})

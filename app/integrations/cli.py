@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import questionary
 
+from app.cli.interactive_shell.theme import ANSI_BOLD, ANSI_RESET
+
 if TYPE_CHECKING:
     from app.integrations.github_mcp import GitHubMcpDisplayDetailLevel
 
@@ -35,8 +37,8 @@ from app.integrations.verify import (
     verify_integrations,
 )
 
-_B = "\033[1m"
-_R = "\033[0m"
+_B = ANSI_BOLD
+_R = ANSI_RESET
 
 
 def _json_echo(data: Any) -> None:
@@ -325,6 +327,22 @@ def _setup_betterstack() -> None:
                 "username": username,
                 "password": password,
                 "sources": sources,
+            }
+        },
+    )
+
+
+def _setup_incident_io() -> None:
+    api_key = _p("incident.io API key", secret=True)
+    base_url = _p("API base URL override (optional)")
+    if not api_key:
+        _die("api_key is required.")
+    upsert_integration(
+        "incident_io",
+        {
+            "credentials": {
+                "api_key": api_key,
+                "base_url": base_url,
             }
         },
     )
@@ -681,6 +699,7 @@ _HANDLERS: dict[str, Any] = {
     "datadog": _setup_datadog,
     "grafana": _setup_grafana,
     "honeycomb": _setup_honeycomb,
+    "incident_io": _setup_incident_io,
     "mariadb": _setup_mariadb,
     "mongodb_atlas": _setup_mongodb_atlas,
     "slack": _setup_slack,

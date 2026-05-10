@@ -1,8 +1,8 @@
 """Inject benchmark summary into README.md between HTML comment markers.
 
-Follows the same marker-replacement pattern used by the contributors workflow
-(.github/workflows/contributors.yml): content between a start and end marker
-is replaced idempotently via ``re.sub`` with ``re.DOTALL``.
+Follows the same marker-replacement pattern used elsewhere in ``README.md``:
+content between a start and end marker is replaced idempotently via ``re.sub``
+with ``re.DOTALL``.
 """
 
 from __future__ import annotations

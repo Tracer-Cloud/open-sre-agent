@@ -9,25 +9,52 @@ from rich.console import Console
 from rich.markup import escape
 
 from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
+from app.cli.interactive_shell.repl_choice_menu import (
+    repl_choose_one,
+    repl_section_break,
+    repl_tty_interactive,
+)
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.tasks import TaskKind
 from app.cli.interactive_shell.theme import (
-    PRIMARY,
-    TERMINAL_ERROR,
-    TEXT_DIM,
+    DIM,
+    ERROR,
+    HIGHLIGHT,
     WARNING,
 )
 from app.cli.support.errors import OpenSREError
 from app.cli.support.exception_reporting import report_exception
+from app.llm_reasoning_effort import apply_reasoning_effort
 
 
-def _cmd_template(_session: ReplSession, console: Console, args: list[str]) -> bool:
+def _interactive_template_menu(session: ReplSession, console: Console) -> bool:
+    from app.cli.support.constants import ALERT_TEMPLATE_CHOICES
+
+    root = "/template"
+    choices: list[tuple[str, str]] = [(c, c) for c in ALERT_TEMPLATE_CHOICES]
+    choices.append(("done", "done"))
+    while True:
+        name = repl_choose_one(
+            title="template",
+            breadcrumb=root,
+            choices=choices,
+        )
+        if name is None or name == "done":
+            return True
+        _cmd_template(session, console, [name])
+        repl_section_break(console)
+
+
+def _cmd_template(session: ReplSession, console: Console, args: list[str]) -> bool:
     from app.cli.investigation.alert_templates import build_alert_template
     from app.cli.support.constants import ALERT_TEMPLATE_CHOICES
 
+    if not args and repl_tty_interactive():
+        return _interactive_template_menu(session, console)
+
     if not args:
         console.print(
-            f"[{TEXT_DIM}]usage:[/] /template <type>  (choices: {', '.join(ALERT_TEMPLATE_CHOICES)})"
+            f"[{DIM}]usage:[/] /template <type>  (choices: {', '.join(ALERT_TEMPLATE_CHOICES)})"
         )
         return True
 
@@ -36,7 +63,7 @@ def _cmd_template(_session: ReplSession, console: Console, args: list[str]) -> b
         payload = build_alert_template(template_name)
     except ValueError:
         console.print(
-            f"[{TERMINAL_ERROR}]unknown template:[/] {escape(template_name)}  "
+            f"[{ERROR}]unknown template:[/] {escape(template_name)}  "
             f"(choices: {', '.join(ALERT_TEMPLATE_CHOICES)})"
         )
         return True
@@ -45,35 +72,43 @@ def _cmd_template(_session: ReplSession, console: Console, args: list[str]) -> b
     return True
 
 
+def _validate_investigate_args(args: list[str]) -> str | None:
+    if not args:
+        return f"[{DIM}]usage:[/] /investigate <file>"
+    return None
+
+
+def _validate_save_args(args: list[str]) -> str | None:
+    if not args:
+        return f"[{DIM}]usage:[/] /save <path>  (e.g. /save report.md or /save out.json)"
+    return None
+
+
 def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str]) -> bool:
     from app.cli.investigation import run_investigation_for_session
 
-    if not args:
-        console.print(f"[{TEXT_DIM}]usage:[/] /investigate <file>")
-        session.mark_latest(ok=False, kind="slash")
-        return True
-
     path = Path(args[0])
     if not path.exists():
-        console.print(f"[{TERMINAL_ERROR}]file not found:[/] {escape(str(path))}")
+        console.print(f"[{ERROR}]file not found:[/] {escape(str(path))}")
         session.mark_latest(ok=False, kind="slash")
         return True
 
     try:
         text = path.read_text(encoding="utf-8")
     except Exception as exc:
-        console.print(f"[{TERMINAL_ERROR}]cannot read file:[/] {escape(str(exc))}")
+        console.print(f"[{ERROR}]cannot read file:[/] {escape(str(exc))}")
         session.mark_latest(ok=False, kind="slash")
         return True
 
     task = session.task_registry.create(TaskKind.INVESTIGATION)
     task.mark_running()
     try:
-        final_state = run_investigation_for_session(
-            alert_text=text,
-            context_overrides=session.accumulated_context or None,
-            cancel_requested=task.cancel_requested,
-        )
+        with apply_reasoning_effort(session.reasoning_effort):
+            final_state = run_investigation_for_session(
+                alert_text=text,
+                context_overrides=session.accumulated_context or None,
+                cancel_requested=task.cancel_requested,
+            )
     except KeyboardInterrupt:
         task.mark_cancelled()
         console.print(f"[{WARNING}]investigation cancelled.[/]")
@@ -82,7 +117,7 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
         return True
     except OpenSREError as exc:
         task.mark_failed(str(exc))
-        console.print(f"[{TERMINAL_ERROR}]investigation failed:[/] {escape(str(exc))}")
+        console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
         if exc.suggestion:
             console.print(f"[{WARNING}]suggestion:[/] {escape(exc.suggestion)}")
         session.record("alert", args[0], ok=False)
@@ -91,7 +126,7 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
     except Exception as exc:
         task.mark_failed(str(exc))
         report_exception(exc, context="interactive_shell.investigate_file")
-        console.print(f"[{TERMINAL_ERROR}]investigation failed:[/] {escape(str(exc))}")
+        console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
         session.record("alert", args[0], ok=False)
         session.mark_latest(ok=False, kind="slash")
         return True
@@ -108,7 +143,7 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
 
 def _cmd_last(session: ReplSession, console: Console, _args: list[str]) -> bool:
     if session.last_state is None:
-        console.print(f"[{TEXT_DIM}]no investigation in this session yet.[/]")
+        console.print(f"[{DIM}]no investigation in this session yet.[/]")
         return True
 
     from rich.markdown import Markdown
@@ -119,14 +154,14 @@ def _cmd_last(session: ReplSession, console: Console, _args: list[str]) -> bool:
     report = session.last_state.get("problem_md") or session.last_state.get("slack_message") or ""
 
     if not root_cause and not report:
-        console.print(f"[{TEXT_DIM}]last investigation has no report content.[/]")
+        console.print(f"[{DIM}]last investigation has no report content.[/]")
         return True
 
     for title, body in (("Root Cause", root_cause), ("Report", report)):
         if not body:
             continue
         console.print()
-        console.print(Rule(f"[bold white] {title} [/]", style="#2D4A2D", align="left"))
+        console.print(Rule(f"[bold {HIGHLIGHT}] {title} [/]", style=DIM, align="left"))
         console.print(Padding(Markdown(str(body).strip()), (1, 2)))
 
     return True
@@ -134,13 +169,7 @@ def _cmd_last(session: ReplSession, console: Console, _args: list[str]) -> bool:
 
 def _cmd_save(session: ReplSession, console: Console, args: list[str]) -> bool:
     if session.last_state is None:
-        console.print(f"[{TEXT_DIM}]nothing to save — run an investigation first.[/]")
-        return True
-
-    if not args:
-        console.print(
-            f"[{TEXT_DIM}]usage:[/] /save <path>  (e.g. /save report.md or /save out.json)"
-        )
+        console.print(f"[{DIM}]nothing to save — run an investigation first.[/]")
         return True
 
     dest = Path(args[0])
@@ -160,9 +189,9 @@ def _cmd_save(session: ReplSession, console: Console, args: list[str]) -> bool:
             if report:
                 lines.append(f"## Report\n\n{report}\n")
             dest.write_text("\n".join(lines) or "(no report content)", encoding="utf-8")
-        console.print(f"[{PRIMARY}]saved:[/] {escape(str(dest))}")
+        console.print(f"[{HIGHLIGHT}]saved:[/] {escape(str(dest))}")
     except Exception as exc:
-        console.print(f"[{TERMINAL_ERROR}]save failed:[/] {escape(str(exc))}")
+        console.print(f"[{ERROR}]save failed:[/] {escape(str(exc))}")
     return True
 
 
@@ -177,8 +206,8 @@ _TEMPLATE_FIRST_ARGS: tuple[tuple[str, str], ...] = (
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
         "/template",
-        "print a starter alert JSON template "
-        "('/template generic|datadog|grafana|honeycomb|coralogix')",
+        "print a starter alert JSON template (TTY: bare '/template' opens menu; "
+        "else '/template generic|datadog|grafana|honeycomb|coralogix')",
         _cmd_template,
         first_arg_completions=_TEMPLATE_FIRST_ARGS,
         execution_tier=ExecutionTier.SAFE,
@@ -188,6 +217,7 @@ COMMANDS: list[SlashCommand] = [
         "run an RCA investigation from a file ('/investigate <file>')",
         _cmd_investigate_file,
         execution_tier=ExecutionTier.ELEVATED,
+        validate_args=_validate_investigate_args,
     ),
     SlashCommand(
         "/last",
@@ -200,6 +230,7 @@ COMMANDS: list[SlashCommand] = [
         "save last investigation to a file ('/save <path>')",
         _cmd_save,
         execution_tier=ExecutionTier.ELEVATED,
+        validate_args=_validate_save_args,
     ),
 ]
 

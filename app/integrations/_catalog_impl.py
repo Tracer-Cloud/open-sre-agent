@@ -23,7 +23,9 @@ from app.integrations.config_models import (
     DatadogIntegrationConfig,
     DiscordBotConfig,
     GrafanaIntegrationConfig,
+    HelmIntegrationConfig,
     HoneycombIntegrationConfig,
+    IncidentIoIntegrationConfig,
     JiraIntegrationConfig,
     OpsGenieIntegrationConfig,
     SlackWebhookConfig,
@@ -405,6 +407,21 @@ def _classify_service_instance(
             return opsgenie_config.model_dump(), "opsgenie"
         return None, None
 
+    if key == "incident_io":
+        try:
+            incident_io_config = IncidentIoIntegrationConfig.model_validate(
+                {
+                    "api_key": credentials.get("api_key", ""),
+                    "base_url": credentials.get("base_url", ""),
+                    "integration_id": record_id,
+                }
+            )
+        except Exception:
+            return None, None
+        if incident_io_config.api_key:
+            return incident_io_config.model_dump(), "incident_io"
+        return None, None
+
     if key == "jira":
         try:
             jira_config = JiraIntegrationConfig.model_validate(
@@ -641,6 +658,25 @@ def _classify_service_instance(
         ):
             return argocd_config.model_dump(), "argocd"
         return None, None
+
+    if key == "helm":
+        try:
+            helm_config = HelmIntegrationConfig.model_validate(
+                {
+                    "helm_path": credentials.get("helm_path", "helm"),
+                    "kube_context": credentials.get("kube_context", "")
+                    or credentials.get("context", ""),
+                    "kubeconfig": credentials.get("kubeconfig", "")
+                    or credentials.get("kubeconfig_path", "")
+                    or credentials.get("kube_config", ""),
+                    "default_namespace": credentials.get("default_namespace", "")
+                    or credentials.get("namespace", ""),
+                    "integration_id": record_id,
+                }
+            )
+        except Exception:
+            return None, None
+        return helm_config.model_dump(), "helm"
 
     if key == "victoria_logs":
         try:
@@ -1124,6 +1160,31 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 )
             )
 
+    helm_env_enabled = os.getenv("OSRE_HELM_INTEGRATION", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    if helm_env_enabled:
+        try:
+            helm_env_config = HelmIntegrationConfig.model_validate(
+                {
+                    "helm_path": os.getenv("HELM_PATH", "helm").strip() or "helm",
+                    "kube_context": os.getenv("HELM_KUBE_CONTEXT", "").strip(),
+                    "kubeconfig": os.getenv("HELM_KUBECONFIG", "").strip(),
+                    "default_namespace": os.getenv("HELM_NAMESPACE", "").strip(),
+                }
+            )
+        except Exception:
+            pass
+        else:
+            integrations.append(
+                _active_env_record(
+                    "helm",
+                    helm_env_config.model_dump(exclude={"integration_id"}),
+                )
+            )
+
     vercel_api_token = os.getenv("VERCEL_API_TOKEN", "").strip()
     if vercel_api_token:
         vercel_config = VercelConfig.model_validate(
@@ -1153,6 +1214,25 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 opsgenie_config.model_dump(exclude={"integration_id"}),
             )
         )
+
+    incident_io_api_key = os.getenv("INCIDENT_IO_API_KEY", "").strip()
+    if incident_io_api_key:
+        try:
+            incident_io_config = IncidentIoIntegrationConfig.model_validate(
+                {
+                    "api_key": incident_io_api_key,
+                    "base_url": os.getenv("INCIDENT_IO_BASE_URL", "").strip(),
+                }
+            )
+        except Exception:
+            logger.debug("Failed to load incident.io config from env", exc_info=True)
+        else:
+            integrations.append(
+                _active_env_record(
+                    "incident_io",
+                    incident_io_config.model_dump(exclude={"integration_id"}),
+                )
+            )
 
     jira_base_url = os.getenv("JIRA_BASE_URL", "").strip()
     jira_email = os.getenv("JIRA_EMAIL", "").strip()

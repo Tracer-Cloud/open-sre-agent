@@ -14,11 +14,11 @@ from rich.table import Table
 from rich.text import Text
 
 from app.cli.interactive_shell.theme import (
-    ACCENT,
-    BOLD_ACCENT,
+    BOLD_BRAND,
+    BRAND,
     ERROR,
-    PRIMARY,
-    TEXT_DIM,
+    HIGHLIGHT,
+    SECONDARY,
     WARNING,
 )
 
@@ -26,7 +26,7 @@ from app.cli.interactive_shell.theme import (
 def status_badge(status: str) -> Text:
     normalized = status.strip().lower()
     if normalized in {"passed", "pass", "ok", "healthy"}:
-        return Text("PASSED", style=f"bold {PRIMARY}")
+        return Text("PASSED", style=f"bold {HIGHLIGHT}")
     if normalized in {"warn", "warning", "degraded", "outdated"}:
         return Text("WARN", style=f"bold {WARNING}")
     if normalized == "missing":
@@ -80,7 +80,7 @@ def render_health_report(
     counts = _summary_counts(normalized_results)
 
     console.print()
-    console.print(Panel.fit(f"[{BOLD_ACCENT}]OpenSRE Health[/]", border_style=ACCENT))
+    console.print(Panel.fit(f"[{BOLD_BRAND}]OpenSRE Health[/]", border_style=BRAND))
 
     from app.guardrails.rules import get_default_rules_path, load_rules
 
@@ -100,21 +100,21 @@ def render_health_report(
 
     summary = Text.assemble(
         ("Summary: ", "bold"),
-        (f"{counts['passed']} passed", PRIMARY),
-        ("  |  ", TEXT_DIM),
+        (f"{counts['passed']} passed", HIGHLIGHT),
+        ("  |  ", SECONDARY),
         (f"{counts['missing']} missing", WARNING),
-        ("  |  ", TEXT_DIM),
+        ("  |  ", SECONDARY),
         (f"{counts['failed']} failed", ERROR),
     )
     if counts["other"]:
-        summary.append("  |  ", style=TEXT_DIM)
+        summary.append("  |  ", style=SECONDARY)
         summary.append(f"{counts['other']} unknown")
     console.print(summary)
     console.print()
 
     table = Table(title="Integration Checks", box=box.SIMPLE_HEAVY, show_lines=False)
-    table.add_column("Service", style=BOLD_ACCENT)
-    table.add_column("Source", style=TEXT_DIM)
+    table.add_column("Service", style=BOLD_BRAND)
+    table.add_column("Source", style=SECONDARY)
     table.add_column("Status")
     table.add_column("Detail")
 
@@ -139,7 +139,7 @@ def render_health_report(
             "[bold]opensre integrations setup <service>[/bold]."
         )
     else:
-        console.print(f"[bold {PRIMARY}]All configured integrations look healthy.[/]")
+        console.print(f"[bold {HIGHLIGHT}]All configured integrations look healthy.[/]")
 
 
 def render_health_json(

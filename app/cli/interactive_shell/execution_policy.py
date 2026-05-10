@@ -20,6 +20,7 @@ from app.cli.interactive_shell.shell_policy import (
     evaluate_policy,
     parse_shell_command,
 )
+from app.cli.interactive_shell.theme import DIM, WARNING
 
 ExecutionVerdict = Literal["allow", "ask", "deny"]
 
@@ -117,9 +118,9 @@ def execution_allowed(
             trust_mode=trust_mode,
             reason=result.reason,
         )
-        console.print(f"[yellow]Action blocked:[/yellow] {escape(result.reason or 'not allowed')}")
+        console.print(f"[{WARNING}]Action blocked:[/] {escape(result.reason or 'not allowed')}")
         if result.hint:
-            console.print(f"[dim]{escape(result.hint)}[/dim]")
+            console.print(f"[{DIM}]{escape(result.hint)}[/]")
         return False
 
     if result.verdict == "allow":
@@ -152,22 +153,22 @@ def execution_allowed(
             reason="non_interactive_stdin",
         )
         console.print(
-            "[yellow]confirmation required but stdin is not a TTY; "
-            "enable trust mode with[/yellow] [bold]/trust[/bold] [yellow]or rerun in a terminal.[/yellow]"
+            f"[{WARNING}]confirmation required but stdin is not a TTY; "
+            f"enable trust mode with[/] [bold]/trust[/bold] [{WARNING}]or rerun in a terminal.[/]"
         )
-        console.print(f"[dim]{escape(action_summary)}[/dim]")
+        console.print(f"[{DIM}]{escape(action_summary)}[/]")
         return False
 
     reason = (result.reason or "this action").strip()
     summary = action_summary.strip()
     if action_already_listed:
-        console.print(f"[yellow]Confirm:[/yellow] [dim]{escape(reason)}[/dim]")
+        console.print(f"[{WARNING}]Confirm:[/] [{DIM}]{escape(reason)}[/]")
     elif summary:
         console.print(
-            f"[yellow]Confirm[/yellow] [bold]{escape(summary)}[/bold] [dim]— {escape(reason)}[/dim]"
+            f"[{WARNING}]Confirm[/] [bold]{escape(summary)}[/bold] [{DIM}]— {escape(reason)}[/]"
         )
     else:
-        console.print(f"[yellow]Confirm:[/yellow] [dim]{escape(reason)}[/dim]")
+        console.print(f"[{WARNING}]Confirm:[/] [{DIM}]{escape(reason)}[/]")
     answer = confirm("Proceed? [y/N] ").strip().lower()
     if answer not in {"y", "yes"}:
         _emit_decision(
@@ -178,7 +179,7 @@ def execution_allowed(
             reason="user_declined",
             user_prompted=True,
         )
-        console.print("[dim]cancelled.[/dim]")
+        console.print(f"[{DIM}]cancelled.[/]")
         return False
 
     _emit_decision(

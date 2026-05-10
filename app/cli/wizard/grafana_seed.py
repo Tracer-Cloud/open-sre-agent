@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import json
 import time
+from contextlib import suppress
 from typing import Any
 
 import requests
+
+from app.utils.sentry_sdk import init_sentry
 
 LOCAL_LOKI_URL = "http://localhost:3100"
 SERVICE_NAME = "prefect-etl-pipeline-local"
@@ -160,6 +163,8 @@ def seed_logs() -> None:
 
 
 def main() -> int:
+    with suppress(ModuleNotFoundError):
+        init_sentry(entrypoint="wizard")
     seed_logs()
     return 0
 

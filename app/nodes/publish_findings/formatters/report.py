@@ -294,6 +294,15 @@ def format_slack_message(ctx: ReportContext) -> str:
             "\n*Provenance:*\n" + _sanitize_for_slack("\n".join(provenance_lines)) + "\n"
         )
 
+    remediation_steps = ctx.get("remediation_steps", [])
+    remediation_block = ""
+    if remediation_steps:
+        remediation_block = (
+            "\n## Recommended Actions\n"
+            + "\n".join(f"• {_sanitize_for_slack(s)}" for s in remediation_steps)
+            + "\n"
+        )
+
     trace_steps = build_investigation_trace(ctx)
     trace_block = (
         "\n## Investigation Trace\n" + "\n".join(trace_steps) + "\n" if trace_steps else ""
@@ -311,7 +320,7 @@ def format_slack_message(ctx: ReportContext) -> str:
     # Do not prefix with a separate [RCA] title line; the consumer can render
     # section headings (Root Cause text, Findings, Investigation Trace) with
     # larger fonts as needed.
-    return f"""{conclusion_block}{provenance_block}{trace_block}
+    return f"""{conclusion_block}{provenance_block}{remediation_block}{trace_block}
 {cited_section}
 {cloudwatch_link}{meta_block}
 """
@@ -390,6 +399,18 @@ def build_slack_blocks(ctx: ReportContext) -> list[dict]:
             }
         )
         _add(_mrkdwn_section("\n".join(provenance_lines)))
+
+    # ── Recommended Actions ──
+    remediation_steps = ctx.get("remediation_steps", [])
+    if remediation_steps:
+        blocks.append({"type": "divider"})
+        blocks.append(
+            {
+                "type": "header",
+                "text": {"type": "plain_text", "text": "Recommended Actions"},
+            }
+        )
+        _add(_mrkdwn_section("\n".join(f"• {_sanitize_for_slack(s)}" for s in remediation_steps)))
 
     # ── Investigation Trace ──
     trace_steps = build_investigation_trace(ctx)

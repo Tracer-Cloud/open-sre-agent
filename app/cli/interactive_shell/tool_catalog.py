@@ -87,7 +87,7 @@ def _resolve_source_file(tool: RegisteredTool) -> str:
         return ""
     try:
         module = importlib.import_module(module_name)
-    except Exception:  # noqa: BLE001
+    except Exception:
         return ""
     file_attr = getattr(module, "__file__", None)
     if not file_attr:

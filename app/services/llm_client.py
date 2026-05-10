@@ -19,9 +19,20 @@ if TYPE_CHECKING:
     from app.integrations.llm_cli.registry import CLIProviderRegistration
 
 import boto3
-from anthropic import Anthropic, AnthropicBedrock, AuthenticationError, NotFoundError
+import botocore.exceptions
+from anthropic import (
+    Anthropic,
+    AnthropicBedrock,
+    AuthenticationError,
+    NotFoundError,
+    PermissionDeniedError,
+)
+from anthropic import BadRequestError as AnthropicBadRequestError
 from openai import AuthenticationError as OpenAIAuthError
+from openai import BadRequestError as OpenAIBadRequestError
+from openai import NotFoundError as OpenAINotFoundError
 from openai import OpenAI
+from openai import RateLimitError as OpenAIRateLimitError
 from pydantic import BaseModel, ValidationError
 
 from app.config import (
@@ -34,6 +45,7 @@ from app.config import (
     LLMSettings,
 )
 from app.llm_credentials import resolve_llm_api_key
+from app.llm_reasoning_effort import get_active_reasoning_effort
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +87,16 @@ _RETRY_MAX_ATTEMPTS = 3
 # silent network drops.
 _CLIENT_TIMEOUT_SEC = 60.0
 
+# Bedrock boto3 error codes that must not be retried (invalid config, no access).
+_BEDROCK_NON_RETRYABLE_CODES = frozenset(
+    {
+        "ValidationException",
+        "AccessDeniedException",
+        "ResourceNotFoundException",
+        "UnauthorizedException",
+    }
+)
+
 
 @dataclass(frozen=True)
 class RootCauseResult:
@@ -83,6 +105,7 @@ class RootCauseResult:
     validated_claims: list[str]
     non_validated_claims: list[str]
     causal_chain: list[str]
+    remediation_steps: list[str]
 
 
 @dataclass(frozen=True)
@@ -170,6 +193,8 @@ class LLMClient:
                     f"Anthropic model '{self._model}' was not found. "
                     "Check your configured model name and try again."
                 ) from err
+            except AnthropicBadRequestError as err:
+                raise RuntimeError(f"Anthropic request rejected (HTTP 400): {err.message}") from err
             except GuardrailBlockedError:
                 raise
             except Exception as err:
@@ -216,6 +241,8 @@ class LLMClient:
                     f"Anthropic model '{self._model}' was not found. "
                     "Check your configured model name and try again."
                 ) from err
+            except AnthropicBadRequestError as err:
+                raise RuntimeError(f"Anthropic request rejected (HTTP 400): {err.message}") from err
             except GuardrailBlockedError:
                 raise
             except Exception as err:
@@ -319,8 +346,20 @@ class BedrockLLMClient:
             try:
                 response = self._anthropic_client.messages.create(**kwargs)
                 break
+            except AnthropicBadRequestError as err:
+                raise RuntimeError(
+                    f"Bedrock Anthropic request rejected (HTTP 400): {err.message}"
+                ) from err
             except GuardrailBlockedError:
                 raise
+            except (
+                AuthenticationError,
+                PermissionDeniedError,
+                NotFoundError,
+            ) as err:
+                raise RuntimeError(
+                    f"Bedrock API request failed: {type(err).__name__}: {err}"
+                ) from err
             except Exception as err:
                 last_err = err
                 if attempt == max_attempts - 1:
@@ -374,6 +413,12 @@ class BedrockLLMClient:
             except GuardrailBlockedError:
                 raise
             except Exception as err:
+                if isinstance(err, botocore.exceptions.ClientError):
+                    code = err.response.get("Error", {}).get("Code", "")
+                    if code in _BEDROCK_NON_RETRYABLE_CODES:
+                        raise RuntimeError(
+                            f"Bedrock API request failed: {type(err).__name__}: {err}"
+                        ) from err
                 last_err = err
                 if attempt == max_attempts - 1:
                     raise RuntimeError(
@@ -428,7 +473,13 @@ def _format_anthropic_retry_error(err: Exception) -> str:
             "Anthropic API connection failed after multiple retries. "
             "Check network access and try again."
         )
-    if status_code == 529:
+    # Detect overloaded via HTTP status (error-response path) or via body error
+    # type (SSE streaming path: the SDK raises APIStatusError from body events
+    # where the initial HTTP response was 200, so status_code is absent/not 529).
+    body = getattr(err, "body", None)
+    error_obj = body.get("error") if isinstance(body, dict) else None
+    body_error_type = error_obj.get("type", "") if isinstance(error_obj, dict) else ""
+    if status_code == 529 or body_error_type == "overloaded_error":
         return (
             "Anthropic API is overloaded (HTTP 529) after multiple retries. "
             "Try again in a few seconds."
@@ -436,9 +487,40 @@ def _format_anthropic_retry_error(err: Exception) -> str:
     return f"Anthropic API request failed after multiple retries: {error_name}."
 
 
+def _parse_retry_after(err: Exception) -> float:
+    """Extract the suggested retry delay in seconds from a RateLimitError.
+
+    Google/Gemini embeds the delay in the error body's ``details`` array as a
+    ``retryDelay`` field (e.g. ``"5s"``), and also in the human-readable
+    message (``"Please retry in 5.478238622s"``).  Returns 0 if nothing is
+    found so callers can fall back to their own backoff.
+    """
+    body = getattr(err, "body", None)
+    if isinstance(body, dict):
+        error_obj = body.get("error", {})
+        if isinstance(error_obj, dict):
+            for detail in error_obj.get("details", []):
+                delay_str = detail.get("retryDelay", "")
+                if delay_str:
+                    m = re.search(r"^(\d+(?:\.\d+)?)\s*s$", str(delay_str).strip())
+                    if m:
+                        return min(float(m.group(1)), 60.0)
+    m = re.search(r"[Rr]etry in (\d+(?:\.\d+)?)s", str(err))
+    if m:
+        return min(float(m.group(1)), 60.0)
+    return 0.0
+
+
 def _uses_max_completion_tokens(model: str) -> bool:
     """Reasoning models (o1, o3, o4, gpt-5 series) require max_completion_tokens."""
     return model.startswith(("o1", "o3", "o4", "gpt-5"))
+
+
+def _resolve_openai_reasoning_effort(*, model: str, api_key_env: str) -> str | None:
+    """Session override for OpenAI reasoning models in the interactive shell."""
+    if api_key_env != "OPENAI_API_KEY" or not _uses_max_completion_tokens(model):
+        return None
+    return get_active_reasoning_effort()
 
 
 class OpenAILLMClient:
@@ -517,6 +599,12 @@ class OpenAILLMClient:
             token_param: self._max_tokens,
             "messages": messages,
         }
+        reasoning_effort = _resolve_openai_reasoning_effort(
+            model=self._model,
+            api_key_env=self._api_key_env,
+        )
+        if reasoning_effort is not None:
+            kwargs["reasoning_effort"] = reasoning_effort
         if self._temperature is not None:
             kwargs["temperature"] = self._temperature
         return kwargs
@@ -541,8 +629,28 @@ class OpenAILLMClient:
                 raise RuntimeError(
                     f"{self._provider_label} authentication failed. Check {self._api_key_env} in your environment, .env, or secure local keychain."
                 ) from err
+            except OpenAINotFoundError as err:
+                raise RuntimeError(
+                    f"{self._provider_label} model '{self._model}' was not found. "
+                    "Check your configured model name or endpoint."
+                ) from err
+            except OpenAIBadRequestError as err:
+                raise RuntimeError(
+                    f"{self._provider_label} request rejected (HTTP 400): {err.message}"
+                ) from err
             except GuardrailBlockedError:
                 raise
+            except OpenAIRateLimitError as err:
+                last_err = err
+                if attempt == max_attempts - 1:
+                    raise RuntimeError(
+                        f"{self._provider_label} rate limit exceeded (HTTP 429) after multiple retries. "
+                        "Check your quota and billing details."
+                    ) from err
+                suggested = _parse_retry_after(err)
+                wait = max(suggested, backoff_seconds)
+                time.sleep(wait)
+                backoff_seconds = wait * 2
             except Exception as err:
                 last_err = err
                 if attempt == max_attempts - 1:
@@ -592,8 +700,29 @@ class OpenAILLMClient:
                 raise RuntimeError(
                     f"{self._provider_label} authentication failed. Check {self._api_key_env} in your environment, .env, or secure local keychain."
                 ) from err
+            except OpenAINotFoundError as err:
+                raise RuntimeError(
+                    f"{self._provider_label} model '{self._model}' was not found. "
+                    "Check your configured model name or endpoint."
+                ) from err
+            except OpenAIBadRequestError as err:
+                raise RuntimeError(
+                    f"{self._provider_label} request rejected (HTTP 400): {err.message}"
+                ) from err
             except GuardrailBlockedError:
                 raise
+            except OpenAIRateLimitError as err:
+                if emitted:
+                    raise
+                if attempt == max_attempts - 1:
+                    raise RuntimeError(
+                        f"{self._provider_label} rate limit exceeded (HTTP 429) after multiple retries. "
+                        "Check your quota and billing details."
+                    ) from err
+                suggested = _parse_retry_after(err)
+                wait = max(suggested, backoff_seconds)
+                time.sleep(wait)
+                backoff_seconds = wait * 2
             except Exception as err:
                 if emitted:
                     # Mid-stream failure: never retry — chunks are already on
@@ -756,7 +885,10 @@ def _get_cli_provider_registration(provider: str) -> CLIProviderRegistration | N
 
 
 def _create_llm_client(model_type: str) -> _LLMClientType:
-    settings = LLMSettings.from_env()
+    try:
+        settings = LLMSettings.from_env()
+    except ValidationError as exc:
+        raise RuntimeError(str(exc)) from exc
     provider = settings.provider
     if provider == "openai":
         config = OPENAI_LLM_CONFIG
@@ -928,6 +1060,7 @@ def parse_root_cause(response: str) -> RootCauseResult:
     validated_claims: list[str] = []
     non_validated_claims: list[str] = []
     causal_chain: list[str] = []
+    remediation_steps: list[str] = []
 
     if "ROOT_CAUSE_CATEGORY:" in response:
         parts = response.split("ROOT_CAUSE_CATEGORY:", 1)
@@ -949,6 +1082,7 @@ def parse_root_cause(response: str) -> RootCauseResult:
                 "VALIDATED_CLAIMS:",
                 "NON_VALIDATED_CLAIMS:",
                 "CAUSAL_CHAIN:",
+                "REMEDIATION_STEPS:",
             ):
                 if delimiter in after:
                     root_cause = after.split(delimiter, 1)[0].strip()
@@ -959,10 +1093,14 @@ def parse_root_cause(response: str) -> RootCauseResult:
             # Extract validated claims
             if "VALIDATED_CLAIMS:" in after:
                 validated_section = after.split("VALIDATED_CLAIMS:", 1)[1]
-                if "NON_VALIDATED_CLAIMS:" in validated_section:
-                    validated_text = validated_section.split("NON_VALIDATED_CLAIMS:", 1)[0]
-                elif "CAUSAL_CHAIN:" in validated_section:
-                    validated_text = validated_section.split("CAUSAL_CHAIN:", 1)[0]
+                for delimiter in (
+                    "NON_VALIDATED_CLAIMS:",
+                    "CAUSAL_CHAIN:",
+                    "REMEDIATION_STEPS:",
+                ):
+                    if delimiter in validated_section:
+                        validated_text = validated_section.split(delimiter, 1)[0]
+                        break
                 else:
                     validated_text = validated_section
 
@@ -974,13 +1112,18 @@ def parse_root_cause(response: str) -> RootCauseResult:
                         and not line.startswith("CAUSAL_CHAIN")
                         and not line.startswith("CONFIDENCE")
                         and not line.startswith("ROOT_CAUSE")
+                        and not line.startswith("REMEDIATION_STEPS")
                     ):
                         validated_claims.append(line)
 
             # Extract non-validated claims
             if "NON_VALIDATED_CLAIMS:" in after:
                 non_validated_section = after.split("NON_VALIDATED_CLAIMS:", 1)[1]
-                for delimiter in ("ALTERNATIVE_HYPOTHESES_CONSIDERED:", "CAUSAL_CHAIN:"):
+                for delimiter in (
+                    "ALTERNATIVE_HYPOTHESES_CONSIDERED:",
+                    "CAUSAL_CHAIN:",
+                    "REMEDIATION_STEPS:",
+                ):
                     if delimiter in non_validated_section:
                         non_validated_text = non_validated_section.split(delimiter, 1)[0]
                         break
@@ -993,12 +1136,15 @@ def parse_root_cause(response: str) -> RootCauseResult:
                         line
                         and not line.startswith("CAUSAL_CHAIN")
                         and not line.startswith("ALTERNATIVE")
+                        and not line.startswith("REMEDIATION_STEPS")
                     ):
                         non_validated_claims.append(line)
 
             # Extract causal chain
             if "CAUSAL_CHAIN:" in after:
                 causal_section = after.split("CAUSAL_CHAIN:", 1)[1]
+                if "REMEDIATION_STEPS:" in causal_section:
+                    causal_section = causal_section.split("REMEDIATION_STEPS:", 1)[0]
                 causal_text = causal_section
 
                 for line in causal_text.strip().split("\n"):
@@ -1006,10 +1152,31 @@ def parse_root_cause(response: str) -> RootCauseResult:
                     if line and not line.startswith("ALTERNATIVE"):
                         causal_chain.append(line)
 
+            if "REMEDIATION_STEPS:" in after:
+                rem_section = after.split("REMEDIATION_STEPS:", 1)[1]
+                for line in rem_section.strip().split("\n"):
+                    line = line.strip().lstrip("*-•( ").strip()
+                    if not line or line.startswith("("):
+                        continue
+                    if any(
+                        line.startswith(h)
+                        for h in (
+                            "ROOT_CAUSE",
+                            "VALIDATED",
+                            "NON_VALIDATED",
+                            "CAUSAL",
+                            "ALTERNATIVE",
+                            "REMEDIATION_STEPS",
+                        )
+                    ):
+                        break
+                    remediation_steps.append(line)
+
     return RootCauseResult(
         root_cause=root_cause,
         root_cause_category=root_cause_category,
         validated_claims=validated_claims,
         non_validated_claims=non_validated_claims,
         causal_chain=causal_chain,
+        remediation_steps=remediation_steps,
     )

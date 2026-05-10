@@ -7,6 +7,7 @@ from typing import Any
 import questionary
 from rich.console import Console
 
+from app.cli.interactive_shell.theme import BRAND, DIM, HIGHLIGHT
 from app.cli.investigation.alert_templates import build_alert_template
 from app.cli.investigation.payload import load_file, load_interactive
 from app.cli.support.constants import SAMPLE_ALERT_OPTIONS
@@ -15,12 +16,12 @@ _console = Console()
 
 _STYLE = questionary.Style(
     [
-        ("qmark", "fg:cyan bold"),
+        ("qmark", f"fg:{BRAND} bold"),
         ("question", "bold"),
-        ("answer", "fg:cyan bold"),
-        ("pointer", "fg:cyan bold"),
-        ("highlighted", "fg:cyan bold"),
-        ("selected", "fg:green"),
+        ("answer", f"fg:{BRAND} bold"),
+        ("pointer", f"fg:{BRAND} bold"),
+        ("highlighted", f"fg:{BRAND} bold"),
+        ("selected", f"fg:{HIGHLIGHT}"),
     ]
 )
 
@@ -64,7 +65,7 @@ def _pick_sample_alert() -> dict[str, Any]:
     if choice is None:
         raise SystemExit(0)
 
-    _console.print(f"\n[dim]Using sample alert:[/dim] [bold]{choice}[/bold]\n")
+    _console.print(f"\n[{DIM}]Using sample alert:[/] [bold]{choice}[/bold]\n")
     return build_alert_template(choice)
 
 

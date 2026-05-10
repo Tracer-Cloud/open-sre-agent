@@ -9,11 +9,11 @@ from rich.console import Console
 from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
 from app.cli.interactive_shell.rendering import repl_table
 from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
+from app.cli.interactive_shell.theme import BOLD_BRAND, DIM, ERROR, HIGHLIGHT, WARNING
 
 
 def _cmd_exit(_session: ReplSession, console: Console, _args: list[str]) -> bool:
-    console.print("[dim]goodbye.[/dim]")
+    console.print(f"[{DIM}]goodbye.[/]")
     return False
 
 
@@ -37,33 +37,33 @@ def _cmd_health(_session: ReplSession, console: Console, _args: list[str]) -> bo
 def _cmd_doctor(_session: ReplSession, console: Console, _args: list[str]) -> bool:
     from app.cli.commands.doctor import _CHECKS, _check
 
-    status_styles: dict[str, str] = {"ok": "green", "warn": "yellow", "error": "red"}
-    table = repl_table(title="OpenSRE Doctor", title_style=TERMINAL_ACCENT_BOLD)
+    status_styles: dict[str, str] = {"ok": HIGHLIGHT, "warn": WARNING, "error": ERROR}
+    table = repl_table(title="OpenSRE Doctor", title_style=BOLD_BRAND)
     table.add_column("check", style="bold")
     table.add_column("status")
-    table.add_column("detail", style="dim", overflow="fold")
+    table.add_column("detail", style=DIM, overflow="fold")
 
     issues = 0
     for name, fn in _CHECKS:
         result = _check(name, fn)
         status = result["status"]
-        style = status_styles.get(status, "dim")
-        table.add_row(name, f"[{style}]{status}[/{style}]", result["detail"])
+        style = status_styles.get(status, DIM)
+        table.add_row(name, f"[{style}]{status}[/]", result["detail"])
         if status in ("warn", "error"):
             issues += 1
 
     console.print(table)
     if issues:
-        console.print(f"[yellow]{issues} issue(s) found.[/yellow]")
+        console.print(f"[{WARNING}]{issues} issue(s) found.[/]")
     else:
-        console.print("[green]all checks passed.[/green]")
+        console.print(f"[{HIGHLIGHT}]all checks passed.[/]")
     return True
 
 
 def _cmd_version(_session: ReplSession, console: Console, _args: list[str]) -> bool:
     from app.version import get_version
 
-    table = repl_table(title="Version info", title_style=TERMINAL_ACCENT_BOLD, show_header=False)
+    table = repl_table(title="Version info", title_style=BOLD_BRAND, show_header=False)
     table.add_column("key", style="bold")
     table.add_column("value")
     table.add_row("opensre", get_version())

@@ -1,12 +1,17 @@
 """Investigation action execution."""
 
+import logging
 import time
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any
 
 from app.tools.registered_tool import RegisteredTool as InvestigationAction
+from app.utils.errors import report_exception
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -43,8 +48,11 @@ def _execute_with_retry(
 ) -> ActionExecutionResult:
     """Execute action with exponential backoff retry for transient failures."""
     last_error = None
+    last_transient = False
+    attempts_made = 0
 
     for attempt in range(max_attempts):
+        attempts_made = attempt + 1
         try:
             kwargs = action.extract_params(available_sources)
             data = action.run(**kwargs)
@@ -81,14 +89,44 @@ def _execute_with_retry(
                 )
         except Exception as e:
             last_error = e
-            if attempt < max_attempts - 1 and _is_transient_error(e):
+            last_transient = _is_transient_error(e)
+            if attempt < max_attempts - 1 and last_transient:
+                with suppress(Exception):
+                    import sentry_sdk
+
+                    sentry_sdk.add_breadcrumb(
+                        category="action_execution",
+                        message=f"{action_name} attempt {attempts_made} failed, retrying",
+                        level="warning",
+                        data={
+                            "action_name": action_name,
+                            "attempt": attempts_made,
+                            "transient": True,
+                            "error": f"{type(e).__name__}: {e}",
+                        },
+                    )
                 backoff_seconds = 2**attempt
                 time.sleep(backoff_seconds)
                 continue
             break
 
+    if last_error is not None:
+        severity = "warning" if last_transient else "error"
+        report_exception(
+            last_error,
+            logger=logger,
+            message=f"Action {action_name} failed after {attempts_made} attempt(s)",
+            severity=severity,
+            tags={"surface": "node", "component": "execute_actions"},
+            extras={"action_name": action_name, "attempts": attempts_made},
+        )
+
     available_source_keys = list(available_sources.keys()) if available_sources else []
-    error_detail = f"{type(last_error).__name__}: {str(last_error)} | Available sources: {available_source_keys}"
+    error_detail = (
+        f"{type(last_error).__name__}: {last_error} | Available sources: {available_source_keys}"
+        if last_error is not None
+        else f"No attempts made | Available sources: {available_source_keys}"
+    )
     return ActionExecutionResult(
         action_name=action_name,
         success=False,
@@ -172,6 +210,17 @@ def execute_actions(
             try:
                 results[action_name] = future.result()
             except Exception as e:
+                report_exception(
+                    e,
+                    logger=logger,
+                    message=f"Action {action_name} future failed",
+                    severity="error",
+                    tags={
+                        "surface": "node",
+                        "component": "execute_actions",
+                    },
+                    extras={"action_name": action_name},
+                )
                 results[action_name] = ActionExecutionResult(
                     action_name=action_name,
                     success=False,

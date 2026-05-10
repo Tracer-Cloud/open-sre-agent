@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.markup import escape
 
+from app.cli.interactive_shell.agents_md_reference import build_agents_md_reference_text
 from app.cli.interactive_shell.cli_reference import build_cli_reference_text
 from app.cli.interactive_shell.grounding_diagnostics import log_grounding_cache_diagnostics
 from app.cli.interactive_shell.prompt_rules import (
@@ -17,8 +18,9 @@ from app.cli.interactive_shell.prompt_rules import (
 )
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.streaming import STREAM_LABEL_ASSISTANT, stream_to_console
-from app.cli.interactive_shell.theme import TERMINAL_ACCENT_BOLD
+from app.cli.interactive_shell.theme import BOLD_BRAND, DIM, ERROR, MARKDOWN_THEME
 from app.cli.support.exception_reporting import report_exception
+from app.integrations.llm_cli.errors import CLITimeoutError
 
 # Cap stored (user, assistant) pairs; list holds 2 entries per turn.
 _MAX_CLI_AGENT_TURNS = 12
@@ -37,7 +39,9 @@ _ACTION_RULE = (
     '`{"action":"switch_toolcall_model","model":"claude-opus-4-7"}` '
     "to change ONLY the toolcall model on the currently active provider; "
     '`{"action":"slash","command":"/model show"}` where command is one of '
-    "/model show, /list models, /health, /doctor, /version. For ordinary "
+    "/model show, /list models, /health, /doctor, /version; "
+    '`{"action":"run_cli_command","args":"<subcommand> <flags>"}` '
+    "to run any opensre subcommand (agent is blocked). For ordinary "
     "questions, return normal Markdown."
 )
 
@@ -62,12 +66,16 @@ def _format_history_for_prompt(session: ReplSession) -> str:
     return "\n".join(lines) if lines else "(no prior messages in this CLI thread)"
 
 
-def _build_system_prompt(reference: str, history: str) -> str:
+def _build_system_prompt(reference: str, history: str, agents_md: str = "") -> str:
     """Build the system prompt for one assistant turn.
 
     Split out so tests can assert on terminology / formatting rules without
-    invoking an LLM.
+    invoking an LLM. ``agents_md`` is the optional repo-map block from
+    :mod:`app.cli.interactive_shell.agents_md_reference`; when empty the
+    section is omitted so callers in environments that ship no AGENTS.md
+    files don't waste tokens on an empty header.
     """
+    repo_map_block = f"--- Repo map (AGENTS.md) ---\n{agents_md}\n\n" if agents_md else ""
     return (
         "You are the OpenSRE terminal assistant. You help with OpenSRE CLI "
         "usage, the interactive shell, and onboarding. A deterministic pre-pass "
@@ -84,6 +92,7 @@ def _build_system_prompt(reference: str, history: str) -> str:
         "not invent subcommands.\n\n"
         f"{_TERMINOLOGY_RULE}\n{_MARKDOWN_RULE}\n{_ACTION_RULE}\n\n"
         f"--- CLI reference ---\n{reference}\n\n"
+        f"{repo_map_block}"
         f"--- Recent CLI conversation ---\n{history}\n"
     )
 
@@ -162,8 +171,8 @@ def _execute_action_plan(
     )
 
     console.print()
-    console.print(f"[{TERMINAL_ACCENT_BOLD}]{STREAM_LABEL_ASSISTANT}:[/]")
-    console.print("[dim]Requested actions:[/dim]")
+    console.print(f"[{BOLD_BRAND}]{STREAM_LABEL_ASSISTANT}:[/]")
+    console.print(f"[{DIM}]Requested actions:[/]")
     for index, action in enumerate(actions, start=1):
         kind = str(action.get("action", "")).strip()
         if kind == "switch_llm_provider":
@@ -182,9 +191,12 @@ def _execute_action_plan(
             )
         elif kind == "slash":
             label = str(action.get("command", "")).strip()
+        elif kind == "run_cli_command":
+            args = str(action.get("args", "")).strip()
+            label = f"opensre {args}" if args else "opensre"
         else:
             label = f"unsupported action: {kind or '?'}"
-        console.print(f"[dim]{index}.[/dim] [{TERMINAL_ACCENT_BOLD}]{escape(label)}[/]")
+        console.print(f"[{DIM}]{index}.[/] [{BOLD_BRAND}]{escape(label)}[/]")
 
     console.print()
     for action in actions:
@@ -195,7 +207,7 @@ def _execute_action_plan(
             requested_model = str(action.get("model", "")).strip() or None
             requested_toolcall = str(action.get("toolcall_model", "")).strip() or None
             if not provider:
-                console.print("[red]missing provider for switch_llm_provider action[/red]")
+                console.print(f"[{ERROR}]missing provider for switch_llm_provider action[/]")
                 continue
             slash_label = f"/model set {provider}"
             if requested_model:
@@ -226,7 +238,7 @@ def _execute_action_plan(
         if kind == "switch_toolcall_model":
             requested_model = str(action.get("model", "")).strip()
             if not requested_model:
-                console.print("[red]missing model for switch_toolcall_model action[/red]")
+                console.print(f"[{ERROR}]missing model for switch_toolcall_model action[/]")
                 continue
             pol = evaluate_llm_runtime_switch(action_type="switch_toolcall_model")
             if not execution_allowed(
@@ -247,12 +259,12 @@ def _execute_action_plan(
         if kind == "slash":
             command = str(action.get("command", "")).strip()
             if command not in _ALLOWED_SLASH_ACTIONS:
-                console.print(f"[red]unsupported action command:[/red] {escape(command)}")
+                console.print(f"[{ERROR}]unsupported action command:[/] {escape(command)}")
                 continue
             stripped = command.strip()
             parts = stripped.split()
             name = parts[0].lower()
-            args = parts[1:]
+            arg_list = parts[1:]
             cmd_slash = SLASH_COMMANDS.get(name)
             if cmd_slash is None:
                 dispatch_slash(
@@ -263,7 +275,7 @@ def _execute_action_plan(
                     is_tty=is_tty,
                 )
                 continue
-            tier = resolve_slash_execution_tier(name, args, cmd_slash.execution_tier)
+            tier = resolve_slash_execution_tier(name, arg_list, cmd_slash.execution_tier)
             policy = evaluate_slash_tier(tier)
             if not execution_allowed(
                 policy,
@@ -287,7 +299,17 @@ def _execute_action_plan(
             )
             continue
 
-        console.print(f"[red]unsupported action:[/red] {escape(kind or '?')}")
+        if kind == "run_cli_command":
+            args = str(action.get("args", "")).strip()
+            if not args:
+                console.print(f"[{ERROR}]missing args for run_cli_command action[/]")
+                continue
+            from app.cli.interactive_shell.action_executor import run_opensre_cli_command
+
+            run_opensre_cli_command(args, session, console)
+            continue
+
+        console.print(f"[{ERROR}]unsupported action:[/] {escape(kind or '?')}")
     console.print()
     return True
 
@@ -315,13 +337,14 @@ def answer_cli_agent(
         from app.services.llm_client import get_llm_for_reasoning
     except Exception as exc:
         report_exception(exc, context="interactive_shell.cli_agent.import")
-        console.print(f"[red]LLM client unavailable:[/red] {escape(str(exc))}")
+        console.print(f"[{ERROR}]LLM client unavailable:[/] {escape(str(exc))}")
         return
 
     reference = build_cli_reference_text()
+    agents_md = build_agents_md_reference_text()
     log_grounding_cache_diagnostics("cli_agent_grounding")
     history = _format_history_for_prompt(session)
-    system = _build_system_prompt(reference, history)
+    system = _build_system_prompt(reference, history, agents_md=agents_md)
     user_block = f"--- User message ---\n{message}"
     prompt = f"{system}\n{user_block}"
 
@@ -337,11 +360,15 @@ def answer_cli_agent(
             suppress_if_starts_with="{",
         )
     except KeyboardInterrupt:
-        console.print("[dim]· cancelled[/dim]")
+        console.print(f"[{DIM}]· cancelled[/]")
         return
     except Exception as exc:
-        report_exception(exc, context="interactive_shell.cli_agent.stream")
-        console.print(f"[red]assistant failed:[/red] {escape(str(exc))}")
+        report_exception(
+            exc,
+            context="interactive_shell.cli_agent.stream",
+            expected=isinstance(exc, CLITimeoutError),
+        )
+        console.print(f"[{ERROR}]assistant failed:[/] {escape(str(exc))}")
         return
 
     actions = _parse_action_plan(text_str)
@@ -356,8 +383,9 @@ def answer_cli_agent(
     # something. The non-suppressed path was already rendered live.
     if text_str.lstrip().startswith("{") and text_str.strip():
         console.print()
-        console.print(f"[{TERMINAL_ACCENT_BOLD}]{STREAM_LABEL_ASSISTANT}:[/]")
-        console.print(Markdown(text_str))
+        console.print(f"[{BOLD_BRAND}]{STREAM_LABEL_ASSISTANT}:[/]")
+        with console.use_theme(MARKDOWN_THEME):
+            console.print(Markdown(text_str, code_theme="ansi_dark"))
         console.print()
 
 

@@ -5,8 +5,13 @@ on:
     branches: [main]
     paths-ignore:
       - "docs/**"
+      - "infra/**"
+      - "tests/**"
       - "**/*.md"
       - "**/*.mdx"
+      - ".claude/**"
+      - ".understand-anything/**"
+      - ".github/**"
   schedule:
     - cron: "30 0 * * *"
   workflow_dispatch:

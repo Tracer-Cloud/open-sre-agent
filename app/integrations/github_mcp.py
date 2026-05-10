@@ -25,6 +25,7 @@ from rich.console import Console, Group
 from rich.panel import Panel
 from rich.table import Table
 
+from app.cli.interactive_shell.theme import BRAND, DIM, ERROR, HIGHLIGHT
 from app.integrations.mcp_streamable_http_compat import streamable_http_client
 from app.strict_config import StrictConfigModel
 
@@ -228,8 +229,8 @@ def print_github_mcp_validation_report(
         out.print(
             Panel.fit(
                 body.strip(),
-                title="[bold red]GitHub MCP · validation failed[/]",
-                border_style="red",
+                title=f"[bold {ERROR}]GitHub MCP · validation failed[/]",
+                border_style=ERROR,
             )
         )
         return
@@ -244,9 +245,9 @@ def print_github_mcp_validation_report(
     profile_counts_only = bool(count is not None and count > 0 and not samples)
 
     summary = Table.grid(padding=(0, 2))
-    summary.add_column(style="dim", justify="right")
+    summary.add_column(style=DIM, justify="right")
     summary.add_column()
-    summary.add_row("Status", "[green]Configuration validation: succeeded[/]")
+    summary.add_row("Status", f"[{HIGHLIGHT}]Configuration validation: succeeded[/]")
     summary.add_row("GitHub identity", identity)
     summary.add_row("Repositories returned (probe)", count_str)
     if profile_pub is not None or profile_priv is not None:
@@ -257,7 +258,7 @@ def print_github_mcp_validation_report(
     if profile_counts_only:
         summary.add_row(
             "",
-            "[dim]Counts from GitHub profile (no sample repo names in this session).[/]",
+            f"[{DIM}]Counts from GitHub profile (no sample repo names in this session).[/]",
         )
 
     blocks: list[Any] = [summary]
@@ -273,7 +274,7 @@ def print_github_mcp_validation_report(
     if detail_level in {"standard", "full"} and probe_tool:
         summary.add_row(
             "Access source",
-            f"[bold]{_probe_source_label(probe_tool)}[/]\n[dim]{_probe_listing_caption(probe_tool)}[/]",
+            f"[bold]{_probe_source_label(probe_tool)}[/]\n[{DIM}]{_probe_listing_caption(probe_tool)}[/]",
         )
 
     rows_detail = list(result.repo_access_probe_rows)
@@ -284,15 +285,15 @@ def print_github_mcp_validation_report(
         repo_table = Table(
             title="[bold]Repositories[/]",
             show_header=True,
-            header_style="bold dim",
-            border_style="dim",
+            header_style=f"bold {DIM}",
+            border_style=DIM,
         )
-        repo_table.add_column("#", justify="right", style="dim", width=4)
+        repo_table.add_column("#", justify="right", style=DIM, width=4)
         if rows_detail:
             repo_table.add_column("Repository", style="default")
             repo_table.add_column("Visibility", justify="center")
             repo_table.add_column("Fork", justify="center")
-            repo_table.add_column("Starred (this list)", justify="center", style="dim")
+            repo_table.add_column("Starred (this list)", justify="center", style=DIM)
             for i, row in enumerate(rows_detail, start=1):
                 repo_table.add_row(
                     str(i),
@@ -307,14 +308,14 @@ def print_github_mcp_validation_report(
                 repo_table.add_row(str(i), name)
         blocks.append(repo_table)
     elif detail_level == "full" and not samples and not profile_counts_only:
-        blocks.append("[dim]No repository names were returned by the listing probe.[/]")
+        blocks.append(f"[{DIM}]No repository names were returned by the listing probe.[/]")
 
     panel_body: Any = Group(*blocks) if len(blocks) > 1 else blocks[0]
     out.print(
         Panel.fit(
             panel_body,
-            title="[bold green]GitHub MCP · connected[/]",
-            border_style="green",
+            title=f"[bold {BRAND}]GitHub MCP · connected[/]",
+            border_style=BRAND,
         )
     )
 
