@@ -328,6 +328,10 @@ class BedrockLLMClient:
             try:
                 response = self._anthropic_client.messages.create(**kwargs)
                 break
+            except AnthropicBadRequestError as err:
+                raise RuntimeError(
+                    f"Bedrock Anthropic request rejected (HTTP 400): {err.message}"
+                ) from err
             except GuardrailBlockedError:
                 raise
             except Exception as err:
