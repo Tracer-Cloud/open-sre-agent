@@ -170,10 +170,10 @@ def set_live_console(console: Console | None) -> None:
     _live_console = console
 
 
-def unregister_live_console(expected: Console) -> None:
+def unregister_live_console(expected: Console | None) -> None:
     """Safely clear the active console registry ONLY if it matches the owner."""
     global _live_console
-    if _live_console is expected:
+    if expected is not None and _live_console is expected:
         _live_console = None
 
 
