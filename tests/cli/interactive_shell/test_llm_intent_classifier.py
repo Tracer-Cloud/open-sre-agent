@@ -225,6 +225,17 @@ class TestClassifyIntentWithLLM:
 class TestRouteInputWithLLM:
     """Tests for the full route_input pipeline, exercising the LLM path."""
 
+    @pytest.fixture(autouse=True)
+    def _enable_llm_routing(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Re-enable the LLM routing pipeline for this test class.
+
+        The conftest disables LLM routing by default (to prevent live LLM
+        calls in unrelated tests).  Tests in this class need the LLM branch
+        of ``route_input`` to be active so they can verify that the mocked
+        ``classify_intent_with_llm`` is actually invoked.
+        """
+        monkeypatch.setattr("app.cli.interactive_shell.router._LLM_ROUTING_DISABLED", False)
+
     def _patch_llm_classifier(self, route_kind: str) -> MagicMock:
         """Return a mock for ``classify_intent_with_llm`` returning *route_kind*."""
         mock = MagicMock(
@@ -455,6 +466,11 @@ class TestAlertVocabularyInNonAlertContexts:
     (b) the routing result is correct when the LLM gives the right answer.
     """
 
+    @pytest.fixture(autouse=True)
+    def _enable_llm_routing(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Re-enable the LLM routing pipeline for this test class."""
+        monkeypatch.setattr("app.cli.interactive_shell.router._LLM_ROUTING_DISABLED", False)
+
     @pytest.mark.parametrize(
         "text,llm_route,expected_kind",
         [
@@ -575,6 +591,11 @@ class TestLLMRoutingDisabledFlag:
 
 class TestRouteDecisionFromLLM:
     """Verify the RouteDecision returned for LLM-classified routes is well-formed."""
+
+    @pytest.fixture(autouse=True)
+    def _enable_llm_routing(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Re-enable the LLM routing pipeline for this test class."""
+        monkeypatch.setattr("app.cli.interactive_shell.router._LLM_ROUTING_DISABLED", False)
 
     def test_llm_route_decision_event_payload(self) -> None:
         session = _fresh_session()
