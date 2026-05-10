@@ -109,9 +109,7 @@ class TestAgentsDispatch:
         assert "cursor-tab" in out
         assert "9133" in out
 
-    def test_no_subcommand_renders_discovered_agents(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_no_subcommand_renders_discovered_agents(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from app.cli.interactive_shell.command_registry import agents as agents_mod
 
         monkeypatch.setattr(

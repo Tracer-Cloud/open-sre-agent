@@ -36,8 +36,7 @@ def test_discovers_cursor_agent_exec_helper() -> None:
             ProcessRow(
                 pid=23995,
                 command=(
-                    "Cursor Helper (Plugin): extension-host (agent-exec) "
-                    "tracer-agent-2026 [1-4]"
+                    "Cursor Helper (Plugin): extension-host (agent-exec) tracer-agent-2026 [1-4]"
                 ),
             )
         ],
