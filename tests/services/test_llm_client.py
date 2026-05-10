@@ -519,6 +519,18 @@ def test_anthropic_invoke_stream_overloaded_via_body_raises_friendly_error(
         list(client.invoke_stream("hi"))
 
 
+def test_format_anthropic_retry_error_handles_non_dict_body_error() -> None:
+    """Unexpected Anthropic body shapes should not mask the original error class."""
+
+    class _ApiStatusError(Exception):
+        body = {"error": "overloaded_error"}
+
+    assert (
+        llm_client._format_anthropic_retry_error(_ApiStatusError())
+        == "Anthropic API request failed after multiple retries: _ApiStatusError."
+    )
+
+
 # ---------------------------------------------------------------------------
 # OpenAILLMClient.invoke / invoke_stream — kwargs builder + streaming behavior
 # ---------------------------------------------------------------------------

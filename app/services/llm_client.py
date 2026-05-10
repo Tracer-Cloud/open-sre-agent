@@ -435,7 +435,8 @@ def _format_anthropic_retry_error(err: Exception) -> str:
     # type (SSE streaming path: the SDK raises APIStatusError from body events
     # where the initial HTTP response was 200, so status_code is absent/not 529).
     body = getattr(err, "body", None)
-    body_error_type = body.get("error", {}).get("type", "") if isinstance(body, dict) else ""
+    error_obj = body.get("error") if isinstance(body, dict) else None
+    body_error_type = error_obj.get("type", "") if isinstance(error_obj, dict) else ""
     if status_code == 529 or body_error_type == "overloaded_error":
         return (
             "Anthropic API is overloaded (HTTP 529) after multiple retries. "
