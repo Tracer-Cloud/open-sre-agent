@@ -12,6 +12,7 @@ from dataclasses import asdict
 import pytest
 
 from tests.synthetic.rds_postgres.run_suite import (
+    MemoryMode,
     ScenarioScore,
     annotate_with_memory_mode,
 )
@@ -19,7 +20,7 @@ from tests.synthetic.rds_postgres.run_suite import (
 pytestmark = pytest.mark.synthetic
 
 
-def _make_score(memory_mode: str | None = None) -> ScenarioScore:
+def _make_score(memory_mode: MemoryMode | None = None) -> ScenarioScore:
     return ScenarioScore(
         scenario_id="002-connection-exhaustion",
         passed=True,
