@@ -43,7 +43,7 @@ from tests.synthetic.rds_postgres.axis_memory.scoring import (
 from tests.synthetic.rds_postgres.run_suite import run_scenario
 from tests.synthetic.rds_postgres.scenario_loader import (
     SUITE_DIR,
-    load_all_scenarios,
+    load_scenario,
 )
 
 PAIRS_FILE = Path(__file__).parent / "pairs.yml"
@@ -91,6 +91,32 @@ def load_pairs(only_id: str = "") -> list[dict[str, Any]]:
     return pairs
 
 
+def _load_pair_fixtures(pairs: list[dict[str, Any]]) -> dict[str, Any]:
+    """Load only the scenarios referenced by the supplied pairs.
+
+    Calls `load_scenario(SUITE_DIR / scenario_id)` per needed id rather than
+    `load_all_scenarios(SUITE_DIR)`. The eager loader iterates every scenario
+    directory and parses its answer.yml; if any scenario in the suite is
+    fixture-less (e.g. a future healthy/noise scenario), eager load would
+    blow up before this runner ever touched the pair scenarios it needs.
+    """
+    needed_ids: set[str] = set()
+    for pair in pairs:
+        needed_ids.add(pair["base"])
+        needed_ids.add(pair["sibling"])
+
+    fixtures_by_id: dict[str, Any] = {}
+    for scenario_id in sorted(needed_ids):
+        scenario_dir = SUITE_DIR / scenario_id
+        if not scenario_dir.is_dir():
+            raise SystemExit(
+                f"Pair references unknown scenario id: {scenario_id!r} "
+                f"(expected directory at {scenario_dir})"
+            )
+        fixtures_by_id[scenario_id] = load_scenario(scenario_dir)
+    return fixtures_by_id
+
+
 def _run_baseline(scenario_id: str, fixtures_by_id: dict[str, Any], use_mock_grafana: bool) -> Any:
     """Run a single scenario without memory and return its ScenarioScore."""
     fixture = fixtures_by_id.get(scenario_id)
@@ -128,16 +154,7 @@ def run(argv: list[str] | None = None) -> list[PairAnnotation]:
     args = parse_args(argv)
     pairs = load_pairs(only_id=args.pair)
 
-    # Only load scenarios referenced by pairs to avoid blowing up on scenarios
-    # that don't ship an answer.yml (e.g. some healthy/noisy scenarios).
-    needed_ids: set[str] = set()
-    for pair in pairs:
-        needed_ids.add(pair["base"])
-        needed_ids.add(pair["sibling"])
-    fixtures = [
-        fixture for fixture in load_all_scenarios(SUITE_DIR) if fixture.scenario_id in needed_ids
-    ]
-    fixtures_by_id = {fixture.scenario_id: fixture for fixture in fixtures}
+    fixtures_by_id = _load_pair_fixtures(pairs)
 
     annotations: list[PairAnnotation] = []
     for pair in pairs:
