@@ -123,11 +123,10 @@ class TaskRecord:
             self._cancel_requested.set()
             proc = self._process
             pid = self.pid
-            rehydrated = self._rehydrated
         if proc is not None and proc.poll() is None:
             with contextlib.suppress(OSError):
                 proc.terminate()
-        elif was_active and pid is not None and rehydrated:
+        elif was_active and pid is not None:
             mark_cancelled_without_watcher = True
         if mark_cancelled_without_watcher:
             self.mark_cancelled()
