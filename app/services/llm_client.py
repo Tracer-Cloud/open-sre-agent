@@ -347,8 +347,8 @@ class BedrockLLMClient:
                 response = self._anthropic_client.messages.create(**kwargs)
                 break
             except AnthropicBadRequestError as err:
-                msg = str(err)
-                if "on-demand throughput" in msg or "inference profile" in msg.lower():
+                err_msg = str(err)
+                if "on-demand throughput" in err_msg or "inference profile" in err_msg.lower():
                     raise RuntimeError(
                         f"Bedrock model '{self._model}' requires a cross-region inference profile. "
                         f"Try prefixing with 'us.' (e.g. 'us.{self._model}') and update "
