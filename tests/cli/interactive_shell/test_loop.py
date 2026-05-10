@@ -709,14 +709,22 @@ class TestReplState:
                 await asyncio.sleep(1.0)
 
             state.current_task = asyncio.create_task(_waits_forever())
+            # Snapshot to a local — re-reading ``state.current_task``
+            # across the cancel + await would let CodeQL / code-quality
+            # bots flag the bare ``await`` as ineffectual and would also
+            # leave the assertion racey if anything reassigned the field.
+            task = state.current_task
             state.cancel_current_dispatch()
 
             # Both signals must fire — per-dispatch event flipped AND
             # the asyncio task cancelled.
             assert dispatch_cancel.is_set() is True
-            with contextlib.suppress(asyncio.CancelledError):
-                await state.current_task
-            assert state.current_task.cancelled() is True
+            try:  # noqa: SIM105
+                await task
+            except asyncio.CancelledError:
+                # Expected — that's the whole point of the cancel.
+                pass
+            assert task.cancelled() is True
 
         asyncio.run(_scenario())
 

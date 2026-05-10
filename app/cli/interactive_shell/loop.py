@@ -33,6 +33,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
+from prompt_toolkit import PromptSession
 from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.key_binding import KeyBindings, merge_key_bindings
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent
@@ -324,7 +325,10 @@ async def _repl_main(
     if initial_input:
         return _run_initial_input(initial_input, session, hot_reloader)
 
-    await _run_interactive(session, hot_reloader)
+    # Pass the already-built ``pt_session`` so ``_run_interactive``
+    # doesn't allocate a second one. ``session.prompt_history_backend``
+    # is already wired above.
+    await _run_interactive(session, hot_reloader, pt_session=pt_session)
     return 0
 
 
@@ -549,6 +553,7 @@ class _StreamingConsole(Console):
 async def _run_interactive(
     session: ReplSession,
     hot_reloader: HotReloadCoordinator | None = None,
+    pt_session: PromptSession[str] | None = None,
 ) -> None:
     """Per-turn ``prompt_async`` cycle backed by a queue + background
     processor. Submitting a new prompt while a turn is streaming
@@ -565,9 +570,16 @@ async def _run_interactive(
     ``hot_reloader`` (from main, optional) is consulted at the start of
     each prompt iteration so dev-time edits to dispatch handlers are
     picked up between turns.
+
+    ``pt_session`` may be supplied by the caller (``_repl_main`` already
+    built one to wire ``session.prompt_history_backend``) to avoid a
+    redundant ``_build_prompt_session()`` call here. When ``None``, this
+    function builds its own — keeps the public signature usable for
+    callers that don't pre-build.
     """
-    pt_session = _build_prompt_session()
-    session.prompt_history_backend = pt_session.history
+    if pt_session is None:
+        pt_session = _build_prompt_session()
+        session.prompt_history_backend = pt_session.history
     spinner = _SpinnerState()
     state = _ReplState()
 
@@ -636,6 +648,7 @@ async def _run_interactive(
             highlight=False,
             force_terminal=True,
             color_system="truecolor",
+            legacy_windows=False,
         )
         spinner.start()
         try:
