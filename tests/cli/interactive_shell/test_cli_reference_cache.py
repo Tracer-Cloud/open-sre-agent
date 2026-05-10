@@ -30,6 +30,20 @@ def test_second_build_is_cache_hit() -> None:
     assert s2["misses"] == s1["misses"]
 
 
+def test_cold_build_is_silent(capsys: pytest.CaptureFixture[str]) -> None:
+    from app.cli.__main__ import cli
+
+    text = build_cli_reference_text()
+    captured = capsys.readouterr()
+    first_command = sorted(cli.commands.keys())[0]
+
+    assert captured.out == ""
+    assert captured.err == ""
+    assert "=== opensre --help ===" in text
+    assert f"=== opensre {first_command} --help ===" in text
+    assert f"Usage: opensre {first_command}" in text
+
+
 def test_invalidate_forces_rebuild_miss() -> None:
     build_cli_reference_text()
     s1 = get_cli_reference_cache_stats()
