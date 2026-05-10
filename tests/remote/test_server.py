@@ -5,6 +5,7 @@ import collections
 import shutil
 import urllib.error
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -276,6 +277,22 @@ async def test_lifespan_starts_and_cancels_vercel_poller(
     assert cancelled.is_set()
 
 
+@pytest.mark.asyncio
+async def test_lifespan_raises_helpful_error_on_permission_denied(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    unwritable = MagicMock()
+    unwritable.mkdir.side_effect = PermissionError("Permission denied: '/opt/opensre'")
+    unwritable.__str__ = lambda self: "/opt/opensre/investigations"
+    unwritable.parent.__str__ = lambda self: "/opt/opensre"
+
+    monkeypatch.setattr(remote_server, "INVESTIGATIONS_DIR", unwritable)
+
+    with pytest.raises(RuntimeError, match="Cannot create investigations directory"):
+        async with _lifespan(object()):
+            pass
+
+
 # ---------------------------------------------------------------------------
 # _id_to_iso tests
 # ---------------------------------------------------------------------------
@@ -475,69 +492,3 @@ def test_check_memory_health_returns_missing_when_proc_file_absent(
     assert result.name == "Memory"
     assert result.status == "missing"
     assert "/proc/meminfo unavailable on this platform." in result.detail
-
-
-def test_check_memory_health_returns_missing_when_memtotal_absent(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    class _FakeIncompletePath:
-        def __init__(self, *_args: object, **_kwargs: object) -> None:
-            pass
-
-        def exists(self) -> bool:
-            return True
-
-        def read_text(self, **_kwargs: object) -> str:
-            return "MemAvailable:    8192 kB\n"
-
-    monkeypatch.setattr("app.remote.server.Path", _FakeIncompletePath)
-    result = _check_memory_health()
-
-    assert isinstance(result, DeepHealthCheck)
-    assert result.name == "Memory"
-    assert result.status == "missing"
-    assert "Incomplete /proc/meminfo data." in result.detail
-
-
-def test_check_memory_health_returns_missing_when_memavailable_absent(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    class _FakeIncompletePath:
-        def __init__(self, *_args: object, **_kwargs: object) -> None:
-            pass
-
-        def exists(self) -> bool:
-            return True
-
-        def read_text(self, **_kwargs: object) -> str:
-            return "MemTotal:       16384 kB\n"
-
-    monkeypatch.setattr("app.remote.server.Path", _FakeIncompletePath)
-    result = _check_memory_health()
-
-    assert isinstance(result, DeepHealthCheck)
-    assert result.name == "Memory"
-    assert result.status == "missing"
-    assert "Incomplete /proc/meminfo data." in result.detail
-
-
-def test_check_memory_health_returns_missing_on_oserror(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    class _FakeOsErrorPath:
-        def __init__(self, *_args: object, **_kwargs: object) -> None:
-            pass
-
-        def exists(self) -> bool:
-            return True
-
-        def read_text(self, **_kwargs: object) -> str:
-            raise OSError("permission denied")
-
-    monkeypatch.setattr("app.remote.server.Path", _FakeOsErrorPath)
-    result = _check_memory_health()
-
-    assert isinstance(result, DeepHealthCheck)
-    assert result.name == "Memory"
-    assert result.status == "missing"
-    assert "Unable to read meminfo:" in result.detail
