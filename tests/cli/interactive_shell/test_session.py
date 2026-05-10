@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
+import app.constants as const_module
 from app.cli.interactive_shell.session import ReplSession
+from app.cli.interactive_shell.tasks import TaskKind, TaskRegistry
 
 
 class TestReplSession:
@@ -59,6 +65,24 @@ class TestReplSession:
         assert session.ctrl_c_intervention_count == 0
         assert session.correction_intervention_count == 0
         assert session.trust_mode is True  # preserved intentionally
+
+    def test_clear_keeps_persisted_task_history_file(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        session = ReplSession()
+        monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        session.task_registry = TaskRegistry.persistent()
+        task = session.task_registry.create(TaskKind.SYNTHETIC_TEST, command="opensre tests synthetic")
+        task.mark_running()
+
+        session.clear()
+
+        reloaded = TaskRegistry.persistent()
+        loaded = reloaded.get(task.task_id)
+        assert loaded is not None
+        assert loaded.task_id == task.task_id
 
     def test_accumulate_from_state_extracts_known_keys(self) -> None:
         session = ReplSession()
