@@ -57,7 +57,14 @@ def _echo_catalog_item(item: Any, *, indent: int = 0) -> None:
         _echo_catalog_item(child, indent=indent + 1)
 
 
-def _build_synthetic_argv(*, scenario: str, output_json: bool, mock_grafana: bool) -> list[str]:
+def _build_synthetic_argv(
+    *,
+    scenario: str,
+    output_json: bool,
+    mock_grafana: bool,
+    report: bool | None,
+    observations_dir: str,
+) -> list[str]:
     argv: list[str] = []
     if scenario:
         argv.extend(["--scenario", scenario])
@@ -65,6 +72,12 @@ def _build_synthetic_argv(*, scenario: str, output_json: bool, mock_grafana: boo
         argv.append("--json")
     if mock_grafana:
         argv.append("--mock-grafana")
+    if report is True:
+        argv.append("--report")
+    elif report is False:
+        argv.append("--no-report")
+    if observations_dir:
+        argv.extend(["--observations-dir", observations_dir])
     return argv
 
 
@@ -146,7 +159,26 @@ def _synthetic_suite_not_bundled_error() -> OpenSREError:
     show_default=True,
     help="Serve fixture data via FixtureGrafanaBackend instead of real Grafana calls.",
 )
-def run_synthetic_suite(scenario: str, output_json: bool, mock_grafana: bool) -> None:
+@click.option(
+    "--report/--no-report",
+    default=None,
+    help=(
+        "Print Rich observation report per scenario. Defaults to auto "
+        "(enabled for single-scenario runs)."
+    ),
+)
+@click.option(
+    "--observations-dir",
+    default="",
+    help="Directory where synthetic run observations are written.",
+)
+def run_synthetic_suite(
+    scenario: str,
+    output_json: bool,
+    mock_grafana: bool,
+    report: bool | None,
+    observations_dir: str,
+) -> None:
     """Run the synthetic RDS PostgreSQL RCA benchmark."""
     # ``packaging/opensre.spec`` only collects ``app/`` data files, so neither
     # the synthetic Python package's submodules nor the per-scenario data
@@ -188,6 +220,8 @@ def run_synthetic_suite(scenario: str, output_json: bool, mock_grafana: bool) ->
                 scenario=scenario,
                 output_json=output_json,
                 mock_grafana=mock_grafana,
+                report=report,
+                observations_dir=observations_dir,
             )
         )
     except Exception as exc:

@@ -213,6 +213,16 @@ class AnswerKeySchema(TypedDict):
     required_queries: NotRequired[
         list[str]
     ]  # metric names agent must have specifically requested via query_timeseries
+    golden_trajectory: NotRequired[GoldenTrajectorySchema]
+
+
+class GoldenTrajectorySchema(TypedDict, total=False):
+    ordered_actions: list[str]
+    matching: str
+    max_edit_distance: int
+    max_extra_actions: int
+    max_redundancy: int
+    max_loops: int
 
 
 # ---------------------------------------------------------------------------
@@ -477,6 +487,40 @@ def validate_answer_key(data: dict[str, Any]) -> AnswerKeySchema:
         )
     for axis2_list_field in ("ruling_out_keywords", "required_queries"):
         _require_non_empty_str_list(data, axis2_list_field, "answer.yml")
+    golden = data.get("golden_trajectory")
+    if golden is not None:
+        if not isinstance(golden, dict):
+            raise ValueError("answer.yml: 'golden_trajectory' must be an object when present")
+        ordered_actions = golden.get("ordered_actions")
+        if ordered_actions is not None:
+            if (
+                not isinstance(ordered_actions, list)
+                or not ordered_actions
+                or not all(isinstance(action, str) and action.strip() for action in ordered_actions)
+            ):
+                raise ValueError(
+                    "answer.yml: 'golden_trajectory.ordered_actions' must be a non-empty list "
+                    "of strings when present"
+                )
+            unknown_actions = [a for a in ordered_actions if a not in VALID_TRAJECTORY_ACTIONS]
+            if unknown_actions:
+                raise ValueError(
+                    "answer.yml: unknown action(s) in golden_trajectory.ordered_actions "
+                    f"{unknown_actions}; expected subset of {sorted(VALID_TRAJECTORY_ACTIONS)}"
+                )
+        matching = golden.get("matching")
+        if matching is not None and matching not in {"strict", "lcs", "set"}:
+            raise ValueError(
+                "answer.yml: 'golden_trajectory.matching' must be one of "
+                "'strict', 'lcs', or 'set' when present"
+            )
+        for int_field in ("max_edit_distance", "max_extra_actions", "max_redundancy", "max_loops"):
+            value = golden.get(int_field)
+            if value is not None and (not isinstance(value, int) or value < 0):
+                raise ValueError(
+                    f"answer.yml: 'golden_trajectory.{int_field}' must be a non-negative integer "
+                    "when present"
+                )
     return data  # type: ignore[return-value]
 
 

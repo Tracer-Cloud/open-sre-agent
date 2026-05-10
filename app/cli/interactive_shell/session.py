@@ -134,9 +134,13 @@ class ReplSession:
         self.accumulated_context.clear()
         self.token_usage.clear()
         self.cli_agent_messages.clear()
+<<<<<<< HEAD
         # Keep persisted cross-session task history on disk intact.
         # /reset is session-scoped, so swap in a fresh in-memory registry.
         self.task_registry = TaskRegistry()
+=======
+        self.task_registry.clear()
+>>>>>>> upstream/main
 
         self.terminal_turn_count = 0
         self.terminal_fallback_count = 0
