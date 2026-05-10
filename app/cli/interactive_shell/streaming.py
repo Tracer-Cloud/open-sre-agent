@@ -185,24 +185,36 @@ def stream_to_console(
         Splits on ``\\n\\n`` (``_PARAGRAPH_BREAK``) but only when an
         even number of triple-backtick fences (``_CODE_FENCE``) are
         present in the proposed prefix — that's enough to keep code
-        blocks whole without tracking fence type. ``force`` flushes any
-        remaining buffer at end-of-stream.
+        blocks whole without tracking fence type. A ``\\n\\n`` falling
+        inside an open fence is skipped so we keep scanning forward;
+        otherwise a code block with embedded blank lines would defer
+        every later paragraph to ``force=True`` at EOS. ``force``
+        flushes any remaining buffer at end-of-stream.
         """
         nonlocal para_buffer
         break_len = len(_PARAGRAPH_BREAK)
         while True:
             text = "".join(para_buffer)
-            idx = text.find(_PARAGRAPH_BREAK)
-            if idx < 0:
+            search_from = 0
+            rendered = False
+            while True:
+                idx = text.find(_PARAGRAPH_BREAK, search_from)
+                if idx < 0:
+                    break
+                paragraph = text[: idx + break_len]
+                # Odd backtick-fence count means a fence is still open;
+                # the boundary is inside it, so skip and keep scanning
+                # for the next ``\n\n`` that lands outside any fence.
+                if paragraph.count(_CODE_FENCE) % 2 == 1:
+                    search_from = idx + break_len
+                    continue
+                _render_paragraph(paragraph)
+                tail = text[idx + break_len :]
+                para_buffer = [tail] if tail else []
+                rendered = True
                 break
-            paragraph = text[: idx + break_len]
-            # Odd backtick-fence count means a fence is still open;
-            # don't render the partial code block.
-            if paragraph.count(_CODE_FENCE) % 2 == 1:
+            if not rendered:
                 break
-            _render_paragraph(paragraph)
-            tail = text[idx + break_len :]
-            para_buffer = [tail] if tail else []
         if force:
             tail = "".join(para_buffer)
             if tail.strip():

@@ -234,6 +234,55 @@ class TestTtyParagraphRender:
         assert "y = 2" in output
         assert "Trailing" in output
 
+    def test_post_fence_paragraph_renders_after_block_with_embedded_blank_line(
+        self,
+    ) -> None:
+        """A code block containing a blank line must not bury later
+        paragraphs at EOS. Once the closing fence arrives, the
+        completed code-block paragraph flushes and any subsequent
+        ``\\n\\n``-terminated paragraph flushes mid-stream too.
+        """
+        from app.cli.interactive_shell import streaming as streaming_module
+
+        parse_count = [0]
+        real_markdown = streaming_module.Markdown
+
+        class _SpyMarkdown(real_markdown):  # type: ignore[misc, valid-type]
+            def __init__(self, text: str, **kwargs) -> None:
+                parse_count[0] += 1
+                super().__init__(text, **kwargs)
+
+        original_markdown = streaming_module.Markdown
+        streaming_module.Markdown = _SpyMarkdown
+        try:
+            console, _ = _tty_console()
+            stream_to_console(
+                console,
+                label="assistant",
+                chunks=_yield_chunks(
+                    [
+                        "Intro.\n\n",
+                        "```python\n",
+                        "x = 1\n\n",
+                        "y = 2\n",
+                        "```\n\n",
+                        "Conclusion.\n\n",
+                    ]
+                ),
+            )
+        finally:
+            streaming_module.Markdown = original_markdown
+
+        # 3 parses — intro flushes on its own ``\n\n``; the fenced block
+        # flushes once the closing fence + ``\n\n`` arrive (skipping the
+        # embedded blank line); conclusion flushes on its own ``\n\n``
+        # before EOS. Without the skip-past-open-fence logic, the fenced
+        # block + conclusion would defer to a single force-flush at EOS
+        # → 2 parses.
+        assert parse_count[0] == 3, (
+            f"post-fence paragraph deferred to EOS — got {parse_count[0]} parses"
+        )
+
     def test_returns_empty_string_when_stream_is_empty(self) -> None:
         """An empty stream must not leave a frozen spinner on screen."""
         console, buf = _tty_console()
