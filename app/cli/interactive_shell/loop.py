@@ -224,7 +224,9 @@ async def _repl_main(initial_input: str | None = None, _config: ReplConfig | Non
     # prompt_toolkit has claimed and released stdout for input handling.
     # Without this, slash-command output after the first prompt renders as
     # literal escape codes in some terminal emulators.
-    console = Console(highlight=False, force_terminal=True, color_system="truecolor")
+    console = Console(
+        highlight=False, force_terminal=True, color_system="truecolor", legacy_windows=False
+    )
     render_banner(console)
     # Prune dead-PID agent records and stale lockfiles before the user's
     # first ``/agents`` call. Errors are caught inside; a sweep failure

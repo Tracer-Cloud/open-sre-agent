@@ -58,7 +58,9 @@ from app.version import get_version
 load_dotenv(override=False)
 init_sentry(entrypoint="remote")
 
-INVESTIGATIONS_DIR = Path(os.getenv("INVESTIGATIONS_DIR", "/opt/opensre/investigations"))
+INVESTIGATIONS_DIR = Path(
+    os.getenv("INVESTIGATIONS_DIR", str(Path.home() / ".opensre" / "investigations"))
+)
 _AUTH_KEY = os.getenv("OPENSRE_API_KEY")
 _AUTH_EXEMPT_PATHS = {
     "/discord/interactions",
@@ -93,7 +95,14 @@ def _check_api_key(request: Request, x_api_key: str | None = Header(default=None
 
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    INVESTIGATIONS_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        INVESTIGATIONS_DIR.mkdir(parents=True, exist_ok=True)
+    except PermissionError as exc:
+        raise RuntimeError(
+            f"Cannot create investigations directory '{INVESTIGATIONS_DIR}'. "
+            "Set the INVESTIGATIONS_DIR environment variable to a writable path, "
+            f"or grant write access to '{INVESTIGATIONS_DIR.parent}'."
+        ) from exc
     _refresh_instance_metadata()
 
     poller_task: asyncio.Task[None] | None = None

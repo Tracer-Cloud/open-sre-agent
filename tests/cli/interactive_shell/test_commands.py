@@ -10,6 +10,11 @@ from prompt_toolkit.history import FileHistory
 from rich.console import Console
 
 from app.cli.interactive_shell.command_registry import repl_data as repl_data_module
+from app.cli.interactive_shell.command_registry.investigation import (
+    _validate_investigate_args,
+    _validate_save_args,
+)
+from app.cli.interactive_shell.command_registry.tasks_cmds import _validate_cancel_args
 from app.cli.interactive_shell.commands import SLASH_COMMANDS, dispatch_slash
 from app.cli.interactive_shell.session import ReplSession
 from app.cli.interactive_shell.tasks import TaskKind, TaskStatus
@@ -1138,6 +1143,107 @@ class TestCancelCommand:
         dispatch_slash("/cancel", ReplSession(), console)
         assert "usage" in buf.getvalue().lower()
         assert "/tasks" in buf.getvalue()
+
+
+class TestPrePolicyValidation:
+    """Regression for #1712: ``validate_args`` runs before the policy gate, so
+    invalid args never trigger the ``Proceed?`` confirmation prompt."""
+
+    @pytest.mark.parametrize(
+        "command,expected_usage_fragment",
+        [
+            ("/investigate", "/investigate <file>"),
+            ("/save", "/save <path>"),
+            ("/cancel", "/cancel <task_id>"),
+        ],
+    )
+    def test_missing_arg_skips_policy_prompt(
+        self, command: str, expected_usage_fragment: str
+    ) -> None:
+        confirm_calls: list[str] = []
+
+        def _confirm(prompt: str) -> str:
+            confirm_calls.append(prompt)
+            return "n"
+
+        session = ReplSession()
+
+        console, buf = _capture()
+        dispatch_slash(command, session, console, confirm_fn=_confirm, is_tty=True)
+
+        assert expected_usage_fragment in buf.getvalue()
+        assert confirm_calls == [], f"confirm_fn must not be called for {command} with no args"
+        assert session.history[-1] == {"type": "slash", "text": command, "ok": False}
+
+    def test_validate_args_fires_in_trust_mode(self) -> None:
+        """Trust mode bypasses the policy prompt but must not bypass arg validation."""
+        confirm_calls: list[str] = []
+
+        def _confirm(prompt: str) -> str:
+            confirm_calls.append(prompt)
+            return "y"
+
+        session = ReplSession()
+        session.trust_mode = True
+
+        console, buf = _capture()
+        dispatch_slash("/investigate", session, console, confirm_fn=_confirm, is_tty=True)
+
+        assert "/investigate <file>" in buf.getvalue()
+        assert confirm_calls == [], "trust mode must not skip arg validation"
+
+    def test_valid_arg_still_fires_policy_prompt(self, tmp_path: Path) -> None:
+        """The fix must not accidentally remove the policy gate entirely."""
+        alert_file = tmp_path / "alert.json"
+        alert_file.write_text('{"alert_name": "test"}', encoding="utf-8")
+
+        confirm_calls: list[str] = []
+
+        def _confirm(prompt: str) -> str:
+            confirm_calls.append(prompt)
+            return "n"  # decline so we don't run a real investigation
+
+        session = ReplSession()
+        console, _ = _capture()
+        dispatch_slash(
+            f"/investigate {alert_file}",
+            session,
+            console,
+            confirm_fn=_confirm,
+            is_tty=True,
+        )
+
+        assert len(confirm_calls) == 1, "policy prompt must still fire for valid args"
+
+
+class TestSlashValidatorFunctions:
+    """Direct unit tests for the per-command pre-policy validators."""
+
+    @pytest.mark.parametrize(
+        "validator,expected_usage_fragment",
+        [
+            (_validate_investigate_args, "/investigate <file>"),
+            (_validate_save_args, "/save <path>"),
+            (_validate_cancel_args, "/cancel <task_id>"),
+        ],
+    )
+    def test_returns_usage_when_args_empty(
+        self, validator: object, expected_usage_fragment: str
+    ) -> None:
+        result = validator([])  # type: ignore[operator]
+        assert isinstance(result, str)
+        assert expected_usage_fragment in result
+
+    @pytest.mark.parametrize(
+        "validator,args",
+        [
+            (_validate_investigate_args, ["alert.json"]),
+            (_validate_save_args, ["report.md"]),
+            (_validate_cancel_args, ["task-abc"]),
+        ],
+    )
+    def test_returns_none_when_args_present(self, validator: object, args: list[str]) -> None:
+        assert validator(args) is None  # type: ignore[operator]
 
 
 class TestCliDelegatedCommands:

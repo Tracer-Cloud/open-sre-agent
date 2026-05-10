@@ -111,6 +111,12 @@ def dispatch_slash(
         console.print()
         console.print(f"[{ERROR}]unknown command:[/] {escape(name)}  (type [bold]/help[/bold])")
         return True
+    if cmd.validate_args is not None:
+        validation_error = cmd.validate_args(args)
+        if validation_error is not None:
+            console.print(validation_error)
+            session.record("slash", stripped, ok=False)
+            return True
     if policy_precleared:
         session.record("slash", stripped, ok=True)
         return cmd.handler(session, console, args)
