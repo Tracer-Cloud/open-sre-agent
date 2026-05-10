@@ -487,3 +487,74 @@ class TestScenarioInheritance:
             for f in real_dir.iterdir():
                 f.unlink()
             real_dir.rmdir()
+
+    def test_golden_trajectory_requires_ordered_actions(self) -> None:
+        """golden_trajectory block must include a non-empty ordered_actions list."""
+        real_dir = SUITE_DIR / "999-test-golden-trajectory-missing-actions"
+        real_dir.mkdir(exist_ok=True)
+        try:
+            (real_dir / "scenario.yml").write_text(
+                textwrap.dedent("""\
+                base: 000-healthy
+                scenario_id: 999-test-golden-trajectory-missing-actions
+                failure_mode: replication_lag
+                severity: critical
+            """)
+            )
+            (real_dir / "answer.yml").write_text(
+                textwrap.dedent("""\
+                root_cause_category: resource_exhaustion
+                required_keywords:
+                  - replication lag
+                model_response: "Replication lag from write pressure."
+                golden_trajectory:
+                  matching: strict
+            """)
+            )
+
+            with pytest.raises(
+                ValueError,
+                match="golden_trajectory.ordered_actions",
+            ):
+                load_scenario(real_dir)
+        finally:
+            for f in real_dir.iterdir():
+                f.unlink()
+            real_dir.rmdir()
+
+    def test_golden_trajectory_rejects_boolean_numeric_fields(self) -> None:
+        """Boolean values are rejected for numeric golden_trajectory limits."""
+        real_dir = SUITE_DIR / "999-test-golden-trajectory-bool-limit"
+        real_dir.mkdir(exist_ok=True)
+        try:
+            (real_dir / "scenario.yml").write_text(
+                textwrap.dedent("""\
+                base: 000-healthy
+                scenario_id: 999-test-golden-trajectory-bool-limit
+                failure_mode: replication_lag
+                severity: critical
+            """)
+            )
+            (real_dir / "answer.yml").write_text(
+                textwrap.dedent("""\
+                root_cause_category: resource_exhaustion
+                required_keywords:
+                  - replication lag
+                model_response: "Replication lag from write pressure."
+                golden_trajectory:
+                  ordered_actions:
+                    - query_grafana_metrics
+                    - query_grafana_logs
+                  max_loops: true
+            """)
+            )
+
+            with pytest.raises(
+                ValueError,
+                match="golden_trajectory.max_loops",
+            ):
+                load_scenario(real_dir)
+        finally:
+            for f in real_dir.iterdir():
+                f.unlink()
+            real_dir.rmdir()

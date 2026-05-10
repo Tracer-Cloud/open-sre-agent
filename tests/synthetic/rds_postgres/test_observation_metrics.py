@@ -145,6 +145,32 @@ def test_observation_roundtrip_and_report_rendering(tmp_path: Path) -> None:
         "aws_performance_insights",
     ]
     assert payload["missing_required_evidence_sources"] == ["aws_rds_events"]
+    assert payload["evidence_source_coverage"]["required_coverage"] == 0.5
+    assert payload["evidence_source_coverage"]["available_coverage"] == 2 / 3
+    assert payload["evidence_source_coverage"]["source_presence"] == {
+        "aws_cloudwatch_metrics": True,
+        "aws_performance_insights": True,
+        "aws_rds_events": False,
+    }
+    assert payload["canonical_report_payload"]["status"] == "pass"
+    assert payload["canonical_report_payload"]["trajectory"]["golden"] == [
+        "query_grafana_metrics",
+        "query_grafana_logs",
+        "query_grafana_alert_rules",
+    ]
+    assert payload["canonical_report_payload"]["trajectory"]["policy"] == {
+        "passed": False,
+        "matching": "lcs",
+        "violations": ["lcs_ratio=0.67 < 1.00"],
+    }
+    assert (
+        payload["canonical_report_payload"]["evidence"]["missing_required_sources"]
+        == ["aws_rds_events"]
+    )
+    assert (
+        payload["canonical_report_payload"]["observation_path"]
+        == payload["observation_path"]
+    )
     assert (tmp_path / "001-replication-lag" / "latest.json").exists()
 
     report_text = render_report_to_string(observation)
