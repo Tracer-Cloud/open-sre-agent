@@ -3,12 +3,23 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from dataclasses import asdict, dataclass
+import time
+from dataclasses import asdict, dataclass, replace
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
+
+from rich.console import Console
 
 from app.pipeline.runners import run_investigation
 from tests.synthetic.mock_aws_backend import FixtureAWSBackend
 from tests.synthetic.mock_grafana_backend.backend import FixtureGrafanaBackend
+from tests.synthetic.rds_postgres.observations import (
+    build_observation,
+    compute_trajectory_metrics,
+    render_report_to_console,
+    write_observation,
+)
 from tests.synthetic.rds_postgres.scenario_loader import (
     SUITE_DIR,
     ScenarioFixture,
@@ -87,6 +98,25 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--axis2",
         action="store_true",
         help="Print Axis 1 vs Axis 2 gap report (requires results from both suites).",
+    )
+    report_group = parser.add_mutually_exclusive_group()
+    report_group.add_argument(
+        "--report",
+        action="store_true",
+        dest="report",
+        help="Print Rich observation report per scenario.",
+    )
+    report_group.add_argument(
+        "--no-report",
+        action="store_false",
+        dest="report",
+        help="Disable Rich observation report output.",
+    )
+    parser.set_defaults(report=None)
+    parser.add_argument(
+        "--observations-dir",
+        default=str(SUITE_DIR / "_observations"),
+        help="Directory where per-run observation JSON files are written.",
     )
     return parser.parse_args(argv)
 
@@ -467,6 +497,17 @@ def run_scenario(
     return state_dict, score_result(fixture, state_dict, queried_metrics=queried_metrics)
 
 
+def _resolved_golden_trajectory(fixture: ScenarioFixture) -> tuple[list[str], int | None]:
+    golden_cfg = fixture.answer_key.golden_trajectory or {}
+    ordered = golden_cfg.get("ordered_actions")
+    if isinstance(ordered, list) and ordered:
+        max_loops = golden_cfg.get("max_loops")
+        if isinstance(max_loops, int):
+            return [str(action) for action in ordered], max_loops
+        return [str(action) for action in ordered], fixture.answer_key.max_investigation_loops
+    return list(fixture.answer_key.optimal_trajectory), fixture.answer_key.max_investigation_loops
+
+
 def _print_gap_report(
     axis1_results: list[ScenarioScore],
     axis2_results: list[ScenarioScore],
@@ -514,10 +555,52 @@ def run_suite(argv: list[str] | None = None) -> list[ScenarioScore]:
         if not fixtures:
             raise SystemExit(f"Unknown scenario: {args.scenario}")
 
+    observations_dir = Path(args.observations_dir)
+    should_report = bool(args.report) if args.report is not None else len(fixtures) == 1
+    if args.json:
+        should_report = False
+    report_console = Console(highlight=False, soft_wrap=True)
+
     results: list[ScenarioScore] = []
     for fixture in fixtures:
-        _, score = run_scenario(fixture, use_mock_grafana=args.mock_grafana)
+        started_at = datetime.now(UTC)
+        started_monotonic = time.monotonic()
+        final_state, score = run_scenario(fixture, use_mock_grafana=args.mock_grafana)
+        wall_time_s = time.monotonic() - started_monotonic
+
         results.append(score)
+
+        executed_hypotheses = final_state.get("executed_hypotheses") or []
+        loops_used = int(
+            final_state.get("investigation_loop_count") or len(executed_hypotheses)
+        )
+        golden_trajectory, max_loops = _resolved_golden_trajectory(fixture)
+        trajectory_metrics = compute_trajectory_metrics(
+            executed_hypotheses=executed_hypotheses,
+            golden=golden_trajectory,
+            loops_used=loops_used,
+            max_loops=max_loops,
+        )
+        observation = build_observation(
+            scenario_id=fixture.scenario_id,
+            suite="axis1",
+            backend="FixtureGrafanaBackend" if args.mock_grafana else "LiveGrafanaBackend",
+            score=asdict(score),
+            reasoning=asdict(score.reasoning) if score.reasoning is not None else None,
+            trajectory=trajectory_metrics,
+            final_state=final_state,
+            started_at=started_at,
+            wall_time_s=wall_time_s,
+        )
+        observation_path = write_observation(observation, observations_dir)
+        relative_observation_path = str(observation_path.relative_to(observations_dir))
+        observation_for_report = replace(
+            observation,
+            observation_path=relative_observation_path,
+        )
+
+        if should_report:
+            render_report_to_console(observation_for_report, report_console)
 
     if args.json:
         print(json.dumps([asdict(result) for result in results], indent=2))

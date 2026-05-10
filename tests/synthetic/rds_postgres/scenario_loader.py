@@ -53,6 +53,7 @@ class ScenarioAnswerKey:
     max_investigation_loops: int = 1
     ruling_out_keywords: list[str] = ()  # type: ignore[assignment]
     required_queries: list[str] = ()  # type: ignore[assignment]
+    golden_trajectory: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -236,6 +237,11 @@ def _parse_answer_yaml(path: Path) -> ScenarioAnswerKey:
         max_investigation_loops=int(validated.get("max_investigation_loops") or 1),
         ruling_out_keywords=list(validated.get("ruling_out_keywords") or []),
         required_queries=list(validated.get("required_queries") or []),
+        golden_trajectory=(
+            dict(validated["golden_trajectory"])
+            if isinstance(validated.get("golden_trajectory"), dict)
+            else None
+        ),
     )
 
 
