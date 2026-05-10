@@ -416,6 +416,11 @@ class ProgressTracker:
         if self._rich:
             self._display = _EventLogDisplay(t0=self._t0)
 
+    @property
+    def has_active_display(self) -> bool:
+        """Return True if the live display is currently running."""
+        return self._display is not None
+
     def stop(self) -> None:
         """Stop the active live display if running."""
         if self._display:

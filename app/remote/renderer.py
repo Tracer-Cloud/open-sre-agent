@@ -258,7 +258,7 @@ class StreamRenderer:
         """Print a rich renderable permanently above the active live region (even during diagnose)."""
         if self._diagnose._live is not None and self._diagnose._live.is_started:
             self._diagnose._live.console.print(renderable)
-        elif self._tracker._display is not None:
+        elif self._tracker.has_active_display:
             self._tracker.print_above_renderable(renderable)
         else:
             self._console.print(renderable)
@@ -557,10 +557,16 @@ class StreamRenderer:
                 if stripped_clean[-1] in {".", "?", "!"}:
                     return False
 
-                # Structural prefix requirement: starts with #, [, **, or is all-caps
+                # Structural prefix requirement: starts with #, [, **, or is all-caps.
+                # Note-style brackets like "[Note: ...]" are excluded by requiring no colon.
+                is_bracket = (
+                    stripped.startswith("[")
+                    and stripped_clean.endswith("]")
+                    and ":" not in stripped
+                )
                 has_prefix = (
                     stripped.startswith("#")
-                    or stripped.startswith("[")
+                    or is_bracket
                     or stripped.startswith("**")
                     or stripped_clean.isupper()
                 )
@@ -655,9 +661,9 @@ class StreamRenderer:
             # adds alert framing and timing the diagnose stream doesn't carry.
             diagnose_streamed = self._diagnose.streamed
             if root_cause and not diagnose_streamed:
-                _print_section("Root Cause", root_cause)
+                _print_section("Root Cause", root_cause, console=self._console)
             if report:
-                _print_section("Report", report)
+                _print_section("Report", report, console=self._console)
             elif not root_cause:
                 if self._final_state.get("is_noise"):
                     _print_info("Alert classified as noise — no investigation needed.")
@@ -711,7 +717,7 @@ def _print_connection_banner() -> None:
     sys.stdout.flush()
 
 
-def _print_section(title: str, content: str) -> None:
+def _print_section(title: str, content: str, console: Any | None = None) -> None:
     if get_output_format() == "rich":
         from rich.console import Console
         from rich.markdown import Markdown
@@ -720,11 +726,11 @@ def _print_section(title: str, content: str) -> None:
 
         from app.cli.interactive_shell.theme import MARKDOWN_THEME
 
-        console = Console(highlight=False)
-        console.print()
-        console.print(Rule(f"[bold] {title} [/]", style=BRAND, align="left"))
-        with console.use_theme(MARKDOWN_THEME):
-            console.print(Padding(Markdown(content.strip(), code_theme="ansi_dark"), (1, 2)))
+        c = console or Console(highlight=False)
+        c.print()
+        c.print(Rule(f"[bold] {title} [/]", style=BRAND, align="left"))
+        with c.use_theme(MARKDOWN_THEME):
+            c.print(Padding(Markdown(content.strip(), code_theme="ansi_dark"), (1, 2)))
     else:
         print(f"\n  {title}")
         for line in content.strip().splitlines():
