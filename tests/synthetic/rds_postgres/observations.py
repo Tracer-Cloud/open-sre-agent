@@ -62,6 +62,8 @@ class RunObservation:
     observed_evidence_sources: list[str]
     required_evidence_sources: list[str]
     missing_required_evidence_sources: list[str]
+    evidence_source_coverage: dict[str, Any]
+    canonical_report_payload: dict[str, Any]
     final_state_digest: str
     observation_path: str = ""
 
@@ -141,12 +143,98 @@ def _resolved_evidence_sources(
     available_evidence_sources: list[str],
     required_evidence_sources: list[str],
 ) -> tuple[list[str], list[str], list[str]]:
-    candidate_sources = _unique_in_order([*available_evidence_sources, *required_evidence_sources])
-    observed_sources = [source for source in candidate_sources if evidence.get(source)]
+    coverage = _source_aware_evidence_coverage(
+        evidence=evidence,
+        available_evidence_sources=available_evidence_sources,
+        required_evidence_sources=required_evidence_sources,
+    )
+    return (
+        list(coverage["observed_sources"]),
+        list(coverage["required_sources"]),
+        list(coverage["missing_required_sources"]),
+    )
+
+
+def _source_aware_evidence_coverage(
+    evidence: dict[str, Any],
+    available_evidence_sources: list[str],
+    required_evidence_sources: list[str],
+) -> dict[str, Any]:
+    available_sources = _unique_in_order(available_evidence_sources)
+    required_sources = _unique_in_order(required_evidence_sources)
+    candidate_sources = _unique_in_order([*available_sources, *required_sources])
+    source_presence = {source: bool(evidence.get(source)) for source in candidate_sources}
+    observed_sources = [source for source, present in source_presence.items() if present]
+
     missing_required_sources = [
-        source for source in required_evidence_sources if source not in observed_sources
+        source for source in required_sources if not source_presence.get(source, False)
     ]
-    return observed_sources, required_evidence_sources, missing_required_sources
+
+    required_observed = sum(1 for source in required_sources if source_presence.get(source, False))
+    available_observed = sum(1 for source in available_sources if source_presence.get(source, False))
+
+    required_coverage = (
+        required_observed / len(required_sources) if required_sources else 1.0
+    )
+    available_coverage = (
+        available_observed / len(available_sources) if available_sources else 1.0
+    )
+
+    return {
+        "available_sources": available_sources,
+        "required_sources": required_sources,
+        "observed_sources": observed_sources,
+        "missing_required_sources": missing_required_sources,
+        "source_presence": source_presence,
+        "required_coverage": required_coverage,
+        "available_coverage": available_coverage,
+    }
+
+
+def _canonical_report_payload(
+    *,
+    score: dict[str, Any],
+    trajectory: TrajectoryMetrics,
+    evaluated_golden_actions: list[str],
+    trajectory_policy: TrajectoryPolicyResult | None,
+    evidence_source_coverage: dict[str, Any],
+) -> dict[str, Any]:
+    policy_payload: dict[str, Any] | None = None
+    if trajectory_policy is not None:
+        policy_payload = {
+            "passed": trajectory_policy.passed,
+            "matching": trajectory_policy.matching,
+            "violations": list(trajectory_policy.violations),
+        }
+
+    return {
+        "status": "pass" if bool(score.get("passed")) else "fail",
+        "category": score.get("actual_category"),
+        "failure_reason": score.get("failure_reason"),
+        "evidence": {
+            "observed_sources": list(evidence_source_coverage["observed_sources"]),
+            "required_sources": list(evidence_source_coverage["required_sources"]),
+            "missing_required_sources": list(
+                evidence_source_coverage["missing_required_sources"]
+            ),
+            "source_presence": dict(evidence_source_coverage["source_presence"]),
+            "required_coverage": evidence_source_coverage["required_coverage"],
+            "available_coverage": evidence_source_coverage["available_coverage"],
+        },
+        "trajectory": {
+            "golden": list(evaluated_golden_actions),
+            "actual": list(trajectory.flat_actions),
+            "strict_match": trajectory.strict_match,
+            "lcs_ratio": trajectory.lcs_ratio,
+            "edit_distance": trajectory.edit_distance,
+            "coverage": trajectory.coverage,
+            "extra_actions": list(trajectory.extra_actions),
+            "missing_actions": list(trajectory.missing_actions),
+            "redundancy_count": trajectory.redundancy_count,
+            "failed_action_count": trajectory.failed_action_count,
+            "policy": policy_payload,
+        },
+    }
 
 
 def evaluate_trajectory_policy(
@@ -257,6 +345,11 @@ def build_observation(
     wall_time_s: float,
 ) -> RunObservation:
     evidence = final_state.get("evidence") or {}
+    evidence_source_coverage = _source_aware_evidence_coverage(
+        evidence=evidence,
+        available_evidence_sources=available_evidence_sources,
+        required_evidence_sources=required_evidence_sources,
+    )
     observed_sources, required_sources, missing_required_sources = _resolved_evidence_sources(
         evidence=evidence,
         available_evidence_sources=available_evidence_sources,
@@ -277,6 +370,14 @@ def build_observation(
         observed_evidence_sources=observed_sources,
         required_evidence_sources=required_sources,
         missing_required_evidence_sources=missing_required_sources,
+        evidence_source_coverage=evidence_source_coverage,
+        canonical_report_payload=_canonical_report_payload(
+            score=score,
+            trajectory=trajectory,
+            evaluated_golden_actions=evaluated_golden_actions,
+            trajectory_policy=trajectory_policy,
+            evidence_source_coverage=evidence_source_coverage,
+        ),
         final_state_digest=final_state_digest(final_state),
     )
 
@@ -291,6 +392,9 @@ def write_observation(observation: RunObservation, observations_dir: Path) -> Pa
 
     payload = asdict(observation)
     payload["observation_path"] = str(target.relative_to(observations_dir))
+    canonical_payload = dict(payload.get("canonical_report_payload") or {})
+    canonical_payload["observation_path"] = payload["observation_path"]
+    payload["canonical_report_payload"] = canonical_payload
     target.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     latest = scenario_dir / "latest.json"
