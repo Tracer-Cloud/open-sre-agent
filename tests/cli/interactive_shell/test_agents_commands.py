@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -12,13 +13,17 @@ from rich.table import Table
 
 from app.agents import blast_radius as blast_radius_module
 from app.agents import config as config_mod
+from app.agents.blast_radius import BlastRadiusEvent
 from app.agents.conflicts import (
     DEFAULT_WINDOW_SECONDS,
     FileWriteConflict,
     WriteEvent,
     render_conflicts,
 )
+from app.agents.network_egress import NetworkEgressEvent
+from app.agents.probe import ProcessSnapshot
 from app.agents.registry import AgentRecord, AgentRegistry
+from app.agents.sudo_invocations import SudoInvocationEvent
 from app.cli.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from app.cli.interactive_shell.session import ReplSession
 
@@ -362,3 +367,153 @@ class TestRenderConflicts:
         assert "/new.py" in out
         assert "/old.py" in out
         assert "aider:3" in out
+
+
+class TestAgentsInspect:
+    """``/agents inspect <pid>`` — three-section Blast radius panel.
+
+    The handler lazy-starts three watchers; tests stub the three
+    coordinator functions so no real psutil polling threads spin up.
+    """
+
+    def _stub_coordinators(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        *,
+        write_events: list[BlastRadiusEvent],
+        sudo_events: list[SudoInvocationEvent],
+        egress_events: list[NetworkEgressEvent],
+        project_root: str | None = "/repo",
+        started_at: datetime | None = None,
+    ) -> None:
+        from app.cli.interactive_shell.command_registry import agents as agents_mod
+
+        monkeypatch.setattr(
+            agents_mod, "collect_recent_outside_writes", lambda *_a, **_k: write_events
+        )
+        monkeypatch.setattr(agents_mod, "collect_recent_sudo_events", lambda *_a, **_k: sudo_events)
+        monkeypatch.setattr(
+            agents_mod, "collect_recent_egress_events", lambda *_a, **_k: egress_events
+        )
+        monkeypatch.setattr(agents_mod, "_project_root_for_inspect", lambda _record: project_root)
+        # ``probe`` returns a ProcessSnapshot or None; the handler only
+        # uses ``.started_at``, so a synthetic snapshot is enough.
+        snap = (
+            ProcessSnapshot(
+                pid=8421,
+                cpu_percent=0.0,
+                rss_mb=1.0,
+                num_fds=10,
+                num_connections=2,
+                status="running",
+                started_at=started_at,
+            )
+            if started_at is not None
+            else None
+        )
+        monkeypatch.setattr(agents_mod, "probe", lambda *_a, **_k: snap)
+
+    def test_usage_message_when_no_pid_given(self) -> None:
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents inspect", session, console) is True
+        assert "usage" in buf.getvalue().lower()
+        assert session.history[-1]["ok"] is False
+
+    def test_invalid_pid_is_rejected(self) -> None:
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents inspect notapid", session, console) is True
+        assert "invalid pid" in buf.getvalue().lower()
+        assert session.history[-1]["ok"] is False
+
+    def test_unknown_pid_is_rejected(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")  # empty registry
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents inspect 12345", session, console) is True
+        out = buf.getvalue()
+        assert "no registered agent" in out.lower()
+        assert session.history[-1]["ok"] is False
+
+    def test_renders_panel_with_all_three_sections_when_events_present(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        registry = _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
+        registry.register(AgentRecord(name="claude-code", pid=8421, command="claude"))
+
+        self._stub_coordinators(
+            monkeypatch,
+            write_events=[
+                BlastRadiusEvent(
+                    agent="claude-code:8421",
+                    path="/etc/danger.conf",
+                    timestamp=100.0,
+                    outside_project_root=True,
+                )
+            ],
+            sudo_events=[
+                SudoInvocationEvent(
+                    agent="claude-code:8421",
+                    command="sudo apt update",
+                    child_pid=9911,
+                    timestamp=101.0,
+                )
+            ],
+            egress_events=[
+                NetworkEgressEvent(
+                    agent="claude-code:8421",
+                    remote_host="1.2.3.4",
+                    remote_port=443,
+                    family="ipv4",
+                    timestamp=102.0,
+                )
+            ],
+            started_at=datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC),
+        )
+
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents inspect 8421", session, console) is True
+
+        out = buf.getvalue()
+        # Panel title and header lines
+        assert "Blast radius" in out
+        assert "claude-code" in out
+        assert "8421" in out
+        # Each of the three sections renders its evidence row
+        assert "/etc/danger.conf" in out
+        assert "sudo apt update" in out
+        assert "1.2.3.4" in out
+        assert "443" in out
+        # Header carries the lazy-start caveat verbatim
+        assert "lazy-start" in out
+
+    def test_renders_empty_section_captions_when_streams_are_empty(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        registry = _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
+        registry.register(AgentRecord(name="claude-code", pid=8421, command="claude"))
+
+        self._stub_coordinators(
+            monkeypatch,
+            write_events=[],
+            sudo_events=[],
+            egress_events=[],
+            project_root=None,
+            started_at=None,
+        )
+
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents inspect 8421", session, console) is True
+
+        out = buf.getvalue()
+        assert "Blast radius" in out
+        # Empty-state caption from blast_radius_view._EMPTY_SECTION
+        assert "nothing observed yet" in out
+
+    def test_first_arg_completions_include_inspect(self) -> None:
+        cmd = SLASH_COMMANDS["/agents"]
+        keywords = [pair[0] for pair in cmd.first_arg_completions]
+        assert "inspect" in keywords

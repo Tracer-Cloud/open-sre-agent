@@ -367,6 +367,35 @@ def collect_recent_write_events(
     return events
 
 
+def collect_recent_outside_writes(
+    records: Iterable[AgentRecord],
+    *,
+    since: float,
+) -> list[BlastRadiusEvent]:
+    """Lazy-start watchers and return only events whose target is outside the project root.
+
+    Used by the ``/agents inspect <pid>`` blast-radius panel — the
+    conflict detector consumes the in-tree writes via
+    :func:`collect_recent_write_events`, the inspect panel surfaces
+    the *out-of-tree* subset because that's the value-producing
+    signal ("the agent touched something it had no business touching").
+
+    Returns the full :class:`BlastRadiusEvent` shape (not the
+    :class:`WriteEvent` projection) so the panel can keep the
+    ``outside_project_root`` flag in the data model and the
+    ``timestamp`` for sorting.
+    """
+    events: list[BlastRadiusEvent] = []
+    for record in records:
+        watcher = _get_or_start_watcher(record)
+        if watcher is None:
+            continue
+        for evt in watcher.events():
+            if evt.timestamp >= since and evt.outside_project_root:
+                events.append(evt)
+    return events
+
+
 def _reset_watchers_for_tests() -> None:
     """Stop all running watchers and clear the cache. Test-only helper.
 
@@ -384,6 +413,7 @@ def _reset_watchers_for_tests() -> None:
 __all__ = [
     "BlastRadiusEvent",
     "BlastRadiusWatcher",
+    "collect_recent_outside_writes",
     "collect_recent_write_events",
     "find_project_root",
 ]

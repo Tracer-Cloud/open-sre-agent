@@ -17,7 +17,10 @@ from pydantic import ValidationError
 from rich.console import Console
 from rich.markup import escape
 
-from app.agents.blast_radius import collect_recent_write_events
+from app.agents.blast_radius import (
+    collect_recent_outside_writes,
+    collect_recent_write_events,
+)
 from app.agents.config import (
     agents_config_path,
     load_agents_config,
@@ -30,10 +33,14 @@ from app.agents.conflicts import (
 )
 from app.agents.coordination import BranchClaims
 from app.agents.lifecycle import TerminateResult, terminate
-from app.agents.registry import AgentRegistry
+from app.agents.network_egress import collect_recent_egress_events
+from app.agents.probe import probe
+from app.agents.registry import AgentRecord, AgentRegistry
+from app.agents.sudo_invocations import collect_recent_sudo_events
 from app.analytics.events import Event
 from app.analytics.provider import get_analytics
 from app.cli.interactive_shell.agents_view import render_agents_table
+from app.cli.interactive_shell.blast_radius_view import render_blast_radius_panel
 from app.cli.interactive_shell.command_registry.types import SlashCommand
 from app.cli.interactive_shell.rendering import repl_table
 from app.cli.interactive_shell.session import ReplSession
@@ -43,6 +50,7 @@ _AGENTS_FIRST_ARGS: tuple[tuple[str, str], ...] = (
     ("budget", "view or edit per-agent hourly budgets"),
     ("claim", "claim a branch for an agent"),
     ("conflicts", "show file-write conflicts between local AI agents"),
+    ("inspect", "show /agents inspect <pid> blast-radius panel for one agent"),
     ("kill", "SIGTERM → SIGKILL a local agent by PID"),
     ("release", "release a branch claim"),
 )
@@ -337,6 +345,83 @@ def _cmd_agents_kill(
     return True
 
 
+def _cmd_agents_inspect(session: ReplSession, console: Console, args: list[str]) -> bool:
+    """Handle ``/agents inspect <pid>`` — render the three-section Blast radius panel.
+
+    Resolves the agent's project root and start time on first call; the
+    three watcher coordinators (file-write outside-only, sudo
+    invocations, network egress) lazy-start on first call too. Subsequent
+    calls reuse the running watchers and just re-render. The panel
+    header carries an explicit caveat that "since started" really means
+    "since the watchers started" because the lazy-start pattern can't
+    retroactively observe events that happened before the first inspect.
+    """
+    if not args:
+        console.print(f"[{ERROR}]usage:[/] /agents inspect <pid>")
+        session.mark_latest(ok=False, kind="slash")
+        return True
+
+    raw_pid = args[0]
+    try:
+        pid = int(raw_pid)
+    except ValueError:
+        console.print(f"[{ERROR}]invalid pid:[/] {escape(raw_pid)} is not an integer")
+        session.mark_latest(ok=False, kind="slash")
+        return True
+
+    registry = AgentRegistry()
+    record = registry.get(pid)
+    if record is None:
+        console.print(
+            f"[{ERROR}]no registered agent with pid {pid}.[/] "
+            "Use [bold]/agents[/bold] to see registered agents."
+        )
+        session.mark_latest(ok=False, kind="slash")
+        return True
+
+    # Best-effort process metadata. Both fall back to ``None`` if the
+    # process is gone or inaccessible — the panel renders with degraded
+    # header rather than failing the command.
+    snapshot = probe(pid, cpu_interval=0.0)
+    started_at = snapshot.started_at if snapshot is not None else None
+    project_root = _project_root_for_inspect(record)
+
+    # ``since=0.0`` so we get every event the watchers have collected;
+    # the inspect panel is the "what's happened since I started
+    # watching" view, not a sliding window. Lazy-start happens inside
+    # each coordinator on first call per ``(name, pid)``.
+    write_events = collect_recent_outside_writes([record], since=0.0)
+    sudo_events = collect_recent_sudo_events([record], since=0.0)
+    egress_events = collect_recent_egress_events([record], since=0.0)
+
+    panel = render_blast_radius_panel(
+        record=record,
+        project_root=project_root,
+        started_at=started_at,
+        write_events=write_events,
+        sudo_events=sudo_events,
+        egress_events=egress_events,
+    )
+    console.print(panel)
+    return True
+
+
+def _project_root_for_inspect(record: AgentRecord) -> str | None:
+    """Best-effort project-root resolver for the inspect panel header.
+
+    Reuses :func:`app.agents.blast_radius._resolve_agent_project_root`
+    when possible. ``None`` if the PID is gone or has no ``.git``
+    ancestor — the panel header degrades gracefully.
+    """
+    # Imported lazily to avoid pulling watchdog into modules that don't
+    # actually use the watcher (the conflict detector and inspect panel
+    # both need it; modules like /agents budget don't).
+    from app.agents.blast_radius import _resolve_agent_project_root
+
+    root = _resolve_agent_project_root(record)
+    return str(root) if root is not None else None
+
+
 def _cmd_agents(session: ReplSession, console: Console, args: list[str]) -> bool:
     if not args:
         return _cmd_agents_list(console)
@@ -351,6 +436,9 @@ def _cmd_agents(session: ReplSession, console: Console, args: list[str]) -> bool
     if sub == "claim":
         return _cmd_agents_claim(session, console, args[1:])
 
+    if sub == "inspect":
+        return _cmd_agents_inspect(session, console, args[1:])
+
     if sub == "kill":
         return _cmd_agents_kill(session, console, args[1:])
 
@@ -360,8 +448,9 @@ def _cmd_agents(session: ReplSession, console: Console, args: list[str]) -> bool
     console.print(
         f"[{ERROR}]unknown subcommand:[/] {escape(sub)}  "
         "(try [bold]/agents[/bold], [bold]/agents budget[/bold], "
-        "[bold]/agents conflicts[/bold], [bold]/agents kill[/bold], "
-        "[bold]/agents claim[/bold], or [bold]/agents release[/bold])"
+        "[bold]/agents conflicts[/bold], [bold]/agents inspect[/bold], "
+        "[bold]/agents kill[/bold], [bold]/agents claim[/bold], "
+        "or [bold]/agents release[/bold])"
     )
     session.mark_latest(ok=False, kind="slash")
     return True
@@ -370,7 +459,8 @@ def _cmd_agents(session: ReplSession, console: Console, args: list[str]) -> bool
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
         "/agents",
-        "show registered local AI agents (subcommands: budget, claim, conflicts, kill, release)",
+        "show registered local AI agents "
+        "(subcommands: budget, claim, conflicts, inspect, kill, release)",
         _cmd_agents,
         first_arg_completions=_AGENTS_FIRST_ARGS,
     ),
