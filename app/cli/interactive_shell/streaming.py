@@ -110,14 +110,52 @@ def stream_to_console(
     # an error label below it.
     buffer: list[str] = list(peeked)
     started = time.monotonic()
+    # When ``console`` is the textual ``TextualConsole`` adapter, push
+    # cumulative byte count into the ``StatusLine`` so the user sees the
+    # ``thinking… (Ns · ↓ Xk tokens)`` indicator update live. ``getattr``
+    # avoids importing the adapter here (would create an import cycle).
+    # Throttled to ~10/s so the worker thread isn't bottlenecked queueing
+    # ``call_from_thread`` events for every chunk on long streams. A
+    # bare ``except`` makes failure here non-fatal — a flaky status
+    # widget must never truncate the response buffer.
+    progress_hook = getattr(console, "update_streaming_progress", None)
+    total_bytes = sum(len(c) for c in peeked)
+    last_progress_at = 0.0
+    _PROGRESS_INTERVAL_S = 0.1
+
+    def _maybe_update_progress(now: float, *, force: bool = False) -> float:
+        nonlocal progress_hook
+        if progress_hook is None:
+            return last_progress_at
+        if not force and now - last_progress_at < _PROGRESS_INTERVAL_S:
+            return last_progress_at
+        try:
+            progress_hook(total_bytes)
+        except Exception:
+            progress_hook = None
+        return now
+
+    def _is_cancelled() -> bool:
+        # ``getattr`` keeps this layer decoupled from the loop's
+        # ``_StreamingConsole`` — non-interactive callers (the test
+        # harness, the non-TTY path above) never expose the attribute
+        # so this stays False for them.
+        return bool(getattr(console, "cancel_requested", False))
+
+    if peeked:
+        last_progress_at = _maybe_update_progress(time.monotonic(), force=True)
     try:
         while True:
+            if _is_cancelled():
+                break
             chunk = _next_chunk(chunks_iter)
             if chunk is None:
                 break
             if not chunk:
                 continue
             buffer.append(chunk)
+            total_bytes += len(chunk)
+            last_progress_at = _maybe_update_progress(time.monotonic())
     finally:
         elapsed = time.monotonic() - started
         if buffer:

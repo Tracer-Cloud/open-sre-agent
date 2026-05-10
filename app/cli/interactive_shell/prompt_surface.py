@@ -311,6 +311,7 @@ __all__ = [
     "_build_prompt_session",
     "_build_prompt_style",
     "_prompt_message",
+    "_prompt_rule_ansi",
     "_tab_expand_or_menu",
     "_install_prompt_frame",
     "ReplInputLexer",

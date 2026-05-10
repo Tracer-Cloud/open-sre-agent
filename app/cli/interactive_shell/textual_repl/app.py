@@ -1,29 +1,28 @@
 """Textual ``App`` for the OpenSRE interactive REPL.
 
-Layout (top → bottom):
+Layout (inline mode, top → bottom):
 
 * :class:`textual.widgets.RichLog` — scrolling output area where each turn's
-  rendered Markdown response, streamed reasoning, and tool-use blocks land.
-  textual handles scroll-to-bottom automatically as content is appended.
-* :class:`StatusLine` — single-row status indicator showing
+  prompt echo, rendered Markdown response, and status footer land.
+  ``auto_scroll=True`` keeps the latest content visible. The widget has
+  its own internal scrollbar (visually hidden via ``scrollbar-size: 0 0``)
+  for navigating history within the widget. Native terminal scrollback
+  for past conversation isn't currently supported in inline mode — the
+  inline driver doesn't support ``App.suspend`` (``can_suspend == False``)
+  and content written to the inline driver's stream creates ghost frames
+  in scrollback. That's a follow-up requiring a custom driver or
+  fullscreen mode (which is unreliable on macOS Terminal.app).
+* :class:`StatusLine` — single-row reactive widget showing
   ``esc to interrupt`` while idle and
-  ``⠋ thinking… (Ns · ↓ X tokens)`` during streaming.
-* :class:`textual.widgets.Input` — input field pinned at the bottom of the
-  app. Stays editable while a response streams (type-ahead).
-
-textual's reactive model means we never manually manage the cursor or
-re-render — mutations to widget content trigger declarative redraws and
-the framework handles cursor positioning, erase-region, and animation
-correctly. That's why this composes cleanly where ``prompt_toolkit``'s
-inline mode produced rendering artifacts.
-
-The :func:`run_textual_repl` async entry point is what :mod:`loop` calls
-in place of the per-turn ``prompt_async`` cycle.
+  ``⠋ thinking… (Ns · ↓ X tokens)  esc to interrupt`` while streaming.
+* :class:`textual.widgets.Input` — input box pinned at the bottom of the
+  inline app, remains editable (type-ahead) while a response streams.
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import threading
 import time
 from collections.abc import Callable
@@ -60,7 +59,10 @@ class StatusLine(Static):
 
     def render(self) -> Text:
         if not self.streaming:
-            return Text("  esc to interrupt", style="dim")
+            return Text(
+                "  esc to interrupt  ·  PgUp/PgDn to scroll log",
+                style="dim",
+            )
         elapsed = time.monotonic() - self.started_at
         tokens = _format_tokens(self.bytes_in // _CHARS_PER_TOKEN)
         glyph = _SPINNER_FRAMES[self.frame_idx % len(_SPINNER_FRAMES)]
@@ -76,7 +78,7 @@ class StatusLine(Static):
 
 
 class OpenSREApp(App):
-    """The textual ``App`` that owns the REPL UI.
+    """Inline textual ``App``: RichLog + StatusLine + Input.
 
     ``dispatch_fn`` is the synchronous handler closure (from :mod:`loop`)
     that routes one submitted line through the same dispatch logic the
@@ -86,10 +88,17 @@ class OpenSREApp(App):
     """
 
     CSS = """
+    Screen {
+        height: auto;
+    }
+    Vertical {
+        height: auto;
+    }
     #log {
         height: auto;
-        max-height: 24;
+        max-height: 60;
         padding: 0 1;
+        scrollbar-size: 0 0;
     }
     #status {
         height: 1;
@@ -105,6 +114,8 @@ class OpenSREApp(App):
         Binding("ctrl+c", "ctrl_c", "Cancel / Exit", show=False, priority=True),
         Binding("ctrl+d", "exit_repl", "Exit", show=False, priority=True),
         Binding("ctrl+q", "exit_repl", "Quit", show=False, priority=True),
+        Binding("pageup", "log_scroll_up", "Scroll log up", show=False, priority=True),
+        Binding("pagedown", "log_scroll_down", "Scroll log down", show=False, priority=True),
     ]
 
     def __init__(
@@ -136,38 +147,50 @@ class OpenSREApp(App):
             )
 
     def on_mount(self) -> None:
-        """Render the ready-state welcome panel and focus the input field.
+        """Render the banner into the log, then focus the input.
 
-        We call ``render_ready_box`` (the welcome panel with logo, version,
-        and tips) but skip ``render_splash`` — splash includes a first-run
-        legal notice that blocks on ``sys.stdin.readline()``, which hangs
-        ``on_mount`` because textual owns the input loop. ``render_ready_box``
-        only emits Rich renderables via ``console.print``, which our
-        ``TextualConsole`` forwards into the log widget cleanly.
+        Banner rendering is deferred until after the first refresh so the
+        ``RichLog`` widget has a measured width. We pre-render the banner
+        to ANSI through a regular ``rich.console.Console`` (sized to the
+        widget's width) and write each ANSI line back via
+        ``Text.from_ansi`` — feeding ``Panel`` directly into ``RichLog``
+        in inline mode produced a collapsed/empty box. Living inside the
+        log means the banner scrolls together with response content
+        (PageUp recovers it) instead of being frozen at the top of the
+        terminal viewport.
         """
-        from app.cli.interactive_shell.banner import render_ready_box
-        from app.cli.interactive_shell.textual_repl.console_adapter import TextualConsole
+        self.call_after_refresh(self._write_banner_now)
+        self.call_after_refresh(self._focus_input)
 
-        try:
-            render_ready_box(TextualConsole(self), session=self.session)
-        except Exception as exc:
-            from app.version import get_version
+    def _focus_input(self) -> None:
+        self.query_one("#input", Input).focus()
 
-            self.log_widget.write(
-                Text.assemble(
-                    ("OpenSRE", "bold #B9EDAF"),
-                    ("  ", ""),
-                    (f"v{get_version()}", "dim"),
-                    ("  · interactive shell", "dim"),
-                )
-            )
-            self.log_widget.write(
-                Text(f"(banner: {exc})", style="dim")
-            )
-        self.log_widget.write(
-            Text("Type a message, /command, or paste an alert. Ctrl+Q to quit.", style="dim")
+    def _write_banner_now(self) -> None:
+        from io import StringIO
+
+        from rich.console import Console as RichConsole
+
+        from app.cli.interactive_shell.banner import build_ready_panel
+
+        log = self.log_widget
+        width = max(40, log.size.width or 80)
+        buf = StringIO()
+        console = RichConsole(
+            file=buf,
+            force_terminal=True,
+            color_system="truecolor",
+            width=width,
+            highlight=False,
         )
-        self.query_one(Input).focus()
+        console.print(build_ready_panel(session=self.session))
+        for line in buf.getvalue().splitlines():
+            log.write(Text.from_ansi(line))
+        log.write(
+            Text(
+                "Type a message, /command, or paste an alert.  Ctrl+Q to quit.",
+                style="dim",
+            )
+        )
 
     @property
     def log_widget(self) -> RichLog:
@@ -178,17 +201,22 @@ class OpenSREApp(App):
         return self.query_one("#status", StatusLine)
 
     @on(Input.Submitted, "#input")
-    def _on_submit(self, event: Input.Submitted) -> None:
+    async def _on_submit(self, event: Input.Submitted) -> None:
         text = event.value.strip()
         # Always clear the input — the framework handles this via
         # ``input.value = ""`` which is non-racy in textual's reactive model.
         event.input.value = ""
         if not text:
             return
-        # Cancel any in-flight turn before starting the new one.
-        self._cancel_active_turn()
-        # Echo the prompt above the streaming response — RichLog appends
-        # naturally with auto-scroll, no race against the input render.
+        # Cancel any in-flight turn AND wait for its ``finally`` block to
+        # run before starting the new one. Without the await, the previous
+        # turn's cleanup (``status.streaming = False``, ticker cancel) can
+        # race against the new turn's setup (``status.streaming = True``,
+        # new ticker), leaving streaming=False on the new turn — the
+        # ticker's ``while self.status.streaming`` loop exits immediately
+        # and the user sees no ``thinking…`` spinner.
+        await self._cancel_active_turn_and_wait()
+        # Echo the prompt above the streaming response.
         self.log_widget.write(Text(f"❯ {text}", style="bold #B9EDAF"))
         # Schedule the dispatch as a task. The worker thread runs the
         # synchronous handlers; textual keeps rendering meanwhile.
@@ -196,6 +224,16 @@ class OpenSREApp(App):
         self._cancel_event = cancel_event
         self._active_task = asyncio.create_task(self._run_dispatch(text, cancel_event))
         self._ctrl_c_count = 0
+
+    async def _cancel_active_turn_and_wait(self) -> None:
+        task = self._active_task
+        if task is None or task.done():
+            return
+        task.cancel()
+        if self._cancel_event is not None:
+            self._cancel_event.set()
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await task
 
     async def _run_dispatch(self, text: str, cancel_event: threading.Event) -> None:
         # Mark streaming + start the spinner ticker.
@@ -242,7 +280,12 @@ class OpenSREApp(App):
             self._cancel_event.set()
 
     def action_cancel(self) -> None:
+        if self._active_task is None or self._active_task.done():
+            return
         self._cancel_active_turn()
+        self.log_widget.write(
+            Text("· interrupting… (LLM stream finishes draining first)", style="dim")
+        )
 
     def action_ctrl_c(self) -> None:
         if self._active_task is not None and not self._active_task.done():
@@ -257,6 +300,14 @@ class OpenSREApp(App):
 
     def action_exit_repl(self) -> None:
         self.exit()
+
+    def action_log_scroll_up(self) -> None:
+        """PageUp — scroll the log up one page without losing input focus."""
+        self.log_widget.scroll_page_up(animate=False)
+
+    def action_log_scroll_down(self) -> None:
+        """PageDown — scroll the log down one page without losing input focus."""
+        self.log_widget.scroll_page_down(animate=False)
 
     # ── Public API the dispatch closure uses to write into the log ────────
 

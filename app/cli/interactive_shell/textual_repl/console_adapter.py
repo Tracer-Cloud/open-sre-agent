@@ -46,13 +46,25 @@ class TextualConsole(Console):
         ``RichLog.write`` accepts Rich renderables directly (``Markdown``,
         ``Table``, ``Text``, plain strings), so we don't need to render to
         ANSI here — textual handles the rendering inside its layout.
+
+        Dispatch handlers run on a worker thread (see
+        ``OpenSREApp._run_dispatch``); textual's render isn't thread-safe,
+        so we marshal each write back to the main thread via
+        ``call_from_thread``. That's a no-op cost when we're already on
+        the main thread (the textual driver detects it).
         """
-        # Empty print() — convention for blank-line spacing. RichLog
-        # auto-spaces between writes, so we skip empty calls.
         if not objects:
             return
         for obj in objects:
-            self._app.log_widget.write(obj)
+            self._app.call_from_thread(self._app.log_widget.write, obj)
+
+    def update_streaming_progress(self, bytes_received: int) -> None:
+        """Streaming hook — used by ``stream_to_console`` to update the
+        ``StatusLine`` token counter while a response streams.
+
+        Marshalled to the main thread for the same reason as ``print``.
+        """
+        self._app.call_from_thread(self._app.update_streaming_progress, bytes_received)
 
 
 __all__ = ["TextualConsole"]

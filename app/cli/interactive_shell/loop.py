@@ -1,27 +1,42 @@
 """Async REPL loop — the zero-exit heart of the OpenSRE interactive terminal.
 
-Built around :class:`textual_repl.OpenSREApp` (#1679), a Textual-based
-``App`` with a declarative React-like component tree. The input box is a
-fixed widget pinned at the bottom; output flows above as a scrolling
-``RichLog``; the ``StatusLine`` widget shows ``thinking… (Ns · ↓ X tokens)``
-during streaming. Type-ahead works because Textual's reactive render model
-keeps the input widget responsive while ``dispatch_fn`` runs on a worker
-thread.
+Built on a per-turn :func:`PromptSession.prompt_async` cycle wrapped in
+:func:`patch_stdout`. The prompt is pinned at the bottom of the terminal,
+streamed responses print into normal terminal output above it (so they
+flow into native scrollback — the user can scroll the terminal naturally
+to see prior turns), and a dynamic ``bottom_toolbar`` shows the live
+``thinking… (Ns · ↓ X tokens) — esc to interrupt`` indicator while a
+turn is generating.
 
-The pre-textual prompt_toolkit-only approach couldn't compose the "input
-pinned + output flowing above + streaming indicator" pattern reliably —
-race-induced duplicate prompts, status-line overlap, ``rich.Live``
-fighting ``patch_stdout``. Textual's declarative model is what Claude
-Code's Ink (React for terminals) does, just in Python.
+Type-ahead during streaming works because the dispatch runs as an
+``asyncio`` background task; the next iteration's ``prompt_async``
+starts immediately, so the input frame stays editable while output
+continues to flow above it.
+
+Earlier iterations of #1679 used a textual-based persistent app with an
+inline ``RichLog``. That fought with macOS Terminal.app's native scroll
+(content stayed inside a widget instead of going to terminal scrollback)
+and with the user's expectation of a single, native scroll axis. The
+``prompt_toolkit`` + ``patch_stdout`` shape — which is how Claude Code
+behaves — gives up the declarative widget tree but matches terminal
+conventions: input pinned at bottom, history scrolls naturally.
 """
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import re
 import sys
+import threading
+import time
 from collections.abc import Callable
 
+from prompt_toolkit.application.current import get_app_or_none
+from prompt_toolkit.formatted_text import ANSI
+from prompt_toolkit.key_binding import KeyBindings, merge_key_bindings
+from prompt_toolkit.key_binding.key_processor import KeyPressEvent
+from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
 from rich.markup import escape
 
@@ -36,10 +51,21 @@ from app.cli.interactive_shell.cli_help import answer_cli_help
 from app.cli.interactive_shell.commands import dispatch_slash
 from app.cli.interactive_shell.config import ReplConfig
 from app.cli.interactive_shell.follow_up import answer_follow_up
-from app.cli.interactive_shell.prompt_surface import render_submitted_prompt
+from app.cli.interactive_shell.prompt_surface import (
+    _build_prompt_session,
+    _prompt_message,
+    _prompt_rule_ansi,
+    render_submitted_prompt,
+)
 from app.cli.interactive_shell.router import route_input
 from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import DIM, ERROR, WARNING
+from app.cli.interactive_shell.theme import (
+    ANSI_DIM,
+    ANSI_RESET,
+    DIM,
+    ERROR,
+    WARNING,
+)
 from app.cli.support.errors import OpenSREError
 from app.cli.support.exception_reporting import report_exception
 
@@ -255,22 +281,277 @@ def run_repl(initial_input: str | None = None, config: ReplConfig | None = None)
         except (EOFError, KeyboardInterrupt):
             return 0
 
-    # Interactive REPL — textual owns its own event loop. Calling ``app.run()``
-    # synchronously avoids the ``asyncio.run`` wrapper that was causing
-    # silent-render failures in some terminals (notably macOS Terminal.app).
-    from app.cli.interactive_shell.textual_repl import (
-        OpenSREApp,
-        TextualConsole,
+    # Banner prints to real stdout and lives in the user's terminal
+    # scrollback above all subsequent turns — same place as past responses,
+    # so native terminal scroll reveals everything from the session top
+    # downward, no widget-internal scroll axis.
+    real_console = Console(highlight=False, force_terminal=True, color_system="truecolor")
+    render_banner(real_console)
+
+    with contextlib.suppress(EOFError, KeyboardInterrupt):
+        asyncio.run(_run_interactive(session))
+    return 0
+
+
+class _SpinnerState:
+    """Mutable state read by the prompt's bottom-toolbar callback.
+
+    The toolbar callback runs every ``refresh_interval`` (~100 ms) while a
+    turn streams; it reads ``streaming``, ``started_at``, ``bytes_in`` to
+    compose the live ``⠋ thinking… (Ns · ↓ X tokens)`` line. Streaming
+    layer (:mod:`streaming`) updates ``bytes_in`` via a console hook —
+    see :class:`_StreamingConsole` below.
+    """
+
+    _SPINNER_FRAMES = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
+    _CHARS_PER_TOKEN = 4
+
+    def __init__(self) -> None:
+        self.streaming: bool = False
+        self.started_at: float = 0.0
+        self.bytes_in: int = 0
+        self._frame_idx: int = 0
+
+    def start(self) -> None:
+        self.streaming = True
+        self.started_at = time.monotonic()
+        self.bytes_in = 0
+        self._frame_idx = 0
+
+    def stop(self) -> None:
+        self.streaming = False
+
+    def toolbar_ansi(self) -> ANSI:
+        """Bottom toolbar: rule + state-aware hint. The animated spinner
+        lives in :meth:`inline_spinner_ansi`, which is prepended to the
+        prompt ``message`` so it appears *above* the input frame — at
+        the end of the last response chunk — matching Claude Code's
+        layout.
+
+        Hint text follows Claude Code: ``esc to interrupt`` while a turn
+        is streaming, ``/ for commands  ·  ↑↓ history  ·  esc to clear``
+        when idle so the user sees what each key does.
+        """
+        rule = _prompt_rule_ansi()
+        if self.streaming:
+            hint = "esc to interrupt"
+        else:
+            hint = "/ for commands  ·  ↑↓ history  ·  esc to clear"
+        return ANSI(f"{rule}\n{ANSI_DIM}  {hint}{ANSI_RESET}")
+
+    def inline_spinner_ansi(self) -> str:
+        """Single-line ``⠋ thinking… (Ns · ↓ X tokens)`` indicator, or
+        empty string when not streaming. Rendered above the input rule
+        so it sits at the visual end of the response stream.
+        """
+        if not self.streaming:
+            return ""
+        elapsed = time.monotonic() - self.started_at
+        tokens = self.bytes_in // self._CHARS_PER_TOKEN
+        if tokens >= 1000:
+            tokens_str = f"{tokens / 1000:.1f}k"
+        else:
+            tokens_str = str(tokens)
+        glyph = self._SPINNER_FRAMES[self._frame_idx % len(self._SPINNER_FRAMES)]
+        self._frame_idx += 1
+        return (
+            f"\x1b[1;38;2;185;237;175m{glyph} thinking…{ANSI_RESET}"
+            f"{ANSI_DIM} ({elapsed:.0f}s · ↓ {tokens_str} tokens){ANSI_RESET}"
+        )
+
+
+class _StreamingConsole(Console):
+    """``rich.Console`` that exposes ``update_streaming_progress`` and
+    ``cancel_requested`` to :func:`stream_to_console`. The streaming
+    layer keys off the presence of these via ``getattr`` to (a) push
+    live byte counts into the spinner state and (b) stop pulling LLM
+    chunks when the user presses Esc — ``asyncio.to_thread`` doesn't
+    propagate task cancellation into the worker thread, so without
+    this signal the dispatch keeps streaming after Esc.
+    """
+
+    def __init__(
+        self,
+        spinner: _SpinnerState,
+        cancel_event: threading.Event,
+        **kwargs: object,
+    ) -> None:
+        super().__init__(**kwargs)  # type: ignore[arg-type]
+        self._spinner = spinner
+        self._cancel_event = cancel_event
+
+    def update_streaming_progress(self, bytes_received: int) -> None:
+        # Plain attribute write — read by ``_SpinnerState.toolbar_ansi``
+        # on the next ``refresh_interval`` repaint (every 100 ms). No
+        # cross-thread synchronisation needed; the dispatch worker
+        # writes, the prompt-toolkit app reads, and 100 ms staleness on
+        # the token counter is imperceptible.
+        self._spinner.bytes_in = bytes_received
+
+    @property
+    def cancel_requested(self) -> bool:
+        return self._cancel_event.is_set()
+
+
+async def _run_interactive(session: ReplSession) -> None:
+    """Per-turn ``prompt_async`` cycle backed by a queue + background
+    processor. Submitting a new prompt while a turn is streaming
+    **enqueues** it — the active turn finishes naturally and the queued
+    item runs next (matches Claude Code's behaviour). ``Esc`` cancels
+    just the currently-running dispatch; the processor moves on to the
+    next queued item.
+
+    Type-ahead during streaming works because ``prompt_async`` keeps
+    running on the main coroutine while the processor drains the queue
+    in the background — the user can type and queue further prompts
+    without waiting for the active turn to complete.
+    """
+    pt_session = _build_prompt_session(session)
+    spinner = _SpinnerState()
+
+    queue: asyncio.Queue[str] = asyncio.Queue()
+    current_dispatch: dict[str, asyncio.Task[None] | None] = {"task": None}
+    exit_requested = {"flag": False}
+    # ``threading.Event`` because the dispatch runs in a worker thread
+    # via ``asyncio.to_thread`` — ``task.cancel()`` alone doesn't reach
+    # the worker. Streaming.py polls ``console.cancel_requested``
+    # between chunks; setting this event here breaks that loop.
+    cancel_event = threading.Event()
+
+    def _cancel_current() -> None:
+        cancel_event.set()
+        task = current_dispatch["task"]
+        if task is not None and not task.done():
+            task.cancel()
+
+    cancel_kb = KeyBindings()
+
+    @cancel_kb.add("escape", eager=True)
+    def _on_escape(event: KeyPressEvent) -> None:
+        # Claude Code parity: Esc cancels the active stream when one is
+        # running; otherwise it clears the input buffer (faster than
+        # selecting + Backspacing a long typed prompt).
+        task = current_dispatch["task"]
+        if task is not None and not task.done():
+            _cancel_current()
+            return
+        if event.current_buffer.text:
+            event.current_buffer.reset()
+
+    @cancel_kb.add("c-l")
+    def _on_ctrl_l(event: KeyPressEvent) -> None:
+        # Clear the screen (terminal-native shortcut). The prompt
+        # repaints automatically on the next render tick.
+        event.app.renderer.clear()
+
+    # Mutate the session's bindings BEFORE any ``prompt_async`` call —
+    # ``PromptSession`` caches the underlying ``Application`` on first
+    # use and ``prompt_async(key_bindings=...)`` doesn't reliably
+    # invalidate that cache, so per-call overrides can be silently
+    # ignored. Setting ``pt_session.key_bindings`` upfront ensures the
+    # cancel binding is baked into the cached app from the start.
+    existing_kb = pt_session.key_bindings
+    pt_session.key_bindings = (
+        merge_key_bindings([existing_kb, cancel_kb]) if existing_kb is not None else cancel_kb
     )
 
-    def _dispatch(text: str, app: OpenSREApp) -> None:
-        console = TextualConsole(app)
-        _dispatch_one_turn(text, session, console, on_exit=app.exit)
+    def _request_exit() -> None:
+        exit_requested["flag"] = True
+        _cancel_current()
+        app = get_app_or_none()
+        if app is not None:
+            app.exit()
 
-    app = OpenSREApp(session, _dispatch)
-    with contextlib.suppress(EOFError, KeyboardInterrupt):
-        app.run()
-    return 0
+    async def _run_one_dispatch(text: str) -> None:
+        # Reset the cancel event for this turn — Esc on a previous turn
+        # would otherwise keep this one from running at all.
+        cancel_event.clear()
+        console = _StreamingConsole(
+            spinner,
+            cancel_event,
+            highlight=False,
+            force_terminal=True,
+            color_system="truecolor",
+        )
+        spinner.start()
+        try:
+            await asyncio.to_thread(
+                _dispatch_one_turn,
+                text,
+                session,
+                console,
+                on_exit=_request_exit,
+            )
+        except asyncio.CancelledError:
+            console.print(f"[{WARNING}]· interrupted[/]")
+            raise
+        except Exception as exc:
+            report_exception(exc, context="interactive_shell.dispatch_async")
+            console.print(f"[{ERROR}]dispatch error:[/] {escape(str(exc))}")
+        finally:
+            spinner.stop()
+
+    async def _processor() -> None:
+        """Drain queued prompts one dispatch at a time."""
+        while not exit_requested["flag"]:
+            try:
+                text = await queue.get()
+            except asyncio.CancelledError:
+                return
+            if exit_requested["flag"]:
+                queue.task_done()
+                return
+            task = asyncio.create_task(_run_one_dispatch(text))
+            current_dispatch["task"] = task
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await task
+            current_dispatch["task"] = None
+            queue.task_done()
+
+    def _message_with_spinner() -> ANSI:
+        """Prompt message — spinner line (when streaming) above the
+        input rule + ``❯`` prefix. The callable is re-evaluated every
+        ``refresh_interval`` tick so the spinner glyph and token
+        counter animate in place.
+        """
+        base = _prompt_message(session).value
+        spinner_part = spinner.inline_spinner_ansi()
+        if spinner_part:
+            return ANSI(f"{spinner_part}\n{base}")
+        return ANSI(base)
+
+    processor_task = asyncio.create_task(_processor())
+    try:
+        with patch_stdout(raw=True):
+            while True:
+                try:
+                    text = await pt_session.prompt_async(
+                        message=_message_with_spinner,
+                        bottom_toolbar=spinner.toolbar_ansi,
+                        refresh_interval=0.1,
+                    )
+                except (EOFError, KeyboardInterrupt):
+                    # Ctrl+C / Ctrl+D cancels the currently-running
+                    # turn if one is active; otherwise exits the REPL.
+                    if current_dispatch["task"] is not None and not current_dispatch["task"].done():
+                        _cancel_current()
+                        continue
+                    return
+
+                if exit_requested["flag"]:
+                    return
+
+                stripped = (text or "").strip()
+                if not stripped:
+                    continue
+
+                await queue.put(stripped)
+    finally:
+        exit_requested["flag"] = True
+        _cancel_current()
+        processor_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await processor_task
 
 
 __all__ = ["run_repl"]
