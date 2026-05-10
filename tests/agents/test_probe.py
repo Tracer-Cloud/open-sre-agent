@@ -19,10 +19,16 @@ _REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 # - ``blast_radius.py`` — issue #1500 (filesystem blast-radius watcher;
 #   uses ``psutil.Process(pid).cwd()`` to resolve each agent's project
 #   root before scheduling a ``watchdog`` observer on it)
+# - ``sudo_invocations.py`` — issue #1500 (sudo invocation watcher;
+#   polls ``psutil.Process.children(recursive=True)`` for sudo/doas)
+# - ``network_egress.py`` — issue #1500 (network-egress watcher; polls
+#   ``psutil.Process.net_connections`` for new outbound hosts)
 _PSUTIL_ALLOWED_MODULES = frozenset(
     {
         _REPO_ROOT / "app" / "agents" / "probe.py",
         _REPO_ROOT / "app" / "agents" / "blast_radius.py",
+        _REPO_ROOT / "app" / "agents" / "sudo_invocations.py",
+        _REPO_ROOT / "app" / "agents" / "network_egress.py",
     }
 )
 
