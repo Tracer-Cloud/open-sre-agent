@@ -10,8 +10,6 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-import psutil
-
 from app.agents.registry import AgentRecord, AgentRegistry
 
 logger = logging.getLogger(__name__)
@@ -69,22 +67,18 @@ def discover_agent_processes(*, include_all: bool = False) -> list[DiscoveredAge
 
     candidates: list[DiscoveredAgent] = []
     current_pid = os.getpid()
-    for proc in psutil.process_iter(attrs=["pid", "name", "cmdline"]):
-        try:
-            info = proc.info
-            pid = int(info.get("pid") or 0)
-            if pid <= 0 or pid == current_pid:
-                continue
-            cmdline = _cmdline_from_info(info)
-            command = _command_from_cmdline(cmdline, info)
-            process_name = str(info.get("name") or "")
-        except (psutil.NoSuchProcess, psutil.ZombieProcess, psutil.AccessDenied, ValueError):
+    for row in _current_process_rows():
+        if row.pid <= 0 or row.pid == current_pid:
             continue
+        cmdline = _split_command(row.command)
+        process_name = _normalized_token(cmdline[0]) if cmdline else ""
 
         agent_name = _classify_agent(process_name, cmdline, include_all=include_all)
         if agent_name is None:
             continue
-        candidates.append(DiscoveredAgent(name=f"{agent_name}-{pid}", pid=pid, command=command))
+        candidates.append(
+            DiscoveredAgent(name=f"{agent_name}-{row.pid}", pid=row.pid, command=row.command)
+        )
 
     return sorted(candidates, key=lambda item: (item.name, item.pid))
 
@@ -136,16 +130,18 @@ def process_command(pid: int) -> str | None:
     """Best-effort command line for a PID, or ``None`` if unavailable."""
 
     try:
-        proc = psutil.Process(pid)
-        cmdline = proc.cmdline()
-    except (psutil.NoSuchProcess, psutil.ZombieProcess, psutil.AccessDenied, ProcessLookupError):
+        proc = subprocess.run(
+            ("ps", "-p", str(pid), "-o", "args="),
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=2.0,
+        )
+    except (OSError, subprocess.TimeoutExpired, ValueError):
         return None
-    if cmdline:
-        return " ".join(shlex.quote(part) for part in cmdline)
-    try:
-        return proc.name()
-    except (psutil.NoSuchProcess, psutil.ZombieProcess, psutil.AccessDenied):
+    if proc.returncode != 0:
         return None
+    return proc.stdout.strip() or None
 
 
 def display_command(command: str) -> str:
@@ -194,18 +190,11 @@ def _parse_ps_line(line: str) -> ProcessRow | None:
     return ProcessRow(pid=pid, command=parts[1])
 
 
-def _cmdline_from_info(info: dict[str, object]) -> list[str]:
-    raw_cmdline = info.get("cmdline")
-    if isinstance(raw_cmdline, list) and raw_cmdline:
-        return [str(part) for part in raw_cmdline if str(part)]
-    name = str(info.get("name") or "")
-    return [name] if name else []
-
-
-def _command_from_cmdline(cmdline: list[str], info: dict[str, object]) -> str:
-    if cmdline:
-        return " ".join(shlex.quote(part) for part in cmdline)
-    return str(info.get("name") or "")
+def _split_command(command: str) -> list[str]:
+    try:
+        return shlex.split(command)
+    except ValueError:
+        return command.split()
 
 
 def _discover_cursor_terminal_agents(cursor_projects_dir: Path) -> list[AgentRecord]:
