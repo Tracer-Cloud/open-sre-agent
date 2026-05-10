@@ -130,6 +130,7 @@ TASK_CANCEL_SYNTHETIC_RE = re.compile(
     r"\b(?:synthetic|syntehtic)(?:[_\s-]?tests?)?\b|\bbenchmark\b",
     re.IGNORECASE,
 )
+TASK_CANCEL_GENERIC_TRIGGER_RE = re.compile(r"\b(?:abort|cancel)\b", re.IGNORECASE)
 TASK_CANCEL_GENERIC_RE = re.compile(r"\b(?:job|process|run|task|work)\b", re.IGNORECASE)
 IMPLEMENTATION_RE = re.compile(
     r"^\s*(?:please\s+)?(?:can\s+you\s+)?"
@@ -330,8 +331,9 @@ def extract_task_cancel_request(clause: PromptClause) -> PlannedAction | None:
     if synthetic is not None:
         return task_cancel_action("synthetic_test", clause.position + synthetic.start())
 
+    generic_trigger = TASK_CANCEL_GENERIC_TRIGGER_RE.search(clause.text)
     generic = TASK_CANCEL_GENERIC_RE.search(clause.text)
-    if generic is not None:
+    if generic_trigger is not None and generic is not None:
         return task_cancel_action("task", clause.position + generic.start())
 
     return None

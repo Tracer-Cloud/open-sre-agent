@@ -124,9 +124,12 @@ class TaskRecord:
             self._cancel_requested.set()
             proc = self._process
             pid = self.pid
+            rehydrated = self._rehydrated
         if proc is not None and proc.poll() is None:
             with contextlib.suppress(OSError):
                 proc.terminate()
+        elif was_active and pid is not None and rehydrated:
+            mark_cancelled_without_watcher = True
         elif was_active and pid is not None and _process_alive(pid):
             with contextlib.suppress(OSError):
                 os.kill(pid, signal.SIGTERM)
@@ -229,6 +232,7 @@ class TaskRegistry:
     ) -> None:
         self._tasks: deque[TaskRecord] = deque(maxlen=max_tasks)
         self._lock = threading.Lock()
+        self._persist_lock = threading.Lock()
         self._persist_path = persist_path
         self._max_tasks = max_tasks
         if load:
@@ -265,15 +269,16 @@ class TaskRegistry:
     def _persist(self) -> None:
         if self._persist_path is None:
             return
-        with self._lock:
-            payload = [task.to_dict() for task in self._tasks]
-        try:
-            self._persist_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-            tmp_path = self._persist_path.with_suffix(f"{self._persist_path.suffix}.tmp")
-            tmp_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
-            tmp_path.replace(self._persist_path)
-        except OSError:
-            return
+        with self._persist_lock:
+            with self._lock:
+                payload = [task.to_dict() for task in self._tasks]
+            try:
+                self._persist_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                tmp_path = self._persist_path.with_suffix(f"{self._persist_path.suffix}.tmp")
+                tmp_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+                tmp_path.replace(self._persist_path)
+            except OSError:
+                return
 
     def _refresh_rehydrated(self) -> None:
         with self._lock:

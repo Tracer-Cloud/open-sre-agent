@@ -167,7 +167,7 @@ class TestTaskRegistry:
         assert loaded.status == TaskStatus.COMPLETED
         assert loaded.result == "process exited while shell was closed"
 
-    def test_cancel_rehydrated_task_sends_sigterm(
+    def test_cancel_rehydrated_task_does_not_signal_pid(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
@@ -191,7 +191,7 @@ class TestTaskRegistry:
         assert loaded is not None
         assert loaded.request_cancel() is True
         assert loaded.status == TaskStatus.CANCELLED
-        assert calls[-1] == (12345, 15)
+        assert (12345, 15) not in calls
 
 
 class TestSlashTaskCommands:

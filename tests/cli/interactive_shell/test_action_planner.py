@@ -46,6 +46,14 @@ def test_plan_task_cancel_before_shell_kill() -> None:
     assert plan_cli_actions(msg) == []
 
 
+def test_stop_process_prompt_is_not_task_cancel() -> None:
+    msg = "stop the process of auto-investigation and give me a manual runbook"
+    actions, unhandled = plan_actions_with_unhandled(msg)
+
+    assert actions == []
+    assert unhandled is True
+
+
 def test_plan_cli_actions_remote_deployment_inventory_questions() -> None:
     messages = (
         "Which remote deployments are connected?",

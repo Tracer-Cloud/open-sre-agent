@@ -60,6 +60,10 @@ class TestEnvVarResolution:
         monkeypatch.setenv("OPENSRE_RELOAD", "0")
         assert ReplConfig.load().reload is False
 
+    def test_opensre_reload_empty_disables_reload(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENSRE_RELOAD", "")
+        assert ReplConfig.load().reload is False
+
     def test_opensre_reload_1_enables_reload(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OPENSRE_RELOAD", "1")
         assert ReplConfig.load().reload is True
