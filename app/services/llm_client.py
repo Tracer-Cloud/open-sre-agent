@@ -19,8 +19,17 @@ if TYPE_CHECKING:
     from app.integrations.llm_cli.registry import CLIProviderRegistration
 
 import boto3
-from anthropic import Anthropic, AnthropicBedrock, AuthenticationError, NotFoundError
+import botocore.exceptions
+from anthropic import (
+    Anthropic,
+    AnthropicBedrock,
+    AuthenticationError,
+    NotFoundError,
+    PermissionDeniedError,
+)
+from anthropic import BadRequestError as AnthropicBadRequestError
 from openai import AuthenticationError as OpenAIAuthError
+from openai import BadRequestError as OpenAIBadRequestError
 from openai import NotFoundError as OpenAINotFoundError
 from openai import OpenAI
 from openai import RateLimitError as OpenAIRateLimitError
@@ -77,6 +86,16 @@ _RETRY_MAX_ATTEMPTS = 3
 # generations (Opus, GPT-5) headroom while preventing indefinite hangs on
 # silent network drops.
 _CLIENT_TIMEOUT_SEC = 60.0
+
+# Bedrock boto3 error codes that must not be retried (invalid config, no access).
+_BEDROCK_NON_RETRYABLE_CODES = frozenset(
+    {
+        "ValidationException",
+        "AccessDeniedException",
+        "ResourceNotFoundException",
+        "UnauthorizedException",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -174,6 +193,8 @@ class LLMClient:
                     f"Anthropic model '{self._model}' was not found. "
                     "Check your configured model name and try again."
                 ) from err
+            except AnthropicBadRequestError as err:
+                raise RuntimeError(f"Anthropic request rejected (HTTP 400): {err.message}") from err
             except GuardrailBlockedError:
                 raise
             except Exception as err:
@@ -220,6 +241,8 @@ class LLMClient:
                     f"Anthropic model '{self._model}' was not found. "
                     "Check your configured model name and try again."
                 ) from err
+            except AnthropicBadRequestError as err:
+                raise RuntimeError(f"Anthropic request rejected (HTTP 400): {err.message}") from err
             except GuardrailBlockedError:
                 raise
             except Exception as err:
@@ -323,8 +346,20 @@ class BedrockLLMClient:
             try:
                 response = self._anthropic_client.messages.create(**kwargs)
                 break
+            except AnthropicBadRequestError as err:
+                raise RuntimeError(
+                    f"Bedrock Anthropic request rejected (HTTP 400): {err.message}"
+                ) from err
             except GuardrailBlockedError:
                 raise
+            except (
+                AuthenticationError,
+                PermissionDeniedError,
+                NotFoundError,
+            ) as err:
+                raise RuntimeError(
+                    f"Bedrock API request failed: {type(err).__name__}: {err}"
+                ) from err
             except Exception as err:
                 last_err = err
                 if attempt == max_attempts - 1:
@@ -378,6 +413,12 @@ class BedrockLLMClient:
             except GuardrailBlockedError:
                 raise
             except Exception as err:
+                if isinstance(err, botocore.exceptions.ClientError):
+                    code = err.response.get("Error", {}).get("Code", "")
+                    if code in _BEDROCK_NON_RETRYABLE_CODES:
+                        raise RuntimeError(
+                            f"Bedrock API request failed: {type(err).__name__}: {err}"
+                        ) from err
                 last_err = err
                 if attempt == max_attempts - 1:
                     raise RuntimeError(
@@ -432,7 +473,13 @@ def _format_anthropic_retry_error(err: Exception) -> str:
             "Anthropic API connection failed after multiple retries. "
             "Check network access and try again."
         )
-    if status_code == 529:
+    # Detect overloaded via HTTP status (error-response path) or via body error
+    # type (SSE streaming path: the SDK raises APIStatusError from body events
+    # where the initial HTTP response was 200, so status_code is absent/not 529).
+    body = getattr(err, "body", None)
+    error_obj = body.get("error") if isinstance(body, dict) else None
+    body_error_type = error_obj.get("type", "") if isinstance(error_obj, dict) else ""
+    if status_code == 529 or body_error_type == "overloaded_error":
         return (
             "Anthropic API is overloaded (HTTP 529) after multiple retries. "
             "Try again in a few seconds."
@@ -587,6 +634,10 @@ class OpenAILLMClient:
                     f"{self._provider_label} model '{self._model}' was not found. "
                     "Check your configured model name or endpoint."
                 ) from err
+            except OpenAIBadRequestError as err:
+                raise RuntimeError(
+                    f"{self._provider_label} request rejected (HTTP 400): {err.message}"
+                ) from err
             except GuardrailBlockedError:
                 raise
             except OpenAIRateLimitError as err:
@@ -653,6 +704,10 @@ class OpenAILLMClient:
                 raise RuntimeError(
                     f"{self._provider_label} model '{self._model}' was not found. "
                     "Check your configured model name or endpoint."
+                ) from err
+            except OpenAIBadRequestError as err:
+                raise RuntimeError(
+                    f"{self._provider_label} request rejected (HTTP 400): {err.message}"
                 ) from err
             except GuardrailBlockedError:
                 raise
