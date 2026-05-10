@@ -1,1 +1,1 @@
-python3 -c "import sys; sys.stdout.write(open('/home/user/opensre/app/services/llm_client.py').read())"
+python3 -c "print(open('/home/user/opensre/app/services/llm_client.py').read(), end='')"
