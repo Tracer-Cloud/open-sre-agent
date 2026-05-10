@@ -34,6 +34,12 @@ from app.cli.support.exception_reporting import report_exception
 from app.cli.support.prompt_support import repl_prompt_note_ctrl_c, repl_reset_ctrl_c_gate
 from app.llm_reasoning_effort import apply_reasoning_effort
 
+_build_prompt_session = _prompt_surface._build_prompt_session
+_prompt_message = _prompt_surface._prompt_message
+route_input = _router.route_input
+answer_cli_help = _cli_help.answer_cli_help
+dispatch_slash = _commands.dispatch_slash
+
 _INTERVENTION_CORRECTION_RE = re.compile(
     r"("
     r"no(?=[,.!?]|$)"
@@ -140,7 +146,7 @@ async def _run_one_turn(
     while True:
         try:
             with patch_stdout(raw=True):
-                text = await prompt.prompt_async(lambda: _prompt_surface._prompt_message(session))
+                text = await prompt.prompt_async(lambda: _prompt_message(session))
         except EOFError:
             console.print()
             return False
@@ -158,7 +164,7 @@ async def _run_one_turn(
 
     _prompt_surface.render_submitted_prompt(console, session, text)
 
-    decision = _router.route_input(text, session)
+    decision = route_input(text, session)
     kind = decision.route_kind.value
     session.last_route_decision = decision
     get_analytics().capture(
@@ -171,7 +177,7 @@ async def _run_one_turn(
         # Rewrite bare-word commands to their slash form before dispatch.
         cmd_text = text if text.startswith("/") else f"/{text}"
         try:
-            should_continue = _commands.dispatch_slash(cmd_text, session, console)
+            should_continue = dispatch_slash(cmd_text, session, console)
         except Exception as exc:
             report_exception(exc, context="interactive_shell.slash_dispatch")
             console.print(
@@ -183,7 +189,7 @@ async def _run_one_turn(
 
     if kind == "cli_help":
         with apply_reasoning_effort(session.reasoning_effort):
-            _cli_help.answer_cli_help(text, session, console)
+            answer_cli_help(text, session, console)
         session.record("cli_help", text)
         return True
 
@@ -239,7 +245,7 @@ async def _repl_main(initial_input: str | None = None, _config: ReplConfig | Non
     cfg = _config or ReplConfig.load()
     session = ReplSession()
     session.task_registry = TaskRegistry.persistent()
-    prompt = _prompt_surface._build_prompt_session()
+    prompt = _build_prompt_session()
     session.prompt_history_backend = prompt.history
     hot_reloader = HotReloadCoordinator() if cfg.reload else None
 
@@ -253,7 +259,7 @@ async def _repl_main(initial_input: str | None = None, _config: ReplConfig | Non
                 continue
             _prompt_surface.render_submitted_prompt(console, session, stripped)
 
-            decision = _router.route_input(stripped, session)
+            decision = route_input(stripped, session)
             kind = decision.route_kind.value
             session.last_route_decision = decision
             get_analytics().capture(
@@ -262,12 +268,12 @@ async def _repl_main(initial_input: str | None = None, _config: ReplConfig | Non
             )
             if kind == "slash":
                 cmd_text = stripped if stripped.startswith("/") else f"/{stripped}"
-                if not _commands.dispatch_slash(cmd_text, session, console):
+                if not dispatch_slash(cmd_text, session, console):
                     return 0
                 console.print()
             elif kind == "cli_help":
                 with apply_reasoning_effort(session.reasoning_effort):
-                    _cli_help.answer_cli_help(stripped, session, console)
+                    answer_cli_help(stripped, session, console)
                 session.record("cli_help", stripped)
             elif kind == "cli_agent":
                 turn = _agent_actions.execute_cli_actions_with_metrics(stripped, session, console)
