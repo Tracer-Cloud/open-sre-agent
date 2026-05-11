@@ -324,6 +324,7 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
     IntegrationSpec(service="posthog"),
     IntegrationSpec(service="trello"),
     IntegrationSpec(service="rds", setup_order=11),
+    IntegrationSpec(service="alicloud", direct_effective=True),
 )
 
 INTEGRATION_SPECS_BY_SERVICE = {spec.service: spec for spec in INTEGRATION_SPECS}
