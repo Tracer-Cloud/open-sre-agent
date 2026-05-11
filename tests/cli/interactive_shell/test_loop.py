@@ -793,6 +793,11 @@ class TestReplState:
             try:  # noqa: SIM105
                 await task
             except asyncio.CancelledError:
+                # Expected: the worker-triggered cancellation surfaces
+                # here once the scheduled ``task.cancel`` callback runs
+                # on the loop. Swallow so the assertion below can verify
+                # cancellation state without the exception unwinding the
+                # test.
                 pass
             assert task.cancelled() is True
 
