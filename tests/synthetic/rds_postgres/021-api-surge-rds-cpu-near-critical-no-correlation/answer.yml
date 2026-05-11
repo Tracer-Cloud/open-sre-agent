@@ -1,0 +1,69 @@
+root_cause_category: application_load_spike
+equivalent_root_cause_categories:
+  - upstream_traffic_surge
+  - application_tier_load_spike
+  - cpu_saturation_workload_burst
+  - cpu_saturation_bad_query
+required_keywords:
+  - API
+  - request
+  - surge
+  - products
+  - CPU
+  - "92"
+forbidden_keywords:
+  - configuration_error
+  - slow query
+  - cpu_saturation
+forbidden_categories:
+  - cpu_saturation
+  - configuration_error
+  - replication_lag
+  - storage_full
+required_evidence_sources:
+  - aws_cloudwatch_metrics
+  - aws_performance_insights
+  - ec2_instances_by_tag
+  - elb_target_health
+optimal_trajectory:
+  - describe_rds_instance
+  - ec2_instances_by_tag
+  - get_elb_target_health
+  - query_grafana_metrics
+  - query_grafana_logs
+max_investigation_loops: 3
+ruling_out_keywords:
+  - flat
+  - background tier
+  - parameter group
+model_response: |
+  ROOT_CAUSE: A 5x surge in inbound API requests to the prod-api-tg target group is driving the CPU near-critical condition on the payments-prod PostgreSQL primary. The surge increased the call rate of the products-by-category SELECT from ~16/sec to ~82/sec. That query is cheap per call (~18 ms, CPU-bound, no slow plan) but at 5x volume it accounts for ~77% of total db_load. The RDS instance is healthy in shape — the load is upstream-driven volume, not a DB-internal fault.
+  ROOT_CAUSE_CATEGORY: application_load_spike
+
+  VALIDATED_CLAIMS:
+  - RDS CPUUtilization climbed from ~12% to 92% between 14:05Z and 14:14Z and is sustained above 88% for the last four minutes. [evidence: aws_cloudwatch_metrics]
+  - ALB RequestCount on prod-api-tg climbed from ~1000/min to ~5000/min over the same window — a 5x surge. [evidence: aws_cloudwatch_metrics]
+  - EC2 API-tier CPU stayed flat at ~25-28% across all four prod-api-asg instances during the surge — the requests are I/O-bound for the API process and CPU-bound for the database, so the API tier metrics do not light up. [evidence: aws_cloudwatch_metrics, ec2_instances_by_tag]
+  - EC2 API-tier NetworkOut climbed from ~50 MB/min to ~250 MB/min — a 5x increase that matches the request count surge in shape and magnitude. [evidence: aws_cloudwatch_metrics]
+  - Performance Insights shows one query (products-by-category SELECT) dominating db_load at 6.4 AAS (~77% of total). Per-call duration is 18 ms (normal); call rate climbed from ~16/sec baseline to 82/sec. Wait events are CPU:user — no locks, no slow IO. [evidence: aws_performance_insights]
+  - DatabaseConnections climbed only modestly (82 to 142) — the API tier's connection pool absorbed the surge without exhausting, ruling out connection_exhaustion. [evidence: aws_cloudwatch_metrics]
+  - The background tier (prod-bg-asg) is flat at ~19% CPU and is not implicated. [evidence: aws_cloudwatch_metrics, ec2_instances_by_tag]
+  - All four ALB targets in prod-api-tg report healthy state — no draining or unhealthy instance to explain the climb. [evidence: elb_target_health]
+  - No relevant RDS events in the window. The parameter group change at 08:14Z is six hours before the alert and unrelated. [evidence: aws_rds_events]
+
+  NON_VALIDATED_CLAIMS:
+  - The traffic surge likely originates from an external client (scraper, partner integration, or unannounced campaign launch). The fixture does not include client-IP attribution, so the source of the surge cannot be confirmed from the evidence available.
+
+  CAUSAL_CHAIN:
+  - 14:05Z onward: ALB RequestCount on prod-api-tg climbs from ~1000/min to ~5000/min. EC2 API-tier NetworkOut climbs in lockstep, confirming the surge reaches the API process.
+  - Each API request issues a products-by-category SELECT on the PostgreSQL primary. At baseline 1000/min and ~1 such query per request, db_load for this query was ~1 AAS. At 5000/min, db_load reaches 6.4 AAS.
+  - Per-call duration of the query is unchanged (~18 ms, CPU-bound). The increase is purely volume.
+  - RDS CPUUtilization rises proportionally and reaches 92% at 14:14Z, triggering the near-critical alert.
+  - API-tier CPU stays flat because the API process is mostly waiting on the DB and the per-request CPU cost on the API side is small. The "where is CPU elevated" heuristic alone would point only to the DB; the upstream cause is visible only by reading non-CPU metrics on the API tier (NetworkOut, ALB RequestCount).
+  - The recent parameter group change is a red herring — it was applied six hours before the alert and changed only log_min_duration_statement, which does not affect CPU or query performance.
+
+  RECOMMENDED_ACTIONS:
+  - Confirm the source of the API request surge (CDN logs, application access logs, or per-IP request counts). Determine whether it is legitimate traffic (e.g., campaign launch) or scraping/abuse.
+  - If legitimate traffic, scale the API tier and consider adding a read replica or query result cache for the products-by-category endpoint.
+  - If scraping/abuse, add rate limiting at the ALB or WAF layer for the /api/products?category=X endpoint family.
+  - Add an alert on ALB RequestCount per target group so similar surges are detected upstream of the DB next time.

@@ -1,0 +1,41 @@
+schema_version: "1.0"
+scenario_id: 021-api-surge-rds-cpu-near-critical-no-correlation
+engine: postgres
+engine_version: "15"
+instance_class: db.r6g.xlarge
+region: us-east-1
+db_instance_identifier: payments-prod
+db_cluster: ""
+failure_mode: application_load_spike
+severity: critical
+scenario_difficulty: 4
+adversarial_signals:
+  - RDS CPU is at 92% — alert fires on CPU and CPU is the most obvious metric, but it is the symptom not the root
+  - API-tier EC2 CPU is flat at ~25%, so an agent that only looks for "where is CPU elevated" will miss the upstream cause
+  - Connection count climbs modestly (the API server's connection pool absorbs the surge), so "connection_exhaustion" is the wrong category
+  - An unrelated parameter group change happened 6 hours before the alert — a tempting red herring
+  - Top SQL in Performance Insights shows one dominating query that is fast per call but executed 5x baseline rate; the load is volume, not cost
+  - The correlation between API request count and DB load has no shared identifier — the agent must connect them by timestamp only
+available_evidence:
+  - aws_cloudwatch_metrics
+  - aws_rds_events
+  - aws_performance_insights
+  - ec2_instances_by_tag
+  - elb_target_health
+topology:
+  vpc_id: vpc-0c2d3e4f
+  load_balancer_arn: arn:aws:elasticloadbalancing:us-east-1:444455556666:loadbalancer/app/prod-api-alb/aabbccdd
+  target_group_arn: arn:aws:elasticloadbalancing:us-east-1:444455556666:targetgroup/prod-api-tg/eeff0011
+  tiers:
+    - name: api
+      asg: prod-api-asg
+      instance_ids:
+        - i-0a11
+        - i-0a22
+        - i-0a33
+        - i-0a44
+    - name: background
+      asg: prod-bg-asg
+      instance_ids:
+        - i-0b11
+        - i-0b22

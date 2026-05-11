@@ -1,0 +1,36 @@
+{
+  "id": "m_alb_requests",
+  "label": "ALB RequestCount for prod-api-tg (sum per minute)",
+  "metric_name": "RequestCount",
+  "dimensions": [
+    {
+      "Name": "LoadBalancer",
+      "Value": "app/prod-api-alb/aabbccdd"
+    },
+    {
+      "Name": "TargetGroup",
+      "Value": "targetgroup/prod-api-tg/eeff0011"
+    }
+  ],
+  "stat": "Sum",
+  "unit": "Count",
+  "status_code": "Complete",
+  "timestamps": [
+    "2026-05-08T14:00:00Z",
+    "2026-05-08T14:01:00Z",
+    "2026-05-08T14:02:00Z",
+    "2026-05-08T14:03:00Z",
+    "2026-05-08T14:04:00Z",
+    "2026-05-08T14:05:00Z",
+    "2026-05-08T14:06:00Z",
+    "2026-05-08T14:07:00Z",
+    "2026-05-08T14:08:00Z",
+    "2026-05-08T14:09:00Z",
+    "2026-05-08T14:10:00Z",
+    "2026-05-08T14:11:00Z",
+    "2026-05-08T14:12:00Z",
+    "2026-05-08T14:13:00Z",
+    "2026-05-08T14:14:00Z"
+  ],
+  "values": [983, 1012, 974, 998, 1024, 2118, 3216, 4187, 4768, 4942, 5021, 5048, 5067, 5042, 5089]
+}

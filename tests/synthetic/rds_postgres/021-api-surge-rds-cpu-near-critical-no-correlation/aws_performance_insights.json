@@ -1,0 +1,86 @@
+{
+  "db_instance_identifier": "payments-prod",
+  "start_time": "2026-05-08T14:00:00Z",
+  "end_time": "2026-05-08T14:14:00Z",
+  "db_load": {
+    "timestamps": [
+      "2026-05-08T14:00:00Z", "2026-05-08T14:01:00Z", "2026-05-08T14:02:00Z",
+      "2026-05-08T14:03:00Z", "2026-05-08T14:04:00Z", "2026-05-08T14:05:00Z",
+      "2026-05-08T14:06:00Z", "2026-05-08T14:07:00Z", "2026-05-08T14:08:00Z",
+      "2026-05-08T14:09:00Z", "2026-05-08T14:10:00Z", "2026-05-08T14:11:00Z",
+      "2026-05-08T14:12:00Z", "2026-05-08T14:13:00Z", "2026-05-08T14:14:00Z"
+    ],
+    "values": [0.4, 0.5, 0.4, 0.5, 0.4, 1.6, 3.2, 4.8, 6.1, 7.0, 7.6, 7.9, 8.1, 8.2, 8.3],
+    "unit": "AAS"
+  },
+  "top_sql": [
+    {
+      "statement": "SELECT p.product_id, p.name, p.price, p.stock FROM products p WHERE p.category_id = $1 ORDER BY p.popularity_score DESC LIMIT 50",
+      "db_load_avg": 6.4,
+      "wait_events": [
+        {"name": "CPU:user",         "type": "CPU", "db_load_avg": 5.9},
+        {"name": "IO:DataFileRead",  "type": "IO",  "db_load_avg": 0.5}
+      ],
+      "calls_per_sec": 82.4,
+      "mean_call_duration_ms": 18.2
+    },
+    {
+      "statement": "INSERT INTO payment_events (event_id, customer_id, amount, status, created_at) VALUES ($1, $2, $3, $4, NOW())",
+      "db_load_avg": 0.6,
+      "wait_events": [
+        {"name": "IO:DataFileWrite", "type": "IO",  "db_load_avg": 0.3},
+        {"name": "CPU:user",         "type": "CPU", "db_load_avg": 0.2},
+        {"name": "Lock:relation",    "type": "Lock","db_load_avg": 0.1}
+      ],
+      "calls_per_sec": 14.7,
+      "mean_call_duration_ms": 4.1
+    },
+    {
+      "statement": "SELECT c.customer_id, c.email FROM customers c WHERE c.customer_id = $1",
+      "db_load_avg": 0.4,
+      "wait_events": [
+        {"name": "CPU:user",        "type": "CPU", "db_load_avg": 0.3},
+        {"name": "IO:DataFileRead", "type": "IO",  "db_load_avg": 0.1}
+      ],
+      "calls_per_sec": 91.2,
+      "mean_call_duration_ms": 1.8
+    },
+    {
+      "statement": "REFRESH MATERIALIZED VIEW CONCURRENTLY mv_daily_payment_summary",
+      "db_load_avg": 0.3,
+      "wait_events": [
+        {"name": "IO:DataFileRead", "type": "IO", "db_load_avg": 0.2},
+        {"name": "CPU:user",        "type": "CPU","db_load_avg": 0.1}
+      ],
+      "calls_per_sec": 0.02,
+      "mean_call_duration_ms": 480.0
+    }
+  ],
+  "top_wait_events": [
+    {"name": "CPU:user",        "type": "CPU", "db_load_avg": 6.5},
+    {"name": "IO:DataFileRead", "type": "IO",  "db_load_avg": 0.9},
+    {"name": "Client:ClientRead","type": "Client","db_load_avg": 0.4},
+    {"name": "IO:DataFileWrite","type": "IO",  "db_load_avg": 0.3},
+    {"name": "Lock:relation",   "type": "Lock","db_load_avg": 0.1}
+  ],
+  "top_users": [
+    {"name": "api_service", "db_load_avg": 7.4},
+    {"name": "background_worker", "db_load_avg": 0.5},
+    {"name": "rdsadmin", "db_load_avg": 0.3}
+  ],
+  "top_hosts": [
+    {"id": "10.0.1.11", "db_load_avg": 2.1},
+    {"id": "10.0.1.22", "db_load_avg": 2.0},
+    {"id": "10.0.1.33", "db_load_avg": 1.9},
+    {"id": "10.0.1.44", "db_load_avg": 1.6},
+    {"id": "10.0.2.11", "db_load_avg": 0.4},
+    {"id": "10.0.2.22", "db_load_avg": 0.3}
+  ],
+  "notes": [
+    "Top SQL #1 (products-by-category SELECT) dominates db_load at 6.4 AAS — that is ~77% of total load. Per-call duration is fast (18 ms) but call rate climbed from a baseline of ~16/sec to 82/sec over the window. The load is volume, not cost.",
+    "Top SQL #2 (payment_events INSERT) is the normal write path; its call rate is normal.",
+    "Top SQL #3 (customer-by-id SELECT) is the typical session-lookup pattern, slightly elevated alongside the product-list calls, consistent with each user session making one customer-lookup plus one or more product-list requests.",
+    "Top SQL #4 (materialized view refresh) is a scheduled background task; its db_load is unchanged from baseline.",
+    "Top hosts: the four 10.0.1.x IPs map to the prod-api-asg instances (i-0a11..i-0a44) and account for ~93% of total db_load. The two 10.0.2.x IPs map to prod-bg-asg instances (i-0b11, i-0b22) and contribute negligibly. Top user 'api_service' confirms the load originates from the API tier, not background workers."
+  ]
+}

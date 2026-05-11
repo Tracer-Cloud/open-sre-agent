@@ -1,0 +1,26 @@
+{
+  "title": "[synthetic-rds] RDS CPUUtilization near-critical on payments-prod",
+  "state": "alerting",
+  "alert_source": "cloudwatch",
+  "commonLabels": {
+    "alertname": "RDSCPUNearCritical",
+    "severity": "critical",
+    "pipeline_name": "rds-postgres-api-surge-synthetic",
+    "service": "rds",
+    "engine": "postgres"
+  },
+  "commonAnnotations": {
+    "summary": "CPUUtilization on payments-prod climbed from ~12% to 92% over 10 minutes and has held above 88% for the last 4 minutes.",
+    "error": "",
+    "suspected_symptom": "Sustained DB CPU near the critical threshold; no obvious DB-internal cause in the alert payload.",
+    "db_instance_identifier": "payments-prod",
+    "db_instance": "payments-prod",
+    "db_cluster": "",
+    "engine": "postgres",
+    "cloudwatch_region": "us-east-1",
+    "aws_region": "us-east-1",
+    "vpc_id": "vpc-0c2d3e4f",
+    "rds_failure_mode": "application_load_spike",
+    "context_sources": "cloudwatch"
+  }
+}

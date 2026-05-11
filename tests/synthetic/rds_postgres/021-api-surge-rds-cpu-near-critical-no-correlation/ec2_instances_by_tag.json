@@ -1,0 +1,70 @@
+{
+  "instances": [
+    {
+      "instance_id": "i-0a11",
+      "tier": "api",
+      "asg": "prod-api-asg",
+      "private_ip": "10.0.1.11",
+      "vpc_id": "vpc-0c2d3e4f",
+      "subnet_id": "subnet-0a1",
+      "state": "running",
+      "instance_type": "m6i.large",
+      "security_groups": ["sg-api"]
+    },
+    {
+      "instance_id": "i-0a22",
+      "tier": "api",
+      "asg": "prod-api-asg",
+      "private_ip": "10.0.1.22",
+      "vpc_id": "vpc-0c2d3e4f",
+      "subnet_id": "subnet-0a2",
+      "state": "running",
+      "instance_type": "m6i.large",
+      "security_groups": ["sg-api"]
+    },
+    {
+      "instance_id": "i-0a33",
+      "tier": "api",
+      "asg": "prod-api-asg",
+      "private_ip": "10.0.1.33",
+      "vpc_id": "vpc-0c2d3e4f",
+      "subnet_id": "subnet-0a3",
+      "state": "running",
+      "instance_type": "m6i.large",
+      "security_groups": ["sg-api"]
+    },
+    {
+      "instance_id": "i-0a44",
+      "tier": "api",
+      "asg": "prod-api-asg",
+      "private_ip": "10.0.1.44",
+      "vpc_id": "vpc-0c2d3e4f",
+      "subnet_id": "subnet-0a4",
+      "state": "running",
+      "instance_type": "m6i.large",
+      "security_groups": ["sg-api"]
+    },
+    {
+      "instance_id": "i-0b11",
+      "tier": "background",
+      "asg": "prod-bg-asg",
+      "private_ip": "10.0.2.11",
+      "vpc_id": "vpc-0c2d3e4f",
+      "subnet_id": "subnet-0b1",
+      "state": "running",
+      "instance_type": "m6i.large",
+      "security_groups": ["sg-bg"]
+    },
+    {
+      "instance_id": "i-0b22",
+      "tier": "background",
+      "asg": "prod-bg-asg",
+      "private_ip": "10.0.2.22",
+      "vpc_id": "vpc-0c2d3e4f",
+      "subnet_id": "subnet-0b2",
+      "state": "running",
+      "instance_type": "m6i.large",
+      "security_groups": ["sg-bg"]
+    }
+  ]
+}

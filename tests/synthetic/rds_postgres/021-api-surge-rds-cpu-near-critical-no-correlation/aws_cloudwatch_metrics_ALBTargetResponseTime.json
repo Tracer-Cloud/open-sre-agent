@@ -1,0 +1,36 @@
+{
+  "id": "m_alb_response_time",
+  "label": "ALB TargetResponseTime for prod-api-tg (avg seconds)",
+  "metric_name": "TargetResponseTime",
+  "dimensions": [
+    {
+      "Name": "LoadBalancer",
+      "Value": "app/prod-api-alb/aabbccdd"
+    },
+    {
+      "Name": "TargetGroup",
+      "Value": "targetgroup/prod-api-tg/eeff0011"
+    }
+  ],
+  "stat": "Average",
+  "unit": "Seconds",
+  "status_code": "Complete",
+  "timestamps": [
+    "2026-05-08T14:00:00Z",
+    "2026-05-08T14:01:00Z",
+    "2026-05-08T14:02:00Z",
+    "2026-05-08T14:03:00Z",
+    "2026-05-08T14:04:00Z",
+    "2026-05-08T14:05:00Z",
+    "2026-05-08T14:06:00Z",
+    "2026-05-08T14:07:00Z",
+    "2026-05-08T14:08:00Z",
+    "2026-05-08T14:09:00Z",
+    "2026-05-08T14:10:00Z",
+    "2026-05-08T14:11:00Z",
+    "2026-05-08T14:12:00Z",
+    "2026-05-08T14:13:00Z",
+    "2026-05-08T14:14:00Z"
+  ],
+  "values": [0.048, 0.051, 0.046, 0.049, 0.052, 0.061, 0.078, 0.094, 0.118, 0.139, 0.158, 0.172, 0.184, 0.189, 0.193]
+}

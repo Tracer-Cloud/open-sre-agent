@@ -1,0 +1,32 @@
+{
+  "id": "m_ec2_bg_cpu",
+  "label": "EC2 background tier CPUUtilization (avg across prod-bg-asg)",
+  "metric_name": "CPUUtilization",
+  "dimensions": [
+    {
+      "Name": "AutoScalingGroupName",
+      "Value": "prod-bg-asg"
+    }
+  ],
+  "stat": "Average",
+  "unit": "Percent",
+  "status_code": "Complete",
+  "timestamps": [
+    "2026-05-08T14:00:00Z",
+    "2026-05-08T14:01:00Z",
+    "2026-05-08T14:02:00Z",
+    "2026-05-08T14:03:00Z",
+    "2026-05-08T14:04:00Z",
+    "2026-05-08T14:05:00Z",
+    "2026-05-08T14:06:00Z",
+    "2026-05-08T14:07:00Z",
+    "2026-05-08T14:08:00Z",
+    "2026-05-08T14:09:00Z",
+    "2026-05-08T14:10:00Z",
+    "2026-05-08T14:11:00Z",
+    "2026-05-08T14:12:00Z",
+    "2026-05-08T14:13:00Z",
+    "2026-05-08T14:14:00Z"
+  ],
+  "values": [18.4, 19.1, 18.9, 18.3, 19.0, 18.7, 18.5, 18.8, 19.2, 18.9, 18.6, 19.0, 18.7, 18.9, 19.1]
+}
