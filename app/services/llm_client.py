@@ -426,7 +426,10 @@ class BedrockLLMClient:
                     ) from err
                 if code in ("AccessDeniedException", "UnauthorizedException"):
                     err_msg = str(err)
-                    if "INVALID_PAYMENT_INSTRUMENT" in err_msg or "payment instrument" in err_msg.lower():
+                    if (
+                        "INVALID_PAYMENT_INSTRUMENT" in err_msg
+                        or "payment instrument" in err_msg.lower()
+                    ):
                         raise RuntimeError(
                             f"Access denied for Bedrock model '{self._model}'. "
                             "A valid AWS payment instrument is required — add a payment method "
