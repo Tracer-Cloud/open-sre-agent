@@ -13,7 +13,7 @@ import re
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 if TYPE_CHECKING:
     from app.integrations.llm_cli.registry import CLIProviderRegistration
@@ -936,13 +936,15 @@ def _extract_json_payload(text: str) -> Any:
 # Protocol keeps static type safety for CLI-backed clients without runtime import cycles.
 _LLMClientType = LLMClient | OpenAILLMClient | BedrockLLMClient | SupportsLLMInvoke
 _llm: _LLMClientType | None = None
+_llm_for_classification: _LLMClientType | None = None
 _llm_for_tools: _LLMClientType | None = None
 
 
 def reset_llm_singletons() -> None:
     """Clear cached LLM clients (tests, benchmarks, alternate configs)."""
-    global _llm, _llm_for_tools
+    global _llm, _llm_for_classification, _llm_for_tools
     _llm = None
+    _llm_for_classification = None
     _llm_for_tools = None
 
 
@@ -953,7 +955,24 @@ def _get_cli_provider_registration(provider: str) -> CLIProviderRegistration | N
     return get_cli_provider_registration(provider)
 
 
-def _create_llm_client(model_type: str) -> _LLMClientType:
+# Three-tier model selection: highest-cost reasoning > mid-tier classification > cheapest toolcall.
+ModelType = Literal["reasoning", "classification", "toolcall"]
+
+
+def _select_model(settings: Any, provider_prefix: str, model_type: ModelType) -> str:
+    """Look up the per-provider model field for the requested tier.
+
+    Reads ``{provider_prefix}_{model_type}_model`` off the validated
+    :class:`LLMSettings` instance. Centralises the dispatch so adding a new
+    tier (e.g. the ``classification`` tier added for the interactive-shell
+    intent classifier) only requires extending the settings model rather
+    than touching every per-provider branch in :func:`_create_llm_client`.
+    """
+    attr = f"{provider_prefix}_{model_type}_model"
+    return str(getattr(settings, attr))
+
+
+def _create_llm_client(model_type: ModelType) -> _LLMClientType:
     try:
         settings = LLMSettings.from_env()
     except ValidationError as exc:
@@ -961,23 +980,16 @@ def _create_llm_client(model_type: str) -> _LLMClientType:
     provider = settings.provider
     if provider == "openai":
         config = OPENAI_LLM_CONFIG
-        model = (
-            settings.openai_reasoning_model
-            if model_type == "reasoning"
-            else settings.openai_toolcall_model
+        return OpenAILLMClient(
+            model=_select_model(settings, "openai", model_type),
+            max_tokens=config.max_tokens,
         )
-        return OpenAILLMClient(model=model, max_tokens=config.max_tokens)
     elif provider == "openrouter":
         from app.config import OPENROUTER_LLM_CONFIG
 
         config = OPENROUTER_LLM_CONFIG
-        model = (
-            settings.openrouter_reasoning_model
-            if model_type == "reasoning"
-            else settings.openrouter_toolcall_model
-        )
         return OpenAILLMClient(
-            model=model,
+            model=_select_model(settings, "openrouter", model_type),
             max_tokens=config.max_tokens,
             base_url=OPENROUTER_BASE_URL,
             api_key_env="OPENROUTER_API_KEY",
@@ -986,13 +998,8 @@ def _create_llm_client(model_type: str) -> _LLMClientType:
         from app.config import REQUESTY_BASE_URL, REQUESTY_LLM_CONFIG
 
         config = REQUESTY_LLM_CONFIG
-        model = (
-            settings.requesty_reasoning_model
-            if model_type == "reasoning"
-            else settings.requesty_toolcall_model
-        )
         return OpenAILLMClient(
-            model=model,
+            model=_select_model(settings, "requesty", model_type),
             max_tokens=config.max_tokens,
             base_url=REQUESTY_BASE_URL,
             api_key_env="REQUESTY_API_KEY",
@@ -1002,13 +1009,8 @@ def _create_llm_client(model_type: str) -> _LLMClientType:
         from app.config import GEMINI_LLM_CONFIG
 
         config = GEMINI_LLM_CONFIG
-        model = (
-            settings.gemini_reasoning_model
-            if model_type == "reasoning"
-            else settings.gemini_toolcall_model
-        )
         return OpenAILLMClient(
-            model=model,
+            model=_select_model(settings, "gemini", model_type),
             max_tokens=config.max_tokens,
             base_url=GEMINI_BASE_URL,
             api_key_env="GEMINI_API_KEY",
@@ -1017,13 +1019,8 @@ def _create_llm_client(model_type: str) -> _LLMClientType:
         from app.config import NVIDIA_LLM_CONFIG
 
         config = NVIDIA_LLM_CONFIG
-        model = (
-            settings.nvidia_reasoning_model
-            if model_type == "reasoning"
-            else settings.nvidia_toolcall_model
-        )
         return OpenAILLMClient(
-            model=model,
+            model=_select_model(settings, "nvidia", model_type),
             max_tokens=config.max_tokens,
             base_url=NVIDIA_BASE_URL,
             api_key_env="NVIDIA_API_KEY",
@@ -1032,13 +1029,8 @@ def _create_llm_client(model_type: str) -> _LLMClientType:
         from app.config import MINIMAX_LLM_CONFIG
 
         config = MINIMAX_LLM_CONFIG
-        model = (
-            settings.minimax_reasoning_model
-            if model_type == "reasoning"
-            else settings.minimax_toolcall_model
-        )
         return OpenAILLMClient(
-            model=model,
+            model=_select_model(settings, "minimax", model_type),
             max_tokens=config.max_tokens,
             base_url=MINIMAX_BASE_URL,
             api_key_env="MINIMAX_API_KEY",
@@ -1047,6 +1039,7 @@ def _create_llm_client(model_type: str) -> _LLMClientType:
     elif provider == "ollama":
         from app.config import OLLAMA_LLM_CONFIG
 
+        # Ollama exposes a single local model regardless of tier.
         config = OLLAMA_LLM_CONFIG
         host = settings.ollama_host.rstrip("/")
         return OpenAILLMClient(
@@ -1060,12 +1053,10 @@ def _create_llm_client(model_type: str) -> _LLMClientType:
         from app.config import BEDROCK_LLM_CONFIG
 
         config = BEDROCK_LLM_CONFIG
-        model = (
-            settings.bedrock_reasoning_model
-            if model_type == "reasoning"
-            else settings.bedrock_toolcall_model
+        return BedrockLLMClient(
+            model=_select_model(settings, "bedrock", model_type),
+            max_tokens=config.max_tokens,
         )
-        return BedrockLLMClient(model=model, max_tokens=config.max_tokens)
     elif (cli_reg := _get_cli_provider_registration(provider)) is not None:
         from app.config import DEFAULT_MAX_TOKENS
         from app.integrations.llm_cli.runner import CLIBackedLLMClient
@@ -1079,19 +1070,17 @@ def _create_llm_client(model_type: str) -> _LLMClientType:
         )
     else:
         config = ANTHROPIC_LLM_CONFIG
-        model = (
-            settings.anthropic_reasoning_model
-            if model_type == "reasoning"
-            else settings.anthropic_toolcall_model
+        return LLMClient(
+            model=_select_model(settings, "anthropic", model_type),
+            max_tokens=config.max_tokens,
         )
-        return LLMClient(model=model, max_tokens=config.max_tokens)
 
 
 def get_llm_for_reasoning() -> _LLMClientType:
     """
     Get or create the LLM client singleton for complex reasoning tasks.
 
-    Uses the full-capability model (e.g., Claude Opus, GPT-4o) for:
+    Uses the full-capability model (e.g., Claude Opus, GPT-5) for:
     - Root cause diagnosis and multi-step analysis
     - Evidence categorization and claim validation
 
@@ -1104,12 +1093,34 @@ def get_llm_for_reasoning() -> _LLMClientType:
     return _llm
 
 
+def get_llm_for_classification() -> _LLMClientType:
+    """
+    Get or create the LLM client singleton for the mid-tier classification tier.
+
+    Uses a Sonnet-class model (Claude Sonnet for Anthropic/Bedrock/Requesty,
+    Gemini Flash for Gemini, GPT-5 mini for OpenAI). Heavier and slower than
+    the toolcall tier but markedly more capable on tasks that need real
+    instruction-following — e.g. interactive-shell intent classification —
+    while still being substantially cheaper than the reasoning tier.
+
+    Override the per-provider model via ``<PROVIDER>_CLASSIFICATION_MODEL``
+    (e.g. ``ANTHROPIC_CLASSIFICATION_MODEL=claude-sonnet-4-6``).
+    """
+    global _llm_for_classification
+    if _llm_for_classification is None:
+        _llm_for_classification = _create_llm_client(model_type="classification")
+    return _llm_for_classification
+
+
 def get_llm_for_tools() -> _LLMClientType:
     """
     Get or create a lightweight LLM client for tool selection and action planning.
 
-    Uses toolcall models (Claude Haiku for Anthropic, GPT-4o mini for OpenAI)
+    Uses toolcall models (Claude Haiku for Anthropic, GPT-5 mini for OpenAI)
     for lower cost and faster inference on simple routing decisions.
+
+    For tasks that need stronger instruction-following than Haiku-tier models
+    can reliably provide, use :func:`get_llm_for_classification` instead.
     """
     global _llm_for_tools
     if _llm_for_tools is None:

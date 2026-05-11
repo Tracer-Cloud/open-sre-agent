@@ -1,4 +1,6 @@
-root_cause_category: cpu_saturation
+root_cause_category: cpu_saturation_bad_query
+equivalent_root_cause_categories:
+  - cpu_saturation
 required_keywords:
   - CPU
   - query
@@ -14,7 +16,7 @@ optimal_trajectory:
 max_investigation_loops: 4
 model_response: |
   ROOT_CAUSE: CPU saturation on catalog-prod caused by a full table scan query (SELECT * FROM orders WHERE status = ?) running at 7.2 out of 8 available vCPUs. The query lacks a selective index on the status column, forcing sequential scans at 16,000–18,000 ReadIOPS.
-  ROOT_CAUSE_CATEGORY: cpu_saturation
+  ROOT_CAUSE_CATEGORY: cpu_saturation_bad_query
 
   VALIDATED_CLAIMS:
   - CPUUtilization sustained 88–97% over the full 20-minute window. [evidence: aws_cloudwatch_metrics]

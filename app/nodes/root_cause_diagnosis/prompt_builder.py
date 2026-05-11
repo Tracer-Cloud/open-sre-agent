@@ -93,7 +93,7 @@ EVIDENCE:
 OUTPUT FORMAT (follow exactly — no markdown code blocks, start immediately with ROOT_CAUSE:):
 
 ROOT_CAUSE:
-<1-2 sentences stating the root cause. If not provable, say "Most likely: ..." and state what evidence is missing. Never say only "Unable to determine".>
+<1-2 sentences. Begin with "The root cause is ..." or "The root cause of this incident is ...". If not provable, say "Most likely the root cause is ..." and state what evidence is missing. Never say only "Unable to determine".>
 
 ROOT_CAUSE_CATEGORY:
 <exactly one category name from the list below, lowercase, snake_case, no other text>

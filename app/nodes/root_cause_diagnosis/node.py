@@ -25,6 +25,27 @@ from .prompt_builder import build_diagnosis_prompt
 from .remediation_templates import get_template_steps
 
 
+def _blocked_action_names(executed_hypotheses: list[dict[str, object]]) -> set[str]:
+    blocked: set[str] = set()
+    for hypothesis in executed_hypotheses:
+        for field_name in ("actions", "exhausted_actions"):
+            actions = hypothesis.get(field_name, [])
+            if isinstance(actions, list):
+                blocked.update(action for action in actions if isinstance(action, str))
+    return blocked
+
+
+def _has_untried_actions(state: InvestigationState) -> bool:
+    available_actions = state.get("available_action_names", [])
+    if not isinstance(available_actions, list) or not available_actions:
+        return False
+    blocked = _blocked_action_names(state.get("executed_hypotheses", []))
+    return any(
+        isinstance(action_name, str) and action_name not in blocked
+        for action_name in available_actions
+    )
+
+
 def _is_healthy_claim_key(key: str, value: object) -> bool:
     """Return True iff a key should produce a healthy-short-circuit claim.
 
@@ -289,6 +310,16 @@ def diagnose_root_cause(state: InvestigationState) -> dict:
         and loop_count < MAX_INVESTIGATION_LOOPS
     ):
         recommendations.append("Fetch audit payload from S3 to trace external vendor interactions")
+    if (
+        not recommendations
+        and result.root_cause_category == "unknown"
+        and validity_score < 0.7
+        and loop_count < MAX_INVESTIGATION_LOOPS
+        and _has_untried_actions(state)
+    ):
+        recommendations.append(
+            "Gather one more round of telemetry evidence before finalizing root cause"
+        )
     next_loop_count = loop_count + 1 if recommendations else loop_count
 
     tracker.complete(

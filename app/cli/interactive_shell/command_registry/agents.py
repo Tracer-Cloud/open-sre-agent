@@ -33,11 +33,17 @@ from app.agents.lifecycle import TerminateResult, terminate
 from app.agents.registry import AgentRegistry
 from app.analytics.events import Event
 from app.analytics.provider import get_analytics
-from app.cli.interactive_shell.agents_view import render_agents_table
 from app.cli.interactive_shell.command_registry.types import SlashCommand
-from app.cli.interactive_shell.rendering import repl_table
-from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import BOLD_BRAND, DIM, ERROR, HIGHLIGHT, WARNING
+from app.cli.interactive_shell.runtime import ReplSession
+from app.cli.interactive_shell.ui import (
+    BOLD_BRAND,
+    DIM,
+    ERROR,
+    HIGHLIGHT,
+    WARNING,
+    render_agents_table,
+    repl_table,
+)
 
 _AGENTS_FIRST_ARGS: tuple[tuple[str, str], ...] = (
     ("budget", "view or edit per-agent hourly budgets"),

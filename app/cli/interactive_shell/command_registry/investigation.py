@@ -9,18 +9,17 @@ from rich.console import Console
 from rich.markup import escape
 
 from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
-from app.cli.interactive_shell.repl_choice_menu import (
-    repl_choose_one,
-    repl_section_break,
-    repl_tty_interactive,
-)
-from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.tasks import TaskKind
-from app.cli.interactive_shell.theme import (
+from app.cli.interactive_shell.runtime import ReplSession, TaskKind
+from app.cli.interactive_shell.ui import (
     DIM,
     ERROR,
     HIGHLIGHT,
     WARNING,
+)
+from app.cli.interactive_shell.ui.choice_menu import (
+    repl_choose_one,
+    repl_section_break,
+    repl_tty_interactive,
 )
 from app.cli.support.errors import OpenSREError
 from app.cli.support.exception_reporting import report_exception

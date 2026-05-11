@@ -7,7 +7,7 @@ from typing import Any
 import questionary
 from rich.console import Console
 
-from app.cli.interactive_shell.theme import BRAND, DIM, HIGHLIGHT
+from app.cli.interactive_shell.ui.theme import BRAND, DIM, HIGHLIGHT
 from app.cli.investigation.alert_templates import build_alert_template
 from app.cli.investigation.payload import load_file, load_interactive
 from app.cli.support.constants import SAMPLE_ALERT_OPTIONS

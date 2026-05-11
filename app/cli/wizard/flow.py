@@ -14,7 +14,7 @@ from rich.console import Console
 from rich.rule import Rule
 from rich.text import Text
 
-from app.cli.interactive_shell.theme import (
+from app.cli.interactive_shell.ui.theme import (
     BRAND,
     DIM,
     ERROR,
@@ -442,7 +442,7 @@ def _render_header() -> None:
       ─────────────────────────────────────────  [DIM rule]
       Setup — Configure your local AI stack …    [SECONDARY subtitle]
     """
-    from app.cli.interactive_shell.banner import _render_art
+    from app.cli.interactive_shell.ui.banner import _render_art
 
     art = _render_art()
     version = get_version()

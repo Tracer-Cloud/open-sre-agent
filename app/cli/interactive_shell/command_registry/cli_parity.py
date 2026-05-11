@@ -14,15 +14,14 @@ from pathlib import Path
 from rich.console import Console
 from rich.markup import escape
 
-from app.cli.interactive_shell.action_executor import (
+from app.cli.interactive_shell.command_registry.suggestions import closest_choice
+from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
+from app.cli.interactive_shell.orchestration.action_executor import (
     SYNTHETIC_TEST_TIMEOUT_SECONDS,
     start_background_cli_task,
 )
-from app.cli.interactive_shell.command_registry.suggestions import closest_choice
-from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
-from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.tasks import TaskKind
-from app.cli.interactive_shell.theme import DIM, ERROR
+from app.cli.interactive_shell.runtime import ReplSession, TaskKind
+from app.cli.interactive_shell.ui import DIM, ERROR
 
 _UPDATE_SUBPROCESS_TIMEOUT_SECONDS = 300
 _BACKGROUND_TEST_SUBCOMMANDS = frozenset({"run", "synthetic", "cloudopsbench"})

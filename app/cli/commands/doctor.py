@@ -31,7 +31,7 @@ from rich.console import Console
 from rich.rule import Rule
 from rich.text import Text
 
-from app.cli.interactive_shell.theme import (
+from app.cli.interactive_shell.ui.theme import (
     DIM,
     ERROR,
     GLYPH_ERROR,

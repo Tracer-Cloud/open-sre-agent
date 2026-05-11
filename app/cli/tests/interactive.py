@@ -8,7 +8,7 @@ from typing import Any
 
 from rich.console import Console
 
-from app.cli.interactive_shell.theme import BRAND, DIM, HIGHLIGHT, WARNING
+from app.cli.interactive_shell.ui.theme import BRAND, DIM, HIGHLIGHT, WARNING
 from app.cli.tests.catalog import TestCatalog, TestCatalogItem
 from app.cli.tests.runner import format_command, run_catalog_item, run_catalog_items
 

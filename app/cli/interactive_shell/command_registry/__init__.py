@@ -34,13 +34,13 @@ from app.cli.interactive_shell.command_registry.suggestions import closest_choic
 from app.cli.interactive_shell.command_registry.system import COMMANDS as SYSTEM_COMMANDS
 from app.cli.interactive_shell.command_registry.tasks_cmds import COMMANDS as TASK_COMMANDS
 from app.cli.interactive_shell.command_registry.types import SlashCommand
-from app.cli.interactive_shell.execution_policy import (
+from app.cli.interactive_shell.orchestration.execution_policy import (
     evaluate_slash_tier,
     execution_allowed,
     resolve_slash_execution_tier,
 )
-from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import ERROR
+from app.cli.interactive_shell.runtime import ReplSession
+from app.cli.interactive_shell.ui import ERROR
 
 _MERGED_SEQUENCE = tuple(
     chain(

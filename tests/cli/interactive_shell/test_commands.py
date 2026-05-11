@@ -19,8 +19,8 @@ from app.cli.interactive_shell.command_registry.investigation import (
 )
 from app.cli.interactive_shell.command_registry.tasks_cmds import _validate_cancel_args
 from app.cli.interactive_shell.commands import SLASH_COMMANDS, dispatch_slash
-from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.tasks import TaskKind, TaskStatus
+from app.cli.interactive_shell.runtime.session import ReplSession
+from app.cli.interactive_shell.runtime.tasks import TaskKind, TaskStatus
 
 
 def _capture() -> tuple[Console, io.StringIO]:

@@ -30,6 +30,8 @@ from app.cli.commands.tests import _build_synthetic_argv
 def test_build_synthetic_argv_with_explicit_report_and_observations_dir() -> None:
     argv = _build_synthetic_argv(
         scenario="001-replication-lag",
+        levels="1,2,3,4",
+        parallel_levels=1,
         output_json=False,
         mock_grafana=True,
         report=True,
@@ -48,12 +50,27 @@ def test_build_synthetic_argv_with_explicit_report_and_observations_dir() -> Non
 def test_build_synthetic_argv_with_json_and_no_report() -> None:
     argv = _build_synthetic_argv(
         scenario="",
+        levels="1,2,3,4",
+        parallel_levels=1,
         output_json=True,
         mock_grafana=False,
         report=False,
         observations_dir="",
     )
     assert argv == ["--json", "--no-report"]
+
+
+def test_build_synthetic_argv_with_levels_and_parallel() -> None:
+    argv = _build_synthetic_argv(
+        scenario="",
+        levels="2,3,4",
+        parallel_levels=4,
+        output_json=False,
+        mock_grafana=True,
+        report=None,
+        observations_dir="",
+    )
+    assert argv == ["--levels", "2,3,4", "--parallel-levels", "4", "--mock-grafana"]
 
 
 def test_tests_synthetic_cli_forwards_flags_to_run_suite_main(tmp_path: Path) -> None:
@@ -85,6 +102,10 @@ def test_tests_synthetic_cli_forwards_flags_to_run_suite_main(tmp_path: Path) ->
                 "synthetic",
                 "--scenario",
                 "001-replication-lag",
+                "--levels",
+                "2,3,4",
+                "--parallel-levels",
+                "4",
                 "--json",
                 "--report",
                 "--observations-dir",
@@ -96,6 +117,8 @@ def test_tests_synthetic_cli_forwards_flags_to_run_suite_main(tmp_path: Path) ->
     assert seen_argv == [
         "--scenario",
         "001-replication-lag",
+        "--parallel-levels",
+        "4",
         "--json",
         "--mock-grafana",
         "--report",
@@ -137,3 +160,37 @@ def test_tests_synthetic_cli_does_not_pass_observations_dir_when_unset(tmp_path:
 
     assert result.exit_code == 0
     assert seen_argv == ["--json", "--mock-grafana", "--no-report"]
+
+
+def test_tests_synthetic_all_defaults_to_parallel_all_levels(tmp_path: Path) -> None:
+    runner = CliRunner()
+    scenarios_dir = tmp_path / "rds_postgres"
+    (scenarios_dir / "001-replication-lag").mkdir(parents=True)
+
+    seen_argv: list[str] = []
+
+    def _fake_main(argv: list[str]) -> int:
+        seen_argv[:] = argv
+        return 0
+
+    fake_run_suite = types.ModuleType("tests.synthetic.rds_postgres.run_suite")
+    fake_run_suite.main = _fake_main
+
+    with (
+        unittest.mock.patch("app.cli.tests.discover.SYNTHETIC_SCENARIOS_DIR", scenarios_dir),
+        unittest.mock.patch.dict(
+            sys.modules,
+            {"tests.synthetic.rds_postgres.run_suite": fake_run_suite},
+        ),
+    ):
+        result = runner.invoke(
+            cli,
+            [
+                "tests",
+                "synthetic",
+                "all",
+            ],
+        )
+
+    assert result.exit_code == 0
+    assert seen_argv == ["--parallel-levels", "4", "--mock-grafana"]

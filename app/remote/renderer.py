@@ -20,7 +20,7 @@ from rich.markdown import Markdown
 from rich.spinner import Spinner
 from rich.text import Text
 
-from app.cli.interactive_shell.theme import (
+from app.cli.interactive_shell.ui.theme import (
     ANSI_BOLD,
     ANSI_DIM,
     ANSI_RESET,
@@ -524,7 +524,7 @@ def _print_section(title: str, content: str) -> None:
         from rich.padding import Padding
         from rich.rule import Rule
 
-        from app.cli.interactive_shell.theme import MARKDOWN_THEME
+        from app.cli.interactive_shell.ui.theme import MARKDOWN_THEME
 
         console = Console(highlight=False)
         console.print()

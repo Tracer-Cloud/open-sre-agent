@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime
 from typing import Any
 
-from app.nodes.root_cause_diagnosis.constants import _GRAFANA_SOURCE_TYPE_LABELS
+from app.nodes.root_cause_diagnosis.constants import GRAFANA_SOURCE_TYPE_LABELS
 
 _STRUCTURED_TAG_PREFIXES = ("kube_",)
 _STRUCTURED_TAG_NAMES = ("pod_name", "container_name", "container_id")
@@ -18,7 +18,7 @@ def _format_grafana_log_entry(log: Any) -> str:
     message = str(log.get("message") or "")[:300]
     source_type = str(log.get("source_type") or "").strip()
     source_parts = [
-        _GRAFANA_SOURCE_TYPE_LABELS.get(source_type, ""),
+        GRAFANA_SOURCE_TYPE_LABELS.get(source_type, ""),
         str(log.get("source_identifier") or "").strip(),
     ]
     source = " ".join(part for part in source_parts if part)

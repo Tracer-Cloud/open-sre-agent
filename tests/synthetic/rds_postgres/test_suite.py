@@ -87,6 +87,79 @@ def test_score_result_does_not_apply_failover_wording_to_storage_scenario() -> N
     assert score.passed is True
 
 
+def test_score_result_accepts_equivalent_cpu_saturation_category() -> None:
+    """Scenario 004 allows either generic CPU saturation or the specific bad-query label."""
+
+    fixture = load_scenario(SUITE_DIR / "004-cpu-saturation-bad-query")
+
+    final_state = {
+        "root_cause": (
+            "CPU saturation from a heavy query shown in Performance Insights "
+            "top SQL with AAS and avg load on the catalog database."
+        ),
+        "root_cause_category": "cpu_saturation",
+        "validated_claims": [],
+        "non_validated_claims": [],
+        "causal_chain": [],
+        "evidence": {
+            "grafana_metrics": {"placeholder": True},
+        },
+        "executed_hypotheses": [
+            {
+                "actions": [
+                    "query_grafana_metrics",
+                    "query_grafana_logs",
+                    "query_grafana_alert_rules",
+                ]
+            }
+        ],
+        "investigation_loop_count": 1,
+    }
+
+    score = score_result(fixture, final_state)
+
+    assert score.passed is True
+    assert score.actual_category == "cpu_saturation"
+    assert score.accepted_categories == ("cpu_saturation", "cpu_saturation_bad_query")
+
+
+def test_score_result_accepts_replication_lag_wal_volume_equivalent() -> None:
+    """Scenario 006 allows generic replication_lag or WAL-specific subcategory."""
+
+    fixture = load_scenario(SUITE_DIR / "006-replication-lag-cpu-redherring")
+
+    final_state = {
+        "root_cause": (
+            "Replication lag on the replica from WAL volume; the SELECT workload is a "
+            "red herring with avg load and AAS in Performance Insights. "
+            "UPDATE on primary drives WAL; SELECT analytics is unrelated to the lag."
+        ),
+        "root_cause_category": "replication_lag_wal_volume",
+        "validated_claims": [],
+        "non_validated_claims": [],
+        "causal_chain": [],
+        "evidence": {
+            "grafana_metrics": {"placeholder": True},
+        },
+        "executed_hypotheses": [
+            {
+                "actions": [
+                    "query_grafana_metrics",
+                    "query_grafana_logs",
+                    "query_grafana_alert_rules",
+                ]
+            }
+        ],
+        "investigation_loop_count": 1,
+    }
+
+    score = score_result(fixture, final_state)
+
+    assert score.passed is True
+    assert score.actual_category == "replication_lag_wal_volume"
+    assert score.accepted_categories == ("replication_lag", "replication_lag_wal_volume")
+
+
 def test_score_result_keeps_failover_event_reasoning_requirement() -> None:
     fixture = load_scenario(SUITE_DIR / "005-failover")
 
@@ -593,6 +666,105 @@ class TestScenarioInheritance:
                 match="golden_trajectory.max_loops",
             ):
                 load_scenario(real_dir)
+        finally:
+            for f in real_dir.iterdir():
+                f.unlink()
+            real_dir.rmdir()
+
+    def test_schema_v3_supports_k8s_semantic_evidence_sources(self) -> None:
+        """schema_v3 scenarios can declare and load Kubernetes semantic evidence IDs."""
+        real_dir = SUITE_DIR / "999-test-schema-v3-k8s-sources"
+        real_dir.mkdir(exist_ok=True)
+        try:
+            (real_dir / "scenario.yml").write_text(
+                textwrap.dedent("""\
+                base: 000-healthy
+                schema_version: schema_v3
+                scenario_id: 999-test-schema-v3-k8s-sources
+                failure_mode: cpu_saturation
+                severity: critical
+                scenario_difficulty: 3
+                available_evidence:
+                  - k8s_events
+                  - k8s_rollout
+            """)
+            )
+            (real_dir / "answer.yml").write_text(
+                textwrap.dedent("""\
+                root_cause_category: cpu_saturation
+                required_keywords:
+                  - cpu saturation
+                model_response: "CPU saturation."
+                required_evidence_sources:
+                  - k8s_events
+            """)
+            )
+            (real_dir / "k8s_events.json").write_text(json.dumps({"events": []}))
+            (real_dir / "k8s_rollout.json").write_text(json.dumps({"status": "degraded"}))
+
+            fixture = load_scenario(real_dir)
+
+            assert fixture.metadata.schema_version == "schema_v3"
+            assert fixture.metadata.available_evidence == ["k8s_events", "k8s_rollout"]
+            assert fixture.evidence.k8s_events is not None
+            assert fixture.evidence.k8s_rollout is not None
+            assert fixture.answer_key.required_evidence_sources == ["k8s_events"]
+        finally:
+            for f in real_dir.iterdir():
+                f.unlink()
+            real_dir.rmdir()
+
+    def test_schema_v3_complex_scenario_requires_required_evidence_sources(self) -> None:
+        """schema_v3 complex scenarios must declare non-empty required_evidence_sources."""
+        real_dir = SUITE_DIR / "999-test-schema-v3-complex-requires-sources"
+        real_dir.mkdir(exist_ok=True)
+        try:
+            (real_dir / "scenario.yml").write_text(
+                textwrap.dedent("""\
+                base: 000-healthy
+                schema_version: schema_v3
+                scenario_id: 999-test-schema-v3-complex-requires-sources
+                failure_mode: cpu_saturation
+                severity: critical
+                scenario_difficulty: 3
+                available_evidence:
+                  - aws_cloudwatch_metrics
+            """)
+            )
+            _write_minimal_answer_yml(real_dir)
+
+            with pytest.raises(
+                ValueError,
+                match="required_evidence_sources",
+            ):
+                load_scenario(real_dir)
+        finally:
+            for f in real_dir.iterdir():
+                f.unlink()
+            real_dir.rmdir()
+
+    def test_schema_v1_complex_scenario_keeps_backward_compatibility(self) -> None:
+        """Legacy schema versions keep loading without required_evidence_sources."""
+        real_dir = SUITE_DIR / "999-test-schema-v1-complex-backcompat"
+        real_dir.mkdir(exist_ok=True)
+        try:
+            (real_dir / "scenario.yml").write_text(
+                textwrap.dedent("""\
+                base: 000-healthy
+                schema_version: "1.0"
+                scenario_id: 999-test-schema-v1-complex-backcompat
+                failure_mode: cpu_saturation
+                severity: critical
+                scenario_difficulty: 3
+                available_evidence:
+                  - aws_cloudwatch_metrics
+            """)
+            )
+            _write_minimal_answer_yml(real_dir)
+
+            fixture = load_scenario(real_dir)
+            assert fixture.metadata.schema_version == "1.0"
+            assert fixture.answer_key.required_evidence_sources == []
         finally:
             for f in real_dir.iterdir():
                 f.unlink()

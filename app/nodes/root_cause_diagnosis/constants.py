@@ -31,7 +31,7 @@ ALLOWED_EVIDENCE_SOURCES = [
     "cloudopsbench_evidence",
 ]
 
-_GRAFANA_SOURCE_TYPE_LABELS: dict[str, str] = {
+GRAFANA_SOURCE_TYPE_LABELS: dict[str, str] = {
     "aws_performance_insights": "Performance Insights",
     "aws_rds_events": "RDS Events",
     "cloudwatch_logs": "CloudWatch Logs",

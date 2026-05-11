@@ -8,22 +8,29 @@ from rich.markup import escape
 from app.cli.interactive_shell.command_registry import repl_data
 from app.cli.interactive_shell.command_registry.cli_parity import run_cli_command
 from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
-from app.cli.interactive_shell.rendering import (
+from app.cli.interactive_shell.config.tool_catalog import (
+    build_tool_catalog,
+    format_tool_catalog_text,
+)
+from app.cli.interactive_shell.runtime import ReplSession
+from app.cli.interactive_shell.ui import (
+    BOLD_BRAND,
+    DIM,
+    ERROR,
+    HIGHLIGHT,
     MCP_INTEGRATION_SERVICES,
+    WARNING,
     render_integrations_table,
     render_mcp_table,
     render_models_table,
     repl_table,
 )
-from app.cli.interactive_shell.repl_choice_menu import (
+from app.cli.interactive_shell.ui.choice_menu import (
     CRUMB_SEP,
     repl_choose_one,
     repl_section_break,
     repl_tty_interactive,
 )
-from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import BOLD_BRAND, DIM, ERROR, HIGHLIGHT, WARNING
-from app.cli.interactive_shell.tool_catalog import build_tool_catalog, format_tool_catalog_text
 
 _ROOT_LIST = "/list"
 _ROOT_INTEGRATIONS = "/integrations"

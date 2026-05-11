@@ -25,7 +25,7 @@ from rich.console import Console, Group
 from rich.panel import Panel
 from rich.table import Table
 
-from app.cli.interactive_shell.theme import BRAND, DIM, ERROR, HIGHLIGHT
+from app.cli.interactive_shell.ui.theme import BRAND, DIM, ERROR, HIGHLIGHT
 from app.integrations.mcp_streamable_http_compat import streamable_http_client
 from app.strict_config import StrictConfigModel
 

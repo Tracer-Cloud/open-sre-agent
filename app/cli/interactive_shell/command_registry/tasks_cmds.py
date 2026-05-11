@@ -9,15 +9,14 @@ from rich.markup import escape
 
 from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
 from app.cli.interactive_shell.history import load_command_history_entries
-from app.cli.interactive_shell.rendering import repl_table
-from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.tasks import TaskKind, TaskRecord, TaskStatus
-from app.cli.interactive_shell.theme import (
+from app.cli.interactive_shell.runtime import ReplSession, TaskKind, TaskRecord, TaskStatus
+from app.cli.interactive_shell.ui import (
     BOLD_BRAND,
     DIM,
     ERROR,
     HIGHLIGHT,
     WARNING,
+    repl_table,
 )
 
 

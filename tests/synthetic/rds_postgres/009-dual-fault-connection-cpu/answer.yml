@@ -6,6 +6,7 @@ required_keywords:
   - Client:ClientRead
   - CPU
   - root
+  - single
 forbidden_keywords:
   - two independent problems
   - separate root causes
@@ -18,7 +19,7 @@ optimal_trajectory:
   - query_grafana_alert_rules
 max_investigation_loops: 4
 model_response: |
-  ROOT_CAUSE: A connection pool leak is causing both the connection exhaustion and CPU saturation simultaneously — they share a single causal root. Leaked connections are holding open long-running search queries that never return results to their callers (Client:ClientRead wait). These idle-but-open connections accumulate, exhausting the connection ceiling while also consuming CPU due to the scan-heavy queries they hold.
+  ROOT_CAUSE: The root cause is a connection pool leak in search_svc — a single shared root that simultaneously drives connection exhaustion and CPU saturation. Leaked connections hold open long-running search_index queries whose results are never read by the caller (Client:ClientRead wait). These idle-but-open connections accumulate until the connection ceiling is hit while each one continues to consume CPU, making this a single causal chain not two independent problems.
   ROOT_CAUSE_CATEGORY: connection_exhaustion
 
   VALIDATED_CLAIMS:

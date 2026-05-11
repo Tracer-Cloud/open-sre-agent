@@ -315,7 +315,6 @@ class TestToolResultToDict:
         is_error: bool = False,
         content_items: list | None = None,
     ) -> MagicMock:
-        from mcp import types  # type: ignore[import-not-found]
 
         result = MagicMock()
         result.isError = is_error

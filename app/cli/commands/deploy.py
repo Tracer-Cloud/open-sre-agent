@@ -12,7 +12,7 @@ from app.analytics.cli import (
     capture_deploy_failed,
     capture_deploy_started,
 )
-from app.cli.interactive_shell.theme import BRAND, DIM, ERROR, HIGHLIGHT, WARNING
+from app.cli.interactive_shell.ui.theme import BRAND, DIM, ERROR, HIGHLIGHT, WARNING
 from app.cli.support.context import is_json_output, is_yes
 from app.cli.support.errors import OpenSREError
 from app.deployment.methods.langsmith import (

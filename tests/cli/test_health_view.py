@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 from rich.console import Console
 
-from app.cli.interactive_shell.theme import ERROR, HIGHLIGHT, WARNING
+from app.cli.interactive_shell.ui.theme import ERROR, HIGHLIGHT, WARNING
 from app.cli.support.health_view import (
     _summary_counts,
     render_health_json,

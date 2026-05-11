@@ -16,9 +16,9 @@ from app.agents.discovery import (
 )
 from app.agents.probe import pid_exists
 from app.agents.registry import AgentRecord, AgentRegistry
-from app.cli.interactive_shell.agents_view import render_agents_table
-from app.cli.interactive_shell.rendering import repl_table
-from app.cli.interactive_shell.theme import BOLD_BRAND, DIM, HIGHLIGHT
+from app.cli.interactive_shell.ui.agents_view import render_agents_table
+from app.cli.interactive_shell.ui.rendering import repl_table
+from app.cli.interactive_shell.ui.theme import BOLD_BRAND, DIM, HIGHLIGHT
 
 
 @click.group(name="agents")

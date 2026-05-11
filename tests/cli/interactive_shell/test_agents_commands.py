@@ -17,7 +17,7 @@ from app.agents.conflicts import (
 )
 from app.agents.registry import AgentRecord, AgentRegistry
 from app.cli.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
-from app.cli.interactive_shell.session import ReplSession
+from app.cli.interactive_shell.runtime.session import ReplSession
 
 
 def _capture() -> tuple[Console, io.StringIO]:

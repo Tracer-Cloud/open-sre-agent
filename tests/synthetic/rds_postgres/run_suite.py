@@ -1,16 +1,36 @@
+"""Thin orchestration entrypoint for the synthetic RDS PostgreSQL benchmark suite.
+
+Pure scoring logic lives in scoring.py.
+Rendering/cross-axis reports live in reporting.py.
+Per-scenario observation building and Rich rendering live in observations.py.
+"""
+
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
-import re
+import os
+import textwrap
 import time
-from collections.abc import Callable
-from dataclasses import asdict, dataclass, field, replace
+from collections.abc import Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager, nullcontext
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    Progress,
+    TaskID,
+    TaskProgressColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
+from rich.table import Table
 
 from tests.synthetic.mock_aws_backend import FixtureAWSBackend
 from tests.synthetic.mock_grafana_backend.backend import FixtureGrafanaBackend
@@ -23,6 +43,15 @@ from tests.synthetic.rds_postgres.observations import (
     render_report_to_console,
     write_observation,
 )
+from tests.synthetic.rds_postgres.runner_api import (
+    LevelRunConfig,
+    LevelRunResult,
+    SuiteRunConfig,
+    SuiteRunResult,
+    group_fixtures_by_level,
+    parse_levels_csv,
+    select_fixtures,
+)
 from tests.synthetic.rds_postgres.scenario_loader import (
     SUITE_DIR,
     GoldenTrajectoryConfig,
@@ -30,12 +59,37 @@ from tests.synthetic.rds_postgres.scenario_loader import (
     load_all_scenarios,
 )
 
-# Maps fixture schema evidence keys to the agent's internal state keys.
-_EVIDENCE_KEY_MAP: dict[str, str] = {
-    "aws_cloudwatch_metrics": "grafana_metrics",
-    "aws_rds_events": "grafana_logs",
-    "aws_performance_insights": "grafana_metrics",
-}
+# Re-export scoring symbols so existing import sites continue to work without
+# modification. Track removal in a follow-up once all sites are migrated.
+from tests.synthetic.rds_postgres.scoring import (
+    FailureDetail,
+    GateResult,
+    ReasoningScore,
+    ScenarioScore,
+    TrajectoryScore,
+    _all_required_gates_pass,
+    score_reasoning,
+    score_result,
+    score_trajectory,
+)
+
+__all__ = [
+    # dataclasses
+    "FailureDetail",
+    "GateResult",
+    "ReasoningScore",
+    "ScenarioScore",
+    "TrajectoryScore",
+    # functions
+    "score_result",
+    "score_reasoning",
+    "score_trajectory",
+    # orchestration
+    "run_scenario",
+    "run_synthetic_suite",
+    "run_suite",
+    "main",
+]
 
 
 def _run_investigation_lazy(**kwargs: Any) -> Any:
@@ -44,99 +98,8 @@ def _run_investigation_lazy(**kwargs: Any) -> Any:
     return _run_investigation(**kwargs)
 
 
-# Keep this as a module symbol so tests can monkeypatch it without importing
-# heavy optional dependencies during test collection.
+# Keep as module symbol so tests can monkeypatch without importing heavy deps.
 run_investigation: Callable[..., Any] = _run_investigation_lazy
-
-
-@dataclass(frozen=True)
-class TrajectoryScore:
-    actual_sequence: list[str]  # flattened actions from executed_hypotheses
-    expected_sequence: list[str]  # from answer_key.optimal_trajectory
-    loops_used: int
-    reported_loops_used: int
-    loop_count_consistent: bool
-    actions_per_loop: list[int]
-    max_loops: int
-    sequencing_ok: bool  # all expected actions appear in actual (set membership)
-    calibration_ok: bool  # loops_used <= max_loops
-    trajectory_budget_ok: bool  # no extra actions beyond expected trajectory
-    extra_actions_count: int
-    efficiency_score: float  # mean(sequencing_ok, calibration_ok, trajectory_budget_ok)
-
-
-@dataclass(frozen=True)
-class FailureDetail:
-    code: str
-    detail: str
-
-
-@dataclass(frozen=True)
-class GateResult:
-    status: str
-    threshold: str
-    actual: str
-
-
-@dataclass(frozen=True)
-class ReasoningScore:
-    """Axis 2 adversarial reasoning quality score.
-
-    ruling_out_ok: every ruling_out_keywords token was found in agent output.
-    queries_ok: every required_queries metric name was requested via query_timeseries.
-    reasoning_score: mean(ruling_out_ok, queries_ok); 1.0 = full pass.
-    """
-
-    ruling_out_ok: bool
-    queries_ok: bool
-    missing_ruling_out: list[str]
-    missing_queries: list[str]
-    reasoning_score: float
-
-
-@dataclass(frozen=True)
-class ScenarioScore:
-    scenario_id: str
-    passed: bool
-    root_cause_present: bool
-    expected_category: str
-    actual_category: str
-    missing_keywords: list[str]
-    matched_keywords: list[str]
-    exact_missing_keywords: list[str] = field(default_factory=list)
-    exact_matched_keywords: list[str] = field(default_factory=list)
-    semantic_missing_keywords: list[str] = field(default_factory=list)
-    semantic_matched_keywords: list[str] = field(default_factory=list)
-    exact_keyword_match: bool = False
-    semantic_keyword_match: bool = False
-    normalization_used: list[str] = field(default_factory=list)
-    gates: dict[str, GateResult] = field(default_factory=dict)
-    failure_reasons: list[FailureDetail] = field(default_factory=list)
-    root_cause: str = ""
-    failure_reason: str = ""
-    trajectory: TrajectoryScore | None = None
-    reasoning: ReasoningScore | None = None
-
-
-_REQUIRED_GATE_NAMES = {
-    "category_match",
-    "required_keyword_match",
-    "required_evidence_sources",
-    "trajectory_budget",
-    "forbidden_category_clear",
-    "forbidden_keyword_clear",
-    "failover_event_reasoning",
-    "trajectory_policy",
-}
-
-
-def _all_required_gates_pass(gates: dict[str, GateResult]) -> bool:
-    for gate_name, gate in gates.items():
-        if gate_name not in _REQUIRED_GATE_NAMES:
-            continue
-        if gate.status != "pass":
-            return False
-    return True
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -145,6 +108,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--scenario",
         default="",
         help="Run a single scenario directory name, e.g. 001-replication-lag.",
+    )
+    parser.add_argument(
+        "--levels",
+        default="1,2,3,4",
+        help=(
+            "Comma-separated scenario_difficulty levels to execute (1-4). "
+            "Ignored when --scenario is set."
+        ),
+    )
+    parser.add_argument(
+        "--parallel-levels",
+        type=int,
+        default=1,
+        dest="parallel_levels",
+        help="Number of scenario levels to execute in parallel (max 4).",
     )
     parser.add_argument(
         "--json",
@@ -181,7 +159,36 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=str(SUITE_DIR / "_observations"),
         help="Directory where per-run observation JSON files are written.",
     )
+    parser.add_argument(
+        "--baseline-out",
+        default="",
+        dest="baseline_out",
+        help="Write per-scenario canonical_report_payload JSON snapshots into this directory.",
+    )
+    parser.add_argument(
+        "--baseline-check",
+        default="",
+        dest="baseline_check",
+        help=(
+            "Compare each scenario's canonical_report_payload against snapshots in this "
+            "directory. Exits non-zero on any mismatch."
+        ),
+    )
     return parser.parse_args(argv)
+
+
+def _build_run_config(args: argparse.Namespace) -> SuiteRunConfig:
+    return SuiteRunConfig(
+        scenario=str(args.scenario or "").strip(),
+        levels=parse_levels_csv(args.levels),
+        parallel_levels=max(1, int(args.parallel_levels)),
+        output_json=bool(args.json),
+        mock_grafana=bool(args.mock_grafana),
+        report=args.report,
+        observations_dir=Path(args.observations_dir),
+        baseline_out=Path(args.baseline_out) if args.baseline_out else None,
+        baseline_check=Path(args.baseline_check) if args.baseline_check else None,
+    )
 
 
 def _build_resolved_integrations(
@@ -189,22 +196,7 @@ def _build_resolved_integrations(
     use_mock_grafana: bool,
     grafana_backend: Any = None,
 ) -> dict[str, Any] | None:
-    """Build pre-resolved integrations to inject into run_investigation.
-
-    Accepts an optional pre-built grafana_backend (e.g. SelectiveGrafanaBackend)
-    so callers can instrument the backend before injection.  Falls back to a fresh
-    FixtureGrafanaBackend when use_mock_grafana=True and no backend is provided.
-
-    When the scenario declares EC2/ELB evidence, also injects a FixtureAWSBackend
-    under ``aws.ec2_backend`` so the EC2/RDS topology tools can serve fixture
-    data without colliding with the EKS ``_backend`` slot.
-    """
-    has_aws_topology = bool(
-        fixture.evidence.ec2_instances_by_tag is not None
-        or fixture.evidence.elb_target_health is not None
-    )
-    if not use_mock_grafana and grafana_backend is None and not has_aws_topology:
-        return None
+    """Build pre-resolved integrations for injection into run_investigation."""
     integrations: dict[str, Any] = {}
     if use_mock_grafana or grafana_backend is not None:
         integrations["grafana"] = {
@@ -212,538 +204,11 @@ def _build_resolved_integrations(
             "api_key": "",
             "_backend": grafana_backend or FixtureGrafanaBackend(fixture),
         }
-    if has_aws_topology:
-        integrations["aws"] = {
-            "region": fixture.metadata.region,
-            "ec2_backend": FixtureAWSBackend(fixture),
-        }
-    return integrations or None
-
-
-def _normalize_text(value: str) -> str:
-    return " ".join(value.lower().split())
-
-
-def _normalize_query_token(value: str) -> str:
-    return _normalize_text(value).replace(" ", "_").replace("-", "_")
-
-
-def _matches_required_keyword(normalized_output: str, keyword: str) -> bool:
-    semantic_match, _, _ = _keyword_match_details(normalized_output, keyword)
-    return semantic_match
-
-
-def _matches_required_keyword_exact(normalized_output: str, keyword: str) -> bool:
-    normalized_keyword = _normalize_text(keyword)
-    return bool(normalized_keyword) and normalized_keyword in normalized_output
-
-
-def _keyword_match_details(normalized_output: str, keyword: str) -> tuple[bool, str, str | None]:
-    normalized_keyword = _normalize_text(keyword)
-    if normalized_keyword in normalized_output:
-        return True, "exact_phrase", None
-
-    keyword_aliases = {
-        "max_connections": (
-            "maximum allowed connections",
-            "max allowed connections",
-            "allowed connections",
-            "connection slots",
-        ),
-        "performanceinsights": (
-            "top sql activity",
-            "avg load",
-            "aas",
-            "active sessions",
-            "db load",
-        ),
-        "client sessions": (
-            "client session",
-            "idle database sessions",
-            "database sessions",
-        ),
-        "idle": (
-            "clientread",
-            "waiting for client response",
-            "sessions remain open",
-            "open sessions",
-        ),
-        "write-heavyworkload": (
-            "write heavy workload",
-            "write-heavy update",
-            "update-heavy workload",
-            "heavy update workload",
-        ),
-        "replicationlag": (
-            "replica lag",
-            "replication delay",
-        ),
+    integrations["aws"] = {
+        "region": fixture.metadata.region,
+        "ec2_backend": FixtureAWSBackend(fixture),
     }
-    for alias in keyword_aliases.get(normalized_keyword.replace(" ", ""), ()):
-        if _normalize_text(alias) in normalized_output:
-            return True, "alias_lookup", alias
-
-    keyword_tokens = set(re.findall(r"[a-z0-9]+", normalized_keyword))
-    if not keyword_tokens:
-        return False, "none", None
-
-    output_tokens = set(re.findall(r"[a-z0-9]+", normalized_output))
-    if keyword_tokens.issubset(output_tokens):
-        return True, "token_subset", None
-    return False, "none", None
-
-
-def _scored_output_text(final_state: dict[str, Any]) -> str:
-    """Return the broadest textual output we should grade for synthetic scenarios."""
-    return " ".join(
-        [
-            str(final_state.get("root_cause") or ""),
-            " ".join(claim.get("claim", "") for claim in final_state.get("validated_claims", [])),
-            " ".join(
-                claim.get("claim", "") for claim in final_state.get("non_validated_claims", [])
-            ),
-            " ".join(final_state.get("causal_chain", [])),
-            str(final_state.get("report") or ""),
-            str((final_state.get("problem_report") or {}).get("report_md") or ""),
-        ]
-    )
-
-
-def score_trajectory(
-    fixture: ScenarioFixture,
-    final_state: dict[str, Any],
-) -> TrajectoryScore | None:
-    """Score the agent's investigation trajectory against the expected sequence.
-
-    Returns None when no optimal_trajectory is declared for the scenario.
-    """
-    expected = list(fixture.answer_key.optimal_trajectory)
-    if not expected:
-        return None
-
-    max_loops = fixture.answer_key.max_investigation_loops
-
-    # Flatten all actions across every investigation loop (order preserved)
-    executed_hypotheses: list[dict[str, Any]] = final_state.get("executed_hypotheses") or []
-    actual_sequence: list[str] = []
-    actions_per_loop: list[int] = []
-    for hyp in executed_hypotheses:
-        actions = [str(action) for action in hyp.get("actions", [])]
-        actions_per_loop.append(len(actions))
-        actual_sequence.extend(actions)
-
-    action_loops_used = len(executed_hypotheses)
-    reported_loops_used = int(final_state.get("investigation_loop_count") or action_loops_used)
-    loop_count_consistent = reported_loops_used == action_loops_used
-
-    # Sequencing: all expected actions must appear in the actual sequence.
-    # Actions run in parallel so completion order is non-deterministic; we check
-    # coverage (set membership) rather than position.  When a real LLM is used,
-    # it may skip actions entirely — that will surface as sequencing_ok=False.
-    sequencing_ok = set(expected) <= set(actual_sequence)
-
-    calibration_ok = action_loops_used <= max_loops
-    extra_actions_count = len([action for action in actual_sequence if action not in set(expected)])
-    trajectory_budget_ok = extra_actions_count == 0
-    efficiency_score = (int(sequencing_ok) + int(calibration_ok) + int(trajectory_budget_ok)) / 3.0
-
-    return TrajectoryScore(
-        actual_sequence=actual_sequence,
-        expected_sequence=expected,
-        loops_used=action_loops_used,
-        reported_loops_used=reported_loops_used,
-        loop_count_consistent=loop_count_consistent,
-        actions_per_loop=actions_per_loop,
-        max_loops=max_loops,
-        sequencing_ok=sequencing_ok,
-        calibration_ok=calibration_ok,
-        trajectory_budget_ok=trajectory_budget_ok,
-        extra_actions_count=extra_actions_count,
-        efficiency_score=efficiency_score,
-    )
-
-
-def score_reasoning(
-    fixture: ScenarioFixture,
-    final_state: dict[str, Any],
-    queried_metrics: list[str] | None = None,
-) -> ReasoningScore | None:
-    """Score Axis 2 adversarial reasoning quality.
-
-    Returns None when neither ruling_out_keywords nor required_queries are
-    declared for the scenario.
-
-    Args:
-        fixture: The scenario fixture containing the answer key.
-        final_state: The agent's final investigation state dict.
-        queried_metrics: List of metric_name values the agent requested via
-            query_timeseries (from SelectiveGrafanaBackend.queried_metrics).
-            Pass None or [] when the backend does not record queries (Axis 1).
-    """
-    has_ruling_out = bool(fixture.answer_key.ruling_out_keywords)
-    has_required_queries = bool(fixture.answer_key.required_queries)
-    if not has_ruling_out and not has_required_queries:
-        return None
-
-    # --- ruling_out_keywords: check each token appears anywhere in agent output ---
-    evidence_text = _scored_output_text(final_state)
-    normalized_output = _normalize_text(evidence_text)
-
-    missing_ruling_out: list[str] = []
-    if has_ruling_out:
-        for token in fixture.answer_key.ruling_out_keywords:
-            if not _matches_required_keyword(normalized_output, token):
-                missing_ruling_out.append(token)
-
-    # --- required_queries: each token must appear in at least one queried metric name ---
-    missing_queries: list[str] = []
-    if has_required_queries:
-        audited = {_normalize_query_token(item) for item in (queried_metrics or [])}
-        for required in fixture.answer_key.required_queries:
-            token = _normalize_query_token(required)
-            if not any(token in q for q in audited):
-                missing_queries.append(required)
-
-    ruling_out_ok = not missing_ruling_out
-    queries_ok = not missing_queries
-    reasoning_score = (int(ruling_out_ok) + int(queries_ok)) / 2.0
-
-    return ReasoningScore(
-        ruling_out_ok=ruling_out_ok,
-        queries_ok=queries_ok,
-        missing_ruling_out=missing_ruling_out,
-        missing_queries=missing_queries,
-        reasoning_score=reasoning_score,
-    )
-
-
-def score_result(
-    fixture: ScenarioFixture,
-    final_state: dict[str, Any],
-    queried_metrics: list[str] | None = None,
-) -> ScenarioScore:
-    root_cause = str(final_state.get("root_cause") or "").strip()
-    actual_category = str(final_state.get("root_cause_category") or "unknown").strip()
-    root_cause_present = bool(root_cause and root_cause.lower() != "unable to determine root cause")
-
-    evidence_text = _scored_output_text(final_state)
-    normalized_output = _normalize_text(evidence_text)
-
-    exact_matched_keywords = [
-        keyword
-        for keyword in fixture.answer_key.required_keywords
-        if _matches_required_keyword_exact(normalized_output, keyword)
-    ]
-    exact_missing_keywords = [
-        keyword
-        for keyword in fixture.answer_key.required_keywords
-        if keyword not in exact_matched_keywords
-    ]
-    semantic_matched_keywords: list[str] = []
-    semantic_missing_keywords: list[str] = []
-    normalization_used: set[str] = {"casefold_whitespace_normalization"}
-    for keyword in fixture.answer_key.required_keywords:
-        semantic_match, match_mode, _matched_alias = _keyword_match_details(
-            normalized_output, keyword
-        )
-        if semantic_match:
-            semantic_matched_keywords.append(keyword)
-            normalization_used.add(match_mode)
-        else:
-            semantic_missing_keywords.append(keyword)
-
-    # Backward-compatible aggregate aliases retained for existing consumers.
-    matched_keywords = list(semantic_matched_keywords)
-    missing_keywords = list(semantic_missing_keywords)
-    exact_keyword_match = not exact_missing_keywords
-    semantic_keyword_match = not semantic_missing_keywords
-
-    answer_key = fixture.answer_key
-    trajectory = score_trajectory(fixture, final_state)
-    reasoning = score_reasoning(fixture, final_state, queried_metrics)
-    failures: list[FailureDetail] = []
-
-    gates: dict[str, GateResult] = {}
-
-    def _mark_gate(name: str, passed: bool, threshold: str, actual: str) -> None:
-        gates[name] = GateResult(
-            status="pass" if passed else "fail",
-            threshold=threshold,
-            actual=actual,
-        )
-
-    # 1. Category match
-    if not root_cause_present:
-        failures.append(FailureDetail(code="NO_ROOT_CAUSE", detail="no root cause in output"))
-    elif actual_category != answer_key.root_cause_category:
-        failures.append(
-            FailureDetail(
-                code="WRONG_CATEGORY",
-                detail=(
-                    f"wrong category: got {actual_category!r}, expected "
-                    f"{answer_key.root_cause_category!r}"
-                ),
-            )
-        )
-    _mark_gate(
-        "category_match",
-        root_cause_present and actual_category == answer_key.root_cause_category,
-        f"actual_category == {answer_key.root_cause_category!r}",
-        f"root_cause_present={root_cause_present}, actual_category={actual_category!r}",
-    )
-
-    if semantic_missing_keywords:
-        failures.append(
-            FailureDetail(
-                code="MISSING_REQUIRED_KEYWORD",
-                detail=f"missing required keywords: {semantic_missing_keywords}",
-            )
-        )
-    _mark_gate(
-        "required_keyword_match",
-        semantic_keyword_match,
-        "all required keywords matched (semantic)",
-        (f"missing_semantic={semantic_missing_keywords}, missing_exact={exact_missing_keywords}"),
-    )
-
-    _mark_gate(
-        "exact_keyword_match",
-        exact_keyword_match,
-        "all required keywords matched verbatim",
-        f"missing_exact={exact_missing_keywords}",
-    )
-    _mark_gate(
-        "semantic_keyword_match",
-        semantic_keyword_match,
-        "all required keywords matched semantically",
-        f"missing_semantic={semantic_missing_keywords}",
-    )
-
-    # 2. Forbidden category check (level 2+ adversarial)
-    forbidden_category_hit = bool(
-        answer_key.forbidden_categories and actual_category in answer_key.forbidden_categories
-    )
-    if forbidden_category_hit:
-        failures.append(
-            FailureDetail(
-                code="FORBIDDEN_CATEGORY_PRESENT",
-                detail=f"forbidden category in output: {actual_category!r}",
-            )
-        )
-    _mark_gate(
-        "forbidden_category_clear",
-        not forbidden_category_hit,
-        "actual_category not in forbidden_categories",
-        f"actual_category={actual_category!r}, forbidden={answer_key.forbidden_categories}",
-    )
-
-    # 3. Forbidden keyword check — none of these may appear in evidence_text
-    forbidden_hits: list[str] = []
-    if answer_key.forbidden_keywords:
-        forbidden_hits = [
-            kw for kw in answer_key.forbidden_keywords if _normalize_text(kw) in normalized_output
-        ]
-        if forbidden_hits:
-            failures.append(
-                FailureDetail(
-                    code="FORBIDDEN_KEYWORD_PRESENT",
-                    detail=f"forbidden keywords in output: {forbidden_hits}",
-                )
-            )
-    _mark_gate(
-        "forbidden_keyword_clear",
-        not forbidden_hits,
-        "no forbidden keywords appear in graded output text",
-        f"forbidden_hits={forbidden_hits}",
-    )
-
-    # 4. Evidence path check — required sources must be non-empty in final_state["evidence"].
-    # Fixture schema keys (aws_cloudwatch_metrics, aws_rds_events, aws_performance_insights) map to the agent's
-    # internal evidence keys (grafana_metrics, grafana_logs) set by _map_grafana_*.
-    missing_required_evidence: list[str] = []
-    if answer_key.required_evidence_sources:
-        evidence = final_state.get("evidence") or {}
-        performance_insights_tokens = (
-            "top sql activity",
-            "avg load",
-            "aas",
-            "db load",
-            "walwrite",
-            "clientread",
-        )
-
-        for source_key in answer_key.required_evidence_sources:
-            if source_key == "aws_performance_insights":
-                state_key = _EVIDENCE_KEY_MAP.get(source_key, source_key)
-
-                has_state_evidence = bool(evidence.get(state_key))
-                has_pi_signal = any(
-                    token in normalized_output for token in performance_insights_tokens
-                )
-
-                if not (has_state_evidence and has_pi_signal):
-                    missing_required_evidence.append(source_key)
-
-                continue
-
-            state_key = _EVIDENCE_KEY_MAP.get(source_key, source_key)
-            if not evidence.get(state_key):
-                missing_required_evidence.append(source_key)
-
-    if missing_required_evidence:
-        failures.append(
-            FailureDetail(
-                code="MISSING_REQUIRED_EVIDENCE_SOURCE",
-                detail=f"required evidence not gathered: {missing_required_evidence}",
-            )
-        )
-    _mark_gate(
-        "required_evidence_sources",
-        not missing_required_evidence,
-        "all required evidence sources populated",
-        f"missing_required_evidence={missing_required_evidence}",
-    )
-
-    _mark_gate(
-        "trajectory_budget",
-        trajectory.trajectory_budget_ok if trajectory is not None else True,
-        "extra_actions_count == 0",
-        (
-            f"extra_actions_count={trajectory.extra_actions_count}"
-            if trajectory is not None
-            else "not_applicable"
-        ),
-    )
-
-    # 5. Primary evidence + explicit sequence check — only for scenarios that
-    # explicitly require the failover event timeline wording.
-    failover_required_tokens = {
-        "primary evidence source",
-        "failover initiated",
-        "failover in progress",
-        "failover completed",
-        "instance available",
-    }
-    normalized_required_keywords = {
-        _normalize_text(keyword) for keyword in answer_key.required_keywords
-    }
-    requires_failover_event_reasoning = failover_required_tokens.issubset(
-        normalized_required_keywords
-    )
-
-    if requires_failover_event_reasoning:
-        root_cause_text = _normalize_text(root_cause)
-        validated_text = _normalize_text(
-            " ".join(claim.get("claim", "") for claim in final_state.get("validated_claims", []))
-        )
-        causal_chain_text = _normalize_text(" ".join(final_state.get("causal_chain", [])))
-
-        reasoning_text = " ".join([root_cause_text, validated_text, causal_chain_text])
-
-        mentions_event_reasoning = (
-            "rds" in reasoning_text
-            and ("event" in reasoning_text or "timeline" in reasoning_text)
-            and "primary evidence source" in reasoning_text
-        )
-
-        if not mentions_event_reasoning:
-            failures.append(
-                FailureDetail(
-                    code="FAILOVER_REASONING_NOT_PRIMARY",
-                    detail="RDS events gathered but not used as primary reasoning signal",
-                )
-            )
-
-        required_sequence_tokens = (
-            "failover initiated",
-            "failover in progress",
-            "failover completed",
-            "instance available",
-        )
-
-        sequence_present = all(token in reasoning_text for token in required_sequence_tokens)
-
-        if not sequence_present:
-            failures.append(
-                FailureDetail(
-                    code="FAILOVER_SEQUENCE_INCOMPLETE",
-                    detail="RDS event sequence not explicitly listed in required form",
-                )
-            )
-        _mark_gate(
-            "failover_event_reasoning",
-            mentions_event_reasoning and sequence_present,
-            "mentions primary RDS event reasoning and full failover sequence tokens",
-            (
-                f"mentions_event_reasoning={mentions_event_reasoning}, "
-                f"sequence_present={sequence_present}"
-            ),
-        )
-    else:
-        _mark_gate(
-            "failover_event_reasoning",
-            True,
-            "not required unless failover sequence keywords are in answer key",
-            "not_applicable",
-        )
-
-    passed = _all_required_gates_pass(gates) and not failures
-    failure_reason = "; ".join(detail.detail for detail in failures)
-    return ScenarioScore(
-        scenario_id=fixture.scenario_id,
-        passed=passed,
-        root_cause_present=root_cause_present,
-        expected_category=fixture.answer_key.root_cause_category,
-        actual_category=actual_category,
-        missing_keywords=missing_keywords,
-        matched_keywords=matched_keywords,
-        exact_missing_keywords=exact_missing_keywords,
-        exact_matched_keywords=exact_matched_keywords,
-        semantic_missing_keywords=semantic_missing_keywords,
-        semantic_matched_keywords=semantic_matched_keywords,
-        exact_keyword_match=exact_keyword_match,
-        semantic_keyword_match=semantic_keyword_match,
-        normalization_used=sorted(normalization_used),
-        gates=gates,
-        failure_reasons=failures,
-        root_cause=root_cause,
-        failure_reason=failure_reason,
-        trajectory=trajectory,
-        reasoning=reasoning,
-    )
-
-
-def run_scenario(
-    fixture: ScenarioFixture,
-    use_mock_grafana: bool = False,
-    grafana_backend: Any = None,
-) -> tuple[dict[str, Any], ScenarioScore]:
-    alert = fixture.alert
-    labels = alert.get("commonLabels", {}) or {}
-
-    alert_name = str(alert.get("title") or labels.get("alertname") or fixture.scenario_id)
-    pipeline_name = str(labels.get("pipeline_name") or "rds-postgres-synthetic")
-    severity = str(labels.get("severity") or "critical")
-
-    resolved_integrations = _build_resolved_integrations(
-        fixture, use_mock_grafana, grafana_backend=grafana_backend
-    )
-
-    final_state = run_investigation(
-        alert_name=alert_name,
-        pipeline_name=pipeline_name,
-        severity=severity,
-        raw_alert=alert,
-        resolved_integrations=resolved_integrations,
-    )
-    state_dict = dict(final_state)
-
-    # Extract query audit log from SelectiveGrafanaBackend if one was injected.
-    queried_metrics: list[str] | None = None
-    if grafana_backend is not None and hasattr(grafana_backend, "queried_metrics"):
-        queried_metrics = list(grafana_backend.queried_metrics)
-
-    return state_dict, score_result(fixture, state_dict, queried_metrics=queried_metrics)
+    return integrations
 
 
 def _resolved_golden_trajectory(
@@ -777,7 +242,6 @@ def _trajectory_policy_for_fixture(
         max_edit_distance=golden_cfg.max_edit_distance,
         max_extra_actions=golden_cfg.max_extra_actions,
         max_redundancy=golden_cfg.max_redundancy,
-        # Enforce the resolved loop threshold even if golden_trajectory omits max_loops.
         max_loops=max_loops,
     )
 
@@ -786,8 +250,37 @@ def _apply_trajectory_policy_to_score(
     score: ScenarioScore,
     trajectory_policy: TrajectoryPolicyResult | None,
 ) -> ScenarioScore:
-    if trajectory_policy is None or trajectory_policy.passed:
-        return score
+    """Apply the trajectory policy result to the score, always recording the gate.
+
+    The gate is recorded in ALL cases (pass, fail, not-applicable) so that
+    ``_all_required_gates_pass`` acts as a true hard gate.
+    """
+    gates = dict(score.gates)
+
+    if trajectory_policy is None:
+        gates["trajectory_policy"] = GateResult(
+            status="pass",
+            threshold="not_applicable — no golden trajectory configured",
+            actual="not_applicable",
+        )
+        return replace(
+            score,
+            passed=_all_required_gates_pass(gates) and not score.failure_reasons,
+            gates=gates,
+        )
+
+    gates["trajectory_policy"] = GateResult(
+        status="pass" if trajectory_policy.passed else "fail",
+        threshold="policy violations list must be empty",
+        actual=f"violations={trajectory_policy.violations}",
+    )
+
+    if trajectory_policy.passed:
+        return replace(
+            score,
+            passed=_all_required_gates_pass(gates) and not score.failure_reasons,
+            gates=gates,
+        )
 
     policy_reason = "trajectory policy failed: " + "; ".join(
         trajectory_policy.violations or ["unknown violation"]
@@ -796,12 +289,6 @@ def _apply_trajectory_policy_to_score(
     if not any(detail.code == "TRAJECTORY_POLICY_FAILED" for detail in failures):
         failures.append(FailureDetail(code="TRAJECTORY_POLICY_FAILED", detail=policy_reason))
 
-    gates = dict(score.gates)
-    gates["trajectory_policy"] = GateResult(
-        status="pass" if trajectory_policy.passed else "fail",
-        threshold="policy violations list must be empty",
-        actual=f"violations={trajectory_policy.violations}",
-    )
     combined_reason = "; ".join(detail.detail for detail in failures)
 
     return replace(
@@ -813,132 +300,420 @@ def _apply_trajectory_policy_to_score(
     )
 
 
-def _print_gap_report(
-    axis1_results: list[ScenarioScore],
-    axis2_results: list[ScenarioScore],
-    all_fixtures: list[ScenarioFixture],
-) -> None:
-    """Print Axis 1 vs Axis 2 pass-rate gap, overall and per difficulty level."""
-    difficulty_map = {f.scenario_id: f.metadata.scenario_difficulty for f in all_fixtures}
+def run_scenario(
+    fixture: ScenarioFixture,
+    use_mock_grafana: bool = False,
+    grafana_backend: Any = None,
+) -> tuple[dict[str, Any], ScenarioScore]:
+    alert = fixture.alert
+    labels = alert.get("commonLabels", {}) or {}
 
-    def _pass_rate(results: list[ScenarioScore]) -> float:
-        return sum(1 for r in results if r.passed) / len(results) * 100 if results else 0.0
+    alert_name = str(alert.get("title") or labels.get("alertname") or fixture.scenario_id)
+    pipeline_name = str(labels.get("pipeline_name") or "rds-postgres-synthetic")
+    severity = str(labels.get("severity") or "critical")
 
-    ax1_pct = _pass_rate(axis1_results)
-    ax2_pct = _pass_rate(axis2_results)
-    gap = ax1_pct - ax2_pct
-
-    print("\n=== Axis 1 vs Axis 2 Gap Report ===")
-    print(
-        f"  Axis 1 (all scenarios, full data):  {ax1_pct:.0f}%  ({sum(r.passed for r in axis1_results)}/{len(axis1_results)})"
+    resolved_integrations = _build_resolved_integrations(
+        fixture, use_mock_grafana, grafana_backend=grafana_backend
     )
-    print(
-        f"  Axis 2 (adversarial, selective):    {ax2_pct:.0f}%  ({sum(r.passed for r in axis2_results)}/{len(axis2_results)})"
-    )
-    print(f"  Gap:                                {gap:+.0f}pp")
 
-    print("\n  Per difficulty level:")
-    for level in sorted(
-        {difficulty_map.get(r.scenario_id, 0) for r in axis1_results + axis2_results}
-    ):
-        ax1_level = [r for r in axis1_results if difficulty_map.get(r.scenario_id, 0) == level]
-        ax2_level = [r for r in axis2_results if difficulty_map.get(r.scenario_id, 0) == level]
-        ax1_pct_l = _pass_rate(ax1_level)
-        ax2_pct_l = _pass_rate(ax2_level)
-        gap_l = ax1_pct_l - ax2_pct_l
-        print(
-            f"    Difficulty {level}: Axis1={ax1_pct_l:.0f}% ({len(ax1_level)} scenarios)  "
-            f"Axis2={ax2_pct_l:.0f}% ({len(ax2_level)} scenarios)  gap={gap_l:+.0f}pp"
+    final_state = run_investigation(
+        alert_name=alert_name,
+        pipeline_name=pipeline_name,
+        severity=severity,
+        raw_alert=alert,
+        resolved_integrations=resolved_integrations,
+    )
+    state_dict = dict(final_state)
+
+    queried_metrics: list[str] | None = None
+    if grafana_backend is not None and hasattr(grafana_backend, "queried_metrics"):
+        queried_metrics = list(grafana_backend.queried_metrics)
+
+    return state_dict, score_result(fixture, state_dict, queried_metrics=queried_metrics)
+
+
+@dataclass(frozen=True)
+class _ScenarioExecution:
+    fixture: ScenarioFixture
+    score: ScenarioScore
+    canonical_report_payload: dict[str, Any]
+    observation_for_report: Any
+    wall_time_s: float
+
+
+def _execute_fixture(
+    fixture: ScenarioFixture,
+    *,
+    config: SuiteRunConfig,
+    progress_hook: Callable[[str, int], None] | None = None,
+) -> _ScenarioExecution:
+    if progress_hook is not None:
+        progress_hook(fixture.scenario_id, 1)
+    started_at = datetime.now(UTC)
+    started_monotonic = time.monotonic()
+    final_state, score = run_scenario(fixture, use_mock_grafana=config.mock_grafana)
+    wall_time_s = time.monotonic() - started_monotonic
+    if progress_hook is not None:
+        progress_hook(fixture.scenario_id, 2)
+
+    executed_hypotheses = final_state.get("executed_hypotheses") or []
+    loops_used = len(executed_hypotheses)
+    golden_trajectory, max_loops, golden_cfg = _resolved_golden_trajectory(fixture)
+    trajectory_metrics = compute_trajectory_metrics(
+        executed_hypotheses=executed_hypotheses,
+        golden=golden_trajectory,
+        loops_used=loops_used,
+        max_loops=max_loops,
+    )
+    trajectory_policy = (
+        evaluate_trajectory_policy(
+            metrics=trajectory_metrics,
+            golden_actions=golden_trajectory,
+            policy=_trajectory_policy_for_fixture(
+                max_loops=max_loops,
+                golden_cfg=golden_cfg,
+            ),
         )
+        if golden_cfg is not None
+        else None
+    )
+
+    score = _apply_trajectory_policy_to_score(score, trajectory_policy)
+    if progress_hook is not None:
+        progress_hook(fixture.scenario_id, 3)
+
+    observation = build_observation(
+        scenario_id=fixture.scenario_id,
+        suite="axis1",
+        backend="FixtureGrafanaBackend" if config.mock_grafana else "LiveGrafanaBackend",
+        score=asdict(score),
+        reasoning=asdict(score.reasoning) if score.reasoning is not None else None,
+        trajectory=trajectory_metrics,
+        evaluated_golden_actions=golden_trajectory,
+        trajectory_policy=trajectory_policy,
+        final_state=final_state,
+        available_evidence_sources=list(fixture.metadata.available_evidence),
+        required_evidence_sources=list(fixture.answer_key.required_evidence_sources),
+        started_at=started_at,
+        wall_time_s=wall_time_s,
+    )
+
+    observation_path = write_observation(observation, config.observations_dir)
+    relative_observation_path = str(observation_path.relative_to(config.observations_dir))
+    display_observation_path = str(observation_path.resolve())
+    observation_for_report = replace(
+        observation,
+        observation_path=f"{relative_observation_path} ({display_observation_path})",
+    )
+    if progress_hook is not None:
+        progress_hook(fixture.scenario_id, 4)
+
+    return _ScenarioExecution(
+        fixture=fixture,
+        score=score,
+        canonical_report_payload=observation.canonical_report_payload,
+        observation_for_report=observation_for_report,
+        wall_time_s=wall_time_s,
+    )
+
+
+def _run_level(
+    level_config: LevelRunConfig,
+    *,
+    config: SuiteRunConfig,
+    progress_hook: Callable[[str, int], None] | None = None,
+) -> tuple[list[_ScenarioExecution], LevelRunResult]:
+    started = time.monotonic()
+    executions: list[_ScenarioExecution] = []
+    for fixture in level_config.fixtures:
+        executions.append(_execute_fixture(fixture, config=config, progress_hook=progress_hook))
+
+    passed = sum(1 for execution in executions if execution.score.passed)
+    level_result = LevelRunResult(
+        level=level_config.level,
+        scenario_ids=tuple(execution.fixture.scenario_id for execution in executions),
+        passed=passed,
+        failed=len(executions) - passed,
+        wall_time_s=time.monotonic() - started,
+    )
+    return executions, level_result
+
+
+@contextmanager
+def _suppress_investigation_rendering(enabled: bool) -> Iterator[None]:
+    """Temporarily disable node-level investigation rendering."""
+    if not enabled:
+        yield
+        return
+
+    previous_output_format = os.environ.get("TRACER_OUTPUT_FORMAT")
+    os.environ["TRACER_OUTPUT_FORMAT"] = "none"
+
+    from app import output as output_module
+
+    output_module.get_tracker(reset=True)
+    try:
+        yield
+    finally:
+        if previous_output_format is None:
+            os.environ.pop("TRACER_OUTPUT_FORMAT", None)
+        else:
+            os.environ["TRACER_OUTPUT_FORMAT"] = previous_output_format
+        output_module.get_tracker(reset=True)
+
+
+def _render_suite_overview(
+    console: Console,
+    *,
+    config: SuiteRunConfig,
+    level_configs: tuple[LevelRunConfig, ...],
+) -> None:
+    total = sum(len(level.fixtures) for level in level_configs)
+    overview = Table(title="Synthetic Suite Overview", show_header=True)
+    overview.add_column("Level", justify="right")
+    overview.add_column("Scenarios", justify="right")
+    overview.add_column("IDs")
+    for level in level_configs:
+        scenario_ids = ", ".join(fixture.scenario_id for fixture in level.fixtures)
+        overview.add_row(str(level.level), str(len(level.fixtures)), scenario_ids)
+    console.print(overview)
+    console.print(
+        "Run config: "
+        f"total={total}, parallel_levels={config.parallel_levels}, "
+        f"mock_grafana={config.mock_grafana}, observations_dir={config.observations_dir}"
+    )
+
+
+def _render_suite_summary(
+    console: Console,
+    *,
+    executions: list[_ScenarioExecution],
+    level_results: tuple[LevelRunResult, ...],
+) -> None:
+    summary = Table(title="Synthetic Suite Report", show_header=True)
+    summary.add_column("Scenario")
+    summary.add_column("Level", justify="right")
+    summary.add_column("Status")
+    summary.add_column("Category")
+    summary.add_column("Wall(s)", justify="right")
+    summary.add_column("Detail")
+
+    for execution in executions:
+        status = "PASS" if execution.score.passed else "FAIL"
+        detail = execution.score.failure_reason or "-"
+        summary.add_row(
+            execution.fixture.scenario_id,
+            str(execution.fixture.metadata.scenario_difficulty),
+            status,
+            execution.score.actual_category,
+            f"{execution.wall_time_s:.2f}",
+            detail,
+        )
+    console.print(summary)
+
+    level_table = Table(title="Level Summary", show_header=True)
+    level_table.add_column("Level", justify="right")
+    level_table.add_column("Passed", justify="right")
+    level_table.add_column("Failed", justify="right")
+    level_table.add_column("Wall(s)", justify="right")
+    for level_result in level_results:
+        level_table.add_row(
+            str(level_result.level),
+            str(level_result.passed),
+            str(level_result.failed),
+            f"{level_result.wall_time_s:.2f}",
+        )
+    console.print(level_table)
+
+
+def _write_baseline(canonical_payloads: dict[str, Any], baseline_out_dir: Path) -> None:
+    """Write per-scenario canonical_report_payload snapshots to *baseline_out_dir*."""
+    baseline_out_dir.mkdir(parents=True, exist_ok=True)
+    for scenario_id, payload in canonical_payloads.items():
+        target = baseline_out_dir / f"{scenario_id}.json"
+        target.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def _check_baseline(
+    canonical_payloads: dict[str, Any],
+    baseline_check_dir: Path,
+) -> list[str]:
+    """Compare canonical payloads against committed baseline snapshots.
+
+    Returns a list of human-readable mismatch descriptions (empty if all match).
+    """
+    mismatches: list[str] = []
+    for scenario_id, actual_payload in canonical_payloads.items():
+        baseline_file = baseline_check_dir / f"{scenario_id}.json"
+        if not baseline_file.exists():
+            mismatches.append(f"{scenario_id}: baseline file missing at {baseline_file}")
+            continue
+        expected = json.loads(baseline_file.read_text(encoding="utf-8"))
+        actual_canonical = json.loads(
+            json.dumps(actual_payload, sort_keys=True, separators=(",", ":"))
+        )
+        expected_canonical = json.loads(json.dumps(expected, sort_keys=True, separators=(",", ":")))
+        if actual_canonical != expected_canonical:
+            actual_str = json.dumps(actual_payload, indent=2, sort_keys=True)
+            expected_str = json.dumps(expected, indent=2, sort_keys=True)
+            diff_lines: list[str] = []
+            for line in difflib.unified_diff(
+                expected_str.splitlines(),
+                actual_str.splitlines(),
+                fromfile=f"{scenario_id} (baseline)",
+                tofile=f"{scenario_id} (actual)",
+                lineterm="",
+            ):
+                diff_lines.append(line)
+            mismatches.append(
+                f"{scenario_id}: canonical payload differs from baseline\n"
+                + "\n".join(diff_lines[:60])
+            )
+    return mismatches
+
+
+def run_synthetic_suite(config: SuiteRunConfig) -> SuiteRunResult:
+    fixtures = load_all_scenarios(SUITE_DIR)
+    try:
+        selected_fixtures = select_fixtures(fixtures, config)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+
+    level_order = (
+        tuple(sorted({fixture.metadata.scenario_difficulty for fixture in selected_fixtures}))
+        if config.scenario
+        else config.levels
+    )
+    level_configs = group_fixtures_by_level(selected_fixtures, level_order)
+    interactive_console = Console(highlight=False, soft_wrap=True)
+    show_interactive = not config.output_json
+    bulk_run = len(selected_fixtures) > 1
+    show_overview_only = show_interactive and bulk_run
+    if show_interactive and level_configs:
+        _render_suite_overview(interactive_console, config=config, level_configs=level_configs)
+
+    level_executions: dict[int, list[_ScenarioExecution]] = {}
+    level_results_map: dict[int, LevelRunResult] = {}
+    task_map: dict[str, TaskID] = {}
+    progress: Progress | None = None
+    if show_interactive and level_configs and not show_overview_only:
+        progress = Progress(
+            TextColumn("[bold blue]{task.fields[level]}[/bold blue]"),
+            TextColumn("{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            TimeElapsedColumn(),
+            console=interactive_console,
+            transient=False,
+        )
+        for level_config in level_configs:
+            for fixture in level_config.fixtures:
+                task_id = progress.add_task(
+                    description=fixture.scenario_id,
+                    total=4,
+                    completed=0,
+                    level=f"L{level_config.level}",
+                )
+                task_map[fixture.scenario_id] = task_id
+
+    def _progress_hook(scenario_id: str, step: int) -> None:
+        if progress is None:
+            return
+        task_id = task_map.get(scenario_id)
+        if task_id is None:
+            return
+        progress.update(task_id, completed=step)
+
+    max_workers = min(config.parallel_levels, len(level_configs)) if level_configs else 1
+    progress_context = progress if progress is not None else nullcontext()
+    suppress_investigation_rendering = bulk_run or config.output_json
+    with (
+        _suppress_investigation_rendering(suppress_investigation_rendering),
+        progress_context,
+    ):
+        if max_workers > 1:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {
+                    level_config.level: executor.submit(
+                        _run_level,
+                        level_config,
+                        config=config,
+                        progress_hook=_progress_hook,
+                    )
+                    for level_config in level_configs
+                }
+                for level, future in futures.items():
+                    executions, level_result = future.result()
+                    level_executions[level] = executions
+                    level_results_map[level] = level_result
+        else:
+            for level_config in level_configs:
+                executions, level_result = _run_level(
+                    level_config,
+                    config=config,
+                    progress_hook=_progress_hook,
+                )
+                level_executions[level_config.level] = executions
+                level_results_map[level_config.level] = level_result
+
+    ordered_executions: list[_ScenarioExecution] = []
+    ordered_level_results: list[LevelRunResult] = []
+    for level in level_order:
+        if level in level_results_map:
+            ordered_executions.extend(level_executions[level])
+            ordered_level_results.append(level_results_map[level])
+
+    should_report = (
+        bool(config.report) if config.report is not None else len(selected_fixtures) == 1
+    )
+    if config.output_json:
+        should_report = False
+
+    if should_report:
+        report_console = (
+            interactive_console if show_interactive else Console(highlight=False, soft_wrap=True)
+        )
+        for execution in ordered_executions:
+            render_report_to_console(execution.observation_for_report, report_console)
+
+    if show_interactive and ordered_executions and not show_overview_only:
+        _render_suite_summary(
+            interactive_console,
+            executions=ordered_executions,
+            level_results=tuple(ordered_level_results),
+        )
+
+    return SuiteRunResult(
+        config=config,
+        level_results=tuple(ordered_level_results),
+        scores=tuple(execution.score for execution in ordered_executions),
+        canonical_payloads={
+            execution.fixture.scenario_id: execution.canonical_report_payload
+            for execution in ordered_executions
+        },
+    )
 
 
 def run_suite(argv: list[str] | None = None) -> list[ScenarioScore]:
     args = parse_args(argv)
-    fixtures = load_all_scenarios(SUITE_DIR)
-    if args.scenario:
-        fixtures = [fixture for fixture in fixtures if fixture.scenario_id == args.scenario]
-        if not fixtures:
-            raise SystemExit(f"Unknown scenario: {args.scenario}")
-
-    observations_dir = Path(args.observations_dir)
-    should_report = bool(args.report) if args.report is not None else len(fixtures) == 1
-    if args.json:
-        should_report = False
-    report_console = Console(highlight=False, soft_wrap=True)
-
-    results: list[ScenarioScore] = []
-    for fixture in fixtures:
-        started_at = datetime.now(UTC)
-        started_monotonic = time.monotonic()
-        final_state, score = run_scenario(fixture, use_mock_grafana=args.mock_grafana)
-        wall_time_s = time.monotonic() - started_monotonic
-
-        executed_hypotheses = final_state.get("executed_hypotheses") or []
-        loops_used = len(executed_hypotheses)
-        golden_trajectory, max_loops, golden_cfg = _resolved_golden_trajectory(fixture)
-        trajectory_metrics = compute_trajectory_metrics(
-            executed_hypotheses=executed_hypotheses,
-            golden=golden_trajectory,
-            loops_used=loops_used,
-            max_loops=max_loops,
-        )
-        trajectory_policy = (
-            evaluate_trajectory_policy(
-                metrics=trajectory_metrics,
-                golden_actions=golden_trajectory,
-                policy=_trajectory_policy_for_fixture(
-                    max_loops=max_loops,
-                    golden_cfg=golden_cfg,
-                ),
-            )
-            if golden_cfg is not None
-            else None
-        )
-
-        score = _apply_trajectory_policy_to_score(score, trajectory_policy)
-
-        results.append(score)
-
-        observation = build_observation(
-            scenario_id=fixture.scenario_id,
-            suite="axis1",
-            backend="FixtureGrafanaBackend" if args.mock_grafana else "LiveGrafanaBackend",
-            score=asdict(score),
-            reasoning=asdict(score.reasoning) if score.reasoning is not None else None,
-            trajectory=trajectory_metrics,
-            evaluated_golden_actions=golden_trajectory,
-            trajectory_policy=trajectory_policy,
-            final_state=final_state,
-            available_evidence_sources=list(fixture.metadata.available_evidence),
-            required_evidence_sources=list(fixture.answer_key.required_evidence_sources),
-            started_at=started_at,
-            wall_time_s=wall_time_s,
-        )
-        observation_path = write_observation(observation, observations_dir)
-        relative_observation_path = str(observation_path.relative_to(observations_dir))
-        display_observation_path = str(observation_path.resolve())
-        observation_for_report = replace(
-            observation,
-            observation_path=f"{relative_observation_path} ({display_observation_path})",
-        )
-
-        if should_report:
-            render_report_to_console(observation_for_report, report_console)
+    config = _build_run_config(args)
+    suite_result = run_synthetic_suite(config)
+    results = list(suite_result.scores)
+    canonical_payloads = dict(suite_result.canonical_payloads)
 
     if args.json:
         print(json.dumps([asdict(result) for result in results], indent=2))
-    else:
-        for result in results:
-            status = "PASS" if result.passed else "FAIL"
-            detail = (
-                f"reason={result.failure_reason!r}"
-                if result.failure_reason
-                else f"category={result.actual_category}"
-            )
-            print(f"{status} {result.scenario_id} {detail}")
 
-        passed_count = sum(1 for result in results if result.passed)
-        print(f"\nResults: {passed_count}/{len(results)} passed")
+    if config.baseline_out:
+        _write_baseline(canonical_payloads, config.baseline_out)
+
+    if config.baseline_check:
+        mismatches = _check_baseline(canonical_payloads, config.baseline_check)
+        if mismatches:
+            print("\n=== Baseline Check FAILED ===")
+            for msg in mismatches:
+                print(textwrap.indent(msg, "  "))
+            raise SystemExit(1)
 
     return results
 

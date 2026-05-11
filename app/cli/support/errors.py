@@ -97,7 +97,7 @@ def render_error(
          Run `opensre doctor` to diagnose       ← SECONDARY (hint)
     """
     # Lazy import avoids circular dependency: errors ← interactive_shell ← errors.
-    from app.cli.interactive_shell.theme import (
+    from app.cli.interactive_shell.ui.theme import (
         DIM,
         ERROR,
         GLYPH_ERROR,

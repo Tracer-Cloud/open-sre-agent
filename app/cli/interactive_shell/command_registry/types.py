@@ -7,8 +7,8 @@ from dataclasses import dataclass
 
 from rich.console import Console
 
-from app.cli.interactive_shell.execution_tier import ExecutionTier
-from app.cli.interactive_shell.session import ReplSession
+from app.cli.interactive_shell.orchestration.execution_tier import ExecutionTier
+from app.cli.interactive_shell.runtime import ReplSession
 
 
 @dataclass(frozen=True)

@@ -42,35 +42,29 @@ from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
 from rich.markup import escape
 
+import app.cli.interactive_shell.orchestration.agent_actions as _agent_actions
 from app.agents.sweep import run_startup_sweep
 from app.analytics.cli import capture_terminal_turn_summarized
 from app.analytics.events import Event
 from app.analytics.provider import get_analytics
-from app.cli.interactive_shell import agent_actions as _agent_actions
-from app.cli.interactive_shell import cli_agent as _cli_agent
-from app.cli.interactive_shell import cli_help as _cli_help
 from app.cli.interactive_shell import commands as _commands
-from app.cli.interactive_shell import follow_up as _follow_up
-from app.cli.interactive_shell import prompt_surface as _prompt_surface
-from app.cli.interactive_shell import router as _router
-from app.cli.interactive_shell.banner import render_banner
+from app.cli.interactive_shell.chat import cli_agent as _cli_agent
+from app.cli.interactive_shell.chat import cli_help as _cli_help
 from app.cli.interactive_shell.config import ReplConfig
-from app.cli.interactive_shell.hot_reload import HotReloadCoordinator
-from app.cli.interactive_shell.prompt_surface import (
-    _prompt_rule_ansi,
-    render_submitted_prompt,
-)
-from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.streaming import format_token_count_short
-from app.cli.interactive_shell.tasks import TaskRegistry
-from app.cli.interactive_shell.theme import (
+from app.cli.interactive_shell.prompting import follow_up as _follow_up
+from app.cli.interactive_shell.prompting import prompt_surface as _prompt_surface
+from app.cli.interactive_shell.routing import router as _router
+from app.cli.interactive_shell.runtime import HotReloadCoordinator, ReplSession, TaskRegistry
+from app.cli.interactive_shell.ui import (
     ANSI_DIM,
     ANSI_RESET,
     DIM,
     ERROR,
     PROMPT_ACCENT_ANSI,
     WARNING,
+    render_banner,
 )
+from app.cli.interactive_shell.ui.streaming import format_token_count_short
 from app.cli.support.errors import OpenSREError
 from app.cli.support.exception_reporting import report_exception
 from app.cli.support.prompt_support import repl_prompt_note_ctrl_c, repl_reset_ctrl_c_gate
@@ -80,6 +74,8 @@ from app.llm_reasoning_effort import apply_reasoning_effort
 # Local rebindings expose the same names the rest of this module uses.
 _build_prompt_session = _prompt_surface._build_prompt_session
 _prompt_message = _prompt_surface._prompt_message
+_prompt_rule_ansi = _prompt_surface._prompt_rule_ansi
+render_submitted_prompt = _prompt_surface.render_submitted_prompt
 route_input = _router.route_input
 answer_cli_help = _cli_help.answer_cli_help
 answer_cli_agent = _cli_agent.answer_cli_agent
@@ -123,11 +119,11 @@ def _run_new_alert(
     is_tty: bool | None = None,
 ) -> None:
     """Dispatch a free-text alert description to the streaming pipeline."""
-    from app.cli.interactive_shell.execution_policy import (
+    from app.cli.interactive_shell.orchestration.execution_policy import (
         evaluate_investigation_launch,
         execution_allowed,
     )
-    from app.cli.interactive_shell.tasks import TaskKind
+    from app.cli.interactive_shell.runtime.tasks import TaskKind
     from app.cli.investigation import run_investigation_for_session
 
     policy = evaluate_investigation_launch(action_type="investigation")

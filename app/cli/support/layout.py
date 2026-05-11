@@ -8,8 +8,8 @@ import click
 from rich.console import Console
 from rich.text import Text
 
-from app.cli.interactive_shell.banner import build_ready_panel
-from app.cli.interactive_shell.theme import BRAND, DIM, TEXT
+from app.cli.interactive_shell.ui.banner import build_ready_panel
+from app.cli.interactive_shell.ui.theme import BRAND, DIM, TEXT
 
 _LANDING_EXAMPLES: tuple[tuple[str, str], ...] = (
     (
