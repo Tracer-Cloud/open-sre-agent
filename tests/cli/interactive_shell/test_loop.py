@@ -531,6 +531,55 @@ class TestLooksLikeCorrection:
         assert loop._looks_like_correction(text) is False
 
 
+class TestLooksLikeConfirmationAnswer:
+    """Unit tests for the y/n token recognizer.
+
+    Type-ahead text submitted while a ``Proceed? [Y/n]`` worker is
+    parked used to be silently delivered to the confirmation handler
+    and declined the pending action. The recognizer is the
+    gate that keeps that from happening — only deliberate y/n tokens
+    (and empty Enter, which the upstream ``[Y/n]`` prompt accepts as
+    "yes") are treated as answers.
+    """
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "y",
+            "Y",
+            "yes",
+            "YES",
+            "n",
+            "N",
+            "no",
+            "No",
+            " y ",
+            "  yes\n",
+            "",
+            "   ",
+            None,
+        ],
+    )
+    def test_recognised_tokens_match(self, text: str | None) -> None:
+        assert loop._looks_like_confirmation_answer(text) is True
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "what is opensre?",
+            "yeah do it",  # extra words even after "yeah" — ambiguous, not delivered
+            "yep",
+            "yup",
+            "nope",
+            "/help",
+            "show me logs",
+            "y'all should run this",
+        ],
+    )
+    def test_unrecognised_text_does_not_match(self, text: str) -> None:
+        assert loop._looks_like_confirmation_answer(text) is False
+
+
 # ── Spinner state tests ──────────────────────────────────────────────────────
 
 

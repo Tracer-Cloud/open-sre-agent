@@ -106,6 +106,30 @@ _INTERVENTION_CORRECTION_RE = re.compile(
 )
 
 
+# Tokens that count as an explicit answer to a ``Proceed? [Y/n]``
+# confirmation. Compared against ``text.strip().lower()`` so case and
+# trailing whitespace don't matter. ``""`` is included because the
+# upstream prompt is ``[Y/n]`` (capital Y) and ``execution_policy``
+# treats an empty answer as "yes" — see
+# :func:`app.cli.interactive_shell.orchestration.execution_policy.execution_allowed`.
+_CONFIRMATION_TOKENS: frozenset[str] = frozenset({"", "y", "yes", "n", "no"})
+
+
+def _looks_like_confirmation_answer(text: str | None) -> bool:
+    """True when ``text`` reads as a deliberate y/n answer to a pending
+    confirmation prompt (rather than type-ahead the user intended as a
+    new turn).
+
+    The check is conservative: only the explicit y/n tokens (and the
+    empty string, which the upstream ``[Y/n]`` prompt treats as "yes")
+    qualify. Anything else — a question, a sentence, a slash command —
+    is treated as a normal turn so a user who typed ahead while an
+    action plan was still being parsed doesn't silently decline the
+    pending action.
+    """
+    return (text or "").strip().lower() in _CONFIRMATION_TOKENS
+
+
 def _looks_like_correction(text: str) -> bool:
     """True when text begins with a short correction cue (intervention signal)."""
     stripped = text.lstrip()
@@ -778,11 +802,26 @@ async def _run_interactive(
                     return
 
                 # If a worker thread is parked on a confirmation prompt,
-                # the next text the user submits is the *answer* to that
-                # prompt, not a new turn. Deliver it and resume; do NOT
-                # echo it as a turn or enqueue it.
+                # the next text the user submits *might* be the answer
+                # to that prompt — but only if it actually reads like a
+                # y/n token. Type-ahead text the user submitted while
+                # the action plan was still being parsed (e.g. a
+                # follow-up question) used to get silently consumed as
+                # the answer and decline the pending action; queue
+                # those as a normal turn instead and leave the
+                # confirmation parked for an explicit answer.
                 if state.is_awaiting_confirmation():
-                    state.deliver_confirmation(text or "")
+                    if _looks_like_confirmation_answer(text):
+                        state.deliver_confirmation(text or "")
+                        continue
+                    echo_console.print(
+                        f"[{DIM}](type y/N to confirm the pending action; "
+                        "your input has been queued for after)[/]"
+                    )
+                    stripped = (text or "").strip()
+                    if stripped:
+                        render_submitted_prompt(echo_console, session, stripped)
+                        await state.queue.put(stripped)
                     continue
 
                 stripped = (text or "").strip()
