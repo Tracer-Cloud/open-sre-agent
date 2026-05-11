@@ -932,12 +932,12 @@ def _openclaw_conversation_text(conversation: dict[str, object], fallback_text: 
     return combined or fallback_text
 
 
-def _map_get_openclaw_conversation(data: dict) -> dict:
+def _map_get_openclaw_conversation(data: dict, evidence: dict | None = None) -> dict:
     structured = data.get("structured_content") or {}
     text = str(data.get("text", "")).strip()
     if isinstance(structured, dict):
         text = _openclaw_conversation_text(structured, text)
-    existing = data.get("openclaw_conversation_context", "")
+    existing = str((evidence or {}).get("openclaw_conversation_context", "")).strip()
     return {
         "openclaw_conversation_detail": structured,
         "openclaw_conversation_context": f"{existing}\n\n{text}".strip() if existing else text,
@@ -949,12 +949,14 @@ def _map_list_openclaw_tools(data: dict) -> dict:
     return {"openclaw_available_tools": tools}
 
 
-def _map_call_openclaw_tool(data: dict) -> dict:
+def _map_call_openclaw_tool(data: dict, evidence: dict | None = None) -> dict:
     text = str(data.get("text", "")).strip()
     tool_name = str(data.get("tool", "")).strip()
+    existing = str((evidence or {}).get("openclaw_conversation_context", "")).strip()
+    combined = f"{existing}\n\n{text}".strip() if existing else text
     return {
         "openclaw_tool_call_result": {"tool": tool_name, "text": text},
-        "openclaw_conversation_context": text,
+        "openclaw_conversation_context": combined,
     }
 
 
@@ -1018,9 +1020,7 @@ EVIDENCE_MAPPERS: dict[str, Callable[[dict], dict]] = {
     "CheckServiceConnectivity": _map_cloudopsbench_tool,
     "CheckNodeServiceStatus": _map_cloudopsbench_tool,
     "search_openclaw_conversations": _map_search_openclaw_conversations,
-    "get_openclaw_conversation": _map_get_openclaw_conversation,
     "list_openclaw_tools": _map_list_openclaw_tools,
-    "call_openclaw_tool": _map_call_openclaw_tool,
 }
 
 
@@ -1046,6 +1046,14 @@ def merge_evidence(
 
         if action_name == "run_diagnostic_code":
             evidence.update(_map_diagnostic_code_result(result.data, evidence))
+            continue
+
+        if action_name == "get_openclaw_conversation":
+            evidence.update(_map_get_openclaw_conversation(result.data, evidence))
+            continue
+
+        if action_name == "call_openclaw_tool":
+            evidence.update(_map_call_openclaw_tool(result.data, evidence))
             continue
 
         mapper = EVIDENCE_MAPPERS.get(action_name)

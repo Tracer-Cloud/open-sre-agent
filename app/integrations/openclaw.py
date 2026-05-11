@@ -20,7 +20,6 @@ import subprocess
 from collections.abc import AsyncIterator, Coroutine, Mapping
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
-from functools import lru_cache
 from pathlib import Path
 from typing import Literal, cast
 from urllib.parse import urlparse
@@ -209,7 +208,6 @@ def _format_setup_steps(summary: str, steps: tuple[str, ...]) -> str:
     return f"{summary}\nNext steps:\n{rendered_steps}"
 
 
-@lru_cache(maxsize=8)
 def _openclaw_cli_preflight_output(command: str) -> str:
     try:
         result = subprocess.run(
