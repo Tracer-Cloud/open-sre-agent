@@ -255,9 +255,9 @@ def stream_to_console(
                                 next_chunk=_next_chunk,
                             )
                 else:
-                    # force_terminal=True backed by a non-TTY file (StringIO in
-                    # tests, piped output): skip Live so cursor-positioning
-                    # sequences don't write raw markdown into the capture buffer.
+                    # force_terminal=True but backed by a non-TTY file (StringIO
+                    # in tests, piped output): skip Live to avoid cursor-positioning
+                    # sequences writing raw intermediate markdown into the buffer.
                     _run_throttled_markdown_loop(
                         preview=_noop_preview,
                         chunks_iter=chunks_iter,
