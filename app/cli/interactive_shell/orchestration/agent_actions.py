@@ -6,9 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from rich.console import Console
-from rich.live import Live
 from rich.markup import escape
-from rich.spinner import Spinner
 
 from app.cli.interactive_shell.commands import (
     SLASH_COMMANDS,
@@ -34,7 +32,7 @@ from app.cli.interactive_shell.orchestration.execution_policy import (
     resolve_slash_execution_tier,
 )
 from app.cli.interactive_shell.runtime import ReplSession, TaskKind, TaskRecord, TaskStatus
-from app.cli.interactive_shell.ui import BOLD_BRAND, print_planned_actions
+from app.cli.interactive_shell.ui import print_planned_actions
 from app.cli.interactive_shell.ui.streaming import render_response_header
 
 
@@ -47,14 +45,20 @@ class TerminalActionExecutionResult:
     handled: bool
 
 
-def _plan_with_spinner(
-    message: str,
-    console: Console,
-) -> tuple[list, bool]:
-    """Plan actions while showing a thinking spinner."""
-    spinner = Spinner("dots12", text="thinking...", style=BOLD_BRAND)
-    with Live(spinner, console=console, refresh_per_second=20, transient=True):
-        return plan_actions_with_unhandled(message)
+def _plan_actions(message: str) -> tuple[list, bool]:
+    """Plan actions for a free-text message.
+
+    Used to wrap the call in a ``rich.Live`` spinner for in-place
+    "thinking…" feedback, but ``Live``'s cursor manipulation fights
+    the now-always-active ``patch_stdout`` context that the persistent
+    REPL holds for the lifetime of the session (produces transient
+    cursor-jump / erase-line residue on every action-planning call).
+    The bottom-toolbar spinner started by :func:`_run_one_dispatch`
+    already animates throughout the dispatch — including this planning
+    phase — so the user still sees feedback; no separate in-place
+    indicator is needed here.
+    """
+    return plan_actions_with_unhandled(message)
 
 
 def _running_task_matches(session: ReplSession, target: str) -> list[TaskRecord]:
@@ -160,7 +164,7 @@ def execute_cli_actions(
     Returns True when the message was handled. Unknown or ambiguous requests fall
     through to the LLM-backed assistant.
     """
-    actions, has_unhandled_clause = _plan_with_spinner(message, console)
+    actions, has_unhandled_clause = _plan_actions(message)
     if not actions:
         return False
 
@@ -312,7 +316,7 @@ def execute_cli_actions_with_metrics(
         capture_terminal_actions_planned,
     )
 
-    actions, has_unhandled_clause = _plan_with_spinner(message, console)
+    actions, has_unhandled_clause = _plan_actions(message)
     capture_terminal_actions_planned(
         planned_count=len(actions),
         has_unhandled_clause=has_unhandled_clause,

@@ -420,6 +420,69 @@ class TestTtyParagraphRender:
             f"inline ``` mention blocked paragraph flush — got {parse_count[0]} parses"
         )
 
+    def test_mid_line_triple_backtick_does_not_count_as_fence(self) -> None:
+        """A ``\\`\\`\\``` that appears mid-line (not at line start) must
+        NOT be counted as a fence boundary by the parity check. Real
+        code blocks must keep accumulating across paragraphs until a
+        line-start closing fence arrives — the mid-line backticks are
+        inline content (often quoted/embedded in prose), not Markdown
+        syntax.
+
+        Regression for the drive-by review point: a chunk like
+        ``\\nresult: ok\\`\\`\\`\\nmore text`` (closing-fence-shaped
+        characters mid-line because the chunk boundary fell there)
+        used to be a worry. The ``^\\`\\`\\``` regex with
+        ``re.MULTILINE`` matches only line-start fences, so this
+        scenario stays correct.
+        """
+        from app.cli.interactive_shell.ui import streaming as streaming_module
+
+        parse_count = [0]
+        real_markdown = streaming_module.Markdown
+
+        class _SpyMarkdown(real_markdown):  # type: ignore[misc, valid-type]
+            def __init__(self, text: str, **kwargs) -> None:
+                parse_count[0] += 1
+                super().__init__(text, **kwargs)
+
+        original_markdown = streaming_module.Markdown
+        streaming_module.Markdown = _SpyMarkdown
+        try:
+            console, buf = _tty_console()
+            stream_to_console(
+                console,
+                label="assistant",
+                chunks=_yield_chunks(
+                    [
+                        # Real fence opens at line start.
+                        "```py\n",
+                        "x = 1\n",
+                        # Mid-line backticks inside the still-open fence.
+                        # MUST be ignored by the parity check — fence
+                        # stays open until a real closing fence at line
+                        # start.
+                        "result: ok```\n",
+                        "y = 2\n",
+                        # Now the real closing fence at line start.
+                        "```\n\n",
+                        "After the block.\n\n",
+                    ]
+                ),
+            )
+        finally:
+            streaming_module.Markdown = original_markdown
+
+        # 2 parses: (1) the entire fenced code block as one Markdown
+        # parse — proves the mid-line ``` didn't prematurely flush it;
+        # (2) the "After the block." paragraph. Without the line-anchor,
+        # the mid-line ``` would flip the parity, close the fence
+        # early, and we'd see 3+ parses with broken code rendering.
+        assert parse_count[0] == 2, f"mid-line ``` was miscounted — got {parse_count[0]} parses"
+        # And the mid-line backticks must reach the rendered output as
+        # plain text (inside the code block), not get eaten as syntax.
+        output = _strip_ansi(buf.getvalue())
+        assert "result: ok" in output
+
     def test_unclosed_fence_with_embedded_blank_line_renders_at_eos(self) -> None:
         """Unclosed fence containing an embedded ``\\n\\n`` must not hang
         the inner loop and must surface the partial buffer at end-of-stream.

@@ -579,6 +579,35 @@ class TestLooksLikeConfirmationAnswer:
     def test_unrecognised_text_does_not_match(self, text: str) -> None:
         assert loop._looks_like_confirmation_answer(text) is False
 
+    @pytest.mark.parametrize(
+        "text",
+        [
+            # Multi-line type-ahead whose first token reads as ``y``/``yes``
+            # must NOT be classified as a confirmation. The gate compares the
+            # whole stripped/lowered string against the token set, so any
+            # trailing words or internal newlines disqualify it.
+            "yes please run that against staging instead",
+            "yes\nbut do X first",
+            "y\nrun it now",
+            "no\nactually wait, let me check the logs first",
+            "Y but also rotate the keys after",
+            # Embedded newlines preserved through ``strip()`` so the join
+            # still fails the membership check.
+            "yes\nplease",
+        ],
+    )
+    def test_multiline_type_ahead_starting_with_y_or_n_does_not_match(self, text: str) -> None:
+        """Regression for the type-ahead-as-confirmation footgun: a pasted
+        or typed sentence beginning with ``y``/``yes`` (or ``n``/``no``)
+        must be treated as a new turn, not silently delivered as the
+        Proceed? answer. ``str.strip()`` only trims outer whitespace, so
+        any inner non-whitespace content keeps the lowered string out
+        of the token set. (Pure outer-whitespace cases like
+        ``"  yes\\n  "`` correctly DO match — that's just ``yes`` with
+        stray whitespace, not a multi-line message.)
+        """
+        assert loop._looks_like_confirmation_answer(text) is False
+
 
 # ── Spinner state tests ──────────────────────────────────────────────────────
 
