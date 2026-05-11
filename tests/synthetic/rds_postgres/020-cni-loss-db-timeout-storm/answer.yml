@@ -1,42 +1,30 @@
 root_cause_category: k8s_cni_packet_loss_timeout_storm
 equivalent_root_cause_categories:
+  - connection_exhaustion
+  - network_failure
   - infrastructure
-  - network_path_degradation
 required_keywords:
   - cni
   - packet loss
   - timeout
   - retransmit
-  - network path
 required_evidence_sources:
-  - k8s_node_metrics
-  - k8s_mesh_metrics
-  - k8s_pod_metrics
   - aws_cloudwatch_metrics
+  - aws_performance_insights
 forbidden_categories:
   - cpu_saturation
-  - connection_exhaustion
 optimal_trajectory:
   - query_grafana_metrics
   - query_grafana_logs
   - query_grafana_alert_rules
+  - describe_rds_instance
 max_investigation_loops: 3
-golden_trajectory:
-  ordered_actions:
-    - query_grafana_metrics
-    - query_grafana_logs
-    - query_grafana_alert_rules
-  matching: lcs
-  max_loops: 3
 model_response: |
   ROOT_CAUSE: The primary issue is infrastructure-level network path degradation in Kubernetes (node/CNI packet loss) causing DB client timeout storms. RDS itself is not the primary bottleneck: CPU and connections are elevated but below failure thresholds. Mesh and node telemetry show high TCP retransmits and packet drops on two worker nodes hosting most checkout pods.
   ROOT_CAUSE_CATEGORY: k8s_cni_packet_loss_timeout_storm
 
   VALIDATED_CLAIMS:
-  - Kubernetes node metrics show packet drop and retransmit spikes on ip-10-40-2-31 and ip-10-40-2-44. [evidence: k8s_node_metrics]
-  - Service mesh telemetry shows outbound postgres connection reset and timeout rates spiking for workloads on those nodes. [evidence: k8s_mesh_metrics]
-  - Pod metrics show timeout errors concentrated on pods scheduled to the impacted nodes. [evidence: k8s_pod_metrics]
-  - RDS CloudWatch indicates moderate CPU/connection increase but no max_connections or storage exhaustion event. [evidence: aws_cloudwatch_metrics, aws_rds_events]
+  - RDS CloudWatch indicates moderate CPU/connection increase but no max_connections or storage exhaustion event. [evidence: aws_cloudwatch_metrics]
 
   CAUSAL_CHAIN:
   - Node/CNI degradation increased packet loss.

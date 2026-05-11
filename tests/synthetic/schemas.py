@@ -193,6 +193,7 @@ VALID_TRAJECTORY_ACTIONS = frozenset(
         "query_grafana_logs",
         "query_grafana_alert_rules",
         "describe_rds_instance",
+        "describe_rds_events",
         "ec2_instances_by_tag",
         "get_elb_target_health",
     }

@@ -8,7 +8,6 @@ required_keywords:
   - cpu
   - performance insights
 required_evidence_sources:
-  - k8s_rollout
   - aws_performance_insights
   - aws_cloudwatch_metrics
 forbidden_categories:
@@ -18,15 +17,8 @@ optimal_trajectory:
   - query_grafana_metrics
   - query_grafana_logs
   - query_grafana_alert_rules
+  - describe_rds_instance
 max_investigation_loops: 3
-golden_trajectory:
-  ordered_actions:
-    - query_grafana_metrics
-    - query_grafana_logs
-    - query_grafana_alert_rules
-  matching: lcs
-  max_extra_actions: 2
-  max_loops: 3
 model_response: |
   ROOT_CAUSE: A query regression introduced in the latest checkout-api rollout caused cpu_saturation_bad_query on payments-prod. The new endpoint query removed a selective index predicate, triggering repeated sequential scans on orders and driving RDS CPU to 96%. This is application-query behavior correlated to rollout revision checkout-api-9bdaf, not an infrastructure failover.
   ROOT_CAUSE_CATEGORY: cpu_saturation_bad_query

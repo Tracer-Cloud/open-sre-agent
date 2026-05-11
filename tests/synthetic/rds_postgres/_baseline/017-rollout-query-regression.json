@@ -3,17 +3,21 @@
   "evidence": {
     "available_coverage": 0.0,
     "missing_required_sources": [
-      "aws_rds_events"
+      "aws_performance_insights",
+      "aws_cloudwatch_metrics"
     ],
     "observed_sources": [],
     "required_coverage": 0.0,
     "required_sources": [
-      "aws_rds_events"
+      "aws_performance_insights",
+      "aws_cloudwatch_metrics"
     ],
     "source_presence": {
       "aws_cloudwatch_metrics": false,
       "aws_performance_insights": false,
-      "aws_rds_events": false
+      "aws_rds_events": false,
+      "k8s_pod_metrics": false,
+      "k8s_rollout": false
     }
   },
   "failure_reasons": [
@@ -23,21 +27,21 @@
     },
     {
       "code": "MISSING_REQUIRED_KEYWORD",
-      "detail": "missing required keywords: ['storage', 'storage space']"
+      "detail": "missing required keywords: ['rollout', 'query', 'seq scan', 'cpu', 'performance insights']"
     },
     {
       "code": "MISSING_REQUIRED_EVIDENCE_SOURCE",
-      "detail": "required evidence not gathered: ['aws_rds_events']"
+      "detail": "required evidence not gathered: ['aws_performance_insights', 'aws_cloudwatch_metrics']"
     }
   ],
   "gates": {
     "category_match": {
       "actual": "root_cause_present=False, actual_category='unknown'",
       "status": "fail",
-      "threshold": "actual_category in ['storage_exhaustion']"
+      "threshold": "actual_category in ['cpu_saturation', 'cpu_saturation_bad_query']"
     },
     "exact_keyword_match": {
-      "actual": "missing_exact=['storage', 'storage space']",
+      "actual": "missing_exact=['rollout', 'query', 'seq scan', 'cpu', 'performance insights']",
       "status": "fail",
       "threshold": "all required keywords matched verbatim"
     },
@@ -47,7 +51,7 @@
       "threshold": "not required unless failover sequence keywords are in answer key"
     },
     "forbidden_category_clear": {
-      "actual": "actual_category='unknown', forbidden=[]",
+      "actual": "actual_category='unknown', forbidden=['infrastructure', 'connection_exhaustion']",
       "status": "pass",
       "threshold": "actual_category not in forbidden_categories"
     },
@@ -57,17 +61,17 @@
       "threshold": "no forbidden keywords appear in graded output text"
     },
     "required_evidence_sources": {
-      "actual": "missing_required_evidence=['aws_rds_events']",
+      "actual": "missing_required_evidence=['aws_performance_insights', 'aws_cloudwatch_metrics']",
       "status": "fail",
       "threshold": "all required evidence sources populated"
     },
     "required_keyword_match": {
-      "actual": "missing_semantic=['storage', 'storage space'], missing_exact=['storage', 'storage space']",
+      "actual": "missing_semantic=['rollout', 'query', 'seq scan', 'cpu', 'performance insights'], missing_exact=['rollout', 'query', 'seq scan', 'cpu', 'performance insights']",
       "status": "fail",
       "threshold": "all required keywords matched (semantic)"
     },
     "semantic_keyword_match": {
-      "actual": "missing_semantic=['storage', 'storage space']",
+      "actual": "missing_semantic=['rollout', 'query', 'seq scan', 'cpu', 'performance insights']",
       "status": "fail",
       "threshold": "all required keywords matched semantically"
     },
@@ -92,15 +96,15 @@
     "extra_actions": [],
     "failed_action_count": 0,
     "golden": [
-      "query_grafana_logs",
       "query_grafana_metrics",
+      "query_grafana_logs",
       "query_grafana_alert_rules",
       "describe_rds_instance"
     ],
     "lcs_ratio": 0.0,
     "missing_actions": [
-      "query_grafana_logs",
       "query_grafana_metrics",
+      "query_grafana_logs",
       "query_grafana_alert_rules",
       "describe_rds_instance"
     ],
