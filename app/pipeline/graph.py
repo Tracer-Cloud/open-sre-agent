@@ -36,31 +36,57 @@ from app.state import AgentState
 import oqs
 from typing import Tuple, Final
 
-class PQCSecretKey:
-    """Opaque wrapper for PQC secret material to prevent log leakage."""
-    def __init__(self, key_bytes: bytes, algorithm: str):
-        self.__key: Final[bytes] = key_bytes
-        self.algorithm: Final[str] = algorithm
-
-    def expose(self) -> bytes:
-        return self.__key
+import oqs
+from typing import Tuple, Optional
 
 class PQCCore:
-    """NIST Category 3 Lattice-based Cryptography Core."""
-    def __init__(self, security_level: int = 3) -> None:
+    """NIST Category 3/5 Lattice-based Cryptography Core with Domain Auth."""
+    
+    def __init__(self, security_level: int = 3, auth_domain: Optional[str] = None) -> None:
+        self.auth_domain = auth_domain
         if security_level == 5:
             self.kem_alg, self.sig_alg = "Kyber1024", "Dilithium5"
         else:
             self.kem_alg, self.sig_alg = "Kyber768", "Dilithium3"
 
+    def _validate_domain(self, email: str) -> bool:
+        """Helper to enforce double authentication mail domain logic."""
+        if not self.auth_domain:
+            return True
+        return email.endswith(f"@{self.auth_domain}")
+
+    # --- KEM Operations ---
+
     def generate_kem_keypair(self) -> Tuple[bytes, PQCSecretKey]:
         with oqs.KeyEncapsulation(self.kem_alg) as client:
-            return client.generate_keypair(), PQCSecretKey(client.export_secret_key(), self.kem_alg)
+            pk = client.generate_keypair()
+            sk = PQCSecretKey(client.export_secret_key(), self.kem_alg)
+            return pk, sk
+
+    def encapsulate(self, public_key: bytes) -> Tuple[bytes, bytes]:
+        """Produces ciphertext and shared secret for the counterparty."""
+        with oqs.KeyEncapsulation(self.kem_alg) as server:
+            return server.encapsulate(public_key)
 
     def decapsulate(self, ciphertext: bytes, secret_key: PQCSecretKey) -> bytes:
         with oqs.KeyEncapsulation(self.kem_alg) as client:
             client.import_secret_key(secret_key.expose())
             return client.decapsulate(ciphertext)
+
+    # --- Digital Signature Operations ---
+
+    def sign_telemetry(self, data: bytes, secret_key: PQCSecretKey, auth_email: str) -> bytes:
+        """Signs data only if the provided email matches the authorized domain."""
+        if not self._validate_domain(auth_email):
+            raise PermissionError(f"Domain mismatch: {auth_email} is not authorized for this core.")
+            
+        with oqs.Signature(self.sig_alg) as signer:
+            signer.import_secret_key(secret_key.expose())
+            return signer.sign(data)
+
+    def verify_signature(self, data: bytes, signature: bytes, public_key: bytes) -> bool:
+        with oqs.Signature(self.sig_alg) as verifier:
+            return verifier.verify(data, signature, public_key)
 
 def build_graph(config: None = None) -> CompiledStateGraph:
     """Build and compile the LangGraph agent."""
