@@ -65,7 +65,10 @@ from app.cli.interactive_shell.ui import (
     WARNING,
     render_banner,
 )
-from app.cli.interactive_shell.ui.streaming import format_token_count_short
+from app.cli.interactive_shell.ui.streaming import (
+    _CHARS_PER_TOKEN,
+    format_token_count_short,
+)
 from app.cli.support.errors import OpenSREError
 from app.cli.support.exception_reporting import report_exception
 from app.cli.support.prompt_support import repl_prompt_note_ctrl_c, repl_reset_ctrl_c_gate
@@ -443,7 +446,6 @@ class _SpinnerState:
     """
 
     _SPINNER_FRAMES = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
-    _CHARS_PER_TOKEN = 4
     # Claude Code-style verb rotation — one verb is picked per turn so
     # the indicator doesn't always say the same word. Adds personality
     # without flicker (the verb stays fixed for the whole turn).
@@ -515,7 +517,7 @@ class _SpinnerState:
         if not self.streaming:
             return ""
         elapsed = time.monotonic() - self.started_at
-        tokens_str = format_token_count_short(self.bytes_in // self._CHARS_PER_TOKEN)
+        tokens_str = format_token_count_short(self.bytes_in // _CHARS_PER_TOKEN)
         glyph = self._SPINNER_FRAMES[self._frame_idx % len(self._SPINNER_FRAMES)]
         self._frame_idx += 1
         return (
@@ -693,23 +695,26 @@ async def _run_interactive(
             return ANSI(f"{spinner_part}\n{base}")
         return ANSI(base)
 
-    # ``erase_when_done=True`` on ``PromptSession`` clears the input box
-    # the moment the user submits, so without an explicit echo their
-    # question would never appear in terminal scrollback. Echo it via a
-    # real ``Console`` (``patch_stdout`` routes the write above the
-    # active prompt) so each turn looks like Claude Code:
-    #
-    #     [1] ❯ what is opensre?
-    #     <response>
-    #     · 5s · ↓ 100 tokens
-    #
-    #     [2] ❯ tell me more
-    #     ...
-    echo_console = Console(highlight=False, force_terminal=True, color_system="truecolor")
-
     processor_task = asyncio.create_task(_processor())
     try:
         with patch_stdout(raw=True):
+            # ``erase_when_done=True`` on ``PromptSession`` clears the
+            # input box the moment the user submits, so without an
+            # explicit echo their question would never appear in
+            # terminal scrollback. Echo it via a real ``Console``
+            # (``patch_stdout`` routes the write above the active
+            # prompt) so each turn looks like Claude Code:
+            #
+            #     [1] ❯ what is opensre?
+            #     <response>
+            #     · 5s · ↓ 100 tokens
+            #
+            #     [2] ❯ tell me more
+            #
+            # Constructed inside ``patch_stdout`` so Rich captures the
+            # patched stdout proxy rather than the pre-patch
+            # ``sys.stdout``.
+            echo_console = Console(highlight=False, force_terminal=True, color_system="truecolor")
             while True:
                 # Hot-reload check (introduced in main) — picks up dev
                 # edits to dispatch handlers between turns. No-op when

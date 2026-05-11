@@ -33,9 +33,9 @@ from rich.markdown import Markdown
 
 from app.cli.interactive_shell.ui.theme import BOLD_BRAND, DIM, MARKDOWN_THEME
 
-# Approximate characters per token. Same heuristic as
-# ``loop._SpinnerState._CHARS_PER_TOKEN`` — used here for the post-stream
-# elapsed footer.
+# Approximate characters per token. Single source of truth for the
+# streaming layer and ``loop._SpinnerState`` (which imports this so the
+# live spinner and the post-stream footer can't drift apart).
 _CHARS_PER_TOKEN = 4
 
 # Throttle for the optional ``update_streaming_progress`` hook on the
@@ -282,7 +282,7 @@ def stream_to_console(
         _flush_paragraphs(force=True)
         elapsed = time.monotonic() - started
         if buffer:
-            tokens = _format_tokens(sum(len(c) for c in buffer) // _CHARS_PER_TOKEN)
+            tokens = _format_tokens(total_bytes // _CHARS_PER_TOKEN)
             console.print(f"[{DIM}]· {elapsed:.1f}s · ↓ {tokens}[/]")
         console.print()
 

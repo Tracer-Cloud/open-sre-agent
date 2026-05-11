@@ -553,7 +553,7 @@ class TestSpinnerState:
     def test_streaming_inline_spinner_includes_glyph_and_token_count(self) -> None:
         spinner = loop._SpinnerState()
         spinner.start()
-        spinner.bytes_in = 1234 * loop._SpinnerState._CHARS_PER_TOKEN  # = 1234 tokens
+        spinner.bytes_in = 1234 * loop._CHARS_PER_TOKEN  # = 1234 tokens
         rendered = _strip_ansi(spinner.inline_spinner_ansi())
         # The verb is randomly picked from ``_THINKING_VERBS`` per turn —
         # any of them followed by ``…`` is acceptable.
