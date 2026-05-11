@@ -80,6 +80,7 @@ def _same_origin(url_a: str, url_b: str) -> bool:
     a, b = urlparse(url_a), urlparse(url_b)
     return a.scheme == b.scheme and a.netloc == b.netloc
 
+
 def resolve_supabase_config(project_url: str) -> SupabaseConfig:
     """Build a config for the given project URL, resolving credentials from
     the integration store (UI-registered) or environment variables.
@@ -105,9 +106,7 @@ def resolve_supabase_config(project_url: str) -> SupabaseConfig:
             if _same_origin(stored_url, normalized):
                 service_key = str(creds.get("service_key", "")).strip()
                 if service_key:
-                    return build_supabase_config(
-                        {"url": normalized, "service_key": service_key}
-                    )
+                    return build_supabase_config({"url": normalized, "service_key": service_key})
     except Exception:
         pass
 
