@@ -999,6 +999,10 @@ def _create_llm_client(model_type: ModelType) -> _LLMClientType:
     try:
         settings = LLMSettings.from_env()
     except ValidationError as exc:
+        errors = exc.errors()
+        if len(errors) == 1:
+            msg = re.sub(r"^[Vv]alue error,\s*", "", errors[0].get("msg", "")).strip()
+            raise RuntimeError(msg or str(exc)) from exc
         raise RuntimeError(str(exc)) from exc
     provider = settings.provider
     if provider == "openai":
