@@ -794,14 +794,11 @@ class TestStreamRendererFocusedUXAndParsing:
         assert "The evidence suggests memory leak" in out
 
     def test_strip_outer_quotes_does_not_fire_on_linux(self) -> None:
-        """Outer quote-stripping is windows-only and does not fire on POSIX/Linux systems."""
-        from app.cli.interactive_shell.shell_policy import parse_shell_command
+        """Windows-only outer quote normalization does not alter POSIX shlex tokens."""
+        from app.cli.interactive_shell.shell.policy import parse_shell_command
 
         parsed = parse_shell_command('run "cat /tmp/file.txt"', is_windows=False)
-        assert parsed.argv == ["run", '"cat /tmp/file.txt"'] or parsed.argv == [
-            "run",
-            "cat /tmp/file.txt",
-        ]
+        assert parsed.argv == ["run", "cat /tmp/file.txt"]
 
 
 class TestStreamRendererDiagnoseThrottle:
