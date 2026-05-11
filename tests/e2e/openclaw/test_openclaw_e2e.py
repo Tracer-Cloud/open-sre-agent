@@ -26,7 +26,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-import app.integrations.openclaw as openclaw_module
+from app.integrations.openclaw import (
+    OpenClawConfig,
+    describe_openclaw_error,
+    openclaw_runtime_unavailable_reason,
+    validate_openclaw_config,
+)
 from app.nodes.plan_actions.detect_sources import detect_sources
 from app.nodes.resolve_integrations.node import _classify_integrations, _load_env_integrations
 from app.utils.openclaw_delivery import send_openclaw_report
@@ -171,9 +176,7 @@ class TestOpenClawGatewayUnavailable:
         self, _mock_which: MagicMock
     ) -> None:
         """RuntimeError('Connection closed') on an stdio config returns a gateway hint."""
-        config = openclaw_module.OpenClawConfig(
-            mode="stdio", command="openclaw", args=["mcp", "serve"]
-        )
+        config = OpenClawConfig(mode="stdio", command="openclaw", args=["mcp", "serve"])
         completed = subprocess.CompletedProcess(
             args=["openclaw", "--help"],
             returncode=0,
@@ -181,9 +184,7 @@ class TestOpenClawGatewayUnavailable:
             stderr="",
         )
         with patch("app.integrations.openclaw.subprocess.run", return_value=completed):
-            detail = openclaw_module.describe_openclaw_error(
-                RuntimeError("Connection closed"), config
-            )
+            detail = describe_openclaw_error(RuntimeError("Connection closed"), config)
 
         assert "openclaw gateway" in detail, (
             "Remediation hint must reference 'openclaw gateway' so engineers know "
@@ -195,8 +196,8 @@ class TestOpenClawGatewayUnavailable:
         self, _mock_which: MagicMock
     ) -> None:
         """openclaw_runtime_unavailable_reason returns an error string when the binary is missing."""
-        config = openclaw_module.OpenClawConfig(mode="stdio", command="openclaw")
-        reason = openclaw_module.openclaw_runtime_unavailable_reason(config)
+        config = OpenClawConfig(mode="stdio", command="openclaw")
+        reason = openclaw_runtime_unavailable_reason(config)
 
         assert reason is not None
         assert "Command not found" in reason
@@ -248,16 +249,14 @@ class TestOpenClawMCPAuthFailure:
 
     def test_exception_group_unwrapped_to_401_hint(self) -> None:
         """ExceptionGroup wrapping a 401 RuntimeError yields a readable error detail."""
-        config = openclaw_module.OpenClawConfig(
-            url="https://openclaw.example.com/mcp", auth_token="bad-token"
-        )
+        config = OpenClawConfig(url="https://openclaw.example.com/mcp", auth_token="bad-token")
         nested = ExceptionGroup(
             "unhandled errors in a TaskGroup",
             [RuntimeError("HTTP 401 from POST https://openclaw.example.com/mcp")],
         )
 
         with patch("app.integrations.openclaw.list_openclaw_tools", side_effect=nested):
-            result = openclaw_module.validate_openclaw_config(config)
+            result = validate_openclaw_config(config)
 
         assert result.ok is False
         assert "HTTP 401" in result.detail, (
@@ -266,7 +265,7 @@ class TestOpenClawMCPAuthFailure:
 
     def test_bearer_prefix_stripped_from_auth_token(self) -> None:
         """Auth tokens submitted with a 'Bearer ' prefix are normalised automatically."""
-        config = openclaw_module.OpenClawConfig(
+        config = OpenClawConfig(
             url="https://openclaw.example.com/mcp",
             auth_token="Bearer tok-with-prefix",
         )
@@ -274,7 +273,7 @@ class TestOpenClawMCPAuthFailure:
 
     def test_request_headers_inject_bearer(self) -> None:
         """Resolved config must emit Authorization header with Bearer scheme."""
-        config = openclaw_module.OpenClawConfig(
+        config = OpenClawConfig(
             url="https://openclaw.example.com/mcp",
             auth_token="fresh-token",
         )
@@ -282,9 +281,7 @@ class TestOpenClawMCPAuthFailure:
 
     def test_empty_token_produces_no_authorization_header(self) -> None:
         """When auth_token is empty, no Authorization header is emitted."""
-        config = openclaw_module.OpenClawConfig(
-            url="https://openclaw.example.com/mcp", auth_token=""
-        )
+        config = OpenClawConfig(url="https://openclaw.example.com/mcp", auth_token="")
         assert "Authorization" not in config.request_headers
 
     def test_openclaw_source_detected_with_http_config(self) -> None:
@@ -328,8 +325,8 @@ class TestOpenClawStdioCommandNotFound:
 
     def test_legacy_command_describe_error_has_mcp_serve_hint(self) -> None:
         """FileNotFoundError on 'openclaw-mcp' must produce a 'mcp serve' remediation hint."""
-        config = openclaw_module.OpenClawConfig(mode="stdio", command="openclaw-mcp")
-        detail = openclaw_module.describe_openclaw_error(
+        config = OpenClawConfig(mode="stdio", command="openclaw-mcp")
+        detail = describe_openclaw_error(
             FileNotFoundError(2, "No such file or directory", "openclaw-mcp"), config
         )
 
@@ -343,10 +340,10 @@ class TestOpenClawStdioCommandNotFound:
         self, _mock_which: MagicMock
     ) -> None:
         """Verification must short-circuit to 'Command not found' without calling list_tools."""
-        config = openclaw_module.OpenClawConfig(mode="stdio", command="openclaw-mcp")
+        config = OpenClawConfig(mode="stdio", command="openclaw-mcp")
 
         with patch("app.integrations.openclaw.list_openclaw_tools") as mock_list:
-            result = openclaw_module.validate_openclaw_config(config)
+            result = validate_openclaw_config(config)
 
         assert result.ok is False
         assert "Command not found" in result.detail
@@ -370,9 +367,7 @@ class TestOpenClawStdioCommandNotFound:
 
     def test_args_empty_strings_filtered(self) -> None:
         """Empty string args must be dropped — avoids passing '' to subprocess."""
-        config = openclaw_module.OpenClawConfig(
-            mode="stdio", command="openclaw", args=["mcp", "", "serve", "  "]
-        )
+        config = OpenClawConfig(mode="stdio", command="openclaw", args=["mcp", "", "serve", "  "])
         assert "" not in config.args
         assert "  " not in config.args
         assert "mcp" in config.args
