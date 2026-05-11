@@ -107,7 +107,7 @@ def resolve_supabase_config(project_url: str) -> SupabaseConfig:
                 service_key = str(creds.get("service_key", "")).strip()
                 if service_key:
                     return build_supabase_config({"url": normalized, "service_key": service_key})
-    except Exception:
+    except Exception:  # store unavailable or malformed — fall through to env vars
         pass
 
     # Fall back to environment variables.
