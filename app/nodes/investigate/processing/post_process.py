@@ -1021,9 +1021,7 @@ EVIDENCE_MAPPERS: dict[str, Callable[..., dict]] = {
     "CheckServiceConnectivity": _map_cloudopsbench_tool,
     "CheckNodeServiceStatus": _map_cloudopsbench_tool,
     "search_openclaw_conversations": _map_search_openclaw_conversations,
-    "get_openclaw_conversation": _map_get_openclaw_conversation,
     "list_openclaw_tools": _map_list_openclaw_tools,
-    "call_openclaw_tool": _map_call_openclaw_tool,
 }
 
 
