@@ -27,6 +27,14 @@ required_evidence_sources:
   - aws_performance_insights
   - ec2_instances_by_tag
   - elb_target_health
+# Note: Performance Insights data (top_users, top_hosts, top_sql) is
+# auto-populated into state.evidence by the test harness whenever
+# aws_performance_insights is in available_evidence. There is no
+# get_performance_insights tool in the registry today, so it does NOT
+# appear in optimal_trajectory. The agent reads PI directly from its
+# state without a dedicated tool call. This matches the pattern in
+# scenario 015 and is verified by the live LLM run (the agent cites
+# PI top_users in its diagnosis without invoking a PI tool).
 optimal_trajectory:
   - describe_rds_instance
   - describe_rds_events

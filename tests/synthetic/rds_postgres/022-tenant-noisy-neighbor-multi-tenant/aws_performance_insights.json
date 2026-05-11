@@ -85,6 +85,6 @@
     "Top SQL #3 (tenants lookup) is the typical session-bootstrap query; rates stayed in baseline range.",
     "Top SQL #4 (materialized view refresh) is a scheduled background task; unchanged.",
     "Top users decisively attribute the load to one tenant: acme_app_user at 6.4 AAS (~78% of total) while globex_app_user and initech_app_user remain at baseline (~0.4-0.5 AAS each). This is a tenant-attribution scenario, not a system-wide regression.",
-    "Top hosts confirm tenant attribution: the four 10.0.1.x IPs are not present (only 10.0.1.11 and 10.0.1.12 — acme's two API instances). The 10.0.2.x and 10.0.3.x IPs belong to globex and initech respectively and contribute negligibly. The single 10.0.4.x IP is the background worker."
+    "Top hosts confirm tenant attribution: only two 10.0.1.x IPs appear (10.0.1.11 and 10.0.1.12 — acme-corp's two API instances), and together they account for ~78% of total db_load. The 10.0.2.x and 10.0.3.x IPs belong to globex and initech respectively and each contribute under 0.3 AAS. The single 10.0.4.x IP is the shared background worker."
   ]
 }

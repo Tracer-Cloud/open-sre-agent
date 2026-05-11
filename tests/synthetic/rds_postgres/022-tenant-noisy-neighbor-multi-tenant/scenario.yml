@@ -24,6 +24,13 @@ available_evidence:
 topology:
   vpc_id: vpc-0d4e5f60
   load_balancer_arn: arn:aws:elasticloadbalancing:us-east-1:777788889999:loadbalancer/app/prod-multi-alb/11aabbcc
+  # target_group_arn is a single-string field in the topology schema (inherited
+  # from scenario 015's shape). All three tenant target groups
+  # (prod-acme-api-tg, prod-globex-api-tg, prod-initech-api-tg) are populated
+  # in elb_target_health.json and discoverable by the agent via the
+  # get_elb_target_health tool. This field is set to acme's TG as the
+  # alert-implicated primary; the agent should not treat it as the complete
+  # list. Renaming to a list field is a future schema change.
   target_group_arn: arn:aws:elasticloadbalancing:us-east-1:777788889999:targetgroup/prod-acme-api-tg/22ddeeff
   tiers:
     - name: acme-corp-api
