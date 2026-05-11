@@ -55,13 +55,26 @@ def _eks_alert() -> dict[str, Any]:
 
 
 class _StubAWSBackend:
-    """Minimal AWSBackend stub for the credential-gate bypass test."""
+    """Minimal AWSBackend stub for the credential-gate bypass test.
+
+    Implements the full AWSBackend Protocol surface (EC2, ELB, and RDS)
+    because the synthetic suite routes RDS describe calls through this same
+    backend slot. Returning ``available=False`` for RDS is sufficient — this
+    test only cares that ``isinstance(stub, AWSBackend)`` holds, not about
+    the response shape.
+    """
 
     def describe_instances_by_tag(self, **_: Any) -> dict[str, Any]:
         return {"source": "ec2", "available": True, "instances": [], "error": None}
 
     def describe_target_health(self, **_: Any) -> dict[str, Any]:
         return {"source": "ec2", "available": True, "target_groups": [], "error": None}
+
+    def describe_db_instances(self, **_: Any) -> dict[str, Any]:
+        return {"source": "rds", "available": False, "error": None}
+
+    def describe_db_events(self, **_: Any) -> dict[str, Any]:
+        return {"source": "rds", "available": False, "events": [], "error": None}
 
 
 def _aws_credentialed_integrations(*, with_ec2_backend: bool = False) -> dict[str, Any]:

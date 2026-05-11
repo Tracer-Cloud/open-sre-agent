@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 import httpx
 
-from app.cli.interactive_shell.theme import DIM, WARNING
+from app.cli.interactive_shell.ui.theme import DIM, WARNING
 from app.config import DEFAULT_OLLAMA_HOST
 
 if TYPE_CHECKING:

@@ -13,7 +13,7 @@ from prompt_toolkit.key_binding import KeyBindings, KeyBindingsBase, merge_key_b
 from prompt_toolkit.keys import Keys
 from rich.console import Console
 
-from app.cli.interactive_shell.theme import DIM
+from app.cli.interactive_shell.ui.theme import DIM
 
 _escape_patch_installed: list[bool] = [False]
 _ctrl_c_patch_installed: list[bool] = [False]

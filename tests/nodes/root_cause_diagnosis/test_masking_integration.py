@@ -135,3 +135,79 @@ def test_diagnose_with_empty_masking_map_is_passthrough() -> None:
         result = diag_node.diagnose_root_cause(state)  # type: ignore[arg-type]
 
     assert result["root_cause"] == "plain root cause text"
+
+
+def test_diagnose_recommends_more_evidence_for_unknown_with_untried_actions() -> None:
+    from app.nodes.root_cause_diagnosis import node as diag_node
+
+    state = _state_with_masking(
+        available_action_names=["query_grafana_metrics", "query_grafana_logs"],
+        executed_hypotheses=[{"actions": ["query_grafana_metrics"], "loop_count": 0}],
+    )
+    llm_response = _mock_llm_response("ROOT_CAUSE: unknown")
+    parsed = _mock_parse_result("unable to identify exact cause")
+    parsed.root_cause_category = "unknown"
+
+    with (
+        patch.object(diag_node, "get_llm_for_reasoning") as mock_llm_factory,
+        patch.object(diag_node, "parse_root_cause", return_value=parsed),
+        patch.object(diag_node, "is_clearly_healthy", return_value=False),
+        patch.object(
+            diag_node,
+            "check_evidence_availability",
+            return_value=(False, False, True),
+        ),
+        patch.object(diag_node, "validate_and_categorize_claims", return_value=([], [])),
+        patch.object(diag_node, "calculate_validity_score", return_value=0.5),
+        patch.object(diag_node, "check_vendor_evidence_missing", return_value=False),
+        patch.object(diag_node, "build_diagnosis_prompt", return_value="prompt"),
+    ):
+        mock_chain = MagicMock()
+        mock_chain.invoke.return_value = llm_response
+        mock_llm = MagicMock()
+        mock_llm.with_config.return_value = mock_chain
+        mock_llm_factory.return_value = mock_llm
+
+        result = diag_node.diagnose_root_cause(state)  # type: ignore[arg-type]
+
+    assert result["investigation_recommendations"] == [
+        "Gather one more round of telemetry evidence before finalizing root cause"
+    ]
+    assert result["investigation_loop_count"] == 1
+
+
+def test_diagnose_does_not_recommend_when_unknown_but_no_untried_actions() -> None:
+    from app.nodes.root_cause_diagnosis import node as diag_node
+
+    state = _state_with_masking(
+        available_action_names=["query_grafana_metrics"],
+        executed_hypotheses=[{"actions": ["query_grafana_metrics"], "loop_count": 0}],
+    )
+    llm_response = _mock_llm_response("ROOT_CAUSE: unknown")
+    parsed = _mock_parse_result("unable to identify exact cause")
+    parsed.root_cause_category = "unknown"
+
+    with (
+        patch.object(diag_node, "get_llm_for_reasoning") as mock_llm_factory,
+        patch.object(diag_node, "parse_root_cause", return_value=parsed),
+        patch.object(diag_node, "is_clearly_healthy", return_value=False),
+        patch.object(
+            diag_node,
+            "check_evidence_availability",
+            return_value=(False, False, True),
+        ),
+        patch.object(diag_node, "validate_and_categorize_claims", return_value=([], [])),
+        patch.object(diag_node, "calculate_validity_score", return_value=0.5),
+        patch.object(diag_node, "check_vendor_evidence_missing", return_value=False),
+        patch.object(diag_node, "build_diagnosis_prompt", return_value="prompt"),
+    ):
+        mock_chain = MagicMock()
+        mock_chain.invoke.return_value = llm_response
+        mock_llm = MagicMock()
+        mock_llm.with_config.return_value = mock_chain
+        mock_llm_factory.return_value = mock_llm
+
+        result = diag_node.diagnose_root_cause(state)  # type: ignore[arg-type]
+
+    assert result["investigation_recommendations"] == []
+    assert result["investigation_loop_count"] == 0

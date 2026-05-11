@@ -139,6 +139,12 @@ def _capture_accepted_cli_invocation(ctx: click.Context) -> None:
     help="Interactive-shell layout: 'classic' (scrolling) or 'pinned' (fixed "
     "input bar). Overrides OPENSRE_LAYOUT env var and ~/.config/opensre/config.yml.",
 )
+@click.option(
+    "--reload/--no-reload",
+    "reload_enabled",
+    default=None,
+    help="Enable or disable interactive-shell hot reload. Defaults to enabled.",
+)
 @click.pass_context
 def cli(
     ctx: click.Context,
@@ -148,6 +154,7 @@ def cli(
     yes: bool,
     interactive: bool,
     layout: str | None,
+    reload_enabled: bool | None,
 ) -> None:
     """OpenSRE - open-source SRE agent for automated incident investigation and root cause analysis."""
     ctx.ensure_object(dict)
@@ -170,6 +177,7 @@ def cli(
             config = ReplConfig.load(
                 cli_enabled=interactive,
                 cli_layout=layout,
+                cli_reload=reload_enabled,
             )
             if config.enabled:
                 raise SystemExit(run_repl(config=config))

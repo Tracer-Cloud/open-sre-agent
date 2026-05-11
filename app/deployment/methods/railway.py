@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from typing_extensions import TypedDict
 
-from app.cli.interactive_shell.theme import BRAND, DIM, ERROR, HIGHLIGHT, WARNING
+from app.cli.interactive_shell.ui.theme import BRAND, DIM, ERROR, HIGHLIGHT, WARNING
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

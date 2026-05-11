@@ -10,6 +10,8 @@ Welcome to OpenSRE
 
 ## How to Contribute
 
+Looking for a safe first contribution? See [Good First Issues](docs/good-first-issues/README.md).
+
 Use the path that matches the kind of contribution you want to make:
 
 1. **Bugs & small fixes** -> Open a PR. If you need to file an issue first, use the [bug report template](https://github.com/Tracer-Cloud/opensre/issues/new?template=bug_report.yml).

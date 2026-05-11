@@ -25,7 +25,7 @@ from rich.text import Text
 
 from app.analytics.events import Event
 from app.analytics.provider import get_analytics
-from app.cli.interactive_shell.theme import (
+from app.cli.interactive_shell.ui.theme import (
     ANSI_BOLD,
     ANSI_DIM,
     ANSI_RESET,
@@ -775,7 +775,7 @@ def _print_section(title: str, content: str, console: Any | None = None) -> None
         from rich.padding import Padding
         from rich.rule import Rule
 
-        from app.cli.interactive_shell.theme import MARKDOWN_THEME
+        from app.cli.interactive_shell.ui.theme import MARKDOWN_THEME
 
         c = console or Console(highlight=False)
         c.print()

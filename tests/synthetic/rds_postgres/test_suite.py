@@ -9,6 +9,7 @@ import pytest
 from tests.synthetic.rds_postgres.run_suite import run_scenario, score_result
 from tests.synthetic.rds_postgres.scenario_loader import (
     SUITE_DIR,
+    GoldenTrajectoryConfig,
     load_all_scenarios,
     load_scenario,
 )
@@ -59,7 +60,7 @@ def test_score_result_does_not_apply_failover_wording_to_storage_scenario() -> N
             "The RDS instance ran out of storage space, and storage space exhaustion is "
             "confirmed by the RDS event plus collapsing WriteIOPS."
         ),
-        "root_cause_category": "resource_exhaustion",
+        "root_cause_category": "storage_exhaustion",
         "validated_claims": [
             {"claim": 'RDS event states "DB instance ran out of storage space".'},
         ],
@@ -84,6 +85,79 @@ def test_score_result_does_not_apply_failover_wording_to_storage_scenario() -> N
     score = score_result(fixture, final_state)
 
     assert score.passed is True
+
+
+def test_score_result_accepts_equivalent_cpu_saturation_category() -> None:
+    """Scenario 004 allows either generic CPU saturation or the specific bad-query label."""
+
+    fixture = load_scenario(SUITE_DIR / "004-cpu-saturation-bad-query")
+
+    final_state = {
+        "root_cause": (
+            "CPU saturation from a heavy query shown in Performance Insights "
+            "top SQL with AAS and avg load on the catalog database."
+        ),
+        "root_cause_category": "cpu_saturation",
+        "validated_claims": [],
+        "non_validated_claims": [],
+        "causal_chain": [],
+        "evidence": {
+            "grafana_metrics": {"placeholder": True},
+        },
+        "executed_hypotheses": [
+            {
+                "actions": [
+                    "query_grafana_metrics",
+                    "query_grafana_logs",
+                    "query_grafana_alert_rules",
+                ]
+            }
+        ],
+        "investigation_loop_count": 1,
+    }
+
+    score = score_result(fixture, final_state)
+
+    assert score.passed is True
+    assert score.actual_category == "cpu_saturation"
+    assert score.accepted_categories == ("cpu_saturation", "cpu_saturation_bad_query")
+
+
+def test_score_result_accepts_replication_lag_wal_volume_equivalent() -> None:
+    """Scenario 006 allows generic replication_lag or WAL-specific subcategory."""
+
+    fixture = load_scenario(SUITE_DIR / "006-replication-lag-cpu-redherring")
+
+    final_state = {
+        "root_cause": (
+            "Replication lag on the replica from WAL volume; the SELECT workload is a "
+            "red herring with avg load and AAS in Performance Insights. "
+            "UPDATE on primary drives WAL; SELECT analytics is unrelated to the lag."
+        ),
+        "root_cause_category": "replication_lag_wal_volume",
+        "validated_claims": [],
+        "non_validated_claims": [],
+        "causal_chain": [],
+        "evidence": {
+            "grafana_metrics": {"placeholder": True},
+        },
+        "executed_hypotheses": [
+            {
+                "actions": [
+                    "query_grafana_metrics",
+                    "query_grafana_logs",
+                    "query_grafana_alert_rules",
+                ]
+            }
+        ],
+        "investigation_loop_count": 1,
+    }
+
+    score = score_result(fixture, final_state)
+
+    assert score.passed is True
+    assert score.actual_category == "replication_lag_wal_volume"
+    assert score.accepted_categories == ("replication_lag", "replication_lag_wal_volume")
 
 
 def test_score_result_keeps_failover_event_reasoning_requirement() -> None:
@@ -172,6 +246,45 @@ def test_score_result_accepts_failover_event_reasoning() -> None:
 
     score = score_result(fixture, final_state)
 
+    assert score.passed is True
+
+
+def test_score_result_uses_semantic_keyword_matching_for_write_heavy_workload() -> None:
+    fixture = load_scenario(SUITE_DIR / "001-replication-lag")
+
+    final_state = {
+        "root_cause": (
+            "Replication lag is driven by a write-heavy UPDATE on the orders table, "
+            "which increases WAL generation faster than the replica can replay; "
+            "Top SQL Activity and Avg Load confirm replay pressure."
+        ),
+        "root_cause_category": "replication_lag",
+        "validated_claims": [
+            {"claim": "Replica lag and WAL replay pressure are both elevated."},
+        ],
+        "non_validated_claims": [],
+        "causal_chain": [],
+        "evidence": {
+            "grafana_metrics": [{"metric_name": "ReplicaLag"}],
+            "grafana_logs": [{"message": "replica lag spike observed"}],
+        },
+        "executed_hypotheses": [
+            {
+                "actions": [
+                    "query_grafana_metrics",
+                    "query_grafana_logs",
+                    "query_grafana_alert_rules",
+                ]
+            }
+        ],
+    }
+
+    score = score_result(fixture, final_state)
+
+    assert score.semantic_keyword_match is True
+    assert score.exact_keyword_match is False
+    assert score.gates["required_keyword_match"].status == "pass"
+    assert "write-heavy workload" in score.semantic_matched_keywords
     assert score.passed is True
 
 
@@ -439,3 +552,220 @@ class TestScenarioInheritance:
         assert fixture.metadata.scenario_id == "000-healthy"
         assert fixture.metadata.failure_mode == "healthy"
         assert fixture.evidence.aws_cloudwatch_metrics is not None
+
+    def test_golden_trajectory_is_loaded_as_typed_config(self) -> None:
+        """golden_trajectory is normalized into a typed config object."""
+        real_dir = SUITE_DIR / "999-test-golden-trajectory"
+        real_dir.mkdir(exist_ok=True)
+        try:
+            (real_dir / "scenario.yml").write_text(
+                textwrap.dedent("""\
+                base: 000-healthy
+                scenario_id: 999-test-golden-trajectory
+                failure_mode: replication_lag
+                severity: critical
+            """)
+            )
+            (real_dir / "answer.yml").write_text(
+                textwrap.dedent("""\
+                root_cause_category: resource_exhaustion
+                required_keywords:
+                  - replication lag
+                model_response: "Replication lag from write pressure."
+                golden_trajectory:
+                  ordered_actions:
+                    - query_grafana_metrics
+                    - query_grafana_logs
+                  matching: strict
+                  max_edit_distance: 1
+                  max_extra_actions: 0
+                  max_redundancy: 0
+                  max_loops: 2
+            """)
+            )
+
+            fixture = load_scenario(real_dir)
+            expected = GoldenTrajectoryConfig(
+                ordered_actions=["query_grafana_metrics", "query_grafana_logs"],
+                matching="strict",
+                max_edit_distance=1,
+                max_extra_actions=0,
+                max_redundancy=0,
+                max_loops=2,
+            )
+
+            assert fixture.answer_key.golden_trajectory == expected
+        finally:
+            for f in real_dir.iterdir():
+                f.unlink()
+            real_dir.rmdir()
+
+    def test_golden_trajectory_requires_ordered_actions(self) -> None:
+        """golden_trajectory block must include a non-empty ordered_actions list."""
+        real_dir = SUITE_DIR / "999-test-golden-trajectory-missing-actions"
+        real_dir.mkdir(exist_ok=True)
+        try:
+            (real_dir / "scenario.yml").write_text(
+                textwrap.dedent("""\
+                base: 000-healthy
+                scenario_id: 999-test-golden-trajectory-missing-actions
+                failure_mode: replication_lag
+                severity: critical
+            """)
+            )
+            (real_dir / "answer.yml").write_text(
+                textwrap.dedent("""\
+                root_cause_category: resource_exhaustion
+                required_keywords:
+                  - replication lag
+                model_response: "Replication lag from write pressure."
+                golden_trajectory:
+                  matching: strict
+            """)
+            )
+
+            with pytest.raises(
+                ValueError,
+                match="golden_trajectory.ordered_actions",
+            ):
+                load_scenario(real_dir)
+        finally:
+            for f in real_dir.iterdir():
+                f.unlink()
+            real_dir.rmdir()
+
+    def test_golden_trajectory_rejects_boolean_numeric_fields(self) -> None:
+        """Boolean values are rejected for numeric golden_trajectory limits."""
+        real_dir = SUITE_DIR / "999-test-golden-trajectory-bool-limit"
+        real_dir.mkdir(exist_ok=True)
+        try:
+            (real_dir / "scenario.yml").write_text(
+                textwrap.dedent("""\
+                base: 000-healthy
+                scenario_id: 999-test-golden-trajectory-bool-limit
+                failure_mode: replication_lag
+                severity: critical
+            """)
+            )
+            (real_dir / "answer.yml").write_text(
+                textwrap.dedent("""\
+                root_cause_category: resource_exhaustion
+                required_keywords:
+                  - replication lag
+                model_response: "Replication lag from write pressure."
+                golden_trajectory:
+                  ordered_actions:
+                    - query_grafana_metrics
+                    - query_grafana_logs
+                  max_loops: true
+            """)
+            )
+
+            with pytest.raises(
+                ValueError,
+                match="golden_trajectory.max_loops",
+            ):
+                load_scenario(real_dir)
+        finally:
+            for f in real_dir.iterdir():
+                f.unlink()
+            real_dir.rmdir()
+
+    def test_schema_v3_supports_k8s_semantic_evidence_sources(self) -> None:
+        """schema_v3 scenarios can declare and load Kubernetes semantic evidence IDs."""
+        real_dir = SUITE_DIR / "999-test-schema-v3-k8s-sources"
+        real_dir.mkdir(exist_ok=True)
+        try:
+            (real_dir / "scenario.yml").write_text(
+                textwrap.dedent("""\
+                base: 000-healthy
+                schema_version: schema_v3
+                scenario_id: 999-test-schema-v3-k8s-sources
+                failure_mode: cpu_saturation
+                severity: critical
+                scenario_difficulty: 3
+                available_evidence:
+                  - k8s_events
+                  - k8s_rollout
+            """)
+            )
+            (real_dir / "answer.yml").write_text(
+                textwrap.dedent("""\
+                root_cause_category: cpu_saturation
+                required_keywords:
+                  - cpu saturation
+                model_response: "CPU saturation."
+                required_evidence_sources:
+                  - k8s_events
+            """)
+            )
+            (real_dir / "k8s_events.json").write_text(json.dumps({"events": []}))
+            (real_dir / "k8s_rollout.json").write_text(json.dumps({"status": "degraded"}))
+
+            fixture = load_scenario(real_dir)
+
+            assert fixture.metadata.schema_version == "schema_v3"
+            assert fixture.metadata.available_evidence == ["k8s_events", "k8s_rollout"]
+            assert fixture.evidence.k8s_events is not None
+            assert fixture.evidence.k8s_rollout is not None
+            assert fixture.answer_key.required_evidence_sources == ["k8s_events"]
+        finally:
+            for f in real_dir.iterdir():
+                f.unlink()
+            real_dir.rmdir()
+
+    def test_schema_v3_complex_scenario_requires_required_evidence_sources(self) -> None:
+        """schema_v3 complex scenarios must declare non-empty required_evidence_sources."""
+        real_dir = SUITE_DIR / "999-test-schema-v3-complex-requires-sources"
+        real_dir.mkdir(exist_ok=True)
+        try:
+            (real_dir / "scenario.yml").write_text(
+                textwrap.dedent("""\
+                base: 000-healthy
+                schema_version: schema_v3
+                scenario_id: 999-test-schema-v3-complex-requires-sources
+                failure_mode: cpu_saturation
+                severity: critical
+                scenario_difficulty: 3
+                available_evidence:
+                  - aws_cloudwatch_metrics
+            """)
+            )
+            _write_minimal_answer_yml(real_dir)
+
+            with pytest.raises(
+                ValueError,
+                match="required_evidence_sources",
+            ):
+                load_scenario(real_dir)
+        finally:
+            for f in real_dir.iterdir():
+                f.unlink()
+            real_dir.rmdir()
+
+    def test_schema_v1_complex_scenario_keeps_backward_compatibility(self) -> None:
+        """Legacy schema versions keep loading without required_evidence_sources."""
+        real_dir = SUITE_DIR / "999-test-schema-v1-complex-backcompat"
+        real_dir.mkdir(exist_ok=True)
+        try:
+            (real_dir / "scenario.yml").write_text(
+                textwrap.dedent("""\
+                base: 000-healthy
+                schema_version: "1.0"
+                scenario_id: 999-test-schema-v1-complex-backcompat
+                failure_mode: cpu_saturation
+                severity: critical
+                scenario_difficulty: 3
+                available_evidence:
+                  - aws_cloudwatch_metrics
+            """)
+            )
+            _write_minimal_answer_yml(real_dir)
+
+            fixture = load_scenario(real_dir)
+            assert fixture.metadata.schema_version == "1.0"
+            assert fixture.answer_key.required_evidence_sources == []
+        finally:
+            for f in real_dir.iterdir():
+                f.unlink()
+            real_dir.rmdir()

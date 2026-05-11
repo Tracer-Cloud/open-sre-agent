@@ -140,3 +140,6 @@ app/memories
 # Node dev tooling
 node_modules/
 package-lock.json
+
+# Synthetic test run observations (generated test output, not source)
+tests/synthetic/rds_postgres/_observations/

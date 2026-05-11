@@ -30,16 +30,17 @@ from app.cli.interactive_shell.command_registry.repl_data import (
     load_verified_integrations,
 )
 from app.cli.interactive_shell.command_registry.session_cmds import COMMANDS as SESSION_COMMANDS
+from app.cli.interactive_shell.command_registry.suggestions import closest_choice
 from app.cli.interactive_shell.command_registry.system import COMMANDS as SYSTEM_COMMANDS
 from app.cli.interactive_shell.command_registry.tasks_cmds import COMMANDS as TASK_COMMANDS
 from app.cli.interactive_shell.command_registry.types import SlashCommand
-from app.cli.interactive_shell.execution_policy import (
+from app.cli.interactive_shell.orchestration.execution_policy import (
     evaluate_slash_tier,
     execution_allowed,
     resolve_slash_execution_tier,
 )
-from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import ERROR
+from app.cli.interactive_shell.runtime import ReplSession
+from app.cli.interactive_shell.ui import ERROR
 
 _MERGED_SEQUENCE = tuple(
     chain(
@@ -107,10 +108,24 @@ def dispatch_slash(
     args = parts[1:]
     cmd = SLASH_COMMANDS.get(name)
     if cmd is None:
+        suggestion = closest_choice(name, tuple(SLASH_COMMANDS))
         session.record("slash", stripped, ok=False)
         console.print()
-        console.print(f"[{ERROR}]unknown command:[/] {escape(name)}  (type [bold]/help[/bold])")
+        if suggestion is None:
+            console.print(f"[{ERROR}]unknown command:[/] {escape(name)}  (type [bold]/help[/bold])")
+        else:
+            console.print(
+                f"[{ERROR}]unknown command:[/] {escape(name)}  "
+                f"Did you mean [bold]{escape(suggestion)}[/bold]? "
+                "(type [bold]/help[/bold])"
+            )
         return True
+    if cmd.validate_args is not None:
+        validation_error = cmd.validate_args(args)
+        if validation_error is not None:
+            console.print(validation_error)
+            session.record("slash", stripped, ok=False)
+            return True
     if policy_precleared:
         session.record("slash", stripped, ok=True)
         return cmd.handler(session, console, args)

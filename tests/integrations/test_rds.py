@@ -60,7 +60,37 @@ def test_rds_is_available_false_when_missing() -> None:
 def test_rds_extract_params_returns_normalized_dict() -> None:
     sources = {"rds": {"db_instance_identifier": "  prod-db  ", "region": "  us-east-2 "}}
     params = rds_extract_params(sources)
-    assert params == {"db_instance_identifier": "prod-db", "region": "us-east-2"}
+    assert params == {
+        "db_instance_identifier": "prod-db",
+        "region": "us-east-2",
+        "aws_backend": None,
+    }
+
+
+def test_rds_extract_params_forwards_synthetic_backend_handle() -> None:
+    """The fixture backend on ``sources['rds']['_backend']`` must reach the
+    tool layer as ``aws_backend`` so RDS describe calls short-circuit instead
+    of leaking to real boto3 during synthetic scenario runs.
+    """
+    sentinel = object()
+    sources = {
+        "rds": {
+            "db_instance_identifier": "prod-db",
+            "region": "us-east-1",
+            "_backend": sentinel,
+        }
+    }
+    params = rds_extract_params(sources)
+    assert params["aws_backend"] is sentinel
+
+
+def test_rds_is_available_true_with_backend_only() -> None:
+    """Synthetic scenarios may carry only the injected ``_backend`` on the
+    ``rds`` source slot — that alone must satisfy availability so the RDS
+    tools remain selectable in synthetic mode.
+    """
+    sources = {"rds": {"_backend": object()}}
+    assert rds_is_available(sources) is True
 
 
 def test_rds_extract_params_falls_back_to_env_region() -> None:

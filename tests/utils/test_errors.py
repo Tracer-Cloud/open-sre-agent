@@ -24,6 +24,10 @@ def _mock_logger() -> MagicMock:
     return MagicMock(spec=logging.Logger)
 
 
+def _raise(exc: BaseException) -> None:
+    raise exc
+
+
 class TestReportException:
     def test_logs_and_captures(self) -> None:
         mock_log = _mock_logger()
@@ -102,7 +106,7 @@ class TestReportAndSwallow:
             patch("app.utils.errors.capture_exception") as mock_cap,
             report_and_swallow(logger=mock_log, message="msg"),
         ):
-            raise exc
+            _raise(exc)
         mock_cap.assert_called_once_with(exc, extra=None)
 
     def test_no_exception_passes_through(self) -> None:
@@ -138,7 +142,7 @@ class TestReportAndReraise:
             pytest.raises(RuntimeError, match="propagated"),
             report_and_reraise(logger=mock_log, message="reraised"),
         ):
-            raise RuntimeError("propagated")
+            _raise(RuntimeError("propagated"))
         mock_cap.assert_called_once()
 
     def test_no_exception_passes_through(self) -> None:
@@ -159,7 +163,7 @@ class TestReportAndReraise:
             pytest.raises(ValueError),
             report_and_reraise(logger=mock_log, message="logged"),
         ):
-            raise ValueError("x")
+            _raise(ValueError("x"))
         mock_log.error.assert_called_once()
 
 

@@ -7,9 +7,15 @@ import platform
 from rich.console import Console
 
 from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
-from app.cli.interactive_shell.rendering import repl_table
-from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import BOLD_BRAND, DIM, ERROR, HIGHLIGHT, WARNING
+from app.cli.interactive_shell.runtime import ReplSession
+from app.cli.interactive_shell.ui import (
+    BOLD_BRAND,
+    DIM,
+    ERROR,
+    HIGHLIGHT,
+    WARNING,
+    repl_table,
+)
 
 
 def _cmd_exit(_session: ReplSession, console: Console, _args: list[str]) -> bool:

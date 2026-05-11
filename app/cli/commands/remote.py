@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 import click
 
 from app.cli.commands.remote_health import _save_remote_base_url, run_remote_health_check
-from app.cli.interactive_shell.theme import BRAND, DIM, ERROR, HIGHLIGHT, WARNING
+from app.cli.interactive_shell.ui.theme import BRAND, DIM, ERROR, HIGHLIGHT, WARNING
 from app.cli.support.context import is_json_output, is_yes
 from app.cli.support.errors import OpenSREError
 

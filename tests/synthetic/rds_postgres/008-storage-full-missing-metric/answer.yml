@@ -1,4 +1,4 @@
-root_cause_category: resource_exhaustion
+root_cause_category: storage_exhaustion
 required_keywords:
   - storage
   - storage space
@@ -11,7 +11,7 @@ optimal_trajectory:
 max_investigation_loops: 4
 model_response: |
   ROOT_CAUSE: The RDS instance ran out of storage space. FreeStorageSpace was not captured in the CloudWatch metric fixture (simulating a collection gap), but the root cause is definitively confirmed by: (1) the RDS event "DB instance ran out of storage space" at 03:08:44Z, (2) WriteIOPS collapsing to zero at T+8 min, and (3) WriteLatency climbing to 34 seconds as write queries stalled waiting for disk space that was never available.
-  ROOT_CAUSE_CATEGORY: resource_exhaustion
+  ROOT_CAUSE_CATEGORY: storage_exhaustion
 
   VALIDATED_CLAIMS:
   - WriteIOPS dropped from 1,840 to 0 between 03:07Z and 03:10Z — consistent with writes being blocked by a full disk. [evidence: aws_cloudwatch_metrics]

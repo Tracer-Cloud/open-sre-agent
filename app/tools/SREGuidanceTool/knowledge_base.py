@@ -342,6 +342,43 @@ Three Categories of Documentation:
    - Keep playbooks up to date with system changes""",
         source="SRE Workbook Ch.13 - Create and Maintain Documentation",
     ),
+    "playbooks_overview": SREKnowledgeTopic(
+        name="SRE Playbooks Overview",
+        keywords=[
+            "playbook",
+            "runbook",
+            "triage",
+            "incident",
+            "kubernetes",
+            "aws",
+            "rds",
+            "ec2",
+        ],
+        content="""SRE Playbooks Overview:
+
+Use playbooks as a deterministic incident flow:
+1. Classify symptom: latency, error rate, saturation, or deployment regression.
+2. Confirm scope/blast radius: single service, shared dependency, or platform-wide.
+3. Collect high-signal telemetry first: metrics + logs + alert-rule context.
+4. Verify one root-cause mechanism before remediation to avoid red-herring fixes.
+5. Record a short evidence-backed causal chain in the incident timeline.
+
+Suggested playbook structure:
+- Preconditions: required integrations, identifiers, and permissions.
+- Trigger patterns: alert names, thresholds, and example symptom signatures.
+- Investigation sequence: ordered checks with stop conditions.
+- Decision points: clear branch logic (if X then Y).
+- First-response remediation: reversible, low-risk mitigations first.
+- Escalation criteria: when to involve DB, platform, or application owners.
+- Validation and rollback: how to confirm recovery and revert safely.
+- Post-incident follow-up: prevention action items and ownership.
+
+External reference:
+- Scoutflo SRE playbook library:
+  https://github.com/Scoutflo/Scoutflo-SRE-Playbooks
+""",
+        source=("SRE Workbook Ch.13 - Create and Maintain Documentation; Scoutflo SRE Playbooks"),
+    ),
     "workflow_patterns": SREKnowledgeTopic(
         name="Continuous Pipeline Patterns",
         keywords=["workflow", "continuous", "leader", "follower", "prevalence", "mvc"],

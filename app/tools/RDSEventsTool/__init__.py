@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from app.integrations.rds import (
     DEFAULT_RDS_REGION,
@@ -52,15 +52,32 @@ def describe_rds_events(
     db_instance_identifier: str,
     region: str = DEFAULT_RDS_REGION,
     duration_minutes: int = DEFAULT_DURATION_MINUTES,
+    aws_backend: Any = None,
     **_kwargs: Any,
 ) -> dict[str, Any]:
-    """Describe recent RDS events for a DB instance."""
+    """Describe recent RDS events for a DB instance.
+
+    When ``aws_backend`` is provided (FixtureAWSBackend in synthetic tests)
+    the call short-circuits to the backend so we never leak boto3 calls to
+    real AWS during scenario runs. Otherwise calls boto3 rds via
+    ``execute_aws_sdk_call`` using the default boto3 credential chain.
+    """
     logger.info(
         "[rds] describe_rds_events db=%s region=%s duration=%s",
         db_instance_identifier,
         region,
         duration_minutes,
     )
+
+    if aws_backend is not None:
+        return cast(
+            "dict[str, Any]",
+            aws_backend.describe_db_events(
+                db_instance_identifier=db_instance_identifier,
+                duration_minutes=duration_minutes,
+                region=region,
+            ),
+        )
 
     result = execute_aws_sdk_call(
         service_name="rds",

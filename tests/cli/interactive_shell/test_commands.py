@@ -3,16 +3,24 @@
 from __future__ import annotations
 
 import io
+import sys
 from pathlib import Path
 
 import pytest
 from prompt_toolkit.history import FileHistory
 from rich.console import Console
 
+from app.cli.interactive_shell import command_registry as registry_module
 from app.cli.interactive_shell.command_registry import repl_data as repl_data_module
+from app.cli.interactive_shell.command_registry import types as command_types
+from app.cli.interactive_shell.command_registry.investigation import (
+    _validate_investigate_args,
+    _validate_save_args,
+)
+from app.cli.interactive_shell.command_registry.tasks_cmds import _validate_cancel_args
 from app.cli.interactive_shell.commands import SLASH_COMMANDS, dispatch_slash
-from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.tasks import TaskKind, TaskStatus
+from app.cli.interactive_shell.runtime.session import ReplSession
+from app.cli.interactive_shell.runtime.tasks import TaskKind, TaskStatus
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -138,9 +146,41 @@ class TestDispatchSlash:
         assert dispatch_slash("/made-up", session, console) is True
         assert "unknown command" in buf.getvalue()
 
+    def test_unknown_command_suggests_close_match(self) -> None:
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/modle", session, console) is True
+        output = buf.getvalue()
+        assert "unknown command" in output
+        assert "Did you mean" in output
+        assert "/model" in output
+
     def test_local_llm_is_not_a_builtin_slash_action(self) -> None:
         assert "/local-llm" not in SLASH_COMMANDS
         assert "/local_llm" not in SLASH_COMMANDS
+
+    def test_slash_commands_proxy_reads_current_registry(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        command = command_types.SlashCommand("/hot", "hot reload test", lambda *_args: True)
+        monkeypatch.setattr(registry_module, "SLASH_COMMANDS", {"/hot": command})
+
+        assert SLASH_COMMANDS.get("/hot") is command
+        assert list(SLASH_COMMANDS) == ["/hot"]
+
+    def test_dispatch_slash_proxy_calls_current_registry(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        calls: list[str] = []
+
+        def _fake_dispatch(command_line: str, *_args: object, **_kwargs: object) -> bool:
+            calls.append(command_line)
+            return False
+
+        monkeypatch.setattr(registry_module, "dispatch_slash", _fake_dispatch)
+
+        assert dispatch_slash("/hot", ReplSession(), _capture()[0]) is False
+        assert calls == ["/hot"]
 
     def test_empty_input_is_noop(self) -> None:
         session = ReplSession()
@@ -1140,6 +1180,107 @@ class TestCancelCommand:
         assert "/tasks" in buf.getvalue()
 
 
+class TestPrePolicyValidation:
+    """Regression for #1712: ``validate_args`` runs before the policy gate, so
+    invalid args never trigger the ``Proceed?`` confirmation prompt."""
+
+    @pytest.mark.parametrize(
+        "command,expected_usage_fragment",
+        [
+            ("/investigate", "/investigate <file>"),
+            ("/save", "/save <path>"),
+            ("/cancel", "/cancel <task_id>"),
+        ],
+    )
+    def test_missing_arg_skips_policy_prompt(
+        self, command: str, expected_usage_fragment: str
+    ) -> None:
+        confirm_calls: list[str] = []
+
+        def _confirm(prompt: str) -> str:
+            confirm_calls.append(prompt)
+            return "n"
+
+        session = ReplSession()
+
+        console, buf = _capture()
+        dispatch_slash(command, session, console, confirm_fn=_confirm, is_tty=True)
+
+        assert expected_usage_fragment in buf.getvalue()
+        assert confirm_calls == [], f"confirm_fn must not be called for {command} with no args"
+        assert session.history[-1] == {"type": "slash", "text": command, "ok": False}
+
+    def test_validate_args_fires_in_trust_mode(self) -> None:
+        """Trust mode bypasses the policy prompt but must not bypass arg validation."""
+        confirm_calls: list[str] = []
+
+        def _confirm(prompt: str) -> str:
+            confirm_calls.append(prompt)
+            return "y"
+
+        session = ReplSession()
+        session.trust_mode = True
+
+        console, buf = _capture()
+        dispatch_slash("/investigate", session, console, confirm_fn=_confirm, is_tty=True)
+
+        assert "/investigate <file>" in buf.getvalue()
+        assert confirm_calls == [], "trust mode must not skip arg validation"
+
+    def test_valid_arg_still_fires_policy_prompt(self, tmp_path: Path) -> None:
+        """The fix must not accidentally remove the policy gate entirely."""
+        alert_file = tmp_path / "alert.json"
+        alert_file.write_text('{"alert_name": "test"}', encoding="utf-8")
+
+        confirm_calls: list[str] = []
+
+        def _confirm(prompt: str) -> str:
+            confirm_calls.append(prompt)
+            return "n"  # decline so we don't run a real investigation
+
+        session = ReplSession()
+        console, _ = _capture()
+        dispatch_slash(
+            f"/investigate {alert_file}",
+            session,
+            console,
+            confirm_fn=_confirm,
+            is_tty=True,
+        )
+
+        assert len(confirm_calls) == 1, "policy prompt must still fire for valid args"
+
+
+class TestSlashValidatorFunctions:
+    """Direct unit tests for the per-command pre-policy validators."""
+
+    @pytest.mark.parametrize(
+        "validator,expected_usage_fragment",
+        [
+            (_validate_investigate_args, "/investigate <file>"),
+            (_validate_save_args, "/save <path>"),
+            (_validate_cancel_args, "/cancel <task_id>"),
+        ],
+    )
+    def test_returns_usage_when_args_empty(
+        self, validator: object, expected_usage_fragment: str
+    ) -> None:
+        result = validator([])  # type: ignore[operator]
+        assert isinstance(result, str)
+        assert expected_usage_fragment in result
+
+    @pytest.mark.parametrize(
+        "validator,args",
+        [
+            (_validate_investigate_args, ["alert.json"]),
+            (_validate_save_args, ["report.md"]),
+            (_validate_cancel_args, ["task-abc"]),
+        ],
+    )
+    def test_returns_none_when_args_present(self, validator: object, args: list[str]) -> None:
+        assert validator(args) is None  # type: ignore[operator]
+
+
 class TestCliDelegatedCommands:
     """Coverage for commands that simply delegate to the underlying Click CLI."""
 
@@ -1169,3 +1310,135 @@ class TestCliDelegatedCommands:
         monkeypatch.setattr(m, "run_cli_command", _fake_run_cli_command)
         dispatch_slash(command, ReplSession(), Console())
         assert captured == [expected_args]
+
+    def test_tests_run_subcommand_starts_background_task(self, monkeypatch: object) -> None:
+        from app.cli.interactive_shell.command_registry import cli_parity as m
+
+        started: list[tuple[str, list[str], TaskKind, bool]] = []
+
+        def _fake_start_background_cli_task(
+            *,
+            display_command: str,
+            argv_list: list[str],
+            session: ReplSession,
+            console: Console,
+            timeout_seconds: int,
+            kind: TaskKind,
+            use_pty: bool,
+        ) -> object:
+            del session, console, timeout_seconds
+            started.append((display_command, argv_list, kind, use_pty))
+            return object()
+
+        monkeypatch.setattr(m, "start_background_cli_task", _fake_start_background_cli_task)
+        dispatch_slash("/tests synthetic --scenario 001-replication-lag", ReplSession(), Console())
+
+        assert started == [
+            (
+                "opensre tests synthetic --scenario 001-replication-lag",
+                [
+                    sys.executable,
+                    "-m",
+                    "app.cli",
+                    "tests",
+                    "synthetic",
+                    "--scenario",
+                    "001-replication-lag",
+                ],
+                TaskKind.SYNTHETIC_TEST,
+                True,
+            )
+        ]
+
+    def test_tests_picker_closes_selection_file_before_subprocess(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        from app.cli.interactive_shell.command_registry import cli_parity as m
+
+        selection_path = tmp_path / "selection.json"
+
+        class _SelectionFile:
+            name = str(selection_path)
+            closed = False
+
+            def __init__(self) -> None:
+                selection_path.touch()
+
+            def close(self) -> None:
+                self.closed = True
+
+        handle = _SelectionFile()
+        started: list[str] = []
+
+        def _fake_run(_command: list[str], **kwargs: object) -> object:
+            assert handle.closed is True
+            env = kwargs["env"]
+            assert isinstance(env, dict)
+            selection_path.write_text(
+                '[{"command": ["opensre", "tests", "synthetic"], '
+                '"command_display": "opensre tests synthetic"}]',
+                encoding="utf-8",
+            )
+
+            class _Result:
+                returncode = 0
+
+            return _Result()
+
+        monkeypatch.setattr(m.tempfile, "NamedTemporaryFile", lambda **_kwargs: handle)
+        monkeypatch.setattr(m.subprocess, "run", _fake_run)
+        monkeypatch.setattr(
+            m,
+            "start_background_cli_task",
+            lambda **kwargs: started.append(kwargs["display_command"]),
+        )
+
+        dispatch_slash("/tests", ReplSession(), Console())
+
+        assert started == ["opensre tests synthetic"]
+        assert not selection_path.exists()
+
+    def test_tests_flag_first_invocation_delegates_to_cli(self, monkeypatch: object) -> None:
+        from app.cli.interactive_shell.command_registry import cli_parity as m
+
+        delegated: list[list[str]] = []
+        monkeypatch.setattr(
+            m,
+            "run_cli_command",
+            lambda _console, args, **_kwargs: (delegated.append(args), True)[1],
+        )
+
+        dispatch_slash("/tests --help", ReplSession(), Console())
+
+        assert delegated == [["tests", "--help"]]
+
+    def test_tests_subcommand_typo_suggests_synthetic(self, monkeypatch: object) -> None:
+        from app.cli.interactive_shell.command_registry import cli_parity as m
+
+        delegated: list[list[str]] = []
+        started: list[list[str]] = []
+
+        monkeypatch.setattr(
+            m,
+            "run_cli_command",
+            lambda _console, args, **_kwargs: (delegated.append(args), True)[1],
+        )
+        monkeypatch.setattr(
+            m,
+            "start_background_cli_task",
+            lambda **kwargs: started.append(kwargs["argv_list"]),
+        )
+
+        session = ReplSession()
+        console, buf = _capture()
+        dispatch_slash("/tests synthetics", session, console)
+
+        output = buf.getvalue()
+        assert "unknown tests subcommand" in output
+        assert "Did you mean" in output
+        assert "/tests synthetic" in output
+        assert session.history[-1]["ok"] is False
+        assert delegated == []
+        assert started == []

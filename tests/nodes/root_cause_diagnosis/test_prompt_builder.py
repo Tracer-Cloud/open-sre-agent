@@ -112,5 +112,8 @@ def test_unknown_grafana_source_type_is_not_rendered() -> None:
 def test_database_directive_requires_exact_bad_query_reasoning() -> None:
     prompt = build_diagnosis_prompt(_rds_state(), {"grafana_logs": []})
 
-    assert "name the exact SQL statement from Performance Insights" in prompt
+    # Case-insensitive: the directive starts the sentence after a period, so
+    # the canonical wording is "Name the exact SQL statement…" — the
+    # instruction itself must remain present regardless of capitalization.
+    assert "name the exact sql statement from performance insights" in prompt.lower()
     assert "explicitly rule out connection exhaustion" in prompt

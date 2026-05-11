@@ -112,8 +112,8 @@ def render_conflicts(conflicts: list[FileWriteConflict]) -> Table | str:
     # Deferred to avoid a circular import: the interactive-shell package eagerly
     # initialises its REPL graph, which imports the /agents slash command, which
     # imports this module.
-    from app.cli.interactive_shell.rendering import repl_table
-    from app.cli.interactive_shell.theme import BOLD_BRAND, DIM
+    from app.cli.interactive_shell.ui.rendering import repl_table
+    from app.cli.interactive_shell.ui.theme import BOLD_BRAND, DIM
 
     table = repl_table(title="Agent file-write conflicts", title_style=BOLD_BRAND)
     table.add_column("path", style="bold", overflow="fold")
