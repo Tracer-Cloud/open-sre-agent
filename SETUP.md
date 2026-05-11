@@ -156,63 +156,45 @@ If those pass, you are ready to develop. Contribution flow: **[CONTRIBUTING.md](
 
 ---
 
-## Running the OpenSRE MCP server
-
-```bash
-opensre-mcp
-# or from a checkout:
-uv run opensre-mcp
-```
-
-This exposes the `run_rca` tool for MCP clients.
-
----
-
 ## Connecting OpenClaw
 
-Use OpenClaw to call OpenSRE's `run_rca` tool.
+OpenSRE no longer exposes a separate `opensre-mcp` server. Instead, OpenSRE connects to the OpenClaw bridge directly to read recent conversation context and write RCA findings back into OpenClaw.
 
-### 1. Add OpenSRE to OpenClaw
-
-In OpenClaw, open **Settings → MCP Servers** and add:
-
-```json
-{
-    "mcpServers": {
-        "opensre": {
-            "command": "opensre-mcp",
-            "args": []
-        }
-    }
-}
-```
-
-If `opensre-mcp` is not on your `PATH`:
-
-```json
-{ "command": "uv", "args": ["run", "opensre-mcp"] }
-```
-
-(use `uv` from the repo root / env where OpenSRE is installed).
-
-### 2. Configure observability
+### 1. Configure observability
 
 Run the full wizard once (**recommended**):
 
 ```bash
-opensre onboard
+uv run opensre onboard
 ```
 
 To add or reconfigure a **single** integration non-interactively:
 
 ```bash
-opensre integrations setup <service>
+uv run opensre integrations setup <service>
+```
+
+### 2. Configure the OpenClaw bridge
+
+Use the wizard or the direct setup flow:
+
+```bash
+uv run opensre integrations setup openclaw
+uv run opensre integrations verify openclaw
+```
+
+Recommended local settings:
+
+```bash
+OPENCLAW_MCP_MODE=stdio
+OPENCLAW_MCP_COMMAND=openclaw
+OPENCLAW_MCP_ARGS="mcp serve"
 ```
 
 ### 3. Run a test
 
 ```bash
-opensre investigate -i tests/fixtures/openclaw_test_alert.json
+uv run opensre investigate -i tests/fixtures/openclaw_test_alert.json
 ```
 
 ### 4. Optional: OpenSRE calls OpenClaw during RCA

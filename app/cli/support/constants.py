@@ -42,6 +42,7 @@ SETUP_SERVICES: tuple[str, ...] = (
     "mongodb",
     "mongodb_atlas",
     "mysql",
+    "openclaw",
     "opensearch",
     "postgresql",
     "rabbitmq",

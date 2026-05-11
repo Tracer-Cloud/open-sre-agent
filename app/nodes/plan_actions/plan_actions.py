@@ -42,9 +42,12 @@ def _seed_action_names_for_sources(
     if "s3_audit" in available_sources:
         seeded.append("get_s3_object")
 
-    if available_sources.get("openclaw", {}).get("connection_verified"):
-        seeded.append("search_openclaw_conversations")
-        seeded.append("list_openclaw_tools")
+    openclaw = available_sources.get("openclaw", {})
+    if openclaw.get("connection_verified"):
+        if openclaw.get("openclaw_conversation_id") or openclaw.get("conversation_id"):
+            seeded.append("get_openclaw_conversation")
+        else:
+            seeded.append("search_openclaw_conversations")
 
     if "airflow" in available_sources:
         seeded.append("get_recent_airflow_failures")

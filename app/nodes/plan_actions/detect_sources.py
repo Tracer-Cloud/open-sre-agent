@@ -1148,6 +1148,9 @@ def detect_sources(
         connection_verified = bool(openclaw_int.get("connection_verified", True))
 
         if openclaw_config is not None and connection_verified and runtime_error is None:
+            context_openclaw = context.get("openclaw_context", {})
+            if not isinstance(context_openclaw, dict):
+                context_openclaw = {}
             openclaw_search_query = str(
                 annotations.get("openclaw_search")
                 or raw_alert.get("openclaw_search", "")
@@ -1156,6 +1159,11 @@ def detect_sources(
                 or raw_alert.get("alert_name", "")
                 or raw_alert.get("title", "")
                 or annotations.get("summary", "")
+            ).strip()
+            openclaw_conversation_id = str(
+                annotations.get("openclaw_conversation_id")
+                or raw_alert.get("openclaw_conversation_id", "")
+                or context_openclaw.get("conversation_id", "")
             ).strip()
             sources["openclaw"] = {
                 "openclaw_url": openclaw_config.url,
@@ -1166,6 +1174,8 @@ def detect_sources(
                 "openclaw_search_query": openclaw_search_query,
                 "connection_verified": True,
             }
+            if openclaw_conversation_id:
+                sources["openclaw"]["openclaw_conversation_id"] = openclaw_conversation_id
         elif runtime_error is not None:
             logger.debug("Skipping OpenClaw source because it is not usable: %s", runtime_error)
 

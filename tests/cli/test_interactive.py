@@ -389,3 +389,31 @@ def test_run_catalog_items_skips_non_runnable_items() -> None:
     )
 
     assert interactive.run_catalog_items([suite, runnable], dry_run=True) == 0
+
+
+def test_confirm_run_prints_openclaw_preflight_messages(monkeypatch, capsys) -> None:
+    item = CatalogItem(
+        id="rca:openclaw_gateway_crashed",
+        kind="rca_file",
+        display_name="OpenClaw Gateway Crashed",
+        description="Run a bundled markdown RCA alert fixture.",
+        command=("make", "test-rca", "FILE=openclaw_gateway_crashed"),
+        tags=("rca", "fixture", "openclaw"),
+    )
+
+    monkeypatch.setattr(
+        interactive,
+        "get_preflight_messages",
+        lambda _item: ("OpenClaw preflight: unavailable.", "Fix: verify openclaw."),
+    )
+    monkeypatch.setattr(interactive, "_QuestionaryChoice", lambda *, title, value: (title, value))
+    monkeypatch.setattr(
+        interactive,
+        "_select_prompt",
+        lambda *_args, **_kwargs: SimpleNamespace(ask=lambda: True),
+    )
+
+    assert interactive._confirm_run(item) is True
+    output = capsys.readouterr().out
+    assert "OpenClaw preflight: unavailable." in output
+    assert "Fix: verify openclaw." in output

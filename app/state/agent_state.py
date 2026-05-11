@@ -128,6 +128,9 @@ class AgentState(TypedDict, total=False):
     # Telegram context (when triggered from Telegram message)
     telegram_context: dict[str, Any]
 
+    # OpenClaw context (for write-back targeting / transport overrides)
+    openclaw_context: dict[str, Any]
+
     # LangGraph context (injected from config by inject_auth_node)
     thread_id: str
     run_id: str
@@ -202,6 +205,7 @@ class AgentStateModel(StrictConfigModel):
     slack_context: dict[str, Any] = Field(default_factory=dict)
     discord_context: dict[str, Any] = Field(default_factory=dict)
     telegram_context: dict[str, Any] = Field(default_factory=dict)
+    openclaw_context: dict[str, Any] = Field(default_factory=dict)
     thread_id: str = ""
     run_id: str = ""
     auth_token: str = Field(default="", alias="_auth_token", exclude=True)

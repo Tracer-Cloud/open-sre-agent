@@ -1,0 +1,1 @@
+"""Synthetic OpenClaw investigation scenarios."""

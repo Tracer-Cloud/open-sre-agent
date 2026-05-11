@@ -192,3 +192,34 @@ def test_gitlab_writeback_failure_does_not_raise(monkeypatch: pytest.MonkeyPatch
         result = generate_report(_make_state())  # type: ignore[arg-type]
 
     assert "slack_message" in result  # report returned despite write-back failure
+
+
+def test_openclaw_writeback_calls_delivery_when_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_generate_report_deps(monkeypatch)
+
+    mock_send_slack = MagicMock(return_value=(False, None))
+    mock_build_action_blocks = MagicMock(return_value=[])
+    mock_openclaw_delivery = MagicMock(return_value=(True, None))
+
+    with (
+        patch("app.utils.slack_delivery.send_slack_report", mock_send_slack),
+        patch("app.utils.slack_delivery.build_action_blocks", mock_build_action_blocks),
+        patch("app.utils.openclaw_delivery.send_openclaw_report", mock_openclaw_delivery),
+    ):
+        from app.nodes.publish_findings.node import generate_report
+
+        generate_report(
+            _make_state(
+                resolved_integrations={
+                    "openclaw": {
+                        "mode": "streamable-http",
+                        "url": "https://openclaw.example.com/mcp",
+                        "auth_token": "tok",
+                    }
+                }
+            )
+        )  # type: ignore[arg-type]
+
+    mock_openclaw_delivery.assert_called_once()
