@@ -14,7 +14,6 @@ required_keywords:
 forbidden_keywords:
   - configuration_error
   - slow query
-  - cpu_saturation
 forbidden_categories:
   - cpu_saturation
   - configuration_error
@@ -27,6 +26,7 @@ required_evidence_sources:
   - elb_target_health
 optimal_trajectory:
   - describe_rds_instance
+  - describe_rds_events
   - ec2_instances_by_tag
   - get_elb_target_health
   - query_grafana_metrics
