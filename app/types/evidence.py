@@ -28,6 +28,7 @@ EvidenceSource = Literal[
     "google_docs",
     "vercel",
     "opsgenie",
+    "incident_io",
     "jira",
     "elasticsearch",
     "prefect",
@@ -46,6 +47,8 @@ EvidenceSource = Literal[
     "supabase",
     "airflow",
     "argocd",
+    "helm",
     "victoria_logs",
     "rds",
+    "ec2",
 ]

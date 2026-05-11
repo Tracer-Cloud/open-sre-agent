@@ -21,6 +21,15 @@ from typing import TYPE_CHECKING
 from rich.console import Console, ConsoleOptions, RenderResult
 from rich.text import Text
 
+from app.cli.interactive_shell.ui.theme import (
+    BRAND,
+    DIM,
+    ERROR,
+    HIGHLIGHT,
+    SECONDARY,
+    TEXT,
+    WARNING,
+)
 from app.tools.registry import resolve_tool_display_name
 
 if TYPE_CHECKING:
@@ -46,19 +55,18 @@ def get_output_format() -> str:
     return "rich" if sys.stdout.isatty() else "text"
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Design tokens (mirrors theme.py but scoped to output — no CLI dependency)
-# ─────────────────────────────────────────────────────────────────────────────
+def _is_silent_output() -> bool:
+    """Return whether output rendering is explicitly disabled."""
+    return get_output_format() == "none"
 
-_C_PRIMARY = "#1AFF8C"
-_C_ACCENT = "#00D4C8"
-_C_WARNING = "#F0A500"
-_C_ERROR = "#FF4D6A"
-_C_TEXT = "#E8EFE8"
-_C_TEXT_DIM = "#6B8C6B"
-_C_BORDER = "#2D4A2D"
-_C_ORANGE = "#FF8C42"
-_C_TEAL_SOFT = "#5EF0E8"
+
+def _safe_print(text: str) -> None:
+    """Print text, replacing unencodable characters (e.g. on Windows cp1252)."""
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        enc = sys.stdout.encoding or "utf-8"
+        print(text.encode(enc, errors="replace").decode(enc))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -67,11 +75,11 @@ _C_TEAL_SOFT = "#5EF0E8"
 
 # (padded_label, text_color)  — all labels are 6 chars wide
 _BADGE_STYLES: dict[str, tuple[str, str]] = {
-    "READ": ("READ  ", _C_PRIMARY),
-    "PLAN": ("PLAN  ", _C_TEAL_SOFT),
-    "INVEST": ("INVEST", _C_WARNING),
-    "DIAG": ("DIAG  ", _C_ORANGE),
-    "MERGE": ("MERGE ", _C_TEXT_DIM),
+    "READ": ("READ  ", HIGHLIGHT),
+    "PLAN": ("PLAN  ", BRAND),
+    "INVEST": ("INVEST", WARNING),
+    "DIAG": ("DIAG  ", TEXT),
+    "MERGE": ("MERGE ", SECONDARY),
 }
 
 _NODE_EVENT_TYPE: dict[str, str] = {
@@ -183,27 +191,31 @@ def stop_display() -> None:
 
 
 def render_divider(width: int = 80) -> None:
-    """Print a BORDER-coloured dashed ┄ divider."""
+    """Print a DIM-coloured dashed ┄ divider."""
+    if _is_silent_output():
+        return
     if get_output_format() == "rich":
-        _get_console().print(Text("┄" * width, style=_C_BORDER))
+        _get_console().print(Text("┄" * width, style=DIM))
     else:
-        print("─" * width)
+        _safe_print("─" * width)
 
 
 def render_footer(phase: str, elapsed: float, model: str, mode: str) -> None:
     """Print the persistent status footer line."""
+    if _is_silent_output():
+        return
     if get_output_format() == "rich":
         t = Text()
-        t.append(" ● ", style=f"bold {_C_PRIMARY}")
-        t.append(f"{phase}  ", style=f"bold {_C_TEXT_DIM}")
-        t.append(f"{_elapsed_hms(elapsed)}  ", style=_C_TEXT_DIM)
+        t.append(" ● ", style=f"bold {HIGHLIGHT}")
+        t.append(f"{phase}  ", style=f"bold {SECONDARY}")
+        t.append(f"{_elapsed_hms(elapsed)}  ", style=SECONDARY)
         if model:
-            t.append(f"{model}  ", style=_C_TEXT_DIM)
-        t.append(f"{mode}  ", style=_C_TEXT_DIM)
-        t.append("esc to cancel", style=f"dim {_C_TEXT_DIM}")
+            t.append(f"{model}  ", style=SECONDARY)
+        t.append(f"{mode}  ", style=SECONDARY)
+        t.append("esc to cancel", style=DIM)
         _get_console().print(t)
     else:
-        print(f"● {phase}  {elapsed:.1f}s  {model}  {mode}")
+        _safe_print(f"● {phase}  {elapsed:.1f}s  {model}  {mode}")
 
 
 def render_event(
@@ -217,32 +229,34 @@ def render_event(
     error: bool = False,
 ) -> None:
     """Print one typed event-log row."""
+    if _is_silent_output():
+        return
     if get_output_format() == "rich":
-        badge_label, badge_color = _BADGE_STYLES.get(event_type, ("DIAG  ", _C_ORANGE))
+        badge_label, badge_color = _BADGE_STYLES.get(event_type, ("DIAG  ", WARNING))
         ts = _elapsed_hms(elapsed_s)
         t = Text()
-        t.append(f"{ts}  ", style=_C_TEXT_DIM)
+        t.append(f"{ts}  ", style=SECONDARY)
         if muted:
-            t.append(f"{glyph}  ", style=_C_TEXT_DIM)
-            msg_style = _C_TEXT_DIM
+            t.append(f"{glyph}  ", style=SECONDARY)
+            msg_style = SECONDARY
         elif error:
-            t.append("✗  ", style=f"bold {_C_ERROR}")
-            msg_style = _C_TEXT
+            t.append("✗  ", style=f"bold {ERROR}")
+            msg_style = TEXT
         else:
-            t.append(f"{glyph}  ", style=f"bold {_C_PRIMARY}")
-            msg_style = _C_TEXT
+            t.append(f"{glyph}  ", style=f"bold {HIGHLIGHT}")
+            msg_style = TEXT
         t.append(f"[{badge_label}]", style=f"bold {badge_color}")
         t.append("  ")
         t.append(message, style=msg_style)
         if insight:
-            t.append(f"  ↳ {insight}", style=_C_ACCENT)
+            t.append(f"  ↳ {insight}", style=BRAND)
         _get_console().print(t)
     else:
         mark = "✗" if error else ("·" if muted else "✓")
         line = f"  {mark}  [{event_type}]  {message}"
         if insight:
             line += f"  ↳ {insight}"
-        print(line)
+        _safe_print(line)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -254,7 +268,13 @@ _FRAME_SECS = 0.10
 
 
 class _LiveRenderable:
-    """Rich renderable that rebuilds the event-log on every Live refresh."""
+    """Rich renderable that rebuilds the event-log on every Live refresh.
+
+    Only active (in-progress) steps are rendered here.  Completed steps are
+    printed *above* the live region via ``console.print`` the moment they finish
+    so they are never re-rendered — preventing the staircase scrollback bug
+    where Rich under-counts live-area lines and fails to erase them fully.
+    """
 
     def __init__(self, display: _EventLogDisplay) -> None:
         self._d = display
@@ -263,16 +283,15 @@ class _LiveRenderable:
         d = self._d
         now = time.monotonic()
         with d._lock:
-            # Completed event lines (static)
-            yield from d._completed
-
-            # Active step lines (animated)
+            # Active step lines (animated).
+            # Completed steps are NOT yielded here — they are printed permanently
+            # above the live region in step_complete() to avoid the staircase bug.
             for node_name, info in d._active_steps.items():
                 elapsed_step = now - info["t0"]
                 elapsed_total = now - d._t0
                 frame = _SPINNER_FRAMES[int(elapsed_step / _FRAME_SECS) % len(_SPINNER_FRAMES)]
                 ev_type = _node_event_type(node_name)
-                badge_label, badge_color = _BADGE_STYLES.get(ev_type, ("DIAG  ", _C_ORANGE))
+                badge_label, badge_color = _BADGE_STYLES.get(ev_type, ("DIAG  ", WARNING))
                 label = _node_label(node_name)
 
                 # subtext (tool calls / reasoning snippets)
@@ -281,29 +300,32 @@ class _LiveRenderable:
                     subtext = None
 
                 t = Text()
-                t.append(f"{_elapsed_hms(elapsed_total)}  ", style=_C_TEXT_DIM)
-                t.append(f"{frame}  ", style=_C_TEXT_DIM)
+                t.append(f"{_elapsed_hms(elapsed_total)}  ", style=SECONDARY)
+                t.append(f"{frame}  ", style=SECONDARY)
                 t.append(f"[{badge_label}]", style=f"bold {badge_color}")
                 t.append("  ")
-                t.append(label, style=f"bold {_C_TEXT}")
+                t.append(label, style=f"bold {TEXT}")
                 if subtext:
-                    t.append(f"  ↳ {subtext}", style=_C_ACCENT)
-                t.append(f"  {_fmt_timing(int(elapsed_step * 1000))}", style=_C_WARNING)
+                    t.append(f"  ↳ {subtext}", style=BRAND)
+                t.append(f"  {_fmt_timing(int(elapsed_step * 1000))}", style=WARNING)
                 yield t
 
-            # Divider + footer
+            # Divider + footer.
+            # Use max_width - 1 so the line never hits the terminal edge exactly;
+            # a full-width line often causes an implicit wrap that Rich doesn't
+            # count, making it under-erase on the next refresh.
             yield Text("")
-            yield Text("┄" * options.max_width, style=_C_BORDER)
+            yield Text("┄" * (options.max_width - 1), style=DIM)
 
             elapsed_total = now - d._t0
             ft = Text()
-            ft.append(" ● ", style=f"bold {_C_PRIMARY}")
-            ft.append(f"{d._current_phase}  ", style=f"bold {_C_TEXT_DIM}")
-            ft.append(f"{_elapsed_hms(elapsed_total)}  ", style=_C_TEXT_DIM)
+            ft.append(" ● ", style=f"bold {HIGHLIGHT}")
+            ft.append(f"{d._current_phase}  ", style=f"bold {SECONDARY}")
+            ft.append(f"{_elapsed_hms(elapsed_total)}  ", style=SECONDARY)
             if d._model:
-                ft.append(f"{d._model}  ", style=_C_TEXT_DIM)
-            ft.append(f"{d._mode}  ", style=_C_TEXT_DIM)
-            ft.append("esc to cancel", style=f"dim {_C_TEXT_DIM}")
+                ft.append(f"{d._model}  ", style=SECONDARY)
+            ft.append(f"{d._mode}  ", style=SECONDARY)
+            ft.append("esc to cancel", style=DIM)
             yield ft
 
 
@@ -318,7 +340,6 @@ class _EventLogDisplay:
         self._model = model
         self._mode = mode
         self._t0 = time.monotonic()
-        self._completed: list[Text] = []
         self._active_steps: dict[str, dict] = {}  # node_name → {t0, subtext, subtext_until}
         self._current_phase = "LOAD"
         self._lock = threading.Lock()
@@ -329,6 +350,9 @@ class _EventLogDisplay:
             console=self._console,
             refresh_per_second=10,
             auto_refresh=True,
+            # Clip the live area to the terminal height so Rich never tries to
+            # scroll back past more lines than it rendered.
+            vertical_overflow="ellipsis",
         )
         self._live.start(refresh=True)
         _live_console = self._console
@@ -353,32 +377,56 @@ class _EventLogDisplay:
             self._current_phase = _node_phase_label(node_name)
 
     def step_complete(self, node_name: str, event: ProgressEvent) -> None:
+        # Compute elapsed before entering the lock so the timestamp is as
+        # accurate as possible even if the lock is briefly contended.
+        elapsed_total = time.monotonic() - self._t0
         with self._lock:
             self._active_steps.pop(node_name, None)
-            elapsed_total = time.monotonic() - self._t0
             ev_type = _node_event_type(node_name)
-            badge_label, badge_color = _BADGE_STYLES.get(ev_type, ("DIAG  ", _C_ORANGE))
+            badge_label, badge_color = _BADGE_STYLES.get(ev_type, ("DIAG  ", WARNING))
             label = _node_label(node_name)
             err = event.status == "error"
             msg = _humanise_message(event.message or "")
             timing = _fmt_timing(event.elapsed_ms)
 
             t = Text()
-            t.append(f"{_elapsed_hms(elapsed_total)}  ", style=_C_TEXT_DIM)
-            t.append("✗  " if err else "✓  ", style=f"bold {_C_ERROR if err else _C_PRIMARY}")
+            t.append(f"{_elapsed_hms(elapsed_total)}  ", style=SECONDARY)
+            t.append("✗  " if err else "✓  ", style=f"bold {ERROR if err else HIGHLIGHT}")
             t.append(f"[{badge_label}]", style=f"bold {badge_color}")
             t.append("  ")
-            t.append(label, style=f"bold {_C_TEXT}")
+            t.append(label, style=f"bold {TEXT}")
             if msg:
-                t.append(f"  {msg}", style=_C_ACCENT)
-            t.append(f"  {timing}", style=_C_TEXT_DIM)
-            self._completed.append(t)
+                t.append(f"  {msg}", style=BRAND)
+            t.append(f"  {timing}", style=SECONDARY)
+
+        # Print the completed line permanently *above* the live region.
+        # This must happen outside _lock: the auto-refresh thread holds
+        # Rich's internal _refresh_lock while calling __rich_console__ (which
+        # acquires _lock), so printing under _lock would deadlock.
+        #
+        # ``step_complete`` can be invoked from a background pipeline thread
+        # concurrently with ``stop()``; once the live region has been torn down
+        # the line would otherwise leak out *below* whatever ``stop()`` already
+        # flushed, leaving a stray completed-step row after the display closes.
+        if self._live.is_started:
+            self._live.console.print(t)
 
     def step_subtext(self, node_name: str, text: str, duration: float = 4.0) -> None:
         with self._lock:
             if node_name in self._active_steps:
                 self._active_steps[node_name]["subtext"] = text
                 self._active_steps[node_name]["subtext_until"] = time.monotonic() + duration
+
+    def print_above(self, text: str) -> None:
+        """Print text permanently above the live region via the Live's own console."""
+        if not text.strip():
+            return
+        from rich.markdown import Markdown
+
+        from app.cli.interactive_shell.ui.theme import MARKDOWN_THEME
+
+        with self._live.console.use_theme(MARKDOWN_THEME):
+            self._live.console.print(Markdown(text, code_theme="ansi_dark"))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -401,9 +449,10 @@ class ProgressTracker:
     def __init__(self) -> None:
         self.events: list[ProgressEvent] = []
         self._start_times: dict[str, float] = {}
+        self._silent = _is_silent_output()
         self._rich = get_output_format() == "rich"
         self._display: _EventLogDisplay | None = None
-        if self._rich:
+        if self._rich and not self._silent:
             self._display = _EventLogDisplay()
 
     def start(self, node_name: str, message: str | None = None) -> None:
@@ -411,6 +460,8 @@ class ProgressTracker:
         self.events.append(
             ProgressEvent(node_name=node_name, elapsed_ms=0, status="started", message=message)
         )
+        if self._silent:
+            return
         if self._rich:
             if node_name == "publish_findings":
                 # Stop the animated display so the final report prints cleanly below
@@ -420,7 +471,7 @@ class ProgressTracker:
             elif self._display:
                 self._display.step_start(node_name)
         else:
-            print(f"  … {_node_label(node_name)}")
+            _safe_print(f"  … {_node_label(node_name)}")
 
     def complete(
         self, node_name: str, fields_updated: list[str] | None = None, message: str | None = None
@@ -434,6 +485,16 @@ class ProgressTracker:
         """Push a live status string into the active spinner for *node_name*."""
         if self._display:
             self._display.step_subtext(node_name, text, duration)
+
+    def print_above(self, text: str) -> None:
+        """Print text permanently above the active live region, or to stdout in text mode."""
+        if self._silent:
+            return
+        if self._display:
+            self._display.print_above(text)
+        elif text.strip():
+            for line in text.strip().splitlines():
+                print(f"  {line}")
 
     def _finish(
         self, node_name: str, status: str, fields_updated: list[str], message: str | None
@@ -449,6 +510,8 @@ class ProgressTracker:
             message=message,
         )
         self.events.append(event)
+        if self._silent:
+            return
 
         if self._rich:
             if self._display:
@@ -467,7 +530,7 @@ class ProgressTracker:
         line = f"  {mark} {_node_label(node_name)}  {_fmt_timing(elapsed_ms)}"
         if msg := _humanise_message(message or ""):
             line += f"  {msg}"
-        print(line)
+        _safe_print(line)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -499,20 +562,20 @@ def reset_tracker() -> ProgressTracker:
 def render_investigation_header(
     alert_name: str, pipeline_name: str, severity: str, alert_id: str | None = None
 ) -> None:
-    sev_color = "red" if severity.lower() == "critical" else "yellow"
+    sev_color = ERROR if severity.lower() == "critical" else WARNING
     fields = [
-        ("  Alert      ", alert_name, "bold white"),
-        ("  Pipeline   ", pipeline_name, "cyan"),
+        ("  Alert      ", alert_name, f"bold {TEXT}"),
+        ("  Pipeline   ", pipeline_name, BRAND),
         ("  Severity   ", severity, f"bold {sev_color}"),
     ]
     if alert_id:
-        fields.append(("  Alert ID   ", alert_id, "dim"))
+        fields.append(("  Alert ID   ", alert_id, SECONDARY))
 
     if get_output_format() == "rich":
         console = _get_console()
         console.print()
         for label, value, style in fields:
-            console.print(Text.assemble((label, "dim"), (value, style)))
+            console.print(Text.assemble((label, SECONDARY), (value, style)))
         console.print()
     else:
         print()
@@ -541,6 +604,6 @@ def debug_print(message: str) -> None:
     if not _is_verbose():
         return
     if get_output_format() == "rich":
-        _get_console().print(f"[dim]{message}[/]")
+        _get_console().print(f"[{SECONDARY}]{message}[/]")
     else:
         print(f"DEBUG: {message}")

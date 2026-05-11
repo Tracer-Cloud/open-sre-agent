@@ -50,6 +50,15 @@ def _seed_action_names_for_sources(
         seeded.append("get_recent_airflow_failures")
         seeded.append("get_airflow_dag_runs")
 
+    if "ec2" in available_sources:
+        seeded.append("ec2_instances_by_tag")
+        ec2 = available_sources.get("ec2", {})
+        if ec2.get("target_group_arns") or ec2.get("load_balancer_arns") or ec2.get("_backend"):
+            seeded.append("get_elb_target_health")
+
+    if "rds" in available_sources and "grafana" in available_sources:
+        seeded.append("query_grafana_logs")
+
     return seeded
 
 
@@ -113,6 +122,45 @@ def _cloudopsbench_path_actions(backend: object) -> list[str]:
         if action_name and action_name not in actions:
             actions.append(action_name)
     return actions
+
+
+def _enforce_non_k8s_rds_topology_core_actions(
+    *,
+    plan_actions: list[str],
+    available_action_names: list[str],
+    available_sources: AvailableSources,
+    executed_hypotheses: list[ExecutedHypothesis],
+    tool_budget: int,
+) -> list[str]:
+    """Force core attribution actions before ancillary RDS actions.
+
+    For non-K8s RDS incidents that expose EC2 topology and Grafana telemetry,
+    insist on the canonical load-attribution action set first:
+    describe_rds_instance -> ec2_instances_by_tag -> get_elb_target_health ->
+    query_grafana_metrics -> query_grafana_logs
+    """
+    if not (
+        "rds" in available_sources and "ec2" in available_sources and "grafana" in available_sources
+    ):
+        return plan_actions
+
+    blocked_action_names = get_blocked_action_names(executed_hypotheses)
+    allowed_actions = set(available_action_names)
+    core_actions = [
+        "describe_rds_instance",
+        "ec2_instances_by_tag",
+        "get_elb_target_health",
+        "query_grafana_metrics",
+        "query_grafana_logs",
+    ]
+    pending_core_actions = [
+        action_name
+        for action_name in core_actions
+        if action_name in allowed_actions and action_name not in blocked_action_names
+    ]
+    if not pending_core_actions:
+        return plan_actions
+    return pending_core_actions[:tool_budget]
 
 
 def _ensure_seed_actions_available(
@@ -366,6 +414,20 @@ def plan_actions(
         available_action_names=available_action_names,
         available_sources=available_sources,
     )
+    enforced_actions = _enforce_non_k8s_rds_topology_core_actions(
+        plan_actions=plan.actions,
+        available_action_names=available_action_names,
+        available_sources=available_sources,
+        executed_hypotheses=input_data.executed_hypotheses,
+        tool_budget=tool_budget,
+    )
+    if enforced_actions != plan.actions:
+        plan.actions = enforced_actions
+        plan.rationale = (
+            "Controller policy: gather core non-K8s RDS attribution evidence "
+            "(RDS metadata, EC2 tier map, ELB target health, Grafana metrics/logs) "
+            "before ancillary actions."
+        )
     if not plan.actions and available_action_names:
         plan.actions = [available_action_names[0]]
         plan.rationale = (

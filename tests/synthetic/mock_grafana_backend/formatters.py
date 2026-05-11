@@ -168,6 +168,184 @@ def format_tempo_search() -> dict[str, Any]:
     }
 
 
+# ---------------------------------------------------------------------------
+# Kubernetes → Grafana wire formatters
+#
+# In real Grafana stacks, k8s telemetry reaches the agent through the same
+# observability pipes as everything else: kube-state-metrics + cAdvisor are
+# scraped into Prometheus/Mimir, while Kubernetes Events and rollout audit
+# trails are forwarded to Loki by promtail/fluent-bit. The mock mirrors that
+# routing so synthetic scenarios exercise the real ingestion paths instead of
+# inventing a parallel "k8s tool" surface.
+# ---------------------------------------------------------------------------
+
+
+def k8s_events_to_loki_entries(
+    events_fixture: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """Convert a k8s_events.json fixture → Loki stream entries.
+
+    Each event becomes a stream entry tagged ``source_type="k8s_events"`` with
+    the cluster/namespace as labels. Stream values use Loki's nanosecond
+    timestamp + log line shape.
+    """
+    if not events_fixture:
+        return []
+    cluster = str(events_fixture.get("cluster", ""))
+    namespace = str(events_fixture.get("namespace", ""))
+    log_lines: list[list[str]] = []
+    for event in events_fixture.get("events", []) or []:
+        ts = event.get("ts") or event.get("timestamp")
+        if not ts:
+            continue
+        kind = str(event.get("kind", "Event"))
+        name = str(event.get("name", ""))
+        reason = str(event.get("reason", ""))
+        message = str(event.get("message", ""))
+        line = f"[{kind}/{name}] {reason}: {message}".strip()
+        log_lines.append([_iso_to_unix_ns(ts), line])
+    if not log_lines:
+        return []
+    log_lines.sort(key=lambda entry: entry[0])
+    return [
+        {
+            "stream": {
+                "source_type": "k8s_events",
+                "cluster": cluster,
+                "namespace": namespace,
+            },
+            "values": log_lines,
+        }
+    ]
+
+
+def k8s_rollout_to_loki_entries(
+    rollout_fixture: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """Convert a k8s_rollout.json fixture → Loki stream entries.
+
+    A rollout fixture is a single record (not a list); we emit one log line
+    per phase boundary (started + completed) so the agent sees an audit trail
+    rather than an opaque blob.
+    """
+    if not rollout_fixture:
+        return []
+    service = str(rollout_fixture.get("service", ""))
+    namespace = str(rollout_fixture.get("namespace", ""))
+    revision = str(rollout_fixture.get("revision", ""))
+    status = str(rollout_fixture.get("status", "unknown"))
+    notes = str(rollout_fixture.get("notes", ""))
+
+    lines: list[tuple[str, str]] = []
+    started_at = rollout_fixture.get("rollout_started_at")
+    if started_at:
+        lines.append(
+            (
+                str(started_at),
+                f"rollout started: revision={revision} status={status} {notes}".strip(),
+            )
+        )
+    completed_at = rollout_fixture.get("rollout_completed_at")
+    if completed_at:
+        lines.append(
+            (
+                str(completed_at),
+                f"rollout completed: revision={revision} status={status}".strip(),
+            )
+        )
+    if not lines:
+        return []
+    log_lines = [[_iso_to_unix_ns(ts), msg] for ts, msg in lines]
+    log_lines.sort(key=lambda entry: entry[0])
+    return [
+        {
+            "stream": {
+                "source_type": "k8s_rollout",
+                "service": service,
+                "namespace": namespace,
+                "revision": revision,
+            },
+            "values": log_lines,
+        }
+    ]
+
+
+def _k8s_metric_series(
+    metric_name: str,
+    base_labels: dict[str, str],
+    samples: list[dict[str, Any]],
+    field: str,
+) -> list[dict[str, Any]]:
+    """Group a list of samples by their non-timestamp label fields and emit
+    one Prometheus matrix series per group containing values for *field*.
+    """
+    grouped: dict[tuple[tuple[str, str], ...], list[list[Any]]] = {}
+    for sample in samples:
+        if field not in sample:
+            continue
+        labels = {**base_labels}
+        for key in ("node", "upstream", "service", "namespace", "resolver"):
+            if key in sample and sample[key] is not None:
+                labels[key] = str(sample[key])
+        labels["__name__"] = metric_name
+        ts = sample.get("ts") or sample.get("timestamp")
+        if ts is None:
+            continue
+        try:
+            value = float(sample[field])
+        except (TypeError, ValueError):
+            continue
+        key_tuple = tuple(sorted(labels.items()))
+        grouped.setdefault(key_tuple, []).append([_iso_to_unix(ts), str(value)])
+
+    series: list[dict[str, Any]] = []
+    for key_tuple, values in grouped.items():
+        values.sort(key=lambda entry: entry[0])
+        series.append({"metric": dict(key_tuple), "values": values})
+    return series
+
+
+def k8s_metrics_to_mimir_series(
+    fixture: dict[str, Any] | None,
+    *,
+    source: str,
+) -> list[dict[str, Any]]:
+    """Convert a k8s_*_metrics.json fixture → Mimir matrix series list.
+
+    *source* is one of ``k8s_pod_metrics``, ``k8s_node_metrics``,
+    ``k8s_dns_metrics``, ``k8s_mesh_metrics`` and is used both as the metric
+    name prefix (e.g. ``k8s_pod_request_rate_rps``) and as the routing label
+    that the post-processor uses to split metrics back into evidence keys.
+
+    Numeric fields on each sample become separate metric series. Non-numeric
+    fields (e.g. service, namespace, node) become labels on every series.
+    """
+    if not fixture:
+        return []
+    samples = list(fixture.get("samples", []) or [])
+    if not samples:
+        return []
+
+    base_labels: dict[str, str] = {"source_type": source}
+    for key in ("service", "namespace", "resolver"):
+        if key in fixture and fixture[key] is not None:
+            base_labels[key] = str(fixture[key])
+
+    numeric_fields: set[str] = set()
+    for sample in samples:
+        for key, value in sample.items():
+            if key in ("ts", "timestamp", "node", "upstream", "service", "namespace", "resolver"):
+                continue
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                numeric_fields.add(key)
+
+    series: list[dict[str, Any]] = []
+    for field in sorted(numeric_fields):
+        metric_name = f"{source}_{field}"
+        series.extend(_k8s_metric_series(metric_name, base_labels, samples, field))
+    return series
+
+
 def format_ruler_rules(alert_fixture: dict[str, Any]) -> dict[str, Any]:
     """Convert an alert fixture → Grafana Ruler /api/v1/rules response.
 

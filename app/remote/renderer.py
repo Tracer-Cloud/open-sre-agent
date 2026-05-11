@@ -20,20 +20,30 @@ from rich.markdown import Markdown
 from rich.spinner import Spinner
 from rich.text import Text
 
+from app.cli.interactive_shell.ui.theme import (
+    ANSI_BOLD,
+    ANSI_DIM,
+    ANSI_RESET,
+    BOLD_BRAND_ANSI,
+    BRAND,
+    HIGHLIGHT_ANSI,
+    TEXT_ANSI,
+)
 from app.output import (
     ProgressTracker,
     get_output_format,
     render_investigation_header,
+    stop_display,
 )
 from app.remote.reasoning import reasoning_text
 from app.remote.stream import StreamEvent
 
-_RESET = "\033[0m"
-_DIM = "\033[2m"
-_BOLD = "\033[1m"
-_WHITE = "\033[37m"
-_GREEN = "\033[32m"
-_CYAN = "\033[1;36m"
+_RESET = ANSI_RESET
+_DIM = ANSI_DIM
+_BOLD = ANSI_BOLD
+_WHITE = TEXT_ANSI
+_GREEN = HIGHLIGHT_ANSI
+_CYAN = BOLD_BRAND_ANSI
 
 _NODE_START_KINDS = frozenset(
     {
@@ -59,8 +69,147 @@ _DIAGNOSE_NODE = "diagnose_root_cause"
 # Same Rich.Live refresh / spinner choices as the interactive-shell streamer
 # so the two surfaces feel identical.
 _DIAGNOSE_LIVE_REFRESH = 20
+# Same throttle rationale as ``streaming._LIVE_RENDER_INTERVAL_S``: cap
+# Markdown(buffer) re-parses to one per refresh window. Without this, the
+# diagnose Live region performs O(n²) parsing on long streams and stalls
+# visibly past a few thousand tokens.
+_DIAGNOSE_RENDER_INTERVAL_S = 1.0 / _DIAGNOSE_LIVE_REFRESH
 _DIAGNOSE_SPINNER_NAME = "dots12"
 _DIAGNOSE_SPINNER_COLOR = "orange1"
+
+
+class _DiagnoseStreamRenderer:
+    """Owns the diagnose-node live-streaming state machine.
+
+    Encapsulates the buffer of incoming token deltas, the lazy Rich Console
+    + Live region, and the throttled Markdown re-parse cadence. Exists so
+    :class:`StreamRenderer` keeps a single responsibility (event dispatch
+    + node lifecycle + final report) while diagnose-specific streaming
+    concerns live in one focused place.
+
+    Lifecycle: :meth:`start` → :meth:`append_chunk` (per token-delta event)
+    → :meth:`finish`. The same instance can be reused across multiple
+    investigation runs — :meth:`start` resets all state.
+    """
+
+    def __init__(self) -> None:
+        self.buffer: list[str] = []
+        self._live: Live | None = None
+        self._started: float = 0.0
+        # Last time we re-rendered ``Markdown(buffer)`` into the Live region.
+        # Throttled to ``_DIAGNOSE_RENDER_INTERVAL_S`` so long streams don't
+        # incur O(n²) parsing.
+        self._last_render: float = 0.0
+        # Lazy-init: only constructed when the diagnose node first runs.
+        self._console: Console | None = None
+
+    @property
+    def streamed(self) -> bool:
+        """True if any chunks were buffered during the run.
+
+        Callers (specifically :meth:`StreamRenderer._print_report`) use this
+        to decide whether the final ``Root Cause`` summary should be
+        suppressed — it would duplicate text the user just watched stream.
+        """
+        return bool(self.buffer)
+
+    def start(self) -> None:
+        """Reset state and open the Live region (rich) or print a placeholder (text)."""
+        self.buffer = []
+        self._started = time.monotonic()
+        # 0.0 sentinel forces the first chunk past the throttle gate so the
+        # user sees something rendered as soon as tokens arrive.
+        self._last_render = 0.0
+
+        if get_output_format() != "rich":
+            sys.stdout.write(f"  … {_DIAGNOSE_NODE}\n")
+            sys.stdout.flush()
+            return
+
+        # Stop any active ProgressTracker Live display before opening our own
+        # Live region. Two competing Rich Live regions cause visible flicker;
+        # keeping only one Live at a time eliminates it. The next graph node
+        # (publish_findings) already stops the display unconditionally, so
+        # this just moves the stop point one node earlier.
+        stop_display()
+
+        if self._console is None:
+            self._console = Console(highlight=False)
+        spinner = Spinner(
+            _DIAGNOSE_SPINNER_NAME,
+            text=Text(
+                f"{_DIAGNOSE_NODE}  reasoning…",
+                style=f"bold {_DIAGNOSE_SPINNER_COLOR}",
+            ),
+            style=f"bold {_DIAGNOSE_SPINNER_COLOR}",
+        )
+        self._live = Live(
+            spinner,
+            console=self._console,
+            refresh_per_second=_DIAGNOSE_LIVE_REFRESH,
+            transient=False,
+        )
+        self._live.start()
+
+    def append_chunk(self, event: StreamEvent) -> None:
+        """Append a token delta to the buffer; refresh the Live region (throttled).
+
+        The chunk's ``content`` shape varies by provider: OpenAI emits a
+        plain string; langchain-anthropic emits a list of content blocks.
+        :func:`_flatten_chunk_content` handles both — calling ``str()`` on
+        the list shape would render its Python repr instead of reasoning.
+        """
+        chunk = event.data.get("data", {}).get("chunk", {})
+        content = chunk.get("content", "") if isinstance(chunk, dict) else ""
+        if not content:
+            return
+        text = _flatten_chunk_content(content)
+        if not text:
+            return
+        self.buffer.append(text)
+        if self._live is None:
+            return
+        # Throttle Markdown re-parse to once per refresh window; the final
+        # flush in :meth:`finish` guarantees the latest buffer is rendered
+        # before the Live region closes.
+        now = time.monotonic()
+        if now - self._last_render >= _DIAGNOSE_RENDER_INTERVAL_S:
+            self._live.update(Markdown("".join(self.buffer)))
+            self._last_render = now
+
+    def finish(self, message: str | None = None) -> None:
+        """Close the Live region (or text-mode flush) and print the resolved-dot line.
+
+        ``message`` is appended dim-styled to the resolution line — typically
+        a validity-score summary built by ``_build_node_message``.
+        """
+        elapsed = time.monotonic() - self._started
+
+        if self._live is not None:
+            # Final flush: any chunks pending in the last throttle window
+            # render here so the user sees the complete reasoning.
+            if self.buffer:
+                self._live.update(Markdown("".join(self.buffer)))
+            try:
+                self._live.stop()
+            finally:
+                self._live = None
+            sys.stdout.write(
+                f"  {_GREEN}●{_RESET}  {_BOLD}{_WHITE}{_DIAGNOSE_NODE}{_RESET}"
+                f"  {_DIM}{elapsed:.1f}s{_RESET}"
+            )
+            if message:
+                sys.stdout.write(f"  {_DIM}{message}{_RESET}")
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+        else:
+            if self.buffer:
+                for line in "".join(self.buffer).strip().splitlines():
+                    print(f"  {line}")
+            tail = f"  ● {_DIAGNOSE_NODE}  {elapsed:.1f}s"
+            if message:
+                tail += f"  {message}"
+            print(tail)
 
 
 class StreamRenderer:
@@ -81,13 +230,10 @@ class StreamRenderer:
         self._stream_completed = False
         self._local = local
         # diagnose_root_cause streams the model's reasoning live as Markdown
-        # instead of into the compact spinner subtext. Buffer always
-        # accumulates; ``_diagnose_live`` only opens in rich-output mode.
-        self._diagnose_buffer: list[str] = []
-        self._diagnose_live: Live | None = None
-        self._diagnose_started: float = 0.0
-        # Lazy-init: only constructed when the diagnose node first runs.
-        self._diagnose_console: Console | None = None
+        # instead of into the compact spinner subtext. The helper owns the
+        # buffer + Live region + throttle state; the renderer only
+        # orchestrates lifecycle (active_node tracking, finish-on-end).
+        self._diagnose = _DiagnoseStreamRenderer()
 
     @property
     def events_received(self) -> int:
@@ -185,19 +331,16 @@ class StreamRenderer:
 
         if canonical == _DIAGNOSE_NODE:
             if kind in _NODE_START_KINDS and self._is_graph_node_event(event):
-                self._start_diagnose_streaming(canonical)
+                self._begin_diagnose(canonical)
                 return
             if kind in _NODE_END_KINDS and self._is_graph_node_event(event):
                 self._merge_chain_end_output(event)
                 if self._active_node == canonical:
-                    self._finish_diagnose_streaming()
+                    self._end_diagnose()
                 return
             if kind == _TOKEN_STREAM_KIND and self._active_node == canonical:
-                self._append_diagnose_chunk(event)
+                self._diagnose.append_chunk(event)
                 return
-            # Other diagnose-related callbacks (tool starts, sub-chain
-            # events, etc.) intentionally don't fall through to the
-            # spinner-subtext path — diagnose owns its own Rich.Live region.
             return
 
         if kind in _NODE_START_KINDS and self._is_graph_node_event(event):
@@ -220,94 +363,22 @@ class StreamRenderer:
             if text:
                 self._tracker.update_subtext(canonical, text)
 
-    def _start_diagnose_streaming(self, canonical: str) -> None:
-        """Begin the diagnose-streaming branch.
+    def _begin_diagnose(self, canonical: str) -> None:
+        """Mark diagnose as the active node and let the helper open its Live region.
 
         Closes any previous spinner-driven node (e.g. ``investigate``)
-        before taking over stdout for the Live region.
+        first so the helper takes over stdout cleanly.
         """
         if self._active_node and self._active_node != canonical:
             self._finish_active_node()
         self._active_node = canonical
         if canonical not in self._node_names_seen:
             self._node_names_seen.append(canonical)
-        self._diagnose_buffer = []
-        self._diagnose_started = time.monotonic()
+        self._diagnose.start()
 
-        if get_output_format() != "rich":
-            sys.stdout.write(f"  … {canonical}\n")
-            sys.stdout.flush()
-            return
-
-        if self._diagnose_console is None:
-            self._diagnose_console = Console(highlight=False)
-        spinner = Spinner(
-            _DIAGNOSE_SPINNER_NAME,
-            text=Text(
-                f"{canonical}  reasoning…",
-                style=f"bold {_DIAGNOSE_SPINNER_COLOR}",
-            ),
-            style=f"bold {_DIAGNOSE_SPINNER_COLOR}",
-        )
-        self._diagnose_live = Live(
-            spinner,
-            console=self._diagnose_console,
-            refresh_per_second=_DIAGNOSE_LIVE_REFRESH,
-            transient=False,
-        )
-        self._diagnose_live.start()
-
-    def _append_diagnose_chunk(self, event: StreamEvent) -> None:
-        """Append a token delta to the diagnose buffer; refresh the Live region.
-
-        The chunk's ``content`` shape varies by provider: OpenAI emits a plain
-        string; langchain-anthropic emits a list of content blocks (objects
-        with ``.text`` or dicts with a ``"text"`` key). Flatten the list shape
-        to the same text the OpenAI path produces — calling ``str()`` on a
-        block list would render its Python repr instead of the reasoning.
-        """
-        chunk = event.data.get("data", {}).get("chunk", {})
-        content = chunk.get("content", "") if isinstance(chunk, dict) else ""
-        if not content:
-            return
-        text = _flatten_chunk_content(content)
-        if not text:
-            return
-        self._diagnose_buffer.append(text)
-        if self._diagnose_live is not None:
-            self._diagnose_live.update(Markdown("".join(self._diagnose_buffer)))
-
-    def _finish_diagnose_streaming(self) -> None:
-        """Close the diagnose Live region and print the resolved-dot line.
-
-        Also handles the text-mode fallback: replays the accumulated buffer
-        as plain lines (since text mode never opened a Live region).
-        """
-        elapsed = time.monotonic() - self._diagnose_started
-        message = self._build_node_message(_DIAGNOSE_NODE)
-
-        if self._diagnose_live is not None:
-            try:
-                self._diagnose_live.stop()
-            finally:
-                self._diagnose_live = None
-            sys.stdout.write(
-                f"  {_GREEN}●{_RESET}  {_BOLD}{_WHITE}{_DIAGNOSE_NODE}{_RESET}"
-                f"  {_DIM}{elapsed:.1f}s{_RESET}"
-            )
-            if message:
-                sys.stdout.write(f"  {_DIM}{message}{_RESET}")
-            sys.stdout.write("\n")
-            sys.stdout.flush()
-        else:
-            if self._diagnose_buffer:
-                for line in "".join(self._diagnose_buffer).strip().splitlines():
-                    print(f"  {line}")
-            tail = f"  ● {_DIAGNOSE_NODE}  {elapsed:.1f}s"
-            if message:
-                tail += f"  {message}"
-            print(tail)
-
+    def _end_diagnose(self) -> None:
+        """Close the diagnose helper's Live region and clear ``_active_node``."""
+        self._diagnose.finish(self._build_node_message(_DIAGNOSE_NODE))
         self._active_node = None
 
     @staticmethod
@@ -328,11 +399,10 @@ class StreamRenderer:
     def _finish_active_node(self) -> None:
         if self._active_node is None:
             return
-        # Diagnose is streamed via Rich.Live, not the spinner tracker — route
-        # cleanup through the streaming finish so the Live region is always
-        # closed even on mid-stream exceptions.
+        # Diagnose owns its own Rich.Live region — route cleanup through
+        # _end_diagnose so the Live closes even on mid-stream exceptions.
         if self._active_node == _DIAGNOSE_NODE:
-            self._finish_diagnose_streaming()
+            self._end_diagnose()
             return
         message = self._build_node_message(self._active_node)
         self._tracker.complete(self._active_node, message=message)
@@ -389,7 +459,7 @@ class StreamRenderer:
         # appear on screen, so the condensed summary adds noise rather than
         # value. The Report section still prints because publish_findings
         # adds alert framing and timing the diagnose stream doesn't carry.
-        diagnose_streamed = bool(self._diagnose_buffer)
+        diagnose_streamed = self._diagnose.streamed
         if root_cause and not diagnose_streamed:
             _print_section("Root Cause", root_cause)
         if report:
@@ -454,10 +524,13 @@ def _print_section(title: str, content: str) -> None:
         from rich.padding import Padding
         from rich.rule import Rule
 
+        from app.cli.interactive_shell.ui.theme import MARKDOWN_THEME
+
         console = Console(highlight=False)
         console.print()
-        console.print(Rule(f"[bold white] {title} [/]", style="#2D4A2D", align="left"))
-        console.print(Padding(Markdown(content.strip()), (1, 2)))
+        console.print(Rule(f"[bold] {title} [/]", style=BRAND, align="left"))
+        with console.use_theme(MARKDOWN_THEME):
+            console.print(Padding(Markdown(content.strip(), code_theme="ansi_dark"), (1, 2)))
     else:
         print(f"\n  {title}")
         for line in content.strip().splitlines():

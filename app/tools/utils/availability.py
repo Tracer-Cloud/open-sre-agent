@@ -34,6 +34,19 @@ def datadog_available_or_backend(sources: dict[str, dict]) -> bool:
     return bool(dd.get("connection_verified") or dd.get("_backend"))
 
 
+def ec2_available_or_backend(sources: dict[str, dict]) -> bool:
+    """Available when real EC2/AWS credentials are present OR a fixture backend is injected.
+
+    Mirrors ``eks_available_or_backend``: gates EC2/ELB tool wrappers whose
+    ``extract_params`` can delegate to a mock ``aws_backend`` for synthetic tests.
+    The ``ec2`` source is populated by ``detect_sources`` when the alert carries
+    EC2/ELB topology hints (instance_id, target_group_arn, load_balancer_arn,
+    auto_scaling_group, or tier tags).
+    """
+    ec2 = sources.get("ec2", {})
+    return bool(ec2.get("connection_verified") or ec2.get("_backend"))
+
+
 def cloudwatch_is_available(sources: dict[str, dict]) -> bool:
     """Available when a CloudWatch source is present in the alert context.
 

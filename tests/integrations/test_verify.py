@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import pytest
@@ -116,6 +117,43 @@ def test_resolve_effective_integrations_keeps_incomplete_datadog_store_record(
     assert effective["datadog"]["source"] == "local store"
     assert effective["datadog"]["config"]["integration_id"] == "datadog-local"
     assert effective["datadog"]["config"]["api_key"] == ""
+
+
+def test_resolve_effective_integrations_drops_unrecognised_keys_with_warning(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Unknown catalog keys must not crash EffectiveIntegrations (extra=forbid)."""
+    from app.integrations import _catalog_impl as catalog_impl
+
+    monkeypatch.setattr("app.integrations.catalog.load_integrations", lambda: [])
+    fake_service = "zzz_unknown_effective_key"
+    orig_direct = catalog_impl.DIRECT_CLASSIFIED_EFFECTIVE_SERVICES
+    monkeypatch.setattr(
+        catalog_impl,
+        "DIRECT_CLASSIFIED_EFFECTIVE_SERVICES",
+        (*orig_direct, fake_service),
+    )
+    real_classify = catalog_impl.classify_integrations
+
+    def classify_with_unknown(merged: list[dict[str, Any]]) -> dict[str, Any]:
+        out = dict(real_classify(merged))
+        out[fake_service] = {
+            "id": "stub",
+            "service": fake_service,
+            "credentials": {},
+        }
+        return out
+
+    monkeypatch.setattr(catalog_impl, "classify_integrations", classify_with_unknown)
+
+    with caplog.at_level(logging.WARNING, logger="app.integrations._catalog_impl"):
+        effective = resolve_effective_integrations()
+
+    assert fake_service not in effective
+    assert any("unrecognised integration key" in record.message for record in caplog.records), (
+        caplog.text
+    )
+    assert fake_service in caplog.text
 
 
 def test_verify_slack_uses_v2_store_credentials(monkeypatch: pytest.MonkeyPatch) -> None:

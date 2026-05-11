@@ -94,10 +94,20 @@ def _build_available_sources_hint(available_sources: dict[str, dict]) -> str:
     if "grafana" in available_sources:
         grafana = available_sources["grafana"]
         loki_only = grafana.get("loki_only", False)
+        no_traces = grafana.get("no_traces", False)
         grafana_label = "Grafana Local (Loki only)" if loki_only else "Grafana Cloud"
-        traces_hint = (
-            "" if loki_only else "\n- Use query_grafana_traces to find distributed traces in Tempo"
-        )
+        # The traces action is hard-filtered out of available_actions when
+        # no_traces is set (see GrafanaTracesTool._query_grafana_traces_available),
+        # so the prompt only needs to describe traces when they are actually
+        # selectable. For loki_only stacks Tempo is also absent.
+        if loki_only or no_traces:
+            traces_hint = ""
+        else:
+            traces_hint = (
+                "\n- Use query_grafana_traces to find distributed traces in Tempo"
+                " — only relevant for request-latency or service-mesh incidents,"
+                " NOT for database resource threshold alerts (connections, CPU, storage)"
+            )
         hints.append(
             f"""{grafana_label} Available:
 - Service Name: {grafana.get("service_name")}
@@ -249,6 +259,17 @@ def _build_available_sources_hint(available_sources: dict[str, dict]) -> str:
 - Index Pattern: {opensearch.get("index_pattern") or "*"}
 - Query: {opensearch.get("default_query") or "*"}
 - Use query_opensearch_analytics for bounded OpenSearch-compatible evidence"""
+        )
+
+    if "incident_io" in available_sources:
+        incident_io = available_sources["incident_io"]
+        hints.append(
+            f"""incident.io Available:
+- Incident ID: {incident_io.get("incident_id") or "unknown"}
+- Status category: {incident_io.get("status_category") or "live"}
+- Use incident_io_incidents action="context" when an incident ID is available to read metadata and incident updates
+- Use incident_io_incidents action="list" to find live incidents if no incident ID is known
+- Only use action="append_summary" when findings are ready to write back to the incident summary"""
         )
 
     if "eks" in available_sources:
@@ -422,6 +443,9 @@ Planning rules:
    - background processes (e.g. WAL, vacuum, or audit logging systems depending on the database engine)
    - storage growth sources such as audit logs (for PostgreSQL/Aurora) or other logging mechanisms
    Prefer actions that reveal these mechanisms when relevant signals (CPU, connections, storage) are elevated.
+11. Treat get_sre_guidance as a synthesis helper, not a primary evidence action:
+   - only select it after at least one telemetry action (metrics/logs/events/alerts) succeeds
+   - do not use it when concrete product telemetry actions are still available and untried
 
 When selecting actions, optimize for:
 - ruling out competing explanations
@@ -434,6 +458,7 @@ Additionally:
 - When connection counts are high, explicitly evaluate whether idle connections are contributing to the issue and include this explicitly in your reasoning if relevant.
 - When storage pressure is observed, explicitly consider audit logs or database-specific logging mechanisms (e.g. audit_log for PostgreSQL/Aurora)
 - For RDS/Postgres storage alerts, collect metrics, logs/events, and alert rules together when Grafana is available so the final RCA can connect FreeStorageSpace, WriteIOPS, RDS events, and the triggering alert.
+- For RDS/database resource threshold alerts (connections, CPU, storage, IOPS), when Grafana is available: prefer `query_grafana_alert_rules` over `query_grafana_traces`. Alert rules confirm the threshold configuration and the primary metric that fired, which directly anchors the RCA category. Distributed traces (Tempo) are only valuable when the incident is about request latency or service-mesh errors — they contain no useful data for infrastructure ceiling breaches. Do not select `query_grafana_traces` when the alert is clearly firing on a database resource metric.
 
 Avoid:
 - collecting general context that does not help separate hypotheses

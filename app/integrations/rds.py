@@ -46,13 +46,27 @@ def rds_config_from_env() -> RDSConfig | None:
 
 
 def rds_is_available(sources: dict[str, dict]) -> bool:
-    """Check if RDS integration identifying params are present."""
+    """Check if RDS integration identifying params are present.
+
+    A scenario-injected ``_backend`` (FixtureAWSBackend in synthetic tests)
+    counts on its own — synthetic scenarios always carry the DB identifier
+    in scenario metadata, and we want the RDS tools to be selectable in
+    synthetic mode regardless of whether the alert annotations also surfaced
+    the identifier.
+    """
     rds = sources.get("rds", {})
-    return bool(rds.get("db_instance_identifier"))
+    return bool(rds.get("db_instance_identifier") or rds.get("_backend"))
 
 
 def rds_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
-    """Extract RDS identifying params (db_instance_identifier, region)."""
+    """Extract RDS identifying params (db_instance_identifier, region).
+
+    Forwards the optional synthetic ``_backend`` handle as ``aws_backend`` so
+    the RDS tools can short-circuit to fixture data instead of hitting real
+    boto3. Without this hop, ``execute_aws_sdk_call`` would silently leak to
+    whatever AWS account the developer happens to be authenticated against
+    during a synthetic test run.
+    """
     rds = sources.get("rds", {})
     region = (
         str(rds.get("region") or "").strip()
@@ -63,4 +77,5 @@ def rds_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     return {
         "db_instance_identifier": str(rds.get("db_instance_identifier", "")).strip(),
         "region": region,
+        "aws_backend": rds.get("_backend"),
     }

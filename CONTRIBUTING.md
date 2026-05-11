@@ -10,6 +10,8 @@ Welcome to OpenSRE
 
 ## How to Contribute
 
+Looking for a safe first contribution? See [Good First Issues](docs/good-first-issues/README.md).
+
 Use the path that matches the kind of contribution you want to make:
 
 1. **Bugs & small fixes** -> Open a PR. If you need to file an issue first, use the [bug report template](https://github.com/Tracer-Cloud/opensre/issues/new?template=bug_report.yml).
@@ -28,7 +30,7 @@ This repo ships with a generated codebase map at `.understand-anything/` — a k
 
 ### Environment Setup
 
-See **[SETUP.md](SETUP.md)** for detailed setup instructions including Windows-specific guidance.
+See **[SETUP.md](SETUP.md)** for detailed setup instructions including Windows-specific guidance. For benchmark, deployment detail, and telemetry reference, see **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)**.
 
 **Quick start:**
 
@@ -38,7 +40,7 @@ See **[SETUP.md](SETUP.md)** for detailed setup instructions including Windows-s
     - When invoking the CLI from your checkout, prefer **`uv run opensre …`** (see `SETUP.md` troubleshooting if another `opensre` shadows `.venv`).
 4. Build release artifacts when needed: `make build`
 
-If you prefer VS Code, you can use the repo's devcontainer at [.devcontainer/devcontainer.json](.devcontainer/devcontainer.json) instead of setting up Python manually.
+If you prefer VS Code, use the devcontainer at [.devcontainer/devcontainer.json](.devcontainer/devcontainer.json). Details: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#vs-code-dev-container).
 
 ---
 
@@ -107,6 +109,25 @@ Notes:
 - New features should have corresponding tests
 - Aim for >80% code coverage (run `make test-cov` to check)
 
+#### Tests under `tests/synthetic/` need an explicit `pytest.mark.synthetic` marker
+
+The synthetic test tree has its own Make target (`make test-synthetic`) and is excluded from `make test-cov`. The two targets use marker filters:
+
+- `make test-cov` runs `pytest --ignore=tests/synthetic -m "not synthetic"`, so the whole `tests/synthetic/` tree is excluded.
+- `make test-synthetic` runs `pytest -m synthetic`, so a file without `pytest.mark.synthetic` is collected but skipped.
+
+If you add a new test file under `tests/synthetic/`, declare the marker at module level so the file runs under `make test-synthetic`:
+
+```python
+import pytest
+
+pytestmark = pytest.mark.synthetic
+```
+
+Without this marker the new file silently runs in **zero** standard CI configurations. The pattern is already in `tests/synthetic/rds_postgres/test_suite.py`; new files in the same tree should follow it.
+
+See [#1671](https://github.com/Tracer-Cloud/opensre/issues/1671) for the meta-issue tracking this discoverability gap.
+
 ### 4. Run Local Checks (Required Before PR)
 
 ```bash
@@ -122,12 +143,13 @@ All four must pass. **CI will block merging if any fail.**
 
 Replace the placeholders with your actual file or test name:
 
-````bash
+```bash
 pytest tests/cli/test_.py                                       # single file
 pytest tests/cli/test_.py::test_                                # single function
 pytest tests/tools/ -k "test_registry"                          # tools example
 pytest tests/synthetic/ -k "test_scenario"                      # no live infra needed
-````
+```
+
 ### 5. Open a Pull Request
 
 Follow the PR template (see below). Link the relevant issue and describe what changed and why.
@@ -213,7 +235,7 @@ make lint          # Auto-fixes many style issues
 make format-check  # Checks formatting without modifying files
 make typecheck     # Catches type errors
 make test-cov      # Ensures tests pass and coverage is tracked
-````
+```
 
 To verify the package can be shipped, run:
 

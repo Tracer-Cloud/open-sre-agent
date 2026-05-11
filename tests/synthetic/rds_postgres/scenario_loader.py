@@ -3,16 +3,20 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import yaml
 
 from tests.synthetic.schemas import (
+    GoldenTrajectorySchema,
     ScenarioEvidence,
     ScenarioMetadataSchema,
     validate_alert,
     validate_answer_key,
     validate_cloudwatch_metrics,
+    validate_ec2_instances_by_tag,
+    validate_elb_target_health,
+    validate_generic_evidence,
     validate_performance_insights,
     validate_rds_events,
     validate_scenario_metadata,
@@ -39,11 +43,25 @@ class ScenarioMetadata:
     depends_on: str = ""
 
 
+TrajectoryMatching = Literal["strict", "lcs", "set"]
+
+
+@dataclass(frozen=True)
+class GoldenTrajectoryConfig:
+    ordered_actions: list[str]
+    matching: TrajectoryMatching = "lcs"
+    max_edit_distance: int | None = None
+    max_extra_actions: int | None = None
+    max_redundancy: int | None = None
+    max_loops: int | None = None
+
+
 @dataclass(frozen=True)
 class ScenarioAnswerKey:
     root_cause_category: str
     required_keywords: list[str]
     model_response: str
+    equivalent_root_cause_categories: tuple[str, ...] = ()
     forbidden_categories: list[str] = ()  # type: ignore[assignment]
     forbidden_keywords: list[str] = ()  # type: ignore[assignment]
     required_evidence_sources: list[str] = ()  # type: ignore[assignment]
@@ -51,6 +69,7 @@ class ScenarioAnswerKey:
     max_investigation_loops: int = 1
     ruling_out_keywords: list[str] = ()  # type: ignore[assignment]
     required_queries: list[str] = ()  # type: ignore[assignment]
+    golden_trajectory: GoldenTrajectoryConfig | None = None
 
 
 @dataclass(frozen=True)
@@ -62,6 +81,28 @@ class ScenarioFixture:
     metadata: ScenarioMetadata
     answer_key: ScenarioAnswerKey
     problem_md: str
+
+
+def _parse_trajectory_matching(value: Any) -> TrajectoryMatching:
+    if value in {"strict", "lcs", "set"}:
+        return cast(TrajectoryMatching, value)
+    raise ValueError(
+        "answer.yml: 'golden_trajectory.matching' must be one of "
+        "'strict', 'lcs', or 'set' when present"
+    )
+
+
+def _parse_non_negative_int(
+    golden_trajectory: GoldenTrajectorySchema | dict[str, Any], field: str
+) -> int | None:
+    value = golden_trajectory.get(field)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(
+            f"answer.yml: 'golden_trajectory.{field}' must be a non-negative integer when present"
+        )
+    return cast(int, value)
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -223,10 +264,36 @@ def _parse_scenario_yaml(path: Path) -> tuple[ScenarioMetadata, Path | None]:
 def _parse_answer_yaml(path: Path) -> ScenarioAnswerKey:
     payload = _read_yaml(path)
     validated = validate_answer_key(payload)
+    golden_trajectory_raw = validated.get("golden_trajectory")
+    golden_trajectory: GoldenTrajectoryConfig | None = None
+    if isinstance(golden_trajectory_raw, dict):
+        ordered_actions_raw = golden_trajectory_raw.get("ordered_actions")
+        if not isinstance(ordered_actions_raw, list) or not ordered_actions_raw:
+            raise ValueError(
+                "answer.yml: 'golden_trajectory.ordered_actions' must be a non-empty list "
+                "of strings when present"
+            )
+        ordered_actions = [action.strip() for action in ordered_actions_raw]
+        matching = _parse_trajectory_matching(golden_trajectory_raw.get("matching", "lcs"))
+        golden_trajectory = GoldenTrajectoryConfig(
+            ordered_actions=ordered_actions,
+            matching=matching,
+            max_edit_distance=_parse_non_negative_int(golden_trajectory_raw, "max_edit_distance"),
+            max_extra_actions=_parse_non_negative_int(golden_trajectory_raw, "max_extra_actions"),
+            max_redundancy=_parse_non_negative_int(golden_trajectory_raw, "max_redundancy"),
+            max_loops=_parse_non_negative_int(golden_trajectory_raw, "max_loops"),
+        )
+
+    equivalent_raw = validated.get("equivalent_root_cause_categories") or []
+    equivalent_root_cause_categories = tuple(
+        str(item).strip() for item in equivalent_raw if str(item).strip()
+    )
+
     return ScenarioAnswerKey(
         root_cause_category=validated["root_cause_category"].strip(),
         required_keywords=[k.strip() for k in validated["required_keywords"]],
         model_response=validated["model_response"].strip(),
+        equivalent_root_cause_categories=equivalent_root_cause_categories,
         forbidden_categories=list(validated.get("forbidden_categories") or []),
         forbidden_keywords=list(validated.get("forbidden_keywords") or []),
         required_evidence_sources=list(validated.get("required_evidence_sources") or []),
@@ -234,6 +301,7 @@ def _parse_answer_yaml(path: Path) -> ScenarioAnswerKey:
         max_investigation_loops=int(validated.get("max_investigation_loops") or 1),
         ruling_out_keywords=list(validated.get("ruling_out_keywords") or []),
         required_queries=list(validated.get("required_queries") or []),
+        golden_trajectory=golden_trajectory,
     )
 
 
@@ -283,6 +351,14 @@ def _build_evidence(
     aws_cloudwatch_metrics = None
     aws_rds_events = None
     aws_performance_insights = None
+    ec2_instances_by_tag = None
+    elb_target_health = None
+    k8s_events = None
+    k8s_pod_metrics = None
+    k8s_node_metrics = None
+    k8s_dns_metrics = None
+    k8s_mesh_metrics = None
+    k8s_rollout = None
 
     if "aws_cloudwatch_metrics" in available_evidence:
         raw = _load_cloudwatch_metrics(scenario_dir, base_dir)
@@ -297,11 +373,83 @@ def _build_evidence(
         path = _resolve_evidence_path(scenario_dir, base_dir, "aws_performance_insights.json")
         aws_performance_insights = validate_performance_insights(_read_json(path))
 
+    if "ec2_instances_by_tag" in available_evidence:
+        path = _resolve_evidence_path(scenario_dir, base_dir, "ec2_instances_by_tag.json")
+        ec2_instances_by_tag = validate_ec2_instances_by_tag(_read_json(path))
+
+    if "elb_target_health" in available_evidence:
+        path = _resolve_evidence_path(scenario_dir, base_dir, "elb_target_health.json")
+        elb_target_health = validate_elb_target_health(_read_json(path))
+
+    if "k8s_events" in available_evidence:
+        path = _resolve_evidence_path(scenario_dir, base_dir, "k8s_events.json")
+        k8s_events = validate_generic_evidence(_read_json(path), filename="k8s_events.json")
+
+    if "k8s_pod_metrics" in available_evidence:
+        path = _resolve_evidence_path(scenario_dir, base_dir, "k8s_pod_metrics.json")
+        k8s_pod_metrics = validate_generic_evidence(
+            _read_json(path), filename="k8s_pod_metrics.json"
+        )
+
+    if "k8s_node_metrics" in available_evidence:
+        path = _resolve_evidence_path(scenario_dir, base_dir, "k8s_node_metrics.json")
+        k8s_node_metrics = validate_generic_evidence(
+            _read_json(path), filename="k8s_node_metrics.json"
+        )
+
+    if "k8s_dns_metrics" in available_evidence:
+        path = _resolve_evidence_path(scenario_dir, base_dir, "k8s_dns_metrics.json")
+        k8s_dns_metrics = validate_generic_evidence(
+            _read_json(path), filename="k8s_dns_metrics.json"
+        )
+
+    if "k8s_mesh_metrics" in available_evidence:
+        path = _resolve_evidence_path(scenario_dir, base_dir, "k8s_mesh_metrics.json")
+        k8s_mesh_metrics = validate_generic_evidence(
+            _read_json(path), filename="k8s_mesh_metrics.json"
+        )
+
+    if "k8s_rollout" in available_evidence:
+        path = _resolve_evidence_path(scenario_dir, base_dir, "k8s_rollout.json")
+        k8s_rollout = validate_generic_evidence(_read_json(path), filename="k8s_rollout.json")
+
     return ScenarioEvidence(
         aws_cloudwatch_metrics=aws_cloudwatch_metrics,
         aws_rds_events=aws_rds_events,
         aws_performance_insights=aws_performance_insights,
+        ec2_instances_by_tag=ec2_instances_by_tag,
+        elb_target_health=elb_target_health,
+        k8s_events=k8s_events,
+        k8s_pod_metrics=k8s_pod_metrics,
+        k8s_node_metrics=k8s_node_metrics,
+        k8s_dns_metrics=k8s_dns_metrics,
+        k8s_mesh_metrics=k8s_mesh_metrics,
+        k8s_rollout=k8s_rollout,
     )
+
+
+def _is_schema_v3(schema_version: str) -> bool:
+    normalized = schema_version.strip().lower().replace("-", "_")
+    return normalized in {"schema_v3", "v3", "3", "3.0"}
+
+
+def _is_complex_scenario(metadata: ScenarioMetadata) -> bool:
+    return metadata.scenario_difficulty >= 3
+
+
+def _validate_schema_specific_answer_requirements(
+    metadata: ScenarioMetadata,
+    answer_key: ScenarioAnswerKey,
+) -> None:
+    if (
+        _is_schema_v3(metadata.schema_version)
+        and _is_complex_scenario(metadata)
+        and not answer_key.required_evidence_sources
+    ):
+        raise ValueError(
+            "answer.yml: 'required_evidence_sources' must be a non-empty list "
+            "for schema_v3 complex scenarios (scenario_difficulty >= 3)"
+        )
 
 
 def load_scenario(scenario_dir: Path) -> ScenarioFixture:
@@ -312,6 +460,7 @@ def load_scenario(scenario_dir: Path) -> ScenarioFixture:
 
     evidence = _build_evidence(scenario_dir, metadata.available_evidence, base_dir)
     answer_key = _parse_answer_yaml(scenario_dir / "answer.yml")
+    _validate_schema_specific_answer_requirements(metadata, answer_key)
     problem_md = _build_problem_md(alert, metadata)
 
     return ScenarioFixture(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -23,6 +24,7 @@ class AgentRecord:
     pid: int
     command: str
     registered_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    source: str = "registered"
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -36,6 +38,7 @@ class AgentRecord:
             pid=pid,
             command=str(data["command"]),
             registered_at=str(data.get("registered_at", datetime.now(UTC).isoformat())),
+            source=str(data.get("source", "registered")),
         )
 
 
@@ -62,6 +65,25 @@ class AgentRegistry:
     def forget(self, pid: int) -> AgentRecord | None:
         removed = self._records.pop(pid, None)
         if removed is not None:
+            self._rewrite()
+        return removed
+
+    def forget_many(self, pids: Iterable[int]) -> list[AgentRecord]:
+        """Remove every PID in ``pids`` and rewrite the JSONL file once.
+
+        Functionally equivalent to calling :meth:`forget` in a loop,
+        but does only **one** disk rewrite at the end. Use this when
+        pruning many records at once (e.g. the boot-time sweep) so a
+        registry holding N dead PIDs doesn't trigger N full rewrites.
+        Returns the records that were actually removed (silently
+        skips PIDs not present in the registry).
+        """
+        removed: list[AgentRecord] = []
+        for pid in pids:
+            record = self._records.pop(pid, None)
+            if record is not None:
+                removed.append(record)
+        if removed:
             self._rewrite()
         return removed
 

@@ -14,7 +14,10 @@ def _extract_auth(state: AgentState, config: NodeConfig | None) -> dict[str, str
     auth = configurable.get("langgraph_auth_user", {})
 
     thread_id = configurable.get("thread_id", "") or state.get("thread_id", "")
-    run_id = configurable.get("run_id", "") or state.get("run_id", "")
+    _rid = configurable.get("run_id")
+    if _rid is None or _rid == "":
+        _rid = state.get("run_id", "")
+    run_id = "" if _rid is None or _rid == "" else str(_rid)
 
     return {
         "org_id": auth.get("org_id") or state.get("org_id", ""),

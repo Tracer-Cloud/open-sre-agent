@@ -69,9 +69,42 @@ def test_check_llm_provider_not_set(monkeypatch) -> None:
 def test_check_llm_provider_hosted_missing_key(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "anthropic")
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setattr(doctor, "has_llm_api_key", lambda _env_var: False)
     ok, detail = doctor._check_llm_provider()
     assert ok is False
     assert "ANTHROPIC_API_KEY" in detail
+    assert "env or keyring" in detail
+
+
+def test_check_llm_provider_hosted_keyring_key(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "gemini")
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setattr(
+        doctor,
+        "has_llm_api_key",
+        lambda env_var: env_var == "GEMINI_API_KEY",
+    )
+
+    ok, detail = doctor._check_llm_provider()
+
+    assert ok is True
+    assert detail == "provider=gemini"
+
+
+def test_check_llm_provider_non_secret_env_stays_env_only(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "bedrock")
+    monkeypatch.delenv("AWS_DEFAULT_REGION", raising=False)
+
+    def _raise_if_called(_env_var: str) -> bool:
+        raise AssertionError("non-secret provider env should not use keyring lookup")
+
+    monkeypatch.setattr(doctor, "has_llm_api_key", _raise_if_called)
+
+    ok, detail = doctor._check_llm_provider()
+
+    assert ok is False
+    assert "AWS_DEFAULT_REGION" in detail
+    assert "not set" in detail
 
 
 def test_check_llm_provider_claude_code_ready(monkeypatch) -> None:

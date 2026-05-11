@@ -209,6 +209,25 @@ Requires the [Claude Code CLI](https://github.com/anthropics/claude-code) (`npm 
 
 See [`app/integrations/llm_cli/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/app/integrations/llm_cli/AGENTS.md) for the adapter pattern used to add new CLI providers.
 
+## Reasoning effort (interactive shell)
+
+In the TTY REPL (`opensre` with no subcommand), `/effort` stores a **session** preference for how strongly reasoning models should think before answering. It applies only when `LLM_PROVIDER` is **`openai`** (HTTP API) or **`codex`** (Codex CLI); other providers ignore the setting and the shell notes that.
+
+| Input | Sent to the model |
+| ----- | ----------------- |
+| `low`, `medium`, `high`, `xhigh` | same string |
+| `max` | `xhigh` |
+
+Run `/effort` alone to show the current choice (or `(default)` when unset) and the usage line. `/reset` clears investigation state but **keeps** `/effort` (and trust mode), consistent with other session prefs.
+
+Outside the REPL, optional defaults use the environment variable:
+
+```bash
+export OPENSRE_REASONING_EFFORT=high   # low | medium | high | xhigh
+```
+
+Session `/effort` overrides this for interactive runs. Implementation: [`app/llm_reasoning_effort.py`](https://github.com/Tracer-Cloud/opensre/blob/main/app/llm_reasoning_effort.py).
+
 ## Switching providers at runtime
 
 OpenSRE caches LLM clients on first use. To switch providers within a single process (tests, benchmarks), call `reset_llm_singletons()` from `app.services.llm_client` after updating the env vars; otherwise a fresh process picks up the new `LLM_PROVIDER` automatically.

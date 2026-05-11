@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 
 from rich.console import Console
@@ -9,17 +10,18 @@ from rich.markup import escape
 
 from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
 from app.cli.interactive_shell.history import load_command_history_entries
-from app.cli.interactive_shell.rendering import repl_table
-from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.tasks import TaskKind, TaskRecord, TaskStatus
-from app.cli.interactive_shell.theme import (
+from app.cli.interactive_shell.runtime import ReplSession, TaskKind, TaskRecord, TaskStatus
+from app.cli.interactive_shell.ui import (
+    BOLD_BRAND,
+    DIM,
     ERROR,
-    PRIMARY,
-    TERMINAL_ACCENT_BOLD,
-    TERMINAL_ERROR,
-    TEXT_DIM,
+    HIGHLIGHT,
     WARNING,
+    repl_table,
 )
+
+_ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[mA-Za-z]")
+_MAX_DETAIL_CHARS = 120
 
 
 def _task_started_label(task: TaskRecord) -> str:
@@ -33,22 +35,66 @@ def _task_duration_label(task: TaskRecord) -> str:
     return f"{duration:.1f}s"
 
 
+def _synthetic_scenario_label(command: str) -> str:
+    """Extract the short scenario identifier from a synthetic test command string."""
+    if "--scenario" in command:
+        return command.split("--scenario", 1)[1].strip()
+    if command.strip().endswith("all"):
+        return "all"
+    return command.strip()
+
+
+def _clean_first_line(text: str) -> str:
+    """Strip ANSI codes and return the first non-empty line of ``text``."""
+    clean = _ANSI_ESCAPE.sub("", text)
+    return next((line.strip() for line in clean.splitlines() if line.strip()), clean.strip())
+
+
+def _kind_label(task: TaskRecord) -> str:
+    """Return a concise kind label — for synthetic tests use the scenario name."""
+    if task.kind == TaskKind.SYNTHETIC_TEST and task.command:
+        return _synthetic_scenario_label(task.command)
+    return task.kind.value
+
+
 def _task_detail_label(task: TaskRecord) -> str:
+    # Synthetic tests: the kind column already carries the scenario, so show
+    # only the compact outcome here (e.g. "exit code 1" or "ok").
+    if task.kind == TaskKind.SYNTHETIC_TEST:
+        if task.error:
+            err_line = _clean_first_line(task.error)
+            # "exit code 1: …" → keep only "exit code 1"
+            outcome = err_line.split(":")[0].strip() if ":" in err_line else err_line
+            return outcome or "—"
+        if task.result:
+            return task.result
+        if task.command:
+            return _synthetic_scenario_label(task.command)
+        return "—"
+
+    # All other task kinds: show error > result > command, first line, truncated.
     if task.error:
-        return str(task.error)
-    if task.result:
-        return str(task.result)
-    return "—"
+        raw = task.error
+    elif task.result:
+        raw = task.result
+    elif task.command:
+        raw = task.command
+    else:
+        return "—"
+    first_line = _clean_first_line(raw)
+    if len(first_line) > _MAX_DETAIL_CHARS:
+        return first_line[:_MAX_DETAIL_CHARS] + "…"
+    return first_line or "—"
 
 
 def _cmd_history(_session: ReplSession, console: Console, _args: list[str]) -> bool:
     entries = load_command_history_entries()
     if not entries:
-        console.print(f"[{TEXT_DIM}]no history yet.[/]")
+        console.print(f"[{DIM}]no history yet.[/]")
         return True
 
-    table = repl_table(title="Command history", title_style=TERMINAL_ACCENT_BOLD)
-    table.add_column("#", style=TEXT_DIM, justify="right")
+    table = repl_table(title="Command history", title_style=BOLD_BRAND)
+    table.add_column("#", style=DIM, justify="right")
     table.add_column("text", overflow="fold")
 
     for i, entry in enumerate(entries, start=1):
@@ -60,30 +106,30 @@ def _cmd_history(_session: ReplSession, console: Console, _args: list[str]) -> b
 def _cmd_tasks(session: ReplSession, console: Console, _args: list[str]) -> bool:
     tasks = session.task_registry.list_recent(n=50)
     if not tasks:
-        console.print(f"[{TEXT_DIM}]no tasks recorded this session.[/]")
+        console.print(f"[{DIM}]no tasks recorded this session.[/]")
         return True
 
-    table = repl_table(title="Tasks", title_style=TERMINAL_ACCENT_BOLD)
+    table = repl_table(title="Tasks", title_style=BOLD_BRAND)
     table.add_column("id", style="bold")
     table.add_column("kind")
     table.add_column("status")
-    table.add_column("started", style=TEXT_DIM)
-    table.add_column("duration", style=TEXT_DIM, justify="right")
-    table.add_column("detail", style=TEXT_DIM, overflow="fold")
+    table.add_column("started", style=DIM)
+    table.add_column("duration", style=DIM, justify="right")
+    table.add_column("detail", style=DIM, overflow="fold")
 
     status_style = {
         TaskStatus.RUNNING: WARNING,
-        TaskStatus.COMPLETED: PRIMARY,
+        TaskStatus.COMPLETED: HIGHLIGHT,
         TaskStatus.CANCELLED: WARNING,
         TaskStatus.FAILED: ERROR,
-        TaskStatus.PENDING: TEXT_DIM,
+        TaskStatus.PENDING: DIM,
     }
     for task in tasks:
-        st = status_style.get(task.status, TEXT_DIM)
+        st = status_style.get(task.status, DIM)
         table.add_row(
             task.task_id,
-            task.kind.value,
-            f"[{st}]{task.status.value}[/{st}]",
+            _kind_label(task),
+            f"[{st}]{task.status.value}[/]",
             _task_started_label(task),
             _task_duration_label(task),
             escape(_task_detail_label(task)),
@@ -94,37 +140,36 @@ def _cmd_tasks(session: ReplSession, console: Console, _args: list[str]) -> bool
 
 def _cmd_stop(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     console.print(
-        "[dim]in-flight work: press[/dim] [bold]Ctrl+C[/bold] "
-        "[dim]during a streaming investigation, or run[/dim] [bold]/tasks[/bold] "
-        "[dim]then[/dim] [bold]/cancel <id>[/bold] [dim]for background tasks.[/dim]"
+        f"[{DIM}]in-flight work: press[/] [bold]Ctrl+C[/bold] "
+        f"[{DIM}]during a streaming investigation, or run[/] [{HIGHLIGHT}]/tasks[/] "
+        f"[{DIM}]then[/] [{HIGHLIGHT}]/cancel <id>[/] [{DIM}]for background tasks.[/]"
     )
     return True
 
 
-def _cmd_cancel(session: ReplSession, console: Console, args: list[str]) -> bool:
+def _validate_cancel_args(args: list[str]) -> str | None:
     if not args:
-        console.print(
-            f"[{TERMINAL_ERROR}]usage:[/] /cancel <task_id>  — use [bold]/tasks[/bold] to list ids"
-        )
-        return True
+        return f"[{ERROR}]usage:[/] /cancel <task_id>  — use [{HIGHLIGHT}]/tasks[/] to list ids"
+    return None
 
+
+def _cmd_cancel(session: ReplSession, console: Console, args: list[str]) -> bool:
     needle = args[0]
     candidates = session.task_registry.candidates(needle)
     if not candidates:
-        console.print(f"[{TERMINAL_ERROR}]no task matches id:[/] {escape(needle)}")
+        console.print(f"[{ERROR}]no task matches id:[/] {escape(needle)}")
         return True
     if len(candidates) > 1:
         console.print(
-            f"[{TERMINAL_ERROR}]ambiguous id prefix:[/] {escape(needle)} "
-            f"[{TEXT_DIM}]({len(candidates)} matches — use a longer prefix)[/]"
+            f"[{ERROR}]ambiguous id prefix:[/] {escape(needle)} "
+            f"[{DIM}]({len(candidates)} matches — use a longer prefix)[/]"
         )
         return True
 
     task = candidates[0]
     if task.status != TaskStatus.RUNNING:
         console.print(
-            f"[{TEXT_DIM}]task {escape(task.task_id)} already finished "
-            f"(status: {task.status.value}).[/]"
+            f"[{DIM}]task {escape(task.task_id)} already finished (status: {task.status.value}).[/]"
         )
         return True
 
@@ -132,13 +177,14 @@ def _cmd_cancel(session: ReplSession, console: Console, args: list[str]) -> bool
     if task.kind == TaskKind.INVESTIGATION:
         console.print(
             f"[{WARNING}]cancellation signaled.[/] "
-            f"[{TEXT_DIM}]if the investigation is still streaming, press[/] [bold]Ctrl+C[/bold] "
-            f"[{TEXT_DIM}]to interrupt the current run.[/]"
+            f"[{DIM}]if the investigation is still streaming, press[/] [bold]Ctrl+C[/bold] "
+            f"[{DIM}]to interrupt the current run.[/]"
         )
     else:
         console.print(
-            f"[{PRIMARY}]stop requested[/] [{TEXT_DIM}]for synthetic test {escape(task.task_id)}.[/] "
-            f"[{TEXT_DIM}]use[/] [bold]/tasks[/bold] [{TEXT_DIM}]to confirm status.[/]"
+            f"[{HIGHLIGHT}]stop requested[/] "
+            f"[{DIM}]for {escape(task.kind.value)} {escape(task.task_id)}.[/] "
+            f"[{DIM}]use[/] [{HIGHLIGHT}]/tasks[/] [{DIM}]to confirm status.[/]"
         )
     return True
 
@@ -151,6 +197,7 @@ COMMANDS: list[SlashCommand] = [
         "cancel a running task by id ('/cancel <task_id>' — see /tasks)",
         _cmd_cancel,
         execution_tier=ExecutionTier.ELEVATED,
+        validate_args=_validate_cancel_args,
     ),
     SlashCommand(
         "/stop",

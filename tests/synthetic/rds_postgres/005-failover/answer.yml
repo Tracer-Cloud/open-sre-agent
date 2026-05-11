@@ -1,4 +1,8 @@
 root_cause_category: infrastructure
+equivalent_root_cause_categories:
+  - failover_event
+  - multi_az_failover_health_check
+  - failover
 required_keywords:
   - failover
   - Multi-AZ
@@ -15,6 +19,8 @@ optimal_trajectory:
   - query_grafana_logs
   - query_grafana_metrics
   - query_grafana_alert_rules
+  - describe_rds_instance
+  - describe_rds_events
 max_investigation_loops: 4
 model_response: |
   ROOT_CAUSE: Based on the RDS event timeline (primary evidence source), a Multi-AZ automatic failover occurred on payments-prod, triggered by a health check failure on the primary host. This was an infrastructure event rather than resource exhaustion, and the system recovered and workload resumed normally after failover completion.

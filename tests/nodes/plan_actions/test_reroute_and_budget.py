@@ -436,6 +436,78 @@ def test_plan_actions_keeps_deterministic_fallback_when_budget_is_full(monkeypat
     assert available_actions[0].name == "get_sre_guidance"
 
 
+def test_plan_actions_enforces_non_k8s_rds_topology_core_actions(monkeypatch):
+    actions = [
+        MockAction("describe_rds_instance", "rds"),
+        MockAction("ec2_instances_by_tag", "ec2"),
+        MockAction("get_elb_target_health", "ec2"),
+        MockAction("query_grafana_metrics", "grafana"),
+        MockAction("query_grafana_logs", "grafana"),
+        MockAction("query_grafana_alert_rules", "grafana"),
+        MockAction("describe_rds_events", "rds"),
+    ]
+
+    def _mock_detect_sources(raw_alert, context, resolved_integrations=None):
+        _ = (raw_alert, context, resolved_integrations)
+        return {
+            "rds": {"db_instance_identifier": "orders-prod"},
+            "ec2": {"vpc_id": "vpc-123", "target_group_arns": ["tg-1"], "_backend": object()},
+            "grafana": {"connection_verified": True},
+        }
+
+    def _mock_get_available_actions():
+        return actions
+
+    def _mock_get_prioritized_actions_with_reasons(sources=None, keywords=None):
+        _ = (sources, keywords)
+        return actions, []
+
+    def _mock_plan_actions_with_llm(**kwargs):
+        return kwargs["plan_model"](
+            actions=["query_grafana_alert_rules", "describe_rds_events"],
+            rationale="Mocked planner chose ancillary actions",
+        )
+
+    monkeypatch.setattr(plan_actions_module, "detect_sources", _mock_detect_sources)
+    monkeypatch.setattr(plan_actions_module, "get_available_actions", _mock_get_available_actions)
+    monkeypatch.setattr(
+        plan_actions_module,
+        "get_prioritized_actions_with_reasons",
+        _mock_get_prioritized_actions_with_reasons,
+    )
+    monkeypatch.setattr(plan_actions_module, "get_llm_for_tools", object)
+    monkeypatch.setattr(
+        plan_actions_module,
+        "plan_actions_with_llm",
+        _mock_plan_actions_with_llm,
+    )
+
+    input_data = InvestigateInput(
+        raw_alert={"alert_name": "RDS DBConnections climbing"},
+        context={},
+        problem_md="# RDS DBConnections climbing",
+        alert_name="RDSConnectionsClimbing",
+        executed_hypotheses=[],
+        tool_budget=10,
+    )
+
+    plan, *_ = plan_actions(
+        input_data=input_data,
+        plan_model=MockPlan,
+        resolved_integrations={"aws": {"ec2_backend": object()}},
+    )
+
+    assert plan is not None
+    assert plan.actions == [
+        "describe_rds_instance",
+        "ec2_instances_by_tag",
+        "get_elb_target_health",
+        "query_grafana_metrics",
+        "query_grafana_logs",
+    ]
+    assert "core non-K8s RDS attribution evidence" in plan.rationale
+
+
 def test_summarize_execution_results_tracks_retryable_failure_without_exhausting():
     """Retryable failures are audited but remain available before the retry limit."""
     execution_results = {

@@ -80,6 +80,7 @@
               "remote-runtime-investigation",
               "masking",
               "interactive-shell-privacy",
+              "agents",
               "multi-instance-integrations"
             ]
           },
@@ -100,6 +101,7 @@
               "datadog",
               "grafana",
               "honeycomb",
+              "incident_io",
               "opsgenie",
               "sentry",
               "splunk"
@@ -114,6 +116,7 @@
               "github",
               "gitlab",
               "google-docs",
+              "helm",
               "jira",
               "vercel"
             ]

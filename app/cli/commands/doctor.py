@@ -1,20 +1,20 @@
 """Full environment diagnostic command, inspired by ``fly doctor``.
 
 Rendered output (colour roles):
-──────────────────────────────────────────── [BORDER rule]
+──────────────────────────────────────────── [DIM rule]
   OpenSRE Doctor                             [TEXT bold section header]
-──────────────────────────────────────────── [BORDER rule]
+──────────────────────────────────────────── [DIM rule]
 
-  ✓  python          Python 3.13.2           [PRIMARY ✓] [TEXT_DIM check] [TEXT detail]
+  ✓  python          Python 3.13.2           [HIGHLIGHT ✓] [SECONDARY check] [TEXT detail]
   ✓  env_file        .env (12 keys)
   ⚠  integrations    no integrations         [WARNING ⚠]
   ✗  llm_provider    ANTHROPIC_API_KEY unset [ERROR ✗]
-  ✓  version         2026.4.7 (up to date)
+  ✓  version         <version> (up to date)
   ✓  network         github.com reachable
 
-──────────────────────────────────────────── [BORDER rule]
-  1 error · 1 warning — run opensre doctor   [ERROR/WARNING counts · TEXT_DIM hint]
-  All checks passed.                         [PRIMARY — when clean]
+──────────────────────────────────────────── [DIM rule]
+  1 error · 1 warning — run opensre doctor   [ERROR/WARNING counts · SECONDARY hint]
+  All checks passed.                         [HIGHLIGHT — when clean]
 """
 
 from __future__ import annotations
@@ -31,20 +31,21 @@ from rich.console import Console
 from rich.rule import Rule
 from rich.text import Text
 
-from app.cli.interactive_shell.theme import (
-    BORDER,
+from app.cli.interactive_shell.ui.theme import (
+    DIM,
     ERROR,
     GLYPH_ERROR,
     GLYPH_SUCCESS,
     GLYPH_WARNING,
-    PRIMARY,
+    HIGHLIGHT,
+    SECONDARY,
     TEXT,
-    TEXT_DIM,
     WARNING,
 )
 from app.cli.support.context import is_json_output
 from app.cli.support.exit_codes import ERROR as EXIT_ERROR
 from app.cli.support.exit_codes import SUCCESS
+from app.llm_credentials import has_llm_api_key
 from app.version import get_version
 
 
@@ -77,13 +78,15 @@ def _check_env_file() -> tuple[bool, str]:
 
 def _check_llm_provider() -> tuple[bool, str]:
     provider = os.getenv("LLM_PROVIDER", "").lower() or "not set"
-    key_vars = {
+    api_key_vars = {
         "anthropic": "ANTHROPIC_API_KEY",
         "openai": "OPENAI_API_KEY",
         "openrouter": "OPENROUTER_API_KEY",
         "requesty": "REQUESTY_API_KEY",
         "gemini": "GEMINI_API_KEY",
         "nvidia": "NVIDIA_API_KEY",
+    }
+    env_vars = {
         "bedrock": "AWS_DEFAULT_REGION",
         "ollama": "OLLAMA_HOST",
     }
@@ -103,9 +106,13 @@ def _check_llm_provider() -> tuple[bool, str]:
             return False, f"provider={provider}, CLI auth status unclear ({probe.detail})"
         return True, f"provider={provider}, CLI ready ({probe.detail})"
 
-    expected_key = key_vars.get(provider)
-    if expected_key and not os.getenv(expected_key):
-        return False, f"provider={provider}, but {expected_key} is not set"
+    expected_key = api_key_vars.get(provider)
+    if expected_key and not has_llm_api_key(expected_key):
+        return False, f"provider={provider}, but {expected_key} is not available in env or keyring"
+
+    expected_env = env_vars.get(provider)
+    if expected_env and not os.getenv(expected_env):
+        return False, f"provider={provider}, but {expected_env} is not set"
     return True, f"provider={provider}"
 
 
@@ -155,21 +162,21 @@ _CHECKS = [
 def _render_doctor_results(console: Console, results: list[dict[str, str]]) -> None:
     """Print formatted diagnostic results with design-system colour roles.
 
-    Section header: TEXT bold + BORDER rule (col 45).
-    ✓ checks:  PRIMARY glyph, TEXT_DIM check name, TEXT detail.
-    ⚠ warnings: WARNING glyph, TEXT_DIM check name, TEXT detail.
-    ✗ errors:  ERROR glyph, TEXT_DIM check name, TEXT detail.
-    Summary:   ERROR count + WARNING count in their respective roles, TEXT_DIM hint.
+    Section header: TEXT bold + DIM rule (col 45).
+    ✓ checks:  HIGHLIGHT glyph, SECONDARY check name, TEXT detail.
+    ⚠ warnings: WARNING glyph, SECONDARY check name, TEXT detail.
+    ✗ errors:  ERROR glyph, SECONDARY check name, TEXT detail.
+    Summary:   ERROR count + WARNING count in their respective roles, SECONDARY hint.
     """
     console.print()
-    console.print(Rule(style=BORDER))
+    console.print(Rule(style=DIM))
 
-    # Section header — TEXT weight, BORDER rule to col 45.
+    # Section header — TEXT weight, DIM rule to col 45.
     header = Text()
     header.append("  OpenSRE Doctor", style=f"bold {TEXT}")
     console.print(header)
 
-    console.print(Rule(style=BORDER))
+    console.print(Rule(style=DIM))
     console.print()
 
     check_col = 18  # fixed column width for check name alignment
@@ -179,7 +186,7 @@ def _render_doctor_results(console: Console, results: list[dict[str, str]]) -> N
 
         if status == "ok":
             glyph = GLYPH_SUCCESS
-            glyph_style = f"bold {PRIMARY}"
+            glyph_style = f"bold {HIGHLIGHT}"
             detail_style = TEXT
         elif status == "warn":
             glyph = GLYPH_WARNING
@@ -192,19 +199,19 @@ def _render_doctor_results(console: Console, results: list[dict[str, str]]) -> N
 
         row = Text()
         row.append(f"  {glyph}  ", style=glyph_style)
-        row.append(f"{r['check']:<{check_col}}", style=TEXT_DIM)
+        row.append(f"{r['check']:<{check_col}}", style=SECONDARY)
         row.append(r["detail"], style=detail_style)
         console.print(row)
 
     console.print()
-    console.print(Rule(style=BORDER))
+    console.print(Rule(style=DIM))
 
     error_count = sum(1 for r in results if r["status"] == "error")
     warn_count = sum(1 for r in results if r["status"] == "warn")
 
     if error_count == 0 and warn_count == 0:
         summary = Text()
-        summary.append(f"  {GLYPH_SUCCESS}  ", style=f"bold {PRIMARY}")
+        summary.append(f"  {GLYPH_SUCCESS}  ", style=f"bold {HIGHLIGHT}")
         summary.append("All checks passed.", style=TEXT)
         console.print(summary)
     else:
@@ -215,12 +222,12 @@ def _render_doctor_results(console: Console, results: list[dict[str, str]]) -> N
                 f"{error_count} error{'s' if error_count > 1 else ''}", style=f"bold {ERROR}"
             )
         if error_count and warn_count:
-            summary.append("  ·  ", style=TEXT_DIM)
+            summary.append("  ·  ", style=SECONDARY)
         if warn_count:
             summary.append(
                 f"{warn_count} warning{'s' if warn_count > 1 else ''}", style=f"bold {WARNING}"
             )
-        summary.append("   —   fix and rerun ", style=TEXT_DIM)
+        summary.append("   —   fix and rerun ", style=SECONDARY)
         summary.append("opensre doctor", style=f"bold {TEXT}")
         console.print(summary)
 
@@ -237,7 +244,12 @@ def doctor_command() -> None:
     if is_json_output():
         click.echo(json.dumps(results, indent=2))
     else:
-        console = Console(highlight=False, force_terminal=True, color_system="truecolor")
+        console = Console(
+            highlight=False,
+            force_terminal=True,
+            color_system="truecolor",
+            legacy_windows=False,
+        )
         _render_doctor_results(console, results)
 
     has_errors = any(r["status"] == "error" for r in results)

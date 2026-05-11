@@ -139,3 +139,30 @@ def test_ctrl_c_hint_resets_after_window(capsys) -> None:
     handle_ctrl_c_press()
     out = capsys.readouterr().out
     assert "(Press Ctrl+C again to exit)" in out
+
+
+def test_questionary_ask_inside_running_event_loop_does_not_raise() -> None:
+    """q.ask() called from within a running asyncio event loop must not raise.
+
+    Regression test for Sentry issue #1650: asyncio.run() cannot be called
+    from a running event loop — triggered when questionary prompts are shown
+    inside the async REPL dispatch path.
+    """
+    import asyncio
+
+    _last_ctrl_c[0] = None
+    install_questionary_ctrl_c_double_exit()
+
+    async def _run() -> object:
+        with create_pipe_input() as pipe_input:
+            q = questionary.select(
+                "Pick",
+                choices=["a", "b"],
+                input=pipe_input,
+                output=DummyOutput(),
+            )
+            pipe_input.send_bytes(b"\r")
+            return q.ask()
+
+    result = asyncio.run(_run())
+    assert result == "a"

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 
 from app.cli.tests import interactive
@@ -333,6 +334,40 @@ def test_run_interactive_picker_returns_to_selection_after_escape_from_confirm(m
     )
 
     assert interactive.run_interactive_picker(Catalog(items=(first, second))) == 7
+
+
+def test_run_interactive_picker_writes_selection_for_background_mode(monkeypatch, tmp_path) -> None:
+    item = CatalogItem(
+        id="synthetic:001-replication-lag",
+        kind="cli_command",
+        display_name="001-replication-lag",
+        description="Run synthetic scenario.",
+        command=("opensre", "tests", "synthetic", "--scenario", "001-replication-lag"),
+        tags=("synthetic",),
+    )
+    selection_file = tmp_path / "selection.json"
+
+    monkeypatch.setenv("OPENSRE_TEST_PICKER_SELECTION_FILE", str(selection_file))
+    monkeypatch.setattr(interactive, "_require_interactive_dependencies", lambda: None)
+    monkeypatch.setattr(interactive.sys, "stdin", SimpleNamespace(isatty=lambda: True))
+    monkeypatch.setattr(interactive.sys, "stdout", SimpleNamespace(isatty=lambda: True))
+    monkeypatch.setattr(interactive, "choose_interactive_item", lambda _catalog: (item, False))
+    monkeypatch.setattr(interactive, "_confirm_run", lambda _item: True)
+    monkeypatch.setattr(
+        interactive,
+        "run_catalog_item",
+        lambda _item: (_ for _ in ()).throw(AssertionError("should not run inline")),
+    )
+
+    assert interactive.run_interactive_picker(Catalog(items=(item,))) == 0
+    assert json.loads(selection_file.read_text(encoding="utf-8")) == [
+        {
+            "id": "synthetic:001-replication-lag",
+            "display_name": "001-replication-lag",
+            "command": ["opensre", "tests", "synthetic", "--scenario", "001-replication-lag"],
+            "command_display": "opensre tests synthetic --scenario 001-replication-lag",
+        }
+    ]
 
 
 def test_run_catalog_items_skips_non_runnable_items() -> None:

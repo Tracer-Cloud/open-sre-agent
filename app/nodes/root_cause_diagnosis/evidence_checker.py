@@ -40,6 +40,13 @@ INVESTIGATED_EVIDENCE_KEYS = frozenset(
         "argocd_application",
         "argocd_applications",
         "argocd_diff",
+        # Helm release inspection (CLI) — each mapper writes distinct keys so merge_evidence
+        # does not drop parallel tool results.
+        "helm_releases",
+        "helm_release_status",
+        "helm_release_history",
+        "helm_release_values",
+        "helm_release_manifest",
     }
 )
 
@@ -115,6 +122,13 @@ CLAIM_EVIDENCE_KEYS = INVESTIGATED_EVIDENCE_KEYS | frozenset(
         "eks_failing_pods",
         "eks_high_restart_pods",
         "eks_degraded_deployments",
+        # Helm adjacent
+        "helm_list_all_namespaces",
+        "helm_list_namespace",
+        "helm_release_name",
+        "helm_release_namespace",
+        "helm_values_all_requested",
+        "helm_manifest_truncated",
     }
 )
 
@@ -165,6 +179,11 @@ def check_evidence_availability(
         or evidence.get("argocd_application") is not None
         or evidence.get("argocd_applications") is not None
         or evidence.get("argocd_diff") is not None
+        or evidence.get("helm_releases") is not None
+        or evidence.get("helm_release_status") is not None
+        or evidence.get("helm_release_history") is not None
+        or evidence.get("helm_release_values") is not None
+        or evidence.get("helm_release_manifest") is not None
     )
 
     # Check for evidence in alert annotations or raw text
@@ -242,7 +261,40 @@ def is_clearly_healthy(raw_alert: dict[str, Any] | str, evidence: dict[str, Any]
     return any(k in evidence for k in INVESTIGATED_EVIDENCE_KEYS)
 
 
-def check_vendor_evidence_missing(evidence: dict[str, Any]) -> bool:
+def _expects_vendor_evidence(
+    evidence: dict[str, Any],
+    available_sources: dict[str, Any] | None = None,
+) -> bool:
+    """Return True when the incident context indicates upstream vendor tracing is relevant.
+
+    We only request extra audit evidence when there are explicit breadcrumbs such as:
+    - an ``s3_audit`` source already discovered by planning
+    - an ``audit_key`` on an inspected S3 object
+    - parsed vendor audit data from Lambda logs
+    """
+    source_map = available_sources or {}
+    if "s3_audit" in source_map:
+        return True
+
+    s3_object = evidence.get("s3_object", {})
+    if isinstance(s3_object, dict):
+        metadata = s3_object.get("metadata", {})
+        if isinstance(metadata, dict) and metadata.get("audit_key"):
+            return True
+
+    s3_audit_payload = evidence.get("s3_audit_payload", {})
+    if isinstance(s3_audit_payload, dict) and (
+        s3_audit_payload.get("key") or s3_audit_payload.get("found")
+    ):
+        return True
+
+    return bool(evidence.get("vendor_audit_from_logs"))
+
+
+def check_vendor_evidence_missing(
+    evidence: dict[str, Any],
+    available_sources: dict[str, Any] | None = None,
+) -> bool:
     """
     Check if vendor/external API evidence is missing.
 
@@ -254,6 +306,9 @@ def check_vendor_evidence_missing(evidence: dict[str, Any]) -> bool:
     Returns:
         True if vendor evidence is missing
     """
+    if not _expects_vendor_evidence(evidence, available_sources):
+        return False
+
     vendor_evidence_present = bool(
         evidence.get("vendor_audit_from_logs")  # Parsed from Lambda logs
         or (

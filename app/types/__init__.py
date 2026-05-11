@@ -12,22 +12,34 @@ from app.types.retrieval import (
     RetrievalIntent,
     TimeBounds,
 )
+from app.types.root_cause_categories import (
+    GENERIC_FALLBACK_CATEGORIES,
+    VALID_ROOT_CAUSE_CATEGORIES,
+    RootCauseCategory,
+    categories_by_group,
+    render_prompt_taxonomy,
+)
 from app.types.tools import ToolSurface
 
 __all__ = [
+    "AggregationSpec",
     "AssistantTurn",
     "BoundChatModel",
     "Configurable",
     "EvidenceSource",
+    "FieldSelection",
+    "FilterCondition",
+    "GENERIC_FALLBACK_CATEGORIES",
     "NodeConfig",
-    "ToolSurface",
-    "RetrievalIntent",
     "RetrievalControls",
     "RetrievalControlsMap",
+    "RetrievalIntent",
+    "RootCauseCategory",
     "TimeBounds",
-    "FilterCondition",
-    "FieldSelection",
-    "AggregationSpec",
-    "get_configurable",
     "ToolCallPayload",
+    "ToolSurface",
+    "VALID_ROOT_CAUSE_CATEGORIES",
+    "categories_by_group",
+    "get_configurable",
+    "render_prompt_taxonomy",
 ]

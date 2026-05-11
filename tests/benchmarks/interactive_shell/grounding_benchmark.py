@@ -11,12 +11,12 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
-from app.cli.interactive_shell.cli_reference import (
+from app.cli.interactive_shell.references.cli_reference import (
     build_cli_reference_text,
     get_cli_reference_cache_stats,
     invalidate_cli_reference_cache,
 )
-from app.cli.interactive_shell.docs_reference import (
+from app.cli.interactive_shell.references.docs_reference import (
     build_docs_reference_text,
     discover_docs,
     get_docs_cache_stats,

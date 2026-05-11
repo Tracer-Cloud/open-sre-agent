@@ -21,7 +21,9 @@ from app.integrations._verification_adapters import (
     _verify_github,
     _verify_google_docs,
     _verify_grafana,
+    _verify_helm,
     _verify_honeycomb,
+    _verify_incident_io,
     _verify_kafka,
     _verify_mariadb,
     _verify_mongodb,
@@ -188,6 +190,14 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         verify_order=21,
     ),
     IntegrationSpec(
+        service="incident_io",
+        aliases=("incident.io", "incidentio"),
+        verifier=_verify_incident_io,
+        direct_effective=True,
+        setup_order=22,
+        verify_order=22,
+    ),
+    IntegrationSpec(
         service="jira",
         verifier=None,
         direct_effective=True,
@@ -282,6 +292,12 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         verify_order=1,
     ),
     IntegrationSpec(
+        service="helm",
+        verifier=_verify_helm,
+        direct_effective=True,
+        verify_order=34,
+    ),
+    IntegrationSpec(
         service="victoria_logs",
         aliases=("victorialogs",),
         verifier=_verify_victoria_logs,
@@ -304,6 +320,7 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
     IntegrationSpec(service="google_docs", verifier=_verify_google_docs, verify_order=19),
     IntegrationSpec(service="kafka", verifier=_verify_kafka, verify_order=22),
     IntegrationSpec(service="clickhouse", verifier=_verify_clickhouse, verify_order=23),
+    IntegrationSpec(service="alicloud", direct_effective=True),
     IntegrationSpec(service="notion"),
     IntegrationSpec(service="prefect"),
     IntegrationSpec(service="posthog"),
@@ -318,13 +335,12 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
 
 INTEGRATION_SPECS_BY_SERVICE = {spec.service: spec for spec in INTEGRATION_SPECS}
 
-SERVICE_KEY_MAP: dict[str, str] = {}
+SERVICE_KEY_MAP: dict[str, str] = {spec.service: spec.service for spec in INTEGRATION_SPECS}
 for _spec in INTEGRATION_SPECS:
-    SERVICE_KEY_MAP[_spec.service] = _spec.service
     for _alias in _spec.aliases:
         SERVICE_KEY_MAP[_alias] = _spec.service
 
-SKIP_CLASSIFIED_SERVICES = frozenset(
+SKIP_CLASSIFIED_SERVICES: frozenset[str] = frozenset(
     spec.service for spec in INTEGRATION_SPECS if spec.skip_classification
 )
 
