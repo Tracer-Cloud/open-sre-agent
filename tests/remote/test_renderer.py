@@ -218,6 +218,18 @@ class TestStreamRendererUpdatesMode:
         assert msg is not None
         assert "92%" in msg
 
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "text"})
+    def test_node_message_for_diagnose_skips_non_numeric_validity(self) -> None:
+        renderer = StreamRenderer()
+        renderer._final_state = {"validity_score": "0.9"}
+        assert renderer._build_node_message("diagnose_root_cause") is None
+
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "text"})
+    def test_node_message_for_diagnose_skips_non_finite_validity(self) -> None:
+        renderer = StreamRenderer()
+        renderer._final_state = {"validity_score": float("nan")}
+        assert renderer._build_node_message("diagnose_root_cause") is None
+
 
 class TestStreamRendererEventsMode:
     """Tests for events-mode rendering (fine-grained tool/LLM events)."""
@@ -770,6 +782,45 @@ class TestStreamRendererFocusedUXAndParsing:
         renderer._print_report()
         out, _ = capfd.readouterr()
         assert "Next Actions" not in out
+
+    @patch("app.remote.renderer.Live")
+    @patch("app.output._EventLogDisplay")
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
+    def test_rich_rca_includes_parsed_report_root_cause_body(
+        self, _mock_display, _mock_live, capfd
+    ) -> None:
+        """Lines under a report \"Root Cause\" section are shown in the RCA panel (rich)."""
+        renderer = StreamRenderer()
+        renderer._final_state = {
+            "root_cause": "Connection pool exhausted",
+            "validity_score": 0.9,
+            "report": (
+                "# Root Cause\n"
+                "• Stale transactions hold connections open.\n"
+                "• Idle timeout was set too high for burst traffic.\n"
+            ),
+        }
+        renderer._print_report()
+        out, _ = capfd.readouterr()
+        assert "Connection pool exhausted" in out
+        assert "Stale transactions" in out
+        assert "Idle timeout" in out
+
+    @patch("app.remote.renderer.Live")
+    @patch("app.output._EventLogDisplay")
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
+    def test_rich_rca_confidence_invalid_score_shows_na(
+        self, _mock_display, _mock_live, capfd
+    ) -> None:
+        renderer = StreamRenderer()
+        renderer._final_state = {
+            "root_cause": "Incident summary",
+            "validity_score": float("nan"),
+            "report": "",
+        }
+        renderer._print_report()
+        out, _ = capfd.readouterr()
+        assert "N/A" in out
 
     @patch("app.remote.renderer.Live")
     @patch("app.output._EventLogDisplay")

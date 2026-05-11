@@ -9,6 +9,7 @@ Handles both ``stream_mode: ["updates"]`` (legacy node-level) and
 
 from __future__ import annotations
 
+import math
 import re
 import sys
 import time
@@ -317,7 +318,7 @@ class StreamRenderer:
         try:
             for event in events:
                 self._handle_event(event)
-        except (KeyboardInterrupt, GeneratorExit):
+        except KeyboardInterrupt:
             get_analytics().capture(
                 Event.INVESTIGATION_ABANDONED,
                 {
@@ -534,9 +535,9 @@ class StreamRenderer:
                 names = list(integrations.keys())
                 return f"Resolved: {names}"
         if node in {"diagnose", "diagnose_root_cause"}:
-            score = self._final_state.get("validity_score")
-            if score is not None:
-                return f"validity:{int(score * 100)}%"
+            pct = _validity_score_percent(self._final_state.get("validity_score"))
+            if pct:
+                return f"validity:{pct}"
         return None
 
     def _print_alert_header(self) -> None:
@@ -571,13 +572,14 @@ class StreamRenderer:
         root_cause = self._final_state.get("root_cause", "")
         report = self._final_state.get("report", "")
         score = self._final_state.get("validity_score")
-        confidence_str = f"{int(score * 100)}%" if score is not None else "N/A"
+        confidence_str = _validity_score_percent(score) or "N/A"
 
         if get_output_format() == "rich" and root_cause:
             self._console.print()
 
             evidence_lines = []
             next_actions = []
+            root_cause_report_detail: list[str] = []
 
             lines = report.strip().splitlines()
             current_section = None
@@ -646,6 +648,8 @@ class StreamRenderer:
                             evidence_lines.append(clean_line)
                         elif current_section == "next_actions":
                             next_actions.append(clean_line)
+                        else:
+                            root_cause_report_detail.append(clean_line)
 
             if not next_actions:
                 action_verbs = {
@@ -681,8 +685,15 @@ class StreamRenderer:
                         if first_word in action_verbs:
                             next_actions.append(clean_line)
 
-            content = f"[bold white][Root Cause][/bold white]\n  {escape(root_cause)}\n\n"
-            content += f"[bold white][Confidence][/bold white]\n  [bold green]{escape(confidence_str)}[/bold green]\n\n"
+            content = f"[bold white][Root Cause][/bold white]\n  {escape(root_cause)}\n"
+            if root_cause_report_detail:
+                content += "\n"
+                for detail in root_cause_report_detail:
+                    content += f"  • {escape(detail)}\n"
+            content += (
+                f"\n[bold white][Confidence][/bold white]\n"
+                f"  [bold green]{escape(confidence_str)}[/bold green]\n\n"
+            )
 
             if evidence_lines:
                 content += "[bold white][Supporting Evidence][/bold white]\n"
@@ -795,3 +806,16 @@ def _print_info(message: str) -> None:
     else:
         print(f"\n  {message}")
     sys.stdout.flush()
+
+
+def _validity_score_percent(score: Any) -> str | None:
+    """Format a 0..1 validity score for display, or None if the payload is unusable."""
+    if score is None or isinstance(score, bool):
+        return None
+    if not isinstance(score, (int, float)):
+        return None
+    v = float(score)
+    if not math.isfinite(v):
+        return None
+    v = max(0.0, min(1.0, v))
+    return f"{int(v * 100)}%"
