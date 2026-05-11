@@ -431,9 +431,20 @@ class BedrockLLMClient:
                     # ``INVALID_PAYMENT_INSTRUMENT``). Surface the upstream
                     # AWS-provided reason so the user knows which one to fix
                     # — see issue #1808.
-                    aws_message = (
-                        str(err.response.get("Error", {}).get("Message", "")).strip().rstrip(".")
-                    )
+                    err_msg = err.response.get("Error", {}).get("Message", "") or ""
+                    err_msg_str = str(err_msg)
+                    if (
+                        "INVALID_PAYMENT_INSTRUMENT" in err_msg_str
+                        or "payment instrument" in err_msg_str.lower()
+                    ):
+                        aws_message = err_msg_str.strip().rstrip(".")
+                        detail = f" Cause: {aws_message}." if aws_message else ""
+                        raise RuntimeError(
+                            f"Access denied for Bedrock model '{self._model}'.{detail} "
+                            "A valid AWS payment instrument is required — add a payment method "
+                            "to your AWS account or check your AWS Marketplace subscription."
+                        ) from err
+                    aws_message = err_msg_str.strip().rstrip(".")
                     detail = f" Cause: {aws_message}." if aws_message else ""
                     raise RuntimeError(
                         f"Access denied for Bedrock model '{self._model}'.{detail} "

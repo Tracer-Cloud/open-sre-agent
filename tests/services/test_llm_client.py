@@ -1711,8 +1711,42 @@ def test_bedrock_access_denied_surfaces_upstream_aws_message(monkeypatch) -> Non
 
     rendered = str(excinfo.value)
     assert "INVALID_PAYMENT_INSTRUMENT" in rendered
+    assert "payment instrument" in rendered.lower()
+    assert "AWS Marketplace" in rendered
+
+
+def test_bedrock_access_denied_without_payment_keywords_shows_iam_checklist(
+    monkeypatch,
+) -> None:
+    """Other AccessDenied messages keep the broader Bedrock/IAM/marketplace checklist."""
+    monkeypatch.setattr(
+        "app.guardrails.engine.get_guardrail_engine",
+        _InactiveGuardrailEngine,
+    )
+    monkeypatch.setattr(llm_client.time, "sleep", lambda _s: None)
+
+    import botocore.exceptions
+
+    aws_message = "User: arn:aws:iam::123:user/x is not authorized to perform: bedrock:InvokeModel"
+    boto_err = botocore.exceptions.ClientError(
+        {"Error": {"Code": "AccessDeniedException", "Message": aws_message}},
+        "Converse",
+    )
+
+    class _FailingRuntime:
+        def converse(self, **_kwargs):
+            raise boto_err
+
+    monkeypatch.setattr(llm_client.boto3, "client", lambda *_a, **_k: _FailingRuntime())
+
+    client = llm_client.BedrockLLMClient(model="some-model")
+    with pytest.raises(RuntimeError) as excinfo:
+        client.invoke("hello")
+
+    rendered = str(excinfo.value)
+    assert aws_message in rendered
     assert "Bedrock model access" in rendered
-    assert "AWS Marketplace subscription" in rendered
+    assert "IAM permissions" in rendered
 
 
 def test_format_openai_connection_error_ssl_via_cause() -> None:
