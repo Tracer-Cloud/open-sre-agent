@@ -21,6 +21,7 @@ from rich.live import Live
 from rich.markup import escape
 from rich.text import Text
 
+from app.agents.bus import BusMessage, subscribe
 from app.agents.config import (
     agents_config_path,
     load_agents_config,
@@ -33,19 +34,27 @@ from app.agents.conflicts import (
     render_conflicts,
 )
 from app.agents.coordination import BranchClaims
+from app.agents.discovery import registered_and_discovered_agents
 from app.agents.lifecycle import TerminateResult, terminate
 from app.agents.registry import AgentRegistry
 from app.agents.tail import AttachSession, AttachUnsupported, attach
 from app.analytics.events import Event
 from app.analytics.provider import get_analytics
-from app.cli.interactive_shell.agents_view import render_agents_table
 from app.cli.interactive_shell.command_registry.types import SlashCommand
-from app.cli.interactive_shell.rendering import repl_table
-from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import BOLD_BRAND, DIM, ERROR, HIGHLIGHT, WARNING
+from app.cli.interactive_shell.runtime import ReplSession
+from app.cli.interactive_shell.ui import (
+    BOLD_BRAND,
+    DIM,
+    ERROR,
+    HIGHLIGHT,
+    WARNING,
+    render_agents_table,
+    repl_table,
+)
 
 _AGENTS_FIRST_ARGS: tuple[tuple[str, str], ...] = (
     ("budget", "view or edit per-agent hourly budgets"),
+    ("bus", "live-tail the cross-agent context bus"),
     ("claim", "claim a branch for an agent"),
     ("conflicts", "show file-write conflicts between local AI agents"),
     ("kill", "SIGTERM → SIGKILL a local agent by PID"),
@@ -114,17 +123,52 @@ def _print_config_error(console: Console, exc: ValidationError) -> None:
 
 
 def _cmd_agents_list(console: Console) -> bool:
-    """Render the registered ``AgentRecord`` set as a Rich table.
+    """Render registered plus read-only discovered agents as a Rich table.
 
-    Bare ``/agents`` resolves here. The ``$/hr`` cell reads
-    ``hourly_budget_usd`` from ``agents.yaml``; the remaining metric
-    cells (``cpu%``, ``tokens/min``, ``status``, ``uptime``) still
-    render as placeholders until the per-PID sampler and token-meter
-    consumer from #1490 land.
+    Bare ``/agents`` resolves here. Explicit registry rows keep winning
+    on PID collisions; process discovery fills in Cursor, Claude Code,
+    Codex, Aider, and Gemini CLI sessions that the user never registered.
     """
     registry = AgentRegistry()
-    table = render_agents_table(registry.list())
+    table = render_agents_table(registered_and_discovered_agents(registry))
     console.print(table)
+    return True
+
+
+def _format_bus_message(msg: BusMessage) -> str:
+    """Render one ``BusMessage`` as ``[agent] path — summary`` (path optional)."""
+    parts = [f"[{HIGHLIGHT}]\\[{escape(msg.agent)}][/]"]
+    if msg.path:
+        parts.append(escape(msg.path))
+        parts.append("—")
+    parts.append(escape(msg.summary))
+    return " ".join(parts)
+
+
+def _cmd_agents_bus(console: Console) -> bool:
+    """Live-tail the cross-agent context bus until ``Ctrl-C`` or broker exit.
+
+    Self-elects a broker if none is running, then streams each ``BusMessage``
+    as it arrives. The loop ends in three ways, each with explicit feedback:
+    ``KeyboardInterrupt`` (user detached), broker disconnect (e.g. the
+    publishing process exited), or socket error.
+    """
+    console.print(
+        f"[{DIM}]tailing /agents bus — Ctrl-C to exit[/]",
+    )
+    try:
+        for msg in subscribe():
+            console.print(_format_bus_message(msg))
+    except KeyboardInterrupt:
+        console.print(f"[{DIM}](detached)[/]")
+        return True
+    except OSError as exc:
+        console.print(f"[{ERROR}]bus error:[/] {escape(str(exc))}")
+        return False
+    # ``subscribe()`` returned cleanly — the broker closed our connection
+    # (e.g. it stopped, or its host process exited). Surface that explicitly
+    # so the user isn't left wondering why the prompt came back.
+    console.print(f"[{DIM}]bus broker disconnected[/]")
     return True
 
 
@@ -481,6 +525,8 @@ def _cmd_agents(session: ReplSession, console: Console, args: list[str]) -> bool
 
     if sub == "budget":
         return _cmd_agents_budget(session, console, args[1:])
+    if sub == "bus":
+        return _cmd_agents_bus(console)
     if sub == "conflicts":
         return _cmd_agents_conflicts(console)
 
@@ -499,9 +545,9 @@ def _cmd_agents(session: ReplSession, console: Console, args: list[str]) -> bool
     console.print(
         f"[{ERROR}]unknown subcommand:[/] {escape(sub)}  "
         "(try [bold]/agents[/bold], [bold]/agents budget[/bold], "
-        "[bold]/agents claim[/bold], [bold]/agents conflicts[/bold], "
-        "[bold]/agents kill[/bold], [bold]/agents release[/bold], "
-        "or [bold]/agents trace[/bold])"
+        "[bold]/agents bus[/bold], [bold]/agents claim[/bold], "
+        "[bold]/agents conflicts[/bold], [bold]/agents kill[/bold], "
+        "[bold]/agents release[/bold], or [bold]/agents trace[/bold])"
     )
     session.mark_latest(ok=False, kind="slash")
     return True
@@ -510,7 +556,8 @@ def _cmd_agents(session: ReplSession, console: Console, args: list[str]) -> bool
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
         "/agents",
-        "show registered local AI agents (subcommands: budget, claim, conflicts, kill, release, trace)",
+        "show registered local AI agents (subcommands: budget, bus, claim, conflicts, kill, "
+        "release, trace)",
         _cmd_agents,
         first_arg_completions=_AGENTS_FIRST_ARGS,
     ),

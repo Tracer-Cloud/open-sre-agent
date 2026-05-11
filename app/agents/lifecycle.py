@@ -10,10 +10,15 @@ from __future__ import annotations
 import logging
 import os
 import signal
+import sys
 import time
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
+
+# ``os.kill(pid, 0)`` on Windows raises ``OSError`` (WinError 87) for invalid PIDs
+# instead of ``ProcessLookupError``.
+_WIN_ERR_INVALID_PARAMETER = 87
 
 # Default grace period between SIGTERM and SIGKILL escalation.
 DEFAULT_GRACE_SECONDS: float = 5.0
@@ -32,6 +37,21 @@ def _pid_alive(pid: int) -> bool:
     except PermissionError:
         # Process exists but we lack permission — treat as alive.
         return True
+    except OSError as exc:
+        if sys.platform == "win32" and getattr(exc, "winerror", None) == _WIN_ERR_INVALID_PARAMETER:
+            return False
+        raise
+
+
+def _assert_target_pid_exists(pid: int) -> None:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        raise
+    except OSError as exc:
+        if sys.platform == "win32" and getattr(exc, "winerror", None) == _WIN_ERR_INVALID_PARAMETER:
+            raise ProcessLookupError(pid) from exc
+        raise
 
 
 @dataclass(frozen=True)
@@ -52,7 +72,7 @@ def terminate(pid: int, *, grace_s: float = DEFAULT_GRACE_SECONDS) -> TerminateR
     Raises ``PermissionError`` if the calling user cannot signal *pid*.
     """
     # Validate that the process exists before proceeding.
-    os.kill(pid, 0)
+    _assert_target_pid_exists(pid)
 
     t0 = time.monotonic()
 
@@ -81,10 +101,11 @@ def terminate(pid: int, *, grace_s: float = DEFAULT_GRACE_SECONDS) -> TerminateR
             )
         time.sleep(_POLL_INTERVAL)
 
-    # --- SIGKILL escalation ---
+    # --- SIGKILL escalation (or second SIGTERM on platforms without SIGKILL, e.g. Windows)
     logger.warning("pid %d did not exit after SIGTERM; sending SIGKILL", pid)
+    kill_signal = getattr(signal, "SIGKILL", signal.SIGTERM)
     try:
-        os.kill(pid, signal.SIGKILL)
+        os.kill(pid, kill_signal)
     except ProcessLookupError:
         return TerminateResult(
             pid=pid,

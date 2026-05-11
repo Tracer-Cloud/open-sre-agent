@@ -11,6 +11,15 @@ import pytest
 
 from app.agents.lifecycle import TerminateResult, terminate
 
+# Windows ``os.kill`` / ``signal.SIGTERM`` delivery to a Python ``Popen`` child
+# does not match POSIX (handlers may not run; escalation differs). These tests
+# spawn children that rely on POSIX semantics and can hang or confuse ``-n auto``
+# workers on ``windows-latest``.
+_skip_win32_posix_signals = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="POSIX SIGTERM/SIGKILL child semantics are not reliable on Windows",
+)
+
 
 def _spawn_sleep() -> subprocess.Popen[bytes]:
     """Spawn a Python child that exits cleanly on SIGTERM.
@@ -67,6 +76,12 @@ def _reap(proc: subprocess.Popen[bytes]) -> None:
 
 
 class TestTerminate:
+    def test_nonexistent_pid_raises(self) -> None:
+        """Calling terminate() on a PID that doesn't exist should raise."""
+        with pytest.raises(ProcessLookupError):
+            terminate(999_999_999)
+
+    @_skip_win32_posix_signals
     def test_sigterm_exits_promptly(self) -> None:
         """A normal child process should exit quickly after SIGTERM."""
         proc = _spawn_sleep()
@@ -84,6 +99,7 @@ class TestTerminate:
             proc.kill()
             proc.wait()
 
+    @_skip_win32_posix_signals
     def test_process_is_gone_after_terminate(self) -> None:
         """After terminate() + reap, the PID should no longer exist."""
         proc = _spawn_sleep()
@@ -96,6 +112,7 @@ class TestTerminate:
             proc.kill()
             proc.wait()
 
+    @_skip_win32_posix_signals
     def test_no_zombie_left(self) -> None:
         """terminate() must not leave zombie processes after reaping."""
         proc = _spawn_sleep()
@@ -107,11 +124,7 @@ class TestTerminate:
             proc.kill()
             proc.wait()
 
-    def test_nonexistent_pid_raises(self) -> None:
-        """Calling terminate() on a PID that doesn't exist should raise."""
-        with pytest.raises(ProcessLookupError):
-            terminate(999_999_999)
-
+    @_skip_win32_posix_signals
     def test_force_kill_after_grace_period(self) -> None:
         """A process that traps SIGTERM should be SIGKILL'd after grace_s."""
         proc = _spawn_unkillable()

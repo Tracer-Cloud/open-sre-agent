@@ -13,18 +13,18 @@ from app.cli.interactive_shell.history import (
     load_command_history_entries,
     prompt_history_path,
 )
-from app.cli.interactive_shell.history_policy import (
+from app.cli.interactive_shell.history.policy import (
     DEFAULT_REDACTION_RULES,
     RedactingFileHistory,
 )
-from app.cli.interactive_shell.repl_choice_menu import (
+from app.cli.interactive_shell.runtime import ReplSession
+from app.cli.interactive_shell.ui import BOLD_BRAND, DIM, ERROR, HIGHLIGHT
+from app.cli.interactive_shell.ui.choice_menu import (
     CRUMB_SEP,
     repl_choose_one,
     repl_section_break,
     repl_tty_interactive,
 )
-from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import BOLD_BRAND, DIM, ERROR, HIGHLIGHT
 
 
 def _show_history(console: Console) -> bool:

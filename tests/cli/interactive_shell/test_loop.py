@@ -19,7 +19,7 @@ from prompt_toolkit.keys import Keys
 from prompt_toolkit.output import DummyOutput
 
 from app.cli.interactive_shell import loop
-from app.cli.interactive_shell.prompt_surface import (
+from app.cli.interactive_shell.prompting.prompt_surface import (
     _SHIFT_ENTER_SEQUENCE,
     ReplInputLexer,
     ShellCompleter,
@@ -27,9 +27,9 @@ from app.cli.interactive_shell.prompt_surface import (
     _build_prompt_style,
     _tab_expand_or_menu,
 )
-from app.cli.interactive_shell.router import RouteDecision, RouteKind
-from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import ANSI_RESET, PROMPT_ACCENT_ANSI
+from app.cli.interactive_shell.routing.route_types import RouteDecision, RouteKind
+from app.cli.interactive_shell.runtime.session import ReplSession
+from app.cli.interactive_shell.ui.theme import ANSI_RESET, PROMPT_ACCENT_ANSI
 
 
 def test_repl_input_lexer_highlights_first_slash_token() -> None:
@@ -240,7 +240,7 @@ def test_completion_includes_tab_navigation() -> None:
 
 
 def test_completion_menu_current_item_uses_highlight_style() -> None:
-    from app.cli.interactive_shell.theme import BG, HIGHLIGHT
+    from app.cli.interactive_shell.ui.theme import BG, HIGHLIGHT
 
     style = _build_prompt_style()
     attrs = style.get_attrs_for_style_str("class:repl-slash-command")
@@ -282,7 +282,7 @@ def test_shell_completer_path_completion_honors_mixed_case_prefix(tmp_path: Path
 def test_run_new_alert_marks_task_failed_on_opensre_error(monkeypatch: pytest.MonkeyPatch) -> None:
     from rich.console import Console
 
-    from app.cli.interactive_shell.tasks import TaskKind, TaskStatus
+    from app.cli.interactive_shell.runtime.tasks import TaskKind, TaskStatus
     from app.cli.support.errors import OpenSREError
 
     def _raise(
@@ -307,7 +307,7 @@ def test_run_new_alert_marks_task_failed_on_opensre_error(monkeypatch: pytest.Mo
 def test_run_new_alert_reports_unexpected_error(monkeypatch: pytest.MonkeyPatch) -> None:
     from rich.console import Console
 
-    from app.cli.interactive_shell.tasks import TaskStatus
+    from app.cli.interactive_shell.runtime.tasks import TaskStatus
 
     captured_errors: list[BaseException] = []
 
@@ -365,7 +365,7 @@ def test_run_one_turn_reports_slash_dispatch_error(monkeypatch: pytest.MonkeyPat
     from rich.console import Console
 
     class _Prompt:
-        async def prompt_async(self, _prompt: object) -> str:
+        async def prompt_async(self, _prompt: object, **_kwargs: object) -> str:
             return "/boom"
 
     captured_errors: list[BaseException] = []
@@ -388,13 +388,43 @@ def test_run_one_turn_reports_slash_dispatch_error(monkeypatch: pytest.MonkeyPat
     assert isinstance(captured_errors[0], RuntimeError)
 
 
+def test_run_one_turn_typoed_bare_alias_dispatches_canonical_slash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from rich.console import Console
+
+    class _Prompt:
+        async def prompt_async(self, _prompt: object, **_kwargs: object) -> str:
+            return "hlep"
+
+    dispatched: list[str] = []
+
+    def _dispatch(command: str, *_args: object, **_kwargs: object) -> bool:
+        dispatched.append(command)
+        return True
+
+    monkeypatch.setattr(
+        loop,
+        "route_input",
+        lambda *_args: RouteDecision(RouteKind.SLASH, 0.98, ("bare_command_alias",)),
+    )
+    monkeypatch.setattr(loop, "dispatch_slash", _dispatch)
+    session = ReplSession()
+    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
+
+    should_continue = asyncio.run(loop._run_one_turn(_Prompt(), session, console))
+
+    assert should_continue is True
+    assert dispatched == ["/help"]
+
+
 def test_run_one_turn_renders_submitted_prompt_before_handler(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from rich.console import Console
 
     class _Prompt:
-        async def prompt_async(self, _prompt: object) -> str:
+        async def prompt_async(self, _prompt: object, **_kwargs: object) -> str:
             return "explain deploy"
 
     monkeypatch.setattr(

@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import questionary
 
-from app.cli.interactive_shell.theme import ANSI_BOLD, ANSI_RESET
+from app.cli.interactive_shell.ui.theme import ANSI_BOLD, ANSI_RESET
 
 if TYPE_CHECKING:
     from app.integrations.github_mcp import GitHubMcpDisplayDetailLevel

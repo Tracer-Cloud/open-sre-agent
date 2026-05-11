@@ -929,3 +929,147 @@ def test_messages_to_invocation_dicts_tool_shaped_object() -> None:
         "tool_call_id": "z",
         "name": "n",
     }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Non-retryable error handling in retry helpers
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def test_openai_not_found_raises_immediately_without_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """NotFoundError (wrong model name) must surface immediately without retry."""
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    adapter = _OpenAIChatAdapter(model="gpt-nonexistent", with_tools=False)
+
+    from openai import NotFoundError as OAINotFoundErr
+
+    not_found_err = OAINotFoundErr("model not found", response=MagicMock(), body={})
+
+    with patch("openai.OpenAI") as cls, patch("time.sleep") as sleep_mock:
+        client = MagicMock()
+        client.chat.completions.create.side_effect = not_found_err
+        cls.return_value = client
+
+        with pytest.raises(RuntimeError, match="not found"):
+            adapter.invoke([{"role": "user", "content": "hi"}])
+
+    sleep_mock.assert_not_called()
+    assert client.chat.completions.create.call_count == 1
+
+
+def test_openai_bad_request_raises_immediately_without_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """BadRequestError (billing/invalid request) must surface immediately without retry."""
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    adapter = _OpenAIChatAdapter(model="gpt-4o", with_tools=False)
+
+    from openai import BadRequestError as OAIBadReqErr
+
+    bad_req_err = OAIBadReqErr("overdue payment", response=MagicMock(), body={})
+
+    with patch("openai.OpenAI") as cls, patch("time.sleep") as sleep_mock:
+        client = MagicMock()
+        client.chat.completions.create.side_effect = bad_req_err
+        cls.return_value = client
+
+        with pytest.raises(RuntimeError, match="400"):
+            adapter.invoke([{"role": "user", "content": "hi"}])
+
+    sleep_mock.assert_not_called()
+    assert client.chat.completions.create.call_count == 1
+
+
+def test_openai_insufficient_quota_raises_immediately_without_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """RateLimitError with insufficient_quota code must raise immediately (billing limit)."""
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    adapter = _OpenAIChatAdapter(model="gpt-4o", with_tools=False)
+
+    from openai import RateLimitError as OAIRateLimitErr
+
+    quota_err = OAIRateLimitErr("quota exceeded", response=MagicMock(), body={})
+    quota_err.body = {"error": {"code": "insufficient_quota"}}
+
+    with patch("openai.OpenAI") as cls, patch("time.sleep") as sleep_mock:
+        client = MagicMock()
+        client.chat.completions.create.side_effect = quota_err
+        cls.return_value = client
+
+        with pytest.raises(RuntimeError, match="quota"):
+            adapter.invoke([{"role": "user", "content": "hi"}])
+
+    sleep_mock.assert_not_called()
+    assert client.chat.completions.create.call_count == 1
+
+
+def test_anthropic_not_found_raises_immediately_without_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Anthropic NotFoundError must surface immediately without retry."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    adapter = _AnthropicChatAdapter(model="claude-nonexistent", with_tools=False)
+
+    from anthropic import NotFoundError as AntNotFoundErr
+
+    not_found_err = AntNotFoundErr("model not found", response=MagicMock(), body={})
+
+    with patch("anthropic.Anthropic") as cls, patch("time.sleep") as sleep_mock:
+        client = MagicMock()
+        client.messages.create.side_effect = not_found_err
+        cls.return_value = client
+
+        with pytest.raises(RuntimeError, match="not found"):
+            adapter.invoke([{"role": "user", "content": "hi"}])
+
+    sleep_mock.assert_not_called()
+    assert client.messages.create.call_count == 1
+
+
+def test_anthropic_bad_request_raises_immediately_without_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Anthropic BadRequestError (e.g. credit balance too low) must not retry."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    adapter = _AnthropicChatAdapter(model="claude-3-5-sonnet-20241022", with_tools=False)
+
+    from anthropic import BadRequestError as AntBadReqErr
+
+    bad_req_err = AntBadReqErr("credit balance too low", response=MagicMock(), body={})
+
+    with patch("anthropic.Anthropic") as cls, patch("time.sleep") as sleep_mock:
+        client = MagicMock()
+        client.messages.create.side_effect = bad_req_err
+        cls.return_value = client
+
+        with pytest.raises(RuntimeError, match="400"):
+            adapter.invoke([{"role": "user", "content": "hi"}])
+
+    sleep_mock.assert_not_called()
+    assert client.messages.create.call_count == 1
+
+
+def test_anthropic_permission_denied_raises_immediately_without_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Anthropic PermissionDeniedError must surface immediately without retry."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    adapter = _AnthropicChatAdapter(model="claude-3-5-sonnet-20241022", with_tools=False)
+
+    from anthropic import PermissionDeniedError as AntPermDeniedErr
+
+    perm_err = AntPermDeniedErr("access denied", response=MagicMock(), body={})
+
+    with patch("anthropic.Anthropic") as cls, patch("time.sleep") as sleep_mock:
+        client = MagicMock()
+        client.messages.create.side_effect = perm_err
+        cls.return_value = client
+
+        with pytest.raises(RuntimeError, match="access denied"):
+            adapter.invoke([{"role": "user", "content": "hi"}])
+
+    sleep_mock.assert_not_called()
+    assert client.messages.create.call_count == 1

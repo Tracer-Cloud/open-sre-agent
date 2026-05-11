@@ -603,6 +603,48 @@ def test_before_send_filters_nested_lists_of_dicts() -> None:
     assert nested[1][0]["bearer"] == "[Filtered]"
 
 
+@pytest.mark.parametrize(
+    ("exc_type", "exc_value"),
+    [
+        (
+            "RuntimeError",
+            "Openai authentication failed. Check OPENAI_API_KEY in your environment, .env, or secure local keychain.",
+        ),
+        (
+            "RuntimeError",
+            "Openai rate limit exceeded (HTTP 429) after multiple retries. Check your quota and billing details.",
+        ),
+        (
+            "BadRequestError",
+            "Your credit balance is too low to access the Anthropic API.",
+        ),
+        (
+            "RuntimeError",
+            "Ollama model 'llama3.2' was not found. Check your configured model name or endpoint.",
+        ),
+        (
+            "RuntimeError",
+            "LLM API request failed after multiple retries. Try again in a few seconds.",
+        ),
+    ],
+)
+def test_before_send_drops_operator_actionable_llm_errors(
+    exc_type: str,
+    exc_value: str,
+) -> None:
+    event = {"exception": {"values": [{"type": exc_type, "value": exc_value}]}}
+
+    assert sentry_mod._before_send(event, {}) is None
+
+
+def test_before_send_keeps_non_llm_runtime_errors() -> None:
+    event = {
+        "exception": {"values": [{"type": "RuntimeError", "value": "database invariant broke"}]}
+    }
+
+    assert sentry_mod._before_send(event, {}) == event
+
+
 def test_init_sentry_skips_scope_tags_when_dsn_empty(monkeypatch) -> None:
     sentry_mod._init_sentry_once.cache_clear()
     _clear_kill_switches(monkeypatch)

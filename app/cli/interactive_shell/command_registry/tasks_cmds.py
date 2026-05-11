@@ -9,15 +9,14 @@ from rich.markup import escape
 
 from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
 from app.cli.interactive_shell.history import load_command_history_entries
-from app.cli.interactive_shell.rendering import repl_table
-from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.tasks import TaskKind, TaskRecord, TaskStatus
-from app.cli.interactive_shell.theme import (
+from app.cli.interactive_shell.runtime import ReplSession, TaskKind, TaskRecord, TaskStatus
+from app.cli.interactive_shell.ui import (
     BOLD_BRAND,
     DIM,
     ERROR,
     HIGHLIGHT,
     WARNING,
+    repl_table,
 )
 
 
@@ -37,6 +36,8 @@ def _task_detail_label(task: TaskRecord) -> str:
         return str(task.error)
     if task.result:
         return str(task.result)
+    if task.command:
+        return str(task.command)
     return "—"
 
 
@@ -100,13 +101,13 @@ def _cmd_stop(session: ReplSession, console: Console, args: list[str]) -> bool: 
     return True
 
 
-def _cmd_cancel(session: ReplSession, console: Console, args: list[str]) -> bool:
+def _validate_cancel_args(args: list[str]) -> str | None:
     if not args:
-        console.print(
-            f"[{ERROR}]usage:[/] /cancel <task_id>  — use [{HIGHLIGHT}]/tasks[/] to list ids"
-        )
-        return True
+        return f"[{ERROR}]usage:[/] /cancel <task_id>  — use [{HIGHLIGHT}]/tasks[/] to list ids"
+    return None
 
+
+def _cmd_cancel(session: ReplSession, console: Console, args: list[str]) -> bool:
     needle = args[0]
     candidates = session.task_registry.candidates(needle)
     if not candidates:
@@ -135,7 +136,8 @@ def _cmd_cancel(session: ReplSession, console: Console, args: list[str]) -> bool
         )
     else:
         console.print(
-            f"[{HIGHLIGHT}]stop requested[/] [{DIM}]for synthetic test {escape(task.task_id)}.[/] "
+            f"[{HIGHLIGHT}]stop requested[/] "
+            f"[{DIM}]for {escape(task.kind.value)} {escape(task.task_id)}.[/] "
             f"[{DIM}]use[/] [{HIGHLIGHT}]/tasks[/] [{DIM}]to confirm status.[/]"
         )
     return True
@@ -149,6 +151,7 @@ COMMANDS: list[SlashCommand] = [
         "cancel a running task by id ('/cancel <task_id>' — see /tasks)",
         _cmd_cancel,
         execution_tier=ExecutionTier.ELEVATED,
+        validate_args=_validate_cancel_args,
     ),
     SlashCommand(
         "/stop",

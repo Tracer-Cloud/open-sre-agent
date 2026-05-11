@@ -14,7 +14,7 @@ from rich.console import Console
 from rich.rule import Rule
 from rich.text import Text
 
-from app.cli.interactive_shell.theme import (
+from app.cli.interactive_shell.ui.theme import (
     BRAND,
     DIM,
     ERROR,
@@ -42,7 +42,9 @@ from app.llm_credentials import (
 )
 from app.version import get_version
 
-_console = Console(highlight=False, force_terminal=True, color_system="truecolor")
+_console = Console(
+    highlight=False, force_terminal=True, color_system="truecolor", legacy_windows=False
+)
 DEFAULT_GITHUB_MCP_URL = "https://api.githubcopilot.com/mcp/"
 DEFAULT_GITHUB_MCP_MODE = "streamable-http"
 DEFAULT_OPENCLAW_MCP_URL = "http://127.0.0.1:18789/"
@@ -440,7 +442,7 @@ def _render_header() -> None:
       ─────────────────────────────────────────  [DIM rule]
       Setup — Configure your local AI stack …    [SECONDARY subtitle]
     """
-    from app.cli.interactive_shell.banner import _render_art
+    from app.cli.interactive_shell.ui.banner import _render_art
 
     art = _render_art()
     version = get_version()

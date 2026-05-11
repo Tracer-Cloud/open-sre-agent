@@ -547,6 +547,18 @@ def detect_sources(
         if has_backend or (endpoint and (api_key or grafana_local)):
             service_name = _map_pipeline_to_service_name(pipeline_name) if pipeline_name else ""
 
+            # Suppress Grafana traces for RDS/database resource-threshold alerts.
+            # Distributed traces (Tempo) contain no useful data for infrastructure
+            # ceiling breaches (connections, CPU, storage, IOPS). Tagging this in
+            # source detection rather than in the prompt so the flag is always
+            # consistent regardless of which prompt path fires.
+            _is_rds_alert = bool(
+                annotations.get("rds_failure_mode")
+                or annotations.get("db_instance_identifier")
+                or annotations.get("db_instance")
+                or str(common_labels.get("service", "")).lower() == "rds"
+            )
+
             grafana_params: dict[str, Any] = {
                 "service_name": service_name,
                 "pipeline_name": pipeline_name,
@@ -555,6 +567,7 @@ def detect_sources(
                 "grafana_api_key": api_key,
                 "time_range_minutes": alert_time_range_minutes,
                 "loki_only": grafana_local,  # signals no Tempo/Prometheus in local stack
+                "no_traces": _is_rds_alert,  # hard-suppress traces for RDS incidents
             }
             if execution_run_id:
                 grafana_params["execution_run_id"] = execution_run_id

@@ -13,6 +13,7 @@ import pytest
 
 from app.nodes.root_cause_diagnosis.evidence_checker import (
     check_evidence_availability,
+    check_vendor_evidence_missing,
     is_clearly_healthy,
 )
 
@@ -155,3 +156,40 @@ class TestEvidenceAvailabilityArgoCD:
         assert has_tracer is None
         assert has_vendor is True
         assert has_alert is False
+
+
+class TestVendorEvidenceExpectation:
+    def test_vendor_evidence_not_required_without_upstream_audit_signals(self) -> None:
+        evidence = {
+            "aws_cloudwatch_metrics": {"metrics": [{"metric_name": "ReplicaLag"}]},
+            "aws_rds_events": [{"message": "Replica lag high"}],
+        }
+
+        assert check_vendor_evidence_missing(evidence) is False
+
+    def test_vendor_evidence_required_when_s3_audit_source_is_available(self) -> None:
+        evidence: dict[str, object] = {}
+        available_sources = {"s3_audit": {"bucket": "audit-bucket", "key": "a/b/c.json"}}
+
+        assert check_vendor_evidence_missing(evidence, available_sources) is True
+
+    def test_vendor_evidence_present_when_audit_payload_content_exists(self) -> None:
+        evidence = {
+            "s3_audit_payload": {
+                "found": True,
+                "content": '{"request":{"id":"abc"}}',
+            }
+        }
+        available_sources = {"s3_audit": {"bucket": "audit-bucket", "key": "a/b/c.json"}}
+
+        assert check_vendor_evidence_missing(evidence, available_sources) is False
+
+    def test_vendor_evidence_required_when_s3_object_metadata_has_audit_key(self) -> None:
+        evidence = {
+            "s3_object": {
+                "found": True,
+                "metadata": {"audit_key": "lineage/2026/05/10/audit.json"},
+            }
+        }
+
+        assert check_vendor_evidence_missing(evidence) is True

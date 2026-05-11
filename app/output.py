@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 from rich.console import Console, ConsoleOptions, RenderResult
 from rich.text import Text
 
-from app.cli.interactive_shell.theme import (
+from app.cli.interactive_shell.ui.theme import (
     BRAND,
     DIM,
     ERROR,
@@ -53,6 +53,20 @@ def get_output_format() -> str:
     if os.getenv("SLACK_WEBHOOK_URL"):
         return "text"
     return "rich" if sys.stdout.isatty() else "text"
+
+
+def _is_silent_output() -> bool:
+    """Return whether output rendering is explicitly disabled."""
+    return get_output_format() == "none"
+
+
+def _safe_print(text: str) -> None:
+    """Print text, replacing unencodable characters (e.g. on Windows cp1252)."""
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        enc = sys.stdout.encoding or "utf-8"
+        print(text.encode(enc, errors="replace").decode(enc))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -178,14 +192,18 @@ def stop_display() -> None:
 
 def render_divider(width: int = 80) -> None:
     """Print a DIM-coloured dashed ┄ divider."""
+    if _is_silent_output():
+        return
     if get_output_format() == "rich":
         _get_console().print(Text("┄" * width, style=DIM))
     else:
-        print("─" * width)
+        _safe_print("─" * width)
 
 
 def render_footer(phase: str, elapsed: float, model: str, mode: str) -> None:
     """Print the persistent status footer line."""
+    if _is_silent_output():
+        return
     if get_output_format() == "rich":
         t = Text()
         t.append(" ● ", style=f"bold {HIGHLIGHT}")
@@ -197,7 +215,7 @@ def render_footer(phase: str, elapsed: float, model: str, mode: str) -> None:
         t.append("esc to cancel", style=DIM)
         _get_console().print(t)
     else:
-        print(f"● {phase}  {elapsed:.1f}s  {model}  {mode}")
+        _safe_print(f"● {phase}  {elapsed:.1f}s  {model}  {mode}")
 
 
 def render_event(
@@ -211,6 +229,8 @@ def render_event(
     error: bool = False,
 ) -> None:
     """Print one typed event-log row."""
+    if _is_silent_output():
+        return
     if get_output_format() == "rich":
         badge_label, badge_color = _BADGE_STYLES.get(event_type, ("DIAG  ", WARNING))
         ts = _elapsed_hms(elapsed_s)
@@ -236,7 +256,7 @@ def render_event(
         line = f"  {mark}  [{event_type}]  {message}"
         if insight:
             line += f"  ↳ {insight}"
-        print(line)
+        _safe_print(line)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -380,7 +400,7 @@ class _EventLogDisplay:
             return
         from rich.markdown import Markdown
 
-        from app.cli.interactive_shell.theme import MARKDOWN_THEME
+        from app.cli.interactive_shell.ui.theme import MARKDOWN_THEME
 
         with self._live.console.use_theme(MARKDOWN_THEME):
             self._live.console.print(Markdown(text, code_theme="ansi_dark"))
@@ -406,9 +426,10 @@ class ProgressTracker:
     def __init__(self) -> None:
         self.events: list[ProgressEvent] = []
         self._start_times: dict[str, float] = {}
+        self._silent = _is_silent_output()
         self._rich = get_output_format() == "rich"
         self._display: _EventLogDisplay | None = None
-        if self._rich:
+        if self._rich and not self._silent:
             self._display = _EventLogDisplay()
 
     def start(self, node_name: str, message: str | None = None) -> None:
@@ -416,6 +437,8 @@ class ProgressTracker:
         self.events.append(
             ProgressEvent(node_name=node_name, elapsed_ms=0, status="started", message=message)
         )
+        if self._silent:
+            return
         if self._rich:
             if node_name == "publish_findings":
                 # Stop the animated display so the final report prints cleanly below
@@ -425,7 +448,7 @@ class ProgressTracker:
             elif self._display:
                 self._display.step_start(node_name)
         else:
-            print(f"  … {_node_label(node_name)}")
+            _safe_print(f"  … {_node_label(node_name)}")
 
     def complete(
         self, node_name: str, fields_updated: list[str] | None = None, message: str | None = None
@@ -442,6 +465,8 @@ class ProgressTracker:
 
     def print_above(self, text: str) -> None:
         """Print text permanently above the active live region, or to stdout in text mode."""
+        if self._silent:
+            return
         if self._display:
             self._display.print_above(text)
         elif text.strip():
@@ -462,6 +487,8 @@ class ProgressTracker:
             message=message,
         )
         self.events.append(event)
+        if self._silent:
+            return
 
         if self._rich:
             if self._display:
@@ -480,7 +507,7 @@ class ProgressTracker:
         line = f"  {mark} {_node_label(node_name)}  {_fmt_timing(elapsed_ms)}"
         if msg := _humanise_message(message or ""):
             line += f"  {msg}"
-        print(line)
+        _safe_print(line)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

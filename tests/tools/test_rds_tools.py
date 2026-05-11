@@ -3,10 +3,46 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 from unittest.mock import patch
 
 from app.tools.RDSDescribeInstanceTool import describe_rds_instance
 from app.tools.RDSEventsTool import describe_rds_events
+
+
+class _FakeAWSBackend:
+    """Minimal AWSBackend stand-in that records calls for assertion."""
+
+    def __init__(self, db_response: dict[str, Any], events_response: dict[str, Any]) -> None:
+        self.db_response = db_response
+        self.events_response = events_response
+        self.db_calls: list[dict[str, Any]] = []
+        self.events_calls: list[dict[str, Any]] = []
+
+    def describe_db_instances(
+        self,
+        db_instance_identifier: str,
+        region: str = "",
+        **_: Any,
+    ) -> dict[str, Any]:
+        self.db_calls.append({"db_instance_identifier": db_instance_identifier, "region": region})
+        return self.db_response
+
+    def describe_db_events(
+        self,
+        db_instance_identifier: str,
+        duration_minutes: int = 60,
+        region: str = "",
+        **_: Any,
+    ) -> dict[str, Any]:
+        self.events_calls.append(
+            {
+                "db_instance_identifier": db_instance_identifier,
+                "duration_minutes": duration_minutes,
+                "region": region,
+            }
+        )
+        return self.events_response
 
 
 @patch("app.tools.RDSDescribeInstanceTool.execute_aws_sdk_call")
@@ -131,3 +167,68 @@ def test_describe_rds_events_failure(mock_call) -> None:
     result = describe_rds_events("prod-db")
     assert result["available"] is False
     assert result["error"] == "Failed to describe RDS events. Check server logs for details."
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Synthetic-mode short-circuit: when an aws_backend handle is provided the
+# tool MUST route through it instead of boto3. This guards against the
+# regression where synthetic scenarios silently leaked describe_db_instances
+# calls to whatever real AWS account the developer was authenticated against.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@patch("app.tools.RDSDescribeInstanceTool.execute_aws_sdk_call")
+def test_describe_rds_instance_short_circuits_to_aws_backend(mock_call) -> None:
+    backend = _FakeAWSBackend(
+        db_response={
+            "source": "rds",
+            "available": True,
+            "db_instance_identifier": "synthetic-db",
+            "engine": "mysql",
+            "error": None,
+        },
+        events_response={},
+    )
+
+    result = describe_rds_instance(
+        "synthetic-db",
+        region="us-east-1",
+        aws_backend=backend,
+    )
+
+    mock_call.assert_not_called()
+    assert backend.db_calls == [{"db_instance_identifier": "synthetic-db", "region": "us-east-1"}]
+    assert result["engine"] == "mysql"
+
+
+@patch("app.tools.RDSEventsTool.execute_aws_sdk_call")
+def test_describe_rds_events_short_circuits_to_aws_backend(mock_call) -> None:
+    backend = _FakeAWSBackend(
+        db_response={},
+        events_response={
+            "source": "rds",
+            "available": True,
+            "db_instance_identifier": "synthetic-db",
+            "duration_minutes": 90,
+            "total_events": 1,
+            "events": [{"date": "2026-05-05T12:00:00Z", "message": "ok"}],
+            "error": None,
+        },
+    )
+
+    result = describe_rds_events(
+        "synthetic-db",
+        region="us-east-1",
+        duration_minutes=90,
+        aws_backend=backend,
+    )
+
+    mock_call.assert_not_called()
+    assert backend.events_calls == [
+        {
+            "db_instance_identifier": "synthetic-db",
+            "duration_minutes": 90,
+            "region": "us-east-1",
+        }
+    ]
+    assert result["total_events"] == 1

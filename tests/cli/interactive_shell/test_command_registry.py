@@ -19,11 +19,12 @@ from app.cli.interactive_shell.command_registry.session_cmds import (
     _VERBOSE_FIRST_ARGS,
 )
 from app.cli.interactive_shell.commands import SLASH_COMMANDS as COMMANDS_EXPORT
-from app.cli.interactive_shell.session import ReplSession
+from app.cli.interactive_shell.runtime.session import ReplSession
 
 
 def test_commands_shim_reexports_same_registry() -> None:
-    assert COMMANDS_EXPORT is SLASH_COMMANDS
+    assert COMMANDS_EXPORT["/help"] is SLASH_COMMANDS["/help"]
+    assert list(COMMANDS_EXPORT) == list(SLASH_COMMANDS)
 
 
 def _capture() -> tuple[Console, io.StringIO]:

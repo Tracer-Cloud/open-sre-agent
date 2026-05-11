@@ -1,4 +1,4 @@
-root_cause_category: resource_exhaustion
+root_cause_category: checkpoint_io_storm
 required_keywords:
   - vacuum
   - checkpoint
@@ -22,7 +22,7 @@ optimal_trajectory:
 max_investigation_loops: 4
 model_response: |
   ROOT_CAUSE: A runaway VACUUM FREEZE on the billing_events table triggered checkpoint storms that saturated I/O and — as a downstream effect — drove CPUUtilization to 92%. This is NOT a cpu_saturation event caused by application queries. The CPU spike is a symptom, not the root cause.
-  ROOT_CAUSE_CATEGORY: resource_exhaustion
+  ROOT_CAUSE_CATEGORY: checkpoint_io_storm
 
   VALIDATED_CLAIMS:
   - Performance Insights shows autovacuum VACUUM FREEZE on billing_events as the dominant process at 7.8 AAS — accounting for 79% of all database load. [evidence: aws_performance_insights]

@@ -8,16 +8,23 @@ from rich.console import Console
 from rich.markup import escape
 
 import app.cli.interactive_shell.command_registry.repl_data as repl_data
-from app.cli.interactive_shell.banner import render_banner, resolve_provider_models
 from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
-from app.cli.interactive_shell.rendering import repl_table
-from app.cli.interactive_shell.repl_choice_menu import (
+from app.cli.interactive_shell.runtime import ReplSession
+from app.cli.interactive_shell.ui import (
+    BOLD_BRAND,
+    DIM,
+    ERROR,
+    HIGHLIGHT,
+    WARNING,
+    render_banner,
+    repl_table,
+    resolve_provider_models,
+)
+from app.cli.interactive_shell.ui.choice_menu import (
     repl_choose_one,
     repl_section_break,
     repl_tty_interactive,
 )
-from app.cli.interactive_shell.session import ReplSession
-from app.cli.interactive_shell.theme import BOLD_BRAND, DIM, ERROR, HIGHLIGHT, WARNING
 from app.llm_reasoning_effort import (
     REASONING_EFFORT_OPTIONS,
     describe_reasoning_effort_default,
@@ -66,8 +73,12 @@ def _cmd_trust(session: ReplSession, console: Console, args: list[str]) -> bool:
 
 
 def _cmd_status(session: ReplSession, console: Console, _args: list[str]) -> bool:
-    from app.cli.interactive_shell.cli_reference import get_cli_reference_cache_stats
-    from app.cli.interactive_shell.docs_reference import get_docs_cache_stats
+    from app.cli.interactive_shell.references.cli_reference import (
+        get_cli_reference_cache_stats,
+    )
+    from app.cli.interactive_shell.references.docs_reference import (
+        get_docs_cache_stats,
+    )
 
     table = repl_table(title="Session status", title_style=BOLD_BRAND, show_header=False)
     table.add_column("key", style="bold")

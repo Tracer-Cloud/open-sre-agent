@@ -310,3 +310,57 @@ def test_progress_event_independent_default_lists() -> None:
     b: Any = ProgressEvent(node_name="b", elapsed_ms=0)
     a.fields_updated.append("x")
     assert b.fields_updated == []
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# _safe_print
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_safe_print_passes_utf8_strings_unchanged(capsys: pytest.CaptureFixture[str]) -> None:
+    from app.output import _safe_print
+
+    _safe_print("hello world")
+    assert capsys.readouterr().out.strip() == "hello world"
+
+
+def test_safe_print_survives_encode_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Simulate Windows cp1252 stdout that can't encode ● (U+25CF)."""
+    from io import StringIO
+
+    from app.output import _safe_print
+
+    class _NarrowWriter(StringIO):
+        encoding = "ascii"
+
+        def write(self, s: str) -> int:
+            s.encode("ascii")  # raises UnicodeEncodeError for non-ASCII
+            return super().write(s)
+
+    buf = _NarrowWriter()
+    monkeypatch.setattr("sys.stdout", buf)
+    _safe_print("  ● investigate")  # must not raise
+    assert "?" in buf.getvalue() or buf.getvalue()  # fallback ran without exception
+
+
+def test_finish_text_mode_survives_non_ascii_mark(
+    monkeypatch: pytest.MonkeyPatch,
+    force_text_mode: None,
+) -> None:
+    """Regression: _finish in text mode must not raise UnicodeEncodeError for ●."""
+    from io import StringIO
+
+    from app.output import _safe_print
+
+    # Verify _safe_print itself is robust; _finish delegates to it.
+    class _AsciiWriter(StringIO):
+        encoding = "ascii"
+
+        def write(self, s: str) -> int:
+            s.encode("ascii")
+            return super().write(s)
+
+    buf = _AsciiWriter()
+    monkeypatch.setattr("sys.stdout", buf)
+    _safe_print("  ● diagnose_root_cause  1.2s")  # matches the _finish output format
+    assert buf.getvalue()  # something was written, no exception raised

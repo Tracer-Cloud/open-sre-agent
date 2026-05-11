@@ -27,6 +27,54 @@ def test_deploy_ec2_health_check_failure_is_non_fatal() -> None:
     assert "Deployment provisioned. Retry with: opensre remote health" in result.output
 
 
+def test_deploy_ec2_missing_credentials_surfaces_friendly_error() -> None:
+    from botocore.exceptions import NoCredentialsError
+
+    runner = CliRunner()
+    with patch(
+        "tests.deployment.ec2.infrastructure_sdk.deploy_remote.deploy",
+        side_effect=NoCredentialsError(),
+    ):
+        result = runner.invoke(cli, ["deploy", "ec2"])
+
+    assert result.exit_code != 0
+    assert "AWS credentials not found." in result.output
+    assert "Configure AWS credentials before deploying to EC2" in result.output
+
+
+def test_deploy_ec2_partial_credentials_surfaces_friendly_error() -> None:
+    from botocore.exceptions import PartialCredentialsError
+
+    runner = CliRunner()
+    with patch(
+        "tests.deployment.ec2.infrastructure_sdk.deploy_remote.deploy",
+        side_effect=PartialCredentialsError(
+            provider="env",
+            cred_var="AWS_SECRET_ACCESS_KEY",
+        ),
+    ):
+        result = runner.invoke(cli, ["deploy", "ec2"])
+
+    assert result.exit_code != 0
+    assert "AWS credentials not found." in result.output
+    assert "Configure AWS credentials before deploying to EC2" in result.output
+
+
+def test_deploy_ec2_down_missing_credentials_surfaces_friendly_error() -> None:
+    from botocore.exceptions import NoCredentialsError
+
+    runner = CliRunner()
+    with patch(
+        "tests.deployment.ec2.infrastructure_sdk.destroy_remote.destroy",
+        side_effect=NoCredentialsError(),
+    ):
+        result = runner.invoke(cli, ["deploy", "ec2", "--down"])
+
+    assert result.exit_code != 0
+    assert "AWS credentials not found." in result.output
+    assert "Configure AWS credentials before tearing down an EC2 deployment" in result.output
+
+
 def test_deploy_langsmith_success_prints_url() -> None:
     runner = CliRunner()
 

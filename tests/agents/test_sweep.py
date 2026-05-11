@@ -10,7 +10,6 @@ import pytest
 
 import app.agents.sweep as sweep_module
 from app.agents.registry import AgentRecord, AgentRegistry
-from app.agents.sweep import SweepResult, run_startup_sweep, sweep
 
 # A PID large enough to never be allocated on Linux/macOS
 # (``kernel.pid_max`` defaults to 32768 or 4194304). Cross-platform
@@ -34,7 +33,7 @@ def test_dead_pid_record_is_forgotten(isolated_registry: AgentRegistry, tmp_path
     isolated_registry.register(AgentRecord(name="ghost", pid=_DEAD_PID, command="bin"))
     assert isolated_registry.get(_DEAD_PID) is not None  # sanity: registered ok
 
-    result = sweep(isolated_registry, lock_dir=tmp_path / "no-such-dir")
+    result = sweep_module.sweep(isolated_registry, lock_dir=tmp_path / "no-such-dir")
 
     assert isolated_registry.get(_DEAD_PID) is None
     assert len(result.removed_records) == 1
@@ -46,7 +45,7 @@ def test_live_pid_record_is_kept(isolated_registry: AgentRegistry, tmp_path: Pat
     self_pid = os.getpid()
     isolated_registry.register(AgentRecord(name="opensre", pid=self_pid, command="opensre"))
 
-    result = sweep(isolated_registry, lock_dir=tmp_path / "no-such-dir")
+    result = sweep_module.sweep(isolated_registry, lock_dir=tmp_path / "no-such-dir")
 
     assert isolated_registry.get(self_pid) is not None
     assert result.removed_records == ()
@@ -71,7 +70,7 @@ def test_access_denied_pid_is_kept_not_pruned(
 
     monkeypatch.setattr(sweep_module, "pid_exists", lambda pid: pid == foreign_pid)
 
-    result = sweep(isolated_registry, lock_dir=tmp_path / "no-such-dir")
+    result = sweep_module.sweep(isolated_registry, lock_dir=tmp_path / "no-such-dir")
 
     assert isolated_registry.get(foreign_pid) is not None
     assert result.removed_records == ()
@@ -93,7 +92,7 @@ def test_access_denied_pid_lockfile_is_kept(
 
     monkeypatch.setattr(sweep_module, "pid_exists", lambda pid: pid == foreign_pid)
 
-    result = sweep(isolated_registry, lock_dir=lock_dir)
+    result = sweep_module.sweep(isolated_registry, lock_dir=lock_dir)
 
     assert foreign_lock.exists()
     assert result.removed_locks == ()
@@ -120,7 +119,7 @@ def test_many_dead_pids_trigger_one_rewrite_not_n(
 
     isolated_registry._rewrite = _spy  # type: ignore[method-assign]
 
-    result = sweep(isolated_registry, lock_dir=tmp_path / "no-such-dir")
+    result = sweep_module.sweep(isolated_registry, lock_dir=tmp_path / "no-such-dir")
 
     assert len(result.removed_records) == 5
     assert rewrite_call_count == 1, (
@@ -140,8 +139,8 @@ def test_idempotent_second_run_is_a_noop(isolated_registry: AgentRegistry, tmp_p
     isolated_registry.register(AgentRecord(name="ghost", pid=_DEAD_PID, command="bin"))
     isolated_registry.register(AgentRecord(name="opensre", pid=os.getpid(), command="opensre"))
 
-    first = sweep(isolated_registry, lock_dir=tmp_path / "no-such-dir")
-    second = sweep(isolated_registry, lock_dir=tmp_path / "no-such-dir")
+    first = sweep_module.sweep(isolated_registry, lock_dir=tmp_path / "no-such-dir")
+    second = sweep_module.sweep(isolated_registry, lock_dir=tmp_path / "no-such-dir")
 
     assert len(first.removed_records) == 1
     assert second.removed_records == ()
@@ -162,7 +161,7 @@ def test_stale_lockfile_for_dead_pid_is_removed(
     stale_lock = lock_dir / f"{_DEAD_PID}.lock"
     stale_lock.write_text("locked")
 
-    result = sweep(isolated_registry, lock_dir=lock_dir)
+    result = sweep_module.sweep(isolated_registry, lock_dir=lock_dir)
 
     assert not stale_lock.exists()
     assert stale_lock in result.removed_locks
@@ -174,7 +173,7 @@ def test_live_lockfile_is_kept(isolated_registry: AgentRegistry, tmp_path: Path)
     live_lock = lock_dir / f"{os.getpid()}.lock"
     live_lock.write_text("locked")
 
-    result = sweep(isolated_registry, lock_dir=lock_dir)
+    result = sweep_module.sweep(isolated_registry, lock_dir=lock_dir)
 
     assert live_lock.exists()
     assert result.removed_locks == ()
@@ -193,7 +192,7 @@ def test_non_pid_lockfile_names_are_ignored(
     other = lock_dir / "settings.json"
     other.write_text("{}")
 
-    result = sweep(isolated_registry, lock_dir=lock_dir)
+    result = sweep_module.sweep(isolated_registry, lock_dir=lock_dir)
 
     assert foreign.exists()
     assert other.exists()
@@ -203,7 +202,7 @@ def test_non_pid_lockfile_names_are_ignored(
 def test_missing_lock_dir_is_tolerated(isolated_registry: AgentRegistry, tmp_path: Path) -> None:
     """A non-existent lock_dir doesn't raise — common on a fresh
     install where no agent has registered yet."""
-    result = sweep(isolated_registry, lock_dir=tmp_path / "definitely-not-here")
+    result = sweep_module.sweep(isolated_registry, lock_dir=tmp_path / "definitely-not-here")
     assert result.removed_locks == ()
 
 
@@ -224,7 +223,7 @@ def test_lockfile_unlink_failure_is_logged_with_exc_info(
         patch.object(Path, "unlink", side_effect=PermissionError("read-only fs")),
         caplog.at_level("WARNING", logger="app.agents.sweep"),
     ):
-        result = sweep(isolated_registry, lock_dir=lock_dir)
+        result = sweep_module.sweep(isolated_registry, lock_dir=lock_dir)
 
     # The file is still there because unlink was mocked to fail
     assert stuck_lock.exists()
@@ -257,7 +256,7 @@ def test_lockfile_already_gone_is_silently_idempotent(
         patch.object(Path, "unlink", side_effect=FileNotFoundError("already gone")),
         caplog.at_level("WARNING", logger="app.agents.sweep"),
     ):
-        result = sweep(isolated_registry, lock_dir=lock_dir)
+        result = sweep_module.sweep(isolated_registry, lock_dir=lock_dir)
 
     # The race-already-removed file is treated as nothing-to-do:
     # not in removed_locks, but also no warning logged.
@@ -281,7 +280,7 @@ def test_sweep_result_total_property(isolated_registry: AgentRegistry, tmp_path:
     # signed-int32 max, so ``+ 1`` would overflow ``psutil.pid_exists``.
     (lock_dir / f"{_DEAD_PID - 1}.lock").write_text("locked")
 
-    result = sweep(isolated_registry, lock_dir=lock_dir)
+    result = sweep_module.sweep(isolated_registry, lock_dir=lock_dir)
 
     assert result.total == 1 + 2  # 1 record + 2 locks
 
@@ -289,7 +288,7 @@ def test_sweep_result_total_property(isolated_registry: AgentRegistry, tmp_path:
 def test_empty_sweep_result_is_falsy_in_total() -> None:
     """A no-op sweep produces ``SweepResult()`` with total == 0 — the
     boot-time logger uses this to decide whether to emit a message."""
-    empty = SweepResult()
+    empty = sweep_module.SweepResult()
     assert empty.total == 0
     assert empty.removed_records == ()
     assert empty.removed_locks == ()
@@ -312,5 +311,5 @@ def test_run_startup_sweep_swallows_exceptions(monkeypatch: pytest.MonkeyPatch) 
 
     result = sweep_module.run_startup_sweep()
 
-    assert isinstance(result, SweepResult)
+    assert isinstance(result, sweep_module.SweepResult)
     assert result.total == 0

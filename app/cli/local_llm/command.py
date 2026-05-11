@@ -5,7 +5,7 @@ from __future__ import annotations
 import questionary
 from rich.console import Console
 
-from app.cli.interactive_shell.theme import DIM, ERROR, HIGHLIGHT, WARNING
+from app.cli.interactive_shell.ui.theme import DIM, ERROR, HIGHLIGHT, WARNING
 from app.cli.local_llm.hardware import detect_hardware, recommend_model
 from app.cli.local_llm.ollama import (
     install,

@@ -57,14 +57,33 @@ def _echo_catalog_item(item: Any, *, indent: int = 0) -> None:
         _echo_catalog_item(child, indent=indent + 1)
 
 
-def _build_synthetic_argv(*, scenario: str, output_json: bool, mock_grafana: bool) -> list[str]:
+def _build_synthetic_argv(
+    *,
+    scenario: str,
+    levels: str,
+    parallel_levels: int,
+    output_json: bool,
+    mock_grafana: bool,
+    report: bool | None,
+    observations_dir: str,
+) -> list[str]:
     argv: list[str] = []
     if scenario:
         argv.extend(["--scenario", scenario])
+    elif levels and levels != "1,2,3,4":
+        argv.extend(["--levels", levels])
+    if parallel_levels != 1:
+        argv.extend(["--parallel-levels", str(parallel_levels)])
     if output_json:
         argv.append("--json")
     if mock_grafana:
         argv.append("--mock-grafana")
+    if report is True:
+        argv.append("--report")
+    elif report is False:
+        argv.append("--no-report")
+    if observations_dir:
+        argv.extend(["--observations-dir", observations_dir])
     return argv
 
 
@@ -135,8 +154,22 @@ def _synthetic_suite_not_bundled_error() -> OpenSREError:
 
 
 @tests.command(name="synthetic")
+@click.argument("scope", required=False)
 @click.option(
     "--scenario", default="", help="Pin to a single scenario directory, e.g. 001-replication-lag."
+)
+@click.option(
+    "--levels",
+    default="1,2,3,4",
+    show_default=True,
+    help="Comma-separated scenario_difficulty levels to execute when --scenario is not set.",
+)
+@click.option(
+    "--parallel-levels",
+    default=1,
+    type=int,
+    show_default=True,
+    help="Number of scenario difficulty levels to execute in parallel.",
 )
 @click.option("--json", "output_json", is_flag=True, help="Print machine-readable JSON results.")
 @click.option(
@@ -146,8 +179,48 @@ def _synthetic_suite_not_bundled_error() -> OpenSREError:
     show_default=True,
     help="Serve fixture data via FixtureGrafanaBackend instead of real Grafana calls.",
 )
-def run_synthetic_suite(scenario: str, output_json: bool, mock_grafana: bool) -> None:
+@click.option(
+    "--report/--no-report",
+    default=None,
+    help=(
+        "Print Rich observation report per scenario. Defaults to auto "
+        "(enabled for single-scenario runs)."
+    ),
+)
+@click.option(
+    "--observations-dir",
+    default="",
+    help="Directory where synthetic run observations are written.",
+)
+def run_synthetic_suite(
+    scope: str | None,
+    scenario: str,
+    levels: str,
+    parallel_levels: int,
+    output_json: bool,
+    mock_grafana: bool,
+    report: bool | None,
+    observations_dir: str,
+) -> None:
     """Run the synthetic RDS PostgreSQL RCA benchmark."""
+    normalized_scope = (scope or "").strip().lower()
+    if normalized_scope:
+        if normalized_scope != "all":
+            raise OpenSREError(
+                f"Unknown synthetic scope: {scope}",
+                suggestion="Use 'opensre tests synthetic all' or pass --scenario.",
+            )
+        if scenario:
+            raise OpenSREError(
+                "Cannot combine positional 'all' with --scenario.",
+                suggestion="Use either 'opensre tests synthetic all' or '--scenario <id>'.",
+            )
+        # "all" is an explicit intent to run every level; default to full
+        # level parallelism unless the user already overrode the worker count.
+        levels = "1,2,3,4"
+        if parallel_levels == 1:
+            parallel_levels = 4
+
     # ``packaging/opensre.spec`` only collects ``app/`` data files, so neither
     # the synthetic Python package's submodules nor the per-scenario data
     # directories are reliably present in PyInstaller bundles. Two failure
@@ -186,8 +259,12 @@ def run_synthetic_suite(scenario: str, output_json: bool, mock_grafana: bool) ->
         exit_code = run_suite_main(
             _build_synthetic_argv(
                 scenario=scenario,
+                levels=levels,
+                parallel_levels=parallel_levels,
                 output_json=output_json,
                 mock_grafana=mock_grafana,
+                report=report,
+                observations_dir=observations_dir,
             )
         )
     except Exception as exc:

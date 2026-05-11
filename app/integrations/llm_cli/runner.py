@@ -143,6 +143,28 @@ class CLIBackedLLMClient:
             base = self._adapter.explain_failure(
                 stdout=out, stderr=err, returncode=proc.returncode
             ).strip()
+            # When the failure message signals an auth problem raise
+            # CLIAuthenticationRequired so callers (reraise_cli_runtime_error,
+            # server endpoints) get structured, actionable handling instead of
+            # a bare RuntimeError that lands in Sentry as a spurious bug.
+            # Patterns cover all current adapters:
+            #   kimi        → "not logged in", "api key invalid", "re-authenticate"
+            #   cursor      → "not logged in"
+            #   opencode    → "authentication failed", "not authenticated"
+            #   claude/gemini/codex pass raw stderr which may contain these phrases too
+            _base_lower = base.lower()
+            if (
+                "not logged in" in _base_lower
+                or "api key invalid" in _base_lower
+                or "re-authenticate" in _base_lower
+                or "authentication failed" in _base_lower
+                or "not authenticated" in _base_lower
+            ):
+                raise CLIAuthenticationRequired(
+                    provider=self._adapter.name,
+                    auth_hint=self._adapter.auth_hint,
+                    detail=base,
+                )
             if auth_probe_unclear:
                 message = (
                     f"{base}\n\n"

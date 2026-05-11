@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import click
 
-from app.cli.interactive_shell.theme import BRAND, DIM, ERROR, HIGHLIGHT, TEXT, WARNING
+from app.cli.interactive_shell.ui.theme import BRAND, DIM, ERROR, HIGHLIGHT, TEXT, WARNING
 
 if TYPE_CHECKING:
     from app.remote.client import RemoteAgentClient
