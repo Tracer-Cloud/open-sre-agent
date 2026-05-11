@@ -180,9 +180,6 @@ def format_tempo_search() -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-_K8S_LOG_SOURCE_TYPES = ("k8s_events", "k8s_rollout")
-
-
 def k8s_events_to_loki_entries(
     events_fixture: dict[str, Any] | None,
 ) -> list[dict[str, Any]]:
