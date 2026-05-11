@@ -283,6 +283,133 @@ class TestTtyParagraphRender:
             f"post-fence paragraph deferred to EOS — got {parse_count[0]} parses"
         )
 
+    def test_multiple_blank_lines_inside_single_fence_render_as_one_block(
+        self,
+    ) -> None:
+        """A single code block with several embedded ``\\n\\n`` must render
+        once when its fence closes. Exercises ``search_from`` advancing
+        repeatedly within a single ``_flush_paragraphs`` call.
+        """
+        from app.cli.interactive_shell.ui import streaming as streaming_module
+
+        parse_count = [0]
+        real_markdown = streaming_module.Markdown
+
+        class _SpyMarkdown(real_markdown):  # type: ignore[misc, valid-type]
+            def __init__(self, text: str, **kwargs) -> None:
+                parse_count[0] += 1
+                super().__init__(text, **kwargs)
+
+        original_markdown = streaming_module.Markdown
+        streaming_module.Markdown = _SpyMarkdown
+        try:
+            console, _ = _tty_console()
+            stream_to_console(
+                console,
+                label="assistant",
+                chunks=_yield_chunks(
+                    [
+                        "Intro.\n\n",
+                        "```python\n",
+                        "a\n\n",  # first embedded blank
+                        "b\n\n",  # second embedded blank
+                        "c\n\n",  # third embedded blank
+                        "d\n",
+                        "```\n\n",
+                        "After.\n\n",
+                    ]
+                ),
+            )
+        finally:
+            streaming_module.Markdown = original_markdown
+
+        # 3 parses with the fix: intro + fenced block (rendered once when
+        # fence closes, after 3 skip iterations advance search_from past
+        # each embedded blank) + after. Without the fix, the inner loop
+        # would break on the first odd-fence boundary and defer the block
+        # + after to a single EOS force-flush → 2 parses.
+        assert parse_count[0] == 3, (
+            f"expected 3 parses (intro + block + after), got {parse_count[0]}"
+        )
+
+    def test_two_consecutive_fences_each_with_blank_line_render_independently(
+        self,
+    ) -> None:
+        """Two fenced blocks back-to-back, each containing an embedded
+        ``\\n\\n``. Each block must render as its own paragraph when its
+        fence closes — ``search_from`` is reset to 0 after each render so
+        the second block isn't blocked by stale state from the first.
+        """
+        from app.cli.interactive_shell.ui import streaming as streaming_module
+
+        parse_count = [0]
+        real_markdown = streaming_module.Markdown
+
+        class _SpyMarkdown(real_markdown):  # type: ignore[misc, valid-type]
+            def __init__(self, text: str, **kwargs) -> None:
+                parse_count[0] += 1
+                super().__init__(text, **kwargs)
+
+        original_markdown = streaming_module.Markdown
+        streaming_module.Markdown = _SpyMarkdown
+        try:
+            console, _ = _tty_console()
+            stream_to_console(
+                console,
+                label="assistant",
+                chunks=_yield_chunks(
+                    [
+                        "Intro.\n\n",
+                        "```py\nfoo\n\nbar\n```\n\n",  # block 1, embedded blank
+                        "```py\nbaz\n\nqux\n```\n\n",  # block 2, embedded blank
+                        "End.\n\n",
+                    ]
+                ),
+            )
+        finally:
+            streaming_module.Markdown = original_markdown
+
+        # 4 parses with the fix: intro + block1 + block2 + end. Without
+        # the fix, block1's leading embedded ``\n\n`` would lock the inner
+        # loop on the odd-fence break for every subsequent chunk, so the
+        # entire tail (block1 + block2 + end) collapses into one EOS
+        # force-flush → 2 parses total.
+        assert parse_count[0] == 4, (
+            f"expected 4 parses (intro + 2 blocks + end), got {parse_count[0]}"
+        )
+
+    def test_unclosed_fence_with_embedded_blank_line_renders_at_eos(self) -> None:
+        """Unclosed fence containing an embedded ``\\n\\n`` must not hang
+        the inner loop and must surface the partial buffer at end-of-stream.
+
+        With the skip-past-open-fence logic, the inner loop advances
+        ``search_from`` past each embedded ``\\n\\n``, eventually returns
+        ``-1`` from ``find``, and exits cleanly. The outer ``finally``
+        then force-flushes the partial buffer so the user sees the
+        truncated response rather than nothing.
+        """
+        chunks = [
+            "```py\n",
+            "a = 1\n\n",  # blank inside fence
+            "b = 2\n",  # stream ends without closing the fence
+        ]
+
+        console, buf = _tty_console()
+        result = stream_to_console(
+            console,
+            label="assistant",
+            chunks=_yield_chunks(chunks),
+        )
+
+        # Both code lines must appear in the rendered output — the
+        # partial fence is force-flushed at EOS so the user sees what
+        # was streamed before the LLM cut off.
+        output = _strip_ansi(buf.getvalue())
+        assert "a = 1" in output
+        assert "b = 2" in output
+        assert "a = 1" in result
+        assert "b = 2" in result
+
     def test_returns_empty_string_when_stream_is_empty(self) -> None:
         """An empty stream must not leave a frozen spinner on screen."""
         console, buf = _tty_console()

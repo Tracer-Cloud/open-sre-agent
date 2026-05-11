@@ -5,6 +5,9 @@ from __future__ import annotations
 import asyncio
 import io
 import re
+import sys
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -795,3 +798,230 @@ class TestBuildCancelKeyBindings:
         registered = {getattr(k, "value", k) for b in kb.bindings for k in b.keys}
         assert "escape" in registered, f"escape binding missing — registered: {registered}"
         assert "c-l" in registered, f"Ctrl+L binding missing — registered: {registered}"
+
+
+# ── Confirmation routing (worker-thread bridge) ──────────────────────────────
+
+
+class TestRouteConfirmThroughPrompt:
+    """``_route_confirm_through_prompt`` runs on the worker thread that
+    dispatches a turn. It parks on a ``threading.Event`` while the main
+    asyncio loop collects the next ``prompt_async`` return and hands the
+    text back via ``state.deliver_confirmation``. ``Esc`` (or any other
+    cancel path) flips ``state.current_cancel_event`` and the polling
+    loop returns ``""`` within one ``_PROMPT_REFRESH_INTERVAL_S`` tick.
+
+    These tests pin both paths so a stuck event can never leave a worker
+    parked forever. Each runs the function in a real background thread
+    and asserts it returns within a short timeout.
+    """
+
+    # Generous join timeout — one poll tick is
+    # ``loop._PROMPT_REFRESH_INTERVAL_S`` (~100ms); every return path
+    # must complete well inside this, even on slow CI hardware. A
+    # regression that leaves the worker parked surfaces as a test
+    # failure (``t.is_alive()``) rather than a hang.
+    _JOIN_TIMEOUT_S = 2.0
+    # How long ``_wait_until_parked`` polls for the worker thread to
+    # reach the parked state. Worker parks in microseconds (a few
+    # Python statements after thread start), so 1s is a wide safety
+    # margin while still failing fast if the parking never happens.
+    # Must be < ``_JOIN_TIMEOUT_S`` so the parking check fails before
+    # the join would.
+    _PARK_TIMEOUT_S = 1.0
+    # Spin granularity for the parking poll. 5ms is fine-grained enough
+    # that the test sees the parked state within one or two ticks of it
+    # happening (~10ms upper bound on added test latency), while
+    # avoiding a tight loop that hogs the GIL from the worker thread
+    # we're waiting on.
+    _PARK_POLL_INTERVAL_S = 0.005
+
+    def _wait_until_parked(self, state: loop._ReplState) -> None:
+        """Spin until the worker has assigned ``state.confirm_event``.
+
+        The function does this before its first ``response_event.wait``,
+        so once we see it, the worker is definitively in the poll loop
+        and ready to receive a delivery or cancel signal.
+        """
+        deadline = time.monotonic() + self._PARK_TIMEOUT_S
+        while time.monotonic() < deadline:
+            if state.is_awaiting_confirmation():
+                return
+            time.sleep(self._PARK_POLL_INTERVAL_S)
+        raise AssertionError("worker never parked on confirm_event")
+
+    def _run_in_thread(
+        self, state: loop._ReplState, prompt_text: str
+    ) -> tuple[threading.Thread, list[str]]:
+        result: list[str] = []
+
+        def target() -> None:
+            result.append(loop._route_confirm_through_prompt(state, prompt_text))
+
+        t = threading.Thread(target=target, daemon=True)
+        t.start()
+        return t, result
+
+    def test_returns_delivered_response_and_clears_state(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Happy path: main loop calls ``state.deliver_confirmation('y')``
+        → worker wakes from poll → returns ``"y"``; ``confirm_event`` and
+        ``confirm_response`` are cleared so the next confirmation starts
+        from a fresh slate.
+        """
+        # Capture stdout so the prompt text doesn't leak into pytest's
+        # captured output. The function writes via ``sys.stdout`` (not
+        # the Rich Console), so a plain ``StringIO`` swap suffices.
+        captured = io.StringIO()
+        monkeypatch.setattr(sys, "stdout", captured)
+
+        state = loop._ReplState()
+        # Active dispatch must have a cancel event parked; in production
+        # ``_run_one_dispatch`` allocates this before invoking the
+        # confirm_fn. Never set in this test.
+        state.current_cancel_event = threading.Event()
+
+        t, result = self._run_in_thread(state, "Proceed? [y/N] ")
+        self._wait_until_parked(state)
+
+        state.deliver_confirmation("y")
+        t.join(timeout=self._JOIN_TIMEOUT_S)
+
+        assert not t.is_alive(), "worker did not return within timeout"
+        assert result == ["y"]
+        # Finally-block invariant: state cleared for the next prompt.
+        assert state.confirm_event is None
+        assert state.confirm_response == []
+        # Prompt text was written before parking.
+        assert "Proceed? [y/N]" in captured.getvalue()
+
+    def test_returns_empty_string_when_cancel_event_fires(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Esc-cancel **user-facing** path: pressing Esc during an
+        active dispatch routes through the key binding to
+        ``state.cancel_current_dispatch()``, which sets BOTH
+        ``current_cancel_event`` AND ``confirm_event``. The worker
+        wakes from ``response_event.wait`` because ``confirm_event``
+        is the same object as ``response_event``; the polling loop
+        exits via the natural ``while not response_event.is_set()``
+        condition. With ``confirm_response`` never populated, the
+        function returns ``""`` from the else branch of its return
+        expression — ``execution_policy`` treats empty as "decline".
+
+        This pins the production ESC path observable behaviour. The
+        in-loop cancel-check (``if cancel.is_set(): return ""``) is
+        exercised separately by
+        ``test_returns_empty_string_when_cancel_already_set_before_park``
+        and ``test_in_loop_cancel_check_fires_after_wait_timeout``,
+        which set ``current_cancel_event`` without also setting
+        ``confirm_event``.
+        """
+        monkeypatch.setattr(sys, "stdout", io.StringIO())
+
+        state = loop._ReplState()
+        state.current_cancel_event = threading.Event()
+
+        t, result = self._run_in_thread(state, "Proceed? [y/N] ")
+        self._wait_until_parked(state)
+
+        state.cancel_current_dispatch()
+        t.join(timeout=self._JOIN_TIMEOUT_S)
+
+        assert not t.is_alive(), "worker did not return within timeout"
+        assert result == [""]
+        assert state.confirm_event is None
+        assert state.confirm_response == []
+
+    def test_returns_empty_string_when_cancel_already_set_before_park(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Race-safety: if the user pressed Esc *before* the worker
+        reaches the poll loop, the first iteration must observe
+        ``current_cancel_event.is_set()`` and return ``""`` immediately
+        rather than waiting forever for a confirmation that won't come.
+
+        Isolates the **in-loop cancel-check** on the FIRST iteration:
+        ``current_cancel_event`` is pre-set; ``confirm_event`` is NOT
+        set; the worker enters the loop, reaches the cancel-check
+        BEFORE the first ``response_event.wait``, and returns ``""``.
+        Deleting the cancel-check would make this test hang to
+        ``_JOIN_TIMEOUT_S`` and fail.
+        """
+        monkeypatch.setattr(sys, "stdout", io.StringIO())
+
+        state = loop._ReplState()
+        cancel = threading.Event()
+        cancel.set()  # already cancelled
+        state.current_cancel_event = cancel
+
+        t, result = self._run_in_thread(state, "Proceed? ")
+        t.join(timeout=self._JOIN_TIMEOUT_S)
+
+        assert not t.is_alive(), "pre-set cancel did not unblock worker"
+        assert result == [""]
+        assert state.confirm_event is None
+
+    def test_in_loop_cancel_check_fires_after_wait_timeout(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """In-loop cancel-check on a SUBSEQUENT iteration: the worker
+        is already parked in ``response_event.wait(timeout=0.1s)`` when
+        cancel fires. The wait times out (because we don't touch
+        ``confirm_event``), the next iteration's cancel-check sees
+        ``current_cancel_event.is_set()``, returns ``""``.
+
+        Why this is needed: the user-facing test
+        (``test_returns_empty_string_when_cancel_event_fires``) calls
+        ``state.cancel_current_dispatch()``, which sets BOTH the
+        cancel and confirm events — the worker exits via the
+        confirm_event-set path, NOT via the cancel-check. Deleting the
+        cancel-check would still pass that test. This test sets ONLY
+        the cancel event so the only way out is through the check.
+        """
+        monkeypatch.setattr(sys, "stdout", io.StringIO())
+
+        state = loop._ReplState()
+        cancel = threading.Event()
+        state.current_cancel_event = cancel
+
+        t, result = self._run_in_thread(state, "Proceed? ")
+        self._wait_until_parked(state)
+
+        # Set cancel directly — do NOT set confirm_event. The worker
+        # is inside ``response_event.wait(timeout=0.1s)``; that wait
+        # will time out, the next iteration's cancel-check then fires.
+        cancel.set()
+        t.join(timeout=self._JOIN_TIMEOUT_S)
+
+        assert not t.is_alive(), (
+            "in-loop cancel-check did not return within timeout — "
+            "the function ignored a cancel signal that arrived mid-wait"
+        )
+        assert result == [""]
+        assert state.confirm_event is None
+
+    def test_empty_string_delivery_returns_empty_string(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """User presses Enter on the confirmation prompt without typing
+        anything → ``state.deliver_confirmation("")`` is called →
+        function returns ``""``. Real production case: ``y/N`` prompts
+        default to "decline" when the user just hits Enter.
+        """
+        monkeypatch.setattr(sys, "stdout", io.StringIO())
+
+        state = loop._ReplState()
+        state.current_cancel_event = threading.Event()
+
+        t, result = self._run_in_thread(state, "Proceed? [y/N] ")
+        self._wait_until_parked(state)
+
+        state.deliver_confirmation("")
+        t.join(timeout=self._JOIN_TIMEOUT_S)
+
+        assert not t.is_alive(), "empty delivery did not unblock worker"
+        assert result == [""]
+        assert state.confirm_event is None
+        assert state.confirm_response == []

@@ -605,37 +605,6 @@ async def _run_interactive(
         state.cancel_current_dispatch()
         main_loop.call_soon_threadsafe(pt_app.exit)
 
-    def _route_confirm_through_prompt(prompt_text: str) -> str:
-        """Worker-thread confirmation handler. Asks the user via the
-        active prompt_toolkit input instead of stdlib ``input()``
-        (which would deadlock against the running ``prompt_async``).
-
-        Prints the confirmation prompt above the input, parks itself
-        on a ``threading.Event``, and waits for the next text the user
-        submits. Esc cancels and returns ``""`` (which execution_policy
-        treats as "decline").
-        """
-        sys.stdout.write(prompt_text)
-        sys.stdout.flush()
-
-        response_event = threading.Event()
-        state.confirm_event = response_event
-        state.confirm_response = []
-        try:
-            # Poll instead of wait-forever so cancel propagates within
-            # one ``_PROMPT_REFRESH_INTERVAL_S`` tick. Poll the *active*
-            # dispatch's cancel event (not a shared one) so a stale
-            # cancel from a prior turn never shows up here.
-            while not response_event.is_set():
-                cancel = state.current_cancel_event
-                if cancel is not None and cancel.is_set():
-                    return ""
-                response_event.wait(timeout=_PROMPT_REFRESH_INTERVAL_S)
-            return state.confirm_response[0] if state.confirm_response else ""
-        finally:
-            state.confirm_event = None
-            state.confirm_response = []
-
     async def _run_one_dispatch(text: str) -> None:
         # Per-turn cancel event — fresh ``threading.Event`` so a worker
         # thread from a previous turn (still draining its iterator at
@@ -660,7 +629,7 @@ async def _run_interactive(
                 session,
                 console,
                 on_exit=_request_exit,
-                confirm_fn=_route_confirm_through_prompt,
+                confirm_fn=lambda prompt: _route_confirm_through_prompt(state, prompt),
             )
         except asyncio.CancelledError:
             console.print(f"[{WARNING}]· interrupted[/]")
@@ -792,6 +761,42 @@ async def _run_interactive(
             # REPL's outer ``finally`` and the session is shutting down.
             # Suppress so the exit path completes cleanly.
             pass
+
+
+def _route_confirm_through_prompt(state: _ReplState, prompt_text: str) -> str:
+    """Worker-thread confirmation handler. Asks the user via the
+    active prompt_toolkit input instead of stdlib ``input()``
+    (which would deadlock against the running ``prompt_async``).
+
+    Prints the confirmation prompt above the input, parks itself
+    on a ``threading.Event``, and waits for the next text the user
+    submits. Esc cancels and returns ``""`` (which execution_policy
+    treats as "decline").
+
+    Module-level (with explicit ``state``) rather than a closure inside
+    :func:`_run_interactive` so the threaded happy-path / cancel-path
+    tests can drive it directly.
+    """
+    sys.stdout.write(prompt_text)
+    sys.stdout.flush()
+
+    response_event = threading.Event()
+    state.confirm_event = response_event
+    state.confirm_response = []
+    try:
+        # Poll instead of wait-forever so cancel propagates within
+        # one ``_PROMPT_REFRESH_INTERVAL_S`` tick. Poll the *active*
+        # dispatch's cancel event (not a shared one) so a stale
+        # cancel from a prior turn never shows up here.
+        while not response_event.is_set():
+            cancel = state.current_cancel_event
+            if cancel is not None and cancel.is_set():
+                return ""
+            response_event.wait(timeout=_PROMPT_REFRESH_INTERVAL_S)
+        return state.confirm_response[0] if state.confirm_response else ""
+    finally:
+        state.confirm_event = None
+        state.confirm_response = []
 
 
 def _build_cancel_key_bindings(state: _ReplState) -> KeyBindings:
