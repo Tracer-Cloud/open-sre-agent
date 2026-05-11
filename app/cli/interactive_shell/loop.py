@@ -35,6 +35,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from prompt_toolkit import PromptSession
+from prompt_toolkit.application.current import get_app_or_none
 from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.key_binding import KeyBindings, merge_key_bindings
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent
@@ -487,14 +488,23 @@ class _SpinnerState:
         layout.
 
         Hint text follows Claude Code: ``esc to interrupt`` while a turn
-        is streaming, ``/ for commands  ·  ↑↓ history  ·  esc to clear``
-        when idle so the user sees what each key does.
+        is streaming, otherwise ``/ for commands  ·  ↑↓ history`` with
+        ``  ·  esc to clear`` appended only when the input buffer
+        actually has text. The Esc handler is a no-op on empty buffer
+        (see :func:`_build_cancel_key_bindings`), so advertising the
+        clear shortcut unconditionally was misleading.
         """
         rule = _prompt_rule_ansi()
         if self.streaming:
             hint = "esc to interrupt"
         else:
-            hint = "/ for commands  ·  ↑↓ history  ·  esc to clear"
+            hint = "/ for commands  ·  ↑↓ history"
+            app = get_app_or_none()
+            # ``Application.current_buffer`` always returns a Buffer
+            # (returns a dummy if no focus), so direct access is safe
+            # — no None guard needed beyond the app-None check.
+            if app is not None and app.current_buffer.text:
+                hint += "  ·  esc to clear"
         return ANSI(f"{rule}\n{ANSI_DIM}  {hint}{ANSI_RESET}")
 
     def inline_spinner_ansi(self) -> str:
@@ -781,8 +791,18 @@ def _route_confirm_through_prompt(state: _ReplState, prompt_text: str) -> str:
     sys.stdout.flush()
 
     response_event = threading.Event()
-    state.confirm_event = response_event
+    # Ordering matters: reset the response list BEFORE publishing
+    # ``confirm_event``. ``deliver_confirmation`` early-exits when
+    # ``confirm_event is None``, so the list reset is invisible to
+    # the main thread; once ``confirm_event`` is non-None, any
+    # concurrent ``deliver_confirmation`` appends to the fresh list
+    # that this function then reads. Publishing the event first
+    # would expose a window where the main thread appends to the
+    # *previous* list (still referenced by ``state.confirm_response``)
+    # and the next statement here would rebind to ``[]``, silently
+    # dropping the user's answer.
     state.confirm_response = []
+    state.confirm_event = response_event
     try:
         # Poll instead of wait-forever so cancel propagates within
         # one ``_PROMPT_REFRESH_INTERVAL_S`` tick. Poll the *active*

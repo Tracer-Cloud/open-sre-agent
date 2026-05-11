@@ -596,13 +596,41 @@ class TestSpinnerState:
         assert spinner.streaming is False
         assert spinner.inline_spinner_ansi() == ""
 
-    def test_toolbar_idle_hint_lists_shortcut_keys(self) -> None:
-        """When idle, toolbar should advertise the keys the user can press."""
+    def test_toolbar_idle_hint_lists_shortcut_keys_when_buffer_empty(self) -> None:
+        """When idle and the input buffer is empty (no prompt-toolkit app
+        running in this test → ``get_app_or_none()`` returns None →
+        treated as empty), the toolbar advertises the always-useful keys
+        but hides ``esc to clear`` since Esc is a no-op on empty buffer.
+        """
+        spinner = loop._SpinnerState()
+        rendered = _strip_ansi(spinner.toolbar_ansi().value)
+        assert "/ for commands" in rendered
+        assert "history" in rendered
+        # Hidden — buffer is empty, Esc would be a no-op, so the hint
+        # would mislead the user.
+        assert "esc to clear" not in rendered
+
+    def test_toolbar_idle_hint_includes_esc_to_clear_when_buffer_has_text(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When idle and the input buffer has text, the toolbar appends
+        ``esc to clear`` to the hint so the user knows the shortcut
+        exists. ``get_app_or_none`` is monkeypatched to return a fake
+        app whose ``current_buffer.text`` is non-empty.
+        """
+
+        class _FakeBuffer:
+            text = "partially typed"
+
+        class _FakeApp:
+            current_buffer = _FakeBuffer()
+
+        monkeypatch.setattr(loop, "get_app_or_none", lambda: _FakeApp())
+
         spinner = loop._SpinnerState()
         rendered = _strip_ansi(spinner.toolbar_ansi().value)
         assert "esc to clear" in rendered
         assert "/ for commands" in rendered
-        assert "history" in rendered
 
     def test_toolbar_streaming_hint_says_interrupt(self) -> None:
         """During streaming the toolbar hint switches to ``esc to interrupt``."""
@@ -1001,6 +1029,70 @@ class TestRouteConfirmThroughPrompt:
         )
         assert result == [""]
         assert state.confirm_event is None
+
+    def test_confirm_response_reset_before_confirm_event_published(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Race-safety: the response list MUST be reset before
+        ``confirm_event`` is published. Otherwise a concurrent
+        ``deliver_confirmation`` (running between publish and reset)
+        appends to the current list, the next statement rebinds
+        ``confirm_response`` to ``[]``, and the user's answer is
+        silently dropped.
+
+        ``deliver_confirmation`` early-exits when ``confirm_event is
+        None``, so resetting the list first is invisible to the main
+        thread; only the event publish makes the parking observable.
+        This test instruments ``__setattr__`` to verify the ordering
+        deterministically — timing-based tests can't reliably hit the
+        sub-microsecond race window even when the bug is present.
+        """
+        monkeypatch.setattr(sys, "stdout", io.StringIO())
+
+        state = loop._ReplState()
+        state.current_cancel_event = threading.Event()
+
+        # Track every ``confirm_event`` / ``confirm_response`` write
+        # made by ``_route_confirm_through_prompt``. Monkeypatching
+        # AFTER state construction so the dataclass ``__init__`` field
+        # writes don't pollute the recorded order.
+        assignments: list[str] = []
+        real_setattr = loop._ReplState.__setattr__
+
+        def tracking_setattr(obj: object, name: str, value: object) -> None:
+            if name in ("confirm_event", "confirm_response"):
+                assignments.append(name)
+            real_setattr(obj, name, value)  # type: ignore[arg-type]
+
+        monkeypatch.setattr(loop._ReplState, "__setattr__", tracking_setattr)
+
+        t, result = self._run_in_thread(state, "Proceed? ")
+        self._wait_until_parked(state)
+
+        state.deliver_confirmation("answer")
+        t.join(timeout=self._JOIN_TIMEOUT_S)
+
+        assert result == ["answer"]
+
+        # During setup ``_route_confirm_through_prompt`` writes both
+        # attributes. The first write of each is the setup phase
+        # (later writes are the ``finally`` cleanup which clears
+        # both — order there doesn't matter). Pull out just the
+        # setup-phase assignment order.
+        setup_order: list[str] = []
+        for name in assignments:
+            setup_order.append(name)
+            if name == "confirm_event":
+                break  # confirm_event publish is the last setup write
+        assert "confirm_response" in setup_order, (
+            f"confirm_response never reset during setup — saw {setup_order}"
+        )
+        response_idx = setup_order.index("confirm_response")
+        event_idx = setup_order.index("confirm_event")
+        assert response_idx < event_idx, (
+            f"race window: confirm_event published before "
+            f"confirm_response was reset — order was {setup_order}"
+        )
 
     def test_empty_string_delivery_returns_empty_string(
         self, monkeypatch: pytest.MonkeyPatch
