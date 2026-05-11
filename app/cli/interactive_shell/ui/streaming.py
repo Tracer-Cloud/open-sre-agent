@@ -25,6 +25,7 @@ indirection keeps this module decoupled from the loop's
 
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Iterator
 
@@ -48,6 +49,13 @@ _PROGRESS_INTERVAL_S = 0.1
 # bullet header) stay in lock-step.
 _PARAGRAPH_BREAK = "\n\n"
 _CODE_FENCE = "```"
+# Match a triple-backtick only when it opens a line. An inline mention
+# inside flowing text (e.g. "The ``` marker opens a code block") would
+# otherwise flip the odd/even fence count below and stall paragraph
+# rendering until end-of-stream. CommonMark's fence syntax requires
+# the fence to be at line start anyway, so this is a tighter and
+# more accurate check than a naive substring count.
+_CODE_FENCE_LINE_RE = re.compile(rf"^{re.escape(_CODE_FENCE)}", re.MULTILINE)
 _MARKDOWN_CODE_THEME = "ansi_dark"
 
 STREAM_LABEL_ASSISTANT = "assistant"
@@ -202,10 +210,13 @@ def stream_to_console(
                 if idx < 0:
                     break
                 paragraph = text[: idx + break_len]
-                # Odd backtick-fence count means a fence is still open;
-                # the boundary is inside it, so skip and keep scanning
-                # for the next ``\n\n`` that lands outside any fence.
-                if paragraph.count(_CODE_FENCE) % 2 == 1:
+                # Odd line-start fence count means a fence is still
+                # open; the boundary is inside it, so skip and keep
+                # scanning for the next ``\n\n`` that lands outside
+                # any fence. Only line-start fences count (per
+                # CommonMark), so an inline mention like
+                # ``Use ``` to open a block`` doesn't trip this check.
+                if len(_CODE_FENCE_LINE_RE.findall(paragraph)) % 2 == 1:
                     search_from = idx + break_len
                     continue
                 _render_paragraph(paragraph)

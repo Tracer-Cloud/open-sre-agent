@@ -378,6 +378,48 @@ class TestTtyParagraphRender:
             f"expected 4 parses (intro + 2 blocks + end), got {parse_count[0]}"
         )
 
+    def test_inline_triple_backtick_mention_does_not_block_paragraph(self) -> None:
+        """Single inline ``\\`\\`\\``` mention inside flowing text must not
+        be miscounted as an open fence. The substring count would flip to
+        odd (1), skipping the paragraph's ``\\n\\n`` boundary and deferring
+        rendering to EOS. Only line-start fences count, so two paragraphs
+        each render incrementally as their ``\\n\\n`` arrives.
+        """
+        from app.cli.interactive_shell.ui import streaming as streaming_module
+
+        parse_count = [0]
+        real_markdown = streaming_module.Markdown
+
+        class _SpyMarkdown(real_markdown):  # type: ignore[misc, valid-type]
+            def __init__(self, text: str, **kwargs) -> None:
+                parse_count[0] += 1
+                super().__init__(text, **kwargs)
+
+        original_markdown = streaming_module.Markdown
+        streaming_module.Markdown = _SpyMarkdown
+        try:
+            console, _ = _tty_console()
+            stream_to_console(
+                console,
+                label="assistant",
+                chunks=_yield_chunks(
+                    [
+                        "The ``` marker opens a code block in markdown.\n\n",
+                        "Use it whenever you want to fence example code.\n\n",
+                    ]
+                ),
+            )
+        finally:
+            streaming_module.Markdown = original_markdown
+
+        # 2 parses: each paragraph flushes on its own ``\n\n``. Without
+        # the line-start fence check, the single inline ``` would flip
+        # the count to odd, both ``\n\n`` boundaries would be skipped,
+        # and the whole stream would force-flush as 1 parse at EOS.
+        assert parse_count[0] == 2, (
+            f"inline ``` mention blocked paragraph flush — got {parse_count[0]} parses"
+        )
+
     def test_unclosed_fence_with_embedded_blank_line_renders_at_eos(self) -> None:
         """Unclosed fence containing an embedded ``\\n\\n`` must not hang
         the inner loop and must surface the partial buffer at end-of-stream.
