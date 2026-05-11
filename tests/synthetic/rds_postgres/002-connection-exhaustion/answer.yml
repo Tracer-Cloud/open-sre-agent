@@ -3,7 +3,6 @@ required_keywords:
   - connection
   - max_connections
   - idle
-  - client sessions
   - clientread
 required_evidence_sources:
   - aws_cloudwatch_metrics
@@ -16,6 +15,8 @@ optimal_trajectory:
   - query_grafana_metrics
   - query_grafana_logs
   - query_grafana_alert_rules
+  - describe_rds_instance
+  - describe_rds_events
 max_investigation_loops: 4
 model_response: |
   ROOT_CAUSE: The database hit connection exhaustion because leaked client sessions consumed nearly all available max_connections. The outage came from session pressure, not a compute bottleneck. CPUUtilization showed mild elevation (~35-50%) from minute 4 onward, but this is a symptom of accumulated idle client sessions making periodic lightweight queries, not an independent CPU saturation event. Performance Insights confirms Client:ClientRead as the dominant wait event, ruling out CPU saturation and bad-query patterns.

@@ -45,6 +45,22 @@ _SYNTHETIC_SCENARIO_ID_RE = re.compile(
 # comparing against the directory prefix.
 _SYNTHETIC_NUMERIC_HINT_RE = re.compile(r"\b(?P<num>\d{1,4})\b")
 
+# NOTE: ``re.DOTALL`` is intentionally *not* set. ``split_prompt_clauses`` only
+# splits on ``and``/``then`` connectors, so a pasted multi-line prompt can
+# preserve newlines inside a clause. Letting ``.{0,40}`` cross a newline would
+# fire ``"run all\nsynthetic tests"`` as a suite request even when the two
+# words sit on unrelated lines of the user's input.
+_SYNTHETIC_ALL_RE = re.compile(
+    r"\b(?:all|entire)\b.{0,40}\b(?:synthetic|benchmark|tests?)\b"
+    r"|"
+    r"\b(?:synthetic|benchmark|tests?)\b.{0,40}\b(?:all|entire)\b"
+    r"|"
+    r"\bfull\s+(?:synthetic(?:\s+tests?)?|benchmark|suite)\b"
+    r"|"
+    r"\b(?:synthetic|benchmark|tests?)\b.{0,40}\bfull\s+suite\b",
+    re.IGNORECASE,
+)
+
 DEFAULT_SYNTHETIC_SCENARIO = "001-replication-lag"
 
 # Sentinel content emitted when the user pointed at a specific (non-existent)
@@ -134,6 +150,12 @@ def _synthetic_action_content(clause: PromptClause, *, synthetic_start: int) -> 
        fall back to the default scenario so a bare ``run a synthetic test``
        still launches something useful.
     """
+    if _SYNTHETIC_ALL_RE.search(clause.text) is not None:
+        return (
+            "rds_postgres:all",
+            clause.position + synthetic_start,
+        )
+
     full_match = _SYNTHETIC_SCENARIO_ID_RE.search(clause.text)
     if full_match is not None:
         scenario_id = full_match.group("scenario").lower()
@@ -169,6 +191,21 @@ def plan_clause_actions(
     seen_slash: set[str],
 ) -> list[PlannedAction]:
     planned: list[PlannedAction] = []
+
+    # Prioritize explicit synthetic benchmark requests over the generic /tests
+    # intent so phrases like "run all synthetic tests" launch the suite
+    # directly instead of opening the category picker.
+    normalized_text = normalize_intent_text(clause.text)
+    synthetic_match = SYNTHETIC_RDS_TEST_RE.search(normalized_text)
+    if synthetic_match is not None:
+        normalized_clause = PromptClause(text=normalized_text, position=clause.position)
+        synthetic_content, synthetic_position = _synthetic_action_content(
+            normalized_clause,
+            synthetic_start=synthetic_match.start(),
+        )
+        planned.append(synthetic_test_action(synthetic_content, synthetic_position))
+        return planned
+
     mentioned_services = mentioned_integration_services(clause.text)
     matched_slash_registry = False
 
@@ -227,19 +264,6 @@ def plan_clause_actions(
     provider_switch_action = extract_llm_provider_switch(clause)
     if provider_switch_action is not None:
         planned.append(provider_switch_action)
-        return planned
-
-    # Normalize only for SYNTHETIC_RDS_TEST_RE to handle typos like "syntehtic" → "synthetic".
-    # Using normalized text only here avoids false positives in shell command extraction.
-    normalized_text = normalize_intent_text(clause.text)
-    synthetic_match = SYNTHETIC_RDS_TEST_RE.search(normalized_text)
-    if synthetic_match is not None:
-        normalized_clause = PromptClause(text=normalized_text, position=clause.position)
-        synthetic_content, synthetic_position = _synthetic_action_content(
-            normalized_clause,
-            synthetic_start=synthetic_match.start(),
-        )
-        planned.append(synthetic_test_action(synthetic_content, synthetic_position))
         return planned
 
     sample_match = SAMPLE_ALERT_RE.search(clause.text)

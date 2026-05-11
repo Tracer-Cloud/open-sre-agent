@@ -151,8 +151,14 @@ class ReplSession:
         self.token_usage.clear()
         self.cli_agent_messages.clear()
         # Keep persisted cross-session task history on disk intact.
-        # /reset is session-scoped, so swap in a fresh in-memory registry.
-        self.task_registry = TaskRegistry()
+        # /reset is session-scoped, so swap in a fresh in-memory registry
+        # that reuses the same backing store (if any) so /tasks still shows history.
+        persist_path = self.task_registry._persist_path
+        self.task_registry = (
+            TaskRegistry(persist_path=persist_path, load=False)
+            if persist_path is not None
+            else TaskRegistry()
+        )
 
         self.terminal_turn_count = 0
         self.terminal_fallback_count = 0

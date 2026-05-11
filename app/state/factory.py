@@ -93,6 +93,40 @@ def make_initial_state(
     return cast(AgentState, state.model_dump(mode="python", by_alias=True, exclude_none=True))
 
 
+def make_agent_incident_state(
+    *,
+    agent_name: str,
+    breach_reason: str,
+    pid: str | int = "",
+    stdout_tail: str = "",
+    resource_snapshot: dict[str, Any] | None = None,
+    opensre_evaluate: bool = False,
+) -> AgentState:
+    """Create initial state for :func:`node_agent_incident` (local agent fleet SLO breach).
+
+    The synthesizer reads ``context["agent_incident"]``. Callers should populate it
+    with at least ``agent_name`` and ``breach_reason``.
+    """
+    payload: dict[str, Any] = {
+        "agent_name": str(agent_name).strip(),
+        "breach_reason": str(breach_reason).strip(),
+        "pid": pid,
+        "stdout_tail": str(stdout_tail or ""),
+        "resource_snapshot": dict(resource_snapshot or {}),
+    }
+    state = AgentStateModel.model_validate(
+        {
+            "mode": "agent_incident",
+            "raw_alert": {},
+            "context": {"agent_incident": payload},
+            "investigation_started_at": time.monotonic(),
+            "opensre_evaluate": opensre_evaluate,
+            **{k: v for k, v in STATE_DEFAULTS.items() if k not in ("mode", "messages", "context")},
+        }
+    )
+    return cast(AgentState, state.model_dump(mode="python", by_alias=True, exclude_none=True))
+
+
 def make_chat_state(
     org_id: str = "",
     user_id: str = "",

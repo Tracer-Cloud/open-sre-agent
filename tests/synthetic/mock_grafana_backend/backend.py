@@ -21,6 +21,9 @@ from tests.synthetic.mock_grafana_backend.formatters import (
     format_mimir_query_range,
     format_ruler_rules,
     format_tempo_search,
+    k8s_events_to_loki_entries,
+    k8s_metrics_to_mimir_series,
+    k8s_rollout_to_loki_entries,
 )
 
 if TYPE_CHECKING:
@@ -67,13 +70,56 @@ class FixtureGrafanaBackend:
         self._fixture = fixture
 
     def query_timeseries(self, **_: Any) -> dict[str, Any]:
-        if self._fixture.evidence.aws_cloudwatch_metrics is None:
+        evidence = self._fixture.evidence
+        if evidence.aws_cloudwatch_metrics is None and not self._has_any_k8s_metrics():
             raise ValueError(
-                f"{self._fixture.scenario_id}: query_timeseries called but "
-                "'aws_cloudwatch_metrics' is not declared in available_evidence"
+                f"{self._fixture.scenario_id}: query_timeseries called but no metric "
+                "fixtures (aws_cloudwatch_metrics or k8s_*_metrics) are declared in "
+                "available_evidence"
             )
-        metrics = cast(dict[str, Any], self._fixture.evidence.aws_cloudwatch_metrics)
-        return format_mimir_query_range(metrics)
+        if evidence.aws_cloudwatch_metrics is not None:
+            metrics = cast(dict[str, Any], evidence.aws_cloudwatch_metrics)
+            response = format_mimir_query_range(metrics)
+        else:
+            response = {"status": "success", "data": {"resultType": "matrix", "result": []}}
+        response["data"]["result"].extend(self._k8s_mimir_series())
+        return response
+
+    def _has_any_k8s_metrics(self) -> bool:
+        e = self._fixture.evidence
+        return any(
+            (
+                e.k8s_pod_metrics,
+                e.k8s_node_metrics,
+                e.k8s_dns_metrics,
+                e.k8s_mesh_metrics,
+            )
+        )
+
+    def _k8s_mimir_series(self) -> list[dict[str, Any]]:
+        e = self._fixture.evidence
+        series: list[dict[str, Any]] = []
+        series.extend(
+            k8s_metrics_to_mimir_series(
+                cast(dict[str, Any] | None, e.k8s_pod_metrics), source="k8s_pod_metrics"
+            )
+        )
+        series.extend(
+            k8s_metrics_to_mimir_series(
+                cast(dict[str, Any] | None, e.k8s_node_metrics), source="k8s_node_metrics"
+            )
+        )
+        series.extend(
+            k8s_metrics_to_mimir_series(
+                cast(dict[str, Any] | None, e.k8s_dns_metrics), source="k8s_dns_metrics"
+            )
+        )
+        series.extend(
+            k8s_metrics_to_mimir_series(
+                cast(dict[str, Any] | None, e.k8s_mesh_metrics), source="k8s_mesh_metrics"
+            )
+        )
+        return series
 
     def query_logs(self, **_: Any) -> dict[str, Any]:
         events = list(self._fixture.evidence.aws_rds_events or [])
@@ -112,12 +158,23 @@ class FixtureGrafanaBackend:
                     }
                 )
 
-        if not events:
+        k8s_streams = self._k8s_loki_streams()
+        if not events and not k8s_streams:
             raise ValueError(
-                f"{self._fixture.scenario_id}: query_logs called but "
-                "'aws_rds_events' and 'aws_performance_insights' are empty or missing"
+                f"{self._fixture.scenario_id}: query_logs called but no log fixtures "
+                "(aws_rds_events, aws_performance_insights, k8s_events, k8s_rollout) "
+                "are declared in available_evidence"
             )
-        return format_loki_query_range({"events": events})
+        response = format_loki_query_range({"events": events})
+        response["data"]["result"].extend(k8s_streams)
+        return response
+
+    def _k8s_loki_streams(self) -> list[dict[str, Any]]:
+        e = self._fixture.evidence
+        streams: list[dict[str, Any]] = []
+        streams.extend(k8s_events_to_loki_entries(cast(dict[str, Any] | None, e.k8s_events)))
+        streams.extend(k8s_rollout_to_loki_entries(cast(dict[str, Any] | None, e.k8s_rollout)))
+        return streams
 
     def query_alert_rules(self, **_: Any) -> dict[str, Any]:
         return format_ruler_rules(self._fixture.alert)

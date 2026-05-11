@@ -14,7 +14,7 @@ import os
 import textwrap
 import time
 from collections.abc import Callable, Iterator
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager, nullcontext
 from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
@@ -48,6 +48,7 @@ from tests.synthetic.rds_postgres.runner_api import (
     LevelRunResult,
     SuiteRunConfig,
     SuiteRunResult,
+    default_parallel_workers,
     group_fixtures_by_level,
     parse_levels_csv,
     select_fixtures,
@@ -118,11 +119,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--parallel-workers",
+        type=int,
+        default=None,
+        dest="parallel_workers",
+        help=(
+            "Number of scenarios to execute in parallel. "
+            "Defaults to min(8, cpu_count). "
+            "Use 1 to run sequentially."
+        ),
+    )
+    parser.add_argument(
         "--parallel-levels",
         type=int,
         default=1,
         dest="parallel_levels",
-        help="Number of scenario levels to execute in parallel (max 4).",
+        help="Deprecated alias for --parallel-workers (kept for back-compat).",
     )
     parser.add_argument(
         "--json",
@@ -178,9 +190,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def _build_run_config(args: argparse.Namespace) -> SuiteRunConfig:
+    if args.parallel_workers is not None:
+        workers = max(1, int(args.parallel_workers))
+    elif args.parallel_levels != 1:
+        workers = max(1, int(args.parallel_levels))
+    else:
+        workers = default_parallel_workers()
     return SuiteRunConfig(
         scenario=str(args.scenario or "").strip(),
         levels=parse_levels_csv(args.levels),
+        parallel_workers=workers,
         parallel_levels=max(1, int(args.parallel_levels)),
         output_json=bool(args.json),
         mock_grafana=bool(args.mock_grafana),
@@ -479,7 +498,7 @@ def _render_suite_overview(
     console.print(overview)
     console.print(
         "Run config: "
-        f"total={total}, parallel_levels={config.parallel_levels}, "
+        f"total={total}, parallel_workers={config.parallel_workers}, "
         f"mock_grafana={config.mock_grafana}, observations_dir={config.observations_dir}"
     )
 
@@ -624,7 +643,8 @@ def run_synthetic_suite(config: SuiteRunConfig) -> SuiteRunResult:
             return
         progress.update(task_id, completed=step)
 
-    max_workers = min(config.parallel_levels, len(level_configs)) if level_configs else 1
+    all_fixtures = [f for lc in level_configs for f in lc.fixtures]
+    max_workers = min(config.parallel_workers, len(all_fixtures)) if all_fixtures else 1
     progress_context = progress if progress is not None else nullcontext()
     suppress_investigation_rendering = bulk_run or config.output_json
     with (
@@ -633,28 +653,35 @@ def run_synthetic_suite(config: SuiteRunConfig) -> SuiteRunResult:
     ):
         if max_workers > 1:
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = {
-                    level_config.level: executor.submit(
-                        _run_level,
-                        level_config,
+                future_to_fixture = {
+                    executor.submit(
+                        _execute_fixture,
+                        fixture,
                         config=config,
                         progress_hook=_progress_hook,
-                    )
-                    for level_config in level_configs
+                    ): fixture
+                    for fixture in all_fixtures
                 }
-                for level, future in futures.items():
-                    executions, level_result = future.result()
-                    level_executions[level] = executions
-                    level_results_map[level] = level_result
+                for future in as_completed(future_to_fixture):
+                    execution = future.result()
+                    level = execution.fixture.metadata.scenario_difficulty
+                    level_executions.setdefault(level, []).append(execution)
         else:
-            for level_config in level_configs:
-                executions, level_result = _run_level(
-                    level_config,
-                    config=config,
-                    progress_hook=_progress_hook,
-                )
-                level_executions[level_config.level] = executions
-                level_results_map[level_config.level] = level_result
+            for fixture in all_fixtures:
+                execution = _execute_fixture(fixture, config=config, progress_hook=_progress_hook)
+                level = execution.fixture.metadata.scenario_difficulty
+                level_executions.setdefault(level, []).append(execution)
+
+    for level_config in level_configs:
+        executions = level_executions.get(level_config.level, [])
+        passed = sum(1 for e in executions if e.score.passed)
+        level_results_map[level_config.level] = LevelRunResult(
+            level=level_config.level,
+            scenario_ids=tuple(e.fixture.scenario_id for e in executions),
+            passed=passed,
+            failed=len(executions) - passed,
+            wall_time_s=sum(e.wall_time_s for e in executions),
+        )
 
     ordered_executions: list[_ScenarioExecution] = []
     ordered_level_results: list[LevelRunResult] = []
