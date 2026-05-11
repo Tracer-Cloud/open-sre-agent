@@ -49,7 +49,7 @@ INVESTIGATED_EVIDENCE_KEYS = frozenset(
         "helm_release_manifest",
         # OpenClaw bridge — conversations and tool call results
         "openclaw_conversations",
-        "openclaw_conversations_text",
+        "openclaw_conversation_context",
         "openclaw_conversation_detail",
         "openclaw_available_tools",
         "openclaw_tool_call_result",
@@ -137,7 +137,7 @@ CLAIM_EVIDENCE_KEYS = INVESTIGATED_EVIDENCE_KEYS | frozenset(
         "helm_manifest_truncated",
         # OpenClaw
         "openclaw_conversations",
-        "openclaw_conversations_text",
+        "openclaw_conversation_context",
         "openclaw_conversation_detail",
         "openclaw_available_tools",
         "openclaw_tool_call_result",
@@ -196,7 +196,7 @@ def check_evidence_availability(
         or evidence.get("helm_release_history") is not None
         or evidence.get("helm_release_values") is not None
         or evidence.get("helm_release_manifest") is not None
-        or bool(evidence.get("openclaw_conversations_text"))
+        or bool(evidence.get("openclaw_conversation_context"))
         or evidence.get("openclaw_conversations") is not None
         or evidence.get("openclaw_conversation_detail") is not None
         or evidence.get("openclaw_tool_call_result") is not None

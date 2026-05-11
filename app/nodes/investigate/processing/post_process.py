@@ -851,7 +851,7 @@ def _map_search_openclaw_conversations(data: dict) -> dict:
     raw_text = str(data.get("text", "")).strip()
     return {
         "openclaw_conversations": conversations,
-        "openclaw_conversations_text": combined or raw_text,
+        "openclaw_conversation_context": combined or raw_text,
     }
 
 
@@ -937,10 +937,10 @@ def _map_get_openclaw_conversation(data: dict) -> dict:
     text = str(data.get("text", "")).strip()
     if isinstance(structured, dict):
         text = _openclaw_conversation_text(structured, text)
-    existing = data.get("openclaw_conversations_text", "")
+    existing = data.get("openclaw_conversation_context", "")
     return {
         "openclaw_conversation_detail": structured,
-        "openclaw_conversations_text": f"{existing}\n\n{text}".strip() if existing else text,
+        "openclaw_conversation_context": f"{existing}\n\n{text}".strip() if existing else text,
     }
 
 
@@ -954,7 +954,7 @@ def _map_call_openclaw_tool(data: dict) -> dict:
     tool_name = str(data.get("tool", "")).strip()
     return {
         "openclaw_tool_call_result": {"tool": tool_name, "text": text},
-        "openclaw_conversations_text": text,
+        "openclaw_conversation_context": text,
     }
 
 

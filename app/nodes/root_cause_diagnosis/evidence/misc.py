@@ -53,7 +53,7 @@ def build_cloudopsbench_section(evidence: dict[str, Any]) -> str:
 
 def build_openclaw_section(evidence: dict[str, Any]) -> str:
     """Build the OpenClaw conversations / tool-call evidence section."""
-    conversations_text = str(evidence.get("openclaw_conversations_text") or "").strip()
+    conversations_text = str(evidence.get("openclaw_conversation_context") or "").strip()
     conversations = evidence.get("openclaw_conversations") or []
     detail = evidence.get("openclaw_conversation_detail") or {}
     tool_result = evidence.get("openclaw_tool_call_result") or {}
