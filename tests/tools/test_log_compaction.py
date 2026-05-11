@@ -143,6 +143,35 @@ class TestDeduplicateLogs:
         assert len(result) == 1
         assert result[0]["count"] == 2
 
+    def test_preserves_source_metadata_for_downstream_evidence_mapping(self):
+        logs = [
+            {
+                "message": "FailedScheduling: 0/3 nodes are available",
+                "log_level": "WARN",
+                "timestamp": "2026-04-10T02:00:00Z",
+                "source_type": "k8s_events",
+                "namespace": "billing",
+                "cluster": "prod-1",
+                "service": "billing-worker",
+            },
+            {
+                "message": "FailedScheduling: 0/3 nodes are available",
+                "log_level": "WARN",
+                "timestamp": "2026-04-10T02:01:00Z",
+                "source_type": "k8s_events",
+                "namespace": "billing",
+                "cluster": "prod-1",
+                "service": "billing-worker",
+            },
+        ]
+        result = deduplicate_logs(logs)
+        assert len(result) == 1
+        assert result[0]["count"] == 2
+        assert result[0]["source_type"] == "k8s_events"
+        assert result[0]["namespace"] == "billing"
+        assert result[0]["cluster"] == "prod-1"
+        assert result[0]["service"] == "billing-worker"
+
 
 # ===========================================================================
 # Phase 2: build_error_taxonomy
