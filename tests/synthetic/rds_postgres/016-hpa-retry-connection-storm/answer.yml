@@ -15,6 +15,7 @@ optimal_trajectory:
   - query_grafana_logs
   - query_grafana_alert_rules
   - describe_rds_instance
+  - describe_rds_events
 max_investigation_loops: 3
 model_response: |
   ROOT_CAUSE: The incident is connection_exhaustion caused by Kubernetes retry amplification, not a database infrastructure fault. An upstream payment provider timeout increased client retries, HPA scaled checkout-api from 12 to 64 pods, and each pod opened new sessions. RDS DatabaseConnections climbed from 420 to 988 of 1000 and Performance Insights shows Client:ClientRead as dominant wait. CPU rose secondarily but did not indicate primary compute saturation.

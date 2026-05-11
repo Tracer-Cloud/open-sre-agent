@@ -5,7 +5,7 @@ required_keywords:
   - replication lag
   - WAL
   - replica
-  - ETL
+  - bulk INSERT
 required_evidence_sources:
   - aws_rds_events
   - aws_performance_insights

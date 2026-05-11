@@ -18,6 +18,7 @@ optimal_trajectory:
   - query_grafana_logs
   - query_grafana_alert_rules
   - describe_rds_instance
+  - describe_rds_events
 max_investigation_loops: 4
 model_response: |
   ROOT_CAUSE: Read replica lag exceeded 900 seconds because the billing CronJob fan-out launched a burst of parallel reconciliation workers that executed write-heavy UPDATE traffic against ledger_entries on the primary. WAL generation outpaced replica replay; primary CPU stayed only moderately elevated (the adversarial low_primary_cpu_noise signal), so this is replication lag from a coordinated write burst, not cpu_saturation or connection exhaustion.

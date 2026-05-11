@@ -57,6 +57,7 @@ _SYNTHETIC_DIAG_CHARS = 2_000  # max stderr bytes captured from a failing synthe
 _SIGTERM_GRACE_SECONDS = 10  # wait for clean exit after SIGTERM before escalating to SIGKILL
 _TASK_OUTPUT_JOIN_TIMEOUT_SECONDS = 2
 _SYNTHETIC_SCENARIO_ID_RE = re.compile(r"^\d{3}-[a-z0-9][a-z0-9-]*$")
+_ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[mA-Za-z]")
 _IMPLEMENT_PERMISSION_MODE_ENV = "CLAUDE_CODE_IMPLEMENT_PERMISSION_MODE"
 _DEFAULT_IMPLEMENT_PERMISSION_MODE = "acceptEdits"
 
@@ -79,7 +80,8 @@ def terminate_child_process(proc: subprocess.Popen[Any]) -> None:
 def read_diag(buf: tempfile.SpooledTemporaryFile[bytes]) -> str:  # type: ignore[type-arg]
     """Read up to ``_SYNTHETIC_DIAG_CHARS`` bytes from a captured stderr buffer."""
     buf.seek(0)
-    return buf.read(_SYNTHETIC_DIAG_CHARS).decode("utf-8", errors="replace").strip()
+    raw = buf.read(_SYNTHETIC_DIAG_CHARS).decode("utf-8", errors="replace").strip()
+    return _ANSI_ESCAPE.sub("", raw)
 
 
 # Width of the ``<task_id> <stream> │ `` prefix that ``_print_task_output_line``

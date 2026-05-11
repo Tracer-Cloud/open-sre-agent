@@ -20,6 +20,7 @@ optimal_trajectory:
   - query_grafana_metrics
   - query_grafana_alert_rules
   - describe_rds_instance
+  - describe_rds_events
 max_investigation_loops: 3
 model_response: |
   ROOT_CAUSE: The RDS failover itself completed successfully, but Kubernetes clients continued using a stale writer endpoint due to DNS cache/connection pool staleness. This produced persistent application timeouts after failover completion. The issue is cross-layer infrastructure behavior (service discovery and client endpoint freshness), not ongoing database unavailability.

@@ -18,6 +18,7 @@ optimal_trajectory:
   - query_grafana_logs
   - query_grafana_alert_rules
   - describe_rds_instance
+  - describe_rds_events
 max_investigation_loops: 3
 model_response: |
   ROOT_CAUSE: The primary issue is infrastructure-level network path degradation in Kubernetes (node/CNI packet loss) causing DB client timeout storms. RDS itself is not the primary bottleneck: CPU and connections are elevated but below failure thresholds. Mesh and node telemetry show high TCP retransmits and packet drops on two worker nodes hosting most checkout pods.

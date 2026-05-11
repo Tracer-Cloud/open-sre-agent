@@ -4,7 +4,7 @@ equivalent_root_cause_categories:
 required_keywords:
   - rollout
   - query
-  - seq scan
+  - sequential scan
   - cpu
   - performance insights
 required_evidence_sources:
