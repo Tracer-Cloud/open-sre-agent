@@ -18,6 +18,7 @@ optimal_trajectory:
   - query_grafana_logs
   - query_grafana_alert_rules
   - describe_rds_instance
+  - describe_rds_events
 max_investigation_loops: 3
 model_response: |
   ROOT_CAUSE: A query regression introduced in the latest checkout-api rollout caused cpu_saturation_bad_query on payments-prod. The new endpoint query removed a selective index predicate, triggering repeated sequential scans on orders and driving RDS CPU to 96%. This is application-query behavior correlated to rollout revision checkout-api-9bdaf, not an infrastructure failover.

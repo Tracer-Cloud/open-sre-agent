@@ -11,6 +11,7 @@ required_evidence_sources:
   - aws_rds_events
 optimal_trajectory:
   - describe_rds_instance
+  - describe_rds_events
   - ec2_instances_by_tag
   - get_elb_target_health
   - query_grafana_metrics

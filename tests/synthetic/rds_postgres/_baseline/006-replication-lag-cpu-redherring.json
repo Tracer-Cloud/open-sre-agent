@@ -88,21 +88,23 @@
   "trajectory": {
     "actual": [],
     "coverage": 0.0,
-    "edit_distance": 4,
+    "edit_distance": 5,
     "extra_actions": [],
     "failed_action_count": 0,
     "golden": [
       "query_grafana_metrics",
       "query_grafana_logs",
       "query_grafana_alert_rules",
-      "describe_rds_instance"
+      "describe_rds_instance",
+      "describe_rds_events"
     ],
     "lcs_ratio": 0.0,
     "missing_actions": [
       "query_grafana_metrics",
       "query_grafana_logs",
       "query_grafana_alert_rules",
-      "describe_rds_instance"
+      "describe_rds_instance",
+      "describe_rds_events"
     ],
     "policy": null,
     "redundancy_count": 0,

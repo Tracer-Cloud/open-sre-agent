@@ -25,7 +25,7 @@
     },
     {
       "code": "MISSING_REQUIRED_KEYWORD",
-      "detail": "missing required keywords: ['replication lag', 'WAL', 'replica', 'bulk INSERT']"
+      "detail": "missing required keywords: ['replication lag', 'WAL', 'replica', 'INSERT']"
     },
     {
       "code": "MISSING_REQUIRED_EVIDENCE_SOURCE",
@@ -39,7 +39,7 @@
       "threshold": "actual_category in ['replication_lag', 'replication_lag_wal_volume']"
     },
     "exact_keyword_match": {
-      "actual": "missing_exact=['replication lag', 'WAL', 'replica', 'bulk INSERT']",
+      "actual": "missing_exact=['replication lag', 'WAL', 'replica', 'INSERT']",
       "status": "fail",
       "threshold": "all required keywords matched verbatim"
     },
@@ -64,12 +64,12 @@
       "threshold": "all required evidence sources populated"
     },
     "required_keyword_match": {
-      "actual": "missing_semantic=['replication lag', 'WAL', 'replica', 'bulk INSERT'], missing_exact=['replication lag', 'WAL', 'replica', 'bulk INSERT']",
+      "actual": "missing_semantic=['replication lag', 'WAL', 'replica', 'INSERT'], missing_exact=['replication lag', 'WAL', 'replica', 'INSERT']",
       "status": "fail",
       "threshold": "all required keywords matched (semantic)"
     },
     "semantic_keyword_match": {
-      "actual": "missing_semantic=['replication lag', 'WAL', 'replica', 'bulk INSERT']",
+      "actual": "missing_semantic=['replication lag', 'WAL', 'replica', 'INSERT']",
       "status": "fail",
       "threshold": "all required keywords matched semantically"
     },

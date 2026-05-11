@@ -286,6 +286,35 @@ class TaskRegistry:
         for task in items:
             task.refresh_rehydrated_status()
 
+    def _tasks_from_disk(self) -> list[TaskRecord]:
+        """Read the persisted store and return records not already in memory.
+
+        Called by :meth:`list_recent` so that tasks created by other REPL
+        sessions (which share the same on-disk store) are visible without
+        requiring a full restart.
+        """
+        if self._persist_path is None or not self._persist_path.exists():
+            return []
+        try:
+            payload = json.loads(self._persist_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return []
+        if not isinstance(payload, list):
+            return []
+        with self._lock:
+            known_ids = {task.task_id for task in self._tasks}
+        records: list[TaskRecord] = []
+        for item in payload:
+            if not isinstance(item, dict):
+                continue
+            record = TaskRecord.from_dict(item)
+            if record is None or record.task_id in known_ids:
+                continue
+            record._rehydrated = True
+            record.refresh_rehydrated_status()
+            records.append(record)
+        return records
+
     def create(self, kind: TaskKind, *, command: str | None = None) -> TaskRecord:
         task_id = secrets.token_hex(_TASK_ID_BYTES)
         record = self._attach(TaskRecord(task_id=task_id, kind=kind, command=command))
@@ -310,11 +339,19 @@ class TaskRegistry:
         return matches[0]
 
     def list_recent(self, n: int = 20) -> list[TaskRecord]:
-        """Return up to ``n`` tasks, newer tasks first (FIFO buffer end is newest)."""
+        """Return up to ``n`` tasks, newer tasks first.
+
+        Merges any tasks written to the on-disk store by other REPL sessions
+        (e.g. a parallel terminal) so the view is always up-to-date across
+        concurrent sessions that share the same persistence file.
+        """
         self._refresh_rehydrated()
+        disk_extras = self._tasks_from_disk()
         with self._lock:
             items = list(self._tasks)
-        return list(reversed(items[-n:]))
+        combined = items + disk_extras
+        combined.sort(key=lambda t: t.started_at)
+        return list(reversed(combined[-n:]))
 
     def clear(self) -> None:
         with self._lock:

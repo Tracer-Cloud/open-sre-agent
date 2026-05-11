@@ -23,7 +23,7 @@
     },
     {
       "code": "MISSING_REQUIRED_KEYWORD",
-      "detail": "missing required keywords: ['recovered', 'autoscal']"
+      "detail": "missing required keywords: ['autoscal']"
     },
     {
       "code": "MISSING_REQUIRED_EVIDENCE_SOURCE",
@@ -37,7 +37,7 @@
       "threshold": "actual_category in ['healthy', 'storage_exhaustion']"
     },
     "exact_keyword_match": {
-      "actual": "missing_exact=['recovered', 'autoscal']",
+      "actual": "missing_exact=['autoscal']",
       "status": "fail",
       "threshold": "all required keywords matched verbatim"
     },
@@ -62,12 +62,12 @@
       "threshold": "all required evidence sources populated"
     },
     "required_keyword_match": {
-      "actual": "missing_semantic=['recovered', 'autoscal'], missing_exact=['recovered', 'autoscal']",
+      "actual": "missing_semantic=['autoscal'], missing_exact=['autoscal']",
       "status": "fail",
       "threshold": "all required keywords matched (semantic)"
     },
     "semantic_keyword_match": {
-      "actual": "missing_semantic=['recovered', 'autoscal']",
+      "actual": "missing_semantic=['autoscal']",
       "status": "fail",
       "threshold": "all required keywords matched semantically"
     },

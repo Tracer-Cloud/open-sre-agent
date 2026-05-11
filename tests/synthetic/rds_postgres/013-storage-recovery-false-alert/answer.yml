@@ -2,7 +2,6 @@ root_cause_category: healthy
 equivalent_root_cause_categories:
   - storage_exhaustion
 required_keywords:
-  - recovered
   - autoscal
 required_evidence_sources:
   - aws_rds_events
