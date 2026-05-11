@@ -70,7 +70,7 @@ class ReplSession:
     its ``paused`` flag (when it is a ``RedactingFileHistory``) without
     needing access to the ``PromptSession``."""
 
-    task_registry: TaskRegistry = field(default_factory=TaskRegistry)
+    task_registry: TaskRegistry = field(default_factory=TaskRegistry.persistent)
     """Recent in-flight and completed shell tasks for /tasks and /cancel."""
 
     history_generation: int = 0
@@ -151,8 +151,9 @@ class ReplSession:
         self.token_usage.clear()
         self.cli_agent_messages.clear()
         # Keep persisted cross-session task history on disk intact.
-        # /reset is session-scoped, so swap in a fresh in-memory registry.
-        self.task_registry = TaskRegistry()
+        # /reset is session-scoped, so swap in a fresh in-memory registry
+        # but keep the same backing store so /tasks still shows history.
+        self.task_registry = TaskRegistry.persistent()
 
         self.terminal_turn_count = 0
         self.terminal_fallback_count = 0

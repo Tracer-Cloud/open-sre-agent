@@ -50,24 +50,27 @@ def _clean_first_line(text: str) -> str:
     return next((line.strip() for line in clean.splitlines() if line.strip()), clean.strip())
 
 
-def _task_detail_label(task: TaskRecord) -> str:
-    # Synthetic tests: always lead with the scenario name so it stays readable
-    # even when the task has an error (which would otherwise bury the command).
+def _kind_label(task: TaskRecord) -> str:
+    """Return a concise kind label — for synthetic tests use the scenario name."""
     if task.kind == TaskKind.SYNTHETIC_TEST and task.command:
-        scenario = _synthetic_scenario_label(task.command)
+        return _synthetic_scenario_label(task.command)
+    return task.kind.value
+
+
+def _task_detail_label(task: TaskRecord) -> str:
+    # Synthetic tests: the kind column already carries the scenario, so show
+    # only the compact outcome here (e.g. "exit code 1" or "ok").
+    if task.kind == TaskKind.SYNTHETIC_TEST:
         if task.error:
-            # Keep only the exit-code part (e.g. "exit code 1"), drop the full
-            # stderr table which is noisy and multi-line.
             err_line = _clean_first_line(task.error)
+            # "exit code 1: …" → keep only "exit code 1"
             outcome = err_line.split(":")[0].strip() if ":" in err_line else err_line
-            label = f"{scenario}: {outcome}" if outcome else scenario
-        elif task.result:
-            label = f"{scenario}: {task.result}"
-        else:
-            label = scenario
-        if len(label) > _MAX_DETAIL_CHARS:
-            return label[:_MAX_DETAIL_CHARS] + "…"
-        return label or "—"
+            return outcome or "—"
+        if task.result:
+            return task.result
+        if task.command:
+            return _synthetic_scenario_label(task.command)
+        return "—"
 
     # All other task kinds: show error > result > command, first line, truncated.
     if task.error:
@@ -125,7 +128,7 @@ def _cmd_tasks(session: ReplSession, console: Console, _args: list[str]) -> bool
         st = status_style.get(task.status, DIM)
         table.add_row(
             task.task_id,
-            task.kind.value,
+            _kind_label(task),
             f"[{st}]{task.status.value}[/]",
             _task_started_label(task),
             _task_duration_label(task),
