@@ -82,6 +82,9 @@ def deduplicate_logs(
     - ``count``        — number of occurrences in the input
     - ``first_seen``   — earliest timestamp in the group
     - ``last_seen``    — latest timestamp in the group
+    - plus preserved first-seen metadata fields from the source record
+      (for example ``source_type``, ``namespace``, ``cluster``), excluding
+      per-event timestamp/count bookkeeping keys.
 
     If *max_output* is given the result is truncated **after** grouping so that
     high-count bursts no longer steal slots from unique messages.

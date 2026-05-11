@@ -423,56 +423,57 @@ async def investigate_stream(req: InvestigateRequest) -> Response:
     accumulated_state: dict[str, Any] = {}
 
     async def _event_generator() -> AsyncIterator[str]:
-        with track_investigation(
-            entrypoint=EntrypointSource.REMOTE_HTTP,
-            trigger_mode=TriggerMode.SERVICE_RUNTIME,
-        ) as tracker:
-            try:
-                async for event in astream_investigation(
-                    alert_name,
-                    pipeline_name,
-                    severity,
-                    raw_alert=raw_alert,
-                ):
-                    if event.kind == "on_chain_end":
-                        output = event.data.get("data", {}).get("output", {})
-                        if isinstance(output, dict):
-                            accumulated_state.update(output)
-
-                    payload = _json.dumps(event.data, default=str)
-                    yield f"event: {event.event_type}\ndata: {payload}\n\n"
-                yield "event: end\ndata: {}\n\n"
-            except Exception as exc:
-                capture_investigation_failed(
-                    tracker=tracker,
-                    failure_type=type(exc).__name__,
-                )
+        try:
+            with track_investigation(
+                entrypoint=EntrypointSource.REMOTE_HTTP,
+                trigger_mode=TriggerMode.SERVICE_RUNTIME,
+            ) as tracker:
                 try:
-                    reraise_cli_runtime_error(exc)
-                except OpenSREError as mapped:
-                    logger.warning(
-                        "Streaming investigation failed due to CLI runtime error: %s",
-                        mapped,
+                    async for event in astream_investigation(
+                        alert_name,
+                        pipeline_name,
+                        severity,
+                        raw_alert=raw_alert,
+                    ):
+                        if event.kind == "on_chain_end":
+                            output = event.data.get("data", {}).get("output", {})
+                            if isinstance(output, dict):
+                                accumulated_state.update(output)
+
+                        payload = _json.dumps(event.data, default=str)
+                        yield f"event: {event.event_type}\ndata: {payload}\n\n"
+                    yield "event: end\ndata: {}\n\n"
+                except Exception as exc:
+                    capture_investigation_failed(
+                        tracker=tracker,
+                        failure_type=type(exc).__name__,
                     )
-                    error_payload = {
-                        "detail": str(mapped),
-                        "suggestion": mapped.suggestion,
-                    }
-                    yield f"event: error\ndata: {_json.dumps(error_payload)}\n\n"
-                    return
-                except Exception as inner_exc:
-                    capture_exception(inner_exc)
-                    logger.exception("Streaming investigation failed")
-                    yield 'event: error\ndata: {"detail": "internal error"}\n\n'
-                    return
-            finally:
-                _persist_streamed_result(
-                    alert_name=alert_name,
-                    pipeline_name=pipeline_name,
-                    severity=severity,
-                    state=accumulated_state,
-                    logger=logger,
-                )
+                    try:
+                        reraise_cli_runtime_error(exc)
+                    except OpenSREError as mapped:
+                        logger.warning(
+                            "Streaming investigation failed due to CLI runtime error: %s",
+                            mapped,
+                        )
+                        error_payload = {
+                            "detail": str(mapped),
+                            "suggestion": mapped.suggestion,
+                        }
+                        yield f"event: error\ndata: {_json.dumps(error_payload)}\n\n"
+                        return
+                    except Exception as inner_exc:
+                        capture_exception(inner_exc)
+                        logger.exception("Streaming investigation failed")
+                        yield 'event: error\ndata: {"detail": "internal error"}\n\n'
+                        return
+        finally:
+            _persist_streamed_result(
+                alert_name=alert_name,
+                pipeline_name=pipeline_name,
+                severity=severity,
+                state=accumulated_state,
+                logger=logger,
+            )
 
     return StreamingResponse(  # type: ignore[return-value]
         _event_generator(),

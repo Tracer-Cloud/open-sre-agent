@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Mapping
+from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
@@ -347,8 +347,9 @@ def capture_investigation_completed(*, tracker: InvestigationTracker | None = No
     if tracker is None:
         _capture(Event.INVESTIGATION_COMPLETED)
         return
-    if tracker.completed or tracker.failed or not tracker.enabled:
-        tracker.completed = True
+    if tracker.completed:
+        return
+    if tracker.failed or not tracker.enabled:
         return
     _capture(
         Event.INVESTIGATION_COMPLETED,
@@ -394,7 +395,7 @@ def track_investigation(
     interactive: bool = False,
     evaluate_requested: bool = False,
     investigation_id: str | None = None,
-):
+) -> Generator[InvestigationTracker]:
     """Capture investigation lifecycle once, with nested-call dedupe."""
     depth = _INVESTIGATION_TRACKING_DEPTH.get()
     token = _INVESTIGATION_TRACKING_DEPTH.set(depth + 1)
