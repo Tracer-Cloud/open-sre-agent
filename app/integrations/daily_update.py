@@ -17,6 +17,7 @@ from zoneinfo import ZoneInfo
 from pydantic import BaseModel, Field
 
 from app.services.llm_client import get_llm_for_reasoning
+from app.utils.sentry_sdk import init_sentry
 from app.version import get_version
 
 GITHUB_API_BASE_URL = "https://api.github.com"
@@ -732,6 +733,7 @@ def _append_github_output(name: str, value: str) -> None:
 
 def main() -> int:
     """Entrypoint used by the scheduled GitHub Actions workflow."""
+    init_sentry(entrypoint="integrations.daily_update")
     repository = _string(os.getenv("GITHUB_REPOSITORY"))
     token = _string(os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN"))
     if not repository:

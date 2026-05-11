@@ -21,4 +21,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    from app.utils.sentry_sdk import init_sentry
+
+    init_sentry(entrypoint="analytics.install")
     raise SystemExit(main())

@@ -164,7 +164,7 @@ def seed_logs() -> None:
 
 def main() -> int:
     with suppress(ModuleNotFoundError):
-        init_sentry(entrypoint="wizard")
+        init_sentry(entrypoint="wizard.grafana_seed")
     seed_logs()
     return 0
 

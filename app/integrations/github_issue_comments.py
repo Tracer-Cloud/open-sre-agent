@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Any
 from urllib import error, request
 
+from app.utils.sentry_sdk import init_sentry
+
 MAX_COMMENT_PREVIEW_CHARS = 500
 
 
@@ -150,6 +152,7 @@ def send_slack_webhook(payload: dict[str, Any], webhook_url: str) -> None:
 
 def main() -> int:
     """Entrypoint used by the GitHub Actions workflow."""
+    init_sentry(entrypoint="integrations.github_issue_comments")
     event_path = _string(os.getenv("GITHUB_EVENT_PATH"))
     repository = _string(os.getenv("GITHUB_REPOSITORY"))
     webhook_url = _string(
