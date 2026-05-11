@@ -780,7 +780,10 @@ class TestParagraphFlushThrottle:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Lists / code with single ``\\n`` separators don't trigger
-        flush until a real ``\\n\\n`` boundary closes the block."""
+        flush until a real ``\\n\\n`` boundary closes the block.
+        Keeping multi-line list/table syntax intact is required for
+        Rich's Markdown renderer to produce a proper Table / bullet
+        list rather than rendering each row as a standalone block."""
         parse_count = self._spy_markdown_parses(monkeypatch)
         console, _ = _tty_console()
 

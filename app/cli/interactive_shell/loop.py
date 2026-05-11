@@ -394,9 +394,18 @@ def run_repl(initial_input: str | None = None, config: ReplConfig | None = None)
 
 
 # How often the prompt's ``bottom_toolbar`` and ``message`` callables
-# re-evaluate. 100 ms paces the spinner glyph animation and the token
-# counter without burning CPU on the prompt-toolkit render loop.
-_PROMPT_REFRESH_INTERVAL_S = 0.1
+# re-evaluate. 250 ms (4 Hz) is the sweet spot: the spinner still feels
+# alive, the token counter visibly increments, and the bottom area
+# settles enough that incoming Markdown chunks streaming above the
+# input no longer feel like they're "fighting" with a busy toolbar
+# redraw at 10 Hz. The streaming layer keeps its own 100 ms cadence
+# for the byte-count update hook so the counter stays accurate; the
+# *visible* refresh is what's throttled here.
+#
+# Also reused by :func:`_route_confirm_through_prompt` as the
+# ``confirm_event.wait`` poll timeout. 250 ms is still well below the
+# threshold where humans notice Esc-cancel latency.
+_PROMPT_REFRESH_INTERVAL_S = 0.25
 
 
 @dataclass
@@ -532,20 +541,21 @@ class _SpinnerState:
         self.streaming = False
 
     def toolbar_ansi(self) -> ANSI:
-        """Bottom toolbar: rule + state-aware hint. The animated spinner
-        lives in :meth:`inline_spinner_ansi`, which is prepended to the
-        prompt ``message`` so it appears *above* the input frame — at
-        the end of the last response chunk — matching Claude Code's
-        layout.
+        """Bottom toolbar — single hint row directly below the input.
 
-        Hint text follows Claude Code: ``esc to interrupt`` while a turn
-        is streaming, otherwise ``/ for commands  ·  ↑↓ history`` with
+        Always one row tall regardless of streaming state. Keeping
+        the toolbar a constant height is what stops the input cursor
+        from jumping up/down by a line when streaming starts or stops
+        (the spinner lives above the input now, in the prompt
+        message — see :func:`_message_with_spinner`).
+
+        Hint text: ``esc to interrupt`` while a turn is streaming,
+        otherwise ``/ for commands  ·  ↑↓ history`` with
         ``  ·  esc to clear`` appended only when the input buffer
         actually has text. The Esc handler is a no-op on empty buffer
         (see :func:`_build_cancel_key_bindings`), so advertising the
         clear shortcut unconditionally was misleading.
         """
-        rule = _prompt_rule_ansi()
         if self.streaming:
             hint = "esc to interrupt"
         else:
@@ -556,12 +566,14 @@ class _SpinnerState:
             # — no None guard needed beyond the app-None check.
             if app is not None and app.current_buffer.text:
                 hint += "  ·  esc to clear"
-        return ANSI(f"{rule}\n{ANSI_DIM}  {hint}{ANSI_RESET}")
+        return ANSI(f"{ANSI_DIM}{hint}{ANSI_RESET}")
 
     def inline_spinner_ansi(self) -> str:
         """Single-line ``⠋ thinking… (Ns · ↓ X tokens)`` indicator, or
-        empty string when not streaming. Rendered above the input rule
-        so it sits at the visual end of the response stream.
+        empty string when not streaming. Consumed by
+        :func:`_message_with_spinner` and pinned above the input rule,
+        so the spinner appears at the visual end of the response
+        stream while the input cursor stays anchored below it.
         """
         if not self.streaming:
             return ""
@@ -737,16 +749,19 @@ async def _run_interactive(
             state.queue.task_done()
 
     def _message_with_spinner() -> ANSI:
-        """Prompt message — spinner line (when streaming) above the
-        input rule + ``❯`` prefix. The callable is re-evaluated every
-        ``refresh_interval`` tick so the spinner glyph and token
-        counter animate in place.
+        """Prompt message — spinner row above the top rule + ``❯`` prefix.
+
+        The spinner row is *always* reserved: when streaming, the row
+        shows ``⠋ thinking… (Ns · ↓ X tokens)``; when idle, it's a blank
+        line. Reserving the row unconditionally is what keeps the
+        input cursor from jumping up by one line when streaming starts
+        and back down when it stops — Vaibhav's "still some jumping"
+        was that vertical shift. Re-evaluated every
+        ``refresh_interval`` tick so the spinner animates in place
+        without redrawing the rule below it.
         """
         base = _prompt_message(session).value
-        spinner_part = spinner.inline_spinner_ansi()
-        if spinner_part:
-            return ANSI(f"{spinner_part}\n{base}")
-        return ANSI(base)
+        return ANSI(f"{spinner.inline_spinner_ansi()}\n{base}")
 
     processor_task = asyncio.create_task(_processor())
     try:

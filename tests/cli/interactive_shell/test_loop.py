@@ -690,6 +690,30 @@ class TestSpinnerState:
         # Idle hint should NOT be shown when streaming.
         assert "esc to clear" not in rendered
 
+    def test_toolbar_is_single_row_in_both_states(self) -> None:
+        """The toolbar must stay one row tall whether streaming or idle.
+
+        A height delta between streaming and idle would shift every
+        visible row of output up by one line when streaming starts and
+        back down when it stops — the "jumping" Vaibhav reported. The
+        spinner row lives in the prompt message instead
+        (see :func:`_message_with_spinner`), where it's a *reserved*
+        line that's blank when idle and populated when streaming, so
+        the input cursor never moves.
+        """
+        spinner = loop._SpinnerState()
+
+        idle_rendered = _strip_ansi(spinner.toolbar_ansi().value)
+        assert "\n" not in idle_rendered, f"idle toolbar should be 1 row, got: {idle_rendered!r}"
+
+        spinner.start()
+        streaming_rendered = _strip_ansi(spinner.toolbar_ansi().value)
+        assert "\n" not in streaming_rendered, (
+            f"streaming toolbar should be 1 row, got: {streaming_rendered!r}"
+        )
+        # And streaming state still shows the right hint.
+        assert "esc to interrupt" in streaming_rendered
+
 
 def _extract_glyph(ansi_text: str, frames: tuple[str, ...]) -> str:
     plain = _strip_ansi(ansi_text)
