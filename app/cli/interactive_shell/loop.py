@@ -395,6 +395,16 @@ class _ReplState:
     # released) event, so a fresh ``Event.clear()`` for the new turn
     # never races with a still-draining iterator from the previous one.
     current_cancel_event: threading.Event | None = None
+    # The asyncio loop running the prompt coroutine. Bound by
+    # :func:`_run_interactive` once the loop is up so
+    # :meth:`cancel_current_dispatch` can route ``Task.cancel()`` through
+    # ``call_soon_threadsafe``. ``asyncio.Task.cancel`` is documented as
+    # not thread-safe, and this method is invoked from worker threads
+    # via :func:`_request_exit` (the ``/exit`` slash handler runs in
+    # ``asyncio.to_thread``). ``call_soon_threadsafe`` is itself safe
+    # from any thread, including the loop thread, so we use it
+    # uniformly rather than branching on caller-thread identity.
+    loop: asyncio.AbstractEventLoop | None = None
     exit_requested: bool = False
     # Confirmation routing: when an in-flight dispatch needs ``Proceed?
     # [y/N]`` input, it parks ``confirm_event`` + ``confirm_response``
@@ -426,13 +436,28 @@ class _ReplState:
         in :func:`_run_one_dispatch` (main thread). Both are needed.
         Also unparks any worker thread waiting on a confirmation prompt
         so it doesn't hang on Esc.
+
+        ``Task.cancel()`` is scheduled via ``call_soon_threadsafe``
+        because this method is reachable from worker threads (e.g.
+        :func:`_request_exit`, which the ``/exit`` handler invokes from
+        an ``asyncio.to_thread`` worker), and ``asyncio.Task.cancel`` is
+        not thread-safe. ``call_soon_threadsafe`` is safe from any
+        thread including the loop thread, so the same call works
+        regardless of who invokes us. If no loop has been bound yet
+        (e.g. in unit tests that drive ``cancel_current_dispatch``
+        synchronously before :func:`_run_interactive` runs), fall back
+        to a direct call.
         """
         if self.current_cancel_event is not None:
             self.current_cancel_event.set()
         if self.confirm_event is not None:
             self.confirm_event.set()
-        if self.current_task is not None and not self.current_task.done():
-            self.current_task.cancel()
+        task = self.current_task
+        if task is not None and not task.done():
+            if self.loop is not None:
+                self.loop.call_soon_threadsafe(task.cancel)
+            else:
+                task.cancel()
 
 
 class _SpinnerState:
@@ -611,6 +636,10 @@ async def _run_interactive(
     # leaving the user staring at an idle one until they hit Enter.
     pt_app = pt_session.app
     main_loop = asyncio.get_running_loop()
+    # Bind the loop so :meth:`_ReplState.cancel_current_dispatch` can
+    # route ``Task.cancel`` through ``call_soon_threadsafe`` when it's
+    # invoked from a worker thread (see :func:`_request_exit`).
+    state.loop = main_loop
 
     def _request_exit() -> None:
         state.exit_requested = True

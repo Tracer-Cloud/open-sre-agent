@@ -759,6 +759,45 @@ class TestReplState:
 
         asyncio.run(_scenario())
 
+    def test_cancel_from_worker_thread_routes_through_call_soon_threadsafe(self) -> None:
+        """``Task.cancel`` is not thread-safe; ``cancel_current_dispatch``
+        must route the cancel via ``loop.call_soon_threadsafe`` when
+        invoked from a worker thread (the ``/exit`` slash handler runs
+        in ``asyncio.to_thread`` and reaches us through
+        :func:`_request_exit`).
+        """
+
+        async def _scenario() -> None:
+            import threading as _threading
+
+            state = loop._ReplState()
+            state.loop = asyncio.get_running_loop()
+
+            async def _waits_forever() -> None:
+                await asyncio.sleep(10.0)
+
+            state.current_task = asyncio.create_task(_waits_forever())
+            task = state.current_task
+
+            worker_done = _threading.Event()
+
+            def _cancel_in_worker() -> None:
+                state.cancel_current_dispatch()
+                worker_done.set()
+
+            worker = _threading.Thread(target=_cancel_in_worker)
+            worker.start()
+            worker.join(timeout=1.0)
+            assert worker_done.is_set(), "worker thread did not return"
+
+            try:  # noqa: SIM105
+                await task
+            except asyncio.CancelledError:
+                pass
+            assert task.cancelled() is True
+
+        asyncio.run(_scenario())
+
     def test_cancel_when_no_task_is_a_no_op(self) -> None:
         """``cancel_current_dispatch`` is idempotent — safe to call when
         nothing is running. With no active dispatch parked,
