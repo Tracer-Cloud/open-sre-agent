@@ -1,0 +1,47 @@
+schema_version: "1.0"
+scenario_id: 022-tenant-noisy-neighbor-multi-tenant
+engine: postgres
+engine_version: "15"
+instance_class: db.r6g.xlarge
+region: us-east-1
+db_instance_identifier: payments-multi-prod
+db_cluster: ""
+failure_mode: application_load_spike
+severity: critical
+scenario_difficulty: 4
+adversarial_signals:
+  - RDS CPU is at 91% — the alert fired on CPU and CPU is the most obvious metric, but the agent must look beyond it to identify WHICH tenant is responsible
+  - Top SQL in Performance Insights shows one query dominating, but the query plan is normal — the easy wrong answer is "bad query" or "schema regression" when in fact only one tenant's traffic pattern is abusive
+  - The dominating SQL pattern is used by every tenant; what makes this scenario solvable is PI top_users attribution, not the SQL text alone
+  - Other tenant users (globex_app_user, initech_app_user) and their EC2 instances stay at baseline load, providing direct evidence to rule out a multi-tenant outage or a DB-internal cause
+  - Connection count climbs only modestly (the acme connection pool absorbed the surge), so connection_exhaustion is the wrong category
+available_evidence:
+  - aws_cloudwatch_metrics
+  - aws_rds_events
+  - aws_performance_insights
+  - ec2_instances_by_tag
+  - elb_target_health
+topology:
+  vpc_id: vpc-0d4e5f60
+  load_balancer_arn: arn:aws:elasticloadbalancing:us-east-1:777788889999:loadbalancer/app/prod-multi-alb/11aabbcc
+  target_group_arn: arn:aws:elasticloadbalancing:us-east-1:777788889999:targetgroup/prod-acme-api-tg/22ddeeff
+  tiers:
+    - name: acme-corp-api
+      asg: prod-acme-api-asg
+      instance_ids:
+        - i-0a11
+        - i-0a12
+    - name: globex-api
+      asg: prod-globex-api-asg
+      instance_ids:
+        - i-0b11
+        - i-0b12
+    - name: initech-api
+      asg: prod-initech-api-asg
+      instance_ids:
+        - i-0c11
+        - i-0c12
+    - name: background
+      asg: prod-bg-asg
+      instance_ids:
+        - i-0d11

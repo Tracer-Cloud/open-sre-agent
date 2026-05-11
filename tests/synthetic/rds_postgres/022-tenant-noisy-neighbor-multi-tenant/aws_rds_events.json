@@ -1,0 +1,11 @@
+{
+  "events": [
+    {
+      "date": "2026-05-11T04:08:00Z",
+      "message": "Automated backup finished for DB instance payments-multi-prod.",
+      "source_identifier": "payments-multi-prod",
+      "source_type": "db-instance",
+      "event_categories": ["backup"]
+    }
+  ]
+}

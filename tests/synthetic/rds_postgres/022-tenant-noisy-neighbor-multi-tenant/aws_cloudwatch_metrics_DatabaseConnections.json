@@ -1,0 +1,32 @@
+{
+  "id": "m_rds_connections",
+  "label": "DatabaseConnections",
+  "metric_name": "DatabaseConnections",
+  "dimensions": [
+    {
+      "Name": "DBInstanceIdentifier",
+      "Value": "payments-multi-prod"
+    }
+  ],
+  "stat": "Average",
+  "unit": "Count",
+  "status_code": "Complete",
+  "timestamps": [
+    "2026-05-11T16:00:00Z",
+    "2026-05-11T16:01:00Z",
+    "2026-05-11T16:02:00Z",
+    "2026-05-11T16:03:00Z",
+    "2026-05-11T16:04:00Z",
+    "2026-05-11T16:05:00Z",
+    "2026-05-11T16:06:00Z",
+    "2026-05-11T16:07:00Z",
+    "2026-05-11T16:08:00Z",
+    "2026-05-11T16:09:00Z",
+    "2026-05-11T16:10:00Z",
+    "2026-05-11T16:11:00Z",
+    "2026-05-11T16:12:00Z",
+    "2026-05-11T16:13:00Z",
+    "2026-05-11T16:14:00Z"
+  ],
+  "values": [78, 81, 79, 80, 82, 95, 108, 118, 126, 131, 134, 136, 137, 138, 139]
+}

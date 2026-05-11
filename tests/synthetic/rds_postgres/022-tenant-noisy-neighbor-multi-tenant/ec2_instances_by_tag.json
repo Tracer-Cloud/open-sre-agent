@@ -1,0 +1,88 @@
+{
+  "instances": [
+    {
+      "instance_id": "i-0a11",
+      "tier": "acme-corp-api",
+      "tenant": "acme-corp",
+      "asg": "prod-acme-api-asg",
+      "private_ip": "10.0.1.11",
+      "vpc_id": "vpc-0d4e5f60",
+      "subnet_id": "subnet-0a1",
+      "state": "running",
+      "instance_type": "m6i.large",
+      "security_groups": ["sg-acme-api"]
+    },
+    {
+      "instance_id": "i-0a12",
+      "tier": "acme-corp-api",
+      "tenant": "acme-corp",
+      "asg": "prod-acme-api-asg",
+      "private_ip": "10.0.1.12",
+      "vpc_id": "vpc-0d4e5f60",
+      "subnet_id": "subnet-0a2",
+      "state": "running",
+      "instance_type": "m6i.large",
+      "security_groups": ["sg-acme-api"]
+    },
+    {
+      "instance_id": "i-0b11",
+      "tier": "globex-api",
+      "tenant": "globex",
+      "asg": "prod-globex-api-asg",
+      "private_ip": "10.0.2.11",
+      "vpc_id": "vpc-0d4e5f60",
+      "subnet_id": "subnet-0b1",
+      "state": "running",
+      "instance_type": "m6i.large",
+      "security_groups": ["sg-globex-api"]
+    },
+    {
+      "instance_id": "i-0b12",
+      "tier": "globex-api",
+      "tenant": "globex",
+      "asg": "prod-globex-api-asg",
+      "private_ip": "10.0.2.12",
+      "vpc_id": "vpc-0d4e5f60",
+      "subnet_id": "subnet-0b2",
+      "state": "running",
+      "instance_type": "m6i.large",
+      "security_groups": ["sg-globex-api"]
+    },
+    {
+      "instance_id": "i-0c11",
+      "tier": "initech-api",
+      "tenant": "initech",
+      "asg": "prod-initech-api-asg",
+      "private_ip": "10.0.3.11",
+      "vpc_id": "vpc-0d4e5f60",
+      "subnet_id": "subnet-0c1",
+      "state": "running",
+      "instance_type": "m6i.large",
+      "security_groups": ["sg-initech-api"]
+    },
+    {
+      "instance_id": "i-0c12",
+      "tier": "initech-api",
+      "tenant": "initech",
+      "asg": "prod-initech-api-asg",
+      "private_ip": "10.0.3.12",
+      "vpc_id": "vpc-0d4e5f60",
+      "subnet_id": "subnet-0c2",
+      "state": "running",
+      "instance_type": "m6i.large",
+      "security_groups": ["sg-initech-api"]
+    },
+    {
+      "instance_id": "i-0d11",
+      "tier": "background",
+      "tenant": "shared",
+      "asg": "prod-bg-asg",
+      "private_ip": "10.0.4.11",
+      "vpc_id": "vpc-0d4e5f60",
+      "subnet_id": "subnet-0d1",
+      "state": "running",
+      "instance_type": "m6i.large",
+      "security_groups": ["sg-bg"]
+    }
+  ]
+}

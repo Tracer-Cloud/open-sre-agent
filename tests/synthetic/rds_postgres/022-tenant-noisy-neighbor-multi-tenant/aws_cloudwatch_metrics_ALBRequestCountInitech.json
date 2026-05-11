@@ -1,0 +1,36 @@
+{
+  "id": "m_alb_requests_initech",
+  "label": "ALB RequestCount for prod-initech-api-tg (sum per minute)",
+  "metric_name": "RequestCount",
+  "dimensions": [
+    {
+      "Name": "LoadBalancer",
+      "Value": "app/prod-multi-alb/11aabbcc"
+    },
+    {
+      "Name": "TargetGroup",
+      "Value": "targetgroup/prod-initech-api-tg/44jjkkll"
+    }
+  ],
+  "stat": "Sum",
+  "unit": "Count",
+  "status_code": "Complete",
+  "timestamps": [
+    "2026-05-11T16:00:00Z",
+    "2026-05-11T16:01:00Z",
+    "2026-05-11T16:02:00Z",
+    "2026-05-11T16:03:00Z",
+    "2026-05-11T16:04:00Z",
+    "2026-05-11T16:05:00Z",
+    "2026-05-11T16:06:00Z",
+    "2026-05-11T16:07:00Z",
+    "2026-05-11T16:08:00Z",
+    "2026-05-11T16:09:00Z",
+    "2026-05-11T16:10:00Z",
+    "2026-05-11T16:11:00Z",
+    "2026-05-11T16:12:00Z",
+    "2026-05-11T16:13:00Z",
+    "2026-05-11T16:14:00Z"
+  ],
+  "values": [296, 304, 298, 301, 295, 303, 299, 305, 297, 302, 298, 306, 301, 295, 303]
+}

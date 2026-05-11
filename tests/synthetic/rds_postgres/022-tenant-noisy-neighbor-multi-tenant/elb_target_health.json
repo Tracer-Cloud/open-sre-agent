@@ -1,0 +1,75 @@
+{
+  "target_groups": [
+    {
+      "TargetGroupArn": "arn:aws:elasticloadbalancing:us-east-1:777788889999:targetgroup/prod-acme-api-tg/22ddeeff",
+      "TargetGroupName": "prod-acme-api-tg",
+      "LoadBalancerArns": [
+        "arn:aws:elasticloadbalancing:us-east-1:777788889999:loadbalancer/app/prod-multi-alb/11aabbcc"
+      ]
+    },
+    {
+      "TargetGroupArn": "arn:aws:elasticloadbalancing:us-east-1:777788889999:targetgroup/prod-globex-api-tg/33gghhii",
+      "TargetGroupName": "prod-globex-api-tg",
+      "LoadBalancerArns": [
+        "arn:aws:elasticloadbalancing:us-east-1:777788889999:loadbalancer/app/prod-multi-alb/11aabbcc"
+      ]
+    },
+    {
+      "TargetGroupArn": "arn:aws:elasticloadbalancing:us-east-1:777788889999:targetgroup/prod-initech-api-tg/44jjkkll",
+      "TargetGroupName": "prod-initech-api-tg",
+      "LoadBalancerArns": [
+        "arn:aws:elasticloadbalancing:us-east-1:777788889999:loadbalancer/app/prod-multi-alb/11aabbcc"
+      ]
+    }
+  ],
+  "targets": [
+    {
+      "target_group_arn": "arn:aws:elasticloadbalancing:us-east-1:777788889999:targetgroup/prod-acme-api-tg/22ddeeff",
+      "instance_id": "i-0a11",
+      "port": 8080,
+      "state": "healthy",
+      "reason": "",
+      "description": ""
+    },
+    {
+      "target_group_arn": "arn:aws:elasticloadbalancing:us-east-1:777788889999:targetgroup/prod-acme-api-tg/22ddeeff",
+      "instance_id": "i-0a12",
+      "port": 8080,
+      "state": "healthy",
+      "reason": "",
+      "description": ""
+    },
+    {
+      "target_group_arn": "arn:aws:elasticloadbalancing:us-east-1:777788889999:targetgroup/prod-globex-api-tg/33gghhii",
+      "instance_id": "i-0b11",
+      "port": 8080,
+      "state": "healthy",
+      "reason": "",
+      "description": ""
+    },
+    {
+      "target_group_arn": "arn:aws:elasticloadbalancing:us-east-1:777788889999:targetgroup/prod-globex-api-tg/33gghhii",
+      "instance_id": "i-0b12",
+      "port": 8080,
+      "state": "healthy",
+      "reason": "",
+      "description": ""
+    },
+    {
+      "target_group_arn": "arn:aws:elasticloadbalancing:us-east-1:777788889999:targetgroup/prod-initech-api-tg/44jjkkll",
+      "instance_id": "i-0c11",
+      "port": 8080,
+      "state": "healthy",
+      "reason": "",
+      "description": ""
+    },
+    {
+      "target_group_arn": "arn:aws:elasticloadbalancing:us-east-1:777788889999:targetgroup/prod-initech-api-tg/44jjkkll",
+      "instance_id": "i-0c12",
+      "port": 8080,
+      "state": "healthy",
+      "reason": "",
+      "description": ""
+    }
+  ]
+}

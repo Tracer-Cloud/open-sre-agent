@@ -1,0 +1,90 @@
+{
+  "db_instance_identifier": "payments-multi-prod",
+  "start_time": "2026-05-11T16:00:00Z",
+  "end_time": "2026-05-11T16:14:00Z",
+  "db_load": {
+    "timestamps": [
+      "2026-05-11T16:00:00Z", "2026-05-11T16:01:00Z", "2026-05-11T16:02:00Z",
+      "2026-05-11T16:03:00Z", "2026-05-11T16:04:00Z", "2026-05-11T16:05:00Z",
+      "2026-05-11T16:06:00Z", "2026-05-11T16:07:00Z", "2026-05-11T16:08:00Z",
+      "2026-05-11T16:09:00Z", "2026-05-11T16:10:00Z", "2026-05-11T16:11:00Z",
+      "2026-05-11T16:12:00Z", "2026-05-11T16:13:00Z", "2026-05-11T16:14:00Z"
+    ],
+    "values": [0.6, 0.7, 0.6, 0.7, 0.6, 1.8, 3.4, 4.9, 6.2, 7.1, 7.6, 7.8, 8.0, 8.1, 8.2],
+    "unit": "AAS"
+  },
+  "top_sql": [
+    {
+      "statement": "SELECT o.order_id, o.created_at, o.status, oi.product_id, oi.quantity, oi.unit_price FROM orders o JOIN order_items oi ON o.order_id = oi.order_id WHERE o.customer_id = $1 ORDER BY o.created_at DESC LIMIT 100",
+      "db_load_avg": 6.3,
+      "wait_events": [
+        {"name": "CPU:user",        "type": "CPU", "db_load_avg": 5.8},
+        {"name": "IO:DataFileRead", "type": "IO",  "db_load_avg": 0.5}
+      ],
+      "calls_per_sec": 76.4,
+      "mean_call_duration_ms": 21.7
+    },
+    {
+      "statement": "INSERT INTO payment_events (event_id, tenant_id, customer_id, amount, status, created_at) VALUES ($1, $2, $3, $4, $5, NOW())",
+      "db_load_avg": 0.7,
+      "wait_events": [
+        {"name": "IO:DataFileWrite", "type": "IO",  "db_load_avg": 0.4},
+        {"name": "CPU:user",         "type": "CPU", "db_load_avg": 0.2},
+        {"name": "Lock:relation",    "type": "Lock","db_load_avg": 0.1}
+      ],
+      "calls_per_sec": 9.2,
+      "mean_call_duration_ms": 5.3
+    },
+    {
+      "statement": "SELECT tenant_id, plan, billing_status FROM tenants WHERE tenant_id = $1",
+      "db_load_avg": 0.3,
+      "wait_events": [
+        {"name": "CPU:user",        "type": "CPU", "db_load_avg": 0.2},
+        {"name": "IO:DataFileRead", "type": "IO",  "db_load_avg": 0.1}
+      ],
+      "calls_per_sec": 24.8,
+      "mean_call_duration_ms": 0.9
+    },
+    {
+      "statement": "REFRESH MATERIALIZED VIEW CONCURRENTLY mv_daily_revenue_by_tenant",
+      "db_load_avg": 0.2,
+      "wait_events": [
+        {"name": "IO:DataFileRead", "type": "IO", "db_load_avg": 0.15},
+        {"name": "CPU:user",        "type": "CPU","db_load_avg": 0.05}
+      ],
+      "calls_per_sec": 0.02,
+      "mean_call_duration_ms": 410.0
+    }
+  ],
+  "top_wait_events": [
+    {"name": "CPU:user",         "type": "CPU", "db_load_avg": 6.4},
+    {"name": "IO:DataFileRead",  "type": "IO",  "db_load_avg": 0.9},
+    {"name": "Client:ClientRead","type": "Client","db_load_avg": 0.3},
+    {"name": "IO:DataFileWrite", "type": "IO",  "db_load_avg": 0.4},
+    {"name": "Lock:relation",    "type": "Lock","db_load_avg": 0.1}
+  ],
+  "top_users": [
+    {"name": "acme_app_user",      "db_load_avg": 6.4},
+    {"name": "globex_app_user",    "db_load_avg": 0.5},
+    {"name": "initech_app_user",   "db_load_avg": 0.4},
+    {"name": "background_worker",  "db_load_avg": 0.2},
+    {"name": "rdsadmin",           "db_load_avg": 0.1}
+  ],
+  "top_hosts": [
+    {"id": "10.0.1.11", "db_load_avg": 3.3},
+    {"id": "10.0.1.12", "db_load_avg": 3.1},
+    {"id": "10.0.2.11", "db_load_avg": 0.26},
+    {"id": "10.0.2.12", "db_load_avg": 0.24},
+    {"id": "10.0.3.11", "db_load_avg": 0.21},
+    {"id": "10.0.3.12", "db_load_avg": 0.19},
+    {"id": "10.0.4.11", "db_load_avg": 0.20}
+  ],
+  "notes": [
+    "Top SQL #1 (orders+order_items JOIN by customer_id) dominates db_load at 6.3 AAS (~77% of total). Per-call duration is normal (~22 ms, CPU-bound, no slow plan). Call rate climbed from a baseline of ~10/sec to 76/sec — a ~7-8x increase concentrated in a single tenant's workload, not a spread-across-tenants surge.",
+    "Top SQL #2 (payment_events INSERT) is the normal write path; call rate is normal across all tenants.",
+    "Top SQL #3 (tenants lookup) is the typical session-bootstrap query; rates stayed in baseline range.",
+    "Top SQL #4 (materialized view refresh) is a scheduled background task; unchanged.",
+    "Top users decisively attribute the load to one tenant: acme_app_user at 6.4 AAS (~78% of total) while globex_app_user and initech_app_user remain at baseline (~0.4-0.5 AAS each). This is a tenant-attribution scenario, not a system-wide regression.",
+    "Top hosts confirm tenant attribution: the four 10.0.1.x IPs are not present (only 10.0.1.11 and 10.0.1.12 — acme's two API instances). The 10.0.2.x and 10.0.3.x IPs belong to globex and initech respectively and contribute negligibly. The single 10.0.4.x IP is the background worker."
+  ]
+}

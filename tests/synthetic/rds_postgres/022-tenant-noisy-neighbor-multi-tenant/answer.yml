@@ -1,0 +1,72 @@
+root_cause_category: application_load_spike
+equivalent_root_cause_categories:
+  - tenant_noisy_neighbor
+  - multi_tenant_load_spike
+  - application_tier_load_spike
+  - upstream_traffic_surge
+  - cpu_saturation_bad_query
+  - cpu_saturation_workload_burst
+required_keywords:
+  - tenant
+  - acme
+  - customer
+  - CPU
+  - "91"
+forbidden_keywords:
+  - configuration_error
+  - slow query
+  - schema regression
+forbidden_categories:
+  - cpu_saturation
+  - connection_exhaustion
+  - configuration_error
+  - replication_lag
+  - storage_full
+required_evidence_sources:
+  - aws_cloudwatch_metrics
+  - aws_performance_insights
+  - ec2_instances_by_tag
+  - elb_target_health
+optimal_trajectory:
+  - describe_rds_instance
+  - describe_rds_events
+  - query_grafana_metrics
+  - query_grafana_logs
+  - ec2_instances_by_tag
+  - get_elb_target_health
+max_investigation_loops: 3
+ruling_out_keywords:
+  - globex
+  - initech
+  - background
+  - baseline
+model_response: |
+  ROOT_CAUSE: Tenant acme-corp is the sole driver of the CPU near-critical condition on payments-multi-prod. Acme's API tier traffic on prod-acme-api-tg climbed from ~410 req/min to ~3300 req/min (an ~8x surge) over the alert window, while globex and initech ALB target groups stayed at their respective baseline rates. Performance Insights attributes the database load decisively: acme_app_user at 6.4 AAS (~78% of total), with globex_app_user, initech_app_user, and the background worker all at baseline. The dominant SQL pattern (orders+order_items join by customer_id) is normal in shape — its plan and per-call duration (22 ms, CPU:user wait) are unchanged; only acme's call rate is amplified, consistent with a recent code regression on acme's side that introduced an N+1 or otherwise multiplicative query pattern.
+  ROOT_CAUSE_CATEGORY: application_load_spike
+
+  VALIDATED_CLAIMS:
+  - RDS CPUUtilization climbed from ~12% to 91% between 16:05Z and 16:14Z and is sustained above 87% for the last four minutes. [evidence: aws_cloudwatch_metrics]
+  - ALB RequestCount on prod-acme-api-tg climbed from ~410/min to ~3300/min — an ~8x surge concentrated on acme-corp's target group. [evidence: aws_cloudwatch_metrics]
+  - ALB RequestCount on prod-globex-api-tg and prod-initech-api-tg stayed flat at their respective baselines (~395/min and ~300/min). No surge on any tenant other than acme. [evidence: aws_cloudwatch_metrics]
+  - Performance Insights top_users decisively attributes the load to acme_app_user (6.4 AAS, ~78% of total). globex_app_user and initech_app_user remain at baseline (~0.5 AAS each), as does the background worker. [evidence: aws_performance_insights]
+  - Performance Insights top_hosts confirms the attribution: 10.0.1.11 and 10.0.1.12 (acme-corp's two API instances) account for ~78% of total db_load. The four globex+initech API IPs (10.0.2.x, 10.0.3.x) each contribute under 0.3 AAS. [evidence: aws_performance_insights]
+  - The dominant SQL pattern (orders+order_items join filtered by customer_id) has a normal CPU:user-dominated wait profile and an unchanged per-call duration of ~22 ms. The query is not slow; only its call rate on acme's connections is amplified. [evidence: aws_performance_insights]
+  - DatabaseConnections climbed only modestly (78 to 139) — acme's connection pool absorbed the surge without exhausting, ruling out connection_exhaustion. [evidence: aws_cloudwatch_metrics]
+  - All ALB target group memberships are healthy across acme, globex, and initech — no draining or unhealthy instances on any tenant. [evidence: elb_target_health]
+  - No relevant RDS events in the window. The automated backup at 04:08Z is twelve hours before the alert and unrelated. [evidence: aws_rds_events]
+
+  NON_VALIDATED_CLAIMS:
+  - The surge on acme is most consistent with a recent deploy that introduced an N+1 query pattern (each customer-page render now issues multiplied queries against orders+order_items). The fixture does not include acme's deploy timeline, so the specific commit cannot be confirmed from the evidence available.
+
+  CAUSAL_CHAIN:
+  - 16:05Z onward: acme's ALB target group sees its request count climb from ~410/min to ~3300/min. The other two tenant target groups stay flat over the same window, ruling out a shared upstream cause (CDN, DNS, common load-balancer).
+  - Each request issues the orders+order_items join against the shared payments-multi-prod primary. Because every tenant shares the same DB, acme's amplified call rate becomes db_load that the other tenants pay for in shared CPU.
+  - Performance Insights confirms the attribution mechanism: top_users is dominated by acme_app_user and top_hosts is dominated by acme's two API-instance IPs. Cross-checking with ec2_instances_by_tag confirms those IPs are tagged tenant=acme-corp.
+  - RDS CPUUtilization rises proportionally and reaches 91% at 16:14Z, triggering the near-critical alert.
+  - The query itself is not the problem; its plan is normal and its per-call duration is unchanged. The problem is one tenant's traffic generating multiplied executions of a normal query. This is a classic noisy-neighbor pattern on a shared DB.
+
+  RECOMMENDED_ACTIONS:
+  - Contact acme-corp's engineering team to identify the recent deploy that changed the query pattern. Roll back or hot-fix the N+1 access pattern.
+  - Short-term: apply per-tenant rate limiting at the ALB/WAF layer or a per-tenant connection pool cap so a single tenant cannot consume more than its fair share of shared DB capacity.
+  - Add an alert on per-tenant ALB RequestCount so future tenant-specific surges are caught upstream of the DB.
+  - Long-term: consider tenant isolation strategies — read replicas per tenant, shard by tenant_id, or move acme to a dedicated DB if it is consistently the largest customer.

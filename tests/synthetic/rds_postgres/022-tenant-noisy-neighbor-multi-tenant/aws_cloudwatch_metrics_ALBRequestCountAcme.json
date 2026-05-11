@@ -1,0 +1,36 @@
+{
+  "id": "m_alb_requests_acme",
+  "label": "ALB RequestCount for prod-acme-api-tg (sum per minute)",
+  "metric_name": "RequestCount",
+  "dimensions": [
+    {
+      "Name": "LoadBalancer",
+      "Value": "app/prod-multi-alb/11aabbcc"
+    },
+    {
+      "Name": "TargetGroup",
+      "Value": "targetgroup/prod-acme-api-tg/22ddeeff"
+    }
+  ],
+  "stat": "Sum",
+  "unit": "Count",
+  "status_code": "Complete",
+  "timestamps": [
+    "2026-05-11T16:00:00Z",
+    "2026-05-11T16:01:00Z",
+    "2026-05-11T16:02:00Z",
+    "2026-05-11T16:03:00Z",
+    "2026-05-11T16:04:00Z",
+    "2026-05-11T16:05:00Z",
+    "2026-05-11T16:06:00Z",
+    "2026-05-11T16:07:00Z",
+    "2026-05-11T16:08:00Z",
+    "2026-05-11T16:09:00Z",
+    "2026-05-11T16:10:00Z",
+    "2026-05-11T16:11:00Z",
+    "2026-05-11T16:12:00Z",
+    "2026-05-11T16:13:00Z",
+    "2026-05-11T16:14:00Z"
+  ],
+  "values": [412, 408, 421, 416, 405, 1024, 1612, 2218, 2741, 3046, 3194, 3267, 3284, 3291, 3306]
+}
