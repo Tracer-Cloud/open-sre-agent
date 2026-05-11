@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 from app.cli.interactive_shell.routing import router as _router_module
@@ -192,7 +193,9 @@ class TestClassifyInput:
         )
         assert classify_input(text, session) == "new_alert"
 
-    def test_short_incident_with_in_docs_phrase_routes_to_new_alert(self) -> None:
+    def test_short_incident_with_in_docs_phrase_routes_to_new_alert(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """'in (the) docs' on its own is too broad to be a help signal — an
         incident description that mentions errors happening "in docs" must
         still reach the investigation pipeline (#1166 review feedback).
@@ -200,6 +203,7 @@ class TestClassifyInput:
         Only counts as a docs question when the surrounding clause is
         question-shaped (covered by ``test_in_the_docs_question_routes_to_cli_help``).
         """
+        monkeypatch.setattr(_router_module, "_LLM_ROUTING_DISABLED", True)
         session = ReplSession()
         text = "the API errors are happening in docs"
         assert classify_input(text, session) == "new_alert"
