@@ -10,6 +10,7 @@ from typing import Literal
 
 from app.config import (
     ANTHROPIC_REASONING_MODEL,
+    BEDROCK_REASONING_MODEL,
     DEFAULT_OLLAMA_HOST,
     DEFAULT_OLLAMA_MODEL,
     GEMINI_REASONING_MODEL,
@@ -23,7 +24,7 @@ from app.integrations.llm_cli.base import LLMCLIAdapter
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 PROJECT_ENV_PATH = Path(os.getenv("OPENSRE_PROJECT_ENV_PATH", PROJECT_ROOT / ".env"))
 
-CredentialKind = Literal["api_key", "host", "cli"]
+CredentialKind = Literal["api_key", "host", "cli", "none"]
 
 
 @dataclass(frozen=True)
@@ -144,6 +145,53 @@ NVIDIA_MODELS = (
         label="Nemotron 3 Super 120B (5x higher throughput for agentic AI)",
     ),
     ModelOption(value="nvidia/nemotron-3-nano-30b-a3b", label="Nemotron 3 Nano 30B"),
+)
+
+BEDROCK_MODELS = (
+    ModelOption(
+        value=BEDROCK_REASONING_MODEL,
+        label="Claude Sonnet 4.6 (US cross-region) — default",
+    ),
+    ModelOption(
+        value="us.anthropic.claude-opus-4-7",
+        label="Claude Opus 4.7 (US cross-region) — most capable",
+    ),
+    ModelOption(
+        value="us.anthropic.claude-opus-4-6-v1",
+        label="Claude Opus 4.6 (US cross-region)",
+    ),
+    ModelOption(
+        value="us.anthropic.claude-opus-4-5-20251101-v1:0",
+        label="Claude Opus 4.5 (US cross-region)",
+    ),
+    ModelOption(
+        value="us.anthropic.claude-opus-4-1-20250805-v1:0",
+        label="Claude Opus 4.1 (US cross-region)",
+    ),
+    ModelOption(
+        value="us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        label="Claude Sonnet 4.5 (US cross-region)",
+    ),
+    ModelOption(
+        value="us.anthropic.claude-sonnet-4-20250514-v1:0",
+        label="Claude Sonnet 4 (US cross-region)",
+    ),
+    ModelOption(
+        value="us.anthropic.claude-haiku-4-5-20251001-v1:0",
+        label="Claude Haiku 4.5 (US cross-region) — fast, cost-efficient",
+    ),
+    ModelOption(
+        value="us.meta.llama4-maverick-17b-instruct-v1:0",
+        label="Llama 4 Maverick 17B (US cross-region)",
+    ),
+    ModelOption(
+        value="us.amazon.nova-pro-v1:0",
+        label="Amazon Nova Pro (US cross-region)",
+    ),
+    ModelOption(
+        value="mistral.mistral-large-3-675b-instruct",
+        label="Mistral Large 3 675B Instruct (on-demand)",
+    ),
 )
 
 OLLAMA_MODELS = (
@@ -340,6 +388,25 @@ SUPPORTED_PROVIDERS = (
         models=NVIDIA_MODELS,
         legacy_model_env="NVIDIA_MODEL",
         toolcall_model_env="NVIDIA_TOOLCALL_MODEL",
+    ),
+    ProviderOption(
+        value="bedrock",
+        label="Amazon Bedrock (IAM auth)",
+        group="Hosted providers",
+        # Intentionally empty: Bedrock authenticates via the IAM credential
+        # chain (env, ~/.aws/credentials, instance profile) — no API key to
+        # prompt for.  Empty string is safe: every downstream check uses
+        # ``bool(provider.api_key_env)`` or ``.get()`` (never subscript).
+        api_key_env="",
+        model_env="BEDROCK_REASONING_MODEL",
+        default_model=BEDROCK_REASONING_MODEL,
+        models=BEDROCK_MODELS,
+        toolcall_model_env="BEDROCK_TOOLCALL_MODEL",
+        credential_label="AWS region (uses IAM credentials)",
+        credential_secret=False,
+        # credential_kind="none" causes flow.py to skip the credential prompt
+        # entirely.  Region is picked up from AWS_DEFAULT_REGION / ~/.aws/config.
+        credential_kind="none",
     ),
     ProviderOption(
         value="codex",

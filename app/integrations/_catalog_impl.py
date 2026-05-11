@@ -56,6 +56,7 @@ from app.integrations.registry import (
 )
 from app.integrations.sentry import build_sentry_config
 from app.integrations.store import _STRUCTURAL_RECORD_FIELDS, load_integrations
+from app.integrations.supabase import build_supabase_config
 from app.services.vercel import VercelConfig
 from app.utils.coercion import safe_int
 
@@ -800,6 +801,23 @@ def _classify_service_instance(
             return None, None
         if splunk_config.base_url and splunk_config.token:
             return splunk_config.model_dump(), "splunk"
+        return None, None
+
+    if key == "supabase":
+        try:
+            sb_config = build_supabase_config(
+                {
+                    "url": credentials.get("url", ""),
+                    "service_key": credentials.get("service_key", ""),
+                }
+            )
+        except Exception:
+            return None, None
+        if sb_config.is_configured:
+            return {
+                "project_url": sb_config.url,
+                "integration_id": record_id,
+            }, "supabase"
         return None, None
 
     # Fallback for unknown services: pass through credentials + record id.
@@ -1616,6 +1634,22 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     splunk_config.model_dump(exclude={"integration_id"}),
                 )
             )
+
+    supabase_url = os.getenv("SUPABASE_URL", "").strip()
+    supabase_service_key = os.getenv("SUPABASE_SERVICE_KEY", "").strip()
+    if supabase_url and supabase_service_key:
+        try:
+            sb_config = build_supabase_config(
+                {"url": supabase_url, "service_key": supabase_service_key}
+            )
+            integrations.append(
+                _active_env_record(
+                    "supabase",
+                    {"project_url": sb_config.url},
+                )
+            )
+        except Exception:
+            logger.debug("Failed to load Supabase config from env", exc_info=True)
 
     return integrations
 

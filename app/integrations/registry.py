@@ -39,6 +39,7 @@ from app.integrations._verification_adapters import (
     _verify_slack_without_test,
     _verify_snowflake,
     _verify_splunk,
+    _verify_supabase,
     _verify_telegram,
     _verify_tracer,
     _verify_vercel,
@@ -325,6 +326,11 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
     IntegrationSpec(service="posthog"),
     IntegrationSpec(service="trello"),
     IntegrationSpec(service="rds", setup_order=11),
+    IntegrationSpec(
+        service="supabase",
+        verifier=_verify_supabase,
+        verify_order=99,
+    ),
 )
 
 INTEGRATION_SPECS_BY_SERVICE = {spec.service: spec for spec in INTEGRATION_SPECS}

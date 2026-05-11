@@ -2110,7 +2110,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                 )
             ]
             model = provider.default_model
-            if provider.credential_kind != "cli":
+            if provider.credential_kind not in ("cli", "none"):
                 _step(provider.credential_label.title())
                 try:
                     api_key = _prompt_value(
@@ -2127,7 +2127,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
             assert saved_provider is not None
             provider = saved_provider
             model = saved_model_value or provider.default_model
-            if provider.credential_kind != "cli":
+            if provider.credential_kind not in ("cli", "none"):
                 has_api_key = bool(defaults["has_api_key"])
                 legacy_api_key = str(defaults["legacy_api_key"] or "").strip()
                 if not has_api_key and legacy_api_key:

@@ -982,11 +982,9 @@ def test_execute_cli_actions_backtick_shell_preserves_space_path_token(monkeypat
         is True
     )
     # On Windows, shlex with posix=False preserves quotes for tokens with spaces.
-    expected_path = (
-        '"/tmp/file with spaces.txt"'
-        if intent_parser_module.IS_WINDOWS
-        else "/tmp/file with spaces.txt"
-    )
+    # Both Windows and Posix parsers correctly strip outer quotes from tokens
+    # following the policy.py _strip_outer_quotes logic.
+    expected_path = "/tmp/file with spaces.txt"
     assert calls[0][0] == ["cat", expected_path]
 
 

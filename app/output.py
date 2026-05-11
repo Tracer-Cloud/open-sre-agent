@@ -16,7 +16,7 @@ import sys
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from rich.console import Console, ConsoleOptions, RenderResult
 from rich.text import Text
@@ -178,6 +178,19 @@ def _get_console() -> Console:
     return _live_console or Console(highlight=False)
 
 
+def set_live_console(console: Console | None) -> None:
+    """Register an active console globally for top-level routing."""
+    global _live_console
+    _live_console = console
+
+
+def unregister_live_console(expected: Console | None) -> None:
+    """Safely clear the active console registry ONLY if it matches the owner."""
+    global _live_console
+    if expected is not None and _live_console is expected:
+        _live_console = None
+
+
 def stop_display() -> None:
     """Stop any running live display. Call before printing final report output."""
     global _active_display
@@ -332,14 +345,14 @@ class _LiveRenderable:
 class _EventLogDisplay:
     """Rich Live-backed animated event log. One instance per investigation."""
 
-    def __init__(self, model: str = "", mode: str = "local") -> None:
+    def __init__(self, model: str = "", mode: str = "local", t0: float | None = None) -> None:
         from rich.live import Live
 
         global _live_console, _active_display
 
         self._model = model
         self._mode = mode
-        self._t0 = time.monotonic()
+        self._t0 = t0 if t0 is not None else time.monotonic()
         self._active_steps: dict[str, dict] = {}  # node_name → {t0, subtext, subtext_until}
         self._current_phase = "LOAD"
         self._lock = threading.Lock()
@@ -428,6 +441,10 @@ class _EventLogDisplay:
         with self._live.console.use_theme(MARKDOWN_THEME):
             self._live.console.print(Markdown(text, code_theme="ansi_dark"))
 
+    def print_above_renderable(self, renderable: Any) -> None:
+        """Print a rich renderable permanently above the live region."""
+        self._live.console.print(renderable)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Progress event + tracker
@@ -449,11 +466,23 @@ class ProgressTracker:
     def __init__(self) -> None:
         self.events: list[ProgressEvent] = []
         self._start_times: dict[str, float] = {}
+        self._t0: float = time.monotonic()
         self._silent = _is_silent_output()
         self._rich = get_output_format() == "rich"
         self._display: _EventLogDisplay | None = None
         if self._rich and not self._silent:
-            self._display = _EventLogDisplay()
+            self._display = _EventLogDisplay(t0=self._t0)
+
+    @property
+    def has_active_display(self) -> bool:
+        """Return True if the live display is currently running."""
+        return self._display is not None
+
+    def stop(self) -> None:
+        """Stop the active live display if running."""
+        if self._display:
+            self._display.stop()
+            self._display = None
 
     def start(self, node_name: str, message: str | None = None) -> None:
         self._start_times[node_name] = time.monotonic()
@@ -468,7 +497,9 @@ class ProgressTracker:
                 if self._display:
                     self._display.stop()
                     self._display = None
-            elif self._display:
+            else:
+                if self._display is None:
+                    self._display = _EventLogDisplay(t0=self._t0)
                 self._display.step_start(node_name)
         else:
             _safe_print(f"  … {_node_label(node_name)}")
@@ -496,6 +527,14 @@ class ProgressTracker:
             for line in text.strip().splitlines():
                 print(f"  {line}")
 
+    def print_above_renderable(self, renderable: Any) -> None:
+        """Print a rich renderable permanently above the active live region, or to console."""
+        if self._display:
+            self._display.print_above_renderable(renderable)
+        else:
+            _get_console().print()
+            _get_console().print(renderable)
+
     def _finish(
         self, node_name: str, status: str, fields_updated: list[str], message: str | None
     ) -> None:
@@ -517,12 +556,12 @@ class ProgressTracker:
             if self._display:
                 self._display.step_complete(node_name, event)
             else:
-                # Display was stopped (publish_findings path) — print a plain Rich line
+                # Display was stopped (e.g. diagnose path) — route safely above active live console
                 mark = "✗" if status == "error" else "●"
                 line = f"  {mark} {_node_label(node_name)}  {_fmt_timing(elapsed_ms)}"
                 if msg := _humanise_message(message or ""):
                     line += f"  {msg}"
-                Console(highlight=False).print(line)
+                self.print_above_renderable(line)
             return
 
         # text mode

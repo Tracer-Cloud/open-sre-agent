@@ -315,7 +315,6 @@ class TestToolResultToDict:
         is_error: bool = False,
         content_items: list | None = None,
     ) -> MagicMock:
-
         result = MagicMock()
         result.isError = is_error
         result.content = content_items or []

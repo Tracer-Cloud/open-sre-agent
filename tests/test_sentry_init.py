@@ -20,10 +20,17 @@ def _reset_sentry_module_state(monkeypatch: pytest.MonkeyPatch) -> None:
     import Y`` because the stub is not a package. Stubbing the integrations
     builder with an empty list keeps every test working; the one test that
     asserts integrations were wired overrides this in its own body.
+
+    Also clears the global ``OPENSRE_SENTRY_DISABLED`` flag set by conftest so
+    that ``_before_send`` unit tests can exercise the scrubbing/filtering logic.
+    Tests that need the disable flag re-set it via ``monkeypatch.setenv``.
     """
     sentry_mod._init_sentry_once.cache_clear()
     sentry_mod._reset_scope_tags_state_for_tests()
     monkeypatch.setattr(sentry_mod, "_build_sentry_integrations", lambda: [])
+    monkeypatch.delenv("OPENSRE_SENTRY_DISABLED", raising=False)
+    monkeypatch.delenv("OPENSRE_NO_TELEMETRY", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
 
 
 def test_init_sentry_noops_when_disabled(monkeypatch) -> None:
@@ -246,6 +253,12 @@ def test_before_send_filters_sensitive_request_headers() -> None:
 def test_before_send_drops_event_when_dsn_is_empty(monkeypatch) -> None:
     monkeypatch.setenv("SENTRY_DSN", "")
     monkeypatch.setattr(sentry_mod, "SENTRY_DSN", "")
+
+    assert sentry_mod._before_send({"message": "boom"}, {}) is None
+
+
+def test_before_send_drops_event_when_sentry_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENSRE_SENTRY_DISABLED", "1")
 
     assert sentry_mod._before_send({"message": "boom"}, {}) is None
 
@@ -609,6 +622,22 @@ def test_before_send_filters_nested_lists_of_dicts() -> None:
         (
             "RuntimeError",
             "Openai authentication failed. Check OPENAI_API_KEY in your environment, .env, or secure local keychain.",
+        ),
+        (
+            "RuntimeError",
+            "Openrouter authentication failed. Check OPENROUTER_API_KEY in your environment, .env, or secure local keychain.",
+        ),
+        (
+            "RuntimeError",
+            "Minimax authentication failed. Check MINIMAX_API_KEY in your environment, .env, or secure local keychain.",
+        ),
+        (
+            "RuntimeError",
+            "1 validation error for LLMSettings\n  Value error, LLM provider 'minimax' requires MINIMAX_API_KEY to be set.",
+        ),
+        (
+            "RuntimeError",
+            "Openai request rejected (HTTP 400): Error code: 400 - {'error': {'message': 'litellm.BadRequestError: AnthropicException - {\"message\":\"The provided model identifier is invalid.\"}. Received Model Group=relay-ops-claude-opus-4-7'}}",
         ),
         (
             "RuntimeError",

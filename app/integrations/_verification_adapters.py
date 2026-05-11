@@ -33,6 +33,7 @@ from app.integrations.openclaw import build_openclaw_config, validate_openclaw_c
 from app.integrations.postgresql import build_postgresql_config, validate_postgresql_config
 from app.integrations.rabbitmq import build_rabbitmq_config, validate_rabbitmq_config
 from app.integrations.sentry import build_sentry_config, validate_sentry_config
+from app.integrations.supabase import build_supabase_config, validate_supabase_config
 from app.services.alertmanager import AlertmanagerClient, AlertmanagerConfig
 from app.services.argocd import ArgoCDClient, ArgoCDConfig
 from app.services.coralogix import CoralogixClient
@@ -575,6 +576,16 @@ def _verify_slack_without_test(source: str, config: dict[str, Any]) -> dict[str,
     return _verify_slack(source, config, send_slack_test=False)
 
 
+def _verify_supabase(service: str, config: dict[str, Any]) -> dict[str, str]:
+    return _verify_with_validation_result(
+        service,
+        "supabase",
+        config,
+        build_config=build_supabase_config,
+        validate_config=validate_supabase_config,
+    )
+
+
 __all__ = [
     "VerifierFn",
     "_verify_alertmanager",
@@ -610,6 +621,7 @@ __all__ = [
     "_verify_slack_without_test",
     "_verify_snowflake",
     "_verify_splunk",
+    "_verify_supabase",
     "_verify_telegram",
     "_verify_tracer",
     "_verify_vercel",

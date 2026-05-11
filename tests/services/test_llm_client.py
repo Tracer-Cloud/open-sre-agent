@@ -1032,6 +1032,21 @@ def test_create_llm_client_missing_api_key_raises_runtime_error(monkeypatch) -> 
         llm_client.reset_llm_singletons()
 
 
+def test_create_llm_client_missing_api_key_omits_pydantic_boilerplate(monkeypatch) -> None:
+    """Sentry #1815: the RuntimeError message must not include pydantic boilerplate."""
+    monkeypatch.setenv("LLM_PROVIDER", "minimax")
+    monkeypatch.delenv("MINIMAX_API_KEY", raising=False)
+    llm_client.reset_llm_singletons()
+    try:
+        with pytest.raises(RuntimeError) as exc_info:
+            llm_client._create_llm_client("reasoning")
+        msg = str(exc_info.value)
+        assert "1 validation error for LLMSettings" not in msg
+        assert "MINIMAX_API_KEY" in msg
+    finally:
+        llm_client.reset_llm_singletons()
+
+
 # ---------------------------------------------------------------------------
 # LLMClient.invoke / invoke_stream — NotFoundError handling
 # ---------------------------------------------------------------------------

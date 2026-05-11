@@ -539,7 +539,7 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
     [
         pytest.param(
             "codex",
-            6,
+            7,
             "OpenAI Codex CLI",
             60.0,
             marks=pytest.mark.skipif(
@@ -549,7 +549,7 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
         ),
         pytest.param(
             "opencode",
-            10,
+            11,
             "OpenCode CLI",
             120.0,
             marks=pytest.mark.skipif(
@@ -569,8 +569,8 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
 ) -> None:
     """PTY: quickstart → local CLI LLM → repick when unauthenticated, then finish as Anthropic.
 
-    Navigates from the default provider with ``stagger_j`` ``j`` presses (provider list order
-    in ``SUPPORTED_PROVIDERS``). Fresh HOME has no CLI auth, so either ``requires login`` or
+    Navigates from the default provider with ``stagger_j`` ``j`` presses (0-based index in
+    ``SUPPORTED_PROVIDERS``, e.g. codex=7 after Bedrock). Fresh HOME has no CLI auth, so either ``requires login`` or
     ``Could not verify … login`` is accepted before choosing repick. Skips when the CLI binary
     for each parametrized case is not on PATH.
     """

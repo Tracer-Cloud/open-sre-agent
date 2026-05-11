@@ -300,6 +300,15 @@ def parse_shell_command(command: str, *, is_windows: bool) -> ParsedShellCommand
             parse_error="empty command.",
         )
 
+    if is_windows:
+
+        def _strip_outer_quotes(value: str) -> str:
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+                return value[1:-1]
+            return value
+
+        argv = [_strip_outer_quotes(token) for token in argv]
+
     return ParsedShellCommand(command=stripped, argv=argv, passthrough=False)
 
 

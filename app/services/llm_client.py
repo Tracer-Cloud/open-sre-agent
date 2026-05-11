@@ -432,18 +432,19 @@ class BedrockLLMClient:
                     # AWS-provided reason so the user knows which one to fix
                     # — see issue #1808.
                     err_msg = err.response.get("Error", {}).get("Message", "") or ""
+                    err_msg_str = str(err_msg)
                     if (
-                        "INVALID_PAYMENT_INSTRUMENT" in err_msg
-                        or "payment instrument" in err_msg.lower()
+                        "INVALID_PAYMENT_INSTRUMENT" in err_msg_str
+                        or "payment instrument" in err_msg_str.lower()
                     ):
-                        aws_message = err_msg.strip().rstrip(".")
+                        aws_message = err_msg_str.strip().rstrip(".")
                         detail = f" Cause: {aws_message}." if aws_message else ""
                         raise RuntimeError(
                             f"Access denied for Bedrock model '{self._model}'.{detail} "
                             "A valid AWS payment instrument is required — add a payment method "
                             "to your AWS account or check your AWS Marketplace subscription."
                         ) from err
-                    aws_message = err_msg.strip().rstrip(".")
+                    aws_message = err_msg_str.strip().rstrip(".")
                     detail = f" Cause: {aws_message}." if aws_message else ""
                     raise RuntimeError(
                         f"Access denied for Bedrock model '{self._model}'.{detail} "
@@ -998,6 +999,10 @@ def _create_llm_client(model_type: ModelType) -> _LLMClientType:
     try:
         settings = LLMSettings.from_env()
     except ValidationError as exc:
+        errors = exc.errors()
+        if len(errors) == 1:
+            msg = re.sub(r"^[Vv]alue error,\s*", "", errors[0].get("msg", "")).strip()
+            raise RuntimeError(msg or str(exc)) from exc
         raise RuntimeError(str(exc)) from exc
     provider = settings.provider
     if provider == "openai":
