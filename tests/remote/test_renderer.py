@@ -809,6 +809,29 @@ class TestStreamRendererFocusedUXAndParsing:
     @patch("app.remote.renderer.Live")
     @patch("app.output._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
+    def test_root_cause_verbs_do_not_promote_to_next_actions(
+        self, _mock_display, _mock_live, capfd
+    ) -> None:
+        """Action verbs under Root Cause belong in RCA detail, never verb-fallback Next Actions."""
+        renderer = StreamRenderer()
+        renderer._final_state = {
+            "root_cause": "Connection pool exhaustion",
+            "validity_score": 0.9,
+            "report": (
+                "# Root Cause\n"
+                "• Review the pool settings before scaling.\n"
+                "• Check idle timeout versus burst traffic.\n"
+            ),
+        }
+        renderer._print_report()
+        out, _ = capfd.readouterr()
+        assert "Next Actions" not in out
+        assert "Review the pool settings" in out
+        assert "idle timeout" in out.lower()
+
+    @patch("app.remote.renderer.Live")
+    @patch("app.output._EventLogDisplay")
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
     def test_rich_rca_confidence_invalid_score_shows_na(
         self, _mock_display, _mock_live, capfd
     ) -> None:
@@ -921,8 +944,12 @@ class TestStreamRendererDiagnoseThrottle:
         monkeypatch.setattr(renderer_module, "Markdown", _SpyMarkdown)
         return fake_time, parse_count
 
+    @patch("app.remote.renderer.Live")
+    @patch("app.output._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
-    def test_chunks_in_one_window_collapse_to_a_single_final_flush(self, monkeypatch) -> None:
+    def test_chunks_in_one_window_collapse_to_a_single_final_flush(
+        self, _mock_display, _mock_live, monkeypatch
+    ) -> None:
         """100 chunks while the clock is stuck → exactly one Markdown parse."""
         fake_time, parse_count = self._install_clock_and_spy(monkeypatch)
         # Force rich mode so the Live region opens and the throttle gates
@@ -949,8 +976,12 @@ class TestStreamRendererDiagnoseThrottle:
         # silence unused-var while keeping the fixture wired.
         assert fake_time[0] == 0.0
 
+    @patch("app.remote.renderer.Live")
+    @patch("app.output._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
-    def test_chunks_across_multiple_windows_render_periodically(self, monkeypatch) -> None:
+    def test_chunks_across_multiple_windows_render_periodically(
+        self, _mock_display, _mock_live, monkeypatch
+    ) -> None:
         """Chunks spaced past the throttle interval render multiple times."""
         from app.remote import renderer as renderer_module
 
@@ -972,8 +1003,12 @@ class TestStreamRendererDiagnoseThrottle:
         # Throttle's purpose: parse count must stay << total chunks.
         assert parse_count[0] < 50
 
+    @patch("app.remote.renderer.Live")
+    @patch("app.output._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
-    def test_final_flush_renders_chunks_pending_in_last_window(self, monkeypatch) -> None:
+    def test_final_flush_renders_chunks_pending_in_last_window(
+        self, _mock_display, _mock_live, monkeypatch
+    ) -> None:
         """Chunks arriving in the trailing throttle window must still appear."""
         from app.remote import renderer as renderer_module
 
@@ -995,8 +1030,12 @@ class TestStreamRendererDiagnoseThrottle:
         # Two parses: one in-loop render at "early " + one final flush.
         assert parse_count[0] == 2
 
+    @patch("app.remote.renderer.Live")
+    @patch("app.output._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
-    def test_anthropic_block_chunks_throttle_correctly(self, monkeypatch) -> None:
+    def test_anthropic_block_chunks_throttle_correctly(
+        self, _mock_display, _mock_live, monkeypatch
+    ) -> None:
         """List-shaped Anthropic content blocks honor the same throttle gate."""
         fake_time, parse_count = self._install_clock_and_spy(monkeypatch)
         renderer = StreamRenderer()

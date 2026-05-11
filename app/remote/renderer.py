@@ -642,8 +642,10 @@ class StreamRenderer:
 
                 if current_section in ("evidence", "next_actions", "root_cause"):
                     clean_line = _clean_markdown_line(stripped)
+                    # Always consume body lines under an active section so the verb-fallback
+                    # pass cannot treat root-cause narrative (e.g. "• Review …") as actions.
+                    consumed_indices.add(idx)
                     if clean_line:
-                        consumed_indices.add(idx)
                         if current_section == "evidence":
                             evidence_lines.append(clean_line)
                         elif current_section == "next_actions":
