@@ -640,6 +640,63 @@ class TestLooksLikeConfirmationAnswer:
         assert loop._looks_like_confirmation_answer(text) is False
 
 
+class TestLooksLikeCancelRequest:
+    """Unit tests for the bare-cancel slash recognizer.
+
+    The recognizer is the gate that lets the prompt loop intercept
+    ``/cancel``-style slashes typed while a dispatch is parked
+    (e.g. on a ``Proceed? [y/N]`` confirmation) and route them through
+    ``state.cancel_current_dispatch()`` instead of queueing them
+    behind the dispatch they're trying to interrupt.
+    """
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "/cancel",
+            "/CANCEL",
+            "/Cancel",
+            "/stop",
+            "/STOP",
+            "/abort",
+            "  /cancel  ",
+            "/cancel\n",
+            "\t/stop\t",
+        ],
+    )
+    def test_recognised_cancel_slashes_match(self, text: str) -> None:
+        assert loop._looks_like_cancel_request(text) is True
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            # Targeted background-task cancel — must keep flowing
+            # through the normal slash dispatch path so the existing
+            # ``_cmd_cancel`` handler resolves the task id.
+            "/cancel 8f5fe574",
+            "/cancel abc123",
+            "/stop now",
+            # Other slashes — unrelated to interrupt.
+            "/help",
+            "/tasks",
+            # Natural-language uses of the same words must NOT be
+            # intercepted; the user might be talking about cancelling
+            # a deploy or stopping a service in their environment.
+            "cancel this please",
+            "cancel",
+            "stop the deploy",
+            "stop",
+            "abort",
+            # Empty / whitespace / None — nothing to intercept.
+            "",
+            "   ",
+            None,
+        ],
+    )
+    def test_unrecognised_text_does_not_match(self, text: str | None) -> None:
+        assert loop._looks_like_cancel_request(text) is False
+
+
 # ── Spinner state tests ──────────────────────────────────────────────────────
 
 

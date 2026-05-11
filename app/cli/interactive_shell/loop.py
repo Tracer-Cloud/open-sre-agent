@@ -129,6 +129,31 @@ def _looks_like_confirmation_answer(text: str | None) -> bool:
     return (text or "").strip().lower() in _CONFIRMATION_TOKENS
 
 
+# Bare slash commands that mean "stop whatever is currently pondering",
+# matching the user's mental model when they reach for the obvious
+# cancel command after seeing the spinner stuck. ``/cancel <task_id>``
+# (with arguments) is intentionally excluded — that's a targeted
+# background-task cancel handled by the existing slash command in the
+# worker thread.
+_CANCEL_REQUEST_TOKENS: frozenset[str] = frozenset({"/cancel", "/stop", "/abort"})
+
+
+def _looks_like_cancel_request(text: str | None) -> bool:
+    """True when ``text`` reads as a deliberate request to interrupt the
+    currently-active dispatch.
+
+    Used by the prompt loop to intercept bare ``/cancel`` (and friends)
+    before they're queued. Without this intercept, ``/cancel`` typed
+    while the worker is parked on a ``Proceed? [y/N]`` confirmation
+    sits behind the parked dispatch in the queue and never runs — the
+    spinner keeps spinning and the user gets no feedback. Routing the
+    intent through :meth:`_ReplState.cancel_current_dispatch` mirrors
+    what ``Esc`` already does and gives ``/cancel`` discoverable parity
+    with that keystroke.
+    """
+    return (text or "").strip().lower() in _CANCEL_REQUEST_TOKENS
+
+
 def _looks_like_correction(text: str) -> bool:
     """True when text begins with a short correction cue (intervention signal)."""
     stripped = text.lstrip()
@@ -823,6 +848,25 @@ async def _run_interactive(
 
                 if state.exit_requested:
                     return
+
+                # Bare ``/cancel``/``/stop``/``/abort`` while a dispatch
+                # is active: route through the same path as ``Esc``
+                # (``state.cancel_current_dispatch()``) instead of
+                # queueing the slash. Queueing a cancel behind the
+                # dispatch that's *causing* the spinner to spin is a
+                # deadlock from the user's perspective — the queued
+                # ``/cancel`` only runs once the parked dispatch
+                # finishes, which is exactly what they're trying to
+                # interrupt. ``/cancel <task_id>`` with arguments is
+                # intentionally NOT matched by the recognizer so the
+                # existing targeted background-task cancel still flows
+                # through the normal slash-dispatch path.
+                if state.is_dispatch_running() and _looks_like_cancel_request(text):
+                    stripped = (text or "").strip()
+                    if stripped:
+                        render_submitted_prompt(echo_console, session, stripped)
+                    state.cancel_current_dispatch()
+                    continue
 
                 # If a worker thread is parked on a confirmation prompt,
                 # the next text the user submits *might* be the answer
