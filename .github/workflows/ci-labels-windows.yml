@@ -52,7 +52,7 @@ jobs:
         run: uv run python -m ruff format --check app/ tests/
 
       - name: Typecheck
-        run: uv run python -m mypy app/
+        run: uv run python -m mypy app/ --platform linux
 
   windows-test:
     if: contains(github.event.pull_request.labels.*.name, 'ci:windows')
