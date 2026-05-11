@@ -20,8 +20,14 @@ def _disable_sentry() -> None:
     os.environ["OPENSRE_SENTRY_DISABLED"] = "1"
 
 
+def _mark_tests_for_analytics() -> None:
+    os.environ["OPENSRE_NO_TELEMETRY"] = "1"
+    os.environ["OPENSRE_INVESTIGATION_SOURCE"] = "test"
+
+
 _load_env()
 _disable_sentry()
+_mark_tests_for_analytics()
 
 
 @pytest.fixture(autouse=True)
@@ -34,3 +40,4 @@ def pytest_configure(config):
     """Pytest hook — keep env available for collection and execution."""
     _load_env()
     _disable_sentry()
+    _mark_tests_for_analytics()

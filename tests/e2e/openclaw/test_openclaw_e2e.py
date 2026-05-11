@@ -36,10 +36,6 @@ from app.nodes.plan_actions.detect_sources import detect_sources
 from app.nodes.resolve_integrations.node import _classify_integrations, _load_env_integrations
 from app.utils.openclaw_delivery import send_openclaw_report
 
-OpenClawConfig = openclaw_module.OpenClawConfig
-from app.nodes.resolve_integrations.node import _classify_integrations, _load_env_integrations
-from app.utils.openclaw_delivery import send_openclaw_report
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

@@ -308,6 +308,37 @@ def test_run_new_alert_marks_task_failed_on_opensre_error(monkeypatch: pytest.Mo
     assert inv_tasks[0].error == "integration misconfigured"
 
 
+def test_run_new_alert_tracks_cli_paste_source(monkeypatch: pytest.MonkeyPatch) -> None:
+    from rich.console import Console
+
+    track_calls: list[tuple[str, str]] = []
+
+    class _TrackContext:
+        def __enter__(self) -> None:
+            return None
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            _ = (exc_type, exc, tb)
+            return False
+
+    def fake_track_investigation(*, entrypoint, trigger_mode, **kwargs):  # type: ignore[no-untyped-def]
+        _ = kwargs
+        track_calls.append((entrypoint.value, trigger_mode.value))
+        return _TrackContext()
+
+    monkeypatch.setattr("app.analytics.cli.track_investigation", fake_track_investigation)
+    monkeypatch.setattr(
+        "app.cli.investigation.run_investigation_for_session",
+        lambda **_kwargs: {"root_cause": "handled"},
+    )
+    session = ReplSession()
+    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
+
+    loop._run_new_alert("High CPU alert", session, console)
+
+    assert track_calls == [("cli_paste", "paste")]
+
+
 def test_run_new_alert_reports_unexpected_error(monkeypatch: pytest.MonkeyPatch) -> None:
     from rich.console import Console
 

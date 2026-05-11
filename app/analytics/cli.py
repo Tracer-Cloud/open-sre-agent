@@ -4,10 +4,15 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass
 from typing import Final
+from uuid import uuid4
 
 from app.analytics.events import Event
 from app.analytics.provider import Properties, get_analytics
+from app.analytics.source import EntrypointSource, TriggerMode, build_source_properties
 from app.utils.sentry_sdk import capture_exception
 
 EVAL_AND_TERMINAL_KPI_QUERIES: Final[dict[str, str]] = {
@@ -113,6 +118,21 @@ EVAL_AND_TERMINAL_EVENT_CONTRACT: Final[dict[Event, frozenset[str]]] = {
     ),
 }
 
+_INVESTIGATION_TRACKING_DEPTH: ContextVar[int] = ContextVar(
+    "investigation_tracking_depth",
+    default=0,
+)
+
+
+@dataclass
+class InvestigationTracker:
+    """Holds shared context for investigation lifecycle captures."""
+
+    shared_properties: Properties
+    enabled: bool
+    completed: bool = False
+    failed: bool = False
+
 
 def _string_value(value: object) -> str | None:
     return value if isinstance(value, str) and value else None
@@ -154,8 +174,10 @@ def _investigation_started_properties(
     input_json: str | None,
     interactive: bool,
     evaluate_requested: bool,
+    shared_properties: Properties,
 ) -> Properties:
     properties: Properties = {
+        **shared_properties,
         "has_input_file": input_path is not None,
         "has_inline_json": input_json is not None,
         "interactive": interactive,
@@ -169,6 +191,21 @@ def _investigation_started_properties(
         properties["llm_provider"] = llm_provider
     if llm_model is not None:
         properties["llm_model"] = llm_model
+    return properties
+
+
+def _investigation_completed_properties(*, shared_properties: Properties) -> Properties:
+    return {**shared_properties}
+
+
+def _investigation_failed_properties(
+    *,
+    shared_properties: Properties,
+    failure_type: str | None = None,
+) -> Properties:
+    properties: Properties = {**shared_properties}
+    if failure_type:
+        properties["failure_type"] = failure_type
     return properties
 
 
@@ -284,8 +321,16 @@ def capture_investigation_started(
     input_path: str | None,
     input_json: str | None,
     interactive: bool,
+    entrypoint: EntrypointSource = EntrypointSource.CLI_COMMAND,
+    trigger_mode: TriggerMode = TriggerMode.FILE,
+    investigation_id: str | None = None,
     evaluate_requested: bool = False,
 ) -> None:
+    shared_properties = build_source_properties(
+        entrypoint=entrypoint,
+        trigger_mode=trigger_mode,
+        investigation_id=investigation_id or str(uuid4()),
+    )
     _capture(
         Event.INVESTIGATION_STARTED,
         _investigation_started_properties(
@@ -293,16 +338,101 @@ def capture_investigation_started(
             input_json=input_json,
             interactive=interactive,
             evaluate_requested=evaluate_requested,
+            shared_properties=shared_properties,
         ),
     )
 
 
-def capture_investigation_completed() -> None:
-    _capture(Event.INVESTIGATION_COMPLETED)
+def capture_investigation_completed(*, tracker: InvestigationTracker | None = None) -> None:
+    if tracker is None:
+        _capture(Event.INVESTIGATION_COMPLETED)
+        return
+    if tracker.completed or tracker.failed or not tracker.enabled:
+        tracker.completed = True
+        return
+    _capture(
+        Event.INVESTIGATION_COMPLETED,
+        _investigation_completed_properties(shared_properties=tracker.shared_properties),
+    )
+    tracker.completed = True
 
 
-def capture_investigation_failed() -> None:
-    _capture(Event.INVESTIGATION_FAILED)
+def capture_investigation_failed(
+    *,
+    tracker: InvestigationTracker | None = None,
+    failure_type: str | None = None,
+) -> None:
+    if tracker is None:
+        _capture(
+            Event.INVESTIGATION_FAILED,
+            _investigation_failed_properties(
+                shared_properties={},
+                failure_type=failure_type,
+            ),
+        )
+        return
+    if tracker.failed or not tracker.enabled:
+        tracker.failed = True
+        return
+    _capture(
+        Event.INVESTIGATION_FAILED,
+        _investigation_failed_properties(
+            shared_properties=tracker.shared_properties,
+            failure_type=failure_type,
+        ),
+    )
+    tracker.failed = True
+
+
+@contextmanager
+def track_investigation(
+    *,
+    entrypoint: EntrypointSource,
+    trigger_mode: TriggerMode,
+    input_path: str | None = None,
+    input_json: str | None = None,
+    interactive: bool = False,
+    evaluate_requested: bool = False,
+    investigation_id: str | None = None,
+):
+    """Capture investigation lifecycle once, with nested-call dedupe."""
+    depth = _INVESTIGATION_TRACKING_DEPTH.get()
+    token = _INVESTIGATION_TRACKING_DEPTH.set(depth + 1)
+    tracker: InvestigationTracker
+    if depth > 0:
+        tracker = InvestigationTracker(shared_properties={}, enabled=False)
+    else:
+        shared_properties = build_source_properties(
+            entrypoint=entrypoint,
+            trigger_mode=trigger_mode,
+            investigation_id=investigation_id or str(uuid4()),
+        )
+        _capture(
+            Event.INVESTIGATION_STARTED,
+            _investigation_started_properties(
+                input_path=input_path,
+                input_json=input_json,
+                interactive=interactive,
+                evaluate_requested=evaluate_requested,
+                shared_properties=shared_properties,
+            ),
+        )
+        tracker = InvestigationTracker(shared_properties=shared_properties, enabled=True)
+
+    try:
+        yielded = tracker
+        yield yielded
+    except Exception as exc:
+        capture_investigation_failed(
+            tracker=yielded,
+            failure_type=type(exc).__name__,
+        )
+        raise
+    else:
+        if not yielded.failed and not yielded.completed:
+            capture_investigation_completed(tracker=yielded)
+    finally:
+        _INVESTIGATION_TRACKING_DEPTH.reset(token)
 
 
 def capture_integration_setup_started(service: str) -> None:

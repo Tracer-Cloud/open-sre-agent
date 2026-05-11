@@ -110,7 +110,7 @@ def test_service_flag_surfaces_errors_from_payload_builder() -> None:
 
     runner = CliRunner()
     with (
-        patch("app.cli.commands.general.capture_investigation_started") as mock_started,
+        patch("app.cli.commands.general.track_investigation") as mock_tracking,
         patch(
             "app.remote.runtime_alert.build_runtime_alert_payload",
             side_effect=OpenSREError("unknown service", suggestion="add it"),
@@ -120,21 +120,17 @@ def test_service_flag_surfaces_errors_from_payload_builder() -> None:
         result = runner.invoke(investigate_command, ["--service", "missing"])
 
     assert result.exit_code != 0
-    mock_started.assert_not_called()
+    mock_tracking.assert_not_called()
 
 
 def test_print_template_does_not_count_as_investigation() -> None:
     runner = CliRunner()
 
-    with (
-        patch("app.cli.commands.general.capture_investigation_started") as mock_started,
-        patch("app.cli.commands.general.capture_investigation_completed") as mock_completed,
-    ):
+    with patch("app.cli.commands.general.track_investigation") as mock_tracking:
         result = runner.invoke(investigate_command, ["--print-template", "generic"])
 
     assert result.exit_code == 0
-    mock_started.assert_not_called()
-    mock_completed.assert_not_called()
+    mock_tracking.assert_not_called()
 
 
 def test_slack_thread_without_service_is_rejected() -> None:

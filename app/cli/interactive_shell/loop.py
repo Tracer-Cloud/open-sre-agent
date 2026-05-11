@@ -146,6 +146,8 @@ def _run_new_alert(
     is_tty: bool | None = None,
 ) -> None:
     """Dispatch a free-text alert description to the streaming pipeline."""
+    from app.analytics.cli import track_investigation
+    from app.analytics.source import EntrypointSource, TriggerMode
     from app.cli.interactive_shell.orchestration.execution_policy import (
         evaluate_investigation_launch,
         execution_allowed,
@@ -168,7 +170,14 @@ def _run_new_alert(
     task = session.task_registry.create(TaskKind.INVESTIGATION, command="free-text investigation")
     task.mark_running()
     try:
-        with apply_reasoning_effort(session.reasoning_effort):
+        with (
+            track_investigation(
+                entrypoint=EntrypointSource.CLI_PASTE,
+                trigger_mode=TriggerMode.PASTE,
+                interactive=True,
+            ),
+            apply_reasoning_effort(session.reasoning_effort),
+        ):
             final_state = run_investigation_for_session(
                 alert_text=text,
                 context_overrides=session.accumulated_context or None,

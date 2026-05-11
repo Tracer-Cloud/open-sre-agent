@@ -10,13 +10,12 @@ import time
 import click
 
 from app.analytics.cli import (
-    capture_investigation_completed,
-    capture_investigation_failed,
-    capture_investigation_started,
     capture_update_completed,
     capture_update_failed,
     capture_update_started,
+    track_investigation,
 )
+from app.analytics.source import EntrypointSource, TriggerMode
 from app.cli.support.constants import ALERT_TEMPLATE_CHOICES
 from app.cli.support.context import is_json_output, is_yes
 from app.cli.support.exit_codes import ERROR, SUCCESS
@@ -216,33 +215,36 @@ def investigate_command(
             input_json=input_json,
             interactive=interactive,
         )
-        capture_investigation_started(
+        trigger_mode = (
+            TriggerMode.PASTE
+            if interactive
+            else (TriggerMode.INLINE_JSON if input_json is not None else TriggerMode.FILE)
+        )
+        with track_investigation(
+            entrypoint=EntrypointSource.CLI_COMMAND,
+            trigger_mode=trigger_mode,
             input_path=input_path,
             input_json=input_json,
             interactive=interactive,
             evaluate_requested=evaluate,
-        )
-        # Only stream the live UI when the user is interactively watching stdout
-        # and hasn't asked for machine-readable JSON. Otherwise the spinner and
-        # ANSI control codes corrupt the JSON payload that consumers expect on
-        # stdout (pipes, redirection, --json, CI logs).
-        # --evaluate forces the non-streaming path because the streaming runner
-        # does not yet wire opensre_evaluate scoring through the renderer.
-        stream_to_stdout = (
-            sys.stdout.isatty() and not is_json_output() and output is None and not evaluate
-        )
-        if stream_to_stdout:
-            run_investigation_cli_streaming(raw_alert=payload)
-        else:
-            result = run_investigation_cli(raw_alert=payload, opensre_evaluate=evaluate)
-            write_json(result, output)
+        ):
+            # Only stream the live UI when the user is interactively watching stdout
+            # and hasn't asked for machine-readable JSON. Otherwise the spinner and
+            # ANSI control codes corrupt the JSON payload that consumers expect on
+            # stdout (pipes, redirection, --json, CI logs).
+            # --evaluate forces the non-streaming path because the streaming runner
+            # does not yet wire opensre_evaluate scoring through the renderer.
+            stream_to_stdout = (
+                sys.stdout.isatty() and not is_json_output() and output is None and not evaluate
+            )
+            if stream_to_stdout:
+                run_investigation_cli_streaming(raw_alert=payload)
+            else:
+                result = run_investigation_cli(raw_alert=payload, opensre_evaluate=evaluate)
+                write_json(result, output)
     except SystemExit:
         raise
-    except Exception:
-        capture_investigation_failed()
-        raise
 
-    capture_investigation_completed()
     raise SystemExit(SUCCESS)
 
 
@@ -284,19 +286,20 @@ def _run_service_investigation(
             suggestion="Export SLACK_BOT_TOKEN=xoxb-... in your environment and retry.",
         )
 
-    try:
-        raw_alert = build_runtime_alert_payload(
-            service,
-            slack_thread_ref=slack_thread,
-            slack_bot_token=slack_bot_token or None,
-        )
-        _eval = bool(other_inputs.get("evaluate"))
-        capture_investigation_started(
-            input_path=None,
-            input_json=None,
-            interactive=False,
-            evaluate_requested=_eval,
-        )
+    raw_alert = build_runtime_alert_payload(
+        service,
+        slack_thread_ref=slack_thread,
+        slack_bot_token=slack_bot_token or None,
+    )
+    _eval = bool(other_inputs.get("evaluate"))
+    with track_investigation(
+        entrypoint=EntrypointSource.CLI_COMMAND,
+        trigger_mode=TriggerMode.SERVICE_RUNTIME,
+        input_path=None,
+        input_json=None,
+        interactive=False,
+        evaluate_requested=_eval,
+    ):
         result = run_investigation_cli(
             raw_alert=raw_alert,
             alert_name=raw_alert.get("alert_name"),
@@ -304,10 +307,5 @@ def _run_service_investigation(
             severity=raw_alert.get("severity"),
             opensre_evaluate=_eval,
         )
-    except Exception:
-        capture_investigation_failed()
-        raise
-
-    capture_investigation_completed()
     write_json(result, output)
     raise SystemExit(SUCCESS)

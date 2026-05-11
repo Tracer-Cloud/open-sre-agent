@@ -94,10 +94,12 @@ def deduplicate_logs(
     for log in logs:
         message = log.get("message", "")
         log_level = str(log.get("log_level", "") or "").upper()
+        source_type = str(log.get("source_type", "") or "")
         timestamp = str(log.get("timestamp", "") or "")
 
-        # Build grouping key from normalized message + level
-        key = f"{log_level}::{_normalize_message(message)}"
+        # Preserve semantic source boundaries (for example k8s_events vs db-instance)
+        # so post-process mappers can still infer evidence categories from compacted logs.
+        key = f"{source_type}::{log_level}::{_normalize_message(message)}"
 
         if key in groups:
             entry = groups[key]
@@ -107,13 +109,21 @@ def deduplicate_logs(
             if timestamp and (not entry["last_seen"] or timestamp > entry["last_seen"]):
                 entry["last_seen"] = timestamp
         else:
-            groups[key] = {
-                "message": message,
-                "log_level": log_level,
-                "count": 1,
-                "first_seen": timestamp,
-                "last_seen": timestamp,
+            entry = {
+                key: value
+                for key, value in log.items()
+                if key not in {"count", "first_seen", "last_seen", "timestamp"}
             }
+            entry.update(
+                {
+                    "message": message,
+                    "log_level": log_level,
+                    "count": 1,
+                    "first_seen": timestamp,
+                    "last_seen": timestamp,
+                }
+            )
+            groups[key] = entry
 
     # Sort groups: errors first, then by first_seen ascending
     result = sorted(groups.values(), key=_log_sort_key)
