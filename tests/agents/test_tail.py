@@ -17,12 +17,18 @@ from __future__ import annotations
 
 import os
 import queue
+import sys
 import threading
 import time
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+
+posix_only = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="_resolve_linux_target requires /proc and POSIX path conventions (Linux-only)",
+)
 
 from app.agents import tail as tail_mod
 from app.agents.tail import (
@@ -160,6 +166,7 @@ class TestParseLsofFd1:
         assert _parse_lsof_fd1("") == (None, None)
 
 
+@posix_only
 class TestResolveLinuxTarget:
     def test_regular_file_target(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         log = tmp_path / "out.log"
