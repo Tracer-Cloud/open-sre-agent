@@ -1,0 +1,43 @@
+root_cause_category: failover_dns_stale_endpoint
+equivalent_root_cause_categories:
+  - infrastructure
+  - service_discovery_staleness
+required_keywords:
+  - failover completed
+  - dns
+  - stale endpoint
+  - kubernetes
+  - application timeout
+required_evidence_sources:
+  - aws_rds_events
+  - k8s_dns_metrics
+  - k8s_pod_metrics
+forbidden_categories:
+  - connection_exhaustion
+optimal_trajectory:
+  - query_grafana_logs
+  - query_grafana_metrics
+  - query_grafana_alert_rules
+max_investigation_loops: 3
+golden_trajectory:
+  ordered_actions:
+    - query_grafana_logs
+    - query_grafana_metrics
+    - query_grafana_alert_rules
+  matching: lcs
+  max_loops: 3
+model_response: |
+  ROOT_CAUSE: The RDS failover itself completed successfully, but Kubernetes clients continued using a stale writer endpoint due to DNS cache/connection pool staleness. This produced persistent application timeouts after failover completion. The issue is cross-layer infrastructure behavior (service discovery and client endpoint freshness), not ongoing database unavailability.
+  ROOT_CAUSE_CATEGORY: failover_dns_stale_endpoint
+
+  VALIDATED_CLAIMS:
+  - RDS events show failover initiated, in progress, and completed with instance available. [evidence: aws_rds_events]
+  - CloudWatch shows DB CPU and connections returning to normal post-failover, indicating writer stability. [evidence: aws_cloudwatch_metrics]
+  - Kubernetes DNS metrics show elevated NXDOMAIN/SERVFAIL and stale cache hit ratio in checkout namespace after failover completion. [evidence: k8s_dns_metrics]
+  - Pod metrics show timeout errors persisted while pods still targeted old writer IP; errors drop after DNS cache flush and pool recycle. [evidence: k8s_pod_metrics, k8s_events]
+
+  CAUSAL_CHAIN:
+  - Multi-AZ failover completed.
+  - Clients retained stale endpoint resolution.
+  - Pod connection attempts targeted old writer endpoint.
+  - Timeout storm persisted until DNS and pool refresh.

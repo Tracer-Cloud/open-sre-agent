@@ -13,7 +13,7 @@ This suite benchmarks RDS PostgreSQL root-cause analysis against bundled telemet
 | 002 | connection-exhaustion             | 1          | connection_exhaustion | none                                          | —                             |
 | 003 | storage-full                      | 1          | storage_exhaustion  | none                                            | —                             |
 | 004 | cpu-saturation-bad-query          | 1          | cpu_saturation      | none                                            | —                             |
-| 005 | failover                          | 1          | infrastructure      | none                                            | —                             |
+| 005 | failover                          | 1          | multi_az_failover_health_check | none                                     | —                             |
 | 006 | replication-lag-cpu-redherring    | 2          | replication_lag     | CPUUtilization elevated (analytics job)         | category: cpu_saturation      |
 | 007 | connection-pressure-noisy-healthy | 2          | healthy             | CPU/connections oscillating near-threshold      | category: connection_exhaustion |
 | 008 | storage-full-missing-metric       | 3          | storage_exhaustion  | FreeStorageSpace absent from fixture            | —                             |

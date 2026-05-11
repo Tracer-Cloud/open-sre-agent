@@ -1095,8 +1095,12 @@ def run_synthetic_test(
 
     resolved_suite_name = ""
     resolved_scenario = DEFAULT_SYNTHETIC_SCENARIO
+    run_all = False
     if suite_spec == "rds_postgres":
         resolved_suite_name = "rds_postgres"
+    elif suite_spec == "rds_postgres:all":
+        resolved_suite_name = "rds_postgres"
+        run_all = True
     elif suite_spec.startswith("rds_postgres:"):
         requested_scenario = suite_spec.split(":", 1)[1].strip()
         if requested_scenario and _SYNTHETIC_SCENARIO_ID_RE.fullmatch(requested_scenario):
@@ -1112,7 +1116,11 @@ def run_synthetic_test(
         policy,
         session=session,
         console=console,
-        action_summary=f"opensre tests synthetic --scenario {resolved_scenario}",
+        action_summary=(
+            "opensre tests synthetic all"
+            if run_all
+            else f"opensre tests synthetic --scenario {resolved_scenario}"
+        ),
         confirm_fn=confirm_fn,
         is_tty=is_tty,
         action_already_listed=action_already_listed,
@@ -1120,7 +1128,11 @@ def run_synthetic_test(
         session.record("synthetic_test", suite_name, ok=False)
         return
 
-    display_command = f"opensre tests synthetic --scenario {resolved_scenario}"
+    display_command = (
+        "opensre tests synthetic all"
+        if run_all
+        else f"opensre tests synthetic --scenario {resolved_scenario}"
+    )
     console.print(f"[bold]$ {display_command}[/bold]")
     session.last_synthetic_observation_path = None
     task = session.task_registry.create(TaskKind.SYNTHETIC_TEST, command=display_command)
@@ -1132,16 +1144,28 @@ def run_synthetic_test(
     )
     try:
         proc = subprocess.Popen(
-            [
-                sys.executable,
-                "-u",
-                "-m",
-                "app.cli",
-                "tests",
-                "synthetic",
-                "--scenario",
-                resolved_scenario,
-            ],
+            (
+                [
+                    sys.executable,
+                    "-u",
+                    "-m",
+                    "app.cli",
+                    "tests",
+                    "synthetic",
+                    "all",
+                ]
+                if run_all
+                else [
+                    sys.executable,
+                    "-u",
+                    "-m",
+                    "app.cli",
+                    "tests",
+                    "synthetic",
+                    "--scenario",
+                    resolved_scenario,
+                ]
+            ),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,

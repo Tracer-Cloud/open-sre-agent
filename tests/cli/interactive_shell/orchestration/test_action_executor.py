@@ -680,6 +680,47 @@ def test_run_synthetic_test_honours_explicit_scenario(
     assert "opensre tests synthetic --scenario 005-failover" in buf.getvalue()
 
 
+def test_run_synthetic_test_all_launches_suite_alias(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    popen_commands: list[list[str]] = []
+
+    class _FakeProcess:
+        returncode = 0
+        stdout = io.StringIO("scenario run\n")
+        stderr = io.StringIO("")
+
+        def poll(self) -> int:
+            return 0
+
+    def _fake_popen(command: list[str], **_kwargs: object) -> _FakeProcess:
+        popen_commands.append(command)
+        return _FakeProcess()
+
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.orchestration.action_executor.subprocess.Popen", _fake_popen
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.orchestration.action_executor.threading.Thread",
+        _ImmediateThread,
+    )
+
+    session = ReplSession()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    run_synthetic_test(
+        "rds_postgres:all",
+        session,
+        console,
+        confirm_fn=lambda _prompt: "y",
+        is_tty=True,
+    )
+
+    assert popen_commands[0][-2:] == ["synthetic", "all"]
+    assert "opensre tests synthetic all" in buf.getvalue()
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Subprocess terminal width forwarding
 # ─────────────────────────────────────────────────────────────────────────────
