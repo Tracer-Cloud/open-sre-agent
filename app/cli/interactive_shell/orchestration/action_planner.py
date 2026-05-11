@@ -44,6 +44,12 @@ _SYNTHETIC_SCENARIO_ID_RE = re.compile(
 # The capture group is the raw user token; we left-pad to 3 digits when
 # comparing against the directory prefix.
 _SYNTHETIC_NUMERIC_HINT_RE = re.compile(r"\b(?P<num>\d{1,4})\b")
+
+# NOTE: ``re.DOTALL`` is intentionally *not* set. ``split_prompt_clauses`` only
+# splits on ``and``/``then`` connectors, so a pasted multi-line prompt can
+# preserve newlines inside a clause. Letting ``.{0,40}`` cross a newline would
+# fire ``"run all\nsynthetic tests"`` as a suite request even when the two
+# words sit on unrelated lines of the user's input.
 _SYNTHETIC_ALL_RE = re.compile(
     r"\b(?:all|entire)\b.{0,40}\b(?:synthetic|benchmark|tests?)\b"
     r"|"
@@ -52,7 +58,7 @@ _SYNTHETIC_ALL_RE = re.compile(
     r"\bfull\s+(?:synthetic(?:\s+tests?)?|benchmark|suite)\b"
     r"|"
     r"\b(?:synthetic|benchmark|tests?)\b.{0,40}\bfull\s+suite\b",
-    re.IGNORECASE | re.DOTALL,
+    re.IGNORECASE,
 )
 
 DEFAULT_SYNTHETIC_SCENARIO = "001-replication-lag"

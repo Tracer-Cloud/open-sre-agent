@@ -403,7 +403,13 @@ class _EventLogDisplay:
         # This must happen outside _lock: the auto-refresh thread holds
         # Rich's internal _refresh_lock while calling __rich_console__ (which
         # acquires _lock), so printing under _lock would deadlock.
-        self._live.console.print(t)
+        #
+        # ``step_complete`` can be invoked from a background pipeline thread
+        # concurrently with ``stop()``; once the live region has been torn down
+        # the line would otherwise leak out *below* whatever ``stop()`` already
+        # flushed, leaving a stray completed-step row after the display closes.
+        if self._live.is_started:
+            self._live.console.print(t)
 
     def step_subtext(self, node_name: str, text: str, duration: float = 4.0) -> None:
         with self._lock:
