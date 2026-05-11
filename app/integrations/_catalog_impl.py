@@ -1859,4 +1859,12 @@ def resolve_effective_integrations(
                 },
             )
 
-    return EffectiveIntegrations.model_validate(effective).model_dump(exclude_none=True)
+    known_keys = set(EffectiveIntegrations.model_fields)
+    unknown_keys = set(effective) - known_keys
+    if unknown_keys:
+        logger.warning(
+            "resolve_effective_integrations: dropping unrecognised integration key(s): %s",
+            sorted(unknown_keys),
+        )
+    filtered_effective = {k: v for k, v in effective.items() if k in known_keys}
+    return EffectiveIntegrations.model_validate(filtered_effective).model_dump(exclude_none=True)

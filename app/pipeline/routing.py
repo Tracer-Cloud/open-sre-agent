@@ -16,7 +16,12 @@ logger = logging.getLogger(__name__)
 
 def route_by_mode(state: AgentState) -> str:
     """Route based on agent mode. Defaults to chat when mode is not set."""
-    return "investigation" if state.get("mode") == "investigation" else "chat"
+    mode = state.get("mode")
+    if mode == "investigation":
+        return "investigation"
+    if mode == "agent_incident":
+        return "agent_incident"
+    return "chat"
 
 
 def route_chat(state: AgentState) -> str:
