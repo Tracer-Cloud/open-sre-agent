@@ -26,6 +26,7 @@ from rich.text import Text
 
 from app.analytics.events import Event
 from app.analytics.provider import get_analytics
+from app.analytics.source import EntrypointSource
 from app.cli.interactive_shell.ui.theme import (
     ANSI_BOLD,
     ANSI_DIM,
@@ -85,6 +86,10 @@ _DIAGNOSE_LIVE_REFRESH = 20
 _DIAGNOSE_RENDER_INTERVAL_S = 1.0 / _DIAGNOSE_LIVE_REFRESH
 _DIAGNOSE_SPINNER_NAME = "dots12"
 _DIAGNOSE_SPINNER_COLOR = "orange1"
+
+
+def _render_source(*, local: bool) -> str:
+    return EntrypointSource.CLI_PASTE.value if local else EntrypointSource.REMOTE_HTTP.value
 
 
 class _DiagnoseStreamRenderer:
@@ -193,7 +198,7 @@ class _DiagnoseStreamRenderer:
                 {
                     "latency_ms": int(latency_ms),
                     "stage": _DIAGNOSE_NODE,
-                    "source": "interactive_shell" if self._local else "remote_api",
+                    "source": _render_source(local=self._local),
                 },
             )
         if self._live is None:
@@ -371,7 +376,7 @@ class StreamRenderer:
                 Event.INVESTIGATION_ABANDONED,
                 {
                     "stage": self._active_node or "unstarted",
-                    "source": "interactive_shell" if self._local else "remote_api",
+                    "source": _render_source(local=self._local),
                 },
             )
             raise

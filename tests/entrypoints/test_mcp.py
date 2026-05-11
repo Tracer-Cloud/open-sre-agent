@@ -133,3 +133,29 @@ def test_run_rca_output_model_has_error_type_field() -> None:
 def test_run_rca_output_model_error_type_defaults_to_none() -> None:
     out = RunRCAOutput(ok=True)
     assert out.error_type is None
+
+
+def test_run_rca_tracks_investigation_source(monkeypatch: MonkeyPatch) -> None:
+    track_calls: list[tuple[str, str]] = []
+
+    class _TrackContext:
+        def __enter__(self) -> None:
+            return None
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            _ = (exc_type, exc, tb)
+            return False
+
+    def fake_track_investigation(*, entrypoint, trigger_mode, **kwargs):  # type: ignore[no-untyped-def]
+        _ = kwargs
+        track_calls.append((entrypoint.value, trigger_mode.value))
+        return _TrackContext()
+
+    monkeypatch.setattr("app.entrypoints.mcp.track_investigation", fake_track_investigation)
+    monkeypatch.setattr("app.entrypoints.mcp.run_investigation_cli", lambda **_kwargs: {"ok": True})
+
+    payload: dict[str, Any] = {"title": "test", "state": "firing", "alert_source": "grafana"}
+    result = run_rca(alert_payload=payload)
+
+    assert result["ok"] is True
+    assert track_calls == [("mcp", "service_runtime")]
