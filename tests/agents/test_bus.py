@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import queue
 import socket
+import sys
 import threading
 import time
 from contextlib import suppress
@@ -21,6 +22,15 @@ from app.agents.bus import (
     _socket_is_live,
     publish,
     subscribe,
+)
+
+#: Classes decorated with this marker exercise the live broker (AF_UNIX
+#: sockets + fcntl), which is POSIX-only. Skip on Windows runners so
+#: ``ci:windows`` doesn't report failures for code that is not expected
+#: to function there in the first place.
+posix_only = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="agent bus requires AF_UNIX + fcntl (POSIX-only)",
 )
 
 
@@ -138,6 +148,7 @@ class TestBusMessage:
         assert msg.data["k"] == 1
 
 
+@posix_only
 class TestBusServerLifecycle:
     def test_start_binds_socket_and_stop_unlinks(self, sock_path: Path) -> None:
         server = BusServer(sock_path)
@@ -214,6 +225,7 @@ class TestBusServerLifecycle:
             bus_module._ensure_broker(sock_path)
 
 
+@posix_only
 class TestLivenessProbe:
     def test_socket_is_live_does_not_create_phantom_subscriber(self, sock_path: Path) -> None:
         # _socket_is_live used to make a real connection on every probe; under
@@ -243,6 +255,7 @@ class TestLivenessProbe:
         assert not _socket_is_live(sock_path)
 
 
+@posix_only
 class TestPublisherCache:
     def test_burst_of_publishes_reuses_one_connection(self, sock_path: Path) -> None:
         # Each publish() previously opened a fresh UDS connection, which the
@@ -404,6 +417,7 @@ class TestPublisherCache:
         assert len(seen) == total, f"frame loss or corruption: got {len(seen)} unique of {total}"
 
 
+@posix_only
 class TestPublishSubscribe:
     def test_round_trip_one_publisher_one_subscriber(self, sock_path: Path) -> None:
         received: queue.Queue[BusMessage] = queue.Queue()
@@ -668,6 +682,7 @@ class TestPublishSubscribe:
             server.stop()
 
 
+@posix_only
 class TestBrokerElectionRace:
     def test_concurrent_cold_start_election_does_not_orphan_a_broker(self, sock_path: Path) -> None:
         # Cold-start race: two processes both observe ``_socket_is_live``
@@ -814,6 +829,7 @@ class TestBrokerElectionRace:
             child.wait(timeout=5.0)
 
 
+@posix_only
 class TestBrokerSelfElection:
     def test_stale_socket_file_is_unlinked_and_rebound(self, sock_path: Path) -> None:
         sock_path.parent.mkdir(parents=True, exist_ok=True)
