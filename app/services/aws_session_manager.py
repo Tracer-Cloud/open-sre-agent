@@ -130,11 +130,18 @@ class AWSSessionManager:
             logger.info("Assuming role: %s", role_arn)
             # Use base session to get STS client
             base_session = self.get_session(region=actual_region)
-            sts = base_session.client("sts")
+            # Use standard retry config for STS to prevent throttling failures
+            config = Config(
+                retries={"max_attempts": 3, "mode": "standard"}, connect_timeout=5, read_timeout=60
+            )
+            sts = base_session.client("sts", config=config)
+
+            node_name = os.getenv("OPENSRE_NODE_NAME") or os.uname().nodename
+            role_session_name = f"opensre-{node_name}-{int(time.time())}"[:64]
 
             assume_role_kwargs: dict[str, Any] = {
                 "RoleArn": role_arn,
-                "RoleSessionName": f"OpenSRE-Session-{int(time.time())}",
+                "RoleSessionName": role_session_name,
                 "DurationSeconds": DEFAULT_SESSION_DURATION,
             }
             if external_id:
@@ -188,16 +195,13 @@ class AWSSessionManager:
         # Fixes P1: Include external_id in cache key
         cache_key = (service_name, actual_region, role_arn, external_id)
 
-        was_expired = False
         with self._cache_lock:
             # Check if we have a valid cached client
             if cache_key in self._client_cache:
                 if not role_arn or not self._is_session_expired(role_arn, external_id=external_id):
                     return self._client_cache[cache_key]
-                # Client exists but session expired — mark for forced replacement
-                # and evict immediately to prevent other threads from using it
+                # Client exists but session expired — evict immediately to prevent other threads from using it
                 del self._client_cache[cache_key]
-                was_expired = True
 
         # Create new client (network bound)
         session = self.get_session(region=actual_region, role_arn=role_arn, external_id=external_id)
@@ -210,14 +214,10 @@ class AWSSessionManager:
         client = session.client(service_name, config=config)  # type: ignore[call-overload]
 
         with self._cache_lock:
-            # If the miss was due to expiry, always replace the stale client.
-            # Only use double-check when the cache was originally empty (race with another thread).
-            if (
-                not was_expired
-                and cache_key in self._client_cache
-                and (
-                    not role_arn or not self._is_session_expired(role_arn, external_id=external_id)
-                )
+            # Re-check validity before updating cache to handle race conditions where another
+            # thread might have already updated the cache with a fresh client.
+            if cache_key in self._client_cache and (
+                not role_arn or not self._is_session_expired(role_arn, external_id=external_id)
             ):
                 return self._client_cache[cache_key]
 

@@ -267,8 +267,6 @@ class TestExecuteAwsSdkCallValidation:
         assert "not allowed" in result["error"].lower()
 
     def test_rejected_operation_does_not_create_client(self) -> None:
-        from app.services.aws_session_manager import get_aws_session_manager
-
         with patch("app.services.aws_sdk_client.get_aws_session_manager") as mock_get_manager:
             result = execute_aws_sdk_call("ec2", "terminate_instances")
 

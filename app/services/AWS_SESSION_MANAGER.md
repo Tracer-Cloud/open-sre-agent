@@ -8,7 +8,7 @@ This implementation replaces the previous "stateless instantiation" pattern for 
 | Feature | Old Pattern (Downgrade) | New Pattern (Upgrade) |
 | :--- | :--- | :--- |
 | **Performance** | **High Latency**: 300ms–800ms overhead for *every* call. | **Low Latency**: ~50ms for subsequent calls. |
-| **AWS Throttling** | **High Risk**: Parallel `AssumeRole` calls could trigger limits. | **Safe**: Atomic locking ensures one `AssumeRole` per role. |
+| **AWS Throttling** | **High Risk**: Parallel `AssumeRole` calls could trigger limits. | **Safe**: Atomic locking ensures one `AssumeRole` per role per non-expiry transition. |
 | **Investigation Scope** | **Limited**: Current account only. | **Expansive**: Cross-Account via Role Assumption. |
 | **Reliability** | **Brittle**: Calls fail on session expiry. | **Robust**: Proactive refresh 5 mins before expiry. |
 
