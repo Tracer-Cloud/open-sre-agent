@@ -1859,4 +1859,7 @@ def resolve_effective_integrations(
                 },
             )
 
-    return EffectiveIntegrations.model_validate(effective).model_dump(exclude_none=True)
+    known_keys = set(EffectiveIntegrations.model_fields)
+    return EffectiveIntegrations.model_validate(
+        {k: v for k, v in effective.items() if k in known_keys}
+    ).model_dump(exclude_none=True)
