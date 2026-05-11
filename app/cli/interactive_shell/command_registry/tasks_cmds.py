@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 
 from rich.console import Console
@@ -19,6 +20,9 @@ from app.cli.interactive_shell.ui import (
     repl_table,
 )
 
+_ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[mA-Za-z]")
+_MAX_DETAIL_CHARS = 120
+
 
 def _task_started_label(task: TaskRecord) -> str:
     return datetime.fromtimestamp(task.started_at, tz=UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -31,14 +35,56 @@ def _task_duration_label(task: TaskRecord) -> str:
     return f"{duration:.1f}s"
 
 
+def _synthetic_scenario_label(command: str) -> str:
+    """Extract the short scenario identifier from a synthetic test command string."""
+    if "--scenario" in command:
+        return command.split("--scenario", 1)[1].strip()
+    if command.strip().endswith("all"):
+        return "all"
+    return command.strip()
+
+
+def _clean_first_line(text: str) -> str:
+    """Strip ANSI codes and return the first non-empty line of ``text``."""
+    clean = _ANSI_ESCAPE.sub("", text)
+    return next((line.strip() for line in clean.splitlines() if line.strip()), clean.strip())
+
+
+def _kind_label(task: TaskRecord) -> str:
+    """Return a concise kind label — for synthetic tests use the scenario name."""
+    if task.kind == TaskKind.SYNTHETIC_TEST and task.command:
+        return _synthetic_scenario_label(task.command)
+    return task.kind.value
+
+
 def _task_detail_label(task: TaskRecord) -> str:
+    # Synthetic tests: the kind column already carries the scenario, so show
+    # only the compact outcome here (e.g. "exit code 1" or "ok").
+    if task.kind == TaskKind.SYNTHETIC_TEST:
+        if task.error:
+            err_line = _clean_first_line(task.error)
+            # "exit code 1: …" → keep only "exit code 1"
+            outcome = err_line.split(":")[0].strip() if ":" in err_line else err_line
+            return outcome or "—"
+        if task.result:
+            return task.result
+        if task.command:
+            return _synthetic_scenario_label(task.command)
+        return "—"
+
+    # All other task kinds: show error > result > command, first line, truncated.
     if task.error:
-        return str(task.error)
-    if task.result:
-        return str(task.result)
-    if task.command:
-        return str(task.command)
-    return "—"
+        raw = task.error
+    elif task.result:
+        raw = task.result
+    elif task.command:
+        raw = task.command
+    else:
+        return "—"
+    first_line = _clean_first_line(raw)
+    if len(first_line) > _MAX_DETAIL_CHARS:
+        return first_line[:_MAX_DETAIL_CHARS] + "…"
+    return first_line or "—"
 
 
 def _cmd_history(_session: ReplSession, console: Console, _args: list[str]) -> bool:
@@ -82,7 +128,7 @@ def _cmd_tasks(session: ReplSession, console: Console, _args: list[str]) -> bool
         st = status_style.get(task.status, DIM)
         table.add_row(
             task.task_id,
-            task.kind.value,
+            _kind_label(task),
             f"[{st}]{task.status.value}[/]",
             _task_started_label(task),
             _task_duration_label(task),

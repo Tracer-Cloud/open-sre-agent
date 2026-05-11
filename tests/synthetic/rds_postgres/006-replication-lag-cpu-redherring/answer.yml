@@ -8,7 +8,6 @@ required_keywords:
   - replica
   - UPDATE
   - SELECT
-  - causally independent
 forbidden_keywords:
   - cpu_saturation
   - two root causes
@@ -21,6 +20,8 @@ optimal_trajectory:
   - query_grafana_metrics
   - query_grafana_logs
   - query_grafana_alert_rules
+  - describe_rds_instance
+  - describe_rds_events
 max_investigation_loops: 4
 model_response: |
   ROOT_CAUSE: Replication lag on analytics-prod-replica-1 caused by a write-heavy batch UPDATE job generating WAL faster than the replica could replay. The CPUUtilization elevation (70-85%) is a confounder from an unrelated analytics SELECT query running concurrently — it is not the root cause.

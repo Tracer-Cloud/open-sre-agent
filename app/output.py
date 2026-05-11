@@ -268,7 +268,13 @@ _FRAME_SECS = 0.10
 
 
 class _LiveRenderable:
-    """Rich renderable that rebuilds the event-log on every Live refresh."""
+    """Rich renderable that rebuilds the event-log on every Live refresh.
+
+    Only active (in-progress) steps are rendered here.  Completed steps are
+    printed *above* the live region via ``console.print`` the moment they finish
+    so they are never re-rendered — preventing the staircase scrollback bug
+    where Rich under-counts live-area lines and fails to erase them fully.
+    """
 
     def __init__(self, display: _EventLogDisplay) -> None:
         self._d = display
@@ -277,10 +283,9 @@ class _LiveRenderable:
         d = self._d
         now = time.monotonic()
         with d._lock:
-            # Completed event lines (static)
-            yield from d._completed
-
-            # Active step lines (animated)
+            # Active step lines (animated).
+            # Completed steps are NOT yielded here — they are printed permanently
+            # above the live region in step_complete() to avoid the staircase bug.
             for node_name, info in d._active_steps.items():
                 elapsed_step = now - info["t0"]
                 elapsed_total = now - d._t0
@@ -305,9 +310,12 @@ class _LiveRenderable:
                 t.append(f"  {_fmt_timing(int(elapsed_step * 1000))}", style=WARNING)
                 yield t
 
-            # Divider + footer
+            # Divider + footer.
+            # Use max_width - 1 so the line never hits the terminal edge exactly;
+            # a full-width line often causes an implicit wrap that Rich doesn't
+            # count, making it under-erase on the next refresh.
             yield Text("")
-            yield Text("┄" * options.max_width, style=DIM)
+            yield Text("┄" * (options.max_width - 1), style=DIM)
 
             elapsed_total = now - d._t0
             ft = Text()
@@ -332,7 +340,6 @@ class _EventLogDisplay:
         self._model = model
         self._mode = mode
         self._t0 = time.monotonic()
-        self._completed: list[Text] = []
         self._active_steps: dict[str, dict] = {}  # node_name → {t0, subtext, subtext_until}
         self._current_phase = "LOAD"
         self._lock = threading.Lock()
@@ -343,6 +350,9 @@ class _EventLogDisplay:
             console=self._console,
             refresh_per_second=10,
             auto_refresh=True,
+            # Clip the live area to the terminal height so Rich never tries to
+            # scroll back past more lines than it rendered.
+            vertical_overflow="ellipsis",
         )
         self._live.start(refresh=True)
         _live_console = self._console
@@ -367,9 +377,11 @@ class _EventLogDisplay:
             self._current_phase = _node_phase_label(node_name)
 
     def step_complete(self, node_name: str, event: ProgressEvent) -> None:
+        # Compute elapsed before entering the lock so the timestamp is as
+        # accurate as possible even if the lock is briefly contended.
+        elapsed_total = time.monotonic() - self._t0
         with self._lock:
             self._active_steps.pop(node_name, None)
-            elapsed_total = time.monotonic() - self._t0
             ev_type = _node_event_type(node_name)
             badge_label, badge_color = _BADGE_STYLES.get(ev_type, ("DIAG  ", WARNING))
             label = _node_label(node_name)
@@ -386,7 +398,18 @@ class _EventLogDisplay:
             if msg:
                 t.append(f"  {msg}", style=BRAND)
             t.append(f"  {timing}", style=SECONDARY)
-            self._completed.append(t)
+
+        # Print the completed line permanently *above* the live region.
+        # This must happen outside _lock: the auto-refresh thread holds
+        # Rich's internal _refresh_lock while calling __rich_console__ (which
+        # acquires _lock), so printing under _lock would deadlock.
+        #
+        # ``step_complete`` can be invoked from a background pipeline thread
+        # concurrently with ``stop()``; once the live region has been torn down
+        # the line would otherwise leak out *below* whatever ``stop()`` already
+        # flushed, leaving a stray completed-step row after the display closes.
+        if self._live.is_started:
+            self._live.console.print(t)
 
     def step_subtext(self, node_name: str, text: str, duration: float = 4.0) -> None:
         with self._lock:

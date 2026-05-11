@@ -95,3 +95,4 @@ class EffectiveIntegrations(StrictConfigModel):
     argocd: EffectiveIntegrationEntry | None = None
     helm: EffectiveIntegrationEntry | None = None
     victoria_logs: EffectiveIntegrationEntry | None = None
+    alicloud: EffectiveIntegrationEntry | None = None

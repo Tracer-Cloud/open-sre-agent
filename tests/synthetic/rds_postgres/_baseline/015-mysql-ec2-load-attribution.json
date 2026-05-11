@@ -95,11 +95,12 @@
   "trajectory": {
     "actual": [],
     "coverage": 0.0,
-    "edit_distance": 5,
+    "edit_distance": 6,
     "extra_actions": [],
     "failed_action_count": 0,
     "golden": [
       "describe_rds_instance",
+      "describe_rds_events",
       "ec2_instances_by_tag",
       "get_elb_target_health",
       "query_grafana_metrics",
@@ -108,6 +109,7 @@
     "lcs_ratio": 0.0,
     "missing_actions": [
       "describe_rds_instance",
+      "describe_rds_events",
       "ec2_instances_by_tag",
       "get_elb_target_health",
       "query_grafana_metrics",

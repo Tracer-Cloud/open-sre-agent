@@ -9,7 +9,7 @@ from typing_extensions import TypedDict
 
 from app.strict_config import StrictConfigModel
 
-AgentMode = Literal["chat", "investigation"]
+AgentMode = Literal["chat", "investigation", "agent_incident"]
 
 
 class ChatMessage(TypedDict, total=False):

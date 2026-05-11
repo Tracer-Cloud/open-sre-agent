@@ -5,6 +5,7 @@ from langgraph.graph.state import CompiledStateGraph
 
 from app.nodes import (
     node_adapt_window,
+    node_agent_incident,
     node_diagnose_root_cause,
     node_extract_alert,
     node_plan_actions,
@@ -46,6 +47,7 @@ def build_graph(config: None = None) -> CompiledStateGraph:
     graph.add_node("tool_executor", tool_executor_node)
 
     graph.add_node("extract_alert", _accept_langgraph_config(node_extract_alert))
+    graph.add_node("agent_incident", _accept_langgraph_config(node_agent_incident))
     graph.add_node("resolve_integrations", _accept_langgraph_config(node_resolve_integrations))
     graph.add_node("plan_actions", _accept_langgraph_config(node_plan_actions))
     graph.add_node("investigate_hypothesis", node_investigate_hypothesis)
@@ -58,7 +60,13 @@ def build_graph(config: None = None) -> CompiledStateGraph:
     graph.set_entry_point("inject_auth")
 
     graph.add_conditional_edges(
-        "inject_auth", route_by_mode, {"chat": "router", "investigation": "extract_alert"}
+        "inject_auth",
+        route_by_mode,
+        {
+            "chat": "router",
+            "investigation": "extract_alert",
+            "agent_incident": "agent_incident",
+        },
     )
 
     graph.add_conditional_edges(
@@ -72,6 +80,11 @@ def build_graph(config: None = None) -> CompiledStateGraph:
 
     graph.add_conditional_edges(
         "extract_alert", route_after_extract, {"end": END, "investigate": "resolve_integrations"}
+    )
+    graph.add_conditional_edges(
+        "agent_incident",
+        route_after_extract,
+        {"end": END, "investigate": "resolve_integrations"},
     )
     graph.add_edge("resolve_integrations", "plan_actions")
     graph.add_conditional_edges("plan_actions", distribute_hypotheses)

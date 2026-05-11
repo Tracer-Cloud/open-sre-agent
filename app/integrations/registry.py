@@ -319,6 +319,7 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
     IntegrationSpec(service="google_docs", verifier=_verify_google_docs, verify_order=19),
     IntegrationSpec(service="kafka", verifier=_verify_kafka, verify_order=22),
     IntegrationSpec(service="clickhouse", verifier=_verify_clickhouse, verify_order=23),
+    IntegrationSpec(service="alicloud", direct_effective=True),
     IntegrationSpec(service="notion"),
     IntegrationSpec(service="prefect"),
     IntegrationSpec(service="posthog"),
@@ -328,13 +329,12 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
 
 INTEGRATION_SPECS_BY_SERVICE = {spec.service: spec for spec in INTEGRATION_SPECS}
 
-SERVICE_KEY_MAP: dict[str, str] = {}
+SERVICE_KEY_MAP: dict[str, str] = {spec.service: spec.service for spec in INTEGRATION_SPECS}
 for _spec in INTEGRATION_SPECS:
-    SERVICE_KEY_MAP[_spec.service] = _spec.service
     for _alias in _spec.aliases:
         SERVICE_KEY_MAP[_alias] = _spec.service
 
-SKIP_CLASSIFIED_SERVICES = frozenset(
+SKIP_CLASSIFIED_SERVICES: frozenset[str] = frozenset(
     spec.service for spec in INTEGRATION_SPECS if spec.skip_classification
 )
 

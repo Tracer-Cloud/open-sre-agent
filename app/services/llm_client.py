@@ -425,9 +425,19 @@ class BedrockLLMClient:
                         "Check the model ID, region, or inference profile."
                     ) from err
                 if code in ("AccessDeniedException", "UnauthorizedException"):
+                    # AccessDeniedException is overloaded on Bedrock: it can mean
+                    # missing IAM, missing per-region/per-model Bedrock access
+                    # opt-in, or an AWS Marketplace billing problem (e.g.
+                    # ``INVALID_PAYMENT_INSTRUMENT``). Surface the upstream
+                    # AWS-provided reason so the user knows which one to fix
+                    # — see issue #1808.
+                    aws_message = str(err.response.get("Error", {}).get("Message", "")).strip().rstrip(".")
+                    detail = f" Cause: {aws_message}." if aws_message else ""
                     raise RuntimeError(
-                        f"Access denied for Bedrock model '{self._model}'. "
-                        "Check your AWS IAM permissions and account configuration."
+                        f"Access denied for Bedrock model '{self._model}'.{detail} "
+                        "Check Bedrock model access (per-region opt-in), your "
+                        "AWS Marketplace subscription / payment method, and "
+                        "IAM permissions."
                     ) from err
                 last_err = err
                 if attempt == max_attempts - 1:
