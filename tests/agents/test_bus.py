@@ -876,3 +876,42 @@ class TestSlashCommandFormatter:
         msg = BusMessage(agent="a:1", topic="finding", summary="x")
         out = _format_bus_message(msg)
         assert "—" not in out
+
+
+class TestWindowsGuard:
+    """The bus is POSIX-only. On Windows the module must still import cleanly
+    so the rest of the CLI keeps working, but every entry point must raise a
+    clear ``RuntimeError`` rather than crash with ``ModuleNotFoundError`` /
+    ``AttributeError`` deep inside socket / fcntl code."""
+
+    def test_require_bus_available_raises_when_flag_is_false(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(bus_module, "_BUS_AVAILABLE", False)
+        with pytest.raises(RuntimeError, match="POSIX-only"):
+            bus_module._require_bus_available()
+
+    def test_publish_raises_runtimeerror_on_windows(
+        self, monkeypatch: pytest.MonkeyPatch, sock_path: Path
+    ) -> None:
+        monkeypatch.setattr(bus_module, "_BUS_AVAILABLE", False)
+        with pytest.raises(RuntimeError, match="POSIX-only"):
+            bus_module.publish(
+                BusMessage(agent="a:1", topic="finding", summary="x"),
+                path=sock_path,
+            )
+
+    def test_subscribe_raises_runtimeerror_on_windows(
+        self, monkeypatch: pytest.MonkeyPatch, sock_path: Path
+    ) -> None:
+        monkeypatch.setattr(bus_module, "_BUS_AVAILABLE", False)
+        with pytest.raises(RuntimeError, match="POSIX-only"):
+            next(iter(bus_module.subscribe(path=sock_path)))
+
+    def test_busserver_start_raises_runtimeerror_on_windows(
+        self, monkeypatch: pytest.MonkeyPatch, sock_path: Path
+    ) -> None:
+        monkeypatch.setattr(bus_module, "_BUS_AVAILABLE", False)
+        server = bus_module.BusServer(sock_path)
+        with pytest.raises(RuntimeError, match="POSIX-only"):
+            server.start()

@@ -15,12 +15,12 @@ from __future__ import annotations
 
 import atexit
 import errno
-import fcntl
 import json
 import logging
 import os
 import select
 import socket
+import sys
 import threading
 import types
 import uuid
@@ -31,6 +31,34 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from app.constants import OPENSRE_HOME_DIR
+
+#: The bus is POSIX-only — it relies on Unix-domain sockets (``AF_UNIX``) and
+#: ``fcntl.flock`` for cross-process broker election. ``import fcntl`` is gated
+#: so the module is still importable on Windows; ``publish``/``subscribe``
+#: raise a clear :class:`RuntimeError` instead of crashing with
+#: ``ModuleNotFoundError`` at import time and cascading through every CLI test.
+_BUS_AVAILABLE: bool = sys.platform != "win32"
+
+if _BUS_AVAILABLE:
+    import fcntl
+else:  # pragma: no cover - exercised on Windows runners only
+    fcntl = None  # type: ignore[assignment]
+
+
+def _require_bus_available() -> None:
+    """Raise ``RuntimeError`` on platforms where the bus cannot run.
+
+    Called by every public entry point (``publish``, ``subscribe``,
+    ``BusServer.start``) before any POSIX-only syscall. Lets the module
+    import cleanly on Windows while still failing loudly if anything
+    actually tries to use the bus.
+    """
+    if not _BUS_AVAILABLE:
+        raise RuntimeError(
+            "agent bus is POSIX-only (requires Unix-domain sockets and fcntl); "
+            "not supported on Windows"
+        )
+
 
 logger = logging.getLogger(__name__)
 
@@ -248,6 +276,7 @@ class BusServer:
         ``_write_pid_file_atomic``). Any partial state is rolled back so a
         half-started broker never persists.
         """
+        _require_bus_available()
         if self._running.is_set():
             return
         _ensure_parent_dir(self._path)
@@ -627,6 +656,7 @@ def publish(
     connection, or send error — one retry is attempted (re-electing the
     broker if needed) before propagating the error.
     """
+    _require_bus_available()
     target = path or DEFAULT_BUS_SOCKET_PATH
     _ensure_broker(target)
     frame = message.to_jsonl()
@@ -670,6 +700,7 @@ def subscribe(
     most common cause is a broker that just exited, in which case
     ``_ensure_broker`` will re-elect on the second pass.
     """
+    _require_bus_available()
     target = path or DEFAULT_BUS_SOCKET_PATH
     last_connect_err: OSError | None = None
     client: socket.socket | None = None
