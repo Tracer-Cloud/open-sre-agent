@@ -78,7 +78,6 @@ from app.llm_reasoning_effort import apply_reasoning_effort
 # Local rebindings expose the same names the rest of this module uses.
 _build_prompt_session = _prompt_surface._build_prompt_session
 _prompt_message = _prompt_surface._prompt_message
-_prompt_rule_ansi = _prompt_surface._prompt_rule_ansi
 render_submitted_prompt = _prompt_surface.render_submitted_prompt
 route_input = _router.route_input
 answer_cli_help = _cli_help.answer_cli_help
