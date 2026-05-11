@@ -1676,6 +1676,45 @@ def test_bedrock_invoke_converse_hard_client_errors_raise_immediately(
     assert sleeps == [], "non-transient errors must not be retried"
 
 
+def test_bedrock_access_denied_surfaces_upstream_aws_message(monkeypatch) -> None:
+    """``AccessDeniedException`` on Bedrock can also indicate an AWS
+    Marketplace billing problem (e.g. ``INVALID_PAYMENT_INSTRUMENT``) or a
+    missing per-model Bedrock opt-in, not just IAM. The wrapped
+    ``RuntimeError`` must include the upstream AWS ``Message`` so the user
+    knows which one to fix. Regression coverage for #1808."""
+    monkeypatch.setattr(
+        "app.guardrails.engine.get_guardrail_engine",
+        _InactiveGuardrailEngine,
+    )
+    monkeypatch.setattr(llm_client.time, "sleep", lambda _s: None)
+
+    import botocore.exceptions
+
+    aws_message = (
+        "Model access is denied due to INVALID_PAYMENT_INSTRUMENT:"
+        "A valid payment instrument must be provided."
+    )
+    boto_err = botocore.exceptions.ClientError(
+        {"Error": {"Code": "AccessDeniedException", "Message": aws_message}},
+        "Converse",
+    )
+
+    class _FailingRuntime:
+        def converse(self, **_kwargs):
+            raise boto_err
+
+    monkeypatch.setattr(llm_client.boto3, "client", lambda *_a, **_k: _FailingRuntime())
+
+    client = llm_client.BedrockLLMClient(model="some-model")
+    with pytest.raises(RuntimeError) as excinfo:
+        client.invoke("hello")
+
+    rendered = str(excinfo.value)
+    assert "INVALID_PAYMENT_INSTRUMENT" in rendered
+    assert "Bedrock model access" in rendered
+    assert "AWS Marketplace subscription" in rendered
+
+
 def test_format_openai_connection_error_ssl_via_cause() -> None:
     """SSL fingerprint in __cause__ triggers the TLS-specific message."""
     ssl_err = Exception("[SSL: WRONG_VERSION_NUMBER] wrong version number")
