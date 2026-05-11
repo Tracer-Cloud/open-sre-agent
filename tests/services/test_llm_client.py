@@ -1783,3 +1783,15 @@ def test_format_openai_connection_error_non_ssl_returns_generic_message() -> Non
     assert "SSL" not in msg
     assert "network connection" in msg
     assert "NVIDIA" in msg
+
+
+def test_format_openai_connection_error_timeout_returns_timeout_message() -> None:
+    """APITimeoutError gets a specific timeout message, not the generic network-connection one."""
+    err = llm_client.OpenAITimeoutError.__new__(llm_client.OpenAITimeoutError)
+    Exception.__init__(err, "Request timed out.")
+
+    msg = llm_client._format_openai_connection_error(err, "Ollama")
+
+    assert "timed out" in msg.lower()
+    assert "Ollama" in msg
+    assert "network connection" not in msg

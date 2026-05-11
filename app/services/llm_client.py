@@ -29,6 +29,7 @@ from anthropic import (
 )
 from anthropic import BadRequestError as AnthropicBadRequestError
 from openai import APIConnectionError as OpenAIConnectionError
+from openai import APITimeoutError as OpenAITimeoutError
 from openai import AuthenticationError as OpenAIAuthError
 from openai import BadRequestError as OpenAIBadRequestError
 from openai import NotFoundError as OpenAINotFoundError
@@ -530,6 +531,11 @@ def _format_anthropic_retry_error(err: Exception) -> str:
 
 def _format_openai_connection_error(err: Exception, provider_label: str) -> str:
     """Return a user-facing message for an OpenAI APIConnectionError."""
+    if isinstance(err, OpenAITimeoutError):
+        return (
+            f"{provider_label} API request timed out. "
+            "Check that the service is running and responsive at the configured endpoint."
+        )
     cause: BaseException | None = err
     cause_text_parts: list[str] = []
     while cause is not None:
