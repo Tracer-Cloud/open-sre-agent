@@ -240,11 +240,11 @@ def stream_to_console(
             # as a static block so the user — and any error label printed by
             # the caller — sees what was produced before the failure.
             try:
-                wrap_patch_stdout = _console_file_is_a_tty(console)
-                try:
-                    _run_throttled_with_live(wrap_patch_stdout=wrap_patch_stdout)
-                except NoConsoleScreenBufferError:
-                    if wrap_patch_stdout:
+                is_real_tty = _console_file_is_a_tty(console)
+                if is_real_tty:
+                    try:
+                        _run_throttled_with_live(wrap_patch_stdout=True)
+                    except NoConsoleScreenBufferError:
                         try:
                             _run_throttled_with_live(wrap_patch_stdout=False)
                         except NoConsoleScreenBufferError:
@@ -254,13 +254,16 @@ def stream_to_console(
                                 buffer=buffer,
                                 next_chunk=_next_chunk,
                             )
-                    else:
-                        _run_throttled_markdown_loop(
-                            preview=_noop_preview,
-                            chunks_iter=chunks_iter,
-                            buffer=buffer,
-                            next_chunk=_next_chunk,
-                        )
+                else:
+                    # force_terminal=True but backed by a non-TTY file (StringIO
+                    # in tests, piped output): skip Live to avoid cursor-positioning
+                    # sequences writing raw intermediate markdown into the buffer.
+                    _run_throttled_markdown_loop(
+                        preview=_noop_preview,
+                        chunks_iter=chunks_iter,
+                        buffer=buffer,
+                        next_chunk=_next_chunk,
+                    )
             finally:
                 # Single authoritative render. The live preview was transient
                 # + cropped while streaming; this is what ends up in
