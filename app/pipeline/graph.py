@@ -2,7 +2,7 @@
 
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
-
+from __future__ import annotations
 from app.nodes import (
     node_adapt_window,
     node_agent_incident,
@@ -32,7 +32,7 @@ from app.pipeline.routing import (
     should_call_tools,
 )
 from app.state import AgentState
-from __future__ import annotations
+
 import oqs
 from typing import Tuple, Final
 
