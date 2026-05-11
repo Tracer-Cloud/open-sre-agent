@@ -32,7 +32,7 @@ from app.cli.interactive_shell.orchestration.execution_policy import (
     resolve_slash_execution_tier,
 )
 from app.cli.interactive_shell.runtime import ReplSession, TaskKind, TaskRecord, TaskStatus
-from app.cli.interactive_shell.ui import print_planned_actions
+from app.cli.interactive_shell.ui import DIM, print_planned_actions
 from app.cli.interactive_shell.ui.streaming import render_response_header
 
 
@@ -175,6 +175,16 @@ def execute_cli_actions(
         session.record("cli_agent", message)
 
     for action in actions:
+        # Multi-action plans: if the user pressed Esc / typed
+        # ``/cancel`` between actions, the per-dispatch cancel event
+        # is set on the ``_StreamingConsole``. Skip the rest of the
+        # plan so a "run all of these" plan doesn't keep marching
+        # through after an explicit cancel. ``getattr`` with a default
+        # keeps non-streaming consoles (used by the seeded-input
+        # test path) working unchanged.
+        if getattr(console, "cancel_requested", False):
+            console.print(f"[{DIM}](remaining actions cancelled)[/]")
+            break
         console.print()
         if action.kind == "slash":
             stripped = action.content.strip()

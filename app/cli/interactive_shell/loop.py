@@ -154,6 +154,26 @@ def _looks_like_cancel_request(text: str | None) -> bool:
     return (text or "").strip().lower() in _CANCEL_REQUEST_TOKENS
 
 
+class DispatchCancelled(Exception):
+    """Raised in the dispatch worker thread when the user interrupts
+    (Esc / ``/cancel`` / ``/stop`` / ``/abort``) and the worker is
+    parked on a ``Proceed? [y/N]`` confirmation prompt.
+
+    Closes a real footgun in the cancel path: ``execution_policy``
+    treats an empty answer as **YES** (the upstream prompt is
+    ``[Y/n]``, capital Y), so if the cancel handler returned ``""``
+    the worker would happily run the action it was supposed to
+    interrupt — only the spinner would stop, the agent would keep
+    going. Raising propagates out of ``execution_allowed`` and the
+    surrounding action loop, so the in-flight action never runs and
+    any remaining actions in the same plan are skipped.
+
+    Caught by :func:`_run_one_dispatch` so the user just sees the
+    standard ``· interrupted`` line and the prompt becomes responsive
+    again, identical to a clean Esc on a streaming response.
+    """
+
+
 def _looks_like_correction(text: str) -> bool:
     """True when text begins with a short correction cue (intervention signal)."""
     stripped = text.lstrip()
@@ -744,6 +764,17 @@ async def _run_interactive(
         except asyncio.CancelledError:
             console.print(f"[{WARNING}]· interrupted[/]")
             raise
+        except DispatchCancelled:
+            # Worker raised mid-confirmation because the user pressed
+            # Esc / typed ``/cancel``. The exception already short-
+            # circuited the in-flight action and the surrounding action
+            # loop, so there's nothing left to do besides match the
+            # ``Esc``-on-streaming UX. Do NOT re-raise: the asyncio
+            # task completed via the worker's exception, not via
+            # ``Task.cancel`` (the two race), and re-raising here would
+            # surface this as a generic dispatch error rather than the
+            # clean ``· interrupted`` line.
+            console.print(f"[{WARNING}]· interrupted[/]")
         except Exception as exc:
             report_exception(exc, context="interactive_shell.dispatch_async")
             console.print(f"[{ERROR}]dispatch error:[/] {escape(str(exc))}")
@@ -920,8 +951,11 @@ def _route_confirm_through_prompt(state: _ReplState, prompt_text: str) -> str:
 
     Prints the confirmation prompt above the input, parks itself
     on a ``threading.Event``, and waits for the next text the user
-    submits. Esc cancels and returns ``""`` (which execution_policy
-    treats as "decline").
+    submits. Esc / ``/cancel`` raises :class:`DispatchCancelled` so
+    the surrounding ``execution_allowed`` call (and the dispatch as
+    a whole) bails out without running the pending action — returning
+    a sentinel string would be silently confirmed by
+    ``execution_policy`` because ``[Y/n]`` treats empty as YES.
 
     Module-level (with explicit ``state``) rather than a closure inside
     :func:`_run_interactive` so the threaded happy-path / cancel-path
@@ -951,9 +985,19 @@ def _route_confirm_through_prompt(state: _ReplState, prompt_text: str) -> str:
         while not response_event.is_set():
             cancel = state.current_cancel_event
             if cancel is not None and cancel.is_set():
-                return ""
+                raise DispatchCancelled("cancelled while awaiting confirmation")
             response_event.wait(timeout=_PROMPT_REFRESH_INTERVAL_S)
-        return state.confirm_response[0] if state.confirm_response else ""
+        # ``response_event`` was set. Real answers reach here via
+        # ``deliver_confirmation``, which appends to ``confirm_response``
+        # *before* setting the event. An empty list here therefore
+        # means the event was set by ``cancel_current_dispatch`` (which
+        # publishes the event without delivering an answer) — treat
+        # that as a cancel rather than the empty string, otherwise
+        # ``execution_policy`` would silently confirm the pending
+        # ``[Y/n]`` action.
+        if not state.confirm_response:
+            raise DispatchCancelled("cancelled while awaiting confirmation")
+        return state.confirm_response[0]
     finally:
         state.confirm_event = None
         state.confirm_response = []
