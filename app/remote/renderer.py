@@ -686,6 +686,13 @@ class StreamRenderer:
                         first_word = tokens[0].strip("*_`")
                         if first_word in action_verbs:
                             next_actions.append(clean_line)
+                            consumed_indices.add(idx)
+
+            additional_report_lines = [
+                line.strip()
+                for idx, line in enumerate(lines)
+                if idx not in consumed_indices and line.strip()
+            ]
 
             content = f"[bold white][Root Cause][/bold white]\n  {escape(root_cause)}\n"
             if root_cause_report_detail:
@@ -707,6 +714,15 @@ class StreamRenderer:
                 content += "[bold white][Next Actions][/bold white]\n"
                 for act in next_actions:
                     content += f"  • {escape(act)}\n"
+
+            if additional_report_lines:
+                content += (
+                    "\n[bold white][Additional report context][/bold white]"
+                    "[dim]  (lines not classified into RCA sections)[/dim]\n"
+                )
+                for raw in additional_report_lines:
+                    show = escape(_clean_markdown_line(raw) or raw)
+                    content += f"  {show}\n"
 
             self._console.print(
                 Panel(

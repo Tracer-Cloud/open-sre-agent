@@ -742,10 +742,10 @@ class TestStreamRendererFocusedUXAndParsing:
     @patch("app.remote.renderer.Live")
     @patch("app.output._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
-    def test_report_parsing_ignores_mid_sentence_prose_keywords(
+    def test_report_parsing_mid_sentence_prose_not_misclassified(
         self, _mock_display, _mock_live, capfd
     ) -> None:
-        """Report parser ignores mid-sentence prose containing keywords without a structural prefix."""
+        """Prose containing section keywords stays out of structured blocks; surfaced as additional context."""
         renderer = StreamRenderer()
         renderer._final_state = {
             "root_cause": "Database connection pool saturated",
@@ -762,9 +762,10 @@ class TestStreamRendererFocusedUXAndParsing:
         out, _ = capfd.readouterr()
         assert "Supporting Evidence" in out
         assert "Saturated pool connections count" in out
-        assert "There is no supporting evidence" not in out
-        assert "Investigating root cause further" not in out
-        assert "Skip next steps for now" not in out
+        assert "Additional report context" in out
+        assert "There is no supporting evidence of DB hardware failure" in out
+        assert "Investigating root cause further" in out
+        assert "Skip next steps for now" in out
 
     @patch("app.remote.renderer.Live")
     @patch("app.output._EventLogDisplay")
