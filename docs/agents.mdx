@@ -102,6 +102,15 @@ is required so a stray keypress doesn't abort an in-flight response.
   decoded under `errors="replace"`). Redaction of secrets in the live
   tail is tracked separately under the `monitor-local-agents` Phase 3
   hygiene work.
+- **Quiet stdout while the PID is still alive.** The reader follows file
+  EOF like `tail -f`: if the process stops writing while it remains alive,
+  the last chunk stays on screen and nothing new appears until more bytes
+  land or you detach. That is normal idling — not necessarily a exited or
+  stuck agent reader.
+- **ANSI and terminal sequences.** Trace output passes through Rich with
+  ANSI interpretation, same trust model as dumping `kubectl logs` into a TTY:
+  buggy or hostile agents can emit control sequences affecting the viewer.
+  Only trace processes you trust; there is no sandboxing step.
 
 ## `/agents bus` — shared context channel
 

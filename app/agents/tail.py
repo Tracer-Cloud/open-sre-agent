@@ -310,14 +310,17 @@ class AttachSession:
                 if chunk:
                     self._publish(chunk)
                     continue
-                # EOF for now: the *only* liveness condition is the
-                # producer pid. We deliberately do NOT check
-                # ``self.target.path.exists()`` — once the fd is open we
-                # follow the inode through rename/unlink (logrotate
-                # semantics), the same way ``tail -f`` does. If the
-                # path-check were here, a logrotate move would silently
-                # end the trace mid-incident even though the agent is
-                # still writing to the original inode.
+                # EOF for now while the PID is still alive: we poll below until
+                # new bytes arrive or the process exits. A quiet writer leaves
+                # the rendered view unchanged; see trace limitations in
+                # docs/agents.mdx.
+                #
+                # The only *exit* trigger here is PID death — we deliberately
+                # do NOT check ``self.target.path.exists()`` once the fd is
+                # open so we keep following the inode through rename/unlink
+                # (logrotate semantics), same as ``tail -f``. An exists-check
+                # would silently end the trace mid-incident while the agent
+                # still writes the original inode.
                 if not pid_exists(self.target.pid):
                     self.producer_exited = True
                     break

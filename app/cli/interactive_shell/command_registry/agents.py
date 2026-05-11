@@ -1,9 +1,8 @@
 """Slash command: ``/agents`` (registered local AI agent fleet view).
 
 Bare ``/agents`` renders the registered-agents dashboard; subcommands
-drill into specific surfaces (currently ``budget``, ``claim``, ``conflicts``,
-``release``, ``trace``, with more landing as the monitor-local-agents
-initiative ships).
+cover ``budget``, ``bus``, ``claim``, ``conflicts``, ``kill``, ``release``,
+and ``trace`` (with more surfaces planned for monitor-local-agents).
 """
 
 from __future__ import annotations
@@ -79,7 +78,10 @@ _TRACE_RENDER_TAIL_BYTES = 64 * 1024
 
 
 def _render_trace_snapshot(live: Live, sess: AttachSession) -> None:
-    """Pull the bounded snapshot, decode on a UTF-8 boundary, hand to ``Live``."""
+    """Decode the bounded snapshot with UTF-8 boundary safety for ``Live``.
+
+    ANSI sequences are interpreted (Rich); treat traced output like unfiltered ``kubectl logs``.
+    """
     snapshot = _slice_to_utf8_boundary(sess.buffer.snapshot(), _TRACE_RENDER_TAIL_BYTES)
     live.update(Text.from_ansi(snapshot.decode("utf-8", errors="replace")))
 
