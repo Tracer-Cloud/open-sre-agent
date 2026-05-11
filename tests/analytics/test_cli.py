@@ -196,9 +196,12 @@ def test_track_investigation_emits_failed_on_exception(
     stub = _StubAnalytics()
     monkeypatch.setattr(cli, "get_analytics", lambda: stub)
 
-    with pytest.raises(RuntimeError, match="boom"), cli.track_investigation(
-        entrypoint=EntrypointSource.MCP,
-        trigger_mode=TriggerMode.SERVICE_RUNTIME,
+    with (
+        pytest.raises(RuntimeError, match="boom"),
+        cli.track_investigation(
+            entrypoint=EntrypointSource.MCP,
+            trigger_mode=TriggerMode.SERVICE_RUNTIME,
+        ),
     ):
         raise RuntimeError("boom")
 
@@ -212,12 +215,15 @@ def test_track_investigation_nested_context_dedupes(monkeypatch: pytest.MonkeyPa
     stub = _StubAnalytics()
     monkeypatch.setattr(cli, "get_analytics", lambda: stub)
 
-    with cli.track_investigation(
-        entrypoint=EntrypointSource.SDK,
-        trigger_mode=TriggerMode.SERVICE_RUNTIME,
-    ), cli.track_investigation(
-        entrypoint=EntrypointSource.CLI_COMMAND,
-        trigger_mode=TriggerMode.FILE,
+    with (
+        cli.track_investigation(
+            entrypoint=EntrypointSource.SDK,
+            trigger_mode=TriggerMode.SERVICE_RUNTIME,
+        ),
+        cli.track_investigation(
+            entrypoint=EntrypointSource.CLI_COMMAND,
+            trigger_mode=TriggerMode.FILE,
+        ),
     ):
         pass
 
