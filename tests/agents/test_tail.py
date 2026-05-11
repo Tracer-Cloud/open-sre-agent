@@ -416,6 +416,7 @@ class TestAttachSession:
             assert b"hello" in sess.buffer.snapshot()
         assert not sess._thread.is_alive()  # noqa: SLF001 (test inspecting lifecycle)
 
+    @posix_only
     def test_reader_follows_inode_through_rename(self, tmp_path: Path) -> None:
         # logrotate-style: the path is renamed away after attach, but the
         # producer keeps writing to the original inode. The reader holds
