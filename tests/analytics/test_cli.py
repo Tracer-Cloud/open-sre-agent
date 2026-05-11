@@ -196,12 +196,16 @@ def test_track_investigation_emits_failed_on_exception(
     stub = _StubAnalytics()
     monkeypatch.setattr(cli, "get_analytics", lambda: stub)
 
-    with pytest.raises(RuntimeError, match="boom"):  # noqa: SIM117
+    try:
         with cli.track_investigation(
             entrypoint=EntrypointSource.MCP,
             trigger_mode=TriggerMode.SERVICE_RUNTIME,
         ):
             raise RuntimeError("boom")
+    except RuntimeError as exc:
+        assert str(exc) == "boom"
+    else:
+        pytest.fail("Expected RuntimeError")
 
     emitted_events = [event for event, _ in stub.events]
     assert emitted_events == [Event.INVESTIGATION_STARTED, Event.INVESTIGATION_FAILED]
