@@ -110,6 +110,31 @@ class TestResolveSupabaseConfig:
         with pytest.raises(ValueError, match="not configured"):
             resolve_supabase_config("https://proj.supabase.co")
 
+    def test_resolves_from_integration_store_v2_without_env(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """v2 store records keep credentials under instances[0]; resolve must still work."""
+        monkeypatch.delenv("SUPABASE_URL", raising=False)
+        monkeypatch.delenv("SUPABASE_SERVICE_KEY", raising=False)
+        v2_record = {
+            "service": "supabase",
+            "status": "active",
+            "instances": [
+                {
+                    "name": "default",
+                    "tags": {},
+                    "credentials": {
+                        "url": "https://proj.supabase.co",
+                        "service_key": "from-store",
+                    },
+                }
+            ],
+        }
+        with patch("app.integrations.store.load_integrations", return_value=[v2_record]):
+            config = resolve_supabase_config("https://proj.supabase.co")
+        assert config.service_key == "from-store"
+        assert config.url == "https://proj.supabase.co"
+
     def test_strips_trailing_slash_before_comparison(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("SUPABASE_URL", "https://proj.supabase.co")
         monkeypatch.setenv("SUPABASE_SERVICE_KEY", "svc")
@@ -275,6 +300,8 @@ class TestGetStorageBuckets:
             result = get_storage_buckets(config)
         assert result["available"] is True
         assert result["total_buckets"] == 2
+        assert result["returned_buckets"] == 2
+        assert result["truncated"] is False
         assert result["buckets"][0]["name"] == "avatars"
         assert result["buckets"][1]["public"] is False
 
@@ -294,6 +321,8 @@ class TestGetStorageBuckets:
             result = get_storage_buckets(config)
         assert result["available"] is True
         assert result["total_buckets"] == 0
+        assert result["returned_buckets"] == 0
+        assert result["truncated"] is False
 
     def test_handles_exception(self) -> None:
         config = SupabaseConfig(url="https://proj.supabase.co", service_key="key")
@@ -307,4 +336,6 @@ class TestGetStorageBuckets:
         mock_buckets = [{"id": str(i), "name": f"bucket-{i}"} for i in range(10)]
         with patch("app.integrations.supabase._make_request", return_value=(200, mock_buckets)):
             result = get_storage_buckets(config)
-        assert result["total_buckets"] == 2
+        assert result["total_buckets"] == 10
+        assert result["returned_buckets"] == 2
+        assert result["truncated"] is True

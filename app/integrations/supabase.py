@@ -8,6 +8,7 @@ enforced, result sizes capped.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from typing import Any
@@ -15,7 +16,10 @@ from urllib.parse import urlparse
 
 from pydantic import Field, field_validator
 
+from app.services.supabase.client import supabase_http_get
 from app.strict_config import StrictConfigModel
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_SUPABASE_TIMEOUT_SECONDS = 10.0
 DEFAULT_SUPABASE_MAX_RESULTS = 50
@@ -94,11 +98,12 @@ def resolve_supabase_config(project_url: str) -> SupabaseConfig:
     normalized = project_url.rstrip("/")
 
     # Check the integration store first — covers users who registered via the UI
-    # wizard without setting environment variables.
+    # wizard without setting environment variables (including v2 ``instances`` shape).
     try:
-        from app.integrations.store import load_integrations
+        from app.integrations.store import _record_with_flat_credentials_view, load_integrations
 
-        for record in load_integrations():
+        for raw in load_integrations():
+            record = _record_with_flat_credentials_view(raw)
             if str(record.get("service", "")).lower() != "supabase":
                 continue
             creds = record.get("credentials", {}) or {}
@@ -107,8 +112,11 @@ def resolve_supabase_config(project_url: str) -> SupabaseConfig:
                 service_key = str(creds.get("service_key", "")).strip()
                 if service_key:
                     return build_supabase_config({"url": normalized, "service_key": service_key})
-    except Exception:  # store unavailable or malformed — fall through to env vars
-        pass
+    except Exception:
+        logger.debug(
+            "Supabase credential store lookup failed; falling back to environment",
+            exc_info=True,
+        )
 
     # Fall back to environment variables.
     env_config = supabase_config_from_env()
@@ -136,16 +144,13 @@ def _make_request(
 
     Returns (status_code, response_body). Caller handles error inspection.
     """
-    import httpx  # type: ignore[import-untyped]
-
-    url = f"{config.url}{path}"
-    with httpx.Client(timeout=config.timeout_seconds) as client:
-        response = client.get(url, headers=config.headers, params=params or {})
-    try:
-        body: Any = response.json()
-    except Exception:
-        body = response.text
-    return response.status_code, body
+    return supabase_http_get(
+        config.url,
+        path,
+        config.headers,
+        timeout_seconds=config.timeout_seconds,
+        params=params,
+    )
 
 
 def validate_supabase_config(config: SupabaseConfig) -> SupabaseValidationResult:
@@ -179,8 +184,8 @@ def supabase_is_available(sources: dict[str, dict]) -> bool:  # type: ignore[typ
 def supabase_extract_params(sources: dict[str, dict]) -> dict[str, Any]:  # type: ignore[type-arg]
     """Extract Supabase identifying params from resolved integrations.
 
-    The service key is resolved internally from environment variables so it
-    never appears in tool signatures and is never seen by the LLM.
+    The service key is resolved internally (integration store or environment)
+    so it never appears in tool signatures and is never seen by the LLM.
     """
     sb = sources.get("supabase", {})
     return {
@@ -269,6 +274,7 @@ def get_storage_buckets(config: SupabaseConfig) -> dict[str, Any]:
             }
 
         raw_buckets: list[dict[str, Any]] = body if isinstance(body, list) else []
+        actual_total = len(raw_buckets)
         bucket_summaries = []
         for bucket in raw_buckets[: config.max_results]:
             bucket_summaries.append(
@@ -282,12 +288,15 @@ def get_storage_buckets(config: SupabaseConfig) -> dict[str, Any]:
                     "updated_at": bucket.get("updated_at", ""),
                 }
             )
+        returned = len(bucket_summaries)
 
         return {
             "source": "supabase",
             "available": True,
             "project_url": config.url,
-            "total_buckets": len(bucket_summaries),
+            "total_buckets": actual_total,
+            "returned_buckets": returned,
+            "truncated": actual_total > returned,
             "buckets": bucket_summaries,
         }
     except Exception as err:
