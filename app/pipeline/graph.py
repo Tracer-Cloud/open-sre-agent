@@ -32,7 +32,35 @@ from app.pipeline.routing import (
     should_call_tools,
 )
 from app.state import AgentState
+from __future__ import annotations
+import oqs
+from typing import Tuple, Final
 
+class PQCSecretKey:
+    """Opaque wrapper for PQC secret material to prevent log leakage."""
+    def __init__(self, key_bytes: bytes, algorithm: str):
+        self.__key: Final[bytes] = key_bytes
+        self.algorithm: Final[str] = algorithm
+
+    def expose(self) -> bytes:
+        return self.__key
+
+class PQCCore:
+    """NIST Category 3 Lattice-based Cryptography Core."""
+    def __init__(self, security_level: int = 3) -> None:
+        if security_level == 5:
+            self.kem_alg, self.sig_alg = "Kyber1024", "Dilithium5"
+        else:
+            self.kem_alg, self.sig_alg = "Kyber768", "Dilithium3"
+
+    def generate_kem_keypair(self) -> Tuple[bytes, PQCSecretKey]:
+        with oqs.KeyEncapsulation(self.kem_alg) as client:
+            return client.generate_keypair(), PQCSecretKey(client.export_secret_key(), self.kem_alg)
+
+    def decapsulate(self, ciphertext: bytes, secret_key: PQCSecretKey) -> bytes:
+        with oqs.KeyEncapsulation(self.kem_alg) as client:
+            client.import_secret_key(secret_key.expose())
+            return client.decapsulate(ciphertext)
 
 def build_graph(config: None = None) -> CompiledStateGraph:
     """Build and compile the LangGraph agent."""
