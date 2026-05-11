@@ -810,6 +810,35 @@ class TestStreamRendererFocusedUXAndParsing:
     @patch("app.remote.renderer.Live")
     @patch("app.output._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
+    def test_report_parses_markdown_hash_and_emphasis_headers(
+        self, _mock_display, _mock_live, capfd
+    ) -> None:
+        """``## …`` and ``*Italic:*`` subsection titles classify like ``### …`` headings."""
+        renderer = StreamRenderer()
+        renderer._final_state = {
+            "root_cause": "Incident summary line",
+            "validity_score": 0.88,
+            "report": (
+                "*Non-Validated Claims (Inferred):*\n"
+                "Insufficient evidence gathered yet.\n"
+                "## Recommended Actions\n"
+                "- Enable debug logging for the workload\n"
+                "*Cited Evidence:*\n"
+                "- Queries: synthetic lookup\n"
+            ),
+        }
+        renderer._print_report()
+        out, _ = capfd.readouterr()
+        assert "Claims & inference" in out
+        assert "Insufficient evidence gathered" in out
+        assert "Supporting Evidence" in out
+        assert "synthetic lookup" in out.lower()
+        assert "Next Actions" in out
+        assert "Enable debug logging" in out
+
+    @patch("app.remote.renderer.Live")
+    @patch("app.output._EventLogDisplay")
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
     def test_root_cause_verbs_do_not_promote_to_next_actions(
         self, _mock_display, _mock_live, capfd
     ) -> None:

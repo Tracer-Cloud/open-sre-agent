@@ -249,11 +249,59 @@ def _clean_markdown_line(line: str) -> str:
     prev = ""
     while stripped != prev:
         prev = stripped
-        # Strip bullet prefix (requires space after bullet to preserve **bold**)
-        stripped = re.sub(r"^[-•●—*]\s+", "", stripped)
-        # Strip numbered list prefix (e.g. "1. ", "2) ")
+        stripped = re.sub(r"^[-•●—]\s+", "", stripped)
+        # Markdown ``* item`` list marker only — not ``*Italic Section:*`` headings.
+        stripped = re.sub(r"^\*\s+", "", stripped)
         stripped = re.sub(r"^\d+[.)]\s+", "", stripped)
     return stripped
+
+
+def _normalized_report_heading_inner(line: str) -> str:
+    """Normalize LLM report lines for heading keyword matching."""
+    s = line.strip()
+    while s.startswith("#"):
+        s = s[1:].strip()
+    if s.startswith("**"):
+        core = s[2:]
+        if core.endswith("**:"):
+            core = core[:-3]
+        elif core.endswith("**"):
+            core = core[:-2]
+        return core.strip()
+    if len(s) >= 2 and s.startswith("[") and s.endswith("]") and ":" not in s:
+        return s[1:-1].strip()
+    if (
+        len(s) >= 3
+        and s.startswith("*")
+        and s.endswith("*")
+        and not s.startswith("* ")
+        and "**" not in s
+    ):
+        inner = s[1:-1].strip()
+        if ":" in inner or len(inner.split()) >= 3:
+            return inner
+    return s.strip()
+
+
+def _report_line_looks_like_heading(line: str, *, inner: str) -> bool:
+    """True if the line uses a heading-like structure (not prose)."""
+    stripped = line.strip()
+    if stripped.startswith("#"):
+        return True
+    is_bracket = (
+        stripped.startswith("[") and stripped.rstrip().endswith("]") and ":" not in stripped
+    )
+    is_bold_md = stripped.startswith("**") and (stripped.endswith("**") or stripped.endswith("**:"))
+    wrapped_ast = (
+        len(stripped) >= 3
+        and stripped.startswith("*")
+        and stripped.endswith("*")
+        and not stripped.startswith("* ")
+        and "**" not in stripped
+        and (":" in stripped[1:-1] or len(stripped[1:-1].strip().split()) >= 3)
+    )
+    shouty = inner.isupper() and len(inner.replace(" ", "")) >= 8 and len(inner.split()) <= 14
+    return bool(is_bracket or is_bold_md or wrapped_ast or shouty)
 
 
 class StreamRenderer:
@@ -579,45 +627,29 @@ class StreamRenderer:
 
             evidence_lines = []
             next_actions = []
+            claims_lines: list[str] = []
             root_cause_report_detail: list[str] = []
 
             lines = report.strip().splitlines()
             current_section = None
             consumed_indices = set()
 
+            _RCA_LINE = "[dim]" + ("─" * 48) + "[/dim]"
+
             def is_header_candidate(line: str, keywords: list[str]) -> bool:
-                stripped = line.strip()
-                if not stripped:
+                stripped_full = line.strip()
+                if not stripped_full:
                     return False
-                stripped_clean = stripped.lstrip("#").strip()
-                if not stripped_clean:
+                inner = _normalized_report_heading_inner(stripped_full)
+                if len(inner) > 72:
                     return False
-                if len(stripped_clean) > 60:
+                if inner.endswith((".", "?", "!")) and not inner.endswith(":"):
                     return False
-                # Safe endswith check guarantees no IndexError regardless of line length
-                if stripped_clean.endswith((".", "?", "!")):
+                if len(inner.split()) > 12:
                     return False
-
-                if len(stripped_clean.split()) > 6:
+                if not _report_line_looks_like_heading(stripped_full, inner=inner):
                     return False
-
-                # Structural prefix requirement: starts with #, [, **, or is all-caps.
-                # Note-style brackets like "[Note: ...]" are excluded by requiring no colon.
-                is_bracket = (
-                    stripped.startswith("[")
-                    and stripped_clean.endswith("]")
-                    and ":" not in stripped
-                )
-                is_bold = stripped.startswith("**") and (
-                    stripped.endswith("**") or stripped.endswith("**:")
-                )
-                has_prefix = (
-                    stripped.startswith("#") or is_bracket or is_bold or stripped_clean.isupper()
-                )
-                if not has_prefix:
-                    return False
-
-                lowered = stripped_clean.lower()
+                lowered = inner.lower()
                 return any(kw in lowered for kw in keywords)
 
             for idx, line in enumerate(lines):
@@ -625,28 +657,46 @@ class StreamRenderer:
                 if not stripped:
                     continue
 
-                if is_header_candidate(line, ["supporting evidence"]):
+                if is_header_candidate(line, ["root cause"]):
+                    current_section = "root_cause"
+                    consumed_indices.add(idx)
+                    continue
+                if is_header_candidate(
+                    line,
+                    ["non-validated claims", "inferred claims", "unvalidated claims"],
+                ):
+                    current_section = "claims"
+                    consumed_indices.add(idx)
+                    continue
+                if is_header_candidate(
+                    line, ["supporting evidence", "cited evidence", "evidence cited"]
+                ):
                     current_section = "evidence"
                     consumed_indices.add(idx)
                     continue
-                elif is_header_candidate(
-                    line, ["next actions", "next steps", "remediation", "recommendations"]
+                if is_header_candidate(
+                    line,
+                    [
+                        "next actions",
+                        "next steps",
+                        "remediation",
+                        "recommendations",
+                        "recommended actions",
+                    ],
                 ):
                     current_section = "next_actions"
                     consumed_indices.add(idx)
                     continue
-                elif is_header_candidate(line, ["root cause"]):
-                    current_section = "root_cause"
-                    consumed_indices.add(idx)
-                    continue
 
-                if current_section in ("evidence", "next_actions", "root_cause"):
+                if current_section in ("claims", "evidence", "next_actions", "root_cause"):
                     clean_line = _clean_markdown_line(stripped)
                     # Always consume body lines under an active section so the verb-fallback
                     # pass cannot treat root-cause narrative (e.g. "• Review …") as actions.
                     consumed_indices.add(idx)
                     if clean_line:
-                        if current_section == "evidence":
+                        if current_section == "claims":
+                            claims_lines.append(clean_line)
+                        elif current_section == "evidence":
                             evidence_lines.append(clean_line)
                         elif current_section == "next_actions":
                             next_actions.append(clean_line)
@@ -666,6 +716,8 @@ class StreamRenderer:
                     "scale",
                     "run",
                     "test",
+                    "enable",
+                    "escalate",
                 }
                 for idx, line in enumerate(lines):
                     if idx in consumed_indices:
@@ -675,7 +727,10 @@ class StreamRenderer:
                         continue
 
                     # Verb fallback only applies to lines formatted as list items
-                    is_bullet = stripped.startswith(("-", "•", "*", "●", "—"))
+                    is_ast_bullet = stripped.startswith("*") and (
+                        stripped.startswith("* ") or re.match(r"^\*\t", stripped) is not None
+                    )
+                    is_bullet = stripped.startswith(("-", "•", "●", "—")) or is_ast_bullet
                     is_numbered = bool(re.match(r"^\s*\d+[.)]\s*", stripped))
                     if not (is_bullet or is_numbered):
                         continue
@@ -694,35 +749,82 @@ class StreamRenderer:
                 if idx not in consumed_indices and line.strip()
             ]
 
-            content = f"[bold white][Root Cause][/bold white]\n  {escape(root_cause)}\n"
+            def _bullet_block(title_markup: str, items: list[str]) -> str:
+                block = title_markup + "\n"
+                for item in items:
+                    block += f"  [cyan]\u2022[/cyan] {escape(item)}\n"
+                return block.rstrip()
+
+            raw_conf = score
+            low_confidence = (
+                isinstance(raw_conf, (int, float))
+                and not isinstance(raw_conf, bool)
+                and math.isfinite(float(raw_conf))
+                and float(raw_conf) * 100 <= 12.5
+            )
+            if confidence_str == "N/A":
+                conf_render = f"[dim]{escape(confidence_str)}[/dim]"
+            elif low_confidence:
+                conf_render = f"[bold yellow]{escape(confidence_str)}[/bold yellow]"
+            else:
+                conf_render = f"[bold green]{escape(confidence_str)}[/bold green]"
+
+            content = (
+                "[bold bright_white]\u2591 Root Cause[/bold bright_white]\n"
+                f"  [default]{escape(root_cause)}[/default]\n"
+            )
             if root_cause_report_detail:
                 content += "\n"
                 for detail in root_cause_report_detail:
-                    content += f"  • {escape(detail)}\n"
+                    content += f"  [cyan]\u2022[/cyan] {escape(detail)}\n"
+
             content += (
-                f"\n[bold white][Confidence][/bold white]\n"
-                f"  [bold green]{escape(confidence_str)}[/bold green]\n\n"
+                f"\n[bold bright_white]\u2591 Confidence[/bold bright_white]\n  {conf_render}\n"
             )
 
+            has_structured_body = claims_lines or evidence_lines or next_actions
+            has_tail = additional_report_lines
+            if has_structured_body or has_tail:
+                content += "\n" + _RCA_LINE + "\n"
+
+            if claims_lines:
+                content += (
+                    "\n"
+                    + _bullet_block(
+                        "[bold magenta]\u2591 Claims & inference[/bold magenta]",
+                        claims_lines,
+                    )
+                    + "\n"
+                )
+
             if evidence_lines:
-                content += "[bold white][Supporting Evidence][/bold white]\n"
-                for ev in evidence_lines:
-                    content += f"  • {escape(ev)}\n"
-                content += "\n"
+                content += (
+                    "\n"
+                    + _bullet_block(
+                        "[bold cyan]\u2591 Supporting Evidence[/bold cyan]",
+                        evidence_lines,
+                    )
+                    + "\n"
+                )
 
             if next_actions:
-                content += "[bold white][Next Actions][/bold white]\n"
-                for act in next_actions:
-                    content += f"  • {escape(act)}\n"
+                content += (
+                    "\n"
+                    + _bullet_block(
+                        "[bold yellow]\u2591 Next Actions[/bold yellow]",
+                        next_actions,
+                    )
+                    + "\n"
+                )
 
             if additional_report_lines:
                 content += (
-                    "\n[bold white][Additional report context][/bold white]"
-                    "[dim]  (lines not classified into RCA sections)[/dim]\n"
+                    "\n[bold white]\u2591 Additional report context[/bold white]"
+                    "[dim] — unclassified lines below [/dim]\n"
                 )
                 for raw in additional_report_lines:
                     show = escape(_clean_markdown_line(raw) or raw)
-                    content += f"  {show}\n"
+                    content += f"  [dim]\u2514[/dim] {show}\n"
 
             self._console.print(
                 Panel(
