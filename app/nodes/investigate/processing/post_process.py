@@ -333,6 +333,36 @@ def _derive_performance_insights_from_grafana_logs(logs: list) -> dict:
     }
 
 
+_K8S_LOG_EVIDENCE_SOURCES = ("k8s_events", "k8s_rollout")
+
+
+def _derive_k8s_evidence_from_grafana_logs(logs: list) -> dict[str, list[dict]]:
+    """Group Loki log lines by their k8s ``source_type`` label.
+
+    Returns a mapping ``{evidence_key: [log_record, ...]}`` for any source
+    in ``_K8S_LOG_EVIDENCE_SOURCES`` that has at least one matching record.
+    Each record preserves timestamp + message and any namespace/cluster/service
+    labels that came over with the stream.
+    """
+    grouped: dict[str, list[dict]] = {}
+    for log in logs:
+        if not isinstance(log, dict):
+            continue
+        source_type = str(log.get("source_type", "")).strip()
+        if source_type not in _K8S_LOG_EVIDENCE_SOURCES:
+            continue
+        grouped.setdefault(source_type, []).append(
+            {
+                "timestamp": _timestamp_from_loki_ns(log.get("timestamp")),
+                "message": str(log.get("message", "")),
+                "namespace": log.get("namespace", ""),
+                "cluster": log.get("cluster", ""),
+                "service": log.get("service", ""),
+            }
+        )
+    return grouped
+
+
 def _map_grafana_logs(data: dict) -> dict:
     logs = data.get("logs", [])
     mapped: dict[str, object] = {
@@ -349,6 +379,9 @@ def _map_grafana_logs(data: dict) -> dict:
     performance_insights = _derive_performance_insights_from_grafana_logs(logs)
     if performance_insights:
         mapped["aws_performance_insights"] = performance_insights
+
+    for evidence_key, records in _derive_k8s_evidence_from_grafana_logs(logs).items():
+        mapped[evidence_key] = records
 
     return mapped
 
@@ -400,6 +433,50 @@ def _build_rds_cloudwatch_metrics(summaries: list[dict]) -> dict:
     }
 
 
+_K8S_METRIC_EVIDENCE_SOURCES = (
+    "k8s_pod_metrics",
+    "k8s_node_metrics",
+    "k8s_dns_metrics",
+    "k8s_mesh_metrics",
+)
+
+
+def _build_k8s_metrics_evidence(summaries: list[dict]) -> dict[str, dict]:
+    """Group Mimir summaries by their k8s ``source_type`` label.
+
+    The mock Grafana backend tags every k8s series with a ``source_type`` label
+    (``k8s_pod_metrics`` etc.); real Grafana stacks emit the same label when
+    operators scrape kube-state-metrics through a recording rule that adds it.
+    """
+    grouped: dict[str, dict] = {}
+    for summary in summaries:
+        labels = summary.get("labels", {})
+        source = ""
+        if isinstance(labels, dict):
+            source = str(labels.get("source_type", ""))
+        if not source:
+            raw_name = str(summary.get("raw_metric_name", ""))
+            for candidate in _K8S_METRIC_EVIDENCE_SOURCES:
+                if raw_name.startswith(candidate):
+                    source = candidate
+                    break
+        if source not in _K8S_METRIC_EVIDENCE_SOURCES:
+            continue
+        bucket = grouped.setdefault(source, {"metrics": [], "observations": []})
+        bucket["metrics"].append(
+            {
+                "metric_name": summary.get("metric_name", "unknown"),
+                "raw_metric_name": summary.get("raw_metric_name", ""),
+                "labels": labels if isinstance(labels, dict) else {},
+                "datapoint_count": summary.get("datapoint_count", 0),
+                "summary": summary.get("summary", ""),
+            }
+        )
+        if summary.get("summary"):
+            bucket["observations"].append(str(summary["summary"]))
+    return grouped
+
+
 def _map_grafana_metrics(data: dict) -> dict:
     metrics = data.get("metrics", [])
     summaries = summarize_prometheus_metrics(metrics)
@@ -413,6 +490,9 @@ def _map_grafana_metrics(data: dict) -> dict:
     rds_metrics = _build_rds_cloudwatch_metrics(summaries)
     if rds_metrics:
         mapped["aws_cloudwatch_metrics"] = rds_metrics
+
+    for evidence_key, payload in _build_k8s_metrics_evidence(summaries).items():
+        mapped[evidence_key] = payload
 
     return mapped
 

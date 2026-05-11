@@ -4,13 +4,17 @@
     "available_coverage": 0.0,
     "missing_required_sources": [
       "aws_cloudwatch_metrics",
-      "aws_performance_insights"
+      "aws_performance_insights",
+      "k8s_events",
+      "k8s_pod_metrics"
     ],
     "observed_sources": [],
     "required_coverage": 0.0,
     "required_sources": [
       "aws_cloudwatch_metrics",
-      "aws_performance_insights"
+      "aws_performance_insights",
+      "k8s_events",
+      "k8s_pod_metrics"
     ],
     "source_presence": {
       "aws_cloudwatch_metrics": false,
@@ -32,7 +36,7 @@
     },
     {
       "code": "MISSING_REQUIRED_EVIDENCE_SOURCE",
-      "detail": "required evidence not gathered: ['aws_cloudwatch_metrics', 'aws_performance_insights']"
+      "detail": "required evidence not gathered: ['aws_cloudwatch_metrics', 'aws_performance_insights', 'k8s_events', 'k8s_pod_metrics']"
     }
   ],
   "gates": {
@@ -62,7 +66,7 @@
       "threshold": "no forbidden keywords appear in graded output text"
     },
     "required_evidence_sources": {
-      "actual": "missing_required_evidence=['aws_cloudwatch_metrics', 'aws_performance_insights']",
+      "actual": "missing_required_evidence=['aws_cloudwatch_metrics', 'aws_performance_insights', 'k8s_events', 'k8s_pod_metrics']",
       "status": "fail",
       "threshold": "all required evidence sources populated"
     },

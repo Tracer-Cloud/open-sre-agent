@@ -11,6 +11,9 @@ required_keywords:
   - application timeout
 required_evidence_sources:
   - aws_rds_events
+  - k8s_dns_metrics
+  - k8s_events
+  - k8s_pod_metrics
 forbidden_categories:
   - connection_exhaustion
 optimal_trajectory:

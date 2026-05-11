@@ -10,6 +10,8 @@ required_keywords:
 required_evidence_sources:
   - aws_performance_insights
   - aws_cloudwatch_metrics
+  - k8s_rollout
+  - k8s_pod_metrics
 forbidden_categories:
   - infrastructure
   - connection_exhaustion

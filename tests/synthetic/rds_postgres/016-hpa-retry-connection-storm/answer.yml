@@ -8,6 +8,8 @@ required_keywords:
 required_evidence_sources:
   - aws_cloudwatch_metrics
   - aws_performance_insights
+  - k8s_events
+  - k8s_pod_metrics
 forbidden_categories:
   - infrastructure
 optimal_trajectory:

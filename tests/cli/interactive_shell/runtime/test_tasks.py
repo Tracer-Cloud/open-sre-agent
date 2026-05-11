@@ -212,11 +212,16 @@ class TestTaskRegistry:
 
         session.clear()
 
+        # /reset must keep the on-disk store intact: a fresh persistent registry
+        # still finds the task, and the session's swapped-in registry continues
+        # to surface persisted history via its disk-backed merge so /tasks does
+        # not "forget" the user's prior runs after a session reset.
         reloaded = TaskRegistry.persistent()
         [loaded] = reloaded.list_recent()
         assert loaded.task_id == task.task_id
         assert loaded.command == "opensre tests"
-        assert session.task_registry.list_recent() == []
+        [visible_after_reset] = session.task_registry.list_recent()
+        assert visible_after_reset.task_id == task.task_id
 
 
 class TestSlashTaskCommands:
