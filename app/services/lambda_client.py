@@ -2,11 +2,13 @@
 
 import base64
 import json
+import logging
 from contextlib import suppress
 from io import BytesIO
 from typing import Any
 from zipfile import ZipFile
 
+from app.services.aws_telemetry import report_aws_failure
 from app.services.env import make_boto3_client, require_aws_credentials
 
 try:
@@ -15,6 +17,9 @@ except ImportError:
 
     class ClientError(Exception):  # type: ignore[no-redef]
         """Stub when botocore is not installed; prevents over-broad except clauses."""
+
+
+logger = logging.getLogger(__name__)
 
 
 def _get_lambda_client():
@@ -116,7 +121,19 @@ def get_function_code(
             # Download and extract if code is under 5MB
             import requests
 
-            zip_response = requests.get(code_location, timeout=30)
+            try:
+                zip_response = requests.get(code_location, timeout=30)
+            except requests.RequestException as e:
+                report_aws_failure(
+                    e,
+                    logger=logger,
+                    message=f"Lambda zip download failed for {function_name}",
+                    service="lambda",
+                    operation="get_function:download_code",
+                    extras={"function_name": function_name},
+                )
+                result["data"]["extract_error"] = f"download failed: {e}"
+                return result
             if zip_response.status_code == 200:
                 files: dict[str, Any] = {}
                 try:
@@ -145,10 +162,39 @@ def get_function_code(
                     result["data"]["files"] = files
                     result["data"]["file_count"] = len(files)
                 except Exception as e:
+                    report_aws_failure(
+                        e,
+                        logger=logger,
+                        message=f"Lambda zip extraction failed for {function_name}",
+                        service="lambda",
+                        operation="get_function:extract_code",
+                        extras={"function_name": function_name},
+                    )
                     result["data"]["extract_error"] = str(e)
+            else:
+                report_aws_failure(
+                    RuntimeError(f"HTTP {zip_response.status_code}"),
+                    logger=logger,
+                    message=f"Lambda zip download returned non-200 for {function_name}",
+                    service="lambda",
+                    operation="get_function:download_code",
+                    extras={
+                        "function_name": function_name,
+                        "status_code": zip_response.status_code,
+                    },
+                )
+                result["data"]["extract_error"] = f"HTTP {zip_response.status_code}"
 
         return result
     except ClientError as e:
+        report_aws_failure(
+            e,
+            logger=logger,
+            message=f"Lambda get_function failed for {function_name}",
+            service="lambda",
+            operation="get_function",
+            extras={"function_name": function_name},
+        )
         return {"success": False, "error": str(e)}
 
 
@@ -336,9 +382,27 @@ def invoke_function(
 
         response = client.invoke(**kwargs)
 
-        result_payload = None
+        result_payload: Any = None
         if "Payload" in response:
-            result_payload = json.loads(response["Payload"].read().decode())
+            try:
+                result_payload = json.loads(response["Payload"].read().decode())
+            except json.JSONDecodeError as e:
+                report_aws_failure(
+                    e,
+                    logger=logger,
+                    message=f"Lambda invoke payload parse failed for {function_name}",
+                    service="lambda",
+                    operation="invoke:parse_payload",
+                    extras={"function_name": function_name},
+                )
+                return {
+                    "success": False,
+                    "error": f"Invalid JSON payload returned by Lambda: {e}",
+                    "data": {
+                        "status_code": response.get("StatusCode"),
+                        "function_error": response.get("FunctionError"),
+                    },
+                }
 
         return {
             "success": True,
@@ -353,6 +417,14 @@ def invoke_function(
             },
         }
     except ClientError as e:
+        report_aws_failure(
+            e,
+            logger=logger,
+            message=f"Lambda invoke failed for {function_name}",
+            service="lambda",
+            operation="invoke",
+            extras={"function_name": function_name},
+        )
         return {"success": False, "error": str(e)}
 
 
