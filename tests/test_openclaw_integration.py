@@ -9,7 +9,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
-import app.integrations.openclaw as openclaw_module
 from app.integrations.openclaw import (
     OpenClawConfig,
     _tool_result_to_dict,
@@ -320,7 +319,6 @@ class TestValidateOpenClawConfig:
 
     def test_stdio_node_requirement_fails_before_listing_tools(self) -> None:
         config = OpenClawConfig(mode="stdio", command="openclaw", args=["mcp", "serve"])
-        openclaw_module._openclaw_cli_preflight_output.cache_clear()
         completed = subprocess.CompletedProcess(
             args=["openclaw", "--help"],
             returncode=1,
@@ -396,7 +394,6 @@ class TestDescribeOpenClawError:
 
     def test_gateway_unavailable_receives_gateway_hint(self) -> None:
         config = OpenClawConfig(mode="stdio", command="openclaw", args=["mcp", "serve"])
-        openclaw_module._openclaw_cli_preflight_output.cache_clear()
         completed = subprocess.CompletedProcess(
             args=["openclaw", "--help"],
             returncode=0,
@@ -421,7 +418,6 @@ class TestDescribeOpenClawError:
 
     def test_runtime_unavailable_reason_detects_node_version_requirement(self) -> None:
         config = OpenClawConfig(mode="stdio", command="openclaw", args=["mcp", "serve"])
-        openclaw_module._openclaw_cli_preflight_output.cache_clear()
         completed = subprocess.CompletedProcess(
             args=["openclaw", "--help"],
             returncode=1,

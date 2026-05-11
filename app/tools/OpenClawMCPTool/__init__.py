@@ -396,7 +396,7 @@ def get_openclaw_conversation(
         "Writing investigation findings back into a conversation an engineer is already using",
         "Appending a short remediation note or next-step summary to an OpenClaw thread",
     ],
-    requires=["conversation_id", "content"],
+    requires=["conversation_id"],
     surfaces=("investigation", "chat"),
     input_schema={
         "type": "object",

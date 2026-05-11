@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 from typing import cast
 
+import yaml
 from typing_extensions import TypedDict
 
 from app.cli.tests.catalog import TestCatalog, TestCatalogItem, TestRequirement
@@ -359,13 +360,11 @@ def _discover_rds_synthetic_scenarios() -> list[TestCatalogItem]:
         scenario_yml = scenario_dir / "scenario.yml"
         if scenario_yml.exists():
             try:
-                import yaml  # type: ignore[import-untyped]
-
-                meta = yaml.safe_load(scenario_yml.read_text()) or {}
+                meta = yaml.safe_load(scenario_yml.read_text(encoding="utf-8")) or {}
                 failure_mode = meta.get("failure_mode", "")
                 if failure_mode:
                     display_name = f"{scenario_id}  [{failure_mode}]"
-            except Exception:
+            except (OSError, UnicodeDecodeError, yaml.YAMLError, TypeError, ValueError):
                 display_name = scenario_id
         items.append(
             TestCatalogItem(
@@ -403,7 +402,8 @@ def _discover_openclaw_synthetic_scenarios() -> list[TestCatalogItem]:
                 if scenario_description:
                     display_name = scenario_description[:80]
                     description = scenario_description
-            except Exception:
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
+                # Ignore unreadable/invalid metadata and keep default name/description.
                 pass
 
         items.append(
