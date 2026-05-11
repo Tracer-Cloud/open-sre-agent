@@ -1,0 +1,25 @@
+# src/security/pqc_core/wrapper.py
+import oqs # Open Quantum Safe library
+
+class PQCCore:
+    """
+    [span_1](start_span)Implements Layer 3: PQC Transformation using Lattice-based primitives[span_1](end_span).
+    [span_2](start_span)[span_3](start_span)Replaces RSA/ECC with CRYSTALS-Kyber and Dilithium[span_2](end_span)[span_3](end_span).
+    """
+    def __init__(self):
+        self.kem_alg = "Kyber512"
+        self.sig_alg = "Dilithium2"
+
+    def generate_kem_keypair(self):
+        with oqs.KeyEncapsulation(self.kem_alg) as client:
+            public_key = client.generate_keypair()
+            return public_key, client.export_secret_key()
+
+    def encapsulate(self, public_key):
+        with oqs.KeyEncapsulation(self.kem_alg) as server:
+            ciphertext, shared_secret = server.encapsulate(public_key)
+            return ciphertext, shared_secret
+
+    def sign_telemetry(self, message, secret_key):
+        with oqs.Signature(self.sig_alg) as signer:
+            return signer.sign(message, secret_key)
