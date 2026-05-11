@@ -1,0 +1,43 @@
+root_cause_category: replication_lag
+required_keywords:
+  - cronjob
+  - fan out
+  - replication lag
+  - WAL
+  - ledger entries
+required_evidence_sources:
+  - k8s_events
+  - k8s_pod_metrics
+  - aws_cloudwatch_metrics
+  - aws_performance_insights
+forbidden_categories:
+  - cpu_saturation
+  - connection_exhaustion
+optimal_trajectory:
+  - query_grafana_metrics
+  - query_grafana_logs
+  - query_grafana_alert_rules
+max_investigation_loops: 4
+golden_trajectory:
+  ordered_actions:
+    - query_grafana_metrics
+    - query_grafana_logs
+    - query_grafana_alert_rules
+  matching: lcs
+  max_extra_actions: 2
+  max_loops: 4
+model_response: |
+  ROOT_CAUSE: Read replica lag exceeded 900 seconds because the billing CronJob fan-out launched a burst of parallel reconciliation workers that executed write-heavy UPDATE traffic against ledger_entries on the primary. WAL generation outpaced replica replay; primary CPU stayed only moderately elevated (the adversarial low_primary_cpu_noise signal), so this is replication lag from a coordinated write burst, not cpu_saturation or connection exhaustion.
+
+  ROOT_CAUSE_CATEGORY: replication_lag
+
+  VALIDATED_CLAIMS:
+  - Kubernetes events show billing-reconcile CronJob starting and Job scaling worker replicas from 8 to 120 with concurrencyPolicy=Allow. [evidence: k8s_events]
+  - Pod metrics show running_jobs climbed to 120 with write_ops_per_sec rising above 1000 in the same window as the lag spike. [evidence: k8s_pod_metrics]
+  - CloudWatch ReplicaLag on payments-prod-replica-1 reached about 960 seconds while WriteIOPS on the primary climbed sharply. [evidence: aws_cloudwatch_metrics]
+  - Performance Insights shows billing_worker driving UPDATE ledger_entries with IO:WALWrite and IO:WALSync as dominant waits. [evidence: aws_performance_insights]
+
+  CAUSAL_CHAIN:
+  - Scheduled billing reconcile cron permitted concurrent job fan-out.
+  - Many workers issued reconciliation UPDATEs against the primary.
+  - WAL volume exceeded replica apply capacity and ReplicaLag accumulated.
