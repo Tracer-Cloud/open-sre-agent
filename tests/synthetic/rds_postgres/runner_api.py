@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from hashlib import sha256
 from pathlib import Path
@@ -9,6 +10,15 @@ from tests.synthetic.rds_postgres.scenario_loader import SUITE_DIR, ScenarioFixt
 
 DEFAULT_LEVELS: tuple[int, ...] = (1, 2, 3, 4)
 _MAX_LEVEL = 4
+
+
+def default_parallel_workers() -> int:
+    """Default scenario worker count for the suite.
+
+    Caps at 8 to avoid overloading the upstream LLM provider while still
+    saturating typical developer machines (4–10 cores).
+    """
+    return min(8, os.cpu_count() or 1)
 
 
 @dataclass(frozen=True)
@@ -27,6 +37,12 @@ class ShardSpec:
 class SuiteRunConfig:
     scenario: str = ""
     levels: tuple[int, ...] = DEFAULT_LEVELS
+    # Total scenario worker count for the flat ThreadPoolExecutor that runs
+    # every selected fixture. Replaces ``parallel_levels`` as the scheduling
+    # knob; level grouping is preserved only for reporting.
+    parallel_workers: int = field(default_factory=default_parallel_workers)
+    # Deprecated: previously controlled how many *level* buckets ran in
+    # parallel. Retained for argv/back-compat; ignored by the scheduler.
     parallel_levels: int = 1
     output_json: bool = False
     mock_grafana: bool = False
@@ -37,6 +53,8 @@ class SuiteRunConfig:
     shard: ShardSpec = field(default_factory=ShardSpec)
 
     def __post_init__(self) -> None:
+        if self.parallel_workers < 1:
+            raise ValueError("parallel_workers must be >= 1")
         if self.parallel_levels < 1:
             raise ValueError("parallel_levels must be >= 1")
         if not self.levels:
