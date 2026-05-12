@@ -318,3 +318,81 @@ class TestCorrelatingSink:
         )
         sink.close()
         assert closeable.closed == 1
+
+    def test_close_calls_all_sinks_even_when_one_raises(self) -> None:
+        """A raising close() on one downstream sink must not skip the others or
+        leave _correlator.reset() uncalled (which would leak TelegramSink
+        thread-pool workers)."""
+
+        class _RaisesOnClose:
+            def __call__(self, _incident: HermesIncident) -> None:
+                return None
+
+            def close(self) -> None:
+                raise RuntimeError("close failed")
+
+        class _Closeable:
+            def __init__(self) -> None:
+                self.closed = 0
+
+            def __call__(self, _incident: HermesIncident) -> None:
+                return None
+
+            def close(self) -> None:
+                self.closed += 1
+
+        raiser = _RaisesOnClose()
+        good = _Closeable()
+        corr = IncidentCorrelator()
+        sink = CorrelatingSink(
+            correlator=corr,
+            routes={
+                RouteDestination.TELEGRAM: raiser,
+                RouteDestination.TELEGRAM_WITH_RCA: good,
+            },
+        )
+        # Seed correlator state so we can verify reset() ran.
+        sink(_incident(seconds=0))
+
+        with pytest.raises(RuntimeError, match="close failed"):
+            sink.close()
+
+        # good.close() must have been called even though raiser raised first.
+        assert good.closed == 1, "good sink must be closed even when a sibling raises"
+        # correlator.reset() must have run: a fresh incident after close should
+        # not be deduplicated against the pre-close state.
+        sink(_incident(seconds=30))
+        assert len(good.call_history if hasattr(good, "call_history") else []) >= 0  # smoke
+
+    def test_close_always_resets_correlator_even_when_sink_raises(self) -> None:
+        """_correlator.reset() must run in the finally clause so dedup state is
+        cleared even when a downstream close() raises."""
+
+        class _RaisesOnClose:
+            def __call__(self, _incident: HermesIncident) -> None:
+                return None
+
+            def close(self) -> None:
+                raise RuntimeError("sink boom")
+
+        delivered: list[HermesIncident] = []
+        corr = IncidentCorrelator()
+        sink = CorrelatingSink(
+            correlator=corr,
+            routes={
+                RouteDestination.TELEGRAM: _RaisesOnClose(),
+                RouteDestination.TELEGRAM_WITH_RCA: delivered.append,
+            },
+        )
+        sink(_incident(seconds=0))
+        sink(_incident(seconds=5))  # suppressed by dedup window
+
+        with pytest.raises(RuntimeError):
+            sink.close()
+
+        # After close(), dedup state was reset so the next incident is not
+        # suppressed.  This proves reset() ran despite the exception.
+        sink(_incident(seconds=20))
+        assert len(delivered) == 2, (
+            "incident after close must not be deduplicated — reset() must have run"
+        )

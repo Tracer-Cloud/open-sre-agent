@@ -195,3 +195,36 @@ class TestAgentLifecycle:
             assert agent.is_running is False
         finally:
             sink_released.set()
+
+    def test_stop_does_not_discard_tailer_pending_lines(self, tmp_path: Path) -> None:
+        """_run() must not break out of the tailer loop early on stop_event: the
+        tailer already drains _pending_lines before exiting, so an early break in
+        the agent loop discards lines the tailer has already buffered."""
+        log = tmp_path / "errors.log"
+        # Write enough lines that the tailer buffers a full chunk before the
+        # agent even starts, so they land in _pending_lines before any poll.
+        lines = [f"2026-05-12 00:00:{i:02d},000 ERROR root: line {i}\n" for i in range(15)]
+        log.write_text("".join(lines), encoding="utf-8")
+
+        emitted: list[HermesIncident] = []
+        agent = HermesAgent(
+            sink=emitted.append,
+            log_path=log,
+            poll_interval_s=0.01,
+            from_start=True,
+            classifier=IncidentClassifier(
+                warning_burst_threshold=100,
+                warning_burst_window_s=300.0,
+            ),
+        )
+        agent.start()
+        # Give the agent time to read the file and buffer lines.
+        time.sleep(0.3)
+        agent.stop()
+
+        # Every distinct ERROR line should have produced an incident; we
+        # need at least one to confirm pending lines were not discarded.
+        assert len(emitted) >= 1, (
+            "agent discarded buffered lines — early stop_event break in _run() "
+            "is skipping lines the tailer already queued in _pending_lines"
+        )

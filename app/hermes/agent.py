@@ -169,8 +169,11 @@ class HermesAgent:
     def _run(self) -> None:
         try:
             for line in self._tailer:
-                if self._stop_event.is_set():
-                    break
+                # Do NOT break here on stop_event: FileTailer.__iter__ already
+                # drains _pending_lines before exiting when the stop event fires.
+                # An early break here would discard lines that the tailer has
+                # already buffered, silently defeating the pending-line drain
+                # that was added to prevent exactly that data loss.
                 with self._pipeline_lock:
                     record = parse_log_line(line, prev_level=self._prev_level)
                     if record is None:

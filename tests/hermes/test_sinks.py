@@ -364,3 +364,27 @@ class TestDispatcherIntegration:
         assert callable(sink)
         assert len(calls) == 1
         assert len(bridge_calls) == 1
+
+    def test_run_bridge_in_pool_returns_sink_closed_when_executor_is_none(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """_run_bridge_in_pool must handle a None executor gracefully instead
+        of raising AssertionError (which would crash under optimised bytecode or
+        after a concurrent close())."""
+        dispatcher, calls = _dispatcher(monkeypatch)
+
+        def _bridge(_incident: HermesIncident) -> str | None:
+            return "should not be called"
+
+        sink = TelegramSink(
+            dispatcher,
+            investigation_bridge=_bridge,
+            config=TelegramSinkConfig(bridge_run_inline=False, bridge_workers=1),
+        )
+        # Manually null the executor to simulate the race between close() and
+        # an in-flight _run_bridge_in_pool call.
+        sink._bridge_executor = None  # type: ignore[attr-defined]
+
+        # Calling the pooled bridge path directly must return sink_closed, not raise.
+        result = sink._run_bridge_in_pool(_bridge, _incident(severity=IncidentSeverity.HIGH))  # type: ignore[attr-defined]
+        assert "sink_closed" in result.state

@@ -250,10 +250,13 @@ class TelegramSink:
     def _run_bridge_in_pool(
         self, bridge: InvestigationBridge, incident: HermesIncident
     ) -> _InvestigationResult:
-        # The executor is guaranteed non-None on this path (see
-        # _maybe_investigate); assert for the type checker.
+        # Caller (_maybe_investigate) only reaches this branch when the
+        # executor is not None; guard defensively rather than asserting so
+        # the path is safe under optimised bytecode (-O) and across any
+        # future refactor that may relax the precondition.
         executor = self._bridge_executor
-        assert executor is not None
+        if executor is None:
+            return _InvestigationResult.sink_closed()
 
         future: Future[str | None] = executor.submit(bridge, incident)
         timeout = self._config.bridge_timeout_s

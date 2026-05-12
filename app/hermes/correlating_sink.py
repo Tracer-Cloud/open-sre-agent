@@ -114,21 +114,44 @@ class CorrelatingSink:
                 self._metrics["sink_errors"] += 1
 
     def close(self) -> None:
-        """Close downstream sinks (if supported) and reset correlator state."""
+        """Close downstream sinks (if supported) and reset correlator state.
+
+        Every downstream sink's ``close()`` is called even if an earlier one
+        raises, and ``_correlator.reset()`` always runs in the finally clause
+        so :class:`~app.hermes.sinks.TelegramSink` thread-pool workers are
+        never leaked by an exception from a sibling sink.
+        """
+        errors: list[BaseException] = []
         seen: set[int] = set()
-        for sink_fn in self._routes.values():
-            key = id(sink_fn)
-            if key in seen:
-                continue
-            seen.add(key)
-            close_fn = getattr(sink_fn, "close", None)
-            if callable(close_fn):
-                close_fn()
-        if self._default_route is not None and id(self._default_route) not in seen:
-            close_fn = getattr(self._default_route, "close", None)
-            if callable(close_fn):
-                close_fn()
-        self._correlator.reset()
+
+        candidates: list[IncidentSinkFn] = list(self._routes.values())
+        if self._default_route is not None:
+            candidates.append(self._default_route)
+
+        try:
+            for sink_fn in candidates:
+                key = id(sink_fn)
+                if key in seen:
+                    continue
+                seen.add(key)
+                close_fn = getattr(sink_fn, "close", None)
+                if not callable(close_fn):
+                    continue
+                try:
+                    close_fn()
+                except Exception as exc:  # noqa: BLE001
+                    logger.exception(
+                        "error closing downstream sink %r during CorrelatingSink.close()",
+                        sink_fn,
+                    )
+                    errors.append(exc)
+        finally:
+            self._correlator.reset()
+
+        if errors:
+            # Re-raise the first exception after all sinks have been given a
+            # chance to close.  The correlator is already reset at this point.
+            raise errors[0]
 
     def metrics_snapshot(self) -> dict[str, int]:
         """Return a copy of the running counters. Useful for ops dashboards.
