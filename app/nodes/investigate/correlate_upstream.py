@@ -19,7 +19,9 @@ class _UpstreamEvidenceProvider(Protocol):
         service_name: str,
         window_start: str,
         window_end: str,
-    ) -> UpstreamEvidenceBundle: ...
+    ) -> UpstreamEvidenceBundle:
+        """Collect upstream evidence for the current incident window."""
+        raise NotImplementedError
 
 
 def _empty_correlation() -> dict[str, list[dict[str, Any]]]:
