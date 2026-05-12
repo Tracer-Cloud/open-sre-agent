@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from typing import TYPE_CHECKING, Any, NoReturn
 
 from langsmith import traceable
@@ -148,7 +148,7 @@ def stream_investigation_cli(
     alert_name: str | None = None,
     pipeline_name: str | None = None,
     severity: str | None = None,
-) -> Iterator[StreamEvent]:
+) -> Generator[StreamEvent]:
     """Stream investigation events locally via ``astream_events``.
 
     Bridges the async LangGraph streaming API into a synchronous iterator
