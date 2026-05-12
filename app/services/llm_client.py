@@ -711,7 +711,6 @@ class OpenAILLMClient:
             except GuardrailBlockedError:
                 raise
             except OpenAITimeoutError as err:
-                last_err = err
                 if attempt == max_attempts - 1:
                     raise RuntimeError(
                         _format_openai_connection_error(err, self._provider_label)
