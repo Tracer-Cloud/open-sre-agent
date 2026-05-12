@@ -18,9 +18,11 @@ def build_correlation_report(
     ranked_candidates: list[UpstreamCandidate],
     top_n: int = 3,
 ) -> CorrelationReport:
+    limit = top_n if top_n > 0 else len(ranked_candidates)
+
     return CorrelationReport(
         correlated_signals=correlated_signals,
-        most_likely_causal_drivers=tuple(ranked_candidates[:top_n]),
+        most_likely_causal_drivers=tuple(ranked_candidates[:limit]),
     )
 
 

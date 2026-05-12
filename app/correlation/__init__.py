@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.correlation.providers import NoopUpstreamEvidenceProvider
 from app.correlation.upstream import (
     LogSignal,
     MetricSeries,
@@ -11,6 +12,7 @@ from app.correlation.upstream import (
 __all__ = [
     "LogSignal",
     "MetricSeries",
+    "NoopUpstreamEvidenceProvider",
     "TopologyHint",
     "UpstreamEvidenceBundle",
     "UpstreamEvidenceProvider",
