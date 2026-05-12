@@ -29,13 +29,13 @@ make test-synthetic
 ```
 
 **2 — Live watch on a fixture file (Telegram required)**  
-Use any scenario’s `errors.log` as the tail source. From the repo root you can pass it directly — no temp dir or `HERMES_LOG_PATH` needed for this demo:
+Use a scenario’s `errors.log` that emits incidents under **default** classifier settings (see **Quick check with a bundled fixture** under [CLI: live watch](#cli-live-watch) — the `002-gateway-systemd-crash-loop` example matches the screenshot there). From the repo root:
 
 ```bash
 export TELEGRAM_BOT_TOKEN=…
 export TELEGRAM_DEFAULT_CHAT_ID=…
 uv run opensre hermes watch \
-  --log-path tests/synthetic/hermes/000-telegram-polling-conflict/errors.log \
+  --log-path tests/synthetic/hermes/002-gateway-systemd-crash-loop/errors.log \
   --from-start
 ```
 
