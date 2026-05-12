@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import os
 import re
+from collections import deque
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -312,10 +313,31 @@ def _read_segment(
     # the parent landed in an earlier poll. The classifier already
     # buffers the open traceback for us across calls.
     prev_level: LogLevel | None = None
-    # Continuation records inherit datetime.min from the parser, so ``since``
-    # filtering must follow the parent line's inclusion decision to avoid
-    # orphan traceback frames in the returned records.
-    parent_passes_since = since is None
+    # Continuation records carry no logger and inherit datetime.min, so
+    # ``since`` filtering must track the last non-continuation record's
+    # decision and propagate it to subsequent continuation lines.
+    #
+    # The tricky case is two loggers interleaving in the file:
+    #
+    #   t=20s  logger-A: Traceback …   → passes since filter
+    #   t=05s  logger-B: unrelated     → filtered by since filter
+    #   (continuation frame)           → belongs to logger-A's traceback,
+    #                                    must still pass
+    #
+    # A scalar "parent_passes_since" would be overwritten by logger-B and
+    # the continuation would inherit the wrong decision.  Instead we keep a
+    # FIFO queue of filter decisions for every header seen so far.  The queue
+    # is consumed lazily: the FIRST continuation in a new block pops the
+    # oldest (= logger-A's) entry; subsequent continuations in that same block
+    # peek at the front without popping.  Non-continuation headers push but
+    # never pop, so the arrival-order pairing is preserved.
+    #
+    # Invariant: in real Python logging a traceback is a single log-call, so
+    # each header produces exactly one block of consecutive continuations.
+    # The FIFO pairing matches physical write order.
+    since_queue: deque[bool] = deque()  # one entry per header, in order
+    prev_was_continuation = False  # tracks boundary for queue pop
+    last_parent_passes_since = since is None  # seed when queue is empty
     new_offset = start_offset
 
     with path.open("rb") as handle:
@@ -353,10 +375,20 @@ def _read_segment(
             if since is None:
                 passes_since = True
             elif record.is_continuation:
-                passes_since = parent_passes_since
+                if not prev_was_continuation and since_queue:
+                    # First continuation in a new block: pop the oldest header
+                    # entry (= the header that opened this traceback block).
+                    # The entry is kept at the front so subsequent lines in the
+                    # same block (prev_was_continuation=True) simply peek it.
+                    last_parent_passes_since = since_queue.popleft()
+                passes_since = last_parent_passes_since
             else:
                 passes_since = record.timestamp >= since
-                parent_passes_since = passes_since
+                # Push this header's decision.  We do NOT pop here — the
+                # previous block's entry is consumed by its own continuations.
+                since_queue.append(passes_since)
+                last_parent_passes_since = passes_since
+            prev_was_continuation = record.is_continuation
             would_return = passes_level and passes_since
             # If this line would become the (max_lines+1)th returned record,
             # rewind before it without calling observe(). The cursor must

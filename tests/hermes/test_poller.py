@@ -156,6 +156,75 @@ class TestSinceFilter:
         assert poll.records[0].is_continuation is False
         assert poll.records[1].is_continuation is True
 
+    def test_interleaved_loggers_continuations_follow_own_parent(self, tmp_path: Path) -> None:
+        """Regression: scalar parent_passes_since was overwritten by each
+        non-continuation record regardless of logger.  When logger-B (filtered)
+        appears between logger-A's header and a later logger-A record, the
+        *next* non-header record after logger-B inherits logger-B's decision.
+
+        Real Python logging emits each exception traceback atomically, so the
+        realistic interleaving is: a non-continuation from a filtered logger
+        appearing BETWEEN two non-continuation records of a passing logger.
+        The second logger-A record falls back to logger-A's own saved decision,
+        not logger-B's more recent one.
+
+        Layout (since = 10s):
+          t=20s  logger-A header  → passes (>= since)
+          t=05s  logger-B header  → filtered (< since)   ← would poison scalar
+          t=25s  logger-A record  → should pass (logger-A's own history)
+        """
+        p = tmp_path / "interleaved.log"
+        p.write_text(
+            "2026-05-12 00:00:20,000 ERROR logger-A: first message\n"
+            "2026-05-12 00:00:05,000 ERROR logger-B: old message\n"
+            "2026-05-12 00:00:25,000 ERROR logger-A: second message\n",
+            encoding="utf-8",
+        )
+        since = datetime(2026, 5, 12, 0, 0, 10)
+        poll = hermes_poller.poll_hermes_logs(
+            p,
+            hermes_poller.HermesLogCursor.at_start(p),
+            classifier=IncidentClassifier(),
+            since=since,
+        )
+        messages = [r.message for r in poll.records if not r.is_continuation]
+        # logger-B (t=05s) is before since, logger-A records (t=20s, t=25s) pass
+        assert "first message" in messages, "logger-A t=20s must pass since filter"
+        assert "second message" in messages, "logger-A t=25s must pass since filter"
+        assert "old message" not in messages, "logger-B t=05s must be excluded"
+
+    def test_continuation_follows_traceback_header_not_interleaved_logger(
+        self, tmp_path: Path
+    ) -> None:
+        """Regression: a continuation frame must inherit the filter decision of
+        its own parent header, not a different logger that wrote between the
+        header and the continuation.
+
+        Layout (since = 10s):
+          t=20s  logger-A: Traceback …  → passes
+          t=05s  logger-B: plain line   → filtered  ← old code poisons scalar
+          continuation frame            → must still pass (parent was logger-A)
+        """
+        p = tmp_path / "interleaved2.log"
+        p.write_text(
+            "2026-05-12 00:00:20,000 ERROR logger-A: Traceback (most recent call last):\n"
+            "2026-05-12 00:00:05,000 ERROR logger-B: unrelated\n"
+            '  File "/a.py", line 1, in foo\n',
+            encoding="utf-8",
+        )
+        since = datetime(2026, 5, 12, 0, 0, 10)
+        poll = hermes_poller.poll_hermes_logs(
+            p,
+            hermes_poller.HermesLogCursor.at_start(p),
+            classifier=IncidentClassifier(),
+            since=since,
+        )
+        continuations = [r for r in poll.records if r.is_continuation]
+        assert len(continuations) >= 1, (
+            "continuation after logger-A header must not be dropped because "
+            "logger-B (filtered) appeared between header and continuation"
+        )
+
 
 class TestRotationAndTruncation:
     def test_rotation_resets_offset_and_flags_detection(self, tmp_path: Path) -> None:
