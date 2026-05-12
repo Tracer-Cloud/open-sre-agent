@@ -6,6 +6,7 @@ from langgraph.graph.state import CompiledStateGraph
 from app.nodes import (
     node_adapt_window,
     node_agent_incident,
+    node_correlate_upstream,
     node_diagnose_root_cause,
     node_extract_alert,
     node_plan_actions,
@@ -53,6 +54,7 @@ def build_graph(config: None = None) -> CompiledStateGraph:
     graph.add_node("investigate_hypothesis", node_investigate_hypothesis)
     graph.add_node("merge_hypothesis_results", merge_hypothesis_results)
     graph.add_node("diagnose", _accept_langgraph_config(node_diagnose_root_cause))
+    graph.add_node("correlate_upstream", _accept_langgraph_config(node_correlate_upstream))
     graph.add_node("adapt_window", _accept_langgraph_config(node_adapt_window))
     graph.add_node("opensre_eval", node_opensre_llm_eval)
     graph.add_node("publish", _accept_langgraph_config(node_publish_findings))
@@ -97,10 +99,15 @@ def build_graph(config: None = None) -> CompiledStateGraph:
     graph.add_conditional_edges(
         "diagnose",
         route_investigation_loop,
-        {"investigate": "adapt_window", "opensre_eval": "opensre_eval", "publish": "publish"},
+        {
+            "investigate": "adapt_window",
+            "opensre_eval": "opensre_eval",
+            "publish": "correlate_upstream",
+        },
     )
     graph.add_edge("adapt_window", "plan_actions")
     graph.add_edge("opensre_eval", "publish")
+    graph.add_edge("correlate_upstream", "publish")
     graph.add_edge("publish", END)
 
     return graph.compile()
