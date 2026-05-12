@@ -312,6 +312,9 @@ def _read_segment(
     # the parent landed in an earlier poll. The classifier already
     # buffers the open traceback for us across calls.
     prev_level: LogLevel | None = None
+    # Initialised to start_offset so the return is always defined even if
+    # the file is empty and the while-loop body never executes.
+    new_offset = start_offset
 
     with path.open("rb") as handle:
         handle.seek(start_offset)
@@ -324,6 +327,7 @@ def _read_segment(
             line_start = handle.tell()
             raw = handle.readline()
             if not raw:
+                # EOF — cursor rests at the last byte we saw.
                 new_offset = line_start
                 break
             if len(raw) > budget:
@@ -331,12 +335,15 @@ def _read_segment(
                 new_offset = line_start
                 break
             budget -= len(raw)
+            # Post-line offset is deterministic from line_start + raw length;
+            # no extra tell() needed and there is exactly one assignment path
+            # per iteration that reaches the loop top again.
+            line_end = line_start + len(raw)
 
             line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
-
             record = parse_log_line(line, prev_level=prev_level)
             if record is None:
-                new_offset = handle.tell()
+                new_offset = line_end
                 continue
 
             passes_level = level_filter is None or record.level in level_filter
@@ -365,7 +372,6 @@ def _read_segment(
                 handle.seek(line_start)
                 break
 
-            new_offset = handle.tell()
             parsed_count += 1
             if not record.is_continuation:
                 prev_level = record.level
@@ -375,11 +381,9 @@ def _read_segment(
             for incident in classifier.observe(record):
                 incidents.append(incident)
 
-            if level_filter is not None and record.level not in level_filter:
-                continue
-            if since is not None and record.timestamp < since and not record.is_continuation:
-                continue
-            records.append(record)
+            if passes_level and passes_since:
+                records.append(record)
+            new_offset = line_end
 
     return tuple(records), tuple(incidents), new_offset, parsed_count, truncated
 
