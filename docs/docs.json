@@ -128,7 +128,8 @@
               "messaging/index",
               "messaging/slack",
               "messaging/discord",
-              "messaging/telegram"
+              "messaging/telegram",
+              "hermes"
             ]
           },
           {
