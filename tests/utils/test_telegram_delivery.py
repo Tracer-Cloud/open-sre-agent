@@ -13,6 +13,7 @@ from app.utils.telegram_delivery import (
     _TelegramTokenFilter,
     post_telegram_message,
     send_telegram_report,
+    truncate_for_telegram_html,
 )
 
 # ---------------------------------------------------------------------------
@@ -313,6 +314,29 @@ def test_send_telegram_report_truncates_to_4096(monkeypatch: pytest.MonkeyPatch)
     send_telegram_report(long_report, {"bot_token": "tok", "chat_id": "chat-1"})
     assert len(captured["text"]) == 4096
     assert captured["text"].endswith("…")
+
+
+def test_truncate_for_telegram_html_strips_incomplete_trailing_tag() -> None:
+    # Narrow limit so slice lands after ``<b>`` opens but well before ``</b>``.
+    src = "<b>" + ("m" * 80)
+    out = truncate_for_telegram_html(src, 18, suffix="…")
+    assert len(out) <= 18
+    assert out.endswith("…")
+    assert not out[:-1].replace("…", "").endswith("<")
+
+
+def test_truncate_for_telegram_html_balances_open_tags_within_limit() -> None:
+    long_inner = "z" * 6000
+    src = f"<b>start {long_inner}</b>"
+    out = truncate_for_telegram_html(src, 4096, suffix="…")
+    assert len(out) == 4096
+    assert out.endswith("…")
+    assert out.count("<b>") == out.count("</b>")
+
+
+def test_truncate_for_telegram_html_noop_when_under_limit() -> None:
+    s = "<i>ok</i>"
+    assert truncate_for_telegram_html(s, 50) == s
 
 
 # ---------------------------------------------------------------------------

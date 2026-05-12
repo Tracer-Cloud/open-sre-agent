@@ -103,6 +103,19 @@ def _sanitize_for_slack(text: str) -> str:
 _SLACK_LINK_RE = re.compile(r"<(https?://[^|>]+)(?:\|([^>]+))?>")
 
 
+def _star_pairs_to_bold_placeholders(line: str, bold_ph: dict[str, str]) -> str:
+    """Replace only paired ``*inner*`` spans (inner has no ``*``); lone ``*`` stay literal."""
+    out = line
+    while True:
+        m = re.search(r"\*([^*\n]+)\*", out)
+        if not m:
+            break
+        tok = f"«B{len(bold_ph)}»"
+        bold_ph[tok] = "<b>" + html.escape(m.group(1)) + "</b>"
+        out = out[: m.start()] + tok + out[m.end() :]
+    return out
+
+
 def _to_telegram_html_body(text: str) -> str:
     """Convert mixed Slack-style text (headers, *bold*, `code`, <url|label>) to Telegram HTML."""
     placeholders: dict[str, str] = {}
@@ -125,14 +138,12 @@ def _to_telegram_html_body(text: str) -> str:
         if hdr:
             out_lines.append("<b>" + html.escape(hdr.group(1).strip()) + "</b>")
             continue
-        parts = line.split("*")
-        segs: list[str] = []
-        for i, part in enumerate(parts):
-            if i % 2 == 0:
-                segs.append(html.escape(part))
-            else:
-                segs.append("<b>" + html.escape(part) + "</b>")
-        out_lines.append("".join(segs))
+        bold_ph: dict[str, str] = {}
+        starred = _star_pairs_to_bold_placeholders(line, bold_ph)
+        escaped = html.escape(starred)
+        for token, inner in sorted(bold_ph.items(), key=lambda kv: -len(kv[0])):
+            escaped = escaped.replace(token, inner)
+        out_lines.append(escaped)
 
     merged = "\n".join(out_lines)
     for token, chunk in sorted(placeholders.items(), key=lambda kv: -len(kv[0])):

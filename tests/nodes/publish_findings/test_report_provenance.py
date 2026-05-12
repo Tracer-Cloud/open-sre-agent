@@ -55,6 +55,18 @@ def test_build_report_context_adds_source_provenance() -> None:
     )
 
 
+def test_format_telegram_message_does_not_treat_lonely_asterisk_as_bold() -> None:
+    state = _make_state()
+    state["severity"] = "warning"
+    state["alert_name"] = "Unit"
+    state["pipeline_name"] = "pipe"
+    state["root_cause"] = "Check 2 * 3 = 6 before scaling"
+    ctx = build_report_context(state)
+    body = format_telegram_message(ctx)
+    assert "2 * 3" in body
+    assert "<b>3</b>" not in body
+
+
 def test_format_telegram_message_omits_banner_only_root_cause() -> None:
     state = _make_state()
     state["severity"] = "info"
@@ -67,10 +79,7 @@ def test_format_telegram_message_omits_banner_only_root_cause() -> None:
     ctx = build_report_context(state)
     body = format_telegram_message(ctx)
     assert body.count("k8s-eks-synthetic") == 1
-    assert (
-        "Scheduled Health Check — payments-api on k8s-eks-synthetic (severity: info)"
-        not in body
-    )
+    assert "Scheduled Health Check — payments-api on k8s-eks-synthetic (severity: info)" not in body
 
 
 def test_format_telegram_message_uses_html_and_severity_header() -> None:
