@@ -16,4 +16,7 @@ def rank_upstream_candidates(
             candidate.name,
         ),
     )
-    return ranked[:limit] if limit is not None else ranked
+    if limit is None or limit < 0:
+        return ranked
+
+    return ranked[:limit]

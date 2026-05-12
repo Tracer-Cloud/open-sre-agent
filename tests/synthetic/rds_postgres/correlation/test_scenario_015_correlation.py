@@ -18,7 +18,7 @@ from tests.synthetic.rds_postgres.correlation.topology import (
     score_topology_adjacency,
 )
 
-SCENARIO_DIR = Path("tests/synthetic/rds_postgres/015-mysql-ec2-load-attribution")
+SCENARIO_DIR = Path(__file__).resolve().parent.parent / "015-mysql-ec2-load-attribution"
 
 
 def _load_json(filename: str) -> dict[str, Any]:
