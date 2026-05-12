@@ -65,13 +65,17 @@ def test_adapt_window_unconditionally_returns_to_plan_actions() -> None:
 
 
 def test_terminate_paths_bypass_adapt_window() -> None:
-    """Terminal routing decisions go straight from ``diagnose`` to
-    ``opensre_eval`` or ``publish`` — adaptation is never run on a
-    terminating iteration."""
+    """Terminal routing decisions bypass ``adapt_window``.
+
+    The publish path now goes through ``correlate_upstream`` before
+    ``publish`` so correlation can be attached to the final report without
+    running window adaptation on a terminating iteration.
+    """
     ends = _branch_ends("diagnose", "route_investigation_loop")
     assert ends is not None
     assert ends.get("opensre_eval") == "opensre_eval"
-    assert ends.get("publish") == "publish"
+    assert ends.get("publish") == "correlate_upstream"
+    assert ("correlate_upstream", "publish") in _unconditional_edges()
     # And nothing else feeds adapt_window:
     incoming_to_adapt = [(src, dst) for src, dst in _builder().edges if dst == "adapt_window"]
     incoming_branches_to_adapt = [
