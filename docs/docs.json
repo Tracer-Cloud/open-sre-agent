@@ -128,8 +128,7 @@
               "messaging/index",
               "messaging/slack",
               "messaging/discord",
-              "messaging/telegram",
-              "hermes"
+              "messaging/telegram"
             ]
           },
           {
@@ -141,6 +140,7 @@
               "mongodb",
               "mysql",
               "openclaw",
+              "hermes",
               "opensearch",
               "postgresql",
               "prefect",
