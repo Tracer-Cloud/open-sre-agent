@@ -91,6 +91,16 @@ def test_repeat_rule_only_fires_at_threshold() -> None:
     assert len(incident.records) == 3
 
 
+def test_repeat_rule_crash_loop_ignores_info_level_restart_spam() -> None:
+    """INFO startup lines must not count toward crash_loop — same min_level
+    contract as :class:`PatternRule`."""
+    crash = next(r for r in default_pattern_rules() if r.name == "crash_loop")
+    assert isinstance(crash, RepeatRule)
+    msg = "agent restarted after unexpected exit"
+    for i in range(5):
+        assert crash.evaluate(_rec(msg, level=LogLevel.INFO, seconds=i * 5)) is None
+
+
 def test_repeat_rule_window_ages_out_old_hits() -> None:
     crash = next(r for r in default_pattern_rules() if r.name == "crash_loop")
     assert isinstance(crash, RepeatRule)

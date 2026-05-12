@@ -93,10 +93,13 @@ class RepeatRule:
     patterns: tuple[re.Pattern[str], ...]
     threshold: int
     window: timedelta
+    min_level: LogLevel = LogLevel.WARNING
     _hits: dict[str, deque[LogRecord]] = field(default_factory=dict)
 
     def evaluate(self, record: LogRecord) -> HermesIncident | None:
         if record.is_continuation:
+            return None
+        if record.level.severity_rank < self.min_level.severity_rank:
             return None
         if not any(p.search(record.message) or p.search(record.raw) for p in self.patterns):
             return None
@@ -233,6 +236,7 @@ def default_pattern_rules() -> list[PatternRule | RepeatRule]:
             ),
             threshold=3,
             window=timedelta(seconds=120),
+            min_level=LogLevel.WARNING,
         ),
     ]
 
