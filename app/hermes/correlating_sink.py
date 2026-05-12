@@ -113,6 +113,23 @@ class CorrelatingSink:
             with self._lock:
                 self._metrics["sink_errors"] += 1
 
+    def close(self) -> None:
+        """Close downstream sinks (if supported) and reset correlator state."""
+        seen: set[int] = set()
+        for sink_fn in self._routes.values():
+            key = id(sink_fn)
+            if key in seen:
+                continue
+            seen.add(key)
+            close_fn = getattr(sink_fn, "close", None)
+            if callable(close_fn):
+                close_fn()
+        if self._default_route is not None and id(self._default_route) not in seen:
+            close_fn = getattr(self._default_route, "close", None)
+            if callable(close_fn):
+                close_fn()
+        self._correlator.reset()
+
     def metrics_snapshot(self) -> dict[str, int]:
         """Return a copy of the running counters. Useful for ops dashboards.
 

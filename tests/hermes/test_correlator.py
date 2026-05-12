@@ -281,3 +281,40 @@ class TestCorrelatingSink:
         assert fp_escalated == f"{fp_first}:escalated", (
             "escalated incident must use ':escalated'-suffixed fingerprint"
         )
+
+    def test_close_resets_correlator_state(self) -> None:
+        delivered: list[HermesIncident] = []
+        corr = IncidentCorrelator()
+        sink = CorrelatingSink(
+            correlator=corr,
+            routes={RouteDestination.TELEGRAM_WITH_RCA: delivered.append},
+        )
+        sink(_incident(seconds=0))
+        sink(_incident(seconds=10))  # suppressed by dedup
+        sink.close()
+        sink(_incident(seconds=20))
+        assert len(delivered) == 2
+
+    def test_close_propagates_once_for_shared_downstream_sink(self) -> None:
+        class _Closeable:
+            def __init__(self) -> None:
+                self.closed = 0
+
+            def __call__(self, _incident: HermesIncident) -> None:
+                return None
+
+            def close(self) -> None:
+                self.closed += 1
+
+        closeable = _Closeable()
+        corr = IncidentCorrelator()
+        sink = CorrelatingSink(
+            correlator=corr,
+            routes={
+                RouteDestination.TELEGRAM: closeable,
+                RouteDestination.TELEGRAM_WITH_RCA: closeable,
+            },
+            default_route=closeable,
+        )
+        sink.close()
+        assert closeable.closed == 1

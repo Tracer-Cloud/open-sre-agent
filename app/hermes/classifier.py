@@ -93,7 +93,7 @@ class IncidentClassifier:
         if use_default_pattern_rules:
             rules.extend(default_pattern_rules())
         if pattern_rules:
-            rules.extend(pattern_rules)
+            rules.extend(_clone_rule(rule) for rule in pattern_rules)
         self._pattern_rules = rules
 
     def observe(self, record: LogRecord) -> list[HermesIncident]:
@@ -281,6 +281,26 @@ def _message_signature(message: str) -> str:
     normalized = _NUM_RE.sub("<num>", normalized)
     normalized = _WS_RE.sub(" ", normalized).strip()
     return normalized[:120]
+
+
+def _clone_rule(rule: PatternRule | RepeatRule) -> PatternRule | RepeatRule:
+    """Return an equivalent rule instance with isolated mutable state.
+
+    PatternRule is immutable so reuse is safe. RepeatRule carries mutable
+    per-logger hit buckets; cloning prevents accidental cross-classifier
+    state sharing when callers pass the same rule instance to multiple
+    IncidentClassifier objects.
+    """
+    if isinstance(rule, PatternRule):
+        return rule
+    return RepeatRule(
+        name=rule.name,
+        severity=rule.severity,
+        title_template=rule.title_template,
+        patterns=rule.patterns,
+        threshold=rule.threshold,
+        window=rule.window,
+    )
 
 
 __all__ = [

@@ -8,6 +8,7 @@ import pytest
 
 from app.hermes.classifier import IncidentClassifier, classify_all
 from app.hermes.incident import IncidentSeverity, LogLevel, LogRecord
+from app.hermes.rules import RepeatRule, default_pattern_rules
 
 
 def _record(
@@ -130,6 +131,38 @@ class TestWarningBurstRule:
             out.extend(classifier.observe(_record(logger="")))
 
         assert out == []
+
+    def test_repeat_rule_state_is_isolated_per_classifier_instance(self) -> None:
+        shared_repeat = next(
+            rule
+            for rule in default_pattern_rules()
+            if isinstance(rule, RepeatRule) and rule.name == "crash_loop"
+        )
+        c1 = IncidentClassifier(pattern_rules=[shared_repeat], use_default_pattern_rules=False)
+        c2 = IncidentClassifier(pattern_rules=[shared_repeat], use_default_pattern_rules=False)
+        base = datetime(2026, 5, 12, 0, 0, 0)
+        msg = "agent restarted after unexpected exit"
+
+        out1 = c1.observe(_record(level=LogLevel.ERROR, message=msg, timestamp=base))
+        out2 = c1.observe(
+            _record(
+                level=LogLevel.ERROR,
+                message=msg,
+                timestamp=base + timedelta(seconds=10),
+            )
+        )
+        assert not any(i.rule == "crash_loop" for i in out1)
+        assert not any(i.rule == "crash_loop" for i in out2)
+        # If RepeatRule._hits were shared between classifiers, this third
+        # observation from c2 would fire crash_loop; it must not.
+        out3 = c2.observe(
+            _record(
+                level=LogLevel.ERROR,
+                message=msg,
+                timestamp=base + timedelta(seconds=20),
+            )
+        )
+        assert not any(i.rule == "crash_loop" for i in out3)
 
 
 class TestTracebackRule:
