@@ -225,6 +225,29 @@ class TestSinceFilter:
             "logger-B (filtered) appeared between header and continuation"
         )
 
+    def test_filtered_pre_since_line_before_traceback_does_not_drop_frames(
+        self, tmp_path: Path
+    ) -> None:
+        """A filtered non-traceback line before a passing Traceback must not sit
+        in ``since_queue`` and poison the first frame's ``passes_since``."""
+        p = tmp_path / "since_traceback.log"
+        p.write_text(
+            "2026-05-12 00:00:05,000 ERROR stale: noise before since window\n"
+            "2026-05-12 00:00:20,000 ERROR logger: Traceback (most recent call last):\n"
+            '  File "/x.py", line 1, in y\n',
+            encoding="utf-8",
+        )
+        since = datetime(2026, 5, 12, 0, 0, 10)
+        poll = hermes_poller.poll_hermes_logs(
+            p,
+            hermes_poller.HermesLogCursor.at_start(p),
+            classifier=IncidentClassifier(),
+            since=since,
+        )
+        assert any(r.is_continuation and "x.py" in r.message for r in poll.records), (
+            "traceback frame must appear in returned records after a filtered pre-since line"
+        )
+
 
 class TestRotationAndTruncation:
     def test_rotation_resets_offset_and_flags_detection(self, tmp_path: Path) -> None:

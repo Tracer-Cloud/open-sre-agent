@@ -46,6 +46,19 @@ from app.hermes.parser import parse_log_line
 _DEFAULT_MAX_BYTES: Final[int] = 64 * 1024 * 1024
 
 
+def _opens_python_traceback(message: str) -> bool:
+    """True when *message* starts the standard logging exception header.
+
+    Only such lines are queued for ``since`` inheritance: every other
+    non-continuation line updates ``last_parent_passes_since`` but must not
+    occupy a FIFO slot, otherwise a filtered pre-``since`` noise line sits
+    ahead of a passing Traceback header and the first frame pops the wrong
+    decision.
+    """
+    lower = message.casefold()
+    return "traceback" in lower and "most recent call" in lower
+
+
 @dataclass(frozen=True, slots=True)
 class HermesLogCursor:
     """Resumable read position in a Hermes log file.
@@ -327,16 +340,15 @@ def _read_segment(
     #
     # A scalar "parent_passes_since" would be overwritten by logger-B and
     # the continuation would inherit the wrong decision.  Instead we keep a
-    # FIFO queue of filter decisions for every header seen so far.  The queue
-    # is consumed lazily: the FIRST continuation in a new block pops the
-    # oldest (= logger-A's) entry; subsequent continuations in that same block
-    # peek at the front without popping.  Non-continuation headers push but
-    # never pop, so the arrival-order pairing is preserved.
+    # FIFO queue of filter decisions for Traceback **openers** only (see
+    # ``_opens_python_traceback``).  Non-traceback headers update
+    # ``last_parent_passes_since`` but are not queued, so a filtered line
+    # before a passing Traceback does not steal the continuation's decision.
     #
     # Invariant: in real Python logging a traceback is a single log-call, so
     # each header produces exactly one block of consecutive continuations.
     # The FIFO pairing matches physical write order.
-    since_queue: deque[bool] = deque()  # one entry per header, in order
+    since_queue: deque[bool] = deque()  # one entry per Traceback opener, in order
     prev_was_continuation = False  # tracks boundary for queue pop
     last_parent_passes_since = since is None  # seed when queue is empty
     new_offset = start_offset
@@ -396,9 +408,11 @@ def _read_segment(
                 passes_since = last_parent_passes_since
             else:
                 passes_since = record.timestamp >= since
-                # Push this header's decision.  We do NOT pop here — the
-                # previous block's entry is consumed by its own continuations.
-                since_queue.append(passes_since)
+                # Push this Traceback opener's decision.  Plain log lines do
+                # not open continuation blocks in our format and must not
+                # consume FIFO slots ahead of a later Traceback header.
+                if _opens_python_traceback(record.message):
+                    since_queue.append(passes_since)
                 last_parent_passes_since = passes_since
             prev_was_continuation = record.is_continuation
             would_return = passes_level and passes_since
