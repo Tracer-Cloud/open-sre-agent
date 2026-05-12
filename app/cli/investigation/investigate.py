@@ -19,6 +19,8 @@ if TYPE_CHECKING:
 
 _logger = logging.getLogger(__name__)
 
+_SESSION_EVENT_POLL_S = 0.25
+
 
 def _check_llm_settings() -> None:
     """Validate LLM settings early and surface misconfiguration as a structured error."""
@@ -153,6 +155,10 @@ def stream_investigation_cli(
     using a background thread + queue so events are yielded in real time
     (not batched).  The same ``StreamRenderer`` used for remote
     investigations can render local runs identically.
+
+    On :exc:`KeyboardInterrupt` the background asyncio task is cancelled
+    and the thread is joined so Ctrl+C terminates cleanly instead of
+    leaving an orphaned LangGraph run in flight.
     """
     import queue
     import threading
@@ -167,10 +173,13 @@ def stream_investigation_cli(
         severity=severity,
     )
 
-    event_queue: queue.Queue[StreamEvent | Exception | None] = queue.Queue()
+    event_queue: queue.Queue[StreamEvent | BaseException | None] = queue.Queue()
+    loop_ref: dict[str, asyncio.AbstractEventLoop] = {}
+    pump_task_ref: dict[str, asyncio.Task[None]] = {}
 
     def _run_async() -> None:
         loop = asyncio.new_event_loop()
+        loop_ref["loop"] = loop
         try:
 
             async def _pump() -> None:
@@ -182,7 +191,12 @@ def stream_investigation_cli(
                 ):
                     event_queue.put(evt)
 
-            loop.run_until_complete(_pump())
+            task = loop.create_task(_pump())
+            pump_task_ref["task"] = task
+            try:
+                loop.run_until_complete(task)
+            except asyncio.CancelledError:
+                event_queue.put(KeyboardInterrupt("investigation cancelled"))
         except Exception as exc:
             event_queue.put(exc)
         finally:
@@ -192,16 +206,35 @@ def stream_investigation_cli(
     thread = threading.Thread(target=_run_async, daemon=True)
     thread.start()
 
-    while True:
-        item = event_queue.get()
-        if isinstance(item, Exception):
-            thread.join()
-            _reraise_investigation_failure(item)
-        if item is None:
-            break
-        yield item
+    def _cancel_pump() -> None:
+        loop = loop_ref.get("loop")
+        task = pump_task_ref.get("task")
+        if loop is None or task is None or loop.is_closed():
+            return
+        loop.call_soon_threadsafe(task.cancel)
 
-    thread.join()
+    try:
+        while True:
+            try:
+                item = event_queue.get(timeout=_SESSION_EVENT_POLL_S)
+            except queue.Empty:
+                continue
+            if isinstance(item, BaseException):
+                thread.join()
+                _reraise_investigation_failure(item)
+            if item is None:
+                break
+            yield item
+    except KeyboardInterrupt:
+        _cancel_pump()
+        raise
+    finally:
+        thread.join(timeout=5)
+        if thread.is_alive():
+            _logger.warning(
+                "investigation thread did not terminate within 5s after cancellation; "
+                "an LLM call may still be in flight"
+            )
 
 
 def run_investigation_cli_streaming(
@@ -225,16 +258,19 @@ def run_investigation_cli_streaming(
         severity=severity,
     )
     renderer = StreamRenderer(local=True)
-    final_state = renderer.render_stream(events)
+    try:
+        final_state = renderer.render_stream(events)
+    except KeyboardInterrupt:
+        # Force-close the generator so the background thread's finally block
+        # runs and the async task is cancelled before we re-raise.
+        events.close()
+        raise
     return {
         "report": final_state.get("slack_message", final_state.get("report", "")),
         "problem_md": final_state.get("problem_md", ""),
         "root_cause": final_state.get("root_cause", ""),
         "is_noise": final_state.get("is_noise", False),
     }
-
-
-_SESSION_EVENT_POLL_S = 0.25
 
 
 def _run_session_alert_payload(

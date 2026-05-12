@@ -148,6 +148,31 @@ def test_stream_investigation_cli_raises_queued_exception_immediately(
         next(events)
 
 
+def test_stream_investigation_cli_closes_cleanly_on_generator_close(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Closing the generator must not hang and must clean up the background thread."""
+    import asyncio
+
+    async def fake_astream_investigation(*args: object, **kwargs: object):
+        yield StreamEvent("metadata", data={"run_id": "run-123"})
+        # Simulate a long-running stream
+        await asyncio.sleep(1000)
+
+    monkeypatch.setattr("app.cli.investigation.investigate.LLMSettings.from_env", object)
+    monkeypatch.setattr(
+        "app.pipeline.runners.astream_investigation",
+        fake_astream_investigation,
+    )
+
+    events = stream_investigation_cli(raw_alert={"alert_name": "PayloadAlert"})
+    first = next(events)
+    assert first.event_type == "metadata"
+
+    # Closing the generator should trigger cleanup without hanging
+    events.close()
+
+
 def test_run_investigation_cli_maps_cli_auth_to_opensre_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

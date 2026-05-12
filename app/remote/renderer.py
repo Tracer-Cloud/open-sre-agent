@@ -368,10 +368,12 @@ class StreamRenderer:
         if not self._local:
             _print_connection_banner()
 
+        _interrupted = False
         try:
             for event in events:
                 self._handle_event(event)
         except KeyboardInterrupt:
+            _interrupted = True
             get_analytics().capture(
                 Event.INVESTIGATION_ABANDONED,
                 {
@@ -388,7 +390,8 @@ class StreamRenderer:
             # report the user has been watching stream live would be
             # silently discarded before the exception propagates.
             self._finish_active_node()
-            self._print_report()
+            if not _interrupted:
+                self._print_report()
         return dict(self._final_state)
 
     def _handle_event(self, event: StreamEvent) -> None:
