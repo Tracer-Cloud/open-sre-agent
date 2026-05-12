@@ -115,11 +115,10 @@ class CorrelatingSink:
         with self._lock:
             return dict(self._metrics)
 
-    def _count_suppressed(self, decision: CorrelatorDecision) -> None:
+    def _count_suppressed(self, _decision: CorrelatorDecision) -> None:
+        # Suppressed implies within_dedup with no escalation (see correlator).
         with self._lock:
             self._metrics["suppressed"] += 1
-            if decision.escalated_from is not None:
-                self._metrics["escalated"] += 1
 
     def _count_dropped(self, decision: CorrelatorDecision) -> None:
         with self._lock:

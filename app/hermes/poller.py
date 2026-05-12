@@ -362,14 +362,19 @@ def _read_segment(
             if max_lines is not None and len(records) >= max_lines:
                 # Cap reached: rewind before this line so the cursor
                 # retries it on the next poll instead of silently
-                # dropping it. Count remaining bytes as truncated using
-                # file size to avoid reading the rest of the file.
-                handle.seek(0, 2)  # seek to end
-                remaining_bytes = handle.tell() - line_start
-                # Estimate remaining lines using average observed bytes/line
-                # to avoid reading all remaining content just to count them.
-                avg = (handle.tell() - start_offset) / max(parsed_count, 1)
-                truncated = max(1, int(remaining_bytes / max(avg, 1)))
+                # dropping it. Estimate backlog lines from remaining file
+                # bytes vs average bytes per *returned* record over the span
+                # we actually read (start_offset → line_start). Do not use
+                # (EOF - start_offset) / parsed_count — that mixes the whole
+                # tail with only pre-cap parses and skews the average.
+                file_size = path.stat().st_size
+                remaining_bytes = max(0, file_size - line_start)
+                consumed_bytes = max(0, line_start - start_offset)
+                avg_bytes_per_record = consumed_bytes / max(len(records), 1)
+                truncated = max(
+                    1,
+                    int(remaining_bytes / max(avg_bytes_per_record, 1.0)),
+                )
                 new_offset = line_start
                 handle.seek(line_start)
                 break
