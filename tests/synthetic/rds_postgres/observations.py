@@ -202,7 +202,8 @@ def _canonical_report_payload(
             "available_coverage": evidence_source_coverage["available_coverage"],
         },
         "correlation": correlation
-        or {
+        if correlation is not None
+        else {
             "correlated_signals": [],
             "most_likely_causal_drivers": [],
         },
