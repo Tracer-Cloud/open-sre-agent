@@ -655,6 +655,18 @@ def test_before_send_filters_nested_lists_of_dicts() -> None:
             "RuntimeError",
             "LLM API request failed after multiple retries. Try again in a few seconds.",
         ),
+        (
+            "RuntimeError",
+            "Cannot connect to Ollama API. Check your network connection and that the endpoint URL is reachable.",
+        ),
+        (
+            "RuntimeError",
+            "Cannot connect to Ollama API (SSL/TLS error). Verify the endpoint URL uses HTTPS and that no proxy is stripping TLS.",
+        ),
+        (
+            "RuntimeError",
+            "Cannot connect to Openrouter API. Check your network connection and that the endpoint URL is reachable.",
+        ),
     ],
 )
 def test_before_send_drops_operator_actionable_llm_errors(

@@ -57,6 +57,8 @@ _OPERATOR_ACTIONABLE_LLM_ERROR_PATTERNS: tuple[re.Pattern[str], ...] = (
     # Relay/proxy forwarding an invalid model group to Anthropic.
     re.compile(r"\bprovided model identifier is invalid\b", re.I),
     re.compile(r"\bLLM API request failed after multiple retries\b", re.I),
+    # Provider endpoint unreachable (Ollama down, bad URL, SSL misconfiguration).
+    re.compile(r"\bcannot connect to .+ api\b", re.I),
 )
 
 
