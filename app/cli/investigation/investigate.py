@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import threading
 from collections.abc import Generator, Iterator
@@ -224,7 +225,9 @@ def stream_investigation_cli(
         task = pump_task_ref.get("task")
         if loop is None or task is None or loop.is_closed():
             return
-        loop.call_soon_threadsafe(task.cancel)
+        with contextlib.suppress(RuntimeError):
+            # Loop may close between `is_closed()` and scheduling cancellation.
+            loop.call_soon_threadsafe(task.cancel)
 
     try:
         while True:
@@ -233,7 +236,7 @@ def stream_investigation_cli(
             except queue.Empty:
                 continue
             if isinstance(item, BaseException):
-                thread.join()
+                thread.join(timeout=5)
                 _reraise_investigation_failure(item)
             if item is None:
                 break
@@ -345,7 +348,9 @@ def _run_session_alert_payload(
         task = pump_task_ref.get("task")
         if loop is None or task is None or loop.is_closed():
             return
-        loop.call_soon_threadsafe(task.cancel)
+        with contextlib.suppress(RuntimeError):
+            # Loop may close between `is_closed()` and scheduling cancellation.
+            loop.call_soon_threadsafe(task.cancel)
 
     def _events() -> Iterator[StreamEvent]:
         try:
@@ -358,6 +363,7 @@ def _run_session_alert_payload(
                 except queue.Empty:
                     continue
                 if isinstance(item, BaseException):
+                    thread.join(timeout=5)
                     _reraise_investigation_failure(item)
                 if item is None:
                     return
