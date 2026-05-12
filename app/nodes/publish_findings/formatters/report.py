@@ -1,9 +1,13 @@
-"""Main report formatting and assembly for Slack messages."""
+"""RCA report formatting for Slack (mrkdwn / Block Kit) and Telegram (HTML)."""
 
+import html
 import re
 
-from app.nodes.publish_findings.formatters.base import format_slack_link
-from app.nodes.publish_findings.formatters.evidence import format_cited_evidence_section
+from app.nodes.publish_findings.formatters.base import format_html_link, format_slack_link
+from app.nodes.publish_findings.formatters.evidence import (
+    format_cited_evidence_section,
+    format_cited_evidence_section_html,
+)
 from app.nodes.publish_findings.formatters.infrastructure import (
     build_investigation_trace,
     format_pod_line,
@@ -94,6 +98,123 @@ def _sanitize_for_slack(text: str) -> str:
     result = re.sub(r"\*\*(.+?)\*\*", r"*\1*", result)
     result = re.sub(r"__(.+?)__", r"*\1*", result)
     return result
+
+
+_SLACK_LINK_RE = re.compile(r"<(https?://[^|>]+)(?:\|([^>]+))?>")
+
+
+def _to_telegram_html_body(text: str) -> str:
+    """Convert mixed Slack-style text (headers, *bold*, `code`, <url|label>) to Telegram HTML."""
+    placeholders: dict[str, str] = {}
+
+    def _put(chunk: str) -> str:
+        token = f"«{len(placeholders)}»"
+        placeholders[token] = chunk
+        return token
+
+    s = text
+    s = re.sub(r"`([^`]+)`", lambda m: _put("<code>" + html.escape(m.group(1)) + "</code>"), s)
+    s = _SLACK_LINK_RE.sub(
+        lambda m: _put(format_html_link(m.group(2) or m.group(1), m.group(1))),
+        s,
+    )
+
+    out_lines: list[str] = []
+    for line in s.splitlines():
+        hdr = re.match(r"^#{1,6}\s+(.+)$", line)
+        if hdr:
+            out_lines.append("<b>" + html.escape(hdr.group(1).strip()) + "</b>")
+            continue
+        parts = line.split("*")
+        segs: list[str] = []
+        for i, part in enumerate(parts):
+            if i % 2 == 0:
+                segs.append(html.escape(part))
+            else:
+                segs.append("<b>" + html.escape(part) + "</b>")
+        out_lines.append("".join(segs))
+
+    merged = "\n".join(out_lines)
+    for token, chunk in sorted(placeholders.items(), key=lambda kv: -len(kv[0])):
+        merged = merged.replace(token, chunk)
+    return merged
+
+
+def _severity_telegram_header(ctx: ReportContext) -> str:
+    """Severity emoji row aligned with Hermes Telegram sink conventions."""
+    raw = (ctx.get("severity") or "").strip()
+    lower = raw.lower()
+    emoji = {
+        "critical": "🔴",
+        "crit": "🔴",
+        "high": "🟠",
+        "error": "🟠",
+        "medium": "🟡",
+        "warning": "🟡",
+        "warn": "🟡",
+        "low": "🟢",
+        "info": "🟢",
+        "none": "⚪",
+        "healthy": "🟢",
+        "normal": "🟢",
+    }.get(lower, "⚠️")
+    display_sev = raw.upper() if raw else "UNKNOWN"
+    alert = html.escape(str(ctx.get("alert_name") or "Alert"))
+    pipeline = html.escape(str(ctx.get("pipeline_name") or "unknown"))
+    return f"{emoji} <b>{alert}</b> · {pipeline}\n<i>severity: {html.escape(display_sev)}</i>"
+
+
+def _render_claim_lines_telegram(ctx: ReportContext) -> tuple[list[str], list[str]]:
+    catalog = ctx.get("evidence_catalog") or {}
+    evidence = ctx.get("evidence") or {}
+
+    validated_lines: list[str] = []
+    for claim_data in ctx.get("validated_claims", []):
+        claim = claim_data.get("claim", "")
+        claim = _resolve_evidence_tags(claim, evidence)
+        claim = _sanitize_for_slack(claim)
+        evidence_ids = claim_data.get("evidence_ids", [])
+        evidence_labels = claim_data.get("evidence_labels", [])
+        evidence_list: list[str] = []
+        if evidence_ids:
+            for eid in evidence_ids:
+                entry = catalog.get(eid, {})
+                disp = entry.get("display_id", eid)
+                url = entry.get("url")
+                evidence_list.append(format_html_link(str(disp), url or None))
+        elif evidence_labels:
+            evidence_list = [html.escape(str(x)) for x in evidence_labels]
+        ev_str = f" [{', '.join(evidence_list)}]" if evidence_list else ""
+        validated_lines.append(f"• {_to_telegram_html_body(claim)}{ev_str}")
+
+    non_validated_lines: list[str] = []
+    for cd in ctx.get("non_validated_claims", []):
+        raw = _sanitize_for_slack(cd.get("claim", ""))
+        non_validated_lines.append(f"• {_to_telegram_html_body(raw)}")
+
+    return validated_lines, non_validated_lines
+
+
+def render_cloudwatch_link_html(ctx: ReportContext) -> str:
+    """Telegram-HTML CloudWatch deep link, mirroring :func:`render_cloudwatch_link`."""
+    cw_url = ctx.get("cloudwatch_logs_url")
+    cw_group = ctx.get("cloudwatch_log_group")
+    cw_stream = ctx.get("cloudwatch_log_stream")
+
+    if cw_url:
+        safe = html.escape(str(cw_url), quote=True)
+        return f'\n<b>CloudWatch</b>: <a href="{safe}">View logs</a>\n'
+    if cw_group and cw_stream:
+        url = build_cloudwatch_url(ctx)
+        if url:
+            safe = html.escape(str(url), quote=True)
+            return f'\n<b>CloudWatch</b>: <a href="{safe}">View logs</a>\n'
+        return (
+            f"\n<b>CloudWatch Logs</b>\n"
+            f"Log Group: {html.escape(str(cw_group))}\n"
+            f"Log Stream: {html.escape(str(cw_stream))}\n"
+        )
+    return ""
 
 
 def _mrkdwn_section(text: str) -> "dict | None":
@@ -324,6 +445,74 @@ def format_slack_message(ctx: ReportContext) -> str:
 {cited_section}
 {cloudwatch_link}{meta_block}
 """
+
+
+def format_telegram_message(ctx: ReportContext) -> str:
+    """Format an HTML RCA message for Telegram (:meth:`parse_mode` ``HTML``).
+
+    Uses Telegram-supported tags and a Hermes-style severity emoji header, instead
+    of Slack mrkdwn (``<url|label>``, ``##`` headings) which render as plain text
+    without ``parse_mode``.
+    """
+    duration_seconds = ctx.get("investigation_duration_seconds")
+    alert_id = ctx.get("alert_id")
+    root_cause_sentence = _derive_root_cause_sentence(ctx)
+
+    if not root_cause_sentence:
+        root_cause_sentence = "Not determined (insufficient evidence)."
+
+    parts: list[str] = [_severity_telegram_header(ctx)]
+
+    rc = _to_telegram_html_body(root_cause_sentence)
+    top_log = _get_top_error_log(ctx.get("evidence") or {})
+    if top_log:
+        rc += "\n<code>" + html.escape(top_log) + "</code>"
+    parts.append(rc)
+
+    validated_lines, non_validated_lines = _render_claim_lines_telegram(ctx)
+    if validated_lines:
+        parts.append("<b>Findings</b>\n" + "\n".join(validated_lines))
+    if non_validated_lines:
+        parts.append("<b>Non-Validated Claims (Inferred)</b>\n" + "\n".join(non_validated_lines))
+
+    provenance_lines = _format_provenance_lines(ctx)
+    if provenance_lines:
+        prov = "\n".join(
+            "• " + _to_telegram_html_body(_sanitize_for_slack(pl.lstrip("• ").strip()))
+            for pl in provenance_lines
+        )
+        parts.append("<b>Provenance</b>\n" + prov)
+
+    remediation_steps = ctx.get("remediation_steps", [])
+    if remediation_steps:
+        ra = "\n".join(
+            "• " + _to_telegram_html_body(_sanitize_for_slack(str(step)))
+            for step in remediation_steps
+        )
+        parts.append("<b>Recommended Actions</b>\n" + ra)
+
+    trace_steps = build_investigation_trace(ctx)
+    if trace_steps:
+        tr = "\n".join(_to_telegram_html_body(step) for step in trace_steps)
+        parts.append("<b>Investigation Trace</b>\n" + tr)
+
+    cited_block = format_cited_evidence_section_html(ctx).strip()
+    if cited_block:
+        parts.append(cited_block)
+
+    cw_block = render_cloudwatch_link_html(ctx).strip()
+    if cw_block:
+        parts.append(cw_block)
+
+    meta_bits: list[str] = []
+    if duration_seconds is not None:
+        meta_bits.append(f"Timing: {duration_seconds}s")
+    if alert_id:
+        meta_bits.append(f"Alert ID: {alert_id}")
+    if meta_bits:
+        parts.append("<i>" + html.escape(" | ".join(meta_bits)) + "</i>")
+
+    return "\n\n".join(p for p in parts if p)
 
 
 # ---------------------------------------------------------------------------

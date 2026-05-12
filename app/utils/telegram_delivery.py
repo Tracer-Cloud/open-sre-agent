@@ -58,6 +58,7 @@ def post_telegram_message(
     bot_token: str,
     parse_mode: str = "",
     reply_to_message_id: str = "",
+    reply_markup: dict[str, Any] | None = None,
 ) -> tuple[bool, str, str]:
     """Call Telegram Bot API sendMessage endpoint.
 
@@ -67,6 +68,8 @@ def post_telegram_message(
     payload: dict[str, Any] = {"chat_id": chat_id, "text": text}
     if parse_mode:
         payload["parse_mode"] = parse_mode
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
     if reply_to_message_id and reply_to_message_id != "0":
         with contextlib.suppress(ValueError, TypeError):
             payload["reply_to_message_id"] = int(reply_to_message_id)
@@ -93,7 +96,13 @@ def post_telegram_message(
     return True, "", message_id
 
 
-def send_telegram_report(report: str, telegram_ctx: dict[str, Any]) -> tuple[bool, str]:
+def send_telegram_report(
+    report: str,
+    telegram_ctx: dict[str, Any],
+    *,
+    parse_mode: str = "HTML",
+    reply_markup: dict[str, Any] | None = None,
+) -> tuple[bool, str]:
     """Send a truncated report to Telegram. Returns (success, error)."""
     bot_token: str = str(telegram_ctx.get("bot_token") or "")
     chat_id: str = str(telegram_ctx.get("chat_id") or "")
@@ -102,6 +111,11 @@ def send_telegram_report(report: str, telegram_ctx: dict[str, Any]) -> tuple[boo
     reply_to_message_id: str = str(telegram_ctx.get("reply_to_message_id") or "")
     text = truncate(report, _MESSAGE_LIMIT, suffix="…")
     post_success, error, _ = post_telegram_message(
-        chat_id, text, bot_token, reply_to_message_id=reply_to_message_id
+        chat_id,
+        text,
+        bot_token,
+        parse_mode=parse_mode,
+        reply_to_message_id=reply_to_message_id,
+        reply_markup=reply_markup,
     )
     return (True, "") if post_success else (False, error)

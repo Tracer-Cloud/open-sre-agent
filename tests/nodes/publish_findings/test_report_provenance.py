@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from app.nodes.publish_findings.formatters.report import build_slack_blocks, format_slack_message
+from app.nodes.publish_findings.formatters.report import (
+    build_slack_blocks,
+    format_slack_message,
+    format_telegram_message,
+)
 from app.nodes.publish_findings.report_context import build_report_context
 
 
@@ -49,6 +53,19 @@ def test_build_report_context_adds_source_provenance() -> None:
     assert ctx["evidence_catalog"]["evidence/grafana/loki"]["provenance"] == (
         "instance=myorg.grafana.net, service=checkout-api, pipeline=checkout-service"
     )
+
+
+def test_format_telegram_message_uses_html_and_severity_header() -> None:
+    state = _make_state()
+    state["severity"] = "critical"
+    state["alert_name"] = "KubernetesJobFailed"
+    ctx = build_report_context(state)
+    body = format_telegram_message(ctx)
+    assert "🔴" in body
+    assert "<b>KubernetesJobFailed</b>" in body
+    assert "CRITICAL" in body
+    assert "##" not in body
+    assert "*Cited Evidence" not in body
 
 
 def test_format_slack_message_shows_provenance() -> None:

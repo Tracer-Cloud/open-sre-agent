@@ -130,6 +130,7 @@ def test_send_telegram_report_posts_to_chat(monkeypatch: pytest.MonkeyPatch) -> 
     assert "tok" in captured["url"]
     assert captured["json"]["chat_id"] == "chat-1"
     assert captured["json"]["text"] == "Report text"
+    assert captured["json"]["parse_mode"] == "HTML"
 
 
 def test_send_telegram_report_uses_reply_to_message_id(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -145,6 +146,25 @@ def test_send_telegram_report_uses_reply_to_message_id(monkeypatch: pytest.Monke
         {"bot_token": "tok", "chat_id": "chat-1", "reply_to_message_id": "77"},
     )
     assert captured["json"].get("reply_to_message_id") == 77
+
+
+def test_send_telegram_report_passes_reply_markup(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, Any] = {}
+
+    def _fake_post(url: str, *, json: dict[str, Any], **_kw: Any) -> MagicMock:
+        captured["json"] = json
+        return _mock_response(200, {"ok": True, "result": {"message_id": 7}})
+
+    monkeypatch.setattr("app.utils.delivery_transport.httpx.post", _fake_post)
+    markup = {"inline_keyboard": [[{"text": "Open", "url": "https://x"}]]}
+    ok, err = send_telegram_report(
+        "Hi",
+        {"bot_token": "tok", "chat_id": "c1"},
+        reply_markup=markup,
+    )
+    assert ok is True
+    assert err == ""
+    assert captured["json"]["reply_markup"] == markup
 
 
 def test_send_telegram_report_returns_false_on_api_error(monkeypatch: pytest.MonkeyPatch) -> None:

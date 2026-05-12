@@ -1,8 +1,11 @@
 """Evidence formatting and citation for RCA reports."""
 
+import html
+from collections.abc import Callable
 from typing import Any
 
 from app.nodes.publish_findings.formatters.base import (
+    format_html_link,
     format_slack_link,
     shorten_text,
 )
@@ -13,7 +16,11 @@ from app.nodes.publish_findings.urls.aws import (
 )
 
 
-def _format_tool_calls_line(ctx: ReportContext) -> str:
+def _format_tool_calls_line(
+    ctx: ReportContext,
+    *,
+    link_fn: Callable[[str, str | None], str] = format_slack_link,
+) -> str:
     """Summarize tool calls made during investigation from executed_hypotheses.
 
     Returns a compact line like: "Queries: cloudwatch logs (12 events), <Grafana Loki|url> (5 logs)"
@@ -227,7 +234,7 @@ def _format_tool_calls_line(ctx: ReportContext) -> str:
             label, count_fn, url_fn = defn
             count_str = count_fn(evidence)
             url = url_fn(evidence) if url_fn else None
-            display = format_slack_link(label, url) if url else label
+            display = link_fn(label, url or None)
             if count_str:
                 parts.append(f"{display} ({count_str})")
             else:
@@ -265,7 +272,7 @@ def format_cited_evidence_section(ctx: ReportContext) -> str:
             summary = entry.get("summary")
             snippet = entry.get("snippet")
             provenance = entry.get("provenance")
-            link = format_slack_link(label, url) if url else label
+            link = format_slack_link(label, url or None)
             line = f"- {display_id} — {link}"
             if summary:
                 line += f" — {summary}"
@@ -283,3 +290,43 @@ def format_cited_evidence_section(ctx: ReportContext) -> str:
         return ""
 
     return "\n*Cited Evidence:*\n" + "\n".join(lines) + "\n"
+
+
+def format_cited_evidence_section_html(ctx: ReportContext) -> str:
+    """Like :func:`format_cited_evidence_section` but Telegram HTML with consistent bullets."""
+    catalog = ctx.get("evidence_catalog") or {}
+    lines: list[str] = []
+
+    if catalog:
+
+        def _sort_key(eid: str) -> str:
+            return str(catalog[eid].get("display_id", eid))
+
+        for evidence_id in sorted(catalog.keys(), key=_sort_key):
+            if evidence_id.startswith("evidence/datadog/failed_pod/"):
+                continue
+            entry = catalog[evidence_id] or {}
+            display_id = entry.get("display_id", evidence_id)
+            label = entry.get("label") or evidence_id
+            url = entry.get("url")
+            summary = entry.get("summary")
+            snippet = entry.get("snippet")
+            provenance = entry.get("provenance")
+            link = format_html_link(label, url or None)
+            line = f"• {html.escape(str(display_id))} — {link}"
+            if summary:
+                line += f" — {html.escape(str(summary))}"
+            if provenance:
+                line += f" — provenance: {html.escape(str(provenance))}"
+            if snippet:
+                line += f" — {html.escape(shorten_text(snippet, max_chars=100))}"
+            lines.append(line)
+
+    tool_calls_line = _format_tool_calls_line(ctx, link_fn=format_html_link)
+    if tool_calls_line:
+        lines.append(f"• {tool_calls_line}")
+
+    if not lines:
+        return ""
+
+    return "\n<b>Cited Evidence</b>\n" + "\n".join(lines) + "\n"

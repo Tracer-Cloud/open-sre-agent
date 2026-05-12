@@ -78,6 +78,10 @@ def _patch_generate_report_deps(monkeypatch: pytest.MonkeyPatch) -> None:
         lambda _ctx: "slack report text",
     )
     monkeypatch.setattr(
+        "app.nodes.publish_findings.node.format_telegram_message",
+        lambda _ctx: "telegram report text",
+    )
+    monkeypatch.setattr(
         "app.nodes.publish_findings.node.build_slack_blocks",
         lambda _ctx: [],
     )
