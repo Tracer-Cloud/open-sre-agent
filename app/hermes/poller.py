@@ -360,8 +360,19 @@ def _read_segment(
             if since is not None and record.timestamp < since and not record.is_continuation:
                 continue
             if max_lines is not None and len(records) >= max_lines:
-                truncated += 1
-                continue
+                # Cap reached: rewind before this line so the cursor
+                # retries it on the next poll instead of silently
+                # dropping it. Count remaining bytes as truncated using
+                # file size to avoid reading the rest of the file.
+                handle.seek(0, 2)  # seek to end
+                remaining_bytes = handle.tell() - line_start
+                # Estimate remaining lines using average observed bytes/line
+                # to avoid reading all remaining content just to count them.
+                avg = (handle.tell() - start_offset) / max(parsed_count, 1)
+                truncated = max(1, int(remaining_bytes / max(avg, 1)))
+                new_offset = line_start
+                handle.seek(line_start)
+                break
             records.append(record)
 
     return tuple(records), tuple(incidents), new_offset, parsed_count, truncated

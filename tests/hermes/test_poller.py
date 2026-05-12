@@ -167,11 +167,22 @@ class TestMaxLines:
                 fixture.write_line(line)
             poll = fixture.poll_once(max_lines=2)
             assert len(poll.records) == 2
-            # 3 records were left behind under the cap.
-            assert poll.truncated_lines == 3
-            # The cursor still advanced past everything we *parsed* so
-            # callers can drain the rest on the next call.
-            assert poll.cursor.offset == fixture.path.stat().st_size
+            # truncated_lines must be ≥1: at least one line was not returned.
+            assert poll.truncated_lines >= 1
+            # The cursor must be rewound before the first uncapped line so
+            # the caller can drain the rest on the next poll.
+            assert poll.cursor.offset < fixture.path.stat().st_size
+
+    def test_max_lines_cursor_resumes_from_cap_point(self, tmp_path: Path) -> None:
+        with hermes_log_fixture(tmp_path) as fixture:
+            for line in _LINES_BURST:
+                fixture.write_line(line)
+            first = fixture.poll_once(max_lines=2)
+            assert len(first.records) == 2
+            # Second poll must pick up the remaining lines.
+            second = fixture.poll_once(max_lines=10)
+            assert len(second.records) == 3
+            assert second.truncated_lines == 0
 
 
 class TestMissingFile:

@@ -191,17 +191,21 @@ class TelegramSink:
             )
 
     def close(self) -> None:
-        """Shut down the bridge executor.
+        """Shut down the bridge executor without blocking the caller.
 
-        Safe to call multiple times. Cancels any *pending* (not yet
-        started) futures immediately so the process exits promptly after
-        a SIGTERM. Bridge calls that are *already running* are left to
-        finish naturally — they are bounded by ``bridge_timeout_s`` so
-        the worst-case wait is that value, not indefinite.
+        Safe to call multiple times. This method returns immediately:
+
+        * Queued (not-yet-started) futures are cancelled via
+          ``cancel_futures=True`` so they never start after close.
+        * Already-running bridge calls are left to complete or time
+          out on their own. They are bounded by ``bridge_timeout_s``
+          (default 45 s) so they cannot block indefinitely. Using
+          ``wait=False`` prevents ``close()`` from hanging when called
+          from a SIGTERM handler while a bridge call is in flight.
         """
         executor = self._bridge_executor
         if executor is not None:
-            executor.shutdown(wait=True, cancel_futures=True)
+            executor.shutdown(wait=False, cancel_futures=True)
             self._bridge_executor = None
 
     # ------------------------------------------------------------------
