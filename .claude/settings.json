@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv run *)",
+      "Bash(python *)",
+      "Bash(python3 *)",
+      "Bash(python3*)",
+      "PowerShell(uv run *)",
+      "PowerShell(python *)",
+      "PowerShell(python3 *)"
+    ]
+  }
+}

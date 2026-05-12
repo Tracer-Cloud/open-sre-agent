@@ -120,6 +120,21 @@ def test_llm_settings_from_env_gemini_cli_without_api_key(monkeypatch) -> None:
     assert settings.provider == "gemini-cli"
 
 
+def test_llm_settings_from_env_copilot_without_api_key(monkeypatch) -> None:
+    """CLI-backed Copilot CLI: vendor auth, no hosted API key required."""
+    monkeypatch.setenv("LLM_PROVIDER", "copilot")
+    monkeypatch.setattr("app.config.resolve_llm_api_key", lambda _: "")
+
+    settings = LLMSettings.from_env()
+
+    assert settings.provider == "copilot"
+
+
+def test_llm_settings_copilot_provider_accepted() -> None:
+    settings = LLMSettings.model_validate({"provider": "copilot"})
+    assert settings.provider == "copilot"
+
+
 def test_has_credentials_for_active_llm_provider_missing_key(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "anthropic")
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
@@ -140,6 +155,14 @@ def test_has_credentials_for_active_llm_provider_with_key(monkeypatch) -> None:
 
 def test_has_credentials_for_active_llm_provider_ollama_never_requires_key(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.setattr("app.config.resolve_llm_api_key", lambda _: "")
+
+    assert has_credentials_for_active_llm_provider() is True
+
+
+def test_has_credentials_for_active_llm_provider_copilot_never_requires_key(monkeypatch) -> None:
+    """CLI-backed Copilot must never require a hosted API key, same as Ollama / other CLIs."""
+    monkeypatch.setenv("LLM_PROVIDER", "copilot")
     monkeypatch.setattr("app.config.resolve_llm_api_key", lambda _: "")
 
     assert has_credentials_for_active_llm_provider() is True

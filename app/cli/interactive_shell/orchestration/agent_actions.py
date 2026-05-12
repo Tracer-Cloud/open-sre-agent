@@ -6,9 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from rich.console import Console
-from rich.live import Live
 from rich.markup import escape
-from rich.spinner import Spinner
 
 from app.cli.interactive_shell.commands import (
     SLASH_COMMANDS,
@@ -34,7 +32,8 @@ from app.cli.interactive_shell.orchestration.execution_policy import (
     resolve_slash_execution_tier,
 )
 from app.cli.interactive_shell.runtime import ReplSession, TaskKind, TaskRecord, TaskStatus
-from app.cli.interactive_shell.ui import BOLD_BRAND, print_planned_actions
+from app.cli.interactive_shell.ui import DIM, print_planned_actions
+from app.cli.interactive_shell.ui.streaming import render_response_header
 
 
 @dataclass(frozen=True)
@@ -46,14 +45,20 @@ class TerminalActionExecutionResult:
     handled: bool
 
 
-def _plan_with_spinner(
-    message: str,
-    console: Console,
-) -> tuple[list, bool]:
-    """Plan actions while showing a thinking spinner."""
-    spinner = Spinner("dots12", text="thinking...", style=BOLD_BRAND)
-    with Live(spinner, console=console, refresh_per_second=20, transient=True):
-        return plan_actions_with_unhandled(message)
+def _plan_actions(message: str) -> tuple[list, bool]:
+    """Plan actions for a free-text message.
+
+    Used to wrap the call in a ``rich.Live`` spinner for in-place
+    "thinking…" feedback, but ``Live``'s cursor manipulation fights
+    the now-always-active ``patch_stdout`` context that the persistent
+    REPL holds for the lifetime of the session (produces transient
+    cursor-jump / erase-line residue on every action-planning call).
+    The bottom-toolbar spinner started by :func:`_run_one_dispatch`
+    already animates throughout the dispatch — including this planning
+    phase — so the user still sees feedback; no separate in-place
+    indicator is needed here.
+    """
+    return plan_actions_with_unhandled(message)
 
 
 def _running_task_matches(session: ReplSession, target: str) -> list[TaskRecord]:
@@ -159,17 +164,27 @@ def execute_cli_actions(
     Returns True when the message was handled. Unknown or ambiguous requests fall
     through to the LLM-backed assistant.
     """
-    actions, has_unhandled_clause = _plan_with_spinner(message, console)
+    actions, has_unhandled_clause = _plan_actions(message)
     if not actions:
         return False
 
     console.print()
-    console.print(f"[{BOLD_BRAND}]assistant:[/]")
+    render_response_header(console, "assistant")
     print_planned_actions(console, actions)
     if not has_unhandled_clause:
         session.record("cli_agent", message)
 
     for action in actions:
+        # Multi-action plans: if the user pressed Esc / typed
+        # ``/cancel`` between actions, the per-dispatch cancel event
+        # is set on the ``_StreamingConsole``. Skip the rest of the
+        # plan so a "run all of these" plan doesn't keep marching
+        # through after an explicit cancel. ``getattr`` with a default
+        # keeps non-streaming consoles (used by the seeded-input
+        # test path) working unchanged.
+        if getattr(console, "cancel_requested", False):
+            console.print(f"[{DIM}](remaining actions cancelled)[/]")
+            break
         console.print()
         if action.kind == "slash":
             stripped = action.content.strip()
@@ -293,15 +308,25 @@ def execute_cli_actions(
 
 
 def execute_cli_actions_with_metrics(
-    message: str, session: ReplSession, console: Console
+    message: str,
+    session: ReplSession,
+    console: Console,
+    *,
+    confirm_fn: Callable[[str], str] | None = None,
 ) -> TerminalActionExecutionResult:
-    """Execute deterministic actions and return per-turn action counters."""
+    """Execute deterministic actions and return per-turn action counters.
+
+    ``confirm_fn`` is forwarded to :func:`execute_cli_actions` so the
+    interactive REPL can route mid-dispatch ``Proceed? [y/N]`` prompts
+    through its active prompt_toolkit input instead of the stdlib
+    ``input()`` (which deadlocks against the running ``prompt_async``).
+    """
     from app.analytics.cli import (
         capture_terminal_actions_executed,
         capture_terminal_actions_planned,
     )
 
-    actions, has_unhandled_clause = _plan_with_spinner(message, console)
+    actions, has_unhandled_clause = _plan_actions(message)
     capture_terminal_actions_planned(
         planned_count=len(actions),
         has_unhandled_clause=has_unhandled_clause,
@@ -316,7 +341,7 @@ def execute_cli_actions_with_metrics(
         )
 
     history_start = len(session.history)
-    handled = execute_cli_actions(message, session, console)
+    handled = execute_cli_actions(message, session, console, confirm_fn=confirm_fn)
     executed_entries = [
         item
         for item in session.history[history_start:]

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import queue
 import socket
 import threading
@@ -10,6 +11,8 @@ from contextlib import suppress
 from pathlib import Path
 
 import pytest
+
+_POSIX_FCNTL_AVAILABLE = importlib.util.find_spec("fcntl") is not None
 
 from app.agents import bus as bus_module
 from app.agents.bus import (
@@ -746,6 +749,10 @@ class TestBrokerElectionRace:
         assert lock_path.parent == sock_path.parent
         assert lock_path.name == sock_path.name + ".lock"
 
+    @pytest.mark.skipif(
+        not _POSIX_FCNTL_AVAILABLE,
+        reason="cross-process election flock requires POSIX fcntl (omitted on Windows)",
+    )
     def test_ensure_broker_blocks_on_election_flock_held_by_peer(self, sock_path: Path) -> None:
         # Direct test of the cross-process serialization: a child process
         # holds the election flock; this process's ``_ensure_broker``

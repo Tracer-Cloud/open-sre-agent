@@ -84,6 +84,8 @@ def _validate_save_args(args: list[str]) -> str | None:
 
 
 def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str]) -> bool:
+    from app.analytics.cli import track_investigation
+    from app.analytics.source import EntrypointSource, TriggerMode
     from app.cli.investigation import run_investigation_for_session
 
     path = Path(args[0])
@@ -102,7 +104,15 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
     task = session.task_registry.create(TaskKind.INVESTIGATION, command=f"/investigate {path}")
     task.mark_running()
     try:
-        with apply_reasoning_effort(session.reasoning_effort):
+        with (
+            track_investigation(
+                entrypoint=EntrypointSource.CLI_REPL_FILE,
+                trigger_mode=TriggerMode.FILE,
+                input_path=str(path),
+                interactive=True,
+            ),
+            apply_reasoning_effort(session.reasoning_effort),
+        ):
             final_state = run_investigation_for_session(
                 alert_text=text,
                 context_overrides=session.accumulated_context or None,

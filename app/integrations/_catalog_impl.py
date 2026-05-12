@@ -485,7 +485,9 @@ def _classify_service_instance(
         except Exception:
             return None, None
         if openclaw_config.is_configured:
-            return openclaw_config.model_dump(), "openclaw"
+            config_dict = openclaw_config.model_dump()
+            config_dict["connection_verified"] = True
+            return config_dict, "openclaw"
         return None, None
 
     if key == "mysql":
@@ -1341,7 +1343,10 @@ def load_env_integrations() -> list[dict[str, Any]]:
             integrations.append(
                 _active_env_record(
                     "openclaw",
-                    openclaw_config.model_dump(exclude={"integration_id"}),
+                    {
+                        **openclaw_config.model_dump(exclude={"integration_id"}),
+                        "connection_verified": True,
+                    },
                 )
             )
         except Exception:

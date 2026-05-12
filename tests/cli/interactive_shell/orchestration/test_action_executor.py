@@ -501,7 +501,9 @@ def test_start_background_cli_task_uses_pty_for_live_terminal_output(
         raise OSError(errno.EIO, "pty closed")
 
     monkeypatch.setattr(
-        "app.cli.interactive_shell.orchestration.action_executor.os.openpty", lambda: (10, 11)
+        "app.cli.interactive_shell.orchestration.action_executor.os.openpty",
+        lambda: (10, 11),
+        raising=False,
     )
     monkeypatch.setattr(
         "app.cli.interactive_shell.orchestration.action_executor.os.read", _fake_read
@@ -539,6 +541,60 @@ def test_start_background_cli_task_uses_pty_for_live_terminal_output(
     assert "live progress" in buf.getvalue()
     assert 10 in closed_fds
     assert 11 in closed_fds
+
+
+def test_start_background_cli_task_falls_back_to_pipes_when_pty_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    popen_kwargs: list[dict[str, object]] = []
+
+    class _TtyBuffer(io.StringIO):
+        def isatty(self) -> bool:
+            return True
+
+    class _FakeProcess:
+        returncode = 0
+        stdout = io.StringIO("pipe progress\n")
+        stderr = io.StringIO("")
+
+        def poll(self) -> int:
+            return 0
+
+    def _fake_popen(_command: list[str], **kwargs: object) -> _FakeProcess:
+        popen_kwargs.append(kwargs)
+        return _FakeProcess()
+
+    monkeypatch.delattr(
+        "app.cli.interactive_shell.orchestration.action_executor.os.openpty",
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.orchestration.action_executor.subprocess.Popen", _fake_popen
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.orchestration.action_executor.threading.Thread",
+        _ImmediateThread,
+    )
+
+    session = ReplSession()
+    buf = _TtyBuffer()
+    console = Console(file=buf, force_terminal=True)
+
+    task = start_background_cli_task(
+        display_command="opensre tests synthetic --scenario 001-replication-lag",
+        argv_list=["python", "-m", "app.cli", "tests", "synthetic"],
+        session=session,
+        console=console,
+        kind=TaskKind.SYNTHETIC_TEST,
+        use_pty=True,
+    )
+
+    assert task is not None
+    assert task.status == TaskStatus.COMPLETED
+    assert popen_kwargs[0]["stdout"] is subprocess.PIPE
+    assert popen_kwargs[0]["stderr"] is subprocess.PIPE
+    assert popen_kwargs[0]["text"] is True
+    assert "pipe progress" in buf.getvalue()
 
 
 def test_run_synthetic_test_unknown_suite_records_failure() -> None:

@@ -10,7 +10,9 @@ from __future__ import annotations
 import math
 import os
 import time
+from collections import defaultdict
 from collections.abc import Callable
+from contextlib import nullcontext
 from pathlib import Path
 
 from prompt_toolkit.patch_stdout import patch_stdout
@@ -19,6 +21,7 @@ from rich.console import Console
 from rich.live import Live
 from rich.markup import escape
 from rich.text import Text
+from rich.tree import Tree
 
 from app.agents.bus import BusMessage, subscribe
 from app.agents.config import (
@@ -59,6 +62,8 @@ _AGENTS_FIRST_ARGS: tuple[tuple[str, str], ...] = (
     ("kill", "SIGTERM → SIGKILL a local agent by PID"),
     ("release", "release a branch claim"),
     ("trace", "live tail of an agent's stdout by pid"),
+    ("graph", "render the wait-on dependency graph as a tree"),
+    ("wait", "mark <pid> as waiting on another pid: /agent wait <pid> --on <other-pid>"),
 )
 
 _TRACE_REFRESH_PER_SECOND = 10
@@ -438,9 +443,11 @@ def _render_live_tail(console: Console, label: str, sess: AttachSession) -> None
     is the canonical "stop" signal.
     """
     console.print(f"[{BOLD_BRAND}]trace {escape(label)}[/]  [{DIM}]Ctrl+C to stop[/]")
+    isatty = getattr(console.file, "isatty", None)
+    stdout_context = patch_stdout(raw=True) if callable(isatty) and isatty() else nullcontext()
     try:
         with (
-            patch_stdout(raw=True),
+            stdout_context,
             Live(
                 Text(""),
                 console=console,
@@ -519,6 +526,128 @@ def _cmd_agents_trace(session: ReplSession, console: Console, args: list[str]) -
     return True
 
 
+def _cmd_agents_wait(session: ReplSession, console: Console, args: list[str]) -> bool:
+    """Handle ``/agents wait <pid> --on <other-pid>``.
+
+    Parse the two pids out of ``args``, registers the dependency in the agent registry.
+    """
+    if len(args) != 3 or args[1] != "--on":
+        console.print(f"[{ERROR}]usage:[/] /agents wait <pid> --on <other-pid>")
+        session.mark_latest(ok=False, kind="slash")
+        return True
+
+    try:
+        pid = int(args[0])
+    except ValueError:
+        console.print(f"[{ERROR}]invalid pid:[/] {escape(args[0])}")
+        session.mark_latest(ok=False, kind="slash")
+        return True
+
+    try:
+        on_pid = int(args[2])
+    except ValueError:
+        console.print(f"[{ERROR}]invalid other-pid:[/] {escape(args[2])}")
+        session.mark_latest(ok=False, kind="slash")
+        return True
+
+    if pid == on_pid:
+        console.print(f"[{ERROR}]invalid pid:[/] {pid} waiting for itself")
+        session.mark_latest(ok=False, kind="slash")
+        return True
+
+    registry = AgentRegistry()
+    waiter = registry.get(pid)
+    if waiter is None:
+        console.print(f"[{ERROR}]pid {pid} is not in the agent registry[/]")
+        session.mark_latest(ok=False, kind="slash")
+        return True
+
+    target = registry.get(on_pid)
+    if target is None:
+        console.print(f"[{ERROR}]pid {on_pid} is not in the agent registry[/]")
+        session.mark_latest(ok=False, kind="slash")
+        return True
+
+    waiter = waiter.add_waits_on(target)
+    registry.register(waiter)
+    console.print(
+        f"[{HIGHLIGHT}]{escape(waiter.name)} (pid {pid}) now waits on "
+        f"{escape(target.name)} (pid {on_pid}).[/]"
+    )
+    return True
+
+
+def _cmd_agents_graph(console: Console) -> bool:
+    """Render the ``waits_on`` dependency graph as a Rich tree.
+
+    Single-pass DFS over the inverse ``waits_on`` edges (depended-on
+    -> waiter), building the Rich tree as it descends. A back edge — a
+    pid re-encountered while still in the active path — is the
+    canonical cycle witness for a directed graph; a warning naming the agents
+    in the loop is emitted instead.
+    """
+
+    def _label(pid: int, ppid: int | None = None) -> str:
+        r = records[pid]
+        if ppid is None:
+            return f"{escape(r.name)} ({pid}) \\[active]"
+
+        pr = records[ppid]
+        return f"{escape(r.name)} ({pid}) \\[waiting on {escape(pr.name)}]"
+
+    def _walk(pid: int, parent: Tree, path: list[int], visited: set[int]) -> list[int] | None:
+        for child in waiters_of.get(pid, []):
+            if child in visited:
+                return path[path.index(child) :] + [child]
+
+            path.append(child)
+            visited.add(child)
+            node = parent.add(_label(child, pid))
+            c = _walk(child, node, path, visited)
+            if c is not None:
+                return c
+
+            path.pop()
+            visited.remove(child)
+        return None
+
+    registry = AgentRegistry()
+    records = {r.pid: r for r in registry.list()}
+    if not records:
+        console.print(f"[{DIM}]no registered agents[/]")
+        return True
+
+    waiters_of: dict[int, list[int]] = defaultdict(list)
+    for record in records.values():
+        for on_pid in record.waits_on:
+            waiters_of[on_pid].append(record.pid)
+
+    # Roots are pids that wait on nothing. If every pid waits on
+    # something the graph is fully covered by a cycle — fall back to
+    # all pids so the walker enters somewhere and surfaces the back
+    # edge instead of silently exiting on an empty root list.
+    roots = [pid for pid, r in records.items() if not r.waits_on] or list(records)
+
+    trees: list[Tree] = []
+    chain: str | None = None
+    for root in roots:
+        tree = Tree(label=_label(root))
+        cycle = _walk(root, tree, [root], {root})
+        if cycle is not None:
+            chain = " -> ".join(f"{records[p].name} ({p})" for p in cycle)
+            break
+        trees.append(tree)
+
+    for i, tree in enumerate(trees):
+        console.print(tree)
+        if i != len(trees) - 1 and chain is None:
+            console.line()
+
+    if chain is not None:
+        console.print(f"[{WARNING}]: agent dependency cycle detected: {escape(chain)}.[/]")
+    return True
+
+
 def _cmd_agents(session: ReplSession, console: Console, args: list[str]) -> bool:
     if not args:
         return _cmd_agents_list(console)
@@ -544,12 +673,19 @@ def _cmd_agents(session: ReplSession, console: Console, args: list[str]) -> bool
     if sub == "trace":
         return _cmd_agents_trace(session, console, args[1:])
 
+    if sub == "wait":
+        return _cmd_agents_wait(session, console, args[1:])
+
+    if sub == "graph":
+        return _cmd_agents_graph(console)
+
     console.print(
         f"[{ERROR}]unknown subcommand:[/] {escape(sub)}  "
         "(try [bold]/agents[/bold], [bold]/agents budget[/bold], "
         "[bold]/agents bus[/bold], [bold]/agents claim[/bold], "
         "[bold]/agents conflicts[/bold], [bold]/agents kill[/bold], "
-        "[bold]/agents release[/bold], or [bold]/agents trace[/bold])"
+        "[bold]/agents release[/bold], [bold]/agents trace[/bold], "
+        "[bold]/agents wait[/bold] or [bold]/agents graph[/bold])"
     )
     session.mark_latest(ok=False, kind="slash")
     return True
@@ -559,7 +695,7 @@ COMMANDS: list[SlashCommand] = [
     SlashCommand(
         "/agents",
         "show registered local AI agents (subcommands: budget, bus, claim, conflicts, kill, "
-        "release, trace)",
+        "release, trace, wait, graph)",
         _cmd_agents,
         first_arg_completions=_AGENTS_FIRST_ARGS,
     ),

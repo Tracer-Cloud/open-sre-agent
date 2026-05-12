@@ -29,6 +29,7 @@ ALLOWED_EVIDENCE_SOURCES = [
     "vercel",
     "github",
     "cloudopsbench_evidence",
+    "openclaw_conversations",
 ]
 
 GRAFANA_SOURCE_TYPE_LABELS: dict[str, str] = {

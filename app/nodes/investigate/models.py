@@ -69,9 +69,14 @@ class InvestigateInput(BaseModel):
         """Create InvestigateInput from investigation state."""
         raw_window = state.get("incident_window")
         incident_window = raw_window if isinstance(raw_window, dict) else None
+        context = _object_dict(state.get("context", {}))
+        openclaw_context = _object_dict(state.get("openclaw_context", {}))
+        if openclaw_context:
+            context = dict(context)
+            context.setdefault("openclaw_context", openclaw_context)
         return cls(
             raw_alert=_raw_alert(state.get("raw_alert", {})),
-            context=_object_dict(state.get("context", {})),
+            context=context,
             problem_md=_string_value(state.get("problem_md", "")),
             alert_name=_string_value(state.get("alert_name", "")),
             investigation_recommendations=_string_list(

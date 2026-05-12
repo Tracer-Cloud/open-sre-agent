@@ -50,7 +50,13 @@ _RETRYABLE_FAILURE_INDICATORS = (
     "503",
 )
 _OPENCLAW_ACTION_NAMES = frozenset(
-    {"call_openclaw_tool", "list_openclaw_tools", "search_openclaw_conversations"}
+    {
+        "call_openclaw_tool",
+        "get_openclaw_conversation",
+        "list_openclaw_tools",
+        "search_openclaw_conversations",
+        "send_openclaw_message",
+    }
 )
 
 
@@ -827,7 +833,135 @@ def _map_cloudopsbench_tool(data: dict) -> dict:
     return {"cloudopsbench_evidence": [evidence_item]}
 
 
-EVIDENCE_MAPPERS: dict[str, Callable[[dict], dict]] = {
+def _map_search_openclaw_conversations(data: dict) -> dict:
+    conversations = data.get("conversations", [])
+    if isinstance(conversations, list) and not conversations:
+        structured = data.get("structured_content")
+        if isinstance(structured, dict):
+            conversations = structured.get("conversations", [])
+        elif isinstance(structured, list):
+            conversations = structured
+    text_parts: list[str] = []
+    for conv in conversations if isinstance(conversations, list) else []:
+        title = str(conv.get("title", "")).strip()
+        last_msg = str(conv.get("lastMessage", "")).strip()
+        if title or last_msg:
+            text_parts.append(f"Conversation: {title}\n{last_msg}" if title else last_msg)
+    combined = "\n\n".join(text_parts).strip()
+    raw_text = str(data.get("text", "")).strip()
+    return {
+        "openclaw_conversations": conversations,
+        "openclaw_conversation_context": combined or raw_text,
+    }
+
+
+def _openclaw_process_summary(conversation: dict[str, object]) -> str:
+    process = conversation.get("process")
+    if not isinstance(process, dict):
+        return ""
+
+    name = str(process.get("name", "")).strip()
+    pid = str(process.get("pid", "")).strip()
+    exit_code = str(process.get("exitCode", "")).strip()
+    run_seconds = str(process.get("runSeconds", "")).strip()
+    exit_reason = str(process.get("exitReason", "")).strip()
+
+    details = [
+        part
+        for part in (name, f"pid={pid}" if pid else "", f"exit={exit_code}" if exit_code else "")
+        if part
+    ]
+    if run_seconds:
+        details.append(f"runtime={run_seconds}s")
+    if exit_reason:
+        details.append(exit_reason)
+    if not details:
+        return ""
+    return "Process: " + " | ".join(details)
+
+
+def _openclaw_message_text(message: object) -> str:
+    if not isinstance(message, dict):
+        return ""
+
+    text = str(
+        message.get("text")
+        or message.get("message")
+        or message.get("content")
+        or message.get("log")
+        or message.get("stderr")
+        or message.get("stdout")
+        or ""
+    ).strip()
+    if not text:
+        return ""
+
+    prefix_parts = [
+        str(message.get("timestamp", "")).strip(),
+        str(message.get("role", "")).strip(),
+        str(message.get("level", "")).strip(),
+    ]
+    prefix = " ".join(part for part in prefix_parts if part)
+    return f"[{prefix}] {text}" if prefix else text
+
+
+def _openclaw_conversation_text(conversation: dict[str, object], fallback_text: str = "") -> str:
+    sections: list[str] = []
+
+    summary = str(conversation.get("summary") or conversation.get("lastMessage") or "").strip()
+    if summary:
+        sections.append(summary)
+
+    process_summary = _openclaw_process_summary(conversation)
+    if process_summary:
+        sections.append(process_summary)
+
+    messages = (
+        conversation.get("messages") or conversation.get("transcript") or conversation.get("events")
+    )
+    if isinstance(messages, list):
+        rendered_messages = [
+            rendered
+            for rendered in (_openclaw_message_text(message) for message in messages[:15])
+            if rendered
+        ]
+        if rendered_messages:
+            sections.append("Transcript:\n" + "\n".join(rendered_messages))
+
+    combined = "\n\n".join(section for section in sections if section).strip()
+    return combined or fallback_text
+
+
+def _map_get_openclaw_conversation(data: dict, current_evidence: dict | None = None) -> dict:
+    structured = data.get("structured_content") or {}
+    text = str(data.get("text", "")).strip()
+    if isinstance(structured, dict):
+        text = _openclaw_conversation_text(structured, text)
+    prior = str((current_evidence or {}).get("openclaw_conversation_context", "")).strip()
+    combined = f"{prior}\n\n{text}".strip() if prior else text
+    return {
+        "openclaw_conversation_detail": structured,
+        "openclaw_conversation_context": combined,
+    }
+
+
+def _map_list_openclaw_tools(data: dict) -> dict:
+    tools = data.get("tools", [])
+    return {"openclaw_available_tools": tools}
+
+
+def _map_call_openclaw_tool(data: dict, current_evidence: dict | None = None) -> dict:
+    text = str(data.get("text", "")).strip()
+    tool_name = str(data.get("tool", "")).strip()
+    prior = str((current_evidence or {}).get("openclaw_conversation_context", "")).strip()
+    combined = f"{prior}\n\n{text}".strip() if prior else text
+    return {
+        "openclaw_tool_call_result": {"tool": tool_name, "text": text},
+        "openclaw_conversation_context": combined,
+    }
+
+
+EVIDENCE_MAPPERS: dict[str, Callable[..., dict]] = {
     "get_failed_jobs": _map_failed_jobs,
     "get_failed_tools": _map_failed_tools,
     "get_error_logs": _map_error_logs,
@@ -886,6 +1020,8 @@ EVIDENCE_MAPPERS: dict[str, Callable[[dict], dict]] = {
     "GetAppYAML": _map_cloudopsbench_tool,
     "CheckServiceConnectivity": _map_cloudopsbench_tool,
     "CheckNodeServiceStatus": _map_cloudopsbench_tool,
+    "search_openclaw_conversations": _map_search_openclaw_conversations,
+    "list_openclaw_tools": _map_list_openclaw_tools,
 }
 
 
@@ -911,6 +1047,14 @@ def merge_evidence(
 
         if action_name == "run_diagnostic_code":
             evidence.update(_map_diagnostic_code_result(result.data, evidence))
+            continue
+
+        if action_name == "get_openclaw_conversation":
+            evidence.update(_map_get_openclaw_conversation(result.data, evidence))
+            continue
+
+        if action_name == "call_openclaw_tool":
+            evidence.update(_map_call_openclaw_tool(result.data, evidence))
             continue
 
         mapper = EVIDENCE_MAPPERS.get(action_name)

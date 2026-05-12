@@ -1032,6 +1032,21 @@ def test_create_llm_client_missing_api_key_raises_runtime_error(monkeypatch) -> 
         llm_client.reset_llm_singletons()
 
 
+def test_create_llm_client_missing_api_key_omits_pydantic_boilerplate(monkeypatch) -> None:
+    """Sentry #1815: the RuntimeError message must not include pydantic boilerplate."""
+    monkeypatch.setenv("LLM_PROVIDER", "minimax")
+    monkeypatch.delenv("MINIMAX_API_KEY", raising=False)
+    llm_client.reset_llm_singletons()
+    try:
+        with pytest.raises(RuntimeError) as exc_info:
+            llm_client._create_llm_client("reasoning")
+        msg = str(exc_info.value)
+        assert "1 validation error for LLMSettings" not in msg
+        assert "MINIMAX_API_KEY" in msg
+    finally:
+        llm_client.reset_llm_singletons()
+
+
 # ---------------------------------------------------------------------------
 # LLMClient.invoke / invoke_stream — NotFoundError handling
 # ---------------------------------------------------------------------------
@@ -1795,3 +1810,32 @@ def test_format_openai_connection_error_timeout_returns_timeout_message() -> Non
     assert "timed out" in msg.lower()
     assert "Ollama" in msg
     assert "network connection" not in msg
+# ---------------------------------------------------------------------------
+# _extract_json_payload — embedded code-fence handling (Sentry #1861)
+# ---------------------------------------------------------------------------
+
+
+def test_extract_json_payload_bare_json() -> None:
+    assert llm_client._extract_json_payload('{"a": 1}') == {"a": 1}
+
+
+def test_extract_json_payload_leading_fence() -> None:
+    text = '```json\n{"a": 1}\n```'
+    assert llm_client._extract_json_payload(text) == {"a": 1}
+
+
+def test_extract_json_payload_embedded_fence_with_preamble() -> None:
+    """LLM returns prose before the code block — Sentry #1861 root cause."""
+    text = 'Here is the JSON:\n\n```json\n{"location": "node.py"}\n```'
+    assert llm_client._extract_json_payload(text) == {"location": "node.py"}
+
+
+def test_extract_json_payload_embedded_fence_trailing_braces_in_prose() -> None:
+    """Greedy regex would over-capture {key} in trailing prose; fence path must win."""
+    text = 'Sure!\n\n```json\n{"key": "value"}\n```\n\nThe {key} field represents the identifier.'
+    assert llm_client._extract_json_payload(text) == {"key": "value"}
+
+
+def test_extract_json_payload_raises_when_no_json() -> None:
+    with pytest.raises(ValueError, match="LLM did not return valid JSON payload"):
+        llm_client._extract_json_payload("This is plain text with no JSON.")

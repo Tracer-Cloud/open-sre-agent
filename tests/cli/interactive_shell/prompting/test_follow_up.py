@@ -147,3 +147,47 @@ class TestAnswerFollowUpMarkupSafety:
         assert "[datadog]" in output
         assert len(captured_errors) == 1
         assert isinstance(captured_errors[0], RuntimeError)
+
+
+class TestAnswerFollowUpGroundingContract:
+    """Verifies that the final-state identifiers (evidence, root cause) are explicitly
+    propagated into the generated LLM prompt, satisfying acceptance criteria for
+    'grounded follow-ups'."""
+
+    def test_prompt_grounds_question_with_root_cause_and_evidence(
+        self, monkeypatch: object
+    ) -> None:
+        captured_prompts: list[str] = []
+
+        class _SpyClient:
+            def invoke_stream(self, prompt: str) -> Iterator[str]:
+                captured_prompts.append(prompt)
+                yield "Success"
+
+        monkeypatch.setattr(  # type: ignore[attr-defined]
+            "app.services.llm_client.get_llm_for_reasoning",
+            lambda: _SpyClient(),
+        )
+
+        session = ReplSession()
+        session.last_state = {
+            "alert_name": "Target_Alert_X",
+            "root_cause": "Database lock contention identified",
+            "evidence": {
+                "ev-999": {"kind": "trace", "summary": "Query execution exceeded 10000ms"}
+            },
+        }
+
+        buf = io.StringIO()
+        console = Console(file=buf, force_terminal=False, width=200)
+        answer_follow_up("Why is there a lock?", session, console)
+
+        assert len(captured_prompts) == 1
+        final_prompt = captured_prompts[0]
+
+        # Verify strict grounding elements in input prompt
+        assert "Target_Alert_X" in final_prompt
+        assert "Database lock contention identified" in final_prompt
+        assert "ev-999" in final_prompt
+        assert "Query execution exceeded 10000ms" in final_prompt
+        assert "Why is there a lock?" in final_prompt

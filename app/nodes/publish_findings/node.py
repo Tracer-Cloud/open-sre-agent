@@ -155,6 +155,17 @@ def generate_report(state: InvestigationState) -> dict:
     else:
         logger.debug("[publish] telegram delivery: no telegram integration configured")
 
+    openclaw_creds = resolved.get("openclaw", {})
+    if openclaw_creds:
+        from app.utils.openclaw_delivery import send_openclaw_report
+
+        oc_posted, oc_error = send_openclaw_report(state, slack_message, openclaw_creds)
+        logger.debug("[publish] openclaw delivery: posted=%s error=%s", oc_posted, oc_error)
+        if not oc_posted:
+            logger.warning("[publish] OpenClaw delivery failed: %s", oc_error)
+    else:
+        logger.debug("[publish] openclaw delivery: no openclaw integration configured")
+
     post_gitlab_mr_writeback(state, slack_message)
 
     return {"slack_message": slack_message, "report": slack_message}

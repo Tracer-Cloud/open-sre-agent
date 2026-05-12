@@ -132,6 +132,10 @@ tests/test_case_upstream_downstream_pipeline/pipeline_code/api_ingester/bin/
 **/cdk.out/
 
 CLAUDE_PERSONAL.md
+
+# Local planning notes (not tracked)
+plans/
+
 tasks/
 app/memories
 .aider*

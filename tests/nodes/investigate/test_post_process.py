@@ -179,6 +179,61 @@ class TestListEKSPodsMapper:
         assert evidence["eks_total_pods"] == 0
 
 
+class TestOpenClawConversationContextMerge:
+    """OpenClaw mappers must accumulate ``openclaw_conversation_context`` across actions."""
+
+    def test_search_then_call_openclaw_tool_appends_tool_text(self) -> None:
+        after_search = merge_evidence(
+            {},
+            {
+                "search_openclaw_conversations": _result(
+                    "search_openclaw_conversations",
+                    {
+                        "conversations": [{"title": "inc-42", "lastMessage": "prior context"}],
+                        "text": "",
+                    },
+                )
+            },
+        )
+        assert "prior context" in str(after_search.get("openclaw_conversation_context", ""))
+
+        merged = merge_evidence(
+            after_search,
+            {
+                "call_openclaw_tool": _result(
+                    "call_openclaw_tool",
+                    {"tool": "events_list", "text": "bridge tool output"},
+                )
+            },
+        )
+        ctx = str(merged.get("openclaw_conversation_context", ""))
+        assert "prior context" in ctx
+        assert "bridge tool output" in ctx
+
+    def test_get_openclaw_conversation_appends_to_existing_context(self) -> None:
+        prior = merge_evidence(
+            {},
+            {
+                "search_openclaw_conversations": _result(
+                    "search_openclaw_conversations",
+                    {"conversations": [], "text": "search snippet"},
+                )
+            },
+        )
+        merged = merge_evidence(
+            prior,
+            {
+                "get_openclaw_conversation": _result(
+                    "get_openclaw_conversation",
+                    {"structured_content": {}, "text": "full thread"},
+                )
+            },
+        )
+        ctx = str(merged.get("openclaw_conversation_context", ""))
+        assert "search snippet" in ctx
+        assert "full thread" in ctx
+
+
 class TestGetEKSEventsMapper:
     """get_eks_events → eks_events / eks_total_warning_count."""
 

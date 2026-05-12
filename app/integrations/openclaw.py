@@ -1,7 +1,7 @@
-"""Shared OpenClaw MCP integration helpers.
+"""Shared OpenClaw bridge integration helpers.
 
 OpenClaw is an AI coding assistant that communicates via the Model Context Protocol (MCP).
-This module centralizes OpenClaw MCP configuration, validation, and tool-calling so the
+This module centralizes OpenClaw bridge configuration, validation, and tool-calling so the
 onboarding wizard, verify CLI, and investigation flows all share the same transport logic.
 
 Supported transports:
@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import shutil
+import subprocess
 from collections.abc import AsyncIterator, Coroutine, Mapping
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
@@ -37,6 +39,11 @@ _OPENCLAW_CONTROL_UI_HOSTS = frozenset({"127.0.0.1", "localhost", "0.0.0.0"})
 _OPENCLAW_CONTROL_UI_PORT = 18789
 _OPENCLAW_STDIO_COMMAND = "openclaw"
 _OPENCLAW_STDIO_ARGS = ("mcp", "serve")
+_NODE_REQUIREMENT_PATTERN = re.compile(
+    r"Node\.js\s+(?P<required>v[0-9][0-9A-Za-z.+-]*)\s+is required\s+\(current:\s*"
+    r"(?P<current>v[0-9][0-9A-Za-z.+-]*)\)",
+    re.IGNORECASE,
+)
 
 
 class OpenClawToolDescriptor(TypedDict):
@@ -68,7 +75,7 @@ class OpenClawToolCallResult(TypedDict, total=False):
 
 
 class OpenClawConfig(StrictConfigModel):
-    """Normalized OpenClaw MCP connection settings."""
+    """Normalized OpenClaw bridge connection settings."""
 
     url: str = ""
     mode: Literal["stdio", "sse", "streamable-http"] = DEFAULT_OPENCLAW_MCP_MODE
@@ -143,7 +150,7 @@ class OpenClawConfig(StrictConfigModel):
 
 @dataclass(frozen=True)
 class OpenClawValidationResult:
-    """Result of validating an OpenClaw MCP integration."""
+    """Result of validating an OpenClaw bridge integration."""
 
     ok: bool
     detail: str
@@ -196,6 +203,57 @@ def _looks_like_openclaw_gateway_unavailable(messages: list[str]) -> bool:
     return any(indicator in message.lower() for message in messages for indicator in indicators)
 
 
+def _format_setup_steps(summary: str, steps: tuple[str, ...]) -> str:
+    rendered_steps = "\n".join(f"{index}. {step}" for index, step in enumerate(steps, start=1))
+    return f"{summary}\nNext steps:\n{rendered_steps}"
+
+
+def _openclaw_cli_preflight_output(command: str) -> str:
+    try:
+        result = subprocess.run(
+            [command, "--help"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+    output_parts = [result.stdout.strip(), result.stderr.strip()]
+    return "\n".join(part for part in output_parts if part).strip()
+
+
+def _openclaw_cli_preflight_issue(config: OpenClawConfig) -> str | None:
+    if not _uses_openclaw_cli_mcp_bridge(config):
+        return None
+
+    command = os.path.expanduser((config.command or "").strip())
+    if not command:
+        return None
+
+    output = _openclaw_cli_preflight_output(command)
+    if not output:
+        return None
+
+    match = _NODE_REQUIREMENT_PATTERN.search(output)
+    if match is None:
+        return None
+
+    required = match.group("required")
+    current = match.group("current")
+    return _format_setup_steps(
+        f"OpenClaw CLI requires Node.js {required} but the current shell is using {current}.",
+        (
+            "Run `nvm install 22` if Node 22 is not installed yet.",
+            "Run `nvm use 22` in the same shell where you launch OpenSRE.",
+            "Verify `node -v` shows 22.12 or newer and `openclaw --help` succeeds.",
+            "Then run `openclaw gateway status` and `uv run opensre integrations verify openclaw` again.",
+            "`nvm alias default 22` only affects future shells; it does not switch the current shell.",
+        ),
+    )
+
+
 def _describe_exception(err: BaseException) -> list[str]:
     if isinstance(err, BaseExceptionGroup):
         messages: list[str] = []
@@ -227,6 +285,11 @@ def describe_openclaw_error(
     detail = "; ".join(messages) if messages else (str(err).strip() or err.__class__.__name__)
     hints: list[str] = []
 
+    if _uses_openclaw_cli_mcp_bridge(config) and _looks_like_openclaw_gateway_unavailable(messages):
+        preflight_issue = _openclaw_cli_preflight_issue(config)
+        if preflight_issue is not None:
+            return preflight_issue
+
     if config.mode != "stdio" and _is_probable_openclaw_control_ui_url(config.url):
         hints.append(
             "The local OpenClaw URL on port 18789 is the Control UI/Gateway, not the MCP "
@@ -248,9 +311,15 @@ def describe_openclaw_error(
 
     if _uses_openclaw_cli_mcp_bridge(config) and _looks_like_openclaw_gateway_unavailable(messages):
         hints.append(
-            "The `openclaw mcp serve` bridge needs a running OpenClaw Gateway. "
-            "Check `openclaw gateway status`, then start it with `openclaw gateway run` "
-            "(foreground) or `openclaw gateway install` followed by `openclaw gateway start`."
+            _format_setup_steps(
+                "The `openclaw mcp serve` bridge needs a running OpenClaw Gateway.",
+                (
+                    "Check `openclaw gateway status`.",
+                    "Start it with `openclaw gateway run` for a foreground session.",
+                    "Or install/start the background service with `openclaw gateway install` then `openclaw gateway start`.",
+                    "Re-run `uv run opensre integrations verify openclaw` after the gateway is healthy.",
+                ),
+            )
         )
 
     if hints:
@@ -260,11 +329,14 @@ def describe_openclaw_error(
 
 def build_openclaw_config(raw: Mapping[str, object] | None) -> OpenClawConfig:
     """Build a normalized OpenClaw config object from env/store data."""
-    return OpenClawConfig.model_validate(raw or {})
+    payload = dict(raw or {})
+    allowed = set(OpenClawConfig.model_fields)
+    sanitized = {key: value for key, value in payload.items() if key in allowed}
+    return OpenClawConfig.model_validate(sanitized)
 
 
 def openclaw_config_from_env() -> OpenClawConfig | None:
-    """Load an OpenClaw MCP config from environment variables."""
+    """Load an OpenClaw bridge config from environment variables."""
     mode = os.getenv("OPENCLAW_MCP_MODE", DEFAULT_OPENCLAW_MCP_MODE).strip().lower()
     url = os.getenv("OPENCLAW_MCP_URL", "").strip()
     command = os.getenv("OPENCLAW_MCP_COMMAND", "").strip()
@@ -302,6 +374,10 @@ def openclaw_runtime_unavailable_reason(config: OpenClawConfig) -> str | None:
 
     if shutil.which(command) is None:
         return describe_openclaw_error(FileNotFoundError(2, "No such file", command), config)
+
+    preflight_issue = _openclaw_cli_preflight_issue(config)
+    if preflight_issue is not None:
+        return preflight_issue
 
     return None
 
@@ -429,7 +505,7 @@ async def _list_tools_async(config: OpenClawConfig) -> list[types.Tool]:
 
 
 def list_openclaw_tools(config: OpenClawConfig) -> list[OpenClawToolDescriptor]:
-    """List available tools from an OpenClaw MCP server."""
+    """List available tools from the OpenClaw bridge."""
     tools = _list_tools_sync(config)
     return [
         {
@@ -468,7 +544,7 @@ def call_openclaw_tool(
 
 
 def validate_openclaw_config(config: OpenClawConfig) -> OpenClawValidationResult:
-    """Validate OpenClaw MCP connectivity by listing available tools."""
+    """Validate OpenClaw bridge connectivity by listing available tools."""
     if not config.is_configured:
         return OpenClawValidationResult(
             ok=False,
@@ -479,7 +555,7 @@ def validate_openclaw_config(config: OpenClawConfig) -> OpenClawValidationResult
         return OpenClawValidationResult(
             ok=False,
             detail=(
-                "OpenClaw MCP validation failed: the local URL on port 18789 is OpenClaw's "
+                "OpenClaw bridge validation failed: the local URL on port 18789 is OpenClaw's "
                 "Control UI/Gateway, not its MCP bridge. Use mode `stdio` with command "
                 f"`{_OPENCLAW_STDIO_COMMAND}` and args `{' '.join(_OPENCLAW_STDIO_ARGS)}`."
             ),
@@ -489,7 +565,7 @@ def validate_openclaw_config(config: OpenClawConfig) -> OpenClawValidationResult
     if runtime_error is not None:
         return OpenClawValidationResult(
             ok=False,
-            detail=f"OpenClaw MCP validation failed: {runtime_error}",
+            detail=f"OpenClaw bridge validation failed: {runtime_error}",
         )
 
     try:
@@ -499,7 +575,7 @@ def validate_openclaw_config(config: OpenClawConfig) -> OpenClawValidationResult
         return OpenClawValidationResult(
             ok=True,
             detail=(
-                f"OpenClaw MCP connected via {config.mode} ({endpoint}); "
+                f"OpenClaw bridge connected via {config.mode} ({endpoint}); "
                 f"discovered {len(tool_names)} tool(s)."
             ),
             tool_names=tool_names,
@@ -507,5 +583,5 @@ def validate_openclaw_config(config: OpenClawConfig) -> OpenClawValidationResult
     except Exception as err:
         return OpenClawValidationResult(
             ok=False,
-            detail=f"OpenClaw MCP validation failed: {describe_openclaw_error(err, config)}",
+            detail=f"OpenClaw bridge validation failed: {describe_openclaw_error(err, config)}",
         )

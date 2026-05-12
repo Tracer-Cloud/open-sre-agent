@@ -220,6 +220,7 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         service="openclaw",
         verifier=_verify_openclaw,
         direct_effective=True,
+        setup_order=12,
         verify_order=28,
     ),
     IntegrationSpec(

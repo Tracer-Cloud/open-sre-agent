@@ -53,6 +53,12 @@ def _kimi_factory() -> LLMCLIAdapter:
     return KimiAdapter()
 
 
+def _copilot_factory() -> LLMCLIAdapter:
+    from app.integrations.llm_cli.copilot import CopilotAdapter
+
+    return CopilotAdapter()
+
+
 CLI_PROVIDER_REGISTRY: dict[str, CLIProviderRegistration] = {
     "codex": CLIProviderRegistration(adapter_factory=_codex_factory, model_env_key="CODEX_MODEL"),
     "cursor": CLIProviderRegistration(
@@ -68,6 +74,9 @@ CLI_PROVIDER_REGISTRY: dict[str, CLIProviderRegistration] = {
         adapter_factory=_opencode_factory, model_env_key="OPENCODE_MODEL"
     ),
     "kimi": CLIProviderRegistration(adapter_factory=_kimi_factory, model_env_key="KIMI_MODEL"),
+    "copilot": CLIProviderRegistration(
+        adapter_factory=_copilot_factory, model_env_key="COPILOT_MODEL"
+    ),
 }
 
 

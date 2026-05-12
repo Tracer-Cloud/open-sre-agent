@@ -53,6 +53,7 @@ def _call_run_investigation(
     severity: str,
     *,
     raw_alert: dict[str, Any],
+    openclaw_context: dict[str, Any] | None = None,
     opensre_evaluate: bool = False,
 ) -> AgentState:
     """Import the heavy investigation runner only when execution starts."""
@@ -63,6 +64,7 @@ def _call_run_investigation(
         pipeline_name,
         severity,
         raw_alert=raw_alert,
+        openclaw_context=openclaw_context,
         opensre_evaluate=opensre_evaluate,
     )
 
@@ -89,6 +91,7 @@ def run_investigation_cli(
     alert_name: str | None = None,
     pipeline_name: str | None = None,
     severity: str | None = None,
+    openclaw_context: dict[str, Any] | None = None,
     opensre_evaluate: bool = False,
 ) -> dict[str, Any]:
     """Run the investigation and return the CLI-facing JSON payload."""
@@ -105,6 +108,7 @@ def run_investigation_cli(
             resolved_pipeline_name,
             resolved_severity,
             raw_alert=raw_alert,
+            openclaw_context=openclaw_context,
             opensre_evaluate=opensre_evaluate,
         )
     except Exception as exc:

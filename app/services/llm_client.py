@@ -935,6 +935,15 @@ def _extract_json_payload(text: str) -> Any:
         cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
         cleaned = re.sub(r"\s*```$", "", cleaned)
         cleaned = cleaned.strip()
+    else:
+        # LLM may prefix the code block with prose ("Here is the JSON:")
+        fence_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned)
+        if fence_match:
+            candidate = fence_match.group(1).strip()
+            try:
+                return _safe_json_loads(candidate)
+            except json.JSONDecodeError:
+                pass
 
     try:
         return _safe_json_loads(cleaned)
@@ -1005,6 +1014,10 @@ def _create_llm_client(model_type: ModelType) -> _LLMClientType:
     try:
         settings = LLMSettings.from_env()
     except ValidationError as exc:
+        errors = exc.errors()
+        if len(errors) == 1:
+            msg = re.sub(r"^[Vv]alue error,\s*", "", errors[0].get("msg", "")).strip()
+            raise RuntimeError(msg or str(exc)) from exc
         raise RuntimeError(str(exc)) from exc
     provider = settings.provider
     if provider == "openai":

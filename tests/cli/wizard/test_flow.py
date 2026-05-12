@@ -977,6 +977,18 @@ def test_credential_line_for_saved_summary_cli_gemini_cli() -> None:
     )
 
 
+def test_credential_line_for_saved_summary_cli_copilot() -> None:
+    from app.cli.wizard import config as wizard_config
+
+    copilot = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "copilot")
+    line = flow._credential_line_for_saved_summary(copilot)
+    # PR #1533: hint surfaces both CLI paths (`copilot login`, `gh auth login`)
+    # before the env-var bypass, matching the new CLI-first probe order.
+    assert line.startswith("GitHub Copilot CLI (Run `copilot login`")
+    assert "gh auth login" in line
+    assert "COPILOT_GITHUB_TOKEN" in line
+
+
 def test_credential_line_for_saved_summary_anthropic() -> None:
     from app.cli.wizard import config as wizard_config
 

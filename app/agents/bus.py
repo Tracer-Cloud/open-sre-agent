@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import atexit
 import errno
-import fcntl
 import json
 import logging
 import os
@@ -25,12 +24,23 @@ import threading
 import types
 import uuid
 from collections.abc import Iterator, Mapping
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
 from app.constants import OPENSRE_HOME_DIR
+
+_fcntl: types.ModuleType | None
+try:
+    import fcntl as _fcntl_impl
+except ImportError:
+    # ``fcntl`` is POSIX-only; PyInstaller Windows binaries must import this
+    # module without failing. Cross-process broker election falls back to
+    # bind/PID-file checks when ``flock`` is unavailable (see ``_ensure_broker``).
+    _fcntl = None
+else:
+    _fcntl = _fcntl_impl
 
 logger = logging.getLogger(__name__)
 
@@ -413,9 +423,11 @@ def _acquire_election_flock(path: Path) -> int | None:
 
     Returns the open fd on success, or ``None`` if the lock could not be
     obtained (file system without ``flock`` support, permission denied,
-    ...). The caller is responsible for releasing + closing the fd via
+    Windows, ...). The caller is responsible for releasing + closing the fd via
     ``_release_election_flock``.
     """
+    if _fcntl is None:
+        return None
     lock_path = _election_lock_path(path)
     try:
         _ensure_parent_dir(lock_path)
@@ -423,7 +435,7 @@ def _acquire_election_flock(path: Path) -> int | None:
     except OSError:
         return None
     try:
-        fcntl.flock(fd, fcntl.LOCK_EX)
+        _fcntl.flock(fd, _fcntl.LOCK_EX)
     except OSError:
         with suppress(OSError):
             os.close(fd)
@@ -434,10 +446,21 @@ def _acquire_election_flock(path: Path) -> int | None:
 def _release_election_flock(fd: int | None) -> None:
     if fd is None:
         return
-    with suppress(OSError):
-        fcntl.flock(fd, fcntl.LOCK_UN)
+    if _fcntl is not None:
+        with suppress(OSError):
+            _fcntl.flock(fd, _fcntl.LOCK_UN)
     with suppress(OSError):
         os.close(fd)
+
+
+@contextmanager
+def _hold_election_flock(path: Path) -> Iterator[None]:
+    """Acquire the cross-process election flock for ``path`` for one ``with`` block."""
+    fd = _acquire_election_flock(path)
+    try:
+        yield
+    finally:
+        _release_election_flock(fd)
 
 
 def _ensure_broker(path: Path) -> BusServer | None:
@@ -449,12 +472,14 @@ def _ensure_broker(path: Path) -> BusServer | None:
     retries the bind.
 
     Cross-process election is serialized by a POSIX ``flock`` on a sidecar
-    lock file (``<socket>.lock``). Without it, two processes that both
+    lock file (``<socket>.lock``) when ``fcntl`` is available (not on Windows).
+    Without ``flock``, two processes that both
     observe ``_socket_is_live`` → False can race through ``_unlink_stale`` +
     ``bind``: the kernel guarantees one bind succeeds, but the loser is left
     holding a listener fd whose filesystem path the winner just took, plus
     the accept/reader daemon threads it spawned — a real resource leak that
-    persists for the loser's process lifetime. Holding the flock around the
+    persists for the loser's process lifetime. Where ``flock`` is available,
+    holding it around the
     check-then-bind sequence makes election atomic across processes.
 
     A lost bind race (``EADDRINUSE`` / ``EEXIST``) is still converted to
@@ -470,29 +495,22 @@ def _ensure_broker(path: Path) -> BusServer | None:
         if existing is not None and existing.is_running:
             return existing
 
-    flock_fd = _acquire_election_flock(path)
-    try:
-        with _broker_lock:
-            # Re-check inside the cross-process lock: a peer (or another
-            # thread that also raced past the fast path) may have just
-            # elected.
-            existing = _brokers.get(path)
-            if existing is not None and existing.is_running:
-                return existing
-            if _socket_is_live(path):
+    with _hold_election_flock(path), _broker_lock:
+        existing = _brokers.get(path)
+        if existing is not None and existing.is_running:
+            return existing
+        if _socket_is_live(path):
+            return None
+        _unlink_stale(path)
+        server = BusServer(path)
+        try:
+            server.start()
+        except OSError as exc:
+            if exc.errno in _BIND_RACE_ERRNOS:
                 return None
-            _unlink_stale(path)
-            server = BusServer(path)
-            try:
-                server.start()
-            except OSError as exc:
-                if exc.errno in _BIND_RACE_ERRNOS:
-                    return None
-                raise
-            _brokers[path] = server
-            return server
-    finally:
-        _release_election_flock(flock_fd)
+            raise
+        _brokers[path] = server
+        return server
 
 
 def _connect_client(path: Path, timeout: float) -> socket.socket:

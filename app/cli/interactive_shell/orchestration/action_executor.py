@@ -941,6 +941,11 @@ def run_opensre_cli_command(
 
     Returns True if the command was attempted (regardless of success),
     False if the subcommand is blocked or args are empty.
+
+    ``confirm_fn`` is forwarded to :func:`execution_allowed` so the
+    interactive REPL can route mid-dispatch ``Proceed? [y/N]`` prompts
+    through its active prompt_toolkit input — the stdlib ``input()``
+    deadlocks against the running ``prompt_async``.
     """
     try:
         tokens = shlex.split(args)

@@ -44,6 +44,7 @@ STATE_DEFAULTS: dict[str, Any] = {
     "slack_context": {},
     "discord_context": {},
     "telegram_context": {},
+    "openclaw_context": {},
     "thread_id": "",
     "run_id": "",
     "_auth_token": "",

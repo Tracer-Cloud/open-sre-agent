@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from app.integrations.github_mcp import GitHubMcpDisplayDetailLevel
 
 from app.integrations.gitlab import DEFAULT_GITLAB_BASE_URL
+from app.integrations.openclaw import build_openclaw_config, validate_openclaw_config
 from app.integrations.registry import SUPPORTED_SETUP_SERVICES
 from app.integrations.store import (
     STORE_PATH,
@@ -531,6 +532,44 @@ def _setup_discord() -> None:
     _register_discord_slash_command(application_id, bot_token)
 
 
+def _setup_openclaw() -> None:
+    print("  1) stdio (recommended)  2) Streamable HTTP  3) SSE")
+    choice = _p("Choice", default="1")
+    mode = {"1": "stdio", "2": "streamable-http", "3": "sse"}.get(choice, "stdio")
+
+    credentials: dict[str, Any] = {"mode": mode}
+    if mode == "stdio":
+        command = _p("OpenClaw bridge command", default="openclaw")
+        args = _p("OpenClaw bridge args", default="mcp serve")
+        if not command:
+            _die("command is required for stdio mode.")
+        credentials["command"] = command
+        credentials["args"] = [part for part in args.split() if part]
+        credentials["url"] = ""
+        credentials["auth_token"] = ""
+    else:
+        url = _p("OpenClaw bridge URL")
+        if not url:
+            _die("url is required for remote MCP modes.")
+        credentials["url"] = url
+        credentials["command"] = ""
+        credentials["args"] = []
+        credentials["auth_token"] = _p("OpenClaw auth token (optional)", secret=True)
+
+    print("\n  Validating OpenClaw bridge...")
+    config = build_openclaw_config(credentials)
+    result = validate_openclaw_config(config)
+    print(f"  {result.detail}")
+    if not result.ok:
+        sys.exit(1)
+
+    upsert_integration("openclaw", {"credentials": credentials})
+    print("  Next:")
+    print("    - opensre integrations verify openclaw")
+    print("    - uv run opensre investigate -i tests/fixtures/openclaw_test_alert.json")
+    print("    - for accurate RCA, also configure Grafana/Datadog and GitHub")
+
+
 def _setup_postgresql() -> None:
     host = _p("Host (e.g. localhost or postgres.example.com)")
     database = _p("Database name")
@@ -712,6 +751,7 @@ _HANDLERS: dict[str, Any] = {
     "sentry": _setup_sentry,
     "mongodb": _setup_mongodb,
     "discord": _setup_discord,
+    "openclaw": _setup_openclaw,
     "postgresql": _setup_postgresql,
     "mysql": _setup_mysql,
 }

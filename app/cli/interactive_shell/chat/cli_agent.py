@@ -371,7 +371,13 @@ def _execute_action_plan(
                 run_opensre_cli_command,
             )
 
-            run_opensre_cli_command(args, session, console)
+            run_opensre_cli_command(
+                args,
+                session,
+                console,
+                confirm_fn=confirm_fn,
+                is_tty=is_tty,
+            )
             continue
 
         console.print(f"[{ERROR}]unsupported action:[/] {escape(kind or '?')}")
@@ -391,12 +397,18 @@ def answer_cli_agent(
     message: str,
     session: ReplSession,
     console: Console,
+    *,
+    confirm_fn: Callable[[str], str] | None = None,
 ) -> None:
     """Run one turn of the terminal assistant (no LangGraph / no investigation pipeline).
 
     For documentation-grounded procedural Q&A use :func:`answer_cli_help`, which
     also pulls relevant ``docs/`` pages into the grounding context.
 
+    ``confirm_fn`` is forwarded to :func:`_execute_action_plan` so the
+    interactive REPL can route mid-dispatch ``Proceed? [y/N]`` prompts
+    through its active prompt_toolkit input instead of the stdlib
+    ``input()`` (which deadlocks against the running ``prompt_async``).
     """
     try:
         from app.services.llm_client import get_llm_for_reasoning
@@ -456,7 +468,7 @@ def answer_cli_agent(
         return
 
     actions = _parse_action_plan(text_str)
-    if _execute_action_plan(actions, session, console):
+    if _execute_action_plan(actions, session, console, confirm_fn=confirm_fn):
         _record_cli_agent_turn(session, message, text_str)
         return
 

@@ -227,14 +227,13 @@ class TestAssistantOutputRendering:
     """The assistant reply must be rendered, not printed as raw Markdown."""
 
     def test_bold_markdown_is_rendered(self, monkeypatch: Any) -> None:
-        # Use force_terminal=True console so Rich renders ANSI for bold.
-        # We strip ANSI escapes from the output to assert the visible chars.
+        # End-of-stream force-flush renders the buffered text as
+        # Markdown — ``**`` delimiters are stripped.
         _patch_llm(monkeypatch, "Hello **world**")
         session = ReplSession()
         console, buf = _capture()
         answer_cli_agent("hi", session, console)
         output = _strip_ansi(buf.getvalue())
-        # Markdown rendering removes the literal ** delimiters around "world".
         assert "**world**" not in output
         assert "world" in output
         assert "Hello" in output
@@ -249,10 +248,9 @@ class TestAssistantOutputRendering:
         console, buf = _capture()
         answer_cli_agent("show commands", session, console)
         output = _strip_ansi(buf.getvalue())
-        # Raw markdown table separator must not leak through.
+        # Rich's Markdown table renderer replaces the ``|---|---|``
+        # separator with box-drawing chars — the literal must not leak.
         assert "|---|---|" not in output
-        # Header / cell text must be preserved (Rich uses box-drawing chars,
-        # so the text is what matters here, not the exact column dividers).
         assert "Command" in output
         assert "What it does" in output
         assert "opensre" in output

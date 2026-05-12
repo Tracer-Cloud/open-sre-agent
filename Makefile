@@ -1,7 +1,7 @@
 -include .env
 export
 
-.PHONY: install onboard benchmark benchmark-update-readme test test-full demo alert-template investigate-alert opensre-hub-fetch opensre-hub-export opensre-hub-investigate verify-integrations check-docker check-langgraph check-langsmith-api-key grafana-local-up grafana-local-down grafana-local-seed langgraph-build langgraph-deploy clean lint format deploy deploy-lambda deploy-prefect deploy-flink destroy destroy-lambda destroy-prefect destroy-flink prefect-local-test simulate-k8s-alert test-k8s-local test-k8s test-k8s-datadog chaos-mesh-up chaos-mesh-down chaos-engineering-apply chaos-engineering-delete chaos-lab-up chaos-lab-down chaos-experiment-list chaos-experiment-up chaos-experiment-down deploy-dd-monitors cleanup-dd-monitors deploy-eks destroy-eks test-k8s-eks datadog-demo crashloop-demo regen-trigger-config test-rca test-rca-grafana test-synthetic test-rds-synthetic test-cli-smoke deploy-langsmith destroy-langsmith test-langsmith deploy-vercel destroy-vercel test-vercel deploy-ec2 destroy-ec2 test-ec2 deploy-ec2-hello destroy-ec2-hello deploy-remote destroy-remote deploy-bedrock destroy-bedrock test-bedrock download-cloudopsbench-hf validate-cloudopsbench
+.PHONY: install onboard benchmark benchmark-update-readme test test-full demo alert-template investigate-alert opensre-hub-fetch opensre-hub-export opensre-hub-investigate verify-integrations check-docker check-langgraph check-langsmith-api-key grafana-local-up grafana-local-down grafana-local-seed langgraph-build langgraph-deploy clean lint format deploy deploy-lambda deploy-prefect deploy-flink destroy destroy-lambda destroy-prefect destroy-flink prefect-local-test simulate-k8s-alert test-k8s-local test-k8s test-k8s-datadog chaos-mesh-up chaos-mesh-down chaos-engineering-apply chaos-engineering-delete chaos-lab-up chaos-lab-down chaos-experiment-list chaos-experiment-up chaos-experiment-down deploy-dd-monitors cleanup-dd-monitors deploy-eks destroy-eks test-k8s-eks datadog-demo crashloop-demo regen-trigger-config test-rca test-rca-grafana test-synthetic test-rds-synthetic test-cli-smoke deploy-langsmith destroy-langsmith test-langsmith deploy-vercel destroy-vercel test-vercel deploy-ec2 destroy-ec2 test-ec2 deploy-ec2-hello destroy-ec2-hello deploy-remote destroy-remote deploy-bedrock destroy-bedrock test-bedrock download-cloudopsbench-hf validate-cloudopsbench test-openclaw test-openclaw-synthetic
 
 
 ifneq ($(wildcard .venv/bin/python),)
@@ -393,6 +393,14 @@ rabbitmq-local-up:
 
 rabbitmq-local-down:
 	docker compose -f infra/docker-compose.rabbitmq.yml down -v
+
+# Run OpenClaw integration + tool E2E tests (mocked transport, no live OpenClaw needed)
+test-openclaw:
+	$(PYTHON) -m pytest tests/e2e/openclaw/ tests/test_openclaw_integration.py tests/tools/test_openclaw_mcp_tool.py tests/utils/test_openclaw_delivery.py -v
+
+# Run synthetic OpenClaw investigation scenarios (FixtureOpenClawBackend, no live OpenClaw)
+test-openclaw-synthetic:
+	$(PYTHON) -m tests.synthetic.openclaw.run_suite
 
 # Run the RabbitMQ integration + tool tests, then invoke the verify command
 # against the live broker.  Requires the rabbitmq-local-up stack to be running.

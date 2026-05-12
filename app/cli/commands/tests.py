@@ -20,7 +20,15 @@ from app.analytics.cli import (
 from app.cli.support.context import is_json_output, is_yes
 from app.cli.support.errors import OpenSREError
 
-_TEST_CATEGORIES: tuple[str, ...] = ("all", "rca", "synthetic", "demo", "infra-heavy", "ci-safe")
+_TEST_CATEGORIES: tuple[str, ...] = (
+    "all",
+    "rca",
+    "synthetic",
+    "demo",
+    "infra-heavy",
+    "ci-safe",
+    "openclaw",
+)
 
 
 class _TestIdType(click.ParamType):
@@ -112,6 +120,15 @@ def _build_cloudopsbench_argv(
     return argv
 
 
+def _build_openclaw_synthetic_argv(*, scenario: str, output_json: bool) -> list[str]:
+    argv: list[str] = []
+    if scenario:
+        argv.extend(["--scenario", scenario])
+    if output_json:
+        argv.append("--json")
+    return argv
+
+
 @click.group(name="tests", invoke_without_command=True)
 @click.pass_context
 def tests(ctx: click.Context) -> None:
@@ -149,6 +166,18 @@ def _synthetic_suite_not_bundled_error() -> OpenSREError:
             "under 'tests/synthetic/rds_postgres/'. Install from source "
             "(`git clone https://github.com/Tracer-Cloud/opensre && pip "
             "install -e .`) and re-run 'opensre tests synthetic'."
+        ),
+    )
+
+
+def _openclaw_synthetic_suite_not_bundled_error() -> OpenSREError:
+    return OpenSREError(
+        "The synthetic OpenClaw suite is not available in this build.",
+        suggestion=(
+            "Pre-built binaries do not bundle the per-scenario data files under "
+            "'tests/synthetic/openclaw/'. Install from source "
+            "(`git clone https://github.com/Tracer-Cloud/opensre && pip install -e .`) "
+            "and re-run 'opensre tests openclaw-synthetic'."
         ),
     )
 
@@ -266,6 +295,37 @@ def run_synthetic_suite(
                 report=report,
                 observations_dir=observations_dir,
             )
+        )
+    except Exception as exc:
+        capture_test_synthetic_failed(scenario_name, reason=type(exc).__name__)
+        raise
+
+    capture_test_synthetic_completed(scenario_name, exit_code=exit_code)
+    raise SystemExit(exit_code)
+
+
+@tests.command(name="openclaw-synthetic")
+@click.option("--scenario", default="", help="Pin to a single OpenClaw synthetic scenario.")
+@click.option("--json", "output_json", is_flag=True, help="Print machine-readable JSON results.")
+def run_openclaw_synthetic_suite(scenario: str, output_json: bool) -> None:
+    """Run the synthetic OpenClaw RCA suite through the fixture bridge backend."""
+    from app.cli.tests.discover import OPENCLAW_SYNTHETIC_SCENARIOS_DIR
+
+    if not OPENCLAW_SYNTHETIC_SCENARIOS_DIR.is_dir():
+        raise _openclaw_synthetic_suite_not_bundled_error()
+
+    try:
+        from tests.synthetic.openclaw.run_suite import main as run_suite_main
+    except ModuleNotFoundError as exc:
+        if exc.name is None or not exc.name.startswith("tests.synthetic.openclaw"):
+            raise
+        raise _openclaw_synthetic_suite_not_bundled_error() from exc
+
+    scenario_name = f"openclaw:{scenario or 'all'}"
+    capture_test_synthetic_started(scenario_name, mock_grafana=False)
+    try:
+        exit_code = run_suite_main(
+            _build_openclaw_synthetic_argv(scenario=scenario, output_json=output_json)
         )
     except Exception as exc:
         capture_test_synthetic_failed(scenario_name, reason=type(exc).__name__)
