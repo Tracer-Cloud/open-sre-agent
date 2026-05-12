@@ -27,6 +27,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
+import contextlib
 import re
 import sys
 import threading
@@ -44,6 +45,8 @@ from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
 from rich.markup import escape
 
+from app.agents import AgentRegistry
+from app.agents.sampler import start_sampler
 import app.cli.interactive_shell.orchestration.agent_actions as _agent_actions
 from app.agents.sweep import run_startup_sweep
 from app.analytics.cli import capture_terminal_turn_summarized
