@@ -73,7 +73,6 @@ class CorrelatorDecision:
 class _FingerprintState:
     last_seen: datetime
     timestamps: deque[datetime] = field(default_factory=deque)
-    original_severity: IncidentSeverity | None = None
 
 
 def default_routing_matrix() -> dict[str, RouteDestination]:
@@ -143,7 +142,6 @@ class IncidentCorrelator:
                 state = _FingerprintState(
                     last_seen=now,
                     timestamps=deque([now]),
-                    original_severity=incident.severity,
                 )
                 self._state[incident.fingerprint] = state
                 destination = self._route(incident.rule, incident.severity)

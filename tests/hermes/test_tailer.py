@@ -36,6 +36,31 @@ def _drain_for(tailer: FileTailer, *, max_lines: int, timeout_s: float = 2.0) ->
 
 
 class TestFromStartReplay:
+    def test_mid_chunk_close_resumes_without_skipping_lines(self, tmp_path: Path) -> None:
+        """Closing the iterator mid-chunk must not advance the file cursor past
+        unconsumed complete lines (regression for chunk read / yield ordering).
+        """
+        log = tmp_path / "errors.log"
+        body = "\n".join(f"L{i:03d}" for i in range(40)) + "\n"
+        log.write_text(body, encoding="utf-8")
+
+        tailer = FileTailer(log, poll_interval_s=0.01, from_start=True, read_chunk=80)
+        outer = iter(tailer)
+        assert next(outer) == "L000"
+        assert next(outer) == "L001"
+        outer.close()
+
+        resumed: list[str] = []
+        for line in tailer:
+            resumed.append(line)
+            if len(resumed) == 38:
+                break
+        tailer.stop()
+
+        assert resumed[:3] == ["L002", "L003", "L004"]
+        assert resumed[-1] == "L039"
+        assert len(resumed) == 38
+
     def test_yields_existing_lines_in_order(self, tmp_path: Path) -> None:
         log = tmp_path / "errors.log"
         log.write_text("a\nb\nc\n", encoding="utf-8")

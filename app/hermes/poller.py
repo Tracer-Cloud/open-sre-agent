@@ -312,8 +312,6 @@ def _read_segment(
     # the parent landed in an earlier poll. The classifier already
     # buffers the open traceback for us across calls.
     prev_level: LogLevel | None = None
-    # Initialised to start_offset so the return is always defined even if
-    # the file is empty and the while-loop body never executes.
     new_offset = start_offset
 
     with path.open("rb") as handle:
@@ -326,13 +324,14 @@ def _read_segment(
         while True:
             line_start = handle.tell()
             raw = handle.readline()
+            # ``line_start`` is the resume offset on EOF or when the line
+            # does not fit in ``budget``; assign once here so CodeQL does
+            # not flag redundant writes on those break paths.
+            new_offset = line_start
             if not raw:
-                # EOF — cursor rests at the last byte we saw.
-                new_offset = line_start
                 break
             if len(raw) > budget:
                 handle.seek(line_start)
-                new_offset = line_start
                 break
             budget -= len(raw)
             # Post-line offset is deterministic from line_start + raw length;
@@ -368,7 +367,6 @@ def _read_segment(
                     1,
                     int(remaining_bytes / max(avg_bytes_per_record, 1.0)),
                 )
-                new_offset = line_start
                 handle.seek(line_start)
                 break
 

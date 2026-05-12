@@ -24,6 +24,7 @@ import logging
 import os
 import threading
 import time
+from collections import deque
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -64,6 +65,7 @@ class FileTailer:
         "_from_start",
         "_stop_event",
         "_partial",
+        "_pending_lines",
         "_fingerprint",
         "_position",
         "_last_reopen_log",
@@ -89,6 +91,7 @@ class FileTailer:
         self._from_start = from_start
         self._stop_event = stop_event if stop_event is not None else threading.Event()
         self._partial: str = ""
+        self._pending_lines: deque[str] = deque()
         self._fingerprint: _FileFingerprint | None = None
         self._position: int = 0
         self._last_reopen_log: float = 0.0
@@ -115,6 +118,7 @@ class FileTailer:
             self._fingerprint = None
             self._position = 0
             self._partial = ""
+            self._pending_lines.clear()
             return
         except OSError as exc:
             self._maybe_log_reopen("cannot stat %s: %s", self._path, exc)
@@ -128,6 +132,7 @@ class FileTailer:
             # First attach: ``from_start`` chooses replay vs live-tail.
             self._position = 0 if self._from_start else stat.st_size
             self._partial = ""
+            self._pending_lines.clear()
             self._fingerprint = fingerprint
         elif rotated or truncated:
             self._maybe_log_reopen(
@@ -137,6 +142,7 @@ class FileTailer:
             )
             self._position = 0
             self._partial = ""
+            self._pending_lines.clear()
             self._fingerprint = fingerprint
 
         if stat.st_size <= self._position:
@@ -148,33 +154,38 @@ class FileTailer:
             self._maybe_log_reopen("read failed on %s: %s", self._path, exc)
 
     def _read_from_current_position(self) -> Iterator[str]:
+        """Read complete lines from the file handle.
+
+        File bytes for each chunk are committed to ``_position`` and
+        ``_partial`` *before* complete lines are yielded. Any lines not yet
+        yielded after a chunk is parsed live in ``_pending_lines`` so a
+        consumer that stops mid-iteration (``GeneratorExit``) does not skip
+        trailing lines in the chunk — the next poll drains the queue first.
+        """
         with open(self._path, encoding="utf-8", errors="replace") as fh:
             fh.seek(self._position)
             while True:
+                while self._pending_lines:
+                    yield self._pending_lines.popleft()
                 chunk = fh.read(self._read_chunk)
                 if not chunk:
                     break
-                self._position = fh.tell()
-                yield from self._split_lines(chunk)
-
-    def _split_lines(self, chunk: str) -> Iterator[str]:
-        # Prepend any leftover bytes from the previous cycle so a record
-        # that straddles two reads is reassembled before being yielded.
-        data = self._partial + chunk
-        # ``splitlines(keepends=True)`` preserves the newline so we can
-        # detect whether the final element is a complete line.
-        parts = data.splitlines(keepends=True)
-        if not parts:
-            self._partial = ""
-            return
-        if parts[-1].endswith(("\n", "\r")):
-            self._partial = ""
-            complete = parts
-        else:
-            self._partial = parts[-1]
-            complete = parts[:-1]
-        for line in complete:
-            yield line.rstrip("\r\n")
+                chunk_end = fh.tell()
+                data = self._partial + chunk
+                parts = data.splitlines(keepends=True)
+                if not parts:
+                    self._partial = ""
+                    self._position = chunk_end
+                    continue
+                if parts[-1].endswith(("\n", "\r")):
+                    self._partial = ""
+                    complete_parts = parts
+                else:
+                    self._partial = parts[-1]
+                    complete_parts = parts[:-1]
+                completes = [p.rstrip("\r\n") for p in complete_parts]
+                self._position = chunk_end
+                self._pending_lines.extend(completes)
 
     def _maybe_log_reopen(self, fmt: str, *args: object) -> None:
         # Throttle noisy reopen/error logs so a long-missing file does not
