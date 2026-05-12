@@ -153,6 +153,7 @@ def test_stream_investigation_cli_closes_cleanly_on_generator_close(
 ) -> None:
     """Closing the generator must not hang and must clean up the background thread."""
     import asyncio
+    import time
 
     async def fake_astream_investigation(*args: object, **kwargs: object):
         yield StreamEvent("metadata", data={"run_id": "run-123"})
@@ -169,8 +170,10 @@ def test_stream_investigation_cli_closes_cleanly_on_generator_close(
     first = next(events)
     assert first.event_type == "metadata"
 
-    # Closing the generator should trigger cleanup without hanging
+    # Without eager pump cancellation, thread.join() would block for the full timeout (~5s).
+    t0 = time.monotonic()
     events.close()
+    assert time.monotonic() - t0 < 2.0
 
 
 def test_run_investigation_cli_maps_cli_auth_to_opensre_error(

@@ -19,6 +19,11 @@ if TYPE_CHECKING:
 
 _logger = logging.getLogger(__name__)
 
+
+class _InvestigationPumpCancelled(Exception):
+    """Propagated when the async pump task was cancelled (distinct from Ctrl+C SIGINT)."""
+
+
 _SESSION_EVENT_POLL_S = 0.25
 
 
@@ -46,6 +51,14 @@ def _check_llm_settings() -> None:
 
 def _reraise_investigation_failure(exc: BaseException) -> NoReturn:
     """Map investigation runtime failures to structured CLI errors."""
+    if isinstance(exc, _InvestigationPumpCancelled):
+        from app.cli.support.errors import OpenSREError
+
+        raise OpenSREError(
+            "Investigation streaming stopped before completion.",
+            suggestion="The run was cancelled or closed early. Retry if you still need results.",
+        ) from exc
+
     reraise_cli_runtime_error(exc)
 
 
@@ -196,7 +209,7 @@ def stream_investigation_cli(
             try:
                 loop.run_until_complete(task)
             except asyncio.CancelledError:
-                event_queue.put(KeyboardInterrupt("investigation cancelled"))
+                event_queue.put(_InvestigationPumpCancelled())
         except Exception as exc:
             event_queue.put(exc)
         finally:
@@ -225,10 +238,8 @@ def stream_investigation_cli(
             if item is None:
                 break
             yield item
-    except KeyboardInterrupt:
-        _cancel_pump()
-        raise
     finally:
+        _cancel_pump()
         thread.join(timeout=5)
         if thread.is_alive():
             _logger.warning(
@@ -319,7 +330,7 @@ def _run_session_alert_payload(
             try:
                 loop.run_until_complete(task)
             except asyncio.CancelledError:
-                event_queue.put(KeyboardInterrupt("investigation cancelled"))
+                event_queue.put(_InvestigationPumpCancelled())
         except Exception as exc:
             event_queue.put(exc)
         finally:
@@ -351,9 +362,8 @@ def _run_session_alert_payload(
                 if item is None:
                     return
                 yield item
-        except KeyboardInterrupt:
+        finally:
             _cancel_pump()
-            raise
 
     renderer = StreamRenderer(local=True)
     try:
