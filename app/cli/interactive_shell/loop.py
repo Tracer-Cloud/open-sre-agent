@@ -894,8 +894,7 @@ async def _run_interactive(
                 # through the normal slash-dispatch path.
                 if state.is_dispatch_running() and _looks_like_cancel_request(text):
                     stripped = (text or "").strip()
-                    if stripped:
-                        render_submitted_prompt(echo_console, session, stripped)
+                    render_submitted_prompt(echo_console, session, stripped)
                     state.cancel_current_dispatch()
                     continue
 

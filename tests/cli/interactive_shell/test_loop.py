@@ -1114,7 +1114,7 @@ class TestRouteConfirmThroughPrompt:
 
     def _run_in_thread(
         self, state: loop._ReplState, prompt_text: str
-    ) -> tuple[threading.Thread, list[str], list[BaseException]]:
+    ) -> tuple[threading.Thread, list[str], list[Exception]]:
         """Run the worker in a background thread and capture both its
         return value (``result``) and any raised exception (``exc``).
 
@@ -1124,12 +1124,12 @@ class TestRouteConfirmThroughPrompt:
         ``exc``.
         """
         result: list[str] = []
-        exc: list[BaseException] = []
+        exc: list[Exception] = []
 
         def target() -> None:
             try:
                 result.append(loop._route_confirm_through_prompt(state, prompt_text))
-            except BaseException as e:
+            except Exception as e:
                 exc.append(e)
 
         t = threading.Thread(target=target, daemon=True)
