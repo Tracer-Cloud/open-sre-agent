@@ -46,6 +46,7 @@ from __future__ import annotations
 import logging
 import threading
 from collections.abc import Callable
+from concurrent.futures import CancelledError as FutureCancelledError
 from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from dataclasses import dataclass
@@ -289,6 +290,11 @@ class TelegramSink:
                 incident.fingerprint,
             )
             return _InvestigationResult.timed_out(timeout)
+        except FutureCancelledError:
+            # shutdown(cancel_futures=True) cancels outstanding futures.
+            # CancelledError signals sink closure, not an investigation
+            # failure, so the operator-visible marker must reflect that.
+            return _InvestigationResult.sink_closed()
         except Exception:
             logger.warning(
                 "hermes investigation bridge raised: rule=%s fingerprint=%s",

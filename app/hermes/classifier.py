@@ -143,6 +143,15 @@ class IncidentClassifier:
     def _maybe_emit_severity(self, record: LogRecord) -> HermesIncident | None:
         if record.level.severity_rank < LogLevel.ERROR.severity_rank:
             return None
+        # Traceback headers are handled exclusively by
+        # _maybe_open_or_finalize_traceback which will emit a ``traceback``
+        # incident (CRITICAL, with frames) once the block is complete.
+        # Emitting ``error_severity`` for the same record would create two
+        # separate incidents for every Python exception — different
+        # fingerprints, different dedup buckets — resulting in duplicate
+        # Telegram notifications and two concurrent RCA investigation calls.
+        if _looks_like_traceback_header(record):
+            return None
         severity = (
             IncidentSeverity.CRITICAL
             if record.level is LogLevel.CRITICAL

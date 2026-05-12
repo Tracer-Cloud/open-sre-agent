@@ -418,3 +418,43 @@ class TestDispatcherIntegration:
         assert len(calls) == 1
         text = calls[0]["text"]
         assert "sink closed" in text.lower() or "skipped" in text.lower()
+
+    def test_cancelled_future_shows_sink_closed_not_failed(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """future.result() raises CancelledError when shutdown(cancel_futures=True)
+        cancels an in-flight future.  This must surface as 'sink_closed' in the
+        Telegram body — not 'attempted (failed)' — because the cancellation is
+        the result of an orderly close(), not an investigation error."""
+        dispatcher, calls = _dispatcher(monkeypatch)
+
+        def _bridge(_incident: HermesIncident) -> str | None:
+            return "RCA"
+
+        sink = TelegramSink(
+            dispatcher,
+            investigation_bridge=_bridge,
+            config=TelegramSinkConfig(bridge_run_inline=False, bridge_workers=1),
+        )
+
+        # Simulate a future that was cancelled by executor.shutdown(cancel_futures=True)
+        from concurrent.futures import Future
+
+        cancelled_future: Future[str | None] = Future()
+        cancelled_future.cancel()
+
+        ex = sink._bridge_executor  # type: ignore[attr-defined]
+        assert ex is not None
+
+        def _submit_cancelled(*_a: object, **_kw: object) -> Future[str | None]:
+            return cancelled_future
+
+        monkeypatch.setattr(ex, "submit", _submit_cancelled)
+
+        result = sink._run_bridge_in_pool(  # type: ignore[attr-defined]
+            _bridge, _incident(severity=IncidentSeverity.HIGH)
+        )
+        assert result.state == "sink_closed", (
+            f"CancelledError should yield sink_closed, got: {result.state}"
+        )
+        sink.close()

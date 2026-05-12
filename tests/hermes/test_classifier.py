@@ -188,15 +188,19 @@ class TestTracebackRule:
             timestamp=datetime(2026, 5, 12, 0, 12, 30),
         )
 
-        # Parent: emits the ERROR severity incident; the traceback stays open.
+        # Parent: opens the traceback buffer; must NOT also fire error_severity
+        # (that would be a duplicate alert for the same exception).
         first = classifier.observe(parent)
-        assert {i.rule for i in first} == {"error_severity"}
+        assert first == [], (
+            "Traceback header must not emit any immediate incident — "
+            "the traceback rule handles it when the block is finalized"
+        )
 
         # Continuation frame: attaches to the open traceback, no emission.
         assert classifier.observe(frame) == []
 
         # Successor: closes the traceback (rule="traceback") and emits its own
-        # error_severity incident.
+        # error_severity incident (because 'next error' is not a traceback header).
         out = classifier.observe(successor)
         rules = [i.rule for i in out]
         assert "traceback" in rules
@@ -247,12 +251,21 @@ class TestClassifyAll:
             _record(level=LogLevel.WARNING, timestamp=datetime(2026, 5, 12, 0, 0, i))
             for i in range(5)
         ]
+        # Non-traceback ERROR so error_severity is expected here.
+        records.append(
+            _record(
+                level=LogLevel.ERROR,
+                logger="root",
+                message="Something went wrong (not a traceback header)",
+                timestamp=datetime(2026, 5, 12, 0, 0, 6),
+            )
+        )
         records.append(
             _record(
                 level=LogLevel.ERROR,
                 logger="root",
                 message="Traceback (most recent call last):",
-                timestamp=datetime(2026, 5, 12, 0, 0, 6),
+                timestamp=datetime(2026, 5, 12, 0, 0, 7),
             )
         )
 
@@ -261,7 +274,34 @@ class TestClassifyAll:
         rules = [i.rule for i in incidents]
         assert "warning_burst" in rules
         assert "error_severity" in rules
+        # Traceback header must produce a traceback incident but NOT a second
+        # error_severity incident (the double-alert regression).
         assert "traceback" in rules
+
+    def test_traceback_header_does_not_double_alert(self) -> None:
+        """A record that opens a traceback must not also fire error_severity.
+
+        Each Python exception would otherwise produce two separate incidents
+        (different fingerprints, different correlator buckets) → two Telegram
+        notifications and two concurrent RCA investigation calls.
+        """
+        classifier = IncidentClassifier()
+        header = _record(
+            level=LogLevel.ERROR,
+            logger="root",
+            message="Traceback (most recent call last):",
+            timestamp=datetime(2026, 5, 12, 10, 0, 0),
+        )
+        on_header = classifier.observe(header)
+        flushed = classifier.flush()
+
+        all_incidents = on_header + flushed
+        rules = [i.rule for i in all_incidents]
+        assert "traceback" in rules
+        assert "error_severity" not in rules, (
+            "Traceback header must not also produce error_severity — "
+            "that would cause duplicate Telegram notifications and RCA calls"
+        )
 
 
 class TestValidation:
