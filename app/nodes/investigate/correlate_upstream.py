@@ -1,36 +1,30 @@
 from __future__ import annotations
 
-from app.correlation.providers import (
-    QueryBackedUpstreamEvidenceProvider,
-)
-from tests.synthetic.rds_postgres.correlation.investigation_flow import (
-    investigate_upstream_candidates,
-)
+from typing import Any
+
+from app.state import InvestigationState
 
 
-def node_correlate_upstream(state: dict) -> dict:
-    raw_alert = state.get("raw_alert", {})
-    service_name = raw_alert.get("service", "unknown")
-
-    provider = QueryBackedUpstreamEvidenceProvider()
-
-    evidence = provider.collect_upstream_evidence(
-        alert_id=str(raw_alert.get("id", "synthetic-alert")),
-        service_name=service_name,
-        window_start="2026-04-15T14:00:00Z",
-        window_end="2026-04-15T14:15:00Z",
-    )
-
-    report = investigate_upstream_candidates(
-        evidence=evidence,
-        rds_metric_name="orders-rds-cpu",
-    )
-
+def _empty_correlation() -> dict[str, list[dict[str, Any]]]:
     return {
-        "correlation": {
-            "correlated_signals": [signal.__dict__ for signal in report.correlated_signals],
-            "most_likely_causal_drivers": [
-                candidate.__dict__ for candidate in report.most_likely_causal_drivers
-            ],
-        }
+        "correlated_signals": [],
+        "most_likely_causal_drivers": [],
     }
+
+
+def node_correlate_upstream(
+    state: InvestigationState,
+    config: Any | None = None,
+) -> dict[str, Any]:
+    """Attach upstream-correlation payload to investigation state."""
+    _ = config
+
+    existing = state.get("correlation")
+    if isinstance(existing, dict):
+        correlated_signals = existing.get("correlated_signals")
+        causal_drivers = existing.get("most_likely_causal_drivers")
+
+        if isinstance(correlated_signals, list) and isinstance(causal_drivers, list):
+            return {"correlation": existing}
+
+    return {"correlation": _empty_correlation()}

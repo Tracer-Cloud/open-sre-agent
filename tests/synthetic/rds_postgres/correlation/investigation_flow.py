@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.correlation.upstream import UpstreamEvidenceBundle
+from app.correlation.upstream import MetricSeries, UpstreamEvidenceBundle
 from tests.synthetic.rds_postgres.correlation.candidate_scoring import (
     score_candidate_correlation,
 )
@@ -19,12 +19,21 @@ from tests.synthetic.rds_postgres.correlation.reporting import (
     build_correlation_report,
 )
 from tests.synthetic.rds_postgres.correlation.time_window import (
+    TimeSeries,
     score_time_window_correlation,
 )
 from tests.synthetic.rds_postgres.correlation.topology import (
     TopologyNode,
     score_topology_adjacency,
 )
+
+
+def _to_time_series(metric: MetricSeries) -> TimeSeries:
+    return TimeSeries(
+        name=metric.name,
+        timestamps=metric.timestamps,
+        values=metric.values,
+    )
 
 
 def investigate_upstream_candidates(
@@ -51,8 +60,8 @@ def investigate_upstream_candidates(
         score = score_candidate_correlation(
             candidate_name=metric.name,
             time_window=score_time_window_correlation(
-                rds_metric,
-                metric,
+                _to_time_series(rds_metric),
+                _to_time_series(metric),
             ),
             topology=score_topology_adjacency(
                 source=source_node,
