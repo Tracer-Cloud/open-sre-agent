@@ -59,6 +59,25 @@ class TestAgentProcess:
 
         assert len(calls) == 2
 
+    def test_process_flushes_trailing_traceback(self) -> None:
+        """One-shot ``process()`` must mirror ``HermesLogsTool`` and flush the
+        classifier so an open traceback at end-of-input becomes an incident.
+        """
+        emitted: list[HermesIncident] = []
+        agent = HermesAgent(
+            sink=emitted.append,
+            log_path="/dev/null",
+            classifier=IncidentClassifier(),
+        )
+        lines = [
+            "2026-05-12 00:00:00,000 ERROR tools.x: Traceback (most recent call last):",
+            '  File "/x", line 1, in foo',
+        ]
+        out = agent.process(lines)
+
+        assert any(i.rule == "traceback" for i in out)
+        assert emitted == out
+
 
 class TestAgentLifecycle:
     def test_start_stop_processes_appended_lines(self, tmp_path: Path) -> None:

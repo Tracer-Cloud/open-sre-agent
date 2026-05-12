@@ -74,6 +74,14 @@ class TestCorrelatorDedup:
         decision = corr.correlate(_incident(fingerprint="b"))
         assert not decision.suppressed
 
+    def test_idle_fingerprint_evicted_after_long_gap(self) -> None:
+        corr = IncidentCorrelator(dedup_window_s=60, escalation_window_s=60, escalation_threshold=3)
+        corr.correlate(_incident(fingerprint="a", seconds=0))
+        corr.correlate(_incident(fingerprint="b", seconds=800))
+        d = corr.correlate(_incident(fingerprint="a", seconds=801))
+        assert not d.suppressed
+        assert d.repeat_count == 1
+
 
 class TestCorrelatorEscalation:
     def test_escalates_after_threshold(self) -> None:

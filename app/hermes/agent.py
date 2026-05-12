@@ -147,6 +147,11 @@ class HermesAgent:
             for incident in incidents:
                 emitted.append(incident)
                 self._dispatch(incident)
+        with self._pipeline_lock:
+            flushed = list(self._classifier.flush())
+        for incident in flushed:
+            emitted.append(incident)
+            self._dispatch(incident)
         return emitted
 
     def __enter__(self) -> HermesAgent:

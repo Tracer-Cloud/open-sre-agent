@@ -137,6 +137,7 @@ class IncidentCorrelator:
         with self._lock:
             state = self._state.get(incident.fingerprint)
             now = incident.detected_at
+            stale_cutoff = now - max(self._dedup_window, self._escalation_window)
 
             if state is None:
                 state = _FingerprintState(
@@ -145,6 +146,7 @@ class IncidentCorrelator:
                 )
                 self._state[incident.fingerprint] = state
                 destination = self._route(incident.rule, incident.severity)
+                self._evict_stale(stale_cutoff)
                 return CorrelatorDecision(
                     deliver=incident,
                     destination=destination,
@@ -183,6 +185,7 @@ class IncidentCorrelator:
                 if suppressed
                 else self._route(incident.rule, effective_severity)
             )
+            self._evict_stale(stale_cutoff)
             return CorrelatorDecision(
                 deliver=delivered,
                 destination=destination,
@@ -194,6 +197,16 @@ class IncidentCorrelator:
     def reset(self) -> None:
         with self._lock:
             self._state.clear()
+
+    def _evict_stale(self, cutoff: datetime) -> None:
+        """Drop fingerprint rows whose ``last_seen`` predates *cutoff*.
+
+        Called under ``_lock`` after updating the active row so the current
+        incident's fingerprint is never evicted in the same call.
+        """
+        stale = [fp for fp, s in self._state.items() if s.last_seen < cutoff]
+        for fp in stale:
+            del self._state[fp]
 
     def _route(self, rule: str, severity: IncidentSeverity) -> RouteDestination:
         explicit = self._routing_matrix.get(rule)
