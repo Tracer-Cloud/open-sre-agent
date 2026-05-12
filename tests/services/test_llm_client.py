@@ -1798,3 +1798,37 @@ def test_format_openai_connection_error_non_ssl_returns_generic_message() -> Non
     assert "SSL" not in msg
     assert "network connection" in msg
     assert "NVIDIA" in msg
+
+
+# ---------------------------------------------------------------------------
+# _extract_json_payload — embedded code-fence handling (Sentry #1861)
+# ---------------------------------------------------------------------------
+
+
+def test_extract_json_payload_bare_json() -> None:
+    assert llm_client._extract_json_payload('{"a": 1}') == {"a": 1}
+
+
+def test_extract_json_payload_leading_fence() -> None:
+    text = '```json\n{"a": 1}\n```'
+    assert llm_client._extract_json_payload(text) == {"a": 1}
+
+
+def test_extract_json_payload_embedded_fence_with_preamble() -> None:
+    """LLM returns prose before the code block — Sentry #1861 root cause."""
+    text = 'Here is the JSON:\n\n```json\n{"location": "node.py"}\n```'
+    assert llm_client._extract_json_payload(text) == {"location": "node.py"}
+
+
+def test_extract_json_payload_embedded_fence_trailing_braces_in_prose() -> None:
+    """Greedy regex would over-capture {key} in trailing prose; fence path must win."""
+    text = (
+        "Sure!\n\n```json\n{\"key\": \"value\"}\n```\n\n"
+        "The {key} field represents the identifier."
+    )
+    assert llm_client._extract_json_payload(text) == {"key": "value"}
+
+
+def test_extract_json_payload_raises_when_no_json() -> None:
+    with pytest.raises(ValueError, match="LLM did not return valid JSON payload"):
+        llm_client._extract_json_payload("This is plain text with no JSON.")
