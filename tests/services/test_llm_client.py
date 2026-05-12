@@ -1822,10 +1822,7 @@ def test_extract_json_payload_embedded_fence_with_preamble() -> None:
 
 def test_extract_json_payload_embedded_fence_trailing_braces_in_prose() -> None:
     """Greedy regex would over-capture {key} in trailing prose; fence path must win."""
-    text = (
-        "Sure!\n\n```json\n{\"key\": \"value\"}\n```\n\n"
-        "The {key} field represents the identifier."
-    )
+    text = 'Sure!\n\n```json\n{"key": "value"}\n```\n\nThe {key} field represents the identifier.'
     assert llm_client._extract_json_payload(text) == {"key": "value"}
 
 
