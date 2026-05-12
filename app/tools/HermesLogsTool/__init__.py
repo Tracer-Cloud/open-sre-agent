@@ -69,6 +69,43 @@ def _default_log_path() -> Path:
     return Path.home().joinpath(*_DEFAULT_LOG_RELATIVE)
 
 
+def _allowed_log_dirs() -> tuple[Path, ...]:
+    """Directories the tool is permitted to read from.
+
+    By default this is ``~/.hermes`` — the directory tree that the
+    Hermes agent writes to. When ``HERMES_LOG_PATH`` is set to a path
+    outside that tree the env-var parent is added automatically, so
+    operators with non-standard log locations don't need extra config.
+    """
+    dirs: list[Path] = [Path.home() / ".hermes"]
+    override = os.environ.get(_ENV_LOG_PATH, "").strip()
+    if override:
+        dirs.append(Path(override).expanduser().resolve(strict=False).parent)
+    return tuple(dirs)
+
+
+def _validate_log_path(path: Path) -> None:
+    """Raise ``ValueError`` if *path* is outside the allowed log directories.
+
+    The ``log_path`` parameter is LLM-supplied and therefore untrusted.
+    Without this guard a crafted call could read arbitrary files (e.g.
+    ``/etc/shadow``) by passing them as ``log_path``. We resolve to an
+    absolute path with no symlink traversal (``strict=False`` so
+    missing files are still validated) before comparing.
+    """
+    resolved = path.expanduser().resolve(strict=False)
+    for allowed in _allowed_log_dirs():
+        try:
+            resolved.relative_to(allowed.resolve(strict=False))
+            return
+        except ValueError:
+            continue
+    raise ValueError(
+        f"log_path {str(path)!r} is outside the permitted log directories; "
+        "set HERMES_LOG_PATH to allow a custom location"
+    )
+
+
 def _serialise_record(record: LogRecord) -> dict[str, Any]:
     return {
         "timestamp": record.timestamp.isoformat() if not record.is_continuation else None,
@@ -259,6 +296,11 @@ def get_hermes_logs(
         return {"error": str(exc), "records": [], "incidents": []}
 
     resolved_path = Path(log_path).expanduser() if log_path else _default_log_path()
+
+    try:
+        _validate_log_path(resolved_path)
+    except ValueError as exc:
+        return {"error": str(exc), "records": [], "incidents": []}
 
     resolved_cursor: HermesLogCursor | None
     if op == "scan":

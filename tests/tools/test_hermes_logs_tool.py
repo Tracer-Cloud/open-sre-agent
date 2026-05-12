@@ -22,6 +22,18 @@ def _write_log(tmp_path: Path, lines: list[str]) -> Path:
     return log
 
 
+@pytest.fixture(autouse=True)
+def _allow_tmp_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Allow the test's tmp_path directory by setting HERMES_LOG_PATH.
+
+    The tool restricts log_path to HERMES_LOG_PATH's parent (or ~/.hermes
+    by default). Tests use tmp_path which is outside ~/.hermes, so we point
+    the env var at a file inside tmp_path to add the directory to the
+    allow-list without changing test logic.
+    """
+    monkeypatch.setenv("HERMES_LOG_PATH", str(tmp_path / "errors.log"))
+
+
 class TestScanMode:
     def test_scan_returns_recent_records(self, tmp_path: Path) -> None:
         log = _write_log(tmp_path, _LINES)
@@ -120,6 +132,39 @@ class TestErrorPaths:
         # late-appearing file. Just empty records + a fresh cursor.
         assert result.get("records") == []
         assert result["cursor"].endswith(f"@{ghost}")
+
+
+class TestLogPathValidation:
+    def test_rejects_path_outside_allowed_dirs(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Clear the env override so only ~/.hermes is allowed, then try
+        # to read a file in tmp_path (which is outside ~/.hermes).
+        monkeypatch.delenv("HERMES_LOG_PATH", raising=False)
+        log = _write_log(tmp_path, _LINES)
+        result = get_hermes_logs(op="scan", log_path=str(log))
+        assert "error" in result
+        assert "permitted" in result["error"]
+
+    def test_accepts_path_within_env_override_dir(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        log = _write_log(tmp_path, _LINES)
+        # autouse fixture already sets HERMES_LOG_PATH to tmp_path/errors.log
+        # so tmp_path is in the allow-list.
+        result = get_hermes_logs(op="scan", log_path=str(log), tail_lines=10)
+        assert "error" not in result
+        assert len(result["records"]) == 3
+
+    def test_rejects_traversal_outside_allowed_dir(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Even with a symlink pointing outside tmp_path, resolve() sees
+        # the real path and the validator rejects it.
+        monkeypatch.delenv("HERMES_LOG_PATH", raising=False)
+        result = get_hermes_logs(op="scan", log_path="/etc/passwd")
+        assert "error" in result
+        assert "permitted" in result["error"]
 
 
 class TestDefaultPathResolution:
