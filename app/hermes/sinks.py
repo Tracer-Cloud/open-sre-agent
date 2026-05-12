@@ -44,6 +44,7 @@ operator can distinguish:
 from __future__ import annotations
 
 import logging
+import threading
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
@@ -152,6 +153,7 @@ class TelegramSink:
         "_config",
         "_bridge_executor",
         "_bridge_shutdown",
+        "_bridge_lock",
     )
 
     def __init__(
@@ -169,6 +171,7 @@ class TelegramSink:
         # keeps the no-investigation hot path zero-cost.
         self._bridge_executor: ThreadPoolExecutor | None = None
         self._bridge_shutdown = False
+        self._bridge_lock = threading.Lock()
         if investigation_bridge is not None and not self._config.bridge_run_inline:
             self._bridge_executor = ThreadPoolExecutor(
                 max_workers=max(1, self._config.bridge_workers),
@@ -205,14 +208,18 @@ class TelegramSink:
           ``wait=False`` prevents ``close()`` from hanging when called
           from a SIGTERM handler while a bridge call is in flight.
         """
-        executor = self._bridge_executor
-        if executor is not None:
-            executor.shutdown(wait=False, cancel_futures=True)
-            self._bridge_executor = None
+        # Set shutdown first so in-flight ``_run_bridge_in_pool`` paths that
+        # still hold a future can finish, while new work sees ``sink_closed``
+        # before racing ``submit`` against ``shutdown``.
+        with self._bridge_lock:
+            self._bridge_shutdown = True
+            executor = self._bridge_executor
+            if executor is not None:
+                executor.shutdown(wait=False, cancel_futures=True)
+                self._bridge_executor = None
         # After close, never fall back to `_run_bridge_inline` just because
         # the executor handle is None — that path would run investigations
         # on the caller thread after shutdown and fight in-flight pool work.
-        self._bridge_shutdown = True
 
     # ------------------------------------------------------------------
     # Investigation bridge
@@ -254,11 +261,19 @@ class TelegramSink:
         # executor is not None; guard defensively rather than asserting so
         # the path is safe under optimised bytecode (-O) and across any
         # future refactor that may relax the precondition.
-        executor = self._bridge_executor
-        if executor is None:
-            return _InvestigationResult.sink_closed()
+        with self._bridge_lock:
+            if self._bridge_shutdown:
+                return _InvestigationResult.sink_closed()
+            executor = self._bridge_executor
+            if executor is None:
+                return _InvestigationResult.sink_closed()
+            try:
+                future: Future[str | None] = executor.submit(bridge, incident)
+            except RuntimeError:
+                # Pool already shut down (TOCTOU with :meth:`close`) — still
+                # deliver Telegram; investigation section is skipped only.
+                return _InvestigationResult.sink_closed()
 
-        future: Future[str | None] = executor.submit(bridge, incident)
         timeout = self._config.bridge_timeout_s
         try:
             summary = future.result(timeout=timeout)

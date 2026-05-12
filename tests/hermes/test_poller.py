@@ -358,6 +358,9 @@ class TestByteBudgetLineBoundary:
         assert len(first.records) == 1
         assert first.records[0].message.endswith("aaa")
         assert first.cursor.offset == b1
+        assert first.truncated_lines >= 1, (
+            "byte-budget stop with unread bytes must set truncated_lines so has_more is true"
+        )
 
         second = hermes_poller.poll_hermes_logs(p, first.cursor, classifier=IncidentClassifier())
         assert len(second.records) == 1

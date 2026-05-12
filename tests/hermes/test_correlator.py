@@ -357,12 +357,7 @@ class TestCorrelatingSink:
         with pytest.raises(RuntimeError, match="close failed"):
             sink.close()
 
-        # good.close() must have been called even though raiser raised first.
         assert good.closed == 1, "good sink must be closed even when a sibling raises"
-        # correlator.reset() must have run: a fresh incident after close should
-        # not be deduplicated against the pre-close state.
-        sink(_incident(seconds=30))
-        assert len(good.call_history if hasattr(good, "call_history") else []) >= 0  # smoke
 
     def test_close_always_resets_correlator_even_when_sink_raises(self) -> None:
         """_correlator.reset() must run in the finally clause so dedup state is

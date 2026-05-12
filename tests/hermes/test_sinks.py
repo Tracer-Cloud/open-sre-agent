@@ -388,3 +388,33 @@ class TestDispatcherIntegration:
         # Calling the pooled bridge path directly must return sink_closed, not raise.
         result = sink._run_bridge_in_pool(_bridge, _incident(severity=IncidentSeverity.HIGH))  # type: ignore[attr-defined]
         assert "sink_closed" in result.state
+
+    def test_submit_runtime_error_still_dispatches_telegram(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """If ``executor.submit`` raises (pool shut down), investigation is skipped
+        but the Telegram notification must still be sent — ``__call__`` must not
+        abort before ``dispatch``."""
+        dispatcher, calls = _dispatcher(monkeypatch)
+
+        def _bridge(_incident: HermesIncident) -> str | None:
+            return "RCA"
+
+        sink = TelegramSink(
+            dispatcher,
+            investigation_bridge=_bridge,
+            config=TelegramSinkConfig(bridge_run_inline=False, bridge_workers=1),
+        )
+        ex = sink._bridge_executor
+        assert ex is not None
+
+        def _boom_submit(*_a: object, **_kw: object) -> None:
+            raise RuntimeError("cannot schedule new futures after interpreter shutdown")
+
+        monkeypatch.setattr(ex, "submit", _boom_submit)
+
+        sink(_incident(severity=IncidentSeverity.HIGH))
+
+        assert len(calls) == 1
+        text = calls[0]["text"]
+        assert "sink closed" in text.lower() or "skipped" in text.lower()

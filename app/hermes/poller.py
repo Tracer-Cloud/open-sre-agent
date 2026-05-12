@@ -147,9 +147,10 @@ class HermesLogPoll:
     # poller transparently rewinds in either case; this flag is purely
     # informational for callers that want to log the transition.
     rotation_detected: bool = False
-    # Number of lines NOT returned because the read hit ``max_lines``.
-    # Callers should re-poll immediately with the returned cursor to
-    # drain the backlog. ``0`` means everything was read.
+    # Number of lines NOT returned because the read hit ``max_lines`` or
+    # the per-poll byte budget stopped before EOF (cursor still before
+    # ``stat.st_size``). Callers should re-poll with the returned cursor.
+    # ``0`` means everything through EOF was consumed under both caps.
     truncated_lines: int = 0
     # Stats useful to the agent / tests without re-scanning the
     # returned records: how many lines were parsed vs. yielded.
@@ -358,6 +359,17 @@ def _read_segment(
                 break
             if len(raw) > budget:
                 handle.seek(line_start)
+                # Budget exhausted before the next full line could be read.
+                # Signal truncation when unread bytes remain so callers (e.g.
+                # ``get_hermes_logs``) set ``has_more=True`` and re-poll; without
+                # this, ``truncated_lines`` stays 0 while ``cursor.offset`` is
+                # still before EOF and the agent stops tailing prematurely.
+                try:
+                    file_size = os.fstat(handle.fileno()).st_size
+                except OSError:
+                    file_size = line_start
+                if file_size > line_start:
+                    truncated = max(truncated, 1)
                 break
             budget -= len(raw)
             # Post-line offset is deterministic from line_start + raw length;
