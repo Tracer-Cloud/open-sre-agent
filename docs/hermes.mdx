@@ -64,6 +64,24 @@ uv run opensre hermes watch
 
 Stop with **Ctrl+C** or **SIGTERM** (e.g. under systemd).
 
+### Quick check with a bundled fixture
+
+From the repo root you can point `--log-path` at a synthetic `errors.log`. Prefer a scenario with **ERROR** / **CRITICAL** lines so incidents fire under the **default** classifier (the live watcher does **not** read per-scenario `scenario.yml` thresholds):
+
+```bash
+uv run opensre hermes watch \
+  --log-path tests/synthetic/hermes/002-gateway-systemd-crash-loop/errors.log \
+  --from-start
+```
+
+Example **Telegram** output when replaying that fixture (critical exit, traceback, crash loop, and systemd error):
+
+![Hermes incidents delivered to Telegram after watching the 002-gateway-systemd-crash-loop synthetic log](/images/hermes-telegram-watch-demo.png)
+
+**Why you might see no Telegram:** `warning_burst` needs **five** warnings from the same logger within **60 seconds** (`IncidentClassifier` defaults). Several synthetic scenarios set a lower threshold in `scenario.yml` for **pytest only**; the CLI watcher ignores that file. For example `000-telegram-polling-conflict` expects bursts of **three** warnings — the suite passes, but **`hermes watch` on that file emits no `warning_burst` incidents**, so nothing is sent. Use a log with hard errors (like `002-*`) or your real `errors.log` once Hermes is writing enough warnings.
+
+Correlator **dedup** can also reduce multiple Telegram sends for the same fingerprint; check shutdown line `hermes-watch: correlator metrics delivered=…` — if `delivered=0`, the classifier did not emit any routable incidents for that run.
+
 ### Common options
 
 | Flag | Purpose |
