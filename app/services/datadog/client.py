@@ -13,6 +13,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
+import sentry_sdk
 
 from app.integrations.config_models import DatadogIntegrationConfig
 from app.integrations.probes import ProbeResult
@@ -106,7 +107,9 @@ class DatadogClient:
 
             return {"success": True, "logs": logs, "total": len(logs)}
         except httpx.HTTPStatusError as e:
-            logger.warning(
+            sentry_sdk.set_tag("subsystem", "datadog")
+            sentry_sdk.set_tag("integration", "datadog")
+            logger.exception(
                 "[datadog] Log search HTTP failure status=%s query=%r window=%sm "
                 "(check API/app key permissions and query syntax)",
                 e.response.status_code,
@@ -118,7 +121,9 @@ class DatadogClient:
                 "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
             }
         except Exception as e:
-            logger.warning(
+            sentry_sdk.set_tag("subsystem", "datadog")
+            sentry_sdk.set_tag("integration", "datadog")
+            logger.exception(
                 "[datadog] Log search request error type=%s detail=%s "
                 "(network/auth/timeout likely)",
                 type(e).__name__,
@@ -156,7 +161,9 @@ class DatadogClient:
 
             return {"success": True, "monitors": results, "total": len(results)}
         except httpx.HTTPStatusError as e:
-            logger.warning(
+            sentry_sdk.set_tag("subsystem", "datadog")
+            sentry_sdk.set_tag("integration", "datadog")
+            logger.exception(
                 "[datadog] List monitors HTTP failure status=%s query=%r "
                 "(verify monitor.read scope and org/site)",
                 e.response.status_code,
@@ -167,7 +174,9 @@ class DatadogClient:
                 "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
             }
         except Exception as e:
-            logger.warning(
+            sentry_sdk.set_tag("subsystem", "datadog")
+            sentry_sdk.set_tag("integration", "datadog")
+            logger.exception(
                 "[datadog] List monitors request error type=%s detail=%s",
                 type(e).__name__,
                 e,
@@ -287,13 +296,17 @@ class DatadogClient:
 
             return {"success": True, "events": events, "total": len(events)}
         except httpx.HTTPStatusError as e:
-            logger.warning("[datadog] Events query failed: %s", e.response.status_code)
+            sentry_sdk.set_tag("subsystem", "datadog")
+            sentry_sdk.set_tag("integration", "datadog")
+            logger.exception("[datadog] Events query failed: %s", e.response.status_code)
             return {
                 "success": False,
                 "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
             }
         except Exception as e:
-            logger.warning("[datadog] Events query error: %s", e)
+            sentry_sdk.set_tag("subsystem", "datadog")
+            sentry_sdk.set_tag("integration", "datadog")
+            logger.exception("[datadog] Events query error: %s", e)
             return {"success": False, "error": str(e)}
 
 
@@ -348,7 +361,9 @@ class DatadogAsyncClient:
             return {"success": True, "logs": logs, "total": len(logs), "duration_ms": duration_ms}
         except httpx.HTTPStatusError as e:
             duration_ms = int((time.monotonic() - t0) * 1000)
-            logger.warning("[datadog] Async log search failed: %s", e.response.status_code)
+            sentry_sdk.set_tag("subsystem", "datadog")
+            sentry_sdk.set_tag("integration", "datadog")
+            logger.exception("[datadog] Async log search failed: %s", e.response.status_code)
             return {
                 "success": False,
                 "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
@@ -356,7 +371,9 @@ class DatadogAsyncClient:
             }
         except Exception as e:
             duration_ms = int((time.monotonic() - t0) * 1000)
-            logger.warning("[datadog] Async log search error: %s", e)
+            sentry_sdk.set_tag("subsystem", "datadog")
+            sentry_sdk.set_tag("integration", "datadog")
+            logger.exception("[datadog] Async log search error: %s", e)
             return {"success": False, "error": str(e), "duration_ms": duration_ms}
 
     async def _list_monitors(
@@ -394,7 +411,9 @@ class DatadogAsyncClient:
             }
         except httpx.HTTPStatusError as e:
             duration_ms = int((time.monotonic() - t0) * 1000)
-            logger.warning("[datadog] Async list monitors failed: %s", e.response.status_code)
+            sentry_sdk.set_tag("subsystem", "datadog")
+            sentry_sdk.set_tag("integration", "datadog")
+            logger.exception("[datadog] Async list monitors failed: %s", e.response.status_code)
             return {
                 "success": False,
                 "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
@@ -402,7 +421,9 @@ class DatadogAsyncClient:
             }
         except Exception as e:
             duration_ms = int((time.monotonic() - t0) * 1000)
-            logger.warning("[datadog] Async list monitors error: %s", e)
+            sentry_sdk.set_tag("subsystem", "datadog")
+            sentry_sdk.set_tag("integration", "datadog")
+            logger.exception("[datadog] Async list monitors error: %s", e)
             return {"success": False, "error": str(e), "duration_ms": duration_ms}
 
     async def _get_events(
@@ -449,7 +470,9 @@ class DatadogAsyncClient:
             }
         except httpx.HTTPStatusError as e:
             duration_ms = int((time.monotonic() - t0) * 1000)
-            logger.warning("[datadog] Async events query failed: %s", e.response.status_code)
+            sentry_sdk.set_tag("subsystem", "datadog")
+            sentry_sdk.set_tag("integration", "datadog")
+            logger.exception("[datadog] Async events query failed: %s", e.response.status_code)
             return {
                 "success": False,
                 "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
@@ -457,7 +480,9 @@ class DatadogAsyncClient:
             }
         except Exception as e:
             duration_ms = int((time.monotonic() - t0) * 1000)
-            logger.warning("[datadog] Async events query error: %s", e)
+            sentry_sdk.set_tag("subsystem", "datadog")
+            sentry_sdk.set_tag("integration", "datadog")
+            logger.exception("[datadog] Async events query error: %s", e)
             return {"success": False, "error": str(e), "duration_ms": duration_ms}
 
     async def fetch_all(
