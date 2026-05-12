@@ -5,6 +5,7 @@ from typing import Any, Protocol, cast
 from langsmith import traceable
 
 from app.correlation.providers import NoopUpstreamEvidenceProvider
+from app.correlation.runtime import build_runtime_correlation
 from app.correlation.upstream import UpstreamEvidenceBundle
 from app.output import get_tracker
 from app.state import InvestigationState
@@ -94,7 +95,8 @@ def node_correlate_upstream(
         window_start=window_start,
         window_end=window_end,
     )
-    _ = evidence
+    correlation = build_runtime_correlation(evidence)
+
     tracker.complete("correlate_upstream")
 
-    return {"correlation": _empty_correlation()}
+    return {"correlation": correlation}

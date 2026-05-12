@@ -33,6 +33,14 @@ class RecordingProvider:
                     values=(90.0,),
                 ),
             ),
+            upstream_metrics=(
+                MetricSeries(
+                    source="datadog",
+                    name="orders-web-cpu",
+                    timestamps=("2026-04-15T14:00:00Z",),
+                    values=(85.0,),
+                ),
+            ),
         )
 
 
@@ -65,9 +73,10 @@ def test_correlate_upstream_invokes_configured_provider() -> None:
             "window_end": "2026-04-15T14:15:00Z",
         }
     ]
-    assert result == {
-        "correlation": {
-            "correlated_signals": [],
-            "most_likely_causal_drivers": [],
-        }
-    }
+    correlation = result["correlation"]
+
+    assert correlation["correlated_signals"]
+    assert correlation["most_likely_causal_drivers"]
+
+    driver = correlation["most_likely_causal_drivers"][0]
+    assert driver["name"] == "orders-web-cpu"
