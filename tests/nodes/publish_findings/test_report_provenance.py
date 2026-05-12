@@ -55,6 +55,24 @@ def test_build_report_context_adds_source_provenance() -> None:
     )
 
 
+def test_format_telegram_message_omits_banner_only_root_cause() -> None:
+    state = _make_state()
+    state["severity"] = "info"
+    state["alert_name"] = "[synthetic-k8s] Scheduled Health Check — payments-api"
+    state["pipeline_name"] = "k8s-eks-synthetic"
+    state["root_cause"] = (
+        "[synthetic-k8s] Scheduled Health Check — payments-api on k8s-eks-synthetic "
+        "(severity: info)"
+    )
+    ctx = build_report_context(state)
+    body = format_telegram_message(ctx)
+    assert body.count("k8s-eks-synthetic") == 1
+    assert (
+        "Scheduled Health Check — payments-api on k8s-eks-synthetic (severity: info)"
+        not in body
+    )
+
+
 def test_format_telegram_message_uses_html_and_severity_header() -> None:
     state = _make_state()
     state["severity"] = "critical"

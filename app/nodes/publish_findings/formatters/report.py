@@ -140,6 +140,29 @@ def _to_telegram_html_body(text: str) -> str:
     return merged
 
 
+def _norm_banner_key(text: str) -> str:
+    return re.sub(r"\s+", " ", text.strip().lower())
+
+
+def _telegram_baseline_repeats_header(ctx: ReportContext, root_cause_sentence: str) -> bool:
+    """True when the derived root-cause line only repeats alert metadata already in the header."""
+    alert = (ctx.get("alert_name") or "").strip()
+    pipeline = (ctx.get("pipeline_name") or "").strip()
+    if not alert or not pipeline:
+        return False
+    s = root_cause_sentence.strip()
+    if len(s) > 220:
+        return False
+    rc = _norm_banner_key(s)
+    if _norm_banner_key(alert) not in rc or _norm_banner_key(pipeline) not in rc:
+        return False
+    if "because" in rc or "due to" in rc or "caused" in rc:
+        return False
+    if "severity" in rc:
+        return True
+    return len(s) < 120
+
+
 def _severity_telegram_header(ctx: ReportContext) -> str:
     """Severity emoji row aligned with Hermes Telegram sink conventions."""
     raw = (ctx.get("severity") or "").strip()
@@ -456,18 +479,26 @@ def format_telegram_message(ctx: ReportContext) -> str:
     """
     duration_seconds = ctx.get("investigation_duration_seconds")
     alert_id = ctx.get("alert_id")
-    root_cause_sentence = _derive_root_cause_sentence(ctx)
-
-    if not root_cause_sentence:
-        root_cause_sentence = "Not determined (insufficient evidence)."
+    derived_rc = _derive_root_cause_sentence(ctx)
+    root_cause_sentence = derived_rc or "Not determined (insufficient evidence)."
 
     parts: list[str] = [_severity_telegram_header(ctx)]
 
-    rc = _to_telegram_html_body(root_cause_sentence)
     top_log = _get_top_error_log(ctx.get("evidence") or {})
-    if top_log:
-        rc += "\n<code>" + html.escape(top_log) + "</code>"
-    parts.append(rc)
+    baseline_noise = (
+        derived_rc
+        and _telegram_baseline_repeats_header(ctx, derived_rc)
+        and root_cause_sentence != "Not determined (insufficient evidence)."
+    )
+    if baseline_noise and not top_log:
+        pass
+    elif baseline_noise and top_log:
+        parts.append("<code>" + html.escape(top_log) + "</code>")
+    else:
+        rc = _to_telegram_html_body(root_cause_sentence)
+        if top_log:
+            rc += "\n<code>" + html.escape(top_log) + "</code>"
+        parts.append(rc)
 
     validated_lines, non_validated_lines = _render_claim_lines_telegram(ctx)
     if validated_lines:

@@ -1,7 +1,6 @@
 """Main orchestration node for report generation and publishing."""
 
 import logging
-from typing import Any
 
 from langsmith import traceable
 
@@ -142,16 +141,9 @@ def generate_report(state: InvestigationState) -> dict:
             bool(bot_token),
         )
         if bot_token and chat_id:
-            inv_url = masking_ctx.unmask(investigation_url) if investigation_url else None
-            reply_markup: dict[str, Any] | None = None
-            if inv_url:
-                reply_markup = {
-                    "inline_keyboard": [[{"text": "View investigation", "url": inv_url}]]
-                }
             tg_posted, tg_error = send_telegram_report(
                 telegram_message,
                 {"bot_token": bot_token, "chat_id": chat_id, "reply_to_message_id": reply_to},
-                reply_markup=reply_markup,
             )
             logger.debug("[publish] telegram delivery: posted=%s error=%s", tg_posted, tg_error)
             if not tg_posted:
