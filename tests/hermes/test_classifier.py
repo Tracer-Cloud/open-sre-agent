@@ -56,6 +56,25 @@ class TestErrorSeverityRule:
         assert classifier.observe(_record(level=LogLevel.INFO)) == []
         assert classifier.observe(_record(level=LogLevel.DEBUG)) == []
 
+    def test_error_fingerprint_normalizes_volatile_tokens(self) -> None:
+        classifier = IncidentClassifier()
+        a = _record(
+            level=LogLevel.ERROR,
+            logger="db.client",
+            message="failed to connect host=10.0.0.1 port=5432 code=500",
+        )
+        b = _record(
+            level=LogLevel.ERROR,
+            logger="db.client",
+            message="failed to connect host=10.0.0.2 port=5432 code=501",
+        )
+        ia = classifier.observe(a)[0]
+        ib = classifier.observe(b)[0]
+
+        assert ia.rule == "error_severity"
+        assert ib.rule == "error_severity"
+        assert ia.fingerprint == ib.fingerprint
+
 
 class TestWarningBurstRule:
     def test_burst_fires_at_threshold_and_clears(self) -> None:

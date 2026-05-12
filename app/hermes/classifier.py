@@ -25,6 +25,7 @@ and primarily exists so external callers can flush from another thread.
 from __future__ import annotations
 
 import hashlib
+import re
 import threading
 from collections import deque
 from collections.abc import Iterable
@@ -40,6 +41,10 @@ DEFAULT_WARNING_BURST_WINDOW_S: Final[float] = 60.0
 DEFAULT_TRACEBACK_FOLLOWUP_S: Final[float] = 5.0
 
 _TRACEBACK_HEADER: Final[str] = "Traceback (most recent call last)"
+_IPV4_RE: Final[re.Pattern[str]] = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+_HEX_RE: Final[re.Pattern[str]] = re.compile(r"\b0x[0-9a-fA-F]+\b")
+_NUM_RE: Final[re.Pattern[str]] = re.compile(r"\b\d+\b")
+_WS_RE: Final[re.Pattern[str]] = re.compile(r"\s+")
 
 
 @dataclass
@@ -149,7 +154,11 @@ class IncidentClassifier:
             title=f"{record.level.value} from {record.logger or 'unknown'}",
             detected_at=record.timestamp,
             logger=record.logger,
-            fingerprint=_fingerprint("error_severity", record.logger, record.message),
+            fingerprint=_fingerprint(
+                "error_severity",
+                record.logger,
+                _message_signature(record.message),
+            ),
             records=(record,),
             run_id=record.run_id,
         )
@@ -262,6 +271,16 @@ def _fingerprint(rule: str, logger_name: str, message: str) -> str:
         usedforsecurity=False,
     )
     return digest.hexdigest()[:16]
+
+
+def _message_signature(message: str) -> str:
+    """Normalize volatile values so dedup keys stay stable across retries."""
+    normalized = message.lower()
+    normalized = _IPV4_RE.sub("<ip>", normalized)
+    normalized = _HEX_RE.sub("<hex>", normalized)
+    normalized = _NUM_RE.sub("<num>", normalized)
+    normalized = _WS_RE.sub(" ", normalized).strip()
+    return normalized[:120]
 
 
 __all__ = [

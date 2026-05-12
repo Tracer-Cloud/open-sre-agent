@@ -79,6 +79,21 @@ class TestFromStartReplay:
 
         assert out == ["complete"]
 
+    def test_stop_does_not_drop_pending_lines_when_file_is_idle(self, tmp_path: Path) -> None:
+        """Pending complete lines must still drain after stop even when file size
+        no longer grows (regression for stat-size early return path).
+        """
+        log = tmp_path / "errors.log"
+        log.write_text("a\nb\nc\n", encoding="utf-8")
+        tailer = FileTailer(log, poll_interval_s=0.01, from_start=True, read_chunk=4096)
+
+        it = iter(tailer)
+        assert next(it) == "a"
+        tailer.stop()
+
+        drained = list(it)
+        assert drained == ["b", "c"]
+
 
 class TestLiveTail:
     def test_only_yields_lines_appended_after_attach(self, tmp_path: Path) -> None:

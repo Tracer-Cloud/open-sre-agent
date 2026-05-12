@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -116,6 +117,44 @@ class TestLevelFilter:
             assert poll.records == (), "WARNING records should be dropped from response"
             assert len(poll.incidents) == 1, "but the classifier should still emit the burst"
             assert poll.incidents[0].rule == "warning_burst"
+
+
+class TestSinceFilter:
+    def test_continuations_are_filtered_with_their_parent(self, tmp_path: Path) -> None:
+        p = tmp_path / "errs.log"
+        p.write_text(
+            "2026-05-12 00:00:00,000 ERROR x: Traceback (most recent call last):\n"
+            '  File "/x", line 1, in foo\n'
+            "2026-05-12 00:00:30,000 ERROR x: later\n",
+            encoding="utf-8",
+        )
+        since = datetime(2026, 5, 12, 0, 0, 10)
+        poll = hermes_poller.poll_hermes_logs(
+            p,
+            hermes_poller.HermesLogCursor.at_start(p),
+            classifier=IncidentClassifier(),
+            since=since,
+        )
+        assert [r.message for r in poll.records] == ["later"]
+        assert all(not r.is_continuation for r in poll.records)
+
+    def test_continuations_survive_when_parent_passes_since(self, tmp_path: Path) -> None:
+        p = tmp_path / "errs.log"
+        p.write_text(
+            "2026-05-12 00:00:20,000 ERROR x: Traceback (most recent call last):\n"
+            '  File "/x", line 1, in foo\n',
+            encoding="utf-8",
+        )
+        since = datetime(2026, 5, 12, 0, 0, 10)
+        poll = hermes_poller.poll_hermes_logs(
+            p,
+            hermes_poller.HermesLogCursor.at_start(p),
+            classifier=IncidentClassifier(),
+            since=since,
+        )
+        assert len(poll.records) == 2
+        assert poll.records[0].is_continuation is False
+        assert poll.records[1].is_continuation is True
 
 
 class TestRotationAndTruncation:

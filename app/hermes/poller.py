@@ -312,6 +312,10 @@ def _read_segment(
     # the parent landed in an earlier poll. The classifier already
     # buffers the open traceback for us across calls.
     prev_level: LogLevel | None = None
+    # Continuation records inherit datetime.min from the parser, so ``since``
+    # filtering must follow the parent line's inclusion decision to avoid
+    # orphan traceback frames in the returned records.
+    parent_passes_since = since is None
     new_offset = start_offset
 
     with path.open("rb") as handle:
@@ -346,9 +350,13 @@ def _read_segment(
                 continue
 
             passes_level = level_filter is None or record.level in level_filter
-            passes_since = not (
-                since is not None and record.timestamp < since and not record.is_continuation
-            )
+            if since is None:
+                passes_since = True
+            elif record.is_continuation:
+                passes_since = parent_passes_since
+            else:
+                passes_since = record.timestamp >= since
+                parent_passes_since = passes_since
             would_return = passes_level and passes_since
             # If this line would become the (max_lines+1)th returned record,
             # rewind before it without calling observe(). The cursor must

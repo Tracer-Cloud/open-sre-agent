@@ -105,13 +105,19 @@ class FileTailer:
         self._stop_event.set()
 
     def __iter__(self) -> Iterator[str]:
-        while not self._stop_event.is_set():
+        while True:
             yield from self._drain_once()
-            if self._stop_event.is_set():
+            # ``stop()`` should not discard lines that are already buffered in
+            # ``_pending_lines`` (e.g. stop signal arrives mid-drain).
+            if self._stop_event.is_set() and not self._pending_lines:
                 break
+            if self._stop_event.is_set():
+                continue
             self._stop_event.wait(self._poll_interval_s)
 
     def _drain_once(self) -> Iterator[str]:
+        while self._pending_lines:
+            yield self._pending_lines.popleft()
         try:
             stat = os.stat(self._path)
         except FileNotFoundError:
@@ -160,7 +166,7 @@ class FileTailer:
         ``_partial`` *before* complete lines are yielded. Any lines not yet
         yielded after a chunk is parsed live in ``_pending_lines`` so a
         consumer that stops mid-iteration (``GeneratorExit``) does not skip
-        trailing lines in the chunk — the next poll drains the queue first.
+        trailing lines in the chunk — the next drain cycle drains the queue first.
         """
         with open(self._path, encoding="utf-8", errors="replace") as fh:
             fh.seek(self._position)
