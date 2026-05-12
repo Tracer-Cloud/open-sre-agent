@@ -51,6 +51,8 @@ class TaskRecord:
     error: str | None = None
     pid: int | None = None
     command: str | None = None
+    progress: str | None = None
+
     _cancel_requested: threading.Event = field(
         default_factory=threading.Event, repr=False, init=False
     )
@@ -164,6 +166,7 @@ class TaskRecord:
             "ended_at": self.ended_at,
             "result": self.result,
             "error": self.error,
+            "progress": self.progress,
             "pid": self.pid,
             "command": self.command,
         }
@@ -191,11 +194,19 @@ class TaskRecord:
             ended_at=float(ended_at_value) if isinstance(ended_at_value, int | float) else None,
             result=str(data["result"]) if data.get("result") is not None else None,
             error=str(data["error"]) if data.get("error") is not None else None,
+            progress=str(data["progress"]) if data.get("progress") is not None else None,
             pid=int(pid_value) if isinstance(pid_value, int) else None,
             command=str(data["command"]) if data.get("command") is not None else None,
         )
         record._rehydrated = True
         return record
+
+    def update_progress(self, output: str) -> None:
+        line = output.rstrip("\r\n")
+        if not line:
+            return
+        with self._lock:
+            self.progress = line
 
 
 def _process_alive(pid: int) -> bool:

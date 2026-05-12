@@ -53,6 +53,7 @@ nosetests.xml
 coverage.xml
 *.cover
 *.log
+!tests/synthetic/hermes/**/*.log
 
 # Jupyter Notebook
 .ipynb_checkpoints

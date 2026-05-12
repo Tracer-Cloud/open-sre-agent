@@ -1,0 +1,90 @@
+---
+title: "Hermes log monitoring"
+description: "Tail a Hermes agent errors.log, classify incidents, and alert on Telegram (optional RCA)."
+---
+
+OpenSRE can **watch the log file written by a [Hermes](https://github.com/NousResearch/hermes-agent) deployment** (typically `errors.log`), turn new lines into structured incidents, optionally **deduplicate and escalate** them, and deliver alerts to **Telegram**. This is separate from OpenSRE’s own runtime logs: it targets the Hermes process’s error log on disk.
+
+<Note>
+Telegram delivery uses the same credential model as the rest of OpenSRE. If you have not configured a bot yet, start with [Telegram](/messaging/telegram) (bot token and `chat_id`).
+</Note>
+
+---
+
+## What gets monitored
+
+| Item | Default |
+|------|---------|
+| Log file | `~/.hermes/logs/errors.log` |
+| Override | Set `HERMES_LOG_PATH` to an absolute path if Hermes writes elsewhere |
+
+The watcher uses a rotation-safe tailer: if the file is missing at startup, it waits until it appears. Use `--from-start` if you intentionally want to replay existing file contents before live-tailing (by default **only new lines** are considered so Telegram is not flooded on restart).
+
+---
+
+## CLI: live watch
+
+Run from a machine that can read the Hermes log file and reach Telegram:
+
+```bash
+uv run opensre hermes watch
+```
+
+Stop with **Ctrl+C** or **SIGTERM** (e.g. under systemd).
+
+### Common options
+
+| Flag | Purpose |
+|------|---------|
+| `--log-path PATH` | Hermes log file (defaults to `HERMES_LOG_PATH` expansion or `~/.hermes/logs/errors.log`) |
+| `--chat-id ID` | Overrides `TELEGRAM_DEFAULT_CHAT_ID` for this run |
+| `--cooldown-seconds N` | Per-fingerprint cooldown before the same incident is sent again (default `300`) |
+| `--from-start` | Replay the file from the beginning, then tail |
+| `--investigate` / `--no-investigate` | Run an OpenSRE RCA for `HIGH` / `CRITICAL` incidents and append the summary to Telegram |
+| `--correlate` / `--no-correlate` | Route through the correlator (dedup, escalation, routing). Default: **on** |
+| `--dedup-window-seconds` | Correlator dedup window when `--correlate` is on |
+| `--escalation-threshold` / `--escalation-window-seconds` | Repeat-hit escalation knobs when `--correlate` is on |
+
+### Environment variables
+
+| Variable | Role |
+|----------|------|
+| `TELEGRAM_BOT_TOKEN` | Required for delivery (see [Telegram](/messaging/telegram)) |
+| `TELEGRAM_DEFAULT_CHAT_ID` | Default destination when `--chat-id` is omitted |
+| `HERMES_LOG_PATH` | Default log path when `--log-path` is omitted |
+| `OPENSRE_HERMES_INVESTIGATE` | If set to `1` / `true` / `yes` / `on`, enables investigation when the CLI does not pass `--investigate` / `--no-investigate` |
+
+---
+
+## Investigations during watch
+
+`--investigate` (or `OPENSRE_HERMES_INVESTIGATE=1`) runs the OpenSRE investigation bridge for severities that warrant RCA. Investigations run in a **bounded thread pool** with a timeout so the tailing thread does not block indefinitely. Medium-severity incidents (for example warning bursts) stay on a lighter notification path by design.
+
+---
+
+## Agent tool: `get_hermes_logs`
+
+During an OpenSRE investigation, the planner can call **`get_hermes_logs`** to read the same Hermes log in two modes:
+
+- **`op="scan"`** — one-shot window of the last *N* lines; returns parsed records and incidents the classifier would emit on that window.
+- **`op="tail"`** — incremental, cursor-based reads for “what’s new since last poll?”.
+
+The tool only allows paths under permitted directories (by default `~/.hermes` and the parent of `HERMES_LOG_PATH` when set) so arbitrary file reads are blocked.
+
+<Warning>
+**Classifier state is not persisted between `tail` calls.** Each tool invocation uses a fresh classifier, so burst windows and traceback continuation state reset between calls. For accurate ongoing detection, use **`opensre hermes watch`** (long-lived classifier) rather than many separate `tail` calls.
+</Warning>
+
+---
+
+## Synthetic regression suite
+
+Developers can lock classifier behavior against real log shapes under `tests/synthetic/hermes/`. See the suite [README](https://github.com/Tracer-Cloud/opensre/blob/main/tests/synthetic/hermes/README.md) in the repository for layout and how to run tests.
+
+---
+
+## Further reading
+
+- Implementation lives under `app/hermes/` in the OpenSRE repository (tailer, parser, classifier, correlator, sinks, CLI wiring).
+- If you also run [OpenClaw](/openclaw) alongside Hermes, that page covers the OpenClaw bridge (context lookup and RCA write-back).
+- For false-positive risks when rules match both `message` and raw line text, see [issue #1874](https://github.com/Tracer-Cloud/opensre/issues/1874).

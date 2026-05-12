@@ -710,6 +710,13 @@ class OpenAILLMClient:
                 ) from err
             except GuardrailBlockedError:
                 raise
+            except OpenAITimeoutError as err:
+                if attempt == max_attempts - 1:
+                    raise RuntimeError(
+                        _format_openai_connection_error(err, self._provider_label)
+                    ) from err
+                time.sleep(backoff_seconds)
+                backoff_seconds *= 2
             except OpenAIConnectionError as err:
                 raise RuntimeError(
                     _format_openai_connection_error(err, self._provider_label)
@@ -794,6 +801,15 @@ class OpenAILLMClient:
                 ) from err
             except GuardrailBlockedError:
                 raise
+            except OpenAITimeoutError as err:
+                if emitted:
+                    raise
+                if attempt == max_attempts - 1:
+                    raise RuntimeError(
+                        _format_openai_connection_error(err, self._provider_label)
+                    ) from err
+                time.sleep(backoff_seconds)
+                backoff_seconds *= 2
             except OpenAIConnectionError as err:
                 if emitted:
                     raise

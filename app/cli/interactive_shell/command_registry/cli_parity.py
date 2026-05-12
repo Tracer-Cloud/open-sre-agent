@@ -210,6 +210,14 @@ def _cmd_config(session: ReplSession, console: Console, args: list[str]) -> bool
     return run_cli_command(console, ["config", *args])
 
 
+def _cmd_messaging(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+    return run_cli_command(console, ["messaging", *args])
+
+
+def _cmd_hermes(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+    return run_cli_command(console, ["hermes", *args])
+
+
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
         "/onboard",
@@ -258,6 +266,18 @@ COMMANDS: list[SlashCommand] = [
         "/config",
         "show or edit local OpenSRE config ('/config show|set <key> <value>')",
         _cmd_config,
+        execution_tier=ExecutionTier.SAFE,
+    ),
+    SlashCommand(
+        "/messaging",
+        "messaging security: DM pairing and identity management ('/messaging pair|allow|revoke|status')",
+        _cmd_messaging,
+        execution_tier=ExecutionTier.SAFE,
+    ),
+    SlashCommand(
+        "/hermes",
+        "live-tail Hermes logs and route incidents to Telegram ('/hermes watch')",
+        _cmd_hermes,
         execution_tier=ExecutionTier.SAFE,
     ),
 ]
