@@ -273,6 +273,9 @@ def get_hermes_logs(
     elif cursor:
         try:
             resolved_cursor = HermesLogCursor.from_token(cursor)
+            # Tokens are LLM-round-tripped; reject crafted paths that
+            # do not match the log file this invocation is configured to read.
+            resolved_cursor.validate_expected_log_path(resolved_path)
         except ValueError as exc:
             return {"error": str(exc), "records": [], "incidents": []}
         bounded_max = min(max_records, _MAX_RECORDS_PER_CALL)

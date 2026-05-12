@@ -102,6 +102,10 @@ class HermesLogCursor:
         We accept the exact shape we emit; refusing anything else
         prevents a malformed LLM-supplied cursor from silently
         defaulting to ``at_start`` and replaying gigabytes of logs.
+
+        Callers that re-ingest tokens from untrusted context (e.g. an
+        LLM echoing text from a log line) must also call
+        :meth:`validate_expected_log_path` before opening ``path``.
         """
         match = re.fullmatch(r"(\d+):(\d+):(\d+)@(.+)", token)
         if match is None:
@@ -112,6 +116,22 @@ class HermesLogCursor:
             offset=int(match.group(3)),
             path=match.group(4),
         )
+
+    def validate_expected_log_path(self, expected: Path | str) -> None:
+        """Ensure ``self.path`` is the same file as ``expected``.
+
+        The token embeds a raw path string; without this check, a
+        crafted token could point at an arbitrary filesystem path while
+        the tool operator believes they are tailing the configured
+        Hermes log.
+        """
+        try:
+            token_resolved = Path(self.path).expanduser().resolve(strict=False)
+            want_resolved = Path(expected).expanduser().resolve(strict=False)
+        except (OSError, ValueError, RuntimeError) as exc:
+            raise ValueError("cannot resolve cursor path or requested log path") from exc
+        if token_resolved != want_resolved:
+            raise ValueError("cursor token does not refer to the requested log file")
 
 
 @dataclass(frozen=True, slots=True)

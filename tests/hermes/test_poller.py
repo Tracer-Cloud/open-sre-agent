@@ -40,6 +40,24 @@ class TestCursorTokenRoundTrip:
             HermesLogCursor.from_token("not-a-cursor")
 
 
+class TestValidateExpectedLogPath:
+    def test_accepts_matching_paths(self, tmp_path: Path) -> None:
+        log = tmp_path / "errors.log"
+        log.write_text("x\n", encoding="utf-8")
+        cursor = HermesLogCursor(path=str(log), device=1, inode=2, offset=3)
+        cursor.validate_expected_log_path(log)
+        cursor.validate_expected_log_path(str(log))
+
+    def test_rejects_path_mismatch(self, tmp_path: Path) -> None:
+        a = tmp_path / "a.log"
+        b = tmp_path / "b.log"
+        a.write_text("x\n", encoding="utf-8")
+        b.write_text("y\n", encoding="utf-8")
+        cursor = HermesLogCursor(path=str(a), device=0, inode=0, offset=0)
+        with pytest.raises(ValueError, match="does not refer"):
+            cursor.validate_expected_log_path(b)
+
+
 class TestPollerBasics:
     def test_first_poll_on_empty_file_returns_no_records(self, tmp_path: Path) -> None:
         with hermes_log_fixture(tmp_path) as fixture:

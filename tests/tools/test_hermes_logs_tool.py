@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from app.hermes.poller import HermesLogCursor
 from app.tools.HermesLogsTool import get_hermes_logs
 
 _LINES = [
@@ -78,6 +79,15 @@ class TestTailMode:
         result = get_hermes_logs(op="tail", log_path=str(log), cursor="garbage-not-a-real-cursor")
         assert "error" in result
         assert "cursor" in result["error"].lower()
+
+    def test_tail_rejects_cursor_for_foreign_path(self, tmp_path: Path) -> None:
+        log = _write_log(tmp_path, _LINES)
+        other = tmp_path / "other.log"
+        other.write_text("secret\n", encoding="utf-8")
+        bad_token = HermesLogCursor(path=str(other), device=0, inode=0, offset=0).to_token()
+        result = get_hermes_logs(op="tail", log_path=str(log), cursor=bad_token)
+        assert "error" in result
+        assert "does not refer" in result["error"]
 
 
 class TestLevelFilter:
