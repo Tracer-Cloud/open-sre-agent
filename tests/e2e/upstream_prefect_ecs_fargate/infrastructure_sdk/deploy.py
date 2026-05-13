@@ -23,9 +23,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-project_root = Path(__file__).resolve().parents[3]
-
 from app.utils.config import load_env
+from tests.e2e._paths import find_repo_root
 from tests.shared.infrastructure_sdk import save_outputs
 from tests.shared.infrastructure_sdk.resources import (
     api_gateway,
@@ -37,6 +36,8 @@ from tests.shared.infrastructure_sdk.resources import (
     s3,
     vpc,
 )
+
+project_root = find_repo_root(__file__)
 
 STACK_NAME = "tracer-prefect-ecs"
 REGION = "us-east-1"
@@ -58,18 +59,13 @@ TRIGGER_LAMBDA_NAME = "tracer-prefect-ecs-trigger"
 
 # Paths
 TESTS_DIR = project_root / "tests"
+SCENARIO_DIR = TESTS_DIR / "e2e" / "upstream_prefect_ecs_fargate"
 PREFECT_DOCKERFILE = (
-    TESTS_DIR
-    / "upstream_prefect_ecs_fargate"
-    / "infrastructure_code"
-    / "prefect_image"
-    / "Dockerfile"
+    SCENARIO_DIR / "infrastructure_code" / "prefect_image" / "Dockerfile"
 )
 ALLOY_CONFIG_DIR = TESTS_DIR / "shared" / "infrastructure_code" / "alloy_config"
 MOCK_API_CODE = TESTS_DIR / "shared" / "external_vendor_api"
-TRIGGER_LAMBDA_CODE = (
-    TESTS_DIR / "upstream_prefect_ecs_fargate" / "pipeline_code" / "trigger_lambda"
-)
+TRIGGER_LAMBDA_CODE = SCENARIO_DIR / "pipeline_code" / "trigger_lambda"
 
 GRAFANA_ENV_KEYS = [
     "GCLOUD_HOSTED_METRICS_URL",

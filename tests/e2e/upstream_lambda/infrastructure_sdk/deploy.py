@@ -21,13 +21,18 @@ from pathlib import Path
 
 from botocore.exceptions import ClientError
 
+from tests.e2e._paths import find_repo_root
 from tests.shared.infrastructure_sdk.config import save_outputs
 from tests.shared.infrastructure_sdk.deployer import get_boto3_client
 from tests.shared.infrastructure_sdk.resources import api_gateway, iam, lambda_, s3
 from tests.shared.infrastructure_sdk.resources.iam import get_account_id, put_role_policy
 from tests.shared.infrastructure_sdk.resources.secrets import get_secret_value
 
-project_root = Path(__file__).resolve().parents[3]
+project_root = find_repo_root(__file__)
+TESTS_DIR = project_root / "tests"
+SCENARIO_DIR = TESTS_DIR / "e2e" / "upstream_lambda"
+SHARED_VENDOR_API_DIR = TESTS_DIR / "shared" / "external_vendor_api"
+PIPELINE_CODE_DIR = SCENARIO_DIR / "pipeline_code"
 
 STACK_NAME = "tracer-lambda"
 REGION = "us-east-1"
@@ -185,16 +190,13 @@ def create_lambda_functions(
     print("Creating Lambda functions...")
 
     # Paths
-    shared_dir = project_root / "tests" / "shared" / "external_vendor_api"
-    pipeline_dir = project_root / "tests" / "upstream_lambda" / "pipeline_code"
-
     # Bundle code
     print("  Bundling MockApi Lambda code...")
-    mock_api_zip = lambda_.bundle_code(shared_dir)
+    mock_api_zip = lambda_.bundle_code(SHARED_VENDOR_API_DIR)
 
     print("  Bundling pipeline code (dependencies already vendored)...")
     # Use custom bundling that puts vendored deps at root level
-    pipeline_zip = bundle_pipeline_code(pipeline_dir)
+    pipeline_zip = bundle_pipeline_code(PIPELINE_CODE_DIR)
 
     # Create MockApi Lambda
     print("  Creating MockApiLambda...")
@@ -403,8 +405,7 @@ def deploy() -> dict:
 
     # 3. Create MockApi Lambda and API Gateway first (for URL)
     print("Creating MockApi Lambda...")
-    shared_dir = project_root / "tests" / "shared" / "external_vendor_api"
-    mock_api_zip = lambda_.bundle_code(shared_dir)
+    mock_api_zip = lambda_.bundle_code(SHARED_VENDOR_API_DIR)
 
     mock_api_lambda = lambda_.create_function(
         name=f"{STACK_NAME}-mock-api",
@@ -431,11 +432,9 @@ def deploy() -> dict:
 
     # 4. Create pipeline Lambdas with correct URLs
     print("Creating pipeline Lambda functions...")
-    pipeline_dir = project_root / "tests" / "upstream_lambda" / "pipeline_code"
-
     print("  Bundling pipeline code (dependencies already vendored)...")
     # Use custom bundling that puts vendored deps at root level
-    pipeline_zip = bundle_pipeline_code(pipeline_dir)
+    pipeline_zip = bundle_pipeline_code(PIPELINE_CODE_DIR)
 
     print("  Creating IngesterLambda...")
     ingester_lambda = lambda_.create_function(
