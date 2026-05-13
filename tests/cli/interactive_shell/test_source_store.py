@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 
 import numpy as np
@@ -117,6 +118,30 @@ def test_cosine_topk_empty_store_does_not_persist_vector_dim(tmp_path: Path) -> 
     assert store.cosine_topk(np.array([1.0, 0.0, 0.0])) == []
 
     assert store.get_meta("vector_dim") is None
+
+
+def test_failed_first_upsert_does_not_persist_vector_dim(tmp_path: Path) -> None:
+    path = tmp_path / "source.sqlite"
+    store = SourceStore(path)
+    with sqlite3.connect(path) as conn:
+        conn.execute(
+            """
+            CREATE TRIGGER fail_chunk_insert
+            BEFORE INSERT ON chunks
+            BEGIN
+                SELECT RAISE(ABORT, 'forced chunk insert failure');
+            END
+            """
+        )
+
+    with pytest.raises(sqlite3.IntegrityError, match="forced chunk insert failure"):
+        store.upsert_chunks(
+            [_chunk("app/a.py", "alpha")],
+            [np.array([1.0, 0.0, 0.0])],
+        )
+
+    assert store.get_meta("vector_dim") is None
+    assert store.stats()["vector_dim"] is None
 
 
 def test_cosine_topk_scan_limit_blocks_large_in_memory_load(tmp_path: Path) -> None:

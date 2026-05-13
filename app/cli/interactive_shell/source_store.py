@@ -112,10 +112,16 @@ class SourceStore:
             return []
 
         normalized_vectors = [self._normalize_vector(vector) for vector in vectors]
+        upsert_vector_dim = self._resolve_upsert_vector_dim(normalized_vectors)
         relpaths = sorted({chunk.relpath for chunk in chunks})
 
         with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
+            if self._vector_dim is None:
+                conn.execute(
+                    "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                    ("vector_dim", str(upsert_vector_dim)),
+                )
             self._delete_files_in_transaction(conn, relpaths)
 
             ids: list[int] = []
@@ -152,6 +158,8 @@ class SourceStore:
                 )
                 ids.append(chunk_id)
             conn.commit()
+        if self._vector_dim is None:
+            self._vector_dim = upsert_vector_dim
         return ids
 
     def fetch_by_ids(self, ids: list[int]) -> list[StoredChunk]:
@@ -309,13 +317,24 @@ class SourceStore:
 
     def _normalize_vector(self, vector: np.ndarray) -> np.ndarray:
         normalized = np.asarray(vector, dtype=np.float32).reshape(-1)
-        if self._vector_dim is None:
-            self.set_meta("vector_dim", str(normalized.shape[0]))
-        elif normalized.shape[0] != self._vector_dim:
+        if self._vector_dim is not None and normalized.shape[0] != self._vector_dim:
             raise IncompatibleStoreError(
                 f"Store vector_dim is {self._vector_dim}, got {normalized.shape[0]}"
             )
         return normalized
+
+    def _resolve_upsert_vector_dim(self, vectors: list[np.ndarray]) -> int:
+        vector_dim = int(vectors[0].shape[0])
+        for vector in vectors:
+            if vector.shape[0] != vector_dim:
+                raise IncompatibleStoreError(
+                    f"Store vector_dim is {vector_dim}, got {vector.shape[0]}"
+                )
+        if self._vector_dim is not None and vector_dim != self._vector_dim:
+            raise IncompatibleStoreError(
+                f"Store vector_dim is {self._vector_dim}, got {vector_dim}"
+            )
+        return vector_dim
 
     def _vector_from_blob(self, blob: bytes) -> np.ndarray:
         vector = np.frombuffer(blob, dtype=np.float32)
