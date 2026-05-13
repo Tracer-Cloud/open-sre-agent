@@ -269,7 +269,9 @@ def test_cli_backed_client_retries_on_ex_tempfail(
         timeout_sec=30.0,
     )
     mock_adapter.parse.return_value = "answer"
-    mock_adapter.explain_failure.return_value = "kimi exited with code 75. To resume this session: kimi -r abc"
+    mock_adapter.explain_failure.return_value = (
+        "kimi exited with code 75. To resume this session: kimi -r abc"
+    )
 
     tempfail = MagicMock(returncode=75, stdout="To resume this session: kimi -r abc", stderr="")
     success = MagicMock(returncode=0, stdout="answer\n", stderr="")
@@ -291,10 +293,10 @@ def test_cli_backed_client_raises_after_all_tempfail_retries(
     mock_run: MagicMock, mock_sleep: MagicMock
 ) -> None:
     """EX_TEMPFAIL (75) exhausting all retries raises RuntimeError."""
-    from app.integrations.llm_cli.kimi import KimiAdapter
-    from app.integrations.llm_cli.runner import CLIBackedLLMClient, _TEMPFAIL_MAX_RETRIES
-
     import pytest
+
+    from app.integrations.llm_cli.kimi import KimiAdapter
+    from app.integrations.llm_cli.runner import _TEMPFAIL_MAX_RETRIES, CLIBackedLLMClient
 
     mock_adapter = MagicMock(spec=KimiAdapter)
     mock_adapter.name = "kimi"
@@ -311,7 +313,9 @@ def test_cli_backed_client_raises_after_all_tempfail_retries(
         env=None,
         timeout_sec=30.0,
     )
-    mock_adapter.explain_failure.return_value = "kimi exited with code 75. To resume this session: kimi -r abc"
+    mock_adapter.explain_failure.return_value = (
+        "kimi exited with code 75. To resume this session: kimi -r abc"
+    )
 
     tempfail = MagicMock(returncode=75, stdout="To resume this session: kimi -r abc", stderr="")
     mock_run.side_effect = [tempfail] * (_TEMPFAIL_MAX_RETRIES + 1)
