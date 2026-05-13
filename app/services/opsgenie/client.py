@@ -164,13 +164,25 @@ class OpsGenieClient:
 
             return {"success": True, "alert": alert}
         except httpx.HTTPStatusError as exc:
-            capture_service_error(exc, logger=logger, integration="opsgenie", method="get_alert")
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="opsgenie",
+                method="get_alert",
+                extras={"alert_id": alert_id},
+            )
             return {
                 "success": False,
                 "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
         except Exception as exc:
-            capture_service_error(exc, logger=logger, integration="opsgenie", method="get_alert")
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="opsgenie",
+                method="get_alert",
+                extras={"alert_id": alert_id},
+            )
             return {"success": False, "error": str(exc)}
 
     def get_alert_logs(self, alert_id: str, limit: int = 20) -> dict[str, Any]:
@@ -197,7 +209,11 @@ class OpsGenieClient:
             return {"success": True, "logs": logs, "total": len(logs)}
         except httpx.HTTPStatusError as exc:
             capture_service_error(
-                exc, logger=logger, integration="opsgenie", method="get_alert_logs"
+                exc,
+                logger=logger,
+                integration="opsgenie",
+                method="get_alert_logs",
+                extras={"alert_id": alert_id},
             )
             return {
                 "success": False,
@@ -205,7 +221,11 @@ class OpsGenieClient:
             }
         except Exception as exc:
             capture_service_error(
-                exc, logger=logger, integration="opsgenie", method="get_alert_logs"
+                exc,
+                logger=logger,
+                integration="opsgenie",
+                method="get_alert_logs",
+                extras={"alert_id": alert_id},
             )
             return {"success": False, "error": str(exc)}
 
@@ -219,13 +239,25 @@ class OpsGenieClient:
             resp.raise_for_status()
             return {"success": True}
         except httpx.HTTPStatusError as exc:
-            capture_service_error(exc, logger=logger, integration="opsgenie", method="add_note")
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="opsgenie",
+                method="add_note",
+                extras={"alert_id": alert_id},
+            )
             return {
                 "success": False,
                 "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
         except Exception as exc:
-            capture_service_error(exc, logger=logger, integration="opsgenie", method="add_note")
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="opsgenie",
+                method="add_note",
+                extras={"alert_id": alert_id},
+            )
             return {"success": False, "error": str(exc)}
 
 

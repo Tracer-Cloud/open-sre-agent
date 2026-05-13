@@ -23,9 +23,8 @@ def capture_service_error(
     extras: dict[str, Any] | None = None,
 ) -> None:
     severity = "warning" if _is_server_error(exc) else "error"
-    merged_extras: dict[str, Any] = {"method": method}
-    if extras:
-        merged_extras.update(extras)
+    merged_extras: dict[str, Any] = dict(extras) if extras else {}
+    merged_extras["method"] = method
     report_exception(
         exc,
         logger=logger,

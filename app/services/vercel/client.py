@@ -279,13 +279,25 @@ class VercelClient:
                 "production_target": prod,
             }
         except httpx.HTTPStatusError as exc:
-            capture_service_error(exc, logger=logger, integration="vercel", method="get_project")
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="vercel",
+                method="get_project",
+                extras={"project": cleaned},
+            )
             return {
                 "success": False,
                 "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
         except Exception as exc:
-            capture_service_error(exc, logger=logger, integration="vercel", method="get_project")
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="vercel",
+                method="get_project",
+                extras={"project": cleaned},
+            )
             return {"success": False, "error": str(exc)}
 
     def list_deployments(
@@ -328,7 +340,11 @@ class VercelClient:
             return {"success": True, "deployments": deployments, "total": len(deployments)}
         except httpx.HTTPStatusError as exc:
             capture_service_error(
-                exc, logger=logger, integration="vercel", method="list_deployments"
+                exc,
+                logger=logger,
+                integration="vercel",
+                method="list_deployments",
+                extras={"project_id": project_id, "state": state},
             )
             return {
                 "success": False,
@@ -336,7 +352,11 @@ class VercelClient:
             }
         except Exception as exc:
             capture_service_error(
-                exc, logger=logger, integration="vercel", method="list_deployments"
+                exc,
+                logger=logger,
+                integration="vercel",
+                method="list_deployments",
+                extras={"project_id": project_id, "state": state},
             )
             return {"success": False, "error": str(exc)}
 
@@ -367,13 +387,25 @@ class VercelClient:
                 },
             }
         except httpx.HTTPStatusError as exc:
-            capture_service_error(exc, logger=logger, integration="vercel", method="get_deployment")
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="vercel",
+                method="get_deployment",
+                extras={"deployment_id": deployment_id},
+            )
             return {
                 "success": False,
                 "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
         except Exception as exc:
-            capture_service_error(exc, logger=logger, integration="vercel", method="get_deployment")
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="vercel",
+                method="get_deployment",
+                extras={"deployment_id": deployment_id},
+            )
             return {"success": False, "error": str(exc)}
 
     def get_deployment_events(self, deployment_id: str, limit: int = 100) -> dict[str, Any]:
@@ -403,7 +435,11 @@ class VercelClient:
             return {"success": True, "events": events, "total": len(events)}
         except httpx.HTTPStatusError as exc:
             capture_service_error(
-                exc, logger=logger, integration="vercel", method="get_deployment_events"
+                exc,
+                logger=logger,
+                integration="vercel",
+                method="get_deployment_events",
+                extras={"deployment_id": deployment_id},
             )
             return {
                 "success": False,
@@ -411,7 +447,11 @@ class VercelClient:
             }
         except Exception as exc:
             capture_service_error(
-                exc, logger=logger, integration="vercel", method="get_deployment_events"
+                exc,
+                logger=logger,
+                integration="vercel",
+                method="get_deployment_events",
+                extras={"deployment_id": deployment_id},
             )
             return {"success": False, "error": str(exc)}
 
@@ -489,7 +529,11 @@ class VercelClient:
                 last_retryable_kind = type(exc).__name__
                 if attempt >= _RUNTIME_LOGS_READ_ATTEMPTS:
                     capture_service_error(
-                        exc, logger=logger, integration="vercel", method="get_runtime_logs"
+                        exc,
+                        logger=logger,
+                        integration="vercel",
+                        method="get_runtime_logs",
+                        extras={"deployment_id": deployment_id},
                     )
                     break
                 time.sleep(min(8.0, 2.0**attempt))
@@ -497,7 +541,11 @@ class VercelClient:
                 if exc.response.status_code == 404:
                     return {"success": True, "logs": [], "total": 0}
                 capture_service_error(
-                    exc, logger=logger, integration="vercel", method="get_runtime_logs"
+                    exc,
+                    logger=logger,
+                    integration="vercel",
+                    method="get_runtime_logs",
+                    extras={"deployment_id": deployment_id},
                 )
                 return {
                     "success": False,
@@ -505,7 +553,11 @@ class VercelClient:
                 }
             except Exception as exc:
                 capture_service_error(
-                    exc, logger=logger, integration="vercel", method="get_runtime_logs"
+                    exc,
+                    logger=logger,
+                    integration="vercel",
+                    method="get_runtime_logs",
+                    extras={"deployment_id": deployment_id},
                 )
                 return {"success": False, "error": str(exc)}
 

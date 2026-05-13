@@ -101,13 +101,25 @@ class JiraClient:
                 resp.raise_for_status()
                 return {"success": True, "issue_key": issue_key}
         except httpx.HTTPStatusError as exc:
-            capture_service_error(exc, logger=logger, integration="jira", method="update_issue")
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="jira",
+                method="update_issue",
+                extras={"issue_key": issue_key},
+            )
             return {
                 "success": False,
                 "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
         except Exception as exc:
-            capture_service_error(exc, logger=logger, integration="jira", method="update_issue")
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="jira",
+                method="update_issue",
+                extras={"issue_key": issue_key},
+            )
             return {"success": False, "error": str(exc)}
 
     def add_comment(
@@ -138,13 +150,25 @@ class JiraClient:
                 data = resp.json()
                 return {"success": True, "comment_id": data.get("id")}
         except httpx.HTTPStatusError as exc:
-            capture_service_error(exc, logger=logger, integration="jira", method="add_comment")
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="jira",
+                method="add_comment",
+                extras={"issue_key": issue_key},
+            )
             return {
                 "success": False,
                 "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
         except Exception as exc:
-            capture_service_error(exc, logger=logger, integration="jira", method="add_comment")
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="jira",
+                method="add_comment",
+                extras={"issue_key": issue_key},
+            )
             return {"success": False, "error": str(exc)}
 
     def search_issues(
@@ -231,13 +255,25 @@ class JiraClient:
                     "labels": fields.get("labels", []),
                 }
         except httpx.HTTPStatusError as exc:
-            capture_service_error(exc, logger=logger, integration="jira", method="get_issue")
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="jira",
+                method="get_issue",
+                extras={"issue_key": issue_key},
+            )
             return {
                 "success": False,
                 "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
         except Exception as exc:
-            capture_service_error(exc, logger=logger, integration="jira", method="get_issue")
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="jira",
+                method="get_issue",
+                extras={"issue_key": issue_key},
+            )
             return {"success": False, "error": str(exc)}
 
 

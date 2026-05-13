@@ -178,7 +178,11 @@ class PrefectClient:
             return {"success": True, "logs": logs, "total": len(logs)}
         except httpx.HTTPStatusError as exc:
             capture_service_error(
-                exc, logger=logger, integration="prefect", method="get_flow_run_logs"
+                exc,
+                logger=logger,
+                integration="prefect",
+                method="get_flow_run_logs",
+                extras={"flow_run_id": flow_run_id},
             )
             return {
                 "success": False,
@@ -186,7 +190,11 @@ class PrefectClient:
             }
         except Exception as exc:
             capture_service_error(
-                exc, logger=logger, integration="prefect", method="get_flow_run_logs"
+                exc,
+                logger=logger,
+                integration="prefect",
+                method="get_flow_run_logs",
+                extras={"flow_run_id": flow_run_id},
             )
             return {"success": False, "error": str(exc)}
 
@@ -256,13 +264,25 @@ class PrefectClient:
             ]
             return {"success": True, "workers": workers, "total": len(workers)}
         except httpx.HTTPStatusError as exc:
-            capture_service_error(exc, logger=logger, integration="prefect", method="get_workers")
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="prefect",
+                method="get_workers",
+                extras={"work_pool_name": work_pool_name},
+            )
             return {
                 "success": False,
                 "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
         except Exception as exc:
-            capture_service_error(exc, logger=logger, integration="prefect", method="get_workers")
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="prefect",
+                method="get_workers",
+                extras={"work_pool_name": work_pool_name},
+            )
             return {"success": False, "error": str(exc)}
 
     # ------------------------------------------------------------------
