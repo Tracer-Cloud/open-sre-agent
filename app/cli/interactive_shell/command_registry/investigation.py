@@ -97,6 +97,7 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
     try:
         text = path.read_text(encoding="utf-8")
     except Exception as exc:
+        report_exception(exc, context="interactive_shell.investigate_file.read")
         console.print(f"[{ERROR}]cannot read file:[/] {escape(str(exc))}")
         session.mark_latest(ok=False, kind="slash")
         return True
@@ -200,6 +201,7 @@ def _cmd_save(session: ReplSession, console: Console, args: list[str]) -> bool:
             dest.write_text("\n".join(lines) or "(no report content)", encoding="utf-8")
         console.print(f"[{HIGHLIGHT}]saved:[/] {escape(str(dest))}")
     except Exception as exc:
+        report_exception(exc, context="interactive_shell.save_report")
         console.print(f"[{ERROR}]save failed:[/] {escape(str(exc))}")
     return True
 

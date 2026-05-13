@@ -210,6 +210,55 @@ class TestDispatchSlash:
         assert "/list integrations" in output
         assert "current session only" not in output
 
+    def test_investigate_file_read_failure_is_reported(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        captured_errors: list[BaseException] = []
+
+        monkeypatch.setattr(Path, "exists", lambda _self: True)
+        monkeypatch.setattr(
+            Path,
+            "read_text",
+            lambda _self, **_kwargs: (_ for _ in ()).throw(RuntimeError("read broke")),
+        )
+        monkeypatch.setattr(
+            "app.cli.support.exception_reporting.capture_exception",
+            lambda exc, **_kwargs: captured_errors.append(exc),
+        )
+
+        session = ReplSession()
+        console, buf = _capture()
+
+        assert dispatch_slash("/investigate incident.json", session, console) is True
+
+        assert "cannot read file" in buf.getvalue()
+        assert len(captured_errors) == 1
+        assert isinstance(captured_errors[0], RuntimeError)
+
+    def test_save_failure_is_reported(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        captured_errors: list[BaseException] = []
+
+        monkeypatch.setattr(
+            Path,
+            "write_text",
+            lambda _self, *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("write broke")),
+        )
+        monkeypatch.setattr(
+            "app.cli.support.exception_reporting.capture_exception",
+            lambda exc, **_kwargs: captured_errors.append(exc),
+        )
+
+        session = ReplSession()
+        session.last_state = {"root_cause": "cache issue", "problem_md": "details"}
+        console, buf = _capture()
+
+        assert dispatch_slash("/save report.md", session, console) is True
+
+        assert "save failed" in buf.getvalue()
+        assert len(captured_errors) == 1
+        assert isinstance(captured_errors[0], RuntimeError)
+
 
 class TestListCommand:
     """Coverage for /list integrations / models / mcp and the default summary."""
