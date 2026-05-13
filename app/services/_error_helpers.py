@@ -10,8 +10,12 @@ import httpx
 from app.utils.errors import report_exception
 
 
-def _is_server_error(exc: BaseException) -> bool:
-    return isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code >= 500
+def _is_transient_vendor_error(exc: BaseException) -> bool:
+    if not isinstance(exc, httpx.HTTPStatusError):
+        return False
+    sc = exc.response.status_code
+    # 429 = vendor rate-limit (transient throttling, not a config error)
+    return sc == 429 or sc >= 500
 
 
 def capture_service_error(
@@ -22,8 +26,9 @@ def capture_service_error(
     method: str,
     extras: dict[str, Any] | None = None,
 ) -> None:
-    severity = "warning" if _is_server_error(exc) else "error"
+    severity = "warning" if _is_transient_vendor_error(exc) else "error"
     merged_extras: dict[str, Any] = dict(extras) if extras else {}
+    merged_extras.pop("surface", None)
     merged_extras["method"] = method
     report_exception(
         exc,

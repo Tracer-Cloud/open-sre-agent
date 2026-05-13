@@ -125,3 +125,26 @@ class TestCaptureServiceError:
             extras = mock_report.call_args.kwargs["extras"]
             assert extras["method"] == "create_issue"
             assert extras["query"] == "test"
+
+    def test_caller_extras_cannot_inject_surface(self, mock_logger: logging.Logger) -> None:
+        exc = RuntimeError("boom")
+        with patch("app.services._error_helpers.report_exception") as mock_report:
+            capture_service_error(
+                exc,
+                logger=mock_logger,
+                integration="jira",
+                method="create_issue",
+                extras={"surface": "injected"},
+            )
+            extras = mock_report.call_args.kwargs["extras"]
+            assert "surface" not in extras
+            tags = mock_report.call_args.kwargs["tags"]
+            assert tags["surface"] == "service_client"
+
+    def test_429_rate_limit_uses_warning_severity(self, mock_logger: logging.Logger) -> None:
+        exc = _make_http_status_error(429)
+        with patch("app.services._error_helpers.report_exception") as mock_report:
+            capture_service_error(
+                exc, logger=mock_logger, integration="datadog", method="search_logs"
+            )
+            assert mock_report.call_args.kwargs["severity"] == "warning"
