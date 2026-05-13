@@ -11,6 +11,8 @@ from typing import Any
 import numpy as np
 
 DEFAULT_STORE_PATH = Path.home() / ".config" / "opensre" / "source_index.sqlite"
+_SQLITE_VARIABLE_LIMIT = 999
+_DEFAULT_MAX_COSINE_SCAN_ROWS = 50_000
 
 
 class IncompatibleStoreError(RuntimeError):
@@ -59,7 +61,6 @@ class SourceStore:
             value = self._normalize_vector_dim(value)
             if self._vector_dim is not None and int(value) != self._vector_dim:
                 raise IncompatibleStoreError(f"Store vector_dim is {self._vector_dim}, got {value}")
-            self._vector_dim = int(value)
 
         if key == "embedding_model":
             existing = self.get_meta(key)
@@ -74,6 +75,9 @@ class SourceStore:
                 (key, value),
             )
 
+        if key == "vector_dim":
+            self._vector_dim = int(value)
+
     def get_meta(self, key: str) -> str | None:
         with self._connect() as conn:
             row = conn.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
@@ -83,9 +87,9 @@ class SourceStore:
         with self._connect() as conn:
             rows = conn.execute(
                 """
-                SELECT relpath, fingerprint
+                SELECT relpath, MAX(fingerprint) AS fingerprint
                 FROM chunks
-                ORDER BY id
+                GROUP BY relpath
                 """
             ).fetchall()
         return {str(row["relpath"]): str(row["fingerprint"]) for row in rows}
@@ -93,11 +97,6 @@ class SourceStore:
     def delete_file(self, relpath: str) -> int:
         with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
-            rows = conn.execute("SELECT id FROM chunks WHERE relpath = ?", (relpath,)).fetchall()
-            ids = [int(row["id"]) for row in rows]
-            if ids:
-                placeholders = _placeholders(ids)
-                conn.execute(f"DELETE FROM vectors WHERE id IN ({placeholders})", ids)
             deleted = conn.execute("DELETE FROM chunks WHERE relpath = ?", (relpath,))
             conn.commit()
         return int(deleted.rowcount)
@@ -159,30 +158,42 @@ class SourceStore:
         if not ids:
             return []
 
+        rows: list[sqlite3.Row] = []
         with self._connect() as conn:
-            placeholders = _placeholders(ids)
-            rows = conn.execute(
-                f"""
-                SELECT id, relpath, kind, symbol, start_line, end_line, content, fingerprint
-                FROM chunks
-                WHERE id IN ({placeholders})
-                """,
-                ids,
-            ).fetchall()
+            for batch in _batches(ids):
+                placeholders = _placeholders(batch)
+                rows.extend(
+                    conn.execute(
+                        f"""
+                        SELECT id, relpath, kind, symbol, start_line, end_line, content, fingerprint
+                        FROM chunks
+                        WHERE id IN ({placeholders})
+                        """,
+                        batch,
+                    ).fetchall()
+                )
 
         by_id = {int(row["id"]): _chunk_from_row(row) for row in rows}
         return [by_id[chunk_id] for chunk_id in ids if chunk_id in by_id]
 
-    def cosine_topk(self, query_vector: np.ndarray, k: int = 30) -> list[tuple[int, float]]:
-        if k <= 0:
-            return []
-
-        query = self._normalize_vector(query_vector)
-        query_norm = float(np.linalg.norm(query))
-        if query_norm == 0:
+    def cosine_topk(
+        self,
+        query_vector: np.ndarray,
+        k: int = 30,
+        *,
+        max_scan_rows: int = _DEFAULT_MAX_COSINE_SCAN_ROWS,
+    ) -> list[tuple[int, float]]:
+        if k <= 0 or max_scan_rows <= 0:
             return []
 
         with self._connect() as conn:
+            row = conn.execute("SELECT COUNT(*) AS row_count FROM vectors").fetchone()
+            row_count = int(row["row_count"])
+            if row_count > max_scan_rows:
+                raise RuntimeError(
+                    f"Refusing to scan {row_count} vectors; rebuild with a vector index "
+                    f"or pass a higher max_scan_rows value"
+                )
             rows = conn.execute("SELECT id, vector FROM vectors ORDER BY id").fetchall()
         if not rows:
             return []
@@ -192,6 +203,11 @@ class SourceStore:
         for row in rows:
             ids.append(int(row["id"]))
             vectors.append(self._vector_from_blob(row["vector"]))
+
+        query = self._normalize_query_vector(query_vector, expected_dim=vectors[0].shape[0])
+        query_norm = float(np.linalg.norm(query))
+        if query_norm == 0:
+            return []
 
         matrix = np.vstack(vectors)
         norms = np.linalg.norm(matrix, axis=1)
@@ -309,23 +325,27 @@ class SourceStore:
             )
         return vector
 
+    def _normalize_query_vector(
+        self,
+        vector: np.ndarray,
+        *,
+        expected_dim: int,
+    ) -> np.ndarray:
+        normalized = np.asarray(vector, dtype=np.float32).reshape(-1)
+        if self._vector_dim is not None:
+            expected_dim = self._vector_dim
+        if normalized.shape[0] != expected_dim:
+            raise IncompatibleStoreError(
+                f"Store vector_dim is {expected_dim}, got {normalized.shape[0]}"
+            )
+        return normalized
+
     def _delete_files_in_transaction(
         self, conn: sqlite3.Connection, relpaths: Iterable[str]
     ) -> None:
-        relpath_list = list(relpaths)
-        if not relpath_list:
-            return
-
-        placeholders = _placeholders(relpath_list)
-        rows = conn.execute(
-            f"SELECT id FROM chunks WHERE relpath IN ({placeholders})",
-            relpath_list,
-        ).fetchall()
-        ids = [int(row["id"]) for row in rows]
-        if ids:
-            id_placeholders = _placeholders(ids)
-            conn.execute(f"DELETE FROM vectors WHERE id IN ({id_placeholders})", ids)
-        conn.execute(f"DELETE FROM chunks WHERE relpath IN ({placeholders})", relpath_list)
+        for batch in _batches(list(relpaths)):
+            placeholders = _placeholders(batch)
+            conn.execute(f"DELETE FROM chunks WHERE relpath IN ({placeholders})", batch)
 
     @staticmethod
     def _normalize_vector_dim(value: str) -> str:
@@ -352,3 +372,8 @@ def _chunk_from_row(row: sqlite3.Row) -> StoredChunk:
 
 def _placeholders(values: Iterable[object]) -> str:
     return ", ".join("?" for _ in values)
+
+
+def _batches[T](values: list[T], size: int = _SQLITE_VARIABLE_LIMIT) -> Iterable[list[T]]:
+    for start in range(0, len(values), size):
+        yield values[start : start + size]

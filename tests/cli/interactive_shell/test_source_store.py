@@ -79,6 +79,17 @@ def test_delete_file_removes_chunks_and_vectors(tmp_path: Path) -> None:
     assert store.cosine_topk(np.array([1.0, 0.0, 0.0]))[0][0] == ids[1]
 
 
+def test_fetch_by_ids_batches_large_id_lists(tmp_path: Path) -> None:
+    store = SourceStore(tmp_path / "source.sqlite", vector_dim=1)
+    chunks = [_chunk(f"app/{index}.py", f"chunk_{index}") for index in range(1005)]
+    vectors = [np.array([float(index + 1)]) for index in range(1005)]
+    ids = store.upsert_chunks(chunks, vectors)
+
+    fetched = store.fetch_by_ids(ids)
+
+    assert fetched == chunks
+
+
 def test_cosine_topk_returns_expected_order(tmp_path: Path) -> None:
     store = _store(tmp_path)
     ids = store.upsert_chunks(
@@ -98,6 +109,25 @@ def test_cosine_topk_returns_expected_order(tmp_path: Path) -> None:
 
     assert [chunk_id for chunk_id, _score in results] == [ids[0], ids[1]]
     assert results[0][1] > results[1][1]
+
+
+def test_cosine_topk_empty_store_does_not_persist_vector_dim(tmp_path: Path) -> None:
+    store = SourceStore(tmp_path / "source.sqlite")
+
+    assert store.cosine_topk(np.array([1.0, 0.0, 0.0])) == []
+
+    assert store.get_meta("vector_dim") is None
+
+
+def test_cosine_topk_scan_limit_blocks_large_in_memory_load(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.upsert_chunks(
+        [_chunk("app/a.py", "alpha"), _chunk("app/b.py", "beta")],
+        [np.array([1.0, 0.0, 0.0]), np.array([0.0, 1.0, 0.0])],
+    )
+
+    with pytest.raises(RuntimeError, match="Refusing to scan 2 vectors"):
+        store.cosine_topk(np.array([1.0, 0.0, 0.0]), max_scan_rows=1)
 
 
 def test_incompatible_store_error_on_mismatched_vector_dim(tmp_path: Path) -> None:
