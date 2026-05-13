@@ -59,8 +59,9 @@ _OPERATOR_ACTIONABLE_LLM_ERROR_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\bLLM API request failed after multiple retries\b", re.I),
     # Provider endpoint unreachable (Ollama down, bad URL, SSL misconfiguration).
     re.compile(r"\bcannot connect to .+ api\b", re.I),
-    # Provider read timeout after retries — transient network/infra condition.
-    re.compile(r"\bapi request timed out\b", re.I),
+    # Provider read timeout after retries — anchored to the suffix produced by
+    # _format_openai_connection_error so generic non-LLM timeout messages are unaffected.
+    re.compile(r"\bapi request timed out\. check that the service is running\b", re.I),
     # Anthropic / provider account-level usage-limit enforcement (HTTP 400).
     re.compile(r"\byou have reached your specified api usage limits\b", re.I),
 )
