@@ -45,7 +45,7 @@ def run_watchdog(
 ) -> int:
     """Run the watchdog loop until target exit, SIGINT, or --once alarm."""
     active_sampler = sampler or ProcessMonitor(config)
-    active_dispatcher = dispatcher
+    active_dispatcher = dispatcher or _build_dispatcher(config)
     cpu_window = _CpuWindow()
 
     try:
@@ -61,11 +61,7 @@ def run_watchdog(
             if config.verbose:
                 click.echo(_format_sample_log(sample, breaches))
 
-            if breaches and active_dispatcher is None:
-                active_dispatcher = _build_dispatcher(config)
-
             for breach in breaches:
-                assert active_dispatcher is not None
                 active_dispatcher.dispatch(
                     breach.name,
                     _format_alarm_message(sample, breach),

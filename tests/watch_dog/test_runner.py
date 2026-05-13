@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import pytest
+
+from app.cli.support.errors import OpenSREError
 from app.cli.support.exit_codes import ERROR, SUCCESS
 from app.watch_dog.config import WatchdogConfig
 from app.watch_dog.process_monitor import ProcessSample
@@ -25,6 +28,11 @@ class _FakeDispatcher:
     def dispatch(self, threshold_name: str, message: str) -> bool:
         self.calls.append((threshold_name, message))
         return True
+
+
+class _ExplodingSampler:
+    def sample(self) -> ProcessSample:
+        raise AssertionError("watchdog sampled before credentials were validated")
 
 
 def _sample(
@@ -98,6 +106,26 @@ def test_target_exit_before_alarm_does_not_dispatch() -> None:
 
     assert code == SUCCESS
     assert dispatcher.calls == []
+
+
+def test_missing_credentials_fail_fast_before_sampling(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _raise_missing_credentials(*, chat_id_override: str | None = None) -> object:
+        raise OpenSREError("missing telegram credentials")
+
+    monkeypatch.setattr(
+        "app.watch_dog.runner.load_credentials_from_env",
+        _raise_missing_credentials,
+    )
+
+    with pytest.raises(OpenSREError, match="missing telegram credentials"):
+        run_watchdog(
+            WatchdogConfig(pid=123, max_cpu=90),
+            sampler=_ExplodingSampler(),
+            _sleep=lambda _seconds: None,
+            _clock=lambda: 100.0,
+        )
 
 
 def test_rss_threshold_formats_alarm_message() -> None:
