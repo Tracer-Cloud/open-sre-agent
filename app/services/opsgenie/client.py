@@ -107,13 +107,25 @@ class OpsGenieClient:
 
             return {"success": True, "alerts": alerts, "total": len(alerts)}
         except httpx.HTTPStatusError as exc:
-            capture_service_error(exc, logger=logger, integration="opsgenie", method="list_alerts")
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="opsgenie",
+                method="list_alerts",
+                extras={"query": query},
+            )
             return {
                 "success": False,
                 "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
         except Exception as exc:
-            capture_service_error(exc, logger=logger, integration="opsgenie", method="list_alerts")
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="opsgenie",
+                method="list_alerts",
+                extras={"query": query},
+            )
             return {"success": False, "error": str(exc)}
 
     def get_alert(self, alert_id: str) -> dict[str, Any]:

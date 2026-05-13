@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 import httpx
 
 from app.utils.errors import report_exception
+
+
+def _is_server_error(exc: BaseException) -> bool:
+    return isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code >= 500
 
 
 def capture_service_error(
@@ -15,13 +20,17 @@ def capture_service_error(
     logger: logging.Logger,
     integration: str,
     method: str,
+    extras: dict[str, Any] | None = None,
 ) -> None:
-    severity = "warning" if isinstance(exc, httpx.HTTPStatusError) else "error"
+    severity = "warning" if _is_server_error(exc) else "error"
+    merged_extras: dict[str, Any] = {"method": method}
+    if extras:
+        merged_extras.update(extras)
     report_exception(
         exc,
         logger=logger,
         message=f"[{integration}] {method} failed",
         severity=severity,
         tags={"surface": "service_client", "integration": integration},
-        extras={"method": method},
+        extras=merged_extras,
     )

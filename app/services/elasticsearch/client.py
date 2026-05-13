@@ -235,7 +235,11 @@ class ElasticsearchClient:
             return {"success": True, "logs": logs, "total": len(logs), "query": query}
         except httpx.HTTPStatusError as exc:
             capture_service_error(
-                exc, logger=logger, integration="elasticsearch", method="search_logs"
+                exc,
+                logger=logger,
+                integration="elasticsearch",
+                method="search_logs",
+                extras={"query": query, "time_range_minutes": time_range_minutes},
             )
             return {
                 "success": False,
@@ -243,7 +247,11 @@ class ElasticsearchClient:
             }
         except Exception as exc:
             capture_service_error(
-                exc, logger=logger, integration="elasticsearch", method="search_logs"
+                exc,
+                logger=logger,
+                integration="elasticsearch",
+                method="search_logs",
+                extras={"query": query, "time_range_minutes": time_range_minutes},
             )
             return {"success": False, "error": str(exc)}
 

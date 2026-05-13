@@ -110,13 +110,25 @@ class DatadogClient:
 
             return {"success": True, "logs": logs, "total": len(logs)}
         except httpx.HTTPStatusError as exc:
-            capture_service_error(exc, logger=logger, integration="datadog", method="search_logs")
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="datadog",
+                method="search_logs",
+                extras={"query": query, "time_range_minutes": time_range_minutes},
+            )
             return {
                 "success": False,
                 "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
         except Exception as exc:
-            capture_service_error(exc, logger=logger, integration="datadog", method="search_logs")
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="datadog",
+                method="search_logs",
+                extras={"query": query, "time_range_minutes": time_range_minutes},
+            )
             return {"success": False, "error": str(exc)}
 
     def query_metrics(
@@ -207,13 +219,25 @@ class DatadogClient:
 
             return {"success": True, "monitors": results, "total": len(results)}
         except httpx.HTTPStatusError as exc:
-            capture_service_error(exc, logger=logger, integration="datadog", method="list_monitors")
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="datadog",
+                method="list_monitors",
+                extras={"query": query},
+            )
             return {
                 "success": False,
                 "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
         except Exception as exc:
-            capture_service_error(exc, logger=logger, integration="datadog", method="list_monitors")
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="datadog",
+                method="list_monitors",
+                extras={"query": query},
+            )
             return {"success": False, "error": str(exc)}
 
     def get_pods_on_node(
@@ -390,7 +414,13 @@ class DatadogAsyncClient:
             return {"success": True, "logs": logs, "total": len(logs), "duration_ms": duration_ms}
         except httpx.HTTPStatusError as exc:
             duration_ms = int((time.monotonic() - t0) * 1000)
-            capture_service_error(exc, logger=logger, integration="datadog", method="_search_logs")
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="datadog",
+                method="_search_logs",
+                extras={"query": query, "time_range_minutes": time_range_minutes},
+            )
             return {
                 "success": False,
                 "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
@@ -398,7 +428,13 @@ class DatadogAsyncClient:
             }
         except Exception as exc:
             duration_ms = int((time.monotonic() - t0) * 1000)
-            capture_service_error(exc, logger=logger, integration="datadog", method="_search_logs")
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="datadog",
+                method="_search_logs",
+                extras={"query": query, "time_range_minutes": time_range_minutes},
+            )
             return {"success": False, "error": str(exc), "duration_ms": duration_ms}
 
     async def _list_monitors(
@@ -437,7 +473,11 @@ class DatadogAsyncClient:
         except httpx.HTTPStatusError as exc:
             duration_ms = int((time.monotonic() - t0) * 1000)
             capture_service_error(
-                exc, logger=logger, integration="datadog", method="_list_monitors"
+                exc,
+                logger=logger,
+                integration="datadog",
+                method="_list_monitors",
+                extras={"query": query},
             )
             return {
                 "success": False,
@@ -447,7 +487,11 @@ class DatadogAsyncClient:
         except Exception as exc:
             duration_ms = int((time.monotonic() - t0) * 1000)
             capture_service_error(
-                exc, logger=logger, integration="datadog", method="_list_monitors"
+                exc,
+                logger=logger,
+                integration="datadog",
+                method="_list_monitors",
+                extras={"query": query},
             )
             return {"success": False, "error": str(exc), "duration_ms": duration_ms}
 

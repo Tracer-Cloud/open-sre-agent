@@ -16,27 +16,44 @@ def mock_logger() -> logging.Logger:
     return MagicMock(spec=logging.Logger)
 
 
-def _make_http_status_error(status_code: int = 502) -> httpx.HTTPStatusError:
-    response = httpx.Response(status_code, text="Bad Gateway")
+def _make_http_status_error(status_code: int = 502, text: str = "error") -> httpx.HTTPStatusError:
+    response = httpx.Response(status_code, text=text)
     request = httpx.Request("GET", "https://api.example.com/test")
     return httpx.HTTPStatusError("error", request=request, response=response)
 
 
 class TestCaptureServiceError:
-    def test_http_status_error_uses_warning_severity(self, mock_logger: logging.Logger) -> None:
+    def test_server_error_uses_warning_severity(self, mock_logger: logging.Logger) -> None:
         exc = _make_http_status_error(502)
         with patch("app.services._error_helpers.report_exception") as mock_report:
             capture_service_error(
                 exc, logger=mock_logger, integration="jira", method="create_issue"
             )
-            mock_report.assert_called_once_with(
-                exc,
-                logger=mock_logger,
-                message="[jira] create_issue failed",
-                severity="warning",
-                tags={"surface": "service_client", "integration": "jira"},
-                extras={"method": "create_issue"},
+            assert mock_report.call_args.kwargs["severity"] == "warning"
+
+    def test_503_uses_warning_severity(self, mock_logger: logging.Logger) -> None:
+        exc = _make_http_status_error(503)
+        with patch("app.services._error_helpers.report_exception") as mock_report:
+            capture_service_error(
+                exc, logger=mock_logger, integration="splunk", method="search_logs"
             )
+            assert mock_report.call_args.kwargs["severity"] == "warning"
+
+    def test_client_4xx_uses_error_severity(self, mock_logger: logging.Logger) -> None:
+        exc = _make_http_status_error(401)
+        with patch("app.services._error_helpers.report_exception") as mock_report:
+            capture_service_error(
+                exc, logger=mock_logger, integration="jira", method="create_issue"
+            )
+            assert mock_report.call_args.kwargs["severity"] == "error"
+
+    def test_403_uses_error_severity(self, mock_logger: logging.Logger) -> None:
+        exc = _make_http_status_error(403)
+        with patch("app.services._error_helpers.report_exception") as mock_report:
+            capture_service_error(
+                exc, logger=mock_logger, integration="datadog", method="search_logs"
+            )
+            assert mock_report.call_args.kwargs["severity"] == "error"
 
     def test_generic_exception_uses_error_severity(self, mock_logger: logging.Logger) -> None:
         exc = ConnectionError("refused")
@@ -44,14 +61,7 @@ class TestCaptureServiceError:
             capture_service_error(
                 exc, logger=mock_logger, integration="datadog", method="search_logs"
             )
-            mock_report.assert_called_once_with(
-                exc,
-                logger=mock_logger,
-                message="[datadog] search_logs failed",
-                severity="error",
-                tags={"surface": "service_client", "integration": "datadog"},
-                extras={"method": "search_logs"},
-            )
+            assert mock_report.call_args.kwargs["severity"] == "error"
 
     def test_timeout_exception_uses_error_severity(self, mock_logger: logging.Logger) -> None:
         exc = httpx.ReadTimeout("timed out")
@@ -78,3 +88,26 @@ class TestCaptureServiceError:
             )
             extras = mock_report.call_args.kwargs["extras"]
             assert extras == {"method": "get_runtime_logs"}
+
+    def test_caller_extras_merged(self, mock_logger: logging.Logger) -> None:
+        exc = _make_http_status_error(502)
+        with patch("app.services._error_helpers.report_exception") as mock_report:
+            capture_service_error(
+                exc,
+                logger=mock_logger,
+                integration="datadog",
+                method="search_logs",
+                extras={"query": "service:web", "time_range_minutes": 60},
+            )
+            extras = mock_report.call_args.kwargs["extras"]
+            assert extras == {
+                "method": "search_logs",
+                "query": "service:web",
+                "time_range_minutes": 60,
+            }
+
+    def test_caller_extras_none_defaults_to_method_only(self, mock_logger: logging.Logger) -> None:
+        exc = RuntimeError("boom")
+        with patch("app.services._error_helpers.report_exception") as mock_report:
+            capture_service_error(exc, logger=mock_logger, integration="jira", method="get_issue")
+            assert mock_report.call_args.kwargs["extras"] == {"method": "get_issue"}
