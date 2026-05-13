@@ -77,6 +77,13 @@ def test_pattern_rules_ignore_continuation_lines() -> None:
     assert rule.evaluate(record) is None
 
 
+def test_pattern_rules_do_not_match_logger_name_only() -> None:
+    rules = {r.name: r for r in default_pattern_rules()}
+    rule = rules["oom_killed"]
+    record = _rec("benign worker heartbeat", logger_name="oom-killer.worker")
+    assert rule.evaluate(record) is None
+
+
 def test_repeat_rule_only_fires_at_threshold() -> None:
     crash = next(r for r in default_pattern_rules() if r.name == "crash_loop")
     assert isinstance(crash, RepeatRule)
@@ -99,6 +106,23 @@ def test_repeat_rule_crash_loop_ignores_info_level_restart_spam() -> None:
     msg = "agent restarted after unexpected exit"
     for i in range(5):
         assert crash.evaluate(_rec(msg, level=LogLevel.INFO, seconds=i * 5)) is None
+
+
+def test_repeat_rule_does_not_count_logger_name_only_matches() -> None:
+    crash = next(r for r in default_pattern_rules() if r.name == "crash_loop")
+    assert isinstance(crash, RepeatRule)
+    for i in range(5):
+        assert (
+            crash.evaluate(
+                _rec(
+                    "routine heartbeat",
+                    level=LogLevel.WARNING,
+                    logger_name="agent-restarting-supervisor",
+                    seconds=i * 10,
+                )
+            )
+            is None
+        )
 
 
 def test_repeat_rule_window_ages_out_old_hits() -> None:
