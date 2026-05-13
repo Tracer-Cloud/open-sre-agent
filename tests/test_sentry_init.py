@@ -772,3 +772,13 @@ def test_init_sentry_ignore_errors_includes_cli_transient_error(monkeypatch) -> 
 
     ignore_errors = init_mock.call_args.kwargs["ignore_errors"]
     assert CLITransientError in ignore_errors
+
+
+def test_init_sentry_ignore_errors_includes_keyboard_interrupt(monkeypatch) -> None:
+    _clear_kill_switches(monkeypatch)
+    init_mock, _ = _install_full_sentry_mock(monkeypatch)
+
+    sentry_mod.init_sentry(entrypoint="cli")
+
+    ignore_errors = init_mock.call_args.kwargs["ignore_errors"]
+    assert KeyboardInterrupt in ignore_errors
