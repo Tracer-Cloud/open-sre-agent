@@ -25,14 +25,36 @@ slug: "quickstart"
       </Tab>
     </Tabs>
 
+    If the binary install fails on an older Linux distribution, run OpenSRE from source with `uv`:
+
+    ```bash
+    git clone https://github.com/Tracer-Cloud/opensre
+    cd opensre
+    uv sync --frozen --extra dev
+    uv run opensre --version
+    ```
+
+    See [SETUP.md](https://github.com/Tracer-Cloud/opensre/blob/main/SETUP.md)
+    for the full source setup guide.
+
   </Step>
 
   <Step title="Onboard">
-    Run the onboarding wizard to configure your LLM provider and connect your integrations (Grafana, Datadog, Honeycomb, Coralogix, Slack, AWS, GitHub MCP, Sentry):
+    Configure an LLM provider first, then connect your integrations
+    (Grafana, Datadog, Honeycomb, Coralogix, Slack, AWS, GitHub MCP, Sentry):
 
-    ```bash
-    opensre onboard
-    ```
+    <Tabs>
+      <Tab title="Local LLM (no API key)">
+        ```bash
+        opensre onboard local_llm
+        ```
+      </Tab>
+      <Tab title="Hosted providers">
+        ```bash
+        opensre onboard
+        ```
+      </Tab>
+    </Tabs>
 
   </Step>
 

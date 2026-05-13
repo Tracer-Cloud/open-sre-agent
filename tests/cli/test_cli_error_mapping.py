@@ -36,7 +36,7 @@ def test_anthropic_model_not_found_suggestion_guides_env_vars() -> None:
 
 
 def test_non_anthropic_model_not_found_does_not_match() -> None:
-    """A 'model not found' error from a non-Anthropic provider must not trigger the Anthropic branch."""
+    """A non-Anthropic model error must not trigger the Anthropic branch."""
     exc = RuntimeError("OpenAI model 'gpt-99' was not found. Check your configuration.")
     with pytest.raises(RuntimeError):
         reraise_cli_runtime_error(exc)
@@ -49,3 +49,33 @@ def test_cli_not_found_still_maps_correctly() -> None:
         reraise_cli_runtime_error(exc)
 
     assert "CLI tool is not installed" in str(exc_info.value)
+
+
+def test_ollama_connectivity_error_maps_to_opensre_error() -> None:
+    """Provider reachability failures should use the same rich CLI error path."""
+    exc = RuntimeError(
+        "Cannot connect to Ollama API. "
+        "Check that the service is running and responsive at the configured endpoint."
+    )
+
+    with pytest.raises(OpenSREError) as exc_info:
+        reraise_cli_runtime_error(exc)
+
+    assert "Cannot connect to Ollama API" in str(exc_info.value)
+    assert exc_info.value.suggestion is not None
+    assert "ollama serve" in exc_info.value.suggestion
+    assert "opensre onboard local_llm" in exc_info.value.suggestion
+
+
+def test_provider_timeout_error_maps_to_opensre_error() -> None:
+    exc = RuntimeError(
+        "Openai API request timed out. "
+        "Check that the service is running and responsive at the configured endpoint."
+    )
+
+    with pytest.raises(OpenSREError) as exc_info:
+        reraise_cli_runtime_error(exc)
+
+    assert "API request timed out" in str(exc_info.value)
+    assert exc_info.value.suggestion is not None
+    assert "LLM provider endpoint" in exc_info.value.suggestion
