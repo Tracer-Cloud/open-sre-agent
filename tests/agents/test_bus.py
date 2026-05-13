@@ -13,6 +13,15 @@ from pathlib import Path
 import pytest
 
 _POSIX_FCNTL_AVAILABLE = importlib.util.find_spec("fcntl") is not None
+_AF_UNIX_AVAILABLE = hasattr(socket, "AF_UNIX")
+
+# Class-level marker for the socket-bound tests. The ``BusMessage`` and
+# slash-command formatter tests are pure-Python and don't carry this marker,
+# so they still run on Windows.
+_requires_af_unix = pytest.mark.skipif(
+    not _AF_UNIX_AVAILABLE,
+    reason="agent bus requires AF_UNIX sockets (POSIX only)",
+)
 
 from app.agents import bus as bus_module
 from app.agents.bus import (
@@ -141,6 +150,7 @@ class TestBusMessage:
         assert msg.data["k"] == 1
 
 
+@_requires_af_unix
 class TestBusServerLifecycle:
     def test_start_binds_socket_and_stop_unlinks(self, sock_path: Path) -> None:
         server = BusServer(sock_path)
@@ -217,6 +227,7 @@ class TestBusServerLifecycle:
             bus_module._ensure_broker(sock_path)
 
 
+@_requires_af_unix
 class TestLivenessProbe:
     def test_socket_is_live_does_not_create_phantom_subscriber(self, sock_path: Path) -> None:
         # _socket_is_live used to make a real connection on every probe; under
@@ -246,6 +257,7 @@ class TestLivenessProbe:
         assert not _socket_is_live(sock_path)
 
 
+@_requires_af_unix
 class TestPublisherCache:
     def test_burst_of_publishes_reuses_one_connection(self, sock_path: Path) -> None:
         # Each publish() previously opened a fresh UDS connection, which the
@@ -407,6 +419,7 @@ class TestPublisherCache:
         assert len(seen) == total, f"frame loss or corruption: got {len(seen)} unique of {total}"
 
 
+@_requires_af_unix
 class TestPublishSubscribe:
     def test_round_trip_one_publisher_one_subscriber(self, sock_path: Path) -> None:
         received: queue.Queue[BusMessage] = queue.Queue()
@@ -671,6 +684,7 @@ class TestPublishSubscribe:
             server.stop()
 
 
+@_requires_af_unix
 class TestBrokerElectionRace:
     def test_concurrent_cold_start_election_does_not_orphan_a_broker(self, sock_path: Path) -> None:
         # Cold-start race: two processes both observe ``_socket_is_live``
@@ -821,6 +835,7 @@ class TestBrokerElectionRace:
             child.wait(timeout=5.0)
 
 
+@_requires_af_unix
 class TestBrokerSelfElection:
     def test_stale_socket_file_is_unlinked_and_rebound(self, sock_path: Path) -> None:
         sock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -883,3 +898,39 @@ class TestSlashCommandFormatter:
         msg = BusMessage(agent="a:1", topic="finding", summary="x")
         out = _format_bus_message(msg)
         assert "—" not in out
+
+
+class TestPlatformGuards:
+    def test_bus_server_start_raises_clear_error_when_unavailable(
+        self, sock_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(bus_module, "BUS_AVAILABLE", False)
+        server = BusServer(sock_path)
+        with pytest.raises(OSError, match="AF_UNIX"):
+            server.start()
+        assert not server.is_running
+
+    def test_connect_client_raises_clear_error_when_unavailable(
+        self, sock_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(bus_module, "BUS_AVAILABLE", False)
+        with pytest.raises(OSError, match="AF_UNIX"):
+            bus_module._connect_client(sock_path, timeout=0.1)
+
+    def test_slash_command_degrades_gracefully_when_unavailable(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from io import StringIO
+
+        from rich.console import Console
+
+        from app.cli.interactive_shell.command_registry import agents as agents_cmd
+
+        monkeypatch.setattr(agents_cmd, "BUS_AVAILABLE", False)
+        buf = StringIO()
+        console = Console(file=buf, force_terminal=False, width=120)
+        result = agents_cmd._cmd_agents_bus(console)
+        assert result is True
+        out = buf.getvalue()
+        assert "not available on this platform" in out
+        assert "AF_UNIX" in out

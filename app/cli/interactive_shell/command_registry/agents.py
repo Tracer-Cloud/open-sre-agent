@@ -23,7 +23,7 @@ from rich.markup import escape
 from rich.text import Text
 from rich.tree import Tree
 
-from app.agents.bus import BusMessage, subscribe
+from app.agents.bus import BUS_AVAILABLE, BusMessage, subscribe
 from app.agents.config import (
     agents_config_path,
     load_agents_config,
@@ -160,6 +160,13 @@ def _cmd_agents_bus(console: Console) -> bool:
     ``KeyboardInterrupt`` (user detached), broker disconnect (e.g. the
     publishing process exited), or socket error.
     """
+    if not BUS_AVAILABLE:
+        # AF_UNIX is POSIX-only; the rest of the REPL still works on Windows.
+        console.print(
+            f"[{WARNING}]/agents bus is not available on this platform "
+            "(requires AF_UNIX sockets — POSIX only).[/]"
+        )
+        return True
     console.print(
         f"[{DIM}]tailing /agents bus — Ctrl-C to exit[/]",
     )

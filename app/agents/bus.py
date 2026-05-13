@@ -42,6 +42,12 @@ except ImportError:
 else:
     _fcntl = _fcntl_impl
 
+# ``socket.AF_UNIX`` is absent on stock Windows Python builds. Probe once so
+# callers see a clear ``OSError`` instead of an ``AttributeError`` from inside
+# ``socket.socket(...)``.
+BUS_AVAILABLE: bool = hasattr(socket, "AF_UNIX")
+_BUS_UNAVAILABLE_MSG = "agent bus requires AF_UNIX sockets; not available on this platform"
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_BUS_SOCKET_PATH: Path = OPENSRE_HOME_DIR / "agents-bus.sock"
@@ -260,6 +266,8 @@ class BusServer:
         """
         if self._running.is_set():
             return
+        if not BUS_AVAILABLE:
+            raise OSError(_BUS_UNAVAILABLE_MSG)
         _ensure_parent_dir(self._path)
         listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
@@ -515,6 +523,8 @@ def _ensure_broker(path: Path) -> BusServer | None:
 
 def _connect_client(path: Path, timeout: float) -> socket.socket:
     """Open a blocking UDS connection to the broker at ``path``."""
+    if not BUS_AVAILABLE:
+        raise OSError(_BUS_UNAVAILABLE_MSG)
     client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     client.settimeout(timeout)
     try:
@@ -734,6 +744,7 @@ def subscribe(
 
 
 __all__ = [
+    "BUS_AVAILABLE",
     "BUS_SCHEMA_VERSION",
     "BusMessage",
     "BusServer",
