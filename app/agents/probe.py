@@ -88,8 +88,9 @@ def probe(pid: int, *, cpu_interval: float = 0.1) -> ProcessSnapshot | None:
         return None
 
     try:
+        cpu = proc.cpu_percent(interval=cpu_interval)
+
         with proc.oneshot():
-            cpu = proc.cpu_percent(interval=cpu_interval)
             rss_mb = proc.memory_info().rss / _BYTES_PER_MIB
             num_fds = _safe_num_fds(proc)
             num_connections = _safe_num_connections(proc)
