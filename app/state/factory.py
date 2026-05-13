@@ -59,8 +59,14 @@ def make_initial_state(
     raw_alert: str | dict[str, Any],
     *,
     opensre_evaluate: bool = False,
+    investigation_metadata: tuple[str, str, str] | None = None,
 ) -> AgentState:
-    """Create initial investigation state from the raw alert payload."""
+    """Create initial investigation state from the raw alert payload.
+
+    When ``investigation_metadata`` is set, it supplies ``(alert_name, pipeline_name,
+    severity)`` for initial state instead of deriving them only from ``raw_alert``.
+    Callers use this for HTTP/CLI overrides without mutating the alert dict.
+    """
     rubric = ""
     alert_payload: str | dict[str, Any] = raw_alert
     if isinstance(alert_payload, dict):
@@ -76,7 +82,10 @@ def make_initial_state(
         # before any downstream extraction/planning nodes run.
         alert_payload = normalize_alert_payload(alert_payload)
 
-    alert_name, pipeline_name, severity = _resolve_alert_metadata(alert_payload)
+    if investigation_metadata is not None:
+        alert_name, pipeline_name, severity = investigation_metadata
+    else:
+        alert_name, pipeline_name, severity = _resolve_alert_metadata(alert_payload)
 
     state = AgentStateModel.model_validate(
         {

@@ -42,6 +42,7 @@ def run_investigation(
     resolved_integrations: dict[str, Any] | None = None,
     openclaw_context: dict[str, Any] | None = None,
     opensre_evaluate: bool = False,
+    investigation_metadata: tuple[str, str, str] | None = None,
 ) -> AgentState:
     """Run the investigation from a raw alert payload. Pure function: inputs in, state out.
 
@@ -50,6 +51,8 @@ def run_investigation(
         resolved_integrations: Optional pre-resolved integrations dict. When provided,
             integration resolution is skipped — useful for synthetic testing where a
             FixtureGrafanaBackend should be injected without real credential resolution.
+        investigation_metadata: Optional ``(alert_name, pipeline_name, severity)`` for
+            initial state; avoids copying those fields onto ``raw_alert``.
     """
     init_sentry(entrypoint="pipeline")
     from app.pipeline.pipeline import run_connected_investigation as _run
@@ -57,6 +60,7 @@ def run_investigation(
     initial = make_initial_state(
         raw_alert=raw_alert,
         opensre_evaluate=opensre_evaluate,
+        investigation_metadata=investigation_metadata,
     )
     if resolved_integrations is not None:
         cast(dict[str, Any], initial)["resolved_integrations"] = resolved_integrations
@@ -88,6 +92,7 @@ async def astream_investigation(
     raw_alert: str | dict[str, Any],
     *,
     opensre_evaluate: bool = False,
+    investigation_metadata: tuple[str, str, str] | None = None,
 ) -> AsyncIterator[Any]:
     """Stream investigation events in real time.
 
@@ -100,6 +105,7 @@ async def astream_investigation(
     initial = make_initial_state(
         raw_alert=raw_alert,
         opensre_evaluate=opensre_evaluate,
+        investigation_metadata=investigation_metadata,
     )
 
     # Silence the global ProgressTracker before starting the background thread

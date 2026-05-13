@@ -25,6 +25,19 @@ def test_make_initial_state_validates_and_sets_defaults() -> None:
     assert state.get("opensre_evaluate") is False
 
 
+def test_make_initial_state_investigation_metadata_override() -> None:
+    state = make_initial_state(
+        {"description": "cpu spike"},
+        investigation_metadata=("Production CPU Spike", "checkout", "high"),
+    )
+    assert state["alert_name"] == "Production CPU Spike"
+    assert state["pipeline_name"] == "checkout"
+    assert state["severity"] == "high"
+    ra = state["raw_alert"]
+    assert isinstance(ra, dict)
+    assert ra.get("description") == "cpu spike"
+
+
 def test_make_initial_state_strips_rubric_when_not_evaluate() -> None:
     raw = {
         "commonAnnotations": {"summary": "x", "scoring_points": "secret rubric"},

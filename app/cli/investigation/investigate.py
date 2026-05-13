@@ -66,6 +66,7 @@ def _call_run_investigation(
     *,
     raw_alert: dict[str, Any],
     opensre_evaluate: bool = False,
+    investigation_metadata: tuple[str, str, str] | None = None,
 ) -> AgentState:
     """Import the heavy investigation runner only when execution starts."""
     from app.pipeline.runners import run_investigation
@@ -73,6 +74,7 @@ def _call_run_investigation(
     return run_investigation(
         raw_alert,
         opensre_evaluate=opensre_evaluate,
+        investigation_metadata=investigation_metadata,
     )
 
 
@@ -115,13 +117,19 @@ def run_investigation_cli(
     *,
     raw_alert: dict[str, Any],
     opensre_evaluate: bool = False,
+    investigation_metadata: tuple[str, str, str] | None = None,
 ) -> dict[str, Any]:
-    """Run the investigation and return the CLI-facing JSON payload."""
+    """Run the investigation and return the CLI-facing JSON payload.
+
+    ``investigation_metadata`` is an optional ``(alert_name, pipeline_name, severity)``
+    tuple for initial state (e.g. HTTP request overrides) without mutating ``raw_alert``.
+    """
     _check_llm_settings()
     try:
         state = _call_run_investigation(
             raw_alert=raw_alert,
             opensre_evaluate=opensre_evaluate,
+            investigation_metadata=investigation_metadata,
         )
     except Exception as exc:
         _reraise_investigation_failure(exc)
