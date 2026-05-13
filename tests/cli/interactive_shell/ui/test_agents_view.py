@@ -9,7 +9,7 @@ this function.
 from __future__ import annotations
 
 import io
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -124,14 +124,14 @@ def test_row_contains_agent_name_and_pid() -> None:
 
 
 def test_metric_cells_are_placeholders_until_wired() -> None:
-    """``uptime``, ``cpu%``, ``tokens/min``, and ``$/hr`` render as
-    placeholders for now; ``status`` shows the row source."""
+    """``uptime``, ``cpu%``, ``tokens/min``, ``$/hr``, and ``status`` render as
+    placeholders when no sampler snapshot exists for the process."""
     table, _ = _render([AgentRecord(name="claude-code", pid=8421, command="claude")])
     # row_count == 1, so iterate directly to inspect the rendered cells
     assert table.row_count == 1
     rendered_cells = [list(col.cells)[0] for col in table.columns]
-    # cells[0] = agent, cells[1] = pid, then metric cells and row source.
-    assert rendered_cells[2:] == ["-", "-", "-", "-", "registered"]
+    # cells[0] = agent, cells[1] = pid, then metric cells and status.
+    assert rendered_cells[2:] == ["-", "-", "-", "-", "-"]
 
 
 def test_table_shows_live_probe_data_when_snapshot_exists(monkeypatch: pytest.MonkeyPatch) -> None:

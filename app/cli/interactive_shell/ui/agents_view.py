@@ -120,7 +120,7 @@ def render_agents_table(records: Iterable[AgentRecord]) -> Table:
             cpu_cell,  # cpu%
             _UNFILLED,  # tokens/min
             hourly_cell,
-            escape(record.source),
+            status_cell,
         )
     return table
 
