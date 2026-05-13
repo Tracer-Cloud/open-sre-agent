@@ -24,7 +24,7 @@ if "psutil" not in sys.modules:
     sys.modules["psutil"] = psutil_stub
 
 from app.cli.__main__ import cli
-from app.cli.commands.tests import _build_synthetic_argv
+from app.cli.commands.tests import _build_openclaw_synthetic_argv, _build_synthetic_argv
 
 
 def test_build_synthetic_argv_with_explicit_report_and_observations_dir() -> None:
@@ -71,6 +71,15 @@ def test_build_synthetic_argv_with_levels_and_parallel() -> None:
         observations_dir="",
     )
     assert argv == ["--levels", "2,3,4", "--parallel-levels", "4", "--mock-grafana"]
+
+
+def test_build_openclaw_synthetic_argv() -> None:
+    argv = _build_openclaw_synthetic_argv(
+        scenario="gateway_process_terminated_missing_tls_key",
+        output_json=True,
+    )
+
+    assert argv == ["--scenario", "gateway_process_terminated_missing_tls_key", "--json"]
 
 
 def test_tests_synthetic_cli_forwards_flags_to_run_suite_main(tmp_path: Path) -> None:
@@ -194,3 +203,42 @@ def test_tests_synthetic_all_defaults_to_parallel_all_levels(tmp_path: Path) -> 
 
     assert result.exit_code == 0
     assert seen_argv == ["--parallel-levels", "4", "--mock-grafana"]
+
+
+def test_tests_openclaw_synthetic_cli_forwards_flags_to_run_suite_main(tmp_path: Path) -> None:
+    runner = CliRunner()
+    scenarios_dir = tmp_path / "openclaw" / "scenarios"
+    (scenarios_dir / "gateway_process_terminated_missing_tls_key").mkdir(parents=True)
+
+    seen_argv: list[str] = []
+
+    def _fake_main(argv: list[str]) -> int:
+        seen_argv[:] = argv
+        return 2
+
+    fake_run_suite = types.ModuleType("tests.synthetic.openclaw.run_suite")
+    fake_run_suite.main = _fake_main
+
+    with (
+        unittest.mock.patch(
+            "app.cli.tests.discover.OPENCLAW_SYNTHETIC_SCENARIOS_DIR",
+            scenarios_dir,
+        ),
+        unittest.mock.patch.dict(
+            sys.modules,
+            {"tests.synthetic.openclaw.run_suite": fake_run_suite},
+        ),
+    ):
+        result = runner.invoke(
+            cli,
+            [
+                "tests",
+                "openclaw-synthetic",
+                "--scenario",
+                "gateway_process_terminated_missing_tls_key",
+                "--json",
+            ],
+        )
+
+    assert result.exit_code == 2
+    assert seen_argv == ["--scenario", "gateway_process_terminated_missing_tls_key", "--json"]

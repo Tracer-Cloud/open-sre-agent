@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from typing import Any
 
 _VALID_LAYOUTS = ("classic", "pinned")
 _FALSE_VALUES = ("", "0", "false", "off", "no")
+
+log = logging.getLogger(__name__)
 
 # ── Release notes ─────────────────────────────────────────────────────────────
 # Shown in the "What's new" panel on startup. Update this each release with
@@ -76,6 +79,10 @@ class ReplConfig:
     enabled: bool = True
     layout: str = "classic"
     reload: bool = True
+    alert_listener_enabled: bool = False
+    alert_listener_host: str = "127.0.0.1"
+    alert_listener_port: int = 0
+    alert_listener_token: str | None = None
 
     @staticmethod
     def _coerce_bool(value: Any, *, default: bool) -> bool:
@@ -130,7 +137,55 @@ class ReplConfig:
         else:
             reload = cls._coerce_bool(file_conf.get("reload"), default=True)
 
-        return cls(enabled=enabled, layout=layout, reload=reload)
+        # --- alert_listener_enabled ---
+        if (env_val := os.getenv("OPENSRE_ALERT_LISTENER_ENABLED")) is not None:
+            alert_listener_enabled = cls._coerce_bool(env_val, default=False)
+        else:
+            alert_listener_enabled = cls._coerce_bool(
+                file_conf.get("alert_listener_enabled"), default=False
+            )
+
+        # --- alert_listener_host ---
+        if (env_val := os.getenv("OPENSRE_ALERT_LISTENER_HOST")) is not None:
+            alert_listener_host = env_val.strip()
+        else:
+            alert_listener_host = str(file_conf.get("alert_listener_host", "127.0.0.1"))
+
+        # --- alert_listener_port ---
+        if (env_val := os.getenv("OPENSRE_ALERT_LISTENER_PORT")) is not None:
+            try:
+                alert_listener_port = int(env_val.strip())
+            except ValueError:
+                log.warning(
+                    "OPENSRE_ALERT_LISTENER_PORT=%r is not a valid port number; defaulting to 0 (random).",
+                    env_val,
+                )
+                alert_listener_port = 0
+        else:
+            try:
+                alert_listener_port = int(file_conf.get("alert_listener_port", 0))
+            except ValueError:
+                log.warning(
+                    "config.yml interactive.alert_listener_port=%r is not a valid port number; defaulting to 0 (random).",
+                    file_conf.get("alert_listener_port"),
+                )
+                alert_listener_port = 0
+
+        # --- alert_listener_token ---
+        if (env_val := os.getenv("OPENSRE_ALERT_LISTENER_TOKEN")) is not None:
+            alert_listener_token = env_val.strip() or None
+        else:
+            alert_listener_token = file_conf.get("alert_listener_token") or None
+
+        return cls(
+            enabled=enabled,
+            layout=layout,
+            reload=reload,
+            alert_listener_enabled=alert_listener_enabled,
+            alert_listener_host=alert_listener_host,
+            alert_listener_port=alert_listener_port,
+            alert_listener_token=alert_listener_token,
+        )
 
     @classmethod
     def from_env(cls) -> ReplConfig:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import NoReturn
 from unittest.mock import patch
 
 import pytest
@@ -110,7 +111,7 @@ def test_service_flag_surfaces_errors_from_payload_builder() -> None:
 
     runner = CliRunner()
     with (
-        patch("app.cli.commands.general.capture_investigation_started") as mock_started,
+        patch("app.cli.commands.general.track_investigation") as mock_tracking,
         patch(
             "app.remote.runtime_alert.build_runtime_alert_payload",
             side_effect=OpenSREError("unknown service", suggestion="add it"),
@@ -120,21 +121,17 @@ def test_service_flag_surfaces_errors_from_payload_builder() -> None:
         result = runner.invoke(investigate_command, ["--service", "missing"])
 
     assert result.exit_code != 0
-    mock_started.assert_not_called()
+    mock_tracking.assert_not_called()
 
 
 def test_print_template_does_not_count_as_investigation() -> None:
     runner = CliRunner()
 
-    with (
-        patch("app.cli.commands.general.capture_investigation_started") as mock_started,
-        patch("app.cli.commands.general.capture_investigation_completed") as mock_completed,
-    ):
+    with patch("app.cli.commands.general.track_investigation") as mock_tracking:
         result = runner.invoke(investigate_command, ["--print-template", "generic"])
 
     assert result.exit_code == 0
-    mock_started.assert_not_called()
-    mock_completed.assert_not_called()
+    mock_tracking.assert_not_called()
 
 
 def test_slack_thread_without_service_is_rejected() -> None:
@@ -189,3 +186,54 @@ def test_slack_thread_passed_to_payload_builder(monkeypatch) -> None:
         slack_thread_ref="C01234/1712345.000001",
         slack_bot_token="xoxb-fake-token",
     )
+
+
+def test_investigate_command_keyboard_interrupt_non_streaming(monkeypatch) -> None:
+    """Ctrl+C during a non-streaming investigation exits cleanly with code 0."""
+    runner = CliRunner()
+
+    def fake_run(*args: object, **kwargs: object) -> NoReturn:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("app.cli.investigation.run_investigation_cli", fake_run)
+    monkeypatch.setattr(
+        "app.cli.investigation.payload.load_payload", lambda **_: {"alert_name": "A"}
+    )
+    monkeypatch.setattr("app.cli.commands.general.is_json_output", lambda: True)
+
+    result = runner.invoke(investigate_command, ["--input", "/tmp/alert.json"])
+    assert result.exit_code == 0
+    assert result.exception is None
+
+
+def test_investigate_command_keyboard_interrupt_streaming(monkeypatch) -> None:
+    """Ctrl+C during a streaming investigation exits cleanly with code 0."""
+    import sys as real_sys
+    import types
+    from unittest.mock import MagicMock
+
+    runner = CliRunner()
+
+    def fake_streaming(*args: object, **kwargs: object) -> NoReturn:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("app.cli.investigation.run_investigation_cli_streaming", fake_streaming)
+    monkeypatch.setattr(
+        "app.cli.investigation.payload.load_payload", lambda **_: {"alert_name": "A"}
+    )
+    monkeypatch.setattr("app.cli.commands.general.is_json_output", lambda: False)
+
+    # Click's CliRunner patches the real sys.stdout, but
+    # app.cli.commands.general imported sys at module load time.
+    # Replace it with a fake module whose stdout reports isatty=True
+    # so the command takes the streaming path.
+    fake_sys = types.ModuleType("sys")
+    fake_sys.__dict__.update(real_sys.__dict__)
+    fake_sys.stdout = MagicMock()
+    fake_sys.stdout.isatty.return_value = True
+
+    with patch("app.cli.commands.general.sys", fake_sys):
+        result = runner.invoke(investigate_command, ["--input", "/tmp/alert.json"])
+
+    assert result.exit_code == 0
+    assert result.exception is None

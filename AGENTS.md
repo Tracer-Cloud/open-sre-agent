@@ -97,6 +97,7 @@ Files to touch:
 - `app/tools/<ToolName>/__init__.py` for the tool implementation, or `app/tools/<tool_file>.py` for a lighter-weight function tool.
 - `app/tools/utils/` if the tool needs shared helper code.
 - `app/services/<vendor>/client.py` if the tool should reuse a dedicated API client instead of inlining requests.
+- `docs/<tool_name>.mdx` for user-facing usage, parameters, and examples.
 - `tests/tools/test_<tool_name>.py` for behavior and regression coverage.
 
 Steps:
@@ -119,6 +120,7 @@ Files to touch:
 - `app/pipeline/graph.py` to register the node and wire edges.
 - `app/pipeline/routing.py` if the node changes branching, loop control, or terminal conditions.
 - `app/state/*.py` if the node adds or changes state fields.
+- `docs/` — update or add a page if the node introduces user-visible behavior or configuration.
 - `tests/` coverage for the specific node or the affected graph path.
 
 Steps:
@@ -160,6 +162,8 @@ Basic steps:
 ## 3. Rules (if X -> do Y)
 
 - If core agent or graph logic changes -> run `make test-cov` and `make typecheck`.
+- If a new feature is shipped (tool, node, CLI command, pipeline behavior, integration) -> add a `docs/` page or section covering usage, configuration, and examples before the PR is opened.
+- If an existing feature changes behavior, flags, or config shape -> update the relevant `docs/` page in the same PR; docs and code must stay in sync.
 - If a tool's API or schema changes -> update docs in `docs/` and update the related unit tests, usually under `tests/tools/`.
 - If an integration changes -> update `tests/integrations/` and verify with `make verify-integrations`.
 - If adding a new integration -> follow the New Integration Checklist below before opening the PR for review.

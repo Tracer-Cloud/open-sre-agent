@@ -58,6 +58,12 @@ def _kind_label(task: TaskRecord) -> str:
 
 
 def _task_detail_label(task: TaskRecord) -> str:
+    if task.status == TaskStatus.RUNNING and task.progress:
+        line = _clean_first_line(task.progress)
+        if len(line) > _MAX_DETAIL_CHARS:
+            return line[:_MAX_DETAIL_CHARS] + "…"
+        return line or "—"
+
     # Synthetic tests: the kind column already carries the scenario, so show
     # only the compact outcome here (e.g. "exit code 1" or "ok").
     if task.kind == TaskKind.SYNTHETIC_TEST:

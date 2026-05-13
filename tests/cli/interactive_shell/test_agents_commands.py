@@ -71,6 +71,12 @@ class TestAgentsRegistration:
         keywords = [pair[0] for pair in cmd.first_arg_completions]
         assert "trace" in keywords
 
+    def test_agents_first_arg_completions_include_wait_and_graph(self) -> None:
+        cmd = SLASH_COMMANDS["/agents"]
+        keywords = [pair[0] for pair in cmd.first_arg_completions]
+        assert "wait" in keywords
+        assert "graph" in keywords
+
     def test_default_window_constant_is_ten_seconds(self) -> None:
         assert DEFAULT_WINDOW_SECONDS == 10.0
 
@@ -604,3 +610,199 @@ class TestAgentsTrace:
         out = buf.getvalue()
         assert "process exited" not in out
         assert "trace ended" in out
+
+
+class TestAgentsWait:
+    def test_usage_when_missing_on_flag(self) -> None:
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents wait 1234 5678", session, console) is True
+        assert "usage:" in buf.getvalue().lower()
+
+    def test_rejects_non_numeric_pid(self) -> None:
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents wait abc --on 5678", session, console) is True
+        assert "invalid pid" in buf.getvalue().lower()
+
+    def test_rejects_non_numeric_on_pid(self) -> None:
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents wait 1234 --on xyz", session, console) is True
+        assert "invalid other-pid" in buf.getvalue().lower()
+
+    def test_rejects_self_wait(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents wait 1234 --on 1234", session, console) is True
+        assert "waiting for itself" in buf.getvalue()
+
+    def test_rejects_unknown_waiter(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        registry = _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
+        registry.register(AgentRecord(name="claude-code", pid=8421, command="claude"))
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents wait 9999 --on 8421", session, console) is True
+        assert "pid 9999 is not in the agent registry" in buf.getvalue()
+
+    def test_rejects_unknown_target(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        registry = _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
+        registry.register(AgentRecord(name="aider", pid=7702, command="aider"))
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents wait 7702 --on 9999", session, console) is True
+        assert "pid 9999 is not in the agent registry" in buf.getvalue()
+
+    def test_happy_path_persists_dependency(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # End-to-end: wait announces the edge in output AND survives a
+        # fresh AgentRegistry load (i.e. the rewrite step actually fired).
+        registry_path = tmp_path / "agents.jsonl"
+        registry = _isolate_registry(monkeypatch, registry_path)
+        registry.register(AgentRecord(name="claude-code", pid=8421, command="claude"))
+        registry.register(AgentRecord(name="aider", pid=7702, command="aider"))
+
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents wait 7702 --on 8421", session, console) is True
+        out = buf.getvalue()
+        assert "aider" in out
+        assert "claude-code" in out
+        assert "now waits on" in out
+
+        reloaded = AgentRegistry(path=registry_path).get(7702)
+        assert reloaded is not None
+        assert reloaded.waits_on == (8421,)
+
+    def test_repeated_wait_is_idempotent(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Two wait calls with the same pair must not produce [8421, 8421].
+        # Guards against a regression where `add_waits_on`'s membership
+        # check is removed and duplicates leak into the JSONL.
+        registry_path = tmp_path / "agents.jsonl"
+        registry = _isolate_registry(monkeypatch, registry_path)
+        registry.register(AgentRecord(name="claude-code", pid=8421, command="claude"))
+        registry.register(AgentRecord(name="aider", pid=7702, command="aider"))
+
+        session = ReplSession()
+        for _ in range(2):
+            console, _ = _capture()
+            assert dispatch_slash("/agents wait 7702 --on 8421", session, console) is True
+
+        reloaded = AgentRegistry(path=registry_path).get(7702)
+        assert reloaded is not None
+        assert reloaded.waits_on == (8421,)
+
+
+class TestAgentsGraph:
+    def test_empty_registry_renders_empty_state(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents graph", session, console) is True
+        assert "no registered agents" in buf.getvalue()
+
+    def test_acyclic_chain_renders_all_agents(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The issue's example tree:
+        #   claude-code (8421) [active]
+        #   └── aider (7702) [waiting on claude-code]
+        #       └── cursor-tab (9133) [waiting on aider]
+        registry = _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
+        registry.register(AgentRecord(name="claude-code", pid=8421, command="claude"))
+        registry.register(AgentRecord(name="aider", pid=7702, command="aider", waits_on=(8421,)))
+        registry.register(
+            AgentRecord(name="cursor-tab", pid=9133, command="cursor", waits_on=(7702,))
+        )
+
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents graph", session, console) is True
+        out = buf.getvalue()
+        assert "claude-code" in out
+        assert "aider" in out
+        assert "cursor-tab" in out
+        assert "claude-code (8421) [active]" in out
+        assert "aider (7702) [waiting on claude-code]" in out
+        assert "cursor-tab (9133) [waiting on aider]" in out.lower()
+
+    def test_cycle_prints_warning(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        registry = _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
+        registry.register(AgentRecord(name="alpha", pid=1, command="a", waits_on=(2,)))
+        registry.register(AgentRecord(name="beta", pid=2, command="b", waits_on=(1,)))
+
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents graph", session, console) is True
+        out = buf.getvalue()
+
+        assert "agent dependency cycle detected" in out
+        assert "alpha" in out
+        assert "beta" in out
+        assert "alpha (1) -> beta (2) -> alpha (1)" in out
+
+    def test_acyclic_chain_multiple_roots(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        registry = _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
+        registry.register(AgentRecord(name="claude-code", pid=8421, command="claude"))
+        registry.register(AgentRecord(name="aider", pid=7702, command="aider", waits_on=(8421,)))
+        registry.register(AgentRecord(name="cursor-tab", pid=9133, command="cursor"))
+        registry.register(AgentRecord(name="aider", pid=8491, command="aider", waits_on=(9133,)))
+
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents graph", session, console) is True
+        out = buf.getvalue()
+        assert "cursor-tab (9133) [active]" in out
+        assert "claude-code (8421) [active]" in out
+        assert "aider (7702) [waiting on claude-code]" in out
+        assert "aider (8491) [waiting on cursor-tab]" in out
+
+    def test_acyclic_chain_multiple_blockers(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        registry = _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
+        registry.register(AgentRecord(name="claude-code", pid=8421, command="claude"))
+        registry.register(AgentRecord(name="aider", pid=7702, command="aider", waits_on=(8421,)))
+        registry.register(
+            AgentRecord(name="cursor-tab", pid=9133, command="cursor", waits_on=(8421,))
+        )
+        registry.register(
+            AgentRecord(name="aider", pid=8491, command="aider", waits_on=(9133, 7702))
+        )
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents graph", session, console) is True
+        out = buf.getvalue()
+        assert "claude-code (8421) [active]" in out
+        assert "aider (8491) [waiting on aider]" in out
+        assert "aider (8491) [waiting on cursor-tab]" in out
+
+    def test_acyclic_chain_multiple_roots_blockers(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        registry = _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
+        registry.register(AgentRecord(name="claude-code", pid=8421, command="claude"))
+        registry.register(AgentRecord(name="cursor-tab", pid=9133, command="cursor"))
+        registry.register(
+            AgentRecord(name="aider", pid=7702, command="aider", waits_on=(8421, 9133))
+        )
+        registry.register(
+            AgentRecord(name="cursor-tab", pid=9134, command="cursor", waits_on=(9133, 8421))
+        )
+        registry.register(AgentRecord(name="aider", pid=8491, command="aider", waits_on=(9134,)))
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents graph", session, console) is True
+        out = buf.getvalue()
+        assert "claude-code (8421) [active]" in out
+        assert "cursor-tab (9133) [active]" in out
+        assert "cursor-tab (9134) [waiting on claude-code]" in out
+        assert "cursor-tab (9134) [waiting on cursor-tab]" in out

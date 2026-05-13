@@ -51,6 +51,51 @@ def build_cloudopsbench_section(evidence: dict[str, Any]) -> str:
     return "".join(lines)
 
 
+def build_openclaw_section(evidence: dict[str, Any]) -> str:
+    """Build the OpenClaw conversations / tool-call evidence section."""
+    conversations_text = str(evidence.get("openclaw_conversation_context") or "").strip()
+    conversations = evidence.get("openclaw_conversations") or []
+    detail = evidence.get("openclaw_conversation_detail") or {}
+    tool_result = evidence.get("openclaw_tool_call_result") or {}
+    available_tools = evidence.get("openclaw_available_tools") or []
+
+    if not any([conversations_text, conversations, detail, tool_result, available_tools]):
+        return ""
+
+    lines: list[str] = ["\nOpenClaw Conversation Context:\n"]
+
+    if conversations_text:
+        lines.append(f"{conversations_text[:3000]}\n")
+    elif conversations:
+        for conv in conversations[:5]:
+            if not isinstance(conv, dict):
+                continue
+            title = str(conv.get("title", "")).strip()
+            last_msg = str(conv.get("lastMessage", "")).strip()
+            if title:
+                lines.append(f"  [{title}]\n")
+            if last_msg:
+                lines.append(f"  {last_msg[:800]}\n\n")
+
+    if detail and isinstance(detail, dict):
+        last_msg = str(detail.get("lastMessage", "")).strip()
+        if last_msg:
+            lines.append(f"\nConversation Detail:\n{last_msg[:800]}\n")
+
+    if tool_result and isinstance(tool_result, dict):
+        tool_text = str(tool_result.get("text", "")).strip()
+        tool_name = str(tool_result.get("tool", "")).strip()
+        if tool_text:
+            label = f"OpenClaw tool {tool_name}" if tool_name else "OpenClaw tool call"
+            lines.append(f"\n{label} result:\n{tool_text[:800]}\n")
+
+    if available_tools:
+        names = [str(t.get("name", "")) for t in available_tools if isinstance(t, dict)]
+        lines.append(f"\nOpenClaw available tools: {', '.join(names)}\n")
+
+    return "".join(lines)
+
+
 def build_alert_annotations_section(alert_annotations: dict[str, Any]) -> str:
     """Build alert annotations evidence section."""
     sections: list[str] = []

@@ -913,6 +913,39 @@ class TestInvestigateFileCommand:
         assert session.last_state == {"root_cause": "test cause"}
         assert '{"alert_name": "test"}' in captured[0]
 
+    def test_investigate_file_tracks_cli_repl_file_source(
+        self, tmp_path: object, monkeypatch: object
+    ) -> None:
+        alert_file = tmp_path / "alert.json"  # type: ignore[operator]
+        alert_file.write_text('{"alert_name": "test"}', encoding="utf-8")  # type: ignore[union-attr]
+
+        track_calls: list[tuple[str, str]] = []
+
+        class _TrackContext:
+            def __enter__(self) -> None:
+                return None
+
+            def __exit__(self, exc_type, exc, tb) -> bool:
+                _ = (exc_type, exc, tb)
+                return False
+
+        def _fake_track(*, entrypoint, trigger_mode, **kwargs):  # type: ignore[no-untyped-def]
+            _ = kwargs
+            track_calls.append((entrypoint.value, trigger_mode.value))
+            return _TrackContext()
+
+        monkeypatch.setattr("app.analytics.cli.track_investigation", _fake_track)
+        monkeypatch.setattr(
+            "app.cli.investigation.run_investigation_for_session",
+            lambda **_kwargs: {"root_cause": "test cause"},
+        )
+        session = ReplSession()
+        console, _ = _capture()
+
+        dispatch_slash(f"/investigate {alert_file}", session, console)
+
+        assert track_calls == [("cli_repl_file", "file")]
+
     def test_investigate_accumulates_infra_context(
         self, tmp_path: object, monkeypatch: object
     ) -> None:

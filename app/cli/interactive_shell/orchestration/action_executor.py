@@ -156,6 +156,7 @@ def _pump_task_stream(
                 capture.write(line.encode("utf-8", errors="replace"))
             if line.strip():
                 _print_task_output_line(console, task, stream_name, line, style=style)
+                task.update_progress(line)
     except Exception as exc:  # noqa: BLE001
         console.print(f"[{DIM}]task output stream ended unexpectedly:[/] {escape(str(exc))}")
 

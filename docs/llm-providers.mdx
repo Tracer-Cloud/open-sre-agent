@@ -20,6 +20,7 @@ OpenSRE is provider-agnostic: bring your own model. Selection is controlled by t
 | Ollama (local)| `ollama`     | None (local daemon)             | `llama3.2`                                    | `llama3.2`                                      |
 | OpenAI Codex CLI| `codex`    | `codex login` (CLI)             | Codex CLI default                             | Codex CLI default                               |
 | Claude Code CLI| `claude-code`| `claude login` (CLI)            | Claude Code CLI default                       | Claude Code CLI default                         |
+| GitHub Copilot CLI| `copilot`| `copilot login` or `gh auth login` (CLI) | Copilot CLI default                           | Copilot CLI default                             |
 
 OpenSRE distinguishes two model slots per provider:
 
@@ -206,6 +207,28 @@ export CLAUDE_CODE_BIN=
 ```
 
 Requires the [Claude Code CLI](https://github.com/anthropics/claude-code) (`npm i -g @anthropic-ai/claude-code`). If `CLAUDE_CODE_MODEL` is unset, OpenSRE omits the `--model` flag and the CLI uses its configured default. If `CLAUDE_CODE_BIN` is unset, the binary is resolved via `PATH` and known install locations.
+
+### GitHub Copilot
+
+```bash
+export LLM_PROVIDER=copilot
+# Authenticate the Copilot CLI separately. Either flow works — the adapter
+# detects both. The interactive `/login` slash command inside `copilot` writes
+# to the platform credential store; `gh auth login` is an equivalent path that
+# Copilot CLI delegates to automatically.
+copilot login          # OAuth device flow; preferred CLI-first onboarding
+# or:
+gh auth login          # logs you into the gh CLI; Copilot will use that token
+# Optional overrides (all blank-by-default):
+export COPILOT_MODEL=
+export COPILOT_BIN=
+# Optional auth bypass for automation (only used when no CLI login is detected):
+# export COPILOT_GITHUB_TOKEN=
+# export GH_TOKEN=
+# export GITHUB_TOKEN=
+```
+
+Requires the [GitHub Copilot CLI](https://docs.github.com/copilot/how-tos/use-copilot-agents/use-copilot-cli) (`npm i -g @github/copilot`). Login uses the interactive `/login` slash command or `copilot login`. OpenSRE detects auth in this order: (1) `COPILOT_GITHUB_TOKEN` / `GH_TOKEN` / `GITHUB_TOKEN` env, (2) [`gh auth status`](https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli#authenticating-with-github-cli) when `gh` is on `PATH` (including `✓ Logged in to github.com account …`, `- Active account: true`, or a supported `- Token:` prefix: `gho_`, `github_pat_`, `ghu_` per Copilot docs — not `ghp_`), with `gh auth status --hostname …` when `COPILOT_GH_HOST` or `GH_HOST` targets a non-`github.com` host. It does **not** read plaintext `$COPILOT_HOME/config.json` (keychain-backed installs may omit it; mis-parsing arbitrary JSON risks false positives). If nothing matches, detection reports `logged_in=None` and the runner verifies at invoke time. If `COPILOT_MODEL` is unset, OpenSRE omits `--model`. Invocations run as `copilot -p PROMPT --no-color --no-ask-user --silent` so they never block on user input. **BYOK / `COPILOT_OFFLINE`:** GitHub auth may be unnecessary; a `None` probe can still be fine if Copilot is configured for offline or external providers only.
 
 See [`app/integrations/llm_cli/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/app/integrations/llm_cli/AGENTS.md) for the adapter pattern used to add new CLI providers.
 

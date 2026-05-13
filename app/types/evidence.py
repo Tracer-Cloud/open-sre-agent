@@ -51,4 +51,5 @@ EvidenceSource = Literal[
     "victoria_logs",
     "rds",
     "ec2",
+    "hermes",
 ]

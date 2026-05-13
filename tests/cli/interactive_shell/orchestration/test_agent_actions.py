@@ -119,6 +119,72 @@ def test_execute_cli_actions_dispatches_planned_commands(monkeypatch: object) ->
     assert "ran /list integrations" in output
 
 
+def test_execute_cli_actions_skips_remaining_actions_when_cancelled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Multi-action plan: if the user pressed Esc / typed ``/cancel``
+    between actions, the per-dispatch cancel event is set on the
+    ``_StreamingConsole``. The action loop checks ``cancel_requested``
+    at the top of each iteration and breaks, so the remaining actions
+    in the plan are NOT dispatched.
+
+    Pre-fix, the loop ran every action regardless of cancel state, so
+    cancelling a "do A then B" plan still ran B even after the user
+    explicitly asked to stop. This pins the new contract that an
+    in-flight cancel halts the plan after the current action.
+    """
+    dispatched: list[str] = []
+
+    class _CancelAfterFirst:
+        """Console-shaped object that returns ``cancel_requested=True``
+        only AFTER the first action has been dispatched, simulating
+        the user hitting Esc / typing ``/cancel`` between actions."""
+
+        def __init__(self, inner: Console, dispatched: list[str]) -> None:
+            self._inner = inner
+            self._dispatched = dispatched
+
+        @property
+        def cancel_requested(self) -> bool:
+            return len(self._dispatched) >= 1
+
+        def __getattr__(self, name: str) -> object:
+            return getattr(self._inner, name)
+
+    def _fake_dispatch(
+        command: str,
+        session: ReplSession,
+        console: Console,
+        **_kwargs: object,
+    ) -> bool:
+        dispatched.append(command)
+        session.record("slash", command, ok=True)
+        console.print(f"ran {command}")
+        return True
+
+    monkeypatch.setattr(agent_actions, "dispatch_slash", _fake_dispatch)  # type: ignore[attr-defined]
+
+    session = ReplSession()
+    inner_console, buf = _capture()
+    console = _CancelAfterFirst(inner_console, dispatched)
+    handled = agent_actions.execute_cli_actions(
+        "check the health of my opensre and then show me all connected services",
+        session,
+        console,  # type: ignore[arg-type]
+    )
+
+    assert handled is True
+    # Only the first action ran; the second was skipped because the
+    # cancel event was set between iterations.
+    assert dispatched == ["/health"], (
+        f"second action ran despite cancel between iterations: {dispatched}"
+    )
+    output = buf.getvalue()
+    assert "ran /health" in output
+    assert "ran /list integrations" not in output
+    assert "remaining actions cancelled" in output
+
+
 def test_execute_cli_actions_falls_through_for_local_llama_request(monkeypatch: object) -> None:
     dispatched: list[str] = []
 

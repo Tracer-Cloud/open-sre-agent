@@ -308,6 +308,37 @@ def test_run_new_alert_marks_task_failed_on_opensre_error(monkeypatch: pytest.Mo
     assert inv_tasks[0].error == "integration misconfigured"
 
 
+def test_run_new_alert_tracks_cli_paste_source(monkeypatch: pytest.MonkeyPatch) -> None:
+    from rich.console import Console
+
+    track_calls: list[tuple[str, str]] = []
+
+    class _TrackContext:
+        def __enter__(self) -> None:
+            return None
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            _ = (exc_type, exc, tb)
+            return False
+
+    def fake_track_investigation(*, entrypoint, trigger_mode, **kwargs):  # type: ignore[no-untyped-def]
+        _ = kwargs
+        track_calls.append((entrypoint.value, trigger_mode.value))
+        return _TrackContext()
+
+    monkeypatch.setattr("app.analytics.cli.track_investigation", fake_track_investigation)
+    monkeypatch.setattr(
+        "app.cli.investigation.run_investigation_for_session",
+        lambda **_kwargs: {"root_cause": "handled"},
+    )
+    session = ReplSession()
+    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
+
+    loop._run_new_alert("High CPU alert", session, console)
+
+    assert track_calls == [("cli_paste", "paste")]
+
+
 def test_run_new_alert_reports_unexpected_error(monkeypatch: pytest.MonkeyPatch) -> None:
     from rich.console import Console
 
@@ -607,6 +638,63 @@ class TestLooksLikeConfirmationAnswer:
         stray whitespace, not a multi-line message.)
         """
         assert loop._looks_like_confirmation_answer(text) is False
+
+
+class TestLooksLikeCancelRequest:
+    """Unit tests for the bare-cancel slash recognizer.
+
+    The recognizer is the gate that lets the prompt loop intercept
+    ``/cancel``-style slashes typed while a dispatch is parked
+    (e.g. on a ``Proceed? [y/N]`` confirmation) and route them through
+    ``state.cancel_current_dispatch()`` instead of queueing them
+    behind the dispatch they're trying to interrupt.
+    """
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "/cancel",
+            "/CANCEL",
+            "/Cancel",
+            "/stop",
+            "/STOP",
+            "/abort",
+            "  /cancel  ",
+            "/cancel\n",
+            "\t/stop\t",
+        ],
+    )
+    def test_recognised_cancel_slashes_match(self, text: str) -> None:
+        assert loop._looks_like_cancel_request(text) is True
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            # Targeted background-task cancel — must keep flowing
+            # through the normal slash dispatch path so the existing
+            # ``_cmd_cancel`` handler resolves the task id.
+            "/cancel 8f5fe574",
+            "/cancel abc123",
+            "/stop now",
+            # Other slashes — unrelated to interrupt.
+            "/help",
+            "/tasks",
+            # Natural-language uses of the same words must NOT be
+            # intercepted; the user might be talking about cancelling
+            # a deploy or stopping a service in their environment.
+            "cancel this please",
+            "cancel",
+            "stop the deploy",
+            "stop",
+            "abort",
+            # Empty / whitespace / None — nothing to intercept.
+            "",
+            "   ",
+            None,
+        ],
+    )
+    def test_unrecognised_text_does_not_match(self, text: str | None) -> None:
+        assert loop._looks_like_cancel_request(text) is False
 
 
 # ── Spinner state tests ──────────────────────────────────────────────────────
@@ -1026,15 +1114,27 @@ class TestRouteConfirmThroughPrompt:
 
     def _run_in_thread(
         self, state: loop._ReplState, prompt_text: str
-    ) -> tuple[threading.Thread, list[str]]:
+    ) -> tuple[threading.Thread, list[str], list[Exception]]:
+        """Run the worker in a background thread and capture both its
+        return value (``result``) and any raised exception (``exc``).
+
+        Cancellation now raises :class:`loop.DispatchCancelled` instead
+        of returning ``""``, so tests need access to both channels —
+        the happy path checks ``result``, the cancel paths check
+        ``exc``.
+        """
         result: list[str] = []
+        exc: list[Exception] = []
 
         def target() -> None:
-            result.append(loop._route_confirm_through_prompt(state, prompt_text))
+            try:
+                result.append(loop._route_confirm_through_prompt(state, prompt_text))
+            except Exception as e:
+                exc.append(e)
 
         t = threading.Thread(target=target, daemon=True)
         t.start()
-        return t, result
+        return t, result, exc
 
     def test_returns_delivered_response_and_clears_state(
         self, monkeypatch: pytest.MonkeyPatch
@@ -1056,13 +1156,14 @@ class TestRouteConfirmThroughPrompt:
         # confirm_fn. Never set in this test.
         state.current_cancel_event = threading.Event()
 
-        t, result = self._run_in_thread(state, "Proceed? [y/N] ")
+        t, result, exc = self._run_in_thread(state, "Proceed? [y/N] ")
         self._wait_until_parked(state)
 
         state.deliver_confirmation("y")
         t.join(timeout=self._JOIN_TIMEOUT_S)
 
         assert not t.is_alive(), "worker did not return within timeout"
+        assert exc == [], f"happy path raised unexpectedly: {exc}"
         assert result == ["y"]
         # Finally-block invariant: state cleared for the next prompt.
         assert state.confirm_event is None
@@ -1070,58 +1171,60 @@ class TestRouteConfirmThroughPrompt:
         # Prompt text was written before parking.
         assert "Proceed? [y/N]" in captured.getvalue()
 
-    def test_returns_empty_string_when_cancel_event_fires(
+    def test_raises_dispatch_cancelled_when_cancel_event_fires(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Esc-cancel **user-facing** path: pressing Esc during an
-        active dispatch routes through the key binding to
+        """Esc / ``/cancel`` **user-facing** path: routes through
         ``state.cancel_current_dispatch()``, which sets BOTH
         ``current_cancel_event`` AND ``confirm_event``. The worker
         wakes from ``response_event.wait`` because ``confirm_event``
         is the same object as ``response_event``; the polling loop
         exits via the natural ``while not response_event.is_set()``
-        condition. With ``confirm_response`` never populated, the
-        function returns ``""`` from the else branch of its return
-        expression — ``execution_policy`` treats empty as "decline".
+        condition.
 
-        This pins the production ESC path observable behaviour. The
-        in-loop cancel-check (``if cancel.is_set(): return ""``) is
-        exercised separately by
-        ``test_returns_empty_string_when_cancel_already_set_before_park``
-        and ``test_in_loop_cancel_check_fires_after_wait_timeout``,
-        which set ``current_cancel_event`` without also setting
-        ``confirm_event``.
+        With ``confirm_response`` never populated, the function MUST
+        raise :class:`loop.DispatchCancelled` rather than returning
+        the empty string. Returning ``""`` would be silently confirmed
+        by ``execution_policy`` because ``[Y/n]`` treats empty as YES,
+        so the in-flight action would run despite the user cancelling.
+        Raising propagates out of ``execution_allowed`` and the
+        surrounding action loop instead, matching what the user
+        expects from ``Esc``.
         """
         monkeypatch.setattr(sys, "stdout", io.StringIO())
 
         state = loop._ReplState()
         state.current_cancel_event = threading.Event()
 
-        t, result = self._run_in_thread(state, "Proceed? [y/N] ")
+        t, result, exc = self._run_in_thread(state, "Proceed? [y/N] ")
         self._wait_until_parked(state)
 
         state.cancel_current_dispatch()
         t.join(timeout=self._JOIN_TIMEOUT_S)
 
         assert not t.is_alive(), "worker did not return within timeout"
-        assert result == [""]
+        assert result == [], f"cancel path returned a value: {result}"
+        assert len(exc) == 1, f"expected exactly one exception, got {exc}"
+        assert isinstance(exc[0], loop.DispatchCancelled), (
+            f"expected DispatchCancelled, got {type(exc[0]).__name__}: {exc[0]}"
+        )
         assert state.confirm_event is None
         assert state.confirm_response == []
 
-    def test_returns_empty_string_when_cancel_already_set_before_park(
+    def test_raises_dispatch_cancelled_when_cancel_already_set_before_park(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Race-safety: if the user pressed Esc *before* the worker
         reaches the poll loop, the first iteration must observe
-        ``current_cancel_event.is_set()`` and return ``""`` immediately
-        rather than waiting forever for a confirmation that won't come.
+        ``current_cancel_event.is_set()`` and raise immediately rather
+        than waiting forever for a confirmation that won't come.
 
         Isolates the **in-loop cancel-check** on the FIRST iteration:
         ``current_cancel_event`` is pre-set; ``confirm_event`` is NOT
         set; the worker enters the loop, reaches the cancel-check
-        BEFORE the first ``response_event.wait``, and returns ``""``.
-        Deleting the cancel-check would make this test hang to
-        ``_JOIN_TIMEOUT_S`` and fail.
+        BEFORE the first ``response_event.wait``, and raises
+        :class:`loop.DispatchCancelled`. Deleting the cancel-check
+        would make this test hang to ``_JOIN_TIMEOUT_S`` and fail.
         """
         monkeypatch.setattr(sys, "stdout", io.StringIO())
 
@@ -1130,29 +1233,33 @@ class TestRouteConfirmThroughPrompt:
         cancel.set()  # already cancelled
         state.current_cancel_event = cancel
 
-        t, result = self._run_in_thread(state, "Proceed? ")
+        t, result, exc = self._run_in_thread(state, "Proceed? ")
         t.join(timeout=self._JOIN_TIMEOUT_S)
 
         assert not t.is_alive(), "pre-set cancel did not unblock worker"
-        assert result == [""]
+        assert result == []
+        assert len(exc) == 1
+        assert isinstance(exc[0], loop.DispatchCancelled)
         assert state.confirm_event is None
 
-    def test_in_loop_cancel_check_fires_after_wait_timeout(
+    def test_in_loop_cancel_check_raises_after_wait_timeout(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """In-loop cancel-check on a SUBSEQUENT iteration: the worker
         is already parked in ``response_event.wait(timeout=0.1s)`` when
         cancel fires. The wait times out (because we don't touch
         ``confirm_event``), the next iteration's cancel-check sees
-        ``current_cancel_event.is_set()``, returns ``""``.
+        ``current_cancel_event.is_set()`` and raises
+        :class:`loop.DispatchCancelled`.
 
         Why this is needed: the user-facing test
-        (``test_returns_empty_string_when_cancel_event_fires``) calls
-        ``state.cancel_current_dispatch()``, which sets BOTH the
+        (``test_raises_dispatch_cancelled_when_cancel_event_fires``)
+        calls ``state.cancel_current_dispatch()``, which sets BOTH the
         cancel and confirm events — the worker exits via the
-        confirm_event-set path, NOT via the cancel-check. Deleting the
-        cancel-check would still pass that test. This test sets ONLY
-        the cancel event so the only way out is through the check.
+        confirm_event-set path (the post-wait empty-``confirm_response``
+        check), NOT via the cancel-check. Deleting the cancel-check
+        would still pass that test. This test sets ONLY the cancel
+        event so the only way out is through the check.
         """
         monkeypatch.setattr(sys, "stdout", io.StringIO())
 
@@ -1160,7 +1267,7 @@ class TestRouteConfirmThroughPrompt:
         cancel = threading.Event()
         state.current_cancel_event = cancel
 
-        t, result = self._run_in_thread(state, "Proceed? ")
+        t, result, exc = self._run_in_thread(state, "Proceed? ")
         self._wait_until_parked(state)
 
         # Set cancel directly — do NOT set confirm_event. The worker
@@ -1173,7 +1280,9 @@ class TestRouteConfirmThroughPrompt:
             "in-loop cancel-check did not return within timeout — "
             "the function ignored a cancel signal that arrived mid-wait"
         )
-        assert result == [""]
+        assert result == []
+        assert len(exc) == 1
+        assert isinstance(exc[0], loop.DispatchCancelled)
         assert state.confirm_event is None
 
     def test_confirm_response_reset_before_confirm_event_published(
@@ -1212,12 +1321,13 @@ class TestRouteConfirmThroughPrompt:
 
         monkeypatch.setattr(loop._ReplState, "__setattr__", tracking_setattr)
 
-        t, result = self._run_in_thread(state, "Proceed? ")
+        t, result, exc = self._run_in_thread(state, "Proceed? ")
         self._wait_until_parked(state)
 
         state.deliver_confirmation("answer")
         t.join(timeout=self._JOIN_TIMEOUT_S)
 
+        assert exc == [], f"happy path raised unexpectedly: {exc}"
         assert result == ["answer"]
 
         # During setup ``_route_confirm_through_prompt`` writes both
@@ -1245,21 +1355,125 @@ class TestRouteConfirmThroughPrompt:
     ) -> None:
         """User presses Enter on the confirmation prompt without typing
         anything → ``state.deliver_confirmation("")`` is called →
-        function returns ``""``. Real production case: ``y/N`` prompts
-        default to "decline" when the user just hits Enter.
+        function returns ``""``. Real production case: ``[Y/n]`` prompts
+        treat plain Enter as "yes" (capital Y default).
+
+        This is the ONLY path that legitimately yields an empty-string
+        return: ``deliver_confirmation`` populated ``confirm_response``
+        with ``""`` BEFORE setting the event, so the post-wait check
+        sees a non-empty list and returns the user's actual answer.
+        Cancellation, by contrast, sets the event WITHOUT delivering
+        an answer and is now distinguishable — that path raises
+        :class:`loop.DispatchCancelled` (see the cancel-path tests
+        above).
         """
         monkeypatch.setattr(sys, "stdout", io.StringIO())
 
         state = loop._ReplState()
         state.current_cancel_event = threading.Event()
 
-        t, result = self._run_in_thread(state, "Proceed? [y/N] ")
+        t, result, exc = self._run_in_thread(state, "Proceed? [y/N] ")
         self._wait_until_parked(state)
 
         state.deliver_confirmation("")
         t.join(timeout=self._JOIN_TIMEOUT_S)
 
         assert not t.is_alive(), "empty delivery did not unblock worker"
+        assert exc == [], f"explicit empty delivery should not raise: {exc}"
         assert result == [""]
         assert state.confirm_event is None
         assert state.confirm_response == []
+
+
+class TestExecutionAllowedRespectsDispatchCancelled:
+    """End-to-end contract: cancelling during ``Proceed? [Y/n]`` must
+    actually STOP the in-flight action — not just stop the spinner.
+
+    Pre-fix, the cancel handler returned ``""``; ``execution_allowed``
+    treated empty as YES (since ``[Y/n]`` defaults to Y) and the worker
+    happily ran the action it was supposed to interrupt — only the
+    spinner stopped, the agent kept going. This test class pins the
+    new contract: the confirm callable raises ``DispatchCancelled`` and
+    the exception propagates out of ``execution_allowed`` *without*
+    silently confirming the action. The action loop in
+    ``execute_cli_actions`` therefore exits via the exception, the
+    in-flight action never runs, and any further actions in the same
+    plan are skipped.
+    """
+
+    def test_dispatch_cancelled_propagates_through_execution_allowed(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from rich.console import Console
+
+        from app.cli.interactive_shell.orchestration.execution_policy import (
+            ExecutionPolicyResult,
+            execution_allowed,
+        )
+
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+        session = ReplSession()
+        console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
+
+        def _cancel_confirm(_prompt: str) -> str:
+            raise loop.DispatchCancelled("cancelled while awaiting confirmation")
+
+        policy = ExecutionPolicyResult(
+            verdict="ask",
+            action_type="opensre_cli",
+            reason="this opensre subcommand may change local config or infrastructure",
+        )
+
+        with pytest.raises(loop.DispatchCancelled):
+            execution_allowed(
+                policy,
+                session=session,
+                console=console,
+                action_summary="opensre deploy ec2 --help",
+                confirm_fn=_cancel_confirm,
+                is_tty=True,
+            )
+
+    def test_empty_confirm_response_would_silently_allow_without_raise(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Regression guard documenting WHY the raise is required.
+
+        If the confirm callable returned ``""`` instead of raising,
+        ``execution_allowed`` would treat the empty answer as YES
+        (``[Y/n]`` defaults to Y) and the action would run. This test
+        pins that footgun by demonstrating the bad outcome with an
+        empty-string return — the cancel handler MUST raise, not
+        return, to actually stop the in-flight action.
+        """
+        from rich.console import Console
+
+        from app.cli.interactive_shell.orchestration.execution_policy import (
+            ExecutionPolicyResult,
+            execution_allowed,
+        )
+
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+        session = ReplSession()
+        console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
+
+        policy = ExecutionPolicyResult(
+            verdict="ask",
+            action_type="opensre_cli",
+            reason="this opensre subcommand may change local config or infrastructure",
+        )
+
+        # Empty string answer (the pre-fix cancel return value) is
+        # silently confirmed — proving the bug existed and that we
+        # cannot rely on a sentinel string for cancellation.
+        assert (
+            execution_allowed(
+                policy,
+                session=session,
+                console=console,
+                action_summary="opensre deploy ec2 --help",
+                confirm_fn=lambda _prompt: "",
+                is_tty=True,
+            )
+            is True
+        )

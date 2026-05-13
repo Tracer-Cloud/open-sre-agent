@@ -9,7 +9,7 @@ from click.testing import CliRunner
 
 from app.cli.__main__ import cli
 from app.cli.tests.catalog import TestCatalogItem, TestRequirement
-from app.cli.tests.runner import format_command, run_catalog_items
+from app.cli.tests.runner import format_command, run_catalog_item, run_catalog_items
 
 
 def test_tests_list_filters_ci_safe_inventory() -> None:
@@ -90,6 +90,17 @@ def test_tests_list_category_rca_excludes_make_targets() -> None:
 
     assert result.exit_code == 0
     assert "make:test-cov" not in result.output
+    assert "openclaw-synthetic:gateway_process_terminated_missing_tls_key" in result.output
+
+
+def test_tests_list_category_openclaw_includes_fixture_and_synthetic() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["tests", "list", "--category", "openclaw"])
+
+    assert result.exit_code == 0
+    assert "rca:openclaw_gateway_crashed" in result.output
+    assert "openclaw-synthetic:gateway_process_terminated_missing_tls_key" in result.output
 
 
 def test_tests_list_search_no_match_returns_empty() -> None:
@@ -204,6 +215,27 @@ def test_format_command_renders_opensre_subcommand() -> None:
     assert "001-replication-lag" in format_command(item)
 
 
+def test_format_command_renders_openclaw_synthetic_subcommand() -> None:
+    item = TestCatalogItem(
+        id="openclaw-synthetic:gateway_process_terminated_missing_tls_key",
+        kind="cli_command",
+        display_name="OpenClaw synthetic scenario",
+        description="Synthetic OpenClaw scenario.",
+        command=(
+            "opensre",
+            "tests",
+            "openclaw-synthetic",
+            "--scenario",
+            "gateway_process_terminated_missing_tls_key",
+        ),
+        tags=("synthetic", "openclaw", "rca"),
+        requirements=TestRequirement(notes=("Configured LLM provider",)),
+    )
+
+    assert "openclaw-synthetic" in format_command(item)
+    assert "gateway_process_terminated_missing_tls_key" in format_command(item)
+
+
 # --- runner.run_catalog_items non-runnable skip ---
 
 
@@ -226,6 +258,31 @@ def test_run_catalog_items_skips_non_runnable_and_prints_message(
     captured = capsys.readouterr()
     assert "suite:empty" in captured.err
     assert "Skipping" in captured.err
+
+
+def test_run_catalog_item_prints_openclaw_preflight_before_execution(
+    monkeypatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    item = TestCatalogItem(
+        id="rca:openclaw_gateway_crashed",
+        kind="rca_file",
+        display_name="OpenClaw Gateway Crashed",
+        description="Run a bundled markdown RCA alert fixture.",
+        command=("python", "-c", "raise SystemExit(0)"),
+        tags=("rca", "fixture", "openclaw"),
+        requirements=TestRequirement(),
+    )
+
+    monkeypatch.setattr(
+        "app.cli.tests.runner.get_preflight_messages",
+        lambda _item: ("OpenClaw preflight: unavailable.",),
+    )
+
+    exit_code = run_catalog_item(item)
+
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "OpenClaw preflight: unavailable." in captured.err
 
 
 # ---------------------------------------------------------------------------

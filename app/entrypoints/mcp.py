@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, Field, ValidationError
 
+from app.analytics.cli import track_investigation
+from app.analytics.source import EntrypointSource, TriggerMode
 from app.cli.investigation import run_investigation_cli
 from app.cli.support.errors import OpenSREError
 from app.utils.sentry_sdk import capture_exception, init_sentry
@@ -57,12 +59,16 @@ def _run_cli(
     pipeline_name: str | None = None,
     severity: str | None = None,
 ) -> dict[str, Any]:
-    return run_investigation_cli(
-        raw_alert=payload,
-        alert_name=alert_name,
-        pipeline_name=pipeline_name,
-        severity=severity,
-    )
+    with track_investigation(
+        entrypoint=EntrypointSource.MCP,
+        trigger_mode=TriggerMode.SERVICE_RUNTIME,
+    ):
+        return run_investigation_cli(
+            raw_alert=payload,
+            alert_name=alert_name,
+            pipeline_name=pipeline_name,
+            severity=severity,
+        )
 
 
 @mcp.tool(name="run_rca")

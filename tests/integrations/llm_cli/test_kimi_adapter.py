@@ -244,6 +244,92 @@ def test_cli_backed_client_invoke_forwards_kimi_env(mock_run: MagicMock) -> None
     assert "OPENAI_API_KEY" not in env
 
 
+@patch("app.integrations.llm_cli.runner.time.sleep")
+@patch("app.integrations.llm_cli.runner.subprocess.run")
+def test_cli_backed_client_retries_on_ex_tempfail(
+    mock_run: MagicMock, mock_sleep: MagicMock
+) -> None:
+    """EX_TEMPFAIL (75) should be retried; on final success returns the answer."""
+    from app.integrations.llm_cli.kimi import KimiAdapter
+    from app.integrations.llm_cli.runner import CLIBackedLLMClient
+
+    mock_adapter = MagicMock(spec=KimiAdapter)
+    mock_adapter.name = "kimi"
+    mock_adapter.detect.return_value = MagicMock(
+        installed=True,
+        bin_path="/usr/bin/kimi",
+        logged_in=True,
+        detail="ok",
+    )
+    mock_adapter.build.return_value = MagicMock(
+        argv=["/usr/bin/kimi", "--print", "--yolo"],
+        stdin="hello",
+        cwd="/tmp",
+        env=None,
+        timeout_sec=30.0,
+    )
+    mock_adapter.parse.return_value = "answer"
+    mock_adapter.explain_failure.return_value = (
+        "kimi exited with code 75. To resume this session: kimi -r abc"
+    )
+
+    tempfail = MagicMock(returncode=75, stdout="To resume this session: kimi -r abc", stderr="")
+    success = MagicMock(returncode=0, stdout="answer\n", stderr="")
+    mock_run.side_effect = [tempfail, success]
+
+    with patch("app.guardrails.engine.get_guardrail_engine") as gr:
+        gr.return_value.is_active = False
+        client = CLIBackedLLMClient(mock_adapter, model="kimi-k2.5", max_tokens=256)
+        resp = client.invoke("hello")
+
+    assert resp.content == "answer"
+    assert mock_run.call_count == 2
+    mock_sleep.assert_called_once()
+
+
+@patch("app.integrations.llm_cli.runner.time.sleep")
+@patch("app.integrations.llm_cli.runner.subprocess.run")
+def test_cli_backed_client_raises_after_all_tempfail_retries(
+    mock_run: MagicMock, mock_sleep: MagicMock
+) -> None:
+    """EX_TEMPFAIL (75) exhausting all retries raises RuntimeError."""
+    import pytest
+
+    from app.integrations.llm_cli.kimi import KimiAdapter
+    from app.integrations.llm_cli.runner import _TEMPFAIL_MAX_RETRIES, CLIBackedLLMClient
+
+    mock_adapter = MagicMock(spec=KimiAdapter)
+    mock_adapter.name = "kimi"
+    mock_adapter.detect.return_value = MagicMock(
+        installed=True,
+        bin_path="/usr/bin/kimi",
+        logged_in=True,
+        detail="ok",
+    )
+    mock_adapter.build.return_value = MagicMock(
+        argv=["/usr/bin/kimi", "--print", "--yolo"],
+        stdin="hello",
+        cwd="/tmp",
+        env=None,
+        timeout_sec=30.0,
+    )
+    mock_adapter.explain_failure.return_value = (
+        "kimi exited with code 75. To resume this session: kimi -r abc"
+    )
+
+    tempfail = MagicMock(returncode=75, stdout="To resume this session: kimi -r abc", stderr="")
+    mock_run.side_effect = [tempfail] * (_TEMPFAIL_MAX_RETRIES + 1)
+
+    with patch("app.guardrails.engine.get_guardrail_engine") as gr:
+        gr.return_value.is_active = False
+        client = CLIBackedLLMClient(mock_adapter, model="kimi-k2.5", max_tokens=256)
+        with pytest.raises(RuntimeError):
+            client.invoke("hello")
+
+    assert mock_run.call_count == _TEMPFAIL_MAX_RETRIES + 1
+    assert mock_sleep.call_count == _TEMPFAIL_MAX_RETRIES
+
+
 def test_parse_and_explain_failure() -> None:
     adapter = KimiAdapter()
 
@@ -271,3 +357,44 @@ def test_parse_and_explain_failure() -> None:
     # Test explain_failure: empty output with code 0
     fail_empty = adapter.explain_failure(stdout="", stderr="", returncode=0)
     assert fail_empty == "kimi returned no output"
+
+
+@patch("app.integrations.llm_cli.runner.subprocess.run")
+def test_cli_backed_client_raises_transient_error_on_exit_75(mock_run: MagicMock) -> None:
+    """Runner raises CLITransientError (not RuntimeError) for EX_TEMPFAIL exit code 75."""
+    import pytest
+
+    from app.integrations.llm_cli.errors import CLITransientError
+    from app.integrations.llm_cli.kimi import KimiAdapter
+    from app.integrations.llm_cli.runner import CLIBackedLLMClient
+
+    mock_adapter = MagicMock(spec=KimiAdapter)
+    mock_adapter.name = "kimi"
+    mock_adapter.detect.return_value = MagicMock(
+        installed=True,
+        bin_path="/usr/bin/kimi",
+        logged_in=True,
+        detail="ok",
+    )
+    mock_adapter.build.return_value = MagicMock(
+        argv=["/usr/bin/kimi", "--print", "--yolo"],
+        stdin="hello",
+        cwd="/tmp",
+        env=None,
+        timeout_sec=30.0,
+    )
+    mock_adapter.explain_failure.return_value = (
+        "kimi exited with code 75. To resume this session: kimi -r abc123"
+    )
+
+    mock_run.return_value = MagicMock(
+        returncode=75,
+        stdout="",
+        stderr="To resume this session: kimi -r abc123",
+    )
+
+    with patch("app.guardrails.engine.get_guardrail_engine") as gr:
+        gr.return_value.is_active = False
+        client = CLIBackedLLMClient(mock_adapter, model="kimi-k2.5")
+        with pytest.raises(CLITransientError, match="kimi exited with code 75"):
+            client.invoke("hello")

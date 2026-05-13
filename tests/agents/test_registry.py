@@ -162,3 +162,55 @@ class TestAgentRegistry:
         parsed = json.loads(lines[0])
         assert parsed["name"] == "claude-code"
         assert parsed["pid"] == 8421
+
+    def test_forget_scrubs_stale_waits_on(self, registry: AgentRegistry) -> None:
+        target = AgentRecord(name="claude-code", pid=8421, command="claude")
+        waiter = AgentRecord(name="aider", pid=7702, command="aider", waits_on=(8421,))
+        registry.register(target)
+        registry.register(waiter)
+
+        registry.forget(8421)
+
+        remaining = registry.get(7702)
+        assert remaining is not None
+        assert remaining.waits_on == ()
+
+    def test_forget_preserves_other_waits_on_entries(self, registry: AgentRegistry) -> None:
+        a = AgentRecord(name="a", pid=1001, command="a")
+        b = AgentRecord(name="b", pid=1002, command="b")
+        waiter = AgentRecord(name="c", pid=2001, command="c", waits_on=(1001, 1002))
+        registry.register(a)
+        registry.register(b)
+        registry.register(waiter)
+
+        registry.forget(1001)
+
+        remaining = registry.get(2001)
+        assert remaining is not None
+        assert remaining.waits_on == (1002,)
+
+    def test_forget_many_scrubs_stale_waits_on(self, registry: AgentRegistry) -> None:
+        dep1 = AgentRecord(name="a", pid=1001, command="a")
+        dep2 = AgentRecord(name="b", pid=1002, command="b")
+        waiter = AgentRecord(name="c", pid=2001, command="c", waits_on=(1001, 1002))
+        registry.register(dep1)
+        registry.register(dep2)
+        registry.register(waiter)
+
+        registry.forget_many([1001, 1002])
+
+        remaining = registry.get(2001)
+        assert remaining is not None
+        assert remaining.waits_on == ()
+
+    def test_forget_scrub_persists_to_disk(self, tmp_path: Path) -> None:
+        path = tmp_path / "agents.jsonl"
+        reg1 = AgentRegistry(path=path)
+        reg1.register(AgentRecord(name="dep", pid=8421, command="claude"))
+        reg1.register(AgentRecord(name="waiter", pid=7702, command="aider", waits_on=(8421,)))
+        reg1.forget(8421)
+
+        reg2 = AgentRegistry(path=path)
+        rehydrated = reg2.get(7702)
+        assert rehydrated is not None
+        assert rehydrated.waits_on == ()

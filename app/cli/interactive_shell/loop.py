@@ -25,6 +25,7 @@ conventions: input pinned at bottom, history scrolls naturally.
 from __future__ import annotations
 
 import asyncio
+import logging
 import random
 import re
 import sys
@@ -48,6 +49,7 @@ from app.agents.sweep import run_startup_sweep
 from app.analytics.cli import capture_terminal_turn_summarized
 from app.analytics.events import Event
 from app.analytics.provider import get_analytics
+from app.cli.interactive_shell import alert_inbox as _alert_inbox
 from app.cli.interactive_shell import commands as _commands
 from app.cli.interactive_shell.chat import cli_agent as _cli_agent
 from app.cli.interactive_shell.chat import cli_help as _cli_help
@@ -73,6 +75,8 @@ from app.cli.support.errors import OpenSREError
 from app.cli.support.exception_reporting import report_exception
 from app.cli.support.prompt_support import repl_prompt_note_ctrl_c, repl_reset_ctrl_c_gate
 from app.llm_reasoning_effort import apply_reasoning_effort
+
+log = logging.getLogger(__name__)
 
 # Module-alias pattern (introduced by main for testability + hot-reload).
 # Local rebindings expose the same names the rest of this module uses.
@@ -129,6 +133,51 @@ def _looks_like_confirmation_answer(text: str | None) -> bool:
     return (text or "").strip().lower() in _CONFIRMATION_TOKENS
 
 
+# Bare slash commands that mean "stop whatever is currently pondering",
+# matching the user's mental model when they reach for the obvious
+# cancel command after seeing the spinner stuck. ``/cancel <task_id>``
+# (with arguments) is intentionally excluded — that's a targeted
+# background-task cancel handled by the existing slash command in the
+# worker thread.
+_CANCEL_REQUEST_TOKENS: frozenset[str] = frozenset({"/cancel", "/stop", "/abort"})
+
+
+def _looks_like_cancel_request(text: str | None) -> bool:
+    """True when ``text`` reads as a deliberate request to interrupt the
+    currently-active dispatch.
+
+    Used by the prompt loop to intercept bare ``/cancel`` (and friends)
+    before they're queued. Without this intercept, ``/cancel`` typed
+    while the worker is parked on a ``Proceed? [y/N]`` confirmation
+    sits behind the parked dispatch in the queue and never runs — the
+    spinner keeps spinning and the user gets no feedback. Routing the
+    intent through :meth:`_ReplState.cancel_current_dispatch` mirrors
+    what ``Esc`` already does and gives ``/cancel`` discoverable parity
+    with that keystroke.
+    """
+    return (text or "").strip().lower() in _CANCEL_REQUEST_TOKENS
+
+
+class DispatchCancelled(Exception):
+    """Raised in the dispatch worker thread when the user interrupts
+    (Esc / ``/cancel`` / ``/stop`` / ``/abort``) and the worker is
+    parked on a ``Proceed? [y/N]`` confirmation prompt.
+
+    Closes a real footgun in the cancel path: ``execution_policy``
+    treats an empty answer as **YES** (the upstream prompt is
+    ``[Y/n]``, capital Y), so if the cancel handler returned ``""``
+    the worker would happily run the action it was supposed to
+    interrupt — only the spinner would stop, the agent would keep
+    going. Raising propagates out of ``execution_allowed`` and the
+    surrounding action loop, so the in-flight action never runs and
+    any remaining actions in the same plan are skipped.
+
+    Caught by :func:`_run_one_dispatch` so the user just sees the
+    standard ``· interrupted`` line and the prompt becomes responsive
+    again, identical to a clean Esc on a streaming response.
+    """
+
+
 def _looks_like_correction(text: str) -> bool:
     """True when text begins with a short correction cue (intervention signal)."""
     stripped = text.lstrip()
@@ -146,6 +195,8 @@ def _run_new_alert(
     is_tty: bool | None = None,
 ) -> None:
     """Dispatch a free-text alert description to the streaming pipeline."""
+    from app.analytics.cli import track_investigation
+    from app.analytics.source import EntrypointSource, TriggerMode
     from app.cli.interactive_shell.orchestration.execution_policy import (
         evaluate_investigation_launch,
         execution_allowed,
@@ -168,7 +219,14 @@ def _run_new_alert(
     task = session.task_registry.create(TaskKind.INVESTIGATION, command="free-text investigation")
     task.mark_running()
     try:
-        with apply_reasoning_effort(session.reasoning_effort):
+        with (
+            track_investigation(
+                entrypoint=EntrypointSource.CLI_PASTE,
+                trigger_mode=TriggerMode.PASTE,
+                interactive=True,
+            ),
+            apply_reasoning_effort(session.reasoning_effort),
+        ):
             final_state = run_investigation_for_session(
                 alert_text=text,
                 context_overrides=session.accumulated_context or None,
@@ -349,11 +407,36 @@ async def _repl_main(
     if initial_input:
         return _run_initial_input(initial_input, session, hot_reloader)
 
-    # Pass the already-built ``pt_session`` so ``_run_interactive``
-    # doesn't allocate a second one. ``session.prompt_history_backend``
-    # is already wired above.
-    await _run_interactive(session, hot_reloader, pt_session=pt_session)
-    return 0
+    alert_listener_handle: _alert_inbox.AlertListenerHandle | None = None
+    if cfg.alert_listener_enabled:
+        try:
+            inbox = _alert_inbox.AlertInbox()
+            alert_listener_handle = _alert_inbox.start_alert_listener(
+                inbox,
+                host=cfg.alert_listener_host,
+                port=cfg.alert_listener_port,
+                token=cfg.alert_listener_token,
+            )
+            _alert_inbox.set_current_inbox(inbox)
+            console = Console(
+                highlight=False,
+                force_terminal=True,
+                color_system="truecolor",
+                legacy_windows=False,
+            )
+            console.print(
+                f"[{DIM}]listening for alerts on http://{alert_listener_handle.bound_address}/alerts[/]"
+            )
+        except Exception as exc:
+            log.warning("Alert listener could not start: %s — continuing without it.", exc)
+
+    try:
+        await _run_interactive(session, hot_reloader, pt_session=pt_session)
+        return 0
+    finally:
+        if alert_listener_handle is not None:
+            alert_listener_handle.stop()
+            _alert_inbox.set_current_inbox(None)
 
 
 def run_repl(initial_input: str | None = None, config: ReplConfig | None = None) -> int:
@@ -710,6 +793,17 @@ async def _run_interactive(
         except asyncio.CancelledError:
             console.print(f"[{WARNING}]· interrupted[/]")
             raise
+        except DispatchCancelled:
+            # Worker raised mid-confirmation because the user pressed
+            # Esc / typed ``/cancel``. The exception already short-
+            # circuited the in-flight action and the surrounding action
+            # loop, so there's nothing left to do besides match the
+            # ``Esc``-on-streaming UX. Do NOT re-raise: the asyncio
+            # task completed via the worker's exception, not via
+            # ``Task.cancel`` (the two race), and re-raising here would
+            # surface this as a generic dispatch error rather than the
+            # clean ``· interrupted`` line.
+            console.print(f"[{WARNING}]· interrupted[/]")
         except Exception as exc:
             report_exception(exc, context="interactive_shell.dispatch_async")
             console.print(f"[{ERROR}]dispatch error:[/] {escape(str(exc))}")
@@ -815,6 +909,24 @@ async def _run_interactive(
                 if state.exit_requested:
                     return
 
+                # Bare ``/cancel``/``/stop``/``/abort`` while a dispatch
+                # is active: route through the same path as ``Esc``
+                # (``state.cancel_current_dispatch()``) instead of
+                # queueing the slash. Queueing a cancel behind the
+                # dispatch that's *causing* the spinner to spin is a
+                # deadlock from the user's perspective — the queued
+                # ``/cancel`` only runs once the parked dispatch
+                # finishes, which is exactly what they're trying to
+                # interrupt. ``/cancel <task_id>`` with arguments is
+                # intentionally NOT matched by the recognizer so the
+                # existing targeted background-task cancel still flows
+                # through the normal slash-dispatch path.
+                if state.is_dispatch_running() and _looks_like_cancel_request(text):
+                    stripped = (text or "").strip()
+                    render_submitted_prompt(echo_console, session, stripped)
+                    state.cancel_current_dispatch()
+                    continue
+
                 # If a worker thread is parked on a confirmation prompt,
                 # the next text the user submits *might* be the answer
                 # to that prompt — but only if it actually reads like a
@@ -867,8 +979,11 @@ def _route_confirm_through_prompt(state: _ReplState, prompt_text: str) -> str:
 
     Prints the confirmation prompt above the input, parks itself
     on a ``threading.Event``, and waits for the next text the user
-    submits. Esc cancels and returns ``""`` (which execution_policy
-    treats as "decline").
+    submits. Esc / ``/cancel`` raises :class:`DispatchCancelled` so
+    the surrounding ``execution_allowed`` call (and the dispatch as
+    a whole) bails out without running the pending action — returning
+    a sentinel string would be silently confirmed by
+    ``execution_policy`` because ``[Y/n]`` treats empty as YES.
 
     Module-level (with explicit ``state``) rather than a closure inside
     :func:`_run_interactive` so the threaded happy-path / cancel-path
@@ -898,9 +1013,19 @@ def _route_confirm_through_prompt(state: _ReplState, prompt_text: str) -> str:
         while not response_event.is_set():
             cancel = state.current_cancel_event
             if cancel is not None and cancel.is_set():
-                return ""
+                raise DispatchCancelled("cancelled while awaiting confirmation")
             response_event.wait(timeout=_PROMPT_REFRESH_INTERVAL_S)
-        return state.confirm_response[0] if state.confirm_response else ""
+        # ``response_event`` was set. Real answers reach here via
+        # ``deliver_confirmation``, which appends to ``confirm_response``
+        # *before* setting the event. An empty list here therefore
+        # means the event was set by ``cancel_current_dispatch`` (which
+        # publishes the event without delivering an answer) — treat
+        # that as a cancel rather than the empty string, otherwise
+        # ``execution_policy`` would silently confirm the pending
+        # ``[Y/n]`` action.
+        if not state.confirm_response:
+            raise DispatchCancelled("cancelled while awaiting confirmation")
+        return state.confirm_response[0]
     finally:
         state.confirm_event = None
         state.confirm_response = []

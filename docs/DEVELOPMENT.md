@@ -1,6 +1,6 @@
 # Development guide
 
-Contributor-focused workflows: local setup details stay in [SETUP.md](../SETUP.md) at the repo root (Windows, troubleshooting, MCP/OpenClaw).
+Contributor-focused workflows: local setup details stay in [SETUP.md](https://github.com/Tracer-Cloud/opensre/blob/main/SETUP.md) at the repo root (Windows, troubleshooting, MCP/OpenClaw).
 
 ## Clone and install
 
@@ -10,7 +10,7 @@ cd opensre
 make install
 ```
 
-[`make install`](../Makefile) runs `uv sync --frozen --extra dev` and the analytics install helper. Use **`uv run opensre …`** from the repo root so you always hit this checkout’s `.venv`, not another `opensre` on your `PATH`.
+[`make install`](https://github.com/Tracer-Cloud/opensre/blob/main/Makefile) runs `uv sync --frozen --extra dev` and the analytics install helper. Use **`uv run opensre …`** from the repo root so you always hit this checkout’s `.venv`, not another `opensre` on your `PATH`.
 
 ```bash
 opensre onboard
@@ -30,11 +30,11 @@ make test-cov      # pytest + coverage (default unit suite)
 
 One-shot (includes heavier `test-full`): `make check`.
 
-Before a PR, run at least `make lint`, `make format-check`, `make typecheck`, and `make test-cov` (see [CONTRIBUTING.md](../CONTRIBUTING.md)).
+Before a PR, run at least `make lint`, `make format-check`, `make typecheck`, and `make test-cov` (see [CONTRIBUTING.md](https://github.com/Tracer-Cloud/opensre/blob/main/CONTRIBUTING.md)).
 
 ## VS Code dev container
 
-The dev container is defined under [`.devcontainer/`](../.devcontainer/). It builds from [`.devcontainer/Dockerfile`](../.devcontainer/Dockerfile) (Python **3.13**), then **`postCreateCommand`** creates `.venv-devcontainer` and runs **`pip install -e '.[dev]'`** (not `uv`). Docker Desktop, OrbStack, Colima, or another compatible runtime must be available on the host.
+The dev container is defined under [`.devcontainer/`](https://github.com/Tracer-Cloud/opensre/tree/main/.devcontainer). It builds from [`.devcontainer/Dockerfile`](https://github.com/Tracer-Cloud/opensre/blob/main/.devcontainer/Dockerfile) (Python **3.13**), then **`postCreateCommand`** creates `.venv-devcontainer` and runs **`pip install -e '.[dev]'`** (not `uv`). Docker Desktop, OrbStack, Colima, or another compatible runtime must be available on the host.
 
 ## Benchmark
 
@@ -49,8 +49,8 @@ To refresh README benchmark copy from cached results (no LLM calls): `make bench
 ### LangGraph Platform (official)
 
 1. Create a deployment on LangGraph Platform and connect this repository.
-2. Keep [`langgraph.json`](../langgraph.json) at the repo root.
-3. Set `LLM_PROVIDER` and the matching API key (for example `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` — see [`.env.example`](../.env.example)).
+2. Keep [`langgraph.json`](https://github.com/Tracer-Cloud/opensre/blob/main/langgraph.json) at the repo root.
+3. Set `LLM_PROVIDER` and the matching API key (for example `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` — see [`.env.example`](https://github.com/Tracer-Cloud/opensre/blob/main/.env.example)).
 4. Add integration and storage env vars your deployment needs.
 
 Minimal LLM env:

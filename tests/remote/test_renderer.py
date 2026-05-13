@@ -6,6 +6,8 @@ import os
 from collections.abc import Iterator
 from unittest.mock import patch
 
+import pytest
+
 from app.remote.renderer import StreamRenderer, _canonical_node_name
 from app.remote.stream import StreamEvent
 
@@ -359,6 +361,35 @@ class TestStreamRendererCleanupOnException:
         assert renderer.final_state.get("alert_name") == "partial-alert", (
             "accumulated state from before the failure must be retained"
         )
+
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "text"})
+    def test_print_report_skipped_on_keyboard_interrupt(self) -> None:
+        """_print_report must NOT run when the user presses Ctrl+C."""
+
+        def stream_raises_keyboard_interrupt() -> Iterator[StreamEvent]:
+            yield _make_event("metadata", data={"run_id": "r-ki"})
+            yield _make_event(
+                "updates",
+                "extract_alert",
+                {"extract_alert": {"alert_name": "interrupted-alert"}},
+            )
+            raise KeyboardInterrupt
+
+        renderer = StreamRenderer()
+        print_report_calls: list[None] = []
+        finish_calls: list[None] = []
+
+        renderer._print_report = lambda: print_report_calls.append(None)  # type: ignore[method-assign]
+        renderer._finish_active_node = lambda: finish_calls.append(None)  # type: ignore[method-assign]
+
+        with pytest.raises(KeyboardInterrupt):
+            renderer.render_stream(stream_raises_keyboard_interrupt())
+
+        assert finish_calls, "spinner cleanup must run on Ctrl+C"
+        assert not print_report_calls, (
+            "_print_report() must be skipped when the user interrupts the stream"
+        )
+        assert renderer.final_state.get("alert_name") == "interrupted-alert"
 
 
 def _diagnose_streaming_events() -> Iterator[StreamEvent]:

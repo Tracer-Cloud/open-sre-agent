@@ -70,6 +70,14 @@ class BaseTool(ABC):
     retrieval_controls: ClassVar[RetrievalControls] = (
         RetrievalControls()
     )  # Declares supported controls
+    requires_approval: ClassVar[bool] = False  # Whether this tool needs approval from messaging
+    approval_reason: ClassVar[str] = ""  # Human-readable reason for requiring approval
+    approval_expiry_seconds: ClassVar[int] = (
+        300  # Approval auto-expires after N seconds (default 5 min)
+    )
+    approval_scope: ClassVar[str] = (
+        "one_shot"  # "one_shot" (single call) or "session" (until disconnect)
+    )
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)

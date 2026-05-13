@@ -10,7 +10,12 @@ from rich.console import Console
 
 from app.cli.interactive_shell.ui.theme import BRAND, DIM, HIGHLIGHT, WARNING
 from app.cli.tests.catalog import TestCatalog, TestCatalogItem
-from app.cli.tests.runner import format_command, run_catalog_item, run_catalog_items
+from app.cli.tests.runner import (
+    format_command,
+    get_preflight_messages,
+    run_catalog_item,
+    run_catalog_items,
+)
 
 _questionary_module: Any
 _questionary_choice: Any
@@ -65,6 +70,7 @@ _CATEGORY_OPTIONS: list[tuple[str, str]] = [
     ("all", "All"),
     ("rca", "RCA"),
     ("synthetic", "Synthetics"),
+    ("openclaw", "OpenClaw"),
     ("demo", "Demos"),
     ("infra-heavy", "Infra-heavy"),
     ("ci-safe", "CI-safe"),
@@ -190,6 +196,8 @@ def _confirm_run(item: TestCatalogItem) -> bool:
         _console.print(f"[{DIM}]Env vars: {', '.join(item.requirements.env_vars)}[/]")
     if item.requirements.notes:
         _console.print(f"[{DIM}]Notes: {', '.join(item.requirements.notes)}[/]")
+    for message in get_preflight_messages(item):
+        _console.print(f"[{WARNING}]{message}[/]")
     if item.command:
         _console.print(f"[{BRAND}]Command:[/] {format_command(item)}")
 

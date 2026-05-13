@@ -57,6 +57,12 @@ _SAFE_SUBPROCESS_ENV_PREFIXES = (
     "GOOGLE_",
     "OPENCODE_",
     "KIMI_",
+    # NOTE: deliberately NO ``COPILOT_`` entry. ``COPILOT_GITHUB_TOKEN`` is a
+    # GitHub PAT; if we forwarded it via this prefix allowlist it would leak
+    # into every other CLI subprocess (Codex, Kimi, Claude Code, etc.). All
+    # Copilot envs (config + credentials) flow through ``CLIInvocation.env``
+    # built by ``CopilotAdapter.build`` so they only reach the Copilot
+    # subprocess. See ``env_overrides.py`` for the COPILOT_*_ENV_KEYS tuples.
 )
 
 

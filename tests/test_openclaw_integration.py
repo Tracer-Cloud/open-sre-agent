@@ -1,8 +1,9 @@
-"""Unit tests for OpenClaw MCP integration."""
+"""Unit tests for the OpenClaw bridge integration."""
 
 from __future__ import annotations
 
 import os
+import subprocess
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -19,6 +20,10 @@ from app.integrations.openclaw import (
     validate_openclaw_config,
 )
 from app.nodes.resolve_integrations.node import _classify_integrations
+from app.tools.OpenClawMCPTool import (
+    call_openclaw_bridge_tool,
+    search_openclaw_conversations,
+)
 
 # ---------------------------------------------------------------------------
 # OpenClawConfig
@@ -152,6 +157,16 @@ class TestBuildOpenClawConfig:
         )
         assert config.integration_id == "int-42"
 
+    def test_helper_metadata_is_ignored(self) -> None:
+        config = build_openclaw_config(
+            {
+                "url": "https://openclaw.example.com/mcp",
+                "connection_verified": True,
+                "search_query": "checkout-api",
+            }
+        )
+        assert config.url == "https://openclaw.example.com/mcp"
+
 
 # ---------------------------------------------------------------------------
 # openclaw_config_from_env
@@ -212,17 +227,17 @@ class TestValidateOpenClawConfig:
 
     def test_ok_result_on_success(self) -> None:
         config = self._http_config()
-        mock_tools = [{"name": "run_rca"}, {"name": "list_alerts"}]
+        mock_tools = [{"name": "conversations_get"}, {"name": "conversations_list"}]
 
         with patch("app.integrations.openclaw.list_openclaw_tools", return_value=mock_tools):
             result = validate_openclaw_config(config)
 
         assert result.ok is True
         assert result.detail == (
-            "OpenClaw MCP connected via streamable-http (https://openclaw.example.com/mcp); "
+            "OpenClaw bridge connected via streamable-http (https://openclaw.example.com/mcp); "
             "discovered 2 tool(s)."
         )
-        assert result.tool_names == ("list_alerts", "run_rca")
+        assert result.tool_names == ("conversations_get", "conversations_list")
 
     def test_failed_result_on_exception(self) -> None:
         config = self._http_config()
@@ -278,7 +293,7 @@ class TestValidateOpenClawConfig:
 
     def test_stdio_endpoint_uses_command_in_detail(self) -> None:
         config = OpenClawConfig(mode="stdio", command="openclaw-mcp")
-        mock_tools = [{"name": "run_rca"}]
+        mock_tools = [{"name": "conversations_list"}]
 
         with (
             patch("app.integrations.openclaw.shutil.which", return_value="/tmp/openclaw-mcp"),
@@ -300,6 +315,28 @@ class TestValidateOpenClawConfig:
 
         assert result.ok is False
         assert "Command not found" in result.detail
+        mock_list_tools.assert_not_called()
+
+    def test_stdio_node_requirement_fails_before_listing_tools(self) -> None:
+        config = OpenClawConfig(mode="stdio", command="openclaw", args=["mcp", "serve"])
+        completed = subprocess.CompletedProcess(
+            args=["openclaw", "--help"],
+            returncode=1,
+            stdout="",
+            stderr="openclaw: Node.js v22.12+ is required (current: v22.1.0).",
+        )
+
+        with (
+            patch(
+                "app.integrations.openclaw.shutil.which", return_value="/opt/homebrew/bin/openclaw"
+            ),
+            patch("app.integrations.openclaw.subprocess.run", return_value=completed),
+            patch("app.integrations.openclaw.list_openclaw_tools") as mock_list_tools,
+        ):
+            result = validate_openclaw_config(config)
+
+        assert result.ok is False
+        assert "Node.js v22.12+" in result.detail
         mock_list_tools.assert_not_called()
 
 
@@ -357,8 +394,15 @@ class TestDescribeOpenClawError:
 
     def test_gateway_unavailable_receives_gateway_hint(self) -> None:
         config = OpenClawConfig(mode="stdio", command="openclaw", args=["mcp", "serve"])
+        completed = subprocess.CompletedProcess(
+            args=["openclaw", "--help"],
+            returncode=0,
+            stdout="OpenClaw CLI help",
+            stderr="",
+        )
 
-        detail = describe_openclaw_error(RuntimeError("Connection closed"), config)
+        with patch("app.integrations.openclaw.subprocess.run", return_value=completed):
+            detail = describe_openclaw_error(RuntimeError("Connection closed"), config)
 
         assert "openclaw gateway status" in detail
         assert "openclaw gateway run" in detail
@@ -372,6 +416,34 @@ class TestDescribeOpenClawError:
         assert detail is not None
         assert "Command not found" in detail
 
+    def test_runtime_unavailable_reason_detects_node_version_requirement(self) -> None:
+        config = OpenClawConfig(mode="stdio", command="openclaw", args=["mcp", "serve"])
+        completed = subprocess.CompletedProcess(
+            args=["openclaw", "--help"],
+            returncode=1,
+            stdout="",
+            stderr=(
+                "openclaw: Node.js v22.12+ is required (current: v22.1.0).\n"
+                "If you use nvm, run:\n"
+                "  nvm install 22\n"
+                "  nvm use 22\n"
+                "  nvm alias default 22\n"
+            ),
+        )
+
+        with (
+            patch(
+                "app.integrations.openclaw.shutil.which", return_value="/opt/homebrew/bin/openclaw"
+            ),
+            patch("app.integrations.openclaw.subprocess.run", return_value=completed),
+        ):
+            detail = openclaw_runtime_unavailable_reason(config)
+
+        assert detail is not None
+        assert "Node.js v22.12+" in detail
+        assert "nvm use 22" in detail
+        assert "current shell" in detail
+
 
 # ---------------------------------------------------------------------------
 # list_openclaw_tools (integration via mock)
@@ -383,8 +455,8 @@ class TestListOpenClawTools:
         config = OpenClawConfig(url="https://openclaw.example.com/mcp")
 
         mock_tool = MagicMock()
-        mock_tool.name = "run_rca"
-        mock_tool.description = "Run root cause analysis"
+        mock_tool.name = "conversations_list"
+        mock_tool.description = "List conversations"
         mock_tool.inputSchema = {"type": "object"}
 
         with patch(
@@ -394,8 +466,8 @@ class TestListOpenClawTools:
             tools = list_openclaw_tools(config)
 
         assert len(tools) == 1
-        assert tools[0]["name"] == "run_rca"
-        assert tools[0]["description"] == "Run root cause analysis"
+        assert tools[0]["name"] == "conversations_list"
+        assert tools[0]["description"] == "List conversations"
 
 
 # ---------------------------------------------------------------------------
@@ -423,6 +495,7 @@ class TestClassifyOpenClawIntegration:
         resolved = _classify_integrations([record])
         assert "openclaw" in resolved
         assert resolved["openclaw"]["url"] == "https://openclaw.example.com/mcp"
+        assert resolved["openclaw"]["connection_verified"] is True
 
     def test_stdio_classified(self) -> None:
         record = self._make_record({"mode": "stdio", "command": "openclaw-mcp"})
@@ -452,3 +525,56 @@ class TestClassifyOpenClawIntegration:
         )
         resolved = _classify_integrations([record])
         assert resolved["openclaw"]["integration_id"] == "openclaw-1"
+
+
+class TestOpenClawExtractParams:
+    def test_extract_params_maps_plain_config_keys(self) -> None:
+        params = call_openclaw_bridge_tool.__opensre_registered_tool__.extract_params(
+            {
+                "openclaw": {
+                    "connection_verified": True,
+                    "url": "https://openclaw.example.com/mcp",
+                    "mode": "streamable-http",
+                    "auth_token": "tok",
+                    "command": "openclaw",
+                    "args": ["mcp", "serve"],
+                }
+            }
+        )
+
+        assert params["openclaw_url"] == "https://openclaw.example.com/mcp"
+        assert params["openclaw_mode"] == "streamable-http"
+        assert params["openclaw_token"] == "tok"
+        assert params["openclaw_command"] == "openclaw"
+        assert params["openclaw_args"] == ["mcp", "serve"]
+
+    def test_extract_params_keeps_prefixed_keys_for_detected_sources(self) -> None:
+        params = call_openclaw_bridge_tool.__opensre_registered_tool__.extract_params(
+            {
+                "openclaw": {
+                    "connection_verified": True,
+                    "openclaw_mode": "stdio",
+                    "openclaw_command": "openclaw",
+                    "openclaw_args": ["mcp", "serve"],
+                }
+            }
+        )
+
+        assert params["openclaw_mode"] == "stdio"
+        assert params["openclaw_command"] == "openclaw"
+        assert params["openclaw_args"] == ["mcp", "serve"]
+
+    def test_search_params_maps_search_query_aliases(self) -> None:
+        params = search_openclaw_conversations.__opensre_registered_tool__.extract_params(
+            {
+                "openclaw": {
+                    "connection_verified": True,
+                    "url": "https://openclaw.example.com/mcp",
+                    "mode": "streamable-http",
+                    "search_query": "checkout-api",
+                }
+            }
+        )
+
+        assert params["search"] == "checkout-api"
+        assert params["limit"] == 10

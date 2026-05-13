@@ -39,6 +39,7 @@ from .misc import (
     build_alert_annotations_section,
     build_betterstack_section,
     build_cloudopsbench_section,
+    build_openclaw_section,
 )
 from .vercel import build_vercel_section
 
@@ -132,6 +133,9 @@ def build_evidence_sections(
 
     # CloudOpsBench
     sections.append(build_cloudopsbench_section(evidence))
+
+    # OpenClaw conversation context
+    sections.append(build_openclaw_section(evidence))
 
     # Alert annotations and raw alert text
     if alert_annotations:

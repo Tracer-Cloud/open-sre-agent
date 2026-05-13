@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from app.nodes.publish_findings.formatters.report import build_slack_blocks, format_slack_message
+from app.nodes.publish_findings.formatters.report import (
+    build_slack_blocks,
+    format_slack_message,
+    format_telegram_message,
+)
 from app.nodes.publish_findings.report_context import build_report_context
 
 
@@ -49,6 +53,46 @@ def test_build_report_context_adds_source_provenance() -> None:
     assert ctx["evidence_catalog"]["evidence/grafana/loki"]["provenance"] == (
         "instance=myorg.grafana.net, service=checkout-api, pipeline=checkout-service"
     )
+
+
+def test_format_telegram_message_does_not_treat_lonely_asterisk_as_bold() -> None:
+    state = _make_state()
+    state["severity"] = "warning"
+    state["alert_name"] = "Unit"
+    state["pipeline_name"] = "pipe"
+    state["root_cause"] = "Check 2 * 3 = 6 before scaling"
+    ctx = build_report_context(state)
+    body = format_telegram_message(ctx)
+    assert "2 * 3" in body
+    assert "<b>3</b>" not in body
+
+
+def test_format_telegram_message_omits_banner_only_root_cause() -> None:
+    state = _make_state()
+    state["severity"] = "info"
+    state["alert_name"] = "[synthetic-k8s] Scheduled Health Check — payments-api"
+    state["pipeline_name"] = "k8s-eks-synthetic"
+    state["root_cause"] = (
+        "[synthetic-k8s] Scheduled Health Check — payments-api on k8s-eks-synthetic "
+        "(severity: info)"
+    )
+    ctx = build_report_context(state)
+    body = format_telegram_message(ctx)
+    assert body.count("k8s-eks-synthetic") == 1
+    assert "Scheduled Health Check — payments-api on k8s-eks-synthetic (severity: info)" not in body
+
+
+def test_format_telegram_message_uses_html_and_severity_header() -> None:
+    state = _make_state()
+    state["severity"] = "critical"
+    state["alert_name"] = "KubernetesJobFailed"
+    ctx = build_report_context(state)
+    body = format_telegram_message(ctx)
+    assert "🔴" in body
+    assert "<b>KubernetesJobFailed</b>" in body
+    assert "CRITICAL" in body
+    assert "##" not in body
+    assert "*Cited Evidence" not in body
 
 
 def test_format_slack_message_shows_provenance() -> None:

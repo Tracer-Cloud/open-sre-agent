@@ -31,7 +31,7 @@ def test_seed_action_names_for_sources_keeps_existing_seed_sources() -> None:
 
     assert "get_s3_object" in seeded
     assert "search_openclaw_conversations" in seeded
-    assert "list_openclaw_tools" in seeded
+    assert "list_openclaw_tools" not in seeded
     assert "get_recent_airflow_failures" in seeded
     assert "get_airflow_dag_runs" in seeded
 

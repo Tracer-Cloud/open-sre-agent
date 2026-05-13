@@ -55,6 +55,7 @@ def run_investigation(
     severity: str,
     raw_alert: str | dict[str, Any] | None = None,
     resolved_integrations: dict[str, Any] | None = None,
+    openclaw_context: dict[str, Any] | None = None,
     *,
     opensre_evaluate: bool = False,
 ) -> AgentState:
@@ -77,6 +78,8 @@ def run_investigation(
     )
     if resolved_integrations is not None:
         cast(dict[str, Any], initial)["resolved_integrations"] = resolved_integrations
+    if openclaw_context:
+        cast(dict[str, Any], initial)["openclaw_context"] = dict(openclaw_context)
     with report_and_reraise(
         logger=logger,
         message="run_investigation failed",

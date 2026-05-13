@@ -29,6 +29,7 @@ from anthropic import (
 )
 from anthropic import BadRequestError as AnthropicBadRequestError
 from openai import APIConnectionError as OpenAIConnectionError
+from openai import APITimeoutError as OpenAITimeoutError
 from openai import AuthenticationError as OpenAIAuthError
 from openai import BadRequestError as OpenAIBadRequestError
 from openai import NotFoundError as OpenAINotFoundError
@@ -530,6 +531,11 @@ def _format_anthropic_retry_error(err: Exception) -> str:
 
 def _format_openai_connection_error(err: Exception, provider_label: str) -> str:
     """Return a user-facing message for an OpenAI APIConnectionError."""
+    if isinstance(err, OpenAITimeoutError):
+        return (
+            f"{provider_label} API request timed out. "
+            "Check that the service is running and responsive at the configured endpoint."
+        )
     cause: BaseException | None = err
     cause_text_parts: list[str] = []
     while cause is not None:
@@ -704,6 +710,13 @@ class OpenAILLMClient:
                 ) from err
             except GuardrailBlockedError:
                 raise
+            except OpenAITimeoutError as err:
+                if attempt == max_attempts - 1:
+                    raise RuntimeError(
+                        _format_openai_connection_error(err, self._provider_label)
+                    ) from err
+                time.sleep(backoff_seconds)
+                backoff_seconds *= 2
             except OpenAIConnectionError as err:
                 raise RuntimeError(
                     _format_openai_connection_error(err, self._provider_label)
@@ -788,6 +801,15 @@ class OpenAILLMClient:
                 ) from err
             except GuardrailBlockedError:
                 raise
+            except OpenAITimeoutError as err:
+                if emitted:
+                    raise
+                if attempt == max_attempts - 1:
+                    raise RuntimeError(
+                        _format_openai_connection_error(err, self._provider_label)
+                    ) from err
+                time.sleep(backoff_seconds)
+                backoff_seconds *= 2
             except OpenAIConnectionError as err:
                 if emitted:
                     raise
@@ -929,6 +951,15 @@ def _extract_json_payload(text: str) -> Any:
         cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
         cleaned = re.sub(r"\s*```$", "", cleaned)
         cleaned = cleaned.strip()
+    else:
+        # LLM may prefix the code block with prose ("Here is the JSON:")
+        fence_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned)
+        if fence_match:
+            candidate = fence_match.group(1).strip()
+            try:
+                return _safe_json_loads(candidate)
+            except json.JSONDecodeError:
+                pass
 
     try:
         return _safe_json_loads(cleaned)
