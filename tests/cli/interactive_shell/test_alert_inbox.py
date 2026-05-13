@@ -73,6 +73,14 @@ class TestAlertInbox:
         assert inbox.dropped == 1
         assert [a.text for a in inbox.iter_pending()] == ["b", "c"]
 
+    def test_peek_last_uses_internal_deque_snapshot(self) -> None:
+        inbox = AlertInbox(maxsize=4)
+        for value in ("a", "b", "c"):
+            inbox.put(IncomingAlert(text=value))
+
+        assert [a.text for a in inbox.peek_last(2)] == ["b", "c"]
+        assert inbox.qsize == 3
+
 
 def _post(
     host: str, port: int, body: object, token: str | None = None
