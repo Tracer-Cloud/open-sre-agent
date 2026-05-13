@@ -17,6 +17,15 @@ slug: "quickstart"
         ```bash
         curl -fsSL https://install.opensre.com | bash
         ```
+
+        If the binary install fails on an older Linux host, run from source:
+
+        ```bash
+        git clone https://github.com/Tracer-Cloud/opensre
+        cd opensre
+        uv sync --frozen --extra dev
+        uv run opensre --version
+        ```
       </Tab>
       <Tab title="Windows">
         ```powershell
@@ -28,7 +37,13 @@ slug: "quickstart"
   </Step>
 
   <Step title="Onboard">
-    Run the onboarding wizard to configure your LLM provider and connect your integrations (Grafana, Datadog, Honeycomb, Coralogix, Slack, AWS, GitHub MCP, Sentry):
+    For a no-API-key trial, configure a local Ollama-backed model first:
+
+    ```bash
+    opensre onboard local_llm
+    ```
+
+    To configure a hosted provider and connect integrations (Grafana, Datadog, Honeycomb, Coralogix, Slack, AWS, GitHub MCP, Sentry), run:
 
     ```bash
     opensre onboard

@@ -242,6 +242,31 @@ def test_reraise_cli_runtime_error_maps_cli_not_found() -> None:
     assert raised.value.suggestion == "codex CLI not found on PATH"
 
 
+def test_reraise_cli_runtime_error_maps_ollama_connectivity() -> None:
+    exc = RuntimeError("Cannot connect to Ollama API")
+
+    with pytest.raises(OpenSREError) as raised:
+        reraise_cli_runtime_error(exc)
+
+    assert str(raised.value) == "Cannot connect to Ollama API."
+    assert raised.value.suggestion is not None
+    assert "opensre onboard local_llm" in raised.value.suggestion
+
+
+def test_reraise_cli_runtime_error_maps_anthropic_usage_limit() -> None:
+    exc = RuntimeError(
+        "Anthropic request rejected (HTTP 400): Error code: 400 - "
+        "{'error': {'message': 'You have reached your specified API usage limits.'}}"
+    )
+
+    with pytest.raises(OpenSREError) as raised:
+        reraise_cli_runtime_error(exc)
+
+    assert str(raised.value) == "Anthropic API usage limit reached."
+    assert raised.value.suggestion is not None
+    assert "LLM_PROVIDER" in raised.value.suggestion
+
+
 def test_reraise_cli_runtime_error_reraises_unknown_runtime_error() -> None:
     exc = RuntimeError("some unrelated runtime failure")
 

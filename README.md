@@ -126,7 +126,17 @@ pipx install opensre
 Configure once, then pick how you want to run investigations:
 
 ```bash
+opensre onboard local_llm   # local Ollama path, no API key required
 opensre onboard
+```
+
+If the binary install fails on an older Linux host, run from source:
+
+```bash
+git clone https://github.com/Tracer-Cloud/opensre
+cd opensre
+uv sync --frozen --extra dev
+uv run opensre --version
 ```
 
 **Interactive shell** — with no subcommand, `opensre` starts a REPL (TTY required). Describe incidents in plain language, stream investigations, and use slash commands such as `/help`, `/status`, `/clear`, `/reset`, `/trust`, `/effort`, `/exit`. `/effort` sets reasoning depth for **OpenAI** and **Codex** providers (`low`, `medium`, `high`, `xhigh`, or `max`; other providers ignore it). Ctrl+C cancels an in-flight investigation without losing session state.

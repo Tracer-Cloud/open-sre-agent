@@ -28,5 +28,17 @@ def reraise_cli_runtime_error(exc: BaseException) -> NoReturn:
                 str(exc),
                 suggestion="Verify your model name in ANTHROPIC_REASONING_MODEL or ANTHROPIC_TOOLCALL_MODEL environment variables.",
             ) from exc
+        if "anthropic" in msg and "usage limits" in msg:
+            raise OpenSREError(
+                "Anthropic API usage limit reached.",
+                suggestion="Wait for the provider quota reset or switch LLM_PROVIDER to another configured provider.",
+            ) from exc
+        if "cannot connect to ollama api" in msg or (
+            "ollama" in msg and "connection" in msg
+        ):
+            raise OpenSREError(
+                "Cannot connect to Ollama API.",
+                suggestion="Start Ollama, then run `opensre onboard local_llm` or set LLM_PROVIDER to a reachable provider.",
+            ) from exc
 
     raise exc
