@@ -51,9 +51,11 @@ class DatadogUpstreamEvidenceProvider:
             ),
         )
 
+        upstream_cpu_metric_name = self._queries.upstream_cpu_metric_template % service_name
+
         upstream_metrics = (
             self._adapter.query_metric_series(
-                metric_name=self._queries.upstream_cpu_metric_template % service_name,
+                metric_name=upstream_cpu_metric_name,
                 start=window_start,
                 end=window_end,
             ),
@@ -77,7 +79,7 @@ class DatadogUpstreamEvidenceProvider:
 
         topology_hints = (
             TopologyHint(
-                source=f"{service_name}-app",
+                source=upstream_cpu_metric_name,
                 target="rds",
                 relation="upstream_of",
             ),

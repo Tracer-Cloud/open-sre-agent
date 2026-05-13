@@ -95,24 +95,30 @@ def node_correlate_upstream(
         return {"correlation": _empty_correlation()}
 
     provider = _provider_from_config(config)
-    evidence = provider.collect_upstream_evidence(
-        alert_id=alert_id,
-        service_name=service_name,
-        window_start=window_start,
-        window_end=window_end,
-    )
-    target_resource = str(
-        raw_alert.get("resource")
-        or raw_alert.get("resource_name")
-        or raw_alert.get("db_instance")
-        or raw_alert.get("db_instance_identifier")
-        or "unknown-rds"
-    )
 
-    correlation = build_runtime_correlation(
-        evidence,
-        target_resource=target_resource,
-    )
+    try:
+        evidence = provider.collect_upstream_evidence(
+            alert_id=alert_id,
+            service_name=service_name,
+            window_start=window_start,
+            window_end=window_end,
+        )
+
+        target_resource = str(
+            raw_alert.get("resource")
+            or raw_alert.get("resource_name")
+            or raw_alert.get("db_instance")
+            or raw_alert.get("db_instance_identifier")
+            or "unknown-rds"
+        )
+
+        correlation = build_runtime_correlation(
+            evidence,
+            target_resource=target_resource,
+        )
+    except Exception:
+        tracker.complete("correlate_upstream")
+        return {"correlation": _empty_correlation()}
 
     tracker.complete("correlate_upstream")
 

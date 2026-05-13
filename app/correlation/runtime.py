@@ -35,11 +35,13 @@ def build_runtime_correlation(
     candidates: list[UpstreamCandidate] = []
 
     for metric in evidence.upstream_metrics:
+        target_names = {target_resource, "rds"}
+
         matching_hints = tuple(
             hint
             for hint in evidence.topology_hints
             if hint.source == metric.name
-            and hint.target == target_resource
+            and hint.target in target_names
             and hint.relation == "upstream_of"
         )
 
