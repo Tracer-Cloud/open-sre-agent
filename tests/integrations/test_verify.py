@@ -214,6 +214,42 @@ def test_verify_grafana_passes_with_supported_datasource(monkeypatch: pytest.Mon
     assert "prometheus" in result["detail"]
 
 
+def test_verify_grafana_reports_datasource_discovery_exception(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.integrations._verification_adapters as _adapters
+
+    reported: list[tuple[BaseException, dict[str, str]]] = []
+
+    def fake_report(
+        service: str,
+        exc: BaseException,
+        *,
+        phase: str,
+        event: str | None = None,
+    ) -> None:
+        reported.append((exc, {"service": service, "phase": phase, "event": event or ""}))
+
+    def raise_requests_error(*_args: Any, **_kwargs: Any) -> Any:
+        raise RuntimeError("datasource boom")
+
+    monkeypatch.setattr(_adapters, "_report_verify_exception", fake_report)
+    monkeypatch.setattr(_adapters.requests, "get", raise_requests_error)
+
+    result = _verify_grafana(
+        "local env",
+        {"endpoint": "https://example.grafana.net", "api_key": "token"},
+    )
+
+    assert result["status"] == "failed"
+    assert "datasource boom" in result["detail"]
+    assert reported[0][1] == {
+        "service": "grafana",
+        "phase": "datasource_discovery",
+        "event": "",
+    }
+
+
 def test_verify_datadog_reports_api_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.integrations.probes import ProbeResult
     from app.services.datadog.client import DatadogClient
@@ -231,6 +267,84 @@ def test_verify_datadog_reports_api_failure(monkeypatch: pytest.MonkeyPatch) -> 
 
     assert result["status"] == "failed"
     assert "403" in result["detail"]
+
+
+def test_probe_verifier_reports_probe_exceptions(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.integrations._verification_adapters as _adapters
+
+    reported: list[tuple[str, str, str]] = []
+
+    class _Config:
+        pass
+
+    class _Client:
+        def __init__(self, _config: _Config) -> None:
+            return None
+
+        def probe_access(self) -> None:
+            raise RuntimeError("probe bug")
+
+    def fake_report(
+        service: str,
+        exc: BaseException,
+        *,
+        phase: str,
+        event: str | None = None,
+    ) -> None:
+        reported.append((service, phase, str(exc)))
+
+    monkeypatch.setattr(_adapters, "_report_verify_exception", fake_report)
+
+    verifier = _adapters.build_probe_verifier(
+        "fake_service",
+        build_config=lambda _raw: _Config(),
+        client_factory=_Client,
+    )
+    result = verifier("local env", {"api_key": "token"})
+
+    assert result == {
+        "service": "fake_service",
+        "source": "local env",
+        "status": "failed",
+        "detail": "probe bug",
+    }
+    assert reported == [("fake_service", "probe_access", "probe bug")]
+
+
+def test_validation_verifier_reports_build_config_exceptions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.integrations._verification_adapters as _adapters
+
+    reported: list[tuple[str, str, str | None]] = []
+
+    def fake_report(
+        service: str,
+        exc: BaseException,
+        *,
+        phase: str,
+        event: str | None = None,
+    ) -> None:
+        reported.append((service, phase, event))
+
+    def raise_build_config(_raw: dict[str, Any]) -> object:
+        raise ValueError("missing field")
+
+    monkeypatch.setattr(_adapters, "_report_verify_exception", fake_report)
+
+    verifier = _adapters.build_validation_verifier(
+        "fake_validation",
+        build_config=raise_build_config,
+        validate_config=lambda _config: object(),
+    )
+
+    assert verifier("local env", {}) == {
+        "service": "fake_validation",
+        "source": "local env",
+        "status": "missing",
+        "detail": "missing field",
+    }
+    assert reported == [("fake_validation", "build_config", "verify_config_invalid")]
 
 
 def test_verify_datadog_accepts_integration_id() -> None:
@@ -377,6 +491,31 @@ def test_verify_tracer_passes_with_env_jwt(monkeypatch: pytest.MonkeyPatch) -> N
     assert result["status"] == "passed"
     assert "org_123" in result["detail"]
     assert "2 integrations" in result["detail"]
+
+
+def test_verify_discord_import_failure_sets_sentry_tag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import builtins
+
+    import app.integrations._verification_adapters as _adapters
+
+    real_import = builtins.__import__
+
+    def fake_import(name: str, *args: Any, **kwargs: Any) -> Any:
+        if name == "discord":
+            raise ImportError("discord missing")
+        return real_import(name, *args, **kwargs)
+
+    tags: dict[str, int | str | bool] = {}
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    monkeypatch.setattr(_adapters, "_set_sentry_tag", tags.__setitem__)
+
+    result = _adapters._verify_discord("local env", {"bot_token": "token"})
+
+    assert result["status"] == "failed"
+    assert result["detail"] == "discord.py is not installed."
+    assert tags["integrations.discord.import_failed"] is True
 
 
 def test_verify_github_passes_with_valid_streamable_http_config(

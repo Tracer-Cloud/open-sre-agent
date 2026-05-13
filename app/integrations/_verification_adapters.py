@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
+from contextlib import suppress
 from typing import Any
 
 import boto3
@@ -47,10 +49,23 @@ from app.services.splunk import SplunkClient, SplunkConfig
 from app.services.tracer_client.client import TracerClient
 from app.services.vercel.client import VercelClient, VercelConfig
 from app.services.victoria_logs import VictoriaLogsClient, VictoriaLogsConfig
+from app.utils.errors import report_exception
+
+try:
+    from botocore.exceptions import BotoCoreError, ClientError
+except Exception:  # pragma: no cover - boto3 brings botocore in supported installs.
+    BotoCoreError = ClientError = ()  # type: ignore[assignment]
 
 VerifierFn = Callable[[str, dict[str, Any]], dict[str, str]]
 
 _SUPPORTED_GRAFANA_TYPES = ("loki", "tempo", "prometheus")
+logger = logging.getLogger(__name__)
+_VENDOR_EXCEPTION_TYPES = (
+    httpx.HTTPError,
+    requests.RequestException,
+    BotoCoreError,
+    ClientError,
+)
 
 
 def result(
@@ -67,6 +82,35 @@ def result(
     }
 
 
+def _set_sentry_tag(key: str, value: int | str | bool) -> None:
+    with suppress(Exception):
+        import sentry_sdk
+
+        sentry_sdk.set_tag(key, value)
+
+
+def _report_verify_exception(
+    service: str,
+    exc: BaseException,
+    *,
+    phase: str,
+    event: str | None = None,
+) -> None:
+    is_vendor_failure = isinstance(exc, _VENDOR_EXCEPTION_TYPES)
+    report_exception(
+        exc,
+        logger=logger,
+        message=f"[integrations] {service} verification {phase} failed",
+        severity="info" if is_vendor_failure else "error",
+        tags={
+            "surface": "integration",
+            "integration": service,
+            "event": event or ("vendor_failure" if is_vendor_failure else "verify_failed"),
+            "phase": phase,
+        },
+    )
+
+
 def _verify_with_validation_result[ConfigT](
     service: str,
     source: str,
@@ -75,8 +119,16 @@ def _verify_with_validation_result[ConfigT](
     build_config: Callable[[dict[str, Any]], ConfigT],
     validate_config: Callable[[ConfigT], Any],
 ) -> dict[str, str]:
-    normalized_config = build_config(config)
-    validation_result = validate_config(normalized_config)
+    try:
+        normalized_config = build_config(config)
+    except Exception as err:
+        _report_verify_exception(service, err, phase="build_config", event="verify_config_invalid")
+        return result(service, source, "missing", str(err))
+    try:
+        validation_result = validate_config(normalized_config)
+    except Exception as err:
+        _report_verify_exception(service, err, phase="validate_config")
+        return result(service, source, "failed", str(err))
     return result(
         service,
         source,
@@ -113,10 +165,12 @@ def build_probe_verifier[ConfigT](
         try:
             normalized_config = build_config(config)
         except Exception as err:
+            _report_verify_exception(service, err, phase="build_config", event="verify_config_invalid")
             return result(service, source, "missing", str(err))
         try:
             probe_result = client_factory(normalized_config).probe_access()
         except Exception as err:
+            _report_verify_exception(service, err, phase="probe_access")
             return result(service, source, "failed", str(err))
         return result(service, source, probe_result.status, probe_result.detail)
 
@@ -181,6 +235,7 @@ def _verify_grafana(source: str, config: dict[str, Any]) -> dict[str, str]:
         response.raise_for_status()
         payload = response.json()
     except Exception as exc:
+        _report_verify_exception("grafana", exc, phase="datasource_discovery")
         return result("grafana", source, "failed", f"Datasource discovery failed: {exc}")
 
     datasources = payload if isinstance(payload, list) else []
@@ -213,6 +268,7 @@ def _verify_aws(source: str, config: dict[str, Any]) -> dict[str, str]:
         sts_client, region, mode = _build_sts_client(config)
         identity = sts_client.get_caller_identity()
     except Exception as exc:
+        _report_verify_exception("aws", exc, phase="sts_check")
         return result("aws", source, "failed", f"AWS STS check failed: {exc}")
 
     account = str(identity.get("Account", "")).strip()
@@ -237,6 +293,7 @@ def _verify_slack(
     try:
         slack_config = SlackWebhookConfig.model_validate(config)
     except Exception as err:
+        _report_verify_exception("slack", err, phase="build_config", event="verify_config_invalid")
         return result("slack", source, "missing", str(err))
 
     webhook_url = slack_config.webhook_url
@@ -255,6 +312,7 @@ def _verify_slack(
         response = httpx.post(webhook_url, json=payload, timeout=10.0)
         response.raise_for_status()
     except Exception as exc:
+        _report_verify_exception("slack", exc, phase="webhook_post")
         return result("slack", source, "failed", f"Webhook delivery failed: {exc}")
     return result("slack", source, "passed", "Webhook delivered test message successfully.")
 
@@ -268,6 +326,7 @@ def _verify_tracer(source: str, config: dict[str, Any]) -> dict[str, str]:
     try:
         org_id = extract_org_id_from_jwt(tracer_config.jwt_token)
     except Exception as err:
+        _report_verify_exception("tracer", err, phase="jwt_decode")
         return result("tracer", source, "failed", f"JWT decode failed: {err}")
     if not org_id:
         return result("tracer", source, "failed", "JWT did not contain an org identifier.")
@@ -280,6 +339,7 @@ def _verify_tracer(source: str, config: dict[str, Any]) -> dict[str, str]:
         )
         integrations = tracer_client.get_all_integrations()
     except Exception as err:
+        _report_verify_exception("tracer", err, phase="api_list_integrations")
         return result("tracer", source, "failed", f"Tracer API check failed: {err}")
 
     return result(
@@ -294,6 +354,7 @@ def _verify_discord(source: str, config: dict[str, Any]) -> dict[str, str]:
     try:
         import discord  # type: ignore[import-not-found]
     except Exception:
+        _set_sentry_tag("integrations.discord.import_failed", True)
         return result("discord", source, "failed", "discord.py is not installed.")
 
     bot_token = str(config.get("bot_token", "")).strip()
@@ -306,11 +367,13 @@ def _verify_discord(source: str, config: dict[str, Any]) -> dict[str, str]:
     try:
         client.run(bot_token)
     except discord.LoginFailure as err:
+        _report_verify_exception("discord", err, phase="login")
         return result("discord", source, "failed", f"Discord login failed: {err}")
     except Exception as err:
         detail = str(err)
         if "run() cannot be called from a running event loop" in detail:
             return result("discord", source, "passed", "Discord bot token accepted.")
+        _report_verify_exception("discord", err, phase="api_check")
         return result("discord", source, "failed", f"Discord API check failed: {err}")
     return result("discord", source, "passed", "Discord bot token accepted.")
 
@@ -325,6 +388,7 @@ def _verify_telegram(source: str, config: dict[str, Any]) -> dict[str, str]:
         response.raise_for_status()
         payload = response.json()
     except Exception as exc:
+        _report_verify_exception("telegram", exc, phase="get_me")
         return result("telegram", source, "failed", f"Telegram API check failed: {exc}")
 
     if not payload.get("ok"):
