@@ -18,7 +18,7 @@ import time
 import uuid
 from pathlib import Path
 
-project_root = Path(__file__).resolve().parents[3]
+project_root = Path(__file__).resolve().parents[4]
 
 from tests.shared.infrastructure_sdk import save_outputs
 from tests.shared.infrastructure_sdk.resources import (
@@ -154,6 +154,7 @@ def deploy() -> dict:
     dockerfile_path = (
         project_root
         / "tests"
+        / "e2e"
         / "upstream_apache_flink_ecs"
         / "infrastructure_code"
         / "flink_image"

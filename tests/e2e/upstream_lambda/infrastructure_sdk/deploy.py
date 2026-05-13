@@ -27,7 +27,7 @@ from tests.shared.infrastructure_sdk.resources import api_gateway, iam, lambda_,
 from tests.shared.infrastructure_sdk.resources.iam import get_account_id, put_role_policy
 from tests.shared.infrastructure_sdk.resources.secrets import get_secret_value
 
-project_root = Path(__file__).resolve().parents[3]
+project_root = Path(__file__).resolve().parents[4]
 
 STACK_NAME = "tracer-lambda"
 REGION = "us-east-1"
@@ -186,7 +186,7 @@ def create_lambda_functions(
 
     # Paths
     shared_dir = project_root / "tests" / "shared" / "external_vendor_api"
-    pipeline_dir = project_root / "tests" / "upstream_lambda" / "pipeline_code"
+    pipeline_dir = project_root / "tests" / "e2e" / "upstream_lambda" / "pipeline_code"
 
     # Bundle code
     print("  Bundling MockApi Lambda code...")
@@ -431,7 +431,7 @@ def deploy() -> dict:
 
     # 4. Create pipeline Lambdas with correct URLs
     print("Creating pipeline Lambda functions...")
-    pipeline_dir = project_root / "tests" / "upstream_lambda" / "pipeline_code"
+    pipeline_dir = project_root / "tests" / "e2e" / "upstream_lambda" / "pipeline_code"
 
     print("  Bundling pipeline code (dependencies already vendored)...")
     # Use custom bundling that puts vendored deps at root level

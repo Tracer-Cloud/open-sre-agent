@@ -23,7 +23,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-project_root = Path(__file__).resolve().parents[3]
+project_root = Path(__file__).resolve().parents[4]
 
 from app.utils.config import load_env
 from tests.shared.infrastructure_sdk import save_outputs
@@ -58,8 +58,9 @@ TRIGGER_LAMBDA_NAME = "tracer-prefect-ecs-trigger"
 
 # Paths
 TESTS_DIR = project_root / "tests"
+E2E_DIR = TESTS_DIR / "e2e"
 PREFECT_DOCKERFILE = (
-    TESTS_DIR
+    E2E_DIR
     / "upstream_prefect_ecs_fargate"
     / "infrastructure_code"
     / "prefect_image"
@@ -68,7 +69,7 @@ PREFECT_DOCKERFILE = (
 ALLOY_CONFIG_DIR = TESTS_DIR / "shared" / "infrastructure_code" / "alloy_config"
 MOCK_API_CODE = TESTS_DIR / "shared" / "external_vendor_api"
 TRIGGER_LAMBDA_CODE = (
-    TESTS_DIR / "upstream_prefect_ecs_fargate" / "pipeline_code" / "trigger_lambda"
+    E2E_DIR / "upstream_prefect_ecs_fargate" / "pipeline_code" / "trigger_lambda"
 )
 
 GRAFANA_ENV_KEYS = [
