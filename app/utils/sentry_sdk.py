@@ -3,6 +3,9 @@
 Initialises Sentry using the project DSN constant.  Call ``init_sentry()`` once
 early in each process entry-point (CLI, LangGraph worker, etc.).  Repeated calls
 are safe — the function is idempotent.
+Set ``OPENSRE_SENTRY_LOGGING_DISABLED=1`` to keep direct
+``capture_exception`` calls enabled while disabling Sentry's logging
+integration for noisy deployments.
 """
 
 from __future__ import annotations
@@ -316,11 +319,16 @@ def _build_sentry_integrations() -> list[Any]:
     from sentry_sdk.integrations.httpx import HttpxIntegration
     from sentry_sdk.integrations.logging import LoggingIntegration
 
-    return [
-        LoggingIntegration(level=logging.INFO, event_level=logging.ERROR),
+    integrations: list[Any] = [
         AsyncioIntegration(),
         HttpxIntegration(),
     ]
+    if os.getenv("OPENSRE_SENTRY_LOGGING_DISABLED", "0") != "1":
+        integrations.insert(
+            0,
+            LoggingIntegration(level=logging.INFO, event_level=logging.ERROR),
+        )
+    return integrations
 
 
 @contextmanager
@@ -430,6 +438,8 @@ def init_sentry(entrypoint: str | None = None) -> None:
     ``DO_NOT_TRACK=1`` to disable both Sentry and PostHog product analytics.
     ``OPENSRE_SENTRY_DISABLED=1`` disables Sentry only;
     ``OPENSRE_ANALYTICS_DISABLED=1`` disables PostHog only.
+    ``OPENSRE_SENTRY_LOGGING_DISABLED=1`` disables automatic logger
+    capture without disabling direct ``capture_exception`` calls.
 
     ``entrypoint`` identifies the calling surface (``cli``, ``webapp``,
     ``remote``, ``mcp``, ``integrations``, ``wizard``, ``graph_pipeline``)

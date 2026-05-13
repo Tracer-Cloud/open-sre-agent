@@ -107,6 +107,7 @@ A random install ID is stored under `~/.config/opensre/anonymous_id`. PostHog `d
 | `DO_NOT_TRACK=1`               | disabled   | disabled   |
 | `OPENSRE_ANALYTICS_DISABLED=1` | disabled   | unaffected |
 | `OPENSRE_SENTRY_DISABLED=1`    | unaffected | disabled   |
+| `OPENSRE_SENTRY_LOGGING_DISABLED=1` | unaffected | disables automatic logger capture only |
 
 Full opt-out:
 

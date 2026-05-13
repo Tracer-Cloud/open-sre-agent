@@ -375,6 +375,17 @@ def test_init_sentry_passes_explicit_integrations(monkeypatch) -> None:
     assert "HttpxIntegration" in integration_names
 
 
+def test_build_sentry_integrations_respects_logging_kill_switch(monkeypatch) -> None:
+    monkeypatch.setenv("OPENSRE_SENTRY_LOGGING_DISABLED", "1")
+
+    integrations = sentry_mod._build_sentry_integrations()
+
+    integration_names = {type(integration).__name__ for integration in integrations}
+    assert "LoggingIntegration" not in integration_names
+    assert "AsyncioIntegration" in integration_names
+    assert "HttpxIntegration" in integration_names
+
+
 def test_init_sentry_suppresses_langgraph_allowed_objects_warning(monkeypatch) -> None:
     from langchain_core._api.deprecation import LangChainPendingDeprecationWarning
 
