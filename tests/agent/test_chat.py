@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-import app.agent.chat as chat_module
+from app.agent.chat import ChatAgent
 from app.state import AgentState
 
 
@@ -36,12 +36,12 @@ class _FakeLLM:
 def test_tracer_data_chat_executes_tool_calls_and_finishes(monkeypatch: Any) -> None:
     fake_llm = _FakeLLM()
 
-    monkeypatch.setattr(chat_module, "_route", lambda _state: "tracer_data")
-    monkeypatch.setattr(chat_module, "_get_llm", lambda **_kwargs: fake_llm)
-    monkeypatch.setattr(chat_module, "get_registered_tools", lambda _surface: [_FakeTool()])
+    monkeypatch.setattr("app.agent.chat._route", lambda _state: "tracer_data")
+    monkeypatch.setattr("app.agent.chat._get_llm", lambda **_kwargs: fake_llm)
+    monkeypatch.setattr("app.agent.chat.get_registered_tools", lambda _surface: [_FakeTool()])
 
     state = cast(AgentState, {"messages": [{"role": "user", "content": "check api"}]})
-    result = chat_module.ChatAgent().run(state)
+    result = ChatAgent().run(state)
 
     assert len(fake_llm.invocations) == 2
     assert result["messages"][0]["tool_calls"][0]["name"] == "lookup_incident"
