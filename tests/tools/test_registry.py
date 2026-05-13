@@ -355,7 +355,7 @@ def test_registry_regression_duplicate_tool_names_across_modules(
 def test_registry_regression_import_failures(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """Test that registry gracefully skips modules with import failures."""
+    """Test that registry reports and gracefully skips modules with import failures."""
     module: Any = ModuleType("app.tools.valid_tool")
 
     @tool(
@@ -385,7 +385,25 @@ def test_registry_regression_import_failures(
         mock_import,
     )
 
-    with caplog.at_level(logging.WARNING, logger="app.tools.registry"):
+    reported: list[tuple[BaseException, str, dict[str, str]]] = []
+
+    def fake_report_exception(
+        exc: BaseException,
+        *,
+        logger: logging.Logger,
+        message: str,
+        severity: str = "error",
+        tags: dict[str, str] | None = None,
+        extras: dict[str, Any] | None = None,
+    ) -> None:
+        reported.append((exc, severity, tags or {}))
+        getattr(logger, severity)("%s", message, exc_info=exc)
+
+    sentry_tags: dict[str, int | str | bool] = {}
+    monkeypatch.setattr(registry_module, "report_exception", fake_report_exception)
+    monkeypatch.setattr(registry_module, "_set_sentry_tag", sentry_tags.__setitem__)
+
+    with caplog.at_level(logging.ERROR, logger="app.tools.registry"):
         tools = registry_module.get_registered_tools()
 
     tool_names = [t.name for t in tools]
@@ -394,6 +412,91 @@ def test_registry_regression_import_failures(
     assert registry_module.get_registered_tool_map()["valid_tool"].run() == {"status": "ok"}
 
     assert any(
-        "Skipping broken_module" in record.message and record.levelname == "WARNING"
+        "Skipping broken_module" in record.message and record.levelname == "ERROR"
         for record in caplog.records
     )
+    assert len(reported) == 1
+    _, severity, tags = reported[0]
+    assert severity == "error"
+    assert tags["surface"] == "tool"
+    assert tags["component"] == "app.tools.broken_module"
+    assert tags["event"] == "tool_module_import_failed"
+    assert sentry_tags["tools.import_failures"] == 1
+
+
+def test_registry_import_failure_classifies_external_optional_dependency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def mock_import(_name: str) -> ModuleType:
+        raise ModuleNotFoundError("No module named 'psycopg2'", name="psycopg2")
+
+    reported: list[tuple[str, dict[str, str]]] = []
+
+    def fake_report_exception(
+        exc: BaseException,
+        *,
+        logger: logging.Logger,
+        message: str,
+        severity: str = "error",
+        tags: dict[str, str] | None = None,
+        extras: dict[str, Any] | None = None,
+    ) -> None:
+        reported.append((severity, tags or {}))
+
+    monkeypatch.setattr(registry_module, "_iter_tool_module_names", lambda: ["optional_tool"])
+    monkeypatch.setattr(registry_module, "_import_tool_module", mock_import)
+    monkeypatch.setattr(registry_module, "report_exception", fake_report_exception)
+    monkeypatch.setattr(registry_module, "_set_sentry_tag", lambda _key, _value: None)
+
+    assert registry_module.get_registered_tools() == []
+    assert reported == [
+        (
+            "warning",
+            {
+                "surface": "tool",
+                "component": "app.tools.optional_tool",
+                "event": "optional_dependency_missing",
+                "missing_module": "psycopg2",
+            },
+        )
+    ]
+
+
+def test_registry_import_failure_classifies_internal_missing_module(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def mock_import(_name: str) -> ModuleType:
+        raise ModuleNotFoundError(
+            "No module named 'app.services.missing'",
+            name="app.services.missing",
+        )
+
+    reported: list[tuple[str, dict[str, str]]] = []
+
+    def fake_report_exception(
+        exc: BaseException,
+        *,
+        logger: logging.Logger,
+        message: str,
+        severity: str = "error",
+        tags: dict[str, str] | None = None,
+        extras: dict[str, Any] | None = None,
+    ) -> None:
+        reported.append((severity, tags or {}))
+
+    monkeypatch.setattr(registry_module, "_iter_tool_module_names", lambda: ["broken_tool"])
+    monkeypatch.setattr(registry_module, "_import_tool_module", mock_import)
+    monkeypatch.setattr(registry_module, "report_exception", fake_report_exception)
+    monkeypatch.setattr(registry_module, "_set_sentry_tag", lambda _key, _value: None)
+
+    assert registry_module.get_registered_tools() == []
+    assert reported == [
+        (
+            "error",
+            {
+                "surface": "tool",
+                "component": "app.tools.broken_tool",
+                "event": "tool_module_import_failed",
+            },
+        )
+    ]

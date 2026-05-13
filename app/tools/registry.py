@@ -6,12 +6,14 @@ import importlib
 import inspect
 import logging
 import pkgutil
+from contextlib import suppress
 from functools import lru_cache
 from types import ModuleType
 
 from app import tools as tools_package
 from app.tools.base import BaseTool
 from app.tools.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool, ToolSurface
+from app.utils.errors import report_exception
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +61,25 @@ def _iter_tool_module_names() -> list[str]:
 
 def _import_tool_module(module_name: str) -> ModuleType:
     return importlib.import_module(f"{tools_package.__name__}.{module_name}")
+
+
+def _classify_import_failure(exc: BaseException) -> tuple[str, dict[str, str]]:
+    if isinstance(exc, ModuleNotFoundError) and exc.name and not exc.name.startswith("app."):
+        return (
+            "warning",
+            {
+                "event": "optional_dependency_missing",
+                "missing_module": exc.name,
+            },
+        )
+    return "error", {"event": "tool_module_import_failed"}
+
+
+def _set_sentry_tag(key: str, value: int | str | bool) -> None:
+    with suppress(Exception):
+        import sentry_sdk
+
+        sentry_sdk.set_tag(key, value)
 
 
 def _candidate_belongs_to_module(candidate: object, module_name: str) -> bool:
@@ -121,19 +142,24 @@ def _collect_registered_tools_from_module(module: ModuleType) -> list[Registered
 @lru_cache(maxsize=1)
 def _load_registry_snapshot() -> tuple[RegisteredTool, ...]:
     tools_by_name: dict[str, RegisteredTool] = {}
+    import_failures = 0
 
     for module_name in _iter_tool_module_names():
         try:
             module = _import_tool_module(module_name)
-        except ModuleNotFoundError as exc:
-            logger.warning("[tools] Skipping %s: %s", module_name, exc)
-            continue
         except Exception as exc:
-            logger.warning(
-                "[tools] Skipping %s due to import failure: %s",
-                module_name,
+            import_failures += 1
+            severity, extra_tags = _classify_import_failure(exc)
+            report_exception(
                 exc,
-                exc_info=True,
+                logger=logger,
+                message=f"[tools] Skipping {module_name} due to import failure",
+                severity=severity,
+                tags={
+                    "surface": "tool",
+                    "component": f"app.tools.{module_name}",
+                    **extra_tags,
+                },
             )
             continue
 
@@ -146,6 +172,7 @@ def _load_registry_snapshot() -> tuple[RegisteredTool, ...]:
                 continue
             tools_by_name[tool.name] = tool
 
+    _set_sentry_tag("tools.import_failures", import_failures)
     return tuple(sorted(tools_by_name.values(), key=lambda tool: tool.name))
 
 
