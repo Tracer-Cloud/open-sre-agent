@@ -790,4 +790,5 @@ def _execute_investigation(
             raw_alert=raw_alert,
             investigation_metadata=investigation_metadata,
         )
-    return result, *investigation_metadata
+    resolved_alert_name, resolved_pipeline_name, resolved_severity = investigation_metadata
+    return result, resolved_alert_name, resolved_pipeline_name, resolved_severity
