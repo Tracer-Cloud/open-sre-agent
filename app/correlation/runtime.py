@@ -112,6 +112,7 @@ def build_runtime_correlation(
         )
 
     ranked = rank_upstream_candidates(candidates)
+    top_confidence = ranked[0].confidence if ranked else 0.0
 
     report = build_correlation_report(
         correlated_signals=(
@@ -119,7 +120,7 @@ def build_runtime_correlation(
                 source="runtime",
                 name="upstream-correlation",
                 description="Runtime upstream correlation analysis.",
-                score=1.0,
+                score=top_confidence,
             ),
         ),
         ranked_candidates=ranked,
