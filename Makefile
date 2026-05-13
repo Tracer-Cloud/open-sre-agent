@@ -575,6 +575,7 @@ help:
 	@echo "  make test-rca        - Run all RCA markdown alert tests in tests/e2e/rca/"
 	@echo "  make test-rca FILE=pipeline_error_in_logs - Run a single RCA alert test"
 	@echo "  make test-rds-synthetic - Run the synthetic RDS PostgreSQL RCA suite"
+	@echo "  make test-openclaw   - Run OpenClaw integration + e2e tests (skips when openclaw CLI absent)"
 	@echo "  make download-cloudopsbench-hf - Download Cloud-OpsBench from Hugging Face"
 	@echo "  make test-cloudopsbench - Run the Cloud-OpsBench synthetic RCA suite"
 	@echo "  make clean           - Clean up cache files"

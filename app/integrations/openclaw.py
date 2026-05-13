@@ -274,6 +274,13 @@ def _describe_exception(err: BaseException) -> list[str]:
             return [f"Could not connect to {request.url}: {err}"]
         return [str(err) or err.__class__.__name__]
 
+    # ``asyncio.wait_for`` raises ``asyncio.TimeoutError`` which is
+    # ``TimeoutError`` in 3.11+. ``str()`` is empty, so the default
+    # branch below would surface just ``"TimeoutError"`` — useless for
+    # a user trying to debug a hung MCP tool. Spell it out.
+    if isinstance(err, TimeoutError):
+        return ["OpenClaw MCP tool call timed out"]
+
     return [str(err).strip() or err.__class__.__name__]
 
 
@@ -320,6 +327,13 @@ def describe_openclaw_error(
                     "Re-run `uv run opensre integrations verify openclaw` after the gateway is healthy.",
                 ),
             )
+        )
+
+    if any("timed out" in message.lower() for message in messages):
+        hints.append(
+            f"The tool did not return within {config.timeout_seconds:.1f}s. "
+            "Check whether the OpenClaw Gateway is responsive (`openclaw gateway health`) "
+            "or raise `OpenClawConfig.timeout_seconds` if the tool is expected to be slow."
         )
 
     if hints:
@@ -527,7 +541,17 @@ async def _call_tool_async(
     arguments: dict[str, object] | None = None,
 ) -> OpenClawToolCallResult:
     async with _open_openclaw_session(config) as session:
-        result = await session.call_tool(tool_name, arguments or {})
+        # ``OpenClawConfig.timeout_seconds`` previously bounded only the
+        # SSE / streamable-http transport handshake; ``session.call_tool``
+        # itself was unbounded, so a hung MCP tool over stdio would
+        # block the investigation pipeline indefinitely. Wrap the call
+        # with ``asyncio.wait_for`` so the same timeout governs all
+        # transport modes uniformly. :func:`describe_openclaw_error`
+        # surfaces a "timed out" hint when ``TimeoutError`` propagates.
+        result = await asyncio.wait_for(
+            session.call_tool(tool_name, arguments or {}),
+            timeout=config.timeout_seconds,
+        )
         payload = _tool_result_to_dict(result)
         payload["tool"] = tool_name
         payload["arguments"] = arguments or {}

@@ -135,6 +135,7 @@ def run_investigation_cli(
         "problem_md": state["problem_md"],
         "root_cause": state["root_cause"],
         "is_noise": state.get("is_noise", False),
+        "validity_score": state.get("validity_score", 0.0),
     }
     if opensre_evaluate:
         ev = state.get("opensre_llm_eval")
