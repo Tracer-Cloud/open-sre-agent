@@ -1,20 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from app.correlation.models import CorrelatedSignal, UpstreamCandidate
 
-
-@dataclass(frozen=True)
-class CorrelatedSignal:
-    source: str
-    name: str
-    description: str
-    score: float
-
-
-@dataclass(frozen=True)
-class UpstreamCandidate:
-    name: str
-    tier: str
-    confidence: float
-    correlated_signals: tuple[CorrelatedSignal, ...]
-    rationale: str
+__all__ = [
+    "CorrelatedSignal",
+    "UpstreamCandidate",
+]

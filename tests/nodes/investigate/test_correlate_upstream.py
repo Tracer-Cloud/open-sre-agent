@@ -52,6 +52,7 @@ def test_correlate_upstream_invokes_configured_provider() -> None:
             "raw_alert": {
                 "alert_id": "alert-1",
                 "service": "orders",
+                "resource": "orders-prod-mysql",
             },
             "incident_window": {
                 "since": "2026-04-15T14:00:00Z",
