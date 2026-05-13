@@ -81,7 +81,7 @@ class WatchdogConfig(StrictConfigModel):
     max_runtime: float | None = Field(default=None, gt=0)
     max_rss: int | None = Field(default=None, gt=0)
     interval: float = Field(default=5.0, gt=0)
-    cooldown: float = Field(default=300.0, ge=0)
+    cooldown: float = Field(default=300.0, gt=0)
     once: bool = False
     chat_id: str | None = None
     verbose: bool = False

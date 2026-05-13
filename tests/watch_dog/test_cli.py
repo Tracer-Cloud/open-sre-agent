@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from click.testing import CliRunner
 
 from app.cli.__main__ import cli
@@ -30,7 +31,7 @@ def test_watchdog_help_lists_expected_flags() -> None:
         assert flag in result.output
 
 
-def test_watchdog_cli_maps_flags_to_config(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+def test_watchdog_cli_maps_flags_to_config(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, WatchdogConfig] = {}
 
     def _fake_run(config: WatchdogConfig) -> int:
