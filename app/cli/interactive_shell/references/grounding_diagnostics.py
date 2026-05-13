@@ -20,8 +20,8 @@ class GroundingSource:
     name: str
     stats_fn: Callable[[], dict[str, Any]]
     format_fn: Callable[[dict[str, Any]], str] = field(
-        default_factory=lambda: (lambda s: str(s))
-    )
+    default_factory=lambda: (lambda s: ", ".join(f"{k}={v}" for k, v in s.items()))
+)
 
 
 def register_grounding_source(source: GroundingSource) -> None:
