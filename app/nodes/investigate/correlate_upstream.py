@@ -54,7 +54,7 @@ def _incident_window(state: InvestigationState) -> tuple[str, str]:
         until = window.get("until")
         if isinstance(since, str) and isinstance(until, str):
             return since, until
-    return "1970-01-01T00:00:00Z", "1970-01-01T00:15:00Z"
+    raise ValueError("incident_window is missing or malformed")
 
 
 def _raw_alert_dict(state: InvestigationState) -> dict[str, Any]:
@@ -88,7 +88,11 @@ def node_correlate_upstream(
         or "unknown"
     )
     alert_id = str(raw_alert.get("id") or raw_alert.get("alert_id") or "unknown")
-    window_start, window_end = _incident_window(state)
+    try:
+        window_start, window_end = _incident_window(state)
+    except ValueError:
+        tracker.complete("correlate_upstream")
+        return {"correlation": _empty_correlation()}
 
     provider = _provider_from_config(config)
     evidence = provider.collect_upstream_evidence(
