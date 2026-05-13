@@ -288,6 +288,10 @@ def _dispatch_one_turn(
         Event.INTERACTIVE_SHELL_ROUTE_DECISION,
         decision.to_event_payload(),
     )
+    if kind != "slash":
+        begin_spinner = getattr(console, "begin_assistant_spinner", None)
+        if callable(begin_spinner):
+            begin_spinner()
     if kind in ("follow_up", "new_alert") and _looks_like_correction(text):
         session.record_intervention("correction")
 
@@ -702,6 +706,9 @@ class _StreamingConsole(Console):
         # the token counter is imperceptible.
         self._spinner.bytes_in = bytes_received
 
+    def begin_assistant_spinner(self) -> None:
+        self._spinner.start()
+
     @property
     def cancel_requested(self) -> bool:
         return self._cancel_event.is_set()
@@ -780,7 +787,6 @@ async def _run_interactive(
             color_system="truecolor",
             legacy_windows=False,
         )
-        spinner.start()
         try:
             await asyncio.to_thread(
                 _dispatch_one_turn,

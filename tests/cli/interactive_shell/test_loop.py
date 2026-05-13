@@ -513,6 +513,54 @@ def test_dispatch_one_turn_calls_on_exit_when_slash_returns_false(
     assert exit_calls == [None]
 
 
+def test_dispatch_one_turn_does_not_start_assistant_spinner_for_slash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from rich.console import Console
+
+    class _Console(Console):
+        spinner_started = False
+
+        def begin_assistant_spinner(self) -> None:
+            self.spinner_started = True
+
+    monkeypatch.setattr(
+        loop,
+        "route_input",
+        lambda *_args: RouteDecision(RouteKind.SLASH, 1.0, ("slash_command",)),
+    )
+    monkeypatch.setattr(loop, "dispatch_slash", lambda *_args, **_kwargs: True)
+
+    console = _Console(file=io.StringIO(), force_terminal=False, highlight=False)
+    loop._dispatch_one_turn("/history", ReplSession(), console, on_exit=lambda: None)
+
+    assert console.spinner_started is False
+
+
+def test_dispatch_one_turn_starts_assistant_spinner_for_llm_routes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from rich.console import Console
+
+    class _Console(Console):
+        spinner_started = False
+
+        def begin_assistant_spinner(self) -> None:
+            self.spinner_started = True
+
+    monkeypatch.setattr(
+        loop,
+        "route_input",
+        lambda *_args: RouteDecision(RouteKind.CLI_HELP, 1.0, ("help",)),
+    )
+    monkeypatch.setattr(loop, "answer_cli_help", lambda *_args, **_kwargs: None)
+
+    console = _Console(file=io.StringIO(), force_terminal=False, highlight=False)
+    loop._dispatch_one_turn("explain /tests", ReplSession(), console, on_exit=lambda: None)
+
+    assert console.spinner_started is True
+
+
 class TestLooksLikeCorrection:
     """Unit tests for the ``_looks_like_correction`` heuristic.
 
