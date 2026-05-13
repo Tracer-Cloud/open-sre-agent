@@ -302,25 +302,45 @@ class TestExecuteAwsSdkCallParamValidation:
 
 class TestExecuteAwsSdkCallClientError:
     def test_client_error(self, mock_boto3_client) -> None:
-        mock_boto3_client.describe_instances.side_effect = ClientError(
+        error = ClientError(
             {
                 "Error": {"Code": "UnauthorizedAccess", "Message": "Not authorized"},
                 "ResponseMetadata": {"HTTPStatusCode": 403},
             },
             "DescribeInstances",
         )
-        result = execute_aws_sdk_call("ec2", "describe_instances")
+        mock_boto3_client.describe_instances.side_effect = error
+
+        with patch("app.services.aws_sdk_client.report_aws_service_exception") as report:
+            result = execute_aws_sdk_call("ec2", "describe_instances")
+
         assert result["success"] is False
         assert "UnauthorizedAccess" in result["error"]
         assert result["metadata"]["error_type"] == "client_error"
         assert result["metadata"]["error_code"] == "UnauthorizedAccess"
         assert result["metadata"]["status_code"] == 403
+        report.assert_called_once_with(
+            error,
+            service="ec2",
+            operation="describe_instances",
+            region=None,
+        )
 
 
 class TestExecuteAwsSdkCallUnexpectedError:
     def test_unexpected_runtime_error(self, mock_boto3_client) -> None:
-        mock_boto3_client.describe_instances.side_effect = RuntimeError("boom")
-        result = execute_aws_sdk_call("ec2", "describe_instances")
+        error = RuntimeError("boom")
+        mock_boto3_client.describe_instances.side_effect = error
+
+        with patch("app.services.aws_sdk_client.report_aws_service_exception") as report:
+            result = execute_aws_sdk_call("ec2", "describe_instances")
+
         assert result["success"] is False
         assert "unexpected error" in result["error"].lower()
         assert result["metadata"]["error_type"] == "unexpected"
+        report.assert_called_once_with(
+            error,
+            service="ec2",
+            operation="describe_instances",
+            region=None,
+        )

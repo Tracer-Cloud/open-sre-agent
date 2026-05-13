@@ -10,6 +10,8 @@ from typing import Any
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError, ParamValidationError
 
+from app.services.aws._telemetry import report_aws_service_exception
+
 # Read-only operation patterns (allowlist)
 ALLOWED_OPERATION_PATTERNS = [
     r"^describe_.*",
@@ -238,6 +240,12 @@ def execute_aws_sdk_call(
         }
 
     except ClientError as e:
+        report_aws_service_exception(
+            e,
+            service=service_name,
+            operation=operation_name,
+            region=region,
+        )
         error_code = e.response.get("Error", {}).get("Code", "Unknown")
         error_message = e.response.get("Error", {}).get("Message", str(e))
 
@@ -255,6 +263,12 @@ def execute_aws_sdk_call(
         }
 
     except Exception as e:
+        report_aws_service_exception(
+            e,
+            service=service_name,
+            operation=operation_name,
+            region=region,
+        )
         return {
             "success": False,
             "error": f"Unexpected error: {str(e)}",

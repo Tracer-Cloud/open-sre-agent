@@ -2,11 +2,13 @@
 
 import base64
 import json
-from contextlib import suppress
 from io import BytesIO
 from typing import Any
 from zipfile import ZipFile
 
+import requests
+
+from app.services.aws._telemetry import report_aws_service_exception
 from app.services.env import make_boto3_client, require_aws_credentials
 
 try:
@@ -23,6 +25,55 @@ def _get_lambda_client():
 
 def _get_cloudwatch_logs_client():
     return make_boto3_client("logs")
+
+
+_reported_metric_parse_failures: set[str] = set()
+
+
+def _client_region(client: Any) -> str | None:
+    return str(getattr(getattr(client, "meta", None), "region_name", "") or "") or None
+
+
+def _report_lambda_client_error(
+    exc: BaseException,
+    *,
+    operation: str,
+    function_name: str,
+    client: Any | None = None,
+    severity: str | None = None,
+    extras: dict[str, Any] | None = None,
+) -> None:
+    report_aws_service_exception(
+        exc,
+        service="lambda",
+        operation=operation,
+        region=_client_region(client),
+        function_name=function_name,
+        severity=severity,
+        extras=extras,
+    )
+
+
+def _report_metric_parse_failure_once(
+    exc: BaseException,
+    *,
+    function_name: str,
+    metric_name: str,
+    message: str,
+    client: Any,
+) -> None:
+    key = f"{function_name}:{metric_name}"
+    if key in _reported_metric_parse_failures:
+        return
+    _reported_metric_parse_failures.add(key)
+    _report_lambda_client_error(
+        exc,
+        operation="parse_invocation_metric",
+        function_name=function_name,
+        client=client,
+        severity="warning",
+        extras={"metric_name": metric_name, "message": message},
+    )
 
 
 def get_function_configuration(function_name: str) -> dict[str, Any]:
@@ -69,6 +120,12 @@ def get_function_configuration(function_name: str) -> dict[str, Any]:
             },
         }
     except ClientError as e:
+        _report_lambda_client_error(
+            e,
+            operation="get_function_configuration",
+            function_name=function_name,
+            client=client,
+        )
         return {"success": False, "error": str(e)}
 
 
@@ -114,10 +171,28 @@ def get_function_code(
 
         if extract_files and code_location and code_size < 5 * 1024 * 1024:
             # Download and extract if code is under 5MB
-            import requests
-
-            zip_response = requests.get(code_location, timeout=30)
-            if zip_response.status_code == 200:
+            try:
+                zip_response = requests.get(code_location, timeout=30)
+            except requests.RequestException as e:
+                _report_lambda_client_error(
+                    e,
+                    operation="download_function_code",
+                    function_name=function_name,
+                    client=client,
+                    severity="warning",
+                    extras={"code_location": code_location},
+                )
+                zip_response = None
+            if zip_response is not None and zip_response.status_code != 200:
+                _report_lambda_client_error(
+                    RuntimeError(f"Function code download returned HTTP {zip_response.status_code}"),
+                    operation="download_function_code",
+                    function_name=function_name,
+                    client=client,
+                    severity="warning",
+                    extras={"status_code": zip_response.status_code, "code_location": code_location},
+                )
+            if zip_response is not None and zip_response.status_code == 200:
                 files: dict[str, Any] = {}
                 try:
                     with ZipFile(BytesIO(zip_response.content)) as zf:
@@ -145,10 +220,23 @@ def get_function_code(
                     result["data"]["files"] = files
                     result["data"]["file_count"] = len(files)
                 except Exception as e:
+                    _report_lambda_client_error(
+                        e,
+                        operation="extract_function_code",
+                        function_name=function_name,
+                        client=client,
+                        severity="warning",
+                    )
                     result["data"]["extract_error"] = str(e)
 
         return result
     except ClientError as e:
+        _report_lambda_client_error(
+            e,
+            operation="get_function",
+            function_name=function_name,
+            client=client,
+        )
         return {"success": False, "error": str(e)}
 
 
@@ -218,13 +306,29 @@ def get_recent_invocations(
                     current_invocation["logs"].append(message)
                     # Parse REPORT for duration and memory
                     if "Duration:" in message:
-                        with suppress(IndexError, ValueError):
+                        try:
                             duration_part = message.split("Duration: ")[1].split()[0]
                             current_invocation["duration_ms"] = float(duration_part)
+                        except (IndexError, ValueError) as e:
+                            _report_metric_parse_failure_once(
+                                e,
+                                function_name=function_name,
+                                metric_name="duration_ms",
+                                message=message,
+                                client=logs_client,
+                            )
                     if "Memory Used:" in message:
-                        with suppress(IndexError, ValueError):
+                        try:
                             memory_part = message.split("Memory Used: ")[1].split()[0]
                             current_invocation["memory_used_mb"] = int(memory_part)
+                        except (IndexError, ValueError) as e:
+                            _report_metric_parse_failure_once(
+                                e,
+                                function_name=function_name,
+                                metric_name="memory_used_mb",
+                                message=message,
+                                client=logs_client,
+                            )
                     invocations.append(current_invocation)
                     current_invocation = None
             elif current_invocation:
@@ -243,6 +347,12 @@ def get_recent_invocations(
             },
         }
     except ClientError as e:
+        _report_lambda_client_error(
+            e,
+            operation="filter_log_events",
+            function_name=function_name,
+            client=logs_client,
+        )
         error_code = e.response.get("Error", {}).get("Code", "")
         if error_code == "ResourceNotFoundException":
             return {
@@ -300,6 +410,12 @@ def get_invocation_logs_by_request_id(
             },
         }
     except ClientError as e:
+        _report_lambda_client_error(
+            e,
+            operation="filter_log_events_by_request_id",
+            function_name=function_name,
+            client=logs_client,
+        )
         return {"success": False, "error": str(e)}
 
 
@@ -337,22 +453,44 @@ def invoke_function(
         response = client.invoke(**kwargs)
 
         result_payload = None
+        payload_parse_error = None
         if "Payload" in response:
-            result_payload = json.loads(response["Payload"].read().decode())
+            raw_payload = response["Payload"].read().decode()
+            try:
+                result_payload = json.loads(raw_payload)
+            except json.JSONDecodeError as e:
+                _report_lambda_client_error(
+                    e,
+                    operation="parse_invoke_payload",
+                    function_name=function_name,
+                    client=client,
+                    extras={"payload_preview": raw_payload[:200]},
+                )
+                payload_parse_error = str(e)
+
+        data = {
+            "status_code": response.get("StatusCode"),
+            "function_error": response.get("FunctionError"),
+            "executed_version": response.get("ExecutedVersion"),
+            "log_result": base64.b64decode(response.get("LogResult", "")).decode()
+            if response.get("LogResult")
+            else None,
+            "payload": result_payload,
+        }
+        if payload_parse_error is not None:
+            data["payload_parse_error"] = payload_parse_error
 
         return {
             "success": True,
-            "data": {
-                "status_code": response.get("StatusCode"),
-                "function_error": response.get("FunctionError"),
-                "executed_version": response.get("ExecutedVersion"),
-                "log_result": base64.b64decode(response.get("LogResult", "")).decode()
-                if response.get("LogResult")
-                else None,
-                "payload": result_payload,
-            },
+            "data": data,
         }
     except ClientError as e:
+        _report_lambda_client_error(
+            e,
+            operation="invoke",
+            function_name=function_name,
+            client=client,
+        )
         return {"success": False, "error": str(e)}
 
 
@@ -406,4 +544,10 @@ def list_functions(
             },
         }
     except ClientError as e:
+        _report_lambda_client_error(
+            e,
+            operation="list_functions",
+            function_name="",
+            client=client,
+        )
         return {"success": False, "error": str(e)}

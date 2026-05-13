@@ -71,14 +71,20 @@ def test_get_function_configuration_success(mock_lambda_client) -> None:
 
 def test_get_function_configuration_error(mock_lambda_client) -> None:
     error_response = {"Error": {"Code": "ResourceNotFoundException", "Message": "Not found"}}
-    mock_lambda_client.get_function_configuration.side_effect = ClientError(
-        error_response, "GetFunctionConfiguration"
-    )
+    error = ClientError(error_response, "GetFunctionConfiguration")
+    mock_lambda_client.get_function_configuration.side_effect = error
 
-    result = get_function_configuration("missing-func")
+    with patch("app.services.lambda_client._report_lambda_client_error") as report:
+        result = get_function_configuration("missing-func")
 
     assert result["success"] is False
     assert "ResourceNotFoundException" in result["error"]
+    report.assert_called_once_with(
+        error,
+        operation="get_function_configuration",
+        function_name="missing-func",
+        client=mock_lambda_client,
+    )
 
 
 def test_get_function_code_success(mock_lambda_client) -> None:
@@ -239,11 +245,16 @@ def test_get_function_code_download_error(mock_lambda_client) -> None:
     }
     mock_response = MagicMock()
     mock_response.status_code = 404
-    with patch("requests.get", return_value=mock_response):
+    with (
+        patch("requests.get", return_value=mock_response),
+        patch("app.services.lambda_client._report_lambda_client_error") as report,
+    ):
         result = get_function_code("test-func")
 
     assert result["success"] is True  # The get_function call succeeded
     assert "files" not in result["data"]
+    assert report.call_args.kwargs["operation"] == "download_function_code"
+    assert report.call_args.kwargs["severity"] == "warning"
 
 
 def test_get_function_code_corrupt_zip(mock_lambda_client) -> None:
@@ -255,11 +266,30 @@ def test_get_function_code_corrupt_zip(mock_lambda_client) -> None:
     mock_response.status_code = 200
     mock_response.content = b"not a zip file"
 
-    with patch("requests.get", return_value=mock_response):
+    with (
+        patch("requests.get", return_value=mock_response),
+        patch("app.services.lambda_client._report_lambda_client_error") as report,
+    ):
         result = get_function_code("test-func")
 
     assert result["success"] is True
     assert "extract_error" in result["data"]
+    assert report.call_args.kwargs["operation"] == "extract_function_code"
+
+
+def test_invoke_function_reports_invalid_json_payload(mock_lambda_client) -> None:
+    mock_lambda_client.invoke.return_value = {
+        "StatusCode": 200,
+        "Payload": BytesIO(b"not-json"),
+    }
+
+    with patch("app.services.lambda_client._report_lambda_client_error") as report:
+        result = invoke_function("test-func")
+
+    assert result["success"] is True
+    assert result["data"]["payload"] is None
+    assert "payload_parse_error" in result["data"]
+    assert report.call_args.kwargs["operation"] == "parse_invoke_payload"
 
 
 def test_get_recent_invocations_multiple(mock_logs_client) -> None:
