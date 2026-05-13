@@ -93,14 +93,22 @@ __all__ = [
 ]
 
 
-def _run_investigation_lazy(**kwargs: Any) -> Any:
-    from app.pipeline.runners import run_investigation as _run_investigation
+def run_investigation(
+    raw_alert: str | dict[str, Any],
+    *,
+    resolved_integrations: dict[str, Any] | None = None,
+    openclaw_context: dict[str, Any] | None = None,
+    opensre_evaluate: bool = False,
+) -> Any:
+    """Lazy-import ``app.pipeline.runners.run_investigation`` (keeps monkeypatch target stable)."""
+    from app.pipeline.runners import run_investigation as _impl
 
-    return _run_investigation(**kwargs)
-
-
-# Keep as module symbol so tests can monkeypatch without importing heavy deps.
-run_investigation: Callable[..., Any] = _run_investigation_lazy
+    return _impl(
+        raw_alert,
+        resolved_integrations=resolved_integrations,
+        openclaw_context=openclaw_context,
+        opensre_evaluate=opensre_evaluate,
+    )
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

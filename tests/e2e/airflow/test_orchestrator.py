@@ -168,7 +168,7 @@ def test_airflow_investigation_e2e():
     The agent is expected to use Airflow tools alongside the alert context to
     produce a root cause.
     """
-    base_url, dag_id, auth_token, username, password = _require_env()
+    _require_env()
 
     from app.cli.investigation import run_investigation_cli
 

@@ -113,11 +113,6 @@ def run_openclaw_investigation(
         },
     )
     def _invoke() -> dict[str, Any]:
-        return run_investigation_cli(
-            alert_name=_ALERT_NAME,
-            pipeline_name=_PIPELINE_NAME,
-            severity="critical",
-            raw_alert=raw_alert,
-        )
+        return run_investigation_cli(raw_alert=raw_alert)
 
     return _invoke()
