@@ -44,6 +44,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import app.cli.interactive_shell.references.grounding_diagnostics as _gd
+
 # Repo root is four levels above this file
 # (.../app/cli/interactive_shell/references/agents_md_reference.py -> repo root).
 _REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -259,6 +261,16 @@ def build_agents_md_reference_text(*, max_chars: int = _DEFAULT_MAX_TOTAL_CHARS)
         return text[:max_chars] + "\n\n[... AGENTS.md reference truncated ...]\n"
     return text
 
+
+_gd.register_grounding_source(
+    _gd.GroundingSource(
+        name="agents_md",
+        stats_fn=get_agents_md_cache_stats,
+        format_fn=lambda s: (
+            f"hits={s['hits']} misses={s['misses']} cached={'yes' if s['cached'] else 'no'}"
+        ),
+    )
+)
 
 __all__ = [
     "AgentsMdFile",

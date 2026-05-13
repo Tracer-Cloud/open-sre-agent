@@ -70,6 +70,7 @@ def test_iteration_order() -> None:
 def test_log_grounding_uses_registry(monkeypatch: object) -> None:
     """log_grounding_cache_diagnostics iterates the registry when verbose."""
     import os
+
     from app.cli.interactive_shell.references import grounding_diagnostics as _gd
 
     original = dict(_gd._registry)

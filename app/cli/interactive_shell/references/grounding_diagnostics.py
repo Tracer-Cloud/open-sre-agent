@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -29,9 +29,9 @@ def register_grounding_source(source: GroundingSource) -> None:
     _registry[source.name] = source
 
 
-def iter_grounding_sources() -> Iterable[GroundingSource]:
-    """Iterate registered grounding sources in insertion order."""
-    return _registry.values()
+def iter_grounding_sources() -> list[GroundingSource]:
+    """Return a snapshot of registered grounding sources in insertion order."""
+    return list(_registry.values())
 
 
 def log_grounding_cache_diagnostics(reason: str) -> None:
