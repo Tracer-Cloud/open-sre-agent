@@ -90,6 +90,9 @@ class ReportContext(TypedDict, total=False):
     # Concrete source provenance, keyed by source name (grafana, eks, github, ...)
     source_provenance: dict[str, dict[str, str]]
 
+    # Alert severity (e.g. critical, high) for channel-specific formatting (Telegram, etc.)
+    severity: str | None
+
     kube_pod_name: str | None
     kube_container_name: str | None
     kube_namespace: str | None
@@ -947,6 +950,7 @@ def build_report_context(state: InvestigationState) -> ReportContext:
         "grafana_endpoint": ns.grafana_endpoint,
         "datadog_site": ns.datadog_site,
         "source_provenance": source_provenance,
+        "severity": (state.get("severity") or None),
         # Kubernetes pod details — from Datadog evidence first, then alert annotations
         "kube_pod_name": (
             ns.evidence.get("datadog_pod_name")

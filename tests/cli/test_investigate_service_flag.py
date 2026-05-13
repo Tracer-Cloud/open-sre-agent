@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import NoReturn
 from unittest.mock import patch
 
 import pytest
@@ -185,3 +186,54 @@ def test_slack_thread_passed_to_payload_builder(monkeypatch) -> None:
         slack_thread_ref="C01234/1712345.000001",
         slack_bot_token="xoxb-fake-token",
     )
+
+
+def test_investigate_command_keyboard_interrupt_non_streaming(monkeypatch) -> None:
+    """Ctrl+C during a non-streaming investigation exits cleanly with code 0."""
+    runner = CliRunner()
+
+    def fake_run(*args: object, **kwargs: object) -> NoReturn:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("app.cli.investigation.run_investigation_cli", fake_run)
+    monkeypatch.setattr(
+        "app.cli.investigation.payload.load_payload", lambda **_: {"alert_name": "A"}
+    )
+    monkeypatch.setattr("app.cli.commands.general.is_json_output", lambda: True)
+
+    result = runner.invoke(investigate_command, ["--input", "/tmp/alert.json"])
+    assert result.exit_code == 0
+    assert result.exception is None
+
+
+def test_investigate_command_keyboard_interrupt_streaming(monkeypatch) -> None:
+    """Ctrl+C during a streaming investigation exits cleanly with code 0."""
+    import sys as real_sys
+    import types
+    from unittest.mock import MagicMock
+
+    runner = CliRunner()
+
+    def fake_streaming(*args: object, **kwargs: object) -> NoReturn:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("app.cli.investigation.run_investigation_cli_streaming", fake_streaming)
+    monkeypatch.setattr(
+        "app.cli.investigation.payload.load_payload", lambda **_: {"alert_name": "A"}
+    )
+    monkeypatch.setattr("app.cli.commands.general.is_json_output", lambda: False)
+
+    # Click's CliRunner patches the real sys.stdout, but
+    # app.cli.commands.general imported sys at module load time.
+    # Replace it with a fake module whose stdout reports isatty=True
+    # so the command takes the streaming path.
+    fake_sys = types.ModuleType("sys")
+    fake_sys.__dict__.update(real_sys.__dict__)
+    fake_sys.stdout = MagicMock()
+    fake_sys.stdout.isatty.return_value = True
+
+    with patch("app.cli.commands.general.sys", fake_sys):
+        result = runner.invoke(investigate_command, ["--input", "/tmp/alert.json"])
+
+    assert result.exit_code == 0
+    assert result.exception is None
