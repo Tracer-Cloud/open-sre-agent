@@ -1023,6 +1023,7 @@ def run_opensre_cli_command(
         command_str = " ".join(tokens)
         print_interactive_wizard_handoff(console, command_str)
         session.record("cli_command", f"opensre {command_str}", ok=False)
+        # True = wizard exists and was handed off; the ``_OPENSRE_BLOCKED_SUBCOMMANDS`` branch above returns False for "shouldn't run at all".
         return True
 
     command_classification = _classify_opensre_command(tokens)

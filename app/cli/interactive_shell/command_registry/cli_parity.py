@@ -78,6 +78,7 @@ def _cmd_onboard(session: ReplSession, console: Console, args: list[str]) -> boo
     # refused invocation so the AI assistant's session history captures
     # user intent regardless of which entry point they used.
     session.record("cli_command", f"opensre {command_str}", ok=False)
+    # True = wizard exists and was handed off; ``_OPENSRE_BLOCKED_SUBCOMMANDS`` returns False for "shouldn't run at all".
     return True
 
 
