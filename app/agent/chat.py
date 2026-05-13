@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import Any, cast
 
 from app.constants.prompts import GENERAL_SYSTEM_PROMPT, ROUTER_PROMPT, SYSTEM_PROMPT
 from app.guardrails.engine import GuardrailBlockedError
@@ -20,6 +20,8 @@ from app.types.config import NodeConfig
 from app.utils.cfg_helpers import CfgHelpers
 
 logger = logging.getLogger(__name__)
+
+_MAX_CHAT_TOOL_ROUNDS = 6
 
 
 class UnsupportedChatProviderError(ValueError):
@@ -69,8 +71,32 @@ def _chat_with_tools(state: AgentState) -> dict[str, Any]:
         llm = _get_llm(with_tools=True)
     except UnsupportedChatProviderError as exc:
         return {"messages": [{"role": "assistant", "content": str(exc)}]}
-    turn = llm.invoke(msgs)
-    return {"messages": [_turn_to_message(turn)]}
+
+    new_messages: list[dict[str, Any]] = []
+    for _ in range(_MAX_CHAT_TOOL_ROUNDS):
+        turn = llm.invoke(msgs)
+        assistant_msg = _turn_to_message(turn)
+        new_messages.append(assistant_msg)
+        msgs.append(assistant_msg)
+
+        if not assistant_msg.get("tool_calls"):
+            break
+
+        tool_state = cast(AgentState, {"messages": msgs})
+        tool_messages = execute_tool_calls(tool_state).get("messages", [])
+        if not tool_messages:
+            break
+        new_messages.extend(tool_messages)
+        msgs.extend(tool_messages)
+    else:
+        new_messages.append(
+            {
+                "role": "assistant",
+                "content": "I hit the chat tool-call limit before producing a final answer.",
+            }
+        )
+
+    return {"messages": new_messages}
 
 
 def _chat_general(state: AgentState) -> dict[str, Any]:

@@ -118,11 +118,8 @@ def _build_resolved_integrations(
     fresh fixture-backed backends when use_mock_backends=True and no backend
     is provided.
 
-    EKS integrations live under the ``aws`` key (not ``eks``) because
-    ``detect_sources`` reads the raw integration dict from
-    ``resolved_integrations["aws"]`` and then emits a derived
-    ``sources["eks"]`` that the EKS tools consume.  The injected ``_backend``
-    propagates through that transform.
+    EKS integrations live under the ``aws`` key (not ``eks``). The injected
+    ``_backend`` is mirrored into the EKS tool context for synthetic runs.
     """
     if not use_mock_backends and eks_backend is None and datadog_backend is None:
         return None

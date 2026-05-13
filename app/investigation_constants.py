@@ -1,8 +1,7 @@
-"""Constants shared between pipeline routing and investigation nodes.
+"""Constants shared between pipeline routing and investigation stages.
 
-This module exists outside both ``app.pipeline`` and ``app.nodes`` to avoid
-the circular import that ``app.pipeline.__init__`` → ``graph`` → ``app.nodes``
-would otherwise create.
+This module exists outside both ``app.pipeline`` and ``app.agent`` to avoid
+partial-initialization cycles between orchestration and agent stages.
 """
 
 from __future__ import annotations

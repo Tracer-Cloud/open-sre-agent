@@ -235,8 +235,27 @@ InvestigationAgent = ConnectedInvestigationAgent
 def _get_available_tools(
     resolved_integrations: dict[str, Any],
 ) -> list[RegisteredTool]:
-    available_sources = resolved_integrations
+    available_sources = _availability_view(resolved_integrations)
     return [t for t in get_registered_tools("investigation") if t.is_available(available_sources)]
+
+
+def _availability_view(resolved_integrations: dict[str, Any]) -> dict[str, Any]:
+    """Adapt resolved integration configs to the legacy tool availability contract.
+
+    Several tools historically used ``connection_verified`` to mean "this
+    integration is configured and safe to offer." The current resolver already
+    filters out invalid configs, so mark configured integration dicts as
+    available for those tools without mutating persisted state.
+    """
+    view: dict[str, Any] = {}
+    for key, value in resolved_integrations.items():
+        if key.startswith("_") or not isinstance(value, dict) or not value:
+            view[key] = value
+            continue
+        item = dict(value)
+        item.setdefault("connection_verified", True)
+        view[key] = item
+    return view
 
 
 def _build_connected_tool_context(

@@ -39,9 +39,8 @@ def ec2_available_or_backend(sources: dict[str, dict]) -> bool:
 
     Mirrors ``eks_available_or_backend``: gates EC2/ELB tool wrappers whose
     ``extract_params`` can delegate to a mock ``aws_backend`` for synthetic tests.
-    The ``ec2`` source is populated by ``detect_sources`` when the alert carries
-    EC2/ELB topology hints (instance_id, target_group_arn, load_balancer_arn,
-    auto_scaling_group, or tier tags).
+    The ``ec2`` source is available when resolved integrations or synthetic
+    backends provide EC2/ELB topology context.
     """
     ec2 = sources.get("ec2", {})
     return bool(ec2.get("connection_verified") or ec2.get("_backend"))
@@ -50,9 +49,8 @@ def ec2_available_or_backend(sources: dict[str, dict]) -> bool:
 def cloudwatch_is_available(sources: dict[str, dict]) -> bool:
     """Available when a CloudWatch source is present in the alert context.
 
-    CloudWatch uses IAM-based auth so detect_sources never writes
-    connection_verified — availability is gated on the source key existing
-    (populated when cloudwatch_log_group is present in alert annotations).
-    Tool params like ``job_queue`` are alert-specific and provided by the LLM.
+    CloudWatch uses IAM-based auth, so availability is gated on the source key
+    existing. Tool params like ``job_queue`` are alert-specific and provided by
+    the LLM.
     """
     return bool(sources.get("cloudwatch"))

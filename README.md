@@ -175,6 +175,9 @@ When an alert fires, OpenSRE automatically:
 4. **Suggests** next steps and, optionally, executes remediation actions
 5. **Posts** a summary directly to Slack or PagerDuty — no context switching needed
 
+For the current code-level agent architecture after removing the old graph and chain
+framework layers, see [AGENT_ARCHITECTURE.md](AGENT_ARCHITECTURE.md).
+
 ---
 
 ## Benchmark

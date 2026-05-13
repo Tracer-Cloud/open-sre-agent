@@ -41,11 +41,11 @@ def _query_grafana_traces_extract_params(sources: dict[str, dict]) -> dict[str, 
 
 
 def _query_grafana_traces_available(sources: dict[str, dict]) -> bool:
-    # `no_traces` is set in detect_sources for RDS/database resource-threshold
-    # alerts (storage, CPU, connections, IOPS) where Tempo contains no useful
-    # data. Removing the action from the planner's choice set is more reliable
-    # than the soft prompt prohibition — the LLM was observed picking traces
-    # anyway and burning the trajectory_budget gate (see scenario
+    # `no_traces` is set for RDS/database resource-threshold alerts (storage,
+    # CPU, connections, IOPS) where Tempo contains no useful data. Removing the
+    # action from the planner's choice set is more reliable than the soft prompt
+    # prohibition — the LLM was observed picking traces anyway and burning the
+    # trajectory_budget gate (see scenario
     # 008-storage-full-missing-metric).
     if _grafana_source(sources).get("no_traces"):
         return False
