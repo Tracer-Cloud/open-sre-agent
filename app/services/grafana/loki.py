@@ -5,6 +5,8 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any
 
+from app.services.grafana._telemetry import report_grafana_failure
+
 if TYPE_CHECKING:
     from app.services.grafana.base import GrafanaClientBase
 
@@ -82,6 +84,13 @@ class LokiMixin:
             if hasattr(e, "response") and e.response is not None:
                 response_text = e.response.text[:300]
                 error_msg = f"Loki query failed: {e.response.status_code}"
+            report_grafana_failure(
+                e,
+                component="loki",
+                method="query_loki",
+                datasource_uid=self.loki_datasource_uid,
+                extras={"query": query},
+            )
 
             return {
                 "success": False,

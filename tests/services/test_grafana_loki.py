@@ -180,9 +180,11 @@ class TestQueryLokiExceptions:
 
     def test_plain_exception_returns_str_error_and_empty_response(self) -> None:
         host = _FakeLokiHost()
-        host.make_request_mock.side_effect = RuntimeError("connection refused")
+        error = RuntimeError("connection refused")
+        host.make_request_mock.side_effect = error
 
-        result = host.query_loki(_QUERY)
+        with patch("app.services.grafana.loki.report_grafana_failure") as report:
+            result = host.query_loki(_QUERY)
 
         assert result == {
             "success": False,
@@ -190,6 +192,13 @@ class TestQueryLokiExceptions:
             "response": "",
             "logs": [],
         }
+        report.assert_called_once_with(
+            error,
+            component="loki",
+            method="query_loki",
+            datasource_uid="loki-uid",
+            extras={"query": _QUERY},
+        )
 
     def test_exception_with_response_includes_status_and_truncated_text(self) -> None:
         host = _FakeLokiHost()

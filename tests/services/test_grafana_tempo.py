@@ -42,14 +42,23 @@ class TestTempoMixin:
     def test_query_tempo_general_exception(self):
         """Test general exception handling during a query."""
         client = FakeGrafanaClient()
-        client._make_request = Mock(side_effect=Exception("Connection timeout"))
+        error = Exception("Connection timeout")
+        client._make_request = Mock(side_effect=error)
 
-        result = client.query_tempo(service_name="auth-service")
+        with patch("app.services.grafana.tempo.report_grafana_failure") as report:
+            result = client.query_tempo(service_name="auth-service")
 
         assert result["success"] is False
         assert result["error"] == "Connection timeout"
         assert result["response"] == ""
         assert result["traces"] == []
+        report.assert_called_once_with(
+            error,
+            component="tempo",
+            method="query_tempo",
+            datasource_uid="tempo-uid-abc",
+            extras={"service_name": "auth-service"},
+        )
 
     def test_query_tempo_http_exception_with_response(self):
         """Test exception handling when the exception contains a response object."""
@@ -182,7 +191,15 @@ class TestTempoMixin:
         mock_response.status_code = 404
         mock_requests_get.return_value = mock_response
 
-        result = client._get_trace_details(trace_id="trace-123")
+        with patch("app.services.grafana.tempo.report_grafana_failure") as report:
+            result = client._get_trace_details(trace_id="trace-123")
 
         # Assert it safely falls back to empty spans
         assert result == {"spans": []}
+        assert report.call_args.kwargs == {
+            "component": "tempo",
+            "method": "_get_trace_details",
+            "datasource_uid": "tempo-uid-abc",
+            "severity": "warning",
+            "extras": {"trace_id": "trace-123", "status_code": 404},
+        }

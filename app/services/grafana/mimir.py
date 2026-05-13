@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from app.services.grafana._telemetry import report_grafana_failure
+
 if TYPE_CHECKING:
     from app.services.grafana.base import GrafanaClientBase
 
@@ -69,6 +71,13 @@ class MimirMixin:
             if hasattr(e, "response") and e.response is not None:
                 response_text = e.response.text[:300]
                 error_msg = f"Mimir query failed: {e.response.status_code}"
+            report_grafana_failure(
+                e,
+                component="mimir",
+                method="query_mimir",
+                datasource_uid=self.mimir_datasource_uid,
+                extras={"query": query},
+            )
 
             return {
                 "success": False,

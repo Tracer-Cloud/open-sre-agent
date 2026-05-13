@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Any
 
 import requests
 
+from app.services.grafana._telemetry import report_grafana_failure
+
 if TYPE_CHECKING:
     from app.services.grafana.base import GrafanaClientBase
 
@@ -79,6 +81,13 @@ class TempoMixin:
             if hasattr(e, "response") and e.response is not None:
                 response_text = e.response.text[:300]
                 error_msg = f"Tempo query failed: {e.response.status_code}"
+            report_grafana_failure(
+                e,
+                component="tempo",
+                method="query_tempo",
+                datasource_uid=self.tempo_datasource_uid,
+                extras={"service_name": service_name},
+            )
 
             return {
                 "success": False,
@@ -130,8 +139,22 @@ class TempoMixin:
                                         )
 
                 return {"spans": spans}
-        except Exception:
-            logger.debug("Failed to fetch Tempo trace spans", exc_info=True)
+            report_grafana_failure(
+                RuntimeError(f"Tempo trace detail returned HTTP {response.status_code}"),
+                component="tempo",
+                method="_get_trace_details",
+                datasource_uid=self.tempo_datasource_uid,
+                severity="warning" if response.status_code < 500 else "error",
+                extras={"trace_id": trace_id, "status_code": response.status_code},
+            )
+        except Exception as e:
+            report_grafana_failure(
+                e,
+                component="tempo",
+                method="_get_trace_details",
+                datasource_uid=self.tempo_datasource_uid,
+                extras={"trace_id": trace_id},
+            )
             return {"spans": []}
 
         return {"spans": []}

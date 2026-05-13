@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from app.services.grafana.mimir import MimirMixin
 
@@ -97,14 +97,23 @@ def test_query_mimir_exception_handling():
     """Test that network exceptions are caught and wrapped in a safe error envelope."""
     client = DummyMimirClient()
 
-    client._make_request.side_effect = Exception("Network timeout")
+    error = Exception("Network timeout")
+    client._make_request.side_effect = error
 
-    result = client.query_mimir("cpu_usage_total")
+    with patch("app.services.grafana.mimir.report_grafana_failure") as report:
+        result = client.query_mimir("cpu_usage_total")
 
     # Requirement: Exception cases / error envelope
     assert result["success"] is False
     assert "Network timeout" in result["error"]
     assert result["metrics"] == []
+    report.assert_called_once_with(
+        error,
+        component="mimir",
+        method="query_mimir",
+        datasource_uid="mimir_uid_456",
+        extras={"query": "cpu_usage_total"},
+    )
 
 
 def test_query_mimir_http_exception_handling():
