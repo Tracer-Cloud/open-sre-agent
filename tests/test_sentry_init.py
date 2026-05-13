@@ -667,6 +667,20 @@ def test_before_send_filters_nested_lists_of_dicts() -> None:
             "RuntimeError",
             "Cannot connect to Openrouter API. Check your network connection and that the endpoint URL is reachable.",
         ),
+        # Provider read timeout after retries (issue #1934).
+        (
+            "RuntimeError",
+            "Openai API request timed out. Check that the service is running and responsive at the configured endpoint.",
+        ),
+        (
+            "RuntimeError",
+            "Minimax API request timed out. Check that the service is running and responsive at the configured endpoint.",
+        ),
+        # Anthropic account-level usage limit enforcement via HTTP 400 (issues #1883, #1885).
+        (
+            "RuntimeError",
+            "Anthropic request rejected (HTTP 400): Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'You have reached your specified API usage limits. You will regain access on 2026-06-01 at 00:00 UTC.'}, 'request_id': 'req_011CaxxMA8NCSdDvaM2LaRm6'}",
+        ),
     ],
 )
 def test_before_send_drops_operator_actionable_llm_errors(

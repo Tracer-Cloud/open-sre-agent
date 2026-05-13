@@ -59,6 +59,10 @@ _OPERATOR_ACTIONABLE_LLM_ERROR_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\bLLM API request failed after multiple retries\b", re.I),
     # Provider endpoint unreachable (Ollama down, bad URL, SSL misconfiguration).
     re.compile(r"\bcannot connect to .+ api\b", re.I),
+    # Provider read timeout after retries — transient network/infra condition.
+    re.compile(r"\bapi request timed out\b", re.I),
+    # Anthropic / provider account-level usage-limit enforcement (HTTP 400).
+    re.compile(r"\byou have reached your specified api usage limits\b", re.I),
 )
 
 
@@ -367,7 +371,11 @@ def _init_sentry_once(
     """
     import sentry_sdk
 
-    from app.integrations.llm_cli.errors import CLIAuthenticationRequired, CLITimeoutError
+    from app.integrations.llm_cli.errors import (
+        CLIAuthenticationRequired,
+        CLITimeoutError,
+        CLITransientError,
+    )
 
     with _suppress_langgraph_allowed_objects_warning():
         sentry_sdk.init(
@@ -383,7 +391,7 @@ def _init_sentry_once(
             integrations=_build_sentry_integrations(),
             before_send=_before_send,
             before_breadcrumb=_before_breadcrumb,
-            ignore_errors=[CLIAuthenticationRequired, CLITimeoutError],
+            ignore_errors=[CLIAuthenticationRequired, CLITimeoutError, CLITransientError],
         )
 
 
