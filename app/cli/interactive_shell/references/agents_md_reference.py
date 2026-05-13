@@ -267,7 +267,7 @@ _gd.register_grounding_source(
         name="agents_md",
         stats_fn=get_agents_md_cache_stats,
         format_fn=lambda s: (
-            f"hits={s['hits']} misses={s['misses']} cached={'yes' if s['cached'] else 'no'}"
+            f"hits={s['hits']} misses={s['misses']} entries={s['currsize']}/{s['maxsize']}"
         ),
     )
 )
