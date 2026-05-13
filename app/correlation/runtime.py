@@ -28,19 +28,11 @@ def _operator_hint_score(
     operator_hints: tuple[str, ...],
 ) -> RuntimeOperatorHintScore:
     normalized_metric_name = (
-        metric_name.lower()
-        .replace("{", " ")
-        .replace("}", " ")
-        .replace(":", " ")
-        .replace(",", " ")
+        metric_name.lower().replace("{", " ").replace("}", " ").replace(":", " ").replace(",", " ")
     )
     tokens = tuple(token for token in normalized_metric_name.split() if len(token) > 2)
 
-    matched = any(
-        token in hint.lower()
-        for hint in operator_hints
-        for token in tokens
-    )
+    matched = any(token in hint.lower() for hint in operator_hints for token in tokens)
 
     return RuntimeOperatorHintScore(score=1.0 if matched else 0.0)
 
