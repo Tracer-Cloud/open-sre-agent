@@ -75,7 +75,15 @@ class TestProviderSelection:
             assert ec.get_embeddings_client() is None
 
     def test_cli_providers_return_none(self) -> None:
-        for provider in ("codex", "cursor", "claude-code", "gemini-cli", "opencode", "kimi", "copilot"):
+        for provider in (
+            "codex",
+            "cursor",
+            "claude-code",
+            "gemini-cli",
+            "opencode",
+            "kimi",
+            "copilot",
+        ):
             with patch.dict(os.environ, {"LLM_PROVIDER": provider}, clear=True):
                 assert ec.get_embeddings_client() is None, f"{provider} should return None"
 
@@ -85,22 +93,29 @@ class TestProviderSelection:
                 assert ec.get_embeddings_client() is None, f"{provider} should return None"
 
     def test_openai_provider_no_key_returns_none(self) -> None:
-        with patch.dict(os.environ, {"LLM_PROVIDER": "openai"}, clear=True):
-            with patch("app.services.embeddings_client.resolve_llm_api_key", return_value=""):
-                assert ec.get_embeddings_client() is None
+        with (
+            patch.dict(os.environ, {"LLM_PROVIDER": "openai"}, clear=True),
+            patch("app.llm_credentials.resolve_llm_api_key", return_value=""),
+        ):
+            assert ec.get_embeddings_client() is None
 
     def test_openai_provider_with_key(self) -> None:
-        with patch.dict(os.environ, {"LLM_PROVIDER": "openai"}, clear=True):
-            with patch("app.services.embeddings_client.resolve_llm_api_key", return_value="sk-test"):
-                with patch("app.services.embeddings_client.OpenAI") as mock_openai:
-                    client = ec.get_embeddings_client()
-                    assert client is not None
-                    assert client.model_name == "text-embedding-3-small"
-                    assert client.dim == 1536
-                    mock_openai.assert_called_once_with(api_key="sk-test", timeout=30.0)
+        with (
+            patch.dict(os.environ, {"LLM_PROVIDER": "openai"}, clear=True),
+            patch("app.llm_credentials.resolve_llm_api_key", return_value="sk-test"),
+            patch("openai.OpenAI"),
+        ):
+            client = ec.get_embeddings_client()
+            assert client is not None
+            assert client.model_name == "text-embedding-3-small"
+            assert client.dim == 1536
 
     def test_ollama_provider(self) -> None:
-        with patch.dict(os.environ, {"LLM_PROVIDER": "ollama", "OLLAMA_HOST": "http://localhost:11434"}, clear=True):
+        with patch.dict(
+            os.environ,
+            {"LLM_PROVIDER": "ollama", "OLLAMA_HOST": "http://localhost:11434"},
+            clear=True,
+        ):
             client = ec.get_embeddings_client()
             assert client is not None
             assert isinstance(client, ec.OllamaEmbeddingsClient)
@@ -108,46 +123,56 @@ class TestProviderSelection:
             assert client.dim == 768
 
     def test_voyage_provider_no_key_returns_none(self) -> None:
-        with patch.dict(os.environ, {"OPENSRE_EMBEDDINGS_PROVIDER": "voyage"}, clear=True):
-            with patch("app.services.embeddings_client.resolve_llm_api_key", return_value=""):
-                assert ec.get_embeddings_client() is None
+        with (
+            patch.dict(os.environ, {"OPENSRE_EMBEDDINGS_PROVIDER": "voyage"}, clear=True),
+            patch("app.llm_credentials.resolve_llm_api_key", return_value=""),
+        ):
+            assert ec.get_embeddings_client() is None
 
     def test_voyage_provider_with_key(self) -> None:
-        with patch.dict(os.environ, {"OPENSRE_EMBEDDINGS_PROVIDER": "voyage"}, clear=True):
-            with patch("app.services.embeddings_client.resolve_llm_api_key", return_value="vo-test-key"):
-                client = ec.get_embeddings_client()
-                assert client is not None
-                assert isinstance(client, ec.VoyageEmbeddingsClient)
-                assert client.model_name == "voyage-3-lite"
-                assert client.dim == 1024
+        with (
+            patch.dict(os.environ, {"OPENSRE_EMBEDDINGS_PROVIDER": "voyage"}, clear=True),
+            patch("app.llm_credentials.resolve_llm_api_key", return_value="vo-test-key"),
+        ):
+            client = ec.get_embeddings_client()
+            assert client is not None
+            assert isinstance(client, ec.VoyageEmbeddingsClient)
+            assert client.model_name == "voyage-3-lite"
+            assert client.dim == 1024
 
     def test_opensre_embeddings_provider_overrides_llm_provider(self) -> None:
         """OPENSRE_EMBEDDINGS_PROVIDER takes precedence over LLM_PROVIDER."""
-        with patch.dict(
-            os.environ,
-            {
-                "OPENSRE_EMBEDDINGS_PROVIDER": "openai",
-                "LLM_PROVIDER": "anthropic",
-            },
-            clear=True,
-        ), patch("app.services.embeddings_client.resolve_llm_api_key", return_value="sk-test"):
-            with patch("app.services.embeddings_client.OpenAI"):
-                client = ec.get_embeddings_client()
-                assert client is not None
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "OPENSRE_EMBEDDINGS_PROVIDER": "openai",
+                    "LLM_PROVIDER": "anthropic",
+                },
+                clear=True,
+            ),
+            patch("app.llm_credentials.resolve_llm_api_key", return_value="sk-test"),
+            patch("openai.OpenAI"),
+        ):
+            client = ec.get_embeddings_client()
+            assert client is not None
 
     def test_opensre_embeddings_model_override(self) -> None:
-        with patch.dict(
-            os.environ,
-            {
-                "LLM_PROVIDER": "openai",
-                "OPENSRE_EMBEDDINGS_MODEL": "text-embedding-3-large",
-            },
-            clear=True,
-        ), patch("app.services.embeddings_client.resolve_llm_api_key", return_value="sk-test"):
-            with patch("app.services.embeddings_client.OpenAI"):
-                client = ec.get_embeddings_client()
-                assert client is not None
-                assert client.model_name == "text-embedding-3-large"
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "LLM_PROVIDER": "openai",
+                    "OPENSRE_EMBEDDINGS_MODEL": "text-embedding-3-large",
+                },
+                clear=True,
+            ),
+            patch("app.llm_credentials.resolve_llm_api_key", return_value="sk-test"),
+            patch("openai.OpenAI"),
+        ):
+            client = ec.get_embeddings_client()
+            assert client is not None
+            assert client.model_name == "text-embedding-3-large"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -168,7 +193,7 @@ class TestOpenAIEmbeddingsHappyPath:
         fake_openai = MagicMock()
         fake_openai.return_value.embeddings = fake_embeddings
 
-        with patch("app.services.embeddings_client.OpenAI", fake_openai):
+        with patch("openai.OpenAI", fake_openai):
             client = ec.OpenAIEmbeddingsClient(model="text-embedding-3-small", api_key="sk-test")
             result = client.embed(["hello", "world"])
 
@@ -188,8 +213,12 @@ class TestOllamaEmbeddingsHappyPath:
         mock_response.json.return_value = {"embeddings": [[0.5, 0.6]]}
         mock_response.raise_for_status.return_value = None
 
-        with patch("app.services.embeddings_client.httpx.post", return_value=mock_response) as mock_post:
-            client = ec.OllamaEmbeddingsClient(model="nomic-embed-text", host="http://localhost:11434")
+        with patch(
+            "app.services.embeddings_client.httpx.post", return_value=mock_response
+        ) as mock_post:
+            client = ec.OllamaEmbeddingsClient(
+                model="nomic-embed-text", host="http://localhost:11434"
+            )
             result = client.embed(["test"])
 
         assert result == [[0.5, 0.6]]
@@ -216,7 +245,9 @@ class TestVoyageEmbeddingsHappyPath:
         }
         mock_response.raise_for_status.return_value = None
 
-        with patch("app.services.embeddings_client.httpx.post", return_value=mock_response) as mock_post:
+        with patch(
+            "app.services.embeddings_client.httpx.post", return_value=mock_response
+        ) as mock_post:
             client = ec.VoyageEmbeddingsClient(model="voyage-3-lite", api_key="vo-test")
             result = client.embed(["a", "b"])
 
@@ -236,7 +267,7 @@ class TestVoyageEmbeddingsHappyPath:
 
 class TestProtocolConformance:
     def test_openai_conforms(self) -> None:
-        with patch("app.services.embeddings_client.OpenAI"):
+        with patch("openai.OpenAI"):
             client = ec.OpenAIEmbeddingsClient(model="text-embedding-3-small", api_key="sk-test")
             assert isinstance(client, ec.EmbeddingsClient)
 

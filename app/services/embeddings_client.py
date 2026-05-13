@@ -39,22 +39,24 @@ _LLM_PROVIDER_TO_EMBEDDINGS_PROVIDER: dict[str, str] = {
 }
 
 # Providers that don't support embeddings — return None from the factory.
-_NON_EMBEDDING_PROVIDERS: frozenset[str] = frozenset({
-    "anthropic",
-    "openrouter",
-    "requesty",
-    "gemini",
-    "nvidia",
-    "minimax",
-    "bedrock",
-    "codex",
-    "cursor",
-    "claude-code",
-    "gemini-cli",
-    "opencode",
-    "kimi",
-    "copilot",
-})
+_NON_EMBEDDING_PROVIDERS: frozenset[str] = frozenset(
+    {
+        "anthropic",
+        "openrouter",
+        "requesty",
+        "gemini",
+        "nvidia",
+        "minimax",
+        "bedrock",
+        "codex",
+        "cursor",
+        "claude-code",
+        "gemini-cli",
+        "opencode",
+        "kimi",
+        "copilot",
+    }
+)
 
 _EMBEDDINGS_TIMEOUT_SEC = 30.0
 
@@ -166,9 +168,7 @@ class NoOpEmbeddingsClient:
         for text in texts:
             digest = hashlib.sha256(text.encode("utf-8")).digest()
             # Expand the 32-byte digest to ``dim`` floats in [-1, 1].
-            floats_from_bytes = [
-                (digest[i % 32] / 127.5) - 1.0 for i in range(self.dim)
-            ]
+            floats_from_bytes = [(digest[i % 32] / 127.5) - 1.0 for i in range(self.dim)]
             result.append(floats_from_bytes)
         return result
 
@@ -196,8 +196,10 @@ def get_embeddings_client() -> EmbeddingsClient | None:
     credentials are missing, so callers can skip RAG features gracefully.
     """
     raw_provider = (
-        os.getenv("OPENSRE_EMBEDDINGS_PROVIDER", "") or os.getenv("LLM_PROVIDER", "") or ""
-    ).strip().lower()
+        (os.getenv("OPENSRE_EMBEDDINGS_PROVIDER", "") or os.getenv("LLM_PROVIDER", "") or "")
+        .strip()
+        .lower()
+    )
 
     if not raw_provider or raw_provider in _NON_EMBEDDING_PROVIDERS:
         return None
