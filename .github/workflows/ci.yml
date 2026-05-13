@@ -196,13 +196,13 @@ jobs:
       matrix:
         include:
           - name: cloudwatch-demo
-            command: python3 -m tests.e2e.cloudwatch_demo.test_aws
+            command: python -m tests.e2e.cloudwatch_demo.test_aws
           - name: upstream-lambda
-            command: python3 -m tests.e2e.upstream_lambda.test_agent_e2e
+            command: python -m tests.e2e.upstream_lambda.test_agent_e2e
           - name: prefect-ecs-fargate
-            command: python3 -m tests.e2e.upstream_prefect_ecs_fargate.test_agent_e2e
+            command: python -m tests.e2e.upstream_prefect_ecs_fargate.test_agent_e2e
           - name: flink-ecs
-            command: python3 -m tests.e2e.upstream_apache_flink_ecs.test_agent_e2e
+            command: python -m tests.e2e.upstream_apache_flink_ecs.test_agent_e2e
 
     name: test-thorough (${{ matrix.name }})
 
@@ -225,6 +225,9 @@ jobs:
       GCLOUD_HOSTED_LOGS_ID: ${{ secrets.GCLOUD_HOSTED_LOGS_ID }}
       GCLOUD_HOSTED_LOGS_URL: ${{ secrets.GCLOUD_HOSTED_LOGS_URL }}
       GCLOUD_RW_API_KEY: ${{ secrets.GCLOUD_RW_API_KEY }}
+      GCLOUD_OTLP_ENDPOINT: ${{ secrets.GCLOUD_OTLP_ENDPOINT }}
+      GCLOUD_OTLP_AUTH_HEADER: ${{ secrets.GCLOUD_OTLP_AUTH_HEADER }}
+      PYTHONUTF8: "1"
       CLOUDWATCH_VERIFY_LOGS: ${{ matrix.name == 'cloudwatch-demo' && '0' || '1' }}
 
     steps:

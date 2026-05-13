@@ -26,6 +26,8 @@ def test_extract_params_maps_fields() -> None:
     params = tool.extract_params(sources)
     assert params["api_url"] == "http://localhost:4200/api"
     assert params["states"] == ["FAILED", "CRASHED"]
+    assert params["state_names"] == []
+    assert params["task_run_flow_run_id"] == ""
 
 
 def test_run_returns_unavailable_when_no_api_url() -> None:
@@ -93,3 +95,31 @@ def test_run_api_error() -> None:
     with patch("app.tools.PrefectFlowRunsTool.make_prefect_client", return_value=mock_client):
         result = tool.run(api_url="http://localhost:4200/api")
     assert result["available"] is False
+
+
+def test_run_includes_task_runs_when_flow_run_id_set() -> None:
+    tool = PrefectFlowRunsTool()
+    mock_client = MagicMock()
+    mock_client.__enter__ = MagicMock(return_value=mock_client)
+    mock_client.__exit__ = MagicMock(return_value=False)
+    mock_client.get_flow_runs.return_value = {"success": True, "flow_runs": []}
+    mock_client.get_task_runs.return_value = {
+        "success": True,
+        "task_runs": [{"id": "t1", "state_type": "FAILED"}],
+    }
+    with patch("app.tools.PrefectFlowRunsTool.make_prefect_client", return_value=mock_client):
+        result = tool.run(
+            api_url="http://localhost:4200/api",
+            task_run_flow_run_id="flow-1",
+            state_names=["Failed"],
+            task_states=["COMPLETED"],
+            task_state_names=["Completed"],
+        )
+    assert result["available"] is True
+    assert len(result["task_runs"]) == 1
+    mock_client.get_task_runs.assert_called_once_with(
+        flow_run_id="flow-1",
+        limit=20,
+        states=["COMPLETED"],
+        state_names=["Completed"],
+    )

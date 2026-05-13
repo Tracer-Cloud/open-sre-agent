@@ -22,6 +22,19 @@ _DEFAULT_TIMEOUT = 30
 _PREFECT_CLOUD_BASE = "https://api.prefect.cloud/api"
 
 
+def _prefect_run_state_subfilter(
+    state_types: list[str] | None,
+    state_names: list[str] | None,
+) -> dict[str, Any] | None:
+    """Build Prefect ``state`` filter object (``type`` / ``name`` sub-filters)."""
+    inner: dict[str, Any] = {}
+    if state_types:
+        inner["type"] = {"any_": [s.upper() for s in state_types]}
+    if state_names:
+        inner["name"] = {"any_": list(state_names)}
+    return inner or None
+
+
 class PrefectConfig(StrictConfigModel):
     """Normalized Prefect credentials.
 
@@ -105,19 +118,23 @@ class PrefectClient:
         self,
         limit: int = 20,
         states: list[str] | None = None,
+        state_names: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Fetch recent flow runs, optionally filtered by state.
+        """Fetch recent flow runs, optionally filtered by state type and/or state name.
 
         Args:
             limit: Maximum number of flow runs to return.
-            states: List of Prefect state names to filter on (e.g. ["FAILED", "CRASHED"]).
+            states: State **types** to include (e.g. ``FAILED``, ``CRASHED``), uppercased in the
+                request. Combined with ``state_names`` using logical AND when both are set.
+            state_names: State **names** to include (e.g. ``Failed``), passed through as-is.
         """
         body: dict[str, Any] = {
             "limit": min(limit, 200),
             "sort": "START_TIME_DESC",
         }
-        if states:
-            body["flow_runs"] = {"state": {"type": {"any_": [s.upper() for s in states]}}}
+        state_sub = _prefect_run_state_subfilter(states, state_names)
+        if state_sub is not None:
+            body["flow_runs"] = {"state": state_sub}
 
         try:
             resp = self._get_client().post("/flow_runs/filter", json=body)
@@ -150,6 +167,71 @@ class PrefectClient:
             }
         except Exception as e:
             logger.warning("[prefect] get_flow_runs error type=%s detail=%s", type(e).__name__, e)
+            return {"success": False, "error": str(e)}
+
+    def get_task_runs(
+        self,
+        *,
+        flow_run_id: str | None = None,
+        limit: int = 20,
+        states: list[str] | None = None,
+        state_names: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Fetch task runs, optionally scoped to a flow run, filtered by state type and/or name.
+
+        At least one of ``flow_run_id``, ``states``, or ``state_names`` must be provided.
+        """
+        if not flow_run_id and not states and not state_names:
+            return {
+                "success": False,
+                "error": (
+                    "Provide flow_run_id and/or states and/or state_names to filter task runs."
+                ),
+                "task_runs": [],
+            }
+
+        body: dict[str, Any] = {
+            "limit": min(limit, 200),
+            "sort": "EXPECTED_START_TIME_DESC",
+        }
+        task_runs_filter: dict[str, Any] = {}
+        if flow_run_id:
+            task_runs_filter["flow_run_id"] = {"any_": [flow_run_id]}
+        state_sub = _prefect_run_state_subfilter(states, state_names)
+        if state_sub is not None:
+            task_runs_filter["state"] = state_sub
+        body["task_runs"] = task_runs_filter
+
+        try:
+            resp = self._get_client().post("/task_runs/filter", json=body)
+            resp.raise_for_status()
+            raw: list[dict[str, Any]] = resp.json()
+            runs = [
+                {
+                    "id": r.get("id", ""),
+                    "name": r.get("name", ""),
+                    "flow_run_id": r.get("flow_run_id", ""),
+                    "state_type": r.get("state_type", ""),
+                    "state_name": r.get("state_name", ""),
+                    "start_time": r.get("start_time", ""),
+                    "end_time": r.get("end_time", ""),
+                    "duration": r.get("total_run_time", None),
+                    "tags": r.get("tags", []),
+                }
+                for r in raw
+            ]
+            return {"success": True, "task_runs": runs, "total": len(runs)}
+        except httpx.HTTPStatusError as e:
+            logger.warning(
+                "[prefect] get_task_runs HTTP failure status=%s",
+                e.response.status_code,
+            )
+            return {
+                "success": False,
+                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+            }
+        except Exception as e:
+            logger.warning("[prefect] get_task_runs error type=%s detail=%s", type(e).__name__, e)
             return {"success": False, "error": str(e)}
 
     def get_flow_run_logs(self, flow_run_id: str, limit: int = 100) -> dict[str, Any]:

@@ -57,7 +57,45 @@ class PrefectFlowRunsTool(BaseTool):
                 "type": "array",
                 "items": {"type": "string"},
                 "default": ["FAILED", "CRASHED"],
-                "description": "Flow run states to filter on. Defaults to FAILED and CRASHED.",
+                "description": (
+                    "Flow run state types to filter on (e.g. FAILED, COMPLETED). "
+                    "Combined with state_names when both are set."
+                ),
+            },
+            "state_names": {
+                "type": "array",
+                "items": {"type": "string"},
+                "default": [],
+                "description": (
+                    "Optional flow run state names (e.g. Failed, Completed). "
+                    "Filters alongside states when both are provided."
+                ),
+            },
+            "task_run_flow_run_id": {
+                "type": "string",
+                "default": "",
+                "description": (
+                    "Optional flow run UUID to list task runs for, using task_states / "
+                    "task_state_names (or the flow-level states / state_names when those are unset)."
+                ),
+            },
+            "task_states": {
+                "type": "array",
+                "items": {"type": "string"},
+                "default": [],
+                "description": (
+                    "Task run state types for the task_run_flow_run_id query. "
+                    "Empty default means reuse states."
+                ),
+            },
+            "task_state_names": {
+                "type": "array",
+                "items": {"type": "string"},
+                "default": [],
+                "description": (
+                    "Task run state names for the task_run_flow_run_id query. "
+                    "Empty default means reuse state_names."
+                ),
             },
             "limit": {
                 "type": "integer",
@@ -83,6 +121,7 @@ class PrefectFlowRunsTool(BaseTool):
     outputs = {
         "flow_runs": "List of matching flow runs with state and timing metadata",
         "failed_runs": "Subset of runs in FAILED or CRASHED state",
+        "task_runs": "Task runs when task_run_flow_run_id is set",
         "logs": "Log lines for the requested flow run (if fetch_logs_for_run_id is set)",
         "error_log_lines": "Log lines containing error keywords",
     }
@@ -98,6 +137,10 @@ class PrefectFlowRunsTool(BaseTool):
             "account_id": prefect.get("account_id", ""),
             "workspace_id": prefect.get("workspace_id", ""),
             "states": ["FAILED", "CRASHED"],
+            "state_names": [],
+            "task_run_flow_run_id": "",
+            "task_states": [],
+            "task_state_names": [],
             "limit": 20,
             "fetch_logs_for_run_id": "",
             "log_limit": 100,
@@ -110,6 +153,10 @@ class PrefectFlowRunsTool(BaseTool):
         account_id: str = "",
         workspace_id: str = "",
         states: list[str] | None = None,
+        state_names: list[str] | None = None,
+        task_run_flow_run_id: str = "",
+        task_states: list[str] | None = None,
+        task_state_names: list[str] | None = None,
         limit: int = 20,
         fetch_logs_for_run_id: str = "",
         log_limit: int = 100,
@@ -124,6 +171,7 @@ class PrefectFlowRunsTool(BaseTool):
                 "failed_runs": [],
                 "logs": [],
                 "error_log_lines": [],
+                "task_runs": [],
             }
 
         client = make_prefect_client(
@@ -141,12 +189,18 @@ class PrefectFlowRunsTool(BaseTool):
                 "failed_runs": [],
                 "logs": [],
                 "error_log_lines": [],
+                "task_runs": [],
             }
 
         effective_states = states if states is not None else ["FAILED", "CRASHED"]
+        flow_state_names = list(state_names) if state_names else None
 
         with client:
-            runs_result = client.get_flow_runs(limit=limit, states=effective_states)
+            runs_result = client.get_flow_runs(
+                limit=limit,
+                states=effective_states,
+                state_names=flow_state_names,
+            )
             if not runs_result.get("success"):
                 return {
                     "source": "prefect",
@@ -156,6 +210,7 @@ class PrefectFlowRunsTool(BaseTool):
                     "failed_runs": [],
                     "logs": [],
                     "error_log_lines": [],
+                    "task_runs": [],
                 }
 
             flow_runs: list[dict[str, Any]] = runs_result.get("flow_runs", [])
@@ -165,6 +220,30 @@ class PrefectFlowRunsTool(BaseTool):
 
             logs: list[dict[str, Any]] = []
             error_log_lines: list[dict[str, Any]] = []
+            task_runs: list[dict[str, Any]] = []
+            task_runs_error: str | None = None
+
+            trimmed_task_flow_id = (task_run_flow_run_id or "").strip()
+            if trimmed_task_flow_id:
+                if task_states is not None and len(task_states) > 0:
+                    resolved_task_states = list(task_states)
+                else:
+                    resolved_task_states = effective_states
+                resolved_task_names: list[str] | None
+                if task_state_names is not None and len(task_state_names) > 0:
+                    resolved_task_names = list(task_state_names)
+                else:
+                    resolved_task_names = flow_state_names
+                tasks_result = client.get_task_runs(
+                    flow_run_id=trimmed_task_flow_id,
+                    limit=limit,
+                    states=resolved_task_states or None,
+                    state_names=resolved_task_names,
+                )
+                if tasks_result.get("success"):
+                    task_runs = tasks_result.get("task_runs", [])
+                else:
+                    task_runs_error = tasks_result.get("error", "Unknown error fetching task runs.")
 
             logs_error: str | None = None
             if fetch_logs_for_run_id:
@@ -188,12 +267,16 @@ class PrefectFlowRunsTool(BaseTool):
             "total": len(flow_runs),
             "failed_runs": failed_runs,
             "total_failed": len(failed_runs),
+            "task_runs": task_runs,
+            "total_task_runs": len(task_runs),
             "logs": logs,
             "error_log_lines": error_log_lines,
             "fetched_logs_for_run_id": fetch_logs_for_run_id or None,
         }
         if logs_error is not None:
             result["logs_error"] = logs_error
+        if task_runs_error is not None:
+            result["task_runs_error"] = task_runs_error
         return result
 
 
