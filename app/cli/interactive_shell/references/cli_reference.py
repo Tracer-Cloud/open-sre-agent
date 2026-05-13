@@ -9,6 +9,8 @@ from typing import Any
 
 import click
 
+from app.cli.interactive_shell.references import grounding_diagnostics as _gd
+
 _logger = logging.getLogger(__name__)
 
 _MAX_REFERENCE_CHARS = 28_000
@@ -222,6 +224,15 @@ def build_cli_reference_text() -> str:
             len(text),
         )
     return text
+_gd.register_grounding_source(
+    _gd.GroundingSource(
+        name="cli",
+        stats_fn=get_cli_reference_cache_stats,
+        format_fn=lambda s: (
+            f"hits={s['hits']} misses={s['misses']} cached={'yes' if s['cached'] else 'no'}"
+        ),
+    )
+)
 
 
 __all__ = [

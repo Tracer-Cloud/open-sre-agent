@@ -73,12 +73,7 @@ def _cmd_trust(session: ReplSession, console: Console, args: list[str]) -> bool:
 
 
 def _cmd_status(session: ReplSession, console: Console, _args: list[str]) -> bool:
-    from app.cli.interactive_shell.references.cli_reference import (
-        get_cli_reference_cache_stats,
-    )
-    from app.cli.interactive_shell.references.docs_reference import (
-        get_docs_cache_stats,
-    )
+    from app.cli.interactive_shell.references.grounding_diagnostics import iter_grounding_sources
 
     table = repl_table(title="Session status", title_style=BOLD_BRAND, show_header=False)
     table.add_column("key", style="bold")
@@ -88,18 +83,9 @@ def _cmd_status(session: ReplSession, console: Console, _args: list[str]) -> boo
     table.add_row("trust mode", "on" if session.trust_mode else "off")
     table.add_row("reasoning effort", display_reasoning_effort(session.reasoning_effort))
     table.add_row("provider", os.getenv("LLM_PROVIDER", "anthropic"))
-    cli_stats = get_cli_reference_cache_stats()
-    doc_stats = get_docs_cache_stats()
-    table.add_row(
-        "grounding cli cache",
-        f"hits={cli_stats['hits']} misses={cli_stats['misses']} "
-        f"cached={'yes' if cli_stats['cached'] else 'no'}",
-    )
-    table.add_row(
-        "grounding docs cache",
-        f"hits={doc_stats['hits']} misses={doc_stats['misses']} "
-        f"entries={doc_stats['currsize']}/{doc_stats['maxsize']}",
-    )
+    for source in iter_grounding_sources():
+        stats = source.stats_fn()
+        table.add_row(f"grounding {source.name} cache", source.format_fn(stats))
     acc = session.accumulated_context
     if acc:
         table.add_row("accumulated context", ", ".join(sorted(acc.keys())))
