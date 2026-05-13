@@ -3,7 +3,7 @@
 
 Creates:
 - 1 IAM role + instance profile for EC2
-- 1 Security group allowing port 2024 (LangGraph API)
+- 1 Security group allowing port 8000 (HTTP health API)
 - 1 EC2 instance running the OpenSRE Docker container
 """
 
@@ -56,9 +56,9 @@ def deploy() -> dict[str, str]:
     sg = create_security_group(
         name=f"{STACK_NAME}-sg",
         vpc_id=vpc["vpc_id"],
-        description="Allow LangGraph API port for OpenSRE deployment tests",
+        description="Allow OpenSRE HTTP health port for deployment tests",
         ingress_rules=[
-            {"port": 2024, "cidr": "0.0.0.0/0", "description": "LangGraph API"},
+            {"port": 8000, "cidr": "0.0.0.0/0", "description": "OpenSRE HTTP"},
             {"port": 22, "cidr": "0.0.0.0/0", "description": "SSH debug access"},
         ],
         stack_name=STACK_NAME,
@@ -88,8 +88,6 @@ def deploy() -> dict[str, str]:
     for key in (
         "OPENAI_API_KEY",
         "ANTHROPIC_API_KEY",
-        "LANGSMITH_API_KEY",
-        "LANGCHAIN_API_KEY",
         "LLM_PROVIDER",
         "ANTHROPIC_MODEL",
     ):

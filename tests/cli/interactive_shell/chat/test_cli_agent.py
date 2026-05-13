@@ -1,4 +1,4 @@
-"""Tests for the LangGraph-free interactive-shell assistant.
+"""Tests for the interactive-shell CLI assistant.
 
 Covers:
 
@@ -144,41 +144,41 @@ class TestSystemPromptAgentsMdGrounding:
         assert "--- Repo map (AGENTS.md) ---" not in prompt
 
 
-class TestSystemPromptGraphPipelineGrounding:
-    """The conversational shell knows the actual LangGraph pipeline shape."""
+class TestSystemPromptInvestigationFlowGrounding:
+    """The conversational shell includes the investigation-flow reference block."""
 
-    def test_graph_pipeline_section_present_when_reference_provided(self) -> None:
+    def test_investigation_flow_section_present_when_reference_provided(self) -> None:
         prompt = _build_system_prompt(
             reference="(ref)",
             history="(hist)",
-            graph_pipeline="inject_auth -> extract_alert -> publish",
+            investigation_flow="resolve → extract → investigate → deliver",
         )
 
-        assert "--- Graph pipeline reference ---" in prompt
-        assert "inject_auth -> extract_alert -> publish" in prompt
-        assert "do not claim the graph definition is unavailable" in prompt
+        assert "--- Investigation flow reference ---" in prompt
+        assert "resolve → extract → investigate → deliver" in prompt
+        assert "do not claim the pipeline definition is unavailable" in prompt
 
-    def test_graph_pipeline_section_omitted_when_reference_empty(self) -> None:
-        prompt = _build_system_prompt(reference="(ref)", history="(hist)", graph_pipeline="")
+    def test_investigation_flow_section_omitted_when_reference_empty(self) -> None:
+        prompt = _build_system_prompt(reference="(ref)", history="(hist)", investigation_flow="")
 
-        assert "--- Graph pipeline reference ---" not in prompt
+        assert "--- Investigation flow reference ---" not in prompt
 
-    def test_answer_cli_agent_injects_graph_pipeline_reference(self, monkeypatch: Any) -> None:
+    def test_answer_cli_agent_injects_investigation_flow_reference(self, monkeypatch: Any) -> None:
         client = _patch_llm(monkeypatch, "Yes, I can describe the pipeline.")
         monkeypatch.setattr(cli_agent, "build_cli_reference_text", lambda: "(ref)")
         monkeypatch.setattr(cli_agent, "build_agents_md_reference_text", lambda: "")
         monkeypatch.setattr(
             cli_agent,
-            "build_graph_pipeline_reference_text",
-            lambda: "diagnose -> adapt_window -> plan_actions",
+            "build_investigation_flow_reference_text",
+            lambda: "resolve → extract → investigate → deliver",
         )
 
         console, _ = _capture()
-        answer_cli_agent("Can you see your own graph pipeline?", ReplSession(), console)
+        answer_cli_agent("Can you see how investigations are structured?", ReplSession(), console)
 
         assert client.last_prompt is not None
-        assert "--- Graph pipeline reference ---" in client.last_prompt
-        assert "diagnose -> adapt_window -> plan_actions" in client.last_prompt
+        assert "--- Investigation flow reference ---" in client.last_prompt
+        assert "resolve → extract → investigate → deliver" in client.last_prompt
 
 
 class TestActionPlanParsing:

@@ -16,9 +16,9 @@ from datetime import UTC, datetime
 
 import boto3
 import requests
-from langsmith import traceable
 
 from app.cli.investigation import run_investigation_cli
+from app.utils.tracing import traceable
 from tests.shared.stack_config import get_flink_config
 from tests.utils.alert_factory import create_alert
 
@@ -162,12 +162,7 @@ def test_agent_investigation(failure_data: dict):
         },
     )
     def run_investigation():
-        return run_investigation_cli(
-            alert_name=alert.get("labels", {}).get("alertname", "FlinkTaskFailure"),
-            pipeline_name="tracer_flink_batch_pipeline",
-            severity="critical",
-            raw_alert=alert,
-        )
+        return run_investigation_cli(raw_alert=alert)
 
     result = run_investigation()
 

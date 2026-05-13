@@ -4,10 +4,10 @@ from datetime import UTC, datetime
 
 try:
     from tests.utils.alert_factory import create_alert
-    from tests.utils.langgraph_client import fire_alert_to_remote_langgraph_client
+    from tests.utils.remote_run_client import fire_alert_to_remote_run_stream
 except ImportError:
     create_alert = None
-    fire_alert_to_remote_langgraph_client = None
+    fire_alert_to_remote_run_stream = None
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ def fire_pipeline_alert(
         )
     )
 
-    if not create_alert or not fire_alert_to_remote_langgraph_client:
+    if not create_alert or not fire_alert_to_remote_run_stream:
         logger.warning("Alert utilities not available (Lambda environment)")
         return
 
@@ -52,12 +52,12 @@ def fire_pipeline_alert(
             },
         )
 
-        fire_alert_to_remote_langgraph_client(
+        fire_alert_to_remote_run_stream(
             alert_name=f"Pipeline failure: {pipeline_name}",
             pipeline_name=pipeline_name,
             severity="critical",
             raw_alert=alert_payload,
         )
-        logger.info("Alert sent to LangGraph endpoint successfully")
+        logger.info("Alert sent to remote investigation stream successfully")
     except Exception as fire_error:
-        logger.warning(f"Failed to fire alert to LangGraph: {fire_error}")
+        logger.warning(f"Failed to fire alert to remote investigation stream: {fire_error}")

@@ -1,7 +1,7 @@
 """
-Test alert factory with remote LangSmith platform.
+Test alert factory with optional remote submission.
 
-Verifies alert creation and submission to deployed LangGraph API.
+Verifies alert creation and optional remote submission.
 """
 
 import os
@@ -91,11 +91,11 @@ def test_create_alert_backwards_compatibility():
 
 
 def test_fire_alert_to_remote_platform():
-    """Test firing alert to remote LangSmith platform."""
-    endpoint = os.getenv("LANGGRAPH_ENDPOINT")
+    """Test firing alert to a configured remote investigation stream URL."""
+    endpoint = os.getenv("OPENSRE_REMOTE_RUN_URL")
 
     if not endpoint or "localhost" in endpoint:
-        pytest.skip("Remote LANGGRAPH_ENDPOINT not configured")
+        pytest.skip("Remote OPENSRE_REMOTE_RUN_URL not configured")
 
     timestamp = datetime.now(UTC).isoformat()
 

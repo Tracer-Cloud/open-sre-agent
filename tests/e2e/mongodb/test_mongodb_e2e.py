@@ -14,10 +14,10 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-from app.integrations.verify import verify_integrations
 from app.nodes.plan_actions.detect_sources import detect_sources
 from app.nodes.resolve_integrations.node import _classify_integrations
+
+from app.integrations.verify import verify_integrations
 
 
 class TestMongoDBIntegrationResolution:

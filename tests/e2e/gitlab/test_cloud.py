@@ -198,12 +198,7 @@ def test_gitlab_investigation_e2e():
 
     print(f"\nRunning investigation — primary: Grafana alert, supplementary: GitLab ({project_id})")
 
-    investigation_result = run_investigation_cli(
-        alert_name="High error rate: api_service",
-        pipeline_name="api_service",
-        severity="critical",
-        raw_alert=raw_alert,
-    )
+    investigation_result = run_investigation_cli(raw_alert=raw_alert)
 
     root_cause = investigation_result.get("root_cause", "")
     remediation_steps = investigation_result.get("remediation_steps", [])

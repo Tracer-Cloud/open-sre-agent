@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import sys
-
 from fastapi import FastAPI, Response, status
 from pydantic import BaseModel, ValidationError
 
@@ -15,16 +13,11 @@ init_sentry(entrypoint="webapp")
 class HealthResponse(BaseModel):
     ok: bool
     version: str
-    graph_loaded: bool
     llm_configured: bool
     env: str
 
 
 app = FastAPI()
-
-
-def _graph_loaded() -> bool:
-    return "app.graph_pipeline" in sys.modules
 
 
 def _llm_configured() -> bool:
@@ -36,18 +29,17 @@ def _llm_configured() -> bool:
 
 
 def get_health_response() -> HealthResponse:
-    graph_loaded = _graph_loaded()
     llm_configured = _llm_configured()
 
     return HealthResponse(
-        ok=graph_loaded and llm_configured,
+        ok=llm_configured,
         version=get_version(),
-        graph_loaded=graph_loaded,
         llm_configured=llm_configured,
         env=get_environment().value,
     )
 
 
+@app.get("/", response_model=HealthResponse)
 @app.get("/health", response_model=HealthResponse)
 def health(response: Response) -> HealthResponse:
     health_response = get_health_response()

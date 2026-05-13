@@ -175,12 +175,7 @@ def test_airflow_investigation_e2e():
     fixture_path = FIXTURES_DIR / "airflow_task_failure_alert.json"
     raw_alert = json.loads(fixture_path.read_text())
 
-    investigation_result = run_investigation_cli(
-        alert_name=f"Airflow DAG failure: {dag_id}",
-        pipeline_name=dag_id,
-        severity="critical",
-        raw_alert=raw_alert,
-    )
+    investigation_result = run_investigation_cli(raw_alert=raw_alert)
 
     root_cause = investigation_result.get("root_cause", "")
 

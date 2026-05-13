@@ -49,8 +49,8 @@ def _seed_docs(root: Path) -> None:
         root,
         "deployment.mdx",
         '---\ntitle: "Deployment"\n---\n\n'
-        "OpenSRE can deploy to Railway, EC2, or LangGraph Cloud.\n\n"
-        "Use `opensre deploy` to deploy the agent.\n",
+        "OpenSRE can deploy to Railway or EC2.\n\n"
+        "Use `opensre remote` to connect to a deployed agent.\n",
     )
     _write_doc(
         root,

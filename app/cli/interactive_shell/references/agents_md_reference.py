@@ -5,7 +5,7 @@ The conversational interactive-shell assistant grounds answers on the
 and, for procedural questions, excerpts from ``docs/`` (via
 :mod:`app.cli.interactive_shell.references.docs_reference`). Neither surface includes
 internal repo-map content, so the assistant cannot answer questions like
-"where do I add a new tool?" or "how does the LangGraph pipeline route?"
+"where do I add a new tool?" or "how does the remote threads pipeline route?"
 from maintained internal documentation.
 
 This module surfaces the repo's ``AGENTS.md`` files (root + per-package) as a

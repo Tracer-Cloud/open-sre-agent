@@ -17,10 +17,10 @@ from datetime import UTC, datetime
 
 import boto3
 import requests
-from langsmith import traceable
 
 from app.cli.investigation import run_investigation_cli
 from app.services.grafana import get_grafana_client
+from app.utils.tracing import traceable
 from tests.shared.stack_config import get_prefect_config
 from tests.shared.tracer_ingest import StepTimer, emit_tool_event
 from tests.utils.alert_factory import create_alert
@@ -240,12 +240,7 @@ def _run_agent_investigation(failure_data: dict, run_id: str, trace_id: str) -> 
         },
     )
     def run_investigation():
-        return run_investigation_cli(
-            alert_name=alert.get("labels", {}).get("alertname", "PrefectFlowFailure"),
-            pipeline_name="upstream_downstream_pipeline_prefect",
-            severity="critical",
-            raw_alert=alert,
-        )
+        return run_investigation_cli(raw_alert=alert)
 
     investigation_timer = StepTimer(
         trace_id=trace_id,

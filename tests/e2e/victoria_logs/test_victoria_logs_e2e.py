@@ -18,7 +18,6 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import httpx
-
 from app.nodes.plan_actions.detect_sources import detect_sources
 from app.nodes.resolve_integrations.node import _classify_integrations, _load_env_integrations
 

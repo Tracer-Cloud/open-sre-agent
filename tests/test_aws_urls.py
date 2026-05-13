@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from urllib.parse import urlparse
 
-from app.nodes.publish_findings.urls.aws import (
+from app.delivery.publish_findings.urls.aws import (
     _encode_aws_path,
     build_batch_console_url,
     build_cloudwatch_url,

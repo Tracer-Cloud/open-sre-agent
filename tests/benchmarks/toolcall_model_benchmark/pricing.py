@@ -1,4 +1,4 @@
-"""LLM run cost estimate from token totals (no LangGraph / agent imports)."""
+"""LLM run cost estimate from token totals (no agent imports)."""
 
 from __future__ import annotations
 

@@ -10,11 +10,13 @@ Output utilities shared across nodes.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import re
 import sys
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -30,7 +32,15 @@ from app.cli.interactive_shell.ui.theme import (
     TEXT,
     WARNING,
 )
-from app.tools.registry import resolve_tool_display_name
+from app.tools.registry import get_registered_tool_map, resolve_tool_display_name
+from app.utils.tool_trace import format_json_preview
+
+try:
+    import select
+    import termios
+except ImportError:  # pragma: no cover - Windows fallback
+    select = None  # type: ignore[assignment]
+    termios = None  # type: ignore[assignment]
 
 if TYPE_CHECKING:
     pass
@@ -87,6 +97,7 @@ _NODE_EVENT_TYPE: dict[str, str] = {
     "resolve_integrations": "READ",
     "plan_actions": "PLAN",
     "merge_hypotheses": "MERGE",
+    "investigation_agent": "INVEST",
     "diagnose_root_cause": "DIAG",
     "opensre_llm_eval": "DIAG",
     "publish_findings": "DIAG",
@@ -97,6 +108,7 @@ _NODE_PHASE: dict[str, str] = {
     "resolve_integrations": "LOAD",
     "plan_actions": "PLAN",
     "merge_hypotheses": "DIAGNOSE",
+    "investigation_agent": "INVESTIGATE",
     "diagnose_root_cause": "DIAGNOSE",
     "opensre_llm_eval": "DIAGNOSE",
     "publish_findings": "PUBLISH",
@@ -124,6 +136,7 @@ _NODE_LABELS: dict[str, str] = {
     "resolve_integrations": "Loading integrations",
     "plan_actions": "Planning",
     "investigate": "Gathering evidence",
+    "investigation_agent": "Investigation",
     "diagnose_root_cause": "Diagnosing",
     "publish_findings": "Publishing",
 }
@@ -196,6 +209,8 @@ def stop_display() -> None:
     global _active_display
     if _active_display is not None:
         _active_display.stop()
+    if "_tracker" in globals() and _tracker is not None:
+        _tracker._stop_toggle_watcher()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -278,6 +293,135 @@ def render_event(
 
 _SPINNER_FRAMES = ("◐", "◓", "◑", "◒")
 _FRAME_SECS = 0.10
+_TOOL_DETAIL_TOGGLE_BYTES = {b"\x0f", b"\x00"}  # ctrl+o; ctrl+0/space on some terminals
+
+
+def _control_char(value: int, existing: Any) -> Any:
+    """Return a termios control-char value matching the platform's cc entry type."""
+    if isinstance(existing, bytes):
+        return bytes([value])
+    if isinstance(existing, str):
+        return chr(value)
+    return value
+
+
+def _disable_control_char(fd: int, existing: Any) -> Any:
+    """Return the platform's disabled control character value if available."""
+    disabled = 0
+    with contextlib.suppress(Exception):
+        disabled = int(os.fpathconf(fd, "PC_VDISABLE"))
+    if disabled < 0 or disabled > 255:
+        disabled = 0
+    return _control_char(disabled, existing)
+
+
+class CtrlOToggleWatcher:
+    """Background stdin watcher for Ctrl+O without triggering terminal output discard.
+
+    On BSD/macOS terminals Ctrl+O is commonly bound to VDISCARD. A plain cbreak
+    setup leaves that special character active, so pressing the toggle key can
+    make the terminal stop displaying output. We keep ISIG enabled for Ctrl+C,
+    but disable IEXTEN/VDISCARD so Ctrl+O reaches the application as a byte.
+    """
+
+    def __init__(self, callback: Callable[[], None]) -> None:
+        self._callback = callback
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._fd: int | None = None
+        self._old_attrs: Any = None
+
+    def start(self) -> None:
+        if select is None or termios is None:
+            return
+        if not sys.stdin.isatty() or not sys.stdout.isatty():
+            return
+        try:
+            self._fd = sys.stdin.fileno()
+            self._old_attrs = termios.tcgetattr(self._fd)
+            new_attrs = termios.tcgetattr(self._fd)
+            new_attrs[3] &= ~(termios.ICANON | termios.ECHO)
+            if hasattr(termios, "IEXTEN"):
+                new_attrs[3] &= ~termios.IEXTEN
+            if hasattr(termios, "VMIN"):
+                new_attrs[6][termios.VMIN] = 1
+            if hasattr(termios, "VTIME"):
+                new_attrs[6][termios.VTIME] = 0
+            if hasattr(termios, "VDISCARD"):
+                index = termios.VDISCARD
+                new_attrs[6][index] = _disable_control_char(self._fd, new_attrs[6][index])
+            termios.tcsetattr(self._fd, termios.TCSADRAIN, new_attrs)
+        except Exception:
+            self._fd = None
+            self._old_attrs = None
+            return
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=0.2)
+        if self._fd is not None and self._old_attrs is not None and termios is not None:
+            with contextlib.suppress(Exception):
+                termios.tcsetattr(self._fd, termios.TCSADRAIN, self._old_attrs)
+
+    def _run(self) -> None:
+        if self._fd is None or select is None:
+            return
+        while not self._stop.is_set():
+            try:
+                readable, _, _ = select.select([self._fd], [], [], 0.1)
+            except Exception:
+                return
+            if not readable:
+                continue
+            try:
+                data = os.read(self._fd, 1)
+            except Exception:
+                return
+            if data in _TOOL_DETAIL_TOGGLE_BYTES:
+                self._callback()
+
+
+def _tool_source_label(tool_name: str) -> str:
+    tool = get_registered_tool_map().get(tool_name)
+    source = str(tool.source) if tool is not None else _infer_tool_source(tool_name)
+    if source == "grafana":
+        return "Grafana"
+    if source == "knowledge":
+        return "SRE"
+    if source == "openclaw":
+        return "OpenClaw"
+    return source.replace("_", " ").title() if source else "Tools"
+
+
+def _infer_tool_source(tool_name: str) -> str:
+    lowered = tool_name.lower()
+    for source in ("grafana", "datadog", "cloudwatch", "sentry", "honeycomb", "openclaw"):
+        if source in lowered:
+            return source
+    if lowered.startswith("get_sre_"):
+        return "knowledge"
+    return "tools"
+
+
+def _tool_short_label(tool_name: str, source_label: str) -> str:
+    display = resolve_tool_display_name(tool_name)
+    label = display
+    for prefix in (
+        source_label,
+        source_label.lower(),
+        f"{source_label} ",
+        f"{source_label.lower()} ",
+        "query ",
+        "get ",
+    ):
+        if label.startswith(prefix):
+            label = label[len(prefix) :].strip()
+    if source_label == "Grafana" and label.lower().startswith("grafana "):
+        label = label[len("grafana ") :].strip()
+    return label or display
 
 
 class _LiveRenderable:
@@ -296,6 +440,10 @@ class _LiveRenderable:
         d = self._d
         now = time.monotonic()
         with d._lock:
+            if d._tool_details_visible:
+                yield from _render_tool_detail_view(d, options, now)
+                return
+
             # Active step lines (animated).
             # Completed steps are NOT yielded here — they are printed permanently
             # above the live region in step_complete() to avoid the staircase bug.
@@ -338,8 +486,63 @@ class _LiveRenderable:
             if d._model:
                 ft.append(f"{d._model}  ", style=SECONDARY)
             ft.append(f"{d._mode}  ", style=SECONDARY)
+            ft.append("ctrl+o tool details  ", style=DIM)
             ft.append("esc to cancel", style=DIM)
             yield ft
+
+
+def _render_tool_detail_view(
+    display: _EventLogDisplay,
+    options: ConsoleOptions,
+    now: float,
+) -> RenderResult:
+    elapsed_total = now - display._t0
+    heading = Text()
+    heading.append(" Tool Details", style=f"bold {TEXT}")
+    summary = display._tool_summary
+    if summary:
+        heading.append(f"  {summary}", style=BRAND)
+    yield heading
+
+    records = display._tool_detail_records[-6:]
+    hidden_count = max(0, len(display._tool_detail_records) - len(records))
+    if hidden_count:
+        yield Text(f"  {hidden_count} older tool call(s) hidden", style=DIM)
+    if not records:
+        yield Text("  No tool calls have finished yet.", style=DIM)
+
+    for record in records:
+        elapsed = str(record.get("elapsed") or "")
+        suffix = f"  {elapsed}" if elapsed else ""
+        row = Text()
+        row.append("  ● ", style=f"bold {HIGHLIGHT}")
+        row.append(str(record.get("display") or "tool"), style=f"bold {TEXT}")
+        row.append(suffix, style=SECONDARY)
+        yield row
+
+        tool_input = record.get("input")
+        output = record.get("output")
+        if tool_input not in ({}, None):
+            yield Text("    Input:", style=SECONDARY)
+            for line in format_json_preview(tool_input, max_chars=1200).splitlines():
+                yield Text(f"      {line}", style=DIM)
+        if output not in ({}, None, ""):
+            yield Text("    Output:", style=SECONDARY)
+            for line in format_json_preview(output, max_chars=2200).splitlines():
+                yield Text(f"      {line}", style=DIM)
+        yield Text("")
+
+    yield Text("┄" * (options.max_width - 1), style=DIM)
+    footer = Text()
+    footer.append(" ● ", style=f"bold {HIGHLIGHT}")
+    footer.append("TOOL DETAILS  ", style=f"bold {SECONDARY}")
+    footer.append(f"{_elapsed_hms(elapsed_total)}  ", style=SECONDARY)
+    if display._model:
+        footer.append(f"{display._model}  ", style=SECONDARY)
+    footer.append(f"{display._mode}  ", style=SECONDARY)
+    footer.append("ctrl+o compact view  ", style=DIM)
+    footer.append("esc to cancel", style=DIM)
+    yield footer
 
 
 class _EventLogDisplay:
@@ -355,6 +558,9 @@ class _EventLogDisplay:
         self._t0 = t0 if t0 is not None else time.monotonic()
         self._active_steps: dict[str, dict] = {}  # node_name → {t0, subtext, subtext_until}
         self._current_phase = "LOAD"
+        self._tool_details_visible = False
+        self._tool_detail_records: list[dict[str, Any]] = []
+        self._tool_summary = ""
         self._lock = threading.Lock()
 
         self._console = Console(highlight=False)
@@ -388,6 +594,23 @@ class _EventLogDisplay:
                 "subtext_until": 0.0,
             }
             self._current_phase = _node_phase_label(node_name)
+
+    def set_tool_details(
+        self,
+        *,
+        visible: bool,
+        records: list[dict[str, Any]],
+        summary: str,
+        clear: bool = False,
+    ) -> None:
+        with self._lock:
+            self._tool_details_visible = visible
+            self._tool_detail_records = list(records)
+            self._tool_summary = summary
+        if self._live.is_started:
+            if clear:
+                self._live.console.clear()
+            self._live.refresh()
 
     def step_complete(self, node_name: str, event: ProgressEvent) -> None:
         # Compute elapsed before entering the lock so the timestamp is as
@@ -470,8 +693,18 @@ class ProgressTracker:
         self._silent = _is_silent_output()
         self._rich = get_output_format() == "rich"
         self._display: _EventLogDisplay | None = None
+        self._tool_start_times: dict[str, float] = {}
+        self._tool_inputs: dict[str, Any] = {}
+        self._tool_details_visible = False
+        self._tool_detail_records: list[dict[str, Any]] = []
+        self._printed_tool_detail_ids: set[int] = set()
+        self._tool_summary_counts: dict[str, dict[str, int]] = {}
+        self._tool_summary_order: list[tuple[str, str]] = []
+        self._toggle_watcher: CtrlOToggleWatcher | None = None
         if self._rich and not self._silent:
             self._display = _EventLogDisplay(t0=self._t0)
+            self._toggle_watcher = CtrlOToggleWatcher(self.toggle_tool_details)
+            self._toggle_watcher.start()
 
     @property
     def has_active_display(self) -> bool:
@@ -480,9 +713,15 @@ class ProgressTracker:
 
     def stop(self) -> None:
         """Stop the active live display if running."""
+        self._stop_toggle_watcher()
         if self._display:
             self._display.stop()
             self._display = None
+
+    def _stop_toggle_watcher(self) -> None:
+        if self._toggle_watcher is not None:
+            self._toggle_watcher.stop()
+            self._toggle_watcher = None
 
     def start(self, node_name: str, message: str | None = None) -> None:
         self._start_times[node_name] = time.monotonic()
@@ -494,6 +733,7 @@ class ProgressTracker:
         if self._rich:
             if node_name == "publish_findings":
                 # Stop the animated display so the final report prints cleanly below
+                self._stop_toggle_watcher()
                 if self._display:
                     self._display.stop()
                     self._display = None
@@ -534,6 +774,167 @@ class ProgressTracker:
         else:
             _get_console().print()
             _get_console().print(renderable)
+
+    def set_tool_detail_view(
+        self,
+        *,
+        visible: bool,
+        records: list[dict[str, Any]],
+        summary: str,
+        clear: bool = False,
+    ) -> None:
+        """Replace the live progress area with a transient tool-detail view."""
+        if self._display:
+            self._display.set_tool_details(
+                visible=visible,
+                records=records,
+                summary=summary,
+                clear=clear,
+            )
+
+    def record_tool_start(
+        self,
+        tool_name: str,
+        tool_input: Any = None,
+        *,
+        event_key: str | None = None,
+    ) -> None:
+        """Record a tool start for compact live summary and optional details."""
+        if self._silent:
+            return
+        key = event_key or tool_name
+        self._tool_start_times[key] = time.monotonic()
+        self._tool_inputs[key] = tool_input
+        self._record_tool_summary(tool_name)
+        self._update_tool_summary_subtext()
+        self._sync_tool_detail_view()
+
+    def record_tool_end(
+        self,
+        tool_name: str,
+        output: Any = None,
+        *,
+        event_key: str | None = None,
+        tool_input: Any = None,
+    ) -> None:
+        """Record a tool end and buffer detailed input/output for Ctrl+O."""
+        if self._silent:
+            return
+        key = event_key or tool_name
+        start = self._tool_start_times.pop(key, None)
+        elapsed = f"{int((time.monotonic() - start) * 1000)}ms" if start is not None else ""
+        stored_input = self._tool_inputs.pop(key, None)
+        self._update_tool_summary_subtext()
+        self._record_tool_detail(
+            resolve_tool_display_name(tool_name),
+            tool_input if tool_input is not None else stored_input,
+            output,
+            elapsed=elapsed,
+        )
+
+    def toggle_tool_details(self) -> None:
+        """Toggle the live view between compact progress and tool details."""
+        if self._silent:
+            return
+        self._tool_details_visible = not self._tool_details_visible
+        if self._rich and self._display:
+            self._sync_tool_detail_view(clear=True)
+            return
+        label = "shown" if self._tool_details_visible else "hidden"
+        _safe_print(f"  Tool details {label} (ctrl+o)")
+        if self._tool_details_visible:
+            self._flush_tool_details()
+
+    def _sync_tool_detail_view(self, *, clear: bool = False) -> None:
+        if self._rich and self._display:
+            self.set_tool_detail_view(
+                visible=self._tool_details_visible,
+                records=self._tool_detail_records,
+                summary=self.format_tool_summary(),
+                clear=clear,
+            )
+
+    def _record_tool_summary(self, tool_name: str) -> None:
+        source = _tool_source_label(tool_name)
+        label = _tool_short_label(tool_name, source)
+        source_counts = self._tool_summary_counts.setdefault(source, {})
+        if label not in source_counts:
+            self._tool_summary_order.append((source, label))
+        source_counts[label] = source_counts.get(label, 0) + 1
+
+    def _update_tool_summary_subtext(self) -> None:
+        summary = self.format_tool_summary()
+        if not summary:
+            return
+        self.update_subtext("investigation_agent", summary, duration=30.0)
+        self.update_subtext("investigate", summary, duration=30.0)
+
+    def format_tool_summary(self) -> str:
+        source_labels: dict[str, list[str]] = {}
+        for source, label in self._tool_summary_order:
+            count = self._tool_summary_counts.get(source, {}).get(label, 0)
+            if count <= 0:
+                continue
+            rendered = f"{label} x{count}" if count > 1 else label
+            source_labels.setdefault(source, []).append(rendered)
+        parts = [
+            f"{source}: {', '.join(labels[:4])}{', ...' if len(labels) > 4 else ''}"
+            for source, labels in source_labels.items()
+        ]
+        summary = " | ".join(parts[:2])
+        return summary[:117] + "..." if len(summary) > 120 else summary
+
+    def _record_tool_detail(
+        self,
+        display: str,
+        tool_input: Any,
+        output: Any,
+        *,
+        elapsed: str = "",
+    ) -> None:
+        if tool_input in ({}, None) and output in ({}, None, ""):
+            return
+        record = {
+            "display": display,
+            "input": tool_input,
+            "output": output,
+            "elapsed": elapsed,
+        }
+        self._tool_detail_records.append(record)
+        if self._tool_details_visible:
+            if self._rich and self._display:
+                self._sync_tool_detail_view()
+            else:
+                self._print_tool_detail(record)
+
+    def _flush_tool_details(self) -> None:
+        for record in self._tool_detail_records:
+            if id(record) not in self._printed_tool_detail_ids:
+                self._print_tool_detail(record)
+
+    def _print_tool_detail(self, record: dict[str, Any]) -> None:
+        display = str(record.get("display") or "tool")
+        tool_input = record.get("input")
+        output = record.get("output")
+        body_parts: list[str] = []
+        if tool_input not in ({}, None):
+            body_parts.append(f"Input:\n{format_json_preview(tool_input, max_chars=1600)}")
+        if output not in ({}, None, ""):
+            body_parts.append(f"Output:\n{format_json_preview(output, max_chars=3000)}")
+        body = "\n\n".join(body_parts)
+        elapsed = str(record.get("elapsed") or "")
+        suffix = f"  {elapsed}" if elapsed else ""
+        if self._rich:
+            detail = Text()
+            detail.append(f"  Tool details: {display}{suffix}\n", style=f"bold {TEXT}")
+            for line in body.splitlines():
+                detail.append(f"    {line}\n", style=DIM)
+            self.print_above_renderable(detail)
+        else:
+            _safe_print(f"  Tool details: {display}{suffix}")
+            for line in body.splitlines():
+                _safe_print(f"      {line}")
+        self._printed_tool_detail_ids.add(id(record))
 
     def _finish(
         self, node_name: str, status: str, fields_updated: list[str], message: str | None
@@ -582,8 +983,8 @@ _tracker: ProgressTracker | None = None
 def get_tracker(*, reset: bool = False) -> ProgressTracker:
     global _tracker
     if _tracker is None or reset:
-        if reset and _tracker is not None and _tracker._display:
-            _tracker._display.stop()
+        if reset and _tracker is not None:
+            _tracker.stop()
         _tracker = ProgressTracker()
     return _tracker
 
@@ -591,6 +992,33 @@ def get_tracker(*, reset: bool = False) -> ProgressTracker:
 def reset_tracker() -> ProgressTracker:
     """Kept for backward compatibility with existing call sites."""
     return get_tracker(reset=True)
+
+
+def set_silent_tracker() -> None:
+    """Install a silent (no-display) tracker as the global singleton.
+
+    Used by astream_investigation before starting the background thread so
+    internal pipeline calls to tracker.start/complete don't open their own
+    Rich Live display — the StreamRenderer drives the display instead.
+    """
+    global _tracker
+    if _tracker is not None:
+        _tracker.stop()
+    _tracker = ProgressTracker.__new__(ProgressTracker)
+    _tracker.events = []
+    _tracker._start_times = {}
+    _tracker._t0 = time.monotonic()
+    _tracker._silent = True
+    _tracker._rich = False
+    _tracker._display = None
+    _tracker._tool_start_times = {}
+    _tracker._tool_inputs = {}
+    _tracker._tool_details_visible = False
+    _tracker._tool_detail_records = []
+    _tracker._printed_tool_detail_ids = set()
+    _tracker._tool_summary_counts = {}
+    _tracker._tool_summary_order = []
+    _tracker._toggle_watcher = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────

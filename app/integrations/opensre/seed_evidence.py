@@ -9,14 +9,14 @@ from __future__ import annotations
 from typing import Any
 
 from app.integrations.opensre.csv_grafana_backend import OpenSRECsvGrafanaBackend
-from app.integrations.opensre.inject import (
-    inject_opensre_into_resolved_integrations,
-    resolve_opensre_telemetry_dir,
-)
-from app.nodes.investigate.processing.post_process import (
+from app.integrations.opensre.grafana_mappers import (
     _map_grafana_logs,
     _map_grafana_metrics,
     _map_grafana_traces,
+)
+from app.integrations.opensre.inject import (
+    inject_opensre_into_resolved_integrations,
+    resolve_opensre_telemetry_dir,
 )
 from app.tools.GrafanaLogsTool import query_grafana_logs
 from app.tools.GrafanaMetricsTool import query_grafana_metrics
@@ -28,7 +28,7 @@ def merge_opensre_seed_into_state(
     resolved_integrations: dict[str, Any] | None,
     existing_evidence: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """Return LangGraph partial state: ``resolved_integrations`` and merged ``evidence``."""
+    """Return a partial state dict: ``resolved_integrations`` and merged ``evidence``."""
     merged = inject_opensre_into_resolved_integrations(raw_alert, resolved_integrations)
     if merged is None:
         merged = dict(resolved_integrations or {})

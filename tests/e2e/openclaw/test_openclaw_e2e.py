@@ -25,6 +25,8 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+from app.nodes.plan_actions.detect_sources import detect_sources
+from app.nodes.resolve_integrations.node import _classify_integrations, _load_env_integrations
 
 from app.integrations.openclaw import (
     OpenClawConfig,
@@ -32,8 +34,6 @@ from app.integrations.openclaw import (
     openclaw_runtime_unavailable_reason,
     validate_openclaw_config,
 )
-from app.nodes.plan_actions.detect_sources import detect_sources
-from app.nodes.resolve_integrations.node import _classify_integrations, _load_env_integrations
 from app.utils.openclaw_delivery import send_openclaw_report
 
 # ---------------------------------------------------------------------------

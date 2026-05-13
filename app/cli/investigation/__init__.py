@@ -1,4 +1,4 @@
-"""Investigation CLI: load alert payloads and run the LangGraph pipeline from the shell."""
+"""Investigation CLI: load raw alert payloads and run the connected agent loop."""
 
 from app.cli.investigation.investigate import (
     resolve_investigation_context,

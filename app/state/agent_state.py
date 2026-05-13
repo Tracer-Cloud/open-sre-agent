@@ -8,9 +8,8 @@ the same set of keys and will fail if they diverge.
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Any
 
-from langgraph.graph import add_messages
 from pydantic import ConfigDict, Field
 from typing_extensions import TypedDict
 
@@ -49,8 +48,8 @@ class AgentState(TypedDict, total=False):
     user_name: str
     organization_slug: str
 
-    # Chat mode — conversation (add_messages reducer appends instead of replacing)
-    messages: Annotated[list, add_messages]
+    # Chat mode — conversation history
+    messages: list
 
     # Alert classification
     is_noise: bool
@@ -94,7 +93,8 @@ class AgentState(TypedDict, total=False):
     investigation_loop_count: int
     hypotheses: list[str]
     executed_hypotheses: list[dict[str, Any]]
-    hypothesis_results: Annotated[list[dict[str, Any]], merge_results_reducer]
+    evidence_entries: list[dict[str, Any]]
+    hypothesis_results: list[dict[str, Any]]
     action_to_run: str
     investigation_started_at: float
 
@@ -131,7 +131,7 @@ class AgentState(TypedDict, total=False):
     # OpenClaw context (for write-back targeting / transport overrides)
     openclaw_context: dict[str, Any]
 
-    # LangGraph context (injected from config by inject_auth_node)
+    # Runtime context (injected from config by inject_auth_node)
     thread_id: str
     run_id: str
     _auth_token: str
@@ -196,6 +196,7 @@ class AgentStateModel(StrictConfigModel):
     investigation_loop_count: int = 0
     hypotheses: list[str] = Field(default_factory=list)
     executed_hypotheses: list[dict[str, Any]] = Field(default_factory=list)
+    evidence_entries: list[dict[str, Any]] = Field(default_factory=list)
     hypothesis_results: list[dict[str, Any]] = Field(default_factory=list)
     action_to_run: str = ""
     investigation_started_at: float = 0.0

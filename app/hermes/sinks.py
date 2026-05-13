@@ -22,7 +22,7 @@ notifications.
 Investigation bridge execution model
 ------------------------------------
 
-Investigation calls (LLM round-trips through LangGraph) can take 30+
+Investigation calls (LLM round-trips via the investigation agent) can take 30+
 seconds. To keep the agent's polling thread responsive — so the
 ``FileTailer`` keeps reading and the classifier keeps observing during
 an investigation — bridge calls are dispatched to a bounded thread pool
@@ -82,7 +82,7 @@ _DEFAULT_BRIDGE_WORKERS: Final[int] = 2
 
 # How long the sink waits for an in-flight investigation before giving
 # up and falling back to a timeout notice. Tuned to be slightly larger
-# than a typical LangGraph investigation but well under the
+# than a typical investigation pipeline but well under the
 # AlarmDispatcher cooldown (300s default) so a retry on the next
 # matching incident gets a fresh shot.
 _DEFAULT_BRIDGE_TIMEOUT_S: Final[float] = 45.0

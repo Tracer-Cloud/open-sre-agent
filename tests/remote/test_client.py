@@ -299,18 +299,18 @@ class TestPreflightResult:
         r = PreflightResult(ok=True, endpoints=["/investigate"])
         assert r.supports_investigate is True
 
-    def test_supports_langgraph(self) -> None:
-        r = PreflightResult(ok=True, server_type="langgraph")
-        assert r.supports_langgraph is True
+    def test_supports_remote_threads_api(self) -> None:
+        r = PreflightResult(ok=True, server_type="threads_api")
+        assert r.supports_remote_threads_api is True
 
     def test_supports_live_stream_for_lightweight_endpoint(self) -> None:
         r = PreflightResult(ok=True, endpoints=["/investigate", "/investigate/stream"])
         assert r.supports_live_stream is True
 
-    def test_supports_live_stream_for_langgraph_endpoint(self) -> None:
+    def test_supports_live_stream_for_threads_api_endpoint(self) -> None:
         r = PreflightResult(
             ok=True,
-            server_type="langgraph",
+            server_type="threads_api",
             endpoints=["/threads", "/threads/*/runs/stream"],
         )
         assert r.supports_live_stream is True
@@ -319,9 +319,9 @@ class TestPreflightResult:
         r = PreflightResult(ok=True, endpoints=["/investigate"])
         assert r.supports_live_stream is False
 
-    def test_not_langgraph(self) -> None:
+    def test_not_threads_api(self) -> None:
         r = PreflightResult(ok=True, server_type="lightweight")
-        assert r.supports_langgraph is False
+        assert r.supports_remote_threads_api is False
 
     def test_status_label_unreachable(self) -> None:
         r = PreflightResult(ok=False, error="connection refused")
@@ -373,7 +373,7 @@ class TestPreflight:
         assert result.supports_stream is False
         assert result.supports_investigate is True
 
-    def test_preflight_old_server_detects_langgraph(self) -> None:
+    def test_preflight_old_server_detects_threads_api(self) -> None:
         client = RemoteAgentClient("http://host:2024")
         health_data = {"ok": True}
         with (
@@ -381,14 +381,14 @@ class TestPreflight:
             patch.object(
                 client,
                 "_detect_server_type",
-                return_value=("langgraph", ["/threads", "/threads/*/runs/stream"]),
+                return_value=("threads_api", ["/threads", "/threads/*/runs/stream"]),
             ),
         ):
             result = client.preflight()
 
         assert result.ok is True
-        assert result.server_type == "langgraph"
-        assert result.supports_langgraph is True
+        assert result.server_type == "threads_api"
+        assert result.supports_remote_threads_api is True
 
     def test_preflight_timeout(self) -> None:
         client = RemoteAgentClient("http://host:2024")

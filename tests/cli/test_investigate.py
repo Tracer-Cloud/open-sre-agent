@@ -32,20 +32,30 @@ def test_resolve_investigation_context_prefers_cli_overrides() -> None:
     assert severity == "critical"
 
 
+def test_resolve_investigation_context_uses_raw_alert_without_pipeline_default() -> None:
+    alert_name, pipeline_name, severity = resolve_investigation_context(
+        raw_alert={
+            "title": "CPU high",
+            "commonLabels": {"service": "checkout", "severity": "critical"},
+        },
+        alert_name=None,
+        pipeline_name=None,
+        severity=None,
+    )
+
+    assert alert_name == "CPU high"
+    assert pipeline_name == "checkout"
+    assert severity == "critical"
+
+
 def test_run_investigation_cli_shapes_agent_state(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     def fake_run_investigation(
-        alert_name: str,
-        pipeline_name: str,
-        severity: str,
         *,
         raw_alert: dict[str, object],
         **_: object,
     ) -> dict[str, object]:
-        captured["alert_name"] = alert_name
-        captured["pipeline_name"] = pipeline_name
-        captured["severity"] = severity
         captured["raw_alert"] = raw_alert
         return {
             "slack_message": "report body",
@@ -60,15 +70,9 @@ def test_run_investigation_cli_shapes_agent_state(monkeypatch) -> None:
 
     result = run_investigation_cli(
         raw_alert={"alert_name": "PayloadAlert"},
-        alert_name=None,
-        pipeline_name=None,
-        severity=None,
     )
 
     assert captured == {
-        "alert_name": "PayloadAlert",
-        "pipeline_name": "events_fact",
-        "severity": "warning",
         "raw_alert": {"alert_name": "PayloadAlert"},
     }
     assert result == {
@@ -81,9 +85,6 @@ def test_run_investigation_cli_shapes_agent_state(monkeypatch) -> None:
 
 def test_run_investigation_cli_evaluate_reports_skip_when_no_rubric(monkeypatch) -> None:
     def fake_run(
-        alert_name: str,
-        pipeline_name: str,
-        severity: str,
         *,
         raw_alert: dict[str, object],
         **_: object,

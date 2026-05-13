@@ -17,6 +17,7 @@ from typing import Any, cast
 
 from app.nodes import node_extract_alert
 from app.nodes.root_cause_diagnosis.node import diagnose_root_cause
+
 from app.state import InvestigationState, make_initial_state
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "datadog_k8s_alert.json"
@@ -43,12 +44,7 @@ def test_baseline_kubernetes_rca():
     """
     fixture = _load_fixture()
 
-    state = make_initial_state(
-        alert_name=fixture["alert"]["title"],
-        pipeline_name="kubernetes_etl_pipeline",
-        severity="critical",
-        raw_alert=fixture["alert"],
-    )
+    state = make_initial_state(raw_alert=fixture["alert"])
     _merge_state(state, node_extract_alert(state))
 
     state_any = cast(dict[str, Any], state)

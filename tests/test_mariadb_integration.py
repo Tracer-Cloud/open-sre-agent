@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.integrations.catalog import classify_integrations as _classify_integrations
 from app.integrations.mariadb import (
     _QUERY_TRUNCATE_LEN,
     DEFAULT_MARIADB_PORT,
@@ -24,7 +25,6 @@ from app.integrations.mariadb import (
     mariadb_is_available,
     validate_mariadb_config,
 )
-from app.nodes.resolve_integrations.node import _classify_integrations
 from app.utils.truncation import truncate as _truncate_shared
 
 

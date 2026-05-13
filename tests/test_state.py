@@ -8,13 +8,13 @@ from app.state import AgentStateModel, make_chat_state, make_initial_state
 
 def test_make_initial_state_validates_and_sets_defaults() -> None:
     state = make_initial_state(
-        alert_name="HighErrorRate",
-        pipeline_name="payments",
-        severity="critical",
         raw_alert={"source": "grafana"},
     )
 
     assert state["mode"] == "investigation"
+    assert state["alert_name"] == "Incident"
+    assert state["pipeline_name"] == "unknown"
+    assert state["severity"] == "warning"
     raw_alert = state["raw_alert"]
     assert isinstance(raw_alert, dict)
     assert raw_alert["source"] == "grafana"
@@ -31,9 +31,6 @@ def test_make_initial_state_strips_rubric_when_not_evaluate() -> None:
         "foo": 1,
     }
     state = make_initial_state(
-        "A",
-        "p",
-        "warning",
         raw_alert=raw,
         opensre_evaluate=False,
     )
@@ -49,9 +46,6 @@ def test_make_initial_state_evaluate_strips_scoring_points() -> None:
         "foo": 1,
     }
     state = make_initial_state(
-        "A",
-        "p",
-        "warning",
         raw_alert=raw,
         opensre_evaluate=True,
     )
@@ -95,9 +89,6 @@ def test_agent_state_model_rejects_unknown_fields() -> None:
 
 def test_make_initial_state_normalizes_datadog_tags_and_process_fields() -> None:
     state = make_initial_state(
-        alert_name="HighErrorRate",
-        pipeline_name="payments",
-        severity="critical",
         raw_alert={
             "alert_source": "datadog",
             "alert_name": "Datadog monitor: process crash",
@@ -123,9 +114,6 @@ def test_make_initial_state_normalizes_datadog_tags_and_process_fields() -> None
 
 def test_make_initial_state_uses_existing_annotations_and_labels_for_canonical_fields() -> None:
     state = make_initial_state(
-        alert_name="ignored",
-        pipeline_name="ignored",
-        severity="warning",
         raw_alert={
             "title": "[FIRING] CPU high",
             "alert_source": "grafana",
@@ -157,9 +145,6 @@ def test_make_initial_state_uses_existing_annotations_and_labels_for_canonical_f
 
 def test_make_initial_state_keeps_common_labels_and_canonical_labels_separate() -> None:
     state = make_initial_state(
-        alert_name="HighErrorRate",
-        pipeline_name="payments",
-        severity="critical",
         raw_alert={
             "commonLabels": {"alertname": "CPUHigh"},
             "commonAnnotations": {"summary": "CPU high"},
@@ -181,9 +166,6 @@ def test_make_initial_state_keeps_common_labels_and_canonical_labels_separate() 
 
 def test_make_initial_state_preserves_explicit_empty_common_labels() -> None:
     state = make_initial_state(
-        alert_name="HighErrorRate",
-        pipeline_name="payments",
-        severity="critical",
         raw_alert={
             "commonLabels": {},
             "labels": {"severity": "low", "pipeline": "wrong"},
@@ -204,9 +186,6 @@ def test_make_initial_state_preserves_explicit_empty_common_labels() -> None:
 
 def test_make_initial_state_preserves_float_pid() -> None:
     state = make_initial_state(
-        alert_name="HighErrorRate",
-        pipeline_name="payments",
-        severity="critical",
         raw_alert={
             "commonLabels": {"pid": 4242.0},
             "commonAnnotations": {"process_name": "worker"},

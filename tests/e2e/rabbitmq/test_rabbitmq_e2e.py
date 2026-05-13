@@ -17,10 +17,10 @@ from typing import Any
 
 import httpx
 import pytest
+from app.nodes.plan_actions.detect_sources import detect_sources
 
 from app.integrations.catalog import classify_integrations
 from app.integrations.rabbitmq import RabbitMQConfig
-from app.nodes.plan_actions.detect_sources import detect_sources
 from app.tools.registry import get_registered_tools
 
 ALERT_PATH = Path(__file__).parent / "rabbitmq_alert.json"

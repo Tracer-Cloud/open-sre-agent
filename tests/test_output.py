@@ -274,6 +274,149 @@ def test_tracker_update_subtext_is_a_noop_in_text_mode() -> None:
     tracker.complete("investigate")
 
 
+@pytest.mark.usefixtures("force_text_mode")
+def test_tracker_tool_details_are_hidden_until_toggled(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    tracker = ProgressTracker()
+
+    tracker.record_tool_start(
+        "query_grafana_logs",
+        {"service_name": "checkout-api", "grafana_api_key": "[redacted]"},
+        event_key="call-1",
+    )
+    tracker.record_tool_end(
+        "query_grafana_logs",
+        {"available": True, "logs": [{"message": "boom"}]},
+        event_key="call-1",
+    )
+
+    out = capsys.readouterr().out
+    assert "Input:" not in out
+    assert "Output:" not in out
+    assert tracker.format_tool_summary() == "Grafana: Loki"
+
+    tracker.toggle_tool_details()
+
+    out = capsys.readouterr().out
+    assert "Tool details shown" in out
+    assert "Input:" in out
+    assert "Output:" in out
+    assert "checkout-api" in out
+    assert "boom" in out
+    assert "grafana_api_key" in out
+    assert "secret" not in out
+
+
+@pytest.mark.usefixtures("force_text_mode")
+def test_rich_tracker_tool_details_toggle_replaces_live_view(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class _FakeDisplay:
+        def __init__(self) -> None:
+            self.detail_calls: list[dict[str, Any]] = []
+
+        def step_subtext(self, *_args: Any, **_kwargs: Any) -> None:
+            return None
+
+        def set_tool_details(
+            self,
+            *,
+            visible: bool,
+            records: list[dict[str, Any]],
+            summary: str,
+            clear: bool = False,
+        ) -> None:
+            self.detail_calls.append(
+                {
+                    "visible": visible,
+                    "records": records,
+                    "summary": summary,
+                    "clear": clear,
+                }
+            )
+
+    tracker = ProgressTracker()
+    display = _FakeDisplay()
+    tracker._rich = True
+    tracker._display = display  # type: ignore[assignment]
+
+    tracker.record_tool_start(
+        "query_grafana_logs",
+        {"service_name": "checkout-api", "grafana_api_key": "[redacted]"},
+        event_key="call-1",
+    )
+    tracker.record_tool_end(
+        "query_grafana_logs",
+        {"available": True, "logs": [{"message": "boom"}]},
+        event_key="call-1",
+    )
+    assert "Input:" not in capsys.readouterr().out
+
+    tracker.toggle_tool_details()
+    shown = display.detail_calls[-1]
+    assert shown["visible"] is True
+    assert shown["clear"] is True
+    assert shown["summary"] == "Grafana: Loki"
+    assert shown["records"][0]["output"]["logs"][0]["message"] == "boom"
+    assert "Input:" not in capsys.readouterr().out
+
+    tracker.toggle_tool_details()
+    hidden = display.detail_calls[-1]
+    assert hidden["visible"] is False
+    assert hidden["clear"] is True
+
+
+def test_ctrl_o_watcher_disables_terminal_output_discard(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _TTY:
+        def isatty(self) -> bool:
+            return True
+
+        def fileno(self) -> int:
+            return 99
+
+    class _Select:
+        @staticmethod
+        def select(*_args: Any, **_kwargs: Any) -> tuple[list[int], list[int], list[int]]:
+            return [], [], []
+
+    class _Termios:
+        ICANON = 0x0002
+        ECHO = 0x0008
+        IEXTEN = 0x0400
+        VMIN = 6
+        VTIME = 5
+        VDISCARD = 13
+        TCSADRAIN = 1
+        saved_attrs: list[list[Any]] = []
+
+        @classmethod
+        def tcgetattr(cls, _fd: int) -> list[Any]:
+            return [0, 0, 0, cls.ICANON | cls.ECHO | cls.IEXTEN, 0, 0, [b"\x00"] * 20]
+
+        @classmethod
+        def tcsetattr(cls, _fd: int, _when: int, attrs: list[Any]) -> None:
+            cls.saved_attrs.append(attrs)
+
+    monkeypatch.setattr(output.sys, "stdin", _TTY())
+    monkeypatch.setattr(output.sys, "stdout", _TTY())
+    monkeypatch.setattr(output, "select", _Select)
+    monkeypatch.setattr(output, "termios", _Termios)
+    monkeypatch.setattr(output.os, "fpathconf", lambda _fd, _name: 0)
+
+    watcher = output.CtrlOToggleWatcher(lambda: None)
+    watcher.start()
+    watcher.stop()
+
+    attrs = _Termios.saved_attrs[0]
+    assert attrs[3] & _Termios.ICANON == 0
+    assert attrs[3] & _Termios.ECHO == 0
+    assert attrs[3] & _Termios.IEXTEN == 0
+    assert attrs[6][_Termios.VDISCARD] == b"\x00"
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Singleton tracker
 # ─────────────────────────────────────────────────────────────────────────────

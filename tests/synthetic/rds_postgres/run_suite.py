@@ -325,21 +325,13 @@ def run_scenario(
     grafana_backend: Any = None,
 ) -> tuple[dict[str, Any], ScenarioScore]:
     alert = fixture.alert
-    labels = alert.get("commonLabels", {}) or {}
-
-    alert_name = str(alert.get("title") or labels.get("alertname") or fixture.scenario_id)
-    pipeline_name = str(labels.get("pipeline_name") or "rds-postgres-synthetic")
-    severity = str(labels.get("severity") or "critical")
 
     resolved_integrations = _build_resolved_integrations(
         fixture, use_mock_grafana, grafana_backend=grafana_backend
     )
 
     final_state = run_investigation(
-        alert_name=alert_name,
-        pipeline_name=pipeline_name,
-        severity=severity,
-        raw_alert=alert,
+        alert,
         resolved_integrations=resolved_integrations,
     )
     state_dict = dict(final_state)

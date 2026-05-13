@@ -31,7 +31,7 @@ def test_devcontainer_config_matches_local_dev_workflow() -> None:
     assert "python -m venv --clear .venv-devcontainer" in config["postCreateCommand"]
     assert "pip install --upgrade pip" not in config["postCreateCommand"]
     assert ".venv-devcontainer/bin/python -m pip install -e '.[dev]'" in config["postCreateCommand"]
-    assert 2024 in config["forwardPorts"]
+    assert 8000 in config["forwardPorts"]
     assert "FROM python:3.13-bookworm" in dockerfile
     assert (
         "apt-get install -y --no-install-recommends ca-certificates curl git make sudo"
