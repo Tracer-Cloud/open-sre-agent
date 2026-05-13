@@ -14,6 +14,14 @@ import pytest
 
 _POSIX_FCNTL_AVAILABLE = importlib.util.find_spec("fcntl") is not None
 
+pytestmark = pytest.mark.skipif(
+    not hasattr(socket, "AF_UNIX"),
+    reason=(
+        "agent bus is built on AF_UNIX Unix-domain sockets; the platform's "
+        "stdlib socket module does not expose AF_UNIX (e.g. Windows)"
+    ),
+)
+
 from app.agents import bus as bus_module
 from app.agents.bus import (
     BUS_SCHEMA_VERSION,
