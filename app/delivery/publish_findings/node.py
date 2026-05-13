@@ -2,7 +2,11 @@
 
 import logging
 
-from app.delivery.publish_findings.formatters.report import build_slack_blocks, format_slack_message
+from app.delivery.publish_findings.formatters.report import (
+    build_slack_blocks,
+    format_slack_message,
+    format_telegram_message,
+)
 from app.delivery.publish_findings.gitlab_writeback import post_gitlab_mr_writeback
 from app.delivery.publish_findings.renderers.editor import open_in_editor
 from app.delivery.publish_findings.renderers.terminal import render_report
@@ -36,6 +40,8 @@ def generate_report(state: InvestigationState) -> dict:
         slack_message,
         short_summary,
     )
+
+    telegram_message = masking_ctx.unmask(format_telegram_message(ctx))
 
     all_blocks = build_slack_blocks(ctx) + build_action_blocks(investigation_url, investigation_id)
     all_blocks = masking_ctx.unmask_value(all_blocks)
@@ -135,7 +141,7 @@ def generate_report(state: InvestigationState) -> dict:
         )
         if bot_token and chat_id:
             tg_posted, tg_error = send_telegram_report(
-                slack_message,
+                telegram_message,
                 {"bot_token": bot_token, "chat_id": chat_id, "reply_to_message_id": reply_to},
             )
             logger.debug("[publish] telegram delivery: posted=%s error=%s", tg_posted, tg_error)

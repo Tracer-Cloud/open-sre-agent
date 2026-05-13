@@ -1,13 +1,45 @@
 ---
 title: "Hermes log monitoring"
-description: "Tail a Hermes agent errors.log, classify incidents, and alert on Telegram (optional RCA)."
+description: "Tail Hermes errors.log, classify incidents, alert on Telegram; run offline classifier regression tests, then try a local watch demo."
 ---
 
-OpenSRE can **watch the log file written by a [Hermes](https://github.com/NousResearch/hermes-agent) deployment** (typically `errors.log`), turn new lines into structured incidents, optionally **deduplicate and escalate** them, and deliver alerts to **Telegram**. This is separate from OpenSRE’s own runtime logs: it targets the Hermes process’s error log on disk.
+OpenSRE can **watch the log file written by a [Hermes](https://github.com/NousResearch/hermes-agent) deployment** (typically `errors.log`), turn new lines into structured incidents, optionally **deduplicate and escalate** them, and deliver alerts to **Telegram**. This page is about that **log tail + classifier + delivery** path — separate from OpenSRE’s own runtime logs.
+
+Developer workflow: the **Hermes synthetic suite** under `tests/synthetic/hermes/` runs **offline** classifier checks (no LLM, no live infra); you can run that first, then **watch** a bundled scenario `errors.log` with `opensre hermes watch` as a small local demo. **Optional:** enable **`--investigate`** to attach the full OpenSRE RCA pipeline for **HIGH** / **CRITICAL** incidents ([quickstart](/quickstart)).
 
 <Note>
-Telegram delivery uses the same credential model as the rest of OpenSRE. If you have not configured a bot yet, start with [Telegram](/messaging/telegram) (bot token and `chat_id`).
+Telegram delivery uses the same credential model as the rest of OpenSRE. For **`hermes watch`**, set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_DEFAULT_CHAT_ID` (or pass `--chat-id`). See [Telegram](/messaging/telegram).
 </Note>
+
+---
+
+## Local demo: synthetic tests, then watch
+
+**1 — Offline “investigation” of the classifier (pytest, no Telegram)**  
+The Hermes synthetic suite feeds real-shaped `errors.log` slices through `IncidentClassifier` and asserts against `answer.yml`. This is the same regression loop documented in the repo’s [`tests/synthetic/hermes/README.md`](https://github.com/Tracer-Cloud/opensre/blob/main/tests/synthetic/hermes/README.md):
+
+```bash
+uv run pytest tests/synthetic/hermes -q
+```
+
+To run every synthetic-marked test under `tests/synthetic/` (includes Hermes and other packages):
+
+```bash
+make test-synthetic
+```
+
+**2 — Live watch on a fixture file (Telegram required)**  
+Use a scenario’s `errors.log` that emits incidents under **default** classifier settings (see **Quick check with a bundled fixture** under [CLI: live watch](#cli-live-watch) — the `002-gateway-systemd-crash-loop` example matches the screenshot there). From the repo root:
+
+```bash
+export TELEGRAM_BOT_TOKEN=…
+export TELEGRAM_DEFAULT_CHAT_ID=…
+uv run opensre hermes watch \
+  --log-path tests/synthetic/hermes/002-gateway-systemd-crash-loop/errors.log \
+  --from-start
+```
+
+`--from-start` **replays** the file then keeps tailing — good for a one-shot demo of classification → Telegram. By default, watch **only reads new lines**, so without `--from-start` a static fixture produces no events until more lines are appended (use a **writable** copy of the scenario log if you want to experiment without editing files under `tests/`). Omit **`--investigate`** for a lightweight demo (**`--investigate`** pulls in LangGraph + LLM for **HIGH** / **CRITICAL** only; see below).
 
 ---
 
@@ -74,9 +106,17 @@ Correlator **dedup** can also reduce multiple Telegram sends for the same finger
 
 ---
 
-## Investigations during watch
+## Watch with full OpenSRE RCA (`--investigate`)
 
-`--investigate` (or `OPENSRE_HERMES_INVESTIGATE=1`) runs the OpenSRE investigation bridge for severities that warrant RCA. Investigations run in a **bounded thread pool** with a timeout so the tailing thread does not block indefinitely. Medium-severity incidents (for example warning bursts) stay on a lighter notification path by design.
+For production on-call, you normally run **one long-lived watcher** with the RCA bridge when you want LLM-backed summaries on serious incidents:
+
+```bash
+uv run opensre hermes watch --investigate
+```
+
+Configure **LLM + integrations** as for any OpenSRE investigation ([quickstart](/quickstart)). When the classifier emits **HIGH** or **CRITICAL** incidents, each qualifying incident triggers **`run_investigation`** via the Telegram sink. Work runs on a **bounded thread pool** with a **timeout** so log tailing stays responsive; **MEDIUM** and lower stay on a lighter notification path by default.
+
+For **ad hoc** Hermes log context during **another** investigation (for example Grafana-driven RCA), use **`get_hermes_logs`** below — it samples the log and does not replace a long-running **`opensre hermes watch`** for continuous classification.
 
 ---
 
@@ -97,7 +137,7 @@ The tool only allows paths under permitted directories (by default `~/.hermes` a
 
 ## Synthetic regression suite
 
-Developers can lock classifier behavior against real log shapes under `tests/synthetic/hermes/`. See the suite [README](https://github.com/Tracer-Cloud/opensre/blob/main/tests/synthetic/hermes/README.md) in the repository for layout and how to run tests.
+Contributors add scenarios under `tests/synthetic/hermes/` (fixtures, `scenario.yml`, `answer.yml`). Layout, schema, and “adding a new scenario” steps are in [`tests/synthetic/hermes/README.md`](https://github.com/Tracer-Cloud/opensre/blob/main/tests/synthetic/hermes/README.md).
 
 ---
 

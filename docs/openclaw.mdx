@@ -136,7 +136,7 @@ Contributor-facing regression coverage for this path lives in:
 - `tests/test_openclaw_integration.py`
 - `tests/tools/test_openclaw_mcp_tool.py`
 - `tests/utils/test_openclaw_delivery.py`
-- `tests/e2e/openclaw/test_openclaw_e2e.py`
+- `tests/e2e/openclaw/` (e2e suite — see the "End-to-end tests" section below)
 
 ## Environment variables
 
@@ -150,7 +150,11 @@ Contributor-facing regression coverage for this path lives in:
 
 ## Troubleshooting
 
-- `OpenClaw bridge validation failed: Node.js ... is required`: switch the current shell to Node `22.12+` or newer, then re-run `openclaw --help` before retrying onboarding.
+- `OpenClaw bridge validation failed: Node.js ... is required`: switch the current shell to Node `22.12+` or newer. With `nvm`: `nvm install 22 && nvm use 22 && nvm alias default 22`. With Homebrew: `brew install node@22 && brew link --overwrite node@22`. Then re-run `openclaw --help` before retrying onboarding.
 - `uv run opensre integrations verify openclaw` fails against `http://127.0.0.1:18789/`: that URL is the OpenClaw Control UI/Gateway, not the MCP bridge. Use `stdio` mode with `openclaw mcp serve`.
 - `search_openclaw_conversations` or write-back fails with `Connection closed` or `ECONNREFUSED`: the OpenClaw Gateway is not running. Check `openclaw gateway status`, then run `openclaw gateway run`.
 - `Command not found: openclaw`: install the OpenClaw CLI or point `OPENCLAW_MCP_COMMAND` at the full executable path.
+
+## End-to-end tests
+
+The OpenClaw e2e suite lives at [`tests/e2e/openclaw/`](https://github.com/Tracer-Cloud/opensre/tree/main/tests/e2e/openclaw). See its [README](https://github.com/Tracer-Cloud/opensre/tree/main/tests/e2e/openclaw/README.md) for prerequisites, how to run the suite, scenario layout, and CI behavior.

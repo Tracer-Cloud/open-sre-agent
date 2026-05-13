@@ -244,6 +244,8 @@ def investigate_command(
                 write_json(result, output)
     except SystemExit:
         raise
+    except KeyboardInterrupt:
+        raise SystemExit(SUCCESS) from None
 
     raise SystemExit(SUCCESS)
 

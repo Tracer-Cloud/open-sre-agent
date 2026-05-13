@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import threading
 from collections.abc import Iterator
@@ -17,6 +18,13 @@ if TYPE_CHECKING:
     from app.state import AgentState
 
 _logger = logging.getLogger(__name__)
+
+
+class _InvestigationPumpCancelled(Exception):
+    """Propagated when the async pump task was cancelled (distinct from Ctrl+C SIGINT)."""
+
+
+_SESSION_EVENT_POLL_S = 0.25
 
 
 def _check_llm_settings() -> None:
@@ -43,6 +51,14 @@ def _check_llm_settings() -> None:
 
 def _reraise_investigation_failure(exc: BaseException) -> NoReturn:
     """Map investigation runtime failures to structured CLI errors."""
+    if isinstance(exc, _InvestigationPumpCancelled):
+        from app.cli.support.errors import OpenSREError
+
+        raise OpenSREError(
+            "Investigation streaming stopped before completion.",
+            suggestion="The run was cancelled or closed early. Retry if you still need results.",
+        ) from exc
+
     reraise_cli_runtime_error(exc)
 
 
@@ -115,6 +131,7 @@ def run_investigation_cli(
         "problem_md": state["problem_md"],
         "root_cause": state["root_cause"],
         "is_noise": state.get("is_noise", False),
+        "validity_score": state.get("validity_score", 0.0),
     }
     if state.get("evidence_entries"):
         out["tool_calls"] = state["evidence_entries"]
@@ -148,6 +165,10 @@ def stream_investigation_cli(
     using a background thread + queue so events are yielded in real time
     (not batched).  The same ``StreamRenderer`` used for remote
     investigations can render local runs identically.
+
+    On :exc:`KeyboardInterrupt` the background asyncio task is cancelled
+    and the thread is joined so Ctrl+C terminates cleanly instead of
+    leaving an orphaned investigation task in flight.
     """
     import queue
     import threading
@@ -156,10 +177,13 @@ def stream_investigation_cli(
 
     _check_llm_settings()
 
-    event_queue: queue.Queue[StreamEvent | Exception | None] = queue.Queue()
+    event_queue: queue.Queue[StreamEvent | BaseException | None] = queue.Queue()
+    loop_ref: dict[str, asyncio.AbstractEventLoop] = {}
+    pump_task_ref: dict[str, asyncio.Task[None]] = {}
 
     def _run_async() -> None:
         loop = asyncio.new_event_loop()
+        loop_ref["loop"] = loop
         try:
 
             async def _pump() -> None:
@@ -168,7 +192,12 @@ def stream_investigation_cli(
                 ):
                     event_queue.put(evt)
 
-            loop.run_until_complete(_pump())
+            task = loop.create_task(_pump())
+            pump_task_ref["task"] = task
+            try:
+                loop.run_until_complete(task)
+            except asyncio.CancelledError:
+                event_queue.put(_InvestigationPumpCancelled())
         except Exception as exc:
             event_queue.put(exc)
         finally:
@@ -178,16 +207,35 @@ def stream_investigation_cli(
     thread = threading.Thread(target=_run_async, daemon=True)
     thread.start()
 
-    while True:
-        item = event_queue.get()
-        if isinstance(item, Exception):
-            thread.join()
-            _reraise_investigation_failure(item)
-        if item is None:
-            break
-        yield item
+    def _cancel_pump() -> None:
+        loop = loop_ref.get("loop")
+        task = pump_task_ref.get("task")
+        if loop is None or task is None or loop.is_closed():
+            return
+        with contextlib.suppress(RuntimeError):
+            # Loop may close between `is_closed()` and scheduling cancellation.
+            loop.call_soon_threadsafe(task.cancel)
 
-    thread.join()
+    try:
+        while True:
+            try:
+                item = event_queue.get(timeout=_SESSION_EVENT_POLL_S)
+            except queue.Empty:
+                continue
+            if isinstance(item, BaseException):
+                thread.join(timeout=5)
+                _reraise_investigation_failure(item)
+            if item is None:
+                break
+            yield item
+    finally:
+        _cancel_pump()
+        thread.join(timeout=5)
+        if thread.is_alive():
+            _logger.warning(
+                "investigation thread did not terminate within 5s after cancellation; "
+                "an LLM call may still be in flight"
+            )
 
 
 def run_investigation_cli_streaming(
@@ -196,7 +244,7 @@ def run_investigation_cli_streaming(
 ) -> dict[str, Any]:
     """Run the investigation with real-time streaming UI and return the result.
 
-    Uses ``astream_events`` + ``StreamRenderer`` so the local CLI shows
+    Uses async pipeline streaming + ``StreamRenderer`` so the local CLI shows
     the same live tool-call and reasoning updates as a remote investigation.
     """
     from app.remote.renderer import StreamRenderer
@@ -205,7 +253,13 @@ def run_investigation_cli_streaming(
         raw_alert=raw_alert,
     )
     renderer = StreamRenderer(local=True)
-    final_state = renderer.render_stream(events)
+    try:
+        final_state = renderer.render_stream(events)
+    except KeyboardInterrupt:
+        # Force-close the generator so the background thread's finally block
+        # runs and the async task is cancelled before we re-raise.
+        events.close()
+        raise
     return {
         "report": final_state.get("slack_message", final_state.get("report", "")),
         "problem_md": final_state.get("problem_md", ""),
@@ -213,9 +267,6 @@ def run_investigation_cli_streaming(
         "is_noise": final_state.get("is_noise", False),
         "tool_calls": final_state.get("evidence_entries", []),
     }
-
-
-_SESSION_EVENT_POLL_S = 0.25
 
 
 def _run_session_alert_payload(
@@ -254,7 +305,7 @@ def _run_session_alert_payload(
             try:
                 loop.run_until_complete(task)
             except asyncio.CancelledError:
-                event_queue.put(KeyboardInterrupt("investigation cancelled"))
+                event_queue.put(_InvestigationPumpCancelled())
         except Exception as exc:
             event_queue.put(exc)
         finally:
@@ -269,7 +320,9 @@ def _run_session_alert_payload(
         task = pump_task_ref.get("task")
         if loop is None or task is None or loop.is_closed():
             return
-        loop.call_soon_threadsafe(task.cancel)
+        with contextlib.suppress(RuntimeError):
+            # Loop may close between `is_closed()` and scheduling cancellation.
+            loop.call_soon_threadsafe(task.cancel)
 
     def _events() -> Iterator[StreamEvent]:
         try:
@@ -282,13 +335,13 @@ def _run_session_alert_payload(
                 except queue.Empty:
                     continue
                 if isinstance(item, BaseException):
+                    thread.join(timeout=5)
                     _reraise_investigation_failure(item)
                 if item is None:
                     return
                 yield item
-        except KeyboardInterrupt:
+        finally:
             _cancel_pump()
-            raise
 
     renderer = StreamRenderer(local=True)
     try:

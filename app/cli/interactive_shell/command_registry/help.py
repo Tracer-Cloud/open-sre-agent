@@ -11,6 +11,7 @@ from app.cli.interactive_shell.ui import BOLD_BRAND, DIM, HIGHLIGHT, repl_table
 
 def _cmd_help(_session: ReplSession, console: Console, _args: list[str]) -> bool:
     from app.cli.interactive_shell.command_registry.agents import COMMANDS as AGENTS_CMDS
+    from app.cli.interactive_shell.command_registry.alerts import COMMANDS as ALERTS_CMDS
     from app.cli.interactive_shell.command_registry.cli_parity import (
         COMMANDS as PARITY_COMMANDS,
     )
@@ -30,6 +31,7 @@ def _cmd_help(_session: ReplSession, console: Console, _args: list[str]) -> bool
         ("Privacy", list(PRIVACY_CMDS)),
         ("Tasks", list(TASK_CMDS)),
         ("Agents", list(AGENTS_CMDS)),
+        ("Alerts", list(ALERTS_CMDS)),
         ("CLI (parity)", list(PARITY_COMMANDS)),
         ("System", list(SYS_CMDS)),
     ]
