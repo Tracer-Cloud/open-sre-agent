@@ -60,6 +60,13 @@ _MAX_FRAME_BYTES: int = 64 * 1024
 _BROADCAST_WRITE_TIMEOUT_SECONDS: float = 0.2
 
 
+def _require_unix_socket_support() -> None:
+    if not hasattr(socket, "AF_UNIX"):
+        raise OSError(
+            "agent bus requires Unix-domain socket support; this platform does not expose socket.AF_UNIX"
+        )
+
+
 @dataclass(frozen=True)
 class BusMessage:
     """A single finding published on the agent bus.
@@ -177,6 +184,8 @@ def _socket_is_live(path: Path) -> bool:
     """
     if not path.exists():
         return False
+    if not hasattr(socket, "AF_UNIX"):
+        return False
     pid = _read_broker_pid(path)
     if pid is None:
         return False
@@ -260,6 +269,7 @@ class BusServer:
         """
         if self._running.is_set():
             return
+        _require_unix_socket_support()
         _ensure_parent_dir(self._path)
         listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
@@ -515,6 +525,7 @@ def _ensure_broker(path: Path) -> BusServer | None:
 
 def _connect_client(path: Path, timeout: float) -> socket.socket:
     """Open a blocking UDS connection to the broker at ``path``."""
+    _require_unix_socket_support()
     client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     client.settimeout(timeout)
     try:
