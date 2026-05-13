@@ -64,7 +64,17 @@ def test_deploy_project_root_resolves_to_repo_root(scenario: str) -> None:
 
 
 def test_shared_assets_exist() -> None:
-    """Assets referenced from `tests/shared/...` by all three helpers."""
+    """Assets the deploy helpers resolve from `tests/shared/...`.
+
+    `external_vendor_api` is bundled as a Lambda by all three helpers
+    (the mock external vendor API). `infrastructure_code/alloy_config`
+    is only read by the Prefect helper's `ALLOY_CONFIG_DIR`; the Flink
+    helper embeds an equivalent Alloy config inline and the Lambda
+    helper has no Alloy sidecar. The directory is still checked here
+    because it is the canonical location for that config and the
+    Prefect helper's resolution depends on the same `tests/shared/`
+    layout this test guards.
+    """
     for rel in (
         Path("external_vendor_api"),
         Path("infrastructure_code") / "alloy_config",
