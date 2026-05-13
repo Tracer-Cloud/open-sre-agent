@@ -158,6 +158,21 @@ def _looks_like_cancel_request(text: str | None) -> bool:
     return (text or "").strip().lower() in _CANCEL_REQUEST_TOKENS
 
 
+def _dispatch_should_show_spinner(text: str, session: ReplSession) -> bool:
+    """Return False for deterministic slash-command dispatches.
+
+    Slash commands often open menus or run local shell handlers. Showing the
+    assistant/token spinner for those paths makes a local menu look like an LLM
+    turn is running. Keep this in lockstep with the router's bare-alias
+    typo-tolerance so typo-corrected local commands do not briefly show the
+    assistant spinner either.
+    """
+    stripped = text.strip()
+    if stripped.startswith("/"):
+        return False
+    return not _router.is_bare_command_alias(stripped, session)
+
+
 class DispatchCancelled(Exception):
     """Raised in the dispatch worker thread when the user interrupts
     (Esc / ``/cancel`` / ``/stop`` / ``/abort``) and the worker is
@@ -780,7 +795,9 @@ async def _run_interactive(
             color_system="truecolor",
             legacy_windows=False,
         )
-        spinner.start()
+        show_spinner = _dispatch_should_show_spinner(text, session)
+        if show_spinner:
+            spinner.start()
         try:
             await asyncio.to_thread(
                 _dispatch_one_turn,
@@ -808,7 +825,8 @@ async def _run_interactive(
             report_exception(exc, context="interactive_shell.dispatch_async")
             console.print(f"[{ERROR}]dispatch error:[/] {escape(str(exc))}")
         finally:
-            spinner.stop()
+            if show_spinner:
+                spinner.stop()
             # Release the per-turn cancel event only if it's still ours.
             # A stale-but-still-running prior-turn worker keeps a strong
             # reference to its own ``dispatch_cancel``; nothing else

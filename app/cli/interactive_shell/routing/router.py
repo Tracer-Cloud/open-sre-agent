@@ -75,6 +75,11 @@ def _is_bare_command_alias(text: str, _session: RoutingSession) -> bool:
     return is_single_edit_typo(stripped.lower(), normalized)
 
 
+def is_bare_command_alias(text: str, session: RoutingSession) -> bool:
+    """True when ``text`` is a bare slash-command alias or accepted typo."""
+    return _is_bare_command_alias(text, session)
+
+
 def _is_cli_help_rule(text: str, _session: RoutingSession) -> bool:
     return _is_cli_help_intent(text.strip())
 
