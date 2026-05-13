@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from app.correlation.models import CorrelatedSignal, UpstreamCandidate
 from app.correlation.reporting import build_correlation_report, correlation_report_to_payload
 from app.correlation.scoring import (
@@ -13,13 +15,8 @@ from app.correlation.scoring import (
 )
 from app.correlation.upstream import UpstreamEvidenceBundle
 
-_EMPTY_CORRELATION: dict[str, list[dict[str, object]]] = {
-    "correlated_signals": [],
-    "most_likely_causal_drivers": [],
-}
 
-
-def _empty_correlation() -> dict[str, list[dict[str, object]]]:
+def _empty_correlation() -> dict[str, Any]:
     return {
         "correlated_signals": [],
         "most_likely_causal_drivers": [],
@@ -30,12 +27,11 @@ def build_runtime_correlation(
     evidence: UpstreamEvidenceBundle,
     *,
     target_resource: str,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     if not evidence.rds_metrics or not evidence.upstream_metrics:
         return _empty_correlation()
 
     rds_metric = evidence.rds_metrics[0]
-
     candidates: list[UpstreamCandidate] = []
 
     for metric in evidence.upstream_metrics:
