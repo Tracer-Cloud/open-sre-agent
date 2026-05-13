@@ -6,7 +6,7 @@ import asyncio
 import contextlib
 import logging
 import threading
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from typing import TYPE_CHECKING, Any, NoReturn
 
 from app.cli.support.cli_error_mapping import reraise_cli_runtime_error
@@ -158,7 +158,7 @@ def run_investigation_cli(
 def stream_investigation_cli(
     *,
     raw_alert: dict[str, Any],
-) -> Iterator[StreamEvent]:
+) -> Generator[StreamEvent]:
     """Stream investigation events locally via the async pipeline stream.
 
     Bridges the async streaming API into a synchronous iterator

@@ -70,7 +70,7 @@ jobs:
     # ``LLM_CREDENTIAL_SKIP_REASON`` when no key is present in env.
     # Contributors with ANTHROPIC_API_KEY / OPENAI_API_KEY /
     # GEMINI_API_KEY set locally still run them via
-    # ``make test-openclaw``. LangSmith vars stay scoped to the
+    # ``make test-openclaw``. Lang Smith env vars stay scoped to the
     # local-RCA path for the same reason — no value tracing the
     # use-case-only CI runs.
 
