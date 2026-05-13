@@ -667,6 +667,10 @@ def test_before_send_filters_nested_lists_of_dicts() -> None:
             "RuntimeError",
             "Cannot connect to Openrouter API. Check your network connection and that the endpoint URL is reachable.",
         ),
+        (
+            "RuntimeError",
+            "Openai API request timed out. Check that the service is running and responsive at the configured endpoint.",
+        ),
     ],
 )
 def test_before_send_drops_operator_actionable_llm_errors(

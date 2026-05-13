@@ -59,6 +59,10 @@ _OPERATOR_ACTIONABLE_LLM_ERROR_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\bLLM API request failed after multiple retries\b", re.I),
     # Provider endpoint unreachable (Ollama down, bad URL, SSL misconfiguration).
     re.compile(r"\bcannot connect to .+ api\b", re.I),
+    re.compile(
+        r"\bapi request timed out\.\s+Check that the service is running and responsive\b",
+        re.I,
+    ),
 )
 
 
