@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import queue
 import threading
@@ -119,7 +120,8 @@ async def astream_investigation(
     loop = asyncio.get_running_loop()
 
     def _put(evt: StreamEvent) -> None:
-        loop.call_soon_threadsafe(event_queue.put_nowait, evt)
+        with contextlib.suppress(RuntimeError):  # loop already closed; consumer is gone
+            loop.call_soon_threadsafe(event_queue.put_nowait, evt)
 
     def _make_node_event(kind: str, node: str, data: dict[str, Any]) -> StreamEvent:
         return StreamEvent(
@@ -255,9 +257,11 @@ async def astream_investigation(
             from app.utils.sentry_sdk import capture_exception
 
             capture_exception(exc)
-            loop.call_soon_threadsafe(event_queue.put_nowait, exc)
+            with contextlib.suppress(RuntimeError):
+                loop.call_soon_threadsafe(event_queue.put_nowait, exc)
         finally:
-            loop.call_soon_threadsafe(event_queue.put_nowait, None)
+            with contextlib.suppress(RuntimeError):
+                loop.call_soon_threadsafe(event_queue.put_nowait, None)
 
     thread = threading.Thread(target=_run_pipeline, daemon=True)
     thread.start()
