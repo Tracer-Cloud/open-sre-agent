@@ -189,6 +189,16 @@ def test_incompatible_store_error_on_mismatched_vector_dim(tmp_path: Path) -> No
         SourceStore(path, vector_dim=2)
 
 
+def test_upsert_rejects_mixed_vector_dims_in_one_batch(tmp_path: Path) -> None:
+    store = SourceStore(tmp_path / "source.sqlite")
+
+    with pytest.raises(ValueError, match="one upsert batch"):
+        store.upsert_chunks(
+            [_chunk("app/a.py", "alpha"), _chunk("app/b.py", "beta")],
+            [np.array([1.0, 0.0, 0.0]), np.array([1.0, 0.0])],
+        )
+
+
 def test_incompatible_store_error_on_mismatched_embedding_model(tmp_path: Path) -> None:
     path = tmp_path / "source.sqlite"
     SourceStore(path, vector_dim=3, embedding_model="model-a")

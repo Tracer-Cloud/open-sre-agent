@@ -10,7 +10,9 @@ from typing import Any
 
 import numpy as np
 
-DEFAULT_STORE_PATH = Path.home() / ".config" / "opensre" / "source_index.sqlite"
+from app.constants import OPENSRE_HOME_DIR
+
+DEFAULT_STORE_PATH = OPENSRE_HOME_DIR / "source_index.sqlite"
 _SQLITE_VARIABLE_LIMIT = 999
 _DEFAULT_MAX_COSINE_SCAN_ROWS = 50_000
 
@@ -31,7 +33,12 @@ class StoredChunk:
 
 
 class SourceStore:
-    """Persist source chunks and float32 embedding vectors in SQLite."""
+    """Persist source chunks and float32 embedding vectors in SQLite.
+
+    One SQLite file is intended for one embedding model and vector dimension.
+    `cosine_topk` performs a bounded linear scan; larger corpora should move to
+    a vector index or ANN backend before this powers production retrieval.
+    """
 
     def __init__(
         self,
@@ -191,6 +198,8 @@ class SourceStore:
         return ids
 
     def fetch_by_ids(self, ids: list[int]) -> list[StoredChunk]:
+        """Return stored chunks for existing ids, omitting ids no longer present."""
+
         if not ids:
             return []
 
@@ -348,8 +357,9 @@ class SourceStore:
         vector_dim = int(vectors[0].shape[0])
         for vector in vectors:
             if vector.shape[0] != vector_dim:
-                raise IncompatibleStoreError(
-                    f"Store vector_dim is {vector_dim}, got {vector.shape[0]}"
+                raise ValueError(
+                    f"All vectors in one upsert batch must have dim {vector_dim}, "
+                    f"got {vector.shape[0]}"
                 )
         if self._vector_dim is not None and vector_dim != self._vector_dim:
             raise IncompatibleStoreError(
