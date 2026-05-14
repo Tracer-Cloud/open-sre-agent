@@ -95,7 +95,7 @@ def drain_and_render_incoming(
 
     for alert in alerts:
         console.print(format_incoming_alert(alert), end="\n")
-        session.record("incoming_alert", alert.text, ok=True)
+        session.record_incoming_alert(alert)
         count += 1
 
     return count

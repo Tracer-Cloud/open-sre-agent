@@ -125,21 +125,26 @@ class ReplSession:
         """Append an entry to the session history.
 
         Supports kinds: "shell", "slash", "alert", "chat", "incoming_alert", etc.
-        For "incoming_alert", also appends to the incoming_alerts list (capped).
+        For "incoming_alert", use record_incoming_alert() instead to preserve metadata.
         """
         self.history.append({"type": kind, "text": text, "ok": ok})
 
-        # Also track incoming alerts in a separate list for easy access
-        if kind == "incoming_alert":
-            from app.cli.interactive_shell.alert_inbox import IncomingAlert
+    def record_incoming_alert(self, alert: "IncomingAlert") -> None:
+        """Append a full IncomingAlert with all metadata to session history.
 
-            # Create a simple IncomingAlert wrapper for the text
-            alert = IncomingAlert(text=text)
-            self.incoming_alerts.append(alert)
+        Also appends to incoming_alerts list (capped at _INCOMING_ALERTS_MAX).
+        This preserves received_at, severity, source, and alert_name metadata
+        so that /status displays accurate timestamps and future uses have complete data.
+        """
+        # Record to history with alert text
+        self.history.append({"type": "incoming_alert", "text": alert.text, "ok": True})
 
-            # Cap the list at _INCOMING_ALERTS_MAX
-            if len(self.incoming_alerts) > self._INCOMING_ALERTS_MAX:
-                self.incoming_alerts.pop(0)
+        # Store the full alert object to preserve all metadata
+        self.incoming_alerts.append(alert)
+
+        # Cap the list at _INCOMING_ALERTS_MAX
+        if len(self.incoming_alerts) > self._INCOMING_ALERTS_MAX:
+            self.incoming_alerts.pop(0)
 
     def mark_latest(self, *, ok: bool, kind: str | None = None) -> None:
         """Update the latest history entry, optionally scanning for a matching kind."""
