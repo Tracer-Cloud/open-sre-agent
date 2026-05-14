@@ -165,12 +165,17 @@ class BedrockAgentClient(AnthropicAgentClient):
     """Bedrock-backed client using AnthropicBedrock SDK."""
 
     def __init__(self, model: str, max_tokens: int = 4096) -> None:
-        from anthropic import AnthropicBedrock
         import os
+        from typing import cast
 
-        self._client = AnthropicBedrock(
-            aws_region=os.getenv("AWS_REGION", "us-east-1"),
-            timeout=_CLIENT_TIMEOUT_SEC,
+        from anthropic import Anthropic, AnthropicBedrock
+
+        self._client = cast(
+            Anthropic,
+            AnthropicBedrock(
+                aws_region=os.getenv("AWS_REGION", "us-east-1"),
+                timeout=_CLIENT_TIMEOUT_SEC,
+            ),
         )
         self._model = model
         self._max_tokens = max_tokens
