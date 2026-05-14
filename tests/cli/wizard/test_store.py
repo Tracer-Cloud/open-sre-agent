@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from app.cli.wizard.store import (
     load_active_remote_name,
     load_local_config,
@@ -96,6 +98,11 @@ def test_remote_loaders_treat_malformed_remote_section_as_empty(tmp_path) -> Non
     assert load_remote_url(store_path) is None
     assert load_named_remotes(store_path) == {}
     assert load_active_remote_name(store_path) is None
+    assert load_remote_ops_config(store_path) == {
+        "provider": None,
+        "project": None,
+        "service": None,
+    }
 
 
 def test_named_remote_loader_skips_malformed_entries(tmp_path) -> None:
@@ -148,9 +155,5 @@ def test_set_active_remote_handles_malformed_named_remotes(tmp_path) -> None:
         encoding="utf-8",
     )
 
-    try:
+    with pytest.raises(KeyError, match="No remote named 'prod'"):
         set_active_remote("prod", path=store_path)
-    except KeyError as exc:
-        assert str(exc) == "\"No remote named 'prod'\""
-    else:
-        raise AssertionError("Expected KeyError for missing remote")
