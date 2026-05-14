@@ -6,6 +6,7 @@ import contextlib
 import tempfile
 from pathlib import Path
 
+from app.constants.investigation import MAX_EXPANSIONS, MAX_INVESTIGATION_LOOPS
 from app.constants.posthog import (
     DEFAULT_POSTHOG_BOUNCE_THRESHOLD,
     DEFAULT_POSTHOG_BOUNCE_WINDOW,
@@ -39,6 +40,8 @@ def ensure_opensre_tmp_dir() -> Path:
 
 
 __all__ = [
+    "MAX_EXPANSIONS",
+    "MAX_INVESTIGATION_LOOPS",
     "DEFAULT_POSTHOG_BOUNCE_THRESHOLD",
     "DEFAULT_POSTHOG_BOUNCE_WINDOW",
     "DEFAULT_POSTHOG_TIMEOUT_SECONDS",

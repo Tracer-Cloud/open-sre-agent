@@ -1321,7 +1321,7 @@ class TestCliDelegatedCommands:
         "command,expected_args",
         [
             ("/onboard", ["onboard"]),
-            ("/deploy ec2", ["deploy", "ec2"]),
+            ("/config show", ["config", "show"]),
             ("/remote health", ["remote", "health"]),
             ("/tests list", ["tests", "list"]),
             ("/guardrails audit", ["guardrails", "audit"]),

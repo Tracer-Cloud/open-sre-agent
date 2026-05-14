@@ -119,7 +119,7 @@ def _cmd_cost(session: ReplSession, console: Console, _args: list[str]) -> bool:
         table.add_row("input tokens", f"{inp:,}")
         table.add_row("output tokens", f"{out:,}")
     else:
-        table.add_row("token usage", f"[{DIM}]not available (LangSmith not wired yet)[/]")
+        table.add_row("token usage", f"[{DIM}]not available (not wired yet)[/]")
 
     console.print(table)
     return True

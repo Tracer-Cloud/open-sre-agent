@@ -83,7 +83,8 @@ def load_payload(
     if input_path:
         return load_file(input_path)
     if sys.stdin.isatty():
-        from app.cli.investigation.investigate_input import prompt_for_input
-
-        return prompt_for_input()
+        raise SystemExit(
+            "No alert input provided. Use --input/-i <file>, --input-json <json>, "
+            "--interactive to paste JSON, or pipe alert JSON on stdin."
+        )
     return load_stdin()

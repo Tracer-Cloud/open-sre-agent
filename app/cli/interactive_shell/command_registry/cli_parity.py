@@ -66,10 +66,6 @@ def _cmd_onboard(session: ReplSession, console: Console, args: list[str]) -> boo
     return run_cli_command(console, ["onboard", *args])
 
 
-def _cmd_deploy(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    return run_cli_command(console, ["deploy", *args])
-
-
 def _cmd_remote(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     return run_cli_command(console, ["remote", *args])
 
@@ -223,12 +219,6 @@ COMMANDS: list[SlashCommand] = [
         "/onboard",
         "run the interactive onboarding wizard ('/onboard local_llm')",
         _cmd_onboard,
-        execution_tier=ExecutionTier.SAFE,
-    ),
-    SlashCommand(
-        "/deploy",
-        "deploy OpenSRE to a cloud environment ('/deploy ec2|langsmith|railway')",
-        _cmd_deploy,
         execution_tier=ExecutionTier.SAFE,
     ),
     SlashCommand(

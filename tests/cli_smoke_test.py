@@ -700,8 +700,7 @@ def test_tests_interactive_launcher_smoke(cli_sandbox: CliSandbox) -> None:
 
 
 def test_deploy_help_smoke(cli_sandbox: CliSandbox) -> None:
-    result = _run_cli(cli_sandbox, "deploy", "-h")
+    result = _run_cli(cli_sandbox, "remote", "-h")
 
     assert result.exit_code == 0
-    assert "ec2" in result.stdout
-    assert "langsmith" in result.stdout
+    assert "health" in result.stdout

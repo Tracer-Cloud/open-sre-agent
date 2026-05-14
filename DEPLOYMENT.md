@@ -1,22 +1,21 @@
-## Official Deployment: LangGraph Platform
+## Deployment
 
-OpenSRE's official deployment method is LangGraph Platform.
+OpenSRE deploys as a standard Python/FastAPI runtime. Use the repo `Dockerfile`,
+Railway, EC2, ECS, Vercel, or another ASGI-capable host.
 
-## Deploy OpenSRE on LangGraph
+## Runtime Environment
 
-1. Create a new deployment in LangGraph Platform.
-2. Connect this repository to that deployment.
-3. Ensure `langgraph.json` is present at the repository root (it defines the graph and
-   HTTP app entrypoints).
-4. Configure your model provider in deployment environment variables:
+1. Deploy this repository using your hosting provider's normal app workflow.
+2. Configure your model provider in deployment environment variables:
     - `LLM_PROVIDER` (for example `anthropic`, `openai`, `openrouter`, `gemini`)
-5. Add the matching provider API key:
+3. Add the matching provider API key:
     - `ANTHROPIC_API_KEY` when `LLM_PROVIDER=anthropic`
     - `OPENAI_API_KEY` when `LLM_PROVIDER=openai`
     - `OPENROUTER_API_KEY` when `LLM_PROVIDER=openrouter`
     - `GEMINI_API_KEY` when `LLM_PROVIDER=gemini`
-6. Add any additional environment variables required by your integrations.
-7. Deploy and verify the service health in LangGraph Platform.
+4. Add `DATABASE_URI` and `REDIS_URI` for hosted layouts that need persistence.
+5. Add any additional environment variables required by your integrations.
+6. Deploy and verify service health.
 
 Example minimum environment:
 
@@ -30,17 +29,13 @@ The full set of supported provider keys and optional model overrides is document
 
 ---
 
-## Railway Deployment (Self-Hosted Alternative)
+## Railway Deployment
 
-Railway remains available if you prefer a self-hosted deployment path.
+Railway remains available as a hosted runtime option.
 
-Before running `opensre deploy railway`, make sure the target Railway project has
-both Postgres and Redis services, and that your OpenSRE service has `DATABASE_URI`
-and `REDIS_URI` set to those connection strings.
-
-```bash
-opensre deploy railway --project <project> --service <service> --yes
-```
+Before deploying on Railway, make sure the target project has both Postgres and
+Redis services, and that your OpenSRE service has `DATABASE_URI` and `REDIS_URI`
+set to those connection strings.
 
 If the deploy starts but the service never becomes healthy, verify that
 `DATABASE_URI` and `REDIS_URI` are present on the Railway service and point to the

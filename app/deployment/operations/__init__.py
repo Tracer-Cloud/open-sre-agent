@@ -1,8 +1,7 @@
-"""Deployment *operations* — runtime and infra around an already-defined deployment.
+"""Deployment operations around an already-defined hosted service.
 
 Health polling, persisted EC2 stack outputs, and provider config validation for
-dry-runs. This is not the same as *methods* (how you invoke Railway/LangSmith
-to ship a build).
+dry runs.
 """
 
 from app.deployment.operations.ec2_config import (

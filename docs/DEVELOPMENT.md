@@ -46,12 +46,11 @@ To refresh README benchmark copy from cached results (no LLM calls): `make bench
 
 ## Deployment
 
-### LangGraph Platform (official)
+### Hosted runtime
 
-1. Create a deployment on LangGraph Platform and connect this repository.
-2. Keep [`langgraph.json`](https://github.com/Tracer-Cloud/opensre/blob/main/langgraph.json) at the repo root.
-3. Set `LLM_PROVIDER` and the matching API key (for example `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` — see [`.env.example`](https://github.com/Tracer-Cloud/opensre/blob/main/.env.example)).
-4. Add integration and storage env vars your deployment needs.
+1. Deploy this repository as a standard Python/FastAPI app using the repo `Dockerfile` or your host's native Python workflow.
+2. Set `LLM_PROVIDER` and the matching API key (for example `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` — see [`.env.example`](https://github.com/Tracer-Cloud/opensre/blob/main/.env.example)).
+3. Add integration and storage env vars your deployment needs.
 
 Minimal LLM env:
 
@@ -120,7 +119,7 @@ Self-hosted users can set `SENTRY_DSN` to their project; unset uses the bundled 
 
 ### Deployment tagging
 
-Set `OPENSRE_DEPLOYMENT_METHOD` to `railway`, `langsmith`, or `local` (default `local`) to label Sentry events.
+Set `OPENSRE_DEPLOYMENT_METHOD` to `railway`, `ec2`, `vercel`, or `local` (default `local`) to label Sentry events.
 
 ### Local PostHog event log
 

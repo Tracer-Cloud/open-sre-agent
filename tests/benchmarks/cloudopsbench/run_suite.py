@@ -135,10 +135,7 @@ def run_case(case: CloudOpsCase, output_dir: Path) -> tuple[dict[str, Any], Clou
     backend = CloudOpsBenchReplayBackend(case)
     alert = build_alert(case)
     final_state = run_investigation(
-        alert_name=f"CloudOpsBench {case.case_id}",
-        pipeline_name="cloudopsbench",
-        severity="critical",
-        raw_alert=alert,
+        alert,
         resolved_integrations=_build_resolved_integrations(case, backend),
     )
     final_state_dict = _json_safe(dict(final_state))

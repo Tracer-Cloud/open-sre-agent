@@ -7,13 +7,14 @@ from typing import Any
 from app.tools.GrafanaLogsTool import (
     _grafana_available,
     _grafana_creds,
+    _grafana_source,
     _resolve_grafana_client,
 )
 from app.tools.tool_decorator import tool
 
 
 def _query_grafana_alert_rules_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
-    grafana = sources.get("grafana", {})
+    grafana = _grafana_source(sources)
     return {
         "folder": grafana.get("pipeline_name"),
         "grafana_backend": grafana.get("_backend"),

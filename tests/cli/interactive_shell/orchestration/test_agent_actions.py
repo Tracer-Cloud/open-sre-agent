@@ -340,11 +340,11 @@ def test_execute_cli_actions_answers_discord_then_dispatches_datadog(
 def test_compound_prompt_plans_chat_list_and_cli_command() -> None:
     message = (
         "tell me how you are doing AND show me all the services we are connected to "
-        "AND then run opensre deploy"
+        "AND then run opensre integrations list"
     )
 
     assert agent_actions.plan_terminal_tasks(message) == ["slash", "cli_command"]
-    assert agent_actions.plan_cli_actions(message) == ["/list integrations", "deploy"]
+    assert agent_actions.plan_cli_actions(message) == ["/list integrations", "integrations list"]
 
 
 def test_cli_command_requires_explicit_opensre_context() -> None:
@@ -355,8 +355,8 @@ def test_cli_command_requires_explicit_opensre_context() -> None:
 
 
 def test_cli_command_preserves_flags_after_explicit_opensre_prefix() -> None:
-    assert agent_actions.plan_cli_actions("please run opensre deploy --dry-run") == [
-        "deploy --dry-run"
+    assert agent_actions.plan_cli_actions("please run opensre integrations verify --dry-run") == [
+        "integrations verify --dry-run"
     ]
 
 
@@ -367,7 +367,7 @@ def test_compound_prompt_plans_chat_list_and_slash_deploy_paraphrase() -> None:
     )
 
     assert agent_actions.plan_terminal_tasks(message) == ["slash", "slash"]
-    assert agent_actions.plan_cli_actions(message) == ["/list integrations", "/deploy"]
+    assert agent_actions.plan_cli_actions(message) == ["/list integrations", "/remote"]
 
 
 def test_services_version_deploy_prompt_plans_all_actions() -> None:
@@ -377,7 +377,7 @@ def test_services_version_deploy_prompt_plans_all_actions() -> None:
     )
 
     assert agent_actions.plan_terminal_tasks(message) == ["slash", "slash", "slash"]
-    assert agent_actions.plan_cli_actions(message) == ["/list integrations", "/version", "/deploy"]
+    assert agent_actions.plan_cli_actions(message) == ["/list integrations", "/version", "/remote"]
 
 
 def test_explicit_shell_command_plans_shell_action() -> None:
@@ -439,7 +439,7 @@ def test_compound_prompt_executes_all_supported_tasks(monkeypatch: object) -> No
     )
 
     assert handled is False
-    assert dispatched == ["/list integrations", "/deploy"]
+    assert dispatched == ["/list integrations", "/remote"]
     output = buf.getvalue()
     assert "I'm doing fine" not in output
     assert "EC2 deployment creates AWS" not in output
@@ -474,7 +474,7 @@ def test_services_version_deploy_prompt_executes_in_order(monkeypatch: object) -
     )
 
     assert handled is True
-    assert dispatched == ["/list integrations", "/version", "/deploy"]
+    assert dispatched == ["/list integrations", "/version", "/remote"]
     output = buf.getvalue()
     assert output.index("ran /list integrations") < output.index("ran /version")
     assert "EC2 deployment creates AWS" not in output

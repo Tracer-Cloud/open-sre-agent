@@ -1429,7 +1429,7 @@ class TestExecutionAllowedRespectsDispatchCancelled:
                 policy,
                 session=session,
                 console=console,
-                action_summary="opensre deploy ec2 --help",
+                action_summary="opensre remote health --help",
                 confirm_fn=_cancel_confirm,
                 is_tty=True,
             )
@@ -1471,7 +1471,7 @@ class TestExecutionAllowedRespectsDispatchCancelled:
                 policy,
                 session=session,
                 console=console,
-                action_summary="opensre deploy ec2 --help",
+                action_summary="opensre remote health --help",
                 confirm_fn=lambda _prompt: "",
                 is_tty=True,
             )

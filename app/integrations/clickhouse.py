@@ -73,8 +73,8 @@ def clickhouse_is_available(sources: dict[str, dict]) -> bool:
 def clickhouse_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     """Extract ClickHouse connection params from resolved integrations.
 
-    Credentials are resolved by detect_sources from the integration store,
-    so the LLM never needs to supply host or password directly.
+    Credentials are resolved from the integration store or environment, so the
+    LLM never needs to supply host or password directly.
     """
     ch = sources.get("clickhouse", {})
     return {

@@ -1,7 +1,7 @@
 """EC2 instance management for deployment tests.
 
 Launches an EC2 instance with Docker, runs the OpenSRE container, and
-exposes the LangGraph API on port 2024.
+exposes the FastAPI health app on port 8000.
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ def generate_user_data(env_vars: dict[str, str] | None = None) -> str:
     1. Installs Docker and AWS CLI
     2. Authenticates with ECR
     3. Pulls the pre-built image
-    4. Runs the container on port 2024
+    4. Runs the container on port 8000
     """
     env_flags = ""
     if env_vars:
@@ -85,7 +85,7 @@ echo "=== Pulling OpenSRE image from ECR ==="
 docker pull {ECR_IMAGE_URI}
 
 echo "=== Starting container ==="
-docker run -d --name opensre -p 2024:2024 --restart=unless-stopped {env_flags} {ECR_IMAGE_URI}
+docker run -d --name opensre -p 8000:8000 --restart=unless-stopped {env_flags} {ECR_IMAGE_URI}
 
 echo "=== Deployment complete ==="
 """
@@ -281,7 +281,7 @@ def wait_for_running(instance_id: str, region: str = DEFAULT_REGION) -> dict[str
 
 def wait_for_health(
     public_ip: str,
-    port: int = 2024,
+    port: int = 8000,
     max_attempts: int = HEALTH_MAX_ATTEMPTS,
 ) -> bool:
     """Wait for the health endpoint to respond on the EC2 instance.

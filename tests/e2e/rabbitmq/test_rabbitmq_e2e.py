@@ -2,9 +2,8 @@
 
 Coverage:
 - RabbitMQ config resolution from store and env
-- Source detection from alert annotations
-- End-to-end flow: alert JSON → resolved_integrations → detect_sources →
-  tools registered and callable.
+- Tool-source availability from resolved integrations
+- End-to-end flow: alert JSON → resolved_integrations → tools registered and callable.
 
 All HTTP traffic is mocked; no real broker is required.
 """
@@ -20,8 +19,8 @@ import pytest
 
 from app.integrations.catalog import classify_integrations
 from app.integrations.rabbitmq import RabbitMQConfig
-from app.nodes.plan_actions.detect_sources import detect_sources
 from app.tools.registry import get_registered_tools
+from tests.e2e.source_helpers import resolve_available_tool_sources
 
 ALERT_PATH = Path(__file__).parent / "rabbitmq_alert.json"
 
@@ -102,14 +101,8 @@ class TestRabbitMQConfigResolution:
 # ---------------------------------------------------------------------------
 
 
-class TestRabbitMQSourceDetection:
+class TestRabbitMQToolSourceAvailability:
     def test_detect_source_populates_credentials(self) -> None:
-        raw_alert = {
-            "commonAnnotations": {
-                "rabbitmq_cluster": "rmq@prod-01",
-                "queue_name": "orders.process",
-            }
-        }
         resolved = {
             "rabbitmq": {
                 "host": "rmq.prod.internal",
@@ -121,17 +114,15 @@ class TestRabbitMQSourceDetection:
                 "verify_ssl": True,
             }
         }
-        sources = detect_sources(raw_alert, {}, resolved)
+        sources = resolve_available_tool_sources(resolved)
         assert "rabbitmq" in sources
         assert sources["rabbitmq"]["host"] == "rmq.prod.internal"
         assert sources["rabbitmq"]["management_port"] == 15672
         assert sources["rabbitmq"]["username"] == "sre_ro"
         assert sources["rabbitmq"]["vhost"] == "/orders"
-        assert sources["rabbitmq"]["connection_verified"] is True
 
     def test_missing_resolved_integration_no_source(self) -> None:
-        raw_alert = {"commonAnnotations": {"rabbitmq_cluster": "rmq@prod-01"}}
-        sources = detect_sources(raw_alert, {}, {})
+        sources = resolve_available_tool_sources({})
         assert "rabbitmq" not in sources
 
 
@@ -166,9 +157,9 @@ class TestRabbitMQToolRegistration:
 
 class TestRabbitMQPipelineFlow:
     def test_alert_fixture_triggers_source_detection(self) -> None:
-        """Loading the sample rabbitmq_alert.json drives detect_sources to
-        populate sources['rabbitmq'] when credentials are present."""
+        """Loading the sample alert keeps RabbitMQ tools available with credentials present."""
         alert = json.loads(ALERT_PATH.read_text())
+        assert alert["commonAnnotations"]["queue_name"] == "orders.process"
         resolved = {
             "rabbitmq": {
                 "host": "rmq.prod.internal",
@@ -181,7 +172,7 @@ class TestRabbitMQPipelineFlow:
             }
         }
 
-        sources = detect_sources(alert, {}, resolved)
+        sources = resolve_available_tool_sources(resolved)
         assert "rabbitmq" in sources
         assert sources["rabbitmq"]["vhost"] == "/orders"
 

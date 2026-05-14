@@ -1,4 +1,4 @@
-"""Remote agent client for connecting to deployed LangGraph API instances."""
+"""Remote agent client for connecting to deployed OpenSRE HTTP APIs."""
 
 from __future__ import annotations
 

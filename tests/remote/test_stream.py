@@ -40,7 +40,7 @@ class TestBuildEvent:
             "name": "query_datadog_logs",
             "run_id": "run-abc",
             "tags": ["graph:step:3"],
-            "metadata": {"langgraph_node": "investigate"},
+            "metadata": {"pipeline_node": "investigate"},
         }
         event = _build_event("events", json.dumps(data))
         assert event.event_type == "events"
@@ -66,8 +66,8 @@ class TestExtractNodeName:
     def test_ignores_dunder_keys(self) -> None:
         assert _extract_node_name("updates", {"__metadata": {}, "diagnose": {}}) == "diagnose"
 
-    def test_metadata_langgraph_node_preferred(self) -> None:
-        data = {"metadata": {"langgraph_node": "publish"}, "name": "other_name"}
+    def test_metadata_pipeline_node_preferred(self) -> None:
+        data = {"metadata": {"pipeline_node": "publish"}, "name": "other_name"}
         assert _extract_node_name("events", data) == "publish"
 
     def test_name_field_fallback(self) -> None:
@@ -188,7 +188,7 @@ class TestParseSSEStream:
             "name": "query_datadog_logs",
             "run_id": "r-42",
             "tags": ["graph:step:3"],
-            "metadata": {"langgraph_node": "investigate"},
+            "metadata": {"pipeline_node": "investigate"},
             "data": {"input": {"query": "error"}},
         }
         resp = self._make_response(

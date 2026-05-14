@@ -6,7 +6,7 @@ from typing import Any
 
 
 def flatten_messages_to_prompt(prompt_or_messages: Any) -> str:
-    """Turn LangChain-style messages or a plain string into one text block."""
+    """Turn structured chat messages or a plain string into one text block."""
     if isinstance(prompt_or_messages, str):
         return prompt_or_messages
 

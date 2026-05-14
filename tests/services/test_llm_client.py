@@ -2021,3 +2021,120 @@ def test_extract_json_payload_embedded_fence_trailing_braces_in_prose() -> None:
 def test_extract_json_payload_raises_when_no_json() -> None:
     with pytest.raises(ValueError, match="LLM did not return valid JSON payload"):
         llm_client._extract_json_payload("This is plain text with no JSON.")
+
+
+# LLMClient.invoke / invoke_stream — usage-limit BadRequestError (HTTP 400) handling
+
+
+_USAGE_LIMIT_BODY = {
+    "type": "error",
+    "error": {
+        "type": "invalid_request_error",
+        "message": "You have reached your specified API usage limits. You will regain access on 2026-06-01 at 00:00 UTC.",
+    },
+}
+
+
+def _make_bad_request_error(body: dict | None = None) -> Exception:
+    err = llm_client.AnthropicBadRequestError.__new__(llm_client.AnthropicBadRequestError)
+    err.status_code = 400  # type: ignore[attr-defined]
+    err.message = str(body)  # type: ignore[attr-defined]
+    err.body = body or {}  # type: ignore[attr-defined]
+    err.request = None  # type: ignore[attr-defined]
+    err.response = None  # type: ignore[attr-defined]
+    return err
+
+
+class _BadRequestMessages:
+    def __init__(self, body: dict) -> None:
+        self._body = body
+
+    def create(self, **_kwargs) -> None:
+        raise _make_bad_request_error(self._body)
+
+    def stream(self, **_kwargs):
+        raise _make_bad_request_error(self._body)
+
+
+class _UsageLimitAnthropic:
+    def __init__(self, *, api_key: str, timeout: float) -> None:
+        del api_key, timeout
+        self.messages = _BadRequestMessages(_USAGE_LIMIT_BODY)
+
+
+def test_anthropic_invoke_usage_limit_raises_friendly_runtime_error(monkeypatch) -> None:
+    """HTTP 400 usage-limit error must surface a clear message, not a raw SDK repr."""
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "Anthropic", _UsageLimitAnthropic)
+
+    client = llm_client.LLMClient(model="claude-3-5-sonnet-20241022")
+
+    with pytest.raises(RuntimeError) as exc_info:
+        client.invoke("hello")
+
+    msg = str(exc_info.value)
+    assert "usage limit" in msg.lower()
+    assert "You will regain access" in msg
+
+
+def test_anthropic_invoke_usage_limit_does_not_retry(monkeypatch) -> None:
+    """BadRequestError must never be retried — it is a permanent client error."""
+    call_count = 0
+
+    class _CountingMessages:
+        def create(self, **_kwargs) -> None:
+            nonlocal call_count
+            call_count += 1
+            raise _make_bad_request_error(_USAGE_LIMIT_BODY)
+
+    class _CountingAnthropic:
+        def __init__(self, **_kwargs) -> None:
+            self.messages = _CountingMessages()
+
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "Anthropic", _CountingAnthropic)
+    monkeypatch.setattr(llm_client.time, "sleep", lambda _: None)
+
+    client = llm_client.LLMClient(model="claude-3-5-sonnet-20241022")
+
+    with pytest.raises(RuntimeError):
+        client.invoke("hello")
+
+    assert call_count == 1, "BadRequestError must not trigger retries"
+
+
+def test_anthropic_invoke_stream_usage_limit_raises_friendly_runtime_error(monkeypatch) -> None:
+    """HTTP 400 usage-limit during streaming must also surface a clear message."""
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "Anthropic", _UsageLimitAnthropic)
+
+    client = llm_client.LLMClient(model="claude-3-5-sonnet-20241022")
+
+    with pytest.raises(RuntimeError) as exc_info:
+        list(client.invoke_stream("hello"))
+
+    msg = str(exc_info.value)
+    assert "usage limit" in msg.lower()
+
+
+def test_anthropic_invoke_bad_request_non_usage_limit_raises_generic_message(monkeypatch) -> None:
+    """Non-usage-limit HTTP 400 errors fall back to a generic HTTP 400 message."""
+    other_body = {
+        "type": "error",
+        "error": {"type": "invalid_request_error", "message": "Invalid JSON in request."},
+    }
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+
+    class _OtherBadRequestAnthropic:
+        def __init__(self, **_kwargs) -> None:
+            self.messages = _BadRequestMessages(other_body)
+
+    monkeypatch.setattr(llm_client, "Anthropic", _OtherBadRequestAnthropic)
+
+    client = llm_client.LLMClient(model="claude-3-5-sonnet-20241022")
+
+    with pytest.raises(RuntimeError) as exc_info:
+        client.invoke("hello")
+
+    msg = str(exc_info.value)
+    assert "HTTP 400" in msg

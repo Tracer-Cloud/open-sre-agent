@@ -39,7 +39,7 @@ uv run opensre hermes watch \
   --from-start
 ```
 
-`--from-start` **replays** the file then keeps tailing — good for a one-shot demo of classification → Telegram. By default, watch **only reads new lines**, so without `--from-start` a static fixture produces no events until more lines are appended (use a **writable** copy of the scenario log if you want to experiment without editing files under `tests/`). Omit **`--investigate`** for a lightweight demo (**`--investigate`** pulls in LangGraph + LLM for **HIGH** / **CRITICAL** only; see below).
+`--from-start` **replays** the file then keeps tailing — good for a one-shot demo of classification → Telegram. By default, watch **only reads new lines**, so without `--from-start` a static fixture produces no events until more lines are appended (use a **writable** copy of the scenario log if you want to experiment without editing files under `tests/`). Omit **`--investigate`** for a lightweight demo (**`--investigate`** runs the investigation pipeline with an LLM for **HIGH** / **CRITICAL** only; see below).
 
 ---
 

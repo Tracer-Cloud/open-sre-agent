@@ -59,16 +59,12 @@ def _run_cli(
     pipeline_name: str | None = None,
     severity: str | None = None,
 ) -> dict[str, Any]:
+    _ = (alert_name, pipeline_name, severity)
     with track_investigation(
         entrypoint=EntrypointSource.MCP,
         trigger_mode=TriggerMode.SERVICE_RUNTIME,
     ):
-        return run_investigation_cli(
-            raw_alert=payload,
-            alert_name=alert_name,
-            pipeline_name=pipeline_name,
-            severity=severity,
-        )
+        return run_investigation_cli(raw_alert=payload)
 
 
 @mcp.tool(name="run_rca")

@@ -191,7 +191,7 @@ _BARE_COMMAND_ALIAS_MAP: dict[str, str] = {
     "status": "/status",
     "trust": "/trust",
     "onboard": "/onboard",
-    "deploy": "/deploy",
+    "deploy": "/remote",
     "remote": "/remote",
     "tests": "/tests",
     "guardrails": "/guardrails",
@@ -270,7 +270,7 @@ _INFORMATIONAL_QUESTION_WORDS = frozenset(
     }
 )
 
-# Narrative signals for long pasted text; replaces "any line >=48 chars" with LangGraph.
+# Narrative signals for long pasted text; replaces "any line >=48 chars" for investigation routing.
 _LONG_LINE_INCIDENT_RE: tuple[re.Pattern[str], ...] = (
     re.compile(r"\b[45]\d{2}\b"),  # HTTP-style status codes
     re.compile(r"\d{1,2}:\d{2}(?::\d{2})?(?:\s*(?:UTC|GMT|Z))?"),
@@ -407,7 +407,7 @@ def _short_question_mentions_incident_vocab(text: str) -> bool:
 
 
 def _reads_like_investigation_request(text: str) -> bool:
-    """True when input should run the LangGraph investigation pipeline (not the CLI agent)."""
+    """True when input should run the investigation pipeline pipeline (not the CLI agent)."""
     stripped = text.strip()
     if not stripped:
         return False

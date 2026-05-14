@@ -124,8 +124,7 @@ def betterstack_is_available(sources: dict[str, dict]) -> bool:
     but no way to derive ``source`` would always run with ``source=""`` and
     deterministically fail. So availability requires, beyond credentials,
     either (a) a configured ``sources`` hint list or (b) an alert-derived
-    ``source_hint`` surfaced by
-    :mod:`app.nodes.plan_actions.detect_sources` from the alert annotation.
+    ``source_hint`` surfaced in the resolved integration config.
     """
     bs = sources.get("betterstack", {})
     if not (bs.get("query_endpoint") and bs.get("username")):
@@ -139,11 +138,9 @@ def betterstack_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     """Extract Better Stack credentials and optional source hints for tool calls.
 
     Returns both the full ``sources`` hint list and a scalar ``source`` (derived
-    from the alert annotation, when the planner has populated ``source_hint``
-    via :mod:`app.nodes.plan_actions.detect_sources`). The executor invokes tools
-    purely via ``action.run(**action.extract_params(...))``; we therefore have
-    to surface the alert-derived target as a concrete kwarg here — the planner
-    can't inject it at call time.
+    from the resolved integration config when present). The executor invokes
+    tools purely via ``action.run(**action.extract_params(...))``; we therefore
+    have to surface the alert-derived target as a concrete kwarg here.
     """
     bs = sources.get("betterstack", {})
     source_hint = str(bs.get("source_hint", "") or "").strip()

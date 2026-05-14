@@ -11,9 +11,9 @@ from datetime import UTC, datetime
 
 import boto3
 import requests
-from langsmith import traceable
 
 from app.cli.investigation import run_investigation_cli
+from app.utils.tracing import traceable
 from tests.utils.alert_factory import create_alert
 from tests.utils.conftest import UPSTREAM_DOWNSTREAM_CONFIG
 
@@ -166,12 +166,7 @@ def test_agent_investigation(failure_data: dict) -> bool:
         },
     )
     def run_investigation():
-        return run_investigation_cli(
-            alert_name=f"Pipeline failure: {pipeline_name}",
-            pipeline_name=pipeline_name,
-            severity="critical",
-            raw_alert=raw_alert,
-        )
+        return run_investigation_cli(raw_alert=raw_alert)
 
     try:
         result = run_investigation()

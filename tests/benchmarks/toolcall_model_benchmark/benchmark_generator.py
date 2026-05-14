@@ -10,16 +10,16 @@ from typing import Literal
 from dotenv import load_dotenv
 
 from app.config import LLMSettings
-from tests.benchmarks.toolcall_model_benchmark.pipeline_benchmark import (
-    configure_split_models,
-    estimate_run_cost_usd,
-    get_fixture_by_id,
-    run_langgraph_investigation_bench,
-)
 from tests.benchmarks.toolcall_model_benchmark.pricing import (
     DEFAULT_REASONING_USD_PER_MTOK,
     DEFAULT_TOOL_USD_PER_MTOK,
+    estimate_run_cost_usd,
 )
+
+
+def configure_split_models() -> None:
+    """No-op placeholder — split-model routing is configured via LLM settings."""
+
 
 FIXED_SCENARIO_IDS: tuple[str, ...] = (
     "001-replication-lag",
@@ -169,6 +169,11 @@ def run_benchmark(
     tool_usd_per_mtok: float = DEFAULT_TOOL_USD_PER_MTOK,
 ) -> tuple[list[CaseMetrics], SummaryMetrics]:
     """Execute benchmark cases and collect duration, token, and cost metrics."""
+    from tests.benchmarks.toolcall_model_benchmark.pipeline_benchmark import (
+        get_fixture_by_id,
+        run_investigation_bench,
+    )
+
     selected = scenario_ids if scenario_ids is not None else list(FIXED_SCENARIO_IDS)
     reasoning_model, tool_model = _resolve_models()
 
@@ -176,7 +181,7 @@ def run_benchmark(
     for sid in selected:
         try:
             fixture = get_fixture_by_id(sid)
-            run = run_langgraph_investigation_bench(
+            run = run_investigation_bench(
                 fixture,
                 label=sid,
                 configure_llm=configure_llm,

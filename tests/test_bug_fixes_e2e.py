@@ -1,19 +1,11 @@
-"""End-to-end tests for PR #520 bug fixes.
-
-Tests the full integration between components rather than individual units:
-1. Guardrails: overlapping keyword redaction through the full engine pipeline
-2. Investigation loop: diagnosis node + routing work together at loop counts 0-4
-"""
+"""End-to-end tests for guardrail overlapping keyword redaction."""
 
 from __future__ import annotations
 
 import re
-from unittest.mock import MagicMock
 
 from app.guardrails.engine import GuardrailEngine
 from app.guardrails.rules import GuardrailAction, GuardrailRule
-from app.investigation_constants import MAX_INVESTIGATION_LOOPS
-from app.pipeline.routing import should_continue_investigation
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -115,129 +107,3 @@ class TestOverlappingRedactionE2E:
         assert "_secret" not in result
         assert "=xyz" in result
         assert "=abc" in result
-
-
-# ---------------------------------------------------------------------------
-# 2. Investigation loop — diagnosis node + routing integration
-# ---------------------------------------------------------------------------
-
-
-class TestInvestigationLoopE2E:
-    """Prove that the diagnosis node generates recommendations at all valid
-    loop counts and that the routing function continues investigation."""
-
-    def test_constant_is_shared_correctly(self) -> None:
-        """routing.py and the diagnosis node use the same constant."""
-        from app.investigation_constants import MAX_INVESTIGATION_LOOPS as from_constants
-
-        assert from_constants == 4
-        assert MAX_INVESTIGATION_LOOPS == 4
-
-    def test_routing_continues_when_recommendations_exist(self) -> None:
-        """should_continue_investigation returns 'investigate' for all valid loops."""
-        for loop in range(MAX_INVESTIGATION_LOOPS + 1):  # 0..4
-            state = {
-                "investigation_recommendations": ["do something"],
-                "investigation_loop_count": loop,
-                "available_action_names": ["some_action"],
-            }
-            result = should_continue_investigation(state)
-            assert result == "investigate", f"Loop {loop} should continue but got '{result}'"
-
-    def test_routing_publishes_when_over_limit(self) -> None:
-        """Loop count > MAX_INVESTIGATION_LOOPS triggers publish."""
-        state = {
-            "investigation_recommendations": ["do something"],
-            "investigation_loop_count": MAX_INVESTIGATION_LOOPS + 1,
-            "available_action_names": ["some_action"],
-        }
-        assert should_continue_investigation(state) == "publish"
-
-    def test_diagnosis_node_generates_recommendations_at_loop_3(self) -> None:
-        """Before the fix, loop_count=3 would NOT generate recommendations
-        because of the hardcoded `< 3` check. Now it should."""
-        from app.nodes.root_cause_diagnosis.node import _handle_insufficient_evidence
-
-        tracker = MagicMock()
-        tracker.complete = MagicMock()
-
-        state = {
-            "investigation_loop_count": 3,
-            "evidence": {
-                "grafana_service_names": ["my-service"],
-                # No grafana_logs yet — should trigger recommendation
-            },
-            "alert_name": "Test",
-            "pipeline_name": "test-pipe",
-            "severity": "critical",
-        }
-
-        result = _handle_insufficient_evidence(state, tracker)
-        assert len(result["investigation_recommendations"]) > 0, (
-            "At loop_count=3, recommendations should still be generated "
-            "(was broken by hardcoded '< 3')"
-        )
-
-    def test_diagnosis_node_no_recommendations_at_max(self) -> None:
-        """At loop_count == MAX_INVESTIGATION_LOOPS, no more recommendations."""
-        from app.nodes.root_cause_diagnosis.node import _handle_insufficient_evidence
-
-        tracker = MagicMock()
-        tracker.complete = MagicMock()
-
-        state = {
-            "investigation_loop_count": MAX_INVESTIGATION_LOOPS,
-            "evidence": {
-                "grafana_service_names": ["my-service"],
-            },
-            "alert_name": "Test",
-            "pipeline_name": "test-pipe",
-            "severity": "critical",
-        }
-
-        result = _handle_insufficient_evidence(state, tracker)
-        assert len(result["investigation_recommendations"]) == 0, (
-            "At loop_count == MAX_INVESTIGATION_LOOPS, no recommendations should be generated"
-        )
-
-    def test_full_loop_lifecycle(self) -> None:
-        """Simulate the full loop lifecycle: diagnosis generates recommendations
-        at loops 0-3, routing continues investigation, then at loop 4 routing
-        publishes."""
-        from app.nodes.root_cause_diagnosis.node import _handle_insufficient_evidence
-
-        tracker = MagicMock()
-        tracker.complete = MagicMock()
-
-        loop_count = 0
-        for i in range(MAX_INVESTIGATION_LOOPS + 2):
-            state = {
-                "investigation_loop_count": loop_count,
-                "evidence": {
-                    "grafana_service_names": ["my-service"],
-                },
-                "alert_name": "Test",
-                "pipeline_name": "test-pipe",
-                "severity": "critical",
-            }
-
-            diag_result = _handle_insufficient_evidence(state, tracker)
-            recs = diag_result["investigation_recommendations"]
-            loop_count = diag_result["investigation_loop_count"]
-
-            routing_state = {
-                "investigation_recommendations": recs,
-                "investigation_loop_count": loop_count,
-                "available_action_names": ["some_action"],
-            }
-            route = should_continue_investigation(routing_state)
-
-            if i < MAX_INVESTIGATION_LOOPS:
-                # Loops 0-3: should generate recommendations and continue
-                assert len(recs) > 0, f"Loop {i}: expected recommendations"
-                assert route == "investigate", f"Loop {i}: expected 'investigate' got '{route}'"
-            else:
-                # Loop 4+: no recommendations, should publish
-                assert len(recs) == 0, f"Loop {i}: expected no recommendations"
-                assert route == "publish", f"Loop {i}: expected 'publish' got '{route}'"
-                break

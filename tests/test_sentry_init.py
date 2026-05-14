@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import sys
-import warnings
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -375,32 +374,13 @@ def test_init_sentry_passes_explicit_integrations(monkeypatch) -> None:
     assert "HttpxIntegration" in integration_names
 
 
-def test_init_sentry_suppresses_langgraph_allowed_objects_warning(monkeypatch) -> None:
-    from langchain_core._api.deprecation import LangChainPendingDeprecationWarning
-
+def test_init_sentry_disables_auto_enabling_integrations(monkeypatch) -> None:
     _clear_kill_switches(monkeypatch)
     init_mock, _ = _install_full_sentry_mock(monkeypatch)
 
-    init_mock.side_effect = lambda **_kwargs: warnings.warn(
-        (
-            "The default value of `allowed_objects` will change in a future version. "
-            "Pass an explicit value (e.g., allowed_objects='messages' or "
-            "allowed_objects='core') to suppress this warning."
-        ),
-        category=LangChainPendingDeprecationWarning,
-        stacklevel=1,
-    )
+    sentry_mod.init_sentry(entrypoint="cli")
 
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        sentry_mod.init_sentry(entrypoint="cli")
-
-    assert init_mock.call_count == 1
-    assert not [
-        warning
-        for warning in caught
-        if isinstance(warning.message, LangChainPendingDeprecationWarning)
-    ]
+    assert init_mock.call_args.kwargs["auto_enabling_integrations"] is False
 
 
 def test_init_sentry_sets_in_app_include_app(monkeypatch) -> None:
@@ -637,7 +617,7 @@ def test_before_send_filters_nested_lists_of_dicts() -> None:
         ),
         (
             "RuntimeError",
-            "Openai request rejected (HTTP 400): Error code: 400 - {'error': {'message': 'litellm.BadRequestError: AnthropicException - {\"message\":\"The provided model identifier is invalid.\"}. Received Model Group=relay-ops-claude-opus-4-7'}}",
+            "Openai request rejected (HTTP 400): Error code: 400 - {'error': {'message': 'litellm.BadRequestError: AnthropicException - {\"message\":\"The provided model identifier is invalid.\"}.  Received Model Group=relay-ops-claude-opus-4-7'}}",
         ),
         (
             "RuntimeError",
@@ -666,6 +646,20 @@ def test_before_send_filters_nested_lists_of_dicts() -> None:
         (
             "RuntimeError",
             "Cannot connect to Openrouter API. Check your network connection and that the endpoint URL is reachable.",
+        ),
+        # Provider read timeout after retries (issue #1934).
+        (
+            "RuntimeError",
+            "Openai API request timed out. Check that the service is running and responsive at the configured endpoint.",
+        ),
+        (
+            "RuntimeError",
+            "Minimax API request timed out. Check that the service is running and responsive at the configured endpoint.",
+        ),
+        # Anthropic account-level usage limit enforcement via HTTP 400 (issues #1883, #1885).
+        (
+            "RuntimeError",
+            "Anthropic request rejected (HTTP 400): Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'You have reached your specified API usage limits. You will regain access on 2026-06-01 at 00:00 UTC.'}, 'request_id': 'req_011CaxxMA8NCSdDvaM2LaRm6'}",
         ),
     ],
 )
@@ -750,7 +744,7 @@ def test_init_sentry_does_not_double_init_across_entrypoints(monkeypatch) -> Non
     init_mock, _ = _install_full_sentry_mock(monkeypatch)
 
     sentry_mod.init_sentry(entrypoint="webapp")
-    sentry_mod.init_sentry(entrypoint="graph_pipeline")
+    sentry_mod.init_sentry(entrypoint="pipeline")
 
     init_mock.assert_called_once()
 
@@ -760,9 +754,21 @@ def test_apply_scope_tags_is_first_wins(monkeypatch) -> None:
     _, tag_mock = _install_full_sentry_mock(monkeypatch)
 
     sentry_mod.init_sentry(entrypoint="webapp")
-    sentry_mod.init_sentry(entrypoint="graph_pipeline")
+    sentry_mod.init_sentry(entrypoint="pipeline")
 
     entrypoint_tags = [
         call.args[1] for call in tag_mock.call_args_list if call.args[0] == "entrypoint"
     ]
     assert entrypoint_tags == ["webapp"]
+
+
+def test_init_sentry_ignore_errors_includes_cli_transient_error(monkeypatch) -> None:
+    from app.integrations.llm_cli.errors import CLITransientError
+
+    _clear_kill_switches(monkeypatch)
+    init_mock, _ = _install_full_sentry_mock(monkeypatch)
+
+    sentry_mod.init_sentry(entrypoint="cli")
+
+    ignore_errors = init_mock.call_args.kwargs["ignore_errors"]
+    assert CLITransientError in ignore_errors

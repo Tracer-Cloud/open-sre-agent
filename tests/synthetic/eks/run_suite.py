@@ -118,11 +118,8 @@ def _build_resolved_integrations(
     fresh fixture-backed backends when use_mock_backends=True and no backend
     is provided.
 
-    EKS integrations live under the ``aws`` key (not ``eks``) because
-    ``detect_sources`` reads the raw integration dict from
-    ``resolved_integrations["aws"]`` and then emits a derived
-    ``sources["eks"]`` that the EKS tools consume.  The injected ``_backend``
-    propagates through that transform.
+    EKS integrations live under the ``aws`` key (not ``eks``). The injected
+    ``_backend`` is mirrored into the EKS tool context for synthetic runs.
     """
     if not use_mock_backends and eks_backend is None and datadog_backend is None:
         return None
@@ -436,11 +433,6 @@ def run_scenario(
     datadog_backend: Any = None,
 ) -> tuple[dict[str, Any], ScenarioScore]:
     alert = fixture.alert
-    labels = alert.get("commonLabels", {}) or {}
-
-    alert_name = str(alert.get("title") or labels.get("alertname") or fixture.scenario_id)
-    pipeline_name = str(labels.get("pipeline_name") or "k8s-eks-synthetic")
-    severity = str(labels.get("severity") or "critical")
 
     resolved_integrations = _build_resolved_integrations(
         fixture,
@@ -450,10 +442,7 @@ def run_scenario(
     )
 
     final_state = run_investigation(
-        alert_name=alert_name,
-        pipeline_name=pipeline_name,
-        severity=severity,
-        raw_alert=alert,
+        alert,
         resolved_integrations=resolved_integrations,
     )
     state_dict = dict(final_state)

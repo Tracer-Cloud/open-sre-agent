@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import sys
+import types
 from typing import NoReturn
 from unittest.mock import patch
 
 import pytest
 from click.testing import CliRunner
 
+import app.remote as remote_pkg
 from app.cli.commands.general import investigate_command
 
 
@@ -32,6 +35,14 @@ def _fake_result() -> dict[str, object]:
     }
 
 
+@pytest.fixture(autouse=True)
+def _stub_runtime_alert_module(monkeypatch: pytest.MonkeyPatch) -> None:
+    runtime_alert = types.ModuleType("app.remote.runtime_alert")
+    runtime_alert.build_runtime_alert_payload = lambda *_args, **_kwargs: {}
+    monkeypatch.setitem(sys.modules, "app.remote.runtime_alert", runtime_alert)
+    monkeypatch.setattr(remote_pkg, "runtime_alert", runtime_alert, raising=False)
+
+
 def test_service_flag_invokes_runtime_investigation(monkeypatch) -> None:
     monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
     runner = CliRunner()
@@ -51,7 +62,7 @@ def test_service_flag_invokes_runtime_investigation(monkeypatch) -> None:
     mock_build.assert_called_once_with("my-svc", slack_thread_ref=None, slack_bot_token=None)
     mock_run.assert_called_once()
     kwargs = mock_run.call_args.kwargs
-    assert kwargs["alert_name"] == "Remote runtime investigation: my-svc"
+    assert set(kwargs) == {"raw_alert", "opensre_evaluate"}
     assert kwargs["raw_alert"]["service"]["provider"] == "railway"
 
 
