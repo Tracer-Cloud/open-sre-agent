@@ -96,8 +96,8 @@ def run_connected_investigation(state: AgentState) -> AgentState:
     from app.agent.context import resolve_integrations
     from app.agent.extract import extract_alert
     from app.agent.investigation import ConnectedInvestigationAgent
+    from app.correlation.node import node_correlate_upstream
     from app.delivery import deliver
-    from app.nodes.investigate.correlate_upstream import node_correlate_upstream
     from app.utils.sentry_sdk import capture_exception
 
     state_any = cast(dict[str, Any], state)
