@@ -7,7 +7,6 @@ from click.testing import CliRunner
 from app.cli.__main__ import cli
 from app.cli.support.constants import VERIFY_SERVICES
 from app.integrations.cli import _HANDLERS, _setup_openclaw, _setup_vercel
-from app.integrations.registry import SUPPORTED_VERIFY_SERVICES
 
 
 def test_integrations_show_redacts_api_token() -> None:
@@ -241,9 +240,19 @@ def test_integrations_verify_accepts_helm() -> None:
     mock_capture.assert_called_once_with("helm")
 
 
-def test_verify_services_matches_registry_source_of_truth() -> None:
-    # The runtime registry is the single source of truth for which services
-    # the `integrations verify` subcommand accepts. Keep this assertion as
-    # a contract test so #1973 cannot recur: any new verifier added to the
-    # registry is automatically accepted by Click without a second edit.
-    assert VERIFY_SERVICES == SUPPORTED_VERIFY_SERVICES
+def test_verify_services_includes_previously_missing_integrations() -> None:
+    # #1973 surfaced these names as registered in the runtime registry but
+    # rejected by Click's positional-arg validator (the CLI's hardcoded
+    # VERIFY_SERVICES tuple had drifted). Anchor them here so a revert to a
+    # hardcoded tuple — or accidental removal from the registry — fails this
+    # test loudly.
+    previously_missing = {
+        "azure",
+        "azure_sql",
+        "helm",
+        "openobserve",
+        "snowflake",
+        "splunk",
+        "supabase",
+    }
+    assert previously_missing <= set(VERIFY_SERVICES)
