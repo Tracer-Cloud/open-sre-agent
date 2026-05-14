@@ -93,11 +93,13 @@ class TestProviderSelection:
             "kimi",
             "copilot",
         ):
+            ec.reset_embeddings_client_singleton()
             with patch.dict(os.environ, {"LLM_PROVIDER": provider}, clear=True):
                 assert ec.get_embeddings_client() is None, f"{provider} should return None"
 
     def test_non_embedding_providers_return_none(self) -> None:
         for provider in ("openrouter", "requesty", "gemini", "nvidia", "minimax"):
+            ec.reset_embeddings_client_singleton()
             with patch.dict(os.environ, {"LLM_PROVIDER": provider}, clear=True):
                 assert ec.get_embeddings_client() is None, f"{provider} should return None"
 
