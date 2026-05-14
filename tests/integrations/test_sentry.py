@@ -62,6 +62,17 @@ def test_list_sentry_issues_preserves_quoted_structured_filter_values(
     assert ("query", query) in captured["params"]
 
 
+def test_list_sentry_issues_ignores_unclosed_quoted_structured_values(
+    monkeypatch: Any,
+) -> None:
+    captured = _capture_sentry_issue_params(monkeypatch)
+
+    query = 'title:"Cannot read TypeError: boom'
+    list_sentry_issues(config=_config(), query=query, limit=10)
+
+    assert ("query", query) in captured["params"]
+
+
 def test_list_sentry_issues_preserves_negated_structured_queries(
     monkeypatch: Any,
 ) -> None:

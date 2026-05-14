@@ -242,11 +242,13 @@ def _structured_query_tokens(query: str) -> list[tuple[int, int, str]]:
         if value_start >= len(query) or query[value_start].isspace():
             continue
         end = _structured_query_value_end(query, value_start)
+        if end is None:
+            continue
         tokens.append((match.start(), end, query[match.start() : end]))
     return tokens
 
 
-def _structured_query_value_end(query: str, value_start: int) -> int:
+def _structured_query_value_end(query: str, value_start: int) -> int | None:
     quote = query[value_start]
     if quote in {'"', "'"}:
         index = value_start + 1
@@ -260,6 +262,7 @@ def _structured_query_value_end(query: str, value_start: int) -> int:
             elif char == quote:
                 return index + 1
             index += 1
+        return None
 
     index = value_start
     while index < len(query) and not query[index].isspace():
