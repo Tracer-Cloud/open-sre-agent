@@ -224,6 +224,8 @@ def build_cli_reference_text() -> str:
             len(text),
         )
     return text
+
+
 _gd.register_grounding_source(
     _gd.GroundingSource(
         name="cli",
