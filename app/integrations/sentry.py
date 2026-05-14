@@ -164,8 +164,11 @@ def _normalize_issue_search_query(query: str) -> str:
     if filters:
         normalized_free_text = (
             _quote_search_phrase(free_text)
-            if _starts_like_exception_signature(free_text)
-            or _looks_like_exception_signature(free_text)
+            if not _is_quoted_search_query(free_text)
+            and (
+                _starts_like_exception_signature(free_text)
+                or _looks_like_exception_signature(free_text)
+            )
             else free_text
         )
         return " ".join([normalized_free_text, *filters])
