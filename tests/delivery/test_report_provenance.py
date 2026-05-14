@@ -244,3 +244,68 @@ def test_build_slack_blocks_omits_recommended_actions_when_empty() -> None:
 
     header_texts = [b.get("text", {}).get("text", "") for b in blocks if b.get("type") == "header"]
     assert not any("Recommended Actions" in t for t in header_texts)
+
+
+def test_runbook_provenance_added_when_state_has_matched_runbook() -> None:
+    state = _make_state()
+    state["matched_runbook"] = {
+        "slug": "payments-oom",
+        "title": "Payments OOM",
+        "path": "/home/user/.config/opensre/runbooks/payments-oom.md",
+        "body": "Bump heap.",
+    }
+
+    ctx = build_report_context(state)
+
+    assert ctx["runbook_provenance"] == {
+        "slug": "payments-oom",
+        "title": "Payments OOM",
+        "path": "/home/user/.config/opensre/runbooks/payments-oom.md",
+    }
+
+
+def test_runbook_provenance_none_when_state_missing_match() -> None:
+    ctx = build_report_context(_make_state())
+
+    assert ctx["runbook_provenance"] is None
+
+
+def test_format_slack_message_renders_runbook_source_line() -> None:
+    state = _make_state()
+    state["remediation_steps"] = ["Bump heap to 2G."]
+    state["matched_runbook"] = {"slug": "payments-oom", "body": "x"}
+    ctx = build_report_context(state)
+
+    message = format_slack_message(ctx)
+
+    assert "## Recommended Actions" in message
+    assert "_Source: runbooks/payments-oom.md_" in message
+
+
+def test_format_slack_message_omits_runbook_source_when_no_match() -> None:
+    state = _make_state()
+    state["remediation_steps"] = ["Bump heap to 2G."]
+    ctx = build_report_context(state)
+
+    message = format_slack_message(ctx)
+
+    assert "_Source: runbooks/" not in message
+
+
+def test_build_slack_blocks_emits_runbook_context_block() -> None:
+    state = _make_state()
+    state["remediation_steps"] = ["Bump heap to 2G."]
+    state["matched_runbook"] = {"slug": "payments-oom", "body": "x"}
+    ctx = build_report_context(state)
+
+    blocks = build_slack_blocks(ctx)
+
+    context_blocks = [b for b in blocks if b.get("type") == "context"]
+    runbook_text = "_Source: runbooks/payments-oom.md_"
+    assert any(
+        any(
+            isinstance(el, dict) and runbook_text in el.get("text", "")
+            for el in block.get("elements", [])
+        )
+        for block in context_blocks
+    )

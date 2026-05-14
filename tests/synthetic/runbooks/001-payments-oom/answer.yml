@@ -1,0 +1,7 @@
+expected_matched_slug: payments-oom
+expected_service: payments-api
+expected_triggers:
+  - oom
+  - memory
+  - failure
+expected_provenance_line: "_Source: runbooks/payments-oom.md_"

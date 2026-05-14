@@ -95,6 +95,10 @@ class ReportContext(TypedDict, total=False):
     # Alert severity (e.g. critical, high) for channel-specific formatting (Telegram, etc.)
     severity: str | None
 
+    # Runbook provenance: top-1 runbook used to ground remediation_steps
+    # (populated by pipeline → matched_runbook).
+    runbook_provenance: dict[str, str] | None
+
     kube_pod_name: str | None
     kube_container_name: str | None
     kube_namespace: str | None
@@ -897,6 +901,16 @@ def build_report_context(state: InvestigationState) -> ReportContext:
     """
     ns = _NormalizedState(state)
     source_provenance = _build_source_provenance(ns.available_sources)
+    matched_runbook = state.get("matched_runbook")
+    runbook_provenance: dict[str, str] | None = (
+        {
+            "slug": str(matched_runbook.get("slug", "")),
+            "title": str(matched_runbook.get("title") or matched_runbook.get("slug", "")),
+            "path": str(matched_runbook.get("path", "")),
+        }
+        if isinstance(matched_runbook, dict) and matched_runbook.get("slug")
+        else None
+    )
     catalog, source_to_id = _build_evidence_catalog(ns)
     # Add provenance summaries to evidence entries when possible.
     for source_name, entry_id in source_to_id.items():
@@ -955,6 +969,7 @@ def build_report_context(state: InvestigationState) -> ReportContext:
         "datadog_site": ns.datadog_site,
         "source_provenance": source_provenance,
         "severity": (state.get("severity") or None),
+        "runbook_provenance": runbook_provenance,
         # Kubernetes pod details — from Datadog evidence first, then alert annotations
         "kube_pod_name": (
             ns.evidence.get("datadog_pod_name")

@@ -1,0 +1,15 @@
+{
+  "title": "[synthetic-runbooks] PaymentsOOMKilled — payments-api",
+  "state": "firing",
+  "alert_source": "datadog",
+  "commonLabels": {
+    "alertname": "PaymentsOOMKilled",
+    "severity": "critical",
+    "pipeline_name": "payments-api",
+    "service": "payments-api"
+  },
+  "commonAnnotations": {
+    "summary": "payments-api pods restarted with exit code 137 (OOMKilled).",
+    "description": "Memory consumption climbed steadily before container kill."
+  }
+}

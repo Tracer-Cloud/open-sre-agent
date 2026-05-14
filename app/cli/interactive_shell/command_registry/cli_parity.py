@@ -234,6 +234,10 @@ def _cmd_watchdog(session: ReplSession, console: Console, args: list[str]) -> bo
     return run_cli_command(console, ["watchdog", *args])
 
 
+def _cmd_runbook(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+    return run_cli_command(console, ["runbook", *args])
+
+
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
         "/onboard",
@@ -294,6 +298,12 @@ COMMANDS: list[SlashCommand] = [
         "/watchdog",
         "monitor one process and send threshold alarms ('/watchdog --pid 123 --max-rss 1G')",
         _cmd_watchdog,
+        execution_tier=ExecutionTier.SAFE,
+    ),
+    SlashCommand(
+        "/runbook",
+        "manage local runbooks for diagnosis grounding ('/runbook add|list|remove')",
+        _cmd_runbook,
         execution_tier=ExecutionTier.SAFE,
     ),
 ]

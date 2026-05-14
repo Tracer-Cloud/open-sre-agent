@@ -1,0 +1,94 @@
+---
+title: "Runbooks"
+---
+
+OpenSRE can ground its remediation suggestions in your team's own runbooks.
+Drop a Markdown file with YAML frontmatter into the local runbook store and
+the diagnosis prompt will inject the matched runbook when the current alert
+fires — so `Recommended Actions` mirrors your team's playbook instead of a
+generic category template.
+
+### Where they live
+
+Runbooks live under `~/.config/opensre/runbooks/`. One file per playbook, one
+slug per filename (the filename without `.md` is the slug).
+
+### File format
+
+```markdown
+---
+service: payments-api                # optional — matches pipeline / alert service
+triggers:                            # required — lowercase keyword fragments
+  - oom
+  - memory
+  - exit code 137
+category: resource_exhaustion        # optional — informational only
+title: Payments API OOM playbook     # optional — falls back to slug
+---
+# Payments API OOM playbook
+
+When `payments-api` pods restart with exit code 137:
+
+1. Bump JVM `-Xmx` from 1.5G → 2G in the `payments-api` Helm values.
+2. Page `#payments-oncall` before scaling — owner approval required.
+3. Verify recovery via the Grafana dashboard `payments-api/jvm-memory`.
+```
+
+Only `triggers` is required. Files with missing/empty `triggers` are skipped
+on load.
+
+### CLI
+
+```bash
+# Copy a runbook into the local store
+opensre runbook add ./payments-oom.md
+
+# Show every runbook currently in the store
+opensre runbook list
+
+# Delete a runbook by slug
+opensre runbook remove payments-oom
+```
+
+### How matching works
+
+During `plan_actions`, OpenSRE scores every runbook against the current alert
+and picks the highest-scoring one (top-1). When the top score is 0, nothing
+is matched and remediation falls back to the deterministic category template
+shipped in Phase 1.
+
+```
+score = (2 if runbook.service matches the alert service or pipeline_name)
+      + |alert keywords ∩ runbook.triggers|
+```
+
+Keyword extraction is shared with the planner
+(`app.nodes.plan_actions.extract_keywords`), so any term in
+`KEYWORD_PATTERNS` that appears in the alert name or problem statement
+contributes to the overlap.
+
+Ties on score are broken by slug (lexicographic), so output is deterministic.
+
+### Where it shows up
+
+When a runbook matches, the diagnosis prompt receives a `RELEVANT TEAM
+RUNBOOK` block and is instructed to prefer actions described inside.
+The final published report appends a provenance line under
+`Recommended Actions`:
+
+```
+## Recommended Actions
+• Bump JVM -Xmx from 1.5G → 2G in payments-api Helm values (per runbook)
+• Page #payments-oncall channel before scaling — owner approval required
+• Verify recovery via Grafana dashboard payments-api/jvm-memory
+_Source: runbooks/payments-oom.md_
+```
+
+The Slack Block Kit renderer emits an equivalent `context` block below
+`Recommended Actions`.
+
+### Out of scope (deferred to Phase 2b)
+
+- Remote ingest from Notion / Google Docs / Confluence (`opensre runbook import …`)
+- Vector retrieval — current matching is deterministic and auditable by design
+- Multi-tenant scoping by `org_id` — single-tenant per home dir today

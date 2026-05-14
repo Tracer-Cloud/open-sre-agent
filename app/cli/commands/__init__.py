@@ -20,6 +20,7 @@ from app.cli.commands.integrations import integrations
 from app.cli.commands.messaging import messaging
 from app.cli.commands.onboard import onboard
 from app.cli.commands.remote import remote
+from app.cli.commands.runbook import runbook
 from app.cli.commands.tests import tests
 from app.cli.commands.watchdog import watchdog_command
 
@@ -35,6 +36,7 @@ _COMMANDS: tuple[click.Command, ...] = (
     messaging,
     hermes_command,
     watchdog_command,
+    runbook,
     health_command,
     doctor_command,
     update_command,

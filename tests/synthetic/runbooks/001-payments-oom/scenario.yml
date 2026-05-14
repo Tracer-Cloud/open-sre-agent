@@ -1,0 +1,11 @@
+schema_version: "1.0"
+scenario_id: 001-payments-oom
+engine: runbooks
+failure_mode: oom
+severity: critical
+service: payments-api
+pipeline_name: payments-api
+description: |
+  Payments API pods crash-loop with exit code 137 (OOMKilled) after a JVM
+  heap leak. The matching runbook should be retrieved and its slug should be
+  surfaced as the source for remediation steps.

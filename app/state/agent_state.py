@@ -57,6 +57,12 @@ class AgentState(TypedDict, total=False):
     available_sources: dict[str, dict]
     available_action_names: list[str]
 
+    # Top-1 runbook matched by `retrieve_matching_runbook` during plan_actions.
+    # Populated only when a runbook in ~/.config/opensre/runbooks/ scores > 0
+    # for the current alert. Consumed by the diagnosis prompt builder
+    # (grounds remediation_steps) and the publish_findings provenance line.
+    matched_runbook: dict[str, Any] | None
+
     # Tool budget enforcement - caps the number of tools per investigation step
     tool_budget: int  # Maximum tools to select per step (default: 10)
 
@@ -167,6 +173,7 @@ class AgentStateModel(StrictConfigModel):
     retrieval_controls: RetrievalControlsMap | None = None
     available_sources: dict[str, dict[str, Any]] = Field(default_factory=dict)
     available_action_names: list[str] = Field(default_factory=list)
+    matched_runbook: dict[str, Any] | None = None
     tool_budget: int = Field(
         default=10, ge=1, le=50, description="Maximum tools to select per step"
     )

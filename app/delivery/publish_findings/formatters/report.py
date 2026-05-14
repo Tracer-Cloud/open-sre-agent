@@ -502,6 +502,9 @@ def format_slack_message(ctx: ReportContext) -> str:
             + "\n".join(f"• {_sanitize_for_slack(s)}" for s in remediation_steps)
             + "\n"
         )
+        runbook_provenance = ctx.get("runbook_provenance")
+        if runbook_provenance and runbook_provenance.get("slug"):
+            remediation_block += f"_Source: runbooks/{runbook_provenance['slug']}.md_\n"
 
     trace_steps = build_investigation_trace(ctx)
     trace_block = (
@@ -705,6 +708,19 @@ def build_slack_blocks(ctx: ReportContext) -> list[dict]:
             }
         )
         _add(_mrkdwn_section("\n".join(f"• {_sanitize_for_slack(s)}" for s in remediation_steps)))
+        runbook_provenance = ctx.get("runbook_provenance")
+        if runbook_provenance and runbook_provenance.get("slug"):
+            blocks.append(
+                {
+                    "type": "context",
+                    "elements": [
+                        {
+                            "type": "mrkdwn",
+                            "text": f"_Source: runbooks/{runbook_provenance['slug']}.md_",
+                        }
+                    ],
+                }
+            )
 
     # ── Investigation Trace ──
     trace_steps = build_investigation_trace(ctx)
