@@ -15,13 +15,13 @@ from app.strict_config import StrictConfigModel
 DEFAULT_SENTRY_URL = "https://sentry.io"
 DEFAULT_SENTRY_STATS_PERIOD = "24h"
 _EXCEPTION_QUERY_PREFIX_RE = re.compile(
-    r"^(?:[A-Z][A-Za-z0-9_.]*(?:Error|Exception|Interrupt|Warning)?|panic|error|runtime error|fatal error):\s*"
+    r"^(?:[A-Za-z0-9_.]*(?:Error|Exception|Interrupt|Warning)|panic|error|runtime error|fatal error):\s*"
 )
 _BARE_EXCEPTION_QUERY_PREFIX_RE = re.compile(
-    r"^(?P<name>[A-Z][A-Za-z0-9_.]*(?:Error|Exception|Interrupt|Warning)?|panic|error|runtime error|fatal error):\s*$"
+    r"^(?P<name>[A-Za-z0-9_.]*(?:Error|Exception|Interrupt|Warning)|panic|error|runtime error|fatal error):\s*$"
 )
 _BARE_EXCEPTION_QUERY_NAME_RE = re.compile(
-    r"^(?:[A-Z][A-Za-z0-9_.]*(?:Error|Exception|Interrupt|Warning)?|panic|error|runtime error|fatal error)$"
+    r"^(?:[A-Za-z0-9_.]*(?:Error|Exception|Interrupt|Warning)|panic|error|runtime error|fatal error)$"
 )
 _STRUCTURED_QUERY_KEY_RE = re.compile(r"(?<!\S)!?(?P<key>[A-Za-z][A-Za-z0-9_.-]*):")
 _STRUCTURED_QUERY_KEYS = frozenset(
@@ -169,15 +169,11 @@ def _normalize_issue_search_query(query: str) -> str:
         normalized_free_text = (
             _quote_search_phrase(free_text)
             if not _is_quoted_search_query(free_text)
-            and (
-                _starts_like_exception_signature(free_text)
-                or _is_bare_exception_name(free_text)
-                or _looks_like_exception_signature(free_text)
-            )
+            and (_starts_like_exception_signature(free_text) or _is_bare_exception_name(free_text))
             else free_text
         )
         return " ".join([*leading_filters, normalized_free_text, *trailing_filters])
-    if _starts_like_exception_signature(stripped) or _looks_like_exception_signature(stripped):
+    if _starts_like_exception_signature(stripped):
         return _quote_search_phrase(stripped)
     return stripped
 
@@ -269,10 +265,6 @@ def _structured_query_value_end(query: str, value_start: int) -> int:
     while index < len(query) and not query[index].isspace():
         index += 1
     return index
-
-
-def _looks_like_exception_signature(query: str) -> bool:
-    return ":" in query and any(char in query for char in (" ", "(", ")", "/", "\\"))
 
 
 def _quote_search_phrase(query: str) -> str:

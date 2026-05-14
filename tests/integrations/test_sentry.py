@@ -73,6 +73,17 @@ def test_list_sentry_issues_preserves_negated_structured_queries(
     assert ("query", query) in captured["params"]
 
 
+def test_list_sentry_issues_preserves_plain_colon_text_queries(
+    monkeypatch: Any,
+) -> None:
+    captured = _capture_sentry_issue_params(monkeypatch)
+
+    query = "team: backend rollout"
+    list_sentry_issues(config=_config(), query=query, limit=10)
+
+    assert ("query", query) in captured["params"]
+
+
 def test_list_sentry_issues_escapes_quotes_in_exception_signatures(
     monkeypatch: Any,
 ) -> None:
@@ -102,6 +113,17 @@ def test_list_sentry_issues_quotes_lowercase_panic_signatures(
     captured = _capture_sentry_issue_params(monkeypatch)
 
     query = "panic: runtime error: invalid memory address or nil pointer dereference"
+    list_sentry_issues(config=_config(), query=query, limit=10)
+
+    assert ("query", f'"{query}"') in captured["params"]
+
+
+def test_list_sentry_issues_quotes_package_qualified_exception_signatures(
+    monkeypatch: Any,
+) -> None:
+    captured = _capture_sentry_issue_params(monkeypatch)
+
+    query = "java.lang.NullPointerException: Cannot invoke getName()"
     list_sentry_issues(config=_config(), query=query, limit=10)
 
     assert ("query", f'"{query}"') in captured["params"]
