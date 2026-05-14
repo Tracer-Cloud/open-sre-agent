@@ -166,6 +166,17 @@ class CLIBackedLLMClient:
         err = _strip_ansi(proc.stderr or "")
 
         if proc.returncode != 0:
+            # Exit code 75 is EX_TEMPFAIL (sysexits.h) — a transient failure
+            # the caller should retry. Raise CLITimeoutError so it is treated as
+            # an expected operational failure and not forwarded to Sentry.
+            if proc.returncode == 75:
+                hint = (
+                    f"{self._adapter.name} reported a temporary failure (exit 75). "
+                    "Retry the request or check network connectivity."
+                )
+                if err:
+                    hint = f"{hint} {err[:200]}"
+                raise CLITimeoutError(hint)
             base = self._adapter.explain_failure(
                 stdout=out, stderr=err, returncode=proc.returncode
             ).strip()
