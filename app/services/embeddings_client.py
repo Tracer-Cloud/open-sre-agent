@@ -106,7 +106,9 @@ class OpenAIEmbeddingsClient:
         self.model_name = model
         self.dim = _DEFAULT_EMBEDDINGS_DIMS.get(model, 1536)
 
-    def embed(self, texts: list[str]) -> list[list[float]]:
+     def embed(self, texts: list[str]) -> list[list[float]]:
+        if not texts:
+            return []
         response = self._client.embeddings.create(model=self.model_name, input=texts)
         response.data.sort(key=lambda d: d.index)
         return [d.embedding for d in response.data]
@@ -123,6 +125,8 @@ class VoyageEmbeddingsClient:
         self._api_key = api_key
 
     def embed(self, texts: list[str]) -> list[list[float]]:
+        if not texts:
+            return []
         response = httpx.post(
             self.BASE_URL,
             headers={"Authorization": f"Bearer {self._api_key}"},
