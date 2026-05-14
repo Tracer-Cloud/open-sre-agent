@@ -1809,11 +1809,17 @@ def resolve_effective_integrations(
         slack_credentials = _raw_credentials(slack_store_integration)
         webhook_url = str(slack_credentials.get("webhook_url", "")).strip()
         if webhook_url:
-            slack_config = SlackWebhookConfig.model_validate({"webhook_url": webhook_url})
-            effective["slack"] = _effective_entry("local store", slack_config.model_dump())
+            try:
+                slack_config = SlackWebhookConfig.model_validate({"webhook_url": webhook_url})
+                effective["slack"] = _effective_entry("local store", slack_config.model_dump())
+            except Exception as exc:
+                logger.warning("Slack webhook URL from store is invalid: %s", exc)
     elif slack_webhook_url := os.getenv("SLACK_WEBHOOK_URL", "").strip():
-        slack_config = SlackWebhookConfig.model_validate({"webhook_url": slack_webhook_url})
-        effective["slack"] = _effective_entry("local env", slack_config.model_dump())
+        try:
+            slack_config = SlackWebhookConfig.model_validate({"webhook_url": slack_webhook_url})
+            effective["slack"] = _effective_entry("local env", slack_config.model_dump())
+        except Exception as exc:
+            logger.warning("SLACK_WEBHOOK_URL is invalid: %s", exc)
 
     google_docs_integration = classified_integrations.get("google_docs")
     if isinstance(google_docs_integration, dict):
