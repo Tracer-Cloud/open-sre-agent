@@ -14,6 +14,7 @@ from urllib.parse import quote
 import httpx
 from pydantic import field_validator
 
+from app.services._factory_telemetry import report_factory_failure
 from app.strict_config import StrictConfigModel
 
 logger = logging.getLogger(__name__)
@@ -334,5 +335,6 @@ def make_prefect_client(
                 workspace_id=workspace_id or "",
             )
         )
-    except Exception:
+    except Exception as exc:
+        report_factory_failure(exc, integration="prefect", logger=logger)
         return None
