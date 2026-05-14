@@ -152,12 +152,18 @@ class CoralogixClient:
             return value
         if not isinstance(value, str) or not value.strip():
             return {}
+        # Only the string branch is an actual parse attempt, so both
+        # record_parsed and record_error live inside it — otherwise the
+        # denominator (parsed + skipped) would only count failures and skew
+        # the skip ratio.
         try:
             payload = json.loads(value)
         except json.JSONDecodeError as exc:
             if stats is not None:
                 stats.record_error(exc)
             return {}
+        if stats is not None:
+            stats.record_parsed()
         return payload if isinstance(payload, dict) else {}
 
     def _normalize_row(

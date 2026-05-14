@@ -64,13 +64,10 @@ class StreamingParseStats:
             return
         # Synthesize an exception so report_exception (which routes through
         # Sentry's capture_exception) has something to attach the histogram to.
-        # Per-line tracebacks were discarded; the failure-type counter is the
-        # signal we care about.
-        synthetic = RuntimeError(
-            f"{integration}: streaming parse skip ratio "
-            f"{self.skip_ratio:.0%} ({self.skipped}/{self.total}) "
-            f"exceeded threshold {threshold:.0%}"
-        )
+        # Keep the message static per integration so Sentry groups every
+        # unhealthy response into a single issue; dynamic counts live in
+        # extras where the dashboard can break them down.
+        synthetic = RuntimeError(f"{integration}: streaming parse rate unhealthy")
         report_exception(
             synthetic,
             logger=logger,

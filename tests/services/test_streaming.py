@@ -111,6 +111,39 @@ class TestReportIfUnhealthy:
         assert kwargs["extras"]["skip_ratio"] == 0.2
         assert kwargs["extras"]["errors"] == {"JSONDecodeError": 20}
 
+    def test_synthetic_message_is_stable_per_integration(self, logger: logging.Logger) -> None:
+        # Sentry groups events by exception type + message. The message must
+        # not embed the ratio or counts, otherwise every distinct response
+        # would create a new issue and defeat the one-event-per-response
+        # design. Two unrelated responses with very different ratios should
+        # carry identical synthetic messages.
+        sent: list[BaseException] = []
+
+        def _record(exc: BaseException, **_: object) -> None:
+            sent.append(exc)
+
+        with patch("app.services._streaming.report_exception", side_effect=_record):
+            a = StreamingParseStats()
+            for _ in range(80):
+                a.record_parsed()
+            for _ in range(20):
+                a.record_error(json.JSONDecodeError("bad", "x", 0))
+            a.report_if_unhealthy(logger=logger, integration="splunk", source="search/jobs")
+
+            b = StreamingParseStats()
+            for _ in range(50):
+                b.record_parsed()
+            for _ in range(50):
+                b.record_error(json.JSONDecodeError("bad", "x", 0))
+            b.report_if_unhealthy(logger=logger, integration="splunk", source="search/jobs")
+
+        assert len(sent) == 2
+        assert str(sent[0]) == str(sent[1])
+        # And the message must not leak the counts that vary per response.
+        assert "20" not in str(sent[0])
+        assert "80" not in str(sent[0])
+        assert "%" not in str(sent[0])
+
     def test_histogram_aggregates_mixed_error_types(self, logger: logging.Logger) -> None:
         stats = StreamingParseStats()
         for _ in range(50):
