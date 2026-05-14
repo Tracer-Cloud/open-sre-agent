@@ -393,7 +393,195 @@ def test_registry_regression_import_failures(
     assert "valid_tool" in tool_names
     assert registry_module.get_registered_tool_map()["valid_tool"].run() == {"status": "ok"}
 
+    # After #1464 the bare ``logger.warning(...)`` was replaced by
+    # ``report_exception`` which routes generic exceptions at error severity,
+    # so the surviving log record is at ERROR level.
     assert any(
-        "Skipping broken_module" in record.message and record.levelname == "WARNING"
+        "Skipping broken_module" in record.message and record.levelname == "ERROR"
         for record in caplog.records
+    )
+
+
+# ---------------------------------------------------------------------------
+# #1464 — surface tool-registry import-time failures to Sentry
+# ---------------------------------------------------------------------------
+
+
+class TestClassifyImportError:
+    """Unit tests for ``_classify_import_error`` severity + tag selection."""
+
+    def test_external_module_not_found_is_warning(self) -> None:
+        exc = ModuleNotFoundError("No module named 'psycopg2'")
+        exc.name = "psycopg2"
+        severity, tags = registry_module._classify_import_error("my_tool", exc)
+        assert severity == "warning"
+        assert tags == {
+            "event": "optional_dependency_missing",
+            "missing_module": "psycopg2",
+        }
+
+    def test_internal_module_not_found_is_error(self) -> None:
+        """Internal ``app.*`` ModuleNotFoundError is our bug — capture at error."""
+        exc = ModuleNotFoundError("No module named 'app.services.removed'")
+        exc.name = "app.services.removed"
+        severity, tags = registry_module._classify_import_error("my_tool", exc)
+        assert severity == "error"
+        assert tags == {"event": "tool_module_import_failed"}
+
+    def test_generic_exception_is_error(self) -> None:
+        exc = RuntimeError("import side-effect blew up")
+        severity, tags = registry_module._classify_import_error("my_tool", exc)
+        assert severity == "error"
+        assert tags == {"event": "tool_module_import_failed"}
+
+    def test_module_not_found_without_name_is_error(self) -> None:
+        """Defensive: ModuleNotFoundError with no ``.name`` cannot be classified
+        as an external optional-dep miss, so it falls through to ``error``."""
+        exc = ModuleNotFoundError("synthetic — no name attribute")
+        exc.name = None
+        severity, tags = registry_module._classify_import_error("my_tool", exc)
+        assert severity == "error"
+        assert tags["event"] == "tool_module_import_failed"
+
+
+def _patch_registry_with_broken_module(monkeypatch: pytest.MonkeyPatch, exc: BaseException) -> None:
+    """Stub the registry to expose exactly one tool module whose import raises ``exc``."""
+
+    def mock_import(name: str) -> ModuleType:
+        raise exc
+
+    monkeypatch.setattr(
+        registry_module,
+        "_iter_tool_module_names",
+        lambda: ["broken_module"],
+    )
+    monkeypatch.setattr(registry_module, "_import_tool_module", mock_import)
+
+
+class TestImportFailuresReportToSentry:
+    """``_load_registry_snapshot`` must route every import failure through
+    ``report_exception`` (#1464), not silently warn — otherwise broken tool
+    modules vanish from the agent's toolbox at runtime with no signal."""
+
+    def test_external_dependency_missing_reports_as_warning(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        exc = ModuleNotFoundError("No module named 'boto3_extras'")
+        exc.name = "boto3_extras"
+        _patch_registry_with_broken_module(monkeypatch, exc)
+
+        with pytest.MonkeyPatch.context() as ctx:
+            calls: list[dict[str, Any]] = []
+            ctx.setattr(
+                registry_module,
+                "report_exception",
+                lambda exc, **kwargs: calls.append({"exc": exc, **kwargs}),
+            )
+            registry_module._load_registry_snapshot()
+
+        assert len(calls) == 1
+        assert calls[0]["severity"] == "warning"
+        tags = calls[0]["tags"]
+        assert tags["surface"] == "tool"
+        assert tags["module_name"] == "broken_module"
+        assert tags["component"] == "app.tools.broken_module"
+        assert tags["event"] == "optional_dependency_missing"
+        assert tags["missing_module"] == "boto3_extras"
+
+    def test_internal_import_failure_reports_as_error(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Internal ``app.*`` import failures must NOT be downgraded — they're
+        always our bug."""
+        exc = ModuleNotFoundError("No module named 'app.services.removed'")
+        exc.name = "app.services.removed"
+        _patch_registry_with_broken_module(monkeypatch, exc)
+
+        calls: list[dict[str, Any]] = []
+        monkeypatch.setattr(
+            registry_module,
+            "report_exception",
+            lambda exc, **kwargs: calls.append({"exc": exc, **kwargs}),
+        )
+        registry_module._load_registry_snapshot()
+
+        assert len(calls) == 1
+        assert calls[0]["severity"] == "error"
+        assert calls[0]["tags"]["event"] == "tool_module_import_failed"
+
+    def test_generic_exception_reports_as_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        exc = RuntimeError("import side-effect blew up")
+        _patch_registry_with_broken_module(monkeypatch, exc)
+
+        calls: list[dict[str, Any]] = []
+        monkeypatch.setattr(
+            registry_module,
+            "report_exception",
+            lambda exc, **kwargs: calls.append({"exc": exc, **kwargs}),
+        )
+        registry_module._load_registry_snapshot()
+
+        assert len(calls) == 1
+        assert calls[0]["severity"] == "error"
+        assert calls[0]["tags"]["event"] == "tool_module_import_failed"
+
+    def test_sentry_tag_set_when_failures_occur(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """``tools.import_failures`` Sentry tag is set so the issue surface
+        can dashboard registry health across releases."""
+        exc = RuntimeError("boom")
+        _patch_registry_with_broken_module(monkeypatch, exc)
+
+        # Swallow the real report_exception so it doesn't actually try to ship
+        # to Sentry from a test process.
+        monkeypatch.setattr(registry_module, "report_exception", lambda *_a, **_k: None)
+
+        tags_set: list[tuple[str, str]] = []
+
+        def fake_set_tag(key: str, value: str) -> None:
+            tags_set.append((key, value))
+
+        monkeypatch.setattr(registry_module.sentry_sdk, "set_tag", fake_set_tag)
+        registry_module._load_registry_snapshot()
+
+        assert ("tools.import_failures", "1") in tags_set
+
+    def test_sentry_tag_skipped_when_no_failures(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """No failures → no spurious ``tools.import_failures=0`` tag that would
+        pollute Sentry's tag cardinality on healthy runs."""
+        monkeypatch.setattr(
+            registry_module,
+            "_iter_tool_module_names",
+            lambda: [],
+        )
+        tags_set: list[tuple[str, str]] = []
+        monkeypatch.setattr(
+            registry_module.sentry_sdk,
+            "set_tag",
+            lambda k, v: tags_set.append((k, v)),
+        )
+        registry_module._load_registry_snapshot()
+
+        assert all(key != "tools.import_failures" for key, _ in tags_set)
+
+
+def test_no_internal_app_imports_fail_on_default_extras() -> None:
+    """Acceptance criterion: under the default extras matrix, no tool module
+    in ``app/tools/`` should fail to import. If this test breaks, a real
+    in-tree import is broken and a tool has silently disappeared from the
+    agent's toolbox."""
+    registry_module.clear_tool_registry_cache()
+    failures: list[tuple[str, BaseException]] = []
+    for module_name in registry_module._iter_tool_module_names():
+        try:
+            registry_module._import_tool_module(module_name)
+        except ModuleNotFoundError as exc:
+            # External optional-dependency miss is acceptable; only internal
+            # ``app.*`` failures should fail this test.
+            if exc.name and not exc.name.startswith("app."):
+                continue
+            failures.append((module_name, exc))
+        except Exception as exc:  # pragma: no cover — surfaces real regressions
+            failures.append((module_name, exc))
+    assert not failures, "internal tool-module import failures detected: " + ", ".join(
+        f"{name}: {exc!r}" for name, exc in failures
     )
