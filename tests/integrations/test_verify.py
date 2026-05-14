@@ -613,3 +613,47 @@ def test_resolve_effective_integrations_includes_vercel_from_env(
     assert vercel is not None
     assert vercel["config"]["api_token"] == "tok_env"
     assert vercel["source"] == "local env"
+
+
+def test_resolve_effective_integrations_skips_invalid_slack_env_url(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A non-Slack SLACK_WEBHOOK_URL must not crash resolve_effective_integrations (Sentry #1987)."""
+    monkeypatch.setattr("app.integrations.catalog.load_integrations", lambda: [])
+    monkeypatch.setenv("SLACK_WEBHOOK_URL", "https://example.com/not-slack")
+
+    with caplog.at_level(logging.WARNING):
+        effective = resolve_effective_integrations()
+
+    assert "slack" not in effective
+    assert any("SLACK_WEBHOOK_URL" in r.message for r in caplog.records)
+
+
+def test_resolve_effective_integrations_skips_invalid_slack_store_url(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """An invalid webhook_url in the store must not crash resolve_effective_integrations."""
+    monkeypatch.setattr(
+        "app.integrations.catalog.load_integrations",
+        lambda: [
+            {
+                "id": "slack-local",
+                "service": "slack",
+                "status": "active",
+                "instances": [
+                    {
+                        "name": "default",
+                        "tags": {},
+                        "credentials": {"webhook_url": "https://example.com/not-slack"},
+                    }
+                ],
+            }
+        ],
+    )
+    monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
+
+    with caplog.at_level(logging.WARNING):
+        effective = resolve_effective_integrations()
+
+    assert "slack" not in effective
+    assert any("Slack webhook" in r.message for r in caplog.records)

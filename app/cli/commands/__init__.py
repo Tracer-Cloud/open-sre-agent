@@ -6,7 +6,6 @@ import click
 
 from app.cli.commands.agent import agents
 from app.cli.commands.config import config_command
-from app.cli.commands.deploy import deploy
 from app.cli.commands.doctor import doctor_command
 from app.cli.commands.general import (
     health_command,
@@ -16,7 +15,9 @@ from app.cli.commands.general import (
     version_command,
 )
 from app.cli.commands.guardrails import guardrails
+from app.cli.commands.hermes import hermes_command
 from app.cli.commands.integrations import integrations
+from app.cli.commands.messaging import messaging
 from app.cli.commands.onboard import onboard
 from app.cli.commands.remote import remote
 from app.cli.commands.tests import tests
@@ -25,12 +26,13 @@ _COMMANDS: tuple[click.Command, ...] = (
     investigate_command,
     onboard,
     config_command,
-    deploy,
     remote,
     tests,
     integrations,
     guardrails,
     agents,
+    messaging,
+    hermes_command,
     health_command,
     doctor_command,
     update_command,

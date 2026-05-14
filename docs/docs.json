@@ -100,6 +100,7 @@
               "coralogix",
               "datadog",
               "grafana",
+              "hermes",
               "honeycomb",
               "incident_io",
               "opsgenie",

@@ -17,7 +17,9 @@ from app.integrations.llm_cli.binary_resolver import resolve_cli_binary
 from app.integrations.llm_cli.env_overrides import CURSOR_CLI_ENV_KEYS, nonempty_env_values
 
 _CURSOR_VERSION_RE = re.compile(r"(\d{4}\.\d{2}\.\d{2}-[a-zA-Z0-9]+|\d+\.\d+\.\d+)")
-_PROBE_TIMEOUT_SEC = 3.0
+# `agent status` often hits the network and prints a short spinner; ~4s locally is common,
+# so 3s probes spuriously timed out during wizard/doctor detection.
+_PROBE_TIMEOUT_SEC = 15.0
 
 
 def _parse_version(text: str) -> str | None:
@@ -136,12 +138,23 @@ class CursorAdapter:
                 check=False,
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
+            detail = f"Could not verify auth status with `{binary} status`: {exc}"
+            logged_in: bool | None = None
+            if _has_cursor_api_key():
+                logged_in = True
+                reason = (
+                    "timed out" if isinstance(exc, subprocess.TimeoutExpired) else f"failed ({exc})"
+                )
+                detail = (
+                    f"Cursor Agent auth probe {reason}; "
+                    "headless auth via CURSOR_API_KEY is configured."
+                )
             return CLIProbe(
                 installed=True,
                 version=version,
-                logged_in=None,
+                logged_in=logged_in,
                 bin_path=binary,
-                detail=f"Could not verify auth status with `{binary} status`: {exc}",
+                detail=detail,
             )
 
         logged_in, detail = _classify_cursor_auth(

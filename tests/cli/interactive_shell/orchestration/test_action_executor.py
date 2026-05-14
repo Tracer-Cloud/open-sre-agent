@@ -15,6 +15,9 @@ from rich.console import Console
 from app.cli.interactive_shell.orchestration.action_executor import (
     _MIN_SUBPROCESS_TERMINAL_WIDTH,
     _TASK_OUTPUT_PREFIX_WIDTH,
+    _is_interactive_wizard,
+    _pump_task_pty,
+    _pump_task_stream,
     read_diag,
     run_cd_command,
     run_claude_code_implementation,
@@ -24,6 +27,7 @@ from app.cli.interactive_shell.orchestration.action_executor import (
     run_synthetic_test,
     start_background_cli_task,
     terminate_child_process,
+    watch_synthetic_subprocess,
 )
 from app.cli.interactive_shell.runtime.session import ReplSession
 from app.cli.interactive_shell.runtime.tasks import TaskKind, TaskStatus
@@ -111,6 +115,30 @@ def test_run_cd_command_chdirs_to_target(monkeypatch: pytest.MonkeyPatch) -> Non
     run_cd_command("cd /tmp/example", session, console)
     assert directories == [Path("/tmp/example")]
     assert session.history[-1]["type"] == "shell"
+
+
+def test_run_cd_command_reports_chdir_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured_errors: list[BaseException] = []
+
+    def _chdir(_target: Path) -> None:
+        raise OSError("permission denied")
+
+    monkeypatch.setattr("app.cli.interactive_shell.orchestration.action_executor.os.chdir", _chdir)
+    monkeypatch.setattr(
+        "app.cli.support.exception_reporting.capture_exception",
+        lambda exc, **_kwargs: captured_errors.append(exc),
+    )
+
+    session = ReplSession()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    run_cd_command("cd /root/blocked", session, console)
+
+    assert "cd failed" in buf.getvalue()
+    assert len(captured_errors) == 1
+    assert isinstance(captured_errors[0], OSError)
+    assert session.history[-1] == {"type": "shell", "text": "cd /root/blocked", "ok": False}
 
 
 def test_run_shell_command_records_when_policy_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -597,6 +625,204 @@ def test_start_background_cli_task_falls_back_to_pipes_when_pty_unavailable(
     assert "pipe progress" in buf.getvalue()
 
 
+def test_task_output_stream_reports_unexpected_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_errors: list[BaseException] = []
+
+    class _BrokenStream:
+        def __iter__(self) -> _BrokenStream:
+            return self
+
+        def __next__(self) -> str:
+            raise RuntimeError("stream broke")
+
+    monkeypatch.setattr(
+        "app.cli.support.exception_reporting.capture_exception",
+        lambda exc, **_kwargs: captured_errors.append(exc),
+    )
+
+    session = ReplSession()
+    task = session.task_registry.create(TaskKind.CLI_COMMAND, command="demo")
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    _pump_task_stream(
+        task=task,
+        stream_name="stdout",
+        stream=_BrokenStream(),  # type: ignore[arg-type]
+        console=console,
+    )
+
+    assert "stream ended unexpectedly" in buf.getvalue()
+    assert len(captured_errors) == 1
+    assert isinstance(captured_errors[0], RuntimeError)
+
+
+def test_task_pty_stream_reports_unexpected_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_errors: list[BaseException] = []
+    closed_fds: list[int] = []
+
+    def _raise_read(_fd: int, _size: int) -> bytes:
+        raise RuntimeError("pty broke")
+
+    monkeypatch.setattr(
+        "app.cli.support.exception_reporting.capture_exception",
+        lambda exc, **_kwargs: captured_errors.append(exc),
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.orchestration.action_executor.os.read",
+        _raise_read,
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.orchestration.action_executor.os.close",
+        lambda fd: closed_fds.append(fd),
+    )
+
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+    with tempfile.SpooledTemporaryFile() as capture:  # type: ignore[type-arg]
+        _pump_task_pty(master_fd=123, console=console, capture=capture)
+
+    assert "terminal stream ended unexpectedly" in buf.getvalue()
+    assert len(captured_errors) == 1
+    assert isinstance(captured_errors[0], RuntimeError)
+    assert closed_fds == [123]
+
+
+def test_start_background_cli_task_reports_spawn_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_errors: list[BaseException] = []
+
+    def _fake_popen(_command: list[str], **_kwargs: object) -> object:
+        raise RuntimeError("spawn broke")
+
+    monkeypatch.setattr(
+        "app.cli.support.exception_reporting.capture_exception",
+        lambda exc, **_kwargs: captured_errors.append(exc),
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.orchestration.action_executor.subprocess.Popen",
+        _fake_popen,
+    )
+
+    session = ReplSession()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    task = start_background_cli_task(
+        display_command="opensre tests synthetic --scenario 001-replication-lag",
+        argv_list=["python", "-m", "app.cli", "tests", "synthetic"],
+        session=session,
+        console=console,
+        kind=TaskKind.SYNTHETIC_TEST,
+    )
+
+    assert task is None
+    assert "failed to start" in buf.getvalue()
+    assert len(captured_errors) == 1
+    assert isinstance(captured_errors[0], RuntimeError)
+    assert session.task_registry.list_recent(1)[0].status == TaskStatus.FAILED
+
+
+def test_start_background_cli_task_reports_watcher_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_errors: list[BaseException] = []
+
+    class _FakeProcess:
+        stdout = None
+        stderr = None
+        returncode = 1
+
+        def poll(self) -> int:
+            return 1
+
+    def _fake_popen(_command: list[str], **_kwargs: object) -> _FakeProcess:
+        return _FakeProcess()
+
+    monkeypatch.setattr(
+        "app.cli.support.exception_reporting.capture_exception",
+        lambda exc, **_kwargs: captured_errors.append(exc),
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.orchestration.action_executor.subprocess.Popen",
+        _fake_popen,
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.orchestration.action_executor.threading.Thread",
+        _ImmediateThread,
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.orchestration.action_executor.read_diag",
+        lambda _buf: (_ for _ in ()).throw(RuntimeError("diag broke")),
+    )
+
+    session = ReplSession()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    task = start_background_cli_task(
+        display_command="opensre tests synthetic --scenario 001-replication-lag",
+        argv_list=["python", "-m", "app.cli", "tests", "synthetic"],
+        session=session,
+        console=console,
+        kind=TaskKind.SYNTHETIC_TEST,
+    )
+
+    assert task is not None
+    assert task.status == TaskStatus.FAILED
+    assert "error:" in buf.getvalue()
+    assert len(captured_errors) == 1
+    assert isinstance(captured_errors[0], RuntimeError)
+
+
+def test_watch_synthetic_subprocess_reports_daemon_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_errors: list[BaseException] = []
+
+    class _FakeProcess:
+        stdout = None
+        stderr = None
+
+        def poll(self) -> int:
+            raise RuntimeError("poll broke")
+
+    monkeypatch.setattr(
+        "app.cli.support.exception_reporting.capture_exception",
+        lambda exc, **_kwargs: captured_errors.append(exc),
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.orchestration.action_executor.threading.Thread",
+        _ImmediateThread,
+    )
+
+    session = ReplSession()
+    task = session.task_registry.create(TaskKind.SYNTHETIC_TEST, command="suite")
+    task.mark_running()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    with tempfile.SpooledTemporaryFile() as stderr_buf:  # type: ignore[type-arg]
+        watch_synthetic_subprocess(
+            task,
+            _FakeProcess(),  # type: ignore[arg-type]
+            session,
+            "suite:001-test",
+            stderr_buf,
+            console,
+        )
+
+    assert task.status == TaskStatus.FAILED
+    assert "synthetic watcher failed" in buf.getvalue()
+    assert len(captured_errors) == 1
+    assert isinstance(captured_errors[0], RuntimeError)
+
+
 def test_run_synthetic_test_unknown_suite_records_failure() -> None:
     session = ReplSession()
     buf = io.StringIO()
@@ -915,3 +1141,179 @@ def test_run_synthetic_test_forwards_columns_to_subprocess(
     env = captured[0].get("env")
     assert isinstance(env, dict)
     assert env.get("COLUMNS") == str(110 - _TASK_OUTPUT_PREFIX_WIDTH - 1)
+
+
+@pytest.mark.parametrize(
+    "tokens,expected",
+    [
+        # Single-token interactive wizards.
+        (["onboard"], True),
+        (["ONBOARD"], True),  # case-insensitive
+        (["onboard", "local_llm"], True),  # extra args still classified
+        # Two-token interactive wizard.
+        (["integrations", "setup"], True),
+        (["INTEGRATIONS", "SETUP"], True),
+        (["integrations", "setup", "datadog"], True),
+        # Two-token NON-wizard under integrations — must NOT match.
+        (["integrations", "list"], False),
+        (["integrations", "verify"], False),
+        # Other subcommands — must NOT match.
+        (["health"], False),
+        (["version"], False),
+        (["agents", "list"], False),
+        # Edge: empty.
+        ([], False),
+    ],
+)
+def test_is_interactive_wizard_classifies_command_paths(tokens: list[str], expected: bool) -> None:
+    """The wizard classifier is the data-driven contract behind both the
+    LLM-classified refusal and the ``/onboard`` slash refusal. Adding a
+    new interactive command later should be a one-line set entry — this
+    test pins the current set + the case-insensitive lookup behavior.
+    """
+    assert _is_interactive_wizard(tokens) is expected
+
+
+def test_run_opensre_cli_command_refuses_onboard_with_helpful_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The onboarding wizard is a full-TTY interactive flow. Running it
+    from inside the persistent REPL produces broken cursor rendering
+    because the wizard's prompt_toolkit Application fights the shell's
+    own active one. Regression for the stacked-widget bug seen with
+    ``opensre onboard`` invoked via natural-language intent.
+    """
+    popen_calls: list[list[str]] = []
+    run_calls: list[list[str]] = []
+
+    def _fake_popen(command: list[str], **_kwargs: object) -> None:
+        popen_calls.append(command)
+        raise AssertionError("subprocess.Popen must not be called for interactive subcommand")
+
+    def _fake_run(command: list[str], **_kwargs: object) -> None:
+        run_calls.append(command)
+        raise AssertionError("subprocess.run must not be called for interactive subcommand")
+
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.orchestration.action_executor.subprocess.Popen", _fake_popen
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.orchestration.action_executor.subprocess.run", _fake_run
+    )
+
+    session = ReplSession()
+    buf = io.StringIO()
+    # Width >80 so the multi-line warning doesn't wrap mid-substring on
+    # the assertions below.
+    console = Console(file=buf, force_terminal=False, width=200)
+
+    assert (
+        run_opensre_cli_command(
+            "onboard",
+            session,
+            console,
+            confirm_fn=lambda _prompt: "y",
+            is_tty=True,
+        )
+        is True
+    )
+
+    out = buf.getvalue()
+    assert "needs a full terminal" in out
+    assert "opensre onboard" in out
+    assert popen_calls == []
+    assert run_calls == []
+    assert session.history[-1] == {
+        "type": "cli_command",
+        "text": "opensre onboard",
+        "ok": False,
+    }
+
+
+def test_run_opensre_cli_command_refuses_integrations_setup_with_helpful_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``opensre integrations setup`` is also a full-TTY wizard. Same
+    rendering conflict as ``onboard``; same fix.
+    """
+    popen_calls: list[list[str]] = []
+    run_calls: list[list[str]] = []
+
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.orchestration.action_executor.subprocess.Popen",
+        lambda cmd, **_kw: popen_calls.append(cmd),
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.orchestration.action_executor.subprocess.run",
+        lambda cmd, **_kw: run_calls.append(cmd),
+    )
+
+    session = ReplSession()
+    buf = io.StringIO()
+    # Width >80 so the multi-line warning doesn't wrap mid-substring on
+    # assertions below.
+    console = Console(file=buf, force_terminal=False, width=200)
+
+    assert (
+        run_opensre_cli_command(
+            "integrations setup",
+            session,
+            console,
+            confirm_fn=lambda _prompt: "y",
+            is_tty=True,
+        )
+        is True
+    )
+
+    out = buf.getvalue()
+    assert "needs a full terminal" in out
+    assert "opensre integrations setup" in out
+    assert popen_calls == []
+    assert run_calls == []
+    assert session.history[-1] == {
+        "type": "cli_command",
+        "text": "opensre integrations setup",
+        "ok": False,
+    }
+
+
+def test_run_opensre_cli_command_allows_integrations_list_without_blocking(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only the ``setup`` subcommand under ``integrations`` is the wizard.
+    Other ``integrations`` subcommands like ``integrations list`` must
+    not get caught by the interactive-wizard block — guard against an
+    over-broad refusal.
+    """
+    start_calls: list[list[str]] = []
+
+    def _fake_start_background_cli_task(*, argv_list: list[str], **_kw: object) -> None:
+        start_calls.append(argv_list)
+
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.orchestration.action_executor.start_background_cli_task",
+        _fake_start_background_cli_task,
+    )
+
+    session = ReplSession()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    assert (
+        run_opensre_cli_command(
+            "integrations list",
+            session,
+            console,
+            confirm_fn=lambda _prompt: "y",
+            is_tty=True,
+        )
+        is True
+    )
+
+    out = buf.getvalue()
+    assert "needs a full terminal" not in out
+    # The dispatcher should have reached the background-task path
+    # (proving the wizard block didn't fire).
+    assert start_calls, "background task starter was not invoked"
+    assert "integrations" in start_calls[0]
+    assert "list" in start_calls[0]

@@ -244,6 +244,8 @@ def investigate_command(
                 write_json(result, output)
     except SystemExit:
         raise
+    except KeyboardInterrupt:
+        raise SystemExit(SUCCESS) from None
 
     raise SystemExit(SUCCESS)
 
@@ -302,9 +304,6 @@ def _run_service_investigation(
     ):
         result = run_investigation_cli(
             raw_alert=raw_alert,
-            alert_name=raw_alert.get("alert_name"),
-            pipeline_name=raw_alert.get("pipeline_name"),
-            severity=raw_alert.get("severity"),
             opensre_evaluate=_eval,
         )
     write_json(result, output)

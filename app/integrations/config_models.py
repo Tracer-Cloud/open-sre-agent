@@ -176,7 +176,8 @@ class SlackWebhookConfig(StrictConfigModel):
         parsed = urlparse(self.webhook_url)
         if parsed.scheme != "https" or not parsed.netloc:
             raise ValueError("Slack webhook must be a valid HTTPS URL.")
-        if "slack.com" not in parsed.netloc:
+        hostname = (parsed.hostname or "").lower()
+        if hostname != "slack.com" and not hostname.endswith(".slack.com"):
             raise ValueError("Slack webhook host must be a Slack domain.")
         return self
 
@@ -671,6 +672,10 @@ class DiscordBotConfig(StrictConfigModel):
     application_id: str = ""
     public_key: str = ""
     default_channel_id: str | None = None
+    identity_policy: dict[str, object] | None = Field(
+        default=None,
+        description="Messaging identity policy for inbound security (MessagingIdentityPolicy shape)",
+    )
 
     @field_validator("bot_token", mode="before")
     @classmethod
@@ -694,6 +699,39 @@ class TelegramBotConfig(StrictConfigModel):
 
     bot_token: str
     default_chat_id: str | None = None
+    identity_policy: dict[str, object] | None = Field(
+        default=None,
+        description="Messaging identity policy for inbound security (MessagingIdentityPolicy shape)",
+    )
+
+    @field_validator("bot_token", mode="before")
+    @classmethod
+    def _validate_bot_token(cls, value: object) -> str:
+        stripped = str(value or "").strip()
+        if not stripped:
+            raise ValueError("bot_token cannot be empty or just whitespace")
+        return stripped
+
+
+class SlackBotConfig(StrictConfigModel):
+    """Slack Bot (Events API) runtime config for inbound messaging.
+
+    NOTE: ``signing_secret`` defaults to empty for backward compatibility,
+    but MUST be set in production when inbound messaging is enabled.
+    Without it, the Slack Events API webhook handler cannot verify request
+    authenticity and will accept forged requests from any source.
+    """
+
+    bot_token: str
+    signing_secret: str = Field(
+        default="",
+        description="Slack signing secret for webhook HMAC verification. MUST be set for inbound.",
+    )
+    app_id: str = ""
+    identity_policy: dict[str, object] | None = Field(
+        default=None,
+        description="Messaging identity policy for inbound security (MessagingIdentityPolicy shape)",
+    )
 
     @field_validator("bot_token", mode="before")
     @classmethod

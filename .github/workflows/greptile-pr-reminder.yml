@@ -39,7 +39,7 @@ jobs:
             echo '@greptile review'
             echo '```'
             echo ''
-            echo 'Give it **~30–60 seconds** (sometimes longer) for results, then fix feedback and re-trigger until you reach **Confidence Score: 5/5**.'
+            echo 'Give it **~5-10 minutes** (sometimes longer) for results, then fix feedback and re-trigger until you reach **Confidence Score: 5/5**.'
             echo ''
             echo '**Optional:** automate with the [greploop skill](https://skills.sh/greptileai/skills/greploop).'
           } > comment.md

@@ -14,10 +14,6 @@ jobs:
       JWT_TOKEN: ${{ secrets.JWT_TOKEN }}
       TRACER_ORG_ID: ${{ secrets.TRACER_ORG_ID }}
       TRACER_WEB_APP_URL: ${{ secrets.TRACER_WEB_APP_URL }}
-      LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
-      LANGSMITH_ENDPOINT: ${{ secrets.LANGSMITH_ENDPOINT }}
-      LANGSMITH_PROJECT: ${{ secrets.LANGSMITH_PROJECT }}
-      LANGSMITH_TRACING: ${{ secrets.LANGSMITH_TRACING }}
       TRACER_API_URL: ${{ secrets.TRACER_API_URL }}
       TRACER_INGEST_TOKEN: ${{ secrets.TRACER_INGEST_TOKEN }}
 

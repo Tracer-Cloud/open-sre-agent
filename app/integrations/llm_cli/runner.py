@@ -13,7 +13,10 @@ from typing import Any
 from pydantic import BaseModel
 
 from app.integrations.llm_cli.base import CLIProbe, LLMCLIAdapter
-from app.integrations.llm_cli.errors import CLIAuthenticationRequired, CLITimeoutError
+from app.integrations.llm_cli.errors import (
+    CLIAuthenticationRequired,
+    CLITimeoutError,
+)
 from app.integrations.llm_cli.subprocess_env import build_cli_subprocess_env
 from app.integrations.llm_cli.text import flatten_messages_to_prompt
 from app.llm_reasoning_effort import get_active_reasoning_effort
@@ -24,6 +27,12 @@ logger = logging.getLogger(__name__)
 _ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
 # Avoid re-running `detect()` (two subprocess probes) on every invoke during long investigations.
 _PROBE_CACHE_TTL_SEC = 45.0
+
+# POSIX EX_TEMPFAIL (75): the subprocess hit a transient error and can be retried.
+# kimi uses this when a session dies mid-flight ("To resume this session: kimi -r …").
+_EX_TEMPFAIL = 75
+_TEMPFAIL_MAX_RETRIES = 2
+_TEMPFAIL_BACKOFF_SEC = 2.0
 
 # Back-compat name for tests and imports that expect this symbol on runner.
 _build_subprocess_env = build_cli_subprocess_env
@@ -116,30 +125,57 @@ class CLIBackedLLMClient:
         )
         merged_env = _build_subprocess_env(invocation.env)
 
-        try:
-            proc = subprocess.run(
-                list(invocation.argv),
-                input=invocation.stdin,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                cwd=invocation.cwd,
-                env=merged_env,
-                timeout=invocation.timeout_sec,
-                check=False,
-            )
-        except subprocess.TimeoutExpired as exc:
-            raise CLITimeoutError(
-                f"{self._adapter.name} CLI timed out after {invocation.timeout_sec:.0f}s."
-            ) from exc
-        except OSError as exc:
-            raise RuntimeError(f"Failed to spawn {self._adapter.name} CLI: {exc}") from exc
+        backoff = _TEMPFAIL_BACKOFF_SEC
+        for attempt in range(_TEMPFAIL_MAX_RETRIES + 1):
+            try:
+                proc = subprocess.run(
+                    list(invocation.argv),
+                    input=invocation.stdin,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    cwd=invocation.cwd,
+                    env=merged_env,
+                    timeout=invocation.timeout_sec,
+                    check=False,
+                )
+            except subprocess.TimeoutExpired as exc:
+                raise CLITimeoutError(
+                    f"{self._adapter.name} CLI timed out after {invocation.timeout_sec:.0f}s."
+                ) from exc
+            except OSError as exc:
+                raise RuntimeError(f"Failed to spawn {self._adapter.name} CLI: {exc}") from exc
+
+            if proc.returncode == _EX_TEMPFAIL and attempt < _TEMPFAIL_MAX_RETRIES:
+                logger.warning(
+                    "cli_llm_tempfail_retry",
+                    extra={
+                        "provider": self._adapter.name,
+                        "attempt": attempt + 1,
+                        "backoff_sec": backoff,
+                    },
+                )
+                time.sleep(backoff)
+                backoff *= 2
+                continue
+            break
 
         out = _strip_ansi(proc.stdout or "")
         err = _strip_ansi(proc.stderr or "")
 
         if proc.returncode != 0:
+            # Exit code 75 is EX_TEMPFAIL (sysexits.h) — a transient failure
+            # the caller should retry. Raise CLITimeoutError so it is treated as
+            # an expected operational failure and not forwarded to Sentry.
+            if proc.returncode == 75:
+                hint = (
+                    f"{self._adapter.name} reported a temporary failure (exit 75). "
+                    "Retry the request or check network connectivity."
+                )
+                if err:
+                    hint = f"{hint} {err[:200]}"
+                raise CLITimeoutError(hint)
             base = self._adapter.explain_failure(
                 stdout=out, stderr=err, returncode=proc.returncode
             ).strip()

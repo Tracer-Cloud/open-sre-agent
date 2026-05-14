@@ -53,6 +53,7 @@ nosetests.xml
 coverage.xml
 *.cover
 *.log
+!tests/synthetic/hermes/**/*.log
 
 # Jupyter Notebook
 .ipynb_checkpoints
@@ -110,7 +111,6 @@ Temporary Items
 
 # Project specific
 output/
-.langgraph_api/
 .cloudopsbench-results/
 tests/benchmarks/cloudopsbench/benchmark/
 tests/benchmarks/cloudopsbench/.cache/

@@ -8,27 +8,14 @@ the same set of keys and will fail if they diverge.
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Any
 
-from langgraph.graph import add_messages
 from pydantic import ConfigDict, Field
 from typing_extensions import TypedDict
 
 from app.state.types import AgentMode, ChatMessageModel
 from app.strict_config import StrictConfigModel
 from app.types.retrieval import RetrievalControlsMap
-
-
-def merge_results_reducer(
-    existing: list[dict[str, Any]] | None, new: list[dict[str, Any]] | None
-) -> list[dict[str, Any]]:
-    if new and len(new) == 1 and new[0].get("__clear"):
-        return []
-    if not existing:
-        return new or []
-    if not new:
-        return existing
-    return existing + new
 
 
 class AgentState(TypedDict, total=False):
@@ -49,8 +36,8 @@ class AgentState(TypedDict, total=False):
     user_name: str
     organization_slug: str
 
-    # Chat mode — conversation (add_messages reducer appends instead of replacing)
-    messages: Annotated[list, add_messages]
+    # Chat mode — conversation history
+    messages: list
 
     # Alert classification
     is_noise: bool
@@ -95,7 +82,8 @@ class AgentState(TypedDict, total=False):
     investigation_loop_count: int
     hypotheses: list[str]
     executed_hypotheses: list[dict[str, Any]]
-    hypothesis_results: Annotated[list[dict[str, Any]], merge_results_reducer]
+    evidence_entries: list[dict[str, Any]]
+    hypothesis_results: list[dict[str, Any]]
     action_to_run: str
     investigation_started_at: float
 
@@ -111,8 +99,9 @@ class AgentState(TypedDict, total=False):
     # Append-only audit trail of windows replaced by ``adapt_window``. Each
     # entry is the OLD window dict at the moment of replacement, plus
     # ``replaced_at`` (ISO-8601) and ``replaced_reason`` (e.g.
-    # "expanded:empty_deploy_timeline"). Bounded by ``MAX_EXPANSIONS`` in
-    # the adapt_window rule layer; the field itself imposes no cap.
+    # "expanded:empty_deploy_timeline"). Bounded by
+    # ``app.constants.investigation.MAX_EXPANSIONS`` in the adapt_window rule
+    # layer; the field itself imposes no cap.
     # ``None`` until the first expansion. Diagnose narratives may cite
     # this to explain "we tried 120m, found no deploys, widened to 240m".
     incident_window_history: list[dict[str, Any]] | None
@@ -132,7 +121,7 @@ class AgentState(TypedDict, total=False):
     # OpenClaw context (for write-back targeting / transport overrides)
     openclaw_context: dict[str, Any]
 
-    # LangGraph context (injected from config by inject_auth_node)
+    # Runtime context (injected from config by inject_auth_node)
     thread_id: str
     run_id: str
     _auth_token: str
@@ -198,6 +187,7 @@ class AgentStateModel(StrictConfigModel):
     investigation_loop_count: int = 0
     hypotheses: list[str] = Field(default_factory=list)
     executed_hypotheses: list[dict[str, Any]] = Field(default_factory=list)
+    evidence_entries: list[dict[str, Any]] = Field(default_factory=list)
     hypothesis_results: list[dict[str, Any]] = Field(default_factory=list)
     action_to_run: str = ""
     investigation_started_at: float = 0.0

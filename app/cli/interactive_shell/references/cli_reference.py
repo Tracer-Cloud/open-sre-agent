@@ -9,6 +9,8 @@ from typing import Any
 
 import click
 
+from app.cli.interactive_shell.references import grounding_diagnostics as _gd
+
 _logger = logging.getLogger(__name__)
 
 _MAX_REFERENCE_CHARS = 28_000
@@ -158,7 +160,7 @@ def _interactive_shell_slash_hints() -> str:
 
     lines = [
         "In the interactive shell, describe an incident or paste alert JSON to run "
-        + "a LangGraph investigation, or chat with the terminal assistant for CLI help.",
+        + "a investigation pipeline, or chat with the terminal assistant for CLI help.",
         "Deterministic shell commands are parsed to argv and run without a shell by default "
         + "(safe/read-only allowlist only). Pipes, redirects, command substitution, mutating "
         + "commands, and other cases need a leading ! for explicit full-shell passthrough.",
@@ -222,6 +224,17 @@ def build_cli_reference_text() -> str:
             len(text),
         )
     return text
+
+
+_gd.register_grounding_source(
+    _gd.GroundingSource(
+        name="cli",
+        stats_fn=get_cli_reference_cache_stats,
+        format_fn=lambda s: (
+            f"hits={s['hits']} misses={s['misses']} cached={'yes' if s['cached'] else 'no'}"
+        ),
+    )
+)
 
 
 __all__ = [

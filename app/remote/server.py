@@ -395,9 +395,9 @@ def investigate(req: InvestigateRequest) -> InvestigateResponse:
 async def investigate_stream(req: InvestigateRequest) -> Response:
     """Stream investigation events as SSE using ``astream_events``.
 
-    Returns ``text/event-stream`` with the same SSE format the LangGraph
+    Returns ``text/event-stream`` with the same SSE format the remote threads
     API uses, so ``RemoteAgentClient`` / ``StreamRenderer`` can consume
-    this endpoint identically to a LangGraph deployment.
+    this endpoint identically to a threads-API deployment.
 
     The final pipeline state is accumulated during streaming and persisted
     as a ``.md`` file once the stream completes, matching the behaviour of
@@ -413,12 +413,13 @@ async def investigate_stream(req: InvestigateRequest) -> Response:
     except VercelResolutionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    alert_name, pipeline_name, severity = resolve_investigation_context(
+    investigation_metadata = resolve_investigation_context(
         raw_alert=raw_alert,
         alert_name=req.alert_name,
         pipeline_name=req.pipeline_name,
         severity=req.severity,
     )
+    alert_name, pipeline_name, severity = investigation_metadata
 
     accumulated_state: dict[str, Any] = {}
 
@@ -430,10 +431,8 @@ async def investigate_stream(req: InvestigateRequest) -> Response:
             ) as tracker:
                 try:
                     async for event in astream_investigation(
-                        alert_name,
-                        pipeline_name,
-                        severity,
                         raw_alert=raw_alert,
+                        investigation_metadata=investigation_metadata,
                     ):
                         if event.kind == "on_chain_end":
                             output = event.data.get("data", {}).get("output", {})
@@ -777,7 +776,7 @@ def _execute_investigation(
     """Run the RCA pipeline and return both the result and resolved metadata."""
     from app.cli.investigation import resolve_investigation_context, run_investigation_cli
 
-    resolved_alert_name, resolved_pipeline_name, resolved_severity = resolve_investigation_context(
+    investigation_metadata = resolve_investigation_context(
         raw_alert=raw_alert,
         alert_name=alert_name,
         pipeline_name=pipeline_name,
@@ -789,8 +788,7 @@ def _execute_investigation(
     ):
         result = run_investigation_cli(
             raw_alert=raw_alert,
-            alert_name=resolved_alert_name,
-            pipeline_name=resolved_pipeline_name,
-            severity=resolved_severity,
+            investigation_metadata=investigation_metadata,
         )
+    resolved_alert_name, resolved_pipeline_name, resolved_severity = investigation_metadata
     return result, resolved_alert_name, resolved_pipeline_name, resolved_severity

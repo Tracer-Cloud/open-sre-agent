@@ -196,14 +196,20 @@ def test_track_investigation_emits_failed_on_exception(
     stub = _StubAnalytics()
     monkeypatch.setattr(cli, "get_analytics", lambda: stub)
 
-    with pytest.raises(RuntimeError, match="boom"):  # noqa: SIM117
-        # Keep nested (not combined) so CodeQL can prove control flow past the
-        # raise via pytest.raises is reachable (see PR #1846 review threads).
+    # Wrap the raise in a callable so the ``raise`` lives inside ``_trigger``
+    # rather than directly in the test body. ``pytest.raises`` then sees a
+    # plain function call as its protected expression, which lets CodeQL
+    # ``py/unreachable-statement`` prove the assertions below are reachable
+    # (the previous nested-``with`` workaround still tripped the rule).
+    def _trigger() -> None:
         with cli.track_investigation(
             entrypoint=EntrypointSource.MCP,
             trigger_mode=TriggerMode.SERVICE_RUNTIME,
         ):
             raise RuntimeError("boom")
+
+    with pytest.raises(RuntimeError, match="boom"):
+        _trigger()
 
     emitted_events = [event for event, _ in stub.events]
     assert emitted_events == [Event.INVESTIGATION_STARTED, Event.INVESTIGATION_FAILED]

@@ -145,6 +145,10 @@ class RegisteredTool:
     )
     tags: tuple[str, ...] = ()
     cost_tier: CostTier | None = None
+    requires_approval: bool = False
+    approval_reason: str = ""
+    approval_expiry_seconds: int = 300
+    approval_scope: str = "one_shot"
     origin_module: str = ""
     origin_name: str = ""
 
@@ -197,7 +201,13 @@ class RegisteredTool:
         }
 
     def __call__(self, **kwargs: Any) -> Any:
-        return self.run(**kwargs)
+        try:
+            return self.run(**kwargs)
+        except Exception as exc:
+            from app.utils.sentry_sdk import capture_exception
+
+            capture_exception(exc, context=f"tool.{self.name}")
+            return {"error": str(exc), "exception_type": type(exc).__name__}
 
     @classmethod
     def from_base_tool(
@@ -241,6 +251,10 @@ class RegisteredTool:
             extract_params=tool.extract_params,
             tags=resolved_tags,
             cost_tier=resolved_cost_tier,
+            requires_approval=getattr(tool.__class__, "requires_approval", False),
+            approval_reason=getattr(tool.__class__, "approval_reason", ""),
+            approval_expiry_seconds=getattr(tool.__class__, "approval_expiry_seconds", 300),
+            approval_scope=getattr(tool.__class__, "approval_scope", "one_shot"),
             origin_module=tool.__class__.__module__,
             origin_name=tool.__class__.__name__,
         )

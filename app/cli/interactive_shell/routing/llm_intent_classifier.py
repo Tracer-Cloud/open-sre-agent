@@ -65,7 +65,7 @@ Your job is to classify user input into EXACTLY ONE of these five categories:
 
   new_alert  – The user is describing or pasting a live production incident,
                alert payload (JSON or text), or service failure that requires
-               investigation via the LangGraph pipeline.
+               investigation via the remote threads pipeline.
                Examples:
                  "the checkout API is returning 502s"
                  {"alertname": "HighCPU", "severity": "critical"}

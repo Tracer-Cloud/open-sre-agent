@@ -10,7 +10,7 @@ Aarush Sharma, Aarush Sharma, Anwesh, Awokoya Olawale Davidson, Blut-agent, DevN
 ## Main updates shipped (April 27, 2026)
 
 - feat: add IncidentWindow foundation for shared incident time (#951) — Malik Amir Hamza
-- Refactor: Parallelize Investigation via LangGraph Send() — Jeel3011
+- Refactor: Parallelize investigation dispatch — Jeel3011
 - docs(azure-monitor): add Azure Monitor integration guide — DevNinja
 - feat(llm-cli): modularize CLI binary resolution — Anwesh
 - fix: stop run_diagnostic_code from crashing every investigation dispatch — Aarush Sharma
@@ -44,7 +44,7 @@ Aarush Sharma, Aarush Sharma, Anwesh, Awokoya Olawale Davidson, Blut-agent, DevN
 - [#983](https://github.com/Tracer-Cloud/opensre/pull/983) test(tracer): add unit tests for get_logs parameter construction (author: Piyush Tiwari; contributors: Piyush Tiwari; labels: _none_; files: `tests/services/tracer_client/test_tracer_logs.py`)
 - [#847](https://github.com/Tracer-Cloud/opensre/pull/847) Fix: Moved pwhtool tests into tests dir  @hruico (author: hruico; contributors: hruico and Vaibhav Upreti; labels: _none_; files: `tests/tools/test_prefect_worker_health_tool.py`)
 - [#937](https://github.com/Tracer-Cloud/opensre/pull/937) Fix :Add deprecation warning for prefect integration (author: Ibocata; contributors: Ibocata; labels: _none_; files: `app/integrations/clients/prefect/__init__.py`)
-- [#936](https://github.com/Tracer-Cloud/opensre/pull/936) Refactor: Parallelize Investigation via LangGraph Send() (author: Jeel3011; contributors: Jeel3011; labels: _none_; files: `app/nodes/__init__.py`, `app/nodes/investigate/__init__.py`, `app/nodes/investigate/merge.py`, `app/nodes/investigate/parallel.py`, `app/pipeline/graph.py`, `app/pipeline/routing.py`, `app/state/agent_state.py`, `tests/nodes/test_parallel_investigate.py`)
+- [#936](https://github.com/Tracer-Cloud/opensre/pull/936) Refactor: Parallelize investigation dispatch (author: Jeel3011; contributors: Jeel3011; labels: _none_; files: `app/nodes/__init__.py`, `app/nodes/investigate/__init__.py`, `app/nodes/investigate/merge.py`, `app/nodes/investigate/parallel.py`, `app/pipeline/graph.py`, `app/pipeline/routing.py`, `app/state/agent_state.py`, `tests/nodes/test_parallel_investigate.py`)
 - [#965](https://github.com/Tracer-Cloud/opensre/pull/965) test(nodes): move publish_findings node_test.py into tests/ tree (author: Lozsku; contributors: Lozsku; labels: _none_; files: `tests/nodes/publish_findings/__init__.py`, `tests/nodes/publish_findings/test_node.py`)
 - [#959](https://github.com/Tracer-Cloud/opensre/pull/959) refactor(tests): move detect_sources GitLab tests into tests/nodes/plan_actions/ (author: Awokoya Olawale Davidson; contributors: Awokoya Olawale Davidson; labels: _none_; files: `app/nodes/plan_actions/detect_sources_test.py`, `tests/nodes/plan_actions/test_detect_sources.py`)
 - [#1009](https://github.com/Tracer-Cloud/opensre/pull/1009) test(llm-cli): fix Windows CI codex path assertions (author: Anwesh; contributors: Anwesh; labels: _none_; files: `tests/integrations/llm_cli/test_codex_adapter.py`)

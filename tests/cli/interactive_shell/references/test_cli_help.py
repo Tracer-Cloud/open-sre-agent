@@ -65,7 +65,7 @@ def _seed_docs_root(root: Path) -> None:
         encoding="utf-8",
     )
     (root / "deployment.mdx").write_text(
-        '---\ntitle: "Deployment"\n---\n\nDeploy OpenSRE to Railway, EC2, or LangGraph Cloud.\n',
+        '---\ntitle: "Deployment"\n---\n\nDeploy OpenSRE to Railway or EC2.\n',
         encoding="utf-8",
     )
 

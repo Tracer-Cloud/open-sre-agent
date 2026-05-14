@@ -57,7 +57,7 @@ response = logs_client.filter_log_events(
 ## 3. Traceable Investigation Metadata
 **Principle:** Every investigation must be decorated with `@traceable` and include comprehensive metadata for observability and debugging.
 
-**Why:** Enables tracking investigation quality, debugging agent behavior, and measuring performance over time in LangSmith.
+**Why:** Enables tracking investigation quality, debugging agent behavior, and measuring performance over time.
 
 **Pattern:**
 ```python

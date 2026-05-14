@@ -161,6 +161,28 @@ def test_parse_vercel_url_extracts_project_and_selected_log_id() -> None:
     assert parsed.selected_log_id == "54w4s-1775494460431-b04b1df81301"
 
 
+def test_parse_vercel_url_accepts_vercel_subdomain() -> None:
+    parsed = parse_vercel_url(
+        "https://api.vercel.com/vincenthus-projects/tracer-marketing-website-v3/logs"
+    )
+
+    assert parsed.team_slug == "vincenthus-projects"
+    assert parsed.project_slug == "tracer-marketing-website-v3"
+
+
+@pytest.mark.parametrize(
+    "vercel_url",
+    [
+        "https://vercel.com.evil.test/vincenthus-projects/tracer-marketing-website-v3/logs",
+        "https://evilvercel.com/vincenthus-projects/tracer-marketing-website-v3/logs",
+        "https://vercel.com@evil.test/vincenthus-projects/tracer-marketing-website-v3/logs",
+    ],
+)
+def test_parse_vercel_url_rejects_spoofed_vercel_hosts(vercel_url: str) -> None:
+    with pytest.raises(VercelResolutionError, match="Unsupported Vercel URL host"):
+        parse_vercel_url(vercel_url)
+
+
 def test_enrich_remote_alert_from_vercel_resolves_selected_log_id(
     monkeypatch,
 ) -> None:

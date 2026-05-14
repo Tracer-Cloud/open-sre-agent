@@ -7,8 +7,8 @@ import os
 import re
 from typing import Any
 
+from app.cli.support.output import debug_print
 from app.config import SLACK_CHANNEL
-from app.output import debug_print
 from app.utils.delivery_transport import post_json
 
 logger = logging.getLogger(__name__)

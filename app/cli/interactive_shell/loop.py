@@ -25,6 +25,7 @@ conventions: input pinned at bottom, history scrolls naturally.
 from __future__ import annotations
 
 import asyncio
+import logging
 import random
 import re
 import sys
@@ -44,11 +45,14 @@ from rich.console import Console
 from rich.markup import escape
 
 import app.cli.interactive_shell.orchestration.agent_actions as _agent_actions
+from app.agents.sampler import start_sampler
 from app.agents.sweep import run_startup_sweep
 from app.analytics.cli import capture_terminal_turn_summarized
 from app.analytics.events import Event
 from app.analytics.provider import get_analytics
+from app.cli.interactive_shell import alert_inbox as _alert_inbox
 from app.cli.interactive_shell import commands as _commands
+from app.cli.interactive_shell.alert_renderer import drain_and_render_incoming
 from app.cli.interactive_shell.chat import cli_agent as _cli_agent
 from app.cli.interactive_shell.chat import cli_help as _cli_help
 from app.cli.interactive_shell.config import ReplConfig
@@ -73,6 +77,8 @@ from app.cli.support.errors import OpenSREError
 from app.cli.support.exception_reporting import report_exception
 from app.cli.support.prompt_support import repl_prompt_note_ctrl_c, repl_reset_ctrl_c_gate
 from app.llm_reasoning_effort import apply_reasoning_effort
+
+log = logging.getLogger(__name__)
 
 # Module-alias pattern (introduced by main for testability + hot-reload).
 # Local rebindings expose the same names the rest of this module uses.
@@ -103,7 +109,6 @@ _INTERVENTION_CORRECTION_RE = re.compile(
     r")",
     re.IGNORECASE,
 )
-
 
 # Tokens that count as an explicit answer to a ``Proceed? [Y/n]``
 # confirmation. Compared against ``text.strip().lower()`` so case and
@@ -152,6 +157,21 @@ def _looks_like_cancel_request(text: str | None) -> bool:
     with that keystroke.
     """
     return (text or "").strip().lower() in _CANCEL_REQUEST_TOKENS
+
+
+def _dispatch_should_show_spinner(text: str, session: ReplSession) -> bool:
+    """Return False for deterministic slash-command dispatches.
+
+    Slash commands often open menus or run local shell handlers. Showing the
+    assistant/token spinner for those paths makes a local menu look like an LLM
+    turn is running. Keep this in lockstep with the router's bare-alias
+    typo-tolerance so typo-corrected local commands do not briefly show the
+    assistant spinner either.
+    """
+    stripped = text.strip()
+    if stripped.startswith("/"):
+        return False
+    return not _router.is_bare_command_alias(stripped, session)
 
 
 class DispatchCancelled(Exception):
@@ -403,11 +423,37 @@ async def _repl_main(
     if initial_input:
         return _run_initial_input(initial_input, session, hot_reloader)
 
-    # Pass the already-built ``pt_session`` so ``_run_interactive``
-    # doesn't allocate a second one. ``session.prompt_history_backend``
-    # is already wired above.
-    await _run_interactive(session, hot_reloader, pt_session=pt_session)
-    return 0
+    alert_listener_handle: _alert_inbox.AlertListenerHandle | None = None
+    inbox: _alert_inbox.AlertInbox | None = None
+    if cfg.alert_listener_enabled:
+        try:
+            inbox = _alert_inbox.AlertInbox()
+            alert_listener_handle = _alert_inbox.start_alert_listener(
+                inbox,
+                host=cfg.alert_listener_host,
+                port=cfg.alert_listener_port,
+                token=cfg.alert_listener_token,
+            )
+            _alert_inbox.set_current_inbox(inbox)
+            console = Console(
+                highlight=False,
+                force_terminal=True,
+                color_system="truecolor",
+                legacy_windows=False,
+            )
+            console.print(
+                f"[{DIM}]listening for alerts on http://{alert_listener_handle.bound_address}/alerts[/]"
+            )
+        except Exception as exc:
+            log.warning("Alert listener could not start: %s — continuing without it.", exc)
+
+    try:
+        await _run_interactive(session, hot_reloader, pt_session=pt_session, inbox=inbox)
+        return 0
+    finally:
+        if alert_listener_handle is not None:
+            alert_listener_handle.stop()
+            _alert_inbox.set_current_inbox(None)
 
 
 def run_repl(initial_input: str | None = None, config: ReplConfig | None = None) -> int:
@@ -682,6 +728,7 @@ async def _run_interactive(
     session: ReplSession,
     hot_reloader: HotReloadCoordinator | None = None,
     pt_session: PromptSession[str] | None = None,
+    inbox: _alert_inbox.AlertInbox | None = None,
 ) -> None:
     """Per-turn ``prompt_async`` cycle backed by a queue + background
     processor. Submitting a new prompt while a turn is streaming
@@ -704,12 +751,16 @@ async def _run_interactive(
     redundant ``_build_prompt_session()`` call here. When ``None``, this
     function builds its own — keeps the public signature usable for
     callers that don't pre-build.
+
+    ``inbox`` (AlertInbox) optional. When provided, the REPL drains pending
+    alerts at the start of each turn and in the background when alerts arrive.
     """
     if pt_session is None:
         pt_session = _build_prompt_session()
         session.prompt_history_backend = pt_session.history
     spinner = _SpinnerState()
     state = _ReplState()
+    sampler_task = start_sampler()
 
     cancel_kb = _build_cancel_key_bindings(state)
     _install_session_key_bindings(pt_session, cancel_kb)
@@ -751,7 +802,9 @@ async def _run_interactive(
             color_system="truecolor",
             legacy_windows=False,
         )
-        spinner.start()
+        show_spinner = _dispatch_should_show_spinner(text, session)
+        if show_spinner:
+            spinner.start()
         try:
             await asyncio.to_thread(
                 _dispatch_one_turn,
@@ -779,13 +832,50 @@ async def _run_interactive(
             report_exception(exc, context="interactive_shell.dispatch_async")
             console.print(f"[{ERROR}]dispatch error:[/] {escape(str(exc))}")
         finally:
-            spinner.stop()
+            if show_spinner:
+                spinner.stop()
             # Release the per-turn cancel event only if it's still ours.
             # A stale-but-still-running prior-turn worker keeps a strong
             # reference to its own ``dispatch_cancel``; nothing else
             # holds a reference once we drop it here.
             if state.current_cancel_event is dispatch_cancel:
                 state.current_cancel_event = None
+
+    async def _alert_watcher() -> None:
+        """Background coroutine: wake on alert.pending_event and drain to console.
+
+        Runs on the main asyncio loop, using call_soon_threadsafe to execute
+        the drain synchronously (the HTTP handler thread sets the event).
+        """
+        if inbox is None:
+            return
+
+        # Synchronously drain any alerts that arrived before the watcher started
+        alert_console = Console(
+            highlight=False,
+            force_terminal=True,
+            color_system="truecolor",
+            legacy_windows=False,
+        )
+        drain_and_render_incoming(session, alert_console, inbox)
+
+        while not state.exit_requested:
+            try:
+                # Wait for the pending event (set by AlertInbox.put)
+                # Use a thread-safe wait with a timeout to allow periodic checks
+                await asyncio.to_thread(inbox.pending_event.wait, timeout=1)
+            except asyncio.CancelledError:
+                return
+
+            # Drain any alerts using call_soon_threadsafe from the watcher thread
+            # This ensures rendering happens on the main loop without conflicts
+            # with the prompt_toolkit editor
+            try:
+                # Since we're already in an asyncio thread context,
+                # we can just call drain directly
+                drain_and_render_incoming(session, alert_console, inbox)
+            except Exception as exc:
+                log.warning("Error draining incoming alerts: %s", exc)
 
     async def _processor() -> None:
         """Drain queued prompts one dispatch at a time."""
@@ -828,6 +918,7 @@ async def _run_interactive(
         return ANSI(f"{spinner.inline_spinner_ansi()}\n{base}")
 
     processor_task = asyncio.create_task(_processor())
+    alert_watcher_task = asyncio.create_task(_alert_watcher())
     try:
         with patch_stdout(raw=True):
             # ``erase_when_done=True`` on ``PromptSession`` clears the
@@ -848,6 +939,14 @@ async def _run_interactive(
             # ``sys.stdout``.
             echo_console = Console(highlight=False, force_terminal=True, color_system="truecolor")
             while True:
+                # Drain any pending alerts at the start of each turn
+                # (safety net in case alerts arrived while typing)
+                if inbox is not None:
+                    try:
+                        drain_and_render_incoming(session, echo_console, inbox)
+                    except Exception as exc:
+                        log.warning("Error draining alerts at turn start: %s", exc)
+
                 # Hot-reload check (introduced in main) — picks up dev
                 # edits to dispatch handlers between turns. No-op when
                 # ``cfg.reload`` was off (hot_reloader is None).
@@ -930,7 +1029,13 @@ async def _run_interactive(
     finally:
         state.exit_requested = True
         state.cancel_current_dispatch()
+        sampler_task.cancel()
+        try:  # noqa: SIM105
+            await sampler_task
+        except asyncio.CancelledError:
+            pass
         processor_task.cancel()
+        alert_watcher_task.cancel()
         # ``try/except/pass`` here (not ``contextlib.suppress``) so
         # CodeQL doesn't flag the bare ``await`` as ineffectual; SIM105
         # ruff suggestion is suppressed locally.
@@ -940,6 +1045,11 @@ async def _run_interactive(
             # Processor cleanup must never raise — we're already in the
             # REPL's outer ``finally`` and the session is shutting down.
             # Suppress so the exit path completes cleanly.
+            pass
+        try:  # noqa: SIM105
+            await alert_watcher_task
+        except (asyncio.CancelledError, Exception):
+            # Alert watcher cleanup must never raise.
             pass
 
 
