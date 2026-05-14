@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 
 from app.cli.interactive_shell.alert_inbox import IncomingAlert
@@ -55,9 +56,9 @@ def format_incoming_alert(alert: IncomingAlert) -> RenderableType:
     # Build the header line: source and severity
     header_parts: list[str] = ["incoming alert"]
     if alert.source:
-        header_parts.append(f"from {alert.source}")
+        header_parts.append(f"from {escape(alert.source)}")
     if alert.severity:
-        header_parts.append(f"[{alert.severity}]")
+        header_parts.append(f"[{escape(alert.severity)}]")
 
     header = " | ".join(header_parts)
 
