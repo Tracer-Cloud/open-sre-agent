@@ -351,7 +351,11 @@ def _read_segment(
     since_queue: deque[bool] = deque()  # one entry per Traceback opener, in order
     prev_was_continuation = False  # tracks boundary for queue pop
     last_parent_passes_since = since is None  # seed when queue is empty
-    new_offset = start_offset
+    # ``new_offset`` is written exactly once per loop iteration from
+    # ``line_start`` (see comment below). ``while True`` guarantees the loop
+    # body runs at least once before any reachable return, so no module-level
+    # seed is needed — adding one would just trip CodeQL
+    # ``py/multiple-definition``.
 
     with path.open("rb") as handle:
         handle.seek(start_offset)
@@ -363,9 +367,13 @@ def _read_segment(
         while True:
             line_start = handle.tell()
             raw = handle.readline()
-            # ``line_start`` is the resume offset on EOF or when the line
-            # does not fit in ``budget``; assign once here so CodeQL does
-            # not flag redundant writes on those break paths.
+            # Single ``new_offset`` write per iteration so CodeQL does not
+            # flag redundant assignments (``py/multiple-definition``). On
+            # the EOF / budget / max_lines break paths ``line_start`` IS the
+            # resume offset; on the record-is-None ``continue`` and on the
+            # normal end-of-body path, the next iteration's ``handle.tell()``
+            # advances past the consumed line so the next write here
+            # captures the new end-of-stream cursor.
             new_offset = line_start
             if not raw:
                 break
@@ -384,15 +392,10 @@ def _read_segment(
                     truncated = max(truncated, 1)
                 break
             budget -= len(raw)
-            # Post-line offset is deterministic from line_start + raw length;
-            # no extra tell() needed and there is exactly one assignment path
-            # per iteration that reaches the loop top again.
-            line_end = line_start + len(raw)
 
             line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
             record = parse_log_line(line, prev_level=prev_level)
             if record is None:
-                new_offset = line_end
                 continue
 
             passes_level = level_filter is None or record.level in level_filter
@@ -447,7 +450,6 @@ def _read_segment(
 
             if passes_level and passes_since:
                 records.append(record)
-            new_offset = line_end
 
     return tuple(records), tuple(incidents), new_offset, parsed_count, truncated
 
