@@ -19,6 +19,7 @@ import httpx
 from app.integrations.config_models import AlertmanagerIntegrationConfig
 from app.integrations.probes import ProbeResult
 from app.services._error_helpers import capture_service_error
+from app.services._factory_telemetry import report_factory_failure
 
 logger = logging.getLogger(__name__)
 
@@ -234,5 +235,6 @@ def make_alertmanager_client(
                 password=password or "",
             )
         )
-    except Exception:
+    except Exception as exc:
+        report_factory_failure(exc, integration="alertmanager", logger=logger)
         return None

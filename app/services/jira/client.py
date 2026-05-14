@@ -9,6 +9,7 @@ import httpx
 
 from app.integrations.models import JiraIntegrationConfig
 from app.services._error_helpers import capture_service_error
+from app.services._factory_telemetry import report_factory_failure
 
 logger = logging.getLogger(__name__)
 
@@ -297,5 +298,6 @@ def make_jira_client(
             project_key=(project_key or "").strip(),
         )
         return JiraClient(config)
-    except Exception:
+    except Exception as exc:
+        report_factory_failure(exc, integration="jira", logger=logger)
         return None

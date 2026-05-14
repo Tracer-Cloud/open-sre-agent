@@ -14,6 +14,7 @@ import httpx
 from app.integrations.config_models import OpsGenieIntegrationConfig
 from app.integrations.probes import ProbeResult
 from app.services._error_helpers import capture_service_error
+from app.services._factory_telemetry import report_factory_failure
 
 logger = logging.getLogger(__name__)
 
@@ -268,5 +269,6 @@ def make_opsgenie_client(api_key: str | None, region: str | None = None) -> OpsG
         return None
     try:
         return OpsGenieClient(OpsGenieConfig(api_key=token, region=region or "us"))
-    except Exception:
+    except Exception as exc:
+        report_factory_failure(exc, integration="opsgenie", logger=logger)
         return None

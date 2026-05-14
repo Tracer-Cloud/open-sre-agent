@@ -21,6 +21,7 @@ from pydantic import field_validator
 
 from app.integrations.probes import ProbeResult
 from app.services._error_helpers import capture_service_error
+from app.services._factory_telemetry import report_factory_failure
 from app.services._streaming import StreamingParseStats
 from app.strict_config import StrictConfigModel
 
@@ -202,5 +203,6 @@ def make_victoria_logs_client(
         return None
     try:
         return VictoriaLogsClient(VictoriaLogsConfig(base_url=url, tenant_id=tenant_id))
-    except Exception:
+    except Exception as exc:
+        report_factory_failure(exc, integration="victoria_logs", logger=logger)
         return None

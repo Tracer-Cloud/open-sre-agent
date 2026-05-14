@@ -19,6 +19,7 @@ import httpx
 from app.integrations.config_models import VercelIntegrationConfig
 from app.integrations.probes import ProbeResult
 from app.services._error_helpers import capture_service_error
+from app.services._factory_telemetry import report_factory_failure
 from app.services._streaming import StreamingParseStats
 
 logger = logging.getLogger(__name__)
@@ -589,5 +590,6 @@ def make_vercel_client(api_token: str | None, team_id: str | None = None) -> Ver
         return None
     try:
         return VercelClient(VercelConfig(api_token=token, team_id=team_id or ""))
-    except Exception:
+    except Exception as exc:
+        report_factory_failure(exc, integration="vercel", logger=logger)
         return None

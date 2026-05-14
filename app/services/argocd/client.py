@@ -19,6 +19,7 @@ import httpx
 from app.integrations.config_models import ArgoCDIntegrationConfig
 from app.integrations.probes import ProbeResult
 from app.services._error_helpers import capture_service_error
+from app.services._factory_telemetry import report_factory_failure
 
 logger = logging.getLogger(__name__)
 
@@ -542,5 +543,6 @@ def make_argocd_client(
                 verify_ssl=_normalize_verify_ssl(verify_ssl),
             )
         )
-    except Exception:
+    except Exception as exc:
+        report_factory_failure(exc, integration="argocd", logger=logger)
         return None
