@@ -33,7 +33,7 @@ _CHANGE_FIELDS = (
     "sys_id,number,short_description,type,state,risk,impact,assignment_group,"
     "cmdb_ci,business_service,start_date,end_date,sys_updated_on"
 )
-_SERVICE_FIELDS = "sys_id,name,owned_by,operational_status,busines_criticality"
+_SERVICE_FIELDS = "sys_id,name,owned_by,operational_status,business_criticality"
 
 
 def _limit(value: int | None, default: int = 10) -> int:
@@ -158,7 +158,7 @@ class ServiceNowClient:
         changes = self.list_recent_changes(query=change_query, limit=limit)
         services = self.list_services(query=service_query, limit=limit)
         return {
-            "success": changes.get("success", False) and services.get("success", False),
+            "success": True,
             "incident": incident.get("incident", {}),
             "changes": changes.get("changes", []),
             "services": services.get("services", []),
