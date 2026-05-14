@@ -128,10 +128,7 @@ def parse_watch_argv(argv: list[str]) -> WatchdogStartSpec | str:
                 return f"[{ERROR}]invalid --max-cpu:[/] {escape(value)}"
             max_supported_cpu = 100.0 * float(max(1, os.cpu_count() or 1))
             if pct <= 0 or pct > max_supported_cpu:
-                return (
-                    f"[{ERROR}]--max-cpu must be between 0 and {max_supported_cpu:g}:[/] "
-                    f"{pct}"
-                )
+                return f"[{ERROR}]--max-cpu must be between 0 and {max_supported_cpu:g}:[/] {pct}"
             max_cpu = pct
         elif token == "--max-runtime":
             seconds = _parse_duration_seconds(value)
