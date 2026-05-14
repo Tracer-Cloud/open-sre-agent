@@ -62,6 +62,17 @@ def test_list_sentry_issues_preserves_quoted_structured_filter_values(
     assert ("query", query) in captured["params"]
 
 
+def test_list_sentry_issues_preserves_negated_structured_queries(
+    monkeypatch: Any,
+) -> None:
+    captured = _capture_sentry_issue_params(monkeypatch)
+
+    query = "!is:resolved !level:info"
+    list_sentry_issues(config=_config(), query=query, limit=10)
+
+    assert ("query", query) in captured["params"]
+
+
 def test_list_sentry_issues_escapes_quotes_in_exception_signatures(
     monkeypatch: Any,
 ) -> None:
@@ -187,4 +198,28 @@ def test_list_sentry_issues_preserves_filters_around_exception_text(
     list_sentry_issues(config=_config(), query=query, limit=10)
 
     expected_query = 'is:unresolved "panic: nil pointer" level:fatal'
+    assert ("query", expected_query) in captured["params"]
+
+
+def test_list_sentry_issues_preserves_negated_filters_with_exception_text(
+    monkeypatch: Any,
+) -> None:
+    captured = _capture_sentry_issue_params(monkeypatch)
+
+    query = "TypeError: cannot read property !is:resolved !level:info"
+    list_sentry_issues(config=_config(), query=query, limit=10)
+
+    expected_query = '"TypeError: cannot read property" !is:resolved !level:info'
+    assert ("query", expected_query) in captured["params"]
+
+
+def test_list_sentry_issues_preserves_leading_negated_filters(
+    monkeypatch: Any,
+) -> None:
+    captured = _capture_sentry_issue_params(monkeypatch)
+
+    query = "!is:resolved !level:info TypeError: cannot read property"
+    list_sentry_issues(config=_config(), query=query, limit=10)
+
+    expected_query = '!is:resolved !level:info "TypeError: cannot read property"'
     assert ("query", expected_query) in captured["params"]

@@ -23,7 +23,7 @@ _BARE_EXCEPTION_QUERY_PREFIX_RE = re.compile(
 _BARE_EXCEPTION_QUERY_NAME_RE = re.compile(
     r"^(?:[A-Z][A-Za-z0-9_.]*(?:Error|Exception|Interrupt|Warning)?|panic|error|runtime error|fatal error)$"
 )
-_STRUCTURED_QUERY_KEY_RE = re.compile(r"(?<!\S)(?P<key>[A-Za-z][A-Za-z0-9_.-]*):")
+_STRUCTURED_QUERY_KEY_RE = re.compile(r"(?<!\S)!?(?P<key>[A-Za-z][A-Za-z0-9_.-]*):")
 _STRUCTURED_QUERY_KEYS = frozenset(
     {
         "age",
