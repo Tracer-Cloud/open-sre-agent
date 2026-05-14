@@ -355,6 +355,18 @@ def _init_sentry_once(
         CLITransientError,
     )
 
+    ignore_errors: list[Any] = [
+        KeyboardInterrupt,
+        CLIAuthenticationRequired,
+        CLITimeoutError,
+        CLITransientError,
+    ]
+    if environment != "production":
+        with suppress(ImportError):
+            from psycopg_pool import PoolTimeout  # type: ignore[import-not-found]
+
+            ignore_errors.append(PoolTimeout)
+
     sentry_sdk.init(
         dsn=dsn,
         environment=environment,
@@ -369,12 +381,7 @@ def _init_sentry_once(
         auto_enabling_integrations=False,
         before_send=_before_send,
         before_breadcrumb=_before_breadcrumb,
-        ignore_errors=[
-            KeyboardInterrupt,
-            CLIAuthenticationRequired,
-            CLITimeoutError,
-            CLITransientError,
-        ],
+        ignore_errors=ignore_errors,
     )
 
 
