@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from subprocess import TimeoutExpired
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -166,6 +167,58 @@ def test_detect_not_logged_in(mock_which: MagicMock, mock_run: MagicMock) -> Non
 
     assert probe.installed is True
     assert probe.logged_in is False
+
+
+@patch("app.integrations.llm_cli.cursor.subprocess.run")
+@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+def test_detect_status_timeout_without_api_key(mock_which: MagicMock, mock_run: MagicMock) -> None:
+    mock_which.return_value = "agent"
+
+    def side_effect(args, **kwargs):
+        if "--version" in args:
+            return _version_proc()
+        if "status" in args:
+            raise TimeoutExpired(cmd=args, timeout=kwargs.get("timeout", 0))
+        return _fallback_proc()
+
+    mock_run.side_effect = side_effect
+
+    with patch.dict(
+        os.environ,
+        {"CURSOR_BIN": "agent", "CURSOR_API_KEY": "", "USERPROFILE": r"C:\Users\test"},
+        clear=True,
+    ):
+        probe = CursorAdapter().detect()
+
+    assert probe.installed is True
+    assert probe.logged_in is None
+    assert "status" in probe.detail
+
+
+@patch("app.integrations.llm_cli.cursor.subprocess.run")
+@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+def test_detect_status_timeout_with_api_key(mock_which: MagicMock, mock_run: MagicMock) -> None:
+    mock_which.return_value = "agent"
+
+    def side_effect(args, **kwargs):
+        if "--version" in args:
+            return _version_proc()
+        if "status" in args:
+            raise TimeoutExpired(cmd=args, timeout=kwargs.get("timeout", 0))
+        return _fallback_proc()
+
+    mock_run.side_effect = side_effect
+
+    with patch.dict(
+        os.environ,
+        {"CURSOR_BIN": "agent", "CURSOR_API_KEY": "ck", "USERPROFILE": r"C:\Users\test"},
+        clear=True,
+    ):
+        probe = CursorAdapter().detect()
+
+    assert probe.installed is True
+    assert probe.logged_in is True
+    assert "CURSOR_API_KEY" in probe.detail
 
 
 @patch.dict(os.environ, {"CURSOR_API_KEY": ""}, clear=False)
