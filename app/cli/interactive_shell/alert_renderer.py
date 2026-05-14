@@ -67,7 +67,7 @@ def format_incoming_alert(alert: IncomingAlert) -> RenderableType:
     body_lines = [
         f"[{DIM}]received {timestamp_str}[/]",
         "",
-        f"[{TEXT}]{alert.text}[/]",
+        f"[{TEXT}]{escape(alert.text)}[/]",
     ]
     body = "\n".join(body_lines)
 
