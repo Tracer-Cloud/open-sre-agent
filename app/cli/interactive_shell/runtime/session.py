@@ -129,7 +129,7 @@ class ReplSession:
         """
         self.history.append({"type": kind, "text": text, "ok": ok})
 
-    def record_incoming_alert(self, alert: "IncomingAlert") -> None:
+    def record_incoming_alert(self, alert: IncomingAlert) -> None:
         """Append a full IncomingAlert with all metadata to session history.
 
         Also appends to incoming_alerts list (capped at _INCOMING_ALERTS_MAX).
