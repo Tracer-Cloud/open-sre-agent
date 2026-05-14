@@ -87,9 +87,15 @@ class SourceStore:
         with self._connect() as conn:
             rows = conn.execute(
                 """
-                SELECT relpath, MAX(fingerprint) AS fingerprint
+                SELECT chunks.relpath, chunks.fingerprint
                 FROM chunks
-                GROUP BY relpath
+                INNER JOIN (
+                    SELECT relpath, MAX(id) AS latest_id
+                    FROM chunks
+                    GROUP BY relpath
+                ) AS latest
+                    ON latest.latest_id = chunks.id
+                ORDER BY chunks.relpath
                 """
             ).fetchall()
         return {str(row["relpath"]): str(row["fingerprint"]) for row in rows}
@@ -100,6 +106,28 @@ class SourceStore:
             deleted = conn.execute("DELETE FROM chunks WHERE relpath = ?", (relpath,))
             conn.commit()
         return int(deleted.rowcount)
+
+    def _fetch_vectors_for_cosine(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        max_scan_rows: int,
+    ) -> list[sqlite3.Row]:
+        conn.execute("BEGIN")
+        try:
+            row = conn.execute("SELECT COUNT(*) AS row_count FROM vectors").fetchone()
+            row_count = int(row["row_count"])
+            if row_count > max_scan_rows:
+                raise RuntimeError(
+                    f"Refusing to scan {row_count} vectors; rebuild with a vector index "
+                    f"or pass a higher max_scan_rows value"
+                )
+            rows = conn.execute("SELECT id, vector FROM vectors ORDER BY id").fetchall()
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        return rows
 
     def upsert_chunks(
         self,
@@ -195,14 +223,7 @@ class SourceStore:
             return []
 
         with self._connect() as conn:
-            row = conn.execute("SELECT COUNT(*) AS row_count FROM vectors").fetchone()
-            row_count = int(row["row_count"])
-            if row_count > max_scan_rows:
-                raise RuntimeError(
-                    f"Refusing to scan {row_count} vectors; rebuild with a vector index "
-                    f"or pass a higher max_scan_rows value"
-                )
-            rows = conn.execute("SELECT id, vector FROM vectors ORDER BY id").fetchall()
+            rows = self._fetch_vectors_for_cosine(conn, max_scan_rows=max_scan_rows)
         if not rows:
             return []
 

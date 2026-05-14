@@ -155,6 +155,32 @@ def test_cosine_topk_scan_limit_blocks_large_in_memory_load(tmp_path: Path) -> N
         store.cosine_topk(np.array([1.0, 0.0, 0.0]), max_scan_rows=1)
 
 
+def test_cosine_topk_counts_and_reads_vectors_in_one_transaction(tmp_path: Path) -> None:
+    traced_sql: list[str] = []
+
+    class TracedSourceStore(SourceStore):
+        def _connect(self) -> sqlite3.Connection:
+            conn = super()._connect()
+            conn.set_trace_callback(traced_sql.append)
+            return conn
+
+    store = TracedSourceStore(tmp_path / "source.sqlite", vector_dim=3)
+    store.upsert_chunks(
+        [_chunk("app/a.py", "alpha")],
+        [np.array([1.0, 0.0, 0.0])],
+    )
+    traced_sql.clear()
+
+    store.cosine_topk(np.array([1.0, 0.0, 0.0]))
+
+    normalized_sql = [statement.strip().upper() for statement in traced_sql]
+    begin_index = normalized_sql.index("BEGIN")
+    count_index = normalized_sql.index("SELECT COUNT(*) AS ROW_COUNT FROM VECTORS")
+    select_index = normalized_sql.index("SELECT ID, VECTOR FROM VECTORS ORDER BY ID")
+    commit_index = normalized_sql.index("COMMIT")
+    assert begin_index < count_index < select_index < commit_index
+
+
 def test_incompatible_store_error_on_mismatched_vector_dim(tmp_path: Path) -> None:
     path = tmp_path / "source.sqlite"
     SourceStore(path, vector_dim=3)
@@ -215,6 +241,27 @@ def test_file_fingerprints_returns_deduplicated_mapping(tmp_path: Path) -> None:
     )
 
     assert store.file_fingerprints() == {"app/a.py": "fp-a", "app/b.py": "fp-b"}
+
+
+def test_file_fingerprints_uses_latest_chunk_when_fingerprints_disagree(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "source.sqlite"
+    store = SourceStore(path, vector_dim=3)
+    ids = store.upsert_chunks(
+        [
+            _chunk("app/a.py", "alpha", fingerprint="fp-current"),
+            _chunk("app/a.py", "beta", fingerprint="fp-current"),
+        ],
+        [np.array([1.0, 0.0, 0.0]), np.array([0.0, 1.0, 0.0])],
+    )
+    with sqlite3.connect(path) as conn:
+        conn.execute(
+            "UPDATE chunks SET fingerprint = ? WHERE id = ?",
+            ("zz-stale-fingerprint", ids[0]),
+        )
+
+    assert store.file_fingerprints() == {"app/a.py": "fp-current"}
 
 
 def test_schema_creation_is_idempotent(tmp_path: Path) -> None:
