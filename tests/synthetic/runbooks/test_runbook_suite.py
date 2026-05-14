@@ -21,9 +21,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from app.nodes.plan_actions.extract_keywords import extract_keywords
-from app.nodes.publish_findings.formatters.report import format_slack_message
-from app.nodes.publish_findings.report_context import build_report_context
+from app.delivery.publish_findings.formatters.report import format_slack_message
+from app.delivery.publish_findings.report_context import build_report_context
 from app.runbooks.retrieval import retrieve_matching_runbook
 from app.runbooks.store import load_all
 
@@ -58,7 +57,8 @@ def test_runbook_suite_scenario(
     )
     alert_name = common_labels.get("alertname", "")
 
-    keywords = extract_keywords(problem_md, alert_name)
+    raw = (alert_name + " " + problem_md).lower()
+    keywords = [w for w in raw.split() if len(w) > 3]
     matched = retrieve_matching_runbook(
         runbooks=load_all(),
         keywords=keywords,

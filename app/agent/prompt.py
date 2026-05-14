@@ -93,6 +93,24 @@ _ALERT_SOURCE_TO_TOOL_SOURCES: dict[str, list[str]] = {
 _SECONDARY_SOURCES = {"knowledge", "openclaw", "google_docs"}
 
 
+def _build_runbook_section(matched_runbook: dict[str, Any] | None) -> str:
+    """Inject a team-authored runbook excerpt into the alert context.
+
+    Phase 2a runbook-aware reasoning: the agent prefers actions described in
+    the matched runbook when proposing remediation steps.
+    """
+    if not matched_runbook:
+        return ""
+    body = str(matched_runbook.get("body", ""))[:2000]
+    slug = str(matched_runbook.get("slug", "unknown"))
+    return (
+        f"\n## Relevant team runbook ({slug})\n\n"
+        f"{body}\n\n"
+        "When proposing remediation steps, prefer actions described in this runbook. "
+        f"Cite [{slug}] in any step you draw from it.\n"
+    )
+
+
 def build_system_prompt(_state: dict[str, Any]) -> str:
     return _INVESTIGATION_SYSTEM
 
@@ -120,15 +138,20 @@ def format_alert_context(state: dict[str, Any]) -> str:
     start_guidance = _build_start_guidance(alert_source, alert_name, tools_by_source)
     tools_section = _format_tools_by_source(tools_by_source)
 
-    return _ALERT_CONTEXT_TEMPLATE.format(
-        alert_name=alert_name,
-        alert_source=alert_source or "unknown",
-        pipeline_name=pipeline_name,
-        severity=severity,
-        extra=extra,
-        connected_integrations=connected_integrations,
-        start_guidance=start_guidance,
-        tools_by_source=tools_section,
+    runbook_section = _build_runbook_section(state.get("matched_runbook"))
+
+    return (
+        _ALERT_CONTEXT_TEMPLATE.format(
+            alert_name=alert_name,
+            alert_source=alert_source or "unknown",
+            pipeline_name=pipeline_name,
+            severity=severity,
+            extra=extra,
+            connected_integrations=connected_integrations,
+            start_guidance=start_guidance,
+            tools_by_source=tools_section,
+        )
+        + runbook_section
     )
 
 

@@ -155,6 +155,8 @@ def run_connected_investigation(state: AgentState) -> AgentState:
         if state_any.get("is_noise"):
             return cast(AgentState, state_any)
 
+        _merge(state_any, {"matched_runbook": _retrieve_runbook(state_any)})
+
         _merge(state_any, ConnectedInvestigationAgent().run(state_any))
         _merge(
             state_any,
@@ -190,6 +192,35 @@ def run_chat(state: AgentState) -> AgentState:
         capture_exception(exc)
         raise
     return cast(AgentState, state_any)
+
+
+def _retrieve_runbook(state: dict[str, Any]) -> dict[str, Any] | None:
+    """Top-1 runbook match for the current alert, or None.
+
+    Pure read-only; never raises — a bad runbook store must not block investigation.
+    """
+    from app.runbooks.retrieval import retrieve_matching_runbook
+    from app.runbooks.store import load_all as load_runbooks
+
+    try:
+        alert_name = state.get("alert_name", "") or ""
+        problem_md = state.get("problem_md", "") or ""
+        raw = (alert_name + " " + problem_md).lower()
+        keywords = [w for w in raw.split() if len(w) > 3]
+        alert_json = state.get("alert_json") or {}
+        common_labels = alert_json.get("commonLabels", {}) if isinstance(alert_json, dict) else {}
+        service = common_labels.get("service") or (
+            alert_json.get("service") if isinstance(alert_json, dict) else None
+        )
+        matched = retrieve_matching_runbook(
+            runbooks=load_runbooks(),
+            keywords=keywords,
+            service=str(service) if service else None,
+            pipeline_name=state.get("pipeline_name"),
+        )
+        return matched.to_dict() if matched else None
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _merge(state: dict[str, Any], updates: dict[str, Any]) -> None:
