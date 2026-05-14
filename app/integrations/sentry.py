@@ -17,7 +17,9 @@ DEFAULT_SENTRY_STATS_PERIOD = "24h"
 _EXCEPTION_QUERY_PREFIX_RE = re.compile(
     r"^(?:[A-Z][A-Za-z0-9_.]*(?:Error|Exception|Interrupt|Warning)?|panic|error|runtime error|fatal error):\s*"
 )
-_STRUCTURED_QUERY_TOKEN_RE = re.compile(r"(?:^|\s)([A-Za-z][A-Za-z0-9_.-]*):")
+_STRUCTURED_QUERY_TOKEN_RE = re.compile(
+    r"(?<!\S)(?P<key>[A-Za-z][A-Za-z0-9_.-]*):(?P<value>\"(?:\\.|[^\"])*\"|'(?:\\.|[^'])*'|\S+)"
+)
 _STRUCTURED_QUERY_KEYS = frozenset(
     {
         "age",
@@ -155,11 +157,19 @@ def _normalize_issue_search_query(query: str) -> str:
     stripped = query.strip()
     if not stripped or _is_quoted_search_query(stripped):
         return stripped
-    if _starts_like_exception_signature(stripped):
-        return _quote_search_phrase(stripped)
-    if _has_structured_query_token(stripped):
+
+    free_text, filters = _split_structured_query_filters(stripped)
+    if filters and not free_text:
         return stripped
-    if _looks_like_exception_signature(stripped):
+    if filters:
+        normalized_free_text = (
+            _quote_search_phrase(free_text)
+            if _starts_like_exception_signature(free_text)
+            or _looks_like_exception_signature(free_text)
+            else free_text
+        )
+        return " ".join([normalized_free_text, *filters])
+    if _starts_like_exception_signature(stripped) or _looks_like_exception_signature(stripped):
         return _quote_search_phrase(stripped)
     return stripped
 
@@ -172,11 +182,24 @@ def _starts_like_exception_signature(query: str) -> bool:
     return bool(_EXCEPTION_QUERY_PREFIX_RE.search(query))
 
 
-def _has_structured_query_token(query: str) -> bool:
-    return any(
-        match.group(1) in _STRUCTURED_QUERY_KEYS
-        for match in _STRUCTURED_QUERY_TOKEN_RE.finditer(query)
-    )
+def _split_structured_query_filters(query: str) -> tuple[str, list[str]]:
+    filters: list[str] = []
+    free_text_parts: list[str] = []
+    cursor = 0
+
+    for match in _STRUCTURED_QUERY_TOKEN_RE.finditer(query):
+        if match.group("key") not in _STRUCTURED_QUERY_KEYS:
+            continue
+        free_text_parts.append(query[cursor : match.start()])
+        filters.append(match.group(0))
+        cursor = match.end()
+
+    if not filters:
+        return query, []
+
+    free_text_parts.append(query[cursor:])
+    free_text = " ".join(part.strip() for part in free_text_parts if part.strip())
+    return free_text, filters
 
 
 def _looks_like_exception_signature(query: str) -> bool:

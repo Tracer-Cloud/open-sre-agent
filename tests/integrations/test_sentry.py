@@ -94,3 +94,27 @@ def test_list_sentry_issues_quotes_bare_colon_exception_signatures(
     list_sentry_issues(config=_config(), query=query, limit=10)
 
     assert ("query", f'"{query}"') in captured["params"]
+
+
+def test_list_sentry_issues_preserves_filters_after_exception_text(
+    monkeypatch: Any,
+) -> None:
+    captured = _capture_sentry_issue_params(monkeypatch)
+
+    query = "TypeError: cannot read property 'x' is:unresolved level:error"
+    list_sentry_issues(config=_config(), query=query, limit=10)
+
+    expected_query = "\"TypeError: cannot read property 'x'\" is:unresolved level:error"
+    assert ("query", expected_query) in captured["params"]
+
+
+def test_list_sentry_issues_preserves_filters_after_lowercase_panic(
+    monkeypatch: Any,
+) -> None:
+    captured = _capture_sentry_issue_params(monkeypatch)
+
+    query = "panic: nil pointer is:unresolved level:fatal"
+    list_sentry_issues(config=_config(), query=query, limit=10)
+
+    expected_query = '"panic: nil pointer" is:unresolved level:fatal'
+    assert ("query", expected_query) in captured["params"]
