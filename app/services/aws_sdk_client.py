@@ -4,11 +4,16 @@ Generic AWS SDK client for executing read-only operations.
 Security-first design with operation allowlists and response sanitization.
 """
 
+import logging
 import re
 from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError, ParamValidationError
+
+from app.services.aws._telemetry import capture_aws_error
+
+logger = logging.getLogger(__name__)
 
 # Read-only operation patterns (allowlist)
 ALLOWED_OPERATION_PATTERNS = [
@@ -218,6 +223,13 @@ def execute_aws_sdk_call(
         }
 
     except NoCredentialsError as e:
+        capture_aws_error(
+            e,
+            component="app.services.aws_sdk_client",
+            service=service_name,
+            operation=operation_name,
+            logger=logger,
+        )
         return {
             "success": False,
             "error": f"AWS credentials not configured: {str(e)}",
@@ -228,6 +240,13 @@ def execute_aws_sdk_call(
         }
 
     except ParamValidationError as e:
+        capture_aws_error(
+            e,
+            component="app.services.aws_sdk_client",
+            service=service_name,
+            operation=operation_name,
+            logger=logger,
+        )
         return {
             "success": False,
             "error": f"Invalid parameters: {str(e)}",
@@ -240,7 +259,13 @@ def execute_aws_sdk_call(
     except ClientError as e:
         error_code = e.response.get("Error", {}).get("Code", "Unknown")
         error_message = e.response.get("Error", {}).get("Message", str(e))
-
+        capture_aws_error(
+            e,
+            component="app.services.aws_sdk_client",
+            service=service_name,
+            operation=operation_name,
+            logger=logger,
+        )
         return {
             "success": False,
             "error": f"AWS API error ({error_code}): {error_message}",
@@ -255,6 +280,13 @@ def execute_aws_sdk_call(
         }
 
     except Exception as e:
+        capture_aws_error(
+            e,
+            component="app.services.aws_sdk_client",
+            service=service_name,
+            operation=operation_name,
+            logger=logger,
+        )
         return {
             "success": False,
             "error": f"Unexpected error: {str(e)}",

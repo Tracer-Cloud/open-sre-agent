@@ -2,11 +2,13 @@
 
 import base64
 import json
+import logging
 from contextlib import suppress
 from io import BytesIO
 from typing import Any
 from zipfile import ZipFile
 
+from app.services.aws._telemetry import capture_aws_error
 from app.services.env import make_boto3_client, require_aws_credentials
 
 try:
@@ -15,6 +17,9 @@ except ImportError:
 
     class ClientError(Exception):  # type: ignore[no-redef]
         """Stub when botocore is not installed; prevents over-broad except clauses."""
+
+
+logger = logging.getLogger(__name__)
 
 
 def _get_lambda_client():
@@ -69,7 +74,23 @@ def get_function_configuration(function_name: str) -> dict[str, Any]:
             },
         }
     except ClientError as e:
+        capture_aws_error(
+            e,
+            component="app.services.lambda_client",
+            service="lambda",
+            operation="get_function_configuration",
+            logger=logger,
+        )
         return {"success": False, "error": str(e)}
+    except Exception as e:
+        capture_aws_error(
+            e,
+            component="app.services.lambda_client",
+            service="lambda",
+            operation="get_function_configuration",
+            logger=logger,
+        )
+        return {"success": False, "error": f"Unexpected error: {e}"}
 
 
 def get_function_code(
@@ -145,11 +166,38 @@ def get_function_code(
                     result["data"]["files"] = files
                     result["data"]["file_count"] = len(files)
                 except Exception as e:
+                    capture_aws_error(
+                        e,
+                        component="app.services.lambda_client",
+                        service="lambda",
+                        operation="get_function_code.zip_extract",
+                        event="aws_extract_failed",
+                        logger=logger,
+                        extra_tags={"function_name": function_name},
+                    )
                     result["data"]["extract_error"] = str(e)
 
         return result
     except ClientError as e:
+        capture_aws_error(
+            e,
+            component="app.services.lambda_client",
+            service="lambda",
+            operation="get_function_code",
+            logger=logger,
+            extra_tags={"function_name": function_name},
+        )
         return {"success": False, "error": str(e)}
+    except Exception as e:
+        capture_aws_error(
+            e,
+            component="app.services.lambda_client",
+            service="lambda",
+            operation="get_function_code",
+            logger=logger,
+            extra_tags={"function_name": function_name},
+        )
+        return {"success": False, "error": f"Unexpected error: {e}"}
 
 
 def get_recent_invocations(
@@ -243,6 +291,14 @@ def get_recent_invocations(
             },
         }
     except ClientError as e:
+        capture_aws_error(
+            e,
+            component="app.services.lambda_client",
+            service="cloudwatch_logs",
+            operation="get_recent_invocations.filter_log_events",
+            logger=logger,
+            extra_tags={"function_name": function_name},
+        )
         error_code = e.response.get("Error", {}).get("Code", "")
         if error_code == "ResourceNotFoundException":
             return {
@@ -251,6 +307,16 @@ def get_recent_invocations(
                 "log_group": log_group_name,
             }
         return {"success": False, "error": str(e)}
+    except Exception as e:
+        capture_aws_error(
+            e,
+            component="app.services.lambda_client",
+            service="cloudwatch_logs",
+            operation="get_recent_invocations.filter_log_events",
+            logger=logger,
+            extra_tags={"function_name": function_name},
+        )
+        return {"success": False, "error": f"Unexpected error: {e}"}
 
 
 def get_invocation_logs_by_request_id(
@@ -300,7 +366,25 @@ def get_invocation_logs_by_request_id(
             },
         }
     except ClientError as e:
+        capture_aws_error(
+            e,
+            component="app.services.lambda_client",
+            service="cloudwatch_logs",
+            operation="get_invocation_logs_by_request_id",
+            logger=logger,
+            extra_tags={"function_name": function_name},
+        )
         return {"success": False, "error": str(e)}
+    except Exception as e:
+        capture_aws_error(
+            e,
+            component="app.services.lambda_client",
+            service="cloudwatch_logs",
+            operation="get_invocation_logs_by_request_id",
+            logger=logger,
+            extra_tags={"function_name": function_name},
+        )
+        return {"success": False, "error": f"Unexpected error: {e}"}
 
 
 def invoke_function(
@@ -337,8 +421,24 @@ def invoke_function(
         response = client.invoke(**kwargs)
 
         result_payload = None
+        payload_decode_error: str | None = None
         if "Payload" in response:
-            result_payload = json.loads(response["Payload"].read().decode())
+            try:
+                result_payload = json.loads(response["Payload"].read().decode())
+            except (json.JSONDecodeError, UnicodeDecodeError) as decode_exc:
+                # Lambda returned a body but it wasn't valid JSON/UTF-8.
+                # Surface this to Sentry — previously it would propagate uncontrolled
+                # and crash the tool surface with no AWS-aware context.
+                capture_aws_error(
+                    decode_exc,
+                    component="app.services.lambda_client",
+                    service="lambda",
+                    operation="invoke_function.payload_decode",
+                    event="aws_decode_failed",
+                    logger=logger,
+                    extra_tags={"function_name": function_name},
+                )
+                payload_decode_error = str(decode_exc)
 
         return {
             "success": True,
@@ -350,10 +450,29 @@ def invoke_function(
                 if response.get("LogResult")
                 else None,
                 "payload": result_payload,
+                "payload_decode_error": payload_decode_error,
             },
         }
     except ClientError as e:
+        capture_aws_error(
+            e,
+            component="app.services.lambda_client",
+            service="lambda",
+            operation="invoke_function",
+            logger=logger,
+            extra_tags={"function_name": function_name},
+        )
         return {"success": False, "error": str(e)}
+    except Exception as e:
+        capture_aws_error(
+            e,
+            component="app.services.lambda_client",
+            service="lambda",
+            operation="invoke_function",
+            logger=logger,
+            extra_tags={"function_name": function_name},
+        )
+        return {"success": False, "error": f"Unexpected error: {e}"}
 
 
 def list_functions(
@@ -406,4 +525,20 @@ def list_functions(
             },
         }
     except ClientError as e:
+        capture_aws_error(
+            e,
+            component="app.services.lambda_client",
+            service="lambda",
+            operation="list_functions",
+            logger=logger,
+        )
         return {"success": False, "error": str(e)}
+    except Exception as e:
+        capture_aws_error(
+            e,
+            component="app.services.lambda_client",
+            service="lambda",
+            operation="list_functions",
+            logger=logger,
+        )
+        return {"success": False, "error": f"Unexpected error: {e}"}
