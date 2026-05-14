@@ -260,7 +260,8 @@ def parse_vercel_url(vercel_url: str) -> ParsedVercelUrl:
     parsed = urlparse(cleaned)
     if not cleaned:
         raise VercelResolutionError("Vercel URL is required.")
-    if "vercel.com" not in parsed.netloc.lower():
+    hostname = (parsed.hostname or "").lower()
+    if hostname != "vercel.com" and not hostname.endswith(".vercel.com"):
         raise VercelResolutionError(f"Unsupported Vercel URL host: {parsed.netloc or '<empty>'}")
 
     parts = [part for part in parsed.path.split("/") if part]
