@@ -16,7 +16,6 @@ from app.integrations.llm_cli.base import CLIProbe, LLMCLIAdapter
 from app.integrations.llm_cli.errors import (
     CLIAuthenticationRequired,
     CLITimeoutError,
-    CLITransientError,
 )
 from app.integrations.llm_cli.subprocess_env import build_cli_subprocess_env
 from app.integrations.llm_cli.text import flatten_messages_to_prompt
@@ -210,11 +209,6 @@ class CLIBackedLLMClient:
                 )
             else:
                 message = base
-            # EX_TEMPFAIL (75): POSIX temporary failure — the CLI crashed mid-session
-            # and may be resumable, but we run one-shot invocations so we treat it as a
-            # transient operational failure rather than a code bug.
-            if proc.returncode == 75:
-                raise CLITransientError(message)
             raise RuntimeError(message)
 
         content = self._adapter.parse(stdout=out, stderr=err, returncode=proc.returncode)
