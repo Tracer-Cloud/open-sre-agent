@@ -244,6 +244,31 @@ class TestHttpListener:
         finally:
             handle.stop()
 
+    def test_negative_content_length_returns_400_without_blocking(
+        self, listener: AlertListenerHandle, inbox: AlertInbox
+    ) -> None:
+        """A negative ``Content-Length`` must be rejected as malformed.
+
+        ``rfile.read(-1)`` reads until EOF rather than zero bytes — if
+        the cap check only rejects values above the upper bound, a
+        client that sends ``Content-Length: -1`` slips through and
+        hangs the single-threaded handler until it closes the
+        connection. The fix is a separate ``< 0`` branch that returns
+        400 (the header is malformed) before the upper-bound 413 check.
+        """
+        status, body = _post_advertising_content_length(
+            "127.0.0.1",
+            listener._bound_port,
+            advertised_length=-1,
+        )
+
+        assert status == 400
+        assert body == {"error": "invalid Content-Length"}
+        assert inbox.pop_nowait() is None
+        # Listener still responsive — handler wasn't stalled by read(-1).
+        healthz_status, _ = _get("127.0.0.1", listener._bound_port, "/healthz")
+        assert healthz_status == 200
+
     def test_auth(self) -> None:
         inbox = AlertInbox()
         handle = start_alert_listener(inbox, host="127.0.0.1", port=0, token="sekret")
