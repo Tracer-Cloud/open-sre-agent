@@ -3,11 +3,78 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 from typing import Any, cast
 
 from app.state import AgentState
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_iso8601(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(UTC)
+
+
+def _window_minutes(start: str, end: str) -> int:
+    try:
+        delta = _parse_iso8601(end) - _parse_iso8601(start)
+        return max(1, int(delta.total_seconds() // 60))
+    except Exception:
+        return 60
+
+
+def _build_correlation_config(state: dict[str, Any]) -> dict[str, Any] | None:
+    from app.correlation.datadog_adapter import DatadogCorrelationAdapter
+    from app.correlation.datadog_provider import DatadogUpstreamEvidenceProvider
+    from app.integrations.config_models import DatadogIntegrationConfig
+    from app.services.datadog import DatadogClient
+
+    resolved = state.get("resolved_integrations") or {}
+    datadog_cfg_raw = resolved.get("datadog")
+    if not isinstance(datadog_cfg_raw, dict) or not datadog_cfg_raw:
+        return None
+
+    try:
+        datadog_cfg = DatadogIntegrationConfig.model_validate(datadog_cfg_raw)
+    except Exception:
+        return None
+
+    client = DatadogClient(datadog_cfg)
+
+    def metric_query(metric_name: str, window: dict[str, Any]) -> dict[str, Any]:
+        start = str(window.get("from") or "")
+        end = str(window.get("to") or "")
+        if not start or not end:
+            return {"timestamps": [], "values": []}
+        query = f"avg:{metric_name}{{*}}"
+        result = client.query_metrics(query, start=_parse_iso8601(start), end=_parse_iso8601(end))
+        if not result.get("success"):
+            return {"timestamps": [], "values": []}
+        return {
+            "timestamps": result.get("timestamps") or [],
+            "values": result.get("values") or [],
+        }
+
+    def log_query(query: str, window: dict[str, Any]) -> dict[str, Any]:
+        start = str(window.get("from") or "")
+        end = str(window.get("to") or "")
+        minutes = _window_minutes(start, end)
+        result = client.search_logs(query, time_range_minutes=minutes, limit=100)
+        logs = result.get("logs") if isinstance(result, dict) else []
+        if not isinstance(logs, list):
+            logs = []
+        return {
+            "timestamps": [str(item.get("timestamp", "")) for item in logs if isinstance(item, dict)],
+            "messages": [str(item.get("message", "")) for item in logs if isinstance(item, dict)],
+        }
+
+    provider = DatadogUpstreamEvidenceProvider(
+        adapter=DatadogCorrelationAdapter(
+            metric_query_fn=metric_query,
+            log_query_fn=log_query,
+        )
+    )
+    return {"configurable": {"upstream_evidence_provider": provider}}
 
 
 def run_connected_investigation(state: AgentState) -> AgentState:
@@ -33,7 +100,13 @@ def run_connected_investigation(state: AgentState) -> AgentState:
             return cast(AgentState, state_any)
 
         _merge(state_any, ConnectedInvestigationAgent().run(state_any))
-        _merge(state_any, node_correlate_upstream(cast(AgentState, state_any)))
+        _merge(
+            state_any,
+            node_correlate_upstream(
+                cast(AgentState, state_any),
+                _build_correlation_config(state_any),
+            ),
+        )
 
         _merge(state_any, deliver(state))
     except Exception as exc:
