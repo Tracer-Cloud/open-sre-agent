@@ -723,6 +723,12 @@ class OpenAILLMClient:
                     "Check your configured model name or endpoint."
                 ) from err
             except OpenAIBadRequestError as err:
+                _msg = (err.message or "").lower()
+                if "model identifier" in _msg:
+                    raise RuntimeError(
+                        f"{self._provider_label} model '{self._model}' was not found. "
+                        "Check your configured model name or endpoint."
+                    ) from err
                 raise RuntimeError(
                     f"{self._provider_label} request rejected (HTTP 400): {err.message}"
                 ) from err
@@ -814,6 +820,12 @@ class OpenAILLMClient:
                     "Check your configured model name or endpoint."
                 ) from err
             except OpenAIBadRequestError as err:
+                _msg = (err.message or "").lower()
+                if "model identifier" in _msg:
+                    raise RuntimeError(
+                        f"{self._provider_label} model '{self._model}' was not found. "
+                        "Check your configured model name or endpoint."
+                    ) from err
                 raise RuntimeError(
                     f"{self._provider_label} request rejected (HTTP 400): {err.message}"
                 ) from err

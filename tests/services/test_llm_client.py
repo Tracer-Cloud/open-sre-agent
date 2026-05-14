@@ -803,6 +803,54 @@ def test_openai_invoke_bad_request_does_not_retry(monkeypatch) -> None:
     assert sleeps == []
 
 
+def test_openai_invoke_invalid_model_identifier_raises_not_found(monkeypatch) -> None:
+    class _Completions:
+        def create(self, **_kwargs):
+            raise _make_fake_openai_bad_request_error(
+                "Error code: 400 - litellm.BadRequestError: AnthropicException - "
+                '{"message":"The provided model identifier is invalid."}'
+            )
+
+    class _Chat:
+        def __init__(self) -> None:
+            self.completions = _Completions()
+
+    class _OpenAI:
+        def __init__(self, **_kwargs) -> None:
+            self.chat = _Chat()
+
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "OpenAI", _OpenAI)
+
+    client = llm_client.OpenAILLMClient(model="relay-ops-claude-opus-4-7")
+    with pytest.raises(RuntimeError, match="Check your configured model name or endpoint"):
+        client.invoke("hello")
+
+
+def test_openai_invoke_stream_invalid_model_identifier_raises_not_found(monkeypatch) -> None:
+    class _Completions:
+        def create(self, **_kwargs):
+            raise _make_fake_openai_bad_request_error(
+                "Error code: 400 - litellm.BadRequestError: AnthropicException - "
+                '{"message":"The provided model identifier is invalid."}'
+            )
+
+    class _Chat:
+        def __init__(self) -> None:
+            self.completions = _Completions()
+
+    class _OpenAI:
+        def __init__(self, **_kwargs) -> None:
+            self.chat = _Chat()
+
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "OpenAI", _OpenAI)
+
+    client = llm_client.OpenAILLMClient(model="relay-ops-claude-opus-4-7")
+    with pytest.raises(RuntimeError, match="Check your configured model name or endpoint"):
+        list(client.invoke_stream("hello"))
+
+
 def test_openai_invoke_stream_yields_delta_content_chunks(monkeypatch) -> None:
     """invoke_stream() routes through the same builder and yields delta.content in order."""
     fake, captured = _make_capturing_openai(chunk_contents=["Hel", "lo, ", "world"])
