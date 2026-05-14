@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    MANAGED_INTEGRATION_SERVICES: tuple[str, ...]
+    VERIFY_SERVICES: tuple[str, ...]
+
 # MANAGED_INTEGRATION_SERVICES and VERIFY_SERVICES are PEP 562 lazy module
 # attributes resolved by `__getattr__` below; ruff's F822 check can't see them.
 __all__ = (
     "ALERT_TEMPLATE_CHOICES",
-    "MANAGED_INTEGRATION_SERVICES",  # noqa: F822
+    "MANAGED_INTEGRATION_SERVICES",
     "SAMPLE_ALERT_OPTIONS",
     "SETUP_SERVICES",
-    "VERIFY_SERVICES",  # noqa: F822
+    "VERIFY_SERVICES",
 )
 
 ALERT_TEMPLATE_CHOICES: tuple[str, ...] = (
