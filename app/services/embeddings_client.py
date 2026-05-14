@@ -106,7 +106,7 @@ class OpenAIEmbeddingsClient:
         self.model_name = model
         self.dim = _DEFAULT_EMBEDDINGS_DIMS.get(model, 1536)
 
-     def embed(self, texts: list[str]) -> list[list[float]]:
+    def embed(self, texts: list[str]) -> list[list[float]]:
         if not texts:
             return []
         response = self._client.embeddings.create(model=self.model_name, input=texts)
