@@ -45,7 +45,7 @@ def test_list_sentry_issues_quotes_exception_signature_queries(
 def test_list_sentry_issues_preserves_structured_queries(monkeypatch: Any) -> None:
     captured = _capture_sentry_issue_params(monkeypatch)
 
-    query = "is:unresolved level:error url:http://example.test/login"
+    query = "is:unresolved level:error error.type:TypeError url:http://example.test/login"
     list_sentry_issues(config=_config(), query=query, limit=10)
 
     assert ("query", query) in captured["params"]
@@ -80,6 +80,17 @@ def test_list_sentry_issues_quotes_lowercase_panic_signatures(
     captured = _capture_sentry_issue_params(monkeypatch)
 
     query = "panic: runtime error: invalid memory address or nil pointer dereference"
+    list_sentry_issues(config=_config(), query=query, limit=10)
+
+    assert ("query", f'"{query}"') in captured["params"]
+
+
+def test_list_sentry_issues_quotes_bare_colon_exception_signatures(
+    monkeypatch: Any,
+) -> None:
+    captured = _capture_sentry_issue_params(monkeypatch)
+
+    query = "KeyError:missing_key"
     list_sentry_issues(config=_config(), query=query, limit=10)
 
     assert ("query", f'"{query}"') in captured["params"]

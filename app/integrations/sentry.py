@@ -15,9 +15,51 @@ from app.strict_config import StrictConfigModel
 DEFAULT_SENTRY_URL = "https://sentry.io"
 DEFAULT_SENTRY_STATS_PERIOD = "24h"
 _EXCEPTION_QUERY_PREFIX_RE = re.compile(
-    r"^(?:[A-Z][A-Za-z0-9_.]*(?:Error|Exception|Interrupt|Warning)?|panic|error|runtime error|fatal error):\s+"
+    r"^(?:[A-Z][A-Za-z0-9_.]*(?:Error|Exception|Interrupt|Warning)?|panic|error|runtime error|fatal error):\s*"
 )
-_STRUCTURED_QUERY_TOKEN_RE = re.compile(r"(?:^|\s)[a-z][a-z0-9_.-]*:")
+_STRUCTURED_QUERY_TOKEN_RE = re.compile(r"(?:^|\s)([A-Za-z][A-Za-z0-9_.-]*):")
+_STRUCTURED_QUERY_KEYS = frozenset(
+    {
+        "age",
+        "assigned",
+        "browser.name",
+        "browser.version",
+        "culprit",
+        "device.family",
+        "device.model",
+        "dist",
+        "environment",
+        "error.handled",
+        "error.type",
+        "error.unhandled",
+        "event.type",
+        "firstSeen",
+        "has",
+        "is",
+        "issue.category",
+        "issue.type",
+        "lastSeen",
+        "level",
+        "logger",
+        "message",
+        "os.name",
+        "os.version",
+        "project",
+        "release",
+        "server_name",
+        "stack.filename",
+        "stack.function",
+        "status",
+        "timesSeen",
+        "title",
+        "transaction",
+        "url",
+        "user",
+        "user.email",
+        "user.id",
+        "user.ip",
+    }
+)
 
 
 class SentryConfig(StrictConfigModel):
@@ -115,7 +157,7 @@ def _normalize_issue_search_query(query: str) -> str:
         return stripped
     if _starts_like_exception_signature(stripped):
         return _quote_search_phrase(stripped)
-    if _STRUCTURED_QUERY_TOKEN_RE.search(stripped):
+    if _has_structured_query_token(stripped):
         return stripped
     if _looks_like_exception_signature(stripped):
         return _quote_search_phrase(stripped)
@@ -128,6 +170,13 @@ def _is_quoted_search_query(query: str) -> bool:
 
 def _starts_like_exception_signature(query: str) -> bool:
     return bool(_EXCEPTION_QUERY_PREFIX_RE.search(query))
+
+
+def _has_structured_query_token(query: str) -> bool:
+    return any(
+        match.group(1) in _STRUCTURED_QUERY_KEYS
+        for match in _STRUCTURED_QUERY_TOKEN_RE.finditer(query)
+    )
 
 
 def _looks_like_exception_signature(query: str) -> bool:
