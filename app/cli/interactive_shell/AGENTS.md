@@ -146,8 +146,13 @@ owning area rather than adding more logic to the caller.
 - Network-ish local surfaces such as `alert_inbox.py` must validate cheap request
   metadata before blocking reads or expensive parsing.
 - Never perform unbounded request-body reads. For alert POSTs specifically,
-  validate `Content-Length` first, reject malformed/negative values with `400`,
-  reject oversized values with `413`, and only then read the bounded body.
+  validate `Content-Length` first, and only then read the bounded body:
+  - non-numeric `Content-Length` values make `int(...)` raise `ValueError`;
+    catch this and return `400`.
+  - negative lengths must return `400`; `rfile.read(-1)` reads until EOF rather
+    than zero bytes, which can stall the single-threaded handler.
+  - oversized positive lengths must return `413` without attempting to read the
+    advertised body.
 - Preserve clean unauthorized responses for real POST bodies by draining only a
   bounded body before returning `401`; this avoids close-with-unread-data resets
   on some platforms without allowing oversized pre-auth reads.
