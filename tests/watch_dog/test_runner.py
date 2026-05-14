@@ -75,7 +75,7 @@ def test_default_mode_keeps_polling_until_target_exits() -> None:
     sleeps: list[float] = []
 
     code = run_watchdog(
-        WatchdogConfig(pid=123, max_runtime="30s", interval=2),
+        WatchdogConfig.model_validate({"pid": 123, "max_runtime": "30s", "interval": 2}),
         sampler=_FakeSampler(
             [
                 _sample(runtime=10),
@@ -132,7 +132,7 @@ def test_rss_threshold_formats_alarm_message() -> None:
     dispatcher = _FakeDispatcher()
 
     code = run_watchdog(
-        WatchdogConfig(pid=123, max_rss="4G", once=True),
+        WatchdogConfig.model_validate({"pid": 123, "max_rss": "4G", "once": True}),
         sampler=_FakeSampler([_sample(rss=5 * 1024**3)]),
         dispatcher=dispatcher,
         _sleep=lambda _seconds: None,
