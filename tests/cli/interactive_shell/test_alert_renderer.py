@@ -8,48 +8,48 @@ from rich.console import Console
 
 from app.cli.interactive_shell.alert_inbox import AlertInbox, IncomingAlert
 from app.cli.interactive_shell.alert_renderer import (
-    _time_ago,
     drain_and_render_incoming,
     format_incoming_alert,
+    time_ago,
 )
 from app.cli.interactive_shell.runtime import ReplSession
 
 
 class TestTimeAgo:
-    """Test _time_ago helper."""
+    """Test time_ago helper."""
 
     def test_seconds_ago(self) -> None:
         now = datetime.now(UTC)
         then = now - timedelta(seconds=5)
-        result = _time_ago(then)
+        result = time_ago(then)
         assert "5s ago" in result
 
     def test_one_second_ago(self) -> None:
         now = datetime.now(UTC)
         then = now - timedelta(seconds=1)
-        result = _time_ago(then)
+        result = time_ago(then)
         assert "1s ago" in result
 
     def test_minutes_ago(self) -> None:
         now = datetime.now(UTC)
         then = now - timedelta(minutes=3)
-        result = _time_ago(then)
+        result = time_ago(then)
         assert "3m ago" in result
 
     def test_hours_ago(self) -> None:
         now = datetime.now(UTC)
         then = now - timedelta(hours=2)
-        result = _time_ago(then)
+        result = time_ago(then)
         assert "2h ago" in result
 
     def test_days_ago(self) -> None:
         now = datetime.now(UTC)
         then = now - timedelta(days=1)
-        result = _time_ago(then)
+        result = time_ago(then)
         assert "1d ago" in result
 
     def test_none_datetime(self) -> None:
-        result = _time_ago(None)
+        result = time_ago(None)
         assert result == "unknown"
 
 

@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from app.cli.interactive_shell.runtime import ReplSession
 
 
-def _time_ago(then: datetime | None) -> str:
+def time_ago(then: datetime | None) -> str:
     """Format a relative time string like '5 seconds ago', '1 minute ago', etc."""
     if then is None:
         return "unknown"
@@ -63,7 +63,7 @@ def format_incoming_alert(alert: IncomingAlert) -> RenderableType:
     header = " | ".join(header_parts)
 
     # Format the alert body with timestamp
-    timestamp_str = _time_ago(alert.received_at)
+    timestamp_str = time_ago(alert.received_at)
     body_lines = [
         f"[{DIM}]received {timestamp_str}[/]",
         "",
@@ -102,4 +102,4 @@ def drain_and_render_incoming(
     return count
 
 
-__all__ = ["format_incoming_alert", "drain_and_render_incoming"]
+__all__ = ["format_incoming_alert", "drain_and_render_incoming", "time_ago"]

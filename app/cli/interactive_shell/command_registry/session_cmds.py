@@ -87,10 +87,10 @@ def _cmd_status(session: ReplSession, console: Console, _args: list[str]) -> boo
 
     # Show incoming alerts count and most recent age
     if session.incoming_alerts:
-        from app.cli.interactive_shell.alert_renderer import _time_ago
+        from app.cli.interactive_shell.alert_renderer import time_ago
 
         most_recent = session.incoming_alerts[-1]
-        age_str = _time_ago(most_recent.received_at)
+        age_str = time_ago(most_recent.received_at)
         table.add_row("incoming alerts", f"{len(session.incoming_alerts)} (last {age_str})")
     else:
         table.add_row("incoming alerts", "0")
