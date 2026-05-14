@@ -8,7 +8,7 @@ from langsmith import traceable
 from app.correlation.providers import NoopUpstreamEvidenceProvider
 from app.correlation.runtime import build_runtime_correlation
 from app.correlation.upstream import UpstreamEvidenceBundle
-from app.output import get_tracker
+from app.cli.support.output import get_tracker
 from app.state import InvestigationState
 
 logger = logging.getLogger(__name__)

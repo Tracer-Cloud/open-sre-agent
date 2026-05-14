@@ -20,6 +20,7 @@ def run_connected_investigation(state: AgentState) -> AgentState:
     from app.agent.extract import extract_alert
     from app.agent.investigation import ConnectedInvestigationAgent
     from app.delivery import deliver
+    from app.nodes.investigate.correlate_upstream import node_correlate_upstream
     from app.utils.sentry_sdk import capture_exception
 
     state_any = cast(dict[str, Any], state)
@@ -32,6 +33,7 @@ def run_connected_investigation(state: AgentState) -> AgentState:
             return cast(AgentState, state_any)
 
         _merge(state_any, ConnectedInvestigationAgent().run(state_any))
+        _merge(state_any, node_correlate_upstream(cast(AgentState, state_any)))
 
         _merge(state_any, deliver(state))
     except Exception as exc:
