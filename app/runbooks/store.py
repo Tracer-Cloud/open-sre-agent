@@ -48,7 +48,7 @@ class Runbook:
     extra: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize into a plain dict for the LangGraph state envelope."""
+        """Serialize into a plain dict for the agent state envelope."""
         return {
             "slug": self.slug,
             "title": self.title,

@@ -206,7 +206,7 @@ def _retrieve_runbook(state: dict[str, Any]) -> dict[str, Any] | None:
         alert_name = state.get("alert_name", "") or ""
         problem_md = state.get("problem_md", "") or ""
         raw = (alert_name + " " + problem_md).lower()
-        keywords = [w for w in raw.split() if len(w) > 3]
+        keywords = [w for w in raw.split() if len(w) >= 3]
         alert_json = state.get("alert_json") or {}
         common_labels = alert_json.get("commonLabels", {}) if isinstance(alert_json, dict) else {}
         service = common_labels.get("service") or (

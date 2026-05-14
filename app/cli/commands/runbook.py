@@ -7,8 +7,8 @@ from pathlib import Path
 import click
 
 from app.runbooks.store import (
+    RUNBOOK_DIR,
     RunbookValidationError,
-    _runbook_dir,
     load_all,
     remove,
     save,
@@ -36,7 +36,7 @@ def runbook_list() -> None:
     """List runbooks currently in the local store."""
     runbooks = load_all()
     if not runbooks:
-        click.echo(f"No runbooks found in {_runbook_dir()}")
+        click.echo(f"No runbooks found in {RUNBOOK_DIR}")
         return
     for rb in runbooks:
         service = rb.service or "-"
@@ -51,4 +51,4 @@ def runbook_remove(slug: str) -> None:
     if remove(slug):
         click.echo(f"✓ Removed runbook '{slug}'")
         return
-    raise click.ClickException(f"no runbook with slug '{slug}' in {_runbook_dir()}")
+    raise click.ClickException(f"no runbook with slug '{slug}' in {RUNBOOK_DIR}")

@@ -62,10 +62,9 @@ score = (2 if runbook.service matches the alert service or pipeline_name)
       + |alert keywords ∩ runbook.triggers|
 ```
 
-Keyword extraction is shared with the planner
-(`app.nodes.plan_actions.extract_keywords`), so any term in
-`KEYWORD_PATTERNS` that appears in the alert name or problem statement
-contributes to the overlap.
+Keywords are extracted from the alert name and problem statement using
+whitespace tokenisation (words of 3+ characters, lowercased). Any token
+that appears in a runbook's `triggers:` list contributes +1 to the score.
 
 Ties on score are broken by slug (lexicographic), so output is deterministic.
 
