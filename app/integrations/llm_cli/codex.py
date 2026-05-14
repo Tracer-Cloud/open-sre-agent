@@ -25,6 +25,7 @@ from app.integrations.llm_cli.env_overrides import (
     OPENAI_PLATFORM_ENV_KEYS,
     nonempty_env_values,
 )
+from app.integrations.llm_cli.subprocess_env import build_cli_subprocess_env
 
 _CODEX_VERSION_RE = re.compile(r"(\d+\.\d+\.\d+)")
 _PROBE_TIMEOUT_SEC = 3.0
@@ -112,6 +113,7 @@ class CodexAdapter:
         )
 
     def _probe_binary(self, binary_path: str) -> CLIProbe:
+        probe_env = build_cli_subprocess_env(None)
         try:
             ver_proc = subprocess.run(
                 [binary_path, "--version"],
@@ -119,6 +121,7 @@ class CodexAdapter:
                 text=True,
                 timeout=_PROBE_TIMEOUT_SEC,
                 check=False,
+                env=probe_env,
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
             return CLIProbe(
@@ -154,6 +157,7 @@ class CodexAdapter:
                 text=True,
                 timeout=_PROBE_TIMEOUT_SEC,
                 check=False,
+                env=probe_env,
             )
         except (OSError, subprocess.TimeoutExpired):
             logged_in: bool | None = None
