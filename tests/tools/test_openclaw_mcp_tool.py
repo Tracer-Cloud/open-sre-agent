@@ -39,6 +39,20 @@ class TestOpenClawSendMessageToolContract(BaseToolContract):
         return send_openclaw_message.__opensre_registered_tool__
 
 
+def test_openclaw_args_schema_declares_array_items() -> None:
+    registered_tools = [
+        list_openclaw_bridge_tools.__opensre_registered_tool__,
+        call_openclaw_bridge_tool.__opensre_registered_tool__,
+        search_openclaw_conversations.__opensre_registered_tool__,
+        get_openclaw_conversation.__opensre_registered_tool__,
+        send_openclaw_message.__opensre_registered_tool__,
+    ]
+
+    for registered_tool in registered_tools:
+        schema = registered_tool.input_schema["properties"]["openclaw_args"]
+        assert schema == {"type": "array", "items": {"type": "string"}}
+
+
 def test_openclaw_tools_are_available_from_agent_state() -> None:
     sources = mock_agent_state(
         {

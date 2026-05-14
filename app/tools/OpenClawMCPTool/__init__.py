@@ -23,6 +23,10 @@ OpenClawBridgeResponse = dict[str, object]
 OpenClawConversationRow = dict[str, object]
 
 
+def _openclaw_args_schema() -> dict[str, object]:
+    return {"type": "array", "items": {"type": "string"}}
+
+
 def _string_list(value: object) -> list[str]:
     if not isinstance(value, list):
         return []
@@ -203,7 +207,7 @@ def _normalize_named_bridge_call(
             "openclaw_mode": {"type": "string"},
             "openclaw_token": {"type": "string"},
             "openclaw_command": {"type": "string"},
-            "openclaw_args": {"type": "array"},
+            "openclaw_args": _openclaw_args_schema(),
         },
         "required": [],
     },
@@ -271,7 +275,7 @@ def list_openclaw_bridge_tools(
             "openclaw_mode": {"type": "string"},
             "openclaw_token": {"type": "string"},
             "openclaw_command": {"type": "string"},
-            "openclaw_args": {"type": "array"},
+            "openclaw_args": _openclaw_args_schema(),
         },
         "required": [],
     },
@@ -346,7 +350,7 @@ def search_openclaw_conversations(
             "openclaw_mode": {"type": "string"},
             "openclaw_token": {"type": "string"},
             "openclaw_command": {"type": "string"},
-            "openclaw_args": {"type": "array"},
+            "openclaw_args": _openclaw_args_schema(),
         },
         "required": ["conversation_id"],
     },
@@ -407,7 +411,7 @@ def get_openclaw_conversation(
             "openclaw_mode": {"type": "string"},
             "openclaw_token": {"type": "string"},
             "openclaw_command": {"type": "string"},
-            "openclaw_args": {"type": "array"},
+            "openclaw_args": _openclaw_args_schema(),
         },
         "required": ["conversation_id", "content"],
     },
@@ -472,7 +476,7 @@ def send_openclaw_message(
             "openclaw_mode": {"type": "string"},
             "openclaw_token": {"type": "string"},
             "openclaw_command": {"type": "string"},
-            "openclaw_args": {"type": "array"},
+            "openclaw_args": _openclaw_args_schema(),
         },
         "required": ["tool_name"],
     },
