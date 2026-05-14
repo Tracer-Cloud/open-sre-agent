@@ -207,7 +207,8 @@ async def astream_investigation(
             )
 
             if state_any.get("is_noise"):
-                loop.call_soon_threadsafe(event_queue.put_nowait, None)
+                with contextlib.suppress(RuntimeError):  # loop closed (consumer cancelled)
+                    loop.call_soon_threadsafe(event_queue.put_nowait, None)
                 return
 
             # --- investigation agent (with real tool events) ---
