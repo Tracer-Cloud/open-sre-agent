@@ -5,7 +5,16 @@ from __future__ import annotations
 import os
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from app.services import embeddings_client as ec
+
+
+@pytest.fixture(autouse=True)
+def _reset_embeddings_singleton() -> None:
+    """Reset the cached singleton before each test."""
+    ec.reset_embeddings_client_singleton()
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # NoOpEmbeddingsClient
@@ -110,6 +119,14 @@ class TestProviderSelection:
             assert client.model_name == "text-embedding-3-small"
             assert client.dim == 1536
 
+    def test_openai_embedding_model_large_dim(self) -> None:
+        """text-embedding-3-large should report dim=3072."""
+        assert ec._DEFAULT_EMBEDDINGS_DIMS["text-embedding-3-large"] == 3072
+
+    def test_voyage_code_3_dim(self) -> None:
+        """voyage-code-3 should report dim=2048."""
+        assert ec._DEFAULT_EMBEDDINGS_DIMS["voyage-code-3"] == 2048
+
     def test_ollama_provider(self) -> None:
         with patch.dict(
             os.environ,
@@ -156,6 +173,35 @@ class TestProviderSelection:
         ):
             client = ec.get_embeddings_client()
             assert client is not None
+
+    def test_singleton_caching(self) -> None:
+        """Second call returns the same cached instance."""
+        with (
+            patch.dict(os.environ, {"LLM_PROVIDER": "openai"}, clear=True),
+            patch("app.llm_credentials.resolve_llm_api_key", return_value="sk-test"),
+            patch("openai.OpenAI"),
+        ):
+            c1 = ec.get_embeddings_client()
+            c2 = ec.get_embeddings_client()
+            assert c1 is c2
+
+    def test_singleton_caches_none(self) -> None:
+        """None result is also cached."""
+        with patch.dict(os.environ, {"LLM_PROVIDER": "anthropic"}, clear=True):
+            assert ec.get_embeddings_client() is None
+            assert ec.get_embeddings_client() is None
+
+    def test_reset_singleton(self) -> None:
+        """After reset, a new call creates a fresh instance."""
+        with (
+            patch.dict(os.environ, {"LLM_PROVIDER": "openai"}, clear=True),
+            patch("app.llm_credentials.resolve_llm_api_key", return_value="sk-test"),
+            patch("openai.OpenAI"),
+        ):
+            c1 = ec.get_embeddings_client()
+            ec.reset_embeddings_client_singleton()
+            c2 = ec.get_embeddings_client()
+            assert c1 is not c2
 
     def test_opensre_embeddings_model_override(self) -> None:
         with (
@@ -208,7 +254,7 @@ class TestOpenAIEmbeddingsHappyPath:
 
 
 class TestOllamaEmbeddingsHappyPath:
-    def test_embed(self) -> None:
+    def test_single_text(self) -> None:
         mock_response = MagicMock()
         mock_response.json.return_value = {"embeddings": [[0.5, 0.6]]}
         mock_response.raise_for_status.return_value = None
@@ -224,9 +270,36 @@ class TestOllamaEmbeddingsHappyPath:
         assert result == [[0.5, 0.6]]
         mock_post.assert_called_once_with(
             "http://localhost:11434/api/embed",
-            json={"model": "nomic-embed-text", "input": "test"},
+            json={"model": "nomic-embed-text", "input": ["test"]},
             timeout=30.0,
         )
+
+    def test_batched_texts(self) -> None:
+        """Multiple texts are sent in a single HTTP request."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "embeddings": [[0.1, 0.2], [0.3, 0.4]]
+        }
+        mock_response.raise_for_status.return_value = None
+
+        with patch(
+            "app.services.embeddings_client.httpx.post", return_value=mock_response
+        ) as mock_post:
+            client = ec.OllamaEmbeddingsClient(
+                model="nomic-embed-text", host="http://localhost:11434"
+            )
+            result = client.embed(["hello", "world"])
+
+        assert result == [[0.1, 0.2], [0.3, 0.4]]
+        mock_post.assert_called_once_with(
+            "http://localhost:11434/api/embed",
+            json={"model": "nomic-embed-text", "input": ["hello", "world"]},
+            timeout=30.0,
+        )
+
+    def test_empty_input(self) -> None:
+        client = ec.OllamaEmbeddingsClient(model="nomic-embed-text")
+        assert client.embed([]) == []
 
 
 # ─────────────────────────────────────────────────────────────────────────────

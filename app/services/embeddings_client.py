@@ -27,9 +27,19 @@ _DEFAULT_EMBEDDINGS_MODELS: dict[str, str] = {
 }
 
 _DEFAULT_EMBEDDINGS_DIMS: dict[str, int] = {
+    # OpenAI
     "text-embedding-3-small": 1536,
+    "text-embedding-3-large": 3072,
+    "text-embedding-ada-002": 1536,
+    # Voyage
     "voyage-3-lite": 1024,
+    "voyage-3": 1024,
+    "voyage-3-large": 1024,
+    "voyage-code-3": 2048,
+    # Ollama / popular open-source
     "nomic-embed-text": 768,
+    "mxbai-embed-large": 1024,
+    "all-minilm": 384,
 }
 
 # Embedding providers that are derived from ``LLM_PROVIDER``.
@@ -78,7 +88,7 @@ class EmbeddingsClient(Protocol):
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         """Embed a list of texts into a list of vectors."""
-        ...
+        pass
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -134,17 +144,16 @@ class OllamaEmbeddingsClient:
         self._base_url = host.rstrip("/")
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        vectors: list[list[float]] = []
-        for text in texts:
-            response = httpx.post(
-                f"{self._base_url}/api/embed",
-                json={"model": self.model_name, "input": text},
-                timeout=_EMBEDDINGS_TIMEOUT_SEC,
-            )
-            response.raise_for_status()
-            data = response.json()
-            vectors.append(data["embeddings"][0])
-        return vectors
+        if not texts:
+            return []
+        response = httpx.post(
+            f"{self._base_url}/api/embed",
+            json={"model": self.model_name, "input": texts},
+            timeout=_EMBEDDINGS_TIMEOUT_SEC,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return list(data["embeddings"])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -177,9 +186,23 @@ class NoOpEmbeddingsClient:
 # Factory
 # ─────────────────────────────────────────────────────────────────────────────
 
+_embeddings_client: EmbeddingsClient | None = None
+_embeddings_client_initialized: bool = False
+
+
+def reset_embeddings_client_singleton() -> None:
+    """Clear the cached embeddings client (tests, config reloads)."""
+    global _embeddings_client, _embeddings_client_initialized
+    _embeddings_client = None
+    _embeddings_client_initialized = False
+
 
 def get_embeddings_client() -> EmbeddingsClient | None:
-    """Resolve and return an :class:`EmbeddingsClient`, or ``None``.
+    """Resolve and return a cached :class:`EmbeddingsClient`, or ``None``.
+
+    The client is constructed once and cached as a module-level singleton.
+    Call :func:`reset_embeddings_client_singleton` to clear the cache
+    (e.g. in tests or after config changes).
 
     Resolution order:
 
@@ -195,6 +218,10 @@ def get_embeddings_client() -> EmbeddingsClient | None:
     Returns ``None`` (silent no-op) for CLI-backed LLM providers or when
     credentials are missing, so callers can skip RAG features gracefully.
     """
+    global _embeddings_client, _embeddings_client_initialized
+    if _embeddings_client_initialized:
+        return _embeddings_client
+
     raw_provider = (
         (os.getenv("OPENSRE_EMBEDDINGS_PROVIDER", "") or os.getenv("LLM_PROVIDER", "") or "")
         .strip()
@@ -202,6 +229,8 @@ def get_embeddings_client() -> EmbeddingsClient | None:
     )
 
     if not raw_provider or raw_provider in _NON_EMBEDDING_PROVIDERS:
+        _embeddings_client_initialized = True
+        _embeddings_client = None
         return None
 
     # Map LLM_PROVIDER to the actual embeddings provider.
@@ -216,8 +245,12 @@ def get_embeddings_client() -> EmbeddingsClient | None:
         api_key = resolve_llm_api_key("OPENAI_API_KEY")
         if not api_key:
             logger.warning("OpenAI API key not found; embeddings disabled.")
+            _embeddings_client_initialized = True
+            _embeddings_client = None
             return None
-        return OpenAIEmbeddingsClient(model=model, api_key=api_key)
+        _embeddings_client = OpenAIEmbeddingsClient(model=model, api_key=api_key)
+        _embeddings_client_initialized = True
+        return _embeddings_client
 
     if provider == "voyage":
         from app.llm_credentials import resolve_llm_api_key
@@ -225,11 +258,19 @@ def get_embeddings_client() -> EmbeddingsClient | None:
         api_key = resolve_llm_api_key("VOYAGE_API_KEY")
         if not api_key:
             logger.warning("Voyage API key not found; embeddings disabled.")
+            _embeddings_client_initialized = True
+            _embeddings_client = None
             return None
-        return VoyageEmbeddingsClient(model=model, api_key=api_key)
+        _embeddings_client = VoyageEmbeddingsClient(model=model, api_key=api_key)
+        _embeddings_client_initialized = True
+        return _embeddings_client
 
     if provider == "ollama":
         host = os.getenv("OLLAMA_HOST", "http://localhost:11434").strip()
-        return OllamaEmbeddingsClient(model=model, host=host)
+        _embeddings_client = OllamaEmbeddingsClient(model=model, host=host)
+        _embeddings_client_initialized = True
+        return _embeddings_client
 
+    _embeddings_client_initialized = True
+    _embeddings_client = None
     return None
