@@ -176,7 +176,8 @@ class SlackWebhookConfig(StrictConfigModel):
         parsed = urlparse(self.webhook_url)
         if parsed.scheme != "https" or not parsed.netloc:
             raise ValueError("Slack webhook must be a valid HTTPS URL.")
-        if "slack.com" not in parsed.netloc:
+        hostname = (parsed.hostname or "").lower()
+        if hostname != "slack.com" and not hostname.endswith(".slack.com"):
             raise ValueError("Slack webhook host must be a Slack domain.")
         return self
 
