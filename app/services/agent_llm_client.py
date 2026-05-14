@@ -161,6 +161,20 @@ class AnthropicAgentClient:
         return {"role": "assistant", "content": raw_content}
 
 
+class BedrockAgentClient(AnthropicAgentClient):
+    """Bedrock-backed client using AnthropicBedrock SDK."""
+
+    def __init__(self, model: str, max_tokens: int = 4096) -> None:
+        from anthropic import AnthropicBedrock
+        import os
+
+        self._client = AnthropicBedrock(
+            aws_region=os.getenv("AWS_REGION", "us-east-1"),
+            timeout=_CLIENT_TIMEOUT_SEC,
+        )
+        self._model = model
+        self._max_tokens = max_tokens
+
 class OpenAIAgentClient:
     """OpenAI-compatible client with tool-calling for the agent loop."""
 
@@ -312,6 +326,12 @@ def get_agent_llm() -> _AgentClientType:
         from app.config import LLMSettings
 
         _agent_client = _create_openai_compat_client(settings, provider)
+    elif provider == "bedrock":
+        from app.config import BEDROCK_LLM_CONFIG
+        _agent_client = BedrockAgentClient(
+            model=settings.bedrock_reasoning_model,
+            max_tokens=BEDROCK_LLM_CONFIG.max_tokens,
+        )
     else:
         # Default: Anthropic
         from app.config import ANTHROPIC_LLM_CONFIG
