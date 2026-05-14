@@ -209,6 +209,7 @@ def _cmd_watch(session: ReplSession, console: Console, args: list[str]) -> bool:
     summary = _watch_command_summary(parsed)
     task = session.task_registry.create(TaskKind.WATCHDOG, command=summary)
     task.mark_running()
+    task.attach_pid(parsed.pid)
     dispatcher = AlarmDispatcher(creds, cooldown_seconds=parsed.cooldown_seconds)
 
     def _on_alarm(threshold: str, detail: str) -> None:
