@@ -99,9 +99,11 @@ def test_remove_returns_true_when_present_false_otherwise(
     home = _patch_home(monkeypatch, tmp_path)
     _write_runbook(home / "runbooks" / "x.md", frontmatter="triggers:\n  - a")
 
-    assert store.remove("x") is True
+    result_first = store.remove("x")
+    assert result_first is True
     assert not (home / "runbooks" / "x.md").exists()
-    assert store.remove("x") is False
+    result_second = store.remove("x")
+    assert result_second is False
 
 
 def test_to_dict_round_trips_fields(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
