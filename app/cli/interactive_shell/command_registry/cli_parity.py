@@ -230,6 +230,10 @@ def _cmd_hermes(session: ReplSession, console: Console, args: list[str]) -> bool
     return run_cli_command(console, ["hermes", *args])
 
 
+def _cmd_watchdog(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+    return run_cli_command(console, ["watchdog", *args])
+
+
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
         "/onboard",
@@ -284,6 +288,12 @@ COMMANDS: list[SlashCommand] = [
         "/hermes",
         "live-tail Hermes logs and route incidents to Telegram ('/hermes watch')",
         _cmd_hermes,
+        execution_tier=ExecutionTier.SAFE,
+    ),
+    SlashCommand(
+        "/watchdog",
+        "monitor one process and send threshold alarms ('/watchdog --pid 123 --max-rss 1GiB')",
+        _cmd_watchdog,
         execution_tier=ExecutionTier.SAFE,
     ),
 ]
