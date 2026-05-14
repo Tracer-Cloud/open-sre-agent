@@ -5,7 +5,9 @@ from unittest.mock import patch
 from click.testing import CliRunner
 
 from app.cli.__main__ import cli
+from app.cli.support.constants import VERIFY_SERVICES
 from app.integrations.cli import _HANDLERS, _setup_openclaw, _setup_vercel
+from app.integrations.registry import SUPPORTED_VERIFY_SERVICES
 
 
 def test_integrations_show_redacts_api_token() -> None:
@@ -217,3 +219,31 @@ def test_integrations_verify_accepts_argocd() -> None:
         send_slack_test=False,
     )
     mock_capture.assert_called_once_with("argocd")
+
+
+def test_integrations_verify_accepts_helm() -> None:
+    # Regression test for #1973: helm was registered in the runtime registry
+    # but rejected by Click because the CLI's hardcoded VERIFY_SERVICES tuple
+    # had drifted out of sync.
+    runner = CliRunner()
+
+    with (
+        patch("app.cli.commands.integrations.capture_integration_verified") as mock_capture,
+        patch("app.integrations.cli.cmd_verify", return_value=0) as mock_verify,
+    ):
+        result = runner.invoke(cli, ["integrations", "verify", "helm"])
+
+    assert result.exit_code == 0
+    mock_verify.assert_called_once_with(
+        "helm",
+        send_slack_test=False,
+    )
+    mock_capture.assert_called_once_with("helm")
+
+
+def test_verify_services_matches_registry_source_of_truth() -> None:
+    # The runtime registry is the single source of truth for which services
+    # the `integrations verify` subcommand accepts. Keep this assertion as
+    # a contract test so #1973 cannot recur: any new verifier added to the
+    # registry is automatically accepted by Click without a second edit.
+    assert VERIFY_SERVICES == SUPPORTED_VERIFY_SERVICES
