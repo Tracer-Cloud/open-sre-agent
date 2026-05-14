@@ -16,6 +16,7 @@ class DatadogCorrelationQueries:
     upstream_cpu_metric_template: str = "system.cpu.user{service:%s}"
     alb_log_query_template: str = "service:%s source:alb"
     app_log_query_template: str = "service:%s"
+    upstream_service_names: tuple[str, ...] = ()
 
 
 class DatadogUpstreamEvidenceProvider:
@@ -24,11 +25,11 @@ class DatadogUpstreamEvidenceProvider:
         *,
         adapter: DatadogCorrelationAdapter,
         queries: DatadogCorrelationQueries | None = None,
-        target_resource: str = "rds",
+        target_resource: str = "unknown-rds",
     ) -> None:
         self._adapter = adapter
         self._queries = queries or DatadogCorrelationQueries()
-        self._target_resource = target_resource or "rds"
+        self._target_resource = target_resource or "unknown-rds"
 
     def collect_upstream_evidence(
         self,
@@ -53,14 +54,20 @@ class DatadogUpstreamEvidenceProvider:
             ),
         )
 
-        upstream_cpu_metric_name = self._queries.upstream_cpu_metric_template % service_name
+        upstream_service_names = self._queries.upstream_service_names or (service_name,)
+        upstream_metric_names = tuple(
+            self._queries.upstream_cpu_metric_template % upstream_service
+            for upstream_service in upstream_service_names
+            if upstream_service
+        )
 
-        upstream_metrics = (
+        upstream_metrics = tuple(
             self._adapter.query_metric_series(
-                metric_name=upstream_cpu_metric_name,
+                metric_name=upstream_metric_name,
                 start=window_start,
                 end=window_end,
-            ),
+            )
+            for upstream_metric_name in upstream_metric_names
         )
 
         web_request_logs = (
@@ -79,12 +86,13 @@ class DatadogUpstreamEvidenceProvider:
             ),
         )
 
-        topology_hints = (
+        topology_hints = tuple(
             TopologyHint(
-                source=upstream_cpu_metric_name,
+                source=upstream_metric_name,
                 target=self._target_resource,
                 relation="upstream_of",
-            ),
+            )
+            for upstream_metric_name in upstream_metric_names
         )
 
         return UpstreamEvidenceBundle(

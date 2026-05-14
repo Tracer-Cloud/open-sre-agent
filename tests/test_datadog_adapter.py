@@ -57,3 +57,26 @@ def test_datadog_adapter_queries_logs() -> None:
 
     assert logs.source == "datadog"
     assert logs.messages[0] == "GET /checkout 200"
+
+
+def test_datadog_adapter_tolerates_failure_payloads() -> None:
+    adapter = DatadogCorrelationAdapter(
+        metric_query_fn=lambda _metric, _params: {"success": False, "error": "boom"},
+        log_query_fn=lambda _query, _params: {"success": False, "error": "boom"},
+    )
+
+    metric = adapter.query_metric_series(
+        metric_name="aws.rds.cpuutilization",
+        start="2026-04-15T14:00:00Z",
+        end="2026-04-15T14:15:00Z",
+    )
+    logs = adapter.query_logs(
+        query="service:orders",
+        start="2026-04-15T14:00:00Z",
+        end="2026-04-15T14:15:00Z",
+    )
+
+    assert metric.timestamps == ()
+    assert metric.values == ()
+    assert logs.timestamps == ()
+    assert logs.messages == ()

@@ -35,19 +35,39 @@ def _datadog_avg_query(metric_name: str) -> str:
 def _target_resource_from_state(state: dict[str, Any]) -> str:
     raw_alert = state.get("raw_alert") or {}
     if not isinstance(raw_alert, dict):
-        return "rds"
+        return "unknown-rds"
     return str(
         raw_alert.get("resource")
         or raw_alert.get("resource_name")
         or raw_alert.get("db_instance")
         or raw_alert.get("db_instance_identifier")
-        or "rds"
+        or "unknown-rds"
     )
+
+
+def _candidate_services_from_state(state: dict[str, Any]) -> tuple[str, ...]:
+    raw_alert = state.get("raw_alert") or {}
+    if not isinstance(raw_alert, dict):
+        return ()
+
+    raw_candidates = (
+        raw_alert.get("upstream_services")
+        or raw_alert.get("candidate_services")
+        or raw_alert.get("related_services")
+    )
+    if isinstance(raw_candidates, str):
+        return tuple(item.strip() for item in raw_candidates.split(",") if item.strip())
+    if isinstance(raw_candidates, list | tuple):
+        return tuple(str(item).strip() for item in raw_candidates if str(item).strip())
+    return ()
 
 
 def _build_correlation_config(state: dict[str, Any]) -> dict[str, Any] | None:
     from app.correlation.datadog_adapter import DatadogCorrelationAdapter
-    from app.correlation.datadog_provider import DatadogUpstreamEvidenceProvider
+    from app.correlation.datadog_provider import (
+        DatadogCorrelationQueries,
+        DatadogUpstreamEvidenceProvider,
+    )
     from app.integrations.config_models import DatadogIntegrationConfig
     from app.services.datadog import DatadogClient
 
@@ -104,6 +124,9 @@ def _build_correlation_config(state: dict[str, Any]) -> dict[str, Any] | None:
         adapter=DatadogCorrelationAdapter(
             metric_query_fn=metric_query,
             log_query_fn=log_query,
+        ),
+        queries=DatadogCorrelationQueries(
+            upstream_service_names=_candidate_services_from_state(state),
         ),
         target_resource=_target_resource_from_state(state),
     )

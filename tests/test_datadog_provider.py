@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from app.correlation.datadog_adapter import DatadogCorrelationAdapter
-from app.correlation.datadog_provider import DatadogUpstreamEvidenceProvider
+from app.correlation.datadog_provider import (
+    DatadogCorrelationQueries,
+    DatadogUpstreamEvidenceProvider,
+)
 
 
 def test_datadog_upstream_provider_collects_metrics_logs_and_topology() -> None:
@@ -59,3 +62,39 @@ def test_datadog_upstream_provider_collects_metrics_logs_and_topology() -> None:
     assert bundle.app_logs[0].source == "datadog"
     assert bundle.topology_hints[0].relation == "upstream_of"
     assert bundle.topology_hints[0].target == "orders-rds-prod"
+
+
+def test_datadog_upstream_provider_can_query_multiple_candidate_services() -> None:
+    metric_queries: list[str] = []
+    adapter = DatadogCorrelationAdapter(
+        metric_query_fn=lambda metric, _params: (
+            metric_queries.append(metric)
+            or {
+                "timestamps": ("2026-04-15T14:00:00Z",),
+                "values": (40.0,),
+            }
+        ),
+        log_query_fn=lambda _query, _params: {
+            "timestamps": (),
+            "messages": (),
+        },
+    )
+    provider = DatadogUpstreamEvidenceProvider(
+        adapter=adapter,
+        queries=DatadogCorrelationQueries(upstream_service_names=("orders-web", "checkout-api")),
+        target_resource="orders-rds-prod",
+    )
+
+    bundle = provider.collect_upstream_evidence(
+        alert_id="alert-1",
+        service_name="orders",
+        window_start="2026-04-15T14:00:00Z",
+        window_end="2026-04-15T14:15:00Z",
+    )
+
+    assert "system.cpu.user{service:orders-web}" in metric_queries
+    assert "system.cpu.user{service:checkout-api}" in metric_queries
+    assert [hint.target for hint in bundle.topology_hints] == [
+        "orders-rds-prod",
+        "orders-rds-prod",
+    ]

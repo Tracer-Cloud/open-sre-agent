@@ -39,8 +39,8 @@ class DatadogCorrelationAdapter:
         return MetricSeries(
             source="datadog",
             name=metric_name,
-            timestamps=tuple(payload["timestamps"]),
-            values=tuple(float(v) for v in payload["values"]),
+            timestamps=tuple(str(timestamp) for timestamp in payload.get("timestamps", ())),
+            values=tuple(float(v) for v in payload.get("values", ())),
         )
 
     def query_logs(
@@ -61,6 +61,6 @@ class DatadogCorrelationAdapter:
         return LogSignal(
             source="datadog",
             name=query,
-            timestamps=tuple(payload["timestamps"]),
-            messages=tuple(payload["messages"]),
+            timestamps=tuple(str(timestamp) for timestamp in payload.get("timestamps", ())),
+            messages=tuple(str(message) for message in payload.get("messages", ())),
         )
