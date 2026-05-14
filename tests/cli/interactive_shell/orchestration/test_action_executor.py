@@ -15,6 +15,8 @@ from rich.console import Console
 from app.cli.interactive_shell.orchestration.action_executor import (
     _MIN_SUBPROCESS_TERMINAL_WIDTH,
     _TASK_OUTPUT_PREFIX_WIDTH,
+    _pump_task_pty,
+    _pump_task_stream,
     read_diag,
     run_cd_command,
     run_claude_code_implementation,
@@ -24,6 +26,7 @@ from app.cli.interactive_shell.orchestration.action_executor import (
     run_synthetic_test,
     start_background_cli_task,
     terminate_child_process,
+    watch_synthetic_subprocess,
 )
 from app.cli.interactive_shell.runtime.session import ReplSession
 from app.cli.interactive_shell.runtime.tasks import TaskKind, TaskStatus
@@ -111,6 +114,30 @@ def test_run_cd_command_chdirs_to_target(monkeypatch: pytest.MonkeyPatch) -> Non
     run_cd_command("cd /tmp/example", session, console)
     assert directories == [Path("/tmp/example")]
     assert session.history[-1]["type"] == "shell"
+
+
+def test_run_cd_command_reports_chdir_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured_errors: list[BaseException] = []
+
+    def _chdir(_target: Path) -> None:
+        raise OSError("permission denied")
+
+    monkeypatch.setattr("app.cli.interactive_shell.orchestration.action_executor.os.chdir", _chdir)
+    monkeypatch.setattr(
+        "app.cli.support.exception_reporting.capture_exception",
+        lambda exc, **_kwargs: captured_errors.append(exc),
+    )
+
+    session = ReplSession()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    run_cd_command("cd /root/blocked", session, console)
+
+    assert "cd failed" in buf.getvalue()
+    assert len(captured_errors) == 1
+    assert isinstance(captured_errors[0], OSError)
+    assert session.history[-1] == {"type": "shell", "text": "cd /root/blocked", "ok": False}
 
 
 def test_run_shell_command_records_when_policy_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -595,6 +622,204 @@ def test_start_background_cli_task_falls_back_to_pipes_when_pty_unavailable(
     assert popen_kwargs[0]["stderr"] is subprocess.PIPE
     assert popen_kwargs[0]["text"] is True
     assert "pipe progress" in buf.getvalue()
+
+
+def test_task_output_stream_reports_unexpected_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_errors: list[BaseException] = []
+
+    class _BrokenStream:
+        def __iter__(self) -> _BrokenStream:
+            return self
+
+        def __next__(self) -> str:
+            raise RuntimeError("stream broke")
+
+    monkeypatch.setattr(
+        "app.cli.support.exception_reporting.capture_exception",
+        lambda exc, **_kwargs: captured_errors.append(exc),
+    )
+
+    session = ReplSession()
+    task = session.task_registry.create(TaskKind.CLI_COMMAND, command="demo")
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    _pump_task_stream(
+        task=task,
+        stream_name="stdout",
+        stream=_BrokenStream(),  # type: ignore[arg-type]
+        console=console,
+    )
+
+    assert "stream ended unexpectedly" in buf.getvalue()
+    assert len(captured_errors) == 1
+    assert isinstance(captured_errors[0], RuntimeError)
+
+
+def test_task_pty_stream_reports_unexpected_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_errors: list[BaseException] = []
+    closed_fds: list[int] = []
+
+    def _raise_read(_fd: int, _size: int) -> bytes:
+        raise RuntimeError("pty broke")
+
+    monkeypatch.setattr(
+        "app.cli.support.exception_reporting.capture_exception",
+        lambda exc, **_kwargs: captured_errors.append(exc),
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.orchestration.action_executor.os.read",
+        _raise_read,
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.orchestration.action_executor.os.close",
+        lambda fd: closed_fds.append(fd),
+    )
+
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+    with tempfile.SpooledTemporaryFile() as capture:  # type: ignore[type-arg]
+        _pump_task_pty(master_fd=123, console=console, capture=capture)
+
+    assert "terminal stream ended unexpectedly" in buf.getvalue()
+    assert len(captured_errors) == 1
+    assert isinstance(captured_errors[0], RuntimeError)
+    assert closed_fds == [123]
+
+
+def test_start_background_cli_task_reports_spawn_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_errors: list[BaseException] = []
+
+    def _fake_popen(_command: list[str], **_kwargs: object) -> object:
+        raise RuntimeError("spawn broke")
+
+    monkeypatch.setattr(
+        "app.cli.support.exception_reporting.capture_exception",
+        lambda exc, **_kwargs: captured_errors.append(exc),
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.orchestration.action_executor.subprocess.Popen",
+        _fake_popen,
+    )
+
+    session = ReplSession()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    task = start_background_cli_task(
+        display_command="opensre tests synthetic --scenario 001-replication-lag",
+        argv_list=["python", "-m", "app.cli", "tests", "synthetic"],
+        session=session,
+        console=console,
+        kind=TaskKind.SYNTHETIC_TEST,
+    )
+
+    assert task is None
+    assert "failed to start" in buf.getvalue()
+    assert len(captured_errors) == 1
+    assert isinstance(captured_errors[0], RuntimeError)
+    assert session.task_registry.list_recent(1)[0].status == TaskStatus.FAILED
+
+
+def test_start_background_cli_task_reports_watcher_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_errors: list[BaseException] = []
+
+    class _FakeProcess:
+        stdout = None
+        stderr = None
+        returncode = 1
+
+        def poll(self) -> int:
+            return 1
+
+    def _fake_popen(_command: list[str], **_kwargs: object) -> _FakeProcess:
+        return _FakeProcess()
+
+    monkeypatch.setattr(
+        "app.cli.support.exception_reporting.capture_exception",
+        lambda exc, **_kwargs: captured_errors.append(exc),
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.orchestration.action_executor.subprocess.Popen",
+        _fake_popen,
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.orchestration.action_executor.threading.Thread",
+        _ImmediateThread,
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.orchestration.action_executor.read_diag",
+        lambda _buf: (_ for _ in ()).throw(RuntimeError("diag broke")),
+    )
+
+    session = ReplSession()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    task = start_background_cli_task(
+        display_command="opensre tests synthetic --scenario 001-replication-lag",
+        argv_list=["python", "-m", "app.cli", "tests", "synthetic"],
+        session=session,
+        console=console,
+        kind=TaskKind.SYNTHETIC_TEST,
+    )
+
+    assert task is not None
+    assert task.status == TaskStatus.FAILED
+    assert "error:" in buf.getvalue()
+    assert len(captured_errors) == 1
+    assert isinstance(captured_errors[0], RuntimeError)
+
+
+def test_watch_synthetic_subprocess_reports_daemon_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_errors: list[BaseException] = []
+
+    class _FakeProcess:
+        stdout = None
+        stderr = None
+
+        def poll(self) -> int:
+            raise RuntimeError("poll broke")
+
+    monkeypatch.setattr(
+        "app.cli.support.exception_reporting.capture_exception",
+        lambda exc, **_kwargs: captured_errors.append(exc),
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.orchestration.action_executor.threading.Thread",
+        _ImmediateThread,
+    )
+
+    session = ReplSession()
+    task = session.task_registry.create(TaskKind.SYNTHETIC_TEST, command="suite")
+    task.mark_running()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    with tempfile.SpooledTemporaryFile() as stderr_buf:  # type: ignore[type-arg]
+        watch_synthetic_subprocess(
+            task,
+            _FakeProcess(),  # type: ignore[arg-type]
+            session,
+            "suite:001-test",
+            stderr_buf,
+            console,
+        )
+
+    assert task.status == TaskStatus.FAILED
+    assert "synthetic watcher failed" in buf.getvalue()
+    assert len(captured_errors) == 1
+    assert isinstance(captured_errors[0], RuntimeError)
 
 
 def test_run_synthetic_test_unknown_suite_records_failure() -> None:

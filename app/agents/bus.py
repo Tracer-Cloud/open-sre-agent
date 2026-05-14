@@ -455,12 +455,45 @@ def _release_election_flock(fd: int | None) -> None:
 
 @contextmanager
 def _hold_election_flock(path: Path) -> Iterator[None]:
-    """Acquire the cross-process election flock for ``path`` for one ``with`` block."""
-    fd = _acquire_election_flock(path)
-    try:
+    """Acquire the cross-process election flock for ``path`` for one ``with`` block.
+
+    The fd lifecycle (``os.open`` → ``flock`` → ``flock LOCK_UN`` → ``os.close``)
+    lives entirely in this scope so static analyzers can verify the file is
+    always closed (CodeQL ``py/file-not-closed``). The standalone
+    ``_acquire_election_flock`` / ``_release_election_flock`` helpers are kept
+    for tests that exercise the half-paired primitive directly.
+    """
+    if _fcntl is None:
+        # No flock support (Windows, exotic FS). Matches the
+        # ``_acquire_election_flock`` → ``None`` contract: yield without
+        # holding a cross-process lock.
         yield
+        return
+
+    lock_path = _election_lock_path(path)
+    try:
+        _ensure_parent_dir(lock_path)
+        fd = os.open(str(lock_path), os.O_RDWR | os.O_CREAT, 0o600)
+    except OSError:
+        yield
+        return
+
+    try:
+        try:
+            _fcntl.flock(fd, _fcntl.LOCK_EX)
+        except OSError:
+            # Could not acquire flock; proceed without it (best-effort
+            # election, matching the original ``None``-on-failure contract).
+            yield
+            return
+        try:
+            yield
+        finally:
+            with suppress(OSError):
+                _fcntl.flock(fd, _fcntl.LOCK_UN)
     finally:
-        _release_election_flock(fd)
+        with suppress(OSError):
+            os.close(fd)
 
 
 def _ensure_broker(path: Path) -> BusServer | None:

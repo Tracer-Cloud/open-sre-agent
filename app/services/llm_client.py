@@ -179,7 +179,7 @@ class LLMClient:
                     "Check your configured model name and try again."
                 ) from err
             except AnthropicBadRequestError as err:
-                raise RuntimeError(f"Anthropic request rejected (HTTP 400): {err.message}") from err
+                raise RuntimeError(_format_anthropic_bad_request(err)) from err
             except GuardrailBlockedError:
                 raise
             except Exception as err:
@@ -227,7 +227,7 @@ class LLMClient:
                     "Check your configured model name and try again."
                 ) from err
             except AnthropicBadRequestError as err:
-                raise RuntimeError(f"Anthropic request rejected (HTTP 400): {err.message}") from err
+                raise RuntimeError(_format_anthropic_bad_request(err)) from err
             except GuardrailBlockedError:
                 raise
             except Exception as err:
@@ -333,11 +333,17 @@ class BedrockLLMClient:
                 break
             except AnthropicBadRequestError as err:
                 err_msg = str(err)
-                if "on-demand throughput" in err_msg or "inference profile" in err_msg.lower():
+                err_msg_lower = err_msg.lower()
+                if "on-demand throughput" in err_msg or "inference profile" in err_msg_lower:
                     raise RuntimeError(
                         f"Bedrock model '{self._model}' requires a cross-region inference profile. "
                         f"Try prefixing with 'us.' (e.g. 'us.{self._model}') and update "
                         "BEDROCK_REASONING_MODEL or BEDROCK_TOOLCALL_MODEL."
+                    ) from err
+                if "usage limits" in err_msg_lower:
+                    raise RuntimeError(
+                        f"Anthropic billing quota exceeded for Bedrock model '{self._model}'. "
+                        "Check your account plan and usage limits."
                     ) from err
                 raise RuntimeError(
                     f"Bedrock Anthropic request rejected (HTTP 400) for model "
@@ -506,6 +512,18 @@ class BedrockLLMClient:
         yield self.invoke(prompt_or_messages).content
 
 
+def _format_anthropic_bad_request(err: AnthropicBadRequestError) -> str:
+    """Return a user-facing message for Anthropic HTTP 400 errors."""
+    body = getattr(err, "body", None)
+    if isinstance(body, dict):
+        error_obj = body.get("error", {})
+        api_msg = error_obj.get("message") if isinstance(error_obj, dict) else None
+        api_msg = api_msg if isinstance(api_msg, str) else ""
+        if "usage limit" in api_msg.lower():
+            return f"Anthropic API usage limit reached. {api_msg}"
+    return f"Anthropic request rejected (HTTP 400): {err.message}"
+
+
 def _format_anthropic_retry_error(err: Exception) -> str:
     """Format a user-facing Anthropic retry failure message."""
     error_name = type(err).__name__
@@ -527,6 +545,21 @@ def _format_anthropic_retry_error(err: Exception) -> str:
             "Try again in a few seconds."
         )
     return f"Anthropic API request failed after multiple retries: {error_name}."
+
+
+# LiteLLM/Anthropic surfaces an unrecognized model ID as an HTTP 400 with a
+# message containing "The provided model identifier is invalid." (note: the
+# OpenAI-compatible 404 code-path is preferred, but LiteLLM relays 400 here).
+# Detection is intentionally a substring match because there is no stable error
+# code for this case across LiteLLM/Anthropic. Update this constant if upstream
+# rewords the message — the failure mode is "fall through to a generic HTTP 400
+# message that is not Sentry-filtered" (see issue #1806).
+_OPENAI_INVALID_MODEL_IDENTIFIER_PHRASE = "model identifier"
+
+
+def _is_openai_invalid_model_identifier(err: OpenAIBadRequestError) -> bool:
+    """True if the OpenAIBadRequestError message indicates an unknown model id."""
+    return _OPENAI_INVALID_MODEL_IDENTIFIER_PHRASE in (err.message or "").lower()
 
 
 def _format_openai_connection_error(err: Exception, provider_label: str) -> str:
@@ -705,6 +738,11 @@ class OpenAILLMClient:
                     "Check your configured model name or endpoint."
                 ) from err
             except OpenAIBadRequestError as err:
+                if _is_openai_invalid_model_identifier(err):
+                    raise RuntimeError(
+                        f"{self._provider_label} model '{self._model}' was not found. "
+                        "Check your configured model name or endpoint."
+                    ) from err
                 raise RuntimeError(
                     f"{self._provider_label} request rejected (HTTP 400): {err.message}"
                 ) from err
@@ -796,6 +834,11 @@ class OpenAILLMClient:
                     "Check your configured model name or endpoint."
                 ) from err
             except OpenAIBadRequestError as err:
+                if _is_openai_invalid_model_identifier(err):
+                    raise RuntimeError(
+                        f"{self._provider_label} model '{self._model}' was not found. "
+                        "Check your configured model name or endpoint."
+                    ) from err
                 raise RuntimeError(
                     f"{self._provider_label} request rejected (HTTP 400): {err.message}"
                 ) from err

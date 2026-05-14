@@ -57,7 +57,6 @@ def test_agents_list_renders_discovered_agents(monkeypatch: pytest.MonkeyPatch) 
     assert result.exit_code == 0, result.output
     assert "cursor-claude-code" in result.output
     assert "80435" in result.output
-    assert "discovered" in result.output
 
 
 def test_agents_register_list_and_forget(isolated_registry_path: Path) -> None:

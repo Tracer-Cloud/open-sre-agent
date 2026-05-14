@@ -34,6 +34,7 @@ from rich.table import Table
 
 from tests.synthetic.mock_aws_backend import FixtureAWSBackend
 from tests.synthetic.mock_grafana_backend.backend import FixtureGrafanaBackend
+from tests.synthetic.mock_grafana_backend.selective_backend import SelectiveGrafanaBackend
 from tests.synthetic.rds_postgres.observations import (
     TrajectoryPolicy,
     TrajectoryPolicyResult,
@@ -43,6 +44,7 @@ from tests.synthetic.rds_postgres.observations import (
     render_report_to_console,
     write_observation,
 )
+from tests.synthetic.rds_postgres.reporting import print_gap_report
 from tests.synthetic.rds_postgres.runner_api import (
     LevelRunConfig,
     LevelRunResult,
@@ -721,9 +723,63 @@ def run_synthetic_suite(config: SuiteRunConfig) -> SuiteRunResult:
     )
 
 
+def _run_axis2_suite(
+    fixtures: list[ScenarioFixture],
+    *,
+    output_json: bool,
+) -> list[ScenarioScore]:
+    """Run every fixture twice (axis 1 and axis 2) and emit the gap report.
+
+    Axis 1 uses ``FixtureGrafanaBackend`` (full mock data, the same backend the
+    default suite uses with ``--mock-grafana``). Axis 2 uses
+    ``SelectiveGrafanaBackend`` (query-aware adversarial mock). The combined
+    result list is returned so :func:`main`'s exit code reflects failures on
+    either axis — a fully-failing axis 2 run still surfaces as non-zero.
+    """
+    axis1_results: list[ScenarioScore] = []
+    axis2_results: list[ScenarioScore] = []
+    for fixture in fixtures:
+        _, score1 = run_scenario(fixture, use_mock_grafana=True)
+        axis1_results.append(score1)
+        _, score2 = run_scenario(
+            fixture,
+            use_mock_grafana=False,
+            grafana_backend=SelectiveGrafanaBackend(fixture),
+        )
+        axis2_results.append(score2)
+
+    if output_json:
+        print(
+            json.dumps(
+                {
+                    "axis1": [asdict(r) for r in axis1_results],
+                    "axis2": [asdict(r) for r in axis2_results],
+                },
+                indent=2,
+            )
+        )
+    else:
+        print_gap_report(axis1_results, axis2_results, fixtures)
+
+    return axis1_results + axis2_results
+
+
 def run_suite(argv: list[str] | None = None) -> list[ScenarioScore]:
     args = parse_args(argv)
     config = _build_run_config(args)
+
+    # --axis2 short-circuits the default per-level orchestration: every selected
+    # fixture is run twice (FixtureGrafanaBackend then SelectiveGrafanaBackend)
+    # and the cross-axis gap is printed via ``print_gap_report``. This is the
+    # canonical command documented in tests/synthetic/rds_postgres/README.md.
+    if args.axis2:
+        all_fixtures = load_all_scenarios(SUITE_DIR)
+        try:
+            selected_fixtures = select_fixtures(all_fixtures, config)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
+        return _run_axis2_suite(selected_fixtures, output_json=bool(args.json))
+
     suite_result = run_synthetic_suite(config)
     results = list(suite_result.scores)
     canonical_payloads = dict(suite_result.canonical_payloads)

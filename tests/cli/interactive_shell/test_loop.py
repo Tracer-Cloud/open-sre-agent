@@ -700,6 +700,36 @@ class TestLooksLikeCancelRequest:
 # ── Spinner state tests ──────────────────────────────────────────────────────
 
 
+class TestDispatchSpinnerRouting:
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "/history",
+            "/tests",
+            "/model show",
+            "tests",
+            "help",
+            # The router typo-corrects single-edit bare aliases before
+            # dispatch, so these are local slash-command paths too.
+            "testts",
+            "hlep",
+        ],
+    )
+    def test_slash_dispatches_do_not_show_assistant_spinner(self, text: str) -> None:
+        assert loop._dispatch_should_show_spinner(text, ReplSession()) is False
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "why did this fail?",
+            "run opensre investigate --input alert.json",
+            "explain deploy",
+        ],
+    )
+    def test_non_slash_dispatches_show_assistant_spinner(self, text: str) -> None:
+        assert loop._dispatch_should_show_spinner(text, ReplSession()) is True
+
+
 def _strip_ansi(text: str) -> str:
     return re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", text)
 

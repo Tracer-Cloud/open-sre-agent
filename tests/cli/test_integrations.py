@@ -5,6 +5,7 @@ from unittest.mock import patch
 from click.testing import CliRunner
 
 from app.cli.__main__ import cli
+from app.cli.support.constants import VERIFY_SERVICES
 from app.integrations.cli import _HANDLERS, _setup_openclaw, _setup_vercel
 
 
@@ -217,3 +218,41 @@ def test_integrations_verify_accepts_argocd() -> None:
         send_slack_test=False,
     )
     mock_capture.assert_called_once_with("argocd")
+
+
+def test_integrations_verify_accepts_helm() -> None:
+    # Regression test for #1973: helm was registered in the runtime registry
+    # but rejected by Click because the CLI's hardcoded VERIFY_SERVICES tuple
+    # had drifted out of sync.
+    runner = CliRunner()
+
+    with (
+        patch("app.cli.commands.integrations.capture_integration_verified") as mock_capture,
+        patch("app.integrations.cli.cmd_verify", return_value=0) as mock_verify,
+    ):
+        result = runner.invoke(cli, ["integrations", "verify", "helm"])
+
+    assert result.exit_code == 0
+    mock_verify.assert_called_once_with(
+        "helm",
+        send_slack_test=False,
+    )
+    mock_capture.assert_called_once_with("helm")
+
+
+def test_verify_services_includes_previously_missing_integrations() -> None:
+    # #1973 surfaced these names as registered in the runtime registry but
+    # rejected by Click's positional-arg validator (the CLI's hardcoded
+    # VERIFY_SERVICES tuple had drifted). Anchor them here so a revert to a
+    # hardcoded tuple — or accidental removal from the registry — fails this
+    # test loudly.
+    previously_missing = {
+        "azure",
+        "azure_sql",
+        "helm",
+        "openobserve",
+        "snowflake",
+        "splunk",
+        "supabase",
+    }
+    assert previously_missing <= set(VERIFY_SERVICES)

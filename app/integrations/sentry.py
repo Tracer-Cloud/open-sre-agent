@@ -14,6 +14,7 @@ from app.strict_config import StrictConfigModel
 
 DEFAULT_SENTRY_URL = "https://sentry.io"
 DEFAULT_SENTRY_STATS_PERIOD = "24h"
+_MAX_SENTRY_QUERY_LEN = 200
 _EXCEPTION_QUERY_PREFIX_RE = re.compile(
     r"^(?:[A-Za-z0-9_.]*(?:Error|Exception|Interrupt|Warning)|panic|error|runtime error|fatal error):\s*"
 )
@@ -141,6 +142,19 @@ def get_sentry_auth_recommendations() -> dict[str, str]:
     }
 
 
+def _sanitize_sentry_query(query: str) -> str:
+    """Reduce a raw query string to something the Sentry issues API accepts.
+
+    The agent may pass a full error message or multi-line stack trace as the
+    search term, which causes a 400 Bad Request because the Sentry search
+    grammar treats ``:`` as a field separator and rejects very long URLs.
+    Taking the first non-empty line and capping at _MAX_SENTRY_QUERY_LEN
+    characters is enough to produce a valid free-text search token.
+    """
+    first_line = query.split("\n")[0].strip()
+    return first_line[:_MAX_SENTRY_QUERY_LEN]
+
+
 def _build_issue_list_params(
     config: SentryConfig,
     limit: int,
@@ -158,7 +172,7 @@ def _build_issue_list_params(
 
 
 def _normalize_issue_search_query(query: str) -> str:
-    stripped = query.strip()
+    stripped = _sanitize_sentry_query(query)
     if not stripped or _is_quoted_search_query(stripped):
         return stripped
 

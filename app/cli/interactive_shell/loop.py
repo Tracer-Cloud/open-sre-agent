@@ -45,6 +45,7 @@ from rich.console import Console
 from rich.markup import escape
 
 import app.cli.interactive_shell.orchestration.agent_actions as _agent_actions
+from app.agents.sampler import start_sampler
 from app.agents.sweep import run_startup_sweep
 from app.analytics.cli import capture_terminal_turn_summarized
 from app.analytics.events import Event
@@ -108,7 +109,6 @@ _INTERVENTION_CORRECTION_RE = re.compile(
     re.IGNORECASE,
 )
 
-
 # Tokens that count as an explicit answer to a ``Proceed? [Y/n]``
 # confirmation. Compared against ``text.strip().lower()`` so case and
 # trailing whitespace don't matter. ``""`` is included because the
@@ -156,6 +156,21 @@ def _looks_like_cancel_request(text: str | None) -> bool:
     with that keystroke.
     """
     return (text or "").strip().lower() in _CANCEL_REQUEST_TOKENS
+
+
+def _dispatch_should_show_spinner(text: str, session: ReplSession) -> bool:
+    """Return False for deterministic slash-command dispatches.
+
+    Slash commands often open menus or run local shell handlers. Showing the
+    assistant/token spinner for those paths makes a local menu look like an LLM
+    turn is running. Keep this in lockstep with the router's bare-alias
+    typo-tolerance so typo-corrected local commands do not briefly show the
+    assistant spinner either.
+    """
+    stripped = text.strip()
+    if stripped.startswith("/"):
+        return False
+    return not _router.is_bare_command_alias(stripped, session)
 
 
 class DispatchCancelled(Exception):
@@ -739,6 +754,7 @@ async def _run_interactive(
         session.prompt_history_backend = pt_session.history
     spinner = _SpinnerState()
     state = _ReplState()
+    sampler_task = start_sampler()
 
     cancel_kb = _build_cancel_key_bindings(state)
     _install_session_key_bindings(pt_session, cancel_kb)
@@ -780,7 +796,9 @@ async def _run_interactive(
             color_system="truecolor",
             legacy_windows=False,
         )
-        spinner.start()
+        show_spinner = _dispatch_should_show_spinner(text, session)
+        if show_spinner:
+            spinner.start()
         try:
             await asyncio.to_thread(
                 _dispatch_one_turn,
@@ -808,7 +826,8 @@ async def _run_interactive(
             report_exception(exc, context="interactive_shell.dispatch_async")
             console.print(f"[{ERROR}]dispatch error:[/] {escape(str(exc))}")
         finally:
-            spinner.stop()
+            if show_spinner:
+                spinner.stop()
             # Release the per-turn cancel event only if it's still ours.
             # A stale-but-still-running prior-turn worker keeps a strong
             # reference to its own ``dispatch_cancel``; nothing else
@@ -959,6 +978,11 @@ async def _run_interactive(
     finally:
         state.exit_requested = True
         state.cancel_current_dispatch()
+        sampler_task.cancel()
+        try:  # noqa: SIM105
+            await sampler_task
+        except asyncio.CancelledError:
+            pass
         processor_task.cancel()
         # ``try/except/pass`` here (not ``contextlib.suppress``) so
         # CodeQL doesn't flag the bare ``await`` as ineffectual; SIM105
