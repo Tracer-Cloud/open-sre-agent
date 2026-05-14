@@ -32,7 +32,7 @@ _DEFAULT_EMBEDDINGS_DIMS: dict[str, int] = {
     "text-embedding-3-large": 3072,
     "text-embedding-ada-002": 1536,
     # Voyage
-    "voyage-3-lite": 1024,
+    "voyage-3-lite": 512,
     "voyage-3": 1024,
     "voyage-3-large": 1024,
     "voyage-code-3": 2048,
