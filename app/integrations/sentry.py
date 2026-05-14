@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -13,6 +14,7 @@ from app.strict_config import StrictConfigModel
 
 DEFAULT_SENTRY_URL = "https://sentry.io"
 DEFAULT_SENTRY_STATS_PERIOD = "24h"
+_STRUCTURED_QUERY_TOKEN_RE = re.compile(r"(?:^|\s)[a-z][a-z0-9_.-]*:")
 
 
 class SentryConfig(StrictConfigModel):
@@ -93,14 +95,39 @@ def _build_issue_list_params(
     limit: int,
     query: str,
 ) -> list[tuple[str, str | int | float | bool | None]]:
+    normalized_query = _normalize_issue_search_query(query)
     params: list[tuple[str, str | int | float | bool | None]] = [
         ("limit", str(limit)),
         ("statsPeriod", DEFAULT_SENTRY_STATS_PERIOD),
-        ("query", query),
+        ("query", normalized_query),
     ]
     if config.project_slug:
         params.append(("project", config.project_slug))
     return params
+
+
+def _normalize_issue_search_query(query: str) -> str:
+    stripped = query.strip()
+    if not stripped or _is_quoted_search_query(stripped):
+        return stripped
+    if _STRUCTURED_QUERY_TOKEN_RE.search(stripped):
+        return stripped
+    if _looks_like_exception_signature(stripped):
+        return _quote_search_phrase(stripped)
+    return stripped
+
+
+def _is_quoted_search_query(query: str) -> bool:
+    return len(query) >= 2 and query[0] == '"' and query[-1] == '"'
+
+
+def _looks_like_exception_signature(query: str) -> bool:
+    return ":" in query and any(char in query for char in (" ", "(", ")", "/", "\\"))
+
+
+def _quote_search_phrase(query: str) -> str:
+    escaped = query.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
 
 
 def _request_json(
