@@ -72,9 +72,9 @@ class AnthropicAgentClient:
     auth_error_hint = "Check ANTHROPIC_API_KEY."
 
     def __init__(self, model: str, max_tokens: int = 4096, *, client: Any | None = None) -> None:
-        from anthropic import Anthropic
-
         if client is None:
+            from anthropic import Anthropic
+
             from app.llm_credentials import resolve_llm_api_key
 
             api_key = resolve_llm_api_key("ANTHROPIC_API_KEY")
@@ -184,9 +184,7 @@ class BedrockAgentClient(AnthropicAgentClient):
     )
 
     def __init__(self, model: str, max_tokens: int = 4096) -> None:
-        from typing import cast
-
-        from anthropic import Anthropic, AnthropicBedrock
+        from anthropic import AnthropicBedrock
 
         region = (os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "").strip()
         if not region:
@@ -194,14 +192,11 @@ class BedrockAgentClient(AnthropicAgentClient):
                 "Bedrock requires AWS_REGION or AWS_DEFAULT_REGION to be set."
             )
 
-        client = cast(
-            Anthropic,
-            AnthropicBedrock(
-                aws_region=region,
-                timeout=_CLIENT_TIMEOUT_SEC,
-            ),
+        bedrock_client = AnthropicBedrock(
+            aws_region=region,
+            timeout=_CLIENT_TIMEOUT_SEC,
         )
-        super().__init__(model=model, max_tokens=max_tokens, client=client)
+        super().__init__(model=model, max_tokens=max_tokens, client=bedrock_client)
 
 
 class OpenAIAgentClient:
@@ -357,6 +352,7 @@ def get_agent_llm() -> _AgentClientType:
         _agent_client = _create_openai_compat_client(settings, provider)
     elif provider == "bedrock":
         from app.config import BEDROCK_LLM_CONFIG
+
         _agent_client = BedrockAgentClient(
             model=settings.bedrock_reasoning_model,
             max_tokens=BEDROCK_LLM_CONFIG.max_tokens,
