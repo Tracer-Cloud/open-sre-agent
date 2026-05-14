@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Any, Literal
 if TYPE_CHECKING:
     from prompt_toolkit.history import History
 
+    from app.cli.interactive_shell.alert_inbox import IncomingAlert
+
 from app.cli.interactive_shell.runtime.tasks import TaskRegistry
 from app.llm_reasoning_effort import ReasoningEffortChoice
 
@@ -97,7 +99,12 @@ class ReplSession:
     last_synthetic_observation_path: str | None = None
     """Absolute path to ``latest.json`` for the last finished synthetic run (set on failure)."""
 
-    # Keys from a completed AgentState that carry reusable infra context into
+    incoming_alerts: list[IncomingAlert] = field(default_factory=list)
+    """Queued incoming alerts from the HTTP listener, capped at 256 entries.
+    Shows up in /status and /history for user visibility."""
+
+    _INCOMING_ALERTS_MAX: int = 256
+    """Maximum number of incoming alerts to keep in session history."""
     # the next investigation.  Kept as a class-level tuple so any caller that
     # wants to know "what counts as accumulated context" has a single source.
     _ACCUMULATED_KEYS: tuple[str, ...] = (
@@ -115,8 +122,24 @@ class ReplSession:
         return value or ""
 
     def record(self, kind: str, text: str, *, ok: bool = True) -> None:
-        """Append an entry to the session history."""
+        """Append an entry to the session history.
+
+        Supports kinds: "shell", "slash", "alert", "chat", "incoming_alert", etc.
+        For "incoming_alert", also appends to the incoming_alerts list (capped).
+        """
         self.history.append({"type": kind, "text": text, "ok": ok})
+
+        # Also track incoming alerts in a separate list for easy access
+        if kind == "incoming_alert":
+            from app.cli.interactive_shell.alert_inbox import IncomingAlert
+
+            # Create a simple IncomingAlert wrapper for the text
+            alert = IncomingAlert(text=text)
+            self.incoming_alerts.append(alert)
+
+            # Cap the list at _INCOMING_ALERTS_MAX
+            if len(self.incoming_alerts) > self._INCOMING_ALERTS_MAX:
+                self.incoming_alerts.pop(0)
 
     def mark_latest(self, *, ok: bool, kind: str | None = None) -> None:
         """Update the latest history entry, optionally scanning for a matching kind."""
@@ -150,6 +173,7 @@ class ReplSession:
         self.accumulated_context.clear()
         self.token_usage.clear()
         self.cli_agent_messages.clear()
+        self.incoming_alerts.clear()
         # Keep persisted cross-session task history on disk intact.
         # /reset is session-scoped, so swap in a fresh in-memory registry
         # that reuses the same backing store (if any) so /tasks still shows history.

@@ -46,6 +46,9 @@ BOLD_TEXT = f"bold {TEXT}"
 BOLD_WARNING = f"bold {WARNING}"
 BOLD_ERROR = f"bold {ERROR}"
 
+# Distinct accent for incoming alerts (visually distinct from BOLD_BRAND used for assistant)
+INCOMING_ALERT_ACCENT = BOLD_WARNING
+
 # ── Semantic glyphs ────────────────────────────────────────────────────────
 
 GLYPH_SUCCESS = "✓"

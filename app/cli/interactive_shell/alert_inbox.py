@@ -60,6 +60,7 @@ class AlertInbox:
         self._maxsize = maxsize
         self._dropped: int = 0
         self._lock = threading.Lock()
+        self._pending_event = threading.Event()  # Set when alerts are available
 
     def put(self, alert: IncomingAlert) -> bool:
         """Return True if queued without eviction, False if an old alert was dropped."""
@@ -68,8 +69,10 @@ class AlertInbox:
                 self._queue.popleft()
                 self._dropped += 1
                 self._queue.append(alert)
+                self._pending_event.set()
                 return False
             self._queue.append(alert)
+            self._pending_event.set()
         return True
 
     def pop_nowait(self) -> IncomingAlert | None:
@@ -87,6 +90,8 @@ class AlertInbox:
                     items.append(self._queue.popleft())
                 except IndexError:
                     break
+            if not self._queue:
+                self._pending_event.clear()
             return items
 
     def peek_last(self, n: int) -> list[IncomingAlert]:
@@ -101,6 +106,11 @@ class AlertInbox:
     @property
     def dropped(self) -> int:
         return self._dropped
+
+    @property
+    def pending_event(self) -> threading.Event:
+        """Event set when alerts are available, for background wakers."""
+        return self._pending_event
 
 
 @dataclass
