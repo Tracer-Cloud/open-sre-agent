@@ -349,6 +349,31 @@ def _setup_incident_io() -> None:
     )
 
 
+def _setup_servicenow() -> None:
+    instance_url = _p("ServiceNow instance URL")
+    api_token = _p("ServiceNow OAuth/API token (optional)", secret=True)
+    username = ""
+    password = ""
+    if not api_token:
+        username = _p("ServiceNow username")
+        password = _p("ServiceNow password", secret=True)
+    if not instance_url:
+        _die("instance_url is required.")
+    if not api_token and not (username and password):
+        _die("api_token or username/password is required.")
+    upsert_integration(
+        "servicenow",
+        {
+            "credentials": {
+                "instance_url": instance_url,
+                "username": username,
+                "password": password,
+                "api_token": api_token,
+            }
+        },
+    )
+
+
 def _setup_github() -> None:
     from app.integrations.github_mcp import (
         GitHubMcpRepoView,
@@ -739,6 +764,7 @@ _HANDLERS: dict[str, Any] = {
     "grafana": _setup_grafana,
     "honeycomb": _setup_honeycomb,
     "incident_io": _setup_incident_io,
+    "servicenow": _setup_servicenow,
     "mariadb": _setup_mariadb,
     "mongodb_atlas": _setup_mongodb_atlas,
     "slack": _setup_slack,

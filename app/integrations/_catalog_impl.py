@@ -28,6 +28,7 @@ from app.integrations.config_models import (
     IncidentIoIntegrationConfig,
     JiraIntegrationConfig,
     OpsGenieIntegrationConfig,
+    ServiceNowIntegrationConfig,
     SlackWebhookConfig,
     SplunkIntegrationConfig,
     TelegramBotConfig,
@@ -422,6 +423,21 @@ def _classify_service_instance(
         if incident_io_config.api_key:
             return incident_io_config.model_dump(), "incident_io"
         return None, None
+
+    if key == "servicenow":
+        try:
+            servicenow_config = ServiceNowIntegrationConfig.model_validate(
+                {
+                    "instance_url": credentials.get("instance_url", ""),
+                    "username": credentials.get("username", ""),
+                    "password": credentials.get("password", ""),
+                    "api_token": credentials.get("api_token", ""),
+                    "integration_id": record_id,
+                }
+            )
+        except Exception:
+            return None, None
+        return servicenow_config.model_dump(), "servicenow"
 
     if key == "jira":
         try:
@@ -1251,6 +1267,32 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 _active_env_record(
                     "incident_io",
                     incident_io_config.model_dump(exclude={"integration_id"}),
+                )
+            )
+
+    servicenow_instance_url = os.getenv("SERVICENOW_INSTANCE_URL", "").strip()
+    servicenow_api_token = os.getenv("SERVICENOW_API_TOKEN", "").strip()
+    servicenow_username = os.getenv("SERVICENOW_USERNAME", "").strip()
+    servicenow_password = os.getenv("SERVICENOW_PASSWORD", "").strip()
+    if servicenow_instance_url and (
+        servicenow_api_token or (servicenow_username and servicenow_password)
+    ):
+        try:
+            servicenow_config = ServiceNowIntegrationConfig.model_validate(
+                {
+                    "instance_url": servicenow_instance_url,
+                    "username": servicenow_username,
+                    "password": servicenow_password,
+                    "api_token": servicenow_api_token,
+                }
+            )
+        except Exception:
+            logger.debug("Failed to load ServiceNow config from env", exc_info=True)
+        else:
+            integrations.append(
+                _active_env_record(
+                    "servicenow",
+                    servicenow_config.model_dump(exclude={"integration_id"}),
                 )
             )
 

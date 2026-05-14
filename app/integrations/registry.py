@@ -36,6 +36,7 @@ from app.integrations._verification_adapters import (
     _verify_postgresql,
     _verify_rabbitmq,
     _verify_sentry,
+    _verify_servicenow,
     _verify_slack_without_test,
     _verify_snowflake,
     _verify_splunk,
@@ -196,6 +197,14 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         direct_effective=True,
         setup_order=22,
         verify_order=22,
+    ),
+    IntegrationSpec(
+        service="servicenow",
+        aliases=("service now", "snow"),
+        verifier=_verify_servicenow,
+        direct_effective=True,
+        setup_order=23,
+        verify_order=23,
     ),
     IntegrationSpec(
         service="jira",

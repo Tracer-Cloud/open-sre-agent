@@ -187,6 +187,12 @@ def validate_incident_io_integration(**kwargs):
     return _validate(**kwargs)
 
 
+def validate_servicenow_integration(**kwargs):
+    from app.cli.wizard.integration_health import validate_servicenow_integration as _validate
+
+    return _validate(**kwargs)
+
+
 def validate_discord_bot(**kwargs):
     from app.cli.wizard.integration_health import validate_discord_bot as _validate
 
@@ -1520,6 +1526,59 @@ def _configure_incident_io() -> tuple[str, str]:
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 
 
+def _configure_servicenow() -> tuple[str, str]:
+    _, credentials = _integration_defaults("servicenow")
+    while True:
+        instance_url = _prompt_value(
+            "ServiceNow instance URL",
+            default=_string_value(credentials.get("instance_url")),
+        )
+        api_token = _prompt_value(
+            "ServiceNow OAuth/API token (optional)",
+            default=_string_value(credentials.get("api_token")),
+            secret=True,
+            allow_empty=True,
+        )
+        username = ""
+        password = ""
+        if not api_token:
+            username = _prompt_value(
+                "ServiceNow username",
+                default=_string_value(credentials.get("username")),
+            )
+            password = _prompt_value(
+                "ServiceNow password",
+                default=_string_value(credentials.get("password")),
+                secret=True,
+            )
+        with _console.status("Validating ServiceNow integration...", spinner="dots"):
+            result = validate_servicenow_integration(
+                instance_url=instance_url,
+                username=username,
+                password=password,
+                api_token=api_token,
+            )
+        _render_integration_result("ServiceNow", result)
+        if result.ok:
+            credentials_payload = {
+                "instance_url": instance_url,
+                "username": username,
+                "password": password,
+                "api_token": api_token,
+            }
+            upsert_integration("servicenow", {"credentials": credentials_payload})
+            env_path = sync_env_values(
+                {
+                    "SERVICENOW_INSTANCE_URL": instance_url,
+                    "SERVICENOW_USERNAME": username,
+                    "SERVICENOW_PASSWORD": password,
+                    "SERVICENOW_API_TOKEN": api_token,
+                }
+            )
+            return "ServiceNow", str(env_path)
+        _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
+
+
 def _configure_discord() -> tuple[str, str]:
     _, credentials = _integration_defaults("discord")
     _console.print(
@@ -1805,6 +1864,11 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
             hint="Read incident context and updates from incident.io",
         ),
         Choice(
+            value="servicenow",
+            label="ServiceNow",
+            hint="Read incidents, services, and change records from ServiceNow",
+        ),
+        Choice(
             value="notion",
             label="Notion",
             hint="Post investigation reports to a Notion database",
@@ -1853,6 +1917,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "alertmanager": _configure_alertmanager,
         "opsgenie": _configure_opsgenie,
         "incident_io": _configure_incident_io,
+        "servicenow": _configure_servicenow,
         "notion": _configure_notion,
         "openclaw": _configure_openclaw,
         "opensearch": _configure_opensearch,
@@ -1876,6 +1941,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "alertmanager": "alertmanager",
         "opsgenie": "opsgenie",
         "incident_io": "incident.io",
+        "servicenow": "servicenow",
         "notion": "notion",
         "openclaw": "openclaw",
         "opensearch": "opensearch",

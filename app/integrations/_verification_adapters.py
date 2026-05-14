@@ -21,6 +21,7 @@ from app.integrations.config_models import (
     HelmIntegrationConfig,
     HoneycombIntegrationConfig,
     IncidentIoIntegrationConfig,
+    ServiceNowIntegrationConfig,
     SlackWebhookConfig,
     TracerIntegrationConfig,
 )
@@ -43,6 +44,7 @@ from app.services.helm import HelmClient
 from app.services.honeycomb import HoneycombClient
 from app.services.incident_io import IncidentIoClient
 from app.services.opsgenie import OpsGenieClient, OpsGenieConfig
+from app.services.servicenow import ServiceNowClient
 from app.services.splunk import SplunkClient, SplunkConfig
 from app.services.tracer_client.client import TracerClient
 from app.services.vercel.client import VercelClient, VercelConfig
@@ -545,6 +547,12 @@ _verify_incident_io = build_probe_verifier(
     build_config=IncidentIoIntegrationConfig.model_validate,
     client_factory=IncidentIoClient,
 )
+
+_verify_servicenow = build_probe_verifier(
+    "servicenow",
+    build_config=ServiceNowIntegrationConfig.model_validate,
+    client_factory=ServiceNowClient,
+)
 _verify_alertmanager = build_probe_verifier(
     "alertmanager",
     build_config=AlertmanagerConfig.model_validate,
@@ -605,6 +613,7 @@ __all__ = [
     "_verify_honeycomb",
     "_verify_helm",
     "_verify_incident_io",
+    "_verify_servicenow",
     "_verify_kafka",
     "_verify_mariadb",
     "_verify_mongodb",

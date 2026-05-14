@@ -233,6 +233,46 @@ class IncidentIoIntegrationConfig(StrictConfigModel):
         }
 
 
+class ServiceNowIntegrationConfig(StrictConfigModel):
+    """Normalized ServiceNow credentials used by investigation and verification flows."""
+
+    instance_url: str
+    username: str = ""
+    password: str = ""
+    api_token: str = ""
+    integration_id: str = ""
+
+    @field_validator("instance_url", mode="before")
+    @classmethod
+    def _normalize_instance_url(cls, value: object) -> str:
+        normalized = normalize_url()(value)
+        return validate_https_or_loopback_http_url(normalized, service_name="ServiceNow")
+
+    _normalize_username = field_validator("username", mode="before")(normalize_str())
+    _normalize_password = field_validator("password", mode="before")(normalize_str())
+    _normalize_api_token = field_validator("api_token", mode="before")(normalize_str())
+
+    @model_validator(mode="after")
+    def _require_auth(self) -> ServiceNowIntegrationConfig:
+        if self.api_token or (self.username and self.password):
+            return self
+        raise ValueError("ServiceNow requires api_token or username/password credentials.")
+
+    @property
+    def base_url(self) -> str:
+        return self.instance_url.rstrip("/")
+
+    @property
+    def headers(self) -> dict[str, str]:
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+        if self.api_token:
+            headers["Authorization"] = f"Bearer {self.api_token}"
+        return headers
+
+
 class AlertmanagerIntegrationConfig(StrictConfigModel):
     """Normalized Alertmanager credentials used by resolution and verification flows."""
 

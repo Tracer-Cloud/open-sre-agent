@@ -1,0 +1,68 @@
+---
+title: ServiceNow
+description: Connect OpenSRE to ServiceNow incidents, change records, and service metadata.
+---
+
+ServiceNow gives investigations ticket, change, and CMDB service context from the same workflow that queries telemetry.
+
+## Capabilities
+
+- Verify connectivity to a ServiceNow instance.
+- Read active or query-scoped incident records.
+- Fetch a linked incident by number or `sys_id`.
+- Read recent `change_request` records.
+- Read `cmdb_ci_service` business service records.
+- Append investigation findings to incident work notes when explicitly requested.
+
+## Setup
+
+Create credentials with read access to the `incident`, `change_request`, and `cmdb_ci_service` tables. Add write permission to `incident.work_notes` only if you want OpenSRE to post findings back.
+
+```bash
+opensre integrations setup servicenow
+```
+
+You can also configure ServiceNow from environment variables:
+
+```bash
+export SERVICENOW_INSTANCE_URL="https://dev12345.service-now.com"
+export SERVICENOW_USERNAME="admin"
+export SERVICENOW_PASSWORD="..."
+```
+
+For bearer token authentication, use:
+
+```bash
+export SERVICENOW_INSTANCE_URL="https://dev12345.service-now.com"
+export SERVICENOW_API_TOKEN="..."
+```
+
+## Verify
+
+```bash
+opensre integrations verify servicenow
+```
+
+Verification performs a minimal Table API read from `incident`.
+
+## Investigation Usage
+
+When an alert includes `servicenow_incident_id`, `servicenow_incident_number`, `servicenow_url`, or `servicenow_incident_url`, OpenSRE makes the `servicenow_records` action available with `action="context"`. That reads:
+
+- incident detail from `incident`
+- recent changes from `change_request`
+- business services from `cmdb_ci_service`
+
+You can scope ServiceNow reads with alert annotations:
+
+```json
+{
+  "servicenow_incident_number": "INC0010001",
+  "servicenow_change_query": "business_service=checkout^ORDERBYDESCsys_updated_on",
+  "servicenow_service_query": "nameLIKEcheckout"
+}
+```
+
+## Write-Back
+
+The `append_work_note` action writes to `incident.work_notes`. Use a least-privilege credential and reserve write-back for workflows where posting findings is expected.

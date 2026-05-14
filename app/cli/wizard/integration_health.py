@@ -16,6 +16,7 @@ from app.cli.wizard.integration_validators.client_validators import (
     validate_opensearch_integration,
     validate_opsgenie_integration,
     validate_sentry_integration,
+    validate_servicenow_integration,
     validate_splunk_integration,
     validate_vercel_integration,
 )
@@ -51,6 +52,7 @@ __all__ = [
     "validate_opensearch_integration",
     "validate_opsgenie_integration",
     "validate_sentry_integration",
+    "validate_servicenow_integration",
     "validate_slack_webhook",
     "validate_splunk_integration",
     "validate_vercel_integration",

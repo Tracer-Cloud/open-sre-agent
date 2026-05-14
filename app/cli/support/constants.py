@@ -56,10 +56,12 @@ SETUP_SERVICES: tuple[str, ...] = (
     "rabbitmq",
     "rds",
     "sentry",
+    "servicenow",
     "slack",
     "tracer",
     "vercel",
 )
+
 
 
 def __getattr__(name: str) -> tuple[str, ...]:

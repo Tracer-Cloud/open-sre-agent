@@ -23,6 +23,7 @@ from app.services.grafana import get_grafana_client_from_credentials
 from app.services.honeycomb import HoneycombClient
 from app.services.incident_io import IncidentIoClient
 from app.services.opsgenie import OpsGenieClient, OpsGenieConfig
+from app.services.servicenow import ServiceNowClient, ServiceNowConfig
 from app.services.splunk import SplunkClient, SplunkConfig
 from app.services.vercel import VercelClient, VercelConfig
 
@@ -451,6 +452,47 @@ def validate_incident_io_integration(
             ok=False,
             detail=f"incident.io validation failed: {str(err).replace(api_key, '[REDACTED]')}",
         )
+
+
+def validate_servicenow_integration(
+    *,
+    instance_url: str,
+    username: str = "",
+    password: str = "",
+    api_token: str = "",
+) -> IntegrationHealthResult:
+    """Validate ServiceNow connectivity by listing one incident."""
+    if not instance_url:
+        return IntegrationHealthResult(ok=False, detail="ServiceNow instance URL is required.")
+    if not api_token and not (username and password):
+        return IntegrationHealthResult(
+            ok=False,
+            detail="ServiceNow API token or username/password is required.",
+        )
+    try:
+        config = ServiceNowConfig(
+            instance_url=instance_url,
+            username=username,
+            password=password,
+            api_token=api_token,
+        )
+        with ServiceNowClient(config) as client:
+            result = client.list_incidents(limit=1)
+        if result.get("success"):
+            return IntegrationHealthResult(
+                ok=True,
+                detail="ServiceNow validated; credentials accepted.",
+            )
+        return IntegrationHealthResult(
+            ok=False,
+            detail=f"ServiceNow validation failed: {result.get('error', 'unknown error')}",
+        )
+    except Exception as err:
+        redacted = str(err)
+        for secret in (password, api_token):
+            if secret:
+                redacted = redacted.replace(secret, "[REDACTED]")
+        return IntegrationHealthResult(ok=False, detail=f"ServiceNow validation failed: {redacted}")
 
 
 def validate_splunk_integration(

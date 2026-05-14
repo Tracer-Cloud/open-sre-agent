@@ -104,6 +104,7 @@
               "honeycomb",
               "incident_io",
               "opsgenie",
+              "servicenow",
               "sentry",
               "splunk"
             ]

@@ -18,6 +18,7 @@ from app.cli.wizard.integration_health import (
     validate_honeycomb_integration,
     validate_incident_io_integration,
     validate_sentry_integration,
+    validate_servicenow_integration,
     validate_slack_webhook,
     validate_vercel_integration,
 )
@@ -48,6 +49,7 @@ def test_legacy_integration_health_import_surface_still_exports_validators() -> 
         "validate_opensearch_integration",
         "validate_opsgenie_integration",
         "validate_sentry_integration",
+        "validate_servicenow_integration",
         "validate_slack_webhook",
         "validate_splunk_integration",
         "validate_vercel_integration",
@@ -165,6 +167,34 @@ def test_validate_incident_io_integration_succeeds(monkeypatch) -> None:
 
     assert result.ok is True
     assert "api key accepted" in result.detail.lower()
+
+
+def test_validate_servicenow_integration_succeeds(monkeypatch) -> None:
+    class _FakeServiceNowClient:
+        def __init__(self, _config) -> None:
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            pass
+
+        def list_incidents(self, **_kwargs):
+            return {"success": True}
+
+    monkeypatch.setattr(
+        "app.cli.wizard.integration_validators.client_validators.ServiceNowClient",
+        _FakeServiceNowClient,
+    )
+
+    result = validate_servicenow_integration(
+        instance_url="https://dev12345.service-now.com",
+        api_token="token",
+    )
+
+    assert result.ok is True
+    assert "credentials accepted" in result.detail.lower()
 
 
 def test_validate_coralogix_integration_fails(monkeypatch) -> None:
