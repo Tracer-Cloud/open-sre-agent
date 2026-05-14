@@ -68,10 +68,13 @@ class DatadogClient:
         query: str,
         time_range_minutes: int = 60,
         limit: int = 50,
+        *,
+        start: datetime | None = None,
+        end: datetime | None = None,
     ) -> dict[str, Any]:
         """Search Datadog logs using the Log Search API (v2)."""
-        now = datetime.now(UTC)
-        from_ts = now - timedelta(minutes=time_range_minutes)
+        now = end or datetime.now(UTC)
+        from_ts = start or (now - timedelta(minutes=time_range_minutes))
 
         payload = {
             "filter": {

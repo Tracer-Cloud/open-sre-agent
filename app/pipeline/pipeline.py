@@ -58,8 +58,16 @@ def _build_correlation_config(state: dict[str, Any]) -> dict[str, Any] | None:
     def log_query(query: str, window: dict[str, Any]) -> dict[str, Any]:
         start = str(window.get("from") or "")
         end = str(window.get("to") or "")
+        start_dt = _parse_iso8601(start) if start else None
+        end_dt = _parse_iso8601(end) if end else None
         minutes = _window_minutes(start, end)
-        result = client.search_logs(query, time_range_minutes=minutes, limit=100)
+        result = client.search_logs(
+            query,
+            time_range_minutes=minutes,
+            limit=100,
+            start=start_dt,
+            end=end_dt,
+        )
         logs = result.get("logs") if isinstance(result, dict) else []
         if not isinstance(logs, list):
             logs = []
