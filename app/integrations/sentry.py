@@ -164,10 +164,10 @@ def _normalize_issue_search_query(query: str) -> str:
     if not stripped or _is_quoted_search_query(stripped):
         return stripped
 
-    free_text, filters = _split_structured_query_filters(stripped)
-    if filters and not free_text:
+    free_text, leading_filters, trailing_filters = _split_structured_query_filters(stripped)
+    if (leading_filters or trailing_filters) and not free_text:
         return stripped
-    if filters:
+    if leading_filters or trailing_filters:
         normalized_free_text = (
             _quote_search_phrase(free_text)
             if not _is_quoted_search_query(free_text)
@@ -178,7 +178,7 @@ def _normalize_issue_search_query(query: str) -> str:
             )
             else free_text
         )
-        return " ".join([normalized_free_text, *filters])
+        return " ".join([*leading_filters, normalized_free_text, *trailing_filters])
     if _starts_like_exception_signature(stripped) or _looks_like_exception_signature(stripped):
         return _quote_search_phrase(stripped)
     return stripped
@@ -196,20 +196,32 @@ def _is_bare_exception_name(query: str) -> bool:
     return bool(_BARE_EXCEPTION_QUERY_NAME_RE.fullmatch(query))
 
 
-def _split_structured_query_filters(query: str) -> tuple[str, list[str]]:
+def _split_structured_query_filters(query: str) -> tuple[str, list[str], list[str]]:
     matches = [
         match
         for match in _STRUCTURED_QUERY_TOKEN_RE.finditer(query)
         if match.group("key") in _STRUCTURED_QUERY_KEYS
     ]
     if not matches:
-        return query, []
+        return query, [], []
+
+    leading_filters: list[str] = []
+    prefix_end = 0
+    match_index = 0
+
+    while match_index < len(matches):
+        match = matches[match_index]
+        if query[prefix_end : match.start()].strip():
+            break
+        leading_filters.append(match.group(0))
+        prefix_end = match.end()
+        match_index += 1
 
     trailing_filters: list[str] = []
     suffix_start = len(query)
     match_index = len(matches) - 1
 
-    while match_index >= 0:
+    while match_index >= len(leading_filters):
         match = matches[match_index]
         if query[match.end() : suffix_start].strip():
             break
@@ -217,18 +229,18 @@ def _split_structured_query_filters(query: str) -> tuple[str, list[str]]:
         suffix_start = match.start()
         match_index -= 1
 
-    if not trailing_filters:
-        return query, []
+    if not leading_filters and not trailing_filters:
+        return query, [], []
 
-    free_text = query[:suffix_start].strip()
+    free_text = query[prefix_end:suffix_start].strip()
     if not free_text:
-        return "", trailing_filters
+        return "", leading_filters, trailing_filters
 
     bare_exception_prefix = _BARE_EXCEPTION_QUERY_PREFIX_RE.fullmatch(free_text)
     if bare_exception_prefix:
         free_text = bare_exception_prefix.group("name")
 
-    return free_text, trailing_filters
+    return free_text, leading_filters, trailing_filters
 
 
 def _looks_like_exception_signature(query: str) -> bool:

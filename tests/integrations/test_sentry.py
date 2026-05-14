@@ -153,3 +153,27 @@ def test_list_sentry_issues_drops_bare_exception_separator_before_filters(
 
     expected_query = '"TypeError" is:unresolved level:error'
     assert ("query", expected_query) in captured["params"]
+
+
+def test_list_sentry_issues_preserves_filters_before_exception_text(
+    monkeypatch: Any,
+) -> None:
+    captured = _capture_sentry_issue_params(monkeypatch)
+
+    query = "is:unresolved level:error TypeError: cannot read property"
+    list_sentry_issues(config=_config(), query=query, limit=10)
+
+    expected_query = 'is:unresolved level:error "TypeError: cannot read property"'
+    assert ("query", expected_query) in captured["params"]
+
+
+def test_list_sentry_issues_preserves_filters_around_exception_text(
+    monkeypatch: Any,
+) -> None:
+    captured = _capture_sentry_issue_params(monkeypatch)
+
+    query = "is:unresolved panic: nil pointer level:fatal"
+    list_sentry_issues(config=_config(), query=query, limit=10)
+
+    expected_query = 'is:unresolved "panic: nil pointer" level:fatal'
+    assert ("query", expected_query) in captured["params"]
