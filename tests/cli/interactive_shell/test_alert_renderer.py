@@ -94,6 +94,20 @@ class TestFormatIncomingAlert:
         # Just verify the alert object was created without error
         assert renderable is not None
 
+    def test_escapes_severity_markup(self) -> None:
+        alert = IncomingAlert(
+            text="payload",
+            severity="critical] [red]pwned",
+            source="webhook",
+            received_at=datetime.now(UTC),
+        )
+        console = Console(record=True)
+        console.print(format_incoming_alert(alert))
+        output = console.export_text()
+
+        assert "[critical] [red]pwned]" in output
+        assert "pwned]" in output
+
 
 class TestDrainAndRenderIncoming:
     """Test drain_and_render_incoming functionality."""
@@ -210,27 +224,31 @@ class TestReplSessionIncomingAlerts:
 
     def test_record_incoming_alert_kind(self) -> None:
         session = ReplSession()
+        alert = IncomingAlert(text="test alert")
 
-        session.record("incoming_alert", "test alert")
+        session.record_incoming_alert(alert)
 
         assert len(session.history) == 1
         assert session.history[0]["type"] == "incoming_alert"
         assert session.history[0]["text"] == "test alert"
+        assert session.history[0]["ok"] is True
         assert len(session.incoming_alerts) == 1
+        assert session.incoming_alerts[0].text == "test alert"
 
-    def test_record_incoming_alert_with_ok_false(self) -> None:
+    def test_record_incoming_alert_always_ok(self) -> None:
         session = ReplSession()
+        alert = IncomingAlert(text="test alert")
 
-        session.record("incoming_alert", "test alert", ok=False)
+        session.record_incoming_alert(alert)
 
-        assert session.history[0]["ok"] is False
+        assert session.history[0]["ok"] is True
 
     def test_incoming_alerts_fifo_list(self) -> None:
         session = ReplSession()
 
-        session.record("incoming_alert", "first")
-        session.record("incoming_alert", "second")
-        session.record("incoming_alert", "third")
+        session.record_incoming_alert(IncomingAlert(text="first"))
+        session.record_incoming_alert(IncomingAlert(text="second"))
+        session.record_incoming_alert(IncomingAlert(text="third"))
 
         assert len(session.incoming_alerts) == 3
         assert session.incoming_alerts[0].text == "first"

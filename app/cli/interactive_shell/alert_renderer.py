@@ -58,7 +58,7 @@ def format_incoming_alert(alert: IncomingAlert) -> RenderableType:
     if alert.source:
         header_parts.append(f"from {escape(alert.source)}")
     if alert.severity:
-        header_parts.append(f"[{escape(alert.severity)}]")
+        header_parts.append(escape(f"[{alert.severity}]"))
 
     header = " | ".join(header_parts)
 
