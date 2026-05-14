@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 from app.guardrails.rules import GuardrailAction, load_rules
@@ -24,6 +25,15 @@ class TestLoadRules:
 
     def test_returns_empty_when_rules_key_missing(self, tmp_path: Path) -> None:
         path = _write_config(tmp_path, {"version": 1})
+        assert load_rules(path) == []
+
+    @pytest.mark.parametrize("rules_value", [1, "secret", {"name": "bad"}])
+    def test_returns_empty_when_rules_section_is_not_a_list(
+        self,
+        tmp_path: Path,
+        rules_value: object,
+    ) -> None:
+        path = _write_config(tmp_path, {"rules": rules_value})
         assert load_rules(path) == []
 
     def test_parses_pattern_rule(self, tmp_path: Path) -> None:
