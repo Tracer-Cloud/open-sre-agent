@@ -155,7 +155,7 @@ class TestProviderSelection:
             assert client is not None
             assert isinstance(client, ec.VoyageEmbeddingsClient)
             assert client.model_name == "voyage-3-lite"
-            assert client.dim == 1024
+            assert client.dim == 512
 
     def test_opensre_embeddings_provider_overrides_llm_provider(self) -> None:
         """OPENSRE_EMBEDDINGS_PROVIDER takes precedence over LLM_PROVIDER."""
