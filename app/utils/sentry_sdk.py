@@ -225,3 +225,58 @@ def capture_exception(exc: BaseException) -> None:
         import sentry_sdk
 
         sentry_sdk.capture_exception(exc)
+
+
+def capture_boto3_exception(
+    exc: BaseException,
+    *,
+    service: str,
+    operation: str,
+    extras: dict[str, Any] | None = None,
+) -> None:
+    """Capture boto3/botocore exceptions with AWS-specific context.
+
+    Extracts HTTP status codes from ClientError responses and tags events
+    with service and operation context for better grouping in Sentry.
+
+    Args:
+        exc: The exception to capture (ClientError, NoCredentialsError, etc.)
+        service: AWS service name (e.g., 'lambda', 'ec2', 's3')
+        operation: Operation name (e.g., 'get_function', 'describe_instances')
+        extras: Additional context to attach to the event
+    """
+    if _is_sentry_disabled():
+        return
+
+    with suppress(Exception):
+        import sentry_sdk
+        from botocore.exceptions import ClientError
+
+        # Set AWS-specific tags
+        sentry_sdk.set_tag("aws_service", service)
+        sentry_sdk.set_tag("aws_operation", operation)
+        sentry_sdk.set_tag("surface", "aws_sdk")
+
+        # Extract status code and error code from ClientError
+        if isinstance(exc, ClientError):
+            response = getattr(exc, "response", {})
+            if isinstance(response, dict):
+                metadata = response.get("ResponseMetadata", {})
+                if isinstance(metadata, dict):
+                    status_code = metadata.get("HTTPStatusCode")
+                    if status_code:
+                        sentry_sdk.set_tag("http_status_code", status_code)
+
+                error_info = response.get("Error", {})
+                if isinstance(error_info, dict):
+                    error_code = error_info.get("Code")
+                    if error_code:
+                        sentry_sdk.set_tag("aws_error_code", error_code)
+
+        # Attach extras
+        if extras:
+            for key, value in extras.items():
+                sentry_sdk.set_context(key, {"value": value})
+
+        sentry_sdk.capture_exception(exc)
+        sentry_sdk.capture_exception(exc)

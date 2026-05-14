@@ -10,6 +10,8 @@ from typing import Any
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError, ParamValidationError
 
+from app.utils.sentry_sdk import capture_boto3_exception
+
 # Read-only operation patterns (allowlist)
 ALLOWED_OPERATION_PATTERNS = [
     r"^describe_.*",
@@ -218,6 +220,12 @@ def execute_aws_sdk_call(
         }
 
     except NoCredentialsError as e:
+        capture_boto3_exception(
+            e,
+            service=service_name,
+            operation=operation_name,
+            extras={"error_type": "credentials"},
+        )
         return {
             "success": False,
             "error": f"AWS credentials not configured: {str(e)}",
@@ -228,6 +236,12 @@ def execute_aws_sdk_call(
         }
 
     except ParamValidationError as e:
+        capture_boto3_exception(
+            e,
+            service=service_name,
+            operation=operation_name,
+            extras={"error_type": "validation", "parameters": str(parameters)},
+        )
         return {
             "success": False,
             "error": f"Invalid parameters: {str(e)}",
@@ -240,6 +254,16 @@ def execute_aws_sdk_call(
     except ClientError as e:
         error_code = e.response.get("Error", {}).get("Code", "Unknown")
         error_message = e.response.get("Error", {}).get("Message", str(e))
+
+        capture_boto3_exception(
+            e,
+            service=service_name,
+            operation=operation_name,
+            extras={
+                "error_type": "client_error",
+                "error_code": error_code,
+            },
+        )
 
         return {
             "success": False,
@@ -255,6 +279,12 @@ def execute_aws_sdk_call(
         }
 
     except Exception as e:
+        capture_boto3_exception(
+            e,
+            service=service_name,
+            operation=operation_name,
+            extras={"error_type": "unexpected"},
+        )
         return {
             "success": False,
             "error": f"Unexpected error: {str(e)}",

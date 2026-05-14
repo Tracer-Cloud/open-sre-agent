@@ -8,6 +8,7 @@ from typing import Any
 from zipfile import ZipFile
 
 from app.services.env import make_boto3_client, require_aws_credentials
+from app.utils.sentry_sdk import capture_boto3_exception
 
 try:
     from botocore.exceptions import ClientError
@@ -69,6 +70,12 @@ def get_function_configuration(function_name: str) -> dict[str, Any]:
             },
         }
     except ClientError as e:
+        capture_boto3_exception(
+            e,
+            service="lambda",
+            operation="get_function_configuration",
+            extras={"function_name": function_name},
+        )
         return {"success": False, "error": str(e)}
 
 
@@ -145,10 +152,22 @@ def get_function_code(
                     result["data"]["files"] = files
                     result["data"]["file_count"] = len(files)
                 except Exception as e:
+                    capture_boto3_exception(
+                        e,
+                        service="lambda",
+                        operation="get_function_code_extract",
+                        extras={"function_name": function_name},
+                    )
                     result["data"]["extract_error"] = str(e)
 
         return result
     except ClientError as e:
+        capture_boto3_exception(
+            e,
+            service="lambda",
+            operation="get_function_code",
+            extras={"function_name": function_name},
+        )
         return {"success": False, "error": str(e)}
 
 
@@ -244,6 +263,16 @@ def get_recent_invocations(
         }
     except ClientError as e:
         error_code = e.response.get("Error", {}).get("Code", "")
+        capture_boto3_exception(
+            e,
+            service="lambda",
+            operation="get_recent_invocations",
+            extras={
+                "function_name": function_name,
+                "log_group": log_group_name,
+                "error_code": error_code,
+            },
+        )
         if error_code == "ResourceNotFoundException":
             return {
                 "success": False,
