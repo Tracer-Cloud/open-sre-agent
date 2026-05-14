@@ -12,12 +12,52 @@ from http.client import HTTPConnection
 import pytest
 
 from app.cli.interactive_shell.alert_inbox import (
+    _MAX_BODY_BYTES,
     AlertInbox,
     AlertListenerHandle,
     IncomingAlert,
     start_alert_listener,
 )
 from app.cli.support.errors import OpenSREError
+
+# A Content-Length value guaranteed to trip the listener's pre-auth
+# body cap. Computed from the cap itself so the constant can't drift
+# out of sync with the production limit.
+_OVERSIZED_CONTENT_LENGTH = _MAX_BODY_BYTES + 1
+
+# Token used by the auth-related tests. Single literal so a future
+# rename happens in one place.
+_TEST_BEARER_TOKEN = "sekret"
+
+
+def _post_advertising_content_length(
+    host: str,
+    port: int,
+    *,
+    advertised_length: int,
+    token: str | None = None,
+) -> tuple[int, dict[str, object]]:
+    """POST /alerts that advertises ``advertised_length`` in
+    ``Content-Length`` but never sends the body.
+
+    Used to verify the listener refuses oversized requests *based on
+    the header alone* — if it tried to read the body first, this would
+    hang and the client's timeout would fire instead of returning a
+    413.
+    """
+    conn = HTTPConnection(host, port, timeout=5)
+    try:
+        conn.putrequest("POST", "/alerts")
+        conn.putheader("Content-Type", "application/json")
+        if token is not None:
+            conn.putheader("Authorization", f"Bearer {token}")
+        conn.putheader("Content-Length", str(advertised_length))
+        conn.endheaders()
+        resp = conn.getresponse()
+        raw = resp.read()
+        return resp.status, json.loads(raw)
+    finally:
+        conn.close()
 
 
 class TestIncomingAlert:
@@ -163,6 +203,46 @@ class TestHttpListener:
     def test_missing_text_returns_400(self, listener: AlertListenerHandle) -> None:
         status, _ = _post("127.0.0.1", listener._bound_port, {})
         assert status == 400
+
+    def test_oversized_content_length_returns_413_without_reading_body(
+        self, listener: AlertListenerHandle, inbox: AlertInbox
+    ) -> None:
+        """Pre-auth body-drain must be capped or a fake Content-Length
+        stalls the single-threaded handler. The server should reject
+        the request based on the header alone, without waiting for the
+        body that the malicious client never sends.
+        """
+        status, body = _post_advertising_content_length(
+            "127.0.0.1",
+            listener._bound_port,
+            advertised_length=_OVERSIZED_CONTENT_LENGTH,
+        )
+
+        assert status == 413
+        assert body == {"error": "payload too large"}
+        # Inbox stays empty — nothing was queued.
+        assert inbox.pop_nowait() is None
+        # And the listener is still healthy — handler thread isn't stalled.
+        healthz_status, _ = _get("127.0.0.1", listener._bound_port, "/healthz")
+        assert healthz_status == 200
+
+    def test_oversized_content_length_returns_413_even_with_valid_token(self) -> None:
+        """The cap runs *before* auth, so even a valid token can't
+        bypass it. Otherwise an authenticated client could still DoS
+        the listener with a fake giant Content-Length.
+        """
+        inbox = AlertInbox()
+        handle = start_alert_listener(inbox, host="127.0.0.1", port=0, token=_TEST_BEARER_TOKEN)
+        try:
+            status, _ = _post_advertising_content_length(
+                "127.0.0.1",
+                handle._bound_port,
+                advertised_length=_OVERSIZED_CONTENT_LENGTH,
+                token=_TEST_BEARER_TOKEN,
+            )
+            assert status == 413
+        finally:
+            handle.stop()
 
     def test_auth(self) -> None:
         inbox = AlertInbox()

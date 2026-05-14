@@ -22,6 +22,11 @@ from app.strict_config import StrictConfigModel
 log = logging.getLogger(__name__)
 
 _DEFAULT_MAX_INBOX = 256
+# Cap on POST body size we'll accept from any caller (authed or not).
+# Bounds the pre-auth body drain that prevents the macOS RST race, so
+# a fake ``Content-Length: 1 GB`` can't stall the single-threaded
+# handler thread before token validation runs.
+_MAX_BODY_BYTES = 1 * 1024 * 1024  # 1 MiB
 
 
 def _wait_until_http_ready(host: str, port: int, *, timeout_s: float = 10.0) -> None:
@@ -182,8 +187,14 @@ def start_alert_listener(
                     return
                 # Read the body first. If we reply and close the
                 # connection while the client is still sending, the
-                # OS may drop our response before it arrives.
+                # OS may drop our response before it arrives. Cap the
+                # read *before* the auth check so an unauthenticated
+                # caller can't stall this single-threaded handler with
+                # a giant Content-Length.
                 length = int(self.headers.get("Content-Length", 0))
+                if length > _MAX_BODY_BYTES:
+                    self._respond(413, {"error": "payload too large"})
+                    return
                 raw = self.rfile.read(length)
                 if not self._check_auth():
                     return
