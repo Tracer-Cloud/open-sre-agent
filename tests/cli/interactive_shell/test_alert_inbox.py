@@ -34,16 +34,21 @@ def _post_advertising_content_length(
     host: str,
     port: int,
     *,
-    advertised_length: int,
+    advertised_length: int | str,
     token: str | None = None,
 ) -> tuple[int, dict[str, object]]:
     """POST /alerts that advertises ``advertised_length`` in
     ``Content-Length`` but never sends the body.
 
-    Used to verify the listener refuses oversized requests *based on
-    the header alone* — if it tried to read the body first, this would
-    hang and the client's timeout would fire instead of returning a
-    413.
+    ``advertised_length`` accepts ints (the common case: pick a value
+    around the cap) and strings (test the parser path with values that
+    aren't valid integers at all, e.g. ``"foo"``). The header is
+    forwarded verbatim via ``str()``.
+
+    Used to verify the listener refuses out-of-range or malformed
+    requests *based on the header alone* — if it tried to read the
+    body first, the test would hang and the client's timeout would
+    fire instead of returning a clean 4xx.
     """
     conn = HTTPConnection(host, port, timeout=5)
     try:
@@ -243,6 +248,21 @@ class TestHttpListener:
             assert status == 413
         finally:
             handle.stop()
+
+    def test_non_numeric_content_length_returns_400(
+        self, listener: AlertListenerHandle, inbox: AlertInbox
+    ) -> None:
+        """Non-numeric ``Content-Length`` must produce a clean 400,
+        not an unhandled ValueError that drops the connection."""
+        status, body = _post_advertising_content_length(
+            "127.0.0.1",
+            listener._bound_port,
+            advertised_length="not-a-number",
+        )
+
+        assert status == 400
+        assert body == {"error": "invalid Content-Length"}
+        assert inbox.pop_nowait() is None
 
     def test_negative_content_length_returns_400_without_blocking(
         self, listener: AlertListenerHandle, inbox: AlertInbox

@@ -193,21 +193,15 @@ def start_alert_listener(
                     self.send_response(404)
                     self.end_headers()
                     return
-                # Read the body first. If we reply and close the
-                # connection while the client is still sending, the
-                # OS may drop our response before it arrives. Validate
-                # ``Content-Length`` *before* the auth check so an
-                # unauthenticated caller can't stall this single-
-                # threaded handler. Reject in two separate cases so
-                # the response status matches HTTP semantics:
-                #   - Negative values → 400. ``rfile.read(-1)`` blocks
-                #     until EOF, letting an attacker hang the handler
-                #     by not closing the connection. The header itself
-                #     is malformed; 400 names that, not 413.
-                #   - Values over ``_MAX_BODY_BYTES`` → 413. Bound the
-                #     bytes a single request can pull (see the
-                #     constant for the sizing rationale).
-                length = int(self.headers.get("Content-Length", 0))
+                # Read the body before the auth check (macOS RST race),
+                # but validate Content-Length first — otherwise an
+                # unauthenticated caller can stall this single-threaded
+                # handler with a malformed or oversized header.
+                try:
+                    length = int(self.headers.get("Content-Length", 0))
+                except ValueError:
+                    self._respond(400, {"error": "invalid Content-Length"})
+                    return
                 if length < 0:
                     self._respond(400, {"error": "invalid Content-Length"})
                     return
