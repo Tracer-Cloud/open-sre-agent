@@ -142,8 +142,13 @@ class CursorAdapter:
             logged_in: bool | None = None
             if _has_cursor_api_key():
                 logged_in = True
+                reason = (
+                    "timed out"
+                    if isinstance(exc, subprocess.TimeoutExpired)
+                    else f"failed ({exc})"
+                )
                 detail = (
-                    "Cursor Agent auth probe timed out; "
+                    f"Cursor Agent auth probe {reason}; "
                     "headless auth via CURSOR_API_KEY is configured."
                 )
             return CLIProbe(
