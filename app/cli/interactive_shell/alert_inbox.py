@@ -180,10 +180,13 @@ def start_alert_listener(
                     self.send_response(404)
                     self.end_headers()
                     return
-                if not self._check_auth():
-                    return
+                # Read the body first. If we reply and close the
+                # connection while the client is still sending, the
+                # OS may drop our response before it arrives.
                 length = int(self.headers.get("Content-Length", 0))
                 raw = self.rfile.read(length)
+                if not self._check_auth():
+                    return
                 try:
                     data = json.loads(raw)
                 except json.JSONDecodeError:

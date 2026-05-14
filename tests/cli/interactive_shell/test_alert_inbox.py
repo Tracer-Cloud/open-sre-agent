@@ -213,3 +213,18 @@ class TestHttpListener:
     def test_bind_non_loopback_without_token_raises(self) -> None:
         with pytest.raises(OpenSREError, match="non-loopback"):
             start_alert_listener(AlertInbox(), host="0.0.0.0", port=0, token=None)
+
+    def test_unauthorized_post_with_large_body_returns_clean_401(self) -> None:
+        # Regression: handler must drain the request body before
+        # returning 401, otherwise close-with-unread-data triggers
+        # RST (RFC 1122) and can clobber the response.
+        inbox = AlertInbox()
+        handle = start_alert_listener(inbox, host="127.0.0.1", port=0, token="sekret")
+        try:
+            big_body = {"text": "x" * 64_000}
+            status, body = _post("127.0.0.1", handle._bound_port, big_body, token="wrong")
+            assert status == 401
+            assert body["error"] == "unauthorized"
+            assert inbox.qsize == 0
+        finally:
+            handle.stop()
