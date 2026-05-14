@@ -27,7 +27,7 @@ class TestLoadRules:
         path = _write_config(tmp_path, {"version": 1})
         assert load_rules(path) == []
 
-    @pytest.mark.parametrize("rules_value", [1, "secret", {"name": "bad"}])
+    @pytest.mark.parametrize("rules_value", [1, "secret", {"name": "bad"}, None])
     def test_returns_empty_when_rules_section_is_not_a_list(
         self,
         tmp_path: Path,
