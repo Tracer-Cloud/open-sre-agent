@@ -58,7 +58,7 @@ def test_runbook_suite_scenario(
     alert_name = common_labels.get("alertname", "")
 
     raw = (alert_name + " " + problem_md).lower()
-    keywords = [w for w in raw.split() if len(w) > 3]
+    keywords = [w for w in raw.split() if len(w) >= 3]
     matched = retrieve_matching_runbook(
         runbooks=load_all(),
         keywords=keywords,
