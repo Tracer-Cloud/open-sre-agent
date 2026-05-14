@@ -23,9 +23,7 @@ _BARE_EXCEPTION_QUERY_PREFIX_RE = re.compile(
 _BARE_EXCEPTION_QUERY_NAME_RE = re.compile(
     r"^(?:[A-Z][A-Za-z0-9_.]*(?:Error|Exception|Interrupt|Warning)?|panic|error|runtime error|fatal error)$"
 )
-_STRUCTURED_QUERY_TOKEN_RE = re.compile(
-    r"(?<!\S)(?P<key>[A-Za-z][A-Za-z0-9_.-]*):(?P<value>\"(?:\\.|[^\"])*\"|'(?:\\.|[^'])*'|\S+)"
-)
+_STRUCTURED_QUERY_KEY_RE = re.compile(r"(?<!\S)(?P<key>[A-Za-z][A-Za-z0-9_.-]*):")
 _STRUCTURED_QUERY_KEYS = frozenset(
     {
         "age",
@@ -197,37 +195,33 @@ def _is_bare_exception_name(query: str) -> bool:
 
 
 def _split_structured_query_filters(query: str) -> tuple[str, list[str], list[str]]:
-    matches = [
-        match
-        for match in _STRUCTURED_QUERY_TOKEN_RE.finditer(query)
-        if match.group("key") in _STRUCTURED_QUERY_KEYS
-    ]
-    if not matches:
+    tokens = _structured_query_tokens(query)
+    if not tokens:
         return query, [], []
 
     leading_filters: list[str] = []
     prefix_end = 0
-    match_index = 0
+    token_index = 0
 
-    while match_index < len(matches):
-        match = matches[match_index]
-        if query[prefix_end : match.start()].strip():
+    while token_index < len(tokens):
+        start, end, text = tokens[token_index]
+        if query[prefix_end:start].strip():
             break
-        leading_filters.append(match.group(0))
-        prefix_end = match.end()
-        match_index += 1
+        leading_filters.append(text)
+        prefix_end = end
+        token_index += 1
 
     trailing_filters: list[str] = []
     suffix_start = len(query)
-    match_index = len(matches) - 1
+    token_index = len(tokens) - 1
 
-    while match_index >= len(leading_filters):
-        match = matches[match_index]
-        if query[match.end() : suffix_start].strip():
+    while token_index >= len(leading_filters):
+        start, end, text = tokens[token_index]
+        if query[end:suffix_start].strip():
             break
-        trailing_filters.insert(0, match.group(0))
-        suffix_start = match.start()
-        match_index -= 1
+        trailing_filters.insert(0, text)
+        suffix_start = start
+        token_index -= 1
 
     if not leading_filters and not trailing_filters:
         return query, [], []
@@ -241,6 +235,40 @@ def _split_structured_query_filters(query: str) -> tuple[str, list[str], list[st
         free_text = bare_exception_prefix.group("name")
 
     return free_text, leading_filters, trailing_filters
+
+
+def _structured_query_tokens(query: str) -> list[tuple[int, int, str]]:
+    tokens: list[tuple[int, int, str]] = []
+    for match in _STRUCTURED_QUERY_KEY_RE.finditer(query):
+        if match.group("key") not in _STRUCTURED_QUERY_KEYS:
+            continue
+        value_start = match.end()
+        if value_start >= len(query) or query[value_start].isspace():
+            continue
+        end = _structured_query_value_end(query, value_start)
+        tokens.append((match.start(), end, query[match.start() : end]))
+    return tokens
+
+
+def _structured_query_value_end(query: str, value_start: int) -> int:
+    quote = query[value_start]
+    if quote in {'"', "'"}:
+        index = value_start + 1
+        escaped = False
+        while index < len(query):
+            char = query[index]
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == quote:
+                return index + 1
+            index += 1
+
+    index = value_start
+    while index < len(query) and not query[index].isspace():
+        index += 1
+    return index
 
 
 def _looks_like_exception_signature(query: str) -> bool:

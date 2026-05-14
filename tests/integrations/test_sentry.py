@@ -51,6 +51,17 @@ def test_list_sentry_issues_preserves_structured_queries(monkeypatch: Any) -> No
     assert ("query", query) in captured["params"]
 
 
+def test_list_sentry_issues_preserves_quoted_structured_filter_values(
+    monkeypatch: Any,
+) -> None:
+    captured = _capture_sentry_issue_params(monkeypatch)
+
+    query = 'is:unresolved title:"Cannot read properties" level:error'
+    list_sentry_issues(config=_config(), query=query, limit=10)
+
+    assert ("query", query) in captured["params"]
+
+
 def test_list_sentry_issues_escapes_quotes_in_exception_signatures(
     monkeypatch: Any,
 ) -> None:
