@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import httpx
+
 from app.services.prefect.client import PrefectClient, PrefectConfig
 
 
@@ -53,7 +55,27 @@ def test_get_task_runs_requires_some_scope() -> None:
 
     out = client.get_task_runs(flow_run_id=None, states=None, state_names=None, limit=10)
     assert out["success"] is False
-    assert "task_runs" in out
+    assert out["task_runs"] == []
+    assert out["total"] == 0
+
+
+def test_get_task_runs_http_error_includes_empty_task_runs() -> None:
+    cfg = PrefectConfig(api_url="http://localhost:4200/api")
+    client = PrefectClient(cfg)
+    mock_http = MagicMock()
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status.side_effect = httpx.HTTPStatusError(
+        "bad",
+        request=MagicMock(),
+        response=MagicMock(status_code=500, text="x"),
+    )
+    mock_http.post.return_value = mock_resp
+    client._client = mock_http
+
+    out = client.get_task_runs(flow_run_id="run-1", states=["FAILED"], state_names=None)
+    assert out["success"] is False
+    assert out["task_runs"] == []
+    assert out["total"] == 0
 
 
 def test_get_task_runs_posts_expected_filter() -> None:

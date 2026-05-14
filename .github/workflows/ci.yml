@@ -225,6 +225,8 @@ jobs:
       GCLOUD_HOSTED_LOGS_ID: ${{ secrets.GCLOUD_HOSTED_LOGS_ID }}
       GCLOUD_HOSTED_LOGS_URL: ${{ secrets.GCLOUD_HOSTED_LOGS_URL }}
       GCLOUD_RW_API_KEY: ${{ secrets.GCLOUD_RW_API_KEY }}
+      # Same OTLP + UTF-8 env as job `test` so investigation paths that touch
+      # Grafana / telemetry behave consistently in live E2E (does not replace log review).
       GCLOUD_OTLP_ENDPOINT: ${{ secrets.GCLOUD_OTLP_ENDPOINT }}
       GCLOUD_OTLP_AUTH_HEADER: ${{ secrets.GCLOUD_OTLP_AUTH_HEADER }}
       PYTHONUTF8: "1"

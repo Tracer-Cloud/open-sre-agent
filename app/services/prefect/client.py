@@ -180,6 +180,9 @@ class PrefectClient:
         """Fetch task runs, optionally scoped to a flow run, filtered by state type and/or name.
 
         At least one of ``flow_run_id``, ``states``, or ``state_names`` must be provided.
+
+        On failure, responses always include ``task_runs`` (empty list) and ``total`` (0) so
+        callers can read the same shape as success paths.
         """
         if not flow_run_id and not states and not state_names:
             return {
@@ -188,6 +191,7 @@ class PrefectClient:
                     "Provide flow_run_id and/or states and/or state_names to filter task runs."
                 ),
                 "task_runs": [],
+                "total": 0,
             }
 
         body: dict[str, Any] = {
@@ -229,10 +233,12 @@ class PrefectClient:
             return {
                 "success": False,
                 "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "task_runs": [],
+                "total": 0,
             }
         except Exception as e:
             logger.warning("[prefect] get_task_runs error type=%s detail=%s", type(e).__name__, e)
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": str(e), "task_runs": [], "total": 0}
 
     def get_flow_run_logs(self, flow_run_id: str, limit: int = 100) -> dict[str, Any]:
         """Fetch logs emitted during a specific flow run.

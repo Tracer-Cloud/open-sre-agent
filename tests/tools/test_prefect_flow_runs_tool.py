@@ -123,3 +123,66 @@ def test_run_includes_task_runs_when_flow_run_id_set() -> None:
         states=["COMPLETED"],
         state_names=["Completed"],
     )
+
+
+def test_run_task_states_inherit_from_flow_when_task_states_empty_or_none() -> None:
+    tool = PrefectFlowRunsTool()
+    mock_client = MagicMock()
+    mock_client.__enter__ = MagicMock(return_value=mock_client)
+    mock_client.__exit__ = MagicMock(return_value=False)
+    mock_client.get_flow_runs.return_value = {"success": True, "flow_runs": []}
+    mock_client.get_task_runs.return_value = {"success": True, "task_runs": []}
+    with patch("app.tools.PrefectFlowRunsTool.make_prefect_client", return_value=mock_client):
+        tool.run(
+            api_url="http://localhost:4200/api",
+            states=["RUNNING", "PENDING"],
+            task_run_flow_run_id="flow-9",
+        )
+    mock_client.get_task_runs.assert_called_once_with(
+        flow_run_id="flow-9",
+        limit=20,
+        states=["RUNNING", "PENDING"],
+        state_names=None,
+    )
+
+    mock_client.reset_mock()
+    mock_client.__enter__ = MagicMock(return_value=mock_client)
+    mock_client.__exit__ = MagicMock(return_value=False)
+    mock_client.get_flow_runs.return_value = {"success": True, "flow_runs": []}
+    mock_client.get_task_runs.return_value = {"success": True, "task_runs": []}
+    with patch("app.tools.PrefectFlowRunsTool.make_prefect_client", return_value=mock_client):
+        tool.run(
+            api_url="http://localhost:4200/api",
+            states=["RUNNING"],
+            task_run_flow_run_id="flow-9",
+            task_states=[],
+        )
+    mock_client.get_task_runs.assert_called_once_with(
+        flow_run_id="flow-9",
+        limit=20,
+        states=["RUNNING"],
+        state_names=None,
+    )
+
+
+def test_run_task_filters_inherit_when_task_states_only_whitespace() -> None:
+    tool = PrefectFlowRunsTool()
+    mock_client = MagicMock()
+    mock_client.__enter__ = MagicMock(return_value=mock_client)
+    mock_client.__exit__ = MagicMock(return_value=False)
+    mock_client.get_flow_runs.return_value = {"success": True, "flow_runs": []}
+    mock_client.get_task_runs.return_value = {"success": True, "task_runs": []}
+    with patch("app.tools.PrefectFlowRunsTool.make_prefect_client", return_value=mock_client):
+        tool.run(
+            api_url="http://localhost:4200/api",
+            states=["FAILED"],
+            state_names=["Failed"],
+            task_run_flow_run_id="flow-x",
+            task_states=["", "  "],
+        )
+    mock_client.get_task_runs.assert_called_once_with(
+        flow_run_id="flow-x",
+        limit=20,
+        states=["FAILED"],
+        state_names=["Failed"],
+    )

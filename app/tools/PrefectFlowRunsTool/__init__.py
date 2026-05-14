@@ -12,7 +12,15 @@ _FAILED_STATES = {"FAILED", "CRASHED", "CANCELLED", "CANCELLING"}
 
 
 class PrefectFlowRunsTool(BaseTool):
-    """Fetch and triage recent Prefect flow runs, surfacing failures for RCA."""
+    """Fetch and triage recent Prefect flow runs, surfacing failures for RCA.
+
+    When ``task_run_flow_run_id`` is set, task-run filters default to the **same** criteria as
+    the flow-run query unless overridden: if ``task_states`` is omitted, empty, or only
+    empty strings, task runs use ``states`` (the resolved flow state types, e.g. default
+    FAILED/CRASHED). If ``task_state_names`` is omitted or empty, task runs use
+    ``state_names`` when the flow query used state names; otherwise task state names are
+    unset for the task API call.
+    """
 
     name = "prefect_flow_runs"
     source = "prefect"
@@ -84,8 +92,9 @@ class PrefectFlowRunsTool(BaseTool):
                 "items": {"type": "string"},
                 "default": [],
                 "description": (
-                    "Task run state types for the task_run_flow_run_id query. "
-                    "Empty default means reuse states."
+                    "Task run state types when querying task_run_flow_run_id. "
+                    "Omitted, null, empty array, or all-empty strings: use the same state types "
+                    "as the flow-run query (the ``states`` argument after defaults)."
                 ),
             },
             "task_state_names": {
@@ -93,8 +102,9 @@ class PrefectFlowRunsTool(BaseTool):
                 "items": {"type": "string"},
                 "default": [],
                 "description": (
-                    "Task run state names for the task_run_flow_run_id query. "
-                    "Empty default means reuse state_names."
+                    "Task run state names when querying task_run_flow_run_id. "
+                    "Omitted, null, empty array, or all-empty strings: use flow ``state_names`` "
+                    "if any were set; otherwise do not filter task runs by state name."
                 ),
             },
             "limit": {
@@ -225,13 +235,24 @@ class PrefectFlowRunsTool(BaseTool):
 
             trimmed_task_flow_id = (task_run_flow_run_id or "").strip()
             if trimmed_task_flow_id:
-                if task_states is not None and len(task_states) > 0:
-                    resolved_task_states = list(task_states)
+                # Task filters inherit from the flow-run query unless task_* explicitly set.
+                non_empty_task_states = (
+                    [s for s in (task_states or []) if str(s).strip()]
+                    if task_states is not None
+                    else None
+                )
+                if non_empty_task_states:
+                    resolved_task_states = list(non_empty_task_states)
                 else:
                     resolved_task_states = effective_states
                 resolved_task_names: list[str] | None
-                if task_state_names is not None and len(task_state_names) > 0:
-                    resolved_task_names = list(task_state_names)
+                non_empty_task_names = (
+                    [n for n in (task_state_names or []) if str(n).strip()]
+                    if task_state_names is not None
+                    else None
+                )
+                if non_empty_task_names:
+                    resolved_task_names = list(non_empty_task_names)
                 else:
                     resolved_task_names = flow_state_names
                 tasks_result = client.get_task_runs(
