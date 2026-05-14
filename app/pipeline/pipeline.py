@@ -64,7 +64,9 @@ def _build_correlation_config(state: dict[str, Any]) -> dict[str, Any] | None:
         if not isinstance(logs, list):
             logs = []
         return {
-            "timestamps": [str(item.get("timestamp", "")) for item in logs if isinstance(item, dict)],
+            "timestamps": [
+                str(item.get("timestamp", "")) for item in logs if isinstance(item, dict)
+            ],
             "messages": [str(item.get("message", "")) for item in logs if isinstance(item, dict)],
         }
 
