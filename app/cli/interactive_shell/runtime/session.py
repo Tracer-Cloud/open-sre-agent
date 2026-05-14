@@ -61,7 +61,7 @@ class ReplSession:
     """Accumulated token counts: {"input": N, "output": N}. Populated when available."""
 
     cli_agent_messages: list[tuple[str, str]] = field(default_factory=list)
-    """LangGraph-free terminal assistant history: alternating (\"user\"|\"assistant\", text)."""
+    """Assistant conversation history: alternating (\"user\"|\"assistant\", text)."""
 
     prompt_history_backend: History | None = None
     """The live ``prompt_toolkit.History`` object backing the input prompt.

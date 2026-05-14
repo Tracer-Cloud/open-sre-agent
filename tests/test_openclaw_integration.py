@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
+from app.integrations.catalog import classify_integrations as _classify_integrations
 from app.integrations.openclaw import (
     OpenClawConfig,
     _tool_result_to_dict,
@@ -19,7 +20,6 @@ from app.integrations.openclaw import (
     openclaw_runtime_unavailable_reason,
     validate_openclaw_config,
 )
-from app.nodes.resolve_integrations.node import _classify_integrations
 from app.tools.OpenClawMCPTool import (
     call_openclaw_bridge_tool,
     search_openclaw_conversations,

@@ -122,7 +122,7 @@ set -euo pipefail
 
 echo "[check] Testing connection_verified injection in catalog classifier..."
 uv run python - <<'PYEOF'
-from app.nodes.resolve_integrations.node import _classify_integrations
+from app.integrations.catalog import classify_integrations as _classify_integrations
 
 record = {
     "id": "openclaw-test",

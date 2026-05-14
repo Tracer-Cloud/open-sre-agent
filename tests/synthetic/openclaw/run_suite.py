@@ -70,10 +70,7 @@ def run_scenario(scenario: OpenClawScenario) -> dict[str, Any]:
     try:
         with backend.patch():
             state = run_investigation(
-                alert_name=scenario.alert_name,
-                pipeline_name=scenario.pipeline_name,
-                severity=scenario.severity,
-                raw_alert=scenario.alert,
+                scenario.alert,
                 resolved_integrations=resolved,
             )
         elapsed = time.monotonic() - start

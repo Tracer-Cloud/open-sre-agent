@@ -1,23 +1,21 @@
-"""LangGraph investigation pipeline benchmark: baseline vs split tool LLM routing.
+"""Investigation pipeline benchmark: baseline vs split tool LLM routing.
 
-Uses the same compiled graph as production (`build_graph`), injects synthetic Grafana
-fixtures (no Tracer JWT required), and tracks token usage by instrumenting API creates.
+Uses the same ``run_investigation`` entry point as production, injects synthetic
+Grafana fixtures (no Tracer JWT required), and tracks token usage by
+instrumenting API creates.
 """
 
 from __future__ import annotations
 
-import copy
 import time
-import uuid
 from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.pipeline import graph as graph_pipeline
+from app.pipeline.runners import run_investigation
 from app.services import llm_client as llm_mod
 from app.state import AgentState, make_initial_state
-from app.types.config import NodeConfig
 from tests.benchmarks.toolcall_model_benchmark.pricing import estimate_run_cost_usd
 from tests.synthetic.rds_postgres.run_suite import _build_resolved_integrations
 from tests.synthetic.rds_postgres.scenario_loader import (
@@ -28,7 +26,7 @@ from tests.synthetic.rds_postgres.scenario_loader import (
 
 __all__ = [
     "LLMCallRecord",
-    "LangGraphBenchmarkRun",
+    "InvestigationBenchmarkRun",
     "TokenTotals",
     "configure_baseline_reasoning_for_tools",
     "configure_split_models",
@@ -36,7 +34,7 @@ __all__ = [
     "get_fixture_by_id",
     "make_investigation_state",
     "reset_llm_singletons",
-    "run_langgraph_investigation_bench",
+    "run_investigation_bench",
 ]
 
 
@@ -68,7 +66,7 @@ class LLMCallRecord:
 
 
 @dataclass
-class LangGraphBenchmarkRun:
+class InvestigationBenchmarkRun:
     label: str
     wall_seconds: float
     tokens: TokenTotals
@@ -78,7 +76,7 @@ class LangGraphBenchmarkRun:
 
 
 def reset_llm_singletons() -> None:
-    """Reset LangChain/Anthropic singletons; delegates to app llm_client."""
+    """Reset Anthropic/OpenAI singletons; delegates to app llm_client."""
     llm_mod.reset_llm_singletons()
 
 
@@ -90,7 +88,7 @@ def configure_split_models() -> None:
 
 
 def configure_baseline_reasoning_for_tools() -> None:
-    """Ablation: tool nodes use the same client instance as reasoning (heavy model for everything)."""
+    """Ablation: tool nodes use the same client instance as reasoning."""
     reset_llm_singletons()
     reasoning = llm_mod.get_llm_for_reasoning()
     llm_mod._llm_for_tools = reasoning
@@ -98,37 +96,7 @@ def configure_baseline_reasoning_for_tools() -> None:
 
 def make_investigation_state(fixture: ScenarioFixture) -> AgentState:
     alert = fixture.alert
-    labels = alert.get("commonLabels", {}) or {}
-    alert_name = str(alert.get("title") or labels.get("alertname") or fixture.scenario_id)
-    pipeline_name = str(labels.get("pipeline_name") or "rds-postgres-synthetic")
-    severity = str(labels.get("severity") or "critical")
-    return make_initial_state(
-        alert_name=alert_name,
-        pipeline_name=pipeline_name,
-        severity=severity,
-        raw_alert=alert,
-    )
-
-
-def _stub_resolve_for_fixture(fixture: ScenarioFixture) -> Callable[..., dict[str, Any]]:
-    """Return a resolve_integrations node replacement that only injects mock Grafana."""
-
-    def _stub(_state: AgentState) -> dict[str, Any]:
-        resolved = _build_resolved_integrations(fixture, use_mock_grafana=True)
-        assert resolved is not None
-        return {"resolved_integrations": resolved}
-
-    return _stub
-
-
-@contextmanager
-def _patch_resolve_integrations(stub: Callable[..., dict[str, Any]]) -> Any:
-    saved = graph_pipeline.node_resolve_integrations
-    graph_pipeline.node_resolve_integrations = stub  # type: ignore[assignment]
-    try:
-        yield
-    finally:
-        graph_pipeline.node_resolve_integrations = saved  # type: ignore[assignment]
+    return make_initial_state(raw_alert=alert)
 
 
 def _add_usage(
@@ -226,43 +194,36 @@ def _track_llm_usage(
         llm_mod.OpenAILLMClient.invoke = orig_openai  # type: ignore[assignment]
 
 
-def run_langgraph_investigation_bench(
+def run_investigation_bench(
     fixture: ScenarioFixture,
     *,
     label: str,
     configure_llm: Callable[[], None],
-) -> LangGraphBenchmarkRun:
-    """Run one full LangGraph investigation for a synthetic RDS scenario; return timing + tokens."""
-    stub = _stub_resolve_for_fixture(fixture)
+) -> InvestigationBenchmarkRun:
+    """Run one full investigation for a synthetic RDS scenario; return timing + tokens."""
+    resolved = _build_resolved_integrations(fixture, use_mock_grafana=True)
+    assert resolved is not None
+    alert = fixture.alert
     totals = TokenTotals()
     tokens_by_model: dict[str, TokenTotals] = {}
     llm_calls: list[LLMCallRecord] = []
-    initial = make_investigation_state(fixture)
-    run_id = uuid.uuid4().hex[:8]
-    config: NodeConfig = {
-        "configurable": {
-            "thread_id": f"bench-{run_id}",
-            "run_id": run_id,
-            "langgraph_auth_user": {},
-        }
-    }
 
     configure_llm()
 
-    with _patch_resolve_integrations(stub), _track_llm_usage(totals, tokens_by_model, llm_calls):
-        graph = graph_pipeline.build_graph()
-        state_in = copy.deepcopy(dict(initial))
+    with _track_llm_usage(totals, tokens_by_model, llm_calls):
         t0 = time.perf_counter()
-        out = graph.invoke(state_in, config)
+        out = run_investigation(alert, resolved_integrations=resolved)
         elapsed = time.perf_counter() - t0
 
-    return LangGraphBenchmarkRun(
+    out_dict = dict(out) if isinstance(out, dict) else {}
+
+    return InvestigationBenchmarkRun(
         label=label,
         wall_seconds=elapsed,
         tokens=totals,
         tokens_by_model=dict(tokens_by_model),
         llm_calls=list(llm_calls),
-        final_state=dict(out) if isinstance(out, dict) else {},
+        final_state=out_dict,
     )
 
 

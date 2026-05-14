@@ -6,8 +6,7 @@ scenario tests (which assert on the investigation output). Mirrors the
 ``trigger-real-failure → invoke-investigation → assert-RCA-quality``
 pattern used by :mod:`tests.e2e.upstream_lambda` and
 :mod:`tests.e2e.upstream_prefect_ecs_fargate`, including
-``create_alert`` for the alert payload and ``@traceable`` for LangSmith
-metadata.
+``create_alert`` for the alert payload and ``@traceable`` metadata.
 """
 
 from __future__ import annotations
@@ -16,9 +15,8 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from langsmith import traceable
-
 from app.cli.investigation import run_investigation_cli
+from app.utils.tracing import traceable
 from tests.e2e.openclaw.infrastructure_sdk.local import OpenClawHandle
 from tests.utils.alert_factory import create_alert
 
@@ -75,9 +73,9 @@ def run_openclaw_investigation(
 ) -> dict[str, Any]:
     """Build an alert from ``failure_context`` and run the OpenSRE pipeline.
 
-    Wraps :func:`run_investigation_cli` inside a ``@traceable`` block so
-    the run shows up in LangSmith with metadata that identifies it as
-    an OpenClaw e2e run (handle PIDs, failure mode, correlation id).
+    Wraps :func:`run_investigation_cli` inside a ``@traceable`` block with
+    metadata that identifies it as an OpenClaw e2e run (handle PIDs,
+    failure mode, correlation id).
 
     Returns the final agent state dict the scenario test then asserts
     on. Expected keys include ``root_cause``, ``problem_md``,
@@ -115,11 +113,6 @@ def run_openclaw_investigation(
         },
     )
     def _invoke() -> dict[str, Any]:
-        return run_investigation_cli(
-            alert_name=_ALERT_NAME,
-            pipeline_name=_PIPELINE_NAME,
-            severity="critical",
-            raw_alert=raw_alert,
-        )
+        return run_investigation_cli(raw_alert=raw_alert)
 
     return _invoke()

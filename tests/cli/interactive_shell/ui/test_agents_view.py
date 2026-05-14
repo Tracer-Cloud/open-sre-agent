@@ -9,6 +9,7 @@ this function.
 from __future__ import annotations
 
 import io
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,7 @@ from rich.console import Console
 from rich.table import Table
 
 from app.agents import config as config_mod
+from app.agents.probe import ProcessSnapshot
 from app.agents.registry import AgentRecord
 from app.cli.interactive_shell.ui import agents_view as agents_view_mod
 from app.cli.interactive_shell.ui.agents_view import render_agents_table
@@ -122,14 +124,42 @@ def test_row_contains_agent_name_and_pid() -> None:
 
 
 def test_metric_cells_are_placeholders_until_wired() -> None:
-    """``uptime``, ``cpu%``, ``tokens/min``, and ``$/hr`` render as
-    placeholders for now; ``status`` shows the row source."""
+    """``uptime``, ``cpu%``, ``tokens/min``, ``$/hr``, and ``status`` render as
+    placeholders when no sampler snapshot exists for the process."""
     table, _ = _render([AgentRecord(name="claude-code", pid=8421, command="claude")])
     # row_count == 1, so iterate directly to inspect the rendered cells
     assert table.row_count == 1
     rendered_cells = [list(col.cells)[0] for col in table.columns]
-    # cells[0] = agent, cells[1] = pid, then metric cells and row source.
-    assert rendered_cells[2:] == ["-", "-", "-", "-", "registered"]
+    # cells[0] = agent, cells[1] = pid, then metric cells and status.
+    assert rendered_cells[2:] == ["-", "-", "-", "-", "-"]
+
+
+def test_table_shows_live_probe_data_when_snapshot_exists(monkeypatch: pytest.MonkeyPatch) -> None:
+    fixed_now = datetime(2026, 5, 10, 14, 0, 0, tzinfo=UTC)
+    started_at = datetime(2026, 5, 10, 12, 0, 0, tzinfo=UTC)  # exactly 2h before
+
+    class FrozenDatetime(datetime):
+        @classmethod
+        def now(cls, _tz=None):  # type: ignore[override]
+            return fixed_now
+
+    monkeypatch.setattr(agents_view_mod, "datetime", FrozenDatetime)
+
+    fake_snapshot = ProcessSnapshot(
+        pid=8421,
+        cpu_percent=23.5,
+        rss_mb=128.0,
+        num_fds=42,
+        num_connections=3,
+        status="running",
+        started_at=started_at,
+    )
+    monkeypatch.setattr(agents_view_mod, "get_snapshot", lambda _pid: fake_snapshot)
+
+    table, _ = _render([AgentRecord(name="cursor", pid=8444, command="cursor")])
+
+    rendered_cells = [list(col.cells)[0] for col in table.columns]
+    assert rendered_cells[2:] == ["2h0m", "23.5", "-", "-", "running"]
 
 
 def test_multiple_records_are_each_rendered_in_order() -> None:

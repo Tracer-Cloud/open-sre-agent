@@ -1,4 +1,4 @@
-"""LangGraph-free assistant surfaces for the interactive terminal."""
+"""Assistant surfaces for the interactive terminal."""
 
 from __future__ import annotations
 

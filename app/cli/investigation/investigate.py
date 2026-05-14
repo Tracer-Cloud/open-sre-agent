@@ -9,10 +9,9 @@ import threading
 from collections.abc import Generator, Iterator
 from typing import TYPE_CHECKING, Any, NoReturn
 
-from langsmith import traceable
-
 from app.cli.support.cli_error_mapping import reraise_cli_runtime_error
 from app.config import LLMSettings
+from app.utils.tracing import traceable
 
 if TYPE_CHECKING:
     from app.remote.stream import StreamEvent
@@ -64,24 +63,18 @@ def _reraise_investigation_failure(exc: BaseException) -> NoReturn:
 
 
 def _call_run_investigation(
-    alert_name: str,
-    pipeline_name: str,
-    severity: str,
     *,
     raw_alert: dict[str, Any],
-    openclaw_context: dict[str, Any] | None = None,
     opensre_evaluate: bool = False,
+    investigation_metadata: tuple[str, str, str] | None = None,
 ) -> AgentState:
     """Import the heavy investigation runner only when execution starts."""
     from app.pipeline.runners import run_investigation
 
     return run_investigation(
-        alert_name,
-        pipeline_name,
-        severity,
-        raw_alert=raw_alert,
-        openclaw_context=openclaw_context,
+        raw_alert,
         opensre_evaluate=opensre_evaluate,
+        investigation_metadata=investigation_metadata,
     )
 
 
@@ -93,10 +86,29 @@ def resolve_investigation_context(
     severity: str | None,
 ) -> tuple[str, str, str]:
     """Resolve investigation metadata from CLI overrides and payload defaults."""
+    labels = raw_alert.get("commonLabels") or raw_alert.get("labels") or {}
+    labels = labels if isinstance(labels, dict) else {}
+    canonical = raw_alert.get("canonical_alert")
+    canonical = canonical if isinstance(canonical, dict) else {}
     return (
-        alert_name or raw_alert.get("alert_name") or "Incident",
-        pipeline_name or raw_alert.get("pipeline_name") or "events_fact",
-        severity or raw_alert.get("severity") or "warning",
+        alert_name
+        or raw_alert.get("alert_name")
+        or raw_alert.get("title")
+        or canonical.get("alert_name")
+        or labels.get("alertname")
+        or "Incident",
+        pipeline_name
+        or raw_alert.get("pipeline_name")
+        or canonical.get("pipeline_name")
+        or labels.get("pipeline_name")
+        or labels.get("pipeline")
+        or labels.get("service")
+        or "unknown",
+        severity
+        or raw_alert.get("severity")
+        or canonical.get("severity")
+        or labels.get("severity")
+        or "warning",
     )
 
 
@@ -104,28 +116,20 @@ def resolve_investigation_context(
 def run_investigation_cli(
     *,
     raw_alert: dict[str, Any],
-    alert_name: str | None = None,
-    pipeline_name: str | None = None,
-    severity: str | None = None,
-    openclaw_context: dict[str, Any] | None = None,
     opensre_evaluate: bool = False,
+    investigation_metadata: tuple[str, str, str] | None = None,
 ) -> dict[str, Any]:
-    """Run the investigation and return the CLI-facing JSON payload."""
+    """Run the investigation and return the CLI-facing JSON payload.
+
+    ``investigation_metadata`` is an optional ``(alert_name, pipeline_name, severity)``
+    tuple for initial state (e.g. HTTP request overrides) without mutating ``raw_alert``.
+    """
     _check_llm_settings()
-    resolved_alert_name, resolved_pipeline_name, resolved_severity = resolve_investigation_context(
-        raw_alert=raw_alert,
-        alert_name=alert_name,
-        pipeline_name=pipeline_name,
-        severity=severity,
-    )
     try:
         state = _call_run_investigation(
-            resolved_alert_name,
-            resolved_pipeline_name,
-            resolved_severity,
             raw_alert=raw_alert,
-            openclaw_context=openclaw_context,
             opensre_evaluate=opensre_evaluate,
+            investigation_metadata=investigation_metadata,
         )
     except Exception as exc:
         _reraise_investigation_failure(exc)
@@ -137,6 +141,8 @@ def run_investigation_cli(
         "is_noise": state.get("is_noise", False),
         "validity_score": state.get("validity_score", 0.0),
     }
+    if state.get("evidence_entries"):
+        out["tool_calls"] = state["evidence_entries"]
     if opensre_evaluate:
         ev = state.get("opensre_llm_eval")
         if isinstance(ev, dict) and ev:
@@ -160,20 +166,17 @@ def run_investigation_cli(
 def stream_investigation_cli(
     *,
     raw_alert: dict[str, Any],
-    alert_name: str | None = None,
-    pipeline_name: str | None = None,
-    severity: str | None = None,
 ) -> Generator[StreamEvent]:
-    """Stream investigation events locally via ``astream_events``.
+    """Stream investigation events locally via the async pipeline stream.
 
-    Bridges the async LangGraph streaming API into a synchronous iterator
+    Bridges the async streaming API into a synchronous iterator
     using a background thread + queue so events are yielded in real time
     (not batched).  The same ``StreamRenderer`` used for remote
     investigations can render local runs identically.
 
     On :exc:`KeyboardInterrupt` the background asyncio task is cancelled
     and the thread is joined so Ctrl+C terminates cleanly instead of
-    leaving an orphaned LangGraph run in flight.
+    leaving an orphaned investigation task in flight.
     """
     import queue
     import threading
@@ -181,12 +184,6 @@ def stream_investigation_cli(
     from app.pipeline.runners import astream_investigation
 
     _check_llm_settings()
-    resolved_alert_name, resolved_pipeline_name, resolved_severity = resolve_investigation_context(
-        raw_alert=raw_alert,
-        alert_name=alert_name,
-        pipeline_name=pipeline_name,
-        severity=severity,
-    )
 
     event_queue: queue.Queue[StreamEvent | BaseException | None] = queue.Queue()
     loop_ref: dict[str, asyncio.AbstractEventLoop] = {}
@@ -199,9 +196,6 @@ def stream_investigation_cli(
 
             async def _pump() -> None:
                 async for evt in astream_investigation(
-                    resolved_alert_name,
-                    resolved_pipeline_name,
-                    resolved_severity,
                     raw_alert=raw_alert,
                 ):
                     event_queue.put(evt)
@@ -255,22 +249,16 @@ def stream_investigation_cli(
 def run_investigation_cli_streaming(
     *,
     raw_alert: dict[str, Any],
-    alert_name: str | None = None,
-    pipeline_name: str | None = None,
-    severity: str | None = None,
 ) -> dict[str, Any]:
     """Run the investigation with real-time streaming UI and return the result.
 
-    Uses ``astream_events`` + ``StreamRenderer`` so the local CLI shows
+    Uses async pipeline streaming + ``StreamRenderer`` so the local CLI shows
     the same live tool-call and reasoning updates as a remote investigation.
     """
     from app.remote.renderer import StreamRenderer
 
     events = stream_investigation_cli(
         raw_alert=raw_alert,
-        alert_name=alert_name,
-        pipeline_name=pipeline_name,
-        severity=severity,
     )
     renderer = StreamRenderer(local=True)
     try:
@@ -285,6 +273,7 @@ def run_investigation_cli_streaming(
         "problem_md": final_state.get("problem_md", ""),
         "root_cause": final_state.get("root_cause", ""),
         "is_noise": final_state.get("is_noise", False),
+        "tool_calls": final_state.get("evidence_entries", []),
     }
 
 
@@ -304,13 +293,6 @@ def _run_session_alert_payload(
     if context_overrides:
         raw_alert.setdefault("annotations", {}).update(context_overrides)
 
-    resolved_alert_name, resolved_pipeline_name, resolved_severity = resolve_investigation_context(
-        raw_alert=raw_alert,
-        alert_name=None,
-        pipeline_name=None,
-        severity=None,
-    )
-
     event_queue: queue.Queue[StreamEvent | BaseException | None] = queue.Queue()
     loop_ref: dict[str, asyncio.AbstractEventLoop] = {}
     pump_task_ref: dict[str, asyncio.Task[None]] = {}
@@ -322,9 +304,6 @@ def _run_session_alert_payload(
 
             async def _pump() -> None:
                 async for evt in astream_investigation(
-                    resolved_alert_name,
-                    resolved_pipeline_name,
-                    resolved_severity,
                     raw_alert=raw_alert,
                 ):
                     event_queue.put(evt)
@@ -403,7 +382,7 @@ def run_investigation_for_session(
     follow-ups and context accumulation can reference it.
 
     KeyboardInterrupt in the main thread is forwarded to the background
-    asyncio loop as a task cancel, so Ctrl+C unwinds the in-flight LangGraph
+    asyncio loop as a task cancel, so Ctrl+C unwinds the in-flight remote investigation
     run cleanly instead of leaving it orphaned.
 
     When ``cancel_requested`` is set, the streaming loop polls it and cancels

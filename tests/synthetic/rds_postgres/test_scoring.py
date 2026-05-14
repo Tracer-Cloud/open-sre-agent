@@ -1,7 +1,7 @@
 """Tests for the pure scoring module.
 
 The key invariant verified here: importing scoring.py must NOT pull in any
-``app.*`` modules (and therefore not LangGraph or any heavy runtime deps).
+``app.*`` modules (and therefore not the full agent runtime or any heavy runtime deps).
 """
 
 from __future__ import annotations

@@ -32,10 +32,10 @@ class TestMetadata:
         assert "base_url" in schema["required"]
 
     def test_input_schema_declares_query_with_default(self) -> None:
-        # ``query`` is intentionally NOT in ``required``: detect_sources doesn't
-        # yet propagate alert-derived queries, so extract_params always supplies
-        # the wildcard default. Marking ``query`` required would lie about the
-        # tool's actual contract.
+        # ``query`` is intentionally NOT in ``required``: the current tool source
+        # context does not propagate alert-derived queries, so extract_params
+        # always supplies the wildcard default. Marking ``query`` required would
+        # lie about the tool's actual contract.
         schema = VictoriaLogsTool().input_schema
         assert "query" in schema["properties"]
         assert schema["properties"]["query"].get("default") == "*"

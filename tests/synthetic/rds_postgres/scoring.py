@@ -1,7 +1,7 @@
 """Pure scoring functions for the synthetic RDS benchmark suite.
 
 This module is free of ``app.*`` imports so scoring logic can be unit-tested
-without importing LangGraph or any heavy runtime dependencies.
+without importing the full investigation runtime or any heavy runtime dependencies.
 
 Dataclasses and functions in this module are re-exported from run_suite.py
 for backward compatibility with existing import sites.

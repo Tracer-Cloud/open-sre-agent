@@ -41,12 +41,7 @@ def run_file(path: Path) -> bool:
 
     alert = _parse_alert_md(path)
 
-    state = run_investigation(
-        alert_name=alert["title"],
-        pipeline_name=alert["pipeline_name"],
-        severity=alert["severity"],
-        raw_alert=alert["raw_alert"],
-    )
+    state = run_investigation(alert["raw_alert"])
 
     passed = bool(state.get("root_cause"))
     category = state.get("root_cause_category") or "—"

@@ -6,9 +6,11 @@ import hmac
 import json
 import logging
 import threading
+import time
 from collections import deque
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from http.client import HTTPConnection
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from threading import Thread
 from typing import Any
@@ -20,6 +22,28 @@ from app.strict_config import StrictConfigModel
 log = logging.getLogger(__name__)
 
 _DEFAULT_MAX_INBOX = 256
+
+
+def _wait_until_http_ready(host: str, port: int, *, timeout_s: float = 10.0) -> None:
+    """Block until ``GET /healthz`` succeeds (TCP accept can happen before HTTP is usable)."""
+    deadline = time.monotonic() + timeout_s
+    last_err: BaseException | None = None
+    while time.monotonic() < deadline:
+        try:
+            conn = HTTPConnection(host, port, timeout=0.5)
+            conn.request("GET", "/healthz")
+            resp = conn.getresponse()
+            resp.read()
+            conn.close()
+            if resp.status == 200:
+                return
+        except (TimeoutError, OSError, ConnectionError) as exc:
+            last_err = exc
+            time.sleep(0.02)
+    msg = f"alert listener on {host}:{port} did not become ready within {timeout_s}s"
+    if last_err is not None:
+        raise RuntimeError(msg) from last_err
+    raise RuntimeError(msg)
 
 
 class IncomingAlert(StrictConfigModel):
@@ -199,6 +223,7 @@ def start_alert_listener(
     bound_port = int(addr[1])
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
+    _wait_until_http_ready(bound_host, bound_port)
     return AlertListenerHandle(
         server=server,
         thread=thread,

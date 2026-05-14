@@ -24,10 +24,10 @@ def test_is_available_requires_grafana_creds() -> None:
 def test_is_available_suppressed_by_no_traces_flag() -> None:
     # Regression test for scenario 008-storage-full-missing-metric: the planner
     # was selecting query_grafana_traces on RDS storage alerts and burning the
-    # trajectory_budget gate. detect_sources sets no_traces=True for any RDS
-    # alert; this assertion guarantees the action is removed from the planner's
-    # choice set rather than relying on a soft prompt prohibition the LLM can
-    # ignore.
+    # trajectory_budget gate. The source context sets no_traces=True for any
+    # RDS alert; this assertion guarantees the action is removed from the
+    # planner's choice set rather than relying on a soft prompt prohibition the
+    # LLM can ignore.
     rt = query_grafana_traces.__opensre_registered_tool__
     assert rt.is_available({"grafana": {"connection_verified": True, "no_traces": True}}) is False
     assert rt.is_available({"grafana": {"_backend": MagicMock(), "no_traces": True}}) is False

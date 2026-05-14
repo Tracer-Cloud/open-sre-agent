@@ -290,7 +290,7 @@ def verify_jwt(token: str) -> JWTClaims:
     try:
         loop = asyncio.get_event_loop()
         if loop.is_running():
-            # Already inside an async context (e.g. LangGraph thread) — run in a new loop
+            # Already inside an async context (e.g. async thread) — run in a new loop
             import concurrent.futures
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:

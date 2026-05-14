@@ -152,7 +152,7 @@ opensre uninstall   # remove opensre and all local data
 
 ## Deployment
 
-The official hosted path is **LangGraph Platform**: connect this repo, keep [`langgraph.json`](langgraph.json) at the root, and set `LLM_PROVIDER` plus the matching API key (see [`.env.example`](.env.example)). **Railway** remains supported as a self-hosted alternative; hosted Postgres and Redis (`DATABASE_URI`, `REDIS_URI`) are required for that layout.
+Deploy OpenSRE as a standard Python/FastAPI runtime using the repo `Dockerfile` or a managed app host such as Railway, EC2, ECS, or Vercel. Set `LLM_PROVIDER` plus the matching API key (see [`.env.example`](.env.example)); hosted layouts that need persistence should also configure `DATABASE_URI` and `REDIS_URI`.
 
 **[Full deployment steps, Railway notes, and `opensre remote ops` → docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#deployment)**
 
@@ -174,6 +174,9 @@ When an alert fires, OpenSRE automatically:
 3. **Generates** a structured investigation report with probable root cause
 4. **Suggests** next steps and, optionally, executes remediation actions
 5. **Posts** a summary directly to Slack or PagerDuty — no context switching needed
+
+For the current code-level agent architecture after removing the old graph and chain
+framework layers, see [AGENT_ARCHITECTURE.md](AGENT_ARCHITECTURE.md).
 
 ---
 
@@ -217,7 +220,7 @@ OpenSRE connects to 60+ tools and services across the modern cloud stack, from L
 | **Dev Tools**           | <img src="docs/assets/icons/github.webp" width="16"> GitHub · GitHub MCP · Bitbucket · GitLab                                                                                                                                                                                                                                                          |                                                                                                                                                                                                                                                                    |
 | **Incident Management** | <img src="docs/assets/icons/pagerduty.png" width="16"> PagerDuty · Opsgenie · Jira · Alertmanager                                                                                                                                                                                                                                                      | [Trello](https://github.com/Tracer-Cloud/opensre/issues/361) · [ServiceNow](https://github.com/Tracer-Cloud/opensre/issues/314) · [incident.io](https://github.com/Tracer-Cloud/opensre/issues/317) · [Linear](https://github.com/Tracer-Cloud/opensre/issues/124) |
 | **Communication**       | <img src="docs/assets/icons/slack.png" width="16"> Slack · Google Docs · Discord · Telegram                                                                                                                                                                                                                                                            | [Notion](https://github.com/Tracer-Cloud/opensre/issues/286) · [Teams](https://github.com/Tracer-Cloud/opensre/issues/138) · [WhatsApp](https://github.com/Tracer-Cloud/opensre/issues/360) · [Confluence](https://github.com/Tracer-Cloud/opensre/issues/313)     |
-| **Agent Deployment**    | <img src="docs/assets/icons/vercel.png" width="16"> Vercel · <img src="docs/assets/icons/langsmith.png" width="16"> LangSmith · <img src="docs/assets/icons/aws.png" width="16"> EC2 · <img src="docs/assets/icons/aws.png" width="16"> ECS · Railway                                                                                                  |                                                                                                                                                                                                                                                                    |
+| **Agent Deployment**    | <img src="docs/assets/icons/vercel.png" width="16"> Vercel · <img src="docs/assets/icons/aws.png" width="16"> EC2 · <img src="docs/assets/icons/aws.png" width="16"> ECS · Railway                                                                                                  |                                                                                                                                                                                                                                                                    |
 | **Protocols**           | <img src="docs/assets/icons/mcp.svg" width="16"> MCP · <img src="docs/assets/icons/acp.png" width="16"> ACP · <img src="docs/assets/icons/openclaw.jpg" width="16"> OpenClaw                                                                                                                                                                           |                                                                                                                                                                                                                                                                    |
 
 OpenSRE is community-built. Looking for a safe first contribution? Browse [`good first issue`](https://github.com/Tracer-Cloud/opensre/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) tickets or see the [Good First Issues guide](docs/good-first-issues/README.md). See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full workflow.

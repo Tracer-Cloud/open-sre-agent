@@ -16,7 +16,7 @@ Usage
         }
     }
 
-The detect_sources block reads ``ec2_backend`` and exposes it on
+The synthetic source builder reads ``ec2_backend`` and exposes it on
 ``available_sources["ec2"]["_backend"]`` (and ``available_sources["rds"]``)
 without colliding with the EKS slot ``available_sources["eks"]["_backend"]``.
 

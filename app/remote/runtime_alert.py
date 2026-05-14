@@ -139,11 +139,9 @@ def build_runtime_alert_payload(
         "alert_name": f"Remote runtime investigation: {name}",
         "pipeline_name": service or name,
         "severity": "warning",
-        # Note: alert_source is intentionally left empty. detect_sources.py
-        # filters integrations by alert_source (e.g. suppresses Grafana when
-        # alert_source not in ("grafana", "")). Leaving it empty keeps all
-        # integrations available; the LLM in extract_alert may re-infer an
-        # alert_source from log text, which is expected and correct.
+        # Note: alert_source is intentionally left empty. The extraction stage
+        # may infer it from log text while keeping configured integrations
+        # available to the tool registry.
         "investigation_origin": "remote_runtime",
         "message": (
             f"Manual runtime investigation for deployed service '{name}'. "

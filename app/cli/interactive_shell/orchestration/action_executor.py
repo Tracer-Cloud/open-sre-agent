@@ -158,6 +158,7 @@ def _pump_task_stream(
                 _print_task_output_line(console, task, stream_name, line, style=style)
                 task.update_progress(line)
     except Exception as exc:  # noqa: BLE001
+        report_exception(exc, context=f"interactive_shell.task_stream.{stream_name}")
         console.print(f"[{DIM}]task output stream ended unexpectedly:[/] {escape(str(exc))}")
 
 
@@ -230,6 +231,7 @@ def _pump_task_pty(
             console.file.write(chunk.decode("utf-8", errors="replace"))
             console.file.flush()
     except Exception as exc:  # noqa: BLE001
+        report_exception(exc, context="interactive_shell.task_pty_stream")
         console.print(f"[{DIM}]task terminal stream ended unexpectedly:[/] {escape(str(exc))}")
     finally:
         with contextlib.suppress(OSError):
@@ -298,6 +300,7 @@ def start_background_cli_task(
             stdout_buf.close()
         stderr_buf.close()
         task.mark_failed(str(exc))
+        report_exception(exc, context="interactive_shell.background_cli_task.start")
         console.print(f"[{ERROR}]failed to start:[/] {escape(str(exc))}")
         return None
 
@@ -359,6 +362,7 @@ def start_background_cli_task(
                 console.print(f"[{ERROR}]command failed (exit {code}):[/]")
         except Exception as exc:  # noqa: BLE001
             task.mark_failed(str(exc))
+            report_exception(exc, context="interactive_shell.background_cli_task.watch")
             console.print(f"[{ERROR}]error:[/] {escape(str(exc))}")
         finally:
             _join_task_output_streams(output_threads)
@@ -426,36 +430,37 @@ def watch_synthetic_subprocess(
         session.record("synthetic_test", _history_text(), ok=ok)
 
     def _run() -> None:
-        output_threads = (
-            _start_task_output_streams(
-                task=task,
-                proc=proc,
-                console=console,
-                stderr_capture=stderr_buf,
-            )
-            if console is not None
-            else []
-        )
-        started = time.monotonic()
-        timed_out = False
-        # Track whether *we* explicitly terminated the process so we can
-        # distinguish a cancel-driven exit from a natural exit that happened
-        # to race with a concurrent /cancel.
-        terminated_by_watcher = False
-        while proc.poll() is None:
-            if time.monotonic() - started > SYNTHETIC_TEST_TIMEOUT_SECONDS:
-                timed_out = True
-                task.request_cancel()
-                terminate_child_process(proc)
-                terminated_by_watcher = True
-                break
-            if task.cancel_requested.is_set():
-                terminate_child_process(proc)
-                terminated_by_watcher = True
-                break
-            time.sleep(_SYNTHETIC_POLL_SECONDS)
-
+        output_threads: list[threading.Thread] = []
         try:
+            output_threads = (
+                _start_task_output_streams(
+                    task=task,
+                    proc=proc,
+                    console=console,
+                    stderr_capture=stderr_buf,
+                )
+                if console is not None
+                else []
+            )
+            started = time.monotonic()
+            timed_out = False
+            # Track whether *we* explicitly terminated the process so we can
+            # distinguish a cancel-driven exit from a natural exit that happened
+            # to race with a concurrent /cancel.
+            terminated_by_watcher = False
+            while proc.poll() is None:
+                if time.monotonic() - started > SYNTHETIC_TEST_TIMEOUT_SECONDS:
+                    timed_out = True
+                    task.request_cancel()
+                    terminate_child_process(proc)
+                    terminated_by_watcher = True
+                    break
+                if task.cancel_requested.is_set():
+                    terminate_child_process(proc)
+                    terminated_by_watcher = True
+                    break
+                time.sleep(_SYNTHETIC_POLL_SECONDS)
+
             if timed_out:
                 task.mark_failed(f"timed out after {SYNTHETIC_TEST_TIMEOUT_SECONDS}s")
                 _record_synthetic_if_current_session(ok=False)
@@ -487,6 +492,13 @@ def watch_synthetic_subprocess(
                 task.mark_failed(error_msg)
                 _record_synthetic_if_current_session(ok=False)
                 _suggest_follow_up_on_failure()
+        except Exception as exc:  # noqa: BLE001
+            task.mark_failed(str(exc))
+            report_exception(exc, context="interactive_shell.synthetic_test.watch")
+            _record_synthetic_if_current_session(ok=False)
+            _suggest_follow_up_on_failure()
+            if console is not None:
+                console.print(f"[{ERROR}]synthetic watcher failed:[/] {escape(str(exc))}")
         finally:
             _join_task_output_streams(output_threads)
             stderr_buf.close()
@@ -790,6 +802,7 @@ def run_cd_command(command: str, session: ReplSession, console: Console) -> None
     try:
         os.chdir(target)
     except Exception as exc:
+        report_exception(exc, context="interactive_shell.shell_cd")
         console.print(f"[{ERROR}]cd failed:[/] {escape(str(exc))}")
         session.record("shell", command, ok=False)
         return

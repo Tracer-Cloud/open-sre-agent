@@ -18,12 +18,6 @@ dependencies = [
     "anthropic>=0.77.1",
     "mcp>=1.27.0",
     "openai>=2.0.0",
-    "langsmith>=0.7.30",
-    "langgraph>=1.1.6",
-    "langgraph-sdk",
-    "langchain-core>=0.3.0",
-    "langchain-anthropic>=0.3.0",
-    "langchain-openai>=0.3.0",
     # Data validation
     "pydantic>=2.12.5,<3",
     "pydantic-settings>=2.12.0,<3",
@@ -32,6 +26,7 @@ dependencies = [
     "httpx>=0.27.0",
     "aiohttp>=3.9.0",
     "fastapi>=0.135.3",
+    "uvicorn[standard]>=0.30.0",
     # Authentication
     "PyJWT>=2.8.0",
     "cryptography>=42.0.0",
@@ -135,7 +130,6 @@ ignore_decorators = [
   "@*.callback",
   "@app.*",              # FastAPI routes
   "@*router.*",          # FastAPI sub-routers (discord_router etc.)
-  "@auth.on.*",          # LangGraph auth callbacks
   "@field_validator",    # Pydantic validators
   "@model_validator",
   "@validator",
@@ -149,7 +143,7 @@ ignore_names = [
   "shell_complete", "format_help", "show",        # Click overrides
   "_normalize_*",                                  # Pydantic field validators
   "_require_*",                                    # Pydantic model validators
-  "on_thread_*", "on_assistant_*", "on_cron_*",    # LangGraph auth handlers
+  "on_thread_*", "on_assistant_*", "on_cron_*",
   "discord_interactions", "health_check",
   "version_check", "deep_health_check",
   "investigate_stream",

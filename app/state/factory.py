@@ -40,6 +40,7 @@ STATE_DEFAULTS: dict[str, Any] = {
     "investigation_loop_count": 0,
     "hypotheses": [],
     "executed_hypotheses": [],
+    "evidence_entries": [],
     "masking_map": {},
     "slack_context": {},
     "discord_context": {},
@@ -55,16 +56,19 @@ STATE_DEFAULTS: dict[str, Any] = {
 
 
 def make_initial_state(
-    alert_name: str,
-    pipeline_name: str,
-    severity: str,
-    raw_alert: str | dict[str, Any] | None = None,
+    raw_alert: str | dict[str, Any],
     *,
     opensre_evaluate: bool = False,
+    investigation_metadata: tuple[str, str, str] | None = None,
 ) -> AgentState:
-    """Create initial state for investigation mode."""
+    """Create initial investigation state from the raw alert payload.
+
+    When ``investigation_metadata`` is set, it supplies ``(alert_name, pipeline_name,
+    severity)`` for initial state instead of deriving them only from ``raw_alert``.
+    Callers use this for HTTP/CLI overrides without mutating the alert dict.
+    """
     rubric = ""
-    alert_payload: str | dict[str, Any] = raw_alert if raw_alert is not None else {}
+    alert_payload: str | dict[str, Any] = raw_alert
     if isinstance(alert_payload, dict):
         if opensre_evaluate:
             rubric = extract_openrca_scoring_points(alert_payload)
@@ -77,6 +81,11 @@ def make_initial_state(
         # Normalize source-specific payloads into a canonical alert shape once,
         # before any downstream extraction/planning nodes run.
         alert_payload = normalize_alert_payload(alert_payload)
+
+    if investigation_metadata is not None:
+        alert_name, pipeline_name, severity = investigation_metadata
+    else:
+        alert_name, pipeline_name, severity = _resolve_alert_metadata(alert_payload)
 
     state = AgentStateModel.model_validate(
         {
@@ -92,6 +101,60 @@ def make_initial_state(
         }
     )
     return cast(AgentState, state.model_dump(mode="python", by_alias=True, exclude_none=True))
+
+
+def _resolve_alert_metadata(raw_alert: str | dict[str, Any]) -> tuple[str, str, str]:
+    """Best-effort defaults used until ``extract_alert`` does deeper parsing."""
+    if not isinstance(raw_alert, dict):
+        return ("Incident", "unknown", "warning")
+
+    labels = _dict_value(raw_alert, "commonLabels") or _dict_value(raw_alert, "labels")
+    annotations = _dict_value(raw_alert, "commonAnnotations") or _dict_value(
+        raw_alert, "annotations"
+    )
+    canonical = _dict_value(raw_alert, "canonical_alert")
+
+    alert_name = _first_text(
+        raw_alert.get("alert_name"),
+        raw_alert.get("title"),
+        canonical.get("alert_name"),
+        labels.get("alertname"),
+        labels.get("alert_name"),
+        annotations.get("summary"),
+        "Incident",
+    )
+    pipeline_name = _first_text(
+        raw_alert.get("pipeline_name"),
+        canonical.get("pipeline_name"),
+        labels.get("pipeline_name"),
+        labels.get("pipeline"),
+        labels.get("service"),
+        raw_alert.get("service"),
+        "unknown",
+    )
+    severity = _first_text(
+        raw_alert.get("severity"),
+        canonical.get("severity"),
+        labels.get("severity"),
+        labels.get("priority"),
+        "warning",
+    )
+    return alert_name, pipeline_name, severity
+
+
+def _dict_value(mapping: dict[str, Any], key: str) -> dict[str, Any]:
+    value = mapping.get(key)
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _first_text(*values: Any) -> str:
+    for value in values:
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return ""
 
 
 def make_agent_incident_state(

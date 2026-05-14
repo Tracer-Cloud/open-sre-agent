@@ -24,6 +24,5 @@ def test_health_response_returns_known_fields() -> None:
 
     assert hasattr(response, "ok")
     assert hasattr(response, "version")
-    assert hasattr(response, "graph_loaded")
     assert hasattr(response, "llm_configured")
     assert hasattr(response, "env")

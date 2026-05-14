@@ -50,7 +50,7 @@ ACTION_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
             r"\b(?:deploy|ship|push)\b.{0,80}?\b(?:to|opensre)\b",
             re.IGNORECASE,
         ),
-        "/deploy",
+        "/remote",
     ),
     (
         re.compile(

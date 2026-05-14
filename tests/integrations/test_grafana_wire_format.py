@@ -3,7 +3,7 @@
 All functions are pure data transforms — no I/O, no mocking required.
 
 grafana_wire_format.py uses only stdlib (re, datetime).  It lives inside a
-package whose __init__.py eagerly imports the full LangGraph node tree, so we
+package whose __init__.py eagerly imports heavy tool packages, so we
 load the module directly from its file to keep this test self-contained and
 fast without requiring the entire optional-dependency stack to be installed.
 """

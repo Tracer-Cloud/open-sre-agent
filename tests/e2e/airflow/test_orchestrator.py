@@ -168,19 +168,14 @@ def test_airflow_investigation_e2e():
     The agent is expected to use Airflow tools alongside the alert context to
     produce a root cause.
     """
-    base_url, dag_id, auth_token, username, password = _require_env()
+    _require_env()
 
     from app.cli.investigation import run_investigation_cli
 
     fixture_path = FIXTURES_DIR / "airflow_task_failure_alert.json"
     raw_alert = json.loads(fixture_path.read_text())
 
-    investigation_result = run_investigation_cli(
-        alert_name=f"Airflow DAG failure: {dag_id}",
-        pipeline_name=dag_id,
-        severity="critical",
-        raw_alert=raw_alert,
-    )
+    investigation_result = run_investigation_cli(raw_alert=raw_alert)
 
     root_cause = investigation_result.get("root_cause", "")
 

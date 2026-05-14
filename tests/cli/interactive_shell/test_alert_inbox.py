@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import socket
+import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from http.client import HTTPConnection
 
@@ -77,25 +79,51 @@ class TestAlertInbox:
 def _post(
     host: str, port: int, body: object, token: str | None = None
 ) -> tuple[int, dict[str, object]]:
-    conn = HTTPConnection(host, port, timeout=5)
     headers = {"Content-Type": "application/json"}
     if token is not None:
         headers["Authorization"] = f"Bearer {token}"
-    conn.request("POST", "/alerts", json.dumps(body), headers)
-    resp = conn.getresponse()
-    data = json.loads(resp.read())
-    conn.close()
-    return resp.status, data
+    body_bytes = json.dumps(body)
+
+    def _once() -> tuple[int, dict[str, object]]:
+        conn = HTTPConnection(host, port, timeout=5)
+        try:
+            conn.request("POST", "/alerts", body_bytes, headers)
+            resp = conn.getresponse()
+            raw = resp.read()
+            return resp.status, json.loads(raw)
+        finally:
+            conn.close()
+
+    return _transient_http_retry(_once)
 
 
 def _get(host: str, port: int, path: str) -> tuple[int, dict[str, object]]:
-    conn = HTTPConnection(host, port, timeout=5)
-    conn.request("GET", path)
-    resp = conn.getresponse()
-    raw = resp.read()
-    data = json.loads(raw) if raw else {}
-    conn.close()
-    return resp.status, data
+    def _once() -> tuple[int, dict[str, object]]:
+        conn = HTTPConnection(host, port, timeout=5)
+        try:
+            conn.request("GET", path)
+            resp = conn.getresponse()
+            raw = resp.read()
+            data = json.loads(raw) if raw else {}
+            return resp.status, data
+        finally:
+            conn.close()
+
+    return _transient_http_retry(_once)
+
+
+def _transient_http_retry[R](fn: Callable[[], R], *, attempts: int = 8) -> R:
+    """Retry on transient client resets under heavy parallel pytest (xdist)."""
+    last_err: BaseException | None = None
+    for attempt in range(attempts):
+        if attempt:
+            time.sleep(min(0.5, 0.03 * (2 ** (attempt - 1))))
+        try:
+            return fn()
+        except (BrokenPipeError, ConnectionResetError, TimeoutError) as exc:
+            last_err = exc
+    assert last_err is not None
+    raise last_err
 
 
 @pytest.fixture

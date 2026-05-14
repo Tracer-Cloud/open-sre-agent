@@ -213,7 +213,7 @@ class TestSeverityRouting:
         dispatcher, calls = _dispatcher(monkeypatch)
 
         def _boom(**_kwargs: Any) -> Any:
-            raise RuntimeError("langgraph exploded")
+            raise RuntimeError("investigation pipeline exploded")
 
         monkeypatch.setattr("app.pipeline.runners.run_investigation", _boom)
         sink = TelegramSink(

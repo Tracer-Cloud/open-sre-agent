@@ -49,7 +49,7 @@ ignore = [
 "app/tracer/client.py" = ["ARG002"]
 
 # CLI entry points
-"app/main.py" = ["ARG001"]
+"app/cli/__main__.py" = ["ARG001"]
 
 # stderr buffer outlives the function — closed in a watcher thread's `finally`,
 # so a `with` block at the call site would close it before the subprocess runs.

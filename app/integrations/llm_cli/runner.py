@@ -16,7 +16,6 @@ from app.integrations.llm_cli.base import CLIProbe, LLMCLIAdapter
 from app.integrations.llm_cli.errors import (
     CLIAuthenticationRequired,
     CLITimeoutError,
-    CLITransientError,
 )
 from app.integrations.llm_cli.subprocess_env import build_cli_subprocess_env
 from app.integrations.llm_cli.text import flatten_messages_to_prompt
@@ -166,6 +165,17 @@ class CLIBackedLLMClient:
         err = _strip_ansi(proc.stderr or "")
 
         if proc.returncode != 0:
+            # Exit code 75 is EX_TEMPFAIL (sysexits.h) — a transient failure
+            # the caller should retry. Raise CLITimeoutError so it is treated as
+            # an expected operational failure and not forwarded to Sentry.
+            if proc.returncode == 75:
+                hint = (
+                    f"{self._adapter.name} reported a temporary failure (exit 75). "
+                    "Retry the request or check network connectivity."
+                )
+                if err:
+                    hint = f"{hint} {err[:200]}"
+                raise CLITimeoutError(hint)
             base = self._adapter.explain_failure(
                 stdout=out, stderr=err, returncode=proc.returncode
             ).strip()
@@ -199,11 +209,6 @@ class CLIBackedLLMClient:
                 )
             else:
                 message = base
-            # EX_TEMPFAIL (75): POSIX temporary failure — the CLI crashed mid-session
-            # and may be resumable, but we run one-shot invocations so we treat it as a
-            # transient operational failure rather than a code bug.
-            if proc.returncode == 75:
-                raise CLITransientError(message)
             raise RuntimeError(message)
 
         content = self._adapter.parse(stdout=out, stderr=err, returncode=proc.returncode)

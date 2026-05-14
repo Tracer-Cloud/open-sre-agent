@@ -1,7 +1,7 @@
 -include .env
 export
 
-.PHONY: install onboard benchmark benchmark-update-readme test test-full demo alert-template investigate-alert opensre-hub-fetch opensre-hub-export opensre-hub-investigate verify-integrations check-docker check-langgraph check-langsmith-api-key grafana-local-up grafana-local-down grafana-local-seed langgraph-build langgraph-deploy clean lint format deploy deploy-lambda deploy-prefect deploy-flink destroy destroy-lambda destroy-prefect destroy-flink prefect-local-test simulate-k8s-alert test-k8s-local test-k8s test-k8s-datadog chaos-mesh-up chaos-mesh-down chaos-engineering-apply chaos-engineering-delete chaos-lab-up chaos-lab-down chaos-experiment-list chaos-experiment-up chaos-experiment-down deploy-dd-monitors cleanup-dd-monitors deploy-eks destroy-eks test-k8s-eks datadog-demo crashloop-demo regen-trigger-config test-rca test-rca-grafana test-synthetic test-rds-synthetic test-cli-smoke deploy-langsmith destroy-langsmith test-langsmith deploy-vercel destroy-vercel test-vercel deploy-ec2 destroy-ec2 test-ec2 deploy-ec2-hello destroy-ec2-hello deploy-remote destroy-remote deploy-bedrock destroy-bedrock test-bedrock download-cloudopsbench-hf validate-cloudopsbench test-openclaw test-openclaw-synthetic
+.PHONY: install onboard benchmark benchmark-update-readme test test-full demo alert-template investigate-alert opensre-hub-fetch opensre-hub-export opensre-hub-investigate verify-integrations check-docker grafana-local-up grafana-local-down grafana-local-seed clean lint format deploy deploy-lambda deploy-prefect deploy-flink destroy destroy-lambda destroy-prefect destroy-flink prefect-local-test simulate-k8s-alert test-k8s-local test-k8s test-k8s-datadog chaos-mesh-up chaos-mesh-down chaos-engineering-apply chaos-engineering-delete chaos-lab-up chaos-lab-down chaos-experiment-list chaos-experiment-up chaos-experiment-down deploy-dd-monitors cleanup-dd-monitors deploy-eks destroy-eks test-k8s-eks datadog-demo crashloop-demo regen-trigger-config test-rca test-rca-grafana test-synthetic test-rds-synthetic test-cli-smoke deploy-vercel destroy-vercel test-vercel deploy-ec2 destroy-ec2 test-ec2 deploy-ec2-hello destroy-ec2-hello deploy-remote destroy-remote deploy-bedrock destroy-bedrock test-bedrock download-cloudopsbench-hf validate-cloudopsbench test-openclaw test-openclaw-synthetic
 
 
 ifneq ($(wildcard .venv/bin/python),)
@@ -94,12 +94,6 @@ check-docker:
 	@command -v docker >/dev/null 2>&1 || { echo "Docker is required for the live local Grafana stack. Install Docker Desktop or another Docker-compatible runtime, then rerun this target."; exit 1; }
 	@docker info >/dev/null 2>&1 || { echo "Docker is installed, but the Docker daemon is not running. Start Docker Desktop, OrbStack, or Colima, then rerun this target."; exit 1; }
 
-check-langgraph:
-	@command -v langgraph >/dev/null 2>&1 || { echo "The LangGraph CLI is required for this target. Install it with 'pip install langgraph-cli' and rerun."; exit 1; }
-
-check-langsmith-api-key:
-	@[ -n "$$LANGGRAPH_HOST_API_KEY" ] || [ -n "$$LANGSMITH_API_KEY" ] || [ -n "$$LANGCHAIN_API_KEY" ] || { echo "Set LANGSMITH_API_KEY (or LANGGRAPH_HOST_API_KEY / LANGCHAIN_API_KEY) in your environment or .env before deploying to LangGraph."; exit 1; }
-
 grafana-local-up: check-docker
 	docker compose -f app/cli/wizard/local_grafana_stack/docker-compose.yml up -d
 
@@ -108,12 +102,6 @@ grafana-local-down: check-docker
 
 grafana-local-seed:
 	$(PYTHON) -m app.cli.wizard.grafana_seed
-
-langgraph-build: check-langgraph check-docker
-	langgraph build
-
-langgraph-deploy: check-langgraph check-docker check-langsmith-api-key
-	langgraph deploy
 
 # Run CloudWatch demo
 cloudwatch-demo:
@@ -164,13 +152,10 @@ validate-cloudopsbench:
 test-rca-grafana: grafana-local-up grafana-local-seed
 	$(PYTHON) -m tests.e2e.rca.run_rca_test grafana_pipeline_failure
 
-# Simulate a Datadog alert via local LangGraph server (full pipeline, real API calls)
+# Run Kubernetes local alert simulation against the in-process investigation API
 simulate-k8s-alert:
-	@echo "Starting LangGraph dev server..."
-	langgraph dev --no-browser >/tmp/langgraph-dev.log 2>&1 &
-	$(PYTHON) tests/e2e/kubernetes_local_alert_simulation/wait_for_server.py
 	$(PYTHON) -m pytest tests/e2e/kubernetes_local_alert_simulation/test_simulation.py -s; \
-	EXIT=$$?; kill %1 2>/dev/null; exit $$EXIT
+	EXIT=$$?; exit $$EXIT
 
 # Run Kubernetes local test (kind)
 test-k8s-local:
@@ -288,8 +273,8 @@ grafana-demo:
 run:
 	opensre investigate
 
-dev: 
-	langgraph dev
+dev:
+	@echo "Run the health app with: uv run uvicorn app.webapp:app --reload --host 0.0.0.0 --port 8000"
 
 docs-dev:
 	cd docs && mint dev
@@ -446,16 +431,6 @@ typecheck:
 # Run all checks (lint + format read-only check + types + full tests; mirrors CI quality gates)
 check: lint format-check typecheck test-full
 
-# ─── Deployment Tests (LangSmith) ────────────────────────────────────────────
-deploy-langsmith:
-	$(PYTHON) -m tests.deployment.langsmith.infrastructure_sdk.deploy
-
-destroy-langsmith:
-	$(PYTHON) -m tests.deployment.langsmith.infrastructure_sdk.destroy
-
-test-langsmith:
-	$(PYTHON) -m pytest tests/deployment/langsmith/ -v -s
-
 # ─── Deployment Tests (Vercel) ───────────────────────────────────────────────
 deploy-vercel:
 	$(PYTHON) -m tests.deployment.vercel.infrastructure_sdk.deploy
@@ -498,9 +473,6 @@ help:
 	@echo "  make deploy-bedrock    - Deploy Bedrock Agent stack"
 	@echo "  make destroy-bedrock   - Destroy Bedrock Agent stack"
 	@echo "  make test-bedrock      - Run Bedrock Agent deployment tests"
-	@echo "  make deploy-langsmith  - Deploy to LangSmith/LangGraph Cloud"
-	@echo "  make destroy-langsmith - Clean up local outputs (remote deployment persists)"
-	@echo "  make test-langsmith    - Run LangSmith deployment tests"
 	@echo "  make deploy-vercel     - Deploy health-check function to Vercel"
 	@echo "  make destroy-vercel    - Destroy Vercel deployment"
 	@echo "  make test-vercel       - Run Vercel deployment tests"
@@ -529,8 +501,6 @@ help:
 	@echo "  make alert-template TEMPLATE=datadog - Print a starter alert JSON template"
 	@echo "  make investigate-alert ALERT=/path/to/alert.json - Run RCA against your own alert payload"
 	@echo "  make verify-integrations - Check local store + .env integrations before running RCA"
-	@echo "  make langgraph-build - Build the LangGraph agent server image locally"
-	@echo "  make langgraph-deploy - Deploy the agent to LangGraph / LangSmith Deployments"
 	@echo "  make prefect-demo    - Run Prefect ECS Fargate E2E test (alias for demo)"
 	@echo "  make prefect-local-test - Run Prefect ECS local test (CLOUD=1 for ECS)"
 	@echo "  make flink-demo      - Run Apache Flink ECS E2E test"

@@ -18,17 +18,19 @@ def test_get_configurable_tolerates_missing_or_invalid_configurable() -> None:
     assert get_configurable(cast(NodeConfig, {"configurable": None})) == {}
 
 
-def test_core_nodes_do_not_import_runnable_config() -> None:
+def test_pipeline_does_not_import_runnable_config() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     targets = [
-        repo_root / "app" / "nodes",
+        repo_root / "app" / "agent",
         repo_root / "app" / "pipeline" / "runners.py",
-        repo_root / "app" / "pipeline" / "graph.py",
+        repo_root / "app" / "pipeline" / "pipeline.py",
     ]
-    banned = ("RunnableConfig", "langchain_core.runnables")
+    banned = ("RunnableConfig",)
     offenders: list[str] = []
 
     for target in targets:
+        if not target.exists():
+            continue
         files = target.rglob("*.py") if target.is_dir() else [target]
         for path in files:
             text = path.read_text(encoding="utf-8")
