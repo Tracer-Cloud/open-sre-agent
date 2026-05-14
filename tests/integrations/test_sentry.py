@@ -45,7 +45,7 @@ def test_list_sentry_issues_quotes_exception_signature_queries(
 def test_list_sentry_issues_preserves_structured_queries(monkeypatch: Any) -> None:
     captured = _capture_sentry_issue_params(monkeypatch)
 
-    query = "is:unresolved level:error"
+    query = "is:unresolved level:error url:http://example.test/login"
     list_sentry_issues(config=_config(), query=query, limit=10)
 
     assert ("query", query) in captured["params"]
@@ -61,3 +61,25 @@ def test_list_sentry_issues_escapes_quotes_in_exception_signatures(
 
     expected_query = '"TypeError: Cannot read \\"mailapi\\" at src/mail/sync.ts:142"'
     assert ("query", expected_query) in captured["params"]
+
+
+def test_list_sentry_issues_quotes_os_errors_with_word_colons(
+    monkeypatch: Any,
+) -> None:
+    captured = _capture_sentry_issue_params(monkeypatch)
+
+    query = "OSError: No such file or directory: '/tmp/cache/index.json'"
+    list_sentry_issues(config=_config(), query=query, limit=10)
+
+    assert ("query", f'"{query}"') in captured["params"]
+
+
+def test_list_sentry_issues_quotes_lowercase_panic_signatures(
+    monkeypatch: Any,
+) -> None:
+    captured = _capture_sentry_issue_params(monkeypatch)
+
+    query = "panic: runtime error: invalid memory address or nil pointer dereference"
+    list_sentry_issues(config=_config(), query=query, limit=10)
+
+    assert ("query", f'"{query}"') in captured["params"]

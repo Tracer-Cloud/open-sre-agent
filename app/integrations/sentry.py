@@ -14,6 +14,9 @@ from app.strict_config import StrictConfigModel
 
 DEFAULT_SENTRY_URL = "https://sentry.io"
 DEFAULT_SENTRY_STATS_PERIOD = "24h"
+_EXCEPTION_QUERY_PREFIX_RE = re.compile(
+    r"^(?:[A-Z][A-Za-z0-9_.]*(?:Error|Exception|Interrupt|Warning)?|panic|error|runtime error|fatal error):\s+"
+)
 _STRUCTURED_QUERY_TOKEN_RE = re.compile(r"(?:^|\s)[a-z][a-z0-9_.-]*:")
 
 
@@ -110,6 +113,8 @@ def _normalize_issue_search_query(query: str) -> str:
     stripped = query.strip()
     if not stripped or _is_quoted_search_query(stripped):
         return stripped
+    if _starts_like_exception_signature(stripped):
+        return _quote_search_phrase(stripped)
     if _STRUCTURED_QUERY_TOKEN_RE.search(stripped):
         return stripped
     if _looks_like_exception_signature(stripped):
@@ -119,6 +124,10 @@ def _normalize_issue_search_query(query: str) -> str:
 
 def _is_quoted_search_query(query: str) -> bool:
     return len(query) >= 2 and query[0] == '"' and query[-1] == '"'
+
+
+def _starts_like_exception_signature(query: str) -> bool:
+    return bool(_EXCEPTION_QUERY_PREFIX_RE.search(query))
 
 
 def _looks_like_exception_signature(query: str) -> bool:
