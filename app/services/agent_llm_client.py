@@ -188,9 +188,7 @@ class BedrockAgentClient(AnthropicAgentClient):
 
         region = (os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "").strip()
         if not region:
-            raise RuntimeError(
-                "Bedrock requires AWS_REGION or AWS_DEFAULT_REGION to be set."
-            )
+            raise RuntimeError("Bedrock requires AWS_REGION or AWS_DEFAULT_REGION to be set.")
 
         bedrock_client = AnthropicBedrock(
             aws_region=region,
