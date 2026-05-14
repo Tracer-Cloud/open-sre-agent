@@ -23,6 +23,28 @@ def _window_minutes(start: str, end: str) -> int:
         return 60
 
 
+def _datadog_avg_query(metric_name: str) -> str:
+    metric = metric_name.strip()
+    if metric.startswith(("avg:", "sum:", "min:", "max:", "count:")):
+        return metric
+    if "{" in metric and "}" in metric:
+        return f"avg:{metric}"
+    return f"avg:{metric}{{*}}"
+
+
+def _target_resource_from_state(state: dict[str, Any]) -> str:
+    raw_alert = state.get("raw_alert") or {}
+    if not isinstance(raw_alert, dict):
+        return "rds"
+    return str(
+        raw_alert.get("resource")
+        or raw_alert.get("resource_name")
+        or raw_alert.get("db_instance")
+        or raw_alert.get("db_instance_identifier")
+        or "rds"
+    )
+
+
 def _build_correlation_config(state: dict[str, Any]) -> dict[str, Any] | None:
     from app.correlation.datadog_adapter import DatadogCorrelationAdapter
     from app.correlation.datadog_provider import DatadogUpstreamEvidenceProvider
@@ -46,7 +68,7 @@ def _build_correlation_config(state: dict[str, Any]) -> dict[str, Any] | None:
         end = str(window.get("to") or "")
         if not start or not end:
             return {"timestamps": [], "values": []}
-        query = f"avg:{metric_name}{{*}}"
+        query = _datadog_avg_query(metric_name)
         result = client.query_metrics(query, start=_parse_iso8601(start), end=_parse_iso8601(end))
         if not result.get("success"):
             return {"timestamps": [], "values": []}
@@ -82,7 +104,8 @@ def _build_correlation_config(state: dict[str, Any]) -> dict[str, Any] | None:
         adapter=DatadogCorrelationAdapter(
             metric_query_fn=metric_query,
             log_query_fn=log_query,
-        )
+        ),
+        target_resource=_target_resource_from_state(state),
     )
     return {"configurable": {"upstream_evidence_provider": provider}}
 

@@ -31,7 +31,10 @@ def test_datadog_upstream_provider_collects_metrics_logs_and_topology() -> None:
         ),
     )
 
-    provider = DatadogUpstreamEvidenceProvider(adapter=adapter)
+    provider = DatadogUpstreamEvidenceProvider(
+        adapter=adapter,
+        target_resource="orders-rds-prod",
+    )
 
     bundle = provider.collect_upstream_evidence(
         alert_id="alert-1",
@@ -55,3 +58,4 @@ def test_datadog_upstream_provider_collects_metrics_logs_and_topology() -> None:
     assert bundle.web_request_logs[0].source == "datadog"
     assert bundle.app_logs[0].source == "datadog"
     assert bundle.topology_hints[0].relation == "upstream_of"
+    assert bundle.topology_hints[0].target == "orders-rds-prod"

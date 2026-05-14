@@ -24,9 +24,11 @@ class DatadogUpstreamEvidenceProvider:
         *,
         adapter: DatadogCorrelationAdapter,
         queries: DatadogCorrelationQueries | None = None,
+        target_resource: str = "rds",
     ) -> None:
         self._adapter = adapter
         self._queries = queries or DatadogCorrelationQueries()
+        self._target_resource = target_resource or "rds"
 
     def collect_upstream_evidence(
         self,
@@ -80,7 +82,7 @@ class DatadogUpstreamEvidenceProvider:
         topology_hints = (
             TopologyHint(
                 source=upstream_cpu_metric_name,
-                target="rds",
+                target=self._target_resource,
                 relation="upstream_of",
             ),
         )
