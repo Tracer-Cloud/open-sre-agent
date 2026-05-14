@@ -134,7 +134,7 @@ class DatadogClient:
         end: datetime,
     ) -> dict[str, Any]:
         """Query Datadog metrics (v1 query API) for a bounded time range."""
-        params = {
+        params: dict[str, str | int] = {
             "from": int(start.timestamp()),
             "to": int(end.timestamp()),
             "query": query,
