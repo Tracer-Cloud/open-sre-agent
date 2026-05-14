@@ -129,3 +129,27 @@ def test_list_sentry_issues_preserves_prequoted_exception_text_with_filters(
     list_sentry_issues(config=_config(), query=query, limit=10)
 
     assert ("query", query) in captured["params"]
+
+
+def test_list_sentry_issues_keeps_filter_tokens_inside_exception_messages(
+    monkeypatch: Any,
+) -> None:
+    captured = _capture_sentry_issue_params(monkeypatch)
+
+    query = "TypeError: unexpected level:error state is:unresolved"
+    list_sentry_issues(config=_config(), query=query, limit=10)
+
+    expected_query = '"TypeError: unexpected level:error state" is:unresolved'
+    assert ("query", expected_query) in captured["params"]
+
+
+def test_list_sentry_issues_drops_bare_exception_separator_before_filters(
+    monkeypatch: Any,
+) -> None:
+    captured = _capture_sentry_issue_params(monkeypatch)
+
+    query = "TypeError: is:unresolved level:error"
+    list_sentry_issues(config=_config(), query=query, limit=10)
+
+    expected_query = '"TypeError" is:unresolved level:error'
+    assert ("query", expected_query) in captured["params"]

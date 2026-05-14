@@ -17,6 +17,12 @@ DEFAULT_SENTRY_STATS_PERIOD = "24h"
 _EXCEPTION_QUERY_PREFIX_RE = re.compile(
     r"^(?:[A-Z][A-Za-z0-9_.]*(?:Error|Exception|Interrupt|Warning)?|panic|error|runtime error|fatal error):\s*"
 )
+_BARE_EXCEPTION_QUERY_PREFIX_RE = re.compile(
+    r"^(?P<name>[A-Z][A-Za-z0-9_.]*(?:Error|Exception|Interrupt|Warning)?|panic|error|runtime error|fatal error):\s*$"
+)
+_BARE_EXCEPTION_QUERY_NAME_RE = re.compile(
+    r"^(?:[A-Z][A-Za-z0-9_.]*(?:Error|Exception|Interrupt|Warning)?|panic|error|runtime error|fatal error)$"
+)
 _STRUCTURED_QUERY_TOKEN_RE = re.compile(
     r"(?<!\S)(?P<key>[A-Za-z][A-Za-z0-9_.-]*):(?P<value>\"(?:\\.|[^\"])*\"|'(?:\\.|[^'])*'|\S+)"
 )
@@ -167,6 +173,7 @@ def _normalize_issue_search_query(query: str) -> str:
             if not _is_quoted_search_query(free_text)
             and (
                 _starts_like_exception_signature(free_text)
+                or _is_bare_exception_name(free_text)
                 or _looks_like_exception_signature(free_text)
             )
             else free_text
@@ -185,24 +192,43 @@ def _starts_like_exception_signature(query: str) -> bool:
     return bool(_EXCEPTION_QUERY_PREFIX_RE.search(query))
 
 
+def _is_bare_exception_name(query: str) -> bool:
+    return bool(_BARE_EXCEPTION_QUERY_NAME_RE.fullmatch(query))
+
+
 def _split_structured_query_filters(query: str) -> tuple[str, list[str]]:
-    filters: list[str] = []
-    free_text_parts: list[str] = []
-    cursor = 0
-
-    for match in _STRUCTURED_QUERY_TOKEN_RE.finditer(query):
-        if match.group("key") not in _STRUCTURED_QUERY_KEYS:
-            continue
-        free_text_parts.append(query[cursor : match.start()])
-        filters.append(match.group(0))
-        cursor = match.end()
-
-    if not filters:
+    matches = [
+        match
+        for match in _STRUCTURED_QUERY_TOKEN_RE.finditer(query)
+        if match.group("key") in _STRUCTURED_QUERY_KEYS
+    ]
+    if not matches:
         return query, []
 
-    free_text_parts.append(query[cursor:])
-    free_text = " ".join(part.strip() for part in free_text_parts if part.strip())
-    return free_text, filters
+    trailing_filters: list[str] = []
+    suffix_start = len(query)
+    match_index = len(matches) - 1
+
+    while match_index >= 0:
+        match = matches[match_index]
+        if query[match.end() : suffix_start].strip():
+            break
+        trailing_filters.insert(0, match.group(0))
+        suffix_start = match.start()
+        match_index -= 1
+
+    if not trailing_filters:
+        return query, []
+
+    free_text = query[:suffix_start].strip()
+    if not free_text:
+        return "", trailing_filters
+
+    bare_exception_prefix = _BARE_EXCEPTION_QUERY_PREFIX_RE.fullmatch(free_text)
+    if bare_exception_prefix:
+        free_text = bare_exception_prefix.group("name")
+
+    return free_text, trailing_filters
 
 
 def _looks_like_exception_signature(query: str) -> bool:
