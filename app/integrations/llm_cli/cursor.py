@@ -143,9 +143,7 @@ class CursorAdapter:
             if _has_cursor_api_key():
                 logged_in = True
                 reason = (
-                    "timed out"
-                    if isinstance(exc, subprocess.TimeoutExpired)
-                    else f"failed ({exc})"
+                    "timed out" if isinstance(exc, subprocess.TimeoutExpired) else f"failed ({exc})"
                 )
                 detail = (
                     f"Cursor Agent auth probe {reason}; "
