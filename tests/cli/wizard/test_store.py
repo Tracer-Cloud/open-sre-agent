@@ -3,10 +3,16 @@ from __future__ import annotations
 import json
 
 from app.cli.wizard.store import (
+    load_active_remote_name,
     load_local_config,
+    load_named_remotes,
     load_remote_ops_config,
+    load_remote_url,
     save_local_config,
+    save_named_remote,
     save_remote_ops_config,
+    save_remote_url,
+    set_active_remote,
 )
 
 
@@ -81,3 +87,70 @@ def test_remote_ops_config_clears_project_and_service(tmp_path) -> None:
 
     loaded = load_remote_ops_config(store_path)
     assert loaded == {"provider": "railway", "project": None, "service": None}
+
+
+def test_remote_loaders_treat_malformed_remote_section_as_empty(tmp_path) -> None:
+    store_path = tmp_path / "opensre.json"
+    store_path.write_text(json.dumps({"version": 1, "remote": "bad"}) + "\n", encoding="utf-8")
+
+    assert load_remote_url(store_path) is None
+    assert load_named_remotes(store_path) == {}
+    assert load_active_remote_name(store_path) is None
+
+
+def test_named_remote_loader_skips_malformed_entries(tmp_path) -> None:
+    store_path = tmp_path / "opensre.json"
+    store_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "remote": {
+                    "remotes": {
+                        "bad": "https://bad.example",
+                        "missing_url": {},
+                        "prod": {"url": "https://prod.example"},
+                    }
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    assert load_named_remotes(store_path) == {"prod": "https://prod.example"}
+
+
+def test_remote_savers_replace_malformed_remote_section(tmp_path) -> None:
+    store_path = tmp_path / "opensre.json"
+    store_path.write_text(json.dumps({"version": 1, "remote": "bad"}) + "\n", encoding="utf-8")
+
+    save_remote_url("https://remote.example", path=store_path)
+    assert load_remote_url(store_path) == "https://remote.example"
+
+    store_path.write_text(json.dumps({"version": 1, "remote": "bad"}) + "\n", encoding="utf-8")
+    save_named_remote("prod", "https://prod.example", set_active=True, path=store_path)
+    assert load_named_remotes(store_path) == {"prod": "https://prod.example"}
+    assert load_active_remote_name(store_path) == "prod"
+
+    store_path.write_text(json.dumps({"version": 1, "remote": "bad"}) + "\n", encoding="utf-8")
+    save_remote_ops_config(provider="railway", project=None, service=None, path=store_path)
+    assert load_remote_ops_config(store_path) == {
+        "provider": "railway",
+        "project": None,
+        "service": None,
+    }
+
+
+def test_set_active_remote_handles_malformed_named_remotes(tmp_path) -> None:
+    store_path = tmp_path / "opensre.json"
+    store_path.write_text(
+        json.dumps({"version": 1, "remote": {"remotes": "bad"}}) + "\n",
+        encoding="utf-8",
+    )
+
+    try:
+        set_active_remote("prod", path=store_path)
+    except KeyError as exc:
+        assert str(exc) == "\"No remote named 'prod'\""
+    else:
+        raise AssertionError("Expected KeyError for missing remote")

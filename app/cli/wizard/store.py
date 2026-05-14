@@ -39,6 +39,28 @@ def load_local_config(path: Path | None = None) -> dict[str, Any]:
     return _load_raw(path)
 
 
+def _remote_section(data: dict[str, Any], *, create: bool = False) -> dict[str, Any]:
+    remote = data.get("remote")
+    if isinstance(remote, dict):
+        return remote
+    if create:
+        remote = {}
+        data["remote"] = remote
+        return remote
+    return {}
+
+
+def _remote_entries(remote_section: dict[str, Any], *, create: bool = False) -> dict[str, Any]:
+    remotes = remote_section.get("remotes")
+    if isinstance(remotes, dict):
+        return remotes
+    if create:
+        remotes = {}
+        remote_section["remotes"] = remotes
+        return remotes
+    return {}
+
+
 def save_local_config(
     *,
     wizard_mode: str,
@@ -77,7 +99,7 @@ def save_local_config(
 def load_remote_url(path: Path | None = None) -> str | None:
     """Return the persisted remote agent URL, or ``None`` if not configured."""
     data = _load_raw(path)
-    url: str | None = data.get("remote", {}).get("url") or None
+    url: str | None = _remote_section(data).get("url") or None
     return url
 
 
@@ -85,7 +107,7 @@ def save_remote_url(url: str, path: Path | None = None) -> None:
     """Persist the remote agent URL to the store."""
     store_path = path or get_store_path()
     data = _load_raw(store_path)
-    data.setdefault("remote", {})["url"] = url
+    _remote_section(data, create=True)["url"] = url
     store_path.parent.mkdir(parents=True, exist_ok=True)
     store_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
@@ -93,8 +115,15 @@ def save_remote_url(url: str, path: Path | None = None) -> None:
 def load_named_remotes(path: Path | None = None) -> dict[str, str]:
     """Return all named remotes as ``{name: url}``."""
     data = _load_raw(path)
-    remotes: dict[str, Any] = data.get("remote", {}).get("remotes", {})
-    return {k: str(v.get("url", "")) for k, v in remotes.items() if v.get("url")}
+    remotes = _remote_entries(_remote_section(data))
+    named_remotes: dict[str, str] = {}
+    for name, entry in remotes.items():
+        if not isinstance(entry, dict):
+            continue
+        url = entry.get("url")
+        if url:
+            named_remotes[name] = str(url)
+    return named_remotes
 
 
 def save_named_remote(
@@ -108,8 +137,8 @@ def save_named_remote(
     """Save a named remote endpoint."""
     store_path = path or get_store_path()
     data = _load_raw(store_path)
-    remote_section = data.setdefault("remote", {})
-    remotes = remote_section.setdefault("remotes", {})
+    remote_section = _remote_section(data, create=True)
+    remotes = _remote_entries(remote_section, create=True)
     remotes[name] = {
         "url": url,
         "source": source,
@@ -126,13 +155,13 @@ def set_active_remote(name: str, path: Path | None = None) -> str:
     """Switch the active remote to *name*. Returns the URL."""
     store_path = path or get_store_path()
     data = _load_raw(store_path)
-    remotes: dict[str, Any] = data.get("remote", {}).get("remotes", {})
+    remotes = _remote_entries(_remote_section(data))
     entry = remotes.get(name)
-    if not entry or not entry.get("url"):
+    if not isinstance(entry, dict) or not entry.get("url"):
         raise KeyError(f"No remote named '{name}'")
 
     url: str = str(entry["url"])
-    remote_section = data.setdefault("remote", {})
+    remote_section = _remote_section(data, create=True)
     remote_section["url"] = url
     remote_section["active_name"] = name
     store_path.parent.mkdir(parents=True, exist_ok=True)
@@ -143,16 +172,14 @@ def set_active_remote(name: str, path: Path | None = None) -> str:
 def load_active_remote_name(path: Path | None = None) -> str | None:
     """Return the name of the currently active remote, or ``None``."""
     data = _load_raw(path)
-    name: str | None = data.get("remote", {}).get("active_name") or None
+    name: str | None = _remote_section(data).get("active_name") or None
     return name
 
 
 def load_remote_ops_config(path: Path | None = None) -> dict[str, str | None]:
     """Return persisted remote ops config values."""
     data = _load_raw(path)
-    remote_data = data.get("remote", {})
-    if not isinstance(remote_data, dict):
-        return {"provider": None, "project": None, "service": None}
+    remote_data = _remote_section(data)
     return {
         "provider": str(remote_data.get("provider") or "") or None,
         "project": str(remote_data.get("project") or "") or None,
@@ -170,7 +197,7 @@ def save_remote_ops_config(
     """Persist remote ops provider scope to the store."""
     store_path = path or get_store_path()
     data = _load_raw(store_path)
-    remote_data = data.setdefault("remote", {})
+    remote_data = _remote_section(data, create=True)
     remote_data["provider"] = provider
     if project:
         remote_data["project"] = project
