@@ -26,6 +26,14 @@ _DEFAULT_MAX_INBOX = 256
 # Bounds the pre-auth body drain that prevents the macOS RST race, so
 # a fake ``Content-Length: 1 GB`` can't stall the single-threaded
 # handler thread before token validation runs.
+#
+# Sizing: realistic alert payloads (text + stack trace + log context)
+# top out around 50 KB, so 1 MiB is ~20× headroom while keeping reads
+# sub-millisecond on loopback and sub-second on typical networks. The
+# cap bounds bytes, NOT duration: a slowloris client could still
+# trickle 1 MiB byte-by-byte and tie up the handler for a long time.
+# Add a socket read timeout if/when this surface is exposed beyond
+# trusted callers.
 _MAX_BODY_BYTES = 1 * 1024 * 1024  # 1 MiB
 
 
