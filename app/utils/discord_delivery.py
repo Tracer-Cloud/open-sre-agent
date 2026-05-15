@@ -105,16 +105,34 @@ _EMBED_TITLE_LIMIT = 256
 _EMBED_DESCRIPTION_LIMIT = 4096
 
 
-def send_discord_report(report: str, discord_ctx: dict[str, Any]) -> tuple[bool, str]:
+def send_discord_report(
+    embed: Mapping[str, Any],
+    discord_ctx: Mapping[str, Any],
+) -> tuple[bool, str]:
+    """Post a pre-built Discord embed to a channel or thread.
+
+    The caller (publish_findings/node.py) constructs the embed via
+    ``formatters.renderers.discord.build_discord_embed`` so the channel-
+    native formatting (severity color, [label](url) links, **bold**
+    section titles) stays in the renderer where it belongs. This function
+    only owns transport: target resolution (thread vs channel) and a
+    defensive truncation of ``title``/``description`` to Discord's hard
+    limits, since the Discord API rejects oversize embeds with an opaque
+    error rather than truncating them.
+    """
     channel_id: str = str(discord_ctx.get("channel_id") or "")
     thread_id: str = str(discord_ctx.get("thread_id") or "")
     bot_token: str = str(discord_ctx.get("bot_token") or "")
-    embed = {
-        "title": truncate("Investigation Complete", _EMBED_TITLE_LIMIT, suffix="…"),
-        "color": 15158332,
-        "description": truncate(report, _EMBED_DESCRIPTION_LIMIT, suffix="…"),
-        "footer": {"text": "OpenSRE Investigation"},
-    }
+
+    # Don't mutate the caller's dict — embeds may be reused/logged elsewhere.
+    payload = dict(embed)
+    title = payload.get("title")
+    if isinstance(title, str) and len(title) > _EMBED_TITLE_LIMIT:
+        payload["title"] = truncate(title, _EMBED_TITLE_LIMIT, suffix="…")
+    description = payload.get("description")
+    if isinstance(description, str) and len(description) > _EMBED_DESCRIPTION_LIMIT:
+        payload["description"] = truncate(description, _EMBED_DESCRIPTION_LIMIT, suffix="…")
+
     target = thread_id if thread_id else channel_id
-    post_message_success, error, _ = post_discord_message(target, [embed], bot_token)
+    post_message_success, error, _ = post_discord_message(target, [payload], bot_token)
     return (True, "") if post_message_success else (False, error)

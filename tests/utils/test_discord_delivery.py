@@ -165,7 +165,19 @@ def test_create_discord_thread_exception(monkeypatch: pytest.MonkeyPatch) -> Non
 # ---------------------------------------------------------------------------
 
 
-def test_send_discord_report_posts_to_channel(monkeypatch: pytest.MonkeyPatch) -> None:
+def _embed(**overrides: Any) -> dict[str, Any]:
+    """Minimal embed dict matching what build_discord_embed produces."""
+    base = {
+        "title": "🔴 PodCrashLooping",
+        "color": 0xE74C3C,
+        "description": "Report text",
+        "footer": {"text": "OpenSRE Investigation"},
+    }
+    base.update(overrides)
+    return base
+
+
+def test_send_discord_report_posts_embed_to_channel(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, Any] = {}
 
     def _fake_post(url: str, *, json: dict[str, Any], **_kw: Any) -> MagicMock:
@@ -174,15 +186,15 @@ def test_send_discord_report_posts_to_channel(monkeypatch: pytest.MonkeyPatch) -
         return _mock_response(200, {"id": "m-1"})
 
     monkeypatch.setattr("app.utils.delivery_transport.httpx.post", _fake_post)
-    ok, error = send_discord_report("Report text", {"channel_id": "chan-1", "bot_token": "tok"})
+    ok, error = send_discord_report(_embed(), {"channel_id": "chan-1", "bot_token": "tok"})
 
     assert ok is True
     assert error == ""
     assert "chan-1" in captured["url"]
     embed = captured["embeds"][0]
     assert embed["description"] == "Report text"
-    assert embed["title"] == "Investigation Complete"
-    assert embed["color"] == 15158332
+    assert embed["title"] == "🔴 PodCrashLooping"
+    assert embed["color"] == 0xE74C3C
     assert embed["footer"]["text"] == "OpenSRE Investigation"
 
 
@@ -195,7 +207,7 @@ def test_send_discord_report_prefers_thread_over_channel(monkeypatch: pytest.Mon
 
     monkeypatch.setattr("app.utils.delivery_transport.httpx.post", _fake_post)
     send_discord_report(
-        "Report",
+        _embed(),
         {"channel_id": "chan-1", "thread_id": "thread-99", "bot_token": "tok"},
     )
     assert "thread-99" in captured["url"]
@@ -207,12 +219,15 @@ def test_send_discord_report_returns_false_on_api_error(monkeypatch: pytest.Monk
         "app.utils.delivery_transport.httpx.post",
         lambda *_a, **_kw: _mock_response(403, {"message": "Forbidden"}),
     )
-    ok, error = send_discord_report("Report", {"channel_id": "chan-1", "bot_token": "tok"})
+    ok, error = send_discord_report(_embed(), {"channel_id": "chan-1", "bot_token": "tok"})
     assert ok is False
     assert "Forbidden" in error
 
 
-def test_send_discord_report_truncates_description_to_4096(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_send_discord_report_truncates_oversize_description(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Defensive truncation at the transport boundary — Discord rejects > 4096."""
     captured: dict[str, Any] = {}
 
     monkeypatch.setattr(
@@ -222,11 +237,27 @@ def test_send_discord_report_truncates_description_to_4096(monkeypatch: pytest.M
             or _mock_response(200, {"id": "m-1"})
         ),  # type: ignore[misc]
     )
-    long_report = "x" * 5000
-    send_discord_report(long_report, {"channel_id": "chan-1", "bot_token": "tok"})
+    send_discord_report(
+        _embed(description="x" * 5000),
+        {"channel_id": "chan-1", "bot_token": "tok"},
+    )
     description = captured["embeds"][0]["description"]
     assert len(description) == 4096
     assert description.endswith("…")
+
+
+def test_send_discord_report_does_not_mutate_caller_embed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Truncation must not modify the dict the caller passed in."""
+    monkeypatch.setattr(
+        "app.utils.delivery_transport.httpx.post",
+        lambda *_a, **_kw: _mock_response(200, {"id": "m-1"}),
+    )
+    embed = _embed(description="x" * 5000)
+    snapshot = dict(embed)
+    send_discord_report(embed, {"channel_id": "chan-1", "bot_token": "tok"})
+    assert embed == snapshot
 
 
 # ---------------------------------------------------------------------------
@@ -401,7 +432,7 @@ class TestDiscordExceptionRedaction:
             lambda *_a, **_kw: DeliveryResponse(ok=False, error=leak_msg),
         )
         ok, error = discord_delivery.send_discord_report(
-            "Report", {"channel_id": "c1", "bot_token": token}
+            _embed(), {"channel_id": "c1", "bot_token": token}
         )
         assert ok is False
         assert token not in error
