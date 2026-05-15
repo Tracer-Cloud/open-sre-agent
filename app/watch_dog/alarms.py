@@ -9,8 +9,7 @@ import time
 from dataclasses import dataclass, field
 
 from app.cli.support.errors import OpenSREError
-from app.utils.telegram_delivery import post_telegram_message
-from app.utils.truncation import truncate
+from app.utils.telegram_delivery import post_telegram_message, truncate_for_telegram_html
 
 logger = logging.getLogger(__name__)
 
@@ -97,8 +96,9 @@ class AlarmDispatcher:
 
         ok, error, _ = post_telegram_message(
             chat_id=self._creds.chat_id,
-            text=truncate(message, _TELEGRAM_MESSAGE_LIMIT, suffix="…"),
+            text=truncate_for_telegram_html(message, _TELEGRAM_MESSAGE_LIMIT, suffix="…"),
             bot_token=self._creds.bot_token,
+            parse_mode="HTML",
         )
         if ok:
             return True

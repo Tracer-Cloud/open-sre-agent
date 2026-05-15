@@ -27,8 +27,16 @@ def _stub_telegram(
         chat_id: str,
         text: str,
         bot_token: str,
+        parse_mode: str = "",
     ) -> tuple[bool, str, str]:
-        calls.append({"chat_id": chat_id, "text": text, "bot_token": bot_token})
+        calls.append(
+            {
+                "chat_id": chat_id,
+                "text": text,
+                "bot_token": bot_token,
+                "parse_mode": parse_mode,
+            }
+        )
         return ok, error, "1" if ok else ""
 
     monkeypatch.setattr(
@@ -157,6 +165,7 @@ def test_first_dispatch_calls_telegram(monkeypatch: pytest.MonkeyPatch) -> None:
         "chat_id": "chat-1",
         "text": "CPU pegged at 95%",
         "bot_token": "tok",
+        "parse_mode": "HTML",
     }
 
 

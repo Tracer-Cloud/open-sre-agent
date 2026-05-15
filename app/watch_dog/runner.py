@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import socket
 import time
 from collections import deque
@@ -161,13 +162,14 @@ def _format_alarm_message(sample: ProcessSample, breach: ThresholdBreach) -> str
 
     return "\n".join(
         [
-            "[opensre watchdog] ALARM",
-            f"host       {socket.gethostname()}",
-            f"pid        {sample.pid}  ({sample.name or '-'})",
-            f"cmd        {command}",
-            f"threshold  {_format_threshold_breach(breach)}",
-            f"runtime    {_format_duration(sample.runtime_seconds)}",
-            f"started    {started}",
+            "<b>🚨 OpenSRE Watchdog Alarm</b>",
+            f"<b>host</b>       <code>{html.escape(socket.gethostname())}</code>",
+            f"<b>pid</b>        <code>{sample.pid}</code>  "
+            f"(<code>{html.escape(sample.name or '-')}</code>)",
+            f"<b>cmd</b>        <code>{html.escape(command)}</code>",
+            f"<b>threshold</b>  <code>{html.escape(_format_threshold_breach(breach))}</code>",
+            f"<b>runtime</b>    <code>{html.escape(_format_duration(sample.runtime_seconds))}</code>",
+            f"<b>started</b>    <code>{html.escape(started)}</code>",
         ]
     )
 

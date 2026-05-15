@@ -67,7 +67,7 @@ def test_once_exits_after_first_threshold_trip() -> None:
     assert code == ERROR
     assert len(dispatcher.calls) == 1
     assert dispatcher.calls[0][0] == "max_cpu"
-    assert "[opensre watchdog] ALARM" in dispatcher.calls[0][1]
+    assert "OpenSRE Watchdog Alarm" in dispatcher.calls[0][1]
 
 
 def test_default_mode_keeps_polling_until_target_exits() -> None:
@@ -142,3 +142,31 @@ def test_rss_threshold_formats_alarm_message() -> None:
     assert code == ERROR
     assert "max_rss" in dispatcher.calls[0][1]
     assert "5.0GiB" in dispatcher.calls[0][1]
+
+
+def test_alarm_message_uses_html_formatting() -> None:
+    dispatcher = _FakeDispatcher()
+
+    sample = ProcessSample(
+        pid=123,
+        name="python<script>",
+        cmdline=("python", "worker.py", "--arg=<unsafe>"),
+        cpu_percent=95.0,
+        rss_bytes=1024,
+        runtime_seconds=30.0,
+        alive=True,
+        started_at=1_700_000_000.0,
+    )
+    code = run_watchdog(
+        WatchdogConfig(pid=123, max_cpu=90, once=True),
+        sampler=_FakeSampler([sample]),
+        dispatcher=dispatcher,
+        _sleep=lambda _seconds: None,
+        _clock=lambda: 100.0,
+    )
+
+    assert code == ERROR
+    message = dispatcher.calls[0][1]
+    assert "<b>🚨 OpenSRE Watchdog Alarm</b>" in message
+    assert "&lt;unsafe&gt;" in message
+    assert "<script>" not in message
