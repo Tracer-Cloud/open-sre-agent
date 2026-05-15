@@ -5,7 +5,11 @@ import types
 
 import pytest
 
-from app.services.agent_llm_client import AnthropicAgentClient, BedrockAgentClient, OpenAIAgentClient
+from app.services.agent_llm_client import (
+    AnthropicAgentClient,
+    BedrockAgentClient,
+    OpenAIAgentClient,
+)
 
 
 def _install_fake_anthropic(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
