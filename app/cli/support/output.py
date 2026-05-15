@@ -76,7 +76,10 @@ def _safe_print(text: str) -> None:
         print(text)
     except UnicodeEncodeError:
         enc = sys.stdout.encoding or "utf-8"
-        print(text.encode(enc, errors="replace").decode(enc))
+        try:
+            print(text.encode(enc, errors="replace").decode(enc))
+        except BrokenPipeError:
+            pass
     except BrokenPipeError:
         pass
 
