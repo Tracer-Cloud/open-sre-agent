@@ -249,15 +249,51 @@ def test_slack_blocks_baseline_header_order(rich_ctx: ReportContext) -> None:
         last_index = idx
 
 
-def test_slack_blocks_baseline_first_block_has_root_cause(rich_ctx: ReportContext) -> None:
+def test_slack_blocks_baseline_first_block_is_severity_header(
+    rich_ctx: ReportContext,
+) -> None:
+    """After issue/2007 task #7 the first block is the severity header.
+
+    Before task #7 this asserted that the first block was the root-cause
+    ``section`` — that's now the third block (after the severity ``header``
+    and a ``context`` row carrying the severity tier + pipeline). See
+    ``test_slack_blocks_baseline_root_cause_section_follows_severity_header``.
+    """
     blocks = build_slack_blocks(rich_ctx)
     assert blocks, "expected at least one block"
     first = blocks[0]
-    assert first["type"] == "section"
-    text = first["text"]["text"]
-    # Root cause sentence + top_log fenced in backticks
-    assert "OOMKilled" in text or "memory" in text.lower()
-    assert "`" in text  # top_log code span
+    assert first["type"] == "header"
+    assert "🔴" in first["text"]["text"]
+    assert "PodCrashLooping" in first["text"]["text"]
+
+
+def test_slack_blocks_baseline_root_cause_section_follows_severity_header(
+    rich_ctx: ReportContext,
+) -> None:
+    """The first ``section`` block holds the root cause + top_log code span."""
+    blocks = build_slack_blocks(rich_ctx)
+    section_blocks = [b for b in blocks if b.get("type") == "section"]
+    assert section_blocks, "expected at least one section block"
+    first_section_text = section_blocks[0]["text"]["text"]
+    assert "OOMKilled" in first_section_text or "memory" in first_section_text.lower()
+    assert "`" in first_section_text
+
+
+def test_slack_blocks_severity_context_row_after_header(rich_ctx: ReportContext) -> None:
+    """The severity tier + pipeline live in a ``context`` block right under
+    the ``header`` block (mirroring Telegram's two-line severity layout)."""
+    blocks = build_slack_blocks(rich_ctx)
+    assert blocks[1]["type"] == "context"
+    elements = blocks[1]["elements"]
+    text = elements[0]["text"]
+    assert "CRITICAL" in text
+    assert "ingest" in text  # pipeline name
+
+
+def test_slack_text_baseline_starts_with_severity_header(rich_ctx: ReportContext) -> None:
+    """Mrkdwn output leads with the emoji + alert + pipeline + severity lines."""
+    text = format_slack_message(rich_ctx)
+    assert text.startswith("🔴 *PodCrashLooping* · ingest\n_severity: CRITICAL_")
 
 
 def test_slack_blocks_baseline_meta_context_last(rich_ctx: ReportContext) -> None:

@@ -26,22 +26,8 @@ from app.delivery.publish_findings.formatters.sections import (
     SectionKind,
     prepare_sections_for,
 )
+from app.delivery.publish_findings.formatters.severity import severity_display, severity_emoji
 from app.delivery.publish_findings.report_context import ReportContext
-
-_SEVERITY_EMOJI = {
-    "critical": "🔴",
-    "crit": "🔴",
-    "high": "🟠",
-    "error": "🟠",
-    "medium": "🟡",
-    "warning": "🟡",
-    "warn": "🟡",
-    "low": "🟢",
-    "info": "🟢",
-    "none": "⚪",
-    "healthy": "🟢",
-    "normal": "🟢",
-}
 
 
 def format_telegram_message(ctx: ReportContext) -> str:
@@ -87,11 +73,9 @@ def _render_severity_header(section: Section) -> str:
     severity = str(section.extras.get("severity") or "")
     alert = str(section.extras.get("alert_name") or "Alert")
     pipeline = str(section.extras.get("pipeline_name") or "unknown")
-    emoji = _SEVERITY_EMOJI.get(severity.lower(), "⚠️")
-    display_sev = severity.upper() if severity else "UNKNOWN"
     return (
-        f"{emoji} <b>{html.escape(alert)}</b> · {html.escape(pipeline)}\n"
-        f"<i>severity: {html.escape(display_sev)}</i>"
+        f"{severity_emoji(severity)} <b>{html.escape(alert)}</b> · {html.escape(pipeline)}\n"
+        f"<i>severity: {html.escape(severity_display(severity))}</i>"
     )
 
 

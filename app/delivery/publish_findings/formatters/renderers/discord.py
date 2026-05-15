@@ -42,6 +42,7 @@ from app.delivery.publish_findings.formatters.sections import (
     SectionKind,
     prepare_sections_for,
 )
+from app.delivery.publish_findings.formatters.severity import severity_emoji
 from app.delivery.publish_findings.report_context import ReportContext
 
 # Slack <url|label> links can leak into section content through helpers like
@@ -54,21 +55,6 @@ _SLACK_LINK_RE = re.compile(r"<(https?://[^|>]+)(?:\|([^>]+))?>")
 # Discord embed hard limits — https://discord.com/developers/docs/resources/channel#embed-limits
 DISCORD_DESCRIPTION_LIMIT = 4096
 DISCORD_TITLE_LIMIT = 256
-
-_SEVERITY_EMOJI = {
-    "critical": "🔴",
-    "crit": "🔴",
-    "high": "🟠",
-    "error": "🟠",
-    "medium": "🟡",
-    "warning": "🟡",
-    "warn": "🟡",
-    "low": "🟢",
-    "info": "🟢",
-    "healthy": "🟢",
-    "normal": "🟢",
-    "none": "⚪",
-}
 
 # Severity → embed color (decimal RGB).
 _SEVERITY_COLOR = {
@@ -152,9 +138,8 @@ def _embed_title(severity: Section | None) -> str:
     if severity is None:
         return "Investigation Complete"
     alert = str(severity.extras.get("alert_name") or "Investigation Complete")
-    sev = str(severity.extras.get("severity") or "").lower()
-    emoji = _SEVERITY_EMOJI.get(sev, "⚠️")
-    return f"{emoji} {alert}"
+    sev = str(severity.extras.get("severity") or "")
+    return f"{severity_emoji(sev)} {alert}"
 
 
 def _severity_color(severity: Section | None) -> int:

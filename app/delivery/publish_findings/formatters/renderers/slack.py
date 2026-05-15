@@ -35,7 +35,14 @@ from app.delivery.publish_findings.formatters.sections import (
     SectionKind,
     prepare_sections_for,
 )
+from app.delivery.publish_findings.formatters.severity import severity_display, severity_emoji
 from app.delivery.publish_findings.report_context import ReportContext
+
+# Slack Block Kit header blocks limit ``plain_text`` to 150 characters
+# (https://api.slack.com/reference/block-kit/blocks#header). The severity
+# emoji + alert name composes the header text, so an unusually long alert
+# triggers truncation.
+_HEADER_BLOCK_TEXT_LIMIT = 150
 
 # ---------------------------------------------------------------------------
 # mrkdwn text renderer
@@ -58,6 +65,8 @@ def format_slack_message(ctx: ReportContext) -> str:
 
 def _render_text(section: Section, ctx: ReportContext) -> str:
     kind = section.kind
+    if kind is SectionKind.SEVERITY_HEADER:
+        return _text_severity_header(section)
     if kind is SectionKind.ROOT_CAUSE:
         return _text_root_cause(section)
     if kind is SectionKind.CLAIMS:
@@ -74,8 +83,18 @@ def _render_text(section: Section, ctx: ReportContext) -> str:
         return render_cloudwatch_link(ctx).strip()
     if kind is SectionKind.META:
         return _text_meta(section)
-    # SEVERITY_HEADER / FAILED_PODS not rendered in the mrkdwn fallback today.
+    # FAILED_PODS not rendered in the mrkdwn fallback today.
     return ""
+
+
+def _text_severity_header(section: Section) -> str:
+    severity = str(section.extras.get("severity") or "")
+    alert = str(section.extras.get("alert_name") or "Alert")
+    pipeline = str(section.extras.get("pipeline_name") or "unknown")
+    return (
+        f"{severity_emoji(severity)} *{alert}* · {pipeline}\n"
+        f"_severity: {severity_display(severity)}_"
+    )
 
 
 def _text_root_cause(section: Section) -> str:
@@ -147,6 +166,8 @@ def build_slack_blocks(ctx: ReportContext) -> list[dict]:
 
 def _render_blocks(section: Section, ctx: ReportContext) -> list[dict[str, Any]]:
     kind = section.kind
+    if kind is SectionKind.SEVERITY_HEADER:
+        return _blocks_severity_header(section)
     if kind is SectionKind.ROOT_CAUSE:
         return _blocks_root_cause(section)
     if kind is SectionKind.FAILED_PODS:
@@ -165,8 +186,33 @@ def _render_blocks(section: Section, ctx: ReportContext) -> list[dict[str, Any]]
         return _blocks_link(ctx)
     if kind is SectionKind.META:
         return _blocks_meta(section)
-    # SEVERITY_HEADER not surfaced in Block Kit today — task #7.
     return []
+
+
+def _blocks_severity_header(section: Section) -> list[dict[str, Any]]:
+    """Severity header as a Block Kit ``header`` block plus a ``context`` row.
+
+    The header block carries the severity emoji + alert name (the visual
+    headline). The context block underneath shows the italic severity tier
+    and pipeline name in smaller type, mirroring Telegram's two-line layout.
+    """
+    severity = str(section.extras.get("severity") or "")
+    alert = str(section.extras.get("alert_name") or "Alert")
+    pipeline = str(section.extras.get("pipeline_name") or "unknown")
+    header_text = f"{severity_emoji(severity)} {alert}"
+    if len(header_text) > _HEADER_BLOCK_TEXT_LIMIT:
+        header_text = header_text[: _HEADER_BLOCK_TEXT_LIMIT - 1] + "…"
+    context_text = f"_severity: {severity_display(severity)} · pipeline: {pipeline}_"
+    return [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": header_text, "emoji": True},
+        },
+        {
+            "type": "context",
+            "elements": [{"type": "mrkdwn", "text": context_text}],
+        },
+    ]
 
 
 def _blocks_root_cause(section: Section) -> list[dict[str, Any]]:
