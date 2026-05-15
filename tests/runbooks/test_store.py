@@ -106,6 +106,36 @@ def test_remove_returns_true_when_present_false_otherwise(
     assert result_second is False
 
 
+def test_remove_rejects_path_traversal_slug(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _patch_home(monkeypatch, tmp_path)
+
+    with pytest.raises(ValueError, match="invalid slug"):
+        store.remove("../opensre.conf")
+
+
+def test_remove_rejects_slug_with_slash(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _patch_home(monkeypatch, tmp_path)
+
+    with pytest.raises(ValueError, match="invalid slug"):
+        store.remove("foo/bar")
+
+
+def test_load_all_parses_runbook_without_trailing_newline(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    home = _patch_home(monkeypatch, tmp_path)
+    rb_path = home / "runbooks" / "no-newline.md"
+    rb_path.parent.mkdir(parents=True, exist_ok=True)
+    rb_path.write_bytes(b"---\ntriggers:\n  - oom\n---\nbody text")
+
+    runbooks = store.load_all()
+
+    assert len(runbooks) == 1
+    assert runbooks[0].slug == "no-newline"
+
+
 def test_to_dict_round_trips_fields(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     home = _patch_home(monkeypatch, tmp_path)
     _write_runbook(

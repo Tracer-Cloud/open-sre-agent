@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import re
 import shutil
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +27,8 @@ from app.constants import OPENSRE_HOME_DIR
 
 RUNBOOK_DIR: Path = OPENSRE_HOME_DIR / "runbooks"
 
-_FRONTMATTER_RE = re.compile(r"\A---\s*\n(.*?)\n---\s*\n", re.DOTALL)
+_FRONTMATTER_RE = re.compile(r"\A---\s*\n(.*?)\n---\s*(?:\n|\Z)", re.DOTALL)
+_SAFE_SLUG_RE = re.compile(r"^[\w-]+$")
 
 
 class RunbookValidationError(ValueError):
@@ -173,11 +174,15 @@ def save(source: Path) -> Runbook:
     dest = directory / f"{parsed.slug}.md"
     shutil.copyfile(source, dest)
 
-    return _parse_runbook_file(dest)
+    return replace(parsed, path=dest)
 
 
 def remove(slug: str) -> bool:
     """Delete ``RUNBOOK_DIR/<slug>.md``. Return True if the file existed."""
+    if not _SAFE_SLUG_RE.match(slug):
+        raise ValueError(
+            f"invalid slug {slug!r} — only letters, digits, hyphens, and underscores allowed"
+        )
     target = _runbook_dir() / f"{slug}.md"
     if not target.exists():
         return False
