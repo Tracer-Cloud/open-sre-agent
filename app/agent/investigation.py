@@ -501,9 +501,12 @@ def _build_assistant_msg(llm: Any, response: Any) -> dict[str, Any]:
         return llm.build_assistant_message(response.raw_content)
     # Use the raw API message when available so provider-specific fields (e.g. Gemini
     # thought_signature required for multi-turn function calls) are preserved.
-    if response.raw_content is not None:
-        return response.raw_content
-    return llm.build_assistant_message(response.content, response.tool_calls)
+    result: dict[str, Any] = (
+        response.raw_content
+        if response.raw_content is not None
+        else llm.build_assistant_message(response.content, response.tool_calls)
+    )
+    return result
 
 
 def _build_tool_result_messages(
