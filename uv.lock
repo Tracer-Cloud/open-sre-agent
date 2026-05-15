@@ -1839,6 +1839,8 @@ postgresql = [
 [package.dev-dependencies]
 dev = [
     { name = "pre-commit" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
     { name = "types-psutil" },
 ]
 
@@ -1908,6 +1910,8 @@ provides-extras = ["dev", "opensre-hub", "kafka", "clickhouse", "postgresql", "a
 [package.metadata.requires-dev]
 dev = [
     { name = "pre-commit", specifier = ">=4.0.0" },
+    { name = "pytest", specifier = ">=9.0.3" },
+    { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "types-psutil", specifier = ">=7.2.2.20260408" },
 ]
 
