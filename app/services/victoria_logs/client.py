@@ -144,7 +144,7 @@ class VictoriaLogsClient:
                 exc,
                 logger=logger,
                 integration="victoria_logs",
-                method="search_logs",
+                method="query_logs",
                 extras={"query": query},
             )
             return {
@@ -156,7 +156,7 @@ class VictoriaLogsClient:
                 exc,
                 logger=logger,
                 integration="victoria_logs",
-                method="search_logs",
+                method="query_logs",
                 extras={"query": query},
             )
             return {"success": False, "error": str(exc)}
