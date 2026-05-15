@@ -115,8 +115,8 @@ def _make_fake_openai_response(
         result: dict = {
             "role": "assistant",
             "content": content or None,
-            "refusal": None,        # SDK null field
-            "audio": None,          # SDK null field
+            "refusal": None,  # SDK null field
+            "audio": None,  # SDK null field
             "function_call": None,  # SDK null field
         }
         if tool_calls:
