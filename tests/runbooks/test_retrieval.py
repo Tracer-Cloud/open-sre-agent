@@ -93,6 +93,33 @@ def test_ties_broken_by_slug() -> None:
     assert result.slug == "a-runbook"
 
 
+def test_multi_word_trigger_matches_when_all_tokens_present() -> None:
+    runbooks = [_rb("x", triggers=("exit code 137",))]
+
+    result = retrieve_matching_runbook(
+        runbooks=runbooks,
+        keywords=["exit", "code", "137"],
+        service=None,
+        pipeline_name=None,
+    )
+
+    assert result is not None
+    assert result.slug == "x"
+
+
+def test_multi_word_trigger_no_match_when_partial_tokens() -> None:
+    runbooks = [_rb("x", triggers=("exit code 137",))]
+
+    result = retrieve_matching_runbook(
+        runbooks=runbooks,
+        keywords=["exit", "code"],
+        service=None,
+        pipeline_name=None,
+    )
+
+    assert result is None
+
+
 def test_keyword_case_insensitive() -> None:
     runbooks = [_rb("x", triggers=("oom",))]
 

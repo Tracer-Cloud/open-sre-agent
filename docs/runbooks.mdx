@@ -59,12 +59,14 @@ shipped in Phase 1.
 
 ```
 score = (2 if runbook.service matches the alert service or pipeline_name)
-      + |alert keywords ∩ runbook.triggers|
+      + Σ matched_triggers
 ```
 
 Keywords are extracted from the alert name and problem statement using
-whitespace tokenisation (words of 3+ characters, lowercased). Any token
-that appears in a runbook's `triggers:` list contributes +1 to the score.
+whitespace tokenisation (words of 3+ characters, lowercased). Each trigger
+contributes +1 when **all** of its tokens appear in the alert keyword set.
+Single-word triggers (`oom`) need one token present; multi-word triggers
+(`exit code 137`) need every token present.
 
 Ties on score are broken by slug (lexicographic), so output is deterministic.
 

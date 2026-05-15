@@ -29,7 +29,11 @@ def _score(
         ):
             service_score = 2
 
-    keyword_overlap = len(keyword_set & set(runbook.triggers))
+    keyword_overlap = sum(
+        1
+        for trigger in runbook.triggers
+        if (parts := trigger.lower().split()) and all(p in keyword_set for p in parts)
+    )
     return service_score + keyword_overlap
 
 
