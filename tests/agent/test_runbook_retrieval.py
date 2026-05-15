@@ -60,6 +60,25 @@ def test_retrieve_runbook_returns_none_when_no_match(
     assert matched is None
 
 
+def test_retrieve_runbook_matches_keywords_when_common_labels_null(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    home = _patch_home(monkeypatch, tmp_path)
+    _write_runbook(home, "oom-runbook", frontmatter="triggers:\n  - oom\n  - memory")
+
+    state: dict[str, Any] = {
+        "alert_name": "OOMKilled",
+        "problem_md": "pod killed due to memory oom",
+        "pipeline_name": "other",
+        "alert_json": {"commonLabels": None},  # null in JSON
+    }
+
+    matched = _retrieve_runbook(state)
+
+    assert matched is not None
+    assert matched["slug"] == "oom-runbook"
+
+
 def test_retrieve_runbook_returns_none_on_empty_store(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

@@ -50,8 +50,8 @@ def test_runbook_suite_scenario(
         target_runbooks / f"{answer['expected_matched_slug']}.md",
     )
 
-    common_labels = alert.get("commonLabels", {})
-    common_annotations = alert.get("commonAnnotations", {})
+    common_labels = alert.get("commonLabels") or {}
+    common_annotations = alert.get("commonAnnotations") or {}
     problem_md = (
         common_annotations.get("summary", "") + " " + common_annotations.get("description", "")
     )
