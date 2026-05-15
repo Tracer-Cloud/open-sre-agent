@@ -214,6 +214,7 @@ def test_openai_agent_client_invoke_raw_content_preserves_extra_fields(
         ("o1-preview", "max_completion_tokens"),
         ("o3-mini", "max_completion_tokens"),
         ("o4-mini", "max_completion_tokens"),
+        ("o5-mini", "max_completion_tokens"),  # future model covered by regex
         ("gpt-4o", "max_tokens"),
         ("gemini-2.5-flash", "max_tokens"),
     ],
@@ -223,7 +224,7 @@ def test_openai_agent_client_uses_correct_tokens_param(
     model: str,
     expected_key: str,
 ) -> None:
-    """Reasoning models (o1/o3/o4) require max_completion_tokens; others use max_tokens."""
+    """O-series reasoning models require max_completion_tokens; others use max_tokens."""
     _install_fake_openai(monkeypatch)
 
     captured: dict[str, object] = {}
