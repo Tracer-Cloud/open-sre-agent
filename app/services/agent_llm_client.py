@@ -233,9 +233,13 @@ class OpenAIAgentClient:
         if system:
             msgs = [{"role": "system", "content": system}] + msgs
 
+        # OpenAI o1/o3/o4 reasoning models use max_completion_tokens; all others use max_tokens.
+        tokens_key = (
+            "max_completion_tokens" if self._model.startswith(("o1", "o3", "o4")) else "max_tokens"
+        )
         kwargs: dict[str, Any] = {
             "model": self._model,
-            "max_tokens": self._max_tokens,
+            tokens_key: self._max_tokens,
             "messages": msgs,
         }
         if tools:

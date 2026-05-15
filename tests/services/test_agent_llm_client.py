@@ -205,3 +205,42 @@ def test_openai_agent_client_invoke_raw_content_preserves_extra_fields(
     assert isinstance(response.raw_content.get("tool_calls"), list)
     first_tc = response.raw_content["tool_calls"][0]
     assert first_tc.get("thought_signature") == "abc123"
+
+
+@pytest.mark.parametrize(
+    "model,expected_key",
+    [
+        ("o1-mini", "max_completion_tokens"),
+        ("o1-preview", "max_completion_tokens"),
+        ("o3-mini", "max_completion_tokens"),
+        ("o4-mini", "max_completion_tokens"),
+        ("gpt-4o", "max_tokens"),
+        ("gemini-2.5-flash", "max_tokens"),
+    ],
+)
+def test_openai_agent_client_uses_correct_tokens_param(
+    monkeypatch: pytest.MonkeyPatch,
+    model: str,
+    expected_key: str,
+) -> None:
+    """Reasoning models (o1/o3/o4) require max_completion_tokens; others use max_tokens."""
+    _install_fake_openai(monkeypatch)
+
+    captured: dict[str, object] = {}
+
+    def fake_create(**kwargs: object) -> object:
+        captured.update(kwargs)
+        return _make_fake_openai_response(content="ok")
+
+    client = OpenAIAgentClient.__new__(OpenAIAgentClient)
+    client._client = types.SimpleNamespace(
+        chat=types.SimpleNamespace(completions=types.SimpleNamespace(create=fake_create))
+    )
+    client._model = model
+    client._max_tokens = 512
+
+    client.invoke(messages=[{"role": "user", "content": "hi"}])
+
+    assert expected_key in captured, f"expected '{expected_key}' in kwargs for model {model!r}"
+    other_key = "max_tokens" if expected_key == "max_completion_tokens" else "max_completion_tokens"
+    assert other_key not in captured, f"unexpected '{other_key}' in kwargs for model {model!r}"
