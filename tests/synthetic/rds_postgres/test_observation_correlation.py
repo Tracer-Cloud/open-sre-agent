@@ -132,6 +132,11 @@ def test_runtime_correlation_smoke_payload_shape() -> None:
     assert "correlated_signals" in result
     assert "most_likely_causal_drivers" in result
 
+    signals = result["correlated_signals"]
+
+    assert signals
+    assert {"name", "source", "score"} <= set(signals[0])
+
     drivers = result["most_likely_causal_drivers"]
 
     assert drivers
