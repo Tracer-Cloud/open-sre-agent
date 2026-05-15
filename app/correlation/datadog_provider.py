@@ -29,7 +29,16 @@ def _scoped_rds_metric(
     metric = metric_name.strip()
 
     if "{" in metric and "}" in metric:
-        return metric
+        prefix, _, rest = metric.partition("{")
+        tags, _, suffix = rest.partition("}")
+
+        if f"{scope_tag}:" in tags:
+            return metric
+
+        scoped_tags = (
+            f"{tags},{scope_tag}:{target_resource}" if tags else f"{scope_tag}:{target_resource}"
+        )
+        return f"{prefix}{{{scoped_tags}}}{suffix}"
 
     if not target_resource or target_resource == "unknown-rds":
         return metric

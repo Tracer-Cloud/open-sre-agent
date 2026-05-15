@@ -139,3 +139,42 @@ def test_datadog_upstream_provider_preserves_prescoped_rds_metrics() -> None:
         "aws.rds.cpuutilization{dbinstanceidentifier:custom-rds}",
         "aws.rds.database_connections{dbinstanceidentifier:custom-rds}",
     ]
+
+
+def test_datadog_upstream_provider_adds_instance_scope_to_tagged_rds_metrics() -> None:
+    metric_queries: list[str] = []
+
+    adapter = DatadogCorrelationAdapter(
+        metric_query_fn=lambda metric, _params: (
+            metric_queries.append(metric)
+            or {
+                "timestamps": ("2026-04-15T14:00:00Z",),
+                "values": (40.0,),
+            }
+        ),
+        log_query_fn=lambda _query, _params: {
+            "timestamps": (),
+            "messages": (),
+        },
+    )
+
+    provider = DatadogUpstreamEvidenceProvider(
+        adapter=adapter,
+        queries=DatadogCorrelationQueries(
+            rds_cpu_metric="aws.rds.cpuutilization{env:prod}",
+            rds_connections_metric="aws.rds.database_connections{env:prod}",
+        ),
+        target_resource="orders-rds-prod",
+    )
+
+    provider.collect_upstream_evidence(
+        alert_id="alert-1",
+        service_name="orders",
+        window_start="2026-04-15T14:00:00Z",
+        window_end="2026-04-15T14:15:00Z",
+    )
+
+    assert metric_queries[:2] == [
+        "aws.rds.cpuutilization{env:prod,dbinstanceidentifier:orders-rds-prod}",
+        "aws.rds.database_connections{env:prod,dbinstanceidentifier:orders-rds-prod}",
+    ]
