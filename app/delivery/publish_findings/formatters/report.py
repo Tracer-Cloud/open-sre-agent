@@ -1,18 +1,32 @@
-"""RCA report formatting for Slack (mrkdwn / Block Kit) and Telegram (HTML)."""
+"""Shared helpers + back-compat re-exports for the RCA report formatters.
+
+The public entry points ``format_slack_message``, ``build_slack_blocks``,
+and ``format_telegram_message`` now live in
+``app.delivery.publish_findings.formatters.renderers.{slack,telegram}``;
+they are re-exported at the bottom of this module so existing imports
+(notably ``app.delivery.publish_findings.node``) continue to work.
+
+This module still owns the derivation and channel-syntax helpers that
+both renderers and ``sections.build_sections`` depend on:
+
+- Root-cause derivation: :func:`_derive_root_cause_sentence`,
+  :func:`_get_top_error_log`.
+- Slack mrkdwn ↔ Telegram HTML conversion: :func:`_sanitize_for_slack`,
+  :func:`_to_telegram_html_body`, :func:`_mrkdwn_section`.
+- Evidence/citation glue: :func:`_resolve_evidence_tags`,
+  :func:`_format_provenance_lines`.
+- CloudWatch links: :func:`render_cloudwatch_link`,
+  :func:`render_cloudwatch_link_html`.
+
+These helpers stay here for now to keep the renderer refactor diff
+narrow; a follow-up will collapse them into ``sections.py`` (or a
+sibling ``derive.py``) so the renderers stop importing from this module.
+"""
 
 import html
 import re
 
 from app.delivery.publish_findings.formatters.base import format_html_link, format_slack_link
-from app.delivery.publish_findings.formatters.evidence import (
-    format_cited_evidence_section,
-    format_cited_evidence_section_html,
-)
-from app.delivery.publish_findings.formatters.infrastructure import (
-    build_investigation_trace,
-    format_pod_line,
-    get_failed_pods,
-)
 from app.delivery.publish_findings.report_context import ReportContext
 from app.delivery.publish_findings.urls.aws import build_cloudwatch_url
 
@@ -409,280 +423,24 @@ def _derive_root_cause_sentence(ctx: ReportContext) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Text renderer (Slack mrkdwn fallback + terminal + ingest report_md)
+# Public entry points — now live in the per-channel renderer modules.
+# Re-exported here so existing imports (notably node.py) keep working.
+# Imports go at the bottom so all helpers above are defined before the
+# renderer modules import them back.
 # ---------------------------------------------------------------------------
 
+from app.delivery.publish_findings.formatters.renderers.slack import (  # noqa: E402
+    build_slack_blocks,
+    format_slack_message,
+)
+from app.delivery.publish_findings.formatters.renderers.telegram import (  # noqa: E402
+    format_telegram_message,
+)
 
-def format_slack_message(ctx: ReportContext) -> str:
-    """Format a plain-text Slack message for the RCA report.
-
-    Used as the `text` fallback (notifications, accessibility, terminal, ingest)
-    when Block Kit blocks are the primary rendered content.
-    """
-    alert_id = ctx.get("alert_id")
-    duration_seconds = ctx.get("investigation_duration_seconds")
-    root_cause_sentence = _derive_root_cause_sentence(ctx)
-
-    if not root_cause_sentence:
-        root_cause_sentence = "Not determined (insufficient evidence)."
-    # Start the report directly with the root cause sentence, without a "Root Cause"
-    # heading line, so that section headings below can carry the visual emphasis.
-    conclusion_block = f"{root_cause_sentence}\n"
-    top_log = _get_top_error_log(ctx.get("evidence") or {})
-    if top_log:
-        conclusion_block += f"`{top_log}`\n"
-
-    validated_lines, non_validated_lines = _render_claim_lines(ctx)
-    if validated_lines:
-        # Use a larger markdown heading so that "Findings" stands out as a section.
-        conclusion_block += "\n## Findings\n" + "\n".join(validated_lines) + "\n"
-    if non_validated_lines:
-        conclusion_block += (
-            "\n*Non-Validated Claims (Inferred):*\n" + "\n".join(non_validated_lines) + "\n"
-        )
-
-    provenance_lines = _format_provenance_lines(ctx)
-    provenance_block = ""
-    if provenance_lines:
-        provenance_block = (
-            "\n*Provenance:*\n" + _sanitize_for_slack("\n".join(provenance_lines)) + "\n"
-        )
-
-    remediation_steps = ctx.get("remediation_steps", [])
-    remediation_block = ""
-    if remediation_steps:
-        remediation_block = (
-            "\n## Recommended Actions\n"
-            + "\n".join(f"• {_sanitize_for_slack(s)}" for s in remediation_steps)
-            + "\n"
-        )
-
-    trace_steps = build_investigation_trace(ctx)
-    trace_block = (
-        "\n## Investigation Trace\n" + "\n".join(trace_steps) + "\n" if trace_steps else ""
-    )
-
-    cited_section = _sanitize_for_slack(format_cited_evidence_section(ctx))
-    cloudwatch_link = render_cloudwatch_link(ctx)
-    meta_lines = []
-    if duration_seconds is not None:
-        meta_lines.append(f"Timing: {duration_seconds}s")
-    if alert_id:
-        meta_lines.append(f"*Alert ID:* {alert_id}")
-    meta_block = "\n" + "\n".join(meta_lines) if meta_lines else ""
-
-    # Do not prefix with a separate [RCA] title line; the consumer can render
-    # section headings (Root Cause text, Findings, Investigation Trace) with
-    # larger fonts as needed.
-    return f"""{conclusion_block}{provenance_block}{remediation_block}{trace_block}
-{cited_section}
-{cloudwatch_link}{meta_block}
-"""
-
-
-def format_telegram_message(ctx: ReportContext) -> str:
-    """Format an HTML RCA message for Telegram (:meth:`parse_mode` ``HTML``).
-
-    Uses Telegram-supported tags and a Hermes-style severity emoji header, instead
-    of Slack mrkdwn (``<url|label>``, ``##`` headings) which render as plain text
-    without ``parse_mode``.
-    """
-    duration_seconds = ctx.get("investigation_duration_seconds")
-    alert_id = ctx.get("alert_id")
-    derived_rc = _derive_root_cause_sentence(ctx)
-    root_cause_sentence = derived_rc or "Not determined (insufficient evidence)."
-
-    parts: list[str] = [_severity_telegram_header(ctx)]
-
-    top_log = _get_top_error_log(ctx.get("evidence") or {})
-    baseline_noise = (
-        derived_rc
-        and _telegram_baseline_repeats_header(ctx, derived_rc)
-        and root_cause_sentence != "Not determined (insufficient evidence)."
-    )
-    if baseline_noise and not top_log:
-        pass
-    elif baseline_noise and top_log:
-        parts.append("<code>" + html.escape(top_log) + "</code>")
-    else:
-        rc = _to_telegram_html_body(root_cause_sentence)
-        if top_log:
-            rc += "\n<code>" + html.escape(top_log) + "</code>"
-        parts.append(rc)
-
-    validated_lines, non_validated_lines = _render_claim_lines_telegram(ctx)
-    if validated_lines:
-        parts.append("<b>Findings</b>\n" + "\n".join(validated_lines))
-    if non_validated_lines:
-        parts.append("<b>Non-Validated Claims (Inferred)</b>\n" + "\n".join(non_validated_lines))
-
-    provenance_lines = _format_provenance_lines(ctx)
-    if provenance_lines:
-        prov = "\n".join(
-            "• " + _to_telegram_html_body(_sanitize_for_slack(pl.lstrip("• ").strip()))
-            for pl in provenance_lines
-        )
-        parts.append("<b>Provenance</b>\n" + prov)
-
-    remediation_steps = ctx.get("remediation_steps", [])
-    if remediation_steps:
-        ra = "\n".join(
-            "• " + _to_telegram_html_body(_sanitize_for_slack(str(step)))
-            for step in remediation_steps
-        )
-        parts.append("<b>Recommended Actions</b>\n" + ra)
-
-    trace_steps = build_investigation_trace(ctx)
-    if trace_steps:
-        tr = "\n".join(_to_telegram_html_body(step) for step in trace_steps)
-        parts.append("<b>Investigation Trace</b>\n" + tr)
-
-    cited_block = format_cited_evidence_section_html(ctx).strip()
-    if cited_block:
-        parts.append(cited_block)
-
-    cw_block = render_cloudwatch_link_html(ctx).strip()
-    if cw_block:
-        parts.append(cw_block)
-
-    meta_bits: list[str] = []
-    if duration_seconds is not None:
-        meta_bits.append(f"Timing: {duration_seconds}s")
-    if alert_id:
-        meta_bits.append(f"Alert ID: {alert_id}")
-    if meta_bits:
-        parts.append("<i>" + html.escape(" | ".join(meta_bits)) + "</i>")
-
-    return "\n\n".join(p for p in parts if p)
-
-
-# ---------------------------------------------------------------------------
-# Block Kit renderer (Slack interactive cards)
-# ---------------------------------------------------------------------------
-
-
-def build_slack_blocks(ctx: ReportContext) -> list[dict]:
-    """Build Slack Block Kit blocks for the RCA report.
-
-    Produces a clean, well-structured message using Slack's native
-    formatting: header, sections with mrkdwn, dividers, and context blocks.
-    """
-    from typing import Any
-
-    duration_seconds = ctx.get("investigation_duration_seconds")
-    alert_id = ctx.get("alert_id")
-    root_cause_sentence = _derive_root_cause_sentence(ctx)
-    blocks: list[dict[str, Any]] = []
-
-    def _add(block: "dict[str, Any] | None") -> None:
-        if block is not None:
-            blocks.append(block)
-
-    # ── Root Cause
-    if not root_cause_sentence:
-        root_cause_sentence = "Not determined (insufficient evidence)"
-    rc_text = root_cause_sentence
-    top_log = _get_top_error_log(ctx.get("evidence") or {})
-    if top_log:
-        rc_text += f"\n`{top_log}`"
-    _add(_mrkdwn_section(rc_text))
-
-    # ── Failed Pods ──
-    datadog_site = ctx.get("datadog_site", "datadoghq.com")
-    all_pods = get_failed_pods(ctx)
-    pod_lines = [
-        line for p in all_pods[:5] if (line := format_pod_line(p, datadog_site, bullet="\u2022 "))
-    ]
-    if len(all_pods) > 5:
-        pod_lines.append(f"• ... and {len(all_pods) - 5} more pods")
-    if pod_lines:
-        blocks.append({"type": "divider"})
-        blocks.append(
-            {
-                "type": "header",
-                "text": {"type": "plain_text", "text": "Failed Pods"},
-            }
-        )
-        _add(_mrkdwn_section("\n".join(pod_lines)))
-
-    # ── Validated Claims (Findings) and Non-Validated Claims ──
-    validated_lines, non_validated_lines = _render_claim_lines(ctx)
-    if validated_lines:
-        blocks.append({"type": "divider"})
-        blocks.append(
-            {
-                "type": "header",
-                "text": {"type": "plain_text", "text": "Findings"},
-            }
-        )
-        _add(_mrkdwn_section("\n".join(validated_lines)))
-    if non_validated_lines:
-        _add(_mrkdwn_section("*Inferred (not yet validated)*\n" + "\n".join(non_validated_lines)))
-
-    provenance_lines = _format_provenance_lines(ctx)
-    if provenance_lines:
-        blocks.append({"type": "divider"})
-        blocks.append(
-            {
-                "type": "header",
-                "text": {"type": "plain_text", "text": "Provenance"},
-            }
-        )
-        _add(_mrkdwn_section("\n".join(provenance_lines)))
-
-    # ── Recommended Actions ──
-    remediation_steps = ctx.get("remediation_steps", [])
-    if remediation_steps:
-        blocks.append({"type": "divider"})
-        blocks.append(
-            {
-                "type": "header",
-                "text": {"type": "plain_text", "text": "Recommended Actions"},
-            }
-        )
-        _add(_mrkdwn_section("\n".join(f"• {_sanitize_for_slack(s)}" for s in remediation_steps)))
-
-    # ── Investigation Trace ──
-    trace_steps = build_investigation_trace(ctx)
-    if trace_steps:
-        blocks.append({"type": "divider"})
-        blocks.append(
-            {
-                "type": "header",
-                "text": {"type": "plain_text", "text": "Investigation Trace"},
-            }
-        )
-        _add(_mrkdwn_section("\n".join(trace_steps)))
-
-    # ── Cited Evidence ──
-    cited_section = format_cited_evidence_section(ctx).strip()
-    if cited_section:
-        blocks.append({"type": "divider"})
-        _add(_mrkdwn_section(cited_section))
-
-    # ── CloudWatch link ──
-    cw_link = render_cloudwatch_link(ctx).strip()
-    if cw_link:
-        _add(_mrkdwn_section(cw_link))
-
-    # ── Meta context (duration / alert) at the bottom ──
-    meta_parts = []
-    if duration_seconds is not None:
-        meta_parts.append(f"Analyzed in {duration_seconds}s")
-    if alert_id:
-        meta_parts.append(f"Alert: {alert_id}")
-    if meta_parts:
-        blocks.append({"type": "divider"})
-        blocks.append(
-            {
-                "type": "context",
-                "elements": [{"type": "mrkdwn", "text": " | ".join(meta_parts)}],
-            }
-        )
-
-    # Slack hard-limits messages to 50 blocks — truncate from the middle to keep
-    # the header (first block) and meta/actions (last 2 blocks) intact.
-    if len(blocks) > 50:
-        blocks = blocks[:48] + blocks[-2:]
-
-    return blocks
+__all__ = [
+    "build_slack_blocks",
+    "format_slack_message",
+    "format_telegram_message",
+    "render_cloudwatch_link",
+    "render_cloudwatch_link_html",
+]
