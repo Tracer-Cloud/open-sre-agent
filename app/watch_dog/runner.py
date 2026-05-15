@@ -78,7 +78,7 @@ def run_watchdog(
 
 def _build_dispatcher(config: WatchdogConfig) -> AlarmDispatcher:
     creds = load_credentials_from_env(chat_id_override=config.chat_id)
-    return AlarmDispatcher(creds, cooldown_seconds=config.cooldown)
+    return AlarmDispatcher(creds, cooldown_seconds=config.cooldown, parse_mode="HTML")
 
 
 def _evaluate_thresholds(
