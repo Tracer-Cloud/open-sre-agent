@@ -48,7 +48,11 @@ def runbook_list() -> None:
 @click.argument("slug")
 def runbook_remove(slug: str) -> None:
     """Delete a runbook by slug (the filename without .md)."""
-    if remove(slug):
+    try:
+        found = remove(slug)
+    except (ValueError, RunbookValidationError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    if found:
         click.echo(f"✓ Removed runbook '{slug}'")
         return
     raise click.ClickException(f"no runbook with slug '{slug}' in {RUNBOOK_DIR}")

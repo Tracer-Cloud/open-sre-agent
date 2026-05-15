@@ -96,3 +96,16 @@ def test_runbook_remove_unknown_slug_errors(
 
     assert result.exit_code != 0
     assert "no runbook" in result.output
+
+
+def test_runbook_remove_invalid_slug_shows_clean_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _patch_home(monkeypatch, tmp_path)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["runbook", "remove", "../opensre.conf"])
+
+    assert result.exit_code != 0
+    assert "invalid slug" in result.output
+    assert "Traceback" not in result.output
