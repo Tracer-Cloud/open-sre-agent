@@ -26,3 +26,14 @@ def test_health_response_returns_known_fields() -> None:
     assert hasattr(response, "version")
     assert hasattr(response, "llm_configured")
     assert hasattr(response, "env")
+
+
+def test_ok_route_is_registered() -> None:
+    from fastapi.testclient import TestClient
+
+    client = TestClient(webapp.app)
+    resp = client.get("/ok")
+    assert resp.status_code in (200, 503)
+    data = resp.json()
+    assert "ok" in data
+    assert "version" in data
