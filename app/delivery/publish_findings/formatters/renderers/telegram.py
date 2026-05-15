@@ -14,13 +14,13 @@ from __future__ import annotations
 
 import html
 
-from app.delivery.publish_findings.formatters.base import format_html_link
-from app.delivery.publish_findings.formatters.evidence import format_cited_evidence_section_html
-from app.delivery.publish_findings.formatters.report import (
+from app.delivery.publish_findings.formatters._derive import (
     _sanitize_for_slack,
     _to_telegram_html_body,
     render_cloudwatch_link_html,
 )
+from app.delivery.publish_findings.formatters.base import format_html_link
+from app.delivery.publish_findings.formatters.evidence import format_cited_evidence_section_html
 from app.delivery.publish_findings.formatters.sections import (
     Section,
     SectionKind,

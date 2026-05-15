@@ -22,14 +22,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.delivery.publish_findings.formatters.base import format_slack_link
-from app.delivery.publish_findings.formatters.evidence import format_cited_evidence_section
-from app.delivery.publish_findings.formatters.infrastructure import format_pod_line
-from app.delivery.publish_findings.formatters.report import (
+from app.delivery.publish_findings.formatters._derive import (
     _mrkdwn_section,
     _sanitize_for_slack,
     render_cloudwatch_link,
 )
+from app.delivery.publish_findings.formatters.base import format_slack_link
+from app.delivery.publish_findings.formatters.evidence import format_cited_evidence_section
+from app.delivery.publish_findings.formatters.infrastructure import format_pod_line
 from app.delivery.publish_findings.formatters.sections import (
     Section,
     SectionKind,

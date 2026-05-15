@@ -28,11 +28,19 @@ from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import Any
 
+from app.delivery.publish_findings.formatters._derive import (
+    _derive_root_cause_sentence,
+    _format_correlation_lines,
+    _format_provenance_lines,
+    _get_top_error_log,
+    _resolve_evidence_tags,
+)
 from app.delivery.publish_findings.formatters.infrastructure import (
     build_investigation_trace,
     get_failed_pods,
 )
 from app.delivery.publish_findings.report_context import ReportContext
+from app.delivery.publish_findings.urls.aws import build_cloudwatch_url
 
 
 class SectionKind(StrEnum):
@@ -100,13 +108,6 @@ def _build_severity_header(ctx: ReportContext) -> Section | None:
 
 
 def _build_root_cause(ctx: ReportContext) -> Section | None:
-    # Lazy import to avoid a load-order cycle with report.py until phase B
-    # promotes these helpers into this module.
-    from app.delivery.publish_findings.formatters.report import (
-        _derive_root_cause_sentence,
-        _get_top_error_log,
-    )
-
     sentence = _derive_root_cause_sentence(ctx)
     top_log = _get_top_error_log(ctx.get("evidence") or {})
 
@@ -136,8 +137,6 @@ def _build_failed_pods(ctx: ReportContext) -> Section | None:
 
 
 def _build_claims(ctx: ReportContext) -> tuple[Section | None, Section | None]:
-    from app.delivery.publish_findings.formatters.report import _resolve_evidence_tags
-
     catalog = ctx.get("evidence_catalog") or {}
     evidence = ctx.get("evidence") or {}
 
@@ -189,8 +188,6 @@ def _build_claims(ctx: ReportContext) -> tuple[Section | None, Section | None]:
 
 
 def _build_provenance(ctx: ReportContext) -> Section | None:
-    from app.delivery.publish_findings.formatters.report import _format_provenance_lines
-
     lines = _format_provenance_lines(ctx)
     if not lines:
         return None
@@ -206,8 +203,6 @@ def _build_correlation(ctx: ReportContext) -> Section | None:
     pre-bulleted signal and driver strings, then stashes them in
     ``extras`` so renderers can wrap them in channel-native sub-headings.
     """
-    from app.delivery.publish_findings.formatters.report import _format_correlation_lines
-
     signal_lines, driver_lines = _format_correlation_lines(ctx)
     if not signal_lines and not driver_lines:
         return None
@@ -258,8 +253,6 @@ def _build_evidence(ctx: ReportContext) -> Section | None:
 
 
 def _build_cloudwatch_link(ctx: ReportContext) -> Section | None:
-    from app.delivery.publish_findings.urls.aws import build_cloudwatch_url
-
     url = ctx.get("cloudwatch_logs_url")
     if not url:
         group = ctx.get("cloudwatch_log_group")
