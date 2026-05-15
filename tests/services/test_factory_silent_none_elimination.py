@@ -52,6 +52,12 @@ def test_report_factory_failure_forwards_tags() -> None:
             exc, integration="argocd", logger=logging.getLogger("test")
         )
     mock_report.assert_called_once()
+    # The original exception object must be forwarded as the first positional
+    # arg so Sentry sees the real traceback; a re-wrapped or placeholder
+    # exception would silently destroy the stack on the issue page.
+    assert mock_report.call_args.args[0] is exc, (
+        "report_factory_failure must forward the original exception object verbatim"
+    )
     kwargs = mock_report.call_args.kwargs
     assert kwargs["severity"] == "warning"
     assert kwargs["tags"] == {
@@ -162,6 +168,16 @@ def test_factory_construction_failure_reports_and_returns_none(
         "on construction failure"
     )
     assert mock_report.call_count == 1, f"{integration} factory silently swallowed the exception"
+    # The construction-time exception must be forwarded verbatim — re-wrapping
+    # it (e.g. ``raise RuntimeError("...") from exc``) would destroy the original
+    # traceback on the Sentry issue page and defeat the point of the routing.
+    forwarded = mock_report.call_args.args[0]
+    assert isinstance(forwarded, RuntimeError), (
+        f"{integration}: expected the RuntimeError from the patched __init__, got {type(forwarded)!r}"
+    )
+    assert str(forwarded) == f"forced {integration} construction failure", (
+        f"{integration}: factory must forward the original exception object, not a re-wrap"
+    )
     kwargs = mock_report.call_args.kwargs
     assert kwargs["integration"] == integration
 
