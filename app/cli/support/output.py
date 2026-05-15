@@ -76,10 +76,8 @@ def _safe_print(text: str) -> None:
         print(text)
     except UnicodeEncodeError:
         enc = sys.stdout.encoding or "utf-8"
-        try:
+        with contextlib.suppress(BrokenPipeError):
             print(text.encode(enc, errors="replace").decode(enc))
-        except BrokenPipeError:
-            pass
     except BrokenPipeError:
         # Downstream pipe/consumer closed (e.g. piping to `head`); ignore to avoid noisy traceback.
         pass
