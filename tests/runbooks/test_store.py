@@ -106,6 +106,15 @@ def test_remove_returns_true_when_present_false_otherwise(
     assert result_second is False
 
 
+def test_save_rejects_invalid_stem(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _patch_home(monkeypatch, tmp_path)
+    source = tmp_path / "my runbook.md"
+    source.write_text("---\ntriggers:\n  - oom\n---\nbody", encoding="utf-8")
+
+    with pytest.raises(store.RunbookValidationError, match="not a valid slug"):
+        store.save(source)
+
+
 def test_remove_rejects_path_traversal_slug(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

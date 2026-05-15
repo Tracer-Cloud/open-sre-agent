@@ -169,6 +169,12 @@ def save(source: Path) -> Runbook:
 
     parsed = _parse_runbook_file(source)
 
+    if not _SAFE_SLUG_RE.match(parsed.slug):
+        raise RunbookValidationError(
+            f"filename stem {parsed.slug!r} is not a valid slug"
+            " — use only letters, digits, hyphens, and underscores"
+        )
+
     directory = _runbook_dir()
     directory.mkdir(parents=True, exist_ok=True)
     dest = directory / f"{parsed.slug}.md"

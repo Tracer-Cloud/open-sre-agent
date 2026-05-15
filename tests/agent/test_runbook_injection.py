@@ -18,11 +18,26 @@ def test_build_runbook_section_includes_slug_and_body() -> None:
     assert "payments-oom" in section
 
 
-def test_build_runbook_section_truncates_long_body() -> None:
+def test_build_runbook_section_returns_empty_when_slug_missing() -> None:
+    assert _build_runbook_section({"body": "some body"}) == ""
+    assert _build_runbook_section({"slug": "", "body": "some body"}) == ""
+
+
+def test_build_runbook_section_truncates_at_newline_boundary() -> None:
+    body = ("line\n" * 500)[:2100]  # contains newlines, exceeds 2000
+    section = _build_runbook_section({"slug": "s", "body": body})
+
+    assert "…(truncated)" in section
+    # must not split mid-line — text before truncation marker ends at \n
+    marker_idx = section.index("…(truncated)")
+    assert section[marker_idx - 1] == "\n"
+
+
+def test_build_runbook_section_truncates_long_body_no_newline() -> None:
     big = "x" * 5000
     section = _build_runbook_section({"slug": "s", "body": big})
 
-    assert "x" * 2000 in section
+    assert "…(truncated)" in section
     assert "x" * 2001 not in section
 
 

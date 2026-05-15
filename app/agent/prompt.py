@@ -101,8 +101,15 @@ def _build_runbook_section(matched_runbook: dict[str, Any] | None) -> str:
     """
     if not matched_runbook:
         return ""
-    body = str(matched_runbook.get("body", ""))[:2000]
-    slug = str(matched_runbook.get("slug", "unknown"))
+    slug = str(matched_runbook.get("slug", "")).strip()
+    if not slug:
+        return ""
+    raw = str(matched_runbook.get("body", ""))
+    if len(raw) > 2000:
+        cut = raw[:2000].rfind("\n")
+        body = raw[: cut if cut > 0 else 2000] + "\n…(truncated)"
+    else:
+        body = raw
     return (
         f"\n## Relevant team runbook ({slug})\n\n"
         f"{body}\n\n"
