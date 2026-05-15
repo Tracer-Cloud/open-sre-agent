@@ -225,6 +225,52 @@ def test_build_sections_meta_section_omitted_when_empty() -> None:
     assert SectionKind.META not in kinds
 
 
+def test_build_sections_emits_fallback_root_cause_when_no_sentence_or_log() -> None:
+    """Regression: when an investigation has neither a derived root cause
+    sentence nor a top error log, the ROOT_CAUSE section must still be emitted
+    with the "Not determined (insufficient evidence)." fallback. The legacy
+    per-formatter code always rendered this fallback; the section pipeline
+    must preserve that signal so the user knows the investigation completed
+    without identifying a cause (vs the section being silently dropped)."""
+    ctx: dict[str, Any] = {
+        "severity": "info",
+        "alert_name": "Heartbeat",
+        "pipeline_name": "watchdog",
+        # No root_cause text and no validated_claims → no derived sentence.
+        "root_cause": "",
+        "validated_claims": [],
+        "non_validated_claims": [],
+        # No evidence → no top_log.
+        "evidence": {},
+    }
+    sections = build_sections(ctx)
+    root = next((s for s in sections if s.kind is SectionKind.ROOT_CAUSE), None)
+    assert root is not None, "ROOT_CAUSE section must be emitted even with empty inputs"
+    assert root.body == "Not determined (insufficient evidence)."
+    assert root.extras == {}
+
+
+def test_prepare_sections_for_keeps_fallback_root_cause_even_with_severity_header() -> None:
+    """The dedup heuristic must not drop the "Not determined" fallback even
+    when a SEVERITY_HEADER is present — banner restate detection only fires
+    for sentences that quote the alert+pipeline pair."""
+    ctx: dict[str, Any] = {
+        "severity": "critical",
+        "alert_name": "PodCrash",
+        "pipeline_name": "ingest",
+        "root_cause": "",
+        "validated_claims": [],
+        "non_validated_claims": [],
+        "evidence": {},
+    }
+    sections = prepare_sections_for(ctx)
+    kinds = [s.kind for s in sections]
+    assert SectionKind.SEVERITY_HEADER in kinds
+    assert SectionKind.ROOT_CAUSE in kinds
+    root = next(s for s in sections if s.kind is SectionKind.ROOT_CAUSE)
+    assert root.body == "Not determined (insufficient evidence)."
+
+
 def test_build_sections_meta_section_present_with_duration() -> None:
     ctx: dict[str, Any] = {
         "severity": "low",

@@ -292,6 +292,30 @@ def test_unmapped_severity_preserves_raw_label_across_channels() -> None:
     assert "⚠️" in embed["title"]
 
 
+def test_empty_investigation_renders_not_determined_fallback_in_all_channels() -> None:
+    """Regression for greptile review feedback on PR #2057: when an
+    investigation produces neither a derived root-cause sentence nor any
+    error logs, every channel must still render the legacy
+    "Not determined (insufficient evidence)." fallback so the user can
+    distinguish "we finished and found nothing" from a silent rendering
+    failure."""
+    state = {
+        "pipeline_name": "watchdog",
+        "alert_name": "Heartbeat",
+        "severity": "info",
+        "root_cause": "",
+        "validated_claims": [],
+        "non_validated_claims": [],
+        "evidence": {},
+    }
+    ctx = build_report_context(state)
+
+    fallback = "Not determined (insufficient evidence)."
+    assert fallback in format_slack_message(ctx)
+    assert fallback in format_telegram_message(ctx)
+    assert fallback in format_discord_message(ctx)
+
+
 def test_no_channel_leaks_foreign_dialect_syntax() -> None:
     """A single ctx run through every renderer: each output is free of the
     other channels' dialect tokens."""

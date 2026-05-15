@@ -110,9 +110,12 @@ def _build_root_cause(ctx: ReportContext) -> Section | None:
     sentence = _derive_root_cause_sentence(ctx)
     top_log = _get_top_error_log(ctx.get("evidence") or {})
 
-    if not sentence and not top_log:
-        return None
-
+    # Always emit a ROOT_CAUSE section so callers see *something* even when
+    # the investigation produced no derived sentence and no error logs.
+    # The legacy per-formatter code always rendered this fallback; dropping
+    # the section here would silently hide that signal from all channels.
+    # ``dedupe_sections._root_cause_repeats_header`` returns False for the
+    # "Not determined" prefix, so the fallback is never deduped away.
     body = sentence or ("Not determined (insufficient evidence)." if not top_log else None)
     extras: dict[str, Any] = {"top_log": top_log} if top_log else {}
     return Section(kind=SectionKind.ROOT_CAUSE, body=body, extras=extras)
