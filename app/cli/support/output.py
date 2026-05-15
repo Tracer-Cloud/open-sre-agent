@@ -81,6 +81,7 @@ def _safe_print(text: str) -> None:
         except BrokenPipeError:
             pass
     except BrokenPipeError:
+        # Downstream pipe/consumer closed (e.g. piping to `head`); ignore to avoid noisy traceback.
         pass
 
 
