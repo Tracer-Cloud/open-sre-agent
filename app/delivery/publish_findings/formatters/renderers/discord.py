@@ -78,16 +78,20 @@ _DEFAULT_COLOR = 0xE74C3C
 
 
 def format_discord_link(label: str, url: str | None) -> str:
-    """Return a Discord ``[label](url)`` link, or plain label without a URL.
+    """Return a Discord ``[label](<url>)`` link, or plain label without a URL.
 
     Brackets inside ``label`` are backslash-escaped so they don't terminate
     the link grammar early; an empty label after escaping falls back to
-    the raw URL.
+    the raw URL. The URL is wrapped in angle brackets (CommonMark
+    "pointy-bracket" link destination) so any URL characters — closing
+    parens, spaces, unbalanced punctuation — render correctly. Without
+    the wrapping, a URL containing ``)`` would terminate the markdown
+    link early and emit visible garbage to the user.
     """
     if not url:
         return label
     safe_label = label.replace("[", r"\[").replace("]", r"\]").strip() or url
-    return f"[{safe_label}]({url})"
+    return f"[{safe_label}](<{url}>)"
 
 
 def _translate_slack_links(text: str) -> str:

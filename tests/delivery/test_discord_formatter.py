@@ -45,7 +45,10 @@ def _assert_order(text: str, markers: list[str]) -> None:
 
 
 def test_format_discord_link_with_url_returns_markdown_link() -> None:
-    assert format_discord_link("OpenSRE", "https://example.com") == "[OpenSRE](https://example.com)"
+    """URL is wrapped in angle brackets — CommonMark 'pointy-bracket' link destination."""
+    assert (
+        format_discord_link("OpenSRE", "https://example.com") == "[OpenSRE](<https://example.com>)"
+    )
 
 
 def test_format_discord_link_without_url_returns_plain_label() -> None:
@@ -55,12 +58,12 @@ def test_format_discord_link_without_url_returns_plain_label() -> None:
 
 def test_format_discord_link_escapes_brackets_in_label() -> None:
     out = format_discord_link("[oops]", "https://example.com")
-    assert out == r"[\[oops\]](https://example.com)"
+    assert out == r"[\[oops\]](<https://example.com>)"
 
 
 def test_format_discord_link_falls_back_to_url_when_label_empties() -> None:
     out = format_discord_link("   ", "https://example.com")
-    assert out == "[https://example.com](https://example.com)"
+    assert out == "[https://example.com](<https://example.com>)"
 
 
 # ---------------------------------------------------------------------------
@@ -97,8 +100,8 @@ def test_format_discord_message_omits_severity_header(rich_ctx: ReportContext) -
 
 def test_format_discord_message_uses_discord_markdown_links(rich_ctx: ReportContext) -> None:
     body = format_discord_message(rich_ctx)
-    # Evidence and cloudwatch links must use [label](url), not Slack <url|label>.
-    assert "[" in body and "](http" in body
+    # Evidence and cloudwatch links must use [label](<url>), not Slack <url|label>.
+    assert "](<http" in body
     # No Slack-style angle-bracket pipe links.
     import re
 
