@@ -102,14 +102,29 @@ def _make_fake_openai_response(
     finish_reason: str = "stop",
     extra_msg_fields: dict | None = None,
 ) -> types.SimpleNamespace:
-    """Build a minimal fake OpenAI chat completion response."""
+    """Build a fake OpenAI chat completion response.
 
-    def model_dump() -> dict:
-        result: dict = {"role": "assistant", "content": content or None}
+    model_dump() mirrors the real SDK: every pydantic field is present,
+    including the null ones (refusal, audio, function_call).  This lets
+    tests verify that exclude_none=True strips those nulls before the
+    dict is stored in raw_content.
+    """
+
+    def model_dump(*, exclude_none: bool = False) -> dict:
+        # Simulate the full SDK field set, nulls included.
+        result: dict = {
+            "role": "assistant",
+            "content": content or None,
+            "refusal": None,        # SDK null field
+            "audio": None,          # SDK null field
+            "function_call": None,  # SDK null field
+        }
         if tool_calls:
             result["tool_calls"] = [tc.model_dump() for tc in tool_calls]
         if extra_msg_fields:
             result.update(extra_msg_fields)
+        if exclude_none:
+            result = {k: v for k, v in result.items() if v is not None}
         return result
 
     msg = types.SimpleNamespace(
@@ -146,6 +161,11 @@ def test_openai_agent_client_invoke_sets_raw_content(
     assert response.raw_content is not None
     assert isinstance(response.raw_content, dict)
     assert response.raw_content.get("role") == "assistant"
+    # exclude_none=True must strip SDK null fields so they don't
+    # cause 400s on Gemini's strict endpoint on the next turn.
+    assert "refusal" not in response.raw_content
+    assert "audio" not in response.raw_content
+    assert "function_call" not in response.raw_content
 
 
 def test_openai_agent_client_invoke_raw_content_preserves_extra_fields(
