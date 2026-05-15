@@ -126,7 +126,13 @@ class AnthropicAgentClient:
                 # missing or malformed — retrying won't fix a credential problem.
                 if "authentication method" in str(err).lower() or "api_key" in str(err).lower():
                     raise RuntimeError(self._authentication_error_message()) from err
-                raise
+                last_err = err
+                if attempt == _RETRY_MAX_ATTEMPTS - 1:
+                    raise RuntimeError(
+                        f"{self.provider_name} API failed after {_RETRY_MAX_ATTEMPTS} attempts: {err}"
+                    ) from err
+                time.sleep(backoff)
+                backoff *= 2
             except Exception as err:
                 last_err = err
                 if attempt == _RETRY_MAX_ATTEMPTS - 1:

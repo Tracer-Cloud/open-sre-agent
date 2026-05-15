@@ -278,3 +278,28 @@ def test_sdk_type_error_for_missing_api_key_fails_fast(
     message = str(exc.value)
     assert "authentication failed" in message.lower()
     assert "ANTHROPIC_API_KEY" in message
+
+
+def test_unrelated_type_error_is_retried_and_wrapped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_anthropic(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr("app.services.agent_llm_client.time.sleep", lambda _: None)
+
+    call_count = 0
+
+    def raise_unrelated_type_error(**_: object) -> object:
+        nonlocal call_count
+        call_count += 1
+        raise TypeError("unexpected argument 'foo'")
+
+    client = AnthropicAgentClient(model="claude-sonnet-4-6")
+    client._client = types.SimpleNamespace(
+        messages=types.SimpleNamespace(create=raise_unrelated_type_error)
+    )
+
+    with pytest.raises(RuntimeError, match="API failed after 3 attempts"):
+        client.invoke(messages=[{"role": "user", "content": "hi"}])
+
+    assert call_count == 3, "non-auth TypeError should be retried like a generic exception"
