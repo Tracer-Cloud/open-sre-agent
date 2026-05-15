@@ -20,7 +20,7 @@ from app.utils.errors import report_exception
 logger = logging.getLogger(__name__)
 
 
-def _classify_import_error(_module_name: str, exc: BaseException) -> tuple[str, dict[str, str]]:
+def _classify_import_error(exc: BaseException) -> tuple[str, dict[str, str]]:
     """Classify a tool-module import failure for Sentry routing (#1464).
 
     External ``ModuleNotFoundError`` (e.g. optional integration extras like
@@ -36,6 +36,21 @@ def _classify_import_error(_module_name: str, exc: BaseException) -> tuple[str, 
             "missing_module": exc.name,
         }
     return "error", {"event": "tool_module_import_failed"}
+
+
+def _record_import_health(import_failures: int) -> None:
+    """Publish aggregate tool-registry import health as a Sentry tag (#1464).
+
+    Always set — including ``"0"`` on a clean rebuild — so a previously written
+    failure count does not leak across cache rebuilds. ``sentry_sdk.set_tag``
+    mutates the currently active scope; when ``clear_tool_registry_cache()`` is
+    invoked from inside a request context, the tag attaches only to that
+    request, which is acceptable for dashboards but is the reason this helper
+    rewrites unconditionally rather than skipping on zero. Best-effort: a
+    Sentry tag write must never break registry initialisation.
+    """
+    with suppress(Exception):
+        sentry_sdk.set_tag("tools.import_failures", str(import_failures))
 
 
 _SKIP_MODULE_NAMES = {
@@ -150,7 +165,7 @@ def _load_registry_snapshot() -> tuple[RegisteredTool, ...]:
         try:
             module = _import_tool_module(module_name)
         except Exception as exc:
-            severity, extra_tags = _classify_import_error(module_name, exc)
+            severity, extra_tags = _classify_import_error(exc)
             report_exception(
                 exc,
                 logger=logger,
@@ -175,12 +190,7 @@ def _load_registry_snapshot() -> tuple[RegisteredTool, ...]:
                 continue
             tools_by_name[tool.name] = tool
 
-    # Surface aggregate import health as a Sentry tag so dashboards can track
-    # "% of tools that loaded successfully" over time (#1464). Best-effort —
-    # we never want a tag write to break registry initialisation.
-    if import_failures:
-        with suppress(Exception):
-            sentry_sdk.set_tag("tools.import_failures", str(import_failures))
+    _record_import_health(import_failures)
 
     return tuple(sorted(tools_by_name.values(), key=lambda tool: tool.name))
 

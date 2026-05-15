@@ -413,7 +413,7 @@ class TestClassifyImportError:
     def test_external_module_not_found_is_warning(self) -> None:
         exc = ModuleNotFoundError("No module named 'psycopg2'")
         exc.name = "psycopg2"
-        severity, tags = registry_module._classify_import_error("my_tool", exc)
+        severity, tags = registry_module._classify_import_error(exc)
         assert severity == "warning"
         assert tags == {
             "event": "optional_dependency_missing",
@@ -424,13 +424,13 @@ class TestClassifyImportError:
         """Internal ``app.*`` ModuleNotFoundError is our bug — capture at error."""
         exc = ModuleNotFoundError("No module named 'app.services.removed'")
         exc.name = "app.services.removed"
-        severity, tags = registry_module._classify_import_error("my_tool", exc)
+        severity, tags = registry_module._classify_import_error(exc)
         assert severity == "error"
         assert tags == {"event": "tool_module_import_failed"}
 
     def test_generic_exception_is_error(self) -> None:
         exc = RuntimeError("import side-effect blew up")
-        severity, tags = registry_module._classify_import_error("my_tool", exc)
+        severity, tags = registry_module._classify_import_error(exc)
         assert severity == "error"
         assert tags == {"event": "tool_module_import_failed"}
 
@@ -439,7 +439,7 @@ class TestClassifyImportError:
         as an external optional-dep miss, so it falls through to ``error``."""
         exc = ModuleNotFoundError("synthetic — no name attribute")
         exc.name = None
-        severity, tags = registry_module._classify_import_error("my_tool", exc)
+        severity, tags = registry_module._classify_import_error(exc)
         assert severity == "error"
         assert tags["event"] == "tool_module_import_failed"
 
@@ -470,14 +470,13 @@ class TestImportFailuresReportToSentry:
         exc.name = "boto3_extras"
         _patch_registry_with_broken_module(monkeypatch, exc)
 
-        with pytest.MonkeyPatch.context() as ctx:
-            calls: list[dict[str, Any]] = []
-            ctx.setattr(
-                registry_module,
-                "report_exception",
-                lambda exc, **kwargs: calls.append({"exc": exc, **kwargs}),
-            )
-            registry_module._load_registry_snapshot()
+        calls: list[dict[str, Any]] = []
+        monkeypatch.setattr(
+            registry_module,
+            "report_exception",
+            lambda exc, **kwargs: calls.append({"exc": exc, **kwargs}),
+        )
+        registry_module._load_registry_snapshot()
 
         assert len(calls) == 1
         assert calls[0]["severity"] == "warning"
@@ -545,9 +544,11 @@ class TestImportFailuresReportToSentry:
 
         assert ("tools.import_failures", "1") in tags_set
 
-    def test_sentry_tag_skipped_when_no_failures(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """No failures → no spurious ``tools.import_failures=0`` tag that would
-        pollute Sentry's tag cardinality on healthy runs."""
+    def test_sentry_tag_always_set_on_clean_rebuild(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """``tools.import_failures`` is rewritten on every rebuild — including
+        with ``"0"`` — so a stale count from a previous load cannot bleed
+        across ``clear_tool_registry_cache()`` calls and falsely flag a healthy
+        process as still degraded."""
         monkeypatch.setattr(
             registry_module,
             "_iter_tool_module_names",
@@ -561,7 +562,36 @@ class TestImportFailuresReportToSentry:
         )
         registry_module._load_registry_snapshot()
 
-        assert all(key != "tools.import_failures" for key, _ in tags_set)
+        assert ("tools.import_failures", "0") in tags_set
+
+    def test_rebuild_after_failure_overwrites_stale_tag(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Regression: a previously written ``tools.import_failures=N`` tag must
+        be overwritten with ``"0"`` when a subsequent rebuild succeeds, so the
+        stale failure count cannot continue to fire on healthy events."""
+        exc = RuntimeError("boom")
+        _patch_registry_with_broken_module(monkeypatch, exc)
+        monkeypatch.setattr(registry_module, "report_exception", lambda *_a, **_k: None)
+
+        tags_set: list[tuple[str, str]] = []
+        monkeypatch.setattr(
+            registry_module.sentry_sdk,
+            "set_tag",
+            lambda k, v: tags_set.append((k, v)),
+        )
+
+        registry_module.clear_tool_registry_cache()
+        registry_module._load_registry_snapshot()
+        registry_module.clear_tool_registry_cache()
+
+        # Now flip the registry to a healthy state and rebuild.
+        monkeypatch.setattr(registry_module, "_iter_tool_module_names", lambda: [])
+        registry_module._load_registry_snapshot()
+
+        # Final write must be "0", not the stale "1" from the first rebuild.
+        registry_writes = [(k, v) for k, v in tags_set if k == "tools.import_failures"]
+        assert registry_writes[-1] == ("tools.import_failures", "0")
 
 
 def test_no_internal_app_imports_fail_on_default_extras() -> None:
