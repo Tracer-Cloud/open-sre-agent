@@ -292,7 +292,7 @@ COMMANDS: list[SlashCommand] = [
     ),
     SlashCommand(
         "/watchdog",
-        "monitor one process and send threshold alarms ('/watchdog --pid 123 --max-rss 1GiB')",
+        "monitor one process and send threshold alarms ('/watchdog --pid 123 --max-rss 1G')",
         _cmd_watchdog,
         execution_tier=ExecutionTier.SAFE,
     ),
