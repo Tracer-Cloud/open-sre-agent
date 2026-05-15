@@ -127,7 +127,12 @@ def build_discord_embed(ctx: ReportContext) -> dict[str, Any]:
     """
     sections = prepare_sections_for(ctx)
     severity = next((s for s in sections if s.kind is SectionKind.SEVERITY_HEADER), None)
-    description = format_discord_message(ctx)
+    parts: list[str] = []
+    for section in sections:
+        chunk = _render(section, ctx)
+        if chunk:
+            parts.append(chunk)
+    description = "\n\n".join(parts)
     if len(description) > DISCORD_DESCRIPTION_LIMIT:
         description = description[: DISCORD_DESCRIPTION_LIMIT - 1] + "…"
     return {
@@ -234,7 +239,7 @@ def _render_remediation(section: Section) -> str:
 
 
 def _render_trace(section: Section) -> str:
-    bullets = [_translate_slack_links(item) for item in section.items]
+    bullets = ["- " + _translate_slack_links(item) for item in section.items]
     return "**Investigation Trace**\n" + "\n".join(bullets)
 
 
