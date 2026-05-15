@@ -232,10 +232,13 @@ def _blocks_severity_header(section: Section) -> list[dict[str, Any]]:
 
 def _blocks_root_cause(section: Section) -> list[dict[str, Any]]:
     parts: list[str] = []
-    parts.append(section.body or "Not determined (insufficient evidence)")
+    if section.body:
+        parts.append(section.body)
     top_log = section.extras.get("top_log")
     if top_log:
         parts.append(f"`{top_log}`")
+    if not parts:
+        parts.append("Not determined (insufficient evidence).")
     block = _mrkdwn_section("\n".join(parts))
     return [block] if block else []
 
