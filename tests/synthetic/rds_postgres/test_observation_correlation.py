@@ -9,7 +9,6 @@ from app.correlation.upstream import (
     TopologyHint,
     UpstreamEvidenceBundle,
 )
-
 from tests.synthetic.rds_postgres.observations import (
     build_observation,
     compute_trajectory_metrics,
