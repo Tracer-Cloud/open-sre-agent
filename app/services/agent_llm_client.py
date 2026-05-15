@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -67,13 +68,19 @@ def _openai_tool_schema(tool: Any) -> dict[str, Any]:
 class AnthropicAgentClient:
     """Anthropic client with native tool-calling for the agent loop."""
 
-    def __init__(self, model: str, max_tokens: int = 4096) -> None:
-        from anthropic import Anthropic
+    provider_name = "Anthropic"
+    auth_error_hint = "Check ANTHROPIC_API_KEY."
 
-        from app.llm_credentials import resolve_llm_api_key
+    def __init__(self, model: str, max_tokens: int = 4096, *, client: Any | None = None) -> None:
+        if client is None:
+            from anthropic import Anthropic
 
-        api_key = resolve_llm_api_key("ANTHROPIC_API_KEY")
-        self._client = Anthropic(api_key=api_key, timeout=_CLIENT_TIMEOUT_SEC)
+            from app.llm_credentials import resolve_llm_api_key
+
+            api_key = resolve_llm_api_key("ANTHROPIC_API_KEY")
+            self._client = Anthropic(api_key=api_key, timeout=_CLIENT_TIMEOUT_SEC)
+        else:
+            self._client = client
         self._model = model
         self._max_tokens = max_tokens
 
@@ -106,23 +113,23 @@ class AnthropicAgentClient:
                 response = self._client.messages.create(**kwargs)
                 break
             except AuthenticationError as err:
-                raise RuntimeError(
-                    "Anthropic authentication failed. Check ANTHROPIC_API_KEY."
-                ) from err
+                raise RuntimeError(self._authentication_error_message()) from err
             except NotFoundError as err:
-                raise RuntimeError(f"Anthropic model '{self._model}' not found.") from err
+                raise RuntimeError(self._model_not_found_error_message()) from err
             except BadRequestError as err:
-                raise RuntimeError(f"Anthropic request rejected (HTTP 400): {err.message}") from err
+                raise RuntimeError(
+                    f"{self.provider_name} request rejected (HTTP 400): {err.message}"
+                ) from err
             except Exception as err:
                 last_err = err
                 if attempt == _RETRY_MAX_ATTEMPTS - 1:
                     raise RuntimeError(
-                        f"Anthropic API failed after {_RETRY_MAX_ATTEMPTS} attempts: {err}"
+                        f"{self.provider_name} API failed after {_RETRY_MAX_ATTEMPTS} attempts: {err}"
                     ) from err
                 time.sleep(backoff)
                 backoff *= 2
         else:
-            raise RuntimeError("Anthropic invocation failed") from last_err
+            raise RuntimeError(f"{self.provider_name} invocation failed") from last_err
 
         text_parts: list[str] = []
         tool_calls: list[ToolCall] = []
@@ -159,6 +166,35 @@ class AnthropicAgentClient:
     def build_assistant_message(raw_content: Any) -> dict[str, Any]:
         """Build the assistant message preserving full Anthropic content blocks."""
         return {"role": "assistant", "content": raw_content}
+
+    def _authentication_error_message(self) -> str:
+        return f"{self.provider_name} authentication failed. {self.auth_error_hint}"
+
+    def _model_not_found_error_message(self) -> str:
+        return f"{self.provider_name} model '{self._model}' not found."
+
+
+class BedrockAgentClient(AnthropicAgentClient):
+    """Bedrock-backed client using AnthropicBedrock SDK."""
+
+    provider_name = "Bedrock"
+    auth_error_hint = (
+        "Check AWS credentials (for example AWS_PROFILE, AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY, "
+        "or instance role) and AWS_REGION/AWS_DEFAULT_REGION."
+    )
+
+    def __init__(self, model: str, max_tokens: int = 4096) -> None:
+        from anthropic import AnthropicBedrock
+
+        region = (os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "").strip()
+        if not region:
+            raise RuntimeError("Bedrock requires AWS_REGION or AWS_DEFAULT_REGION to be set.")
+
+        bedrock_client = AnthropicBedrock(
+            aws_region=region,
+            timeout=_CLIENT_TIMEOUT_SEC,
+        )
+        super().__init__(model=model, max_tokens=max_tokens, client=bedrock_client)
 
 
 class OpenAIAgentClient:
@@ -312,6 +348,13 @@ def get_agent_llm() -> _AgentClientType:
         from app.config import LLMSettings
 
         _agent_client = _create_openai_compat_client(settings, provider)
+    elif provider == "bedrock":
+        from app.config import BEDROCK_LLM_CONFIG
+
+        _agent_client = BedrockAgentClient(
+            model=settings.bedrock_reasoning_model,
+            max_tokens=BEDROCK_LLM_CONFIG.max_tokens,
+        )
     else:
         # Default: Anthropic
         from app.config import ANTHROPIC_LLM_CONFIG

@@ -15,6 +15,7 @@ from typing import Any
 from pydantic import Field, field_validator
 
 from app.integrations._relational import RelationalConfigBase, env_bool, env_str
+from app.integrations._validation_helpers import report_validation_failure
 from app.utils.coercion import safe_int
 from app.utils.truncation import truncate
 
@@ -131,7 +132,12 @@ def validate_mariadb_config(config: MariaDBConfig) -> MariaDBValidationResult:
         finally:
             conn.close()
     except Exception as err:
-        logger.debug("MariaDB validate_config failed", exc_info=True)
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mariadb",
+            method="validate_mariadb_config",
+        )
         return MariaDBValidationResult(ok=False, detail=f"MariaDB connection failed: {err}")
 
 
@@ -205,7 +211,12 @@ def get_process_list(
         finally:
             conn.close()
     except Exception as err:
-        logger.debug("MariaDB get_process_list failed", exc_info=True)
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mariadb",
+            method="get_process_list",
+        )
         return {"source": "mariadb", "available": False, "error": str(err)}
 
 
@@ -256,7 +267,12 @@ def get_global_status(config: MariaDBConfig) -> dict[str, Any]:
         finally:
             conn.close()
     except Exception as err:
-        logger.debug("MariaDB get_global_status failed", exc_info=True)
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mariadb",
+            method="get_global_status",
+        )
         return {"source": "mariadb", "available": False, "error": str(err)}
 
 
@@ -288,7 +304,12 @@ def get_innodb_status(config: MariaDBConfig) -> dict[str, Any]:
         finally:
             conn.close()
     except Exception as err:
-        logger.debug("MariaDB get_innodb_status failed", exc_info=True)
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mariadb",
+            method="get_innodb_status",
+        )
         return {"source": "mariadb", "available": False, "error": str(err)}
 
 
@@ -355,7 +376,12 @@ def get_slow_queries(
         finally:
             conn.close()
     except Exception as err:
-        logger.debug("MariaDB get_slow_queries failed", exc_info=True)
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mariadb",
+            method="get_slow_queries",
+        )
         return {"source": "mariadb", "available": False, "error": str(err)}
 
 
@@ -424,5 +450,10 @@ def get_replication_status(config: MariaDBConfig) -> dict[str, Any]:
         finally:
             conn.close()
     except Exception as err:
-        logger.debug("MariaDB get_replication_status failed", exc_info=True)
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mariadb",
+            method="get_replication_status",
+        )
         return {"source": "mariadb", "available": False, "error": str(err)}

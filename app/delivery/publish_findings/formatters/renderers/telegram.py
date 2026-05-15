@@ -53,6 +53,8 @@ def _render(section: Section, ctx: ReportContext) -> str:
         return _render_root_cause(section)
     if kind is SectionKind.CLAIMS:
         return _render_claims(section)
+    if kind is SectionKind.UPSTREAM_CORRELATION:
+        return _render_correlation(section)
     if kind is SectionKind.PROVENANCE:
         return _render_provenance(section)
     if kind is SectionKind.REMEDIATION:
@@ -109,6 +111,19 @@ def _render_claims(section: Section) -> str:
 def _render_provenance(section: Section) -> str:
     bullets = [f"• {_to_telegram_html_body(_sanitize_for_slack(item))}" for item in section.items]
     return "<b>Provenance</b>\n" + "\n".join(bullets)
+
+
+def _render_correlation(section: Section) -> str:
+    signals = section.extras.get("signals") or ()
+    drivers = section.extras.get("drivers") or ()
+    parts: list[str] = ["<b>Upstream Correlation</b>"]
+    if signals:
+        body = "\n".join(f"• {_to_telegram_html_body(_sanitize_for_slack(s))}" for s in signals)
+        parts.append("<i>Correlated signals:</i>\n" + body)
+    if drivers:
+        body = "\n".join(f"• {_to_telegram_html_body(_sanitize_for_slack(d))}" for d in drivers)
+        parts.append("<i>Most likely causal drivers:</i>\n" + body)
+    return "\n".join(parts)
 
 
 def _render_remediation(section: Section) -> str:

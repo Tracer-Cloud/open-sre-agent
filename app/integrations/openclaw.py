@@ -13,6 +13,7 @@ Supported transports:
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import re
 import shutil
@@ -31,8 +32,11 @@ from mcp.client.stdio import stdio_client  # type: ignore[import-not-found]
 from pydantic import Field, field_validator, model_validator
 from typing_extensions import TypedDict
 
+from app.integrations._validation_helpers import report_validation_failure
 from app.integrations.mcp_streamable_http_compat import streamable_http_client
 from app.strict_config import StrictConfigModel
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_OPENCLAW_MCP_MODE: Literal["streamable-http", "sse", "stdio"] = "streamable-http"
 _OPENCLAW_CONTROL_UI_HOSTS = frozenset({"127.0.0.1", "localhost", "0.0.0.0"})
@@ -605,6 +609,12 @@ def validate_openclaw_config(config: OpenClawConfig) -> OpenClawValidationResult
             tool_names=tool_names,
         )
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="openclaw",
+            method="validate_openclaw_config",
+        )
         return OpenClawValidationResult(
             ok=False,
             detail=f"OpenClaw bridge validation failed: {describe_openclaw_error(err, config)}",

@@ -60,6 +60,40 @@ def _format_provenance_lines(ctx: ReportContext) -> list[str]:
     return lines
 
 
+def _format_correlation_lines(ctx: ReportContext) -> tuple[list[str], list[str]]:
+    correlation = ctx.get("correlation") or {}
+    if not isinstance(correlation, dict):
+        return [], []
+
+    raw_signals = correlation.get("correlated_signals") or []
+    raw_drivers = correlation.get("most_likely_causal_drivers") or []
+
+    signal_lines: list[str] = []
+    for signal in raw_signals:
+        if not isinstance(signal, dict):
+            continue
+        name = signal.get("name") or "unknown"
+        source = signal.get("source") or "unknown"
+        score = signal.get("score")
+        score_text = f" score={float(score):.2f}" if isinstance(score, int | float) else ""
+        signal_lines.append(f"• {name} ({source}{score_text})")
+
+    driver_lines: list[str] = []
+    for driver in raw_drivers:
+        if not isinstance(driver, dict):
+            continue
+        name = driver.get("name") or "unknown"
+        confidence = driver.get("confidence")
+        rationale = driver.get("rationale") or ""
+        confidence_text = (
+            f" confidence={float(confidence):.2f}" if isinstance(confidence, int | float) else ""
+        )
+        suffix = f" — {_sanitize_for_slack(str(rationale))}" if rationale else ""
+        driver_lines.append(f"• {name}{confidence_text}{suffix}")
+
+    return signal_lines, driver_lines
+
+
 # ---------------------------------------------------------------------------
 # Shared section helpers — called by both text and block renderers
 # ---------------------------------------------------------------------------

@@ -27,8 +27,16 @@ def _stub_telegram(
         chat_id: str,
         text: str,
         bot_token: str,
+        parse_mode: str = "",
     ) -> tuple[bool, str, str]:
-        calls.append({"chat_id": chat_id, "text": text, "bot_token": bot_token})
+        calls.append(
+            {
+                "chat_id": chat_id,
+                "text": text,
+                "bot_token": bot_token,
+                "parse_mode": parse_mode,
+            }
+        )
         return ok, error, "1" if ok else ""
 
     monkeypatch.setattr(
@@ -157,7 +165,21 @@ def test_first_dispatch_calls_telegram(monkeypatch: pytest.MonkeyPatch) -> None:
         "chat_id": "chat-1",
         "text": "CPU pegged at 95%",
         "bot_token": "tok",
+        "parse_mode": "",
     }
+
+
+def test_dispatch_can_use_html_parse_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _stub_telegram(monkeypatch)
+    _patch_clock(monkeypatch, [100.0])
+
+    dispatcher = AlarmDispatcher(
+        AlarmCredentials(bot_token="tok", chat_id="chat-1"),
+        parse_mode="HTML",
+    )
+
+    assert dispatcher.dispatch("max_cpu", "CPU < 95% & rising") is True
+    assert calls[0]["parse_mode"] == "HTML"
 
 
 def test_second_dispatch_within_cooldown_is_suppressed(

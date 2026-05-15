@@ -15,6 +15,7 @@ from urllib.parse import parse_qs, urlparse
 
 from app.integrations.verify import resolve_effective_integrations
 from app.services.vercel import VercelClient, VercelConfig, make_vercel_client
+from app.utils.sentry_sdk import report_silent
 
 logger = logging.getLogger(__name__)
 
@@ -260,7 +261,8 @@ def parse_vercel_url(vercel_url: str) -> ParsedVercelUrl:
     parsed = urlparse(cleaned)
     if not cleaned:
         raise VercelResolutionError("Vercel URL is required.")
-    if "vercel.com" not in parsed.netloc.lower():
+    hostname = (parsed.hostname or "").lower()
+    if hostname != "vercel.com" and not hostname.endswith(".vercel.com"):
         raise VercelResolutionError(f"Unsupported Vercel URL host: {parsed.netloc or '<empty>'}")
 
     parts = [part for part in parsed.path.split("/") if part]
@@ -834,14 +836,18 @@ class VercelPoller:
             try:
                 candidates = await asyncio.to_thread(self.collect_candidates)
                 for candidate in candidates:
+                    was_processed = False
                     try:
                         was_processed = await handle_candidate(candidate)
+                    except asyncio.CancelledError:
+                        raise
                     except Exception:
                         logger.exception(
-                            "Background RCA for Vercel deployment %s failed",
+                            "Vercel poller candidate handling failed for %s",
                             candidate.dedupe_key,
                         )
-                        was_processed = False
+                        with report_silent("vercel_poller.handle_candidate"):
+                            raise
                     if was_processed:
                         await asyncio.to_thread(
                             self.state_store.mark_processed,
@@ -852,6 +858,8 @@ class VercelPoller:
                 raise
             except Exception:
                 logger.exception("Vercel poller iteration failed")
+                with report_silent("vercel_poller.iteration"):
+                    raise
 
             await asyncio.sleep(self.settings.interval_seconds)
 

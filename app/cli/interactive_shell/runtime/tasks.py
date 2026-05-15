@@ -36,6 +36,7 @@ class TaskKind(StrEnum):
     SYNTHETIC_TEST = "synthetic_test"
     CLI_COMMAND = "cli_command"
     CODE_AGENT = "code_agent"
+    WATCHDOG = "watchdog"
 
 
 @dataclass

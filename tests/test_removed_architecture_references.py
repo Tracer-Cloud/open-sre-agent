@@ -14,6 +14,7 @@ SKIP_DIRS = {
     "build",
     "htmlcov",
     "node_modules",
+    "opensre.egg-info",
     "plans",
 }
 TEXT_SUFFIXES = {

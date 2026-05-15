@@ -79,6 +79,17 @@ def _cmd_status(session: ReplSession, console: Console, _args: list[str]) -> boo
     table.add_column("key", style="bold")
     table.add_column("value")
     table.add_row("interactions", str(len(session.history)))
+
+    # Show incoming alerts count and most recent age
+    if session.incoming_alerts:
+        from app.cli.interactive_shell.alert_renderer import time_ago
+
+        most_recent = session.incoming_alerts[-1]
+        age_str = time_ago(most_recent.received_at)
+        table.add_row("incoming alerts", f"{len(session.incoming_alerts)} (last {age_str})")
+    else:
+        table.add_row("incoming alerts", "0")
+
     table.add_row("last investigation", "yes" if session.last_state else "none")
     table.add_row("trust mode", "on" if session.trust_mode else "off")
     table.add_row("reasoning effort", display_reasoning_effort(session.reasoning_effort))

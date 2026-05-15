@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 from dataclasses import dataclass
@@ -17,7 +18,10 @@ from app.constants.posthog import (
     DEFAULT_POSTHOG_TIMEOUT_SECONDS,
     DEFAULT_POSTHOG_URL,
 )
+from app.integrations._validation_helpers import report_validation_failure
 from app.strict_config import StrictConfigModel
+
+logger = logging.getLogger(__name__)
 
 
 class PostHogConfig(StrictConfigModel):
@@ -164,6 +168,12 @@ def validate_posthog_config(config: PostHogConfig) -> PostHogValidationResult:
         )
         return PostHogValidationResult(ok=False, detail=detail)
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="posthog",
+            method="validate_posthog_config",
+        )
         return PostHogValidationResult(ok=False, detail=str(err))
 
 

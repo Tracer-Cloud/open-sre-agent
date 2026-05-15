@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import pathlib
 import re
@@ -9,6 +10,7 @@ import subprocess
 import sys
 import tomllib
 
+from app.integrations._validation_helpers import report_validation_failure
 from app.integrations.llm_cli.base import CLIInvocation, CLIProbe
 from app.integrations.llm_cli.binary_resolver import (
     candidate_binary_names as _candidate_binary_names,
@@ -17,6 +19,8 @@ from app.integrations.llm_cli.binary_resolver import (
     default_cli_fallback_paths as _default_cli_fallback_paths,
 )
 from app.integrations.llm_cli.binary_resolver import resolve_cli_binary
+
+logger = logging.getLogger(__name__)
 
 _KIMI_VERSION_RE = re.compile(r"(\d+\.\d+\.\d+)")
 _PROBE_TIMEOUT_SEC = 3.0
@@ -89,6 +93,12 @@ def _check_kimi_auth_fallback() -> tuple[bool | None, str]:
                     return True, "Authenticated via config.toml."
         return False, "No API key configured. Run: kimi login"
     except Exception as e:
+        report_validation_failure(
+            e,
+            logger=logger,
+            integration="kimi",
+            method="_check_kimi_auth_fallback",
+        )
         return None, f"Could not verify auth status: {e}"
 
 

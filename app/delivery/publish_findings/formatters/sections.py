@@ -42,6 +42,7 @@ class SectionKind(StrEnum):
     ROOT_CAUSE = "root_cause"
     FAILED_PODS = "failed_pods"
     CLAIMS = "claims"
+    UPSTREAM_CORRELATION = "upstream_correlation"
     PROVENANCE = "provenance"
     REMEDIATION = "remediation"
     TRACE = "trace"
@@ -195,6 +196,28 @@ def _build_provenance(ctx: ReportContext) -> Section | None:
     return Section(kind=SectionKind.PROVENANCE, title="Provenance", items=items)
 
 
+def _build_correlation(ctx: ReportContext) -> Section | None:
+    """Build the UPSTREAM_CORRELATION section from ``ctx["correlation"]``.
+
+    Reuses ``_format_correlation_lines`` (PR #1877) to produce the
+    pre-bulleted signal and driver strings, then stashes them in
+    ``extras`` so renderers can wrap them in channel-native sub-headings.
+    """
+    from app.delivery.publish_findings.formatters.report import _format_correlation_lines
+
+    signal_lines, driver_lines = _format_correlation_lines(ctx)
+    if not signal_lines and not driver_lines:
+        return None
+    # Strip "• " prefixes so renderers can choose their own bullet glyph.
+    signals = tuple(line.lstrip("• ").strip() for line in signal_lines)
+    drivers = tuple(line.lstrip("• ").strip() for line in driver_lines)
+    return Section(
+        kind=SectionKind.UPSTREAM_CORRELATION,
+        title="Upstream Correlation",
+        extras={"signals": signals, "drivers": drivers},
+    )
+
+
 def _build_remediation(ctx: ReportContext) -> Section | None:
     steps = ctx.get("remediation_steps") or []
     if not steps:
@@ -289,6 +312,7 @@ def build_sections(ctx: ReportContext) -> list[Section]:
         _build_failed_pods(ctx),
         validated_claims,
         non_validated_claims,
+        _build_correlation(ctx),
         _build_provenance(ctx),
         _build_remediation(ctx),
         _build_trace(ctx),

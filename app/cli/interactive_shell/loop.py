@@ -52,6 +52,7 @@ from app.analytics.events import Event
 from app.analytics.provider import get_analytics
 from app.cli.interactive_shell import alert_inbox as _alert_inbox
 from app.cli.interactive_shell import commands as _commands
+from app.cli.interactive_shell.alert_renderer import drain_and_render_incoming
 from app.cli.interactive_shell.chat import cli_agent as _cli_agent
 from app.cli.interactive_shell.chat import cli_help as _cli_help
 from app.cli.interactive_shell.config import ReplConfig
@@ -68,6 +69,7 @@ from app.cli.interactive_shell.ui import (
     WARNING,
     render_banner,
 )
+from app.cli.interactive_shell.ui.choice_menu import repl_tty_interactive
 from app.cli.interactive_shell.ui.streaming import (
     _CHARS_PER_TOKEN,
     format_token_count_short,
@@ -171,6 +173,68 @@ def _dispatch_should_show_spinner(text: str, session: ReplSession) -> bool:
     if stripped.startswith("/"):
         return False
     return not _router.is_bare_command_alias(stripped, session)
+
+
+_EXCLUSIVE_STDIN_MENU_COMMANDS: frozenset[str] = frozenset(
+    {
+        "/history",
+        "/integrations",
+        "/list",
+        "/mcp",
+        "/model",
+        "/template",
+        "/trust",
+        "/verbose",
+    }
+)
+_EXCLUSIVE_STDIN_SUBCOMMANDS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("/integrations", "setup"),
+        ("/mcp", "connect"),
+    }
+)
+_WAIT_FOR_COMPLETION_COMMANDS: frozenset[str] = frozenset({"/exit", "/quit"})
+
+
+def _dispatch_needs_exclusive_stdin(text: str, session: ReplSession) -> bool:
+    """True when a queued turn should finish before the next prompt starts.
+
+    Most turns can run while prompt-toolkit immediately opens the next input
+    frame, which is what gives the shell type-ahead during streaming. A few
+    slash commands, however, temporarily own stdin themselves: inline
+    ``repl_choose_one`` menus and subprocess-backed interactive wizards. If the
+    next prompt starts underneath those, prompt-toolkit can send a cursor
+    position request and the terminal's reply (for example ``[32;1R``) leaks
+    into the prompt or menu input. Exit commands also pause so the shell does
+    not draw one more prompt after printing goodbye. Waiting only for these
+    known cases preserves type-ahead everywhere else.
+    """
+    if not repl_tty_interactive():
+        return False
+
+    stripped = text.strip()
+    if not stripped:
+        return False
+    if stripped.startswith("/"):
+        dispatch_text = stripped
+    elif _router.is_bare_command_alias(stripped, session):
+        dispatch_text = _router.slash_dispatch_text(stripped)
+    else:
+        return False
+
+    parts = dispatch_text.split()
+    if not parts:
+        return False
+    name = parts[0].lower()
+    args = [arg.lower() for arg in parts[1:]]
+
+    if name in _WAIT_FOR_COMPLETION_COMMANDS:
+        return True
+    if name in _EXCLUSIVE_STDIN_MENU_COMMANDS and not args:
+        return True
+    if name == "/tests" and not args:
+        return True
+    return bool(args and (name, args[0]) in _EXCLUSIVE_STDIN_SUBCOMMANDS)
 
 
 class DispatchCancelled(Exception):
@@ -423,6 +487,7 @@ async def _repl_main(
         return _run_initial_input(initial_input, session, hot_reloader)
 
     alert_listener_handle: _alert_inbox.AlertListenerHandle | None = None
+    inbox: _alert_inbox.AlertInbox | None = None
     if cfg.alert_listener_enabled:
         try:
             inbox = _alert_inbox.AlertInbox()
@@ -446,7 +511,7 @@ async def _repl_main(
             log.warning("Alert listener could not start: %s — continuing without it.", exc)
 
     try:
-        await _run_interactive(session, hot_reloader, pt_session=pt_session)
+        await _run_interactive(session, hot_reloader, pt_session=pt_session, inbox=inbox)
         return 0
     finally:
         if alert_listener_handle is not None:
@@ -726,6 +791,7 @@ async def _run_interactive(
     session: ReplSession,
     hot_reloader: HotReloadCoordinator | None = None,
     pt_session: PromptSession[str] | None = None,
+    inbox: _alert_inbox.AlertInbox | None = None,
 ) -> None:
     """Per-turn ``prompt_async`` cycle backed by a queue + background
     processor. Submitting a new prompt while a turn is streaming
@@ -748,6 +814,9 @@ async def _run_interactive(
     redundant ``_build_prompt_session()`` call here. When ``None``, this
     function builds its own — keeps the public signature usable for
     callers that don't pre-build.
+
+    ``inbox`` (AlertInbox) optional. When provided, the REPL drains pending
+    alerts at the start of each turn and in the background when alerts arrive.
     """
     if pt_session is None:
         pt_session = _build_prompt_session()
@@ -777,8 +846,19 @@ async def _run_interactive(
 
     def _request_exit() -> None:
         state.exit_requested = True
-        state.cancel_current_dispatch()
-        main_loop.call_soon_threadsafe(pt_app.exit)
+
+        def _exit_prompt_app(attempts_left: int = 5) -> None:
+            if pt_app.is_running:
+                pt_app.exit()
+                return
+            # The worker thread can request exit in the tiny gap after one
+            # prompt_async call returns and before the next starts. Retry
+            # briefly so the next prompt is dismissed without surfacing
+            # prompt_toolkit's "Application is not running" exception.
+            if attempts_left > 0:
+                main_loop.call_later(0.02, _exit_prompt_app, attempts_left - 1)
+
+        main_loop.call_soon_threadsafe(_exit_prompt_app)
 
     async def _run_one_dispatch(text: str) -> None:
         # Per-turn cancel event — fresh ``threading.Event`` so a worker
@@ -835,6 +915,42 @@ async def _run_interactive(
             if state.current_cancel_event is dispatch_cancel:
                 state.current_cancel_event = None
 
+    async def _alert_watcher() -> None:
+        """Background coroutine: wake on alert.pending_event and drain to console.
+
+        Runs on the main asyncio loop, using call_soon_threadsafe to execute
+        the drain synchronously (the HTTP handler thread sets the event).
+        """
+        if inbox is None:
+            return
+
+        # Synchronously drain any alerts that arrived before the watcher started
+        alert_console = Console(
+            highlight=False,
+            force_terminal=True,
+            color_system="truecolor",
+            legacy_windows=False,
+        )
+        drain_and_render_incoming(session, alert_console, inbox)
+
+        while not state.exit_requested:
+            try:
+                # Wait for the pending event (set by AlertInbox.put)
+                # Use a thread-safe wait with a timeout to allow periodic checks
+                await asyncio.to_thread(inbox.pending_event.wait, timeout=1)
+            except asyncio.CancelledError:
+                return
+
+            # Drain any alerts using call_soon_threadsafe from the watcher thread
+            # This ensures rendering happens on the main loop without conflicts
+            # with the prompt_toolkit editor
+            try:
+                # Since we're already in an asyncio thread context,
+                # we can just call drain directly
+                drain_and_render_incoming(session, alert_console, inbox)
+            except Exception as exc:
+                log.warning("Error draining incoming alerts: %s", exc)
+
     async def _processor() -> None:
         """Drain queued prompts one dispatch at a time."""
         while not state.exit_requested:
@@ -876,6 +992,7 @@ async def _run_interactive(
         return ANSI(f"{spinner.inline_spinner_ansi()}\n{base}")
 
     processor_task = asyncio.create_task(_processor())
+    alert_watcher_task = asyncio.create_task(_alert_watcher())
     try:
         with patch_stdout(raw=True):
             # ``erase_when_done=True`` on ``PromptSession`` clears the
@@ -896,6 +1013,17 @@ async def _run_interactive(
             # ``sys.stdout``.
             echo_console = Console(highlight=False, force_terminal=True, color_system="truecolor")
             while True:
+                if state.exit_requested:
+                    return
+
+                # Drain any pending alerts at the start of each turn
+                # (safety net in case alerts arrived while typing)
+                if inbox is not None:
+                    try:
+                        drain_and_render_incoming(session, echo_console, inbox)
+                    except Exception as exc:
+                        log.warning("Error draining alerts at turn start: %s", exc)
+
                 # Hot-reload check (introduced in main) — picks up dev
                 # edits to dispatch handlers between turns. No-op when
                 # ``cfg.reload`` was off (hot_reloader is None).
@@ -974,7 +1102,10 @@ async def _run_interactive(
                     continue
 
                 render_submitted_prompt(echo_console, session, stripped)
+                wait_for_dispatch = _dispatch_needs_exclusive_stdin(stripped, session)
                 await state.queue.put(stripped)
+                if wait_for_dispatch:
+                    await state.queue.join()
     finally:
         state.exit_requested = True
         state.cancel_current_dispatch()
@@ -984,6 +1115,7 @@ async def _run_interactive(
         except asyncio.CancelledError:
             pass
         processor_task.cancel()
+        alert_watcher_task.cancel()
         # ``try/except/pass`` here (not ``contextlib.suppress``) so
         # CodeQL doesn't flag the bare ``await`` as ineffectual; SIM105
         # ruff suggestion is suppressed locally.
@@ -993,6 +1125,11 @@ async def _run_interactive(
             # Processor cleanup must never raise — we're already in the
             # REPL's outer ``finally`` and the session is shutting down.
             # Suppress so the exit path completes cleanly.
+            pass
+        try:  # noqa: SIM105
+            await alert_watcher_task
+        except (asyncio.CancelledError, Exception):
+            # Alert watcher cleanup must never raise.
             pass
 
 

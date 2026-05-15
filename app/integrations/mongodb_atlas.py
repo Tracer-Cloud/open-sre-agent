@@ -10,6 +10,7 @@ Authentication: HTTP Digest with API public/private key pair.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from typing import Any
@@ -17,7 +18,10 @@ from typing import Any
 import httpx
 from pydantic import Field, field_validator
 
+from app.integrations._validation_helpers import report_validation_failure
 from app.strict_config import StrictConfigModel
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_ATLAS_BASE_URL = "https://cloud.mongodb.com/api/atlas/v2"
 DEFAULT_ATLAS_TIMEOUT = 15
@@ -133,6 +137,12 @@ def validate_mongodb_atlas_config(
             detail=f"Atlas API returned {err.response.status_code}: {err.response.text[:200]}",
         )
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mongodb_atlas",
+            method="validate_mongodb_atlas_config",
+        )
         return MongoDBAtlasValidationResult(ok=False, detail=f"Atlas connection failed: {err}")
 
 
@@ -199,6 +209,12 @@ def get_clusters(config: MongoDBAtlasConfig) -> dict[str, Any]:
         finally:
             client.close()
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mongodb_atlas",
+            method="get_clusters",
+        )
         return {"source": "mongodb_atlas", "available": False, "error": str(err)}
 
 
@@ -247,6 +263,12 @@ def get_alerts(
         finally:
             client.close()
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mongodb_atlas",
+            method="get_alerts",
+        )
         return {"source": "mongodb_atlas", "available": False, "error": str(err)}
 
 
@@ -383,6 +405,12 @@ def get_cluster_metrics(
         finally:
             client.close()
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mongodb_atlas",
+            method="get_cluster_metrics",
+        )
         return {"source": "mongodb_atlas", "available": False, "error": str(err)}
 
 
@@ -466,6 +494,12 @@ def get_performance_advisor(
         finally:
             client.close()
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mongodb_atlas",
+            method="get_performance_advisor",
+        )
         return {"source": "mongodb_atlas", "available": False, "error": str(err)}
 
 
@@ -518,4 +552,10 @@ def get_cluster_events(
         finally:
             client.close()
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mongodb_atlas",
+            method="get_cluster_events",
+        )
         return {"source": "mongodb_atlas", "available": False, "error": str(err)}

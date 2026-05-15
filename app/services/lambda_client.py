@@ -2,12 +2,16 @@
 
 import base64
 import json
+import logging
 from contextlib import suppress
 from io import BytesIO
 from typing import Any
 from zipfile import ZipFile
 
 from app.services.env import make_boto3_client, require_aws_credentials
+from app.utils.errors import report_exception
+
+logger = logging.getLogger(__name__)
 
 try:
     from botocore.exceptions import ClientError
@@ -338,7 +342,26 @@ def invoke_function(
 
         result_payload = None
         if "Payload" in response:
-            result_payload = json.loads(response["Payload"].read().decode())
+            payload_bytes = response["Payload"].read()
+            try:
+                result_payload = json.loads(payload_bytes.decode())
+            except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+                report_exception(
+                    exc,
+                    logger=logger,
+                    message="Lambda invocation returned non-JSON payload",
+                    severity="warning",
+                    tags={
+                        "surface": "service_client",
+                        "integration": "aws_lambda",
+                        "component": "app.services.lambda_client",
+                    },
+                    extras={
+                        "function_name": function_name,
+                        "payload_preview": payload_bytes[:200].decode("utf-8", "replace"),
+                    },
+                )
+                result_payload = None
 
         return {
             "success": True,

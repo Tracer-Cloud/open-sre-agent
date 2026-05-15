@@ -7,13 +7,17 @@ timeouts enforced, result sizes capped.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from typing import Any
 
 from pydantic import Field, field_validator
 
+from app.integrations._validation_helpers import report_validation_failure
 from app.strict_config import StrictConfigModel
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_CLICKHOUSE_PORT = 8123
 DEFAULT_CLICKHOUSE_DATABASE = "default"
@@ -146,6 +150,12 @@ def validate_clickhouse_config(config: ClickHouseConfig) -> ClickHouseValidation
         finally:
             client.close()
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="clickhouse",
+            method="validate_clickhouse_config",
+        )
         return ClickHouseValidationResult(ok=False, detail=f"ClickHouse connection failed: {err}")
 
 
@@ -206,6 +216,12 @@ def get_query_activity(
         finally:
             client.close()
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="clickhouse",
+            method="get_query_activity",
+        )
         return {"source": "clickhouse", "available": False, "error": str(err)}
 
 
@@ -248,6 +264,12 @@ def get_system_health(config: ClickHouseConfig) -> dict[str, Any]:
         finally:
             client.close()
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="clickhouse",
+            method="get_system_health",
+        )
         return {"source": "clickhouse", "available": False, "error": str(err)}
 
 
@@ -306,4 +328,10 @@ def get_table_stats(
         finally:
             client.close()
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="clickhouse",
+            method="get_table_stats",
+        )
         return {"source": "clickhouse", "available": False, "error": str(err)}

@@ -68,10 +68,13 @@ class DatadogClient:
         query: str,
         time_range_minutes: int = 60,
         limit: int = 50,
+        *,
+        start: datetime | None = None,
+        end: datetime | None = None,
     ) -> dict[str, Any]:
         """Search Datadog logs using the Log Search API (v2)."""
-        now = datetime.now(UTC)
-        from_ts = now - timedelta(minutes=time_range_minutes)
+        now = end or datetime.now(UTC)
+        from_ts = start or (now - timedelta(minutes=time_range_minutes))
 
         payload = {
             "filter": {
@@ -121,6 +124,64 @@ class DatadogClient:
             logger.warning(
                 "[datadog] Log search request error type=%s detail=%s "
                 "(network/auth/timeout likely)",
+                type(e).__name__,
+                e,
+            )
+            return {"success": False, "error": str(e)}
+
+    def query_metrics(
+        self,
+        query: str,
+        *,
+        start: datetime,
+        end: datetime,
+    ) -> dict[str, Any]:
+        """Query Datadog metrics (v1 query API) for a bounded time range."""
+        params: dict[str, str | int] = {
+            "from": int(start.timestamp()),
+            "to": int(end.timestamp()),
+            "query": query,
+        }
+        try:
+            resp = self._get_client().get("/api/v1/query", params=params)
+            resp.raise_for_status()
+            payload = resp.json()
+            series_list = payload.get("series") or []
+            if not isinstance(series_list, list) or not series_list:
+                return {"success": True, "timestamps": [], "values": []}
+
+            first = series_list[0] if isinstance(series_list[0], dict) else {}
+            pointlist = first.get("pointlist") or []
+
+            timestamps: list[str] = []
+            values: list[float] = []
+            for point in pointlist:
+                if not (isinstance(point, list | tuple) and len(point) >= 2):
+                    continue
+                ts_ms, value = point[0], point[1]
+                if value is None:
+                    continue
+                try:
+                    ts = datetime.fromtimestamp(float(ts_ms) / 1000.0, tz=UTC)
+                    timestamps.append(ts.isoformat().replace("+00:00", "Z"))
+                    values.append(float(value))
+                except Exception:
+                    continue
+
+            return {"success": True, "timestamps": timestamps, "values": values}
+        except httpx.HTTPStatusError as e:
+            logger.warning(
+                "[datadog] Metrics query HTTP failure status=%s query=%r",
+                e.response.status_code,
+                query,
+            )
+            return {
+                "success": False,
+                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+            }
+        except Exception as e:
+            logger.warning(
+                "[datadog] Metrics query request error type=%s detail=%s",
                 type(e).__name__,
                 e,
             )

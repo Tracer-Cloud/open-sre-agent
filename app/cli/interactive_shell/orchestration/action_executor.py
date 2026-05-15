@@ -830,6 +830,65 @@ def run_pwd_command(command: str, session: ReplSession, console: Console) -> Non
 
 _OPENSRE_BLOCKED_SUBCOMMANDS: frozenset[str] = frozenset({"agent"})
 
+# Command paths (one or two whitespace-joined tokens) that drive a
+# full-TTY interactive wizard — ``questionary`` radio widgets, multi-
+# step prompts. They cannot run inside the persistent REPL: the
+# wizard's prompt_toolkit Application fights the shell's active one
+# over the same terminal. Stdout piped through ``_print_task_output_line``
+# strips cursor-control escapes and stacks each redraw as plain text;
+# stdout inherited leaves two prompt_toolkit apps writing to the same
+# TTY. Both look broken to the user. Refusing with a clear message and
+# pointing at the right invocation is the smallest fix that doesn't
+# strand the user.
+#
+# Stored as space-joined paths (e.g. ``"integrations setup"``) so both
+# one-token (``"onboard"``) and two-token cases live in a single
+# data-driven set; :func:`_is_interactive_wizard` does the lookup.
+_INTERACTIVE_OPENSRE_COMMAND_PATHS: frozenset[str] = frozenset(
+    {
+        "onboard",
+        "integrations setup",
+    }
+)
+
+
+def _is_interactive_wizard(tokens: list[str]) -> bool:
+    """True when ``tokens`` name an opensre subcommand whose Click
+    handler drives an interactive wizard (questionary-backed widgets)
+    that needs a full TTY.
+    """
+    if not tokens:
+        return False
+    one = tokens[0].lower()
+    if one in _INTERACTIVE_OPENSRE_COMMAND_PATHS:
+        return True
+    if len(tokens) < 2:
+        return False
+    two = f"{one} {tokens[1].lower()}"
+    return two in _INTERACTIVE_OPENSRE_COMMAND_PATHS
+
+
+def print_interactive_wizard_handoff(console: Console, command_str: str) -> None:
+    """Print the standardized 'wizard needs a full terminal' handoff
+    message. Used by both :func:`run_opensre_cli_command` (LLM-classified
+    intent path) and ``cli_parity._cmd_onboard`` (slash-command path) so
+    the user sees the same message regardless of how the wizard was
+    triggered.
+
+    Exported (no leading underscore) because it crosses module
+    boundaries — Greptile flagged that a private name imported across
+    modules creates a hidden public contract.
+    """
+    console.print(
+        f"[{WARNING}]`opensre {command_str}` is an interactive wizard "
+        "that needs a full terminal.[/]"
+    )
+    console.print(
+        f"[{DIM}]Exit the interactive shell (Ctrl+D or `/exit`) and run "
+        f"[bold]opensre {command_str}[/bold] directly from your shell prompt.[/]"
+    )
+
+
 _READ_ONLY_OPENSRE_SUBCOMMANDS: frozenset[str] = frozenset(
     {
         "health",
@@ -972,6 +1031,13 @@ def run_opensre_cli_command(
     if first_token in _OPENSRE_BLOCKED_SUBCOMMANDS:
         console.print(f"[{ERROR}]Cannot run `opensre {first_token}`: subcommand is blocked.[/]")
         return False
+
+    if _is_interactive_wizard(tokens):
+        command_str = " ".join(tokens)
+        print_interactive_wizard_handoff(console, command_str)
+        session.record("cli_command", f"opensre {command_str}", ok=False)
+        # True = wizard exists and was handed off; the ``_OPENSRE_BLOCKED_SUBCOMMANDS`` branch above returns False for "shouldn't run at all".
+        return True
 
     command_classification = _classify_opensre_command(tokens)
     from app.cli.interactive_shell.orchestration.execution_policy import (

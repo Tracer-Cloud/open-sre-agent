@@ -32,6 +32,22 @@ One-shot (includes heavier `test-full`): `make check`.
 
 Before a PR, run at least `make lint`, `make format-check`, `make typecheck`, and `make test-cov` (see [CONTRIBUTING.md](https://github.com/Tracer-Cloud/opensre/blob/main/CONTRIBUTING.md)).
 
+## Interactive shell: REPL watchdog demo
+
+PR reviewers expect a **visible demo** (terminal log or screenshot) in the PR under **Demo/Screenshot**, not only tests. Copy the exact steps from this section into your PR description, then attach your terminal output or recording.
+
+1. `uv run opensre` (TTY).
+2. `/trust on` (or confirm the elevated-action prompt when running `/watch`).
+3. `/watch <pid> --max-cpu 80` — expect `task … started.` (use a real PID, e.g. the shell’s Python process).
+4. `/watches` — table columns include id, pid, kind, status, thresholds, last sample.
+5. `/unwatch <task_id>` or `/cancel <task_id>` — then `/watches` again; status should show **cancelled**.
+6. Optional: lower `--max-cpu` so a threshold trips; after Telegram sends, the REPL prints one line: `[task …] alarm fired: … (telegram delivered)`.
+
+Automated equivalent (runs in `make test-cov`):  
+`uv run pytest tests/cli/interactive_shell/test_watchdog_repl_e2e_demo.py -v --tb=short`
+
+Longer transcript (optional): [tests/cli/interactive_shell/repl_watchdog_demo.md](../tests/cli/interactive_shell/repl_watchdog_demo.md).
+
 ## VS Code dev container
 
 The dev container is defined under [`.devcontainer/`](https://github.com/Tracer-Cloud/opensre/tree/main/.devcontainer). It builds from [`.devcontainer/Dockerfile`](https://github.com/Tracer-Cloud/opensre/blob/main/.devcontainer/Dockerfile) (Python **3.13**), then **`postCreateCommand`** creates `.venv-devcontainer` and runs **`pip install -e '.[dev]'`** (not `uv`). Docker Desktop, OrbStack, Colima, or another compatible runtime must be available on the host.

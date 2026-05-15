@@ -167,6 +167,8 @@ def _render(section: Section, ctx: ReportContext) -> str:
         return _render_root_cause(section)
     if kind is SectionKind.CLAIMS:
         return _render_claims(section)
+    if kind is SectionKind.UPSTREAM_CORRELATION:
+        return _render_correlation(section)
     if kind is SectionKind.PROVENANCE:
         return _render_provenance(section)
     if kind is SectionKind.REMEDIATION:
@@ -213,6 +215,17 @@ def _render_claims(section: Section) -> str:
 def _render_provenance(section: Section) -> str:
     bullets = [f"- {item}" for item in section.items]
     return "**Provenance**\n" + "\n".join(bullets)
+
+
+def _render_correlation(section: Section) -> str:
+    signals = section.extras.get("signals") or ()
+    drivers = section.extras.get("drivers") or ()
+    parts: list[str] = ["**Upstream Correlation**"]
+    if signals:
+        parts.append("*Correlated signals:*\n" + "\n".join(f"- {s}" for s in signals))
+    if drivers:
+        parts.append("*Most likely causal drivers:*\n" + "\n".join(f"- {d}" for d in drivers))
+    return "\n".join(parts)
 
 
 def _render_remediation(section: Section) -> str:

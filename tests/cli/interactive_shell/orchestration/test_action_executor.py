@@ -15,6 +15,7 @@ from rich.console import Console
 from app.cli.interactive_shell.orchestration.action_executor import (
     _MIN_SUBPROCESS_TERMINAL_WIDTH,
     _TASK_OUTPUT_PREFIX_WIDTH,
+    _is_interactive_wizard,
     _pump_task_pty,
     _pump_task_stream,
     read_diag,
@@ -1140,3 +1141,179 @@ def test_run_synthetic_test_forwards_columns_to_subprocess(
     env = captured[0].get("env")
     assert isinstance(env, dict)
     assert env.get("COLUMNS") == str(110 - _TASK_OUTPUT_PREFIX_WIDTH - 1)
+
+
+@pytest.mark.parametrize(
+    "tokens,expected",
+    [
+        # Single-token interactive wizards.
+        (["onboard"], True),
+        (["ONBOARD"], True),  # case-insensitive
+        (["onboard", "local_llm"], True),  # extra args still classified
+        # Two-token interactive wizard.
+        (["integrations", "setup"], True),
+        (["INTEGRATIONS", "SETUP"], True),
+        (["integrations", "setup", "datadog"], True),
+        # Two-token NON-wizard under integrations — must NOT match.
+        (["integrations", "list"], False),
+        (["integrations", "verify"], False),
+        # Other subcommands — must NOT match.
+        (["health"], False),
+        (["version"], False),
+        (["agents", "list"], False),
+        # Edge: empty.
+        ([], False),
+    ],
+)
+def test_is_interactive_wizard_classifies_command_paths(tokens: list[str], expected: bool) -> None:
+    """The wizard classifier is the data-driven contract behind both the
+    LLM-classified refusal and the ``/onboard`` slash refusal. Adding a
+    new interactive command later should be a one-line set entry — this
+    test pins the current set + the case-insensitive lookup behavior.
+    """
+    assert _is_interactive_wizard(tokens) is expected
+
+
+def test_run_opensre_cli_command_refuses_onboard_with_helpful_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The onboarding wizard is a full-TTY interactive flow. Running it
+    from inside the persistent REPL produces broken cursor rendering
+    because the wizard's prompt_toolkit Application fights the shell's
+    own active one. Regression for the stacked-widget bug seen with
+    ``opensre onboard`` invoked via natural-language intent.
+    """
+    popen_calls: list[list[str]] = []
+    run_calls: list[list[str]] = []
+
+    def _fake_popen(command: list[str], **_kwargs: object) -> None:
+        popen_calls.append(command)
+        raise AssertionError("subprocess.Popen must not be called for interactive subcommand")
+
+    def _fake_run(command: list[str], **_kwargs: object) -> None:
+        run_calls.append(command)
+        raise AssertionError("subprocess.run must not be called for interactive subcommand")
+
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.orchestration.action_executor.subprocess.Popen", _fake_popen
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.orchestration.action_executor.subprocess.run", _fake_run
+    )
+
+    session = ReplSession()
+    buf = io.StringIO()
+    # Width >80 so the multi-line warning doesn't wrap mid-substring on
+    # the assertions below.
+    console = Console(file=buf, force_terminal=False, width=200)
+
+    assert (
+        run_opensre_cli_command(
+            "onboard",
+            session,
+            console,
+            confirm_fn=lambda _prompt: "y",
+            is_tty=True,
+        )
+        is True
+    )
+
+    out = buf.getvalue()
+    assert "needs a full terminal" in out
+    assert "opensre onboard" in out
+    assert popen_calls == []
+    assert run_calls == []
+    assert session.history[-1] == {
+        "type": "cli_command",
+        "text": "opensre onboard",
+        "ok": False,
+    }
+
+
+def test_run_opensre_cli_command_refuses_integrations_setup_with_helpful_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``opensre integrations setup`` is also a full-TTY wizard. Same
+    rendering conflict as ``onboard``; same fix.
+    """
+    popen_calls: list[list[str]] = []
+    run_calls: list[list[str]] = []
+
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.orchestration.action_executor.subprocess.Popen",
+        lambda cmd, **_kw: popen_calls.append(cmd),
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.orchestration.action_executor.subprocess.run",
+        lambda cmd, **_kw: run_calls.append(cmd),
+    )
+
+    session = ReplSession()
+    buf = io.StringIO()
+    # Width >80 so the multi-line warning doesn't wrap mid-substring on
+    # assertions below.
+    console = Console(file=buf, force_terminal=False, width=200)
+
+    assert (
+        run_opensre_cli_command(
+            "integrations setup",
+            session,
+            console,
+            confirm_fn=lambda _prompt: "y",
+            is_tty=True,
+        )
+        is True
+    )
+
+    out = buf.getvalue()
+    assert "needs a full terminal" in out
+    assert "opensre integrations setup" in out
+    assert popen_calls == []
+    assert run_calls == []
+    assert session.history[-1] == {
+        "type": "cli_command",
+        "text": "opensre integrations setup",
+        "ok": False,
+    }
+
+
+def test_run_opensre_cli_command_allows_integrations_list_without_blocking(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only the ``setup`` subcommand under ``integrations`` is the wizard.
+    Other ``integrations`` subcommands like ``integrations list`` must
+    not get caught by the interactive-wizard block — guard against an
+    over-broad refusal.
+    """
+    start_calls: list[list[str]] = []
+
+    def _fake_start_background_cli_task(*, argv_list: list[str], **_kw: object) -> None:
+        start_calls.append(argv_list)
+
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.orchestration.action_executor.start_background_cli_task",
+        _fake_start_background_cli_task,
+    )
+
+    session = ReplSession()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    assert (
+        run_opensre_cli_command(
+            "integrations list",
+            session,
+            console,
+            confirm_fn=lambda _prompt: "y",
+            is_tty=True,
+        )
+        is True
+    )
+
+    out = buf.getvalue()
+    assert "needs a full terminal" not in out
+    # The dispatcher should have reached the background-task path
+    # (proving the wizard block didn't fire).
+    assert start_calls, "background task starter was not invoked"
+    assert "integrations" in start_calls[0]
+    assert "list" in start_calls[0]

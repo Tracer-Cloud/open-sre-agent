@@ -52,7 +52,7 @@
 
 - `app/analytics/` — Analytics event plumbing and install helpers used by the onboarding flow.
 - `app/auth/` — JWT and authentication helpers for local and hosted runtime access.
-- `app/cli/` — Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support. Interactive terminal (TTY) loop: `app/cli/interactive_shell/`.
+- `app/cli/` — Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support. Interactive terminal (TTY) loop: `app/cli/interactive_shell/`. REPL watchdog slash commands (`/watch`, `/watches`, `/unwatch`): PR demo steps live under **Interactive shell: REPL watchdog demo** in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#interactive-shell-repl-watchdog-demo).
 - `app/constants/` — Shared prompt and other static constants.
 - `app/deployment/` — Single home for “deployment” code, split by concern:
     - `app/deployment/methods/` — _How_ you ship (Railway CLI, etc.).

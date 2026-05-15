@@ -201,7 +201,13 @@ class RegisteredTool:
         }
 
     def __call__(self, **kwargs: Any) -> Any:
-        return self.run(**kwargs)
+        try:
+            return self.run(**kwargs)
+        except Exception as exc:
+            from app.utils.sentry_sdk import capture_exception
+
+            capture_exception(exc, context=f"tool.{self.name}")
+            return {"error": str(exc), "exception_type": type(exc).__name__}
 
     @classmethod
     def from_base_tool(

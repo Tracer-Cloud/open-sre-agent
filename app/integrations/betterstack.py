@@ -27,6 +27,7 @@ from typing import Any
 import httpx
 from pydantic import Field, field_validator
 
+from app.integrations._validation_helpers import report_validation_failure
 from app.strict_config import StrictConfigModel
 
 logger = logging.getLogger(__name__)
@@ -207,7 +208,12 @@ def validate_betterstack_config(
         with _sql_client(config) as client:
             response, err = _post_sql(client, config.query_endpoint, _VALIDATION_PROBE_SQL)
     except Exception as err:
-        logger.debug("Better Stack validate_config failed", exc_info=True)
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="betterstack",
+            method="validate_betterstack_config",
+        )
         return BetterStackValidationResult(
             ok=False, detail=f"Better Stack connection failed: {err}"
         )
@@ -393,7 +399,12 @@ def query_logs(
         with _sql_client(config) as client:
             response, err = _post_sql(client, config.query_endpoint, sql)
     except Exception as err:
-        logger.debug("Better Stack query_logs failed", exc_info=True)
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="betterstack",
+            method="query_logs",
+        )
         return _error_evidence(f"Better Stack connection failed: {err}", source=safe_source)
 
     if err is not None or response is None:

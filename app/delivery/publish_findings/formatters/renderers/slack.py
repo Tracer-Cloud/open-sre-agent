@@ -71,6 +71,8 @@ def _render_text(section: Section, ctx: ReportContext) -> str:
         return _text_root_cause(section)
     if kind is SectionKind.CLAIMS:
         return _text_claims(section)
+    if kind is SectionKind.UPSTREAM_CORRELATION:
+        return _text_correlation(section)
     if kind is SectionKind.PROVENANCE:
         return _text_provenance(section)
     if kind is SectionKind.REMEDIATION:
@@ -121,6 +123,17 @@ def _text_claims(section: Section) -> str:
 def _text_provenance(section: Section) -> str:
     bullets = [f"• {_sanitize_for_slack(item)}" for item in section.items]
     return "*Provenance:*\n" + "\n".join(bullets)
+
+
+def _text_correlation(section: Section) -> str:
+    signals = section.extras.get("signals") or ()
+    drivers = section.extras.get("drivers") or ()
+    parts: list[str] = ["## Upstream Correlation"]
+    if signals:
+        parts.append("*Correlated signals:*\n" + "\n".join(f"• {s}" for s in signals))
+    if drivers:
+        parts.append("*Most likely causal drivers:*\n" + "\n".join(f"• {d}" for d in drivers))
+    return "\n".join(parts)
 
 
 def _text_remediation(section: Section) -> str:
@@ -174,6 +187,8 @@ def _render_blocks(section: Section, ctx: ReportContext) -> list[dict[str, Any]]
         return _blocks_failed_pods(section)
     if kind is SectionKind.CLAIMS:
         return _blocks_claims(section)
+    if kind is SectionKind.UPSTREAM_CORRELATION:
+        return _blocks_correlation(section)
     if kind is SectionKind.PROVENANCE:
         return _blocks_provenance(section)
     if kind is SectionKind.REMEDIATION:
@@ -260,6 +275,30 @@ def _blocks_claims(section: Section) -> list[dict[str, Any]]:
     # Non-validated: no header, just an inline-titled section block.
     section_block = _mrkdwn_section("*Inferred (not yet validated)*\n" + "\n".join(bullets))
     return [section_block] if section_block else []
+
+
+def _blocks_correlation(section: Section) -> list[dict[str, Any]]:
+    signals = section.extras.get("signals") or ()
+    drivers = section.extras.get("drivers") or ()
+    if not signals and not drivers:
+        return []
+    blocks: list[dict[str, Any]] = [
+        {"type": "divider"},
+        {"type": "header", "text": {"type": "plain_text", "text": "Upstream Correlation"}},
+    ]
+    if signals:
+        signal_block = _mrkdwn_section(
+            "*Correlated signals:*\n" + "\n".join(f"• {s}" for s in signals)
+        )
+        if signal_block:
+            blocks.append(signal_block)
+    if drivers:
+        driver_block = _mrkdwn_section(
+            "*Most likely causal drivers:*\n" + "\n".join(f"• {d}" for d in drivers)
+        )
+        if driver_block:
+            blocks.append(driver_block)
+    return blocks
 
 
 def _blocks_provenance(section: Section) -> list[dict[str, Any]]:

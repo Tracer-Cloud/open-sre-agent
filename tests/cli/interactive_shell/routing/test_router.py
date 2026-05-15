@@ -23,8 +23,38 @@ class TestClassifyInput:
         session = ReplSession()
         # A bare word matching a slash command short name should route to slash
         # even without the leading '/' and even with no prior investigation.
-        for word in ("help", "exit", "quit", "status", "clear", "reset", "trust", "welcome"):
+        for word in (
+            "help",
+            "exit",
+            "quit",
+            "status",
+            "clear",
+            "reset",
+            "trust",
+            "welcome",
+            "integrations",
+            "integration",
+            "int",
+            "mcp",
+        ):
             assert classify_input(word, session) == "slash", word
+
+    def test_integration_bare_alias_keeps_subcommands(self) -> None:
+        session = ReplSession()
+
+        for text in (
+            "integrations list",
+            "integration verify",
+            "int show datadog",
+            "mcp list",
+        ):
+            assert classify_input(text, session) == "slash", text
+
+        assert _router_module.slash_dispatch_text("integrations list") == "/integrations list"
+        assert _router_module.slash_dispatch_text("int show datadog") == (
+            "/integrations show datadog"
+        )
+        assert _router_module.slash_dispatch_text("mcp list") == "/mcp list"
 
     def test_bare_question_mark_is_slash(self) -> None:
         """Typing `?` at the prompt should route to /help, not be mistaken for
