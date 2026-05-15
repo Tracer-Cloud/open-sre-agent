@@ -98,6 +98,7 @@ class AnthropicAgentClient:
         from anthropic import (
             AuthenticationError,
             BadRequestError,
+            InternalServerError,
             NotFoundError,
             PermissionDeniedError,
         )
@@ -128,6 +129,24 @@ class AnthropicAgentClient:
                 raise RuntimeError(
                     f"{self.provider_name} request rejected (HTTP 400): {err.message}"
                 ) from err
+            except InternalServerError as err:
+                body = getattr(err, "body", {}) or {}
+                if (
+                    isinstance(body, dict)
+                    and isinstance(body.get("data"), dict)
+                    and "model" in body["data"]
+                ):
+                    raise RuntimeError(
+                        f"{self.provider_name} model '{self._model}' is not configured or billing is not enabled: "
+                        f"{body.get('message', str(err))}"
+                    ) from err
+                last_err = err
+                if attempt == _RETRY_MAX_ATTEMPTS - 1:
+                    raise RuntimeError(
+                        f"{self.provider_name} API failed after {_RETRY_MAX_ATTEMPTS} attempts: {err}"
+                    ) from err
+                time.sleep(backoff)
+                backoff *= 2
             except TypeError as err:
                 # Anthropic SDK raises TypeError from _validate_headers when the API key is
                 # missing or malformed — retrying won't fix a credential problem.

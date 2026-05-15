@@ -29,6 +29,11 @@ def _install_fake_anthropic(monkeypatch: pytest.MonkeyPatch) -> types.SimpleName
     class PermissionDeniedError(Exception):
         pass
 
+    class InternalServerError(Exception):
+        def __init__(self, message: str, body: dict | None = None) -> None:
+            super().__init__(message)
+            self.body = body or {}
+
     class Anthropic:
         def __init__(self, **_: object) -> None:
             self.messages = types.SimpleNamespace(create=lambda **_: None)
@@ -41,6 +46,7 @@ def _install_fake_anthropic(monkeypatch: pytest.MonkeyPatch) -> types.SimpleName
     fake_module.BadRequestError = BadRequestError
     fake_module.NotFoundError = NotFoundError
     fake_module.PermissionDeniedError = PermissionDeniedError
+    fake_module.InternalServerError = InternalServerError
     fake_module.Anthropic = Anthropic
     fake_module.AnthropicBedrock = AnthropicBedrock
     monkeypatch.setitem(sys.modules, "anthropic", fake_module)
@@ -103,6 +109,61 @@ def test_bedrock_permission_denied_is_not_retried_and_mentions_marketplace(
     assert "AWS Marketplace" in message
     assert "aws-marketplace:ViewSubscriptions" in message
     assert "aws-marketplace:Subscribe" in message
+
+
+def test_internal_server_error_with_model_billing_fails_fast(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_anthropic = _install_fake_anthropic(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+    call_count = 0
+
+    def raise_billing_error(**_: object) -> object:
+        nonlocal call_count
+        call_count += 1
+        raise fake_anthropic.InternalServerError(
+            "Error code: 500",
+            body={"message": "模型未配置计费", "data": {"model": "claude-opus-4-7"}},
+        )
+
+    client = AnthropicAgentClient(model="claude-opus-4-7")
+    client._client = types.SimpleNamespace(
+        messages=types.SimpleNamespace(create=raise_billing_error)
+    )
+
+    with pytest.raises(RuntimeError) as exc:
+        client.invoke(messages=[{"role": "user", "content": "hi"}])
+
+    assert call_count == 1, "billing error should not be retried"
+    message = str(exc.value)
+    assert "claude-opus-4-7" in message
+    assert "billing" in message.lower() or "not configured" in message.lower()
+
+
+def test_internal_server_error_without_model_data_is_retried(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_anthropic = _install_fake_anthropic(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr("app.services.agent_llm_client.time.sleep", lambda _: None)
+
+    call_count = 0
+
+    def raise_transient_error(**_: object) -> object:
+        nonlocal call_count
+        call_count += 1
+        raise fake_anthropic.InternalServerError("Internal server error", body={})
+
+    client = AnthropicAgentClient(model="claude-sonnet-4-6")
+    client._client = types.SimpleNamespace(
+        messages=types.SimpleNamespace(create=raise_transient_error)
+    )
+
+    with pytest.raises(RuntimeError, match="API failed after 3 attempts"):
+        client.invoke(messages=[{"role": "user", "content": "hi"}])
+
+    assert call_count == 3, "transient 500 errors should be retried"
 
 
 def _install_fake_openai(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
