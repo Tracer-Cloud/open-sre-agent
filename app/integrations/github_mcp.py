@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 from collections.abc import AsyncIterator, Sequence
 from contextlib import AsyncExitStack, asynccontextmanager
@@ -26,8 +27,11 @@ from rich.panel import Panel
 from rich.table import Table
 
 from app.cli.interactive_shell.ui.theme import BRAND, DIM, ERROR, HIGHLIGHT
+from app.integrations._validation_helpers import report_validation_failure
 from app.integrations.mcp_streamable_http_compat import streamable_http_client
 from app.strict_config import StrictConfigModel
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_GITHUB_MCP_URL = "https://api.githubcopilot.com/mcp/"
 DEFAULT_GITHUB_MCP_MODE = "streamable-http"
@@ -1049,6 +1053,12 @@ def validate_github_mcp_config(
             profile_private_repos=profile_priv,
         )
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="github_mcp",
+            method="validate_github_mcp_config",
+        )
         return GitHubMCPValidationResult(
             ok=False,
             detail=_connectivity_failure_detail(err),

@@ -46,6 +46,40 @@ def _format_provenance_lines(ctx: ReportContext) -> list[str]:
     return lines
 
 
+def _format_correlation_lines(ctx: ReportContext) -> tuple[list[str], list[str]]:
+    correlation = ctx.get("correlation") or {}
+    if not isinstance(correlation, dict):
+        return [], []
+
+    raw_signals = correlation.get("correlated_signals") or []
+    raw_drivers = correlation.get("most_likely_causal_drivers") or []
+
+    signal_lines: list[str] = []
+    for signal in raw_signals:
+        if not isinstance(signal, dict):
+            continue
+        name = signal.get("name") or "unknown"
+        source = signal.get("source") or "unknown"
+        score = signal.get("score")
+        score_text = f" score={float(score):.2f}" if isinstance(score, int | float) else ""
+        signal_lines.append(f"• {name} ({source}{score_text})")
+
+    driver_lines: list[str] = []
+    for driver in raw_drivers:
+        if not isinstance(driver, dict):
+            continue
+        name = driver.get("name") or "unknown"
+        confidence = driver.get("confidence")
+        rationale = driver.get("rationale") or ""
+        confidence_text = (
+            f" confidence={float(confidence):.2f}" if isinstance(confidence, int | float) else ""
+        )
+        suffix = f" — {_sanitize_for_slack(str(rationale))}" if rationale else ""
+        driver_lines.append(f"• {name}{confidence_text}{suffix}")
+
+    return signal_lines, driver_lines
+
+
 # ---------------------------------------------------------------------------
 # Shared section helpers — called by both text and block renderers
 # ---------------------------------------------------------------------------
@@ -441,6 +475,18 @@ def format_slack_message(ctx: ReportContext) -> str:
             "\n*Non-Validated Claims (Inferred):*\n" + "\n".join(non_validated_lines) + "\n"
         )
 
+    correlation_signal_lines, correlation_driver_lines = _format_correlation_lines(ctx)
+    if correlation_signal_lines or correlation_driver_lines:
+        conclusion_block += "\n## Upstream Correlation\n"
+        if correlation_signal_lines:
+            conclusion_block += (
+                "*Correlated signals:*\n" + "\n".join(correlation_signal_lines) + "\n"
+            )
+        if correlation_driver_lines:
+            conclusion_block += (
+                "*Most likely causal drivers:*\n" + "\n".join(correlation_driver_lines) + "\n"
+            )
+
     provenance_lines = _format_provenance_lines(ctx)
     provenance_block = ""
     if provenance_lines:
@@ -618,6 +664,24 @@ def build_slack_blocks(ctx: ReportContext) -> list[dict]:
         _add(_mrkdwn_section("\n".join(validated_lines)))
     if non_validated_lines:
         _add(_mrkdwn_section("*Inferred (not yet validated)*\n" + "\n".join(non_validated_lines)))
+
+    correlation_signal_lines, correlation_driver_lines = _format_correlation_lines(ctx)
+    if correlation_signal_lines or correlation_driver_lines:
+        blocks.append({"type": "divider"})
+        blocks.append(
+            {
+                "type": "header",
+                "text": {"type": "plain_text", "text": "Upstream Correlation"},
+            }
+        )
+        if correlation_signal_lines:
+            _add(_mrkdwn_section("*Correlated signals:*\n" + "\n".join(correlation_signal_lines)))
+        if correlation_driver_lines:
+            _add(
+                _mrkdwn_section(
+                    "*Most likely causal drivers:*\n" + "\n".join(correlation_driver_lines)
+                )
+            )
 
     provenance_lines = _format_provenance_lines(ctx)
     if provenance_lines:

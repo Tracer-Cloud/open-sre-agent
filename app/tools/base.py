@@ -119,7 +119,13 @@ class BaseTool(ABC):
         }
 
     def __call__(self, **kwargs: Any) -> dict[str, Any]:
-        return self.run(**kwargs)  # type: ignore[attr-defined, no-any-return]
+        try:
+            return self.run(**kwargs)  # type: ignore[attr-defined, no-any-return]
+        except Exception as exc:
+            from app.utils.sentry_sdk import capture_exception
+
+            capture_exception(exc, context=f"tool.{self.name}")
+            return {"error": str(exc), "exception_type": type(exc).__name__}
 
     def is_available(self, _sources: dict[str, dict]) -> bool:
         """Return True when required data sources are present.

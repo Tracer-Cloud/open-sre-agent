@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from typing import Any
@@ -9,7 +10,10 @@ from typing import Any
 import httpx
 from pydantic import Field, field_validator
 
+from app.integrations._validation_helpers import report_validation_failure
 from app.strict_config import StrictConfigModel
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_SENTRY_URL = "https://sentry.io"
 DEFAULT_SENTRY_STATS_PERIOD = "24h"
@@ -159,6 +163,12 @@ def validate_sentry_config(config: SentryConfig) -> SentryValidationResult:
         detail = err.response.text.strip() or str(err)
         return SentryValidationResult(ok=False, detail=f"Sentry validation failed: {detail}")
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="sentry",
+            method="validate_sentry_config",
+        )
         return SentryValidationResult(ok=False, detail=f"Sentry validation failed: {err}")
 
 

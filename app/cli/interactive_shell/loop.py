@@ -69,6 +69,7 @@ from app.cli.interactive_shell.ui import (
     WARNING,
     render_banner,
 )
+from app.cli.interactive_shell.ui.choice_menu import repl_tty_interactive
 from app.cli.interactive_shell.ui.streaming import (
     _CHARS_PER_TOKEN,
     format_token_count_short,
@@ -172,6 +173,68 @@ def _dispatch_should_show_spinner(text: str, session: ReplSession) -> bool:
     if stripped.startswith("/"):
         return False
     return not _router.is_bare_command_alias(stripped, session)
+
+
+_EXCLUSIVE_STDIN_MENU_COMMANDS: frozenset[str] = frozenset(
+    {
+        "/history",
+        "/integrations",
+        "/list",
+        "/mcp",
+        "/model",
+        "/template",
+        "/trust",
+        "/verbose",
+    }
+)
+_EXCLUSIVE_STDIN_SUBCOMMANDS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("/integrations", "setup"),
+        ("/mcp", "connect"),
+    }
+)
+_WAIT_FOR_COMPLETION_COMMANDS: frozenset[str] = frozenset({"/exit", "/quit"})
+
+
+def _dispatch_needs_exclusive_stdin(text: str, session: ReplSession) -> bool:
+    """True when a queued turn should finish before the next prompt starts.
+
+    Most turns can run while prompt-toolkit immediately opens the next input
+    frame, which is what gives the shell type-ahead during streaming. A few
+    slash commands, however, temporarily own stdin themselves: inline
+    ``repl_choose_one`` menus and subprocess-backed interactive wizards. If the
+    next prompt starts underneath those, prompt-toolkit can send a cursor
+    position request and the terminal's reply (for example ``[32;1R``) leaks
+    into the prompt or menu input. Exit commands also pause so the shell does
+    not draw one more prompt after printing goodbye. Waiting only for these
+    known cases preserves type-ahead everywhere else.
+    """
+    if not repl_tty_interactive():
+        return False
+
+    stripped = text.strip()
+    if not stripped:
+        return False
+    if stripped.startswith("/"):
+        dispatch_text = stripped
+    elif _router.is_bare_command_alias(stripped, session):
+        dispatch_text = _router.slash_dispatch_text(stripped)
+    else:
+        return False
+
+    parts = dispatch_text.split()
+    if not parts:
+        return False
+    name = parts[0].lower()
+    args = [arg.lower() for arg in parts[1:]]
+
+    if name in _WAIT_FOR_COMPLETION_COMMANDS:
+        return True
+    if name in _EXCLUSIVE_STDIN_MENU_COMMANDS and not args:
+        return True
+    if name == "/tests" and not args:
+        return True
+    return bool(args and (name, args[0]) in _EXCLUSIVE_STDIN_SUBCOMMANDS)
 
 
 class DispatchCancelled(Exception):
@@ -783,8 +846,19 @@ async def _run_interactive(
 
     def _request_exit() -> None:
         state.exit_requested = True
-        state.cancel_current_dispatch()
-        main_loop.call_soon_threadsafe(pt_app.exit)
+
+        def _exit_prompt_app(attempts_left: int = 5) -> None:
+            if pt_app.is_running:
+                pt_app.exit()
+                return
+            # The worker thread can request exit in the tiny gap after one
+            # prompt_async call returns and before the next starts. Retry
+            # briefly so the next prompt is dismissed without surfacing
+            # prompt_toolkit's "Application is not running" exception.
+            if attempts_left > 0:
+                main_loop.call_later(0.02, _exit_prompt_app, attempts_left - 1)
+
+        main_loop.call_soon_threadsafe(_exit_prompt_app)
 
     async def _run_one_dispatch(text: str) -> None:
         # Per-turn cancel event — fresh ``threading.Event`` so a worker
@@ -939,6 +1013,9 @@ async def _run_interactive(
             # ``sys.stdout``.
             echo_console = Console(highlight=False, force_terminal=True, color_system="truecolor")
             while True:
+                if state.exit_requested:
+                    return
+
                 # Drain any pending alerts at the start of each turn
                 # (safety net in case alerts arrived while typing)
                 if inbox is not None:
@@ -1025,7 +1102,10 @@ async def _run_interactive(
                     continue
 
                 render_submitted_prompt(echo_console, session, stripped)
+                wait_for_dispatch = _dispatch_needs_exclusive_stdin(stripped, session)
                 await state.queue.put(stripped)
+                if wait_for_dispatch:
+                    await state.queue.join()
     finally:
         state.exit_requested = True
         state.cancel_current_dispatch()

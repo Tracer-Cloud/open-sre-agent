@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Any
 
 import requests
 
+from app.utils.errors import report_exception
+
 if TYPE_CHECKING:
     from app.services.grafana.base import GrafanaClientBase
 
@@ -130,8 +132,19 @@ class TempoMixin:
                                         )
 
                 return {"spans": spans}
-        except Exception:
-            logger.debug("Failed to fetch Tempo trace spans", exc_info=True)
+        except Exception as exc:
+            report_exception(
+                exc,
+                logger=logger,
+                message="Failed to fetch Tempo trace spans",
+                severity="warning",
+                tags={
+                    "surface": "service_client",
+                    "integration": "grafana",
+                    "component": "app.services.grafana.tempo",
+                },
+                extras={"trace_id": trace_id},
+            )
             return {"spans": []}
 
         return {"spans": []}

@@ -69,6 +69,7 @@ class AgentState(TypedDict, total=False):
     # Shared context/evidence
     context: dict[str, Any]
     evidence: dict[str, Any]
+    correlation: dict[str, Any]
 
     # Investigation analysis
     root_cause: str
@@ -175,6 +176,7 @@ class AgentStateModel(StrictConfigModel):
     resolved_integrations: dict[str, Any] = Field(default_factory=dict)
     context: dict[str, Any] = Field(default_factory=dict)
     evidence: dict[str, Any] = Field(default_factory=dict)
+    correlation: dict[str, Any] = Field(default_factory=dict)
     root_cause: str = ""
     root_cause_category: str = ""
     validated_claims: list[dict[str, Any]] = Field(default_factory=list)

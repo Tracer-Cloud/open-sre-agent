@@ -67,6 +67,9 @@ def _is_bare_command_alias(text: str, _session: RoutingSession) -> bool:
     # mis-correct a valid command word (e.g. "reset" → "test").
     if stripped.lower() in BARE_COMMAND_ALIASES:
         return True
+    first, sep, _rest = stripped.partition(" ")
+    if sep and first.lower() in _BARE_COMMAND_ALIASES_WITH_ARGS:
+        return True
     # Fall back to normalized form only for single-edit typos (distance ≤ 1).
     # Distance 2 matches too many unrelated words (e.g. "hello" → "help").
     normalized = normalize_intent_text(stripped)
@@ -202,6 +205,11 @@ _BARE_COMMAND_ALIAS_MAP: dict[str, str] = {
     "guardrails": "/guardrails",
     "update": "/update",
     "uninstall": "/uninstall",
+    "list": "/list",
+    "integrations": "/integrations",
+    "integration": "/integrations",
+    "int": "/integrations",
+    "mcp": "/mcp",
     "agents": "/agents",
     "doctor": "/doctor",
     "welcome": "/welcome",
@@ -213,6 +221,7 @@ _BARE_COMMAND_ALIAS_MAP: dict[str, str] = {
 _BARE_COMMAND_ALIASES = frozenset(_BARE_COMMAND_ALIAS_MAP.keys())
 BARE_COMMAND_ALIASES = _BARE_COMMAND_ALIASES
 BARE_COMMAND_ALIAS_MAP = _BARE_COMMAND_ALIAS_MAP
+_BARE_COMMAND_ALIASES_WITH_ARGS = frozenset({"integrations", "integration", "int", "mcp"})
 
 
 # Short, question-shaped strings that obviously target the previous investigation.
@@ -500,6 +509,11 @@ def slash_dispatch_text(text: str) -> str:
     stripped = text.strip()
     if stripped.startswith("/"):
         return stripped
+    first, sep, rest = stripped.partition(" ")
+    if sep:
+        mapped_first = BARE_COMMAND_ALIAS_MAP.get(first.lower())
+        if mapped_first is not None and first.lower() in _BARE_COMMAND_ALIASES_WITH_ARGS:
+            return f"{mapped_first} {rest.strip()}"
     normalized = normalize_intent_text(stripped)
     mapped = BARE_COMMAND_ALIAS_MAP.get(normalized)
     if mapped is not None:

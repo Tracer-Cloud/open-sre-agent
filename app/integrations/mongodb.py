@@ -7,13 +7,17 @@ timeouts enforced, result sizes capped.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from typing import Any
 
 from pydantic import Field, field_validator
 
+from app.integrations._validation_helpers import report_validation_failure
 from app.strict_config import StrictConfigModel
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_MONGODB_AUTH_SOURCE = "admin"
 DEFAULT_MONGODB_TIMEOUT_MS = 5000
@@ -119,6 +123,12 @@ def validate_mongodb_config(config: MongoDBConfig) -> MongoDBValidationResult:
         finally:
             client.close()
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mongodb",
+            method="validate_mongodb_config",
+        )
         return MongoDBValidationResult(ok=False, detail=f"MongoDB connection failed: {err}")
 
 
@@ -183,6 +193,12 @@ def get_server_status(config: MongoDBConfig) -> dict[str, Any]:
         finally:
             client.close()
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mongodb",
+            method="get_server_status",
+        )
         return {"source": "mongodb", "available": False, "error": str(err)}
 
 
@@ -232,6 +248,12 @@ def get_current_ops(
         finally:
             client.close()
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mongodb",
+            method="get_current_ops",
+        )
         return {"source": "mongodb", "available": False, "error": str(err)}
 
 
@@ -282,6 +304,12 @@ def get_rs_status(config: MongoDBConfig) -> dict[str, Any]:
                 "members": [],
                 "note": "Server is not part of a replica set.",
             }
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mongodb",
+            method="get_rs_status",
+        )
         return {"source": "mongodb", "available": False, "error": error_str}
 
 
@@ -358,6 +386,12 @@ def get_profiler_data(
         finally:
             client.close()
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mongodb",
+            method="get_profiler_data",
+        )
         return {"source": "mongodb", "available": False, "error": str(err)}
 
 
@@ -404,4 +438,10 @@ def get_collection_stats(
         finally:
             client.close()
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mongodb",
+            method="get_collection_stats",
+        )
         return {"source": "mongodb", "available": False, "error": str(err)}

@@ -30,6 +30,7 @@ STATE_DEFAULTS: dict[str, Any] = {
     "available_action_names": [],
     "context": {},
     "evidence": {},
+    "correlation": {},
     "root_cause": "",
     "root_cause_category": "",
     "validated_claims": [],

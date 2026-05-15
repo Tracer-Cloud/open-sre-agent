@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -10,6 +11,9 @@ import httpx
 
 from app.integrations.models import CoralogixIntegrationConfig
 from app.integrations.probes import ProbeResult
+from app.services._streaming import StreamingParseStats
+
+logger = logging.getLogger(__name__)
 
 _DEFAULT_TIMEOUT_SECONDS = 30.0
 
@@ -75,7 +79,9 @@ class CoralogixClient:
             "Accept": "application/json",
         }
 
-    def _parse_ndjson(self, response_text: str) -> dict[str, Any]:
+    def _parse_ndjson(
+        self, response_text: str, stats: StreamingParseStats | None = None
+    ) -> dict[str, Any]:
         query_ids: list[str] = []
         warnings: list[str] = []
         rows: list[dict[str, Any]] = []
@@ -86,8 +92,12 @@ class CoralogixClient:
                 continue
             try:
                 payload = json.loads(stripped)
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as exc:
+                if stats is not None:
+                    stats.record_error(exc)
                 continue
+            if stats is not None:
+                stats.record_parsed()
 
             if isinstance(payload, dict):
                 query_id = payload.get("queryId")
@@ -137,21 +147,31 @@ class CoralogixClient:
         return result
 
     @staticmethod
-    def _parse_user_data(value: object) -> dict[str, Any]:
+    def _parse_user_data(value: object, stats: StreamingParseStats | None = None) -> dict[str, Any]:
         if isinstance(value, dict):
             return value
         if not isinstance(value, str) or not value.strip():
             return {}
+        # Only the string branch is an actual parse attempt, so both
+        # record_parsed and record_error live inside it — otherwise the
+        # denominator (parsed + skipped) would only count failures and skew
+        # the skip ratio.
         try:
             payload = json.loads(value)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as exc:
+            if stats is not None:
+                stats.record_error(exc)
             return {}
+        if stats is not None:
+            stats.record_parsed()
         return payload if isinstance(payload, dict) else {}
 
-    def _normalize_row(self, row: dict[str, Any]) -> dict[str, Any]:
+    def _normalize_row(
+        self, row: dict[str, Any], stats: StreamingParseStats | None = None
+    ) -> dict[str, Any]:
         metadata = self._items_to_dict(row.get("metadata"))
         labels = self._items_to_dict(row.get("labels"))
-        user_data = self._parse_user_data(row.get("userData"))
+        user_data = self._parse_user_data(row.get("userData"), stats=stats)
         log_obj = user_data.get("log_obj", {}) if isinstance(user_data, dict) else {}
         if not isinstance(log_obj, dict):
             log_obj = {}
@@ -220,8 +240,12 @@ class CoralogixClient:
         except Exception as exc:
             return {"success": False, "error": str(exc)}
 
-        parsed = self._parse_ndjson(response.text)
-        logs = [self._normalize_row(row) for row in parsed["rows"]]
+        stats = StreamingParseStats()
+        parsed = self._parse_ndjson(response.text, stats=stats)
+        # Aggregate userData parse drops into the same stats so the threshold
+        # fires once per response no matter where the drops happened.
+        logs = [self._normalize_row(row, stats=stats) for row in parsed["rows"]]
+        stats.report_if_unhealthy(logger=logger, integration="coralogix", source="dataprime/query")
         return {
             "success": True,
             "logs": logs,
