@@ -210,8 +210,10 @@ def test_openai_agent_client_invoke_raw_content_preserves_extra_fields(
 @pytest.mark.parametrize(
     "model,expected_key",
     [
+        ("o1", "max_completion_tokens"),
         ("o1-mini", "max_completion_tokens"),
         ("o1-preview", "max_completion_tokens"),
+        ("o3", "max_completion_tokens"),
         ("o3-mini", "max_completion_tokens"),
         ("o4-mini", "max_completion_tokens"),
         ("o5-mini", "max_completion_tokens"),  # future model covered by regex
