@@ -219,7 +219,7 @@ def test_execute_investigation_tracks_remote_http_source(
     ]
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_investigate_stream_persists_state_on_disconnect(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -275,7 +275,7 @@ async def test_investigate_stream_persists_state_on_disconnect(
     assert call0["raw_alert"].get("alert_name") == "PayloadAlert"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_investigate_stream_captures_streaming_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -327,7 +327,7 @@ async def test_investigate_stream_captures_streaming_exception(
     assert astream_calls[0]["raw_alert"].get("alert_name") == "PayloadAlert"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_lifespan_starts_and_cancels_vercel_poller(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
@@ -354,7 +354,7 @@ async def test_lifespan_starts_and_cancels_vercel_poller(
     assert cancelled.is_set()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_lifespan_raises_helpful_error_on_permission_denied(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -635,3 +635,77 @@ def test_check_memory_health_returns_missing_on_oserror(
     assert result.name == "Memory"
     assert result.status == "missing"
     assert "Unable to read meminfo:" in result.detail
+
+
+@pytest.mark.anyio
+async def test_investigate_stream_includes_correlation_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_astream_investigation(*args: object, **kwargs: object):
+        _ = (args, kwargs)
+
+        yield StreamEvent(
+            "events",
+            data={
+                "data": {
+                    "output": {
+                        "root_cause": "RDS CPU spike",
+                        "report": "Correlation attached",
+                        "correlation": {
+                            "correlated_signals": [
+                                {
+                                    "name": "upstream-correlation",
+                                    "source": "runtime",
+                                    "score": 0.9,
+                                }
+                            ],
+                            "most_likely_causal_drivers": [
+                                {
+                                    "name": "system.cpu.user{service:orders-web}",
+                                    "confidence": 0.9,
+                                    "rationale": "time_window=1.0",
+                                }
+                            ],
+                        },
+                    }
+                }
+            },
+            kind="on_chain_end",
+        )
+
+    persisted: dict[str, Any] = {}
+
+    monkeypatch.setattr("app.config.LLMSettings.from_env", object)
+
+    monkeypatch.setattr(
+        "app.cli.investigation.resolve_investigation_context",
+        lambda **_kwargs: ("test-alert", "orders-pipeline", "critical"),
+    )
+
+    monkeypatch.setattr(
+        "app.pipeline.runners.astream_investigation",
+        fake_astream_investigation,
+    )
+
+    monkeypatch.setattr(
+        "app.remote.server._persist_streamed_result",
+        lambda **kwargs: persisted.update(kwargs),
+    )
+
+    response = await investigate_stream(
+        InvestigateRequest(raw_alert={"alert_name": "PayloadAlert"})
+    )
+
+    chunks = [chunk async for chunk in response.body_iterator]
+
+    assert chunks
+
+    correlation = persisted["state"]["correlation"]
+
+    assert correlation["correlated_signals"]
+    assert correlation["most_likely_causal_drivers"]
+
+    assert (
+        correlation["most_likely_causal_drivers"][0]["name"]
+        == "system.cpu.user{service:orders-web}"
+    )

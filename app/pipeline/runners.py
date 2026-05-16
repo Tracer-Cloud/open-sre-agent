@@ -216,6 +216,18 @@ async def astream_investigation(
                 state_any, ConnectedInvestigationAgent().run(state_any, on_event=_on_agent_event)
             )
 
+            # --- upstream correlation ---
+            from app.correlation.node import node_correlate_upstream
+            from app.pipeline.pipeline import _build_correlation_config
+
+            _merge(
+                state_any,
+                node_correlate_upstream(
+                    cast("AgentState", state_any),
+                    _build_correlation_config(state_any),
+                ),
+            )
+
             # --- deliver / publish (skip terminal render — StreamRenderer owns it) ---
             _put(_make_node_event("on_chain_start", "publish_findings", {}))
 
