@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from app.state import InvestigationState
+import logging
+logger = logging.getLogger(__name__)
 
 
 def deliver(state: InvestigationState) -> dict[str, Any]:
@@ -28,10 +30,11 @@ def deliver(state: InvestigationState) -> dict[str, Any]:
                 rubric=state_dict["opensre_eval_rubric"],
             )
             state["opensre_llm_eval"] = judge_result
-        except Exception:
+        except Exception as exc:
+            logger.exception("LLM judge failed: %s", exc)
             state["opensre_llm_eval"] = {
                 "skipped": True,
-                "reason": "Judge run failed - check logs for details.",
+                "reason": f"Judge run failed: {exc}",
             }
 
     return generate_report(state)
