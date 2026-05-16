@@ -220,6 +220,14 @@ async def astream_investigation(
             from app.correlation.node import node_correlate_upstream
             from app.pipeline.pipeline import _build_correlation_config
 
+            _put(
+                _make_node_event(
+                    "on_chain_start",
+                    "correlate_upstream",
+                    {},
+                )
+            )
+
             _merge(
                 state_any,
                 node_correlate_upstream(
