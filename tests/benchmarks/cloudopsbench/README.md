@@ -24,6 +24,20 @@ Run the benchmark:
 make test-cloudopsbench
 ```
 
+Run the reusable benchmark harness:
+
+```bash
+uv run opensre bench validate tests/benchmarks/configs/claude-vs-paper.yml
+uv run opensre bench run --config tests/benchmarks/configs/claude-vs-paper.yml
+```
+
+The harness writes JSON, Markdown, and optional HTML reports under the config's
+`output_dir`, including per-case decision traces, estimated token cost when
+token usage is present in the run state, CloudOpsBench paper-metric scores, and
+the checked-in paper A@1 comparison for GPT-4o, GPT-5, Claude-4-Sonnet, and
+DeepSeek-V3.2. Use `workers: 1` in YAML for serial execution; configs default to
+parallel execution.
+
 Run only a subset of cases:
 
 ```bash

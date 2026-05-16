@@ -1,0 +1,23 @@
+benchmark: cloudopsbench
+
+modes:
+  - opensre+llm
+
+llms:
+  - claude-4-sonnet
+  - deepseek-v3.2
+  - gpt-5
+  - gpt-4o
+
+runs_per_case: 3
+workers: 8
+cost_budget_usd: 500
+
+filters:
+  systems: [boutique]
+  fault_categories: [service]
+  limit: 5
+
+output_dir: .bench-results/claude-vs-paper
+report_formats: [json, markdown, html]
+strict_parity: true
