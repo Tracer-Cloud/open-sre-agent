@@ -28,12 +28,13 @@ def _run_one(
     adapter: BenchmarkAdapter,
     case: BenchmarkCase,
     *,
+    mode: str,
     llm: str,
     run_index: int,
     output_dir: Path,
 ) -> dict[str, Any]:
     started = time.perf_counter()
-    case_output = output_dir / "cases" / llm / f"run-{run_index}"
+    case_output = output_dir / "cases" / mode / llm / case.case_id / f"run-{run_index}"
     run_payload = adapter.run_case(case, str(case_output))
     score = adapter.score_case(case, run_payload)
     final_state = run_payload.get("run", {}).get("final_state", {})
@@ -44,7 +45,7 @@ def _run_one(
     return {
         "benchmark": adapter.name,
         "adapter_version": adapter.version,
-        "mode": "opensre+llm",
+        "mode": mode,
         "llm": llm,
         "run_index": run_index,
         "case_id": case.case_id,
@@ -79,36 +80,57 @@ def run_benchmark(adapter: BenchmarkAdapter, config: BenchmarkConfig) -> Benchma
 
     requested_workers = max(1, int(config.workers))
     workers = 1 if config.cost_budget_usd is not None else requested_workers
-    for llm in llms:
-        jobs = [
-            (case, run_index) for case in cases for run_index in range(1, config.runs_per_case + 1)
-        ]
-        with llm_environment(llm):
-            if workers == 1:
-                for case, run_index in jobs:
-                    record(
-                        _run_one(adapter, case, llm=llm, run_index=run_index, output_dir=output_dir)
-                    )
-                continue
-            with ThreadPoolExecutor(max_workers=workers) as executor:
-                futures = [
-                    executor.submit(
-                        _run_one,
-                        adapter,
-                        case,
-                        llm=llm,
-                        run_index=run_index,
-                        output_dir=output_dir,
-                    )
-                    for case, run_index in jobs
-                ]
-                for future in as_completed(futures):
-                    record(future.result())
+    modes = config.modes or ("opensre+llm",)
+    for mode in modes:
+        for llm in llms:
+            jobs = [
+                (case, run_index)
+                for case in cases
+                for run_index in range(1, config.runs_per_case + 1)
+            ]
+            with llm_environment(llm):
+                if workers == 1:
+                    for case, run_index in jobs:
+                        record(
+                            _run_one(
+                                adapter,
+                                case,
+                                mode=mode,
+                                llm=llm,
+                                run_index=run_index,
+                                output_dir=output_dir,
+                            )
+                        )
+                    continue
+                with ThreadPoolExecutor(max_workers=workers) as executor:
+                    futures = [
+                        executor.submit(
+                            _run_one,
+                            adapter,
+                            case,
+                            mode=mode,
+                            llm=llm,
+                            run_index=run_index,
+                            output_dir=output_dir,
+                        )
+                        for case, run_index in jobs
+                    ]
+                    for future in as_completed(futures):
+                        record(future.result())
 
-    results.sort(key=lambda row: (row["llm"], row["case_id"], row["run_index"]))
+    mode_order = {mode: index for index, mode in enumerate(modes)}
+    results.sort(
+        key=lambda row: (
+            mode_order.get(str(row["mode"]), len(mode_order)),
+            row["llm"],
+            row["case_id"],
+            row["run_index"],
+        )
+    )
     if config.strict_parity:
         _validate_strict_parity(
             results,
+            modes=modes,
             llms=llms,
             cases=cases,
             runs_per_case=config.runs_per_case,
@@ -117,6 +139,7 @@ def run_benchmark(adapter: BenchmarkAdapter, config: BenchmarkConfig) -> Benchma
         "benchmark": adapter.name,
         "adapter_version": adapter.version,
         "case_count": len(cases),
+        "modes": list(modes),
         "llms": list(llms),
         "runs_per_case": config.runs_per_case,
         "workers": workers,
@@ -134,18 +157,25 @@ def run_benchmark(adapter: BenchmarkAdapter, config: BenchmarkConfig) -> Benchma
 def _validate_strict_parity(
     results: list[dict[str, Any]],
     *,
+    modes: tuple[str, ...],
     llms: tuple[str, ...],
     cases: list[BenchmarkCase],
     runs_per_case: int,
 ) -> None:
     expected = {
-        (llm, case.case_id, run_index)
+        (mode, llm, case.case_id, run_index)
+        for mode in modes
         for llm in llms
         for case in cases
         for run_index in range(1, runs_per_case + 1)
     }
     observed = {
-        (str(row.get("llm")), str(row.get("case_id")), int(row.get("run_index", 0)))
+        (
+            str(row.get("mode")),
+            str(row.get("llm")),
+            str(row.get("case_id")),
+            int(row.get("run_index", 0)),
+        )
         for row in results
     }
     if observed != expected or len(results) != len(expected):

@@ -97,3 +97,23 @@ def test_run_benchmark_uses_one_worker_when_budget_is_set(tmp_path) -> None:
 
     assert result.payload["workers"] == 1
     assert result.payload["requested_workers"] == 8
+
+
+def test_run_benchmark_emits_requested_modes(tmp_path) -> None:
+    result = run_benchmark(
+        FakeAdapter(),
+        BenchmarkConfig(
+            benchmark="fake",
+            modes=("opensre+llm", "llm_alone"),
+            llms=("gpt-5",),
+            output_dir=str(tmp_path),
+            workers=1,
+            strict_parity=True,
+        ),
+    )
+
+    assert result.payload["modes"] == ["opensre+llm", "llm_alone"]
+    assert [row["mode"] for row in result.payload["results"]] == [
+        "opensre+llm",
+        "llm_alone",
+    ]
