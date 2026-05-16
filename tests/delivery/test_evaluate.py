@@ -57,7 +57,7 @@ def test_deliver_skips_judge_when_evaluate_is_false(
     _patch_generate_report(monkeypatch)
     monkeypatch.setattr(
         "app.integrations.opensre.llm_eval_judge.run_opensre_llm_judge",
-        lambda *a, **kw: pytest.fail("judge should not be called"),
+        lambda *_, **__: pytest.fail("judge should not be called"),
     )
 
     state = _make_state(evaluate=False, rubric="test rubric")

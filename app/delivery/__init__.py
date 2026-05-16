@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from app.state import InvestigationState
-import logging
+
 logger = logging.getLogger(__name__)
 
 
