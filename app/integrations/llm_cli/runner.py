@@ -173,9 +173,7 @@ class CLIBackedLLMClient:
             # filters this type so user-initiated cancellations are not reported
             # as bugs.
             if proc.returncode == 130:
-                raise CLIInterruptedError(
-                    f"{self._adapter.name} CLI subprocess interrupted."
-                )
+                raise CLIInterruptedError(f"{self._adapter.name} CLI subprocess interrupted.")
             # Exit code 75 is EX_TEMPFAIL (sysexits.h) — a transient failure
             # the caller should retry. Raise CLITimeoutError so it is treated as
             # an expected operational failure and not forwarded to Sentry.
