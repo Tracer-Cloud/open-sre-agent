@@ -228,6 +228,18 @@ async def astream_investigation(
                 ),
             )
 
+            _put(
+                _make_node_event(
+                    "on_chain_end",
+                    "correlate_upstream",
+                    {
+                        "output": {
+                            "correlation": state_any.get("correlation", {}),
+                        }
+                    },
+                )
+            )
+
             # --- deliver / publish (skip terminal render — StreamRenderer owns it) ---
             _put(_make_node_event("on_chain_start", "publish_findings", {}))
 

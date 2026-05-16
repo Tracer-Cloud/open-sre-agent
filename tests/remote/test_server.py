@@ -638,42 +638,22 @@ def test_check_memory_health_returns_missing_on_oserror(
 
 
 @pytest.mark.anyio
-async def test_investigate_stream_includes_correlation_payload(
+async def test_investigate_stream_emits_correlation_payload(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def fake_astream_investigation(*args: object, **kwargs: object):
-        _ = (args, kwargs)
-
-        yield StreamEvent(
-            "events",
-            data={
-                "data": {
-                    "output": {
-                        "root_cause": "RDS CPU spike",
-                        "report": "Correlation attached",
-                        "correlation": {
-                            "correlated_signals": [
-                                {
-                                    "name": "upstream-correlation",
-                                    "source": "runtime",
-                                    "score": 0.9,
-                                }
-                            ],
-                            "most_likely_causal_drivers": [
-                                {
-                                    "name": "system.cpu.user{service:orders-web}",
-                                    "confidence": 0.9,
-                                    "rationale": "time_window=1.0",
-                                }
-                            ],
-                        },
-                    }
-                }
-            },
-            kind="on_chain_end",
-        )
-
     persisted: dict[str, Any] = {}
+
+    def fake_investigation_run(
+        _self: object,
+        _state: object,
+        *,
+        on_event: object | None = None,
+    ) -> dict[str, str]:
+        _ = on_event
+        return {
+            "root_cause": "RDS CPU spike",
+            "report": "Correlation attached",
+        }
 
     monkeypatch.setattr("app.config.LLMSettings.from_env", object)
 
@@ -683,8 +663,61 @@ async def test_investigate_stream_includes_correlation_payload(
     )
 
     monkeypatch.setattr(
-        "app.pipeline.runners.astream_investigation",
-        fake_astream_investigation,
+        "app.agent.context.resolve_integrations",
+        lambda _state: {},
+    )
+
+    monkeypatch.setattr(
+        "app.agent.extract.extract_alert",
+        lambda _state: {
+            "raw_alert": {
+                "alert_name": "PayloadAlert",
+                "service": "orders",
+                "resource": "orders-rds-prod",
+            },
+            "alert_name": "PayloadAlert",
+            "pipeline_name": "orders",
+            "severity": "critical",
+            "incident_window": {
+                "since": "2026-04-15T14:00:00Z",
+                "until": "2026-04-15T14:15:00Z",
+            },
+        },
+    )
+
+    monkeypatch.setattr(
+        "app.agent.investigation.ConnectedInvestigationAgent.run",
+        fake_investigation_run,
+    )
+
+    monkeypatch.setattr(
+        "app.correlation.node.node_correlate_upstream",
+        lambda _state, _config=None: {
+            "correlation": {
+                "correlated_signals": [
+                    {
+                        "name": "upstream-correlation",
+                        "source": "runtime",
+                        "score": 0.9,
+                    }
+                ],
+                "most_likely_causal_drivers": [
+                    {
+                        "name": "system.cpu.user{service:orders-web}",
+                        "confidence": 0.9,
+                        "rationale": "time_window=1.0",
+                    }
+                ],
+            }
+        },
+    )
+
+    monkeypatch.setattr(
+        "app.delivery.publish_findings.node.generate_report",
+        lambda _state: {
+            "root_cause": "RDS CPU spike",
+            "report": "Correlation attached",
+        },
     )
 
     monkeypatch.setattr(
@@ -699,12 +732,12 @@ async def test_investigate_stream_includes_correlation_payload(
     chunks = [chunk async for chunk in response.body_iterator]
 
     assert chunks
+    assert any("correlate_upstream" in chunk for chunk in chunks)
 
     correlation = persisted["state"]["correlation"]
 
     assert correlation["correlated_signals"]
     assert correlation["most_likely_causal_drivers"]
-
     assert (
         correlation["most_likely_causal_drivers"][0]["name"]
         == "system.cpu.user{service:orders-web}"
