@@ -61,6 +61,7 @@ def test_deliver_skips_judge_when_evaluate_is_false(
     )
 
     state = _make_state(evaluate=False, rubric="test rubric")
+    state["opensre_eval_rubric"] = "test rubric"
     deliver(state)
     assert not state.get("opensre_llm_eval")
 
