@@ -34,8 +34,7 @@ def _run_one(
 ) -> dict[str, Any]:
     started = time.perf_counter()
     case_output = output_dir / "cases" / llm / f"run-{run_index}"
-    with llm_environment(llm):
-        run_payload = adapter.run_case(case, str(case_output))
+    run_payload = adapter.run_case(case, str(case_output))
     score = adapter.score_case(case, run_payload)
     final_state = run_payload.get("run", {}).get("final_state", {})
     tokens_by_model = tokens_by_model_from_state(
@@ -78,31 +77,42 @@ def run_benchmark(adapter: BenchmarkAdapter, config: BenchmarkConfig) -> Benchma
             )
         results.append(result)
 
-    workers = max(1, int(config.workers))
+    requested_workers = max(1, int(config.workers))
+    workers = 1 if config.cost_budget_usd is not None else requested_workers
     for llm in llms:
         jobs = [
             (case, run_index) for case in cases for run_index in range(1, config.runs_per_case + 1)
         ]
-        if workers == 1:
-            for case, run_index in jobs:
-                record(_run_one(adapter, case, llm=llm, run_index=run_index, output_dir=output_dir))
-            continue
-        with ThreadPoolExecutor(max_workers=workers) as executor:
-            futures = [
-                executor.submit(
-                    _run_one,
-                    adapter,
-                    case,
-                    llm=llm,
-                    run_index=run_index,
-                    output_dir=output_dir,
-                )
-                for case, run_index in jobs
-            ]
-            for future in as_completed(futures):
-                record(future.result())
+        with llm_environment(llm):
+            if workers == 1:
+                for case, run_index in jobs:
+                    record(
+                        _run_one(adapter, case, llm=llm, run_index=run_index, output_dir=output_dir)
+                    )
+                continue
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                futures = [
+                    executor.submit(
+                        _run_one,
+                        adapter,
+                        case,
+                        llm=llm,
+                        run_index=run_index,
+                        output_dir=output_dir,
+                    )
+                    for case, run_index in jobs
+                ]
+                for future in as_completed(futures):
+                    record(future.result())
 
     results.sort(key=lambda row: (row["llm"], row["case_id"], row["run_index"]))
+    if config.strict_parity:
+        _validate_strict_parity(
+            results,
+            llms=llms,
+            cases=cases,
+            runs_per_case=config.runs_per_case,
+        )
     payload = {
         "benchmark": adapter.name,
         "adapter_version": adapter.version,
@@ -110,6 +120,8 @@ def run_benchmark(adapter: BenchmarkAdapter, config: BenchmarkConfig) -> Benchma
         "llms": list(llms),
         "runs_per_case": config.runs_per_case,
         "workers": workers,
+        "requested_workers": requested_workers,
+        "strict_parity": config.strict_parity,
         "filters": config.filters,
         "metric_schema": adapter.metric_schema(),
         "cost_usd": total_cost,
@@ -117,3 +129,30 @@ def run_benchmark(adapter: BenchmarkAdapter, config: BenchmarkConfig) -> Benchma
     }
     write_reports(payload, output_dir, config.report_formats)
     return BenchmarkRunResult(payload=payload, output_dir=output_dir)
+
+
+def _validate_strict_parity(
+    results: list[dict[str, Any]],
+    *,
+    llms: tuple[str, ...],
+    cases: list[BenchmarkCase],
+    runs_per_case: int,
+) -> None:
+    expected = {
+        (llm, case.case_id, run_index)
+        for llm in llms
+        for case in cases
+        for run_index in range(1, runs_per_case + 1)
+    }
+    observed = {
+        (str(row.get("llm")), str(row.get("case_id")), int(row.get("run_index", 0)))
+        for row in results
+    }
+    if observed != expected or len(results) != len(expected):
+        missing = sorted(expected - observed)
+        extra = sorted(observed - expected)
+        raise RuntimeError(
+            "Strict parity failed: "
+            f"missing={missing[:5]} extra={extra[:5]} "
+            f"expected={len(expected)} observed={len(observed)}"
+        )

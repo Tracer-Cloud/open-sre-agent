@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -10,6 +11,8 @@ MODEL_ALIASES: dict[str, tuple[str, str]] = {
     "gpt-5": ("openai", "gpt-5"),
     "gpt-4o": ("openai", "gpt-4o"),
 }
+
+_ENV_LOCK = threading.RLock()
 
 
 def resolve_llm_alias(llm: str) -> tuple[str, str]:
@@ -23,22 +26,23 @@ def resolve_llm_alias(llm: str) -> tuple[str, str]:
 def llm_environment(llm: str) -> Iterator[None]:
     """Temporarily pin OpenSRE's provider/model environment for one run."""
 
-    provider, model = resolve_llm_alias(llm)
-    updates: dict[str, str] = {"OPENSRE_BENCH_LLM": llm}
-    if provider:
-        updates["LLM_PROVIDER"] = provider
-        prefix = provider.upper()
-        updates[f"{prefix}_REASONING_MODEL"] = model
-        updates[f"{prefix}_CLASSIFICATION_MODEL"] = model
-        updates[f"{prefix}_TOOLCALL_MODEL"] = model
+    with _ENV_LOCK:
+        provider, model = resolve_llm_alias(llm)
+        updates: dict[str, str] = {"OPENSRE_BENCH_LLM": llm}
+        if provider:
+            updates["LLM_PROVIDER"] = provider
+            prefix = provider.upper()
+            updates[f"{prefix}_REASONING_MODEL"] = model
+            updates[f"{prefix}_CLASSIFICATION_MODEL"] = model
+            updates[f"{prefix}_TOOLCALL_MODEL"] = model
 
-    previous = {key: os.environ.get(key) for key in updates}
-    os.environ.update(updates)
-    try:
-        yield
-    finally:
-        for key, value in previous.items():
-            if value is None:
-                os.environ.pop(key, None)
-            else:
-                os.environ[key] = value
+        previous = {key: os.environ.get(key) for key in updates}
+        os.environ.update(updates)
+        try:
+            yield
+        finally:
+            for key, value in previous.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value

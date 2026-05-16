@@ -2,14 +2,25 @@ from __future__ import annotations
 
 from typing import Any
 
-from tests.benchmarks.toolcall_model_benchmark.pricing import estimate_run_cost_usd
-
 DEFAULT_MODEL_PRICES_USD_PER_MTOK: dict[str, float] = {
     "claude-4-sonnet": 3.0,
     "deepseek-v3.2": 1.0,
     "gpt-5": 3.0,
     "gpt-4o": 2.5,
 }
+
+
+def _classify_pricing_tier(model_id: str, reasoning_model: str, tool_model: str) -> str:
+    normalized = model_id.lower()
+    if model_id == reasoning_model or normalized == reasoning_model.lower():
+        return "reasoning"
+    if model_id == tool_model or normalized == tool_model.lower():
+        return "tool"
+    if "haiku" in normalized:
+        return "tool"
+    if "sonnet" in normalized or "opus" in normalized:
+        return "reasoning"
+    return "reasoning"
 
 
 def token_count(value: Any) -> int:
@@ -52,10 +63,9 @@ def estimate_case_cost_usd(
         }
         return sum(breakdown.values()), breakdown
     price = DEFAULT_MODEL_PRICES_USD_PER_MTOK.get(llm.lower(), 3.0)
-    return estimate_run_cost_usd(
-        tokens_by_model,
-        reasoning_model=llm,
-        tool_model=llm,
-        reasoning_usd_per_mtok=price,
-        tool_usd_per_mtok=price,
-    )
+    breakdown: dict[str, float] = {}
+    for model_id, token_bucket in tokens_by_model.items():
+        tier = _classify_pricing_tier(model_id, reasoning_model=llm, tool_model=llm)
+        rate = price if tier == "reasoning" else price
+        breakdown[model_id] = (token_count(token_bucket) / 1_000_000.0) * rate
+    return sum(breakdown.values()), breakdown
