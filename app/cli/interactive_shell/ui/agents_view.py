@@ -4,10 +4,9 @@ Produces the structural shape of the dashboard with the columns
 documented in #1486's preview (``agent``, ``pid``, ``uptime``,
 ``cpu%``, ``tokens/min``, ``$/hr``, ``status``). The ``$/hr`` cell
 reads from ``agents.yaml`` via :func:`app.agents.config.load_agents_config`;
-the ``status`` cell shows whether the row came from the explicit
-registry or read-only process discovery; remaining metric columns still
-render as ``-`` until #1490 wires the per-PID sampler and token-meter
-consumer.
+``cpu%`` / ``uptime`` / ``status`` are populated from the per-PID
+sampler. The ``tokens/min`` column still renders as ``-``
+until the token-meter consumer lands in a future issue.
 
 This module lives outside ``app/agents/`` deliberately: the agents
 package is for *collectors* (probe, registry, sweep, meters) and
@@ -19,6 +18,7 @@ collectors would pull it in transitively. The slash command in
 from __future__ import annotations
 
 from collections.abc import Iterable
+from datetime import UTC, datetime, timedelta
 
 from pydantic import ValidationError
 from rich.console import JustifyMethod
@@ -27,15 +27,13 @@ from rich.table import Table
 
 from app.agents.config import load_agents_config
 from app.agents.registry import AgentRecord
+from app.agents.sampler import get_snapshot
 from app.cli.interactive_shell.ui.theme import BOLD_BRAND
 
-# Cells we don't yet have a data source for. See module docstring for
-# which downstream issues fill which column.
+# Placeholder for columns without a live data source (currently only tokens/min).
 _UNFILLED = "-"
 
-#: Columns the dashboard ships with. Order is the user-facing order
-#: and is also the cell-injection contract that #1490 will lean on
-#: when it threads probe snapshots into the rendering layer.
+#: Columns the dashboard ships with. Order matches the user-facing table.
 #: Re-using Rich's own ``JustifyMethod`` type alias rather than a
 #: hand-maintained Literal so column-justify options stay in lockstep
 #: with the library if Rich ever expands them.
@@ -50,6 +48,22 @@ _COLUMNS: tuple[tuple[str, JustifyMethod], ...] = (
 )
 
 
+def _format_uptime(delta: timedelta) -> str:
+    """Format a timedelta as a compact human-readable duration string."""
+    total_seconds = int(delta.total_seconds())
+    if total_seconds < 60:
+        return f"{total_seconds}s"
+    if total_seconds < 3600:
+        return f"{total_seconds // 60}m"
+    hours = total_seconds // 3600
+    if hours < 24:
+        minutes = (total_seconds % 3600) // 60
+        return f"{hours}h{minutes}m"
+    days = hours // 24
+    remaining_hours = hours % 24
+    return f"{days}d{remaining_hours}h"
+
+
 def render_agents_table(records: Iterable[AgentRecord]) -> Table:
     """Return a Rich ``Table`` for the registered ``AgentRecord`` set.
 
@@ -59,9 +73,9 @@ def render_agents_table(records: Iterable[AgentRecord]) -> Table:
     explanatory caption.
 
     The ``$/hr`` cell reads ``hourly_budget_usd`` from ``agents.yaml``
-    when configured. The other metric cells (``uptime``, ``cpu%``,
-    ``tokens/min``) still render as ``-`` placeholders; filling them is
-    out of scope here.
+    when configured. The ``uptime``, ``cpu%``,``status`` are read
+    from the background sampler's probe snapshots. ``tokens/min`` is still
+    pending a future token-meter consumer.
     """
     materialized = list(records)
     table = Table(
@@ -82,6 +96,7 @@ def render_agents_table(records: Iterable[AgentRecord]) -> Table:
         budgets = load_agents_config().agents
     except ValidationError:
         budgets = {}
+    now = datetime.now(UTC)
     for record in materialized:
         budget = budgets.get(record.name)
         hourly_cell = (
@@ -89,14 +104,23 @@ def render_agents_table(records: Iterable[AgentRecord]) -> Table:
             if budget is not None and budget.hourly_budget_usd is not None
             else _UNFILLED
         )
+        snapshot = get_snapshot(record.pid)
+        if snapshot is not None:
+            uptime_cell = _format_uptime(now - snapshot.started_at)
+            cpu_cell = f"{snapshot.cpu_percent:.1f}"
+            status_cell = snapshot.status
+        else:
+            uptime_cell = _UNFILLED
+            cpu_cell = _UNFILLED
+            status_cell = _UNFILLED
         table.add_row(
             escape(record.name),
             str(record.pid),
-            _UNFILLED,  # uptime
-            _UNFILLED,  # cpu%
+            uptime_cell,  # uptime
+            cpu_cell,  # cpu%
             _UNFILLED,  # tokens/min
             hourly_cell,
-            escape(record.source),
+            status_cell,
         )
     return table
 

@@ -11,6 +11,7 @@ from app.cli.interactive_shell.ui import BOLD_BRAND, DIM, HIGHLIGHT, repl_table
 
 def _cmd_help(_session: ReplSession, console: Console, _args: list[str]) -> bool:
     from app.cli.interactive_shell.command_registry.agents import COMMANDS as AGENTS_CMDS
+    from app.cli.interactive_shell.command_registry.alerts import COMMANDS as ALERTS_CMDS
     from app.cli.interactive_shell.command_registry.cli_parity import (
         COMMANDS as PARITY_COMMANDS,
     )
@@ -21,6 +22,7 @@ def _cmd_help(_session: ReplSession, console: Console, _args: list[str]) -> bool
     from app.cli.interactive_shell.command_registry.session_cmds import COMMANDS as SESSION_CMDS
     from app.cli.interactive_shell.command_registry.system import COMMANDS as SYS_CMDS
     from app.cli.interactive_shell.command_registry.tasks_cmds import COMMANDS as TASK_CMDS
+    from app.cli.interactive_shell.command_registry.watch_cmds import COMMANDS as WATCH_CMDS
 
     sections: list[tuple[str, list[SlashCommand]]] = [
         ("Help", list(COMMANDS)),
@@ -28,8 +30,9 @@ def _cmd_help(_session: ReplSession, console: Console, _args: list[str]) -> bool
         ("Integrations & Models", list(INT_CMDS) + list(MODEL_CMDS)),
         ("Investigation", list(INV_CMDS)),
         ("Privacy", list(PRIVACY_CMDS)),
-        ("Tasks", list(TASK_CMDS)),
+        ("Tasks", list(TASK_CMDS) + list(WATCH_CMDS)),
         ("Agents", list(AGENTS_CMDS)),
+        ("Alerts", list(ALERTS_CMDS)),
         ("CLI (parity)", list(PARITY_COMMANDS)),
         ("System", list(SYS_CMDS)),
     ]

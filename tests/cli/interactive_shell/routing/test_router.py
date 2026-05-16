@@ -23,8 +23,38 @@ class TestClassifyInput:
         session = ReplSession()
         # A bare word matching a slash command short name should route to slash
         # even without the leading '/' and even with no prior investigation.
-        for word in ("help", "exit", "quit", "status", "clear", "reset", "trust", "welcome"):
+        for word in (
+            "help",
+            "exit",
+            "quit",
+            "status",
+            "clear",
+            "reset",
+            "trust",
+            "welcome",
+            "integrations",
+            "integration",
+            "int",
+            "mcp",
+        ):
             assert classify_input(word, session) == "slash", word
+
+    def test_integration_bare_alias_keeps_subcommands(self) -> None:
+        session = ReplSession()
+
+        for text in (
+            "integrations list",
+            "integration verify",
+            "int show datadog",
+            "mcp list",
+        ):
+            assert classify_input(text, session) == "slash", text
+
+        assert _router_module.slash_dispatch_text("integrations list") == "/integrations list"
+        assert _router_module.slash_dispatch_text("int show datadog") == (
+            "/integrations show datadog"
+        )
+        assert _router_module.slash_dispatch_text("mcp list") == "/mcp list"
 
     def test_bare_question_mark_is_slash(self) -> None:
         """Typing `?` at the prompt should route to /help, not be mistaken for
@@ -51,7 +81,7 @@ class TestClassifyInput:
             assert classify_input(word, session) == "slash", word
 
     def test_long_operational_health_question_stays_cli_agent(self) -> None:
-        """Long setup questions must not hit LangGraph just because len >= 48."""
+        """Long setup questions must not start an investigation run just because len >= 48."""
         session = ReplSession()
         text = "check the health of my opensre and then show me all connected services"
         assert len(text) >= 48
@@ -184,7 +214,7 @@ class TestClassifyInput:
     def test_incident_text_mentioning_docs_still_routes_to_new_alert(self) -> None:
         """The bare word 'docs' inside an incident description must NOT be
         mistaken for a documentation question (#1166). An incident narrative
-        about a service named 'docs' should still run LangGraph investigation."""
+        about a service named 'docs' should still run the investigation pipeline."""
         session = ReplSession()
         text = (
             "the database docs service started returning 502 errors at 14:00 UTC "
@@ -345,7 +375,7 @@ class TestEdgeCaseRegressionFixtures:
 
     def test_sample_alert_verb_variants_stay_cli_agent(self) -> None:
         """All verb forms that launch a built-in test alert must route to
-        cli_agent, not kick off a real LangGraph investigation."""
+        cli_agent, not kick off a real investigation run."""
         session = ReplSession()
         for phrase in (
             "try a sample alert",
@@ -390,7 +420,7 @@ class TestEdgeCaseRegressionFixtures:
 
     def test_short_incident_question_without_prior_state_is_new_alert(self, monkeypatch) -> None:
         """Short production-symptom questions with no prior investigation must
-        reach the LangGraph pipeline, not the cli_agent.  Pinned to the regex
+        reach the investigation pipeline, not the cli_agent.  Pinned to the regex
         path so the test is deterministic regardless of LLM availability."""
         monkeypatch.setattr(_router_module, "_LLM_ROUTING_DISABLED", True)
         session = ReplSession()

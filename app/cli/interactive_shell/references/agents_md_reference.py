@@ -5,7 +5,7 @@ The conversational interactive-shell assistant grounds answers on the
 and, for procedural questions, excerpts from ``docs/`` (via
 :mod:`app.cli.interactive_shell.references.docs_reference`). Neither surface includes
 internal repo-map content, so the assistant cannot answer questions like
-"where do I add a new tool?" or "how does the LangGraph pipeline route?"
+"where do I add a new tool?" or "how does the remote threads pipeline route?"
 from maintained internal documentation.
 
 This module surfaces the repo's ``AGENTS.md`` files (root + per-package) as a
@@ -43,6 +43,8 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+import app.cli.interactive_shell.references.grounding_diagnostics as _gd
 
 # Repo root is four levels above this file
 # (.../app/cli/interactive_shell/references/agents_md_reference.py -> repo root).
@@ -259,6 +261,16 @@ def build_agents_md_reference_text(*, max_chars: int = _DEFAULT_MAX_TOTAL_CHARS)
         return text[:max_chars] + "\n\n[... AGENTS.md reference truncated ...]\n"
     return text
 
+
+_gd.register_grounding_source(
+    _gd.GroundingSource(
+        name="agents_md",
+        stats_fn=get_agents_md_cache_stats,
+        format_fn=lambda s: (
+            f"hits={s['hits']} misses={s['misses']} entries={s['currsize']}/{s['maxsize']}"
+        ),
+    )
+)
 
 __all__ = [
     "AgentsMdFile",

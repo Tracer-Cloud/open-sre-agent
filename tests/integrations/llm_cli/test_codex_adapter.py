@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from app.integrations.llm_cli.binary_resolver import diagnose_binary_path, npm_prefix_bin_dirs
 from app.integrations.llm_cli.codex import CodexAdapter, _fallback_codex_paths
 from app.integrations.llm_cli.text import flatten_messages_to_prompt
@@ -70,7 +72,12 @@ def test_detect_path_binary_logged_in(mock_which: MagicMock, mock_run: MagicMock
 
 @patch("app.integrations.llm_cli.codex.subprocess.run")
 @patch("app.integrations.llm_cli.binary_resolver.shutil.which")
-def test_detect_not_logged_in(mock_which: MagicMock, mock_run: MagicMock) -> None:
+def test_detect_not_logged_in(
+    mock_which: MagicMock, mock_run: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Strip OPENAI_API_KEY so the dev's shell or .env can't trigger
+    # the API-key fallback and flip logged_in to True.
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     mock_which.return_value = "/usr/bin/codex"
 
     def side_effect(args: list[str], **kwargs: object) -> MagicMock:
@@ -118,8 +125,13 @@ def test_detect_not_logged_in_uses_openai_api_key_fallback(
 
 @patch("app.integrations.llm_cli.codex.subprocess.run")
 @patch("app.integrations.llm_cli.binary_resolver.shutil.which")
-def test_detect_not_logged_in_exit_zero(mock_which: MagicMock, mock_run: MagicMock) -> None:
+def test_detect_not_logged_in_exit_zero(
+    mock_which: MagicMock, mock_run: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Some Codex versions may exit 0 while printing 'Not logged in' — must not match 'logged in'."""
+    # Strip OPENAI_API_KEY so the dev's shell or .env can't trigger
+    # the API-key fallback and flip logged_in to True.
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     mock_which.return_value = "/usr/bin/codex"
 
     def side_effect(args: list[str], **kwargs: object) -> MagicMock:

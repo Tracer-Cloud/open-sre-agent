@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
 """Local alert simulation test for the Kubernetes PIPELINE_ERROR scenario.
 
-POSTs a real Datadog alert payload to a locally running LangGraph dev server
-and runs the full investigation pipeline (including live Datadog API calls).
+Runs the bundled Datadog-style fixture through ``run_investigation`` (the same
+entry point as ``opensre investigate``), including live Datadog API calls when
+credentials are configured.
 
 Alert used:
   [tracer] Pipeline Error in Logs
   PIPELINE_ERROR: Schema validation failed: Missing fields ['customer_id'] in record 0
-
-Prerequisites:
-  The LangGraph server must be running on localhost:2024 before this test is
-  invoked. `make simulate-k8s-alert` handles that automatically.
 
 Usage (from project root):
     make simulate-k8s-alert
@@ -20,8 +17,6 @@ from __future__ import annotations
 
 import json
 import os
-import time
-import urllib.request
 from pathlib import Path
 
 import pytest
@@ -31,17 +26,7 @@ pytestmark = pytest.mark.skipif(
     reason="Requires ANTHROPIC_API_KEY - run manually",
 )
 
-BASE_URL = "http://localhost:2024"
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "datadog_pipeline_error_alert.json"
-RUN_TIMEOUT_SECONDS = 120
-POLL_INTERVAL = 2
-
-
-def _auth_headers() -> dict[str, str]:
-    token = os.environ.get("JWT_TOKEN", "")
-    if not token:
-        raise RuntimeError("JWT_TOKEN env var is required but not set")
-    return {"Authorization": f"Bearer {token}"}
 
 
 def _load_fixture() -> dict:
@@ -49,74 +34,22 @@ def _load_fixture() -> dict:
         return json.load(f)
 
 
-def _post(path: str, body: dict) -> dict:
-    data = json.dumps(body).encode()
-    req = urllib.request.Request(
-        f"{BASE_URL}{path}",
-        data=data,
-        headers={"Content-Type": "application/json", **_auth_headers()},
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=10) as resp:
-        return json.loads(resp.read())
-
-
-def _get(path: str) -> dict:
-    req = urllib.request.Request(
-        f"{BASE_URL}{path}",
-        headers=_auth_headers(),
-    )
-    with urllib.request.urlopen(req, timeout=10) as resp:
-        return json.loads(resp.read())
-
-
-def _wait_for_run(thread_id: str, run_id: str) -> dict:
-    deadline = time.monotonic() + RUN_TIMEOUT_SECONDS
-    while time.monotonic() < deadline:
-        run = _get(f"/threads/{thread_id}/runs/{run_id}")
-        status = run.get("status")
-        if status in ("success", "error"):
-            return run
-        time.sleep(POLL_INTERVAL)
-    raise TimeoutError(f"Run {run_id} did not complete within {RUN_TIMEOUT_SECONDS}s")
-
-
 def test_kubernetes_local_alert_simulation() -> None:
-    """POST a pipeline-error alert to the local LangGraph server and verify the report.
+    """Run a pipeline-error alert locally and verify the report.
 
-    Runs the full investigation pipeline. Asserts:
+    Asserts:
       - root_cause is non-empty and references the missing field
       - slack_message is non-empty and contains a Root Cause section
     """
+    from app.pipeline.runners import run_investigation
+
     fixture = _load_fixture()
     alert = fixture["alert"]
 
-    thread = _post("/threads", {})
-    thread_id = thread["thread_id"]
+    state = run_investigation(alert)
 
-    run = _post(
-        f"/threads/{thread_id}/runs",
-        {
-            "assistant_id": "agent",
-            "input": {
-                "mode": "investigation",
-                "alert_name": alert["title"],
-                "pipeline_name": alert["commonLabels"].get("pipeline_name", "tracer-test"),
-                "severity": alert["commonLabels"].get("severity", "critical"),
-                "raw_alert": alert,
-            },
-        },
-    )
-    run_id = run["run_id"]
-
-    completed = _wait_for_run(thread_id, run_id)
-    assert completed["status"] == "success", f"Run ended with status={completed['status']}"
-
-    state = _get(f"/threads/{thread_id}/state")
-    values = state.get("values", {})
-
-    root_cause = values.get("root_cause", "")
-    slack_message = values.get("slack_message", "")
+    root_cause = state.get("root_cause", "") or ""
+    slack_message = state.get("slack_message", "") or ""
 
     print("\n" + "=" * 70)
     print("SIMULATION REPORT OUTPUT")

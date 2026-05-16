@@ -4,16 +4,44 @@ from __future__ import annotations
 
 import os
 import pathlib
+import subprocess
 import sys
+import time
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from unittest.mock import patch
 
 import psutil
+import pytest
 
 from app.agents.probe import ProcessSnapshot, probe
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 _PROBE_MODULE = _REPO_ROOT / "app" / "agents" / "probe.py"
+
+
+@pytest.fixture
+def busy_process() -> Iterator[int]:
+    """Spawn a subprocess burning CPU in a tight loop; yields its PID.
+    The warmup sleep ensures the process has accumulated enough CPU time for
+    psutil.cpu_percent(interval>0) to measure a non-zero delta.
+    """
+    proc = subprocess.Popen(
+        [sys.executable, "-c", "while True: pass"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    time.sleep(0.1)
+
+    yield proc.pid
+
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
 
 
 def test_probe_returns_snapshot_for_self() -> None:
@@ -75,3 +103,15 @@ def test_psutil_is_not_imported_outside_probe_module() -> None:
     assert not leaks, (
         "psutil leaked into modules other than app/agents/probe.py:\n  " + "\n  ".join(leaks)
     )
+
+
+def test_probe_returns_nonzero_cpu_for_busy_process(busy_process: int) -> None:
+    """Regression: cpu_percent(interval>0) returned 0.0 when called inside proc.oneshot()
+    because both internal readings hit the same cache (#1950). Probing a busy subprocess
+    with a positive interval must yield a non-zero value now that the call lives
+    outside the oneshot block.
+    """
+    snap = probe(busy_process, cpu_interval=0.1)
+
+    assert snap is not None
+    assert snap.cpu_percent > 0.0

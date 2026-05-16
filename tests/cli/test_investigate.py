@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import NoReturn
+from typing import Any, NoReturn
 
 import pytest
 
@@ -32,20 +32,58 @@ def test_resolve_investigation_context_prefers_cli_overrides() -> None:
     assert severity == "critical"
 
 
+def test_resolve_investigation_context_uses_raw_alert_without_pipeline_default() -> None:
+    alert_name, pipeline_name, severity = resolve_investigation_context(
+        raw_alert={
+            "title": "CPU high",
+            "commonLabels": {"service": "checkout", "severity": "critical"},
+        },
+        alert_name=None,
+        pipeline_name=None,
+        severity=None,
+    )
+
+    assert alert_name == "CPU high"
+    assert pipeline_name == "checkout"
+    assert severity == "critical"
+
+
+def test_run_investigation_cli_passes_investigation_metadata_to_runner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_call(**kwargs: Any) -> dict[str, Any]:
+        captured.update(kwargs)
+        return {
+            "slack_message": "r",
+            "problem_md": "p",
+            "root_cause": "c",
+            "is_noise": False,
+            "validity_score": 0.0,
+        }
+
+    monkeypatch.setattr("app.cli.investigation.investigate.LLMSettings.from_env", object)
+    monkeypatch.setattr("app.cli.investigation.investigate._call_run_investigation", fake_call)
+    run_investigation_cli(
+        raw_alert={"description": "x"},
+        investigation_metadata=("A", "B", "high"),
+    )
+    assert captured == {
+        "raw_alert": {"description": "x"},
+        "opensre_evaluate": False,
+        "investigation_metadata": ("A", "B", "high"),
+    }
+
+
 def test_run_investigation_cli_shapes_agent_state(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     def fake_run_investigation(
-        alert_name: str,
-        pipeline_name: str,
-        severity: str,
         *,
         raw_alert: dict[str, object],
         **_: object,
     ) -> dict[str, object]:
-        captured["alert_name"] = alert_name
-        captured["pipeline_name"] = pipeline_name
-        captured["severity"] = severity
         captured["raw_alert"] = raw_alert
         return {
             "slack_message": "report body",
@@ -60,15 +98,9 @@ def test_run_investigation_cli_shapes_agent_state(monkeypatch) -> None:
 
     result = run_investigation_cli(
         raw_alert={"alert_name": "PayloadAlert"},
-        alert_name=None,
-        pipeline_name=None,
-        severity=None,
     )
 
     assert captured == {
-        "alert_name": "PayloadAlert",
-        "pipeline_name": "events_fact",
-        "severity": "warning",
         "raw_alert": {"alert_name": "PayloadAlert"},
     }
     assert result == {
@@ -76,14 +108,12 @@ def test_run_investigation_cli_shapes_agent_state(monkeypatch) -> None:
         "problem_md": "# problem",
         "root_cause": "bad deploy",
         "is_noise": False,
+        "validity_score": 0.0,
     }
 
 
 def test_run_investigation_cli_evaluate_reports_skip_when_no_rubric(monkeypatch) -> None:
     def fake_run(
-        alert_name: str,
-        pipeline_name: str,
-        severity: str,
         *,
         raw_alert: dict[str, object],
         **_: object,
@@ -146,6 +176,34 @@ def test_stream_investigation_cli_raises_queued_exception_immediately(
     assert first.event_type == "metadata"
     with pytest.raises(RuntimeError, match="stream failed"):
         next(events)
+
+
+def test_stream_investigation_cli_closes_cleanly_on_generator_close(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Closing the generator must not hang and must clean up the background thread."""
+    import asyncio
+    import time
+
+    async def fake_astream_investigation(*args: object, **kwargs: object):
+        yield StreamEvent("metadata", data={"run_id": "run-123"})
+        # Simulate a long-running stream
+        await asyncio.sleep(1000)
+
+    monkeypatch.setattr("app.cli.investigation.investigate.LLMSettings.from_env", object)
+    monkeypatch.setattr(
+        "app.pipeline.runners.astream_investigation",
+        fake_astream_investigation,
+    )
+
+    events = stream_investigation_cli(raw_alert={"alert_name": "PayloadAlert"})
+    first = next(events)
+    assert first.event_type == "metadata"
+
+    # Without eager pump cancellation, thread.join() would block for the full timeout (~5s).
+    t0 = time.monotonic()
+    events.close()
+    assert time.monotonic() - t0 < 2.0
 
 
 def test_run_investigation_cli_maps_cli_auth_to_opensre_error(

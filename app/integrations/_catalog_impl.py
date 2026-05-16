@@ -1809,11 +1809,23 @@ def resolve_effective_integrations(
         slack_credentials = _raw_credentials(slack_store_integration)
         webhook_url = str(slack_credentials.get("webhook_url", "")).strip()
         if webhook_url:
-            slack_config = SlackWebhookConfig.model_validate({"webhook_url": webhook_url})
-            effective["slack"] = _effective_entry("local store", slack_config.model_dump())
+            try:
+                slack_config = SlackWebhookConfig.model_validate({"webhook_url": webhook_url})
+                effective["slack"] = _effective_entry("local store", slack_config.model_dump())
+            except Exception:
+                # Do NOT include the exception value — Pydantic v2 ValidationError
+                # embeds the input_value (here a SlackWebhookConfig containing the
+                # webhook_url) in its string representation, and Slack webhook URLs
+                # carry a secret token in the path. Log only a static message.
+                logger.warning("Slack webhook URL from store is invalid; skipping Slack")
     elif slack_webhook_url := os.getenv("SLACK_WEBHOOK_URL", "").strip():
-        slack_config = SlackWebhookConfig.model_validate({"webhook_url": slack_webhook_url})
-        effective["slack"] = _effective_entry("local env", slack_config.model_dump())
+        try:
+            slack_config = SlackWebhookConfig.model_validate({"webhook_url": slack_webhook_url})
+            effective["slack"] = _effective_entry("local env", slack_config.model_dump())
+        except Exception:
+            # See note above: avoid logging the ValidationError which embeds the
+            # raw webhook_url (and its secret token).
+            logger.warning("SLACK_WEBHOOK_URL is invalid; skipping Slack")
 
     google_docs_integration = classified_integrations.get("google_docs")
     if isinstance(google_docs_integration, dict):

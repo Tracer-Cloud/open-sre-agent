@@ -113,6 +113,6 @@ def send_openclaw_report(
         if posted:
             return True, None
         last_error = error
-        logger.warning("[openclaw_delivery] %s failed: %s", tool_name, error)
+        logger.debug("[openclaw_delivery] %s failed: %s", tool_name, error)
 
     return False, last_error

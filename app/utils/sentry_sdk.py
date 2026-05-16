@@ -1,7 +1,7 @@
 """Sentry SDK initialisation for runtime error monitoring.
 
 Initialises Sentry using the project DSN constant.  Call ``init_sentry()`` once
-early in each process entry-point (CLI, LangGraph worker, etc.).  Repeated calls
+early in each process entry-point (CLI, ASGI server, etc.).  Repeated calls
 are safe — the function is idempotent.
 """
 
@@ -11,8 +11,7 @@ import json
 import logging
 import os
 import re
-import warnings
-from collections.abc import Iterator, Mapping
+from collections.abc import Generator, Mapping
 from contextlib import contextmanager, suppress
 from functools import cache
 from typing import Any
@@ -43,7 +42,7 @@ _SENSITIVE_HEADERS: frozenset[str] = frozenset(
 )
 _QUERY_SCRUBBING_CATEGORIES: frozenset[str] = frozenset({"http", "httpx"})
 _HEADER_SCRUBBING_CATEGORIES: frozenset[str] = frozenset({"http", "httpx", "aiohttp"})
-_HOSTED_ENTRYPOINTS: frozenset[str] = frozenset({"webapp", "remote", "mcp", "graph_pipeline"})
+_HOSTED_ENTRYPOINTS: frozenset[str] = frozenset({"webapp", "remote", "mcp", "pipeline"})
 _OPERATOR_ACTIONABLE_LLM_ERROR_PATTERNS: tuple[re.Pattern[str], ...] = (
     # Any provider auth failure: "Openrouter authentication failed. Check OPENROUTER_API_KEY …"
     re.compile(r"\bauthentication failed\.\s+Check\s+\S+_API_KEY\b", re.I),
@@ -59,6 +58,15 @@ _OPERATOR_ACTIONABLE_LLM_ERROR_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\bLLM API request failed after multiple retries\b", re.I),
     # Provider endpoint unreachable (Ollama down, bad URL, SSL misconfiguration).
     re.compile(r"\bcannot connect to .+ api\b", re.I),
+    # Provider read timeout after retries — anchored to the suffix produced by
+    # _format_openai_connection_error so generic non-LLM timeout messages are unaffected.
+    re.compile(r"\bapi request timed out\. check that the service is running\b", re.I),
+    # Anthropic / provider account-level usage-limit enforcement (HTTP 400).
+    re.compile(r"\byou have reached your specified api usage limits\b", re.I),
+    # Billing quota exhausted: catches the OpenAI ``insufficient_quota`` path
+    # (``"<provider> billing quota exceeded. ..."``) and the Bedrock Anthropic
+    # ``usage limits`` path (``"Anthropic billing quota exceeded for Bedrock model ..."``).
+    re.compile(r"\bbilling quota exceeded\b", re.I),
 )
 
 
@@ -323,32 +331,6 @@ def _build_sentry_integrations() -> list[Any]:
     ]
 
 
-@contextmanager
-def _suppress_langgraph_allowed_objects_warning() -> Iterator[None]:
-    """Hide the upstream LangGraph serializer warning during Sentry auto-discovery.
-
-    Sentry's auto-enabled LangGraph integration imports ``langgraph.graph`` during
-    ``sentry_sdk.init()``, which currently triggers a LangChain pending-deprecation
-    warning about ``allowed_objects`` defaults inside LangGraph's serializer setup.
-    OpenSRE does not control that import path and the current runtime behavior
-    remains unchanged (LangChain still defaults to ``allowed_objects='core'``), so
-    we suppress only this one known startup warning until the upstream packages
-    expose an explicit configuration hook.
-    """
-    with warnings.catch_warnings():
-        category: type[Warning] = Warning
-        with suppress(Exception):
-            from langchain_core._api.deprecation import LangChainPendingDeprecationWarning
-
-            category = LangChainPendingDeprecationWarning
-        warnings.filterwarnings(
-            "ignore",
-            message=r"The default value of `allowed_objects` will change in a future version\..*",
-            category=category,
-        )
-        yield
-
-
 @cache
 def _init_sentry_once(
     dsn: str,
@@ -367,24 +349,33 @@ def _init_sentry_once(
     """
     import sentry_sdk
 
-    from app.integrations.llm_cli.errors import CLIAuthenticationRequired, CLITimeoutError
+    from app.integrations.llm_cli.errors import (
+        CLIAuthenticationRequired,
+        CLITimeoutError,
+        CLITransientError,
+    )
 
-    with _suppress_langgraph_allowed_objects_warning():
-        sentry_sdk.init(
-            dsn=dsn,
-            environment=environment,
-            release=release,
-            send_default_pii=False,
-            attach_stacktrace=True,
-            sample_rate=sample_rate,
-            traces_sample_rate=traces_sample_rate,
-            max_breadcrumbs=SENTRY_MAX_BREADCRUMBS,
-            in_app_include=list(SENTRY_IN_APP_INCLUDE),
-            integrations=_build_sentry_integrations(),
-            before_send=_before_send,
-            before_breadcrumb=_before_breadcrumb,
-            ignore_errors=[CLIAuthenticationRequired, CLITimeoutError],
-        )
+    sentry_sdk.init(
+        dsn=dsn,
+        environment=environment,
+        release=release,
+        send_default_pii=False,
+        attach_stacktrace=True,
+        sample_rate=sample_rate,
+        traces_sample_rate=traces_sample_rate,
+        max_breadcrumbs=SENTRY_MAX_BREADCRUMBS,
+        in_app_include=list(SENTRY_IN_APP_INCLUDE),
+        integrations=_build_sentry_integrations(),
+        auto_enabling_integrations=False,
+        before_send=_before_send,
+        before_breadcrumb=_before_breadcrumb,
+        ignore_errors=[
+            KeyboardInterrupt,
+            CLIAuthenticationRequired,
+            CLITimeoutError,
+            CLITransientError,
+        ],
+    )
 
 
 def _apply_scope_tags(entrypoint: str | None) -> None:
@@ -401,7 +392,7 @@ def _apply_scope_tags(entrypoint: str | None) -> None:
     runtime, e.g. ``CPython 3.12``, and is flattened into a tag of the same
     name by Sentry's event processor — overriding any plain ``runtime`` tag
     set on the scope). Server-side surfaces (``webapp``/``remote``/``mcp``/
-    ``graph_pipeline``) map to ``hosted``; everything else maps to ``cli`` —
+    ``pipeline``) map to ``hosted``; everything else maps to ``cli`` —
     this matches the surface, not the ``ENV`` setting, so a webapp running
     locally still reports as ``hosted``.
     """
@@ -432,7 +423,7 @@ def init_sentry(entrypoint: str | None = None) -> None:
     ``OPENSRE_ANALYTICS_DISABLED=1`` disables PostHog only.
 
     ``entrypoint`` identifies the calling surface (``cli``, ``webapp``,
-    ``remote``, ``mcp``, ``integrations``, ``wizard``, ``graph_pipeline``)
+    ``remote``, ``mcp``, ``integrations``, ``wizard``, ``pipeline``)
     and is attached as a scope tag for grouping in Sentry. The first
     non-no-op call wins — inner callers cannot overwrite the outer
     entrypoint's tags.
@@ -493,3 +484,22 @@ def capture_exception(
                 for key, value in extra.items():
                     scope.set_extra(key, value)
             sentry_sdk.capture_exception(exc)
+
+
+@contextmanager
+def report_silent(
+    where: str,
+    *,
+    extra: Mapping[str, Any] | None = None,
+) -> Generator[None]:
+    """Catch exceptions, report to Sentry, do not re-raise.
+
+    Use this in background-task iterations or loop boundaries where an
+    exception must never propagate to the caller but should still appear
+    in Sentry.  The ``silent_at`` scope tag is set to ``where`` so these
+    events are grouped together in the Sentry dashboard.
+    """
+    try:
+        yield
+    except Exception as exc:
+        capture_exception(exc, context=where, extra=extra)

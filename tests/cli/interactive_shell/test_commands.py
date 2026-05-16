@@ -210,6 +210,55 @@ class TestDispatchSlash:
         assert "/list integrations" in output
         assert "current session only" not in output
 
+    def test_investigate_file_read_failure_is_reported(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        captured_errors: list[BaseException] = []
+
+        monkeypatch.setattr(Path, "exists", lambda _self: True)
+        monkeypatch.setattr(
+            Path,
+            "read_text",
+            lambda _self, **_kwargs: (_ for _ in ()).throw(RuntimeError("read broke")),
+        )
+        monkeypatch.setattr(
+            "app.cli.support.exception_reporting.capture_exception",
+            lambda exc, **_kwargs: captured_errors.append(exc),
+        )
+
+        session = ReplSession()
+        console, buf = _capture()
+
+        assert dispatch_slash("/investigate incident.json", session, console) is True
+
+        assert "cannot read file" in buf.getvalue()
+        assert len(captured_errors) == 1
+        assert isinstance(captured_errors[0], RuntimeError)
+
+    def test_save_failure_is_reported(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        captured_errors: list[BaseException] = []
+
+        monkeypatch.setattr(
+            Path,
+            "write_text",
+            lambda _self, *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("write broke")),
+        )
+        monkeypatch.setattr(
+            "app.cli.support.exception_reporting.capture_exception",
+            lambda exc, **_kwargs: captured_errors.append(exc),
+        )
+
+        session = ReplSession()
+        session.last_state = {"root_cause": "cache issue", "problem_md": "details"}
+        console, buf = _capture()
+
+        assert dispatch_slash("/save report.md", session, console) is True
+
+        assert "save failed" in buf.getvalue()
+        assert len(captured_errors) == 1
+        assert isinstance(captured_errors[0], RuntimeError)
+
 
 class TestListCommand:
     """Coverage for /list integrations / models / mcp and the default summary."""
@@ -1320,8 +1369,7 @@ class TestCliDelegatedCommands:
     @pytest.mark.parametrize(
         "command,expected_args",
         [
-            ("/onboard", ["onboard"]),
-            ("/deploy ec2", ["deploy", "ec2"]),
+            ("/config show", ["config", "show"]),
             ("/remote health", ["remote", "health"]),
             ("/tests list", ["tests", "list"]),
             ("/guardrails audit", ["guardrails", "audit"]),
@@ -1343,6 +1391,72 @@ class TestCliDelegatedCommands:
         monkeypatch.setattr(m, "run_cli_command", _fake_run_cli_command)
         dispatch_slash(command, ReplSession(), Console())
         assert captured == [expected_args]
+
+    def test_slash_onboard_refuses_with_helpful_message(self, monkeypatch: object) -> None:
+        """``/onboard`` must NOT spawn the onboarding subprocess from inside
+        the REPL — the wizard's prompt_toolkit Application fights the
+        shell's active one and produces a stacked-widget rendering bug.
+        Refuse with a clear pointer to the right invocation instead.
+        """
+        from app.cli.interactive_shell.command_registry import cli_parity as m
+
+        captured: list[list[str]] = []
+
+        def _fake_run_cli_command(_console: Console, args: list[str], **kwargs: object) -> bool:
+            captured.append(args)
+            return True
+
+        monkeypatch.setattr(m, "run_cli_command", _fake_run_cli_command)
+
+        session = ReplSession()
+        buf = io.StringIO()
+        # Width >80 so the multi-line warning doesn't wrap mid-substring.
+        console = Console(file=buf, force_terminal=False, width=200)
+        dispatch_slash("/onboard", session, console)
+
+        assert captured == [], "subprocess delegate must not be called"
+        out = buf.getvalue()
+        assert "needs a full terminal" in out
+        assert "opensre onboard" in out
+        # Mirrors the LLM-classified path: refused-attempt is recorded so
+        # session history captures the user's intent regardless of entry
+        # point.
+        assert session.history[-1] == {
+            "type": "cli_command",
+            "text": "opensre onboard",
+            "ok": False,
+        }
+
+    def test_slash_onboard_with_args_forwards_them_in_hint(self, monkeypatch: object) -> None:
+        """Refusal message should preserve user-supplied args so
+        the user can copy-paste the suggested ``opensre onboard …``
+        invocation without re-typing. The session record also keeps
+        the args so the assistant sees the full attempted command.
+        """
+        from app.cli.interactive_shell.command_registry import cli_parity as m
+
+        captured: list[list[str]] = []
+
+        def _fake_run_cli_command(_console: Console, args: list[str], **kwargs: object) -> bool:
+            captured.append(args)
+            return True
+
+        monkeypatch.setattr(m, "run_cli_command", _fake_run_cli_command)
+
+        session = ReplSession()
+        buf = io.StringIO()
+        # Width >80 so the multi-line warning doesn't wrap mid-substring.
+        console = Console(file=buf, force_terminal=False, width=200)
+        dispatch_slash("/onboard local_llm", session, console)
+
+        assert captured == []
+        out = buf.getvalue()
+        assert "opensre onboard local_llm" in out
+        assert session.history[-1] == {
+            "type": "cli_command",
+            "text": "opensre onboard local_llm",
+            "ok": False,
+        }
 
     def test_tests_run_subcommand_starts_background_task(self, monkeypatch: object) -> None:
         from app.cli.interactive_shell.command_registry import cli_parity as m

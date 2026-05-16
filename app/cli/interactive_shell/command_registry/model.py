@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import sys
 
 from rich.console import Console
 from rich.markup import escape
@@ -45,12 +44,13 @@ def _is_model_supported(
 
 def _reset_runtime_llm_caches() -> None:
     """Force subsequent REPL assistant calls to use the updated model env."""
+    from app.agent.chat import reset_chat_cache
+    from app.services.agent_llm_client import reset_agent_client
     from app.services.llm_client import reset_llm_singletons
 
     reset_llm_singletons()
-    chat_module = sys.modules.get("app.nodes.chat")
-    if chat_module is not None:
-        chat_module.reset_chat_llm_cache()
+    reset_agent_client()
+    reset_chat_cache()
 
 
 def switch_llm_provider(

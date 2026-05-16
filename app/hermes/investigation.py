@@ -5,7 +5,7 @@ into a Grafana-shaped alert payload, calls
 :func:`app.pipeline.runners.run_investigation`, and extracts a
 human-readable summary from the resulting :class:`AgentState`.
 
-The investigation pipeline is heavy (LangGraph, LLM calls, integration
+The investigation pipeline is heavy (LLM calls, integration
 resolution) so this module imports it lazily — callers that never invoke
 the bridge pay no import cost.
 """
@@ -68,20 +68,15 @@ def run_incident_investigation(incident: HermesIncident) -> str | None:
     raises, the exception propagates to the caller — :class:`TelegramSink`
     maps that to an operator-visible "attempted (failed)" marker. Heavy
     imports are deferred so the Hermes sink can be imported in environments
-    where LangGraph and friends are not installed (e.g. unit tests).
+    where heavy dependencies are not installed (e.g. unit tests).
     """
     # Imported lazily — pulling app.pipeline.runners at module import
-    # time would force every Hermes consumer to pay the LangGraph import
+    # time would force every Hermes consumer to pay the pipeline import
     # cost even when no investigation ever runs.
     from app.pipeline.runners import run_investigation
 
     alert = build_alert_from_incident(incident)
-    state = run_investigation(
-        alert_name=str(alert["alert_name"]),
-        pipeline_name=str(alert["pipeline_name"]),
-        severity=str(alert["severity"]),
-        raw_alert=alert,
-    )
+    state = run_investigation(alert)
     return _extract_summary(state)
 
 

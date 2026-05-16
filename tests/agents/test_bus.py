@@ -7,6 +7,8 @@ import queue
 import socket
 import threading
 import time
+import uuid
+from collections.abc import Iterator
 from contextlib import suppress
 from pathlib import Path
 
@@ -28,8 +30,12 @@ from app.agents.bus import (
 
 
 @pytest.fixture
-def sock_path(tmp_path: Path) -> Path:
-    return tmp_path / "bus.sock"
+def sock_path() -> Iterator[Path]:
+    """Unix domain socket path must stay short (sun_path length cap, often 104–108)."""
+    path = Path("/tmp") / f"opensre-bus-{uuid.uuid4().hex}.sock"
+    yield path
+    with suppress(OSError):
+        path.unlink(missing_ok=True)
 
 
 @pytest.fixture(autouse=True)

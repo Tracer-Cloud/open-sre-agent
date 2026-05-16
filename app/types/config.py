@@ -9,12 +9,11 @@ Configurable = dict[str, Any]
 
 
 class NodeConfig(TypedDict, total=False):
-    """Config shape consumed by OpenSRE nodes.
+    """Config shape consumed by OpenSRE pipeline stages.
 
-    LangGraph may pass a richer runtime config, but core nodes only depend on
-    these project-owned fields. Top-level ``run_id`` matches LangChain
-    ``RunnableConfig.run_id`` (``UUID | None``); ``configurable`` often carries a
-    string run id from callers.
+    Callers may pass a richer runtime config, but core stages only depend on
+    these project-owned fields. Top-level ``run_id`` is typically a caller-provided
+    identifier; ``configurable`` often carries ``thread_id`` and related entries.
     """
 
     configurable: Configurable

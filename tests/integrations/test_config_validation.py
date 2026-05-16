@@ -200,6 +200,19 @@ def test_slack_config_rejects_non_slack_host() -> None:
         SlackWebhookConfig.model_validate({"webhook_url": "https://example.com/webhook"})
 
 
+@pytest.mark.parametrize(
+    "webhook_url",
+    [
+        "https://hooks.slack.com.evil.test/services/T000/B000/test",
+        "https://evilslack.com/services/T000/B000/test",
+        "https://hooks.slack.com@evil.test/services/T000/B000/test",
+    ],
+)
+def test_slack_config_rejects_spoofed_slack_hosts(webhook_url: str) -> None:
+    with pytest.raises(ValidationError, match="Slack webhook host must be a Slack domain"):
+        SlackWebhookConfig.model_validate({"webhook_url": webhook_url})
+
+
 def test_tracer_config_strips_bearer_prefix() -> None:
     config = TracerIntegrationConfig.model_validate(
         {

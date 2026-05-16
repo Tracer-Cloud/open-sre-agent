@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 from collections.abc import Callable
 from itertools import chain
 
@@ -9,6 +10,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from app.cli.interactive_shell.command_registry.agents import COMMANDS as AGENTS_COMMANDS
+from app.cli.interactive_shell.command_registry.alerts import COMMANDS as ALERTS_COMMANDS
 from app.cli.interactive_shell.command_registry.cli_parity import (
     COMMANDS as PARITY_COMMANDS,
 )
@@ -34,6 +36,7 @@ from app.cli.interactive_shell.command_registry.suggestions import closest_choic
 from app.cli.interactive_shell.command_registry.system import COMMANDS as SYSTEM_COMMANDS
 from app.cli.interactive_shell.command_registry.tasks_cmds import COMMANDS as TASK_COMMANDS
 from app.cli.interactive_shell.command_registry.types import SlashCommand
+from app.cli.interactive_shell.command_registry.watch_cmds import COMMANDS as WATCH_COMMANDS
 from app.cli.interactive_shell.orchestration.execution_policy import (
     evaluate_slash_tier,
     execution_allowed,
@@ -50,8 +53,10 @@ _MERGED_SEQUENCE = tuple(
         MODEL_COMMANDS,
         INVESTIGATION_COMMANDS,
         TASK_COMMANDS,
+        WATCH_COMMANDS,
         PRIVACY_COMMANDS,
         AGENTS_COMMANDS,
+        ALERTS_COMMANDS,
         PARITY_COMMANDS,
         SYSTEM_COMMANDS,
     )
@@ -105,7 +110,17 @@ def dispatch_slash(
     if not parts:
         return True
     name = parts[0].lower()
-    args = parts[1:]
+    if name in ("/watch", "/unwatch"):
+        head = parts[0]
+        body = stripped[len(head) :].strip()
+        try:
+            # Use POSIX mode on all platforms so quoted values are unwrapped
+            # consistently (e.g., --max-cpu "80" -> 80).
+            args = shlex.split(body, posix=True)
+        except ValueError:
+            args = body.split()
+    else:
+        args = parts[1:]
     cmd = SLASH_COMMANDS.get(name)
     if cmd is None:
         suggestion = closest_choice(name, tuple(SLASH_COMMANDS))

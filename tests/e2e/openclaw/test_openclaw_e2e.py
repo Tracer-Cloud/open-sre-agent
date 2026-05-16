@@ -26,15 +26,16 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.integrations.catalog import classify_integrations as _classify_integrations
+from app.integrations.catalog import load_env_integrations as _load_env_integrations
 from app.integrations.openclaw import (
     OpenClawConfig,
     describe_openclaw_error,
     openclaw_runtime_unavailable_reason,
     validate_openclaw_config,
 )
-from app.nodes.plan_actions.detect_sources import detect_sources
-from app.nodes.resolve_integrations.node import _classify_integrations, _load_env_integrations
 from app.utils.openclaw_delivery import send_openclaw_report
+from tests.e2e.source_helpers import resolve_available_tool_sources
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -151,18 +152,13 @@ class TestOpenClawGatewayUnavailable:
             "are never selectable during investigations."
         )
 
-    @patch(
-        "app.nodes.plan_actions.detect_sources.openclaw_runtime_unavailable_reason",
-        return_value=None,
-    )
-    def test_openclaw_source_detected_from_resolved_integrations(
-        self, _mock_runtime_unavailable: MagicMock
-    ) -> None:
-        """When openclaw is in resolved_integrations, detect_sources must include it."""
+    def test_openclaw_source_detected_from_resolved_integrations(self) -> None:
+        """When openclaw is in resolved_integrations, bridge tools expose it."""
         alert = _load_fixture("gateway_unavailable_alert.json")
+        assert alert["commonLabels"]["alertname"] == "OpenClawGatewayUnavailable"
         resolved_integrations = {"openclaw": _openclaw_stdio_resolved()}
 
-        sources = detect_sources(alert, {}, resolved_integrations)
+        sources = resolve_available_tool_sources(resolved_integrations)
 
         assert "openclaw" in sources
         assert sources["openclaw"].get("connection_verified") is True
@@ -281,10 +277,9 @@ class TestOpenClawMCPAuthFailure:
         assert "Authorization" not in config.request_headers
 
     def test_openclaw_source_detected_with_http_config(self) -> None:
-        alert = _load_fixture("mcp_auth_failure_alert.json")
         resolved_integrations = {"openclaw": _openclaw_http_resolved()}
 
-        sources = detect_sources(alert, {}, resolved_integrations)
+        sources = resolve_available_tool_sources(resolved_integrations)
 
         assert "openclaw" in sources
 
@@ -370,9 +365,10 @@ class TestOpenClawStdioCommandNotFound:
         assert "serve" in config.args
 
     def test_openclaw_not_detected_as_source_when_command_missing(self) -> None:
-        """When openclaw is not configured, detect_sources must not include it."""
+        """When openclaw is not configured, bridge tools do not expose it."""
         alert = _load_fixture("stdio_command_not_found_alert.json")
-        sources = detect_sources(alert, {}, {})
+        assert alert["commonLabels"]["alertname"] == "OpenClawStdioCommandMissing"
+        sources = resolve_available_tool_sources({})
         assert "openclaw" not in sources
 
 

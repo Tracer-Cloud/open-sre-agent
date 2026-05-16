@@ -22,6 +22,7 @@ from app.cli.interactive_shell.ui import (
 
 _ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[mA-Za-z]")
 _MAX_DETAIL_CHARS = 120
+_WATCHDOG_PID = re.compile(r"pid=(\d+)")
 
 
 def _task_started_label(task: TaskRecord) -> str:
@@ -54,6 +55,10 @@ def _kind_label(task: TaskRecord) -> str:
     """Return a concise kind label — for synthetic tests use the scenario name."""
     if task.kind == TaskKind.SYNTHETIC_TEST and task.command:
         return _synthetic_scenario_label(task.command)
+    if task.kind == TaskKind.WATCHDOG and task.command:
+        match = _WATCHDOG_PID.search(task.command)
+        if match:
+            return f"watchdog {match.group(1)}"
     return task.kind.value
 
 
@@ -77,6 +82,20 @@ def _task_detail_label(task: TaskRecord) -> str:
         if task.command:
             return _synthetic_scenario_label(task.command)
         return "—"
+
+    if task.kind == TaskKind.WATCHDOG:
+        if task.error:
+            raw = task.error
+        elif task.result:
+            raw = task.result
+        elif task.command:
+            raw = task.command
+        else:
+            return "—"
+        first_line = _clean_first_line(raw)
+        if len(first_line) > _MAX_DETAIL_CHARS:
+            return first_line[:_MAX_DETAIL_CHARS] + "…"
+        return first_line or "—"
 
     # All other task kinds: show error > result > command, first line, truncated.
     if task.error:

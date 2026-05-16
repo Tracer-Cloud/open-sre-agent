@@ -7,6 +7,7 @@ All operations are read-only with enforced timeouts.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from typing import Any
@@ -14,7 +15,10 @@ from typing import Any
 import httpx
 from pydantic import Field, field_validator
 
+from app.integrations._validation_helpers import report_validation_failure
 from app.strict_config import StrictConfigModel
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_BITBUCKET_BASE_URL = "https://api.bitbucket.org/2.0"
 DEFAULT_BITBUCKET_TIMEOUT_SECONDS = 10.0
@@ -110,6 +114,12 @@ def validate_bitbucket_config(
         finally:
             client.close()
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="bitbucket",
+            method="validate_bitbucket_config",
+        )
         return BitbucketValidationResult(ok=False, detail=f"Bitbucket connection failed: {err}")
 
 
@@ -157,6 +167,12 @@ def list_commits(
         finally:
             client.close()
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="bitbucket",
+            method="list_commits",
+        )
         return {"source": "bitbucket", "available": False, "error": str(err)}
 
 
@@ -193,6 +209,12 @@ def get_file_contents(
         finally:
             client.close()
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="bitbucket",
+            method="get_file_contents",
+        )
         return {"source": "bitbucket", "available": False, "error": str(err)}
 
 
@@ -243,4 +265,10 @@ def search_code(
         finally:
             client.close()
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="bitbucket",
+            method="search_code",
+        )
         return {"source": "bitbucket", "available": False, "error": str(err)}

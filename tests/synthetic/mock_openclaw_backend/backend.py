@@ -78,11 +78,10 @@ class FixtureOpenClawBackend:
     def patch(self) -> Generator[None]:
         """Patch MCP transport functions and the runtime-availability check.
 
-        Patches all three locations where openclaw_runtime_unavailable_reason
+        Patches both locations where openclaw_runtime_unavailable_reason
         is imported by name:
           - app.integrations.openclaw   (canonical source)
           - app.tools.OpenClawMCPTool   (tool layer local alias)
-          - app.nodes.plan_actions.detect_sources  (source detection layer)
 
         Also patches the tool call and list functions at both the integration
         module and the tool module's local aliases.
@@ -110,10 +109,6 @@ class FixtureOpenClawBackend:
             ),
             patch(
                 "app.tools.OpenClawMCPTool.openclaw_runtime_unavailable_reason",
-                return_value=None,
-            ),
-            patch(
-                "app.nodes.plan_actions.detect_sources.openclaw_runtime_unavailable_reason",
                 return_value=None,
             ),
         ):

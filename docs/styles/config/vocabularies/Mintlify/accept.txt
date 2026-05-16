@@ -115,3 +115,16 @@ rollout
 timespan
 vhost
 vhosts
+# OpenSRE product / stack (deployment, FAQ, contributor-facing docs)
+OpenSRE
+opensre
+ASGI
+Dockerfile
+FastAPI
+Postgres
+Vercel
+pytest
+URIs
+URI
+hostnames
+hostname

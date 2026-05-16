@@ -3,7 +3,7 @@
 Covers:
 - VictoriaLogs config resolution from store and env
 - Verifier status contract (passed / missing / failed)
-- Source detection populates sources["victoria_logs"]
+- Tool-source availability populates sources["victoria_logs"]
 - Tool importability + executor-path contract
 - Alert fixture validity (Alertmanager webhook format)
 
@@ -19,8 +19,9 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 
-from app.nodes.plan_actions.detect_sources import detect_sources
-from app.nodes.resolve_integrations.node import _classify_integrations, _load_env_integrations
+from app.integrations.catalog import classify_integrations as _classify_integrations
+from app.integrations.catalog import load_env_integrations as _load_env_integrations
+from tests.e2e.source_helpers import resolve_available_tool_sources
 
 
 class TestVictoriaLogsIntegrationResolution:
@@ -152,14 +153,10 @@ class TestVictoriaLogsEnvResolution:
         assert len(records) == 0
 
 
-class TestVictoriaLogsSourceDetection:
-    """VictoriaLogs source detection in investigation context."""
+class TestVictoriaLogsToolSourceAvailability:
+    """VictoriaLogs source availability in the tool-registry investigation path."""
 
     def test_detected_when_configured(self) -> None:
-        raw_alert = {
-            "commonLabels": {"alertname": "HighErrorRate", "service": "checkout-api"},
-            "commonAnnotations": {"summary": "Error rate spike"},
-        }
         resolved = {
             "victoria_logs": {
                 "base_url": "http://vmlogs.monitoring.svc:9428",
@@ -167,11 +164,10 @@ class TestVictoriaLogsSourceDetection:
             }
         }
 
-        sources = detect_sources(raw_alert, {}, resolved)
+        sources = resolve_available_tool_sources(resolved)
 
         assert "victoria_logs" in sources
         assert sources["victoria_logs"]["base_url"] == "http://vmlogs.monitoring.svc:9428"
-        assert sources["victoria_logs"]["connection_verified"] is True
 
     def test_tenant_id_propagates_to_source(self) -> None:
         resolved = {
@@ -181,21 +177,19 @@ class TestVictoriaLogsSourceDetection:
             }
         }
 
-        sources = detect_sources({}, {}, resolved)
+        sources = resolve_available_tool_sources(resolved)
 
         assert sources["victoria_logs"]["tenant_id"] == "team-payments"
 
     def test_not_detected_when_unconfigured(self) -> None:
-        raw_alert = {"commonLabels": {"alertname": "HighErrorRate"}}
-
-        sources = detect_sources(raw_alert, {}, {})
+        sources = resolve_available_tool_sources({})
 
         assert "victoria_logs" not in sources
 
     def test_not_detected_when_base_url_empty(self) -> None:
         resolved = {"victoria_logs": {"base_url": ""}}
 
-        sources = detect_sources({}, {}, resolved)
+        sources = resolve_available_tool_sources(resolved)
 
         assert "victoria_logs" not in sources
 

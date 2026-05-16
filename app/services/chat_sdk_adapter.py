@@ -215,7 +215,7 @@ def _tool_calls_to_neutral(raw: Any) -> list[ToolCallPayload]:
 def object_graph_message_to_neutral_dict(msg: Any) -> dict[str, Any]:
     """Convert a non-dict graph message (e.g. framework message object) to a neutral dict.
 
-    Uses duck-typing only — no LangChain imports — so chat stays decoupled from
+    Uses duck-typing only — no third-party chat-framework imports — so chat stays decoupled from
     message class implementations while older graph checkpoints can still load.
     """
     type_attr = getattr(msg, "type", None)
@@ -247,7 +247,7 @@ def object_graph_message_to_neutral_dict(msg: Any) -> dict[str, Any]:
 
 
 def messages_to_invocation_dicts(msgs: list[Any]) -> list[dict[str, Any]]:
-    """Convert LangGraph ``messages`` reducer entries to neutral invocation dicts.
+    """Convert typed ``messages`` reducer entries to neutral invocation dicts.
 
     Accepts plain dicts and duck-typed message objects (``type`` / ``content`` /
     optional ``tool_calls`` / ``tool_call_id``) without importing framework types.

@@ -32,6 +32,7 @@ _HINT = "↑↓  Enter  Esc"
 CRUMB_SEP = "  ›  "
 # Blank line after the submitted slash line before the menu header (all pickers).
 _MENU_LEADING_LINES = 1
+_TERMINAL_NEWLINE = "\r\n"
 
 
 def repl_tty_interactive() -> bool:
@@ -120,6 +121,18 @@ def _menu_height(crumb: str, labels: list[str]) -> int:
     return _MENU_LEADING_LINES + 1 + (1 if crumb else 0) + 1 + 1 + len(labels) + 1 + 1
 
 
+def _write_menu_line(text: str = "") -> None:
+    """Write a menu line at column zero even while the terminal is in raw mode."""
+    if text:
+        sys.stdout.write(f"\r{text}{_TERMINAL_NEWLINE}")
+        return
+    sys.stdout.write(_TERMINAL_NEWLINE)
+
+
+def _erase_menu_block(height: int) -> None:
+    sys.stdout.write(f"\r\x1b[{height}A\r\x1b[J")
+
+
 def _draw_menu(
     *,
     title: str,
@@ -131,34 +144,35 @@ def _draw_menu(
     out = sys.stdout
     w = _cols()
     if erase_lines:
-        out.write(f"\x1b[{erase_lines}A\x1b[J")
-    out.write("\n" * _MENU_LEADING_LINES)
+        _erase_menu_block(erase_lines)
+    for _ in range(_MENU_LEADING_LINES):
+        _write_menu_line()
     # title
-    out.write(f"{PROMPT_ACCENT_ANSI}{title}{ANSI_RESET}\n")
+    _write_menu_line(f"{PROMPT_ACCENT_ANSI}{title}{ANSI_RESET}")
     # breadcrumb path
     if crumb:
-        out.write(f"{DIM_COUNTER_ANSI}{crumb}{ANSI_RESET}\n")
+        _write_menu_line(f"{DIM_COUNTER_ANSI}{crumb}{ANSI_RESET}")
     # separator below header
-    out.write(f"{DIM_COUNTER_ANSI}{_rule(w)}{ANSI_RESET}\n")
-    out.write("\n")
+    _write_menu_line(f"{DIM_COUNTER_ANSI}{_rule(w)}{ANSI_RESET}")
+    _write_menu_line()
     # choices
     for i, label in enumerate(labels):
         here = i == index
         sym = ">" if here else " "
         padded = _pad(sym, label, w)
         if here:
-            out.write(f"{MENU_SELECTION_ROW_ANSI}{padded}{ANSI_RESET}\n")
+            _write_menu_line(f"{MENU_SELECTION_ROW_ANSI}{padded}{ANSI_RESET}")
         else:
-            out.write(f"{DIM_COUNTER_ANSI}{padded}{ANSI_RESET}\n")
-    out.write("\n")
-    out.write(f"{DIM_COUNTER_ANSI}{_HINT}{ANSI_RESET}\n")
+            _write_menu_line(f"{DIM_COUNTER_ANSI}{padded}{ANSI_RESET}")
+    _write_menu_line()
+    _write_menu_line(f"{DIM_COUNTER_ANSI}{_HINT}{ANSI_RESET}")
     out.flush()
 
 
 def _erase_menu(crumb: str, labels: list[str]) -> None:
     """Move cursor up to the start of this menu block and wipe it."""
     height = _menu_height(crumb, labels)
-    sys.stdout.write(f"\x1b[{height}A\x1b[J")
+    _erase_menu_block(height)
     sys.stdout.flush()
 
 

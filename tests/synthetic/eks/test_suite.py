@@ -3,12 +3,10 @@ from __future__ import annotations
 import json
 import textwrap
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
 from app.config import has_credentials_for_active_llm_provider
-from app.nodes.plan_actions.node import InvestigationPlan
 from tests.synthetic.eks.run_suite import run_scenario, score_result
 from tests.synthetic.eks.scenario_loader import (
     SUITE_DIR,
@@ -224,103 +222,6 @@ class TestScorer:
         score = score_result(placeholder, final_state)
         assert score.passed is False
         assert "missing required keywords" in score.failure_reason
-
-
-# ---------------------------------------------------------------------------
-# End-to-end harness smoke test — runs the full pipeline with mocked planner
-# ---------------------------------------------------------------------------
-
-
-class TestHarnessEndToEnd:
-    """Drive the full ``run_investigation`` pipeline against 000-healthy.
-
-    The LLM planner is monkey-patched with a canned :class:`InvestigationPlan`
-    pointing at the 6 EKS + Datadog tools the placeholder declares.  Everything
-    else runs for real: ``detect_sources`` picks up the injected ``_backend``,
-    the tool executor invokes each action, and each wired EKS / Datadog tool
-    short-circuits to its fixture backend.  The ``diagnose_root_cause`` healthy
-    short-circuit then produces a deterministic final state without calling
-    the reasoning LLM.
-
-    This test proves the harness wiring end-to-end without requiring an
-    Anthropic / OpenAI API key.
-
-    **Scope note on evidence assertions:** the assertions below only cover
-    the Datadog evidence keys because ``merge_evidence`` in
-    ``app/nodes/investigate/processing/post_process.py`` has mappers for the
-    Datadog tools but not yet for the EKS tools.  The EKS tools still execute
-    (their calls to the fixture backend are visible on the mock backend
-    instances) but their return dicts are currently dropped by the
-    post-processor.  That is a pre-existing gap tracked separately; see the
-    open issue for the EKS evidence mappers.  Once it lands, the assertions
-    in this test should be extended to cover ``eks_pods``, ``eks_events``,
-    ``eks_deployments``, ``eks_node_health`` and the derived count fields.
-    """
-
-    @staticmethod
-    def _canned_plan(**_: object) -> InvestigationPlan:
-        return InvestigationPlan(
-            actions=[
-                "list_eks_pods",
-                "get_eks_events",
-                "list_eks_deployments",
-                "get_eks_node_health",
-                "query_datadog_logs",
-                "query_datadog_monitors",
-            ],
-            rationale="Canned plan for harness end-to-end smoke test.",
-        )
-
-    def test_placeholder_runs_through_full_pipeline(self, monkeypatch) -> None:
-        # The conftest disables the system keyring for tests, so LLMSettings
-        # won't find any provider credentials unless one is present in the
-        # environment.  A dummy value is enough here because every LLM call in
-        # the pipeline is either mocked (plan_actions) or bypassed entirely by
-        # the healthy short-circuit (diagnose_root_cause).
-        monkeypatch.setenv("LLM_PROVIDER", "anthropic")
-        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-dummy")
-        monkeypatch.setenv("HEALTHY_SHORT_CIRCUIT", "true")
-
-        fixture = load_scenario(SUITE_DIR / "000-healthy")
-        eks_backend = FixtureEKSBackend(fixture)
-        datadog_backend = FixtureDatadogBackend(fixture)
-
-        with patch(
-            "app.nodes.plan_actions.plan_actions.plan_actions_with_llm",
-            side_effect=self._canned_plan,
-        ):
-            final_state, score = run_scenario(
-                fixture,
-                use_mock_backends=True,
-                eks_backend=eks_backend,
-                datadog_backend=datadog_backend,
-            )
-
-        # Scorer should grade the placeholder as passed: category + keywords match.
-        assert score.passed is True, (
-            f"000-healthy scored FAIL: {score.failure_reason!r} "
-            f"(category={score.actual_category!r}, missing={score.missing_keywords})"
-        )
-        assert score.actual_category == "healthy"
-        assert score.missing_keywords == []
-
-        # The diagnose_root_cause healthy short-circuit should have produced a
-        # deterministic root cause without invoking the LLM.
-        root_cause = str(final_state.get("root_cause") or "")
-        assert root_cause, "expected a non-empty root cause"
-        assert "normal" in root_cause.lower()
-        assert final_state.get("root_cause_category") == "healthy"
-        assert final_state.get("validity_score") == 1.0
-
-        # Datadog tools have evidence mappers, so their output should flow into
-        # state["evidence"] through the normal post-processing path.
-        evidence = final_state.get("evidence") or {}
-        for required in ("datadog_logs", "datadog_monitors"):
-            assert required in evidence, (
-                f"expected {required!r} in evidence after tool execution; "
-                f"got {sorted(evidence.keys())}"
-            )
-        assert evidence.get("datadog_monitors_count") == 2
 
 
 # ---------------------------------------------------------------------------

@@ -12,7 +12,6 @@ implicitly, since that targets the default tenant on every request.
 
 from __future__ import annotations
 
-import contextlib
 import json
 import logging
 from typing import Any
@@ -21,6 +20,7 @@ import httpx
 from pydantic import field_validator
 
 from app.integrations.probes import ProbeResult
+from app.services._streaming import StreamingParseStats
 from app.strict_config import StrictConfigModel
 
 logger = logging.getLogger(__name__)
@@ -155,21 +155,30 @@ class VictoriaLogsClient:
 def _parse_ndjson(text: str, *, limit: int) -> list[dict[str, Any]]:
     """Parse VictoriaLogs newline-delimited JSON into a list of dicts.
 
-    Lines that fail to parse are silently skipped — VictoriaLogs may emit
-    an empty trailing newline, and partial responses should not abort the
-    entire result set.
+    A trickle of broken lines is expected (vendor flake, trailing newline).
+    The ``StreamingParseStats`` pass reports to Sentry only when the skip
+    ratio crosses the threshold, so we still surface real schema/content-type
+    drift without one event per dropped line.
     """
     rows: list[dict[str, Any]] = []
+    stats = StreamingParseStats()
     for line in text.splitlines():
         stripped = line.strip()
         if not stripped:
             continue
-        with contextlib.suppress(json.JSONDecodeError):
+        try:
             obj = json.loads(stripped)
-            if isinstance(obj, dict):
-                rows.append(obj)
-                if len(rows) >= limit:
-                    break
+        except json.JSONDecodeError as exc:
+            stats.record_error(exc)
+            continue
+        stats.record_parsed()
+        if isinstance(obj, dict):
+            rows.append(obj)
+            if len(rows) >= limit:
+                break
+    stats.report_if_unhealthy(
+        logger=logger, integration="victoria_logs", source="select/logsql/query"
+    )
     return rows
 
 

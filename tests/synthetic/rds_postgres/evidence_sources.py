@@ -184,7 +184,7 @@ def _evidence_ec2_instances_by_tag(evidence: dict[str, Any]) -> EvidencePresence
             present=True,
             reason="ec2_instances_by_tag key populated in evidence",
         )
-    # Runtime mapper shape from app.nodes.investigate.processing.post_process.
+    # Runtime mapper shape from the investigation evidence post-processing path.
     if evidence.get("ec2_instances") or evidence.get("ec2_instances_by_tier"):
         return EvidencePresence(
             source_id=EvidenceSourceId.EC2_INSTANCES_BY_TAG,
@@ -206,7 +206,7 @@ def _evidence_elb_target_health(evidence: dict[str, Any]) -> EvidencePresence:
             present=True,
             reason="elb_target_health key populated in evidence",
         )
-    # Runtime mapper shape from app.nodes.investigate.processing.post_process.
+    # Runtime mapper shape from the investigation evidence post-processing path.
     if (
         evidence.get("elb_target_groups")
         or evidence.get("elb_healthy_targets")

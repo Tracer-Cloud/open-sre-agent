@@ -1,4 +1,4 @@
-"""HTTP client for remote LangGraph API agent deployments."""
+"""HTTP client for remote OpenSRE agent deployments (streaming and thread APIs)."""
 
 from __future__ import annotations
 
@@ -64,8 +64,8 @@ class PreflightResult:
         return "/investigate" in self.endpoints
 
     @property
-    def supports_langgraph(self) -> bool:
-        return self.server_type == "langgraph"
+    def supports_remote_threads_api(self) -> bool:
+        return self.server_type == "threads_api"
 
     @property
     def status_label(self) -> str:
@@ -93,12 +93,12 @@ def normalize_url(url: str) -> str:
 
 
 class RemoteAgentClient:
-    """Client for interacting with a remote LangGraph API deployment.
+    """Client for interacting with a remote OpenSRE-compatible HTTP API.
 
-    The LangGraph API server (deployed on EC2, LangSmith, etc.) exposes:
+    Typical surfaces include:
       - GET  /ok                          Health check
-      - POST /threads                     Create a conversation thread
-      - POST /threads/{id}/runs/stream    Execute a run with SSE streaming
+      - POST /threads                     Create a conversation thread (optional)
+      - POST /threads/{id}/runs/stream    Execute a run with SSE streaming (optional)
     """
 
     def __init__(self, base_url: str, api_key: str | None = None) -> None:
@@ -222,7 +222,7 @@ class RemoteAgentClient:
         if any(endpoint.startswith("/investigate") for endpoint in endpoints):
             return "lightweight", endpoints
         if any(endpoint.startswith("/threads") for endpoint in endpoints):
-            return "langgraph", endpoints
+            return "threads_api", endpoints
         return "unknown", endpoints
 
     def preflight(self, *, timeout: float = PREFLIGHT_TIMEOUT) -> PreflightResult:
@@ -381,7 +381,7 @@ class RemoteAgentClient:
         """Start an investigation run and stream events via SSE.
 
         Uses ``stream_mode: ["events"]`` to receive fine-grained events
-        (tool calls, LLM reasoning, node transitions) from the LangGraph API.
+        (tool calls, LLM reasoning, node transitions) from the remote thread stream.
         """
         url = f"{self.base_url}/threads/{thread_id}/runs/stream"
         body: dict[str, Any] = {
@@ -491,9 +491,8 @@ class RemoteAgentClient:
     ) -> Iterator[StreamEvent]:
         """Stream an investigation from the lightweight server's SSE endpoint.
 
-        Uses ``POST /investigate/stream`` which returns the same SSE
-        format as the LangGraph API, so the ``StreamRenderer`` can
-        consume either server type identically.
+        Uses ``POST /investigate/stream`` which returns SSE in the same shape
+        as thread-based remotes, so the ``StreamRenderer`` can consume either.
         """
         url = f"{self.base_url}/investigate/stream"
         body: dict[str, Any] = {"raw_alert": raw_alert}

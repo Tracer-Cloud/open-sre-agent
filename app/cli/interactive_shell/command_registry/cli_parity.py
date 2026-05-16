@@ -18,6 +18,7 @@ from app.cli.interactive_shell.command_registry.suggestions import closest_choic
 from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
 from app.cli.interactive_shell.orchestration.action_executor import (
     SYNTHETIC_TEST_TIMEOUT_SECONDS,
+    print_interactive_wizard_handoff,
     start_background_cli_task,
 )
 from app.cli.interactive_shell.runtime import ReplSession, TaskKind
@@ -62,12 +63,23 @@ def run_cli_command(
     return True
 
 
-def _cmd_onboard(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    return run_cli_command(console, ["onboard", *args])
-
-
-def _cmd_deploy(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    return run_cli_command(console, ["deploy", *args])
+def _cmd_onboard(session: ReplSession, console: Console, args: list[str]) -> bool:
+    # Onboard is a full-TTY interactive wizard. It cannot run inside
+    # the persistent REPL — the wizard's prompt_toolkit Application
+    # fights the shell's active one over the same terminal, producing
+    # the stacked-widget rendering bug. Refuse with a clear handoff to
+    # the right invocation instead of spawning a subprocess that will
+    # fail visually. Message body lives in
+    # ``action_executor.print_interactive_wizard_handoff`` so the
+    # LLM-classified path and this slash path stay in lock-step.
+    command_str = "onboard" + ((" " + " ".join(args)) if args else "")
+    print_interactive_wizard_handoff(console, command_str)
+    # Mirror :func:`run_opensre_cli_command`: record the attempted-but-
+    # refused invocation so the AI assistant's session history captures
+    # user intent regardless of which entry point they used.
+    session.record("cli_command", f"opensre {command_str}", ok=False)
+    # True = wizard exists and was handed off; ``_OPENSRE_BLOCKED_SUBCOMMANDS`` returns False for "shouldn't run at all".
+    return True
 
 
 def _cmd_remote(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
@@ -218,17 +230,15 @@ def _cmd_hermes(session: ReplSession, console: Console, args: list[str]) -> bool
     return run_cli_command(console, ["hermes", *args])
 
 
+def _cmd_watchdog(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+    return run_cli_command(console, ["watchdog", *args])
+
+
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
         "/onboard",
         "run the interactive onboarding wizard ('/onboard local_llm')",
         _cmd_onboard,
-        execution_tier=ExecutionTier.SAFE,
-    ),
-    SlashCommand(
-        "/deploy",
-        "deploy OpenSRE to a cloud environment ('/deploy ec2|langsmith|railway')",
-        _cmd_deploy,
         execution_tier=ExecutionTier.SAFE,
     ),
     SlashCommand(
@@ -278,6 +288,12 @@ COMMANDS: list[SlashCommand] = [
         "/hermes",
         "live-tail Hermes logs and route incidents to Telegram ('/hermes watch')",
         _cmd_hermes,
+        execution_tier=ExecutionTier.SAFE,
+    ),
+    SlashCommand(
+        "/watchdog",
+        "monitor one process and send threshold alarms ('/watchdog --pid 123 --max-rss 1G')",
+        _cmd_watchdog,
         execution_tier=ExecutionTier.SAFE,
     ),
 ]

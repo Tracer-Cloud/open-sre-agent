@@ -1,1 +1,1 @@
-"""Tests for LangGraph pipeline construction and routing."""
+"""Tests for pipeline construction and routing."""

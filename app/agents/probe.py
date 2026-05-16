@@ -13,6 +13,7 @@ explicit import.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -23,6 +24,13 @@ import psutil
 # Datadog, Grafana) labels the same 1024² unit as "MB"; the constant
 # stays precise so the unit math is unambiguous.
 _BYTES_PER_MIB = 1024 * 1024
+
+PROCESS_NOT_FOUND: tuple[type[BaseException], ...] = (psutil.NoSuchProcess,)
+PROCESS_INACCESSIBLE_OR_GONE: tuple[type[BaseException], ...] = (
+    psutil.NoSuchProcess,
+    psutil.AccessDenied,
+)
+PROCESS_ERROR: tuple[type[BaseException], ...] = (psutil.Error,)
 
 
 @dataclass(frozen=True)
@@ -66,6 +74,16 @@ def pid_exists(pid: int) -> bool:
         return False
 
 
+def process(pid: int) -> psutil.Process:
+    """Return a handle for ``pid`` while keeping psutil access local."""
+    return psutil.Process(pid)
+
+
+def process_iter(attrs: Iterable[str]) -> Iterator[psutil.Process]:
+    """Yield process handles with preloaded attrs from the local probe module."""
+    return psutil.process_iter(list(attrs))
+
+
 def probe(pid: int, *, cpu_interval: float = 0.1) -> ProcessSnapshot | None:
     """Return a one-shot resource snapshot for ``pid``.
 
@@ -88,8 +106,9 @@ def probe(pid: int, *, cpu_interval: float = 0.1) -> ProcessSnapshot | None:
         return None
 
     try:
+        cpu = proc.cpu_percent(interval=cpu_interval)
+
         with proc.oneshot():
-            cpu = proc.cpu_percent(interval=cpu_interval)
             rss_mb = proc.memory_info().rss / _BYTES_PER_MIB
             num_fds = _safe_num_fds(proc)
             num_connections = _safe_num_connections(proc)

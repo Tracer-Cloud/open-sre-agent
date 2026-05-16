@@ -21,14 +21,14 @@ description: "Frequently asked questions about OpenSRE"
 </Accordion>
 
 <Accordion title="Which deployment path is recommended?">
-    The official deployment path is LangGraph Platform. Keep{" "}
-    <code>langgraph.json</code> at the repo root, set <code>LLM_PROVIDER</code>,
-    add the matching provider API key, and then deploy.
+    Deploy OpenSRE as a standard Python/FastAPI app with the repo Dockerfile or your
+    host's native Python workflow. Set <code>LLM_PROVIDER</code>, add the matching
+    provider API key, and configure storage or integration env vars as needed.
 </Accordion>
 
 <Accordion title="Can I self-host OpenSRE?">
-    Yes. OpenSRE is based on LangGraph, so you can self-host it on your own
-    infrastructure using the LangGraph runtime. Before deploying, set{" "}
+    Yes. You can self-host OpenSRE on your own infrastructure as a normal web
+    runtime. Before deploying, set{" "}
     <code>LLM_PROVIDER</code> and the matching provider key (for example{" "}
     <code>ANTHROPIC_API_KEY</code> when <code>LLM_PROVIDER=anthropic</code>).
 </Accordion>

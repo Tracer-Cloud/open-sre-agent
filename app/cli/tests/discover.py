@@ -114,7 +114,7 @@ _TARGET_METADATA: dict[str, _TargetMetadata] = {
     "simulate-k8s-alert": {
         "display_name": "Simulate Kubernetes Alert",
         "tags": ("k8s", "datadog", "infra-heavy"),
-        "requirements": TestRequirement(notes=("LangGraph dev server", "Kubernetes context")),
+        "requirements": TestRequirement(notes=("Kubernetes context",)),
     },
     "test-k8s-local": {
         "display_name": "Kubernetes Local Test",

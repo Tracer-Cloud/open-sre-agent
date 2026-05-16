@@ -17,6 +17,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from app.utils.sentry_sdk import report_silent
+
 _resource: Any | None
 
 try:
@@ -85,13 +87,11 @@ def _collect_cpu() -> dict[str, Any] | None:
 
 
 def _collect_memory() -> dict[str, Any] | None:
-    try:
+    with report_silent("system_metrics.memory"):
         if sys.platform == "linux":
             return _memory_linux()
         if sys.platform == "darwin":
             return _memory_darwin()
-    except Exception:
-        return None
     return None
 
 
@@ -166,13 +166,11 @@ def _collect_disk() -> dict[str, Any] | None:
 
 
 def _collect_uptime() -> dict[str, Any] | None:
-    try:
+    with report_silent("system_metrics.uptime"):
         if sys.platform == "linux":
             return _uptime_linux()
         if sys.platform == "darwin":
             return _uptime_darwin()
-    except Exception:
-        return None
     return None
 
 
@@ -233,7 +231,7 @@ def _collect_process() -> dict[str, Any] | None:
     if getrusage is None or rusage_self is None:
         return None
 
-    try:
+    with report_silent("system_metrics.process"):
         usage = getrusage(rusage_self)
         # maxrss is in kB on Linux, bytes on macOS
         rss_kb = usage.ru_maxrss if sys.platform == "linux" else usage.ru_maxrss // 1024
@@ -244,5 +242,4 @@ def _collect_process() -> dict[str, Any] | None:
             result["open_fds"] = len(list(fd_dir.iterdir()))
 
         return result
-    except Exception:
-        return None
+    return None

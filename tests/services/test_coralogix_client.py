@@ -236,3 +236,31 @@ def test_build_coralogix_logs_query_subsystem_name_filter() -> None:
     assert result.startswith("source logs")
     assert "filter $l.subsystemname == 'api-gateway'" in result
     assert result.endswith("limit 5")
+
+
+def test_parse_user_data_counts_successes_and_failures_symmetrically(
+    client: CoralogixClient,
+) -> None:
+    """Both branches of _parse_user_data must update the stats denominator.
+
+    Without record_parsed on success the skip ratio would only ever rise:
+    100 good userData blobs + 5 broken ones would compute as 5/5 = 100% skip
+    instead of 5/105 = ~5%, firing a false alert on every response.
+    """
+    from app.services._streaming import StreamingParseStats
+
+    stats = StreamingParseStats()
+    # A JSON-string userData that parses cleanly.
+    client._parse_user_data(json.dumps({"k": "v"}), stats=stats)
+    client._parse_user_data(json.dumps({"k": "v"}), stats=stats)
+    # A broken userData blob.
+    client._parse_user_data("{not json", stats=stats)
+    assert stats.parsed == 2
+    assert stats.skipped == 1
+    # dict / empty-string branches are not parse attempts and must not move
+    # either counter.
+    client._parse_user_data({"already": "a dict"}, stats=stats)
+    client._parse_user_data("", stats=stats)
+    client._parse_user_data(None, stats=stats)
+    assert stats.parsed == 2
+    assert stats.skipped == 1

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from typing import Any
@@ -9,10 +10,14 @@ from typing import Any
 import httpx
 from pydantic import Field, field_validator
 
+from app.integrations._validation_helpers import report_validation_failure
 from app.strict_config import StrictConfigModel
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_SENTRY_URL = "https://sentry.io"
 DEFAULT_SENTRY_STATS_PERIOD = "24h"
+_MAX_SENTRY_QUERY_LEN = 200
 
 
 class SentryConfig(StrictConfigModel):
@@ -88,6 +93,19 @@ def get_sentry_auth_recommendations() -> dict[str, str]:
     }
 
 
+def _sanitize_sentry_query(query: str) -> str:
+    """Reduce a raw query string to something the Sentry issues API accepts.
+
+    The agent may pass a full error message or multi-line stack trace as the
+    search term, which causes a 400 Bad Request because the Sentry search
+    grammar treats ``:`` as a field separator and rejects very long URLs.
+    Taking the first non-empty line and capping at _MAX_SENTRY_QUERY_LEN
+    characters is enough to produce a valid free-text search token.
+    """
+    first_line = query.split("\n")[0].strip()
+    return first_line[:_MAX_SENTRY_QUERY_LEN]
+
+
 def _build_issue_list_params(
     config: SentryConfig,
     limit: int,
@@ -96,7 +114,7 @@ def _build_issue_list_params(
     params: list[tuple[str, str | int | float | bool | None]] = [
         ("limit", str(limit)),
         ("statsPeriod", DEFAULT_SENTRY_STATS_PERIOD),
-        ("query", query),
+        ("query", _sanitize_sentry_query(query)),
     ]
     if config.project_slug:
         params.append(("project", config.project_slug))
@@ -145,6 +163,12 @@ def validate_sentry_config(config: SentryConfig) -> SentryValidationResult:
         detail = err.response.text.strip() or str(err)
         return SentryValidationResult(ok=False, detail=f"Sentry validation failed: {detail}")
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="sentry",
+            method="validate_sentry_config",
+        )
         return SentryValidationResult(ok=False, detail=f"Sentry validation failed: {err}")
 
 

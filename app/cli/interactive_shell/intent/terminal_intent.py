@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 
 from app.cli.interactive_shell.intent.intent_parser import SAMPLE_ALERT_RE
-from app.cli.support.constants import MANAGED_INTEGRATION_SERVICES
 
 _ALERT_SIGNAL_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\balert\b", re.IGNORECASE),
@@ -42,6 +41,13 @@ def mentions_alert_signal(text: str) -> bool:
 
 def mentioned_integration_services(text: str) -> list[str]:
     """Return configured integration service names mentioned in user text."""
+    # Deferred to function scope: this module is loaded as a side-effect of
+    # `app.integrations.registry` (via the `github_mcp` -> `interactive_shell`
+    # back-edge), and `MANAGED_INTEGRATION_SERVICES` is resolved lazily from
+    # the registry. A module-level import here triggers a recursive __getattr__
+    # while the registry is still partially initialized. See #1973.
+    from app.cli.support.constants import MANAGED_INTEGRATION_SERVICES
+
     lower = text.lower()
     services: list[str] = []
     for service in MANAGED_INTEGRATION_SERVICES:

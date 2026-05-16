@@ -144,7 +144,6 @@ class TestAgentsDispatch:
         out = buf.getvalue()
         assert "cursor-claude-code" in out
         assert "80435" in out
-        assert "discovered" in out
 
     def test_unknown_subcommand_prints_error(self) -> None:
         session = ReplSession()

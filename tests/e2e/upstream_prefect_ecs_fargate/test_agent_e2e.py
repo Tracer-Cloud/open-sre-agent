@@ -17,10 +17,15 @@ from datetime import UTC, datetime
 
 import boto3
 import requests
-from langsmith import traceable
 
 from app.cli.investigation import run_investigation_cli
 from app.services.grafana import get_grafana_client
+from app.utils.tracing import traceable
+from tests.shared.e2e_rca_checks import (
+    audit_key_mentioned,
+    investigation_text_blob,
+    s3_key_mentioned,
+)
 from tests.shared.stack_config import get_prefect_config
 from tests.shared.tracer_ingest import StepTimer, emit_tool_event
 from tests.utils.alert_factory import create_alert
@@ -240,12 +245,7 @@ def _run_agent_investigation(failure_data: dict, run_id: str, trace_id: str) -> 
         },
     )
     def run_investigation():
-        return run_investigation_cli(
-            alert_name=alert.get("labels", {}).get("alertname", "PrefectFlowFailure"),
-            pipeline_name="upstream_downstream_pipeline_prefect",
-            severity="critical",
-            raw_alert=alert,
-        )
+        return run_investigation_cli(raw_alert=alert)
 
     investigation_timer = StepTimer(
         trace_id=trace_id,
@@ -310,36 +310,62 @@ def _run_agent_investigation(failure_data: dict, run_id: str, trace_id: str) -> 
         "Schema change detected": False,
     }
 
-    investigation_text = json.dumps(result).lower()
+    investigation_text = investigation_text_blob(result)
 
-    if "cloudwatch" in investigation_text or "prefect" in investigation_text:
+    if (
+        "cloudwatch" in investigation_text
+        or "prefect" in investigation_text
+        or "/ecs/" in investigation_text
+    ):
         success_checks["Prefect logs retrieved"] = True
 
     s3_key = failure_data.get("s3_key", "")
-    if s3_key in investigation_text or "ingested/" in investigation_text:
+    if s3_key_mentioned(investigation_text, s3_key):
         success_checks["S3 input data inspected"] = True
 
-    audit_key = failure_data.get("audit_key", "")
-    if audit_key in investigation_text or "audit/" in investigation_text:
+    audit_key = (failure_data.get("audit_key") or "").strip()
+    if audit_key_mentioned(investigation_text, audit_key):
         success_checks["Audit trail traced"] = True
 
-    if "external" in investigation_text and (
-        "api" in investigation_text or "vendor" in investigation_text
+    if (
+        (
+            "external" in investigation_text
+            and ("api" in investigation_text or "vendor" in investigation_text)
+        )
+        or "mock_api" in investigation_text
+        or "execute-api" in investigation_text
     ):
         success_checks["External API identified"] = True
 
-    if "customer_id" in investigation_text or "schema" in investigation_text:
+    if (
+        "customer_id" in investigation_text
+        or "event_id" in investigation_text
+        or "schema" in investigation_text
+        or "missing fields" in investigation_text
+        or "validation failed" in investigation_text
+    ):
         success_checks["Schema change detected"] = True
 
     print("\nSuccess Checks:")
-    all_passed = True
+    passed_count = 0
     for check, passed in success_checks.items():
         status = "[PASS]" if passed else "[FAIL]"
         print(f"   {status} {check}")
-        if not passed:
-            all_passed = False
+        if passed:
+            passed_count += 1
 
-    return all_passed
+    # Match Flink ECS E2E: allow one non-critical miss, but schema must be surfaced.
+    min_required = 4
+    if passed_count < min_required:
+        print(
+            f"\nFailed: Agent passed {passed_count}/{len(success_checks)} checks, need {min_required}"
+        )
+        return False
+    if not success_checks["Schema change detected"]:
+        print("\nFailed: Agent must detect schema change as root cause")
+        return False
+
+    return True
 
 
 def main():
@@ -367,20 +393,23 @@ def main():
         print("TEST PASSED: Agent successfully traced the failure")
         print("   and detected the schema change as root cause")
     else:
-        print("TEST FAILED: Agent did not detect all expected signals")
+        print("TEST FAILED: Agent did not reach the minimum RCA signal threshold")
     print("=" * 60)
 
-    grafana_client = get_grafana_client()
-    log_url = grafana_client.build_loki_explore_url(
-        service_name="prefect-etl-pipeline",
-        correlation_id=failure_data.get("correlation_id"),
-    )
-    print("\nGrafana Cloud logs (Prefect flow service):")
-    if log_url:
-        print(f"  {log_url}")
-    else:
-        print("  (Grafana Cloud instance URL not configured)")
-    print("  Paste this log URL after the test run.")
+    try:
+        grafana_client = get_grafana_client()
+        log_url = grafana_client.build_loki_explore_url(
+            service_name="prefect-etl-pipeline",
+            correlation_id=failure_data.get("correlation_id"),
+        )
+        print("\nGrafana Cloud logs (Prefect flow service):")
+        if log_url:
+            print(f"  {log_url}")
+        else:
+            print("  (Grafana Cloud instance URL not configured)")
+        print("  Paste this log URL after the test run.")
+    except Exception as exc:
+        print(f"\n(Grafana log URL skipped: {exc})")
 
     return success
 

@@ -35,7 +35,14 @@ pytestmark = [pytest.mark.synthetic, pytest.mark.e2e]
 def _patch_telegram(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     calls: list[dict[str, Any]] = []
 
-    def _fake_post(chat_id: str, text: str, bot_token: str) -> tuple[bool, str, str]:
+    def _fake_post(
+        chat_id: str,
+        text: str,
+        bot_token: str,
+        parse_mode: str = "",
+        reply_to_message_id: str = "",
+        reply_markup: dict[str, Any] | None = None,
+    ) -> tuple[bool, str, str]:
         calls.append({"chat_id": chat_id, "text": text, "bot_token": bot_token})
         return True, "", "1"
 

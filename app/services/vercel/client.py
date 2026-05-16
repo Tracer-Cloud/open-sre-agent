@@ -18,6 +18,7 @@ import httpx
 
 from app.integrations.config_models import VercelIntegrationConfig
 from app.integrations.probes import ProbeResult
+from app.services._streaming import StreamingParseStats
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +134,12 @@ def _append_parsed_runtime_stream_value(
                     return
 
 
-def _ingest_runtime_log_stream_line(line: str, bucket: list[dict[str, Any]], limit: int) -> bool:
+def _ingest_runtime_log_stream_line(
+    line: str,
+    bucket: list[dict[str, Any]],
+    limit: int,
+    stats: StreamingParseStats | None = None,
+) -> bool:
     """Parse a single text line from the stream; return True if ``bucket`` has reached ``limit``."""
     stripped = line.strip()
     if not stripped:
@@ -142,8 +148,12 @@ def _ingest_runtime_log_stream_line(line: str, bucket: list[dict[str, Any]], lim
         stripped = stripped[5:].lstrip()
     try:
         parsed: Any = json.loads(stripped)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as exc:
+        if stats is not None:
+            stats.record_error(exc)
         return len(bucket) >= limit
+    if stats is not None:
+        stats.record_parsed()
     _append_parsed_runtime_stream_value(parsed, bucket, limit=limit)
     return len(bucket) >= limit
 
@@ -151,9 +161,11 @@ def _ingest_runtime_log_stream_line(line: str, bucket: list[dict[str, Any]], lim
 def _collect_runtime_logs_from_stream(response: httpx.Response, limit: int) -> list[dict[str, Any]]:
     """Read Vercel's streamed runtime logs (NDJSON / stream+json); stop after ``limit`` dict rows."""
     bucket: list[dict[str, Any]] = []
+    stats = StreamingParseStats()
     for line in response.iter_lines():
-        if _ingest_runtime_log_stream_line(line, bucket, limit):
+        if _ingest_runtime_log_stream_line(line, bucket, limit, stats=stats):
             break
+    stats.report_if_unhealthy(logger=logger, integration="vercel", source="runtime-logs/stream")
     return bucket[:limit]
 
 

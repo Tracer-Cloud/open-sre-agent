@@ -62,7 +62,7 @@ class AlertmanagerSilencesTool(BaseTool):
     }
 
     def is_available(self, sources: dict) -> bool:
-        return bool(sources.get("alertmanager", {}).get("connection_verified"))
+        return bool(sources.get("alertmanager", {}).get("base_url"))
 
     def extract_params(self, sources: dict) -> dict[str, Any]:
         am = sources["alertmanager"]
