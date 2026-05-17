@@ -25,56 +25,67 @@ class _FakeResponse:
 
 def test_whatsapp_config_validates_required_fields() -> None:
     config = WhatsAppConfig(
-        phone_number_id="123456789",
-        access_token="EAAB...",
+        account_sid="AC1234567890",
+        auth_token="tok-123",
+        from_number="whatsapp:+14155238886",
         default_to="+1234567890",
     )
 
-    assert config.phone_number_id == "123456789"
-    assert config.access_token == "EAAB..."
+    assert config.account_sid == "AC1234567890"
+    assert config.auth_token == "tok-123"
+    assert config.from_number == "whatsapp:+14155238886"
     assert config.default_to == "+1234567890"
 
 
-def test_whatsapp_config_rejects_empty_phone_number_id() -> None:
-    with pytest.raises(ValueError, match="phone_number_id"):
-        WhatsAppConfig(phone_number_id="   ", access_token="tok")
+def test_whatsapp_config_rejects_empty_account_sid() -> None:
+    with pytest.raises(ValueError, match="account_sid"):
+        WhatsAppConfig(account_sid="   ", auth_token="tok", from_number="whatsapp:+1")
 
 
-def test_whatsapp_config_rejects_empty_access_token() -> None:
-    with pytest.raises(ValueError, match="access_token"):
-        WhatsAppConfig(phone_number_id="123", access_token="  ")
+def test_whatsapp_config_rejects_empty_auth_token() -> None:
+    with pytest.raises(ValueError, match="auth_token"):
+        WhatsAppConfig(account_sid="AC123", auth_token="  ", from_number="whatsapp:+1")
+
+
+def test_whatsapp_config_rejects_empty_from_number() -> None:
+    with pytest.raises(ValueError, match="from_number"):
+        WhatsAppConfig(account_sid="AC123", auth_token="tok", from_number="  ")
 
 
 def test_whatsapp_config_default_to_optional() -> None:
-    config = WhatsAppConfig(phone_number_id="123", access_token="tok")
+    config = WhatsAppConfig(
+        account_sid="AC123",
+        auth_token="tok",
+        from_number="whatsapp:+14155238886",
+    )
 
     assert config.default_to is None
 
 
-def test_verify_whatsapp_missing_phone_number_id() -> None:
-    result = _verify_whatsapp("env", {"access_token": "tok"})
+def test_verify_whatsapp_missing_account_sid() -> None:
+    result = _verify_whatsapp("env", {"auth_token": "tok"})
 
     assert result["status"] == "missing"
-    assert "phone_number_id" in result["detail"].lower()
+    assert "account_sid" in result["detail"].lower()
 
 
-def test_verify_whatsapp_missing_access_token() -> None:
-    result = _verify_whatsapp("env", {"phone_number_id": "123"})
+def test_verify_whatsapp_missing_auth_token() -> None:
+    result = _verify_whatsapp("env", {"account_sid": "AC123"})
 
     assert result["status"] == "missing"
-    assert "access_token" in result["detail"].lower()
+    assert "auth_token" in result["detail"].lower()
 
 
 def test_verify_whatsapp_success(monkeypatch: pytest.MonkeyPatch) -> None:
     def _fake_get(*args: Any, **kwargs: Any) -> Any:
-        return _FakeResponse({"id": "123", "display_phone_number": "+1 555 123 4567"})
+        return _FakeResponse({"friendly_name": "Demo Account", "sid": "AC123"})
 
     monkeypatch.setattr("app.integrations._verification_adapters.requests.get", _fake_get)
 
-    result = _verify_whatsapp("env", {"phone_number_id": "123", "access_token": "tok"})
+    result = _verify_whatsapp("env", {"account_sid": "AC123", "auth_token": "tok"})
 
     assert result["status"] == "passed"
-    assert "+1 555 123 4567" in result["detail"]
+    assert "Demo Account" in result["detail"]
 
 
 def test_verify_whatsapp_api_failure(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -83,7 +94,7 @@ def test_verify_whatsapp_api_failure(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr("app.integrations._verification_adapters.requests.get", _fake_get)
 
-    result = _verify_whatsapp("env", {"phone_number_id": "123", "access_token": "tok"})
+    result = _verify_whatsapp("env", {"account_sid": "AC123", "auth_token": "tok"})
 
     assert result["status"] == "failed"
     assert "Connection timeout" in result["detail"]
@@ -95,14 +106,15 @@ def test_verify_whatsapp_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr("app.integrations._verification_adapters.requests.get", _fake_get)
 
-    result = _verify_whatsapp("env", {"phone_number_id": "123", "access_token": "tok"})
+    result = _verify_whatsapp("env", {"account_sid": "AC123", "auth_token": "tok"})
 
     assert result["status"] == "failed"
 
 
 def test_catalog_resolve_whatsapp_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("WHATSAPP_PHONE_NUMBER_ID", "123")
-    monkeypatch.setenv("WHATSAPP_ACCESS_TOKEN", "tok")
+    monkeypatch.setenv("TWILIO_ACCOUNT_SID", "AC123")
+    monkeypatch.setenv("TWILIO_AUTH_TOKEN", "tok")
+    monkeypatch.setenv("TWILIO_WHATSAPP_FROM", "whatsapp:+14155238886")
     monkeypatch.setenv("WHATSAPP_DEFAULT_TO", "+1234567890")
 
     from app.integrations.catalog import resolve_effective_integrations
@@ -111,14 +123,16 @@ def test_catalog_resolve_whatsapp_from_env(monkeypatch: pytest.MonkeyPatch) -> N
 
     assert "whatsapp" in effective
     assert effective["whatsapp"]["source"] == "local env"
-    assert effective["whatsapp"]["config"]["phone_number_id"] == "123"
-    assert effective["whatsapp"]["config"]["access_token"] == "tok"
+    assert effective["whatsapp"]["config"]["account_sid"] == "AC123"
+    assert effective["whatsapp"]["config"]["auth_token"] == "tok"
+    assert effective["whatsapp"]["config"]["from_number"] == "whatsapp:+14155238886"
     assert effective["whatsapp"]["config"]["default_to"] == "+1234567890"
 
 
 def test_catalog_skips_whatsapp_when_env_empty(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("WHATSAPP_PHONE_NUMBER_ID", raising=False)
-    monkeypatch.delenv("WHATSAPP_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("TWILIO_ACCOUNT_SID", raising=False)
+    monkeypatch.delenv("TWILIO_AUTH_TOKEN", raising=False)
+    monkeypatch.delenv("TWILIO_WHATSAPP_FROM", raising=False)
 
     from app.integrations.catalog import resolve_effective_integrations
 

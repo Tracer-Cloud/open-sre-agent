@@ -476,8 +476,9 @@ def _classify_service_instance(
         try:
             wa_config = WhatsAppConfig.model_validate(
                 {
-                    "phone_number_id": credentials.get("phone_number_id", ""),
-                    "access_token": credentials.get("access_token", ""),
+                    "account_sid": credentials.get("account_sid", ""),
+                    "auth_token": credentials.get("auth_token", ""),
+                    "from_number": credentials.get("from_number", ""),
                     "default_to": credentials.get("default_to"),
                 }
             )
@@ -1336,13 +1337,15 @@ def load_env_integrations() -> list[dict[str, Any]]:
         )
         integrations.append(_active_env_record("telegram", tg_config.model_dump()))
 
-    wa_phone_number_id = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "").strip()
-    wa_access_token = os.getenv("WHATSAPP_ACCESS_TOKEN", "").strip()
-    if wa_phone_number_id and wa_access_token:
+    wa_account_sid = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
+    wa_auth_token = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
+    wa_from_number = os.getenv("TWILIO_WHATSAPP_FROM", "").strip()
+    if wa_account_sid and wa_auth_token and wa_from_number:
         wa_config = WhatsAppConfig.model_validate(
             {
-                "phone_number_id": wa_phone_number_id,
-                "access_token": wa_access_token,
+                "account_sid": wa_account_sid,
+                "auth_token": wa_auth_token,
+                "from_number": wa_from_number,
                 "default_to": os.getenv("WHATSAPP_DEFAULT_TO", "").strip() or None,
             }
         )

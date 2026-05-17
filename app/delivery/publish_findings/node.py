@@ -169,21 +169,26 @@ def generate_report(state: InvestigationState) -> dict:
         from app.utils.whatsapp_delivery import send_whatsapp_report
 
         _wa_ctx: dict[str, Any] = state.get("whatsapp_context") or {}  # type: ignore[assignment]
-        access_token = _wa_ctx.get("access_token") or whatsapp_creds.get("access_token", "")
-        phone_number_id = _wa_ctx.get("phone_number_id") or whatsapp_creds.get(
-            "phone_number_id", ""
-        )
+        account_sid = _wa_ctx.get("account_sid") or whatsapp_creds.get("account_sid", "")
+        auth_token = _wa_ctx.get("auth_token") or whatsapp_creds.get("auth_token", "")
+        from_number = _wa_ctx.get("from_number") or whatsapp_creds.get("from_number", "")
         to = _wa_ctx.get("to") or whatsapp_creds.get("default_to", "")
         logger.debug(
-            "[publish] whatsapp delivery: to=%s phone_number_id=%s access_token_present=%s",
+            "[publish] whatsapp delivery: to=%s account_sid=%s auth_token_present=%s from_number=%s",
             to,
-            phone_number_id,
-            bool(access_token),
+            account_sid,
+            bool(auth_token),
+            from_number,
         )
-        if access_token and phone_number_id and to:
+        if account_sid and auth_token and from_number and to:
             wa_posted, wa_error = send_whatsapp_report(
                 whatsapp_message,
-                {"access_token": access_token, "phone_number_id": phone_number_id, "to": to},
+                {
+                    "account_sid": account_sid,
+                    "auth_token": auth_token,
+                    "from_number": from_number,
+                    "to": to,
+                },
             )
             logger.debug("[publish] whatsapp delivery: posted=%s error=%s", wa_posted, wa_error)
             if not wa_posted:
@@ -194,9 +199,10 @@ def generate_report(state: InvestigationState) -> dict:
                 )
         else:
             logger.debug(
-                "[publish] whatsapp delivery: skipped — access_token_present=%s phone_number_id_present=%s to_present=%s",
-                bool(access_token),
-                bool(phone_number_id),
+                "[publish] whatsapp delivery: skipped — account_sid_present=%s auth_token_present=%s from_number_present=%s to_present=%s",
+                bool(account_sid),
+                bool(auth_token),
+                bool(from_number),
                 bool(to),
             )
     else:

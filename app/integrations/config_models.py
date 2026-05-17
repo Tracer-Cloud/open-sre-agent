@@ -714,30 +714,39 @@ class TelegramBotConfig(StrictConfigModel):
 
 
 class WhatsAppConfig(StrictConfigModel):
-    """Meta WhatsApp Cloud API runtime config."""
+    """Twilio WhatsApp runtime config."""
 
-    phone_number_id: str
-    access_token: str
+    account_sid: str
+    auth_token: str
+    from_number: str
     default_to: str | None = None
     identity_policy: dict[str, object] | None = Field(
         default=None,
         description="Messaging identity policy for inbound security (MessagingIdentityPolicy shape)",
     )
 
-    @field_validator("phone_number_id", mode="before")
+    @field_validator("account_sid", mode="before")
     @classmethod
-    def _validate_phone_number_id(cls, value: object) -> str:
+    def _validate_account_sid(cls, value: object) -> str:
         stripped = str(value or "").strip()
         if not stripped:
-            raise ValueError("phone_number_id cannot be empty or just whitespace")
+            raise ValueError("account_sid cannot be empty or just whitespace")
         return stripped
 
-    @field_validator("access_token", mode="before")
+    @field_validator("auth_token", mode="before")
     @classmethod
-    def _validate_access_token(cls, value: object) -> str:
+    def _validate_auth_token(cls, value: object) -> str:
         stripped = str(value or "").strip()
         if not stripped:
-            raise ValueError("access_token cannot be empty or just whitespace")
+            raise ValueError("auth_token cannot be empty or just whitespace")
+        return stripped
+
+    @field_validator("from_number", mode="before")
+    @classmethod
+    def _validate_from_number(cls, value: object) -> str:
+        stripped = str(value or "").strip()
+        if not stripped:
+            raise ValueError("from_number cannot be empty or just whitespace")
         return stripped
 
 

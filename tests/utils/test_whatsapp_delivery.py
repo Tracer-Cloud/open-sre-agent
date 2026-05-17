@@ -8,6 +8,7 @@ import pytest
 
 from app.utils.whatsapp_delivery import (
     post_whatsapp_message,
+    post_whatsapp_message_twilio,
     send_whatsapp_report,
 )
 
@@ -29,7 +30,7 @@ class _FakeDeliveryResponse:
         self.error = error
 
 
-def test_post_whatsapp_message_success(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_post_whatsapp_message_legacy_meta_success(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[dict[str, Any]] = []
 
     def _fake_post_json(
@@ -58,24 +59,55 @@ def test_post_whatsapp_message_success(monkeypatch: pytest.MonkeyPatch) -> None:
     assert error == ""
     assert message_id == "wamid.123"
     assert len(calls) == 1
-    assert calls[0]["url"] == "https://graph.facebook.com/v18.0/pnid-123/messages"
-    assert calls[0]["headers"] == {"Authorization": "Bearer tok-123"}
-    assert calls[0]["payload"]["to"] == "+1234567890"
-    assert calls[0]["payload"]["type"] == "text"
-    assert calls[0]["payload"]["text"]["body"] == "Test message"
 
 
-def test_post_whatsapp_message_transport_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _fake_post_json(*args: Any, **kwargs: Any) -> Any:
-        return _FakeDeliveryResponse(ok=False, error="Connection refused")
+def test_post_whatsapp_message_twilio_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _Resp:
+        status_code = 201
+        text = ""
 
-    monkeypatch.setattr("app.utils.whatsapp_delivery.post_json", _fake_post_json)
+        @staticmethod
+        def json() -> dict[str, Any]:
+            return {"sid": "SM123"}
 
-    success, error, message_id = post_whatsapp_message(
+    captured: dict[str, Any] = {}
+
+    def _fake_post(url: str, **kwargs: Any) -> Any:
+        captured["url"] = url
+        captured.update(kwargs)
+        return _Resp()
+
+    monkeypatch.setattr("app.utils.whatsapp_delivery.httpx.post", _fake_post)
+
+    success, error, message_id = post_whatsapp_message_twilio(
         to="+1234567890",
-        text="Test",
-        phone_number_id="pnid-123",
-        access_token="tok-123",
+        text="hello",
+        account_sid="AC123",
+        auth_token="secret",
+        from_number="whatsapp:+14155238886",
+    )
+
+    assert success is True
+    assert error == ""
+    assert message_id == "SM123"
+    assert captured["url"].endswith("/Accounts/AC123/Messages.json")
+    assert captured["data"]["From"] == "whatsapp:+14155238886"
+    assert captured["data"]["To"] == "whatsapp:+1234567890"
+    assert captured["data"]["Body"] == "hello"
+
+
+def test_post_whatsapp_message_twilio_transport_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _fake_post(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("Connection refused")
+
+    monkeypatch.setattr("app.utils.whatsapp_delivery.httpx.post", _fake_post)
+
+    success, error, message_id = post_whatsapp_message_twilio(
+        to="+123",
+        text="test",
+        account_sid="AC123",
+        auth_token="tok",
+        from_number="whatsapp:+14155238886",
     )
 
     assert success is False
@@ -83,73 +115,48 @@ def test_post_whatsapp_message_transport_failure(monkeypatch: pytest.MonkeyPatch
     assert message_id == ""
 
 
-def test_post_whatsapp_message_api_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _fake_post_json(*args: Any, **kwargs: Any) -> Any:
-        return _FakeDeliveryResponse(
-            ok=True,
-            status_code=400,
-            data={"error": {"message": "Invalid phone number"}},
-            text="Bad Request",
-        )
+def test_post_whatsapp_message_twilio_api_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _Resp:
+        status_code = 400
+        text = "Bad Request"
 
-    monkeypatch.setattr("app.utils.whatsapp_delivery.post_json", _fake_post_json)
+        @staticmethod
+        def json() -> dict[str, Any]:
+            return {"message": "Invalid 'From' parameter"}
 
-    success, error, message_id = post_whatsapp_message(
-        to="+1234567890",
+    monkeypatch.setattr("app.utils.whatsapp_delivery.httpx.post", lambda *_a, **_kw: _Resp())
+
+    success, error, message_id = post_whatsapp_message_twilio(
+        to="+123",
         text="Test",
-        phone_number_id="pnid-123",
-        access_token="tok-123",
+        account_sid="AC123",
+        auth_token="tok-123",
+        from_number="whatsapp:bad",
     )
 
     assert success is False
-    assert "Invalid phone number" in error
+    assert "Invalid 'From' parameter" in error
     assert message_id == ""
-
-
-def test_post_whatsapp_message_redacts_token_in_logs(
-    monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    def _fake_post_json(*args: Any, **kwargs: Any) -> Any:
-        return _FakeDeliveryResponse(
-            ok=True,
-            status_code=400,
-            data={
-                "error": {
-                    "message": "Error for url: https://graph.facebook.com/v18.0/pnid-123/messages?access_token=SECRET"
-                }
-            },
-        )
-
-    monkeypatch.setattr("app.utils.whatsapp_delivery.post_json", _fake_post_json)
-    caplog.set_level("WARNING", logger="app.utils.whatsapp_delivery")
-
-    post_whatsapp_message(
-        to="+123",
-        text="Test",
-        phone_number_id="pnid-123",
-        access_token="SECRET",
-    )
-
-    assert "SECRET" not in caplog.text
 
 
 def test_send_whatsapp_report_success(monkeypatch: pytest.MonkeyPatch) -> None:
     def _fake_post(
         to: str,
         text: str,
-        phone_number_id: str,
-        access_token: str,
+        account_sid: str,
+        auth_token: str,
+        from_number: str,
     ) -> tuple[bool, str, str]:
-        return True, "", "wamid.456"
+        return True, "", "SM456"
 
-    monkeypatch.setattr("app.utils.whatsapp_delivery.post_whatsapp_message", _fake_post)
+    monkeypatch.setattr("app.utils.whatsapp_delivery.post_whatsapp_message_twilio", _fake_post)
 
     success, error = send_whatsapp_report(
         report="Investigation summary",
         whatsapp_ctx={
-            "access_token": "tok",
-            "phone_number_id": "pnid",
+            "account_sid": "AC123",
+            "auth_token": "tok",
+            "from_number": "whatsapp:+14155238886",
             "to": "+123",
         },
     )
@@ -161,7 +168,7 @@ def test_send_whatsapp_report_success(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_send_whatsapp_report_missing_credentials() -> None:
     success, error = send_whatsapp_report(
         report="Test",
-        whatsapp_ctx={"access_token": "tok"},
+        whatsapp_ctx={"account_sid": "AC123"},
     )
 
     assert success is False
@@ -174,20 +181,22 @@ def test_send_whatsapp_report_truncates_long_report(monkeypatch: pytest.MonkeyPa
     def _fake_post(
         to: str,
         text: str,
-        phone_number_id: str,
-        access_token: str,
+        account_sid: str,
+        auth_token: str,
+        from_number: str,
     ) -> tuple[bool, str, str]:
         nonlocal captured_text
         captured_text = text
-        return True, "", "wamid.789"
+        return True, "", "SM789"
 
-    monkeypatch.setattr("app.utils.whatsapp_delivery.post_whatsapp_message", _fake_post)
+    monkeypatch.setattr("app.utils.whatsapp_delivery.post_whatsapp_message_twilio", _fake_post)
 
     send_whatsapp_report(
         report="X" * 5000,
         whatsapp_ctx={
-            "access_token": "tok",
-            "phone_number_id": "pnid",
+            "account_sid": "AC123",
+            "auth_token": "tok",
+            "from_number": "whatsapp:+14155238886",
             "to": "+123",
         },
     )

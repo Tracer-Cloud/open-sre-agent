@@ -533,17 +533,19 @@ def _setup_discord() -> None:
 
 
 def _setup_whatsapp() -> None:
-    phone_number_id = _p("Meta WhatsApp Phone Number ID")
-    access_token = _p("Meta WhatsApp Access Token", secret=True)
+    account_sid = _p("Twilio Account SID (starts with AC...)")
+    auth_token = _p("Twilio Auth Token", secret=True)
+    from_number = _p("Twilio WhatsApp From number (e.g. whatsapp:+14155238886)")
     default_to = _p("Default recipient phone number (optional, e.g. +1234567890)")
-    if not phone_number_id or not access_token:
-        _die("phone_number_id and access_token are required.")
+    if not account_sid or not auth_token or not from_number:
+        _die("account_sid, auth_token, and from_number are required.")
     upsert_integration(
         "whatsapp",
         {
             "credentials": {
-                "phone_number_id": phone_number_id,
-                "access_token": access_token,
+                "account_sid": account_sid,
+                "auth_token": auth_token,
+                "from_number": from_number,
                 "default_to": default_to,
             }
         },
