@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, TypedDict, cast
 
 from pydantic import BaseModel, Field
 
@@ -152,6 +152,16 @@ Investigation conclusion:
 
 Evidence keys collected: {", ".join(evidence.keys()) if evidence else "none"}
 """
+
+    class _DiagnosisPayload(TypedDict):
+        root_cause: str
+        root_cause_category: str
+        causal_chain: list[str]
+        validated_claims: list[str]
+        non_validated_claims: list[str]
+        remediation_steps: list[str]
+        validity_score: float
+
     llm = get_llm_for_reasoning()
     schema_model = _build_diagnosis_schema(_taxonomy_categories_for_alert_source(alert_source))
     raw_schema = (
@@ -159,21 +169,22 @@ Evidence keys collected: {", ".join(evidence.keys()) if evidence else "none"}
         .with_config(run_name="LLM – Parse diagnosis")
         .invoke(prompt)
     )
-    schema = (
+    schema_instance = (
         raw_schema if isinstance(raw_schema, BaseModel) else schema_model.model_validate(raw_schema)
     )
+    schema = cast(_DiagnosisPayload, schema_instance.model_dump())
 
     def _to_claim_dicts(claims: list[str], status: str) -> list[dict]:
         return [{"claim": c, "validation_status": status} for c in claims if c]
 
     return InvestigationResult(
-        root_cause=schema.root_cause,
-        root_cause_category=schema.root_cause_category,
-        causal_chain=schema.causal_chain,
-        validated_claims=_to_claim_dicts(schema.validated_claims, "validated"),
-        non_validated_claims=_to_claim_dicts(schema.non_validated_claims, "not_validated"),
-        remediation_steps=schema.remediation_steps,
-        validity_score=schema.validity_score,
+        root_cause=schema["root_cause"],
+        root_cause_category=schema["root_cause_category"],
+        causal_chain=schema["causal_chain"],
+        validated_claims=_to_claim_dicts(schema["validated_claims"], "validated"),
+        non_validated_claims=_to_claim_dicts(schema["non_validated_claims"], "not_validated"),
+        remediation_steps=schema["remediation_steps"],
+        validity_score=schema["validity_score"],
     )
 
 
