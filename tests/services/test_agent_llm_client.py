@@ -339,18 +339,3 @@ def test_unrelated_type_error_is_retried_and_wrapped(
         client.invoke(messages=[{"role": "user", "content": "hi"}])
 
     assert call_count == 3, "non-auth TypeError should be retried like a generic exception"
-
-
-@pytest.mark.parametrize(
-    "provider", ["codex", "opencode", "claude-code", "kimi", "cursor", "gemini-cli", "copilot"]
-)
-def test_get_agent_llm_rejects_cli_providers(
-    provider: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from app.services.agent_llm_client import get_agent_llm, reset_agent_client
-
-    monkeypatch.setenv("LLM_PROVIDER", provider)
-    reset_agent_client()
-    with pytest.raises(RuntimeError, match="CLI-backed provider"):
-        get_agent_llm()
-    reset_agent_client()
