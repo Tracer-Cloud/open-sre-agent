@@ -641,7 +641,9 @@ def render_prompt_taxonomy(
     lines: list[str] = []
     for group, entries in categories_by_group().items():
         filtered_entries = (
-            [entry for entry in entries if entry.name in include] if include is not None else entries
+            [entry for entry in entries if entry.name in include]
+            if include is not None
+            else entries
         )
         if not filtered_entries:
             continue

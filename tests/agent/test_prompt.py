@@ -6,7 +6,10 @@ from app.agent.prompt import build_system_prompt
 def test_build_system_prompt_non_hermes_uses_generic_category_instruction() -> None:
     prompt = build_system_prompt({"alert_source": "grafana"})
 
-    assert "One of database / infrastructure / code_bug / configuration / network / performance" in prompt
+    assert (
+        "One of database / infrastructure / code_bug / configuration / network / performance"
+        in prompt
+    )
     assert "Hermes root cause category taxonomy" not in prompt
     assert "agent_hang" not in prompt
 
