@@ -4,7 +4,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.agent.investigation import ConnectedInvestigationAgent, _availability_view
+from app.agent.investigation import (
+    ConnectedInvestigationAgent,
+    _availability_view,
+    _build_synthetic_assistant_tool_call_msg,
+)
+from app.services.agent_llm_client import CLIBackedAgentClient, ToolCall
 
 
 def test_availability_view_marks_configured_integrations_without_mutating_state() -> None:
@@ -15,6 +20,36 @@ def test_availability_view_marks_configured_integrations_without_mutating_state(
     assert view["github"]["connection_verified"] is True
     assert "connection_verified" not in resolved["github"]
     assert view["_all"] == resolved["_all"]
+
+
+def test_build_synthetic_assistant_json_for_cli_backed_client() -> None:
+    """Seed assistant turn must match CLI JSON history format (Greptile)."""
+    import types as _types
+
+    fake_adapter = _types.SimpleNamespace(
+        name="codex",
+        binary_env_key="CODEX_BIN",
+        install_hint="",
+        auth_hint="codex login",
+        default_exec_timeout_sec=30.0,
+        detect=lambda: _types.SimpleNamespace(
+            installed=True, bin_path="/x", logged_in=True, detail=""
+        ),
+        build=lambda **_kw: _types.SimpleNamespace(
+            argv=("/x",), stdin="", cwd="/", env=None, timeout_sec=30.0
+        ),
+        parse=lambda **_kw: "",
+        explain_failure=lambda **_kw: "",
+    )
+    llm = CLIBackedAgentClient(fake_adapter, model=None)
+    msg = _build_synthetic_assistant_tool_call_msg(
+        llm,
+        [ToolCall(id="seed_t", name="query_eks", input={"cluster": "c"})],
+    )
+    assert msg["role"] == "assistant"
+    assert '"tool_calls"' in msg["content"]
+    assert "query_eks" in msg["content"]
+    assert "seed_t" in msg["content"]
 
 
 def test_run_gracefully_handles_model_not_found_runtime_error() -> None:

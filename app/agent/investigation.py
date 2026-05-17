@@ -416,7 +416,11 @@ def _build_synthetic_assistant_tool_call_msg(
     This lets us inject pre-seeded tool results into the conversation in a format
     the LLM client already understands, without adding special-case handling.
     """
-    from app.services.agent_llm_client import AnthropicAgentClient, OpenAIAgentClient
+    from app.services.agent_llm_client import (
+        AnthropicAgentClient,
+        CLIBackedAgentClient,
+        OpenAIAgentClient,
+    )
 
     if isinstance(llm, AnthropicAgentClient):
         content = [
@@ -443,6 +447,9 @@ def _build_synthetic_assistant_tool_call_msg(
                 for tc in tool_calls
             ],
         }
+
+    if isinstance(llm, CLIBackedAgentClient):
+        return llm.build_assistant_message("", tool_calls)
 
     # Fallback: plain text summary
     names = ", ".join(tc.name for tc in tool_calls)

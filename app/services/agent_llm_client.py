@@ -467,19 +467,20 @@ class CLIBackedAgentClient:
 
 
 def _try_parse_tool_call_json(text: str) -> dict[str, Any] | None:
-    """Return parsed JSON dict if *text* contains a tool_calls JSON block, else None."""
-    # Strip markdown fences.
+    """Return parsed JSON dict if *text* starts with (or fences) a tool_calls JSON object.
+
+    Uses :meth:`json.JSONDecoder.raw_decode` so a single JSON value is parsed from
+    the start of the candidate without a greedy ``{...}`` span swallowing trailing
+    brace-containing prose and breaking :func:`json.loads`.
+    """
     cleaned = text.strip()
     fence = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned)
-    candidate = fence.group(1).strip() if fence else cleaned
-
-    # Find the first {...} block.
-    brace = re.search(r"\{[\s\S]*\}", candidate)
-    if not brace:
+    candidate = (fence.group(1).strip() if fence else cleaned).strip()
+    if not candidate:
         return None
     try:
-        payload = json.loads(brace.group(0))
-    except (json.JSONDecodeError, ValueError):
+        payload, _end = json.JSONDecoder().raw_decode(candidate)
+    except json.JSONDecodeError:
         return None
     if isinstance(payload, dict) and "tool_calls" in payload:
         return payload

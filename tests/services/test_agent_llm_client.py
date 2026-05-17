@@ -422,6 +422,17 @@ def test_cli_backed_agent_client_build_assistant_message_includes_tool_json() ->
     assert "t1" in msg["content"]
 
 
+def test_try_parse_tool_call_json_uses_raw_decode_not_greedy_brace_span() -> None:
+    """Trailing brace-containing prose after valid JSON must not drop tool_calls."""
+    from app.services import agent_llm_client as alc
+
+    text = '{"tool_calls": [{"id": "a", "name": "t1", "input": {}}]} Here\'s context: {not json}'
+    parsed = alc._try_parse_tool_call_json(text)
+    assert parsed is not None
+    assert len(parsed["tool_calls"]) == 1
+    assert parsed["tool_calls"][0]["name"] == "t1"
+
+
 def test_cli_backed_agent_client_reuses_single_cli_llm_client() -> None:
     """CLIBackedLLMClient should be constructed once so probe cache spans invokes."""
     import types as _types
