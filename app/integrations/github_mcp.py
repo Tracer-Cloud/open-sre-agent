@@ -67,24 +67,35 @@ class GitHubMCPAuthError(RuntimeError):
         self.status_code = status_code
 
 
-def _find_http_status_error(err: BaseException) -> httpx.HTTPStatusError | None:
-    """Locate an ``httpx.HTTPStatusError`` inside ExceptionGroup / cause / context chains."""
+def _find_http_status_error(
+    err: BaseException, _seen: set[int] | None = None
+) -> httpx.HTTPStatusError | None:
+    """Locate an ``httpx.HTTPStatusError`` inside ExceptionGroup / cause / context chains.
+
+    A visited-set keyed by ``id(err)`` guards against cycles in exception chains
+    (e.g. an exception whose ``__context__`` transitively points back to itself).
+    """
+
+    seen = _seen if _seen is not None else set()
+    if id(err) in seen:
+        return None
+    seen.add(id(err))
 
     if isinstance(err, httpx.HTTPStatusError):
         return err
     if isinstance(err, BaseExceptionGroup):
         for inner in err.exceptions:
-            found = _find_http_status_error(inner)
+            found = _find_http_status_error(inner, seen)
             if found is not None:
                 return found
     cause = getattr(err, "__cause__", None)
     if isinstance(cause, BaseException):
-        found = _find_http_status_error(cause)
+        found = _find_http_status_error(cause, seen)
         if found is not None:
             return found
     context = getattr(err, "__context__", None)
     if isinstance(context, BaseException):
-        return _find_http_status_error(context)
+        return _find_http_status_error(context, seen)
     return None
 
 

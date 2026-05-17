@@ -541,10 +541,29 @@ def test_maybe_raise_github_mcp_auth_error_raises_on_401() -> None:
     assert "api.githubcopilot.com" in str(excinfo.value)
 
 
+def test_maybe_raise_github_mcp_auth_error_raises_on_403() -> None:
+    inner = _http_status_error(403, "https://api.githubcopilot.com/mcp/x/all/readonly")
+    group = ExceptionGroup("unhandled errors in a TaskGroup", [inner])
+    with pytest.raises(github_mcp_module.GitHubMCPAuthError) as excinfo:
+        github_mcp_module._maybe_raise_github_mcp_auth_error(group)  # noqa: SLF001
+    assert excinfo.value.status_code == 403
+    assert "403" in str(excinfo.value)
+    assert "api.githubcopilot.com" in str(excinfo.value)
+
+
 def test_maybe_raise_github_mcp_auth_error_ignores_non_auth_statuses() -> None:
     inner = _http_status_error(500, "https://api.githubcopilot.com/mcp/x/all/readonly")
     group = ExceptionGroup("unhandled errors in a TaskGroup", [inner])
     github_mcp_module._maybe_raise_github_mcp_auth_error(group)  # should not raise  # noqa: SLF001
+
+
+def test_find_http_status_error_terminates_on_cyclic_chain() -> None:
+    """A cycle in __context__ must not cause infinite recursion."""
+    a = RuntimeError("a")
+    b = RuntimeError("b")
+    a.__context__ = b
+    b.__context__ = a  # cycle: a -> b -> a
+    assert github_mcp_module._find_http_status_error(a) is None  # noqa: SLF001
 
 
 def test_call_github_mcp_tool_returns_structured_error_on_auth_failure(
