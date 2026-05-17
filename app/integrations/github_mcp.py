@@ -56,6 +56,57 @@ _REPO_PROBE_NO_ARG_TOOLS: tuple[str, ...] = (
 # OPENSRE_GITHUB_MCP_REPO_PROBE_LIMIT (integer, clamped 5..500).
 _DEFAULT_REPO_PROBE_LIMIT = 50
 
+_GITHUB_MCP_AUTH_STATUS_CODES = frozenset({401, 403})
+
+
+class GitHubMCPAuthError(RuntimeError):
+    """Raised when the GitHub MCP server rejects the supplied credentials."""
+
+    def __init__(self, message: str, *, status_code: int) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
+
+def _find_http_status_error(err: BaseException) -> httpx.HTTPStatusError | None:
+    """Locate an ``httpx.HTTPStatusError`` inside ExceptionGroup / cause / context chains."""
+
+    if isinstance(err, httpx.HTTPStatusError):
+        return err
+    if isinstance(err, BaseExceptionGroup):
+        for inner in err.exceptions:
+            found = _find_http_status_error(inner)
+            if found is not None:
+                return found
+    cause = getattr(err, "__cause__", None)
+    if isinstance(cause, BaseException):
+        found = _find_http_status_error(cause)
+        if found is not None:
+            return found
+    context = getattr(err, "__context__", None)
+    if isinstance(context, BaseException):
+        return _find_http_status_error(context)
+    return None
+
+
+def _maybe_raise_github_mcp_auth_error(err: BaseException) -> None:
+    """Re-raise as ``GitHubMCPAuthError`` when ``err`` wraps an auth failure (401/403)."""
+
+    status_err = _find_http_status_error(err)
+    if status_err is None:
+        return
+    code = status_err.response.status_code
+    if code not in _GITHUB_MCP_AUTH_STATUS_CODES:
+        return
+    url = str(status_err.request.url)
+    raise GitHubMCPAuthError(
+        (
+            f"GitHub MCP server rejected the supplied credentials "
+            f"(HTTP {code} from {url}). The token is missing, expired, or lacks scope."
+        ),
+        status_code=code,
+    ) from err
+
+
 _GITHUB_MCP_DISPLAY_LEVELS = frozenset({"summary", "standard", "full"})
 GitHubMcpDisplayDetailLevel = Literal["summary", "standard", "full"]
 GitHubMcpRepoView = Literal["auto", "user", "accessible", "starred", "search_user"]
@@ -575,9 +626,13 @@ def _tool_result_to_dict(result: types.CallToolResult) -> dict[str, Any]:
 
 
 async def _list_tools_async(config: GitHubMCPConfig) -> list[types.Tool]:
-    async with _open_github_mcp_session(config) as session:
-        result = await session.list_tools()
-        return list(result.tools)
+    try:
+        async with _open_github_mcp_session(config) as session:
+            result = await session.list_tools()
+            return list(result.tools)
+    except Exception as err:
+        _maybe_raise_github_mcp_auth_error(err)
+        raise
 
 
 def list_github_mcp_tools(config: GitHubMCPConfig) -> list[dict[str, Any]]:
@@ -599,12 +654,16 @@ async def _call_tool_async(
     tool_name: str,
     arguments: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    async with _open_github_mcp_session(config) as session:
-        result = await session.call_tool(tool_name, arguments or {})
-        payload = _tool_result_to_dict(result)
-        payload["tool"] = tool_name
-        payload["arguments"] = arguments or {}
-        return payload
+    try:
+        async with _open_github_mcp_session(config) as session:
+            result = await session.call_tool(tool_name, arguments or {})
+            payload = _tool_result_to_dict(result)
+            payload["tool"] = tool_name
+            payload["arguments"] = arguments or {}
+            return payload
+    except Exception as err:
+        _maybe_raise_github_mcp_auth_error(err)
+        raise
 
 
 def call_github_mcp_tool(
@@ -612,9 +671,23 @@ def call_github_mcp_tool(
     tool_name: str,
     arguments: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Call a GitHub MCP tool and normalize the result."""
+    """Call a GitHub MCP tool and normalize the result.
 
-    return cast(dict[str, Any], _run_async(_call_tool_async(config, tool_name, arguments)))
+    Translates an upstream 401/403 into a structured ``is_error`` payload so callers
+    do not crash on rejected credentials.
+    """
+
+    try:
+        return cast(dict[str, Any], _run_async(_call_tool_async(config, tool_name, arguments)))
+    except GitHubMCPAuthError as err:
+        return {
+            "is_error": True,
+            "text": str(err),
+            "content": [],
+            "structured_content": None,
+            "tool": tool_name,
+            "arguments": arguments or {},
+        }
 
 
 def _json_schema_allows_empty_object_call(schema: Any) -> bool:
@@ -1051,6 +1124,12 @@ def validate_github_mcp_config(
             repo_access_probe_limit_applied=limit,
             profile_public_repos=profile_pub,
             profile_private_repos=profile_priv,
+        )
+    except GitHubMCPAuthError as err:
+        return GitHubMCPValidationResult(
+            ok=False,
+            detail=str(err),
+            failure_category="authentication",
         )
     except Exception as err:
         report_validation_failure(

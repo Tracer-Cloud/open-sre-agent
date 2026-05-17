@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import httpx
 import pytest
 from rich.console import Console
 
@@ -513,3 +514,87 @@ def test_print_github_mcp_validation_report_success_and_failure() -> None:
     fail_text = fail_console.export_text()
     assert "validation failed" in fail_text.lower()
     assert "connection reset" in fail_text
+
+
+def _http_status_error(status_code: int, url: str) -> httpx.HTTPStatusError:
+    request = httpx.Request("POST", url)
+    response = httpx.Response(status_code, request=request)
+    return httpx.HTTPStatusError("rejected", request=request, response=response)
+
+
+def test_find_http_status_error_walks_exception_group_and_cause() -> None:
+    inner = _http_status_error(401, "https://api.githubcopilot.com/mcp/x/all/readonly")
+    wrapped = RuntimeError("transport")
+    wrapped.__cause__ = inner
+    group = ExceptionGroup("unhandled errors in a TaskGroup", [wrapped])
+    found = github_mcp_module._find_http_status_error(group)  # noqa: SLF001
+    assert found is inner
+
+
+def test_maybe_raise_github_mcp_auth_error_raises_on_401() -> None:
+    inner = _http_status_error(401, "https://api.githubcopilot.com/mcp/x/all/readonly")
+    group = ExceptionGroup("unhandled errors in a TaskGroup", [inner])
+    with pytest.raises(github_mcp_module.GitHubMCPAuthError) as excinfo:
+        github_mcp_module._maybe_raise_github_mcp_auth_error(group)  # noqa: SLF001
+    assert excinfo.value.status_code == 401
+    assert "401" in str(excinfo.value)
+    assert "api.githubcopilot.com" in str(excinfo.value)
+
+
+def test_maybe_raise_github_mcp_auth_error_ignores_non_auth_statuses() -> None:
+    inner = _http_status_error(500, "https://api.githubcopilot.com/mcp/x/all/readonly")
+    group = ExceptionGroup("unhandled errors in a TaskGroup", [inner])
+    github_mcp_module._maybe_raise_github_mcp_auth_error(group)  # should not raise  # noqa: SLF001
+
+
+def test_call_github_mcp_tool_returns_structured_error_on_auth_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    inner = _http_status_error(401, "https://api.githubcopilot.com/mcp/x/all/readonly")
+    group = ExceptionGroup("unhandled errors in a TaskGroup", [inner])
+
+    async def fake_call_tool_async(
+        _config: Any, _name: str, _args: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        github_mcp_module._maybe_raise_github_mcp_auth_error(group)  # noqa: SLF001
+        raise AssertionError("auth helper should have raised")
+
+    monkeypatch.setattr(github_mcp_module, "_call_tool_async", fake_call_tool_async)
+
+    cfg = github_mcp_module.build_github_mcp_config(
+        {
+            "url": "https://api.githubcopilot.com/mcp/",
+            "mode": "streamable-http",
+            "auth_token": "ghp_test",
+        }
+    )
+    result = github_mcp_module.call_github_mcp_tool(cfg, "list_commits", {"owner": "o", "repo": "r"})
+    assert result["is_error"] is True
+    assert "401" in result["text"]
+    assert result["tool"] == "list_commits"
+    assert result["arguments"] == {"owner": "o", "repo": "r"}
+
+
+def test_validate_github_mcp_config_classifies_401_as_authentication(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def raising_list(_config: Any) -> list[dict[str, Any]]:
+        raise github_mcp_module.GitHubMCPAuthError(
+            "GitHub MCP server rejected the supplied credentials (HTTP 401 from "
+            "https://api.githubcopilot.com/mcp/x/all/readonly).",
+            status_code=401,
+        )
+
+    monkeypatch.setattr(github_mcp_module, "list_github_mcp_tools", raising_list)
+
+    cfg = github_mcp_module.build_github_mcp_config(
+        {
+            "url": "https://api.githubcopilot.com/mcp/",
+            "mode": "streamable-http",
+            "auth_token": "ghp_test",
+        }
+    )
+    result = github_mcp_module.validate_github_mcp_config(cfg)
+    assert result.ok is False
+    assert result.failure_category == "authentication"
+    assert "401" in result.detail
