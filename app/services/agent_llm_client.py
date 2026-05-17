@@ -354,7 +354,127 @@ class OpenAIAgentClient:
         return msg
 
 
-_AgentClientType = AnthropicAgentClient | OpenAIAgentClient
+def _get_cli_provider_registration(provider: str) -> Any:
+    """Return the CLI registry entry for *provider*, or None if not CLI-backed."""
+    from app.integrations.llm_cli.registry import get_cli_provider_registration
+
+    return get_cli_provider_registration(provider)
+
+
+class CLIBackedAgentClient:
+    """Tool-calling wrapper for subprocess CLI providers (codex, claude-code, etc.).
+
+    CLI adapters don't expose a native tool-calling API. This client implements
+    the investigation agent's ReAct interface by embedding tool schemas in the
+    prompt as JSON and parsing the model's text response for tool call JSON.
+    Each invoke flattens the full conversation history into a single stdin prompt.
+    """
+
+    _TOOL_CALL_INSTRUCTION = (
+        "You are an SRE investigation agent. Use the available tools to investigate "
+        "the alert. On each turn respond with EITHER:\n"
+        '  (a) A JSON object: {"tool_calls": [{"id": "<unique_id>", "name": "<tool>",'
+        ' "input": {<args>}}]}\n'
+        "  (b) A plain-text final answer when investigation is complete.\n"
+        "Respond with JSON only when calling tools; respond with plain text only for the final answer."
+    )
+
+    def __init__(self, adapter: Any, *, model: str | None = None) -> None:
+        self._adapter = adapter
+        self._model = model
+
+    def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
+        # Return the same dicts — used only to pass back into invoke() below.
+        return [
+            {"name": t.name, "description": t.description, "input_schema": t.input_schema}
+            for t in tools
+        ]
+
+    def invoke(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        system: str | None = None,
+        tools: list[dict[str, Any]] | None = None,
+    ) -> AgentLLMResponse:
+        from app.integrations.llm_cli.runner import CLIBackedLLMClient
+        from app.integrations.llm_cli.text import flatten_messages_to_prompt
+
+        tool_block = ""
+        if tools:
+            tool_lines = json.dumps(tools, indent=2)
+            tool_block = f"\n\nAvailable tools (JSON schema):\n{tool_lines}\n"
+
+        system_block = f"System: {system}\n" if system else ""
+        instruction = self._TOOL_CALL_INSTRUCTION + tool_block
+        prompt = f"{system_block}{instruction}\n\n{flatten_messages_to_prompt(messages)}"
+
+        cli_client = CLIBackedLLMClient(self._adapter, model=self._model)
+        response = cli_client.invoke(prompt)
+        text = response.content.strip()
+
+        # Try to parse a JSON tool call response.
+        tool_calls: list[ToolCall] = []
+        parsed_json = _try_parse_tool_call_json(text)
+        if parsed_json is not None:
+            raw_calls = parsed_json.get("tool_calls") or []
+            for i, tc in enumerate(raw_calls):
+                if not isinstance(tc, dict):
+                    continue
+                tool_calls.append(
+                    ToolCall(
+                        id=str(tc.get("id") or f"call_{i}"),
+                        name=str(tc.get("name") or ""),
+                        input=tc.get("input") or {},
+                    )
+                )
+            content = ""
+        else:
+            content = text
+
+        return AgentLLMResponse(
+            content=content,
+            tool_calls=tool_calls,
+            stop_reason="tool_use" if tool_calls else "end_turn",
+            raw_content=None,  # None so _build_assistant_msg falls through to build_assistant_message
+        )
+
+    @staticmethod
+    def build_tool_result_message(tool_calls: list[ToolCall], results: list[Any]) -> dict[str, Any]:
+        parts = [
+            f"Tool result for {tc.name} (id={tc.id}): {json.dumps(result, default=str)}"
+            for tc, result in zip(tool_calls, results)
+        ]
+        return {"role": "user", "content": "\n".join(parts)}
+
+    @staticmethod
+    def build_assistant_message(content: str, tool_calls: list[ToolCall]) -> dict[str, Any]:
+        """Match OpenAIAgentClient signature so investigation.py dispatch works correctly."""
+        _ = tool_calls
+        return {"role": "assistant", "content": content}
+
+
+def _try_parse_tool_call_json(text: str) -> dict[str, Any] | None:
+    """Return parsed JSON dict if *text* contains a tool_calls JSON block, else None."""
+    # Strip markdown fences.
+    cleaned = text.strip()
+    fence = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned)
+    candidate = fence.group(1).strip() if fence else cleaned
+
+    # Find the first {...} block.
+    brace = re.search(r"\{[\s\S]*\}", candidate)
+    if not brace:
+        return None
+    try:
+        payload = json.loads(brace.group(0))
+    except (json.JSONDecodeError, ValueError):
+        return None
+    if isinstance(payload, dict) and "tool_calls" in payload:
+        return payload
+    return None
+
+
+_AgentClientType = AnthropicAgentClient | OpenAIAgentClient | CLIBackedAgentClient
 _agent_client: _AgentClientType | None = None
 
 
@@ -393,6 +513,9 @@ def get_agent_llm() -> _AgentClientType:
             model=settings.bedrock_reasoning_model,
             max_tokens=BEDROCK_LLM_CONFIG.max_tokens,
         )
+    elif (cli_reg := _get_cli_provider_registration(provider)) is not None:
+        model_name = os.getenv(cli_reg.model_env_key, "").strip() or None
+        _agent_client = CLIBackedAgentClient(cli_reg.adapter_factory(), model=model_name)
     else:
         # Default: Anthropic
         from app.config import ANTHROPIC_LLM_CONFIG
