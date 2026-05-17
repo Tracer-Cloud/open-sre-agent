@@ -5,7 +5,7 @@ required_keywords:
   - "529"
   - overload
   - provider
-  - failover
+  - fail over
 
 forbidden_categories:
   - unknown
