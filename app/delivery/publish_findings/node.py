@@ -48,7 +48,14 @@ def generate_report(state: InvestigationState) -> dict:
 
     all_blocks = build_slack_blocks(ctx) + build_action_blocks(investigation_url, investigation_id)
     all_blocks = masking_ctx.unmask_value(all_blocks)
-    render_report(slack_message, root_cause_category=state.get("root_cause_category"))
+    render_report(
+        slack_message,
+        root_cause_category=state.get("root_cause_category"),
+        confidence_band=state.get("confidence_band", ""),
+        validity_score=state.get("validity_score"),
+        ranked_hypotheses=state.get("ranked_hypotheses", []),
+        missing_evidence=state.get("missing_evidence", []),
+    )
     open_in_editor(slack_message)
 
     slack_ctx = state.get("slack_context", {})

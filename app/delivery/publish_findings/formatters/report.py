@@ -466,6 +466,12 @@ def format_slack_message(ctx: ReportContext) -> str:
     if top_log:
         conclusion_block += f"`{top_log}`\n"
 
+    confidence_band = ctx.get("confidence_band", "")
+    validity_score_val = ctx.get("validity_score")
+    if confidence_band:
+        pct = f" ({validity_score_val:.0%})" if isinstance(validity_score_val, (int, float)) else ""
+        conclusion_block += f"*Confidence:* {confidence_band.upper()}{pct}\n"
+
     validated_lines, non_validated_lines = _render_claim_lines(ctx)
     if validated_lines:
         # Use a larger markdown heading so that "Findings" stands out as a section.
@@ -473,6 +479,21 @@ def format_slack_message(ctx: ReportContext) -> str:
     if non_validated_lines:
         conclusion_block += (
             "\n*Non-Validated Claims (Inferred):*\n" + "\n".join(non_validated_lines) + "\n"
+        )
+
+    ranked_hypotheses = ctx.get("ranked_hypotheses") or []
+    if ranked_hypotheses:
+        conclusion_block += (
+            "\n*Alternative hypotheses:*\n"
+            + "\n".join(f"• {_sanitize_for_slack(h)}" for h in ranked_hypotheses)
+            + "\n"
+        )
+    missing_evidence_list = ctx.get("missing_evidence") or []
+    if missing_evidence_list:
+        conclusion_block += (
+            "\n*Missing evidence:*\n"
+            + "\n".join(f"• {_sanitize_for_slack(e)}" for e in missing_evidence_list)
+            + "\n"
         )
 
     correlation_signal_lines, correlation_driver_lines = _format_correlation_lines(ctx)
@@ -556,11 +577,31 @@ def format_telegram_message(ctx: ReportContext) -> str:
             rc += "\n<code>" + html.escape(top_log) + "</code>"
         parts.append(rc)
 
+    confidence_band = ctx.get("confidence_band", "")
+    validity_score_val = ctx.get("validity_score")
+    if confidence_band:
+        pct = f" ({validity_score_val:.0%})" if isinstance(validity_score_val, (int, float)) else ""
+        parts.append(f"<b>Confidence:</b> {html.escape(confidence_band.upper())}{pct}")
+
     validated_lines, non_validated_lines = _render_claim_lines_telegram(ctx)
     if validated_lines:
         parts.append("<b>Findings</b>\n" + "\n".join(validated_lines))
     if non_validated_lines:
         parts.append("<b>Non-Validated Claims (Inferred)</b>\n" + "\n".join(non_validated_lines))
+
+    ranked_hypotheses = ctx.get("ranked_hypotheses") or []
+    if ranked_hypotheses:
+        hyp = "\n".join(
+            "• " + _to_telegram_html_body(_sanitize_for_slack(str(h))) for h in ranked_hypotheses
+        )
+        parts.append("<b>Alternative hypotheses</b>\n" + hyp)
+
+    missing_evidence_list = ctx.get("missing_evidence") or []
+    if missing_evidence_list:
+        me = "\n".join(
+            "• " + _to_telegram_html_body(_sanitize_for_slack(str(e))) for e in missing_evidence_list
+        )
+        parts.append("<b>Missing evidence</b>\n" + me)
 
     provenance_lines = _format_provenance_lines(ctx)
     if provenance_lines:
@@ -695,6 +736,13 @@ def build_slack_blocks(ctx: ReportContext) -> list[dict]:
         rc_text += f"\n`{top_log}`"
     _add(_mrkdwn_section(rc_text))
 
+    # ── Confidence band ──
+    confidence_band = ctx.get("confidence_band", "")
+    validity_score_val = ctx.get("validity_score")
+    if confidence_band:
+        pct = f" ({validity_score_val:.0%})" if isinstance(validity_score_val, (int, float)) else ""
+        _add(_mrkdwn_section(f"*Confidence:* {confidence_band.upper()}{pct}"))
+
     # ── Failed Pods ──
     datadog_site = ctx.get("datadog_site", "datadoghq.com")
     all_pods = get_failed_pods(ctx)
@@ -726,6 +774,26 @@ def build_slack_blocks(ctx: ReportContext) -> list[dict]:
         _add(_mrkdwn_section("\n".join(validated_lines)))
     if non_validated_lines:
         _add(_mrkdwn_section("*Inferred (not yet validated)*\n" + "\n".join(non_validated_lines)))
+
+    # ── Alternative Hypotheses ──
+    ranked_hypotheses = ctx.get("ranked_hypotheses") or []
+    if ranked_hypotheses:
+        blocks.append({"type": "divider"})
+        _add(
+            _mrkdwn_section(
+                "*Alternative hypotheses:*\n" + "\n".join(f"• {h}" for h in ranked_hypotheses)
+            )
+        )
+
+    # ── Missing Evidence ──
+    missing_evidence_list = ctx.get("missing_evidence") or []
+    if missing_evidence_list:
+        blocks.append({"type": "divider"})
+        _add(
+            _mrkdwn_section(
+                "*Missing evidence:*\n" + "\n".join(f"• {e}" for e in missing_evidence_list)
+            )
+        )
 
     correlation_signal_lines, correlation_driver_lines = _format_correlation_lines(ctx)
     if correlation_signal_lines or correlation_driver_lines:

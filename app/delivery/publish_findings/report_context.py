@@ -46,6 +46,9 @@ class ReportContext(TypedDict, total=False):
     validated_claims: list[dict]
     non_validated_claims: list[dict]
     validity_score: float
+    confidence_band: str
+    ranked_hypotheses: list[str]
+    missing_evidence: list[str]
     investigation_recommendations: list[str]
     remediation_steps: list[str]
     correlation: dict[str, Any]
@@ -918,6 +921,9 @@ def build_report_context(state: InvestigationState) -> ReportContext:
         "validated_claims": validated_claims,
         "non_validated_claims": non_validated_claims,
         "validity_score": state.get("validity_score", 0.0),
+        "confidence_band": state.get("confidence_band", ""),
+        "ranked_hypotheses": state.get("ranked_hypotheses", []),
+        "missing_evidence": state.get("missing_evidence", []),
         "investigation_recommendations": state.get("investigation_recommendations", []),
         "remediation_steps": state.get("remediation_steps", []),
         "correlation": state.get("correlation", {}),

@@ -33,8 +33,10 @@ def _report_body(state: InvestigationState, report: str) -> str:
             sections.append(f"Remediation steps:\n{rendered_steps}")
 
     validity_score = state.get("validity_score")
+    confidence_band = state.get("confidence_band", "")
     if isinstance(validity_score, (int, float)):
-        sections.append(f"Confidence: {validity_score:.0%}")
+        band_str = f" [{confidence_band.upper()}]" if confidence_band else ""
+        sections.append(f"Confidence: {validity_score:.0%}{band_str}")
 
     return "\n\n".join(section for section in sections if section).strip()
 

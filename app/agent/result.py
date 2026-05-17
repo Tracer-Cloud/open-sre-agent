@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, TypedDict, cast
+from typing import Any, Literal, TypedDict, cast
 
 from pydantic import BaseModel, Field
 
@@ -17,6 +17,19 @@ from app.types.root_cause_categories import (
 logger = logging.getLogger(__name__)
 
 
+
+class _ValidatedClaimSchema(BaseModel):
+    claim: str = Field(description="The validated claim statement")
+    evidence_sources: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Subset of the collected evidence keys that directly support this specific claim. "
+            "Only include keys that actually informed this claim."
+        ),
+    )
+
+
+
 @dataclass
 class InvestigationResult:
     root_cause: str
@@ -26,6 +39,9 @@ class InvestigationResult:
     non_validated_claims: list[dict] = field(default_factory=list)
     remediation_steps: list[str] = field(default_factory=list)
     validity_score: float = 0.0
+    confidence_band: str = ""
+    ranked_hypotheses: list[str] = field(default_factory=list)
+    missing_evidence: list[str] = field(default_factory=list)
     evidence: dict[str, Any] = field(default_factory=dict)
     evidence_entries: list[dict] = field(default_factory=list)
     agent_messages: list[dict] = field(default_factory=list)
@@ -37,6 +53,7 @@ class InvestigationResult:
             root_cause=f"{alert_name}: Unable to determine root cause — insufficient evidence.",
             root_cause_category="unknown",
             validity_score=0.0,
+            confidence_band="low",
             non_validated_claims=[
                 {
                     "claim": "Insufficient evidence available",
@@ -51,7 +68,24 @@ class InvestigationResult:
             root_cause="Message classified as noise — no investigation needed.",
             root_cause_category="healthy",
             validity_score=1.0,
+            confidence_band="high",
         )
+
+
+def classify_confidence_band(score: float) -> Literal["high", "medium", "low"]:
+    if score >= 0.75:
+        return "high"
+    if score >= 0.40:
+        return "medium"
+    return "low"
+
+
+def check_sufficiency(result: InvestigationResult) -> bool:
+    if result.root_cause_category in {"healthy"}:
+        return True
+    if result.validity_score >= 0.75 and len(result.validated_claims) >= 1:
+        return True
+    return result.validity_score >= 0.40 and len(result.validated_claims) >= 2
 
 
 def parse_diagnosis(
@@ -121,8 +155,9 @@ def _build_diagnosis_schema(include_categories: set[str]) -> type[BaseModel]:
         causal_chain: list[str] = Field(
             default_factory=list, description="Ordered steps leading to the failure"
         )
-        validated_claims: list[str] = Field(
-            default_factory=list, description="Claims supported by tool evidence"
+        validated_claims: list[_ValidatedClaimSchema] = Field(
+            default_factory=list,
+            description="Claims supported by tool evidence, each with their specific supporting evidence keys",
         )
         non_validated_claims: list[str] = Field(
             default_factory=list, description="Claims not yet confirmed by evidence"
@@ -132,6 +167,14 @@ def _build_diagnosis_schema(include_categories: set[str]) -> type[BaseModel]:
         )
         validity_score: float = Field(
             default=0.0, description="0.0–1.0 confidence in the diagnosis"
+        )
+        ranked_hypotheses: list[str] = Field(
+            default_factory=list,
+            description="Alternative hypotheses ranked by likelihood (most to least likely)",
+        )
+        missing_evidence: list[str] = Field(
+            default_factory=list,
+            description="Evidence that would confirm or refute the diagnosis but was unavailable",
         )
 
     return DiagnosisSchema
@@ -157,10 +200,12 @@ Evidence keys collected: {", ".join(evidence.keys()) if evidence else "none"}
         root_cause: str
         root_cause_category: str
         causal_chain: list[str]
-        validated_claims: list[str]
+        validated_claims: list[dict]
         non_validated_claims: list[str]
         remediation_steps: list[str]
         validity_score: float
+        ranked_hypotheses: list[str]
+        missing_evidence: list[str]
 
     llm = get_llm_for_reasoning()
     schema_model = _build_diagnosis_schema(_taxonomy_categories_for_alert_source(alert_source))
@@ -181,10 +226,21 @@ Evidence keys collected: {", ".join(evidence.keys()) if evidence else "none"}
         root_cause=schema["root_cause"],
         root_cause_category=schema["root_cause_category"],
         causal_chain=schema["causal_chain"],
-        validated_claims=_to_claim_dicts(schema["validated_claims"], "validated"),
+        validated_claims=[
+            {
+                "claim": c["claim"],
+                "validation_status": "validated",
+                **({"evidence_sources": c["evidence_sources"]} if c.get("evidence_sources") else {}),
+            }
+            for c in schema["validated_claims"]
+            if c.get("claim")
+        ],
         non_validated_claims=_to_claim_dicts(schema["non_validated_claims"], "not_validated"),
         remediation_steps=schema["remediation_steps"],
         validity_score=schema["validity_score"],
+        confidence_band=classify_confidence_band(schema["validity_score"]),
+        ranked_hypotheses=schema["ranked_hypotheses"],
+        missing_evidence=schema["missing_evidence"],
     )
 
 
@@ -207,6 +263,7 @@ def _parse_via_legacy(
             ],
             remediation_steps=rr.remediation_steps,
             validity_score=0.5,
+            confidence_band=classify_confidence_band(0.5),
         )
     except Exception as err:
         logger.warning("Legacy parse_root_cause also failed: %s", err)

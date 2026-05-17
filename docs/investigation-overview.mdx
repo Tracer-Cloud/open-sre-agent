@@ -85,6 +85,19 @@ Each run captures:
 - tool outputs collected from connected integrations
 - final diagnosis and recommended remediation steps
 
+### Confidence and Evidence Sufficiency
+
+When a diagnosis is reached, OpenSRE evaluates the available evidence and assigns a **Confidence Band**:
+- **HIGH** (Score ≥ 0.75, at least 1 validated finding): Strong evidence backing the diagnosis.
+- **MEDIUM** (Score 0.40–0.74, at least 2 validated findings): Partial evidence with some gaps.
+- **LOW** (Score < 0.40, or insufficient validated findings): Thin or conflicting evidence.
+
+When evidence is insufficient — a low score or fewer validated findings than the threshold — the system prefixes the root cause with *"Most likely:"* to signal uncertainty.
+
+When the investigation identifies gaps, the report exposes:
+- **Alternative hypotheses** — ranked by likelihood (shown when confidence is medium or low)
+- **Missing evidence** — specific data sources that would confirm or refute the diagnosis
+
 ## Session continuity
 
 REPL sessions are persisted under `~/.opensre/sessions/`. When you exit, the shell prints a `/resume <session-id>` hint so you can pick up later. See [Session history](/sessions).

@@ -77,6 +77,9 @@ class AgentState(TypedDict, total=False):
     validated_claims: list[dict[str, Any]]
     non_validated_claims: list[dict[str, Any]]
     validity_score: float
+    confidence_band: str
+    ranked_hypotheses: list[str]
+    missing_evidence: list[str]
     investigation_recommendations: list[str]
     remediation_steps: list[str]
     investigation_loop_count: int
@@ -188,6 +191,9 @@ class AgentStateModel(StrictConfigModel):
     validated_claims: list[dict[str, Any]] = Field(default_factory=list)
     non_validated_claims: list[dict[str, Any]] = Field(default_factory=list)
     validity_score: float = 0.0
+    confidence_band: str = ""
+    ranked_hypotheses: list[str] = Field(default_factory=list)
+    missing_evidence: list[str] = Field(default_factory=list)
     investigation_recommendations: list[str] = Field(default_factory=list)
     remediation_steps: list[str] = Field(default_factory=list)
     investigation_loop_count: int = 0

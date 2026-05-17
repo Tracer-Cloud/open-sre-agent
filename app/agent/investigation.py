@@ -11,7 +11,7 @@ from typing import Any
 
 from app.agent.llm_invoke_errors import LLMInvokeFailure, classify_llm_invoke_failure
 from app.agent.prompt import build_system_prompt, format_alert_context
-from app.agent.result import InvestigationResult, parse_diagnosis
+from app.agent.result import InvestigationResult, check_sufficiency, parse_diagnosis
 from app.cli.support.output import debug_print, get_tracker
 from app.constants.investigation import MAX_INVESTIGATION_LOOPS
 from app.services.agent_llm_client import ToolCall, get_agent_llm
@@ -407,12 +407,16 @@ class ConnectedInvestigationAgent:
         result.evidence_entries = [e.model_dump() for e in evidence_entries]
         result.agent_messages = messages
 
+        if not check_sufficiency(result) and not result.root_cause.startswith("Most likely"):
+            result.root_cause = f"Most likely: {result.root_cause}"
+
         _emit(
             "agent_end",
             {
                 "root_cause": result.root_cause,
                 "validity_score": result.validity_score,
                 "root_cause_category": result.root_cause_category,
+                "confidence_band": result.confidence_band,
             },
         )
 
@@ -1060,6 +1064,9 @@ def _result_to_state(result: InvestigationResult) -> dict[str, Any]:
         "non_validated_claims": result.non_validated_claims,
         "remediation_steps": result.remediation_steps,
         "validity_score": result.validity_score,
+        "confidence_band": result.confidence_band,
+        "ranked_hypotheses": result.ranked_hypotheses,
+        "missing_evidence": result.missing_evidence,
         "investigation_recommendations": result.investigation_recommendations,
         "evidence": result.evidence,
         "evidence_entries": result.evidence_entries,

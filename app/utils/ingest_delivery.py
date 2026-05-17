@@ -69,6 +69,7 @@ def build_ingest_payload(state: InvestigationState) -> dict[str, Any]:
         "root_cause": state.get("root_cause") or "",
         "confidence": state.get("validity_score") or 0,
         "validity_score": state.get("validity_score") or 0,
+        "confidence_band": state.get("confidence_band") or "",
         "planned_actions": planned_actions,
         "problem_md": state.get("problem_md") or "",
         "investigation_recommendations": state.get("investigation_recommendations") or [],

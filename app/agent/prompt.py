@@ -36,6 +36,10 @@ When you are done investigating (no more tool calls), write a diagnosis that inc
 - **Non-validated claims**: Hypotheses you could not confirm
 - **Remediation steps**: Ordered, concrete actions to fix the issue
 - **Validity score**: 0.0–1.0 reflecting your confidence based on evidence quality
+- **Confidence band**: `high` (strong evidence from multiple sources), `medium` (partial evidence, some gaps), or `low` (thin or conflicting evidence)
+- **Ranked hypotheses**: If confidence is medium or low, list alternative explanations in order of likelihood (most likely first)
+- **Missing evidence**: List specific data sources or queries that would confirm or refute the diagnosis but were unavailable
+- If evidence is thin or conflicting, begin your root cause statement with "Most likely: " to signal uncertainty
 """
 
 _ALERT_CONTEXT_TEMPLATE = """## Alert

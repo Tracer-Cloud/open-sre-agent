@@ -774,6 +774,9 @@ class StreamRenderer:
                 return f"Resolved: {names}"
         if node in {"diagnose", "diagnose_root_cause"}:
             pct = _validity_score_percent(self._final_state.get("validity_score"))
+            band = self._final_state.get("confidence_band", "")
+            if pct and band:
+                return f"validity:{band.upper()}({pct})"
             if pct:
                 return f"validity:{pct}"
         return None
