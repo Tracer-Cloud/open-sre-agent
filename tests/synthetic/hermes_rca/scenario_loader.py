@@ -13,9 +13,11 @@ from tests.synthetic.hermes_rca.hermes_schemas import (
     HermesScenarioMetadataSchema,
     validate_hermes_alert,
     validate_hermes_answer_key,
+    validate_hermes_config,
     validate_hermes_cron_state,
     validate_hermes_kv_cache_state,
     validate_hermes_message_history,
+    validate_hermes_provider_traffic,
     validate_hermes_runtime_state,
     validate_hermes_scenario_metadata,
     validate_hermes_session_log,
@@ -122,10 +124,12 @@ def _load_evidence(scenario_dir: Path, available_evidence: list[str]) -> HermesS
         )
 
     if "hermes_provider_traffic" in available_evidence:
-        provider_traffic = _read_json(scenario_dir / "hermes_provider_traffic.json")
+        provider_traffic = validate_hermes_provider_traffic(
+            _read_json(scenario_dir / "hermes_provider_traffic.json")
+        )
 
     if "hermes_config" in available_evidence:
-        hermes_config = _read_json(scenario_dir / "hermes_config.json")
+        hermes_config = validate_hermes_config(_read_json(scenario_dir / "hermes_config.json"))
 
     if "hermes_runtime_state" in available_evidence:
         runtime_state = validate_hermes_runtime_state(
