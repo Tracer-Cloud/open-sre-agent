@@ -44,6 +44,8 @@ VALID_HERMES_EVIDENCE_SOURCES = frozenset(
 VALID_HERMES_TRAJECTORY_ACTIONS = frozenset(
     {
         "get_hermes_session_log",
+        "get_hermes_provider_traffic",
+        "get_hermes_config",
         "get_hermes_message_history",
         "get_hermes_kv_cache_state",
         "get_hermes_runtime_state",

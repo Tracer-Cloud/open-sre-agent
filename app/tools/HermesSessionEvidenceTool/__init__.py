@@ -59,6 +59,60 @@ def get_hermes_session_log(
 
 
 @tool(
+    name="get_hermes_provider_traffic",
+    source="hermes",
+    description="Get captured Hermes provider HTTP/SSE request and response traffic.",
+    use_cases=[
+        "Diagnose provider 4xx/5xx responses, malformed bodies, dropped headers, and SSE drift"
+    ],
+    surfaces=("investigation",),
+    input_schema={
+        "type": "object",
+        "properties": {"session_id": {"type": "string"}},
+        "required": [],
+    },
+    is_available=_fixture_backend_only,
+    extract_params=_extract_params,
+)
+def get_hermes_provider_traffic(
+    session_id: str = "",
+    hermes_backend: Any = None,
+    **_kwargs: Any,
+) -> dict[str, Any]:
+    backend = _backend_or_error(hermes_backend, "get_hermes_provider_traffic")
+    if isinstance(backend, dict):
+        return backend
+    return cast(dict[str, Any], backend.get_provider_traffic(session_id=session_id))
+
+
+@tool(
+    name="get_hermes_config",
+    source="hermes",
+    description="Get resolved Hermes provider, model, region, and transport configuration.",
+    use_cases=[
+        "Diagnose provider selection, Bedrock IMDS overrides, transport limits, and adapter config mismatches"
+    ],
+    surfaces=("investigation",),
+    input_schema={
+        "type": "object",
+        "properties": {"session_id": {"type": "string"}},
+        "required": [],
+    },
+    is_available=_fixture_backend_only,
+    extract_params=_extract_params,
+)
+def get_hermes_config(
+    session_id: str = "",
+    hermes_backend: Any = None,
+    **_kwargs: Any,
+) -> dict[str, Any]:
+    backend = _backend_or_error(hermes_backend, "get_hermes_config")
+    if isinstance(backend, dict):
+        return backend
+    return cast(dict[str, Any], backend.get_config(session_id=session_id))
+
+
+@tool(
     name="get_hermes_message_history",
     source="hermes",
     description="Get full Hermes conversation message history for ordering/invariant checks.",
@@ -185,6 +239,8 @@ def get_hermes_session_topology(
 
 __all__ = [
     "get_hermes_session_log",
+    "get_hermes_provider_traffic",
+    "get_hermes_config",
     "get_hermes_message_history",
     "get_hermes_kv_cache_state",
     "get_hermes_runtime_state",

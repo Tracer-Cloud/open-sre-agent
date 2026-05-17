@@ -14,6 +14,12 @@ class HermesBackend(Protocol):
     def get_session_log(self, session_id: str = "", **kwargs: Any) -> dict[str, Any]:
         pass
 
+    def get_provider_traffic(self, session_id: str = "", **kwargs: Any) -> dict[str, Any]:
+        pass
+
+    def get_config(self, session_id: str = "", **kwargs: Any) -> dict[str, Any]:
+        pass
+
     def get_message_history(self, session_id: str = "", **kwargs: Any) -> dict[str, Any]:
         pass
 
@@ -46,6 +52,34 @@ class FixtureHermesBackend:
             "available": True,
             "session_id": session_id or evidence.get("session_id", ""),
             "events": list(evidence.get("events", [])),
+            "error": None,
+        }
+
+    def get_provider_traffic(self, session_id: str = "", **_: Any) -> dict[str, Any]:
+        evidence = self._fixture.evidence.hermes_provider_traffic
+        if evidence is None:
+            return self._missing("provider_traffic")
+        return {
+            "source": "hermes",
+            "available": True,
+            "session_id": session_id or str(evidence.get("session_id", "")),
+            "calls": list(evidence.get("calls", [])),
+            "error": None,
+        }
+
+    def get_config(self, session_id: str = "", **_: Any) -> dict[str, Any]:
+        evidence = self._fixture.evidence.hermes_config
+        if evidence is None:
+            return self._missing("config")
+        return {
+            "source": "hermes",
+            "available": True,
+            "session_id": session_id,
+            "provider": str(evidence.get("provider", "")),
+            "model": str(evidence.get("model", "")),
+            "region": str(evidence.get("region", "")),
+            "providers": list(evidence.get("providers", [])),
+            "transport": dict(evidence.get("transport", {})),
             "error": None,
         }
 
