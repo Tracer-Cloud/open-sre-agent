@@ -74,6 +74,8 @@ def _codex_workspace_and_skip_git() -> tuple[str, bool]:
             ["git", "rev-parse", "--show-toplevel"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=5.0,
             check=False,
         )
@@ -117,6 +119,8 @@ class CodexAdapter:
                 [binary_path, "--version"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=_PROBE_TIMEOUT_SEC,
                 check=False,
             )
@@ -152,6 +156,8 @@ class CodexAdapter:
                 [binary_path, "login", "status"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=_PROBE_TIMEOUT_SEC,
                 check=False,
             )

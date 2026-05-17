@@ -162,7 +162,47 @@ class ConnectedInvestigationAgent:
         for iteration in range(MAX_INVESTIGATION_LOOPS):
             logger.debug("[agent] iteration=%d", iteration)
             _emit("llm_start", {"iteration": iteration})
-            response = llm.invoke(messages, system=system, tools=tool_schemas)
+            try:
+                response = llm.invoke(messages, system=system, tools=tool_schemas)
+
+            except RuntimeError as err:
+                err_msg = str(err).lower()
+                if ("model" in err_msg and "not found" in err_msg) or "404" in err_msg:
+                    error_msg = (
+                        "Error: The AI model was not found (404). "
+                        "If using a local LLM, verify the model name in your .env file."
+                    )
+                    tracker.error("investigation_agent", message="Failed: Model not found")
+                    _emit(
+                        "agent_end",
+                        {
+                            "root_cause": error_msg,
+                            "validity_score": 0.0,
+                            "root_cause_category": "Configuration Error",
+                        },
+                    )
+                    updates = {
+                        "root_cause": error_msg,
+                        "root_cause_category": "Configuration Error",
+                        "causal_chain": [f"Model API returned error: {str(err)}"],
+                        "validated_claims": [],
+                        "non_validated_claims": [],
+                        "remediation_steps": [
+                            "Check your .env configuration",
+                            "Verify the model name is correct",
+                            "Ensure the model is downloaded locally",
+                            "Confirm your provider supports this model",
+                        ],
+                        "validity_score": 0.0,
+                        "investigation_recommendations": [],
+                        "evidence": evidence,
+                        "evidence_entries": [e.model_dump() for e in evidence_entries],
+                        "agent_messages": messages,
+                        "executed_hypotheses": executed_hypotheses,
+                    }
+                    updates.update(tool_context)
+                    return updates
+                raise
 
             messages.append(_build_assistant_msg(llm, response))
 

@@ -121,6 +121,18 @@ class AnthropicAgentClient:
                 raise RuntimeError(
                     f"{self.provider_name} request rejected (HTTP 400): {err.message}"
                 ) from err
+            except TypeError as err:
+                # Anthropic SDK raises TypeError from _validate_headers when the API key is
+                # missing or malformed — retrying won't fix a credential problem.
+                if "could not resolve authentication" in str(err).lower():
+                    raise RuntimeError(self._authentication_error_message()) from err
+                last_err = err
+                if attempt == _RETRY_MAX_ATTEMPTS - 1:
+                    raise RuntimeError(
+                        f"{self.provider_name} API failed after {_RETRY_MAX_ATTEMPTS} attempts: {err}"
+                    ) from err
+                time.sleep(backoff)
+                backoff *= 2
             except Exception as err:
                 last_err = err
                 if attempt == _RETRY_MAX_ATTEMPTS - 1:

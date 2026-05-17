@@ -5,7 +5,11 @@ import types
 
 import pytest
 
-from app.services.agent_llm_client import BedrockAgentClient, OpenAIAgentClient
+from app.services.agent_llm_client import (
+    AnthropicAgentClient,
+    BedrockAgentClient,
+    OpenAIAgentClient,
+)
 
 
 def _install_fake_anthropic(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
@@ -247,3 +251,59 @@ def test_openai_agent_client_uses_correct_tokens_param(
     assert expected_key in captured, f"expected '{expected_key}' in kwargs for model {model!r}"
     other_key = "max_tokens" if expected_key == "max_completion_tokens" else "max_completion_tokens"
     assert other_key not in captured, f"unexpected '{other_key}' in kwargs for model {model!r}"
+
+
+def test_sdk_type_error_for_missing_api_key_fails_fast(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_anthropic(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+    call_count = 0
+
+    def raise_auth_type_error(**_: object) -> object:
+        nonlocal call_count
+        call_count += 1
+        raise TypeError(
+            "Could not resolve authentication method. Expected one of api_key, auth_token, "
+            "or credentials to be set. Or for one of the `X-Api-Key` or `Authorization` "
+            "headers to be explicitly omitted"
+        )
+
+    client = AnthropicAgentClient(model="claude-sonnet-4-6")
+    client._client = types.SimpleNamespace(
+        messages=types.SimpleNamespace(create=raise_auth_type_error)
+    )
+
+    with pytest.raises(RuntimeError) as exc:
+        client.invoke(messages=[{"role": "user", "content": "hi"}])
+
+    assert call_count == 1, "auth TypeError should not be retried"
+    message = str(exc.value)
+    assert "authentication failed" in message.lower()
+    assert "ANTHROPIC_API_KEY" in message
+
+
+def test_unrelated_type_error_is_retried_and_wrapped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_anthropic(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr("app.services.agent_llm_client.time.sleep", lambda _: None)
+
+    call_count = 0
+
+    def raise_unrelated_type_error(**_: object) -> object:
+        nonlocal call_count
+        call_count += 1
+        raise TypeError("unexpected argument 'foo'")
+
+    client = AnthropicAgentClient(model="claude-sonnet-4-6")
+    client._client = types.SimpleNamespace(
+        messages=types.SimpleNamespace(create=raise_unrelated_type_error)
+    )
+
+    with pytest.raises(RuntimeError, match="API failed after 3 attempts"):
+        client.invoke(messages=[{"role": "user", "content": "hi"}])
+
+    assert call_count == 3, "non-auth TypeError should be retried like a generic exception"

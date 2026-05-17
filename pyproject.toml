@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "opensre"
-version = "2026.4.5"
+version = "0.1"
 description = "Open-source SRE agent for automated incident investigation and root cause analysis. Automatically analyzes alerts from Slack, Grafana, Datadog, and other tooling."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -92,6 +92,19 @@ dev = [
     "boto3-stubs[essential]",
     "huggingface_hub>=0.26.0",
     "datasets>=3.0.0",
+]
+release-dist = [
+    "build>=1.2.0",
+    "twine>=6.0.0",
+]
+release-binary = [
+    "pyinstaller>=6.3.0",
+]
+# Backward-compatible aggregate extra.
+release = [
+    "build>=1.2.0",
+    "twine>=6.0.0",
+    "pyinstaller>=6.3.0",
 ]
 opensre-hub = [
     "huggingface_hub>=0.26.0",

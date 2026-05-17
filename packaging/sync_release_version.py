@@ -9,17 +9,23 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PYPROJECT_PATH = ROOT / "pyproject.toml"
-APP_VERSION_PATH = ROOT / "app" / "version.py"
-VERSION_PATTERN = re.compile(r"v?(?P<version>\d{4}\.\d{1,2}\.\d{1,2})")
+APP_CONSTANTS_OPENSRE_PATH = ROOT / "app" / "constants" / "opensre.py"
+CALENDAR_VERSION_PATTERN = re.compile(r"v?(?P<version>\d{4}\.\d{1,2}\.\d{1,2})")
+SEMVER_VERSION_PATTERN = re.compile(r"v?(?P<version>\d+\.\d+(?:\.\d+)?)")
 
 
 def _normalize_release_version(raw_value: str) -> str:
-    match = VERSION_PATTERN.fullmatch(raw_value.strip())
-    if match is None:
-        msg = f"Release tag must look like 'vYYYY.M.D' or 'YYYY.M.D'; got {raw_value!r}."
-        raise ValueError(msg)
+    value = raw_value.strip()
+    for pattern in (CALENDAR_VERSION_PATTERN, SEMVER_VERSION_PATTERN):
+        match = pattern.fullmatch(value)
+        if match is not None:
+            return match.group("version")
 
-    return match.group("version")
+    msg = (
+        "Release tag must look like 'vYYYY.M.D', 'YYYY.M.D', 'v0.1', or '0.1.0'; "
+        f"got {raw_value!r}."
+    )
+    raise ValueError(msg)
 
 
 def _replace_project_version(version: str, text: str) -> str:
@@ -46,17 +52,17 @@ def _replace_project_version(version: str, text: str) -> str:
     raise RuntimeError(msg)
 
 
-def _replace_default_version(version: str, text: str) -> str:
+def _replace_default_release_version(version: str, text: str) -> str:
     lines = text.splitlines(keepends=True)
 
     for index, line in enumerate(lines):
         stripped = line.rstrip("\r\n")
-        if stripped.startswith('DEFAULT_VERSION = "'):
+        if stripped.startswith('DEFAULT_RELEASE_VERSION: Final[str] = "'):
             line_ending = _line_ending_for(line)
-            lines[index] = f'DEFAULT_VERSION = "{version}"{line_ending}'
+            lines[index] = f'DEFAULT_RELEASE_VERSION: Final[str] = "{version}"{line_ending}'
             return "".join(lines)
 
-    msg = f"Could not find DEFAULT_VERSION in {APP_VERSION_PATH}."
+    msg = f"Could not find DEFAULT_RELEASE_VERSION in {APP_CONSTANTS_OPENSRE_PATH}."
     raise RuntimeError(msg)
 
 
@@ -79,13 +85,13 @@ def main() -> None:
     parser.add_argument(
         "--tag",
         required=True,
-        help="Release tag to sync from, e.g. v2026.4.13.",
+        help="Release tag to sync from, e.g. v2026.4.13 or v0.1.",
     )
     args = parser.parse_args()
 
     version = _normalize_release_version(args.tag)
     _sync_file(PYPROJECT_PATH, _replace_project_version, version)
-    _sync_file(APP_VERSION_PATH, _replace_default_version, version)
+    _sync_file(APP_CONSTANTS_OPENSRE_PATH, _replace_default_release_version, version)
     print(f"Synchronized release version to {version}")
 
 

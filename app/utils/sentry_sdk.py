@@ -351,6 +351,7 @@ def _init_sentry_once(
 
     from app.integrations.llm_cli.errors import (
         CLIAuthenticationRequired,
+        CLIInterruptedError,
         CLITimeoutError,
         CLITransientError,
     )
@@ -372,6 +373,7 @@ def _init_sentry_once(
         ignore_errors=[
             KeyboardInterrupt,
             CLIAuthenticationRequired,
+            CLIInterruptedError,
             CLITimeoutError,
             CLITransientError,
         ],

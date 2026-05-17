@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from app.integrations.llm_cli.base import CLIProbe, LLMCLIAdapter
 from app.integrations.llm_cli.errors import (
     CLIAuthenticationRequired,
+    CLIInterruptedError,
     CLITimeoutError,
 )
 from app.integrations.llm_cli.subprocess_env import build_cli_subprocess_env
@@ -165,6 +166,14 @@ class CLIBackedLLMClient:
         err = _strip_ansi(proc.stderr or "")
 
         if proc.returncode != 0:
+            # Exit code 130 = subprocess terminated by SIGINT (Ctrl+C); raise
+            # CLIInterruptedError so callers using `try/except Exception` still
+            # observe the failure (KeyboardInterrupt inherits from BaseException
+            # and would bypass those handlers). Sentry's `ignore_errors` config
+            # filters this type so user-initiated cancellations are not reported
+            # as bugs.
+            if proc.returncode == 130:
+                raise CLIInterruptedError(f"{self._adapter.name} CLI subprocess interrupted.")
             # Exit code 75 is EX_TEMPFAIL (sysexits.h) — a transient failure
             # the caller should retry. Raise CLITimeoutError so it is treated as
             # an expected operational failure and not forwarded to Sentry.
