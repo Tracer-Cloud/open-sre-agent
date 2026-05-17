@@ -152,6 +152,8 @@ class FixtureHermesBackend:
             "last_progress_ts": last_progress_ts,
             "is_blocked": computed_blocked,
             "blocking_call": evidence.get("blocking_call"),
+            "imds_fingerprint": evidence.get("imds_fingerprint"),
+            "resolved_aws_role_arn": evidence.get("resolved_aws_role_arn"),
             "error": None,
         }
 
