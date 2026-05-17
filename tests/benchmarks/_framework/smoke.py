@@ -28,6 +28,7 @@ from typing import Any, cast
 from tests.benchmarks._framework.adapters import (
     BenchmarkCase,
     CaseFilters,
+    RunContext,
     RunResult,
 )
 from tests.benchmarks.cloudopsbench.adapter import CloudOpsBenchAdapter
@@ -180,8 +181,8 @@ def main(argv: list[str] | None = None) -> int:
             run = _fake_run_result(case)
             print("  ✓ fake RunResult built (claims wrong root cause to verify scoring)")
 
-        # 4. score_case
-        score = adapter.score_case(case, run)
+        # 4. score_case — pass the same integrations dict via RunContext
+        score = adapter.score_case(case, run, RunContext(integrations=integrations))
         if score.failure_reason:
             print(f"  ✗ scoring failed: {score.failure_reason}")
             return 3

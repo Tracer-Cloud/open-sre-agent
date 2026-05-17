@@ -37,6 +37,7 @@ from tests.benchmarks._framework.adapters import (
     CaseFilters,
     CaseScore,
     MetricSchema,
+    RunContext,
     RunResult,
 )
 from tests.benchmarks.cloudopsbench.case_loader import (
@@ -51,6 +52,7 @@ from tests.benchmarks.cloudopsbench.case_loader import (
 )
 from tests.benchmarks.cloudopsbench.replay_backend import CloudOpsBenchReplayBackend
 from tests.benchmarks.cloudopsbench.scoring import score_case as _legacy_score_case
+from tests.benchmarks.cloudopsbench.tags import seen_shape_for
 
 # --------------------------------------------------------------------------- #
 # Metric inventory — the paper's 15 metrics                                   #
@@ -112,12 +114,11 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
 
     def __init__(self, benchmark_dir: Path = BENCHMARK_DIR) -> None:
         self._benchmark_dir = benchmark_dir
-        # Per-case backend cache: build_opensre_integrations stashes;
-        # score_case retrieves and frees. Required because the State Snapshot's
-        # action_log accumulates DURING the run and must be read AFTER.
-        self._backends_by_case: dict[str, CloudOpsBenchReplayBackend] = {}
         # CloudOpsCase cache so we don't re-load case files between
         # build_alert / build_opensre_integrations / score_case for the same case.
+        # Mutated only from load_cases (single-threaded before parallel runs
+        # start); read-only during cell execution → safe for the framework
+        # runner's ThreadPoolExecutor.
         self._cases_by_id: dict[str, CloudOpsCase] = {}
 
     # ----------------------------------------------------------------------- #
@@ -133,7 +134,8 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
             ``filters.fault_categories[0]`` → ``fault_category_filter``
             ``filters.case_ids[0]`` → ``case_filter``
             ``filters.limit`` → applied AFTER seeded sample so randomization is fair
-            ``filters.seen_shape`` → IGNORED in v1 (Phase D adds tagging first)
+            ``filters.seen_shape`` → applied AFTER tagging (Phase D); each case
+                gets ``seen_shape`` from :func:`tags.seen_shape_for`
 
         For multi-value filters (e.g., multiple systems), call this method
         once per value and merge — current case_loader doesn't support OR.
@@ -153,11 +155,23 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
             rng = random.Random(filters.seed)
             rng.shuffle(legacy_cases)
 
-        # Apply limit after shuffle so the sample is uniform random over the corpus
+        # Apply seen/unseen filter BEFORE limit so `limit=N` means
+        # "N matching cases", not "N candidates, some of which match"
+        wanted_seen_shape: set[bool] | None = (
+            set(filters.seen_shape) if filters.seen_shape else None
+        )
+        if wanted_seen_shape is not None:
+            legacy_cases = [
+                c for c in legacy_cases if seen_shape_for(c.fault_category) in wanted_seen_shape
+            ]
+
+        # Apply limit after shape filtering so the sample is uniform random
+        # over the filtered subset
         if filters.limit is not None and filters.limit > 0:
             legacy_cases = legacy_cases[: filters.limit]
 
         for legacy in legacy_cases:
+            seen_shape = seen_shape_for(legacy.fault_category)
             self._cases_by_id[legacy.case_id] = legacy
             yield BenchmarkCase(
                 case_id=legacy.case_id,
@@ -171,8 +185,7 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
                     "ground_truth": asdict(legacy.result),
                     "process": legacy.process,
                 },
-                # seen_shape is None until Phase D tagging pass runs
-                seen_shape=None,
+                seen_shape=seen_shape,
             )
 
     def build_alert(self, case: BenchmarkCase) -> AlertPayload:
@@ -194,9 +207,9 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
         wire it under the ``eks`` integration key opensre's CloudOpsBench
         tools (``app/tools/CloudOpsBenchK8sTools/__init__.py``) read from.
 
-        The backend instance is cached on the adapter so ``score_case``
-        can read its ``action_log`` (which the agent appends to during
-        the investigation).
+        The returned dict is the only place this cell's backend lives;
+        the runner passes it back via ``RunContext`` to ``score_case``.
+        Stateless on the adapter — safe for parallel execution.
 
         NOTE: ``run_suite._build_resolved_integrations`` placed the backend
         under the ``aws`` key, which doesn't match what the CloudOpsBench
@@ -207,7 +220,6 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
         """
         legacy = self._require_case(case)
         backend = CloudOpsBenchReplayBackend(legacy)
-        self._backends_by_case[case.case_id] = backend
         cluster_name = f"cloudopsbench-{legacy.system}"
         return {
             # Useful for AWS-region-aware tools; not where the backend lives.
@@ -237,22 +249,23 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
             "modes=['opensre+llm'] only."
         )
 
-    def score_case(self, case: BenchmarkCase, run: RunResult) -> CaseScore:
+    def score_case(self, case: BenchmarkCase, run: RunResult, context: RunContext) -> CaseScore:
         """Score the case using CloudOpsBench's 15 paper metrics.
 
-        Bridges the framework's ``RunResult`` shape to the legacy
-        ``score_case(case, case_data)`` call by reconstructing the
-        ``case_data`` dict the legacy scorer expects.
+        Reads the replay backend out of ``context.integrations`` — the same
+        dict ``build_opensre_integrations`` returned for THIS cell. No
+        per-cell state on the adapter (thread-safe).
         """
         legacy = self._require_case(case)
-        backend = self._backends_by_case.pop(case.case_id, None)
-        if backend is None:
+        backend = (context.integrations.get("eks") or {}).get("_backend")
+        if not isinstance(backend, CloudOpsBenchReplayBackend):
             return CaseScore(
                 case_id=case.case_id,
                 metrics={},
                 failure_reason=(
-                    "no replay backend cached for this case — "
-                    "build_opensre_integrations must run before score_case"
+                    "context.integrations missing 'eks._backend' of type "
+                    "CloudOpsBenchReplayBackend — runner must pass the same "
+                    "integrations dict to score_case as it passed to run_investigation"
                 ),
             )
 

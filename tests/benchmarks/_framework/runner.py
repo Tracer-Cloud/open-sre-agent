@@ -43,6 +43,7 @@ from tests.benchmarks._framework.adapters import (
     CaseFilters,
     CaseScore,
     Mode,
+    RunContext,
     RunResult,
 )
 from tests.benchmarks._framework.config import BenchmarkConfig
@@ -277,7 +278,7 @@ class BenchmarkRunner:
             latency_ms=latency_ms,
         )
 
-        score = self.adapter.score_case(case, run)
+        score = self.adapter.score_case(case, run, RunContext(integrations=integrations))
 
         # Per-cell artifact
         artifact_path = (

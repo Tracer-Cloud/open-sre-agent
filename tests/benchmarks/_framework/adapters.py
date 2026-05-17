@@ -135,6 +135,19 @@ class CaseScore:
     failure_reason: str | None = None
 
 
+@dataclass(frozen=True)
+class RunContext:
+    """Per-cell context handed to ``score_case``.
+
+    Lets the adapter access cell-local state (the integrations dict it
+    built earlier — which carries adapter-specific runtime objects like
+    the CloudOpsBench replay backend) WITHOUT keeping per-cell state on
+    the adapter instance. Required for thread-safe parallel execution.
+    """
+
+    integrations: dict[str, Any]
+
+
 class MetricSchema(BaseModel):
     """Adapter's metric inventory. Declared once per adapter.
 
@@ -239,9 +252,15 @@ class BenchmarkAdapter(ABC):
         ...
 
     @abstractmethod
-    def score_case(self, case: BenchmarkCase, run: RunResult) -> CaseScore:
-        """Compute per-case metrics from the run result. Adapter knows its
-        own scoring rubric (e.g., CloudOpsBench's 15 metrics + 3 validity).
+    def score_case(self, case: BenchmarkCase, run: RunResult, context: RunContext) -> CaseScore:
+        """Compute per-case metrics from the run result + per-cell context.
+
+        ``context.integrations`` is the dict ``build_opensre_integrations``
+        returned for THIS cell — adapters use it to read runtime state
+        accumulated during the run (e.g., a replay backend's action_log).
+
+        Passing context explicitly (vs caching on the adapter) is what
+        makes the adapter thread-safe for parallel runner execution.
         """
         ...
 
