@@ -73,3 +73,77 @@ def test_run_re_raises_unmatched_runtime_error() -> None:
             agent.run(state)
 
     mock_tracker.error.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "error_msg",
+    [
+        "OpenAI request rejected: Error code: 400 - {'error': {'message': 'registry.ollama.ai/library/llama3:latest does not support tools'}}",
+        "OpenAI request rejected: Error code: 400 - {'error': {'message': 'llama3:latest does not support tool calls'}}",
+    ],
+)
+def test_run_gracefully_handles_tool_unsupported_model(error_msg: str) -> None:
+    """When the LLM raises a 'does not support tools' error the agent returns
+    a degraded state with a clear configuration-error message."""
+    mock_llm = MagicMock()
+    mock_llm.invoke.side_effect = RuntimeError(error_msg)
+    mock_llm.tool_schemas.return_value = []
+
+    mock_tracker = MagicMock()
+
+    with (
+        patch("app.agent.investigation.get_agent_llm", return_value=mock_llm),
+        patch("app.agent.investigation.get_tracker", return_value=mock_tracker),
+    ):
+        agent = ConnectedInvestigationAgent()
+        state = {
+            "alert_name": "Test alert",
+            "pipeline_name": "test-pipeline",
+            "severity": "critical",
+            "resolved_integrations": {},
+        }
+        result = agent.run(state)
+
+    mock_tracker.error.assert_called_once_with(
+        "investigation_agent", message="Failed: Model does not support tools"
+    )
+    assert result["root_cause_category"] == "Configuration Error"
+    assert result["validity_score"] == 0.0
+    assert "tool calling" in result["root_cause"].lower()
+    assert result["remediation_steps"]
+    assert result["causal_chain"]
+
+
+def test_run_gracefully_handles_single_tool_call_only_model() -> None:
+    """When the provider reports that a model only supports single tool-calls
+    the agent returns a degraded state with a clear configuration-error message."""
+    mock_llm = MagicMock()
+    mock_llm.invoke.side_effect = RuntimeError(
+        "OpenAI API failed: Error code: 500 - {'error': {'message': "
+        "'This model only supports single tool-calls at once! (in tool_use:95)'}}"
+    )
+    mock_llm.tool_schemas.return_value = []
+
+    mock_tracker = MagicMock()
+
+    with (
+        patch("app.agent.investigation.get_agent_llm", return_value=mock_llm),
+        patch("app.agent.investigation.get_tracker", return_value=mock_tracker),
+    ):
+        agent = ConnectedInvestigationAgent()
+        state = {
+            "alert_name": "Test alert",
+            "pipeline_name": "test-pipeline",
+            "severity": "critical",
+            "resolved_integrations": {},
+        }
+        result = agent.run(state)
+
+    mock_tracker.error.assert_called_once_with(
+        "investigation_agent", message="Failed: Model does not support tools"
+    )
+    assert result["root_cause_category"] == "Configuration Error"
+    assert result["validity_score"] == 0.0
+    assert "tool calling" in result["root_cause"].lower()
+    assert result["remediation_steps"]
+    assert result["causal_chain"]

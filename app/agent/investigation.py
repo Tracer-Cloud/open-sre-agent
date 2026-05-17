@@ -173,37 +173,52 @@ class ConnectedInvestigationAgent:
                         "Error: The AI model was not found (404). "
                         "If using a local LLM, verify the model name in your .env file."
                     )
+                    remediation_steps = [
+                        "Check your .env configuration",
+                        "Verify the model name is correct",
+                        "Ensure the model is downloaded locally",
+                        "Confirm your provider supports this model",
+                    ]
                     tracker.error("investigation_agent", message="Failed: Model not found")
-                    _emit(
-                        "agent_end",
-                        {
-                            "root_cause": error_msg,
-                            "validity_score": 0.0,
-                            "root_cause_category": "Configuration Error",
-                        },
+                elif "does not support tool" in err_msg or "only supports single tool" in err_msg:
+                    error_msg = (
+                        "Error: The configured model does not support tool calling. "
+                        "The investigation agent requires a model with native tool-calling support."
                     )
-                    updates = {
+                    remediation_steps = [
+                        "Switch to a model that supports tool calling (e.g. claude-opus-4-7, gpt-4o)",
+                        "For Ollama: use llama3.1, qwen2.5, or another tool-call-capable model",
+                        "Check your LLM_MODEL or LLM_PROVIDER setting in .env",
+                    ]
+                    tracker.error(
+                        "investigation_agent", message="Failed: Model does not support tools"
+                    )
+                else:
+                    raise
+                _emit(
+                    "agent_end",
+                    {
                         "root_cause": error_msg,
-                        "root_cause_category": "Configuration Error",
-                        "causal_chain": [f"Model API returned error: {str(err)}"],
-                        "validated_claims": [],
-                        "non_validated_claims": [],
-                        "remediation_steps": [
-                            "Check your .env configuration",
-                            "Verify the model name is correct",
-                            "Ensure the model is downloaded locally",
-                            "Confirm your provider supports this model",
-                        ],
                         "validity_score": 0.0,
-                        "investigation_recommendations": [],
-                        "evidence": evidence,
-                        "evidence_entries": [e.model_dump() for e in evidence_entries],
-                        "agent_messages": messages,
-                        "executed_hypotheses": executed_hypotheses,
-                    }
-                    updates.update(tool_context)
-                    return updates
-                raise
+                        "root_cause_category": "Configuration Error",
+                    },
+                )
+                updates = {
+                    "root_cause": error_msg,
+                    "root_cause_category": "Configuration Error",
+                    "causal_chain": [f"Model API returned error: {str(err)}"],
+                    "validated_claims": [],
+                    "non_validated_claims": [],
+                    "remediation_steps": remediation_steps,
+                    "validity_score": 0.0,
+                    "investigation_recommendations": [],
+                    "evidence": evidence,
+                    "evidence_entries": [e.model_dump() for e in evidence_entries],
+                    "agent_messages": messages,
+                    "executed_hypotheses": executed_hypotheses,
+                }
+                updates.update(tool_context)
+                return updates
 
             messages.append(_build_assistant_msg(llm, response))
 
