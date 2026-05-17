@@ -29,7 +29,6 @@
 Before any push or PR creation, follow the mandatory checklist in [CI.md](CI.md).
 
 - `CI.md` is the source of truth for push/PR readiness.
-- If `AGENTS.md` and `CI.md` differ, `CI.md` takes precedence for readiness checks.
 - Do not skip required checks.
 
 ## 1. Repo Map
