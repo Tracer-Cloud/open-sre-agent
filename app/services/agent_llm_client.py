@@ -10,10 +10,11 @@ from __future__ import annotations
 import json
 import logging
 import os
-import re
 import time
 from dataclasses import dataclass, field
 from typing import Any
+
+from app.services.llm_client import _uses_max_completion_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -246,9 +247,9 @@ class OpenAIAgentClient:
         if system:
             msgs = [{"role": "system", "content": system}] + msgs
 
-        # OpenAI o-series reasoning models (o1, o3, o4, and future variants) use
-        # max_completion_tokens; all other models use max_tokens.
-        tokens_key = "max_completion_tokens" if re.match(r"^o\d", self._model) else "max_tokens"
+        tokens_key = (
+            "max_completion_tokens" if _uses_max_completion_tokens(self._model) else "max_tokens"
+        )
         kwargs: dict[str, Any] = {
             "model": self._model,
             tokens_key: self._max_tokens,
