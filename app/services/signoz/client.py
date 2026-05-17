@@ -195,7 +195,7 @@ class SigNozClient:
             "  ON s.fingerprint = ts.fingerprint "
             " AND s.metric_name = ts.metric_name "
             " AND s.temporality = ts.temporality "
-            " AND s.env = ts.env "
+            " AND coalesce(s.env, '') = coalesce(ts.env, '') "
             f"WHERE {where_clause} "
             "GROUP BY interval, ts.metric_name, service_name "
             "ORDER BY interval ASC "
