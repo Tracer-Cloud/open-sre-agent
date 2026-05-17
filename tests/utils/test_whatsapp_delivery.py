@@ -7,58 +7,9 @@ from typing import Any
 import pytest
 
 from app.utils.whatsapp_delivery import (
-    post_whatsapp_message,
     post_whatsapp_message_twilio,
     send_whatsapp_report,
 )
-
-
-class _FakeDeliveryResponse:
-    def __init__(
-        self,
-        *,
-        ok: bool = True,
-        status_code: int = 200,
-        data: dict[str, Any] | None = None,
-        text: str = "",
-        error: str = "",
-    ) -> None:
-        self.ok = ok
-        self.status_code = status_code
-        self.data = data or {}
-        self.text = text
-        self.error = error
-
-
-def test_post_whatsapp_message_legacy_meta_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls: list[dict[str, Any]] = []
-
-    def _fake_post_json(
-        url: str,
-        payload: dict[str, Any],
-        *,
-        headers: dict[str, str] | None = None,
-        timeout: float = 15.0,
-    ) -> Any:
-        calls.append({"url": url, "payload": payload, "headers": headers})
-        return _FakeDeliveryResponse(
-            status_code=200,
-            data={"messages": [{"id": "wamid.123"}]},
-        )
-
-    monkeypatch.setattr("app.utils.whatsapp_delivery.post_json", _fake_post_json)
-
-    success, error, message_id = post_whatsapp_message(
-        to="+1234567890",
-        text="Test message",
-        phone_number_id="pnid-123",
-        access_token="tok-123",
-    )
-
-    assert success is True
-    assert error == ""
-    assert message_id == "wamid.123"
-    assert len(calls) == 1
 
 
 def test_post_whatsapp_message_twilio_success(monkeypatch: pytest.MonkeyPatch) -> None:

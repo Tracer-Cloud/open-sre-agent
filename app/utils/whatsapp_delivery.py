@@ -7,7 +7,6 @@ from typing import Any
 
 import httpx
 
-from app.utils.delivery_transport import post_json
 from app.utils.truncation import truncate
 
 logger = logging.getLogger(__name__)
@@ -21,53 +20,6 @@ def _redact_token(text: str, token: str) -> str:
     if token and token in text:
         return text.replace(token, "<redacted>")
     return text
-
-
-def post_whatsapp_message(
-    to: str,
-    text: str,
-    phone_number_id: str,
-    access_token: str,
-) -> tuple[bool, str, str]:
-    """Legacy Meta WhatsApp Cloud API sender.
-
-    Returns (success, error, message_id).
-
-    Kept for backward compatibility with modules that still call this API
-    shape directly (watchdog/Hermes).
-    """
-    logger.debug("[whatsapp] post message to %s", to)
-    url = f"https://graph.facebook.com/v18.0/{phone_number_id}/messages"
-    headers = {"Authorization": f"Bearer {access_token}"}
-    payload: dict[str, Any] = {
-        "messaging_product": "whatsapp",
-        "recipient_type": "individual",
-        "to": to,
-        "type": "text",
-        "text": {"body": text},
-    }
-    response = post_json(url, payload, headers=headers, timeout=15.0)
-    if not response.ok:
-        error = _redact_token(response.error, access_token)
-        logger.warning("[whatsapp] post message exception: %s", error)
-        return False, error, ""
-    if response.status_code != 200:
-        error_message = ""
-        if response.data:
-            error_message = str(
-                response.data.get("error", {}).get("message")
-                or response.data.get("message", "")
-                or f"HTTP {response.status_code}"
-            )
-        else:
-            error_message = response.text or f"HTTP {response.status_code}"
-        error_message = _redact_token(error_message, access_token)
-        logger.warning("[whatsapp] post message failed: %s", error_message)
-        return False, error_message, ""
-
-    result = response.data.get("messages", [{}])[0] if isinstance(response.data, dict) else {}
-    message_id = str(result.get("id") or "") if isinstance(result, dict) else ""
-    return True, "", message_id
 
 
 def post_whatsapp_message_twilio(
