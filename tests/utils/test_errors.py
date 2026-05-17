@@ -58,6 +58,7 @@ class TestReportException:
         extra = mock_cap.call_args[1]["extra"]
         assert extra["tag.surface"] == "cli"
         assert extra["tag.component"] == "app.cli"
+        assert mock_cap.call_args[1]["tags"] == {"surface": "cli", "component": "app.cli"}
 
     def test_extras_are_merged(self) -> None:
         mock_log = _mock_logger()
@@ -73,6 +74,7 @@ class TestReportException:
         extra = mock_cap.call_args[1]["extra"]
         assert extra["tag.surface"] == "tool"
         assert extra["detail"] == "x"
+        assert mock_cap.call_args[1]["tags"] == {"surface": "tool"}
 
     def test_no_tags_or_extras_passes_none(self) -> None:
         mock_log = _mock_logger()

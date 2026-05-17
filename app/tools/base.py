@@ -124,7 +124,11 @@ class BaseTool(ABC):
         except Exception as exc:
             from app.utils.sentry_sdk import capture_exception
 
-            capture_exception(exc, context=f"tool.{self.name}")
+            capture_exception(
+                exc,
+                context=f"tool.{self.name}",
+                tags={"surface": "tool", "tool": self.name},
+            )
             return {"error": str(exc), "exception_type": type(exc).__name__}
 
     def is_available(self, _sources: dict[str, dict]) -> bool:

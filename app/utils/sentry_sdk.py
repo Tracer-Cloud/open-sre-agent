@@ -107,6 +107,19 @@ def _resolved_dsn() -> str:
     return os.getenv("OPENSRE_SENTRY_DSN") or os.getenv("SENTRY_DSN") or SENTRY_DSN
 
 
+def resolved_sentry_dsn_host() -> str:
+    """Return the resolved Sentry DSN host without exposing credentials."""
+    dsn = _resolved_dsn()
+    if not dsn:
+        return ""
+    return urlsplit(dsn).hostname or ""
+
+
+def sentry_transport_enabled() -> bool:
+    """Return whether Sentry events are expected to be sent."""
+    return bool(_resolved_dsn()) and not _is_sentry_disabled()
+
+
 def _scrub_string(value: object) -> object:
     if isinstance(value, str):
         return _HOME_PATH_RE.sub("~", value)
@@ -248,6 +261,20 @@ def _event_has_operator_actionable_llm_error(event: dict[str, Any]) -> bool:
     return any(pattern.search(combined) for pattern in _OPERATOR_ACTIONABLE_LLM_ERROR_PATTERNS)
 
 
+def _apply_fingerprint_rules(event: dict[str, Any]) -> None:
+    tags = event.get("tags")
+    if not isinstance(tags, dict):
+        return
+
+    tool_name = tags.get("tool")
+    if isinstance(tool_name, str) and tool_name:
+        event["fingerprint"] = ["tool-error", tool_name, "{{ default }}"]
+
+    node_name = tags.get("node")
+    if isinstance(node_name, str) and node_name:
+        event["fingerprint"] = ["node-error", node_name, "{{ default }}"]
+
+
 def _before_send(event: Any, _hint: dict[str, Any]) -> Any:
     """Drop or scrub a Sentry event before transport.
 
@@ -263,6 +290,7 @@ def _before_send(event: Any, _hint: dict[str, Any]) -> Any:
         return event
     if _event_has_operator_actionable_llm_error(event):
         return None
+    _apply_fingerprint_rules(event)
     try:
         _scrub_event_in_place(event)
     except Exception:
@@ -473,23 +501,27 @@ def capture_exception(
     *,
     context: str | None = None,
     extra: Mapping[str, Any] | None = None,
-) -> None:
+    tags: Mapping[str, str] | None = None,
+) -> Any | None:
     """Best-effort capture for exceptions swallowed by boundary adapters."""
     if _is_sentry_disabled():
-        return
+        return None
     with suppress(Exception):
         import sentry_sdk
 
-        if context is None and not extra:
-            sentry_sdk.capture_exception(exc)
-            return
+        if context is None and not extra and not tags:
+            return sentry_sdk.capture_exception(exc)
         with sentry_sdk.push_scope() as scope:
             if context is not None:
                 scope.set_tag("opensre.context", context)
+            if tags:
+                for key, value in tags.items():
+                    scope.set_tag(key, value)
             if extra:
                 for key, value in extra.items():
                     scope.set_extra(key, value)
-            sentry_sdk.capture_exception(exc)
+            return sentry_sdk.capture_exception(exc)
+    return None
 
 
 @contextmanager

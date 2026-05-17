@@ -90,6 +90,29 @@ Status: passed
 Detail: Sentry validated for org your-org; issues API responded successfully with 5 issue(s)
 ```
 
+## Verify Error Reporting
+
+Send one test event to confirm OpenSRE can report runtime errors:
+
+```bash
+opensre debug sentry
+```
+
+For a custom or self-hosted project, set the DSN first:
+
+```bash
+OPENSRE_SENTRY_DSN=https://public-key@example.ingest.sentry.io/123 opensre debug sentry
+```
+
+```text
+Sentry DSN host: example.ingest.sentry.io
+Sentry event ID: <event-id>
+Sentry flush sent: yes
+```
+
+The event is synthetic and tagged `debug=true`. If telemetry is disabled, the
+command exits non-zero without sending anything.
+
 ## Troubleshooting
 
 | Symptom | Fix |
