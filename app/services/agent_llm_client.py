@@ -358,6 +358,13 @@ _AgentClientType = AnthropicAgentClient | OpenAIAgentClient
 _agent_client: _AgentClientType | None = None
 
 
+def _is_cli_provider(provider: str) -> bool:
+    """Return True when *provider* is a subprocess-backed CLI (no native tool-calling)."""
+    from app.integrations.llm_cli.registry import CLI_PROVIDER_REGISTRY
+
+    return provider in CLI_PROVIDER_REGISTRY
+
+
 def get_agent_llm() -> _AgentClientType:
     """Return a singleton tool-calling LLM client for the investigation agent."""
     global _agent_client
@@ -392,6 +399,12 @@ def get_agent_llm() -> _AgentClientType:
         _agent_client = BedrockAgentClient(
             model=settings.bedrock_reasoning_model,
             max_tokens=BEDROCK_LLM_CONFIG.max_tokens,
+        )
+    elif _is_cli_provider(provider):
+        raise RuntimeError(
+            f"LLM_PROVIDER={provider!r} is a CLI-backed provider and cannot be used for "
+            "investigations. Investigations require native API tool-calling. "
+            "Set LLM_PROVIDER to 'anthropic', 'openai', 'bedrock', or another API provider."
         )
     else:
         # Default: Anthropic
