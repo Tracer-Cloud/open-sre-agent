@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import types
+from typing import Any
 
 import pytest
 
@@ -405,6 +406,62 @@ def test_cli_backed_agent_client_tool_call_parsing() -> None:
     assert result.tool_calls[0].name == "my_tool"
     assert result.tool_calls[0].input == {"x": 1}
     assert result.content == ""
+
+
+def test_cli_backed_agent_client_build_assistant_message_includes_tool_json() -> None:
+    """Assistant history must retain tool_calls JSON for multi-turn CLI prompts."""
+    from app.services.agent_llm_client import CLIBackedAgentClient, ToolCall
+
+    msg = CLIBackedAgentClient.build_assistant_message(
+        "",
+        [ToolCall(id="t1", name="query_logs", input={"q": "error"})],
+    )
+    assert msg["role"] == "assistant"
+    assert "query_logs" in msg["content"]
+    assert '"tool_calls"' in msg["content"]
+    assert "t1" in msg["content"]
+
+
+def test_cli_backed_agent_client_reuses_single_cli_llm_client() -> None:
+    """CLIBackedLLMClient should be constructed once so probe cache spans invokes."""
+    import types as _types
+    import unittest.mock as mock
+
+    from app.integrations.llm_cli.runner import CLIBackedLLMClient
+    from app.services.agent_llm_client import CLIBackedAgentClient
+    from app.services.llm_client import LLMResponse
+
+    fake_adapter = _types.SimpleNamespace(
+        name="codex",
+        binary_env_key="CODEX_BIN",
+        install_hint="",
+        auth_hint="codex login",
+        default_exec_timeout_sec=30.0,
+        detect=lambda: _types.SimpleNamespace(
+            installed=True, bin_path="/usr/bin/codex", logged_in=True, detail=""
+        ),
+        build=lambda **_kw: _types.SimpleNamespace(
+            argv=("/usr/bin/codex",), stdin="", cwd="/", env=None, timeout_sec=30.0
+        ),
+        parse=lambda **_kw: "",
+        explain_failure=lambda **_kw: "",
+    )
+    real_init = CLIBackedLLMClient.__init__
+    init_count = {"n": 0}
+
+    def counting_init(self: Any, *args: Any, **kwargs: Any) -> None:
+        init_count["n"] += 1
+        return real_init(self, *args, **kwargs)
+
+    with mock.patch.object(CLIBackedLLMClient, "__init__", counting_init):
+        client = CLIBackedAgentClient(fake_adapter, model=None)
+        with mock.patch.object(
+            CLIBackedLLMClient, "invoke", return_value=LLMResponse(content="ok")
+        ):
+            client.invoke([{"role": "user", "content": "a"}])
+            client.invoke([{"role": "user", "content": "b"}])
+
+    assert init_count["n"] == 1
 
 
 def test_cli_backed_agent_client_plain_text_response() -> None:

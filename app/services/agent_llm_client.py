@@ -380,8 +380,13 @@ class CLIBackedAgentClient:
     )
 
     def __init__(self, adapter: Any, *, model: str | None = None) -> None:
+        from app.integrations.llm_cli.runner import CLIBackedLLMClient
+
         self._adapter = adapter
         self._model = model
+        # Reuse one subprocess client so the 45s probe cache in CLIBackedLLMClient
+        # applies across ReAct iterations instead of re-probing every invoke.
+        self._cli_client = CLIBackedLLMClient(adapter, model=self._model)
 
     def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
         # Return the same dicts — used only to pass back into invoke() below.
@@ -397,7 +402,6 @@ class CLIBackedAgentClient:
         system: str | None = None,
         tools: list[dict[str, Any]] | None = None,
     ) -> AgentLLMResponse:
-        from app.integrations.llm_cli.runner import CLIBackedLLMClient
         from app.integrations.llm_cli.text import flatten_messages_to_prompt
 
         tool_block = ""
@@ -409,8 +413,7 @@ class CLIBackedAgentClient:
         instruction = self._TOOL_CALL_INSTRUCTION + tool_block
         prompt = f"{system_block}{instruction}\n\n{flatten_messages_to_prompt(messages)}"
 
-        cli_client = CLIBackedLLMClient(self._adapter, model=self._model)
-        response = cli_client.invoke(prompt)
+        response = self._cli_client.invoke(prompt)
         text = response.content.strip()
 
         # Try to parse a JSON tool call response.
@@ -449,8 +452,17 @@ class CLIBackedAgentClient:
 
     @staticmethod
     def build_assistant_message(content: str, tool_calls: list[ToolCall]) -> dict[str, Any]:
-        """Match OpenAIAgentClient signature so investigation.py dispatch works correctly."""
-        _ = tool_calls
+        """Match OpenAIAgentClient signature; embed tool JSON in content for CLI history."""
+        if tool_calls:
+            payload = {
+                "tool_calls": [
+                    {"id": tc.id, "name": tc.name, "input": tc.input} for tc in tool_calls
+                ]
+            }
+            tool_json = json.dumps(payload)
+            if content.strip():
+                return {"role": "assistant", "content": f"{content.strip()}\n\n{tool_json}"}
+            return {"role": "assistant", "content": tool_json}
         return {"role": "assistant", "content": content}
 
 
