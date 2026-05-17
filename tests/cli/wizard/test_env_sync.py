@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import stat
+
+import pytest
+
 from app.cli.wizard.config import PROVIDER_BY_VALUE
-from app.cli.wizard.env_sync import sync_provider_env
+from app.cli.wizard.env_sync import sync_env_values, sync_provider_env
 
 
 def test_sync_provider_env_updates_provider_specific_keys(tmp_path) -> None:
@@ -76,3 +80,35 @@ def test_sync_provider_env_gemini_cli_writes_model(tmp_path) -> None:
     content = env_path.read_text(encoding="utf-8")
     assert "LLM_PROVIDER=gemini-cli\n" in content
     assert "GEMINI_CLI_MODEL=\n" in content
+
+
+@pytest.mark.skipif(
+    __import__("os").getuid() == 0, reason="root bypasses file permission checks"
+)
+def test_sync_provider_env_permission_error(tmp_path) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text("LLM_PROVIDER=anthropic\n", encoding="utf-8")
+    env_path.chmod(stat.S_IRUSR)  # read-only
+    try:
+        with pytest.raises(PermissionError, match="permission denied"):
+            sync_provider_env(
+                provider=PROVIDER_BY_VALUE["openai"],
+                model="gpt-4o",
+                env_path=env_path,
+            )
+    finally:
+        env_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+
+
+@pytest.mark.skipif(
+    __import__("os").getuid() == 0, reason="root bypasses file permission checks"
+)
+def test_sync_env_values_permission_error(tmp_path) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text("FOO=bar\n", encoding="utf-8")
+    env_path.chmod(stat.S_IRUSR)
+    try:
+        with pytest.raises(PermissionError, match="permission denied"):
+            sync_env_values({"FOO": "baz"}, env_path=env_path)
+    finally:
+        env_path.chmod(stat.S_IRUSR | stat.S_IWUSR)

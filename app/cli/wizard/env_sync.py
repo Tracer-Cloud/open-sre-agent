@@ -30,6 +30,16 @@ def _set_env_value(lines: list[str], key: str, value: str) -> list[str]:
     return updated
 
 
+def _write_env(target_path: Path, content: str) -> None:
+    try:
+        target_path.write_text(content, encoding="utf-8")
+    except PermissionError as exc:
+        raise PermissionError(
+            f"Cannot write to {target_path}: permission denied. "
+            "Ensure you have write access to this file, or run the command as the file owner."
+        ) from exc
+
+
 def sync_env_values(
     values: dict[str, str],
     *,
@@ -47,7 +57,7 @@ def sync_env_values(
     for key, value in values.items():
         lines = _set_env_value(lines, key, value)
 
-    target_path.write_text("".join(lines), encoding="utf-8")
+    _write_env(target_path, "".join(lines))
     return target_path
 
 
@@ -134,5 +144,5 @@ def sync_provider_env(
     for key, value in values.items():
         lines = _set_env_value(lines, key, value)
 
-    target_path.write_text("".join(lines), encoding="utf-8")
+    _write_env(target_path, "".join(lines))
     return target_path
