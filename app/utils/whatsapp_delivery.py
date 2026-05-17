@@ -84,8 +84,9 @@ def post_whatsapp_message_twilio(
     logger.debug("[whatsapp] post twilio message to %s", to)
     url = f"{_TWILIO_BASE_URL}/{account_sid}/Messages.json"
     twilio_to = to if to.startswith("whatsapp:") else f"whatsapp:{to}"
+    twilio_from = from_number if from_number.startswith("whatsapp:") else f"whatsapp:{from_number}"
     payload = {
-        "From": from_number,
+        "From": twilio_from,
         "To": twilio_to,
         "Body": text,
     }
