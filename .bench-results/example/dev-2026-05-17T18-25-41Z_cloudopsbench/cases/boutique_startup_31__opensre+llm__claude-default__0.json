@@ -1,0 +1,74 @@
+{
+  "case": {
+    "case_id": "boutique/startup/31",
+    "benchmark_name": "cloudopsbench",
+    "metadata": {
+      "system": "boutique",
+      "fault_category": "startup",
+      "case_name": "31",
+      "namespace": "boutique",
+      "query": "Service Availability Disruption.",
+      "ground_truth": {
+        "fault_taxonomy": "Startup_Fault",
+        "fault_object": "app/currencyservice",
+        "root_cause": "incorrect_image_reference"
+      },
+      "process": {
+        "path1": [
+          "GetResources::pods",
+          "DescribeResource::pods::currencyservice"
+        ],
+        "path2": [
+          "GetResources::pods",
+          "DescribeResource::pods::currencyservice",
+          "GetAppYAML::currencyservice"
+        ]
+      }
+    },
+    "seen_shape": true
+  },
+  "run": {
+    "mode": "opensre+llm",
+    "llm": "claude-default",
+    "model_version": "(opensre-default)",
+    "opensre_sha": "eab7777c-dirty",
+    "started_at": "2026-05-17T18:25:42.002283+00:00",
+    "ended_at": "2026-05-17T18:27:01.911156+00:00",
+    "ok": true,
+    "error": null,
+    "final_diagnosis": {
+      "stage": "configuration",
+      "component": "",
+      "root_cause": "The currencyservice deployment in the boutique namespace has a pod stuck in ErrImagePull because the kubelet cannot pull the referenced container image. This is a configuration fault in the image reference or registry credentials, isolated to this one service.",
+      "report": "The currencyservice deployment in the boutique namespace has a pod stuck in ErrImagePull because the kubelet cannot pull the referenced container image\n\n## Findings\n• The boutique namespace has exactly one failing workload: currencyservice.\n• The failing pod currencyservice-b68d5576c-gbl9k is in ErrImagePull state at ~30s old.\n• The currencyservice Deployment shows 0/1 ready, 0 available, desired 1.\n• All 10 other Online Boutique pods are 1/1 Running with 0 restarts.\n• The failure mode is image pull, not crash loop, OOM, readiness probe failure, or scheduling issue.\n\n*Non-Validated Claims (Inferred):*\n• The exact image reference being pulled by the currencyservice deployment.\n• Whether the underlying cause is a bad tag, nonexistent repository, or missing/expired imagePullSecret.\n• Whether ErrImagePull has since progressed to ImagePullBackOff.\n• Whether a recent deploy bumped the image tag to a value not present in the registry.\n\n## Recommended Actions\n• Run 'kubectl -n boutique describe pod currencyservice-b68d5576c-gbl9k' and inspect Events for the exact 'Failed to pull image' message.\n• Retrieve the configured image via 'kubectl -n boutique get deploy currencyservice -o jsonpath={.spec.template.spec.containers[*].image}' and verify the tag exists in the registry.\n• If the tag is invalid, roll back with 'kubectl -n boutique rollout undo deployment/currencyservice' or patch to a known-good image via 'kubectl -n boutique set image deploy/currencyservice server=<good-image:tag>'.\n• If the error is unauthorized/denied, verify and recreate the imagePullSecrets referenced by the deployment/service account and confirm kubelet registry (e.g., ECR) credentials are valid.\n• Monitor recovery with 'kubectl -n boutique rollout status deploy/currencyservice' and confirm the pod reaches Running 1/1; validate end-to-end via the frontend currency conversion flow.\n• Add a CI gate that runs 'docker manifest inspect' on images before promotion and an alert on kube_pod_container_status_waiting_reason=~ErrImagePull|ImagePullBackOff.\n\n\n*Cited Evidence:*\n- Queries: GetAlerts, list eks pods, list eks deployments, get eks events, DescribeResource, GetAppYAML, GetResources, GetErrorLogs, GetRecentLogs, get hermes logs, get sre guidance\n\n\nTiming: 80s\n"
+    },
+    "evidence_entries_count": 21,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 79908
+  },
+  "score": {
+    "metrics": {
+      "a1": 0.0,
+      "a3": 0.0,
+      "partial_a1": 0.0,
+      "partial_a3": 0.0,
+      "tcr": 0.0,
+      "exact": 0.0,
+      "in_order": 0.0,
+      "any_order": 0.0,
+      "rel": 0.3333333333333333,
+      "cov": 0.5,
+      "steps": 6.0,
+      "mtti": 0.0,
+      "iac": 2.0,
+      "rar": 0.5,
+      "ztdr": 0.0,
+      "citation_grounding_rate": 0.22018348623853212,
+      "entity_existence_rate": 1.0,
+      "kubectl_actionability_rate": 1.0
+    },
+    "failure_reason": null
+  }
+}

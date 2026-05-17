@@ -1,0 +1,74 @@
+{
+  "case": {
+    "case_id": "boutique/startup/31",
+    "benchmark_name": "cloudopsbench",
+    "metadata": {
+      "system": "boutique",
+      "fault_category": "startup",
+      "case_name": "31",
+      "namespace": "boutique",
+      "query": "Service Availability Disruption.",
+      "ground_truth": {
+        "fault_taxonomy": "Startup_Fault",
+        "fault_object": "app/currencyservice",
+        "root_cause": "incorrect_image_reference"
+      },
+      "process": {
+        "path1": [
+          "GetResources::pods",
+          "DescribeResource::pods::currencyservice"
+        ],
+        "path2": [
+          "GetResources::pods",
+          "DescribeResource::pods::currencyservice",
+          "GetAppYAML::currencyservice"
+        ]
+      }
+    },
+    "seen_shape": true
+  },
+  "run": {
+    "mode": "opensre+llm",
+    "llm": "claude-default",
+    "model_version": "(opensre-default)",
+    "opensre_sha": "eab7777c-dirty",
+    "started_at": "2026-05-17T18:27:01.915469+00:00",
+    "ended_at": "2026-05-17T18:28:15.354678+00:00",
+    "ok": true,
+    "error": null,
+    "final_diagnosis": {
+      "stage": "configuration",
+      "component": "",
+      "root_cause": "The `currencyservice` deployment in the `boutique` namespace cannot start because its pod is stuck in `ErrImagePull` — Kubernetes is unable to pull the container image referenced in the pod spec. This is typically caused by an invalid image name/tag, a wrong registry path, or missing/incorrect imagePullSecrets.",
+      "report": "The `currencyservice` deployment in the `boutique` namespace cannot start because its pod is stuck in `ErrImagePull` — Kubernetes is unable to pull the container image referenced in the pod spec\n\n## Findings\n• Exactly one workload is failing in `boutique`: `currencyservice`.\n• The failure mode is `ErrImagePull` (image-pull failure at the kubelet level), not a runtime crash, OOMKilled, or CrashLoopBackOff.\n• The `currencyservice` deployment has zero available replicas (0/1 ready, 1 desired, 0 available).\n• No restarts have occurred (RESTARTS=0), confirming the container never successfully started.\n• All 10 other microservices in `boutique` (adservice, cartservice, checkoutservice, emailservice, frontend, paymentservice, productcatalogservice, recommendationservice, redis-cart, shippingservice) are Running 1/1 with 0 restarts, making namespace/node/registry-wide issues unlikely.\n\n*Non-Validated Claims (Inferred):*\n• The exact failing image reference (likely a bad tag or typo in the image path) was not retrieved.\n• Whether the failure is due to a missing imagePullSecret vs. a nonexistent tag vs. a private-registry auth error was not confirmed — the underlying kubelet error string was not observed.\n• Whether this is a fresh rollout regression (deployment age of 37s is consistent but not confirmed against deployment history).\n\n## Recommended Actions\n• Run `kubectl describe pod currencyservice-b68d5576c-gbl9k -n boutique` and read the Events section to capture the exact image-pull error (e.g., `manifest unknown`, `unauthorized`, `repository does not exist`).\n• Inspect the deployment's image: `kubectl get deploy currencyservice -n boutique -o jsonpath='{.spec.template.spec.containers[*].image}'` and compare against the expected image tag in the source manifest / Helm values / GitOps repo.\n• If the tag is wrong/typo, fix it via `kubectl set image deploy/currencyservice -n boutique server=<correct-image:tag>` or revert with `kubectl rollout undo deploy/currencyservice -n boutique`.\n• If the error is `unauthorized`/`denied`, verify `imagePullSecrets` on the pod spec / service account and confirm the secret exists with valid credentials (`kubectl get secret -n boutique`).\n• Confirm the image exists in the registry (e.g., `crane manifest <image:tag>` or registry UI); push the missing tag if a CI/CD build was skipped.\n• Watch `kubectl get pods -n boutique -w` until `currencyservice` becomes `1/1 Running`, and verify `checkoutservice`/`frontend` can reach it.\n• Add a CI gate that fails the release if the referenced image tag is not present in the registry, to prevent recurrence.\n\n\n*Cited Evidence:*\n- Queries: GetAlerts, list eks pods, list eks deployments, get eks events, DescribeResource, GetAppYAML, GetErrorLogs, GetResources, GetServiceDependencies\n\n\nTiming: 73s\n"
+    },
+    "evidence_entries_count": 20,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 73439
+  },
+  "score": {
+    "metrics": {
+      "a1": 0.0,
+      "a3": 0.0,
+      "partial_a1": 0.0,
+      "partial_a3": 0.0,
+      "tcr": 0.0,
+      "exact": 0.0,
+      "in_order": 0.0,
+      "any_order": 0.0,
+      "rel": 0.3333333333333333,
+      "cov": 0.5,
+      "steps": 8.0,
+      "mtti": 0.0,
+      "iac": 1.0,
+      "rar": 0.625,
+      "ztdr": 0.0,
+      "citation_grounding_rate": 0.2318840579710145,
+      "entity_existence_rate": 1.0,
+      "kubectl_actionability_rate": 1.0
+    },
+    "failure_reason": null
+  }
+}

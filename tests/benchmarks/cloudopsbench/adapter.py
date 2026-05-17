@@ -53,6 +53,11 @@ from tests.benchmarks.cloudopsbench.case_loader import (
 from tests.benchmarks.cloudopsbench.replay_backend import CloudOpsBenchReplayBackend
 from tests.benchmarks.cloudopsbench.scoring import score_case as _legacy_score_case
 from tests.benchmarks.cloudopsbench.tags import seen_shape_for
+from tests.benchmarks.cloudopsbench.validity_scoring import (
+    compute_citation_grounding,
+    compute_entity_existence,
+    compute_kubectl_actionability,
+)
 
 # --------------------------------------------------------------------------- #
 # Metric inventory — the paper's 15 metrics                                   #
@@ -64,9 +69,13 @@ _PAPER_METRIC_SCHEMA = MetricSchema(
     process_metrics=["exact", "in_order", "any_order", "rel", "cov"],
     efficiency_metrics=["steps", "mtti"],
     robustness_metrics=["iac", "rar", "ztdr"],
-    # validity_metrics deliberately empty — Phase C populates them.
-    # validate_completeness() will flag this; runner refuses full run until fixed.
-    validity_metrics=[],
+    # Phase C — heuristic validity metrics computed against the State Snapshot.
+    # See validity_scoring.py for the heuristic limitations.
+    validity_metrics=[
+        "citation_grounding_rate",
+        "entity_existence_rate",
+        "kubectl_actionability_rate",
+    ],
     higher_is_better={
         # Outcome (higher is better)
         "a1": True,
@@ -87,6 +96,10 @@ _PAPER_METRIC_SCHEMA = MetricSchema(
         "iac": False,
         "rar": False,
         "ztdr": False,
+        # Validity (higher better — more grounded, less hallucinated)
+        "citation_grounding_rate": True,
+        "entity_existence_rate": True,
+        "kubectl_actionability_rate": True,
     },
 )
 
@@ -272,10 +285,22 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
         case_data = _build_case_data(legacy, backend, run)
         legacy_score = _legacy_score_case(legacy, case_data)
 
-        return CaseScore(
-            case_id=case.case_id,
-            metrics=asdict(legacy_score.metrics),
+        # Combine paper metrics + new validity metrics (Phase C)
+        metrics: dict[str, float] = dict(asdict(legacy_score.metrics))
+        finding_text = (
+            str(run.final_diagnosis.get("report") or "")
+            + "\n"
+            + str(run.final_diagnosis.get("root_cause") or "")
         )
+        metrics["citation_grounding_rate"] = compute_citation_grounding(
+            finding_text, run.evidence_entries
+        )
+        metrics["entity_existence_rate"] = compute_entity_existence(
+            finding_text, backend, legacy.namespace
+        )
+        metrics["kubectl_actionability_rate"] = compute_kubectl_actionability(finding_text)
+
+        return CaseScore(case_id=case.case_id, metrics=metrics)
 
     def metric_schema(self) -> MetricSchema:
         """The paper's 15 metrics. Validity metrics arrive in Phase C."""

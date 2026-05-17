@@ -1,0 +1,74 @@
+{
+  "case": {
+    "case_id": "boutique/startup/31",
+    "benchmark_name": "cloudopsbench",
+    "metadata": {
+      "system": "boutique",
+      "fault_category": "startup",
+      "case_name": "31",
+      "namespace": "boutique",
+      "query": "Service Availability Disruption.",
+      "ground_truth": {
+        "fault_taxonomy": "Startup_Fault",
+        "fault_object": "app/currencyservice",
+        "root_cause": "incorrect_image_reference"
+      },
+      "process": {
+        "path1": [
+          "GetResources::pods",
+          "DescribeResource::pods::currencyservice"
+        ],
+        "path2": [
+          "GetResources::pods",
+          "DescribeResource::pods::currencyservice",
+          "GetAppYAML::currencyservice"
+        ]
+      }
+    },
+    "seen_shape": true
+  },
+  "run": {
+    "mode": "opensre+llm",
+    "llm": "claude-default",
+    "model_version": "(opensre-default)",
+    "opensre_sha": "eab7777c-dirty",
+    "started_at": "2026-05-17T18:28:15.359071+00:00",
+    "ended_at": "2026-05-17T18:28:53.842766+00:00",
+    "ok": true,
+    "error": null,
+    "final_diagnosis": {
+      "stage": "configuration",
+      "component": "",
+      "root_cause": "The currencyservice Deployment in the boutique namespace references a misspelled container image ('currencyservce' instead of 'currencyservice'), causing Kubernetes to fail pulling the image. The pod is stuck in ErrImagePull, leaving the service with 0/1 ready replicas and unreachable, which degrades the entire boutique app via frontend and checkoutservice dependencies.",
+      "report": "The currencyservice Deployment in the boutique namespace references a misspelled container image ('currencyservce' instead of 'currencyservice'), causing Kubernetes to fail pulling the image\n\n## Findings\n• Pod currencyservice-b68d5576c-gbl9k is in ErrImagePull with error 'image can't be pulled'.\n• The Deployment manifest references the misspelled image path 'microservices-demo/currencyservce:v0.10.3'.\n• Deployment currencyservice shows 0/1 available replicas; all other boutique deployments are healthy.\n• The ClusterIP service currencyservice:80 is not reachable.\n• All cluster nodes (master + worker-01/02/03) are Ready with no resource pressure.\n\n*Non-Validated Claims (Inferred):*\n• The upstream registry was not directly queried to confirm the misspelled repository does not exist.\n• The failure could theoretically be due to registry auth/network rather than the typo, though this is unlikely.\n• Downstream user-facing impact on frontend/checkoutservice is inferred from the dependency graph but not confirmed via their logs.\n\n## Recommended Actions\n• Fix the image reference in the currencyservice Deployment manifest from '.../microservices-demo/currencyservce:v0.10.3' to '.../microservices-demo/currencyservice:v0.10.3'.\n• Apply the corrected manifest with `kubectl apply -f currencyservice.yaml` or `kubectl set image deployment/currencyservice server=us-central1-docker.pkg.dev/google-samples/microservices-demo/currencyservice:v0.10.3 -n boutique`.\n• Confirm the new pod reaches Running 1/1 with `kubectl get pods -n boutique -w`.\n• Re-test connectivity to currencyservice:80 and run a frontend smoke test.\n• Add a CI/CD guardrail (image-name validator or pre-deploy `kubectl create --dry-run=server`) and an alert on ErrImagePull/ImagePullBackOff.\n• Audit other manifests in the repo for similar typos (grep for 'servce', etc.).\n\n\n*Cited Evidence:*\n- Queries: CheckNodeServiceStatus, CheckServiceConnectivity, DescribeResource, GetAlerts, GetAppYAML, GetClusterConfiguration, GetErrorLogs, GetRecentLogs, GetResources, GetServiceDependencies, describe eks addon, describe eks cluster, get eks events, get eks node health, get eks nodegroup health, list eks clusters, list eks deployments, list eks namespaces, list eks pods\n\n\nTiming: 38s\n"
+    },
+    "evidence_entries_count": 19,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 38483
+  },
+  "score": {
+    "metrics": {
+      "a1": 0.0,
+      "a3": 0.0,
+      "partial_a1": 0.0,
+      "partial_a3": 0.0,
+      "tcr": 0.0,
+      "exact": 0.0,
+      "in_order": 0.0,
+      "any_order": 1.0,
+      "rel": 0.23076923076923078,
+      "cov": 1.0,
+      "steps": 14.0,
+      "mtti": 0.0,
+      "iac": 0.0,
+      "rar": 0.07142857142857142,
+      "ztdr": 0.0,
+      "citation_grounding_rate": 0.40186915887850466,
+      "entity_existence_rate": 1.0,
+      "kubectl_actionability_rate": 1.0
+    },
+    "failure_reason": null
+  }
+}

@@ -1,0 +1,90 @@
+{
+  "run_id": "dev-2026-05-17T18-25-41Z_cloudopsbench",
+  "config_hash": "1c858d67a6e5a18d",
+  "started_at": "2026-05-17T18:25:41.233533+00:00",
+  "ended_at": "2026-05-17T18:32:32.635837+00:00",
+  "per_stratum": {
+    "all": {
+      "opensre+llm/claude-default": {
+        "a1": 0.0,
+        "a3": 0.0,
+        "partial_a1": 0.0,
+        "partial_a3": 0.0,
+        "tcr": 0.0,
+        "exact": 0.0,
+        "in_order": 0.0,
+        "any_order": 0.0,
+        "rel": 0.0,
+        "cov": 0.0,
+        "iac": 0.0,
+        "rar": 0.0,
+        "ztdr": 0.0,
+        "citation_grounding_rate": 1.0,
+        "entity_existence_rate": 1.0,
+        "kubectl_actionability_rate": 1.0,
+        "steps": 0.0,
+        "mtti": 0.0
+      }
+    },
+    "seen-shape": {
+      "opensre+llm/claude-default": {
+        "a1": 0.0,
+        "a3": 0.0,
+        "partial_a1": 0.0,
+        "partial_a3": 0.0,
+        "tcr": 0.0,
+        "exact": 0.0,
+        "in_order": 0.0,
+        "any_order": 0.0,
+        "rel": 0.0,
+        "cov": 0.0,
+        "iac": 0.0,
+        "rar": 0.0,
+        "ztdr": 0.0,
+        "citation_grounding_rate": 1.0,
+        "entity_existence_rate": 1.0,
+        "kubectl_actionability_rate": 1.0,
+        "steps": 0.0,
+        "mtti": 0.0
+      }
+    }
+  },
+  "reported_metrics": [
+    "a1",
+    "a3",
+    "partial_a1",
+    "partial_a3",
+    "tcr",
+    "exact",
+    "in_order",
+    "any_order",
+    "rel",
+    "cov",
+    "iac",
+    "rar",
+    "ztdr",
+    "citation_grounding_rate",
+    "entity_existence_rate",
+    "kubectl_actionability_rate",
+    "steps",
+    "mtti"
+  ],
+  "negative_results": "opensre lost or tied on 15 of 15 cell(s) (adapter=cloudopsbench):\n  - boutique/startup/31  mode=opensre+llm  llm=claude-default  run=0  a1=0.00  artifact=boutique_startup_31__opensre+llm__claude-default__0.json\n  - boutique/startup/31  mode=opensre+llm  llm=claude-default  run=1  a1=0.00  artifact=boutique_startup_31__opensre+llm__claude-default__1.json\n  - boutique/startup/31  mode=opensre+llm  llm=claude-default  run=2  a1=0.00  artifact=boutique_startup_31__opensre+llm__claude-default__2.json\n  - trainticket/runtime/22  mode=opensre+llm  llm=claude-default  run=0  a1=0.00  artifact=trainticket_runtime_22__opensre+llm__claude-default__0.json\n  - trainticket/runtime/22  mode=opensre+llm  llm=claude-default  run=1  a1=0.00  artifact=trainticket_runtime_22__opensre+llm__claude-default__1.json\n  - trainticket/runtime/22  mode=opensre+llm  llm=claude-default  run=2  a1=0.00  artifact=trainticket_runtime_22__opensre+llm__claude-default__2.json\n  - trainticket/runtime/34  mode=opensre+llm  llm=claude-default  run=0  a1=0.00  artifact=trainticket_runtime_34__opensre+llm__claude-default__0.json\n  - trainticket/runtime/34  mode=opensre+llm  llm=claude-default  run=1  a1=0.00  artifact=trainticket_runtime_34__opensre+llm__claude-default__1.json\n  - trainticket/runtime/34  mode=opensre+llm  llm=claude-default  run=2  a1=0.00  artifact=trainticket_runtime_34__opensre+llm__claude-default__2.json\n  - trainticket/startup/14  mode=opensre+llm  llm=claude-default  run=0  a1=0.00  artifact=trainticket_startup_14__opensre+llm__claude-default__0.json\n  - trainticket/startup/14  mode=opensre+llm  llm=claude-default  run=1  a1=0.00  artifact=trainticket_startup_14__opensre+llm__claude-default__1.json\n  - trainticket/startup/14  mode=opensre+llm  llm=claude-default  run=2  a1=0.00  artifact=trainticket_startup_14__opensre+llm__claude-default__2.json\n  - trainticket/runtime/92  mode=opensre+llm  llm=claude-default  run=0  a1=0.00  artifact=trainticket_runtime_92__opensre+llm__claude-default__0.json\n  - trainticket/runtime/92  mode=opensre+llm  llm=claude-default  run=1  a1=0.00  artifact=trainticket_runtime_92__opensre+llm__claude-default__1.json\n  - trainticket/runtime/92  mode=opensre+llm  llm=claude-default  run=2  a1=0.00  artifact=trainticket_runtime_92__opensre+llm__claude-default__2.json",
+  "coi_disclosure": "Conflict-of-interest disclosure: this benchmark run was authored, executed, and interpreted by the same person who builds opensre. Per the framework's integrity discipline, this structural bias is mitigated by (a) pre-registration committed before the run, (b) per-stratum reporting, (c) required negative-results section, (d) external replication of at least one cell before any public claim, (e) standardization-by-pinning of every parameter that affects results. Reviewers are encouraged to reproduce any cell independently.",
+  "raw_artifacts_dir": ".bench-results/example/dev-2026-05-17T18-25-41Z_cloudopsbench/cases",
+  "pre_registration_path": "tests/benchmarks/configs/preregistrations/example.yml",
+  "cost": {
+    "budget_usd": 50.0,
+    "total_cost_usd": 0.0,
+    "remaining_usd": 50.0,
+    "total_tokens_in": 0,
+    "total_tokens_out": 0,
+    "total_calls": 0,
+    "by_model": {}
+  },
+  "opensre_sha": "eab7777c-dirty",
+  "host": {
+    "user": "yauhenbichel",
+    "cwd": "/Users/yauhenbichel/DevBox/tracer-cloud/opensre"
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "case": {
+    "case_id": "trainticket/runtime/22",
+    "benchmark_name": "cloudopsbench",
+    "metadata": {
+      "system": "trainticket",
+      "fault_category": "runtime",
+      "case_name": "22",
+      "namespace": "train-ticket",
+      "query": "Service Availability Disruption.",
+      "ground_truth": {
+        "fault_taxonomy": "Runtime_Fault",
+        "fault_object": "app/ts-order-service",
+        "root_cause": "deployment_zero_replicas"
+      },
+      "process": {
+        "path1": [
+          "GetResources::pods",
+          "GetResources::services",
+          "GetResources::endpoints",
+          "GetResources::deployments"
+        ],
+        "path2": [
+          "GetResources::pods",
+          "GetAlerts::",
+          "GetResources::services",
+          "GetResources::endpoints",
+          "GetResources::deployments"
+        ]
+      }
+    },
+    "seen_shape": true
+  },
+  "run": {
+    "mode": "opensre+llm",
+    "llm": "claude-default",
+    "model_version": "(opensre-default)",
+    "opensre_sha": "eab7777c-dirty",
+    "started_at": "2026-05-17T18:28:53.875379+00:00",
+    "ended_at": "2026-05-17T18:29:52.967343+00:00",
+    "ok": true,
+    "error": null,
+    "final_diagnosis": {
+      "stage": "configuration",
+      "component": "",
+      "root_cause": "The ts-order-service Deployment in namespace train-ticket has been scaled to 0 replicas, leaving its Service with no Endpoints. All traffic to ts-order-service routes (and downstream flows depending on it) consequently fails with 503/500 errors.",
+      "report": "The ts-order-service Deployment in namespace train-ticket has been scaled to 0 replicas, leaving its Service with no Endpoints\n\n## Findings\n• Deployment ts-order-service is at 0/0 replicas in namespace train-ticket.\n• Service ts-order-service has zero endpoints and TCP connectivity to it fails.\n• A ScalingReplicaSet event scaled ts-order-service from 1 to 0 ~4m56s before the snapshot, followed by pod deletion and container Killing events.\n• The application manifest (GetAppYAML) specifies replicas: 1, so live state is drifted from declared state.\n• 503 alerts target routes entering ts-order-service; 500s on the preserve flow occur on a path whose dependency chain traverses ts-order-service.\n• All 4 nodes are Ready, kube-scheduler is healthy, MySQL (tsdb-mysql-0/1/2) and other ts-* deployments are 1/1 Running, ruling out infrastructure/database causes.\n\n*Non-Validated Claims (Inferred):*\n• The actor or mechanism that triggered the scale-down (manual kubectl scale, HPA with minReplicas 0, GitOps overlay, etc.) is unknown from the available tools.\n• Whether the 21 preserve-flow 500s are entirely cascade failures from ts-order-service or partially due to in-flight transaction side effects is not fully confirmed.\n• No application logs for ts-order-service were retrievable (no pods exist), so no in-process error signal corroborates the cascade hypothesis.\n\n## Recommended Actions\n• Immediately restore replicas: kubectl -n train-ticket scale deployment/ts-order-service --replicas=1 and wait for the pod to become Ready (TCP readinessProbe on 12031 with 60s initial delay).\n• Verify recovery: kubectl -n train-ticket get endpoints ts-order-service shows a populated endpoint, and rerun CheckServiceConnectivity against the correct Service port 12031 (also reconcile any alert probe still targeting port 80).\n• Re-apply the source-of-truth manifest from Git (kubectl apply -f ts-order-service.yaml) to prevent drift back to 0 replicas.\n• Audit the cause: review kubectl events sorted by lastTimestamp, check for an HPA (kubectl -n train-ticket get hpa) with minReplicas=0 and raise to >=1, and inspect Argo/Flux or audit logs for the scale-down actor.\n• Add guardrails: a PodDisruptionBudget with minAvailable: 1 for ts-order-service and an alert on kube_deployment_spec_replicas == 0 for production deployments.\n• After ts-order-service is healthy, confirm 500/503 alert counters stop incrementing and review ts-preserve-service and ts-gateway-service logs for any retry-storm fallout.\n\n\n*Cited Evidence:*\n- Queries: CheckNodeServiceStatus, CheckServiceConnectivity, DescribeResource, GetAlerts, GetAppYAML, GetClusterConfiguration, GetErrorLogs, GetRecentLogs, GetResources, GetServiceDependencies, describe eks addon, describe eks cluster, get eks events, get eks node health, get eks nodegroup health, list eks clusters, list eks deployments, list eks namespaces, list eks pods\n\n\nTiming: 59s\n"
+    },
+    "evidence_entries_count": 19,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 59091
+  },
+  "score": {
+    "metrics": {
+      "a1": 0.0,
+      "a3": 0.0,
+      "partial_a1": 0.0,
+      "partial_a3": 0.0,
+      "tcr": 0.0,
+      "exact": 0.0,
+      "in_order": 0.0,
+      "any_order": 0.0,
+      "rel": 0.23076923076923078,
+      "cov": 0.6,
+      "steps": 14.0,
+      "mtti": 0.0,
+      "iac": 0.0,
+      "rar": 0.07142857142857142,
+      "ztdr": 0.0,
+      "citation_grounding_rate": 0.38961038961038963,
+      "entity_existence_rate": 1.0,
+      "kubectl_actionability_rate": 0.0
+    },
+    "failure_reason": null
+  }
+}

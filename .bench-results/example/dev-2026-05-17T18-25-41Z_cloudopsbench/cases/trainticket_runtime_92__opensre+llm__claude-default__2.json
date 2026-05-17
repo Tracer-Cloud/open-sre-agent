@@ -1,0 +1,80 @@
+{
+  "case": {
+    "case_id": "trainticket/runtime/92",
+    "benchmark_name": "cloudopsbench",
+    "metadata": {
+      "system": "trainticket",
+      "fault_category": "runtime",
+      "case_name": "92",
+      "namespace": "train-ticket",
+      "query": "Service Availability Disruption.",
+      "ground_truth": {
+        "fault_taxonomy": "Runtime_Fault",
+        "fault_object": "app/ts-security-service",
+        "root_cause": "service_sidecar_port_conflict"
+      },
+      "process": {
+        "path1": [
+          "GetResources::pods",
+          "DescribeResource::pods::ts-security-service",
+          "GetAlerts::",
+          "GetErrorLogs::ts-security-service",
+          "GetResources::services",
+          "GetResources::endpoints"
+        ],
+        "path2": [
+          "GetResources::pods",
+          "DescribeResource::pods::ts-security-service",
+          "GetAlerts::",
+          "GetErrorLogs::ts-security-service",
+          "GetResources::endpoints"
+        ]
+      }
+    },
+    "seen_shape": true
+  },
+  "run": {
+    "mode": "opensre+llm",
+    "llm": "claude-default",
+    "model_version": "(opensre-default)",
+    "opensre_sha": "eab7777c-dirty",
+    "started_at": "2026-05-17T18:32:32.184987+00:00",
+    "ended_at": "2026-05-17T18:32:32.635336+00:00",
+    "ok": false,
+    "error": "RuntimeError: Anthropic request rejected (HTTP 400): Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, 'request_id': 'req_011Cb8cuJ3TzGrji3cfniU4b'}",
+    "final_diagnosis": {
+      "stage": "",
+      "component": "",
+      "root_cause": "",
+      "report": ""
+    },
+    "evidence_entries_count": 0,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 450
+  },
+  "score": {
+    "metrics": {
+      "a1": 0.0,
+      "a3": 0.0,
+      "partial_a1": 0.0,
+      "partial_a3": 0.0,
+      "tcr": 0.0,
+      "exact": 0.0,
+      "in_order": 0.0,
+      "any_order": 0.0,
+      "rel": 0.0,
+      "cov": 0.0,
+      "steps": 0.0,
+      "mtti": 0.0,
+      "iac": 0.0,
+      "rar": 0.0,
+      "ztdr": 0.0,
+      "citation_grounding_rate": 1.0,
+      "entity_existence_rate": 1.0,
+      "kubectl_actionability_rate": 1.0
+    },
+    "failure_reason": null
+  }
+}
