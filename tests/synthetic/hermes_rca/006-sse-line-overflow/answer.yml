@@ -22,4 +22,4 @@ optimal_trajectory:
 
 max_investigation_loops: 4
 
-model_response: Hermes SSE parser failed because a streamed response line exceeded the configured maximum line size.
+model_response: Hermes SSE parser hit a line overflow because a streamed response line exceeded the configured maximum line size.

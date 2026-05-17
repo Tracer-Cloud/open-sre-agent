@@ -22,4 +22,4 @@ optimal_trajectory:
 
 max_investigation_loops: 3
 
-model_response: Hermes dropped required Codex request headers and the provider rejected the request.
+model_response: Hermes dropped required Codex authorization headers from the request and the provider rejected it.

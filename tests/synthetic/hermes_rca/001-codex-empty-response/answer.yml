@@ -21,4 +21,4 @@ optimal_trajectory:
 
 max_investigation_loops: 3
 
-model_response: Codex Responses API returned an empty/malformed response body and Hermes terminated the session.
+model_response: Codex Responses API returned an empty/malformed response body; Hermes retried the request and then terminated the session.
