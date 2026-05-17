@@ -28,6 +28,7 @@ from rich.table import Table
 from app.agents.config import load_agents_config
 from app.agents.registry import AgentRecord
 from app.agents.sampler import get_snapshot
+from app.agents.status import Status, compute_status
 from app.cli.interactive_shell.ui.theme import BOLD_BRAND
 
 # Placeholder for columns without a live data source (currently only tokens/min).
@@ -47,6 +48,12 @@ _COLUMNS: tuple[tuple[str, JustifyMethod], ...] = (
     ("status", "left"),
 )
 
+_STATUS_COLORS: dict[Status, str] = {
+    Status.ACTIVE: "green",
+    Status.IDLE: "yellow",
+    Status.STUCK: "red",
+}
+
 
 def _format_uptime(delta: timedelta) -> str:
     """Format a timedelta as a compact human-readable duration string."""
@@ -62,6 +69,13 @@ def _format_uptime(delta: timedelta) -> str:
     days = hours // 24
     remaining_hours = hours % 24
     return f"{days}d{remaining_hours}h"
+
+
+def _format_status(status: Status, msg: str = "") -> str:
+    """Return a Rich-markup-colorized status cell for the /agents table."""
+    color = _STATUS_COLORS.get(status, "default")
+    label = f"{status.value} ({msg})" if msg else status.value
+    return f"[{color}]{label}[/{color}]"
 
 
 def render_agents_table(records: Iterable[AgentRecord]) -> Table:
@@ -106,9 +120,23 @@ def render_agents_table(records: Iterable[AgentRecord]) -> Table:
         )
         snapshot = get_snapshot(record.pid)
         if snapshot is not None:
+            # last_output_at requires a background collector that tracks when each agent last wrote
+            # to stdout — not yet implemented. Until that lands, the fallback to snapshot.started_at
+            # means the heuristic overestimates silence duration for agents that are actively producing output.
+            status = compute_status(
+                snapshot,
+                now,
+                last_output_at=None,
+                idle_after_s=120,
+                stuck_after_s=480,
+            )
+            status_msg = ""
+            if status is Status.STUCK:
+                status_msg = f"{_format_uptime(now - snapshot.started_at)} no progress"
+
             uptime_cell = _format_uptime(now - snapshot.started_at)
             cpu_cell = f"{snapshot.cpu_percent:.1f}"
-            status_cell = snapshot.status
+            status_cell = _format_status(status, status_msg)
         else:
             uptime_cell = _UNFILLED
             cpu_cell = _UNFILLED
