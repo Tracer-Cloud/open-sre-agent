@@ -483,9 +483,7 @@ def _classify_service_instance(
             )
         except Exception:
             return None, None
-        if wa_config.phone_number_id and wa_config.access_token:
-            return wa_config.model_dump(), "whatsapp"
-        return None, None
+        return wa_config.model_dump(), "whatsapp"
 
     if key == "openclaw":
         try:

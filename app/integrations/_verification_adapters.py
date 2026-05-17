@@ -354,10 +354,13 @@ def _verify_whatsapp(source: str, config: dict[str, Any]) -> dict[str, str]:
     if not access_token:
         return result("whatsapp", source, "missing", "Missing access_token.")
 
+    from app.utils.whatsapp_delivery import _API_VERSION as _WA_API_VERSION
+
     try:
         response = requests.get(
-            f"https://graph.facebook.com/v18.0/{phone_number_id}",
-            params={"access_token": access_token, "fields": "id,display_phone_number"},
+            f"https://graph.facebook.com/{_WA_API_VERSION}/{phone_number_id}",
+            headers={"Authorization": f"Bearer {access_token}"},
+            params={"fields": "id,display_phone_number"},
             timeout=10,
         )
         response.raise_for_status()
