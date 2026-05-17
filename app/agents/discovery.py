@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 _DEFAULT_CURSOR_PROJECTS_DIR = Path.home() / ".cursor" / "projects"
 _PS_COMMAND = ("ps", "-axo", "pid=,ppid=,args=")
 _MAX_DISPLAY_COMMAND_LENGTH = 120
+_CODEX_LAUNCHER_TOKENS: frozenset[str] = frozenset({"codex", "codex.js", "codex.mjs", "codex.cjs"})
 _NODE_EXECUTABLES: frozenset[str] = frozenset({"node", "nodejs"})
 _NOISE_PROCESS_TOKENS: tuple[str, ...] = (
     "chrome_crashpad_handler",
@@ -256,17 +257,34 @@ def _is_codex_wrapper_native_pair(parent: ProcessRow, child: ProcessRow) -> bool
 
 def _is_node_codex_wrapper(command: str) -> bool:
     cmdline = _split_command(command)
-    if not cmdline:
-        return False
-    executable = _normalized_token(cmdline[0])
-    return executable in _NODE_EXECUTABLES and _has_command_token(command.lower(), "codex")
+    return _is_node_codex_cmdline(cmdline)
 
 
 def _is_native_codex_process(command: str) -> bool:
     cmdline = _split_command(command)
+    return bool(cmdline) and _is_codex_launcher_token(cmdline[0])
+
+
+def _is_codex_command(command: str) -> bool:
+    return _is_codex_cmdline(_split_command(command))
+
+
+def _is_codex_cmdline(cmdline: list[str]) -> bool:
     if not cmdline:
         return False
-    return _normalized_token(cmdline[0]) == "codex"
+    if _is_codex_launcher_token(cmdline[0]):
+        return True
+    return _is_node_codex_cmdline(cmdline)
+
+
+def _is_node_codex_cmdline(cmdline: list[str]) -> bool:
+    if not cmdline or _normalized_token(cmdline[0]) not in _NODE_EXECUTABLES:
+        return False
+    return any(_is_codex_launcher_token(part) for part in cmdline[1:])
+
+
+def _is_codex_launcher_token(value: str) -> bool:
+    return _normalized_token(value) in _CODEX_LAUNCHER_TOKENS
 
 
 def _preferred_codex_pair_pid(
@@ -333,7 +351,7 @@ def _agent_name_for_command(command: str) -> str | None:
         return "cursor-agent"
     if _has_command_token(lower, "claude") and _has_command_token(lower, "code"):
         return "claude-code"
-    if _has_command_token(lower, "codex"):
+    if _is_codex_command(command):
         return "codex"
     if _has_command_token(lower, "aider"):
         return "aider"
@@ -377,6 +395,10 @@ def _classify_agent_loose(process_name: str, cmdline: list[str]) -> str | None:
     tokens.add(_normalized_token(process_name))
 
     for signature, label in _LOOSE_AGENT_SIGNATURES:
+        if label == "codex":
+            if _is_codex_cmdline(cmdline):
+                return label
+            continue
         if signature in tokens or signature in haystack:
             return label
     return None

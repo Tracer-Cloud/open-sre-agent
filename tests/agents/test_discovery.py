@@ -213,6 +213,46 @@ def test_ignores_plain_claude_commands_with_code_prefix_arguments() -> None:
     assert records == []
 
 
+def test_ignores_non_codex_process_from_codex_named_directory() -> None:
+    records = discover_agents(
+        process_rows=[
+            ProcessRow(
+                pid=4242,
+                ppid=4200,
+                command=(
+                    "/workspace/project-with-codex-in-name/.venv/bin/python "
+                    "/workspace/project-with-codex-in-name/.venv/bin/opensre"
+                ),
+            )
+        ],
+        cursor_projects_dir=Path("/does/not/exist"),
+    )
+
+    assert records == []
+
+
+def test_scan_all_ignores_non_codex_process_from_codex_named_directory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(discovery.os, "getpid", lambda: 10)
+    monkeypatch.setattr(
+        discovery,
+        "_current_process_rows",
+        lambda: [
+            ProcessRow(
+                pid=4242,
+                ppid=4200,
+                command=(
+                    "/workspace/project-with-codex-in-name/.venv/bin/python "
+                    "/workspace/project-with-codex-in-name/.venv/bin/opensre"
+                ),
+            )
+        ],
+    )
+
+    assert discovery.discover_agent_processes(include_all=True) == []
+
+
 def test_discovers_single_codex_row_for_node_wrapper_and_native_child(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
