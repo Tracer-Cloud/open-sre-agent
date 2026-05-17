@@ -140,6 +140,8 @@ class HermesRuntimeStateFixture(TypedDict):
     last_progress_ts: str
     is_blocked: bool
     blocking_call: HermesBlockingCall | None
+    imds_fingerprint: NotRequired[dict[str, Any] | None]
+    resolved_aws_role_arn: NotRequired[str | None]
 
 
 class HermesCronLastRun(TypedDict):
@@ -379,6 +381,15 @@ def validate_hermes_runtime_state(data: dict[str, Any]) -> HermesRuntimeStateFix
         _require_str(blocking_call, "started_at", f"{ctx}:blocking_call")
         if not isinstance(blocking_call.get("duration_s"), int):
             raise ValueError(f"{ctx}:blocking_call: 'duration_s' must be an integer")
+
+    imds_fingerprint = data.get("imds_fingerprint")
+    if imds_fingerprint is not None and not isinstance(imds_fingerprint, dict):
+        raise ValueError(f"{ctx}: 'imds_fingerprint' must be an object or null")
+
+    resolved_aws_role_arn = data.get("resolved_aws_role_arn")
+    if resolved_aws_role_arn is not None and not isinstance(resolved_aws_role_arn, str):
+        raise ValueError(f"{ctx}: 'resolved_aws_role_arn' must be a string or null")
+
     return data  # type: ignore[return-value]
 
 
