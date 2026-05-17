@@ -208,7 +208,11 @@ def _parse_ps_line(line: str) -> ProcessRow | None:
         return None
 
     if len(parts) == 2:
-        return ProcessRow(pid=pid, command=parts[1])
+        try:
+            ppid = int(parts[1])
+        except ValueError:
+            ppid = None
+        return ProcessRow(pid=pid, ppid=ppid, command="")
 
     try:
         ppid = int(parts[1])

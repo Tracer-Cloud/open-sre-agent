@@ -127,6 +127,18 @@ def test_display_command_truncates_long_commands() -> None:
     assert display.endswith("...")
 
 
+def test_parse_ps_line_with_missing_args_keeps_ppid_and_empty_command() -> None:
+    row = discovery._parse_ps_line("123 45")
+
+    assert row == ProcessRow(pid=123, ppid=45, command="")
+
+
+def test_parse_ps_line_with_missing_args_tolerates_invalid_ppid() -> None:
+    row = discovery._parse_ps_line("123 not-a-ppid")
+
+    assert row == ProcessRow(pid=123, ppid=None, command="")
+
+
 def test_discovers_cursor_claude_code_process() -> None:
     records = discover_agents(
         process_rows=[
