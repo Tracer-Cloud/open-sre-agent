@@ -1,4 +1,4 @@
-root_cause_category: upstream_service_outage
+root_cause_category: configuration_error
 
 required_keywords:
   - openrouter
