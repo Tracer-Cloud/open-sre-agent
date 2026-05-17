@@ -168,7 +168,7 @@ def generate_report(state: InvestigationState) -> dict:
     if whatsapp_creds:
         from app.utils.whatsapp_delivery import send_whatsapp_report
 
-        _wa_ctx: dict[str, Any] = state.get("whatsapp_context") or {}  # type: ignore[assignment]
+        _wa_ctx: dict[str, Any] = state.get("whatsapp_context") or {}
         account_sid = _wa_ctx.get("account_sid") or whatsapp_creds.get("account_sid", "")
         auth_token = _wa_ctx.get("auth_token") or whatsapp_creds.get("auth_token", "")
         from_number = _wa_ctx.get("from_number") or whatsapp_creds.get("from_number", "")
