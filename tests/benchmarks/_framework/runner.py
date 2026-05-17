@@ -32,6 +32,7 @@ import json
 import os
 import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -52,6 +53,13 @@ from tests.benchmarks._framework.integrity import (
     BenchmarkReport,
     IntegrityGuard,
     make_baseline_report,
+)
+from tests.benchmarks._framework.llm_dispatch import (
+    LLMDispatcher,
+    LLMSpec,
+    MissingAPIKey,
+    ModelVersionMismatch,
+    UnknownLLM,
 )
 
 # --------------------------------------------------------------------------- #
@@ -103,11 +111,13 @@ class BenchmarkRunner:
         adapter: BenchmarkAdapter,
         integrity_guard: IntegrityGuard | None = None,
         cost_tracker: CostTracker | None = None,
+        dispatcher: LLMDispatcher | None = None,
     ) -> None:
         self.config = config
         self.adapter = adapter
         self.integrity = integrity_guard or IntegrityGuard()
         self.cost = cost_tracker or CostTracker(budget_usd=config.cost_budget_usd)
+        self.dispatcher = dispatcher or LLMDispatcher()
         self._opensre_sha = _git_sha()
 
     # ----------------------------------------------------------------------- #
@@ -144,6 +154,11 @@ class BenchmarkRunner:
                 "opensre-benchmark-task-scope.md. Run with modes=['opensre+llm'] only."
             )
 
+        # Pre-flight: verify every LLM in config is registered AND that its
+        # pinned model_version matches the spec. Fail-fast before any cell runs.
+        # Raises UnknownLLM or ModelVersionMismatch; caller surfaces as failure.
+        self._verify_llm_specs()
+
         run_id = self._build_run_id(dev_mode=dev_mode)
         output_dir = self.config.output_dir / run_id
         cases_dir = output_dir / "cases"
@@ -169,23 +184,33 @@ class BenchmarkRunner:
         )
         print(f"  loaded {len(cases)} case(s)")
 
+        # Serialize across LLMs (opensre's LLM client is a module-level
+        # singleton — swapping mid-flight would race). Parallel within a
+        # single LLM activation.
         try:
-            for case in cases:
-                for mode in self.config.modes:
-                    mode_cast: Mode = cast(Mode, mode)
-                    for llm in self.config.llms:
-                        for run_index in range(self.config.runs_per_case):
-                            cell = self._run_one_cell(
-                                case=case,
-                                mode=mode_cast,
-                                llm=llm,
-                                run_index=run_index,
-                                cases_dir=cases_dir,
-                            )
-                            cells.append(cell)
+            for llm in self.config.llms:
+                print(f"  ▶ activating LLM: {llm}")
+                with self.dispatcher.activate(llm) as spec:
+                    llm_cell_specs: list[tuple[BenchmarkCase, Mode, str, int]] = [
+                        (case, cast(Mode, mode), llm, run_index)
+                        for case in cases
+                        for mode in self.config.modes
+                        for run_index in range(self.config.runs_per_case)
+                    ]
+                    cells.extend(
+                        self._execute_llm_batch(
+                            specs=llm_cell_specs,
+                            spec=spec,
+                            cases_dir=cases_dir,
+                        )
+                    )
         except CostBudgetExceeded as exc:
             aborted = True
             abort_reason = str(exc)
+            print(f"  ✗ aborted: {abort_reason}")
+        except (UnknownLLM, ModelVersionMismatch, MissingAPIKey) as exc:
+            aborted = True
+            abort_reason = f"LLM dispatch failed: {exc}"
             print(f"  ✗ aborted: {abort_reason}")
 
         ended_at = datetime.now(UTC).isoformat()
@@ -219,12 +244,73 @@ class BenchmarkRunner:
 
         return RunOutcome(report=report, cells=cells, aborted=aborted, abort_reason=abort_reason)
 
+    def _verify_llm_specs(self) -> None:
+        """Pre-flight: confirm every LLM in config has a registered spec and
+        the config's pinned ``model_versions[<llm>]`` matches.
+
+        Raises UnknownLLM or ModelVersionMismatch from llm_dispatch — caught
+        by _run_inner and surfaced as ``abort_reason``.
+        """
+        for llm in self.config.llms:
+            self.dispatcher.spec(llm)  # raises UnknownLLM
+            configured = self.config.model_versions.get(llm, "")
+            self.dispatcher.verify_model_version(llm, configured)
+
+    def _execute_llm_batch(
+        self,
+        *,
+        specs: list[tuple[BenchmarkCase, Mode, str, int]],
+        spec: LLMSpec,
+        cases_dir: Path,
+    ) -> list[_CellResult]:
+        """Run a batch of cells under one already-activated LLM dispatcher.
+
+        Within an LLM, parallel via ThreadPoolExecutor is safe (singleton
+        is stable for the duration of the activation context).
+        """
+        results: list[_CellResult] = []
+        if self.config.workers <= 1:
+            for case, mode_cast, llm, run_index in specs:
+                results.append(
+                    self._run_one_cell(
+                        case=case,
+                        mode=mode_cast,
+                        llm=llm,
+                        spec=spec,
+                        run_index=run_index,
+                        cases_dir=cases_dir,
+                    )
+                )
+            return results
+        with ThreadPoolExecutor(max_workers=self.config.workers) as executor:
+            future_to_spec = {
+                executor.submit(
+                    self._run_one_cell,
+                    case=case,
+                    mode=mode_cast,
+                    llm=llm,
+                    spec=spec,
+                    run_index=run_index,
+                    cases_dir=cases_dir,
+                ): (case, mode_cast, llm, run_index)
+                for case, mode_cast, llm, run_index in specs
+            }
+            for future in as_completed(future_to_spec):
+                try:
+                    results.append(future.result())
+                except CostBudgetExceeded:
+                    for f in future_to_spec:
+                        f.cancel()
+                    raise
+        return results
+
     def _run_one_cell(
         self,
         *,
         case: BenchmarkCase,
         mode: Mode,
         llm: str,
+        spec: LLMSpec,
         run_index: int,
         cases_dir: Path,
     ) -> _CellResult:
@@ -259,7 +345,9 @@ class BenchmarkRunner:
             case_id=case.case_id,
             mode=mode,
             llm=llm,
-            model_version=self.config.model_versions.get(llm, "(unpinned)"),
+            # Pinned via llm_dispatch — what opensre's LLM client actually resolved to,
+            # not what the user wrote in YAML (those must match by pre-flight check).
+            model_version=spec.reasoning_model,
             opensre_sha=self._opensre_sha,
             started_at=started.isoformat(),
             ended_at=ended.isoformat(),
