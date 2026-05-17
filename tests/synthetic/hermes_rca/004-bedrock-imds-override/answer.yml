@@ -23,4 +23,4 @@ optimal_trajectory:
 
 max_investigation_loops: 4
 
-model_response: Hermes auto-detected AWS Bedrock credentials from IMDS and silently overrode the configured custom provider.
+model_response: Hermes triggered an IMDS override and switched to the Bedrock provider using AWS instance credentials.
