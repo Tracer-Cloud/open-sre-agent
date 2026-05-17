@@ -1956,7 +1956,7 @@ requires-dist = [
     { name = "build", marker = "extra == 'release'", specifier = ">=1.2.0" },
     { name = "build", marker = "extra == 'release-dist'", specifier = ">=1.2.0" },
     { name = "click", specifier = ">=8.1.0" },
-    { name = "clickhouse-connect", specifier = ">=0.15.1" },
+    { name = "clickhouse-connect", specifier = ">=0.15.1,<1.0.0" },
     { name = "clickhouse-connect", marker = "extra == 'clickhouse'", specifier = ">=0.15.1" },
     { name = "confluent-kafka", marker = "extra == 'kafka'", specifier = ">=2.14.0" },
     { name = "cryptography", specifier = ">=42.0.0" },
