@@ -55,6 +55,7 @@ from app.integrations.registry import (
     service_key,
 )
 from app.integrations.sentry import build_sentry_config
+from app.integrations.signoz import build_signoz_config, signoz_config_from_env
 from app.integrations.store import _STRUCTURAL_RECORD_FIELDS, load_integrations
 from app.integrations.supabase import build_supabase_config
 from app.services.vercel import VercelConfig
@@ -820,6 +821,27 @@ def _classify_service_instance(
                 "project_url": sb_config.url,
                 "integration_id": record_id,
             }, "supabase"
+        return None, None
+
+    if key == "signoz":
+        try:
+            signoz_config = build_signoz_config(
+                {
+                    "url": credentials.get("url", ""),
+                    "api_key": credentials.get("api_key", ""),
+                    "clickhouse_host": credentials.get("clickhouse_host", ""),
+                    "clickhouse_port": int(credentials.get("clickhouse_port", 8123) or 8123),
+                    "clickhouse_database": credentials.get("clickhouse_database", "default"),
+                    "clickhouse_user": credentials.get("clickhouse_user", "default"),
+                    "clickhouse_password": credentials.get("clickhouse_password", ""),
+                    "secure": credentials.get("secure", False),
+                    "integration_id": record_id,
+                }
+            )
+        except Exception:
+            return None, None
+        if signoz_config.clickhouse_host:
+            return signoz_config.model_dump(), "signoz"
         return None, None
 
     # Fallback for unknown services: pass through credentials + record id.
@@ -1655,6 +1677,18 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         except Exception:
             logger.debug("Failed to load Supabase config from env", exc_info=True)
+
+    try:
+        signoz_config = signoz_config_from_env()
+        if signoz_config is not None and signoz_config.is_configured:
+            integrations.append(
+                _active_env_record(
+                    "signoz",
+                    signoz_config.model_dump(exclude={"integration_id"}),
+                )
+            )
+    except Exception:
+        logger.debug("Failed to load SigNoz config from env", exc_info=True)
 
     return integrations
 

@@ -96,3 +96,4 @@ class EffectiveIntegrations(StrictConfigModel):
     helm: EffectiveIntegrationEntry | None = None
     victoria_logs: EffectiveIntegrationEntry | None = None
     alicloud: EffectiveIntegrationEntry | None = None
+    signoz: EffectiveIntegrationEntry | None = None

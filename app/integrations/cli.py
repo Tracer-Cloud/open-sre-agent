@@ -730,6 +730,32 @@ def _setup_alertmanager() -> None:
     upsert_integration("alertmanager", {"credentials": credentials})
 
 
+def _setup_signoz() -> None:
+    clickhouse_host = _p("ClickHouse host")
+    clickhouse_port = _p("ClickHouse port", default="8123")
+    clickhouse_user = _p("ClickHouse user", default="default")
+    clickhouse_password = _p("ClickHouse password", secret=True)
+    clickhouse_database = _p("ClickHouse database", default="default")
+    url = _p("SigNoz URL (optional)")
+    api_key = _p("SigNoz API key (optional)", secret=True)
+    if not clickhouse_host:
+        _die("clickhouse_host is required.")
+    upsert_integration(
+        "signoz",
+        {
+            "credentials": {
+                "clickhouse_host": clickhouse_host,
+                "clickhouse_port": int(clickhouse_port) if clickhouse_port.isdigit() else 8123,
+                "clickhouse_user": clickhouse_user,
+                "clickhouse_password": clickhouse_password,
+                "clickhouse_database": clickhouse_database,
+                "url": url,
+                "api_key": api_key,
+            }
+        },
+    )
+
+
 _HANDLERS: dict[str, Any] = {
     "alertmanager": _setup_alertmanager,
     "aws": _setup_aws,
@@ -754,6 +780,7 @@ _HANDLERS: dict[str, Any] = {
     "openclaw": _setup_openclaw,
     "postgresql": _setup_postgresql,
     "mysql": _setup_mysql,
+    "signoz": _setup_signoz,
 }
 
 

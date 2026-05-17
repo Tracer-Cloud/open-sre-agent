@@ -33,6 +33,7 @@ from app.integrations.openclaw import build_openclaw_config, validate_openclaw_c
 from app.integrations.postgresql import build_postgresql_config, validate_postgresql_config
 from app.integrations.rabbitmq import build_rabbitmq_config, validate_rabbitmq_config
 from app.integrations.sentry import build_sentry_config, validate_sentry_config
+from app.integrations.signoz import build_signoz_config, validate_signoz_config
 from app.integrations.supabase import build_supabase_config, validate_supabase_config
 from app.services.alertmanager import AlertmanagerClient, AlertmanagerConfig
 from app.services.argocd import ArgoCDClient, ArgoCDConfig
@@ -456,6 +457,11 @@ _verify_openclaw = build_validation_verifier(
     build_config=build_openclaw_config,
     validate_config=validate_openclaw_config,
 )
+_verify_signoz = build_validation_verifier(
+    "signoz",
+    build_config=build_signoz_config,
+    validate_config=validate_signoz_config,
+)
 
 
 def _build_kafka_config(raw: dict[str, Any]) -> Any:
@@ -617,6 +623,7 @@ __all__ = [
     "_verify_postgresql",
     "_verify_rabbitmq",
     "_verify_sentry",
+    "_verify_signoz",
     "_verify_slack",
     "_verify_slack_without_test",
     "_verify_snowflake",

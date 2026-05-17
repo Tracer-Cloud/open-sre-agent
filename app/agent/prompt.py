@@ -89,6 +89,7 @@ _ALERT_SOURCE_TO_TOOL_SOURCES: dict[str, list[str]] = {
     "bitbucket": ["bitbucket"],
     "argocd": ["eks"],
     "splunk": ["splunk"],
+    "signoz": ["signoz"],
 }
 
 # Generic fallback sources — always secondary, never primary.
