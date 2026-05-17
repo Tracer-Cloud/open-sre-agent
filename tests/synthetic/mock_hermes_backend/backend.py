@@ -53,13 +53,20 @@ class FixtureHermesBackend:
         evidence = self._fixture.evidence.hermes_message_history
         if evidence is None:
             return self._missing("message_history")
-        return {
+        result: dict[str, Any] = {
             "source": "hermes",
             "available": True,
             "session_id": session_id or evidence.get("session_id", ""),
             "messages": list(evidence.get("messages", [])),
             "error": None,
         }
+        snapshots = evidence.get("snapshots")
+        if isinstance(snapshots, dict):
+            result["snapshots"] = {
+                "pre_compression": list(snapshots.get("pre_compression", [])),
+                "post_compression": list(snapshots.get("post_compression", [])),
+            }
+        return result
 
     def get_kv_cache_state(self, session_id: str = "", **_: Any) -> dict[str, Any]:
         evidence = self._fixture.evidence.hermes_kv_cache_state

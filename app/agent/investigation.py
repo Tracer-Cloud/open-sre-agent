@@ -206,7 +206,12 @@ class ConnectedInvestigationAgent:
                 MAX_INVESTIGATION_LOOPS,
             )
 
-        result = parse_diagnosis(messages, evidence, state.get("alert_name", ""))
+        result = parse_diagnosis(
+            messages,
+            evidence,
+            state.get("alert_name", ""),
+            alert_source=_get_alert_source(state),
+        )
         result.evidence = evidence
         result.evidence_entries = [e.model_dump() for e in evidence_entries]
         result.agent_messages = messages

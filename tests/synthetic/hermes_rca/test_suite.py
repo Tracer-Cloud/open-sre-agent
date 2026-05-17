@@ -75,6 +75,29 @@ def test_fixture_backend_delivery_hang_shape() -> None:
     assert cron_state["last_run"]["delivery_status"] == "never_started"
 
 
+def test_compression_ordering_fixture_includes_pre_and_post_snapshots() -> None:
+    fixture = next(
+        scenario
+        for scenario in load_all_scenarios(SUITE_DIR)
+        if scenario.scenario_id == "010-compression-invalid-tool-ordering"
+    )
+    backend = FixtureHermesBackend(fixture)
+    history = backend.get_message_history()
+
+    snapshots = history.get("snapshots")
+    assert isinstance(snapshots, dict)
+
+    pre_messages = snapshots.get("pre_compression")
+    post_messages = snapshots.get("post_compression")
+    assert isinstance(pre_messages, list)
+    assert isinstance(post_messages, list)
+
+    assert pre_messages[1]["role"] == "tool_call"
+    assert pre_messages[2]["role"] == "tool"
+    assert post_messages[1]["role"] == "tool"
+    assert post_messages[2]["role"] == "tool_call"
+
+
 def test_answer_key_category_must_be_valid_taxonomy_value() -> None:
     with pytest.raises(ValueError, match="unknown root_cause_category"):
         validate_hermes_answer_key(

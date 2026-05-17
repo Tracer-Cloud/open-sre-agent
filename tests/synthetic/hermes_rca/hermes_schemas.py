@@ -97,9 +97,15 @@ class HermesMessageEntry(TypedDict):
     ts: str
 
 
+class HermesMessageHistorySnapshots(TypedDict):
+    pre_compression: list[HermesMessageEntry]
+    post_compression: list[HermesMessageEntry]
+
+
 class HermesMessageHistoryFixture(TypedDict):
     session_id: str
     messages: list[HermesMessageEntry]
+    snapshots: NotRequired[HermesMessageHistorySnapshots]
 
 
 class HermesCacheMissEntry(TypedDict):
@@ -231,9 +237,28 @@ def validate_hermes_message_history(data: dict[str, Any]) -> HermesMessageHistor
     messages = data.get("messages")
     if not isinstance(messages, list):
         raise ValueError(f"{ctx}: 'messages' must be a list")
+    _validate_hermes_messages(messages, f"{ctx}:messages")
 
+    snapshots = data.get("snapshots")
+    if snapshots is not None:
+        if not isinstance(snapshots, dict):
+            raise ValueError(f"{ctx}: 'snapshots' must be an object")
+        pre_compression = snapshots.get("pre_compression")
+        post_compression = snapshots.get("post_compression")
+        if not isinstance(pre_compression, list) or not isinstance(post_compression, list):
+            raise ValueError(
+                f"{ctx}: 'snapshots.pre_compression' and 'snapshots.post_compression' must be lists"
+            )
+        _validate_hermes_messages(pre_compression, f"{ctx}:snapshots.pre_compression")
+        _validate_hermes_messages(post_compression, f"{ctx}:snapshots.post_compression")
+    return data  # type: ignore[return-value]
+
+
+def _validate_hermes_messages(messages: list[Any], ctx: str) -> None:
     for index, message in enumerate(messages):
-        mctx = f"{ctx}:messages[{index}]"
+        if not isinstance(message, dict):
+            raise ValueError(f"{ctx}[{index}]: message must be an object")
+        mctx = f"{ctx}[{index}]"
         role = str(message.get("role", "")).strip()
         if role not in {"system", "user", "assistant", "tool_call", "tool"}:
             raise ValueError(f"{mctx}: invalid role {role!r}")
@@ -243,7 +268,6 @@ def validate_hermes_message_history(data: dict[str, Any]) -> HermesMessageHistor
         tool_call_id = message.get("tool_call_id")
         if tool_call_id is not None and not isinstance(tool_call_id, str):
             raise ValueError(f"{mctx}: 'tool_call_id' must be a string or null")
-    return data  # type: ignore[return-value]
 
 
 def validate_hermes_kv_cache_state(data: dict[str, Any]) -> HermesKVCacheStateFixture:
