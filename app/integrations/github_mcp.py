@@ -698,6 +698,10 @@ def call_github_mcp_tool(
             "structured_content": None,
             "tool": tool_name,
             "arguments": arguments or {},
+            # Tag so callers (e.g. validate_github_mcp_config's repo-probe step) can
+            # distinguish an auth failure from a generic tool error and classify it
+            # as ``authentication`` instead of ``repository_access``.
+            "error_kind": "authentication",
         }
 
 
@@ -1088,6 +1092,19 @@ def validate_github_mcp_config(
         list_result = call_github_mcp_tool(config, repo_tool, repo_args)
         if list_result.get("is_error"):
             list_detail = list_result.get("text") or "Unknown error listing repositories."
+            # A token that expires between get_me and the repo-probe surfaces here as
+            # an ``error_kind=authentication`` payload; classify it as auth, not as a
+            # repository_access failure.
+            if list_result.get("error_kind") == "authentication":
+                return GitHubMCPValidationResult(
+                    ok=False,
+                    detail=list_detail,
+                    tool_names=tool_names,
+                    authenticated_user=user_name,
+                    failure_category="authentication",
+                    profile_public_repos=profile_pub,
+                    profile_private_repos=profile_priv,
+                )
             return GitHubMCPValidationResult(
                 ok=False,
                 detail=(

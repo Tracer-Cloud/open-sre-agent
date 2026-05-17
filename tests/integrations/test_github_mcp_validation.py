@@ -592,6 +592,55 @@ def test_call_github_mcp_tool_returns_structured_error_on_auth_failure(
     assert "401" in result["text"]
     assert result["tool"] == "list_commits"
     assert result["arguments"] == {"owner": "o", "repo": "r"}
+    # The auth-tagged payload lets validate_github_mcp_config reclassify a token that
+    # expired between get_me and the repo-probe as authentication, not repository_access.
+    assert result["error_kind"] == "authentication"
+
+
+def test_validate_github_mcp_config_repo_probe_auth_failure_classified_as_authentication(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A token that expires between get_me and the repo-probe must surface as auth."""
+    tools = _minimal_toolset_for_validation()
+
+    def fake_list_tools(_config: Any) -> list[dict[str, Any]]:
+        return tools
+
+    def fake_call(_config: Any, name: str, _args: dict[str, Any] | None = None) -> dict[str, Any]:
+        if name == "get_me":
+            return {"is_error": False, "structured_content": {"login": "alice"}, "text": ""}
+        if name == "list_repositories":
+            # Simulates call_github_mcp_tool catching GitHubMCPAuthError mid-validation
+            # (token revoked between the two calls); contract: error_kind="authentication".
+            return {
+                "is_error": True,
+                "text": (
+                    "GitHub MCP server rejected the supplied credentials (HTTP 401 from "
+                    "https://api.githubcopilot.com/mcp/x/all/readonly)."
+                ),
+                "structured_content": None,
+                "content": [],
+                "tool": name,
+                "arguments": {},
+                "error_kind": "authentication",
+            }
+        raise AssertionError(f"unexpected tool {name}")
+
+    monkeypatch.setattr(github_mcp_module, "list_github_mcp_tools", fake_list_tools)
+    monkeypatch.setattr(github_mcp_module, "call_github_mcp_tool", fake_call)
+
+    cfg = github_mcp_module.build_github_mcp_config(
+        {
+            "url": "https://api.githubcopilot.com/mcp/",
+            "mode": "streamable-http",
+            "auth_token": "ghp_test",
+        }
+    )
+    result = github_mcp_module.validate_github_mcp_config(cfg)
+    assert result.ok is False
+    assert result.failure_category == "authentication"
+    assert "401" in result.detail
+    assert result.authenticated_user == "alice"
 
 
 def test_validate_github_mcp_config_classifies_401_as_authentication(
