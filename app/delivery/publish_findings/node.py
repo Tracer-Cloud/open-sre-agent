@@ -1,11 +1,13 @@
 """Main orchestration node for report generation and publishing."""
 
 import logging
+from typing import Any
 
 from app.delivery.publish_findings.formatters.report import (
     build_slack_blocks,
     format_slack_message,
     format_telegram_message,
+    format_whatsapp_message,
 )
 from app.delivery.publish_findings.gitlab_writeback import post_gitlab_mr_writeback
 from app.delivery.publish_findings.renderers.editor import open_in_editor
@@ -42,6 +44,7 @@ def generate_report(state: InvestigationState) -> dict:
     )
 
     telegram_message = masking_ctx.unmask(format_telegram_message(ctx))
+    whatsapp_message = masking_ctx.unmask(format_whatsapp_message(ctx))
 
     all_blocks = build_slack_blocks(ctx) + build_action_blocks(investigation_url, investigation_id)
     all_blocks = masking_ctx.unmask_value(all_blocks)
@@ -159,6 +162,45 @@ def generate_report(state: InvestigationState) -> dict:
             )
     else:
         logger.debug("[publish] telegram delivery: no telegram integration configured")
+
+    # WhatsApp delivery — uses integration credentials if configured
+    whatsapp_creds = resolved.get("whatsapp", {})
+    if whatsapp_creds:
+        from app.utils.whatsapp_delivery import send_whatsapp_report
+
+        _wa_ctx: dict[str, Any] = state.get("whatsapp_context") or {}  # type: ignore[assignment]
+        access_token = _wa_ctx.get("access_token") or whatsapp_creds.get("access_token", "")
+        phone_number_id = _wa_ctx.get("phone_number_id") or whatsapp_creds.get(
+            "phone_number_id", ""
+        )
+        to = _wa_ctx.get("to") or whatsapp_creds.get("default_to", "")
+        logger.debug(
+            "[publish] whatsapp delivery: to=%s phone_number_id=%s access_token_present=%s",
+            to,
+            phone_number_id,
+            bool(access_token),
+        )
+        if access_token and phone_number_id and to:
+            wa_posted, wa_error = send_whatsapp_report(
+                whatsapp_message,
+                {"access_token": access_token, "phone_number_id": phone_number_id, "to": to},
+            )
+            logger.debug("[publish] whatsapp delivery: posted=%s error=%s", wa_posted, wa_error)
+            if not wa_posted:
+                logger.warning(
+                    "[publish] WhatsApp delivery failed: to=%s error=%s",
+                    to,
+                    wa_error,
+                )
+        else:
+            logger.debug(
+                "[publish] whatsapp delivery: skipped — access_token_present=%s phone_number_id_present=%s to_present=%s",
+                bool(access_token),
+                bool(phone_number_id),
+                bool(to),
+            )
+    else:
+        logger.debug("[publish] whatsapp delivery: no whatsapp integration configured")
 
     openclaw_creds = resolved.get("openclaw", {})
     if openclaw_creds:

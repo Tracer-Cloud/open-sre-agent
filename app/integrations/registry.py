@@ -45,6 +45,7 @@ from app.integrations._verification_adapters import (
     _verify_tracer,
     _verify_vercel,
     _verify_victoria_logs,
+    _verify_whatsapp,
 )
 
 
@@ -216,6 +217,13 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         verifier=_verify_telegram,
         direct_effective=True,
         verify_order=26,
+    ),
+    IntegrationSpec(
+        service="whatsapp",
+        verifier=_verify_whatsapp,
+        direct_effective=True,
+        setup_order=19,
+        verify_order=27,
     ),
     IntegrationSpec(
         service="openclaw",

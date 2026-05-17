@@ -1,0 +1,157 @@
+---
+title: "WhatsApp"
+description: "Deliver investigation findings to WhatsApp via Meta Cloud API."
+---
+
+OpenSRE's WhatsApp integration delivers investigation findings to any WhatsApp number via Meta's official Cloud API — useful for mobile-first on-call rotations and team coordination.
+
+<Note>
+You need a Meta Developer account and a WhatsApp test phone number to get started. No business verification is required for the test number.
+</Note>
+
+---
+
+## Prerequisites
+
+- A Meta (Facebook) Developer account. [Sign up here](https://developers.facebook.com/).
+- A WhatsApp app in the Meta Developer Dashboard.
+
+---
+
+## Step 1: Create a Meta App with WhatsApp
+
+1. Go to the [Meta for Developers](https://developers.facebook.com/) dashboard.
+2. Click **Create App**.
+3. Select **Other** as the app type, then **Business**.
+4. Under **Add products to your app**, select **WhatsApp**.
+5. Once added, you'll land on the **WhatsApp > API Setup** page.
+
+---
+
+## Step 2: Get your credentials
+
+On the **API Setup** page, copy the following values:
+
+| Credential | Where to find | Example |
+|---|---|---|
+| **Phone Number ID** | API Setup page, under "Sending messages" | `123456789012345` |
+| **Access Token** | API Setup page, "Temporary access token" | `EAAB...` |
+
+<Warning>
+Temporary access tokens expire after 24 hours. For automation, generate a **System User** token with `whatsapp_business_messaging` permission from your Business Manager settings.
+</Warning>
+
+---
+
+## Step 3: Add a test recipient
+
+For the test phone number, you can only send messages to phone numbers you've added to the "To" list in the API Setup page.
+
+1. In the API Setup page, find the **To** field.
+2. Enter your personal WhatsApp phone number in international format (e.g., `+1234567890`).
+3. Meta will send a verification code to that number. Enter it to confirm.
+
+---
+
+## Step 4: Configure the integration
+
+### Via CLI wizard (recommended)
+
+```bash
+opensre integrations setup whatsapp
+```
+
+You'll be prompted for:
+- **Phone Number ID** (from Step 2)
+- **Access Token** (from Step 2)
+- **Default recipient phone number** (from Step 3, optional)
+
+### Via environment variables
+
+Add to your `.env` file:
+
+```bash
+WHATSAPP_PHONE_NUMBER_ID=123456789012345
+WHATSAPP_ACCESS_TOKEN=EAAB...
+WHATSAPP_DEFAULT_TO=+1234567890
+```
+
+OpenSRE picks these up at startup and registers WhatsApp as an active integration.
+
+---
+
+## Step 5: Verify
+
+```bash
+opensre integrations verify whatsapp
+```
+
+This calls Meta's Graph API to confirm the phone number ID and access token are valid. On success it reports the connected phone number. On failure it reports the Meta API error message verbatim.
+
+---
+
+## Step 6: Test with an investigation
+
+Trigger a real investigation against a bundled fixture:
+
+```bash
+opensre investigate --input tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
+```
+
+Findings should arrive in WhatsApp as a plain-text message. Long reports are truncated to WhatsApp's message limits.
+
+---
+
+## Watchdog alarms
+
+When the watchdog is running (`opensre watchdog`), threshold breaches can also be sent to WhatsApp:
+
+```bash
+opensre watchdog --pid <PID> --max-cpu 80
+```
+
+Ensure `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, and `WHATSAPP_DEFAULT_TO` are set in your environment.
+
+---
+
+## Troubleshooting
+
+### `opensre integrations verify whatsapp` errors
+
+**`Missing phone_number_id`**
+
+`WHATSAPP_PHONE_NUMBER_ID` is empty. Re-check `.env` and restart any long-running OpenSRE process.
+
+**`Missing access_token`**
+
+`WHATSAPP_ACCESS_TOKEN` is empty or the temporary token expired. Generate a new one in the Meta Developer Dashboard.
+
+**`WhatsApp API check failed: 400 Client Error`**
+
+The `phone_number_id` may be invalid. Verify it matches the value shown in the Meta Dashboard under **WhatsApp > API Setup**.
+
+**`WhatsApp API check failed: 401 Client Error`**
+
+The access token is invalid or expired. Generate a new token.
+
+### Messages never arrive but verify passes
+
+- Ensure the recipient phone number is in international format (e.g., `+1234567890`).
+- For test numbers, the recipient must be added to the "To" list in the Meta Dashboard.
+- WhatsApp free-form messages only work within a 24-hour session window or if the recipient has previously messaged the test number.
+
+---
+
+## Upgrading from test to production
+
+When you're ready to use a real business phone number:
+
+1. Add a real phone number in the Meta Dashboard under **WhatsApp > Configuration**.
+2. Update `WHATSAPP_PHONE_NUMBER_ID` to the new number's ID.
+3. Generate a permanent System User token with `whatsapp_business_messaging` permission.
+4. Update `WHATSAPP_ACCESS_TOKEN` with the new token.
+5. Re-run `opensre integrations verify whatsapp`.
+
+<Note>
+Production phone numbers require Meta Business Verification and approved message templates for outbound conversations outside the 24-hour window. See [Meta's official docs](https://developers.facebook.com/docs/whatsapp/cloud-api/) for details.
+</Note>

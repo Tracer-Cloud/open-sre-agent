@@ -713,6 +713,34 @@ class TelegramBotConfig(StrictConfigModel):
         return stripped
 
 
+class WhatsAppConfig(StrictConfigModel):
+    """Meta WhatsApp Cloud API runtime config."""
+
+    phone_number_id: str
+    access_token: str
+    default_to: str | None = None
+    identity_policy: dict[str, object] | None = Field(
+        default=None,
+        description="Messaging identity policy for inbound security (MessagingIdentityPolicy shape)",
+    )
+
+    @field_validator("phone_number_id", mode="before")
+    @classmethod
+    def _validate_phone_number_id(cls, value: object) -> str:
+        stripped = str(value or "").strip()
+        if not stripped:
+            raise ValueError("phone_number_id cannot be empty or just whitespace")
+        return stripped
+
+    @field_validator("access_token", mode="before")
+    @classmethod
+    def _validate_access_token(cls, value: object) -> str:
+        stripped = str(value or "").strip()
+        if not stripped:
+            raise ValueError("access_token cannot be empty or just whitespace")
+        return stripped
+
+
 class SlackBotConfig(StrictConfigModel):
     """Slack Bot (Events API) runtime config for inbound messaging.
 

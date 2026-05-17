@@ -346,6 +346,34 @@ def _verify_telegram(source: str, config: dict[str, Any]) -> dict[str, str]:
     )
 
 
+def _verify_whatsapp(source: str, config: dict[str, Any]) -> dict[str, str]:
+    phone_number_id = str(config.get("phone_number_id", "")).strip()
+    access_token = str(config.get("access_token", "")).strip()
+    if not phone_number_id:
+        return result("whatsapp", source, "missing", "Missing phone_number_id.")
+    if not access_token:
+        return result("whatsapp", source, "missing", "Missing access_token.")
+
+    try:
+        response = requests.get(
+            f"https://graph.facebook.com/v18.0/{phone_number_id}",
+            params={"access_token": access_token, "fields": "id,display_phone_number"},
+            timeout=10,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except Exception as exc:
+        return result("whatsapp", source, "failed", f"WhatsApp API check failed: {exc}")
+
+    phone_number = str(payload.get("display_phone_number", "")).strip()
+    return result(
+        "whatsapp",
+        source,
+        "passed",
+        f"Connected to WhatsApp number {phone_number or phone_number_id}.",
+    )
+
+
 def _verify_snowflake(source: str, config: dict[str, Any]) -> dict[str, str]:
     account_identifier = str(config.get("account_identifier", "")).strip()
     token = str(config.get("token", "")).strip()
@@ -633,6 +661,7 @@ __all__ = [
     "_verify_tracer",
     "_verify_vercel",
     "_verify_victoria_logs",
+    "_verify_whatsapp",
     "build_probe_verifier",
     "build_validation_verifier",
     "result",

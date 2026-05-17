@@ -83,6 +83,7 @@ class EffectiveIntegrations(StrictConfigModel):
     trello: EffectiveIntegrationEntry | None = None
     discord: EffectiveIntegrationEntry | None = None
     telegram: EffectiveIntegrationEntry | None = None
+    whatsapp: EffectiveIntegrationEntry | None = None
     openclaw: EffectiveIntegrationEntry | None = None
     mysql: EffectiveIntegrationEntry | None = None
     snowflake: EffectiveIntegrationEntry | None = None

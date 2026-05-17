@@ -32,6 +32,7 @@ from app.integrations.config_models import (
     SplunkIntegrationConfig,
     TelegramBotConfig,
     VictoriaLogsIntegrationConfig,
+    WhatsAppConfig,
 )
 from app.integrations.effective_models import EffectiveIntegrations
 from app.integrations.github_mcp import build_github_mcp_config
@@ -469,6 +470,21 @@ def _classify_service_instance(
             return None, None
         if tg_config.bot_token:
             return tg_config.model_dump(), "telegram"
+        return None, None
+
+    if key == "whatsapp":
+        try:
+            wa_config = WhatsAppConfig.model_validate(
+                {
+                    "phone_number_id": credentials.get("phone_number_id", ""),
+                    "access_token": credentials.get("access_token", ""),
+                    "default_to": credentials.get("default_to"),
+                }
+            )
+        except Exception:
+            return None, None
+        if wa_config.phone_number_id and wa_config.access_token:
+            return wa_config.model_dump(), "whatsapp"
         return None, None
 
     if key == "openclaw":
@@ -1321,6 +1337,18 @@ def load_env_integrations() -> list[dict[str, Any]]:
             }
         )
         integrations.append(_active_env_record("telegram", tg_config.model_dump()))
+
+    wa_phone_number_id = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "").strip()
+    wa_access_token = os.getenv("WHATSAPP_ACCESS_TOKEN", "").strip()
+    if wa_phone_number_id and wa_access_token:
+        wa_config = WhatsAppConfig.model_validate(
+            {
+                "phone_number_id": wa_phone_number_id,
+                "access_token": wa_access_token,
+                "default_to": os.getenv("WHATSAPP_DEFAULT_TO", "").strip() or None,
+            }
+        )
+        integrations.append(_active_env_record("whatsapp", wa_config.model_dump()))
 
     atlas_pub = os.getenv("MONGODB_ATLAS_PUBLIC_KEY", "").strip()
     atlas_priv = os.getenv("MONGODB_ATLAS_PRIVATE_KEY", "").strip()

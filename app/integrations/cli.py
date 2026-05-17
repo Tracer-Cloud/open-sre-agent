@@ -532,6 +532,24 @@ def _setup_discord() -> None:
     _register_discord_slash_command(application_id, bot_token)
 
 
+def _setup_whatsapp() -> None:
+    phone_number_id = _p("Meta WhatsApp Phone Number ID")
+    access_token = _p("Meta WhatsApp Access Token", secret=True)
+    default_to = _p("Default recipient phone number (optional, e.g. +1234567890)")
+    if not phone_number_id or not access_token:
+        _die("phone_number_id and access_token are required.")
+    upsert_integration(
+        "whatsapp",
+        {
+            "credentials": {
+                "phone_number_id": phone_number_id,
+                "access_token": access_token,
+                "default_to": default_to,
+            }
+        },
+    )
+
+
 def _setup_openclaw() -> None:
     print("  1) stdio (recommended)  2) Streamable HTTP  3) SSE")
     choice = _p("Choice", default="1")
@@ -777,6 +795,7 @@ _HANDLERS: dict[str, Any] = {
     "sentry": _setup_sentry,
     "mongodb": _setup_mongodb,
     "discord": _setup_discord,
+    "whatsapp": _setup_whatsapp,
     "openclaw": _setup_openclaw,
     "postgresql": _setup_postgresql,
     "mysql": _setup_mysql,
