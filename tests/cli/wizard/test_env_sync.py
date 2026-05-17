@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import os
 import stat
 
 import pytest
 
 from app.cli.wizard.config import PROVIDER_BY_VALUE
 from app.cli.wizard.env_sync import sync_env_values, sync_provider_env
+
+_SKIP_AS_ROOT = not hasattr(os, "getuid") or os.getuid() == 0
 
 
 def test_sync_provider_env_updates_provider_specific_keys(tmp_path) -> None:
@@ -83,7 +86,7 @@ def test_sync_provider_env_gemini_cli_writes_model(tmp_path) -> None:
 
 
 @pytest.mark.skipif(
-    __import__("os").getuid() == 0, reason="root bypasses file permission checks"
+    _SKIP_AS_ROOT, reason="root bypasses file permission checks"
 )
 def test_sync_provider_env_permission_error(tmp_path) -> None:
     env_path = tmp_path / ".env"
@@ -101,7 +104,7 @@ def test_sync_provider_env_permission_error(tmp_path) -> None:
 
 
 @pytest.mark.skipif(
-    __import__("os").getuid() == 0, reason="root bypasses file permission checks"
+    _SKIP_AS_ROOT, reason="root bypasses file permission checks"
 )
 def test_sync_env_values_permission_error(tmp_path) -> None:
     env_path = tmp_path / ".env"
