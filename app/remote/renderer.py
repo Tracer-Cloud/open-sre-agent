@@ -800,7 +800,14 @@ class StreamRenderer:
 
         from app.delivery.publish_findings.renderers.terminal import render_report as _render
 
-        _render(slack_message, root_cause_category=root_cause_category)
+        _render(
+            slack_message,
+            root_cause_category=root_cause_category,
+            confidence_band=self._final_state.get("confidence_band", ""),
+            validity_score=self._final_state.get("validity_score"),
+            ranked_hypotheses=self._final_state.get("ranked_hypotheses") or [],
+            missing_evidence=self._final_state.get("missing_evidence") or [],
+        )
 
 
 def _canonical_node_name(name: str) -> str:

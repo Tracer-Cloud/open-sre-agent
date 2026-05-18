@@ -599,7 +599,8 @@ def format_telegram_message(ctx: ReportContext) -> str:
     missing_evidence_list = ctx.get("missing_evidence") or []
     if missing_evidence_list:
         me = "\n".join(
-            "• " + _to_telegram_html_body(_sanitize_for_slack(str(e))) for e in missing_evidence_list
+            "• " + _to_telegram_html_body(_sanitize_for_slack(str(e)))
+            for e in missing_evidence_list
         )
         parts.append("<b>Missing evidence</b>\n" + me)
 

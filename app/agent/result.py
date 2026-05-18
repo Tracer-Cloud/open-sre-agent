@@ -17,7 +17,6 @@ from app.types.root_cause_categories import (
 logger = logging.getLogger(__name__)
 
 
-
 class _ValidatedClaimSchema(BaseModel):
     claim: str = Field(description="The validated claim statement")
     evidence_sources: list[str] = Field(
@@ -27,7 +26,6 @@ class _ValidatedClaimSchema(BaseModel):
             "Only include keys that actually informed this claim."
         ),
     )
-
 
 
 @dataclass
@@ -230,7 +228,9 @@ Evidence keys collected: {", ".join(evidence.keys()) if evidence else "none"}
             {
                 "claim": c["claim"],
                 "validation_status": "validated",
-                **({"evidence_sources": c["evidence_sources"]} if c.get("evidence_sources") else {}),
+                **(
+                    {"evidence_sources": c["evidence_sources"]} if c.get("evidence_sources") else {}
+                ),
             }
             for c in schema["validated_claims"]
             if c.get("claim")
