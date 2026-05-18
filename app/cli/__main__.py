@@ -210,7 +210,7 @@ def _is_update_invocation(argv: list[str]) -> bool:
 
 def _sentry_entrypoint_for_invocation(argv: list[str]) -> str:
     command_parts = _resolve_command_parts(cli, argv)
-    if command_parts == ["debug", "sentry"]:
+    if command_parts and command_parts[0] == "debug":
         return "debug"
     return "cli"
 

@@ -11,7 +11,7 @@ import pytest
 
 from app.analytics import provider
 from app.analytics.events import Event
-from app.cli.__main__ import main
+from app.cli.__main__ import _sentry_entrypoint_for_invocation, main
 from app.cli.interactive_shell.config import ReplConfig
 
 
@@ -361,6 +361,10 @@ def test_main_debug_sentry_sends_synthetic_event(monkeypatch, capsys) -> None:
     assert flush_calls == [5]
     assert captured[0][1]["context"] == "debug.sentry"
     assert captured[0][1]["tags"] == {"debug": "true", "surface": "debug"}
+
+
+def test_sentry_entrypoint_uses_debug_for_debug_group_invocations() -> None:
+    assert _sentry_entrypoint_for_invocation(["debug", "future-check"]) == "debug"
 
 
 def test_main_debug_sentry_exits_nonzero_when_disabled(monkeypatch, capsys) -> None:
