@@ -326,13 +326,12 @@ class OpenAIAgentClient:
         stop_reason = choice.finish_reason or "stop"
 
         tool_calls: list[ToolCall] = []
-        if msg.tool_calls:
-            for tc in msg.tool_calls:
-                try:
-                    input_dict = json.loads(tc.function.arguments)
-                except json.JSONDecodeError:
-                    input_dict = {}
-                tool_calls.append(ToolCall(id=tc.id, name=tc.function.name, input=input_dict))
+        for tc in msg.tool_calls or []:
+            try:
+                input_dict = json.loads(tc.function.arguments)
+            except json.JSONDecodeError:
+                input_dict = {}
+            tool_calls.append(ToolCall(id=tc.id, name=tc.function.name, input=input_dict))
 
         return AgentLLMResponse(
             content=content,
