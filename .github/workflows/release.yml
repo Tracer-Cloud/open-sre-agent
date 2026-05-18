@@ -25,7 +25,7 @@ on:
           - release
           - main
       tag:
-        description: "Optional tag to release (e.g. v2026.4.5). Ignored for the main channel."
+        description: "Optional tag to release (e.g. v2026.4.5 or v0.1). Ignored for the main channel."
         required: false
         type: string
 
@@ -99,16 +99,21 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.13"
-          cache: "pip"
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+        run: uv sync --frozen --extra dev
 
       - name: Lint
         run: make lint
@@ -129,11 +134,18 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.13"
-          cache: "pip"
 
       - name: Sync release version
         shell: bash
@@ -141,11 +153,9 @@ jobs:
 
       - name: Build Python distributions
         run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-          pip install build twine
-          python -m build
-          twine check dist/*
+          uv sync --frozen --extra release-dist
+          uv run python -m build
+          uv run twine check dist/*
 
       - name: Verify Python distribution version
         shell: bash
@@ -200,11 +210,18 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.13"
-          cache: "pip"
 
       - name: Sync release version
         if: env.RELEASE_CHANNEL == 'release'
@@ -213,14 +230,10 @@ jobs:
 
       - name: Install binary build dependencies
         shell: bash
-        run: |
-          set -euo pipefail
-          python -m pip install --upgrade pip
-          pip install .
-          pip install pyinstaller
+        run: uv sync --frozen --extra release-binary
 
       - name: Build binary
-        run: pyinstaller packaging/opensre.spec --clean --noconfirm
+        run: uv run pyinstaller packaging/opensre.spec --clean --noconfirm
 
       - name: Smoke test binary
         if: runner.os != 'Windows' && env.RELEASE_CHANNEL == 'release'
@@ -438,12 +451,24 @@ jobs:
             exit 0
           fi
 
+          VERSION="${TAG_NAME#v}"
+          latest_flag="--latest=false"
+          release_title="Latest"
+          case "$TAG_NAME" in
+            v[0-9][0-9][0-9][0-9].*) ;;
+            *)
+              latest_flag="--latest"
+              release_title="OpenSRE ${VERSION}"
+              ;;
+          esac
+
           gh release create "$TAG_NAME" \
             release-assets/* \
             --repo "${{ github.repository }}" \
             --target "$target_sha" \
-            --title "Latest" \
-            --notes-file RELEASE_NOTES.md
+            --title "$release_title" \
+            --notes-file RELEASE_NOTES.md \
+            "$latest_flag"
 
           echo "created=true" >> "$GITHUB_OUTPUT"
 

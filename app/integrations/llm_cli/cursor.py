@@ -95,6 +95,8 @@ class CursorAdapter:
                 [binary, "--version"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=_PROBE_TIMEOUT_SEC,
                 check=False,
             )
@@ -134,6 +136,8 @@ class CursorAdapter:
                 [binary, "status"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=_PROBE_TIMEOUT_SEC,
                 check=False,
             )

@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 
 from app.integrations.models import JiraIntegrationConfig
+from app.services._error_helpers import capture_service_error
 
 logger = logging.getLogger(__name__)
 
@@ -75,15 +76,15 @@ class JiraClient:
                     "issue_id": data.get("id"),
                     "url": f"{self.config.base_url}/browse/{data.get('key')}",
                 }
-        except httpx.HTTPStatusError as e:
-            logger.warning("[jira] Failed to create issue status=%s", e.response.status_code)
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(exc, logger=logger, integration="jira", method="create_issue")
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning("[jira] Create issue error type=%s detail=%s", type(e).__name__, e)
-            return {"success": False, "error": str(e)}
+        except Exception as exc:
+            capture_service_error(exc, logger=logger, integration="jira", method="create_issue")
+            return {"success": False, "error": str(exc)}
 
     def update_issue(
         self,
@@ -99,17 +100,27 @@ class JiraClient:
                 )
                 resp.raise_for_status()
                 return {"success": True, "issue_key": issue_key}
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "[jira] Failed to update issue=%s status=%s", issue_key, e.response.status_code
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="jira",
+                method="update_issue",
+                extras={"issue_key": issue_key},
             )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning("[jira] Update issue error: %s", e)
-            return {"success": False, "error": str(e)}
+        except Exception as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="jira",
+                method="update_issue",
+                extras={"issue_key": issue_key},
+            )
+            return {"success": False, "error": str(exc)}
 
     def add_comment(
         self,
@@ -138,17 +149,27 @@ class JiraClient:
                 resp.raise_for_status()
                 data = resp.json()
                 return {"success": True, "comment_id": data.get("id")}
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "[jira] Failed to add comment issue=%s status=%s", issue_key, e.response.status_code
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="jira",
+                method="add_comment",
+                extras={"issue_key": issue_key},
             )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning("[jira] Add comment error: %s", e)
-            return {"success": False, "error": str(e)}
+        except Exception as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="jira",
+                method="add_comment",
+                extras={"issue_key": issue_key},
+            )
+            return {"success": False, "error": str(exc)}
 
     def search_issues(
         self,
@@ -206,15 +227,15 @@ class JiraClient:
                     "issues": issues,
                     "total": data.get("total", len(issues)),
                 }
-        except httpx.HTTPStatusError as e:
-            logger.warning("[jira] Search issues HTTP failure status=%s", e.response.status_code)
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(exc, logger=logger, integration="jira", method="search_issues")
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning("[jira] Search issues error: %s", e)
-            return {"success": False, "error": str(e)}
+        except Exception as exc:
+            capture_service_error(exc, logger=logger, integration="jira", method="search_issues")
+            return {"success": False, "error": str(exc)}
 
     def get_issue(self, issue_key: str) -> dict[str, Any]:
         """Fetch an existing Jira issue to pull context into the investigation."""
@@ -233,17 +254,27 @@ class JiraClient:
                     "description": fields.get("description", ""),
                     "labels": fields.get("labels", []),
                 }
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "[jira] Failed to get issue=%s status=%s", issue_key, e.response.status_code
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="jira",
+                method="get_issue",
+                extras={"issue_key": issue_key},
             )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning("[jira] Get issue error: %s", e)
-            return {"success": False, "error": str(e)}
+        except Exception as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="jira",
+                method="get_issue",
+                extras={"issue_key": issue_key},
+            )
+            return {"success": False, "error": str(exc)}
 
 
 def make_jira_client(

@@ -18,6 +18,7 @@ import httpx
 
 from app.integrations.config_models import AlertmanagerIntegrationConfig
 from app.integrations.probes import ProbeResult
+from app.services._error_helpers import capture_service_error
 
 logger = logging.getLogger(__name__)
 
@@ -87,18 +88,19 @@ class AlertmanagerClient:
             resp.raise_for_status()
             data = resp.json()
             return {"success": True, "status": data}
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "[alertmanager] Status check HTTP failure status=%s",
-                e.response.status_code,
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc, logger=logger, integration="alertmanager", method="get_status"
             )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning("[alertmanager] Status check error: %s", e)
-            return {"success": False, "error": str(e)}
+        except Exception as exc:
+            capture_service_error(
+                exc, logger=logger, integration="alertmanager", method="get_status"
+            )
+            return {"success": False, "error": str(exc)}
 
     def list_alerts(
         self,
@@ -150,18 +152,19 @@ class AlertmanagerClient:
                 )
 
             return {"success": True, "alerts": alerts, "total": len(alerts)}
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "[alertmanager] List alerts HTTP failure status=%s",
-                e.response.status_code,
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc, logger=logger, integration="alertmanager", method="list_alerts"
             )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning("[alertmanager] List alerts error: %s", e)
-            return {"success": False, "error": str(e)}
+        except Exception as exc:
+            capture_service_error(
+                exc, logger=logger, integration="alertmanager", method="list_alerts"
+            )
+            return {"success": False, "error": str(exc)}
 
     def list_silences(self, limit: int = 50) -> dict[str, Any]:
         """List silences from Alertmanager."""
@@ -197,18 +200,19 @@ class AlertmanagerClient:
                 "active_silences": active,
                 "total": len(silences),
             }
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "[alertmanager] List silences HTTP failure status=%s",
-                e.response.status_code,
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc, logger=logger, integration="alertmanager", method="list_silences"
             )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning("[alertmanager] List silences error: %s", e)
-            return {"success": False, "error": str(e)}
+        except Exception as exc:
+            capture_service_error(
+                exc, logger=logger, integration="alertmanager", method="list_silences"
+            )
+            return {"success": False, "error": str(exc)}
 
 
 def make_alertmanager_client(

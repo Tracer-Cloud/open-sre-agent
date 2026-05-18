@@ -6,8 +6,10 @@ import importlib.metadata
 import tomllib
 from pathlib import Path
 
+from app.constants.opensre import DEFAULT_RELEASE_VERSION
+
 PACKAGE_NAME = "opensre"
-DEFAULT_VERSION = "2026.4.5"
+DEFAULT_VERSION = DEFAULT_RELEASE_VERSION
 _PYPROJECT_PATH = Path(__file__).resolve().parents[1] / "pyproject.toml"
 
 

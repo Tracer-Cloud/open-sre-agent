@@ -16,10 +16,16 @@ Telegram delivery uses the same credential model as the rest of OpenSRE. For **`
 ## Local demo: synthetic tests, then watch
 
 **1 — Offline “investigation” of the classifier (pytest, no Telegram)**  
-The Hermes synthetic suite feeds real-shaped `errors.log` slices through `IncidentClassifier` and asserts against `answer.yml`. This is the same regression loop documented in the repo’s [`tests/synthetic/hermes/README.md`](https://github.com/Tracer-Cloud/opensre/blob/main/tests/synthetic/hermes/README.md):
+The Hermes log-classifier synthetic suite feeds real-shaped `errors.log` slices through `IncidentClassifier` and asserts against `answer.yml`. This is the same regression loop documented in the repo’s [`tests/synthetic/hermes/README.md`](https://github.com/Tracer-Cloud/opensre/blob/main/tests/synthetic/hermes/README.md):
 
 ```bash
 uv run pytest tests/synthetic/hermes -q
+```
+
+For incident-identification RCA fixtures (session topology, runtime hangs, cron delivery, KV cache drift), run the parallel suite:
+
+```bash
+uv run pytest tests/synthetic/hermes_rca -q
 ```
 
 To run every synthetic-marked test under `tests/synthetic/` (includes Hermes and other packages):

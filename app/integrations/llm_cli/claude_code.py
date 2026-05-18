@@ -164,6 +164,8 @@ def _probe_cli_auth(binary_path: str) -> tuple[bool | None, str]:
             [binary_path, "auth", "status"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=_PROBE_TIMEOUT_SEC,
             check=False,
             env=build_cli_subprocess_env(_anthropic_env_overrides()),
@@ -255,6 +257,8 @@ class ClaudeCodeAdapter:
                 [binary_path, "--version"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=_PROBE_TIMEOUT_SEC,
                 check=False,
             )

@@ -713,6 +713,43 @@ class TelegramBotConfig(StrictConfigModel):
         return stripped
 
 
+class WhatsAppConfig(StrictConfigModel):
+    """Twilio WhatsApp runtime config."""
+
+    account_sid: str
+    auth_token: str
+    from_number: str
+    default_to: str | None = None
+    identity_policy: dict[str, object] | None = Field(
+        default=None,
+        description="Messaging identity policy for inbound security (MessagingIdentityPolicy shape)",
+    )
+
+    @field_validator("account_sid", mode="before")
+    @classmethod
+    def _validate_account_sid(cls, value: object) -> str:
+        stripped = str(value or "").strip()
+        if not stripped:
+            raise ValueError("account_sid cannot be empty or just whitespace")
+        return stripped
+
+    @field_validator("auth_token", mode="before")
+    @classmethod
+    def _validate_auth_token(cls, value: object) -> str:
+        stripped = str(value or "").strip()
+        if not stripped:
+            raise ValueError("auth_token cannot be empty or just whitespace")
+        return stripped
+
+    @field_validator("from_number", mode="before")
+    @classmethod
+    def _validate_from_number(cls, value: object) -> str:
+        stripped = str(value or "").strip()
+        if not stripped:
+            raise ValueError("from_number cannot be empty or just whitespace")
+        return stripped
+
+
 class SlackBotConfig(StrictConfigModel):
     """Slack Bot (Events API) runtime config for inbound messaging.
 

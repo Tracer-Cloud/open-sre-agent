@@ -399,7 +399,7 @@ def _remove_speculative_words(text: str) -> str:
 
 def _derive_root_cause_sentence(ctx: ReportContext) -> str:
     """Derive a concise, single-sentence root cause with causal preference."""
-    root_cause_text = ctx.get("root_cause", "") or ""
+    root_cause_text = str(ctx.get("root_cause", "") or "").strip()
     root_cause_text = re.sub(r"\s*\[(?i:evidence):[^\]]*\]", "", root_cause_text).strip()
     validated_claims = ctx.get("validated_claims", [])
 
@@ -598,6 +598,68 @@ def format_telegram_message(ctx: ReportContext) -> str:
         meta_bits.append(f"Alert ID: {alert_id}")
     if meta_bits:
         parts.append("<i>" + html.escape(" | ".join(meta_bits)) + "</i>")
+
+    return "\n\n".join(p for p in parts if p)
+
+
+def format_whatsapp_message(ctx: ReportContext) -> str:
+    """Format a plain-text RCA message for WhatsApp (mobile-friendly).
+
+    WhatsApp supports basic formatting (*bold*, _italic_, `code`) but we
+    keep the message plain and structured for maximum compatibility and
+    readability on small screens.
+    """
+    duration_seconds = ctx.get("investigation_duration_seconds")
+    alert_id = ctx.get("alert_id")
+    derived_rc = _derive_root_cause_sentence(ctx)
+    root_cause_sentence = derived_rc or "Not determined (insufficient evidence)."
+
+    parts: list[str] = []
+
+    # Severity header
+    severity = ctx.get("severity", "")
+    if severity:
+        parts.append(f"[{severity.upper()}] OpenSRE Investigation")
+    else:
+        parts.append("OpenSRE Investigation")
+
+    # Root cause + top log
+    top_log = _get_top_error_log(ctx.get("evidence") or {})
+    if top_log:
+        parts.append(f"{root_cause_sentence}\nTop log: {top_log}")
+    else:
+        parts.append(root_cause_sentence)
+
+    # Findings
+    validated_lines, non_validated_lines = _render_claim_lines(ctx)
+    if validated_lines:
+        parts.append("*Findings*\n" + "\n".join(validated_lines))
+    if non_validated_lines:
+        parts.append("*Inferred Claims*\n" + "\n".join(non_validated_lines))
+
+    # Provenance
+    provenance_lines = _format_provenance_lines(ctx)
+    if provenance_lines:
+        parts.append("*Provenance*\n" + "\n".join(provenance_lines))
+
+    # Recommended actions
+    remediation_steps = ctx.get("remediation_steps", [])
+    if remediation_steps:
+        parts.append("*Recommended Actions*\n" + "\n".join(f"• {s}" for s in remediation_steps))
+
+    # Investigation trace
+    trace_steps = build_investigation_trace(ctx)
+    if trace_steps:
+        parts.append("*Investigation Trace*\n" + "\n".join(trace_steps))
+
+    # Meta
+    meta_bits: list[str] = []
+    if duration_seconds is not None:
+        meta_bits.append(f"Timing: {duration_seconds}s")
+    if alert_id:
+        meta_bits.append(f"Alert ID: {alert_id}")
+    if meta_bits:
+        parts.append(" | ".join(meta_bits))
 
     return "\n\n".join(p for p in parts if p)
 

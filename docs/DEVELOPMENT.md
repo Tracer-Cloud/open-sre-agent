@@ -46,7 +46,7 @@ PR reviewers expect a **visible demo** (terminal log or screenshot) in the PR un
 Automated equivalent (runs in `make test-cov`):  
 `uv run pytest tests/cli/interactive_shell/test_watchdog_repl_e2e_demo.py -v --tb=short`
 
-Longer transcript (optional): [tests/cli/interactive_shell/repl_watchdog_demo.md](../tests/cli/interactive_shell/repl_watchdog_demo.md).
+Longer transcript (optional): [tests/cli/interactive_shell/repl_watchdog_demo.md](https://github.com/Tracer-Cloud/opensre/blob/main/tests/cli/interactive_shell/repl_watchdog_demo.md).
 
 ## VS Code dev container
 

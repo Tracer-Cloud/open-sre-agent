@@ -504,6 +504,32 @@ _TAXONOMY: tuple[RootCauseCategory, ...] = (
         GROUP_INFRASTRUCTURE,
         "AWS/cloud account-level quota or limit reached.",
     ),
+    # ── Agent / orchestration runtime (Hermes + similar control-planes) ──
+    RootCauseCategory(
+        "agent_state_corruption",
+        GROUP_CODE_AND_CONFIG,
+        "Agent conversation/tool-call ordering invariants are violated by state corruption.",
+    ),
+    RootCauseCategory(
+        "agent_hang",
+        GROUP_WORKLOAD,
+        "Agent runtime is blocked or makes no progress beyond hang threshold.",
+    ),
+    RootCauseCategory(
+        "delivery_hang",
+        GROUP_WORKLOAD,
+        "Agent work completed but downstream delivery/dispatch remains stuck.",
+    ),
+    RootCauseCategory(
+        "ghost_session",
+        GROUP_CODE_AND_CONFIG,
+        "Visible session diverged from actual continuation chain; output lands in hidden session.",
+    ),
+    RootCauseCategory(
+        "performance_degradation",
+        GROUP_WORKLOAD,
+        "System remains up but materially slower due to cache-thrash/inefficiency regressions.",
+    ),
     # ── Generic fallbacks (kept for backward compatibility) ────────────
     # These exist so legacy answer keys, eval pipelines, and prior LLM
     # outputs continue to validate. New diagnoses should always prefer a
@@ -563,6 +589,18 @@ _TAXONOMY: tuple[RootCauseCategory, ...] = (
 
 VALID_ROOT_CAUSE_CATEGORIES: frozenset[str] = frozenset(entry.name for entry in _TAXONOMY)
 
+# Hermes/runtime-specific categories. Keep these scoped in prompts so
+# non-Hermes investigations don't get steered toward agent-runtime labels.
+HERMES_ROOT_CAUSE_CATEGORIES: frozenset[str] = frozenset(
+    {
+        "agent_state_corruption",
+        "agent_hang",
+        "delivery_hang",
+        "ghost_session",
+        "performance_degradation",
+    }
+)
+
 
 # Names that should never be the diagnosis target for a real incident, but
 # remain valid string outputs (e.g. ``healthy`` short-circuit, ``unknown``
@@ -586,7 +624,9 @@ def categories_by_group() -> dict[str, list[RootCauseCategory]]:
     return grouped
 
 
-def render_prompt_taxonomy() -> str:
+def render_prompt_taxonomy(
+    include_categories: set[str] | frozenset[str] | None = None,
+) -> str:
     """Render the taxonomy as a multi-line string for inclusion in prompts.
 
     The output is a grouped, line-per-category list: each category is shown
@@ -596,18 +636,26 @@ def render_prompt_taxonomy() -> str:
     module is automatically reflected in the prompt without surgery
     elsewhere.
     """
+    include = set(include_categories) if include_categories is not None else None
+
     lines: list[str] = []
     for group, entries in categories_by_group().items():
-        if not entries:
+        filtered_entries = (
+            [entry for entry in entries if entry.name in include]
+            if include is not None
+            else entries
+        )
+        if not filtered_entries:
             continue
         lines.append(f"[{group}]")
-        for entry in entries:
+        for entry in filtered_entries:
             lines.append(f"- {entry.name} — {entry.description}")
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
 
 __all__ = [
+    "HERMES_ROOT_CAUSE_CATEGORIES",
     "GENERIC_FALLBACK_CATEGORIES",
     "GROUP_CLOUD_STORAGE",
     "GROUP_CODE_AND_CONFIG",

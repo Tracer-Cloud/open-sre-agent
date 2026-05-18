@@ -123,7 +123,12 @@ def resolve_postgresql_config(
 
 def _get_connection(config: PostgreSQLConfig) -> Any:
     """Create a psycopg2 connection from config. Caller must close."""
-    import psycopg2  # type: ignore[import-untyped]
+    try:
+        import psycopg2  # type: ignore[import-untyped]
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "psycopg2 is not installed. Install it with: pip install psycopg2-binary"
+        ) from exc
 
     return psycopg2.connect(
         host=config.host,

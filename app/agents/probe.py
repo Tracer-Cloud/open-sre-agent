@@ -1,9 +1,8 @@
-"""Per-PID resource snapshot for the monitor-local-agents fleet view.
+"""Per-PID process helpers for the monitor-local-agents fleet view.
 
-Pure collector: one function, one PID, one snapshot. No background
-loop, no caching, no UI wiring. The wiring layer (#1490) batches calls
-in a REPL background task; the registry layer (#1487) decides which
-PIDs to ask about.
+Pure collectors: no background loop, no caching, no UI wiring. The
+wiring layer (#1490) batches calls in a REPL background task; the
+registry layer (#1487) decides which PIDs to ask about.
 
 The acceptance criterion for the parent issue (#1489) requires that
 ``psutil`` stay confined to this module so the dependency surface
@@ -16,6 +15,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 
 import psutil
 
@@ -82,6 +82,30 @@ def process(pid: int) -> psutil.Process:
 def process_iter(attrs: Iterable[str]) -> Iterator[psutil.Process]:
     """Yield process handles with preloaded attrs from the local probe module."""
     return psutil.process_iter(list(attrs))
+
+
+def process_has_open_codex_rollout(pid: int) -> bool:
+    """Return whether ``pid`` has an open Codex ``rollout-*.jsonl`` file."""
+    try:
+        proc = psutil.Process(pid)
+        open_files = proc.open_files()
+    # The stdlib exceptions cover invalid/raced PIDs and platform-specific
+    # ``open_files()`` failures that psutil may surface directly.
+    except PROCESS_ERROR + (
+        ProcessLookupError,
+        OSError,
+        ValueError,
+        OverflowError,
+    ):
+        return False
+
+    for open_file in open_files:
+        path = getattr(open_file, "path", None)
+        if isinstance(path, str):
+            name = Path(path).name
+            if name.startswith("rollout-") and name.endswith(".jsonl"):
+                return True
+    return False
 
 
 def probe(pid: int, *, cpu_interval: float = 0.1) -> ProcessSnapshot | None:

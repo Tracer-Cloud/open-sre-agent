@@ -13,6 +13,7 @@ import httpx
 
 from app.integrations.config_models import OpsGenieIntegrationConfig
 from app.integrations.probes import ProbeResult
+from app.services._error_helpers import capture_service_error
 
 logger = logging.getLogger(__name__)
 
@@ -105,19 +106,27 @@ class OpsGenieClient:
                 )
 
             return {"success": True, "alerts": alerts, "total": len(alerts)}
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "[opsgenie] List alerts HTTP failure status=%s query=%r",
-                e.response.status_code,
-                query,
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="opsgenie",
+                method="list_alerts",
+                extras={"query": query},
             )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning("[opsgenie] List alerts error: %s", e)
-            return {"success": False, "error": str(e)}
+        except Exception as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="opsgenie",
+                method="list_alerts",
+                extras={"query": query},
+            )
+            return {"success": False, "error": str(exc)}
 
     def get_alert(self, alert_id: str) -> dict[str, Any]:
         """Fetch full details for a specific OpsGenie alert."""
@@ -154,19 +163,27 @@ class OpsGenieClient:
             }
 
             return {"success": True, "alert": alert}
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "[opsgenie] Get alert HTTP failure status=%s id=%r",
-                e.response.status_code,
-                alert_id,
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="opsgenie",
+                method="get_alert",
+                extras={"alert_id": alert_id},
             )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning("[opsgenie] Get alert error: %s", e)
-            return {"success": False, "error": str(e)}
+        except Exception as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="opsgenie",
+                method="get_alert",
+                extras={"alert_id": alert_id},
+            )
+            return {"success": False, "error": str(exc)}
 
     def get_alert_logs(self, alert_id: str, limit: int = 20) -> dict[str, Any]:
         """Fetch the activity log for a specific OpsGenie alert."""
@@ -190,19 +207,27 @@ class OpsGenieClient:
                 )
 
             return {"success": True, "logs": logs, "total": len(logs)}
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "[opsgenie] Get alert logs HTTP failure status=%s id=%r",
-                e.response.status_code,
-                alert_id,
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="opsgenie",
+                method="get_alert_logs",
+                extras={"alert_id": alert_id},
             )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning("[opsgenie] Get alert logs error: %s", e)
-            return {"success": False, "error": str(e)}
+        except Exception as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="opsgenie",
+                method="get_alert_logs",
+                extras={"alert_id": alert_id},
+            )
+            return {"success": False, "error": str(exc)}
 
     def add_note(self, alert_id: str, note: str) -> dict[str, Any]:
         """Add a note to an OpsGenie alert (findings write-back)."""
@@ -213,17 +238,27 @@ class OpsGenieClient:
             )
             resp.raise_for_status()
             return {"success": True}
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "[opsgenie] Add note HTTP failure status=%s id=%r", e.response.status_code, alert_id
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="opsgenie",
+                method="add_note",
+                extras={"alert_id": alert_id},
             )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning("[opsgenie] Add note error: %s", e)
-            return {"success": False, "error": str(e)}
+        except Exception as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="opsgenie",
+                method="add_note",
+                extras={"alert_id": alert_id},
+            )
+            return {"success": False, "error": str(exc)}
 
 
 def make_opsgenie_client(api_key: str | None, region: str | None = None) -> OpsGenieClient | None:

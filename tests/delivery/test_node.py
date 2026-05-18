@@ -82,6 +82,10 @@ def _patch_generate_report_deps(monkeypatch: pytest.MonkeyPatch) -> None:
         lambda _ctx: "telegram report text",
     )
     monkeypatch.setattr(
+        "app.delivery.publish_findings.node.format_whatsapp_message",
+        lambda _ctx: "whatsapp report text",
+    )
+    monkeypatch.setattr(
         "app.delivery.publish_findings.node.build_slack_blocks",
         lambda _ctx: [],
     )
@@ -227,3 +231,41 @@ def test_openclaw_writeback_calls_delivery_when_configured(
         )  # type: ignore[arg-type]
 
     mock_openclaw_delivery.assert_called_once()
+
+
+def test_whatsapp_delivery_uses_twilio_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_generate_report_deps(monkeypatch)
+
+    mock_send_slack = MagicMock(return_value=(False, None))
+    mock_build_action_blocks = MagicMock(return_value=[])
+    mock_whatsapp_delivery = MagicMock(return_value=(True, ""))
+
+    with (
+        patch("app.utils.slack_delivery.send_slack_report", mock_send_slack),
+        patch("app.utils.slack_delivery.build_action_blocks", mock_build_action_blocks),
+        patch("app.utils.whatsapp_delivery.send_whatsapp_report", mock_whatsapp_delivery),
+    ):
+        from app.delivery.publish_findings.node import generate_report
+
+        generate_report(
+            _make_state(
+                resolved_integrations={
+                    "whatsapp": {
+                        "account_sid": "AC123",
+                        "auth_token": "tok",
+                        "from_number": "whatsapp:+14155238886",
+                        "default_to": "+1234567890",
+                    }
+                }
+            )
+        )  # type: ignore[arg-type]
+
+    mock_whatsapp_delivery.assert_called_once_with(
+        "whatsapp report text",
+        {
+            "account_sid": "AC123",
+            "auth_token": "tok",
+            "from_number": "whatsapp:+14155238886",
+            "to": "+1234567890",
+        },
+    )

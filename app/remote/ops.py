@@ -94,6 +94,8 @@ class RailwayRemoteOpsProvider(RemoteOpsProvider):
             link_cmd,
             check=False,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             capture_output=True,
         )
         if link_result.returncode != 0:
@@ -128,6 +130,8 @@ class RailwayRemoteOpsProvider(RemoteOpsProvider):
             cmd,
             check=False,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             capture_output=capture_output,
         )
         if result.returncode != 0:

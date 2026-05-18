@@ -92,6 +92,8 @@ def _probe_opencode_auth_via_cli(binary_path: str) -> tuple[bool | None, str]:
             [binary_path, "auth", "list"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=_AUTH_LIST_TIMEOUT_SEC,
             check=False,
             env=env,
@@ -142,6 +144,8 @@ class OpenCodeAdapter:
                 [binary_path, "--version"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=_PROBE_TIMEOUT_SEC,
                 check=False,
             )
