@@ -169,6 +169,17 @@ def test_unknown_error_gets_error_severity(mock_report: MagicMock) -> None:
 
 
 @patch("app.integrations._verification_adapters.report_exception")
+def test_import_error_gets_info_severity(mock_report: MagicMock) -> None:
+    exc = ImportError("No module named 'discord'")
+    _report_probe_failure(exc, integration="discord")
+
+    mock_report.assert_called_once()
+    assert mock_report.call_args.kwargs["severity"] == "info"
+    assert mock_report.call_args.kwargs["tags"]["event"] == "missing_dependency"
+    assert mock_report.call_args.kwargs["tags"]["surface"] == "integration_probe"
+
+
+@patch("app.integrations._verification_adapters.report_exception")
 def test_message_includes_integration_name(mock_report: MagicMock) -> None:
     _report_probe_failure(ValueError("bad"), integration="aws")
     msg = mock_report.call_args.kwargs["message"]

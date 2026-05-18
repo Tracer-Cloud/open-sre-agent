@@ -89,15 +89,21 @@ def _report_probe_failure(
     integration: str,
 ) -> None:
     is_vendor = isinstance(exc, _VENDOR_TRANSPORT_ERRORS)
+    is_optional_dep = isinstance(exc, (ImportError, ModuleNotFoundError))
+    expected = is_vendor or is_optional_dep
     report_exception(
         exc,
         logger=logger,
         message=f"[{integration}] verification probe failed",
-        severity="info" if is_vendor else "error",
+        severity="info" if expected else "error",
         tags={
             "surface": "integration_probe",
             "integration": integration,
-            "event": "vendor_failure" if is_vendor else "verify_failed",
+            "event": "vendor_failure"
+            if is_vendor
+            else "missing_dependency"
+            if is_optional_dep
+            else "verify_failed",
         },
     )
 
