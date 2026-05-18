@@ -413,6 +413,8 @@ class ConnectedInvestigationAgent:
         else:
             if not result.root_cause.startswith("Most likely"):
                 result.root_cause = f"Most likely: {result.root_cause}"
+            # Override band set by classify_confidence_band in result.py: thin evidence means LOW
+            # regardless of LLM-reported score (a high score with zero claims is still insufficient).
             result.confidence_band = "low"
 
         _emit(
