@@ -237,6 +237,106 @@ def get_hermes_session_topology(
     return cast(dict[str, Any], backend.get_session_topology(session_id=session_id))
 
 
+@tool(
+    name="get_hermes_orchestration_state",
+    source="hermes",
+    description="Get Hermes orchestration role/topology execution state.",
+    use_cases=["Diagnose collapsed orchestration, isolated ACP sessions, and role execution drift"],
+    surfaces=("investigation",),
+    input_schema={
+        "type": "object",
+        "properties": {"session_id": {"type": "string"}},
+        "required": [],
+    },
+    is_available=_fixture_backend_only,
+    extract_params=_extract_params,
+)
+def get_hermes_orchestration_state(
+    session_id: str = "",
+    hermes_backend: Any = None,
+    **_kwargs: Any,
+) -> dict[str, Any]:
+    backend = _backend_or_error(hermes_backend, "get_hermes_orchestration_state")
+    if isinstance(backend, dict):
+        return backend
+    return cast(dict[str, Any], backend.get_orchestration_state(session_id=session_id))
+
+
+@tool(
+    name="get_hermes_routing_decisions",
+    source="hermes",
+    description="Get Hermes capability routing decisions and model selection outcomes.",
+    use_cases=["Diagnose ignored routing policies and default-model fallback behavior"],
+    surfaces=("investigation",),
+    input_schema={
+        "type": "object",
+        "properties": {"session_id": {"type": "string"}},
+        "required": [],
+    },
+    is_available=_fixture_backend_only,
+    extract_params=_extract_params,
+)
+def get_hermes_routing_decisions(
+    session_id: str = "",
+    hermes_backend: Any = None,
+    **_kwargs: Any,
+) -> dict[str, Any]:
+    backend = _backend_or_error(hermes_backend, "get_hermes_routing_decisions")
+    if isinstance(backend, dict):
+        return backend
+    return cast(dict[str, Any], backend.get_routing_decisions(session_id=session_id))
+
+
+@tool(
+    name="get_hermes_memory_state",
+    source="hermes",
+    description="Get Hermes memory backend health and parse/fallback state.",
+    use_cases=["Diagnose memory backend outages, corruption, and parse failures"],
+    surfaces=("investigation",),
+    input_schema={
+        "type": "object",
+        "properties": {"session_id": {"type": "string"}},
+        "required": [],
+    },
+    is_available=_fixture_backend_only,
+    extract_params=_extract_params,
+)
+def get_hermes_memory_state(
+    session_id: str = "",
+    hermes_backend: Any = None,
+    **_kwargs: Any,
+) -> dict[str, Any]:
+    backend = _backend_or_error(hermes_backend, "get_hermes_memory_state")
+    if isinstance(backend, dict):
+        return backend
+    return cast(dict[str, Any], backend.get_memory_state(session_id=session_id))
+
+
+@tool(
+    name="get_hermes_filesystem_state",
+    source="hermes",
+    description="Get Hermes filesystem persistence and corruption state.",
+    use_cases=["Diagnose corrupted memory snapshots and missing recovery backups"],
+    surfaces=("investigation",),
+    input_schema={
+        "type": "object",
+        "properties": {"session_id": {"type": "string"}},
+        "required": [],
+    },
+    is_available=_fixture_backend_only,
+    extract_params=_extract_params,
+)
+def get_hermes_filesystem_state(
+    session_id: str = "",
+    hermes_backend: Any = None,
+    **_kwargs: Any,
+) -> dict[str, Any]:
+    backend = _backend_or_error(hermes_backend, "get_hermes_filesystem_state")
+    if isinstance(backend, dict):
+        return backend
+    return cast(dict[str, Any], backend.get_filesystem_state(session_id=session_id))
+
+
 __all__ = [
     "get_hermes_session_log",
     "get_hermes_provider_traffic",
@@ -246,4 +346,8 @@ __all__ = [
     "get_hermes_runtime_state",
     "get_hermes_cron_state",
     "get_hermes_session_topology",
+    "get_hermes_orchestration_state",
+    "get_hermes_routing_decisions",
+    "get_hermes_memory_state",
+    "get_hermes_filesystem_state",
 ]

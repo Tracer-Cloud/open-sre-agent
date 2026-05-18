@@ -530,6 +530,36 @@ _TAXONOMY: tuple[RootCauseCategory, ...] = (
         GROUP_WORKLOAD,
         "System remains up but materially slower due to cache-thrash/inefficiency regressions.",
     ),
+    RootCauseCategory(
+        "orchestration_missing",
+        GROUP_CODE_AND_CONFIG,
+        "Declared multi-agent orchestration/topology is missing or silently collapsed into a single-agent execution path.",
+    ),
+    RootCauseCategory(
+        "protocol_unsupported",
+        GROUP_CODE_AND_CONFIG,
+        "Requested agent communication protocol is unsupported by the runtime/client implementation.",
+    ),
+    RootCauseCategory(
+        "routing_ignored",
+        GROUP_CODE_AND_CONFIG,
+        "Capability-based model routing configuration exists but is ignored at runtime.",
+    ),
+    RootCauseCategory(
+        "memory_unavailable",
+        GROUP_CODE_AND_CONFIG,
+        "External memory backend is unreachable and the runtime silently falls back to degraded local memory.",
+    ),
+    RootCauseCategory(
+        "memory_corruption",
+        GROUP_CODE_AND_CONFIG,
+        "Persistent agent memory/filesystem state is corrupted without recovery or backup support.",
+    ),
+    RootCauseCategory(
+        "memory_parse_failure",
+        GROUP_CODE_AND_CONFIG,
+        "Memory tool failed due to strict JSON parsing incompatibility with model output.",
+    ),
     # ── Generic fallbacks (kept for backward compatibility) ────────────
     # These exist so legacy answer keys, eval pipelines, and prior LLM
     # outputs continue to validate. New diagnoses should always prefer a
@@ -598,6 +628,12 @@ HERMES_ROOT_CAUSE_CATEGORIES: frozenset[str] = frozenset(
         "delivery_hang",
         "ghost_session",
         "performance_degradation",
+        "orchestration_missing",
+        "protocol_unsupported",
+        "routing_ignored",
+        "memory_unavailable",
+        "memory_corruption",
+        "memory_parse_failure",
     }
 )
 
