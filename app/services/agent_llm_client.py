@@ -252,16 +252,19 @@ class BedrockAgentClient(AnthropicAgentClient):
 
 
 _OPENAI_O_SERIES_RE = re.compile(r"(?:^|[^A-Za-z0-9])o\d", re.IGNORECASE)
+_OPENAI_GPT5_RE = re.compile(r"(?:^|[^A-Za-z0-9])gpt-5", re.IGNORECASE)
 
 
 def _openai_max_token_kwarg(model: str) -> str:
-    # OpenAI o-series reasoning models (o1, o3, o4-mini, …) reject max_tokens.
-    # Matches a bare ``o<digit>`` token at the start of the name or following
-    # a non-alphanumeric separator, so vendor-prefixed routes
-    # (``openai/o4-mini``, ``azure/o3``) and custom deployment names
-    # (``my-o1-deployment``) are still detected correctly. Names with no
-    # o-series token fall back to ``max_tokens``.
-    return "max_completion_tokens" if _OPENAI_O_SERIES_RE.search(model) else "max_tokens"
+    # OpenAI o-series (o1, o3, o4-mini, …) and gpt-5 series reject max_tokens.
+    # O-series: matches a bare ``o<digit>`` token at the start of the name or
+    # following a non-alphanumeric separator, so vendor-prefixed routes
+    # (``openai/o4-mini``, ``azure/o3``) and custom deployments are detected.
+    # gpt-5: matches ``gpt-5`` at the start or after a separator, covering
+    # gpt-5, gpt-5o, gpt-5o-mini, and future gpt-5* variants.
+    if _OPENAI_O_SERIES_RE.search(model) or _OPENAI_GPT5_RE.search(model):
+        return "max_completion_tokens"
+    return "max_tokens"
 
 
 class OpenAIAgentClient:

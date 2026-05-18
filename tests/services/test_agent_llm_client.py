@@ -308,7 +308,7 @@ def test_openai_agent_client_invoke_raw_content_preserves_extra_fields(
 def test_openai_o_series_uses_max_completion_tokens(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """o-series reasoning models must receive max_completion_tokens, not max_tokens."""
+    """o-series and gpt-5 series models must receive max_completion_tokens, not max_tokens."""
     _install_fake_openai(monkeypatch)
 
     captured: dict = {}
@@ -332,6 +332,9 @@ def test_openai_o_series_uses_max_completion_tokens(
         "openai/o4-mini",
         "azure/o3",
         "my-o1-deployment",
+        "gpt-5",
+        "gpt-5o",
+        "gpt-5o-mini",
     ):
         captured.clear()
         client._model = model
