@@ -368,11 +368,11 @@ def _verify_discord(source: str, config: dict[str, Any]) -> dict[str, str]:
     try:
         import discord  # type: ignore[import-not-found]
     except Exception as exc:
-        _report_probe_failure(exc, integration="discord")
         with suppress(Exception):
             import sentry_sdk
 
             sentry_sdk.set_tag("integrations.discord.import_failed", "true")
+        _report_probe_failure(exc, integration="discord")
         return result("discord", source, "failed", "discord.py is not installed.")
 
     bot_token = str(config.get("bot_token", "")).strip()
