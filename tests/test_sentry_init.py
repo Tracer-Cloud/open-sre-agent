@@ -383,6 +383,48 @@ def test_before_send_leaves_unrelated_exception_messages_alone() -> None:
     assert event["exception"]["values"][0]["value"] == original
 
 
+def test_before_send_scrubs_list_typed_input_value_without_mid_clip() -> None:
+    # Pydantic V2 flattens list-field errors to per-element scalar entries
+    # (val.0, val.1, ...), so the rendered ``input_value=`` is always a
+    # scalar repr. Lock that behaviour: the scrubber must replace the whole
+    # value, not clip an inner bracket.
+    event = {
+        "exception": {
+            "values": [
+                {
+                    "type": "ValidationError",
+                    "value": (
+                        "2 validation errors for A\n"
+                        "val.0\n  Input should be a valid integer "
+                        "[type=int_parsing, input_value='secret_a', input_type=str]\n"
+                        "val.1\n  Input should be a valid integer "
+                        "[type=int_parsing, input_value='secret_b', input_type=str]"
+                    ),
+                }
+            ]
+        }
+    }
+
+    sentry_mod._before_send(event, {})
+
+    scrubbed = event["exception"]["values"][0]["value"]
+    assert "secret_a" not in scrubbed
+    assert "secret_b" not in scrubbed
+    assert scrubbed.count("input_value=[Filtered]") == 2
+
+
+def test_scrub_exception_value_is_idempotent() -> None:
+    # Re-scrubbing an already-scrubbed message must be a no-op. Guards
+    # against a future refactor that runs the scrub pass twice (e.g. once
+    # in before_send and once in a downstream hook).
+    once = sentry_mod._scrub_exception_value(
+        "[type=string_too_short, input_value='leaky', input_type=str]"
+    )
+    twice = sentry_mod._scrub_exception_value(once)
+    assert once == twice
+    assert "leaky" not in once
+
+
 def test_before_breadcrumb_strips_query_string_for_http_categories() -> None:
     crumb = {
         "category": "httpx",

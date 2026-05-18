@@ -27,15 +27,16 @@ from app.constants import (
 )
 
 _HOME_PATH_RE: re.Pattern[str] = re.compile(r"/(?:Users|home)/[^/\s]+")
-# Pydantic V2 ValidationError messages render ``input_value=<repr>`` and
-# ``input=<repr>`` for each failing field. When the failing field is e.g.
+# Pydantic V2 ValidationError messages render ``input_value=<repr>`` (or
+# ``input=<repr>``) for each failing field. When the failing field is e.g.
 # ``api_token`` or ``password``, the raw secret lands in the rendered text
 # and reaches Sentry through ``exception.values[].value`` — a layer the
-# existing key-based scrubbers do not walk. Strip the value portion up to
-# the next field separator (``, input_type=``, ``, ctx=``, or the trailing
-# ``]``) and leave the rest of the message intact for triage.
+# existing key-based scrubbers do not walk. Strip the value up to the next
+# pydantic field separator, which is always ``, input_type=``. The placeholder
+# left behind (``input_value=[Filtered]``) has no ``, input_type=`` immediately
+# after the bracket, so re-applying the scrub is a no-op (idempotent).
 _PYDANTIC_INPUT_RE: re.Pattern[str] = re.compile(
-    r"input(?:_value)?=.*?(?=,\s*(?:input_type|ctx)=|\])",
+    r"input(?:_value)?=.*?(?=,\s*input_type=)",
     flags=re.DOTALL,
 )
 _SENSITIVE_KEY_SUFFIXES: tuple[str, ...] = ("_token", "_key", "_secret", "_password")
