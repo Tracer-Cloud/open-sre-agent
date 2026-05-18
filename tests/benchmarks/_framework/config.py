@@ -175,13 +175,26 @@ class BenchmarkConfig(BaseModel):
                 "large for a single run. Confirm intent in pre-registration."
             )
 
-        # Output dir must not be a system path
-        out_str = (
-            str(self.output_dir.resolve())
-            if self.output_dir.is_absolute()
-            else str(self.output_dir)
+        # Output dir must not be a managed system path. Compare BOTH the lexical
+        # form and the resolved form (on macOS /etc → /private/etc symlink would
+        # bypass a check against only one). The narrow prefix list intentionally
+        # excludes user-writable temp paths like /var/folders (pytest tmpdir) and
+        # /var/tmp.
+        lexical = str(self.output_dir)
+        resolved = str(self.output_dir.resolve()) if self.output_dir.is_absolute() else lexical
+        system_prefixes = (
+            "/etc/",
+            "/usr/",
+            "/var/log/",
+            "/var/lib/",
+            "/var/run/",
+            "/private/etc/",
+            "/private/var/log/",
+            "/private/var/lib/",
+            "/private/var/run/",
         )
-        if out_str in {"/", "/tmp", "/var"} or out_str.startswith(("/etc/", "/usr/", "/var/")):
+        system_exacts = {"/", "/etc", "/usr", "/var", "/private/etc", "/private/var"}
+        if any(s in system_exacts or s.startswith(system_prefixes) for s in (lexical, resolved)):
             errors.append(f"output_dir={self.output_dir} would write to a system path — refuse.")
 
         return errors
