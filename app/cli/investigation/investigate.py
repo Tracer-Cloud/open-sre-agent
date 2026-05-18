@@ -140,6 +140,7 @@ def run_investigation_cli(
         "root_cause": state["root_cause"],
         "is_noise": state.get("is_noise", False),
         "validity_score": state.get("validity_score", 0.0),
+        "confidence_band": state.get("confidence_band", ""),
     }
     if state.get("evidence_entries"):
         out["tool_calls"] = state["evidence_entries"]

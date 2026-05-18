@@ -782,7 +782,8 @@ def build_slack_blocks(ctx: ReportContext) -> list[dict]:
         blocks.append({"type": "divider"})
         _add(
             _mrkdwn_section(
-                "*Alternative hypotheses:*\n" + "\n".join(f"• {h}" for h in ranked_hypotheses)
+                "*Alternative hypotheses:*\n"
+                + "\n".join(f"• {_sanitize_for_slack(h)}" for h in ranked_hypotheses)
             )
         )
 
@@ -792,7 +793,8 @@ def build_slack_blocks(ctx: ReportContext) -> list[dict]:
         blocks.append({"type": "divider"})
         _add(
             _mrkdwn_section(
-                "*Missing evidence:*\n" + "\n".join(f"• {e}" for e in missing_evidence_list)
+                "*Missing evidence:*\n"
+                + "\n".join(f"• {_sanitize_for_slack(e)}" for e in missing_evidence_list)
             )
         )
 
