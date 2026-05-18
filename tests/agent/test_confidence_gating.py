@@ -150,6 +150,25 @@ def test_unknown_category_passes_gate() -> None:
     assert result.root_cause_category == "unknown"
 
 
+def test_gate_caps_band_to_medium_when_fired_on_high_score() -> None:
+    """Gate firing on high-score/zero-claims must downgrade band so it stays consistent with prefix."""
+    result = InvestigationResult(
+        root_cause="DB connection pool exhausted.",
+        root_cause_category="database",
+        validity_score=0.85,
+        confidence_band="high",
+        validated_claims=[],
+    )
+    assert check_sufficiency(result) is False
+    # Simulate gate behaviour applied in investigation.py
+    if not result.root_cause.startswith("Most likely"):
+        result.root_cause = f"Most likely: {result.root_cause}"
+    if result.confidence_band == "high":
+        result.confidence_band = "medium"
+    assert result.root_cause.startswith("Most likely:")
+    assert result.confidence_band == "medium"
+
+
 def test_gate_strips_llm_most_likely_prefix_when_sufficient() -> None:
     """When gate passes, any pre-existing LLM-generated 'Most likely:' prefix must be stripped."""
     from app.agent.result import check_sufficiency

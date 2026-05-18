@@ -410,8 +410,11 @@ class ConnectedInvestigationAgent:
         if check_sufficiency(result):
             if result.root_cause.startswith("Most likely:"):
                 result.root_cause = result.root_cause[len("Most likely:") :].lstrip()
-        elif not result.root_cause.startswith("Most likely"):
-            result.root_cause = f"Most likely: {result.root_cause}"
+        else:
+            if not result.root_cause.startswith("Most likely"):
+                result.root_cause = f"Most likely: {result.root_cause}"
+            if result.confidence_band == "high":
+                result.confidence_band = "medium"
 
         _emit(
             "agent_end",
