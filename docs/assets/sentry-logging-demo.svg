@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="760" viewBox="0 0 1400 760">
+  <rect width="1400" height="760" fill="#14181c"/>
+  <text x="36" y="70" font-family="monospace" font-size="38" fill="#ecf2ff">OpenSRE Sentry LoggingIntegration Demo</text>
+  <text x="36" y="140" font-family="monospace" font-size="25" fill="#b7cae6">Command:</text>
+  <text x="36" y="180" font-family="monospace" font-size="25" fill="#d9e6ff">uv run python -c "..._build_sentry_integrations demo..."</text>
+
+  <text x="36" y="250" font-family="monospace" font-size="25" fill="#b7cae6">Output:</text>
+  <text x="36" y="290" font-family="monospace" font-size="25" fill="#d9e6ff">default   -&gt; ['LoggingIntegration', 'AsyncioIntegration', 'HttpxIntegration']</text>
+  <text x="36" y="330" font-family="monospace" font-size="25" fill="#d9e6ff">disabled=1 -&gt; ['AsyncioIntegration', 'HttpxIntegration']</text>
+
+  <text x="36" y="410" font-family="monospace" font-size="25" fill="#b7cae6">Interpretation:</text>
+  <text x="36" y="450" font-family="monospace" font-size="24" fill="#d9e6ff">- By default, logger.error/exception are forwarded via LoggingIntegration.</text>
+  <text x="36" y="490" font-family="monospace" font-size="24" fill="#d9e6ff">- With OPENSRE_SENTRY_LOGGING_DISABLED=1, forwarding is disabled while Sentry remains enabled.</text>
+</svg>
