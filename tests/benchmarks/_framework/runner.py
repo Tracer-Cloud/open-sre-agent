@@ -185,6 +185,13 @@ class BenchmarkRunner:
         )
         print(f"  loaded {len(cases)} case(s)")
 
+        # Register the cost-accounting hook so every successful LLM call
+        # inside opensre's agent feeds CostTracker. Cleared in finally so
+        # the hook doesn't leak into other test code that imports llm_client.
+        from app.services.llm_client import set_usage_hook
+
+        set_usage_hook(self.cost.add)
+
         # Serialize across LLMs (opensre's LLM client is a module-level
         # singleton — swapping mid-flight would race). Parallel within a
         # single LLM activation.
@@ -213,6 +220,8 @@ class BenchmarkRunner:
             aborted = True
             abort_reason = f"LLM dispatch failed: {exc}"
             print(f"  ✗ aborted: {abort_reason}")
+        finally:
+            set_usage_hook(None)
 
         ended_at = datetime.now(UTC).isoformat()
 
@@ -350,9 +359,12 @@ class BenchmarkRunner:
         latency_ms = int((time.monotonic() - t0) * 1000)
         ended = datetime.now(UTC)
 
-        # Cost tracking is a no-op until llm_dispatch wires token counts in.
-        # When that ships, this is where ``self.cost.add(model, tin, tout)``
-        # will run and may raise CostBudgetExceeded.
+        # Cost tracking happens out-of-band: app/services/llm_client._emit_usage
+        # fires self.cost.add for every successful LLM call the agent makes,
+        # so totals in report.json reflect real spend. Per-cell tokens/cost
+        # below stay at 0 (delta capture is a follow-up — would need a
+        # before/after snapshot bracketing run_investigation, complicated by
+        # ThreadPoolExecutor shared-state).
 
         run = RunResult(
             case_id=case.case_id,

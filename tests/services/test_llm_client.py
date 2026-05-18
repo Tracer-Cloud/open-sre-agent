@@ -2186,3 +2186,191 @@ def test_anthropic_invoke_bad_request_non_usage_limit_raises_generic_message(mon
 
     msg = str(exc_info.value)
     assert "HTTP 400" in msg
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Usage hook — observer wired by the benchmark framework
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.fixture(autouse=True)
+def _reset_usage_hook():
+    """Guard tests against hook leakage from other tests in the file."""
+    llm_client.set_usage_hook(None)
+    yield
+    llm_client.set_usage_hook(None)
+
+
+def _make_recording_hook() -> tuple[list[tuple[str, int, int]], llm_client.UsageHook]:
+    """Return (calls_list, hook). Closure-factory keeps state isolated per test."""
+    calls: list[tuple[str, int, int]] = []
+
+    def hook(model: str, tokens_in: int, tokens_out: int) -> None:
+        calls.append((model, tokens_in, tokens_out))
+
+    return calls, hook
+
+
+def test_usage_hook_anthropic_invoke_fires_with_correct_token_counts(monkeypatch) -> None:
+    class _Usage:
+        input_tokens = 123
+        output_tokens = 45
+
+    class _Block:
+        type = "text"
+        text = "ok"
+
+    class _Response:
+        content = [_Block()]
+        usage = _Usage()
+
+    class _Messages:
+        def create(self, **_kwargs):
+            return _Response()
+
+    class _FakeAnthropicWithUsage:
+        def __init__(self, **_kwargs) -> None:
+            self.messages = _Messages()
+
+    monkeypatch.setattr("app.guardrails.engine.get_guardrail_engine", _InactiveGuardrailEngine)
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "Anthropic", _FakeAnthropicWithUsage)
+
+    calls, hook = _make_recording_hook()
+    llm_client.set_usage_hook(hook)
+
+    client = llm_client.LLMClient(model="claude-sonnet-4-5-20250929")
+    client.invoke("hi")
+
+    assert calls == [("claude-sonnet-4-5-20250929", 123, 45)]
+
+
+def test_usage_hook_openai_invoke_fires_with_correct_token_counts(monkeypatch) -> None:
+    class _Usage:
+        prompt_tokens = 200
+        completion_tokens = 50
+
+    class _Message:
+        content = "ok"
+
+    class _Choice:
+        message = _Message()
+
+    class _Response:
+        choices = [_Choice()]
+        usage = _Usage()
+
+    class _Completions:
+        def create(self, **_kwargs):
+            return _Response()
+
+    class _Chat:
+        def __init__(self) -> None:
+            self.completions = _Completions()
+
+    class _FakeOpenAIWithUsage:
+        def __init__(self, **_kwargs) -> None:
+            self.chat = _Chat()
+
+    monkeypatch.setattr("app.guardrails.engine.get_guardrail_engine", _InactiveGuardrailEngine)
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "OpenAI", _FakeOpenAIWithUsage)
+
+    calls, hook = _make_recording_hook()
+    llm_client.set_usage_hook(hook)
+
+    client = llm_client.OpenAILLMClient(model="gpt-4o-2024-11-20")
+    client.invoke("hi")
+
+    assert calls == [("gpt-4o-2024-11-20", 200, 50)]
+
+
+def test_usage_hook_bedrock_converse_fires_with_correct_token_counts(monkeypatch) -> None:
+    monkeypatch.setattr("app.guardrails.engine.get_guardrail_engine", _InactiveGuardrailEngine)
+    response = {
+        "output": {"message": {"role": "assistant", "content": [{"text": "ok"}]}},
+        "usage": {"inputTokens": 77, "outputTokens": 11},
+    }
+    runtime = _RecordingBedrockRuntime(response)
+    monkeypatch.setattr(llm_client.boto3, "client", lambda *_a, **_k: runtime)
+
+    calls, hook = _make_recording_hook()
+    llm_client.set_usage_hook(hook)
+
+    client = llm_client.BedrockLLMClient(model="mistral.mistral-large-2402-v1:0")
+    client.invoke([{"role": "user", "content": "hi"}])
+
+    assert calls == [("mistral.mistral-large-2402-v1:0", 77, 11)]
+
+
+def test_usage_hook_exception_propagates(monkeypatch) -> None:
+    """CostBudgetExceeded raised from the hook must bubble out of invoke()
+    so the benchmark runner can halt cleanly."""
+
+    class _Usage:
+        input_tokens = 1
+        output_tokens = 1
+
+    class _Block:
+        type = "text"
+        text = "ok"
+
+    class _Response:
+        content = [_Block()]
+        usage = _Usage()
+
+    class _Messages:
+        def create(self, **_kwargs):
+            return _Response()
+
+    class _FakeAnthropicWithUsage:
+        def __init__(self, **_kwargs) -> None:
+            self.messages = _Messages()
+
+    monkeypatch.setattr("app.guardrails.engine.get_guardrail_engine", _InactiveGuardrailEngine)
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "Anthropic", _FakeAnthropicWithUsage)
+
+    class _BudgetExceeded(RuntimeError):
+        pass
+
+    def hook(_model, _tin, _tout):
+        raise _BudgetExceeded("over budget")
+
+    llm_client.set_usage_hook(hook)
+
+    client = llm_client.LLMClient(model="claude-sonnet-4-5-20250929")
+    with pytest.raises(_BudgetExceeded):
+        client.invoke("hi")
+
+
+def test_usage_hook_unset_is_default_noop(monkeypatch) -> None:
+    """Without set_usage_hook, invoke must succeed and emit nothing."""
+
+    class _Usage:
+        input_tokens = 1
+        output_tokens = 1
+
+    class _Block:
+        type = "text"
+        text = "ok"
+
+    class _Response:
+        content = [_Block()]
+        usage = _Usage()
+
+    class _Messages:
+        def create(self, **_kwargs):
+            return _Response()
+
+    class _FakeAnthropicWithUsage:
+        def __init__(self, **_kwargs) -> None:
+            self.messages = _Messages()
+
+    monkeypatch.setattr("app.guardrails.engine.get_guardrail_engine", _InactiveGuardrailEngine)
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "Anthropic", _FakeAnthropicWithUsage)
+
+    client = llm_client.LLMClient(model="claude-sonnet-4-5-20250929")
+    response = client.invoke("hi")
+    assert response.content == "ok"
