@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
+from contextlib import suppress
 from typing import Any
 
 import boto3
 import httpx
 import requests
+from botocore.exceptions import BotoCoreError
+from botocore.exceptions import ClientError as BotoClientError
 
 from app.auth.jwt_auth import extract_org_id_from_jwt
 from app.config import get_tracer_base_url
@@ -48,8 +52,19 @@ from app.services.splunk import SplunkClient, SplunkConfig
 from app.services.tracer_client.client import TracerClient
 from app.services.vercel.client import VercelClient, VercelConfig
 from app.services.victoria_logs import VictoriaLogsClient, VictoriaLogsConfig
+from app.utils.errors import report_exception
+
+logger = logging.getLogger(__name__)
 
 VerifierFn = Callable[[str, dict[str, Any]], dict[str, str]]
+
+_VENDOR_TRANSPORT_ERRORS: tuple[type[BaseException], ...] = (
+    httpx.HTTPStatusError,
+    httpx.TransportError,
+    requests.exceptions.RequestException,
+    BotoClientError,
+    BotoCoreError,
+)
 
 _SUPPORTED_GRAFANA_TYPES = ("loki", "tempo", "prometheus")
 
@@ -68,6 +83,25 @@ def result(
     }
 
 
+def _report_probe_failure(
+    exc: BaseException,
+    *,
+    integration: str,
+) -> None:
+    is_vendor = isinstance(exc, _VENDOR_TRANSPORT_ERRORS)
+    report_exception(
+        exc,
+        logger=logger,
+        message=f"[{integration}] verification probe failed",
+        severity="info" if is_vendor else "error",
+        tags={
+            "surface": "integration_probe",
+            "integration": integration,
+            "event": "vendor_failure" if is_vendor else "verify_failed",
+        },
+    )
+
+
 def _verify_with_validation_result[ConfigT](
     service: str,
     source: str,
@@ -76,8 +110,12 @@ def _verify_with_validation_result[ConfigT](
     build_config: Callable[[dict[str, Any]], ConfigT],
     validate_config: Callable[[ConfigT], Any],
 ) -> dict[str, str]:
-    normalized_config = build_config(config)
-    validation_result = validate_config(normalized_config)
+    try:
+        normalized_config = build_config(config)
+        validation_result = validate_config(normalized_config)
+    except Exception as exc:
+        _report_probe_failure(exc, integration=service)
+        return result(service, source, "failed", str(exc))
     return result(
         service,
         source,
@@ -114,10 +152,12 @@ def build_probe_verifier[ConfigT](
         try:
             normalized_config = build_config(config)
         except Exception as err:
+            _report_probe_failure(err, integration=service)
             return result(service, source, "missing", str(err))
         try:
             probe_result = client_factory(normalized_config).probe_access()
         except Exception as err:
+            _report_probe_failure(err, integration=service)
             return result(service, source, "failed", str(err))
         return result(service, source, probe_result.status, probe_result.detail)
 
@@ -182,6 +222,7 @@ def _verify_grafana(source: str, config: dict[str, Any]) -> dict[str, str]:
         response.raise_for_status()
         payload = response.json()
     except Exception as exc:
+        _report_probe_failure(exc, integration="grafana")
         return result("grafana", source, "failed", f"Datasource discovery failed: {exc}")
 
     datasources = payload if isinstance(payload, list) else []
@@ -214,6 +255,7 @@ def _verify_aws(source: str, config: dict[str, Any]) -> dict[str, str]:
         sts_client, region, mode = _build_sts_client(config)
         identity = sts_client.get_caller_identity()
     except Exception as exc:
+        _report_probe_failure(exc, integration="aws")
         return result("aws", source, "failed", f"AWS STS check failed: {exc}")
 
     account = str(identity.get("Account", "")).strip()
@@ -238,6 +280,7 @@ def _verify_slack(
     try:
         slack_config = SlackWebhookConfig.model_validate(config)
     except Exception as err:
+        _report_probe_failure(err, integration="slack")
         return result("slack", source, "missing", str(err))
 
     webhook_url = slack_config.webhook_url
@@ -256,6 +299,7 @@ def _verify_slack(
         response = httpx.post(webhook_url, json=payload, timeout=10.0)
         response.raise_for_status()
     except Exception as exc:
+        _report_probe_failure(exc, integration="slack")
         return result("slack", source, "failed", f"Webhook delivery failed: {exc}")
     return result("slack", source, "passed", "Webhook delivered test message successfully.")
 
@@ -269,6 +313,7 @@ def _verify_tracer(source: str, config: dict[str, Any]) -> dict[str, str]:
     try:
         org_id = extract_org_id_from_jwt(tracer_config.jwt_token)
     except Exception as err:
+        _report_probe_failure(err, integration="tracer")
         return result("tracer", source, "failed", f"JWT decode failed: {err}")
     if not org_id:
         return result("tracer", source, "failed", "JWT did not contain an org identifier.")
@@ -281,6 +326,7 @@ def _verify_tracer(source: str, config: dict[str, Any]) -> dict[str, str]:
         )
         integrations = tracer_client.get_all_integrations()
     except Exception as err:
+        _report_probe_failure(err, integration="tracer")
         return result("tracer", source, "failed", f"Tracer API check failed: {err}")
 
     return result(
@@ -295,6 +341,10 @@ def _verify_discord(source: str, config: dict[str, Any]) -> dict[str, str]:
     try:
         import discord  # type: ignore[import-not-found]
     except Exception:
+        with suppress(Exception):
+            import sentry_sdk
+
+            sentry_sdk.set_tag("integrations.discord.import_failed", "true")
         return result("discord", source, "failed", "discord.py is not installed.")
 
     bot_token = str(config.get("bot_token", "")).strip()
@@ -307,11 +357,13 @@ def _verify_discord(source: str, config: dict[str, Any]) -> dict[str, str]:
     try:
         client.run(bot_token)
     except discord.LoginFailure as err:
+        _report_probe_failure(err, integration="discord")
         return result("discord", source, "failed", f"Discord login failed: {err}")
     except Exception as err:
         detail = str(err)
         if "run() cannot be called from a running event loop" in detail:
             return result("discord", source, "passed", "Discord bot token accepted.")
+        _report_probe_failure(err, integration="discord")
         return result("discord", source, "failed", f"Discord API check failed: {err}")
     return result("discord", source, "passed", "Discord bot token accepted.")
 
@@ -326,6 +378,7 @@ def _verify_telegram(source: str, config: dict[str, Any]) -> dict[str, str]:
         response.raise_for_status()
         payload = response.json()
     except Exception as exc:
+        _report_probe_failure(exc, integration="telegram")
         return result("telegram", source, "failed", f"Telegram API check failed: {exc}")
 
     if not payload.get("ok"):
@@ -363,6 +416,7 @@ def _verify_whatsapp(source: str, config: dict[str, Any]) -> dict[str, str]:
         response.raise_for_status()
         payload = response.json()
     except Exception as exc:
+        _report_probe_failure(exc, integration="whatsapp")
         return result("whatsapp", source, "failed", f"Twilio API check failed: {exc}")
 
     friendly_name = str(payload.get("friendly_name", "")).strip()
