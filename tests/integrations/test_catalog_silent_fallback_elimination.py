@@ -222,6 +222,45 @@ _ENV_LOADER_CASES: list[tuple[str, dict[str, str], str]] = [
         {},
         "rds_config_from_env",
     ),
+    # Pattern C — added in this PR (was the #2036 follow-up scope).
+    (
+        "vercel",
+        {"VERCEL_API_TOKEN": "t"},
+        "VercelConfig",
+    ),
+    (
+        "opsgenie",
+        {"OPSGENIE_API_KEY": "k"},
+        "OpsGenieIntegrationConfig",
+    ),
+    (
+        "jira",
+        {
+            "JIRA_BASE_URL": "https://jira.example",
+            "JIRA_EMAIL": "e@example.com",
+            "JIRA_API_TOKEN": "t",
+        },
+        "JiraIntegrationConfig",
+    ),
+    (
+        "discord",
+        {"DISCORD_BOT_TOKEN": "t"},
+        "DiscordBotConfig",
+    ),
+    (
+        "telegram",
+        {"TELEGRAM_BOT_TOKEN": "t"},
+        "TelegramBotConfig",
+    ),
+    (
+        "mongodb_atlas",
+        {
+            "MONGODB_ATLAS_PUBLIC_KEY": "pub",
+            "MONGODB_ATLAS_PRIVATE_KEY": "priv",
+            "MONGODB_ATLAS_PROJECT_ID": "proj",
+        },
+        "build_mongodb_atlas_config",
+    ),
 ]
 
 
@@ -266,3 +305,33 @@ def test_env_loader_failure_reports_and_skips(
     assert tags["event"] == "env_loader_failed"
     assert tags["surface"] == "integration"
     assert matching[0].kwargs["severity"] == "warning"
+
+
+def test_one_failing_env_loader_does_not_abort_remaining_integrations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The regression #2036 was filed for: a single failing ``model_validate``
+    in ``load_env_integrations`` must not abort discovery for every later
+    vendor. Enable two unrelated loaders (vercel + argocd), force vercel to
+    raise, and assert argocd still appears in the returned list.
+    """
+    for var in list(os.environ):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("VERCEL_API_TOKEN", "tkn")
+    monkeypatch.setenv("ARGOCD_BASE_URL", "https://argo.example")
+    monkeypatch.setenv("ARGOCD_AUTH_TOKEN", "tkn")
+
+    def _boom(*_args: Any, **_kwargs: Any) -> None:
+        raise RuntimeError("forced vercel failure")
+
+    monkeypatch.setattr("app.integrations._catalog_impl.VercelConfig", _boom)
+
+    with patch("app.integrations._catalog_impl.report_exception"):
+        result = load_env_integrations()
+
+    services = {entry["service"] for entry in result}
+    assert "vercel" not in services
+    assert "argocd" in services, (
+        "argocd was dropped — discovery aborted on the first failing loader instead of "
+        "continuing past it (this is exactly the bug #2036 is about)"
+    )

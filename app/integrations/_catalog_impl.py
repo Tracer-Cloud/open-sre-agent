@@ -1323,33 +1323,41 @@ def load_env_integrations() -> list[dict[str, Any]]:
 
     vercel_api_token = os.getenv("VERCEL_API_TOKEN", "").strip()
     if vercel_api_token:
-        vercel_config = VercelConfig.model_validate(
-            {
-                "api_token": vercel_api_token,
-                "team_id": os.getenv("VERCEL_TEAM_ID", "").strip(),
-            }
-        )
-        integrations.append(
-            _active_env_record(
-                "vercel",
-                vercel_config.model_dump(exclude={"integration_id"}),
+        try:
+            vercel_config = VercelConfig.model_validate(
+                {
+                    "api_token": vercel_api_token,
+                    "team_id": os.getenv("VERCEL_TEAM_ID", "").strip(),
+                }
             )
-        )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="vercel")
+        else:
+            integrations.append(
+                _active_env_record(
+                    "vercel",
+                    vercel_config.model_dump(exclude={"integration_id"}),
+                )
+            )
 
     opsgenie_api_key = os.getenv("OPSGENIE_API_KEY", "").strip()
     if opsgenie_api_key:
-        opsgenie_config = OpsGenieIntegrationConfig.model_validate(
-            {
-                "api_key": opsgenie_api_key,
-                "region": os.getenv("OPSGENIE_REGION", "us").strip() or "us",
-            }
-        )
-        integrations.append(
-            _active_env_record(
-                "opsgenie",
-                opsgenie_config.model_dump(exclude={"integration_id"}),
+        try:
+            opsgenie_config = OpsGenieIntegrationConfig.model_validate(
+                {
+                    "api_key": opsgenie_api_key,
+                    "region": os.getenv("OPSGENIE_REGION", "us").strip() or "us",
+                }
             )
-        )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="opsgenie")
+        else:
+            integrations.append(
+                _active_env_record(
+                    "opsgenie",
+                    opsgenie_config.model_dump(exclude={"integration_id"}),
+                )
+            )
 
     incident_io_api_key = resolve_env_credential("INCIDENT_IO_API_KEY")
     if incident_io_api_key:
@@ -1375,32 +1383,41 @@ def load_env_integrations() -> list[dict[str, Any]]:
     jira_api_token = os.getenv("JIRA_API_TOKEN", "").strip()
     jira_project_key = os.getenv("JIRA_PROJECT_KEY", "").strip()
     if jira_base_url and jira_email and jira_api_token:
-        jira_config = JiraIntegrationConfig.model_validate(
-            {
-                "base_url": jira_base_url,
-                "email": jira_email,
-                "api_token": jira_api_token,
-                "project_key": jira_project_key,
-            }
-        )
-        integrations.append(
-            _active_env_record(
-                "jira",
-                jira_config.model_dump(exclude={"integration_id"}),
+        try:
+            jira_config = JiraIntegrationConfig.model_validate(
+                {
+                    "base_url": jira_base_url,
+                    "email": jira_email,
+                    "api_token": jira_api_token,
+                    "project_key": jira_project_key,
+                }
             )
-        )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="jira")
+        else:
+            integrations.append(
+                _active_env_record(
+                    "jira",
+                    jira_config.model_dump(exclude={"integration_id"}),
+                )
+            )
 
     discord_bot_token = resolve_env_credential("DISCORD_BOT_TOKEN")
     if discord_bot_token:
-        discord_config = DiscordBotConfig.model_validate(
-            {
-                "bot_token": discord_bot_token,
-                "application_id": os.getenv("DISCORD_APPLICATION_ID", "").strip(),
-                "public_key": os.getenv("DISCORD_PUBLIC_KEY", "").strip(),
-                "default_channel_id": os.getenv("DISCORD_DEFAULT_CHANNEL_ID", "").strip() or None,
-            }
-        )
-        integrations.append(_active_env_record("discord", discord_config.model_dump()))
+        try:
+            discord_config = DiscordBotConfig.model_validate(
+                {
+                    "bot_token": discord_bot_token,
+                    "application_id": os.getenv("DISCORD_APPLICATION_ID", "").strip(),
+                    "public_key": os.getenv("DISCORD_PUBLIC_KEY", "").strip(),
+                    "default_channel_id": os.getenv("DISCORD_DEFAULT_CHANNEL_ID", "").strip()
+                    or None,
+                }
+            )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="discord")
+        else:
+            integrations.append(_active_env_record("discord", discord_config.model_dump()))
 
     airflow_config = airflow_config_from_env()
     if airflow_config is not None:
@@ -1408,13 +1425,17 @@ def load_env_integrations() -> list[dict[str, Any]]:
 
     telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
     if telegram_bot_token:
-        tg_config = TelegramBotConfig.model_validate(
-            {
-                "bot_token": telegram_bot_token,
-                "default_chat_id": os.getenv("TELEGRAM_DEFAULT_CHAT_ID", "").strip() or None,
-            }
-        )
-        integrations.append(_active_env_record("telegram", tg_config.model_dump()))
+        try:
+            tg_config = TelegramBotConfig.model_validate(
+                {
+                    "bot_token": telegram_bot_token,
+                    "default_chat_id": os.getenv("TELEGRAM_DEFAULT_CHAT_ID", "").strip() or None,
+                }
+            )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="telegram")
+        else:
+            integrations.append(_active_env_record("telegram", tg_config.model_dump()))
 
     wa_account_sid = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
     wa_auth_token = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
@@ -1434,22 +1455,26 @@ def load_env_integrations() -> list[dict[str, Any]]:
     atlas_priv = os.getenv("MONGODB_ATLAS_PRIVATE_KEY", "").strip()
     atlas_project = os.getenv("MONGODB_ATLAS_PROJECT_ID", "").strip()
     if atlas_pub and atlas_priv and atlas_project:
-        atlas_config = build_mongodb_atlas_config(
-            {
-                "api_public_key": atlas_pub,
-                "api_private_key": atlas_priv,
-                "project_id": atlas_project,
-                "base_url": os.getenv(
-                    "MONGODB_ATLAS_BASE_URL", "https://cloud.mongodb.com/api/atlas/v2"
-                ).strip(),
-            }
-        )
-        integrations.append(
-            _active_env_record(
-                "mongodb_atlas",
-                atlas_config.model_dump(exclude={"integration_id"}),
+        try:
+            atlas_config = build_mongodb_atlas_config(
+                {
+                    "api_public_key": atlas_pub,
+                    "api_private_key": atlas_priv,
+                    "project_id": atlas_project,
+                    "base_url": os.getenv(
+                        "MONGODB_ATLAS_BASE_URL", "https://cloud.mongodb.com/api/atlas/v2"
+                    ).strip(),
+                }
             )
-        )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="mongodb_atlas")
+        else:
+            integrations.append(
+                _active_env_record(
+                    "mongodb_atlas",
+                    atlas_config.model_dump(exclude={"integration_id"}),
+                )
+            )
 
     openclaw_url = os.getenv("OPENCLAW_MCP_URL", "").strip()
     openclaw_command = os.getenv("OPENCLAW_MCP_COMMAND", "").strip()
