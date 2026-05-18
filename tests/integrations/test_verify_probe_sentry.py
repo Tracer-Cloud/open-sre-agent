@@ -24,6 +24,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 import requests
+from pydantic import ValidationError as PydanticValidationError
 
 from app.integrations._verification_adapters import (
     _report_probe_failure,
@@ -180,6 +181,34 @@ def test_import_error_gets_info_severity(mock_report: MagicMock) -> None:
 
 
 @patch("app.integrations._verification_adapters.report_exception")
+def test_pydantic_validation_error_gets_info_severity(mock_report: MagicMock) -> None:
+    from pydantic import BaseModel
+
+    class _Dummy(BaseModel):
+        x: int
+
+    try:
+        _Dummy.model_validate({"x": "not_an_int"})
+    except PydanticValidationError as exc:
+        _report_probe_failure(exc, integration="grafana")
+
+    mock_report.assert_called_once()
+    assert mock_report.call_args.kwargs["severity"] == "info"
+    assert mock_report.call_args.kwargs["tags"]["event"] == "invalid_config"
+    assert mock_report.call_args.kwargs["tags"]["surface"] == "integration_probe"
+
+
+@patch("app.integrations._verification_adapters.report_exception")
+def test_expected_override_gets_info_severity(mock_report: MagicMock) -> None:
+    exc = RuntimeError("discord login failure")
+    _report_probe_failure(exc, integration="discord", expected=True)
+
+    mock_report.assert_called_once()
+    assert mock_report.call_args.kwargs["severity"] == "info"
+    assert mock_report.call_args.kwargs["tags"]["event"] == "vendor_failure"
+
+
+@patch("app.integrations._verification_adapters.report_exception")
 def test_message_includes_integration_name(mock_report: MagicMock) -> None:
     _report_probe_failure(ValueError("bad"), integration="aws")
     msg = mock_report.call_args.kwargs["message"]
@@ -236,7 +265,7 @@ def test_verify_slack_captures_on_config_validation_error(
     assert res["status"] == "missing"
     mock_report.assert_called_once()
     assert mock_report.call_args.kwargs["tags"]["integration"] == "slack"
-    assert mock_report.call_args.kwargs["tags"]["event"] == "verify_failed"
+    assert mock_report.call_args.kwargs["tags"]["event"] == "invalid_config"
 
 
 # ---------------------------------------------------------------------------

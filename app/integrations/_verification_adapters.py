@@ -12,6 +12,7 @@ import httpx
 import requests
 from botocore.exceptions import BotoCoreError
 from botocore.exceptions import ClientError as BotoClientError
+from pydantic import ValidationError as PydanticValidationError
 
 from app.auth.jwt_auth import extract_org_id_from_jwt
 from app.config import get_tracer_base_url
@@ -87,15 +88,17 @@ def _report_probe_failure(
     exc: BaseException,
     *,
     integration: str,
+    expected: bool = False,
 ) -> None:
-    is_vendor = isinstance(exc, _VENDOR_TRANSPORT_ERRORS)
+    is_vendor = isinstance(exc, _VENDOR_TRANSPORT_ERRORS) or expected
     is_optional_dep = isinstance(exc, (ImportError, ModuleNotFoundError))
-    expected = is_vendor or is_optional_dep
+    is_bad_config = isinstance(exc, PydanticValidationError)
+    benign = is_vendor or is_optional_dep or is_bad_config
     report_exception(
         exc,
         logger=logger,
         message=f"[{integration}] verification probe failed",
-        severity="info" if expected else "error",
+        severity="info" if benign else "error",
         tags={
             "surface": "integration_probe",
             "integration": integration,
@@ -103,6 +106,8 @@ def _report_probe_failure(
             if is_vendor
             else "missing_dependency"
             if is_optional_dep
+            else "invalid_config"
+            if is_bad_config
             else "verify_failed",
         },
     )
@@ -376,7 +381,7 @@ def _verify_discord(source: str, config: dict[str, Any]) -> dict[str, str]:
     try:
         client.run(bot_token)
     except discord.LoginFailure as err:
-        _report_probe_failure(err, integration="discord")
+        _report_probe_failure(err, integration="discord", expected=True)
         return result("discord", source, "failed", f"Discord login failed: {err}")
     except Exception as err:
         detail = str(err)
