@@ -199,6 +199,16 @@ def test_pydantic_validation_error_gets_info_severity(mock_report: MagicMock) ->
 
 
 @patch("app.integrations._verification_adapters.report_exception")
+def test_value_error_gets_info_severity(mock_report: MagicMock) -> None:
+    exc = ValueError("Missing AWS role_arn or credentials.")
+    _report_probe_failure(exc, integration="aws")
+
+    mock_report.assert_called_once()
+    assert mock_report.call_args.kwargs["severity"] == "info"
+    assert mock_report.call_args.kwargs["tags"]["event"] == "invalid_config"
+
+
+@patch("app.integrations._verification_adapters.report_exception")
 def test_expected_override_gets_info_severity(mock_report: MagicMock) -> None:
     exc = RuntimeError("discord login failure")
     _report_probe_failure(exc, integration="discord", expected=True)
