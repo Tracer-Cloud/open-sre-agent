@@ -14,7 +14,7 @@ import re
 from collections.abc import Generator, Mapping
 from contextlib import contextmanager, suppress
 from functools import cache
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urlsplit, urlunsplit
 
 from app.analytics.events import Event
@@ -503,7 +503,7 @@ def capture_exception(
     context: str | None = None,
     extra: Mapping[str, Any] | None = None,
     tags: Mapping[str, str] | None = None,
-) -> Any | None:
+) -> str | None:
     """Best-effort capture for exceptions swallowed by boundary adapters."""
     if _is_sentry_disabled():
         return None
@@ -511,7 +511,7 @@ def capture_exception(
         import sentry_sdk
 
         if context is None and not extra and not tags:
-            return sentry_sdk.capture_exception(exc)
+            return cast("str | None", sentry_sdk.capture_exception(exc))
         with sentry_sdk.push_scope() as scope:
             if context is not None:
                 scope.set_tag("opensre.context", context)
@@ -521,7 +521,7 @@ def capture_exception(
             if extra:
                 for key, value in extra.items():
                     scope.set_extra(key, value)
-            return sentry_sdk.capture_exception(exc)
+            return cast("str | None", sentry_sdk.capture_exception(exc))
     return None
 
 
