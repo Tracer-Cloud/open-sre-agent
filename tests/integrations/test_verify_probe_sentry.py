@@ -199,13 +199,29 @@ def test_pydantic_validation_error_gets_info_severity(mock_report: MagicMock) ->
 
 
 @patch("app.integrations._verification_adapters.report_exception")
-def test_value_error_gets_info_severity(mock_report: MagicMock) -> None:
+def test_config_error_override_gets_info_severity(mock_report: MagicMock) -> None:
     exc = ValueError("Missing AWS role_arn or credentials.")
-    _report_probe_failure(exc, integration="aws")
+    _report_probe_failure(exc, integration="aws", config_error=True)
 
     mock_report.assert_called_once()
     assert mock_report.call_args.kwargs["severity"] == "info"
     assert mock_report.call_args.kwargs["tags"]["event"] == "invalid_config"
+
+
+@patch("app.integrations._verification_adapters.report_exception")
+@patch("app.integrations._verification_adapters._build_sts_client")
+def test_verify_aws_missing_credentials_returns_missing(
+    mock_build: MagicMock, mock_report: MagicMock
+) -> None:
+    from app.integrations._verification_adapters import _verify_aws
+
+    mock_build.side_effect = ValueError("Missing AWS role_arn or credentials.")
+    res = _verify_aws("env", {"region": "us-east-1"})
+    assert res["status"] == "missing"
+    mock_report.assert_called_once()
+    assert mock_report.call_args.kwargs["severity"] == "info"
+    assert mock_report.call_args.kwargs["tags"]["event"] == "invalid_config"
+    assert mock_report.call_args.kwargs["tags"]["integration"] == "aws"
 
 
 @patch("app.integrations._verification_adapters.report_exception")

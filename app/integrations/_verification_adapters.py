@@ -89,10 +89,11 @@ def _report_probe_failure(
     *,
     integration: str,
     expected: bool = False,
+    config_error: bool = False,
 ) -> None:
     is_vendor = isinstance(exc, _VENDOR_TRANSPORT_ERRORS) or expected
     is_optional_dep = isinstance(exc, (ImportError, ModuleNotFoundError))
-    is_bad_config = isinstance(exc, (PydanticValidationError, ValueError))
+    is_bad_config = isinstance(exc, PydanticValidationError) or config_error
     benign = is_vendor or is_optional_dep or is_bad_config
     report_exception(
         exc,
@@ -272,9 +273,12 @@ def _verify_grafana(source: str, config: dict[str, Any]) -> dict[str, str]:
 def _verify_aws(source: str, config: dict[str, Any]) -> dict[str, str]:
     try:
         sts_client, region, mode = _build_sts_client(config)
+    except (PydanticValidationError, ValueError) as exc:
+        _report_probe_failure(exc, integration="aws", config_error=True)
+        return result("aws", source, "missing", f"AWS config error: {exc}")
     except Exception as exc:
         _report_probe_failure(exc, integration="aws")
-        return result("aws", source, "missing", f"AWS config error: {exc}")
+        return result("aws", source, "failed", f"AWS STS check failed: {exc}")
     try:
         identity = sts_client.get_caller_identity()
     except Exception as exc:
