@@ -109,6 +109,7 @@ def test_run_investigation_cli_shapes_agent_state(monkeypatch) -> None:
         "root_cause": "bad deploy",
         "is_noise": False,
         "validity_score": 0.0,
+        "confidence_band": "",
     }
 
 
