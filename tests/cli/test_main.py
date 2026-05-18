@@ -320,7 +320,6 @@ def test_main_debug_sentry_sends_synthetic_event(monkeypatch, capsys) -> None:
     debug_module = importlib.import_module("app.cli.commands.debug")
     captured: list[tuple[tuple[object, ...], dict[str, object]]] = []
     root_init_entrypoints: list[str | None] = []
-    init_entrypoints: list[str | None] = []
     flush_calls: list[int] = []
 
     monkeypatch.setattr(
@@ -332,11 +331,6 @@ def test_main_debug_sentry_sends_synthetic_event(monkeypatch, capsys) -> None:
     monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr(debug_module, "sentry_transport_enabled", lambda: True)
     monkeypatch.setattr(debug_module, "resolved_sentry_dsn_host", lambda: "sentry.example.test")
-    monkeypatch.setattr(
-        debug_module,
-        "init_sentry",
-        lambda entrypoint=None: init_entrypoints.append(entrypoint),
-    )
 
     def capture_stub(*args: object, **kwargs: object) -> str:
         captured.append((args, kwargs))
@@ -357,7 +351,6 @@ def test_main_debug_sentry_sends_synthetic_event(monkeypatch, capsys) -> None:
     assert "Sentry event ID: event-123" in output
     assert "Sentry flush sent: yes" in output
     assert root_init_entrypoints == ["debug"]
-    assert init_entrypoints == ["debug"]
     assert flush_calls == [5]
     assert captured[0][1]["context"] == "debug.sentry"
     assert captured[0][1]["tags"] == {"debug": "true", "surface": "debug"}
@@ -390,7 +383,6 @@ def test_main_debug_sentry_exits_nonzero_when_flush_fails(monkeypatch, capsys) -
     monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr(debug_module, "sentry_transport_enabled", lambda: True)
     monkeypatch.setattr(debug_module, "resolved_sentry_dsn_host", lambda: "sentry.example.test")
-    monkeypatch.setattr(debug_module, "init_sentry", lambda **_kw: None)
     monkeypatch.setattr(debug_module, "capture_exception", lambda *_args, **_kw: "event-123")
 
     def flush_stub(*, timeout: int) -> bool:

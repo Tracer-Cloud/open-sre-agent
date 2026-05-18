@@ -6,7 +6,6 @@ import click
 
 from app.utils.sentry_sdk import (
     capture_exception,
-    init_sentry,
     resolved_sentry_dsn_host,
     sentry_transport_enabled,
 )
@@ -25,17 +24,7 @@ def debug_sentry_command() -> None:
         click.echo("Sentry is disabled or no DSN is configured.", err=True)
         raise SystemExit(1)
 
-    try:
-        init_sentry(entrypoint="debug")
-    except Exception as exc:
-        click.echo(f"Sentry init failed: {type(exc).__name__}: {exc}", err=True)
-        raise SystemExit(1) from exc
-
-    try:
-        import sentry_sdk
-    except ModuleNotFoundError as exc:
-        click.echo("Sentry SDK is not installed.", err=True)
-        raise SystemExit(1) from exc
+    import sentry_sdk
 
     event_id = capture_exception(
         RuntimeError("OpenSRE Sentry debug smoke test"),
