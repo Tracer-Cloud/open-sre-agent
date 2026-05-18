@@ -50,6 +50,7 @@ from tests.benchmarks.cloudopsbench.case_loader import (
 from tests.benchmarks.cloudopsbench.case_loader import (
     load_cases as _legacy_load_cases,
 )
+from tests.benchmarks.cloudopsbench.held_out_split import compute_held_out_set
 from tests.benchmarks.cloudopsbench.replay_backend import CloudOpsBenchReplayBackend
 from tests.benchmarks.cloudopsbench.scoring import score_case as _legacy_score_case
 from tests.benchmarks.cloudopsbench.tags import seen_shape_for
@@ -163,6 +164,11 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
             )
         )
 
+        # Held-out 20% set — computed against the FULL filter-loaded corpus
+        # so the split is stable regardless of seen-shape / limit filtering
+        # applied later. Integrity Mechanism 8 (generalization gate).
+        held_out_ids = compute_held_out_set(c.case_id for c in legacy_cases)
+
         # Seeded random selection — integrity Mechanism 6 (no cherry-picking)
         if filters.seed is not None:
             rng = random.Random(filters.seed)
@@ -197,6 +203,7 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
                     "query": legacy.query,
                     "ground_truth": asdict(legacy.result),
                     "process": legacy.process,
+                    "is_held_out": legacy.case_id in held_out_ids,
                 },
                 seen_shape=seen_shape,
             )
