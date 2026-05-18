@@ -122,8 +122,8 @@ def test_report_probe_failure_call_count() -> None:
     source = (_REPO_ROOT / _MODULE).read_text(encoding="utf-8")
     count = source.count("_report_probe_failure(")
     definition_count = source.count("def _report_probe_failure(")
-    assert count - definition_count >= 14, (
-        f"expected at least 14 call sites, found {count - definition_count}"
+    assert count - definition_count >= 16, (
+        f"expected at least 16 call sites, found {count - definition_count}"
     )
 
 

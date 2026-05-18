@@ -211,7 +211,11 @@ def _build_sts_client(config: dict[str, Any]) -> tuple[Any, str, str]:
 
 
 def _verify_grafana(source: str, config: dict[str, Any]) -> dict[str, str]:
-    grafana_config = GrafanaIntegrationConfig.model_validate(config)
+    try:
+        grafana_config = GrafanaIntegrationConfig.model_validate(config)
+    except Exception as exc:
+        _report_probe_failure(exc, integration="grafana")
+        return result("grafana", source, "missing", str(exc))
     endpoint = grafana_config.endpoint
     api_key = grafana_config.api_key
     if not endpoint or not api_key:
@@ -309,7 +313,11 @@ def _verify_slack(
 
 
 def _verify_tracer(source: str, config: dict[str, Any]) -> dict[str, str]:
-    tracer_config = TracerIntegrationConfig.model_validate(config)
+    try:
+        tracer_config = TracerIntegrationConfig.model_validate(config)
+    except Exception as exc:
+        _report_probe_failure(exc, integration="tracer")
+        return result("tracer", source, "missing", str(exc))
     if not tracer_config.jwt_token:
         return result("tracer", source, "missing", "Missing JWT token.")
 
