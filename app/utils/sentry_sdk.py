@@ -269,6 +269,7 @@ def _apply_fingerprint_rules(event: dict[str, Any]) -> None:
     tool_name = tags.get("tool")
     if isinstance(tool_name, str) and tool_name:
         event["fingerprint"] = ["tool-error", tool_name, "{{ default }}"]
+        return
 
     node_name = tags.get("node")
     if isinstance(node_name, str) and node_name:

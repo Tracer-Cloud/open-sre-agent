@@ -298,6 +298,17 @@ def test_before_send_fingerprints_node_errors_by_node_name() -> None:
     assert event["fingerprint"] == ["node-error", "extract_alert", "{{ default }}"]
 
 
+def test_before_send_prefers_tool_fingerprint_when_tool_and_node_tags_exist() -> None:
+    event = {
+        "tags": {"tool": "grafana_logs", "node": "investigate"},
+        "message": "tool failed inside node",
+    }
+
+    sentry_mod._before_send(event, {})
+
+    assert event["fingerprint"] == ["tool-error", "grafana_logs", "{{ default }}"]
+
+
 def test_before_send_scrubs_home_paths_in_stack_frames() -> None:
     event = {
         "exception": {
