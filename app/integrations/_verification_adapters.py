@@ -112,6 +112,10 @@ def _verify_with_validation_result[ConfigT](
 ) -> dict[str, str]:
     try:
         normalized_config = build_config(config)
+    except Exception as exc:
+        _report_probe_failure(exc, integration=service)
+        return result(service, source, "missing", str(exc))
+    try:
         validation_result = validate_config(normalized_config)
     except Exception as exc:
         _report_probe_failure(exc, integration=service)
@@ -340,7 +344,8 @@ def _verify_tracer(source: str, config: dict[str, Any]) -> dict[str, str]:
 def _verify_discord(source: str, config: dict[str, Any]) -> dict[str, str]:
     try:
         import discord  # type: ignore[import-not-found]
-    except Exception:
+    except Exception as exc:
+        _report_probe_failure(exc, integration="discord")
         with suppress(Exception):
             import sentry_sdk
 

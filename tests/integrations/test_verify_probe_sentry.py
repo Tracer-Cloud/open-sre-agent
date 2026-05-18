@@ -79,6 +79,16 @@ def _contains_call(handler: ast.ExceptHandler, func_name: str) -> bool:
     return False
 
 
+def _is_success_passthrough(handler: ast.ExceptHandler) -> bool:
+    """True when the handler is a known success-path passthrough.
+
+    The Discord event-loop handler returns "passed" without capture because
+    the exception means the token was accepted. This is intentional.
+    """
+    src = ast.dump(handler)
+    return "run() cannot be called from a running event loop" in src
+
+
 @pytest.mark.parametrize(
     ("func_name", "integration"),
     _PROBE_SITES,
@@ -90,13 +100,17 @@ def test_except_blocks_call_report_probe_failure(func_name: str, integration: st
     functions = _find_functions(tree, func_name)
     assert functions, f"{func_name} not found in {_MODULE}"
 
-    found = False
     for fn in functions:
-        for handler in _except_handlers(fn):
-            if _contains_call(handler, "_report_probe_failure"):
-                found = True
-                break
-    assert found, f"{_MODULE}::{func_name} has no except handler calling _report_probe_failure"
+        handlers = _except_handlers(fn)
+        uncovered = [
+            h
+            for h in handlers
+            if not _contains_call(h, "_report_probe_failure") and not _is_success_passthrough(h)
+        ]
+        assert not uncovered, (
+            f"{_MODULE}::{func_name} has {len(uncovered)} except handler(s) "
+            f"without _report_probe_failure"
+        )
 
 
 def test_module_imports_report_exception() -> None:
@@ -108,8 +122,8 @@ def test_report_probe_failure_call_count() -> None:
     source = (_REPO_ROOT / _MODULE).read_text(encoding="utf-8")
     count = source.count("_report_probe_failure(")
     definition_count = source.count("def _report_probe_failure(")
-    assert count - definition_count >= 13, (
-        f"expected at least 13 call sites, found {count - definition_count}"
+    assert count - definition_count >= 14, (
+        f"expected at least 14 call sites, found {count - definition_count}"
     )
 
 
