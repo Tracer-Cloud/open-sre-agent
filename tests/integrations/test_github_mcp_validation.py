@@ -587,7 +587,9 @@ def test_call_github_mcp_tool_returns_structured_error_on_auth_failure(
             "auth_token": "ghp_test",
         }
     )
-    result = github_mcp_module.call_github_mcp_tool(cfg, "list_commits", {"owner": "o", "repo": "r"})
+    result = github_mcp_module.call_github_mcp_tool(
+        cfg, "list_commits", {"owner": "o", "repo": "r"}
+    )
     assert result["is_error"] is True
     assert "401" in result["text"]
     assert result["tool"] == "list_commits"
