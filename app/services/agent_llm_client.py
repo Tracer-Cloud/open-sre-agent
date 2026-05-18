@@ -326,49 +326,23 @@ class OpenAIAgentClient:
         stop_reason = choice.finish_reason or "stop"
 
         tool_calls: list[ToolCall] = []
-        raw_msg: dict[str, Any] | None = None
         if msg.tool_calls:
-            raw_tc_list: list[dict[str, Any]] = []
-            has_provider_extras = False
             for tc in msg.tool_calls:
                 try:
                     input_dict = json.loads(tc.function.arguments)
                 except json.JSONDecodeError:
                     input_dict = {}
                 tool_calls.append(ToolCall(id=tc.id, name=tc.function.name, input=input_dict))
-                func_dict: dict[str, Any] = {
-                    "name": tc.function.name,
-                    # Use normalized JSON to avoid forwarding malformed argument strings
-                    "arguments": json.dumps(input_dict),
-                }
-                # Preserve provider-specific function-level extras (e.g. Gemini thought_signature)
-                func_extra = getattr(tc.function, "model_extra", None) or {}
-                if func_extra:
-                    has_provider_extras = True
-                func_dict.update(func_extra)
-                tc_dict: dict[str, Any] = {"id": tc.id, "type": "function", "function": func_dict}
-                # Preserve provider-specific tool-call-level extras
-                tc_extra = getattr(tc, "model_extra", None) or {}
-                if tc_extra:
-                    has_provider_extras = True
-                tc_dict.update(tc_extra)
-                raw_tc_list.append(tc_dict)
-            # Only retain raw_msg when provider-specific extras are present
-            # (e.g. Gemini's thought_signature). Otherwise leave raw_content=None
-            # so non-gemini providers go through build_assistant_message.
-            if has_provider_extras:
-                # Use msg.content (may be None) to preserve null vs empty-string distinction
-                raw_msg = {
-                    "role": "assistant",
-                    "content": msg.content,
-                    "tool_calls": raw_tc_list,
-                }
 
         return AgentLLMResponse(
             content=content,
             tool_calls=tool_calls,
             stop_reason=stop_reason,
-            raw_content=raw_msg,
+            # Preserve the raw API message so provider-specific fields (e.g. Gemini
+            # thought_signature in tool_calls) survive into the next conversation turn.
+            # exclude_none=True strips null fields (refusal, audio, function_call …)
+            # that strict OpenAI-compatible endpoints may reject on replay.
+            raw_content=msg.model_dump(exclude_none=True),
         )
 
     @staticmethod
