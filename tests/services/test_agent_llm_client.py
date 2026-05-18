@@ -788,3 +788,51 @@ def test_cli_backed_agent_client_filtered_tool_calls_fall_back_to_text_response(
 
     assert not result.has_tool_calls
     assert result.content == raw
+
+
+def test_bedrock_bad_request_cross_region_inference_gives_helpful_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_anthropic = _install_fake_anthropic(monkeypatch)
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+
+    client = BedrockAgentClient(model="anthropic.claude-sonnet-4-20250514-v1:0")
+    bedrock_error_body = (
+        "Error code: 400 - {'message': \"Invocation of model ID "
+        "anthropic.claude-sonnet-4-20250514-v1:0 with on-demand throughput isn't supported. "
+        'Retry your request with the ID or ARN of an inference profile that contains this model."}'
+    )
+
+    def raise_bad_request(**_: object) -> object:
+        raise fake_anthropic.BadRequestError(bedrock_error_body)
+
+    client._client = types.SimpleNamespace(messages=types.SimpleNamespace(create=raise_bad_request))
+
+    with pytest.raises(RuntimeError) as exc:
+        client.invoke(messages=[{"role": "user", "content": "hi"}])
+
+    message = str(exc.value)
+    assert "requires a cross-region inference profile" in message
+    assert "Try prefixing with 'us.'" in message
+    assert "BEDROCK_REASONING_MODEL" in message
+
+
+def test_bedrock_bad_request_generic_error_uses_default_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_anthropic = _install_fake_anthropic(monkeypatch)
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+
+    client = BedrockAgentClient(model="us.anthropic.claude-sonnet-4-6")
+
+    def raise_bad_request(**_: object) -> object:
+        raise fake_anthropic.BadRequestError("content policy violation")
+
+    client._client = types.SimpleNamespace(messages=types.SimpleNamespace(create=raise_bad_request))
+
+    with pytest.raises(RuntimeError) as exc:
+        client.invoke(messages=[{"role": "user", "content": "hi"}])
+
+    message = str(exc.value)
+    assert "Bedrock request rejected (HTTP 400)" in message
+    assert "cross-region" not in message

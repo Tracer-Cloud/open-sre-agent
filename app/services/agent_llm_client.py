@@ -131,9 +131,7 @@ class AnthropicAgentClient:
             except PermissionDeniedError as err:
                 raise RuntimeError(self._permission_denied_error_message()) from err
             except BadRequestError as err:
-                raise RuntimeError(
-                    f"{self.provider_name} request rejected (HTTP 400): {err.message}"
-                ) from err
+                raise RuntimeError(self._bad_request_error_message(err)) from err
             except RateLimitError as err:
                 raise RuntimeError(f"{self.provider_name} rate limit exceeded: {err}") from err
             except InternalServerError as err:
@@ -222,6 +220,9 @@ class AnthropicAgentClient:
     def _permission_denied_error_message(self) -> str:
         return f"{self.provider_name} API access denied. Check your API key permissions."
 
+    def _bad_request_error_message(self, err: Any) -> str:
+        return f"{self.provider_name} request rejected (HTTP 400): {err.message}"
+
 
 class BedrockAgentClient(AnthropicAgentClient):
     """Bedrock-backed client using AnthropicBedrock SDK."""
@@ -252,6 +253,16 @@ class BedrockAgentClient(AnthropicAgentClient):
             "subscription/payment setup, and IAM permissions including "
             "aws-marketplace:ViewSubscriptions and aws-marketplace:Subscribe."
         )
+
+    def _bad_request_error_message(self, err: Any) -> str:
+        err_str = str(err)
+        if "on-demand throughput" in err_str or "inference profile" in err_str.lower():
+            return (
+                f"Bedrock model '{self._model}' requires a cross-region inference profile. "
+                f"Try prefixing with 'us.' (e.g. 'us.{self._model}') and update "
+                "BEDROCK_REASONING_MODEL or BEDROCK_TOOLCALL_MODEL."
+            )
+        return f"{self.provider_name} request rejected (HTTP 400): {err.message}"
 
 
 _OPENAI_O_SERIES_RE = re.compile(r"(?:^|[^A-Za-z0-9])o\d", re.IGNORECASE)
