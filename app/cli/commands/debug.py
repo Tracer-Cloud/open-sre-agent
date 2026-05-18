@@ -41,7 +41,9 @@ def debug_sentry_command() -> None:
         click.echo(f"Sentry flush failed: {type(exc).__name__}: {exc}", err=True)
         raise SystemExit(1) from exc
 
-    sent = flush_result is True
+    # sentry-sdk 2.x waits for transport flushes but returns None; older/test
+    # transports may return False to signal that pending work was not flushed.
+    sent = flush_result is not False
     click.echo(f"Sentry DSN host: {dsn_host or '<empty>'}")
     click.echo(f"Sentry event ID: {event_id}")
     click.echo(f"Sentry flush sent: {'yes' if sent else 'no'}")

@@ -340,7 +340,7 @@ def test_main_debug_sentry_sends_synthetic_event(monkeypatch, capsys) -> None:
     monkeypatch.setitem(
         sys.modules,
         "sentry_sdk",
-        SimpleNamespace(flush=lambda timeout: flush_calls.append(timeout) or True),
+        SimpleNamespace(flush=lambda timeout: flush_calls.append(timeout)),
     )
 
     exit_code = main(["debug", "sentry"])

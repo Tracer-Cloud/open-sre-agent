@@ -302,7 +302,7 @@ COMMANDS: list[SlashCommand] = [
     ),
     SlashCommand(
         "/debug",
-        "run targeted debug checks ('/debug sentry')",
+        "run targeted runtime diagnostics",
         _cmd_debug,
         execution_tier=ExecutionTier.SAFE,
     ),
