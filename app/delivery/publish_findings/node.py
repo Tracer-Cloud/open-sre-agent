@@ -1,11 +1,13 @@
 """Main orchestration node for report generation and publishing."""
 
 import logging
+from typing import Any
 
 from app.delivery.publish_findings.formatters.report import (
     build_slack_blocks,
     format_slack_message,
     format_telegram_message,
+    format_whatsapp_message,
 )
 from app.delivery.publish_findings.gitlab_writeback import post_gitlab_mr_writeback
 from app.delivery.publish_findings.renderers.editor import open_in_editor
@@ -42,6 +44,7 @@ def generate_report(state: InvestigationState) -> dict:
     )
 
     telegram_message = masking_ctx.unmask(format_telegram_message(ctx))
+    whatsapp_message = masking_ctx.unmask(format_whatsapp_message(ctx))
 
     all_blocks = build_slack_blocks(ctx) + build_action_blocks(investigation_url, investigation_id)
     all_blocks = masking_ctx.unmask_value(all_blocks)
@@ -159,6 +162,51 @@ def generate_report(state: InvestigationState) -> dict:
             )
     else:
         logger.debug("[publish] telegram delivery: no telegram integration configured")
+
+    # WhatsApp delivery — uses integration credentials if configured
+    whatsapp_creds = resolved.get("whatsapp", {})
+    if whatsapp_creds:
+        from app.utils.whatsapp_delivery import send_whatsapp_report
+
+        _wa_ctx: dict[str, Any] = state.get("whatsapp_context") or {}
+        account_sid = _wa_ctx.get("account_sid") or whatsapp_creds.get("account_sid", "")
+        auth_token = _wa_ctx.get("auth_token") or whatsapp_creds.get("auth_token", "")
+        from_number = _wa_ctx.get("from_number") or whatsapp_creds.get("from_number", "")
+        to = _wa_ctx.get("to") or whatsapp_creds.get("default_to", "")
+        logger.debug(
+            "[publish] whatsapp delivery: to=%s account_sid=%s auth_token_present=%s from_number=%s",
+            to,
+            account_sid,
+            bool(auth_token),
+            from_number,
+        )
+        if account_sid and auth_token and from_number and to:
+            wa_posted, wa_error = send_whatsapp_report(
+                whatsapp_message,
+                {
+                    "account_sid": account_sid,
+                    "auth_token": auth_token,
+                    "from_number": from_number,
+                    "to": to,
+                },
+            )
+            logger.debug("[publish] whatsapp delivery: posted=%s error=%s", wa_posted, wa_error)
+            if not wa_posted:
+                logger.warning(
+                    "[publish] WhatsApp delivery failed: to=%s error=%s",
+                    to,
+                    wa_error,
+                )
+        else:
+            logger.debug(
+                "[publish] whatsapp delivery: skipped — account_sid_present=%s auth_token_present=%s from_number_present=%s to_present=%s",
+                bool(account_sid),
+                bool(auth_token),
+                bool(from_number),
+                bool(to),
+            )
+    else:
+        logger.debug("[publish] whatsapp delivery: no whatsapp integration configured")
 
     openclaw_creds = resolved.get("openclaw", {})
     if openclaw_creds:

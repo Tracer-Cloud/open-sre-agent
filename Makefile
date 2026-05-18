@@ -1,7 +1,7 @@
 -include .env
 export
 
-.PHONY: install onboard benchmark benchmark-update-readme test test-full demo alert-template investigate-alert opensre-hub-fetch opensre-hub-export opensre-hub-investigate verify-integrations check-docker grafana-local-up grafana-local-down grafana-local-seed clean lint format deploy deploy-lambda deploy-prefect deploy-flink destroy destroy-lambda destroy-prefect destroy-flink prefect-local-test simulate-k8s-alert test-k8s-local test-k8s test-k8s-datadog chaos-mesh-up chaos-mesh-down chaos-engineering-apply chaos-engineering-delete chaos-lab-up chaos-lab-down chaos-experiment-list chaos-experiment-up chaos-experiment-down deploy-dd-monitors cleanup-dd-monitors deploy-eks destroy-eks test-k8s-eks datadog-demo crashloop-demo regen-trigger-config test-rca test-rca-grafana test-synthetic test-rds-synthetic test-cli-smoke deploy-vercel destroy-vercel test-vercel deploy-ec2 destroy-ec2 test-ec2 deploy-ec2-hello destroy-ec2-hello deploy-remote destroy-remote deploy-bedrock destroy-bedrock test-bedrock download-cloudopsbench-hf validate-cloudopsbench test-openclaw test-openclaw-synthetic
+.PHONY: install onboard benchmark benchmark-update-readme test test-full demo alert-template investigate-alert opensre-hub-fetch opensre-hub-export opensre-hub-investigate verify-integrations check-docker grafana-local-up grafana-local-down grafana-local-seed clean lint format deploy deploy-lambda deploy-prefect deploy-flink destroy destroy-lambda destroy-prefect destroy-flink prefect-local-test simulate-k8s-alert test-k8s-local test-k8s test-k8s-datadog chaos-mesh-up chaos-mesh-down chaos-engineering-apply chaos-engineering-delete chaos-lab-up chaos-lab-down chaos-experiment-list chaos-experiment-up chaos-experiment-down deploy-dd-monitors cleanup-dd-monitors deploy-eks destroy-eks test-k8s-eks datadog-demo crashloop-demo regen-trigger-config test-rca test-rca-grafana test-synthetic test-rds-synthetic test-cli-smoke deploy-vercel destroy-vercel test-vercel deploy-ec2 destroy-ec2 test-ec2 deploy-ec2-hello destroy-ec2-hello deploy-remote destroy-remote deploy-bedrock destroy-bedrock test-bedrock download-cloudopsbench-hf validate-cloudopsbench test-openclaw test-openclaw-synthetic test-hermes test-hermes-synthetic
 
 
 ifneq ($(wildcard .venv/bin/python),)
@@ -387,6 +387,14 @@ test-openclaw:
 test-openclaw-synthetic:
 	$(PYTHON) -m tests.synthetic.openclaw.run_suite
 
+# Run Hermes incident-identification suites: Hermes RCA synthetic tests + Hermes e2e.
+test-hermes:
+	$(PYTHON) -m pytest tests/synthetic/hermes_rca tests/e2e/hermes -v
+
+# Deterministic/no-key Hermes RCA synthetic checks only.
+test-hermes-synthetic:
+	$(PYTHON) -m pytest tests/synthetic/hermes_rca -v
+
 # Run the RabbitMQ integration + tool tests, then invoke the verify command
 # against the live broker.  Requires the rabbitmq-local-up stack to be running.
 test-rabbitmq-real:
@@ -546,6 +554,8 @@ help:
 	@echo "  make test-rca FILE=pipeline_error_in_logs - Run a single RCA alert test"
 	@echo "  make test-rds-synthetic - Run the synthetic RDS PostgreSQL RCA suite"
 	@echo "  make test-openclaw   - Run OpenClaw integration + e2e tests (skips when openclaw CLI absent)"
+	@echo "  make test-hermes     - Run Hermes synthetic + e2e suites"
+	@echo "  make test-hermes-synthetic - Run Hermes RCA synthetic suite only (no-key deterministic path)"
 	@echo "  make download-cloudopsbench-hf - Download Cloud-OpsBench from Hugging Face"
 	@echo "  make test-cloudopsbench - Run the Cloud-OpsBench synthetic RCA suite"
 	@echo "  make clean           - Clean up cache files"

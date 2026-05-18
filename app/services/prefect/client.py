@@ -14,6 +14,7 @@ from urllib.parse import quote
 import httpx
 from pydantic import field_validator
 
+from app.services._error_helpers import capture_service_error
 from app.strict_config import StrictConfigModel
 
 logger = logging.getLogger(__name__)
@@ -139,18 +140,15 @@ class PrefectClient:
                 for r in raw
             ]
             return {"success": True, "flow_runs": runs, "total": len(runs)}
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "[prefect] get_flow_runs HTTP failure status=%s",
-                e.response.status_code,
-            )
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(exc, logger=logger, integration="prefect", method="get_flow_runs")
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning("[prefect] get_flow_runs error type=%s detail=%s", type(e).__name__, e)
-            return {"success": False, "error": str(e)}
+        except Exception as exc:
+            capture_service_error(exc, logger=logger, integration="prefect", method="get_flow_runs")
+            return {"success": False, "error": str(exc)}
 
     def get_flow_run_logs(self, flow_run_id: str, limit: int = 100) -> dict[str, Any]:
         """Fetch logs emitted during a specific flow run.
@@ -178,21 +176,27 @@ class PrefectClient:
                 for entry in raw
             ]
             return {"success": True, "logs": logs, "total": len(logs)}
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "[prefect] get_flow_run_logs HTTP failure status=%s flow_run_id=%r",
-                e.response.status_code,
-                flow_run_id,
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="prefect",
+                method="get_flow_run_logs",
+                extras={"flow_run_id": flow_run_id},
             )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning(
-                "[prefect] get_flow_run_logs error type=%s detail=%s", type(e).__name__, e
+        except Exception as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="prefect",
+                method="get_flow_run_logs",
+                extras={"flow_run_id": flow_run_id},
             )
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": str(exc)}
 
     # ------------------------------------------------------------------
     # Workers / work pools
@@ -221,18 +225,19 @@ class PrefectClient:
                 for p in raw
             ]
             return {"success": True, "work_pools": pools, "total": len(pools)}
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "[prefect] get_work_pools HTTP failure status=%s",
-                e.response.status_code,
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc, logger=logger, integration="prefect", method="get_work_pools"
             )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning("[prefect] get_work_pools error type=%s detail=%s", type(e).__name__, e)
-            return {"success": False, "error": str(e)}
+        except Exception as exc:
+            capture_service_error(
+                exc, logger=logger, integration="prefect", method="get_work_pools"
+            )
+            return {"success": False, "error": str(exc)}
 
     def get_workers(self, work_pool_name: str, limit: int = 20) -> dict[str, Any]:
         """List workers registered in a work pool.
@@ -258,19 +263,27 @@ class PrefectClient:
                 for w in raw
             ]
             return {"success": True, "workers": workers, "total": len(workers)}
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "[prefect] get_workers HTTP failure status=%s pool=%r",
-                e.response.status_code,
-                work_pool_name,
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="prefect",
+                method="get_workers",
+                extras={"work_pool_name": work_pool_name},
             )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning("[prefect] get_workers error type=%s detail=%s", type(e).__name__, e)
-            return {"success": False, "error": str(e)}
+        except Exception as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="prefect",
+                method="get_workers",
+                extras={"work_pool_name": work_pool_name},
+            )
+            return {"success": False, "error": str(exc)}
 
     # ------------------------------------------------------------------
     # Deployments
@@ -301,18 +314,19 @@ class PrefectClient:
                 for d in raw
             ]
             return {"success": True, "deployments": deployments, "total": len(deployments)}
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "[prefect] get_deployments HTTP failure status=%s",
-                e.response.status_code,
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc, logger=logger, integration="prefect", method="get_deployments"
             )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning("[prefect] get_deployments error type=%s detail=%s", type(e).__name__, e)
-            return {"success": False, "error": str(e)}
+        except Exception as exc:
+            capture_service_error(
+                exc, logger=logger, integration="prefect", method="get_deployments"
+            )
+            return {"success": False, "error": str(exc)}
 
 
 def make_prefect_client(

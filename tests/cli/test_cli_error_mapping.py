@@ -49,3 +49,22 @@ def test_cli_not_found_still_maps_correctly() -> None:
         reraise_cli_runtime_error(exc)
 
     assert "CLI tool is not installed" in str(exc_info.value)
+
+
+def test_bedrock_model_not_available_maps_to_opensre_error() -> None:
+    exc = RuntimeError(
+        "Bedrock model 'us.anthropic.claude-sonnet-4-6' is not available for your account. "
+        "Check Bedrock model access in the configured AWS region, AWS Marketplace "
+        "subscription/payment setup, and IAM permissions including "
+        "aws-marketplace:ViewSubscriptions and aws-marketplace:Subscribe."
+    )
+
+    with pytest.raises(OpenSREError) as exc_info:
+        reraise_cli_runtime_error(exc)
+
+    err = exc_info.value
+    assert "Bedrock model" in str(err)
+    assert err.suggestion is not None
+    assert "AWS Marketplace" in err.suggestion
+    assert "aws-marketplace:ViewSubscriptions" in err.suggestion
+    assert "aws-marketplace:Subscribe" in err.suggestion

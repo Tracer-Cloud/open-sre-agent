@@ -661,6 +661,10 @@ def test_before_send_filters_nested_lists_of_dicts() -> None:
             "RuntimeError",
             "Anthropic request rejected (HTTP 400): Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'You have reached your specified API usage limits. You will regain access on 2026-06-01 at 00:00 UTC.'}, 'request_id': 'req_011CaxxMA8NCSdDvaM2LaRm6'}",
         ),
+        (
+            "RuntimeError",
+            "Bedrock model 'us.anthropic.claude-sonnet-4-6' is not available for your account. Check Bedrock model access in the configured AWS region, AWS Marketplace subscription/payment setup, and IAM permissions including aws-marketplace:ViewSubscriptions and aws-marketplace:Subscribe.",
+        ),
     ],
 )
 def test_before_send_drops_operator_actionable_llm_errors(

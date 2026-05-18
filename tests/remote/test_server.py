@@ -219,7 +219,7 @@ def test_execute_investigation_tracks_remote_http_source(
     ]
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_investigate_stream_persists_state_on_disconnect(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -275,7 +275,7 @@ async def test_investigate_stream_persists_state_on_disconnect(
     assert call0["raw_alert"].get("alert_name") == "PayloadAlert"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_investigate_stream_captures_streaming_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -327,7 +327,7 @@ async def test_investigate_stream_captures_streaming_exception(
     assert astream_calls[0]["raw_alert"].get("alert_name") == "PayloadAlert"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_lifespan_starts_and_cancels_vercel_poller(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
@@ -354,7 +354,7 @@ async def test_lifespan_starts_and_cancels_vercel_poller(
     assert cancelled.is_set()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_lifespan_raises_helpful_error_on_permission_denied(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -635,3 +635,110 @@ def test_check_memory_health_returns_missing_on_oserror(
     assert result.name == "Memory"
     assert result.status == "missing"
     assert "Unable to read meminfo:" in result.detail
+
+
+@pytest.mark.anyio
+async def test_investigate_stream_emits_correlation_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    persisted: dict[str, Any] = {}
+
+    def fake_investigation_run(
+        _self: object,
+        _state: object,
+        *,
+        on_event: object | None = None,
+    ) -> dict[str, str]:
+        _ = on_event
+        return {
+            "root_cause": "RDS CPU spike",
+            "report": "Correlation attached",
+        }
+
+    monkeypatch.setattr("app.config.LLMSettings.from_env", object)
+
+    monkeypatch.setattr(
+        "app.cli.investigation.resolve_investigation_context",
+        lambda **_kwargs: ("test-alert", "orders-pipeline", "critical"),
+    )
+
+    monkeypatch.setattr(
+        "app.agent.context.resolve_integrations",
+        lambda _state: {},
+    )
+
+    monkeypatch.setattr(
+        "app.agent.extract.extract_alert",
+        lambda _state: {
+            "raw_alert": {
+                "alert_name": "PayloadAlert",
+                "service": "orders",
+                "resource": "orders-rds-prod",
+            },
+            "alert_name": "PayloadAlert",
+            "pipeline_name": "orders",
+            "severity": "critical",
+            "incident_window": {
+                "since": "2026-04-15T14:00:00Z",
+                "until": "2026-04-15T14:15:00Z",
+            },
+        },
+    )
+
+    monkeypatch.setattr(
+        "app.agent.investigation.ConnectedInvestigationAgent.run",
+        fake_investigation_run,
+    )
+
+    monkeypatch.setattr(
+        "app.correlation.node.node_correlate_upstream",
+        lambda _state, _config=None: {
+            "correlation": {
+                "correlated_signals": [
+                    {
+                        "name": "upstream-correlation",
+                        "source": "runtime",
+                        "score": 0.9,
+                    }
+                ],
+                "most_likely_causal_drivers": [
+                    {
+                        "name": "system.cpu.user{service:orders-web}",
+                        "confidence": 0.9,
+                        "rationale": "time_window=1.0",
+                    }
+                ],
+            }
+        },
+    )
+
+    monkeypatch.setattr(
+        "app.delivery.publish_findings.node.generate_report",
+        lambda _state: {
+            "root_cause": "RDS CPU spike",
+            "report": "Correlation attached",
+        },
+    )
+
+    monkeypatch.setattr(
+        "app.remote.server._persist_streamed_result",
+        lambda **kwargs: persisted.update(kwargs),
+    )
+
+    response = await investigate_stream(
+        InvestigateRequest(raw_alert={"alert_name": "PayloadAlert"})
+    )
+
+    chunks = [chunk async for chunk in response.body_iterator]
+
+    assert chunks
+    assert any("correlate_upstream" in chunk for chunk in chunks)
+
+    correlation = persisted["state"]["correlation"]
+
+    assert correlation["correlated_signals"]
+    assert correlation["most_likely_causal_drivers"]
+    assert (
+        correlation["most_likely_causal_drivers"][0]["name"]
+        == "system.cpu.user{service:orders-web}"
+    )

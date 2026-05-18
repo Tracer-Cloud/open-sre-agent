@@ -18,6 +18,7 @@ import httpx
 
 from app.integrations.config_models import ArgoCDIntegrationConfig
 from app.integrations.probes import ProbeResult
+from app.services._error_helpers import capture_service_error
 
 logger = logging.getLogger(__name__)
 
@@ -219,7 +220,9 @@ class ArgoCDClient:
             ]
             return {"success": True, "applications": applications, "total": len(applications)}
         except Exception as exc:
-            logger.warning("[argocd] list_applications failed type=%s", type(exc).__name__)
+            capture_service_error(
+                exc, logger=logger, integration="argocd", method="list_applications"
+            )
             return self._error_result("list applications failed", exc)
 
     def get_application_summary(
@@ -252,10 +255,12 @@ class ArgoCDClient:
                 "recent_history": _recent_history(payload),
             }
         except Exception as exc:
-            logger.warning(
-                "[argocd] get_application_summary failed type=%s app=%r",
-                type(exc).__name__,
-                name,
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="argocd",
+                method="get_application_summary",
+                extras={"application_name": name},
             )
             return self._error_result("get application summary failed", exc)
 
@@ -302,10 +307,12 @@ class ArgoCDClient:
                 "diff_count": len(diffs),
             }
         except Exception as exc:
-            logger.warning(
-                "[argocd] get_application_diff failed type=%s app=%r",
-                type(exc).__name__,
-                name,
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="argocd",
+                method="get_application_diff",
+                extras={"application_name": name},
             )
             return self._error_result("get application diff failed", exc)
 

@@ -4,7 +4,7 @@
   <img src="docs/logo/opensre-logo-white.svg" alt="OpenSRE" width="360" />
 </p>
 
-<h1>OpenSRE: Build Your Own AI SRE Agents</h1>
+<h1>OpenSRE v0.1: Build Your Own AI SRE Agents</h1>
 
 <p>The open-source framework for AI SRE agents, and the training and evaluation environment they need to improve. Connect the 60+ tools you already run, define your own workflows, and investigate incidents on your own infrastructure.</p>
 

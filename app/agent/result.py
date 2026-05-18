@@ -4,34 +4,17 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, TypedDict, cast
 
 from pydantic import BaseModel, Field
 
+from app.types.root_cause_categories import (
+    HERMES_ROOT_CAUSE_CATEGORIES,
+    VALID_ROOT_CAUSE_CATEGORIES,
+    render_prompt_taxonomy,
+)
+
 logger = logging.getLogger(__name__)
-
-
-class _DiagnosisSchema(BaseModel):
-    root_cause: str = Field(description="Concise root cause statement (2-3 sentences max)")
-    root_cause_category: str = Field(
-        description=(
-            "One of: database, infrastructure, code_bug, configuration, "
-            "network, performance, healthy, unknown"
-        )
-    )
-    causal_chain: list[str] = Field(
-        default_factory=list, description="Ordered steps leading to the failure"
-    )
-    validated_claims: list[str] = Field(
-        default_factory=list, description="Claims supported by tool evidence"
-    )
-    non_validated_claims: list[str] = Field(
-        default_factory=list, description="Claims not yet confirmed by evidence"
-    )
-    remediation_steps: list[str] = Field(
-        default_factory=list, description="Concrete remediation actions in order"
-    )
-    validity_score: float = Field(default=0.0, description="0.0–1.0 confidence in the diagnosis")
 
 
 @dataclass
@@ -75,6 +58,7 @@ def parse_diagnosis(
     messages: list[dict[str, Any]],
     evidence: dict[str, Any],
     alert_name: str = "",
+    alert_source: str = "",
 ) -> InvestigationResult:
     """Parse the agent's final response into a structured InvestigationResult.
 
@@ -86,7 +70,7 @@ def parse_diagnosis(
         return InvestigationResult.unknown(alert_name)
 
     try:
-        return _parse_via_structured_output(last_text, evidence)
+        return _parse_via_structured_output(last_text, evidence, alert_source=alert_source)
     except Exception as err:
         logger.warning("Structured diagnosis parse failed, falling back: %s", err)
         return _parse_via_legacy(last_text, evidence, alert_name)
@@ -119,7 +103,46 @@ def _extract_last_assistant_text(messages: list[dict[str, Any]]) -> str:
     return ""
 
 
-def _parse_via_structured_output(last_text: str, evidence: dict[str, Any]) -> InvestigationResult:
+def _taxonomy_categories_for_alert_source(alert_source: str) -> set[str]:
+    source = alert_source.strip().lower()
+    if source == "hermes":
+        return set(HERMES_ROOT_CAUSE_CATEGORIES | {"healthy", "unknown"})
+    return set(VALID_ROOT_CAUSE_CATEGORIES - HERMES_ROOT_CAUSE_CATEGORIES)
+
+
+def _build_diagnosis_schema(include_categories: set[str]) -> type[BaseModel]:
+    category_taxonomy = render_prompt_taxonomy(include_categories).strip()
+
+    class DiagnosisSchema(BaseModel):
+        root_cause: str = Field(description="Concise root cause statement (2-3 sentences max)")
+        root_cause_category: str = Field(
+            description=(f"Use exactly one category from this taxonomy:\n{category_taxonomy}")
+        )
+        causal_chain: list[str] = Field(
+            default_factory=list, description="Ordered steps leading to the failure"
+        )
+        validated_claims: list[str] = Field(
+            default_factory=list, description="Claims supported by tool evidence"
+        )
+        non_validated_claims: list[str] = Field(
+            default_factory=list, description="Claims not yet confirmed by evidence"
+        )
+        remediation_steps: list[str] = Field(
+            default_factory=list, description="Concrete remediation actions in order"
+        )
+        validity_score: float = Field(
+            default=0.0, description="0.0–1.0 confidence in the diagnosis"
+        )
+
+    return DiagnosisSchema
+
+
+def _parse_via_structured_output(
+    last_text: str,
+    evidence: dict[str, Any],
+    *,
+    alert_source: str = "",
+) -> InvestigationResult:
     from app.services import get_llm_for_reasoning
 
     prompt = f"""Extract the structured diagnosis from this investigation conclusion.
@@ -129,27 +152,39 @@ Investigation conclusion:
 
 Evidence keys collected: {", ".join(evidence.keys()) if evidence else "none"}
 """
-    llm = get_llm_for_reasoning()
-    import typing
 
-    schema = typing.cast(
-        _DiagnosisSchema,
-        llm.with_structured_output(_DiagnosisSchema)
+    class _DiagnosisPayload(TypedDict):
+        root_cause: str
+        root_cause_category: str
+        causal_chain: list[str]
+        validated_claims: list[str]
+        non_validated_claims: list[str]
+        remediation_steps: list[str]
+        validity_score: float
+
+    llm = get_llm_for_reasoning()
+    schema_model = _build_diagnosis_schema(_taxonomy_categories_for_alert_source(alert_source))
+    raw_schema = (
+        llm.with_structured_output(schema_model)
         .with_config(run_name="LLM – Parse diagnosis")
-        .invoke(prompt),
+        .invoke(prompt)
     )
+    schema_instance = (
+        raw_schema if isinstance(raw_schema, BaseModel) else schema_model.model_validate(raw_schema)
+    )
+    schema = cast(_DiagnosisPayload, schema_instance.model_dump())
 
     def _to_claim_dicts(claims: list[str], status: str) -> list[dict]:
         return [{"claim": c, "validation_status": status} for c in claims if c]
 
     return InvestigationResult(
-        root_cause=schema.root_cause,
-        root_cause_category=schema.root_cause_category,
-        causal_chain=schema.causal_chain,
-        validated_claims=_to_claim_dicts(schema.validated_claims, "validated"),
-        non_validated_claims=_to_claim_dicts(schema.non_validated_claims, "not_validated"),
-        remediation_steps=schema.remediation_steps,
-        validity_score=schema.validity_score,
+        root_cause=schema["root_cause"],
+        root_cause_category=schema["root_cause_category"],
+        causal_chain=schema["causal_chain"],
+        validated_claims=_to_claim_dicts(schema["validated_claims"], "validated"),
+        non_validated_claims=_to_claim_dicts(schema["non_validated_claims"], "not_validated"),
+        remediation_steps=schema["remediation_steps"],
+        validity_score=schema["validity_score"],
     )
 
 

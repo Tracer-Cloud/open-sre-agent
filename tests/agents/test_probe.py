@@ -9,12 +9,13 @@ import sys
 import time
 from collections.abc import Iterator
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import psutil
 import pytest
 
-from app.agents.probe import ProcessSnapshot, probe
+from app.agents.probe import ProcessSnapshot, probe, process_has_open_codex_rollout
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 _PROBE_MODULE = _REPO_ROOT / "app" / "agents" / "probe.py"
@@ -81,6 +82,27 @@ def test_probe_returns_none_for_access_denied_process() -> None:
         side_effect=psutil.AccessDenied(pid=os.getpid()),
     ):
         assert probe(os.getpid(), cpu_interval=0.0) is None
+
+
+def test_process_has_open_codex_rollout_matches_rollout_jsonl() -> None:
+    with patch.object(
+        psutil.Process,
+        "open_files",
+        return_value=[
+            SimpleNamespace(path="/tmp/unrelated.log"),
+            SimpleNamespace(path="/Users/me/.codex/rollout-2026-05-17.jsonl"),
+        ],
+    ):
+        assert process_has_open_codex_rollout(os.getpid()) is True
+
+
+def test_process_has_open_codex_rollout_returns_false_when_inaccessible() -> None:
+    with patch.object(
+        psutil.Process,
+        "open_files",
+        side_effect=psutil.AccessDenied(pid=os.getpid()),
+    ):
+        assert process_has_open_codex_rollout(os.getpid()) is False
 
 
 def test_psutil_is_not_imported_outside_probe_module() -> None:

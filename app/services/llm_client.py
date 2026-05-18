@@ -1249,8 +1249,16 @@ def parse_root_cause(response: str) -> RootCauseResult:
             after = parts[1]
             for line in after.split("\n"):
                 candidate = line.strip().lower()
-                if candidate and candidate in VALID_ROOT_CAUSE_CATEGORIES:
+                if not candidate:
+                    continue
+                if candidate in VALID_ROOT_CAUSE_CATEGORIES:
                     root_cause_category = candidate
+                    break
+                for token in re.findall(r"[a-z_][a-z0-9_]*", candidate):
+                    if token in VALID_ROOT_CAUSE_CATEGORIES:
+                        root_cause_category = token
+                        break
+                if root_cause_category != "unknown":
                     break
 
     if "ROOT_CAUSE:" in response:

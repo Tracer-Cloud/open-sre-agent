@@ -42,11 +42,13 @@ _verify_opsgenie = _adapters._verify_opsgenie
 _verify_postgresql = _adapters._verify_postgresql
 _verify_rabbitmq = _adapters._verify_rabbitmq
 _verify_sentry = _adapters._verify_sentry
+_verify_signoz = _adapters._verify_signoz
 _verify_slack = _adapters._verify_slack
 _verify_snowflake = _adapters._verify_snowflake
 _verify_splunk = _adapters._verify_splunk
 _verify_telegram = _adapters._verify_telegram
 _verify_tracer = _adapters._verify_tracer
+_verify_whatsapp = _adapters._verify_whatsapp
 _verify_vercel = _adapters._verify_vercel
 
 _result = _adapters.result
@@ -185,12 +187,14 @@ __all__ = [
     "_verify_postgresql",
     "_verify_rabbitmq",
     "_verify_sentry",
+    "_verify_signoz",
     "_verify_slack",
     "_verify_snowflake",
     "_verify_splunk",
     "_verify_telegram",
     "_verify_tracer",
     "_verify_vercel",
+    "_verify_whatsapp",
     "format_verification_results",
     "resolve_effective_integrations",
     "verification_exit_code",

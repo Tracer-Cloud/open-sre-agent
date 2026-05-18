@@ -41,6 +41,7 @@ def get_health_response() -> HealthResponse:
 
 @app.get("/", response_model=HealthResponse)
 @app.get("/health", response_model=HealthResponse)
+@app.get("/ok", response_model=HealthResponse)
 def health(response: Response) -> HealthResponse:
     health_response = get_health_response()
     response.status_code = (

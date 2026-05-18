@@ -47,8 +47,8 @@ def test_railway_provider_scopes_with_link_when_project_provided() -> None:
     provider = RailwayRemoteOpsProvider()
     scope = RemoteServiceScope(provider="railway", project="proj-a", service="svc-a")
 
-    def _fake_run(cmd, check, text, capture_output):
-        _ = (check, text, capture_output)
+    def _fake_run(cmd, **kwargs):
+        _ = kwargs
 
         if cmd[:2] == ["railway", "link"]:
             return _Result(0, stdout="{}")
@@ -72,8 +72,8 @@ def test_railway_provider_logs() -> None:
 
     captured: list[list[str]] = []
 
-    def _run(cmd, check, text, capture_output):
-        _ = (check, text, capture_output)
+    def _run(cmd, **kwargs):
+        _ = kwargs
         captured.append(list(cmd))
         if cmd[:2] == ["railway", "link"]:
             return _Result(0, stdout="{}")
@@ -94,8 +94,8 @@ def test_railway_provider_fetch_logs() -> None:
     provider = RailwayRemoteOpsProvider()
     scope = RemoteServiceScope(provider="railway", project="proj", service="svc")
 
-    def _run(cmd, check, text, capture_output):
-        _ = (check, text, capture_output)
+    def _run(cmd, **kwargs):
+        _ = kwargs
         if cmd[:2] == ["railway", "link"]:
             return _Result(0, stdout="{}")
         if cmd[:2] == ["railway", "logs"]:
@@ -116,8 +116,8 @@ def test_railway_provider_fetch_logs_stderr_only() -> None:
     provider = RailwayRemoteOpsProvider()
     scope = RemoteServiceScope(provider="railway", project="proj", service="svc")
 
-    def _run(cmd, check, text, capture_output):
-        _ = (check, text, capture_output)
+    def _run(cmd, **kwargs):
+        _ = kwargs
         if cmd[:2] == ["railway", "link"]:
             return _Result(0, stdout="{}")
         if cmd[:2] == ["railway", "logs"]:
@@ -137,8 +137,8 @@ def test_railway_provider_restart() -> None:
     provider = RailwayRemoteOpsProvider()
     scope = RemoteServiceScope(provider="railway", project="proj", service="svc")
 
-    def _run(cmd, check, text, capture_output):
-        _ = (check, text, capture_output)
+    def _run(cmd, **kwargs):
+        _ = kwargs
         if cmd[:2] == ["railway", "link"]:
             return _Result(0, stdout="{}")
         if cmd[:2] == ["railway", "redeploy"]:

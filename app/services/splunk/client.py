@@ -11,6 +11,7 @@ import httpx
 
 from app.integrations.config_models import SplunkIntegrationConfig
 from app.integrations.probes import ProbeResult
+from app.services._error_helpers import capture_service_error
 from app.services._streaming import StreamingParseStats
 
 logger = logging.getLogger(__name__)
@@ -105,11 +106,13 @@ class SplunkClient:
             )
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
+            capture_service_error(exc, logger=logger, integration="splunk", method="search_logs")
             return {
                 "success": False,
                 "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
         except Exception as exc:
+            capture_service_error(exc, logger=logger, integration="splunk", method="search_logs")
             return {"success": False, "error": str(exc)}
 
         logs = self._parse_export_response(response.text)
@@ -174,11 +177,17 @@ class SplunkClient:
                 "detail": f"Connected to Splunk {version}",
             }
         except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc, logger=logger, integration="splunk", method="validate_access"
+            )
             return {
                 "success": False,
                 "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
         except Exception as exc:
+            capture_service_error(
+                exc, logger=logger, integration="splunk", method="validate_access"
+            )
             return {"success": False, "error": str(exc)}
 
     def probe_access(self) -> ProbeResult:

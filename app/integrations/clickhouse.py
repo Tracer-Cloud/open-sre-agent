@@ -119,7 +119,7 @@ def clickhouse_config_from_env() -> ClickHouseConfig | None:
 
 def _get_client(config: ClickHouseConfig) -> Any:
     """Create a clickhouse_connect Client from config. Caller must close."""
-    import clickhouse_connect  # type: ignore[import-not-found]
+    import clickhouse_connect  # type: ignore[import-not-found,import-untyped]
 
     return clickhouse_connect.get_client(
         host=config.host,

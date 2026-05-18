@@ -11,6 +11,7 @@ import httpx
 
 from app.integrations.models import CoralogixIntegrationConfig
 from app.integrations.probes import ProbeResult
+from app.services._error_helpers import capture_service_error
 from app.services._streaming import StreamingParseStats
 
 logger = logging.getLogger(__name__)
@@ -233,11 +234,13 @@ class CoralogixClient:
             )
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
+            capture_service_error(exc, logger=logger, integration="coralogix", method="query_logs")
             return {
                 "success": False,
                 "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
         except Exception as exc:
+            capture_service_error(exc, logger=logger, integration="coralogix", method="query_logs")
             return {"success": False, "error": str(exc)}
 
         stats = StreamingParseStats()
