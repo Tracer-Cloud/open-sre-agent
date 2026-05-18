@@ -122,7 +122,7 @@ A random install ID is stored under `~/.config/opensre/anonymous_id`. PostHog `d
 | `DO_NOT_TRACK=1`               | disabled   | disabled   |
 | `OPENSRE_ANALYTICS_DISABLED=1` | disabled   | unaffected |
 | `OPENSRE_SENTRY_DISABLED=1`    | unaffected | disabled   |
-| `OPENSRE_SENTRY_LOGGING_DISABLED=1` | unaffected | Sentry SDK enabled, but logger.error/exception forwarding disabled |
+| `OPENSRE_SENTRY_LOGGING_DISABLED=1` | unaffected | Sentry SDK enabled, but logging bridge disabled (no breadcrumbs from INFO/WARNING, no events from ERROR/EXCEPTION) |
 
 Full opt-out:
 

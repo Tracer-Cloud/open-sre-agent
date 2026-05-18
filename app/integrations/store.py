@@ -114,8 +114,11 @@ def _read_json_store_at(path: Path) -> dict[str, Any] | None:
     try:
         text = path.read_text(encoding="utf-8")
         data = json.loads(text)
-    except (json.JSONDecodeError, OSError):
+    except json.JSONDecodeError:
         logger.warning("Failed to read integrations store at %s", path)
+        return None
+    except OSError:
+        logger.warning("Failed to read integrations store at %s", path, exc_info=True)
         return None
     if not isinstance(data, dict) or "integrations" not in data:
         return None
@@ -240,8 +243,11 @@ def _load_raw_unlocked() -> tuple[dict[str, Any], bool]:
     try:
         text = STORE_PATH.read_text(encoding="utf-8")
         data = json.loads(text)
-    except (json.JSONDecodeError, OSError):
+    except json.JSONDecodeError:
         logger.warning("Failed to read integrations store at %s", STORE_PATH)
+        return {"version": _VERSION, "integrations": []}, False
+    except OSError:
+        logger.warning("Failed to read integrations store at %s", STORE_PATH, exc_info=True)
         return {"version": _VERSION, "integrations": []}, False
     if not isinstance(data, dict) or "integrations" not in data:
         return {"version": _VERSION, "integrations": []}, False
