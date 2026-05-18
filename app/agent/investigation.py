@@ -407,7 +407,10 @@ class ConnectedInvestigationAgent:
         result.evidence_entries = [e.model_dump() for e in evidence_entries]
         result.agent_messages = messages
 
-        if not check_sufficiency(result) and not result.root_cause.startswith("Most likely"):
+        if check_sufficiency(result):
+            if result.root_cause.startswith("Most likely:"):
+                result.root_cause = result.root_cause[len("Most likely:") :].lstrip()
+        elif not result.root_cause.startswith("Most likely"):
             result.root_cause = f"Most likely: {result.root_cause}"
 
         _emit(

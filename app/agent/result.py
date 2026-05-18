@@ -79,7 +79,7 @@ def classify_confidence_band(score: float) -> Literal["high", "medium", "low"]:
 
 
 def check_sufficiency(result: InvestigationResult) -> bool:
-    if result.root_cause_category in {"healthy"}:
+    if result.root_cause_category in {"healthy", "unknown"}:
         return True
     if result.validity_score >= 0.75 and len(result.validated_claims) >= 1:
         return True

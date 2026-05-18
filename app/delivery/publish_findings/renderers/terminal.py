@@ -1,5 +1,6 @@
 """Terminal rendering for RCA reports — Claude-style output."""
 
+import math
 import re
 
 from rich.console import Console
@@ -290,7 +291,11 @@ def _render_rich_confidence_block(
     band_style = {"HIGH": "bold green", "MEDIUM": "bold yellow", "LOW": "bold red"}.get(
         band_upper, f"bold {TEXT}"
     )
-    score_str = f" ({int(validity_score * 100)}%)" if validity_score is not None else ""
+    score_str = (
+        f" ({int(validity_score * 100)}%)"
+        if validity_score is not None and not math.isnan(validity_score)
+        else ""
+    )
 
     t = Text("  Confidence: ")
     t.append(f"{band_upper}{score_str}" if band_upper else score_str.strip(), style=band_style)
@@ -323,7 +328,11 @@ def _render_plain_report(
 
     if confidence_band or validity_score is not None:
         band_str = confidence_band.upper() if confidence_band else ""
-        score_str = f" ({int(validity_score * 100)}%)" if validity_score is not None else ""
+        score_str = (
+            f" ({int(validity_score * 100)}%)"
+            if validity_score is not None and not math.isnan(validity_score)
+            else ""
+        )
         print(f"\nConfidence: {band_str}{score_str}".strip())
 
     if ranked_hypotheses:

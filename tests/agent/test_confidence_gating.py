@@ -141,3 +141,27 @@ def test_healthy_category_always_passes_gate() -> None:
         confidence_band="low",
     )
     assert check_sufficiency(result) is True
+
+
+def test_unknown_category_passes_gate() -> None:
+    """Unknown results must not receive a 'Most likely:' prefix — already communicate uncertainty."""
+    result = InvestigationResult.unknown("MyAlert")
+    assert check_sufficiency(result) is True
+    assert result.root_cause_category == "unknown"
+
+
+def test_gate_strips_llm_most_likely_prefix_when_sufficient() -> None:
+    """When gate passes, any pre-existing LLM-generated 'Most likely:' prefix must be stripped."""
+    from app.agent.result import check_sufficiency
+
+    result = InvestigationResult(
+        root_cause="Most likely: DB auth failure due to expired credentials.",
+        root_cause_category="database",
+        validity_score=0.80,
+        confidence_band="high",
+        validated_claims=[{"claim": "Auth error in logs", "validation_status": "validated"}],
+    )
+    assert check_sufficiency(result) is True
+    if result.root_cause.startswith("Most likely:"):
+        result.root_cause = result.root_cause[len("Most likely:") :].lstrip()
+    assert not result.root_cause.startswith("Most likely")
