@@ -38,6 +38,7 @@ from tests.benchmarks._framework.config import (
 )
 from tests.benchmarks._framework.cost import CostBudgetExceeded
 from tests.benchmarks._framework.integrity import IntegrityViolation
+from tests.benchmarks._framework.reporting import render_report_dir
 from tests.benchmarks._framework.runner import BenchmarkRunner
 
 # --------------------------------------------------------------------------- #
@@ -160,6 +161,22 @@ def _cmd_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_report(args: argparse.Namespace) -> int:
+    run_dir = Path(args.run_dir)
+    if not run_dir.exists():
+        print(f"  ✗ {run_dir} does not exist", file=sys.stderr)
+        return 1
+    formats = [f.strip() for f in args.format.split(",")] if args.format else None
+    try:
+        rendered = render_report_dir(run_dir, formats=formats)
+    except FileNotFoundError as exc:
+        print(f"  ✗ {exc}", file=sys.stderr)
+        return 1
+    for fmt, path in rendered.items():
+        print(f"  ✓ {fmt}: {path}  ({path.stat().st_size:,} bytes)")
+    return 0
+
+
 # --------------------------------------------------------------------------- #
 # Entry point                                                                 #
 # --------------------------------------------------------------------------- #
@@ -190,6 +207,18 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     p_run.set_defaults(func=_cmd_run)
+
+    p_report = sub.add_parser(
+        "report",
+        help="Re-render report.md + report.html from a finished run's report.json.",
+    )
+    p_report.add_argument("run_dir", help="Directory containing report.json + cases/")
+    p_report.add_argument(
+        "--format",
+        default="markdown,html",
+        help="Comma-separated subset of {markdown,html}. Default: both.",
+    )
+    p_report.set_defaults(func=_cmd_report)
 
     return parser
 

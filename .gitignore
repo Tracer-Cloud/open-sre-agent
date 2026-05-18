@@ -1,8 +1,11 @@
-# Environment variables
+# Environment variables 
 *.env
 .env
 .env.local
 .env.*.local
+.env.backup*
+.env.bench
+.env.bak
 .secrets
 
 # Python

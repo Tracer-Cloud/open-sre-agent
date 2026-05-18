@@ -61,6 +61,7 @@ from tests.benchmarks._framework.llm_dispatch import (
     ModelVersionMismatch,
     UnknownLLM,
 )
+from tests.benchmarks._framework.reporting import render_report_dir
 
 # --------------------------------------------------------------------------- #
 # Internal types                                                              #
@@ -237,6 +238,18 @@ class BenchmarkRunner:
             json.dumps(_report_to_dict(report, self.cost), ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
+
+        # Auto-render markdown + HTML (or whichever formats the config requested).
+        # Failure here is non-fatal — JSON is the source of truth; the
+        # human-readable views can be regenerated via `bench report` later.
+        render_formats = [f for f in self.config.report_formats if f != "json"]
+        if render_formats:
+            try:
+                rendered = render_report_dir(output_dir, formats=render_formats)
+                for fmt, path in rendered.items():
+                    print(f"  ✓ rendered {fmt}: {path}")
+            except Exception as exc:
+                print(f"  ⚠ report rendering failed (JSON still written): {exc}")
 
         # Production runs gate emission on report_validation; dev runs skip
         if not dev_mode:
