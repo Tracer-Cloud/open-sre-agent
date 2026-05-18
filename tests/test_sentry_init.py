@@ -9,6 +9,8 @@ import pytest
 from app.constants import SENTRY_DSN, SENTRY_ERROR_SAMPLE_RATE, SENTRY_TRACES_SAMPLE_RATE
 from app.utils import sentry_sdk as sentry_mod
 
+_REAL_BUILD_SENTRY_INTEGRATIONS = sentry_mod._build_sentry_integrations
+
 
 @pytest.fixture(autouse=True)
 def _reset_sentry_module_state(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -372,6 +374,28 @@ def test_init_sentry_passes_explicit_integrations(monkeypatch) -> None:
     assert "LoggingIntegration" in integration_names
     assert "AsyncioIntegration" in integration_names
     assert "HttpxIntegration" in integration_names
+
+
+def test_build_sentry_integrations_disables_logging_bridge(monkeypatch) -> None:
+    monkeypatch.setenv("OPENSRE_SENTRY_LOGGING_DISABLED", "1")
+    monkeypatch.setattr(sentry_mod, "_build_sentry_integrations", _REAL_BUILD_SENTRY_INTEGRATIONS)
+
+    integrations = sentry_mod._build_sentry_integrations()
+
+    integration_names = {type(integration).__name__ for integration in integrations}
+    assert "LoggingIntegration" not in integration_names
+    assert "AsyncioIntegration" in integration_names
+    assert "HttpxIntegration" in integration_names
+
+
+def test_build_sentry_integrations_enables_logging_bridge_by_default(monkeypatch) -> None:
+    monkeypatch.delenv("OPENSRE_SENTRY_LOGGING_DISABLED", raising=False)
+    monkeypatch.setattr(sentry_mod, "_build_sentry_integrations", _REAL_BUILD_SENTRY_INTEGRATIONS)
+
+    integrations = sentry_mod._build_sentry_integrations()
+
+    integration_names = {type(integration).__name__ for integration in integrations}
+    assert "LoggingIntegration" in integration_names
 
 
 def test_init_sentry_disables_auto_enabling_integrations(monkeypatch) -> None:
