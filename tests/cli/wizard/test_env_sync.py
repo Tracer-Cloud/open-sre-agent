@@ -85,9 +85,7 @@ def test_sync_provider_env_gemini_cli_writes_model(tmp_path) -> None:
     assert "GEMINI_CLI_MODEL=\n" in content
 
 
-@pytest.mark.skipif(
-    _SKIP_AS_ROOT, reason="root bypasses file permission checks"
-)
+@pytest.mark.skipif(_SKIP_AS_ROOT, reason="root bypasses file permission checks")
 def test_sync_provider_env_permission_error(tmp_path) -> None:
     env_path = tmp_path / ".env"
     env_path.write_text("LLM_PROVIDER=anthropic\n", encoding="utf-8")
@@ -103,9 +101,7 @@ def test_sync_provider_env_permission_error(tmp_path) -> None:
         env_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
 
 
-@pytest.mark.skipif(
-    _SKIP_AS_ROOT, reason="root bypasses file permission checks"
-)
+@pytest.mark.skipif(_SKIP_AS_ROOT, reason="root bypasses file permission checks")
 def test_sync_env_values_permission_error(tmp_path) -> None:
     env_path = tmp_path / ".env"
     env_path.write_text("FOO=bar\n", encoding="utf-8")
