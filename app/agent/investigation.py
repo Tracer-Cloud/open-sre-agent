@@ -413,8 +413,7 @@ class ConnectedInvestigationAgent:
         else:
             if not result.root_cause.startswith("Most likely"):
                 result.root_cause = f"Most likely: {result.root_cause}"
-            if result.confidence_band == "high":
-                result.confidence_band = "medium"
+            result.confidence_band = "low"
 
         _emit(
             "agent_end",

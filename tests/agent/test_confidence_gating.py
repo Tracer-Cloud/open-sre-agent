@@ -150,23 +150,26 @@ def test_unknown_category_passes_gate() -> None:
     assert result.root_cause_category == "unknown"
 
 
-def test_gate_caps_band_to_medium_when_fired_on_high_score() -> None:
-    """Gate firing on high-score/zero-claims must downgrade band so it stays consistent with prefix."""
-    result = InvestigationResult(
-        root_cause="DB connection pool exhausted.",
-        root_cause_category="database",
-        validity_score=0.85,
-        confidence_band="high",
-        validated_claims=[],
-    )
-    assert check_sufficiency(result) is False
-    # Simulate gate behaviour applied in investigation.py
-    if not result.root_cause.startswith("Most likely"):
-        result.root_cause = f"Most likely: {result.root_cause}"
-    if result.confidence_band == "high":
-        result.confidence_band = "medium"
-    assert result.root_cause.startswith("Most likely:")
-    assert result.confidence_band == "medium"
+def test_gate_downgrades_band_to_low_when_fired() -> None:
+    """Gate always sets band to low — regardless of starting band — to stay consistent with prefix."""
+    for starting_band, validity_score, validated_claims in [
+        ("high", 0.85, []),
+        ("medium", 0.55, [{"claim": "c1", "validation_status": "validated"}]),
+    ]:
+        result = InvestigationResult(
+            root_cause="DB connection pool exhausted.",
+            root_cause_category="database",
+            validity_score=validity_score,
+            confidence_band=starting_band,
+            validated_claims=validated_claims,
+        )
+        assert check_sufficiency(result) is False
+        # Simulate gate behaviour applied in investigation.py
+        if not result.root_cause.startswith("Most likely"):
+            result.root_cause = f"Most likely: {result.root_cause}"
+        result.confidence_band = "low"
+        assert result.root_cause.startswith("Most likely:")
+        assert result.confidence_band == "low"
 
 
 def test_gate_strips_llm_most_likely_prefix_when_sufficient() -> None:
