@@ -50,6 +50,8 @@ def _record_import_health(import_failures: int) -> None:
     Sentry tag write must never break registry initialisation.
     """
     with suppress(Exception):
+        import sentry_sdk  # noqa: PLC0415 — lazy import, SDK may be absent
+
         sentry_sdk.set_tag("tools.import_failures", str(import_failures))
 
 
