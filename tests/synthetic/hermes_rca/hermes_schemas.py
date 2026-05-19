@@ -535,6 +535,9 @@ def validate_hermes_routing_decisions(data: dict[str, Any]) -> dict[str, Any]:
         ):
             _require_str(call, field, cctx)
 
+        if call["capability_category"] not in capability_categories:
+            raise ValueError(f"{cctx}: unknown capability_category {call['capability_category']!r}")
+
     return data
 
 
