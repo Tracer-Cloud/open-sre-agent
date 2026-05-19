@@ -18,6 +18,8 @@ exception and assert the Sentry path fires.
 from __future__ import annotations
 
 import ast
+import builtins
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -28,6 +30,7 @@ from pydantic import ValidationError as PydanticValidationError
 
 from app.integrations._verification_adapters import (
     _report_probe_failure,
+    _verify_discord,
     _verify_grafana,
     _verify_slack,
     _verify_telegram,
@@ -80,16 +83,6 @@ def _contains_call(handler: ast.ExceptHandler, func_name: str) -> bool:
     return False
 
 
-def _is_success_passthrough(handler: ast.ExceptHandler) -> bool:
-    """True when the handler is a known success-path passthrough.
-
-    The Discord event-loop handler returns "passed" without capture because
-    the exception means the token was accepted. This is intentional.
-    """
-    src = ast.dump(handler)
-    return "run() cannot be called from a running event loop" in src
-
-
 @pytest.mark.parametrize(
     ("func_name", "integration"),
     _PROBE_SITES,
@@ -103,11 +96,7 @@ def test_except_blocks_call_report_probe_failure(func_name: str, integration: st
 
     for fn in functions:
         handlers = _except_handlers(fn)
-        uncovered = [
-            h
-            for h in handlers
-            if not _contains_call(h, "_report_probe_failure") and not _is_success_passthrough(h)
-        ]
+        uncovered = [h for h in handlers if not _contains_call(h, "_report_probe_failure")]
         assert not uncovered, (
             f"{_MODULE}::{func_name} has {len(uncovered)} except handler(s) "
             f"without _report_probe_failure"
@@ -299,6 +288,28 @@ def test_verify_slack_captures_on_config_validation_error(
 # ---------------------------------------------------------------------------
 
 
-def test_discord_import_failure_sets_sentry_tag() -> None:
-    source = (_REPO_ROOT / _MODULE).read_text(encoding="utf-8")
-    assert 'sentry_sdk.set_tag("integrations.discord.import_failed", "true")' in source
+@patch("app.integrations._verification_adapters.report_exception")
+def test_discord_import_failure_sets_sentry_tag(mock_report: MagicMock) -> None:
+    import sentry_sdk
+
+    saved = sys.modules.pop("discord", None)
+    real_import = builtins.__import__
+
+    def _fail_discord(name: str, *args: object, **kwargs: object) -> object:
+        if name == "discord":
+            raise ImportError("No module named 'discord'")
+        return real_import(name, *args, **kwargs)
+
+    try:
+        with (
+            patch("builtins.__import__", side_effect=_fail_discord),
+            patch.object(sentry_sdk, "set_tag") as mock_tag,
+        ):
+            res = _verify_discord("env", {"bot_token": "fake"})
+        assert res["status"] == "failed"
+        mock_tag.assert_called_once_with("integrations.discord.import_failed", "true")
+        mock_report.assert_called_once()
+        assert mock_report.call_args.kwargs["tags"]["integration"] == "discord"
+    finally:
+        if saved is not None:
+            sys.modules["discord"] = saved
