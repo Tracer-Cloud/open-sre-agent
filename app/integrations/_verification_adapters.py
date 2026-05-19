@@ -394,7 +394,13 @@ def _verify_discord(source: str, config: dict[str, Any]) -> dict[str, str]:
     except Exception as err:
         detail = str(err)
         if "run() cannot be called from a running event loop" in detail:
-            return result("discord", source, "passed", "Discord bot token accepted.")
+            _report_probe_failure(err, integration="discord", expected=True)
+            return result(
+                "discord",
+                source,
+                "failed",
+                "Cannot verify Discord token inside a running event loop.",
+            )
         _report_probe_failure(err, integration="discord")
         return result("discord", source, "failed", f"Discord API check failed: {err}")
     return result("discord", source, "passed", "Discord bot token accepted.")
