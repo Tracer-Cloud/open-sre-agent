@@ -13,6 +13,8 @@ from typing import Any
 
 import httpx
 
+from app.remote.error_reporting import report_remote_exception
+
 logger = logging.getLogger(__name__)
 
 _SLACK_API_URL = "https://slack.com/api/conversations.replies"
@@ -63,10 +65,25 @@ def fetch_slack_thread(
         resp.raise_for_status()
         data = resp.json()
     except httpx.HTTPStatusError as exc:
-        logger.warning("[slack] thread fetch HTTP error status=%s", exc.response.status_code)
+        report_remote_exception(
+            exc,
+            logger=logger,
+            component="slack_context",
+            event="thread_fetch_http_error",
+            message=f"[slack] thread fetch HTTP error status={exc.response.status_code}",
+            severity="warning",
+            extras={"status_code": exc.response.status_code},
+        )
         return {"error": f"HTTP {exc.response.status_code}"}
     except Exception as exc:
-        logger.warning("[slack] thread fetch error: %s", exc)
+        report_remote_exception(
+            exc,
+            logger=logger,
+            component="slack_context",
+            event="thread_fetch_error",
+            message=f"[slack] thread fetch error: {exc}",
+            severity="warning",
+        )
         return {"error": str(exc)}
 
     if not data.get("ok"):

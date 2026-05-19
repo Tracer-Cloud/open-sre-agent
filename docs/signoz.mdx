@@ -1,0 +1,166 @@
+# SigNoz Integration
+
+Query logs, metrics, and traces from [SigNoz](https://signoz.io) — an OpenTelemetry-native observability platform that stores everything in ClickHouse.
+
+## Quick Start
+
+If you already run SigNoz, skip to env setup below.
+If you want a local stack, use the official SigNoz Docker setup (or the thin wrappers in `infra/scripts/signoz/` that mirror it):
+
+```bash
+# optional convenience wrappers (mirror official docs)
+bash infra/scripts/signoz/start-local.sh
+# ... later
+bash infra/scripts/signoz/stop-local.sh
+```
+
+### 1. Configure Environment Variables
+
+Set your SigNoz ClickHouse credentials:
+
+```bash
+export SIGNOZ_CLICKHOUSE_HOST="localhost"
+export SIGNOZ_CLICKHOUSE_PORT="8123"
+export SIGNOZ_CLICKHOUSE_USER="default"
+export SIGNOZ_CLICKHOUSE_PASSWORD=""
+export SIGNOZ_CLICKHOUSE_DATABASE="default"
+export SIGNOZ_URL="http://localhost:3301"      # optional
+export SIGNOZ_API_KEY=""                        # optional
+```
+
+### 2. Verify Connectivity
+
+```bash
+opensre integrations verify signoz
+```
+
+Expected output:
+
+```
+Connected to ClickHouse 24.x; SigNoz schema verified (4 tables present).
+```
+
+### 3. Use the Tools
+
+When `alert_source` is `signoz`, the agent auto-seeds three tools before the ReAct loop:
+
+- **`query_signoz_logs`** — Search `signoz_logs.distributed_logs_v2` by service, severity, and time window.
+- **`query_signoz_metrics`** — Query `signoz_metrics.distributed_samples_v4` for CPU, memory, and request-rate signals.
+- **`query_signoz_traces`** — Query `signoz_traces.distributed_signoz_index_v3` for error spans, p99 latency, and inter-service dependencies.
+
+## Webhook Configuration
+
+SigNoz emits Prometheus-style webhook payloads. To trigger OpenSRE investigations automatically:
+
+1. In SigNoz, go to **Settings → Notification Channels**.
+2. Create a **Webhook** channel pointing at your OpenSRE instance:
+   ```
+   POST https://your-opensre-instance/investigate
+   ```
+3. The agent will detect `alert_source: signoz` from the payload and auto-query logs, metrics, and traces.
+
+### Example Webhook Payload
+
+```json
+{
+  "receiver": "opensre",
+  "status": "firing",
+  "alerts": [
+    {
+      "status": "firing",
+      "labels": {
+        "alertname": "HighErrorRate",
+        "service_name": "payment-service",
+        "severity": "critical"
+      },
+      "annotations": {
+        "summary": "Error rate exceeded 5% for payment-service"
+      },
+      "startsAt": "2024-01-15T10:00:00Z"
+    }
+  ],
+  "groupLabels": { "alertname": "HighErrorRate" },
+  "commonLabels": {
+    "alertname": "HighErrorRate",
+    "service_name": "payment-service",
+    "severity": "critical"
+  },
+  "commonAnnotations": {
+    "summary": "Error rate exceeded 5% for payment-service"
+  }
+}
+```
+
+## CLI Setup
+
+```bash
+opensre integrations setup signoz
+```
+
+You will be prompted for:
+- ClickHouse host
+- ClickHouse port (default: 8123)
+- ClickHouse user (default: default)
+- ClickHouse password
+- ClickHouse database (default: default)
+- SigNoz URL (optional)
+- SigNoz API key (optional)
+
+## Supported Metrics (V1)
+
+The metrics tool supports a curated list of common infrastructure metrics:
+
+| Alias | Actual SigNoz Metric |
+|-------|---------------------|
+| `cpu_usage` | `system_cpu_usage` |
+| `memory_usage` | `system_memory_usage` |
+| `request_rate` | `signoz_calls_total` |
+
+You can also pass any raw metric name stored in `signoz_metrics.distributed_time_series_v4`.
+For latency percentiles (p95/p99), prefer `query_signoz_traces`, which computes
+percentile estimates directly from span durations.
+
+## Schema Compatibility
+
+The integration targets SigNoz v0.x+ with the following ClickHouse tables:
+
+- `signoz_logs.distributed_logs_v2`
+- `signoz_metrics.distributed_samples_v4`
+- `signoz_metrics.distributed_time_series_v4`
+- `signoz_traces.distributed_signoz_index_v3`
+
+Verification probes for table existence and fails gracefully if schema drift is detected.
+
+## Example Investigation
+
+```bash
+# Manually trigger a SigNoz investigation
+opensre investigate --input-json '{
+  "alert_source": "signoz",
+  "alert_name": "HighErrorRate",
+  "pipeline_name": "payment-service",
+  "severity": "critical",
+  "commonLabels": {
+    "service_name": "payment-service",
+    "severity": "critical"
+  },
+  "commonAnnotations": {
+    "summary": "Error rate exceeded 5%"
+  }
+}'
+```
+
+The agent will:
+1. Extract `alert_source: signoz`
+2. Seed `query_signoz_logs`, `query_signoz_metrics`, `query_signoz_traces`
+3. Run the ReAct loop to synthesize a diagnosis
+4. Deliver the RCA to Slack (if configured)
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---------|-----|
+| `SigNoz connection failed` | Verify `SIGNOZ_CLICKHOUSE_HOST` and port. For Docker, use the container IP or `host.docker.internal`. |
+| `Missing tables` | Ensure SigNoz has been running long enough to create the distributed tables. Check `system.tables` in ClickHouse. |
+| `No logs returned` | Confirm the service name matches `resources_string['service.name']` in SigNoz. |
+| `No metrics returned` | Verify the metric exists in `signoz_metrics.distributed_time_series_v4`. |

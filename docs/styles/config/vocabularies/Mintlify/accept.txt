@@ -128,3 +128,15 @@ URIs
 URI
 hostnames
 hostname
+# Hermes / incident operations terms
+cron
+cooldown
+correlator
+Correlator
+dedup
+deduplicate
+hoc
+routable
+systemd
+tailer
+traceback

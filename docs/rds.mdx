@@ -79,3 +79,70 @@ Both tools become available to the planner whenever `rds.db_instance_identifier`
 | **AccessDenied on `rds:DescribeDBInstances`** | Add the IAM policy above to the role or user used by the AWS integration. |
 | **DBInstanceNotFound** | Confirm `RDS_DB_INSTANCE_IDENTIFIER` matches an instance in `AWS_REGION`. |
 | **Tool reports the wrong region** | Either `AWS_REGION` is set to a different region, or the source dict has a stale `region` field. Check the resolution order above. |
+
+## Upstream correlation validation
+
+OpenSRE also includes a deterministic upstream-correlation smoke validation path for no-trace-ID RDS CPU spike investigations.
+
+This allows validating correlation output locally without requiring live Datadog credentials or full LLM investigation setup.
+
+### Local smoke validation
+
+Run:
+
+```bash
+opensre tests upstream-correlation-smoke
+```
+
+Expected output includes separate sections for:
+
+- correlated signals
+- most likely causal driver(s)
+
+Example:
+
+```
+Upstream Correlation Smoke Validation
+
+Correlated signals:
+- upstream-correlation (source=runtime, score=0.9)
+
+Most likely causal driver(s):
+- system.cpu.user{service:orders-web} (confidence=0.9)
+  rationale=time_window=1.0, topology=1.0, periodicity=1.0, operator_hint=0.0
+```
+
+For machine-readable output:
+
+```bash
+opensre tests upstream-correlation-smoke --json
+```
+
+### Live investigation validation
+
+For live validation, configure Datadog and trigger an investigation against an RDS CPU spike alert.
+
+The upstream correlation runtime automatically scopes RDS metrics to the alerting DB instance using the `dbinstanceidentifier` tag to avoid cross-instance aggregation in multi-RDS environments.
+
+Recommended alert fields:
+
+```json
+{
+  "service": "orders",
+  "resource": "orders-rds-prod",
+  "upstream_services": ["orders-web"]
+}
+```
+
+Then run a live investigation:
+
+```bash
+opensre investigate
+```
+
+When runtime evidence is available, the final report includes:
+
+- correlated signals
+- most likely causal driver(s)
+
+This validation flow is intended as a lightweight smoke/integration path and does not require synthetic benchmark execution.

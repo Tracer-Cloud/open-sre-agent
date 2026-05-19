@@ -42,6 +42,8 @@ class TestDispatchSlash:
         output = buf.getvalue()
         for name in SLASH_COMMANDS:
             assert name in output
+        assert "Use /help <command> for usage." in output
+        assert "/model set <provider>" not in output
 
     def test_question_mark_shortcut_runs_help(self) -> None:
         """`/?` is the canonical shortcut for `/help` (vim / less convention)."""
@@ -52,6 +54,42 @@ class TestDispatchSlash:
         # Any slash command name suffices as proof the help table rendered.
         assert "/help" in output
         assert "/list" in output
+
+    def test_help_command_detail_shows_usage(self) -> None:
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/help /model", session, console) is True
+        output = buf.getvalue()
+        assert "Show or change active LLM settings." in output
+        assert "/model set <provider>" in output
+        assert "In a TTY, bare /model opens an interactive menu." in output
+
+    def test_help_category_shows_compact_section(self) -> None:
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/help tasks", session, console) is True
+        output = buf.getvalue()
+        assert "Tasks commands" in output
+        assert "/tasks" in output
+        assert "/cancel <task_id>" not in output
+
+    def test_tty_help_dispatch_uses_interactive_picker(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.cli.interactive_shell.command_registry import help as help_cmd
+
+        session = ReplSession()
+        console, buf = _capture()
+        picker_called: list[bool] = []
+        monkeypatch.setattr(help_cmd, "repl_tty_interactive", lambda: True)
+        monkeypatch.setattr(
+            help_cmd, "choose_help_command", lambda _sections: picker_called.append(True)
+        )
+
+        assert dispatch_slash("/help", session, console) is True
+
+        assert picker_called == [True]
+        assert buf.getvalue() == ""
 
     def test_bare_slash_previews_all_commands(self) -> None:
         session = ReplSession()
@@ -423,13 +461,30 @@ class TestIntegrationsCommand:
         assert "all integrations ok" in buf.getvalue()
 
     def test_show_known_service(self, monkeypatch: object) -> None:
-        self._patch(monkeypatch)
+        verified: list[str | None] = []
+
+        def _verify_one(service: str) -> dict[str, str]:
+            verified.append(service)
+            return {
+                "service": service,
+                "source": "env",
+                "status": "ok",
+                "detail": "ok",
+            }
+
+        monkeypatch.setattr(
+            repl_data_module,
+            "configured_integration_names",
+            lambda: ["datadog"],
+        )
+        monkeypatch.setattr(repl_data_module, "verify_integration", _verify_one)
         console, buf = _capture()
         dispatch_slash("/integrations show datadog", ReplSession(), console)
+        assert verified == ["datadog"]
         assert "datadog" in buf.getvalue()
 
     def test_show_unknown_service(self, monkeypatch: object) -> None:
-        self._patch(monkeypatch)
+        monkeypatch.setattr(repl_data_module, "configured_integration_names", lambda: ["datadog"])
         session = ReplSession()
         session.record("slash", "/integrations show bogus")
         console, buf = _capture()

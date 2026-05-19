@@ -60,6 +60,8 @@ dependencies = [
     "PyNaCl>=1.5.0",
     # MariaDB
     "pymysql>=1.1.0,<2.0.0",
+    # ClickHouse (used by first-class SigNoz + ClickHouse integrations)
+    "clickhouse-connect>=0.15.1,<1.0.0",
     "sentry-sdk>=2.59.0",
     # File locking for atomic store operations
     "filelock>=3.29.0",
@@ -93,6 +95,19 @@ dev = [
     "huggingface_hub>=0.26.0",
     "datasets>=3.0.0",
 ]
+release-dist = [
+    "build>=1.2.0",
+    "twine>=6.0.0",
+]
+release-binary = [
+    "pyinstaller>=6.3.0",
+]
+# Backward-compatible aggregate extra.
+release = [
+    "build>=1.2.0",
+    "twine>=6.0.0",
+    "pyinstaller>=6.3.0",
+]
 opensre-hub = [
     "huggingface_hub>=0.26.0",
     "datasets>=3.0.0",
@@ -100,6 +115,7 @@ opensre-hub = [
 kafka = [
     "confluent-kafka>=2.14.0",
 ]
+# Backward-compatible no-op extra; ClickHouse is now a core dependency.
 clickhouse = [
     "clickhouse-connect>=0.15.1",
 ]

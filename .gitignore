@@ -4,8 +4,8 @@
 .env.local
 .env.*.local
 .env.backup*
-.env.bench
 .env.bak
+.env.bench
 .secrets
 
 # Python

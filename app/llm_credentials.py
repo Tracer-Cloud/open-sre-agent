@@ -18,6 +18,14 @@ def _keyring_is_disabled() -> bool:
     return os.getenv("OPENSRE_DISABLE_KEYRING", "").strip().lower() in _DISABLED_VALUES
 
 
+def resolve_env_credential(env_var: str, *, default: str = "") -> str:
+    """Resolve a credential from env first, then the local keychain."""
+    env_value = os.getenv(env_var, default).strip()
+    if env_value:
+        return env_value
+    return resolve_llm_api_key(env_var)
+
+
 def resolve_llm_api_key(env_var: str) -> str:
     """Resolve an LLM API key from env first, then the local keychain."""
     env_value = os.getenv(env_var, "").strip()

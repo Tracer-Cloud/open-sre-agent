@@ -6,17 +6,20 @@ import logging
 import os
 import shlex
 import subprocess
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
+from app.agents.probe import process_has_open_codex_rollout
 from app.agents.registry import AgentRecord, AgentRegistry
 
 logger = logging.getLogger(__name__)
 
 _DEFAULT_CURSOR_PROJECTS_DIR = Path.home() / ".cursor" / "projects"
-_PS_COMMAND = ("ps", "-axo", "pid=,args=")
+_PS_COMMAND = ("ps", "-axo", "pid=,ppid=,args=")
 _MAX_DISPLAY_COMMAND_LENGTH = 120
+_CODEX_LAUNCHER_TOKENS: frozenset[str] = frozenset({"codex", "codex.js", "codex.mjs", "codex.cjs"})
+_NODE_EXECUTABLES: frozenset[str] = frozenset({"node", "nodejs"})
 _NOISE_PROCESS_TOKENS: tuple[str, ...] = (
     "chrome_crashpad_handler",
     "shipit",
@@ -60,14 +63,16 @@ class ProcessRow:
 
     pid: int
     command: str
+    ppid: int | None = None
 
 
 def discover_agent_processes(*, include_all: bool = False) -> list[DiscoveredAgent]:
     """Return likely local AI-agent sessions visible to the current user."""
 
-    candidates: list[DiscoveredAgent] = []
+    candidates_by_pid: dict[int, tuple[str, ProcessRow]] = {}
     current_pid = os.getpid()
-    for row in _current_process_rows():
+    rows = _current_process_rows()
+    for row in rows:
         if row.pid <= 0 or row.pid == current_pid:
             continue
         cmdline = _split_command(row.command)
@@ -76,10 +81,18 @@ def discover_agent_processes(*, include_all: bool = False) -> list[DiscoveredAge
         agent_name = _classify_agent(process_name, cmdline, include_all=include_all)
         if agent_name is None:
             continue
-        candidates.append(
-            DiscoveredAgent(name=f"{agent_name}-{row.pid}", pid=row.pid, command=row.command)
-        )
+        candidates_by_pid[row.pid] = (agent_name, row)
 
+    for pid in _codex_duplicate_pids_to_drop(
+        rows,
+        {pid for pid, (name, _) in candidates_by_pid.items() if name == "codex"},
+    ):
+        candidates_by_pid.pop(pid, None)
+
+    candidates = [
+        DiscoveredAgent(name=f"{agent_name}-{row.pid}", pid=row.pid, command=row.command)
+        for agent_name, row in candidates_by_pid.values()
+    ]
     return sorted(candidates, key=lambda item: (item.name, item.pid))
 
 
@@ -112,6 +125,12 @@ def discover_agents(
     for record in _discover_cursor_terminal_agents(cursor_projects_dir):
         records_by_pid.setdefault(record.pid, record)
 
+    for pid in _codex_duplicate_pids_to_drop(
+        rows,
+        {pid for pid, record in records_by_pid.items() if record.name == "codex"},
+    ):
+        records_by_pid.pop(pid, None)
+
     return sorted(records_by_pid.values(), key=lambda record: (record.name, record.pid))
 
 
@@ -135,6 +154,8 @@ def process_command(pid: int) -> str | None:
             check=False,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=2.0,
         )
     except (OSError, subprocess.TimeoutExpired, ValueError):
@@ -160,6 +181,8 @@ def _current_process_rows() -> list[ProcessRow]:
             check=False,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=2.0,
         )
     except (OSError, subprocess.TimeoutExpired):
@@ -180,14 +203,26 @@ def _parse_ps_line(line: str) -> ProcessRow | None:
     stripped = line.strip()
     if not stripped:
         return None
-    parts = stripped.split(maxsplit=1)
-    if len(parts) != 2:
+    parts = stripped.split(maxsplit=2)
+    if len(parts) < 2:
         return None
     try:
         pid = int(parts[0])
     except ValueError:
         return None
-    return ProcessRow(pid=pid, command=parts[1])
+
+    if len(parts) == 2:
+        try:
+            ppid = int(parts[1])
+        except ValueError:
+            ppid = None
+        return ProcessRow(pid=pid, ppid=ppid, command="")
+
+    try:
+        ppid = int(parts[1])
+    except ValueError:
+        ppid = None
+    return ProcessRow(pid=pid, ppid=ppid, command=parts[2])
 
 
 def _split_command(command: str) -> list[str]:
@@ -195,6 +230,81 @@ def _split_command(command: str) -> list[str]:
         return shlex.split(command)
     except ValueError:
         return command.split()
+
+
+def _codex_duplicate_pids_to_drop(rows: Iterable[ProcessRow], codex_pids: set[int]) -> set[int]:
+    if len(codex_pids) < 2:
+        return set()
+
+    rows_by_pid = {row.pid: row for row in rows if row.pid in codex_pids}
+    rollout_owner_cache: dict[int, bool] = {}
+    pids_to_drop: set[int] = set()
+
+    def owns_rollout(pid: int) -> bool:
+        if pid not in rollout_owner_cache:
+            rollout_owner_cache[pid] = process_has_open_codex_rollout(pid)
+        return rollout_owner_cache[pid]
+
+    for child in rows_by_pid.values():
+        if child.ppid is None:
+            continue
+        parent = rows_by_pid.get(child.ppid)
+        if parent is None or not _is_codex_wrapper_native_pair(parent, child):
+            continue
+
+        keep_pid = _preferred_codex_pair_pid(parent, child, owns_rollout)
+        drop_pid = parent.pid if keep_pid == child.pid else child.pid
+        pids_to_drop.add(drop_pid)
+
+    return pids_to_drop
+
+
+def _is_codex_wrapper_native_pair(parent: ProcessRow, child: ProcessRow) -> bool:
+    return _is_node_codex_wrapper(parent.command) and _is_native_codex_process(child.command)
+
+
+def _is_node_codex_wrapper(command: str) -> bool:
+    cmdline = _split_command(command)
+    return _is_node_codex_cmdline(cmdline)
+
+
+def _is_native_codex_process(command: str) -> bool:
+    cmdline = _split_command(command)
+    return bool(cmdline) and _is_codex_launcher_token(cmdline[0])
+
+
+def _is_codex_command(command: str) -> bool:
+    return _is_codex_cmdline(_split_command(command))
+
+
+def _is_codex_cmdline(cmdline: list[str]) -> bool:
+    if not cmdline:
+        return False
+    if _is_codex_launcher_token(cmdline[0]):
+        return True
+    return _is_node_codex_cmdline(cmdline)
+
+
+def _is_node_codex_cmdline(cmdline: list[str]) -> bool:
+    if not cmdline or _normalized_token(cmdline[0]) not in _NODE_EXECUTABLES:
+        return False
+    return any(_is_codex_launcher_token(part) for part in cmdline[1:])
+
+
+def _is_codex_launcher_token(value: str) -> bool:
+    return _normalized_token(value) in _CODEX_LAUNCHER_TOKENS
+
+
+def _preferred_codex_pair_pid(
+    parent: ProcessRow,
+    child: ProcessRow,
+    owns_rollout: Callable[[int], bool],
+) -> int:
+    parent_owns_rollout = owns_rollout(parent.pid)
+    child_owns_rollout = owns_rollout(child.pid)
+    if parent_owns_rollout and not child_owns_rollout:
+        return parent.pid
+    return child.pid
 
 
 def _discover_cursor_terminal_agents(cursor_projects_dir: Path) -> list[AgentRecord]:
@@ -249,7 +359,7 @@ def _agent_name_for_command(command: str) -> str | None:
         return "cursor-agent"
     if _has_command_token(lower, "claude") and _has_command_token(lower, "code"):
         return "claude-code"
-    if _has_command_token(lower, "codex"):
+    if _is_codex_command(command):
         return "codex"
     if _has_command_token(lower, "aider"):
         return "aider"
@@ -293,6 +403,10 @@ def _classify_agent_loose(process_name: str, cmdline: list[str]) -> str | None:
     tokens.add(_normalized_token(process_name))
 
     for signature, label in _LOOSE_AGENT_SIGNATURES:
+        if label == "codex":
+            if _is_codex_cmdline(cmdline):
+                return label
+            continue
         if signature in tokens or signature in haystack:
             return label
     return None

@@ -39,7 +39,9 @@ def detect_hardware() -> HardwareProfile:
 def _get_total_ram_gb() -> float:
     try:
         if sys.platform == "darwin":
-            out = subprocess.check_output(["sysctl", "-n", "hw.memsize"], text=True)
+            out = subprocess.check_output(
+                ["sysctl", "-n", "hw.memsize"], text=True, encoding="utf-8", errors="replace"
+            )
             return int(out.strip()) / (1024**3)
         elif sys.platform == "linux":
             with open("/proc/meminfo") as f:
@@ -54,7 +56,9 @@ def _get_total_ram_gb() -> float:
 def _get_available_ram_gb(total_ram_gb: float) -> float:
     try:
         if sys.platform == "darwin":
-            out = subprocess.check_output(["sysctl", "-n", "hw.usermem"], text=True)
+            out = subprocess.check_output(
+                ["sysctl", "-n", "hw.usermem"], text=True, encoding="utf-8", errors="replace"
+            )
             return int(out.strip()) / (1024**3)
         elif sys.platform == "linux":
             with open("/proc/meminfo") as f:

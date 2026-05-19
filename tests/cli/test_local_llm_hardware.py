@@ -124,7 +124,9 @@ class TestGetTotalRamGbMacOS:
         ):
             mock_sys.platform = "darwin"
             self._call()
-        mock_sub.assert_called_once_with(["sysctl", "-n", "hw.memsize"], text=True)
+        mock_sub.assert_called_once_with(
+            ["sysctl", "-n", "hw.memsize"], text=True, encoding="utf-8", errors="replace"
+        )
 
     def test_returns_fallback_on_subprocess_failure(self) -> None:
         from app.cli.local_llm.hardware import _FALLBACK_RAM_GB
@@ -230,7 +232,9 @@ class TestGetAvailableRamGbMacOS:
         ):
             mock_sys.platform = "darwin"
             self._call(_16_GiB)
-        mock_sub.assert_called_once_with(["sysctl", "-n", "hw.usermem"], text=True)
+        mock_sub.assert_called_once_with(
+            ["sysctl", "-n", "hw.usermem"], text=True, encoding="utf-8", errors="replace"
+        )
 
     def test_returns_half_total_on_subprocess_failure(self) -> None:
         with (

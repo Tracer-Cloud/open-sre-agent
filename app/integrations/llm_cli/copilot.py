@@ -161,6 +161,8 @@ def _classify_gh_auth_status() -> tuple[bool | None, str]:
             argv,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=_GH_AUTH_TIMEOUT_SEC,
             check=False,
         )
@@ -229,6 +231,8 @@ class CopilotAdapter:
                 [binary_path, "--version"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=_PROBE_TIMEOUT_SEC,
                 check=False,
             )

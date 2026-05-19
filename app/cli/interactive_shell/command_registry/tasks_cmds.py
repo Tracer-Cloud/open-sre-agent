@@ -215,18 +215,20 @@ def _cmd_cancel(session: ReplSession, console: Console, args: list[str]) -> bool
 
 
 COMMANDS: list[SlashCommand] = [
-    SlashCommand("/history", "show persisted command history", _cmd_history),
-    SlashCommand("/tasks", "list recent and in-flight shell tasks", _cmd_tasks),
+    SlashCommand("/history", "Show persisted command history.", _cmd_history),
+    SlashCommand("/tasks", "List recent and in-flight shell tasks.", _cmd_tasks),
     SlashCommand(
         "/cancel",
-        "cancel a running task by id ('/cancel <task_id>' — see /tasks)",
+        "Cancel a running task by id.",
         _cmd_cancel,
+        usage=("/cancel <task_id>",),
+        notes=("Use /tasks to list task ids.",),
         execution_tier=ExecutionTier.ELEVATED,
         validate_args=_validate_cancel_args,
     ),
     SlashCommand(
         "/stop",
-        "hints for stopping in-flight investigations and background tasks",
+        "Show how to stop in-flight investigations and background tasks.",
         _cmd_stop,
     ),
 ]

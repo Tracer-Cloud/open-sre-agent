@@ -6,6 +6,7 @@ import logging
 from typing import Any, cast
 
 from app.services.eks.eks_k8s_client import build_k8s_clients
+from app.tools._telemetry import report_run_error
 from app.tools.tool_decorator import tool
 from app.tools.utils.availability import eks_available_or_backend
 from app.tools.utils.eks_workload_helper import extract_workload_params
@@ -131,5 +132,13 @@ def list_eks_pods(
             "error": None,
         }
     except Exception as e:
-        logger.error("[eks] list_eks_pods FAILED: %s", e, exc_info=True)
+        report_run_error(
+            e,
+            tool_name="list_eks_pods",
+            source="eks",
+            component="app.tools.EKSListPodsTool",
+            method="core_v1.list_namespaced_pod",
+            logger=logger,
+            extras={"cluster_name": cluster_name, "namespace": namespace, "region": region},
+        )
         return {"source": "eks", "available": False, "namespace": namespace, "error": str(e)}

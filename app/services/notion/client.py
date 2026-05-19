@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 from pydantic import field_validator
 
+from app.services._error_helpers import capture_service_error
 from app.strict_config import StrictConfigModel
 
 logger = logging.getLogger(__name__)
@@ -90,18 +91,19 @@ class NotionClient:
                     "page_id": data.get("id"),
                     "url": data.get("url"),
                 }
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "[notion] Failed to create page status=%s",
-                e.response.status_code,
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc, logger=logger, integration="notion", method="create_investigation_page"
             )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning("[notion] Request error type=%s detail=%s", type(e).__name__, e)
-            return {"success": False, "error": str(e)}
+        except Exception as exc:
+            capture_service_error(
+                exc, logger=logger, integration="notion", method="create_investigation_page"
+            )
+            return {"success": False, "error": str(exc)}
 
     def update_page(
         self,
@@ -117,15 +119,15 @@ class NotionClient:
                 resp = client.patch(f"/blocks/{page_id}/children", json=payload)
                 resp.raise_for_status()
                 return {"success": True, "page_id": page_id}
-        except httpx.HTTPStatusError as e:
-            logger.warning("[notion] Failed to update page status=%s", e.response.status_code)
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(exc, logger=logger, integration="notion", method="update_page")
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning("[notion] Update error: %s", e)
-            return {"success": False, "error": str(e)}
+        except Exception as exc:
+            capture_service_error(exc, logger=logger, integration="notion", method="update_page")
+            return {"success": False, "error": str(exc)}
 
 
 def _heading(text: str) -> dict:

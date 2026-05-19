@@ -81,12 +81,12 @@ def _cmd_version(_session: ReplSession, console: Console, _args: list[str]) -> b
 
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
-        "/exit", "exit the interactive shell", _cmd_exit, execution_tier=ExecutionTier.EXEMPT
+        "/exit", "Exit the interactive shell.", _cmd_exit, execution_tier=ExecutionTier.EXEMPT
     ),
-    SlashCommand("/quit", "alias for /exit", _cmd_exit, execution_tier=ExecutionTier.EXEMPT),
-    SlashCommand("/health", "show integration and agent health", _cmd_health),
-    SlashCommand("/doctor", "run full environment diagnostic", _cmd_doctor),
-    SlashCommand("/version", "print version, Python and OS info", _cmd_version),
+    SlashCommand("/quit", "Alias for /exit.", _cmd_exit, execution_tier=ExecutionTier.EXEMPT),
+    SlashCommand("/health", "Show integration and agent health.", _cmd_health),
+    SlashCommand("/doctor", "Run full environment diagnostic.", _cmd_doctor),
+    SlashCommand("/version", "Print version, Python, and OS info.", _cmd_version),
 ]
 
 __all__ = ["COMMANDS"]

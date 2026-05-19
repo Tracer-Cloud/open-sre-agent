@@ -218,7 +218,6 @@ def test_bedrock_client_routes_mistral_to_converse(monkeypatch) -> None:
 
     client = llm_client.BedrockLLMClient(model="mistral.mistral-large-2402-v1:0")
     assert client._use_anthropic is False
-
     resp = client.invoke([{"role": "user", "content": "hi"}])
     assert resp.content == "ok"
     assert len(runtime.converse_calls) == 1
@@ -228,6 +227,20 @@ def test_bedrock_client_routes_mistral_to_converse(monkeypatch) -> None:
         {"role": "user", "content": [{"text": "hi"}]},
     ]
     assert "system" not in call
+
+
+def test_parse_root_cause_extracts_category_when_not_first_token() -> None:
+    parsed = llm_client.parse_root_cause(
+        "ROOT_CAUSE_CATEGORY:\nroot_cause_category: agent_hang\nROOT_CAUSE: test"
+    )
+    assert parsed.root_cause_category == "agent_hang"
+
+
+def test_parse_root_cause_extracts_category_from_arrow_format() -> None:
+    parsed = llm_client.parse_root_cause(
+        "ROOT_CAUSE_CATEGORY:\ncategory -> delivery_hang\nROOT_CAUSE: test"
+    )
+    assert parsed.root_cause_category == "delivery_hang"
 
 
 def test_invoke_converse_includes_optional_system_temperature(monkeypatch) -> None:

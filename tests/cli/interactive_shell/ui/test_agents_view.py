@@ -159,7 +159,7 @@ def test_table_shows_live_probe_data_when_snapshot_exists(monkeypatch: pytest.Mo
     table, _ = _render([AgentRecord(name="cursor", pid=8444, command="cursor")])
 
     rendered_cells = [list(col.cells)[0] for col in table.columns]
-    assert rendered_cells[2:] == ["2h0m", "23.5", "-", "-", "running"]
+    assert rendered_cells[2:] == ["2h0m", "23.5", "-", "-", "[red]stuck (2h0m no progress)[/red]"]
 
 
 def test_multiple_records_are_each_rendered_in_order() -> None:

@@ -324,20 +324,27 @@ def _validate_watch_args(args: list[str]) -> str | None:
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
         "/watch",
-        "watch a process PID in the background; alarms go to Telegram",
+        "Watch a process and send threshold alarms.",
         _cmd_watch,
+        usage=(
+            "/watch <pid> [--max-cpu N] [--max-runtime D] [--max-rss S] "
+            "[--cooldown D] [--interval N] [--once]",
+        ),
+        notes=("Alarms are sent to Telegram when Telegram delivery is configured.",),
         execution_tier=ExecutionTier.ELEVATED,
         validate_args=_validate_watch_args,
     ),
     SlashCommand(
         "/watches",
-        "list watchdog background tasks with last resource sample",
+        "List watchdog background tasks with the latest resource sample.",
         _cmd_watches,
     ),
     SlashCommand(
         "/unwatch",
-        "cancel a running watchdog task by id ('/unwatch <task_id>' — see /watches)",
+        "Cancel a running watchdog task by id.",
         _cmd_unwatch,
+        usage=("/unwatch <task_id>",),
+        notes=("Use /watches to list watchdog task ids.",),
         execution_tier=ExecutionTier.ELEVATED,
         validate_args=_validate_unwatch_args,
     ),

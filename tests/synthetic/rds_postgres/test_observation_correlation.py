@@ -2,6 +2,13 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from app.correlation.runtime import build_runtime_correlation
+from app.correlation.upstream import (
+    LogSignal,
+    MetricSeries,
+    TopologyHint,
+    UpstreamEvidenceBundle,
+)
 from tests.synthetic.rds_postgres.observations import (
     build_observation,
     compute_trajectory_metrics,
@@ -63,3 +70,75 @@ def test_build_observation_includes_correlation_payload_in_canonical_report() ->
         "correlated_signals",
         "most_likely_causal_drivers",
     ]
+
+
+def test_runtime_correlation_smoke_payload_shape() -> None:
+    evidence = UpstreamEvidenceBundle(
+        rds_metrics=(
+            MetricSeries(
+                source="datadog",
+                name="aws.rds.cpuutilization",
+                timestamps=(
+                    "2026-04-15T14:00:00Z",
+                    "2026-04-15T14:01:00Z",
+                    "2026-04-15T14:02:00Z",
+                ),
+                values=(35.0, 92.0, 95.0),
+            ),
+        ),
+        upstream_metrics=(
+            MetricSeries(
+                source="datadog",
+                name="system.cpu.user{service:orders-web}",
+                timestamps=(
+                    "2026-04-15T14:00:00Z",
+                    "2026-04-15T14:01:00Z",
+                    "2026-04-15T14:02:00Z",
+                ),
+                values=(30.0, 90.0, 94.0),
+            ),
+        ),
+        web_request_logs=(
+            LogSignal(
+                source="datadog",
+                name="alb",
+                timestamps=("2026-04-15T14:01:00Z",),
+                messages=("GET /checkout 200",),
+            ),
+        ),
+        app_logs=(
+            LogSignal(
+                source="datadog",
+                name="orders-app",
+                timestamps=("2026-04-15T14:01:00Z",),
+                messages=("checkout fanout started",),
+            ),
+        ),
+        topology_hints=(
+            TopologyHint(
+                source="system.cpu.user{service:orders-web}",
+                target="orders-rds-prod",
+                relation="upstream_of",
+            ),
+        ),
+        operator_hints=("scheduled checkout sync introduced recently",),
+    )
+
+    result = build_runtime_correlation(
+        evidence,
+        target_resource="orders-rds-prod",
+    )
+
+    assert "correlated_signals" in result
+    assert "most_likely_causal_drivers" in result
+
+    signals = result["correlated_signals"]
+
+    assert signals
+    assert {"name", "source", "score"} <= set(signals[0])
+
+    drivers = result["most_likely_causal_drivers"]
+
+    assert drivers
+    assert drivers[0]["confidence"] > 0.0
+    assert "rationale" in drivers[0]

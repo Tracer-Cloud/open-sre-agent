@@ -14,8 +14,8 @@ from typing import Any, cast
 from urllib.parse import parse_qs, urlparse
 
 from app.integrations.verify import resolve_effective_integrations
+from app.remote.error_reporting import report_remote_exception
 from app.services.vercel import VercelClient, VercelConfig, make_vercel_client
-from app.utils.sentry_sdk import report_silent
 
 logger = logging.getLogger(__name__)
 
@@ -313,8 +313,15 @@ def resolve_vercel_config() -> VercelConfig | None:
         return None
     try:
         return VercelConfig.model_validate(config)
-    except Exception as exc:  # pragma: no cover - defensive validation wrapper
-        logger.warning("Failed to resolve Vercel config: %s", exc)
+    except Exception as exc:
+        report_remote_exception(
+            exc,
+            logger=logger,
+            component="vercel_poller",
+            event="config_resolve_failed",
+            message=f"Failed to resolve Vercel config: {exc}",
+            severity="error",
+        )
         return None
 
 
@@ -841,13 +848,19 @@ class VercelPoller:
                         was_processed = await handle_candidate(candidate)
                     except asyncio.CancelledError:
                         raise
-                    except Exception:
-                        logger.exception(
-                            "Vercel poller candidate handling failed for %s",
-                            candidate.dedupe_key,
+                    except Exception as exc:
+                        report_remote_exception(
+                            exc,
+                            logger=logger,
+                            component="vercel_poller",
+                            event="candidate_handler_failed",
+                            message=(
+                                "Background RCA for Vercel deployment "
+                                f"{candidate.dedupe_key} failed"
+                            ),
+                            severity="error",
+                            tags={"candidate_id": candidate.dedupe_key},
                         )
-                        with report_silent("vercel_poller.handle_candidate"):
-                            raise
                     if was_processed:
                         await asyncio.to_thread(
                             self.state_store.mark_processed,
@@ -856,10 +869,15 @@ class VercelPoller:
                         )
             except asyncio.CancelledError:
                 raise
-            except Exception:
-                logger.exception("Vercel poller iteration failed")
-                with report_silent("vercel_poller.iteration"):
-                    raise
+            except Exception as exc:
+                report_remote_exception(
+                    exc,
+                    logger=logger,
+                    component="vercel_poller",
+                    event="poller_iteration_failed",
+                    message="Vercel poller iteration failed",
+                    severity="error",
+                )
 
             await asyncio.sleep(self.settings.interval_seconds)
 

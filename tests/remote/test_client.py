@@ -419,3 +419,69 @@ class TestPreflight:
 
         assert result.ok is False
         assert "403" in (result.error or "")
+
+    def test_fetch_remote_version_reports_fallback_failure(self) -> None:
+        client = RemoteAgentClient("http://host:2024")
+        http_client = MagicMock()
+        http_client.get.side_effect = RuntimeError("version down")
+
+        with patch("app.remote.client.report_remote_exception") as report:
+            result = client._fetch_remote_version(http_client, "0.1.0")
+
+        assert result == ("0.1.0", "/ok")
+        report.assert_called_once()
+        assert report.call_args.kwargs["event"] == "remote_version_fetch_failed"
+        assert report.call_args.kwargs["severity"] == "warning"
+
+    def test_fetch_deep_checks_reports_fallback_failure(self) -> None:
+        client = RemoteAgentClient("http://host:2024")
+        http_client = MagicMock()
+        http_client.get.side_effect = RuntimeError("deep down")
+
+        with patch("app.remote.client.report_remote_exception") as report:
+            result = client._fetch_deep_checks(http_client)
+
+        assert result == []
+        report.assert_called_once()
+        assert report.call_args.kwargs["event"] == "deep_health_fetch_failed"
+        assert report.call_args.kwargs["severity"] == "warning"
+
+    def test_endpoint_exists_reports_probe_failure(self) -> None:
+        client = RemoteAgentClient("http://host:2024")
+        http_client = MagicMock()
+        http_client.get.side_effect = RuntimeError("probe down")
+
+        with patch("app.remote.client.report_remote_exception") as report:
+            assert client._endpoint_exists(http_client, "/investigate") is False
+
+        report.assert_called_once()
+        assert report.call_args.kwargs["event"] == "endpoint_probe_failed"
+        assert report.call_args.kwargs["severity"] == "warning"
+
+    def test_preflight_reports_timeout(self) -> None:
+        client = RemoteAgentClient("http://host:2024")
+        with (
+            patch.object(client, "health", side_effect=httpx.TimeoutException("timed out")),
+            patch("app.remote.client.report_remote_exception") as report,
+        ):
+            result = client.preflight()
+
+        assert result.ok is False
+        assert result.error == "connection timed out"
+        report.assert_called_once()
+        assert report.call_args.kwargs["event"] == "preflight_timeout"
+        assert report.call_args.kwargs["severity"] == "warning"
+
+    def test_preflight_reports_unexpected_failure(self) -> None:
+        client = RemoteAgentClient("http://host:2024")
+        with (
+            patch.object(client, "health", side_effect=RuntimeError("bad shape")),
+            patch("app.remote.client.report_remote_exception") as report,
+        ):
+            result = client.preflight()
+
+        assert result.ok is False
+        assert result.error == "bad shape"
+        report.assert_called_once()
+        assert report.call_args.kwargs["event"] == "preflight_failed"
+        assert report.call_args.kwargs["severity"] == "warning"

@@ -661,6 +661,24 @@ def test_before_send_filters_nested_lists_of_dicts() -> None:
             "RuntimeError",
             "Anthropic request rejected (HTTP 400): Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'You have reached your specified API usage limits. You will regain access on 2026-06-01 at 00:00 UTC.'}, 'request_id': 'req_011CaxxMA8NCSdDvaM2LaRm6'}",
         ),
+        (
+            "RuntimeError",
+            "Bedrock model 'us.anthropic.claude-sonnet-4-6' is not available for your account. Check Bedrock model access in the configured AWS region, AWS Marketplace subscription/payment setup, and IAM permissions including aws-marketplace:ViewSubscriptions and aws-marketplace:Subscribe.",
+        ),
+        # Bedrock cross-region inference profile misconfiguration (issue #2167).
+        (
+            "RuntimeError",
+            "Bedrock model 'anthropic.claude-haiku-4-5-20251001-v1:0' requires a cross-region inference profile. Try prefixing with 'us.' (e.g. 'us.anthropic.claude-haiku-4-5-20251001-v1:0') and update BEDROCK_REASONING_MODEL or BEDROCK_TOOLCALL_MODEL.",
+        ),
+        # agent_llm_client uses "not found" (no "was") unlike llm_client — both must be caught.
+        (
+            "RuntimeError",
+            "Bedrock model 'anthropic.claude-3-sonnet-20240229-v1:0' not found.",
+        ),
+        (
+            "RuntimeError",
+            "OpenAI model 'llama3.2' not found.",
+        ),
     ],
 )
 def test_before_send_drops_operator_actionable_llm_errors(

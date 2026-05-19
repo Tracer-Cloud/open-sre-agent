@@ -6,6 +6,7 @@ from typing import Any
 
 from app.integrations.models import GoogleDocsIntegrationConfig
 from app.services.google_docs import GoogleDocsClient
+from app.tools._telemetry import report_run_error
 from app.tools.tool_decorator import tool
 
 
@@ -195,6 +196,14 @@ def create_google_docs_incident_report(
         }
 
     except Exception as exc:
+        report_run_error(
+            exc,
+            tool_name="create_google_docs_incident_report",
+            source="google_docs",
+            component="app.tools.GoogleDocsCreateReportTool",
+            method="GoogleDocsClient.create_incident_report",
+            extras={"title": title, "severity": severity, "folder_id": folder_id},
+        )
         return {
             "success": False,
             "error": f"Failed to create incident report: {exc}",

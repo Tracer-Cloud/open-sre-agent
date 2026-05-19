@@ -44,8 +44,11 @@ from app.hermes.incident import HermesIncident, IncidentSeverity, LogLevel, LogR
 class PatternRule:
     """Rule that emits one incident per matching log record.
 
-    Patterns are matched case-insensitively against the record's
-    message. Any pattern matching causes the rule to fire.
+    Patterns are matched case-insensitively against ``record.message``
+    only. ``record.raw`` (which includes the timestamp/level/logger
+    prefix) is intentionally excluded so a keyword appearing in a
+    logger name — e.g. ``oom_monitor`` — cannot fire an OOM rule on
+    an otherwise benign message.
     """
 
     name: str
@@ -60,7 +63,7 @@ class PatternRule:
         if record.level.severity_rank < self.min_level.severity_rank:
             return None
         for pattern in self.patterns:
-            if pattern.search(record.message) or pattern.search(record.raw):
+            if pattern.search(record.message):
                 title = self.title_template.format(
                     logger=record.logger or "unknown",
                     level=record.level.value,
@@ -85,6 +88,10 @@ class RepeatRule:
     Used for ``crash_loop`` and any other failure mode that's only
     actionable when it repeats. Each rule keeps its own bounded deque
     keyed by logger; older matches age out automatically.
+
+    As with :class:`PatternRule`, patterns match against
+    ``record.message`` only — never the raw line — so logger names
+    can't accidentally satisfy a rule.
     """
 
     name: str
@@ -101,7 +108,7 @@ class RepeatRule:
             return None
         if record.level.severity_rank < self.min_level.severity_rank:
             return None
-        if not any(p.search(record.message) or p.search(record.raw) for p in self.patterns):
+        if not any(p.search(record.message) for p in self.patterns):
             return None
         key = record.logger or "_unknown"
         bucket = self._hits.setdefault(key, deque())

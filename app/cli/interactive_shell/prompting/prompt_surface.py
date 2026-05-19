@@ -183,7 +183,7 @@ class ShellCompleter(Completer):
                         cmd.name,
                         start_position=-len(parts[0]),
                         display=cmd.name,
-                        display_meta=_short_meta(cmd.help_text),
+                        display_meta=_short_meta(cmd.description),
                     )
             return
 

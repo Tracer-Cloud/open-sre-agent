@@ -532,6 +532,26 @@ def _setup_discord() -> None:
     _register_discord_slash_command(application_id, bot_token)
 
 
+def _setup_whatsapp() -> None:
+    account_sid = _p("Twilio Account SID (starts with AC...)")
+    auth_token = _p("Twilio Auth Token", secret=True)
+    from_number = _p("Twilio WhatsApp From number (e.g. whatsapp:+14155238886)")
+    default_to = _p("Default recipient phone number (optional, e.g. +1234567890)")
+    if not account_sid or not auth_token or not from_number:
+        _die("account_sid, auth_token, and from_number are required.")
+    upsert_integration(
+        "whatsapp",
+        {
+            "credentials": {
+                "account_sid": account_sid,
+                "auth_token": auth_token,
+                "from_number": from_number,
+                "default_to": default_to,
+            }
+        },
+    )
+
+
 def _setup_openclaw() -> None:
     print("  1) stdio (recommended)  2) Streamable HTTP  3) SSE")
     choice = _p("Choice", default="1")
@@ -730,6 +750,32 @@ def _setup_alertmanager() -> None:
     upsert_integration("alertmanager", {"credentials": credentials})
 
 
+def _setup_signoz() -> None:
+    clickhouse_host = _p("ClickHouse host")
+    clickhouse_port = _p("ClickHouse port", default="8123")
+    clickhouse_user = _p("ClickHouse user", default="default")
+    clickhouse_password = _p("ClickHouse password", secret=True)
+    clickhouse_database = _p("ClickHouse database", default="default")
+    url = _p("SigNoz URL (optional)")
+    api_key = _p("SigNoz API key (optional)", secret=True)
+    if not clickhouse_host:
+        _die("clickhouse_host is required.")
+    upsert_integration(
+        "signoz",
+        {
+            "credentials": {
+                "clickhouse_host": clickhouse_host,
+                "clickhouse_port": int(clickhouse_port) if clickhouse_port.isdigit() else 8123,
+                "clickhouse_user": clickhouse_user,
+                "clickhouse_password": clickhouse_password,
+                "clickhouse_database": clickhouse_database,
+                "url": url,
+                "api_key": api_key,
+            }
+        },
+    )
+
+
 _HANDLERS: dict[str, Any] = {
     "alertmanager": _setup_alertmanager,
     "aws": _setup_aws,
@@ -751,9 +797,11 @@ _HANDLERS: dict[str, Any] = {
     "sentry": _setup_sentry,
     "mongodb": _setup_mongodb,
     "discord": _setup_discord,
+    "whatsapp": _setup_whatsapp,
     "openclaw": _setup_openclaw,
     "postgresql": _setup_postgresql,
     "mysql": _setup_mysql,
+    "signoz": _setup_signoz,
 }
 
 

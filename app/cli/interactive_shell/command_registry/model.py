@@ -555,13 +555,19 @@ _MODEL_FIRST_ARGS: tuple[tuple[str, str], ...] = (
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
         "/model",
-        "show or set the active LLM (TTY: bare '/model' opens an inline menu — "
-        "show stays open for more actions; set / restore / toolcall exit after success; "
-        "done or Esc closes; TTY set: LLM provider then reasoning — pick "
-        "'provider default (one step)' to skip toolcall tuning (like bare `/model set p`); "
-        "else '/model show', '/model set <provider> [model] [--toolcall-model <m>]', "
-        "'/model restore [provider]', '/model toolcall set <model>')",
+        "Show or change active LLM settings.",
         _cmd_model,
+        usage=(
+            "/model",
+            "/model show",
+            "/model set <provider> [model] [--toolcall-model <model>]",
+            "/model restore [provider]",
+            "/model toolcall set <model>",
+        ),
+        notes=(
+            "In a TTY, bare /model opens an interactive menu.",
+            "The menu stays open after show actions and closes after set, restore, or toolcall changes.",
+        ),
         first_arg_completions=_MODEL_FIRST_ARGS,
         execution_tier=ExecutionTier.SAFE,
     ),

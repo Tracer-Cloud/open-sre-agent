@@ -153,6 +153,8 @@ class GeminiCLIAdapter:
                 [binary_path, "--version"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=_PROBE_TIMEOUT_SEC,
                 check=False,
             )
@@ -182,6 +184,8 @@ class GeminiCLIAdapter:
                 [binary_path, "-p", "respond with: ok", "--output-format", "json"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=_PROBE_TIMEOUT_SEC,
                 check=False,
                 env=probe_env,

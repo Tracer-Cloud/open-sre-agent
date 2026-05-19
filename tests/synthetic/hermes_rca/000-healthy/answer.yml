@@ -1,0 +1,10 @@
+root_cause_category: healthy
+required_keywords:
+- healthy
+- no failure
+forbidden_categories:
+- unknown
+required_evidence_sources:
+- hermes_session_log
+- hermes_runtime_state
+model_response: Hermes session healthy; no failure detected.

@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 
+from app.tools._telemetry import report_run_error
 from app.tools.tool_decorator import tool
 
 _DEFAULT_MAX_RESULTS = 100
@@ -113,6 +114,14 @@ def query_azure_monitor_logs(
         response.raise_for_status()
         body = response.json()
     except Exception as err:
+        report_run_error(
+            err,
+            tool_name="query_azure_monitor_logs",
+            source="azure",
+            component="app.tools.AzureMonitorLogsTool",
+            method="httpx.post",
+            extras={"workspace_id": workspace, "integration_id": integration_id},
+        )
         return {"source": "azure", "available": False, "error": str(err), "rows": []}
 
     tables = body.get("tables", []) if isinstance(body, dict) else []

@@ -10,6 +10,7 @@ from typing import Any
 
 import httpx
 
+from app.remote.error_reporting import report_remote_exception
 from app.remote.stream import StreamEvent, parse_sse_stream
 
 logger = logging.getLogger(__name__)
@@ -154,7 +155,16 @@ class RemoteAgentClient:
                 if parsed:
                     remote_version = parsed
                     version_source = "/version"
-        except Exception:
+        except Exception as exc:
+            report_remote_exception(
+                exc,
+                logger=logger,
+                component="client",
+                event="remote_version_fetch_failed",
+                message="Remote version probe failed",
+                severity="warning",
+                extras={"base_url": self.base_url, "endpoint": "/version"},
+            )
             return remote_version, version_source
         return remote_version, version_source
 
@@ -183,7 +193,16 @@ class RemoteAgentClient:
                         "detail": detail,
                     }
                 )
-        except Exception:
+        except Exception as exc:
+            report_remote_exception(
+                exc,
+                logger=logger,
+                component="client",
+                event="deep_health_fetch_failed",
+                message="Remote deep health probe failed",
+                severity="warning",
+                extras={"base_url": self.base_url, "endpoint": "/health/deep"},
+            )
             return []
         return checks
 
@@ -201,7 +220,16 @@ class RemoteAgentClient:
         url = f"{self.base_url}{path}"
         try:
             response = client.get(url, headers=self._headers)
-        except Exception:
+        except Exception as exc:
+            report_remote_exception(
+                exc,
+                logger=logger,
+                component="client",
+                event="endpoint_probe_failed",
+                message=f"Remote endpoint probe failed for {path}",
+                severity="warning",
+                extras={"base_url": self.base_url, "endpoint": path},
+            )
             return False
         return response.status_code != 404
 
@@ -261,14 +289,50 @@ class RemoteAgentClient:
                 latency_ms=latency_ms,
                 system=system,
             )
-        except httpx.TimeoutException:
+        except httpx.TimeoutException as exc:
+            report_remote_exception(
+                exc,
+                logger=logger,
+                component="client",
+                event="preflight_timeout",
+                message="Remote preflight timed out",
+                severity="warning",
+                extras={"base_url": self.base_url},
+            )
             return PreflightResult(ok=False, error="connection timed out")
-        except httpx.ConnectError:
+        except httpx.ConnectError as exc:
+            report_remote_exception(
+                exc,
+                logger=logger,
+                component="client",
+                event="preflight_connection_refused",
+                message="Remote preflight connection failed",
+                severity="warning",
+                extras={"base_url": self.base_url},
+            )
             return PreflightResult(ok=False, error="connection refused")
         except httpx.HTTPStatusError as exc:
+            report_remote_exception(
+                exc,
+                logger=logger,
+                component="client",
+                event="preflight_http_error",
+                message=f"Remote preflight returned HTTP {exc.response.status_code}",
+                severity="warning",
+                extras={"base_url": self.base_url, "status_code": exc.response.status_code},
+            )
             code = exc.response.status_code
             return PreflightResult(ok=False, error=f"HTTP {code}")
         except Exception as exc:
+            report_remote_exception(
+                exc,
+                logger=logger,
+                component="client",
+                event="preflight_failed",
+                message="Remote preflight failed",
+                severity="warning",
+                extras={"base_url": self.base_url},
+            )
             return PreflightResult(ok=False, error=str(exc) or "unknown error")
 
     def probe_health(

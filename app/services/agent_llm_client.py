@@ -38,8 +38,12 @@ class AgentLLMResponse:
     content: str
     tool_calls: list[ToolCall] = field(default_factory=list)
     stop_reason: str = "end_turn"
-    # Raw Anthropic content blocks — used to build the next assistant message
-    # for providers that require full content-block history (Anthropic).
+    # Raw provider message data for the next assistant turn.
+    # Anthropic: list of content blocks (always populated).
+    # OpenAI-compatible: dict with role/content/tool_calls, populated only when
+    # provider-specific extras (e.g. Gemini's thought_signature) need to be
+    # preserved; otherwise None and the assistant message is reconstructed via
+    # build_assistant_message.
     raw_content: Any = None
 
     @property
@@ -95,7 +99,14 @@ class AnthropicAgentClient:
         system: str | None = None,
         tools: list[dict[str, Any]] | None = None,
     ) -> AgentLLMResponse:
-        from anthropic import AuthenticationError, BadRequestError, NotFoundError
+        from anthropic import (
+            AuthenticationError,
+            BadRequestError,
+            InternalServerError,
+            NotFoundError,
+            PermissionDeniedError,
+            RateLimitError,
+        )
 
         kwargs: dict[str, Any] = {
             "model": self._model,
@@ -117,10 +128,42 @@ class AnthropicAgentClient:
                 raise RuntimeError(self._authentication_error_message()) from err
             except NotFoundError as err:
                 raise RuntimeError(self._model_not_found_error_message()) from err
+            except PermissionDeniedError as err:
+                raise RuntimeError(self._permission_denied_error_message()) from err
             except BadRequestError as err:
-                raise RuntimeError(
-                    f"{self.provider_name} request rejected (HTTP 400): {err.message}"
-                ) from err
+                raise RuntimeError(self._bad_request_error_message(err)) from err
+            except RateLimitError as err:
+                raise RuntimeError(f"{self.provider_name} rate limit exceeded: {err}") from err
+            except InternalServerError as err:
+                body = getattr(err, "body", {}) or {}
+                if (
+                    isinstance(body, dict)
+                    and isinstance(body.get("data"), dict)
+                    and "model" in body["data"]
+                ):
+                    raise RuntimeError(
+                        f"{self.provider_name} model '{self._model}' is not configured or billing is not enabled: "
+                        f"{body.get('message', str(err))}"
+                    ) from err
+                last_err = err
+                if attempt == _RETRY_MAX_ATTEMPTS - 1:
+                    raise RuntimeError(
+                        f"{self.provider_name} API failed after {_RETRY_MAX_ATTEMPTS} attempts: {err}"
+                    ) from err
+                time.sleep(backoff)
+                backoff *= 2
+            except TypeError as err:
+                # Anthropic SDK raises TypeError from _validate_headers when the API key is
+                # missing or malformed — retrying won't fix a credential problem.
+                if "could not resolve authentication" in str(err).lower():
+                    raise RuntimeError(self._authentication_error_message()) from err
+                last_err = err
+                if attempt == _RETRY_MAX_ATTEMPTS - 1:
+                    raise RuntimeError(
+                        f"{self.provider_name} API failed after {_RETRY_MAX_ATTEMPTS} attempts: {err}"
+                    ) from err
+                time.sleep(backoff)
+                backoff *= 2
             except Exception as err:
                 last_err = err
                 if attempt == _RETRY_MAX_ATTEMPTS - 1:
@@ -174,6 +217,12 @@ class AnthropicAgentClient:
     def _model_not_found_error_message(self) -> str:
         return f"{self.provider_name} model '{self._model}' not found."
 
+    def _permission_denied_error_message(self) -> str:
+        return f"{self.provider_name} API access denied. Check your API key permissions."
+
+    def _bad_request_error_message(self, err: Any) -> str:
+        return f"{self.provider_name} request rejected (HTTP 400): {err.message}"
+
 
 class BedrockAgentClient(AnthropicAgentClient):
     """Bedrock-backed client using AnthropicBedrock SDK."""
@@ -196,6 +245,40 @@ class BedrockAgentClient(AnthropicAgentClient):
             timeout=_CLIENT_TIMEOUT_SEC,
         )
         super().__init__(model=model, max_tokens=max_tokens, client=bedrock_client)
+
+    def _permission_denied_error_message(self) -> str:
+        return (
+            f"Bedrock model '{self._model}' is not available for your account. "
+            "Check Bedrock model access in the configured AWS region, AWS Marketplace "
+            "subscription/payment setup, and IAM permissions including "
+            "aws-marketplace:ViewSubscriptions and aws-marketplace:Subscribe."
+        )
+
+    def _bad_request_error_message(self, err: Any) -> str:
+        err_str = str(err)
+        if "on-demand throughput" in err_str or "inference profile" in err_str.lower():
+            return (
+                f"Bedrock model '{self._model}' requires a cross-region inference profile. "
+                f"Try prefixing with 'us.' (e.g. 'us.{self._model}') and update "
+                "BEDROCK_REASONING_MODEL or BEDROCK_TOOLCALL_MODEL."
+            )
+        return f"{self.provider_name} request rejected (HTTP 400): {err.message}"
+
+
+_OPENAI_O_SERIES_RE = re.compile(r"(?:^|[^A-Za-z0-9])o\d", re.IGNORECASE)
+_OPENAI_GPT5_RE = re.compile(r"(?:^|[^A-Za-z0-9])gpt-5", re.IGNORECASE)
+
+
+def _openai_max_token_kwarg(model: str) -> str:
+    # OpenAI o-series (o1, o3, o4-mini, …) and gpt-5 series reject max_tokens.
+    # O-series: matches a bare ``o<digit>`` token at the start of the name or
+    # following a non-alphanumeric separator, so vendor-prefixed routes
+    # (``openai/o4-mini``, ``azure/o3``) and custom deployments are detected.
+    # gpt-5: matches ``gpt-5`` at the start or after a separator, covering
+    # gpt-5, gpt-5o, gpt-5o-mini, and future gpt-5* variants.
+    if _OPENAI_O_SERIES_RE.search(model) or _OPENAI_GPT5_RE.search(model):
+        return "max_completion_tokens"
+    return "max_tokens"
 
 
 class OpenAIAgentClient:
@@ -228,18 +311,21 @@ class OpenAIAgentClient:
         system: str | None = None,
         tools: list[dict[str, Any]] | None = None,
     ) -> AgentLLMResponse:
-        from openai import AuthenticationError, BadRequestError, NotFoundError
+        from openai import (
+            AuthenticationError,
+            BadRequestError,
+            NotFoundError,
+            PermissionDeniedError,
+            RateLimitError,
+        )
 
         msgs = list(messages)
         if system:
             msgs = [{"role": "system", "content": system}] + msgs
 
-        # OpenAI o-series reasoning models (o1, o3, o4, and future variants) use
-        # max_completion_tokens; all other models use max_tokens.
-        tokens_key = "max_completion_tokens" if re.match(r"^o\d", self._model) else "max_tokens"
         kwargs: dict[str, Any] = {
             "model": self._model,
-            tokens_key: self._max_tokens,
+            _openai_max_token_kwarg(self._model): self._max_tokens,
             "messages": msgs,
         }
         if tools:
@@ -258,6 +344,10 @@ class OpenAIAgentClient:
                 raise RuntimeError(f"OpenAI model '{self._model}' not found.") from err
             except BadRequestError as err:
                 raise RuntimeError(f"OpenAI request rejected: {err}") from err
+            except RateLimitError as err:
+                raise RuntimeError(f"OpenAI rate limit exceeded: {err}") from err
+            except PermissionDeniedError as err:
+                raise RuntimeError(f"OpenAI request forbidden: {err}") from err
             except Exception as err:
                 last_err = err
                 if attempt == _RETRY_MAX_ATTEMPTS - 1:
@@ -267,19 +357,22 @@ class OpenAIAgentClient:
         else:
             raise RuntimeError("OpenAI invocation failed") from last_err
 
+        if not hasattr(response, "choices") or not response.choices:
+            raise RuntimeError(
+                f"OpenAI API returned an unexpected response: {type(response).__name__}"
+            )
         choice = response.choices[0]
         msg = choice.message
         content = msg.content or ""
         stop_reason = choice.finish_reason or "stop"
 
         tool_calls: list[ToolCall] = []
-        if msg.tool_calls:
-            for tc in msg.tool_calls:
-                try:
-                    input_dict = json.loads(tc.function.arguments)
-                except json.JSONDecodeError:
-                    input_dict = {}
-                tool_calls.append(ToolCall(id=tc.id, name=tc.function.name, input=input_dict))
+        for tc in msg.tool_calls or []:
+            try:
+                input_dict = json.loads(tc.function.arguments)
+            except json.JSONDecodeError:
+                input_dict = {}
+            tool_calls.append(ToolCall(id=tc.id, name=tc.function.name, input=input_dict))
 
         return AgentLLMResponse(
             content=content,
@@ -288,7 +381,7 @@ class OpenAIAgentClient:
             # Preserve the raw API message so provider-specific fields (e.g. Gemini
             # thought_signature in tool_calls) survive into the next conversation turn.
             # exclude_none=True strips null fields (refusal, audio, function_call …)
-            # that Gemini's strict endpoint would reject on the next turn.
+            # that strict OpenAI-compatible endpoints may reject on replay.
             raw_content=msg.model_dump(exclude_none=True),
         )
 
@@ -324,7 +417,167 @@ class OpenAIAgentClient:
         return msg
 
 
-_AgentClientType = AnthropicAgentClient | OpenAIAgentClient
+def _get_cli_provider_registration(provider: str) -> Any:
+    """Return the CLI registry entry for *provider*, or None if not CLI-backed."""
+    from app.integrations.llm_cli.registry import get_cli_provider_registration
+
+    return get_cli_provider_registration(provider)
+
+
+class CLIBackedAgentClient:
+    """Tool-calling wrapper for subprocess CLI providers (codex, claude-code, etc.).
+
+    CLI adapters don't expose a native tool-calling API. This client implements
+    the investigation agent's ReAct interface by embedding tool schemas in the
+    prompt as JSON and parsing the model's text response for tool call JSON.
+    Each invoke flattens the full conversation history into a single stdin prompt.
+    """
+
+    _TOOL_CALL_INSTRUCTION = (
+        "You are an SRE investigation agent. Use the available tools to investigate "
+        "the alert. On each turn respond with EITHER:\n"
+        '  (a) A JSON object: {"tool_calls": [{"id": "<unique_id>", "name": "<tool>",'
+        ' "input": {<args>}}]}\n'
+        "  (b) A plain-text final answer when investigation is complete.\n"
+        "Respond with JSON only when calling tools; respond with plain text only for the final answer."
+    )
+
+    def __init__(self, adapter: Any, *, model: str | None = None) -> None:
+        from app.integrations.llm_cli.runner import CLIBackedLLMClient
+
+        self._adapter = adapter
+        self._model = model
+        # Reuse one subprocess client so the 45s probe cache in CLIBackedLLMClient
+        # applies across ReAct iterations instead of re-probing every invoke.
+        self._cli_client = CLIBackedLLMClient(adapter, model=self._model)
+
+    def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
+        # Return the same dicts — used only to pass back into invoke() below.
+        return [
+            {"name": t.name, "description": t.description, "input_schema": t.input_schema}
+            for t in tools
+        ]
+
+    def invoke(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        system: str | None = None,
+        tools: list[dict[str, Any]] | None = None,
+    ) -> AgentLLMResponse:
+        from app.integrations.llm_cli.text import flatten_messages_to_prompt
+
+        tool_block = ""
+        if tools:
+            tool_lines = json.dumps(tools, indent=2)
+            tool_block = f"\n\nAvailable tools (JSON schema):\n{tool_lines}\n"
+
+        system_block = f"System: {system}\n" if system else ""
+        instruction = self._TOOL_CALL_INSTRUCTION + tool_block
+        prompt = f"{system_block}{instruction}\n\n{flatten_messages_to_prompt(messages)}"
+
+        response = self._cli_client.invoke(prompt)
+        text = response.content.strip()
+
+        # Try to parse a JSON tool call response.
+        tool_calls: list[ToolCall] = []
+        parsed_json = _try_parse_tool_call_json(text)
+        if parsed_json is not None:
+            raw_calls = parsed_json.get("tool_calls")
+            if isinstance(raw_calls, list):
+                for i, tc in enumerate(raw_calls):
+                    if not isinstance(tc, dict):
+                        continue
+                    name = tc.get("name")
+                    if not isinstance(name, str) or not name.strip():
+                        continue
+                    raw_input = tc.get("input")
+                    input_payload = raw_input if isinstance(raw_input, dict) else {}
+                    tool_calls.append(
+                        ToolCall(
+                            id=str(tc.get("id") or f"call_{i}"),
+                            name=name.strip(),
+                            input=input_payload,
+                        )
+                    )
+            content = "" if tool_calls else text
+        else:
+            content = text
+
+        return AgentLLMResponse(
+            content=content,
+            tool_calls=tool_calls,
+            stop_reason="tool_use" if tool_calls else "end_turn",
+            raw_content=None,  # None so _build_assistant_msg falls through to build_assistant_message
+        )
+
+    @staticmethod
+    def build_tool_result_message(tool_calls: list[ToolCall], results: list[Any]) -> dict[str, Any]:
+        parts = [
+            f"Tool result for {tc.name} (id={tc.id}): {json.dumps(result, default=str)}"
+            for tc, result in zip(tool_calls, results)
+        ]
+        return {"role": "user", "content": "\n".join(parts)}
+
+    @staticmethod
+    def build_assistant_message(content: str, tool_calls: list[ToolCall]) -> dict[str, Any]:
+        """Match OpenAIAgentClient signature; embed tool JSON in content for CLI history."""
+        if tool_calls:
+            payload = {
+                "tool_calls": [
+                    {"id": tc.id, "name": tc.name, "input": tc.input} for tc in tool_calls
+                ]
+            }
+            tool_json = json.dumps(payload)
+            if content.strip():
+                return {"role": "assistant", "content": f"{content.strip()}\n\n{tool_json}"}
+            return {"role": "assistant", "content": tool_json}
+        return {"role": "assistant", "content": content}
+
+
+def _try_parse_tool_call_json(text: str) -> dict[str, Any] | None:
+    """Return parsed JSON dict if *text* contains a tool_calls JSON object.
+
+    Uses :meth:`json.JSONDecoder.raw_decode` so a single JSON value is parsed
+    without a greedy ``{...}`` span swallowing trailing brace-containing prose and
+    breaking :func:`json.loads`.
+    """
+    cleaned = text.strip()
+    fence = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned)
+    candidate = (fence.group(1).strip() if fence else cleaned).strip()
+    if not candidate:
+        return None
+
+    decoder = json.JSONDecoder()
+
+    def _decode_at(idx: int) -> dict[str, Any] | None:
+        try:
+            payload, _end = decoder.raw_decode(candidate, idx)
+        except json.JSONDecodeError:
+            return None
+        if isinstance(payload, dict) and "tool_calls" in payload:
+            return payload
+        return None
+
+    # Fast path: candidate is pure JSON (the preferred model behavior).
+    parsed = _decode_at(0)
+    if parsed is not None:
+        return parsed
+
+    # Recovery path: some CLI models prepend unfenced prose before the JSON
+    # object. Scan object starts and accept the first dict that contains
+    # "tool_calls". Skip index 0 because the fast path already attempted it.
+    for match in re.finditer(r"\{", candidate):
+        if match.start() == 0:
+            continue
+        parsed = _decode_at(match.start())
+        if parsed is not None:
+            return parsed
+
+    return None
+
+
+_AgentClientType = AnthropicAgentClient | OpenAIAgentClient | CLIBackedAgentClient
 _agent_client: _AgentClientType | None = None
 
 
@@ -363,6 +616,9 @@ def get_agent_llm() -> _AgentClientType:
             model=settings.bedrock_reasoning_model,
             max_tokens=BEDROCK_LLM_CONFIG.max_tokens,
         )
+    elif (cli_reg := _get_cli_provider_registration(provider)) is not None:
+        model_name = os.getenv(cli_reg.model_env_key, "").strip() or None
+        _agent_client = CLIBackedAgentClient(cli_reg.adapter_factory(), model=model_name)
     else:
         # Default: Anthropic
         from app.config import ANTHROPIC_LLM_CONFIG
