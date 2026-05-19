@@ -10,10 +10,15 @@ from app.credentials import _tenant_ctx, set_tenant_context
 
 _EXEMPT_PATHS: frozenset[str] = frozenset({"/", "/health", "/ok"})
 
+# Credentials endpoints handle their own admin JWT verification.
+_EXEMPT_PREFIXES: tuple[str, ...] = ("/api/v1/tenants",)
+
 
 class TenantMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         if request.url.path in _EXEMPT_PATHS:
+            return await call_next(request)
+        if any(request.url.path.startswith(prefix) for prefix in _EXEMPT_PREFIXES):
             return await call_next(request)
 
         raw = request.headers.get("Authorization", "")

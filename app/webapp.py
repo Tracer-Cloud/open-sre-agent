@@ -11,6 +11,7 @@ from app.entrypoints.alerts import router as alerts_router
 from app.entrypoints.investigations import router as investigations_router
 from app.entrypoints.runbooks import router as runbooks_router
 from app.middleware.tenant import TenantMiddleware
+from app.routers.credentials import router as credentials_router
 from app.utils.sentry_sdk import init_sentry
 from app.version import get_version
 
@@ -32,6 +33,7 @@ app = FastAPI()
 app.include_router(investigations_router)
 app.include_router(alerts_router)
 app.include_router(runbooks_router)
+app.include_router(credentials_router)
 app.add_middleware(TenantMiddleware)
 
 
