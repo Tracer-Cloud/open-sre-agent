@@ -252,11 +252,18 @@ class TopologyMetadata(TypedDict, total=False):
 
     Present in fixtures that exercise the DNS → LB → Target Group → EC2 → RDS
     request path. Absent in legacy RDS-only scenarios (000–014).
+
+    ``target_group_arn`` accepts a single string (back-compat with scenarios
+    001–020) or a list of strings (multi-target-group scenarios like the
+    multi-tenant noisy-neighbour fixture flagged on #1832 review, #2100). The
+    scenario loader normalises both shapes into ``target_group_arns`` so
+    consumers below the field-shape boundary always see a list.
     """
 
     vpc_id: str
     load_balancer_arn: str
-    target_group_arn: str
+    target_group_arn: str | list[str]
+    target_group_arns: list[str]
     tiers: list[TopologyTier]
 
 
@@ -620,7 +627,49 @@ def validate_scenario_metadata(data: dict[str, Any]) -> ScenarioMetadataSchema:
             f"{ctx}: unknown evidence source(s) {unknown}; expected subset of {sorted(VALID_EVIDENCE_SOURCES)}"
         )
 
+    topology = data.get("topology")
+    if isinstance(topology, dict):
+        _normalize_topology_target_groups(topology, ctx=ctx)
+
     return data  # type: ignore[return-value]
+
+
+def _normalize_topology_target_groups(topology: dict[str, Any], *, ctx: str) -> None:
+    """Populate ``topology['target_group_arns']`` from the string-or-list field.
+
+    Scenarios 001–020 use a single ``target_group_arn: str``. Multi-target-group
+    scenarios pass either a list there or a separate ``target_group_arns`` list.
+    Downstream consumers (mock_aws_backend, candidate scoring, trajectory
+    grader) always read ``target_group_arns``; this helper guarantees the list
+    exists regardless of the input shape.
+    """
+    arn = topology.get("target_group_arn")
+    arns = topology.get("target_group_arns")
+
+    if arns is not None:
+        if not isinstance(arns, list) or not all(
+            isinstance(item, str) and item.strip() for item in arns
+        ):
+            raise ValueError(
+                f"{ctx}: 'topology.target_group_arns' must be a non-empty list of strings when set"
+            )
+        normalised = list(arns)
+    elif isinstance(arn, list):
+        if not all(isinstance(item, str) and item.strip() for item in arn):
+            raise ValueError(
+                f"{ctx}: 'topology.target_group_arn' list entries must be non-empty strings"
+            )
+        normalised = list(arn)
+    elif isinstance(arn, str):
+        normalised = [arn] if arn.strip() else []
+    elif arn is None:
+        normalised = []
+    else:
+        raise ValueError(
+            f"{ctx}: 'topology.target_group_arn' must be a string or a list of strings"
+        )
+
+    topology["target_group_arns"] = normalised
 
 
 # ---------------------------------------------------------------------------
