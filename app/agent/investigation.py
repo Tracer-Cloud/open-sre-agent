@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
+import sys
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
@@ -478,11 +479,31 @@ def _run_parallel(
     if len(tool_calls) == 1:
         return [_call(tool_calls[0])]
 
+    # Interpreter teardown (Ctrl+C late in the run, atexit chain) races against
+    # ThreadPoolExecutor.submit and raises "cannot schedule new futures after
+    # interpreter shutdown" (#2194). Detect it up front, and treat any RuntimeError
+    # raised from submit during the same race as a signal to drop back to sequential
+    # execution so the investigation still completes instead of losing every tool call.
+    if sys.is_finalizing():
+        logger.debug("[_run_parallel] interpreter finalizing; running tools sequentially")
+        return [_call(tc) for tc in tool_calls]
+
     results: list[Any] = [None] * len(tool_calls)
-    with ThreadPoolExecutor(max_workers=min(_TOOL_EXECUTOR_WORKERS, len(tool_calls))) as pool:
-        futures = {pool.submit(_call, tc): i for i, tc in enumerate(tool_calls)}
-        for fut in as_completed(futures):
-            results[futures[fut]] = fut.result()
+    try:
+        with ThreadPoolExecutor(max_workers=min(_TOOL_EXECUTOR_WORKERS, len(tool_calls))) as pool:
+            futures = {pool.submit(_call, tc): i for i, tc in enumerate(tool_calls)}
+            for fut in as_completed(futures):
+                results[futures[fut]] = fut.result()
+    except RuntimeError as exc:
+        if "interpreter shutdown" not in str(exc):
+            raise
+        logger.warning(
+            "[_run_parallel] ThreadPoolExecutor raced with interpreter shutdown; "
+            "falling back to sequential tool execution",
+        )
+        for i, tc in enumerate(tool_calls):
+            if results[i] is None:
+                results[i] = _call(tc)
     return results
 
 

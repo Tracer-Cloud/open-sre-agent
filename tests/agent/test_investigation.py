@@ -8,6 +8,7 @@ from app.agent.investigation import (
     ConnectedInvestigationAgent,
     _availability_view,
     _build_synthetic_assistant_tool_call_msg,
+    _run_parallel,
 )
 from app.services.agent_llm_client import CLIBackedAgentClient, ToolCall
 
@@ -182,3 +183,96 @@ def test_run_gracefully_handles_single_tool_call_only_model() -> None:
     assert "tool calling" in result["root_cause"].lower()
     assert result["remediation_steps"]
     assert result["causal_chain"]
+
+
+def _make_tool_call(name: str, id_: str = "call-1") -> ToolCall:
+    return ToolCall(id=id_, name=name, input={})
+
+
+def _registered_tool(name: str, run_value: object) -> MagicMock:
+    """Build a minimal stand-in for ``RegisteredTool`` that ``_run_parallel`` can drive."""
+    tool = MagicMock(name=f"tool[{name}]")
+    tool.name = name
+    tool.extract_params.return_value = {}
+    tool.run.return_value = run_value
+    return tool
+
+
+def test_run_parallel_falls_back_to_sequential_on_interpreter_shutdown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Sentry-reported #2194: ``ThreadPoolExecutor.submit`` can race the interpreter
+    shutdown handlers and raise ``RuntimeError: cannot schedule new futures after
+    interpreter shutdown``. _run_parallel must catch that, drop back to sequential
+    execution, and surface real tool results instead of letting the investigation
+    lose every parallel tool call."""
+
+    def _boom_submit(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("cannot schedule new futures after interpreter shutdown")
+
+    monkeypatch.setattr(
+        "app.agent.investigation.ThreadPoolExecutor.submit",
+        _boom_submit,
+    )
+
+    tool_calls = [_make_tool_call("alpha", id_="a"), _make_tool_call("beta", id_="b")]
+    tools = [
+        _registered_tool("alpha", {"out": "A"}),
+        _registered_tool("beta", {"out": "B"}),
+    ]
+
+    results = _run_parallel(tool_calls, tools, resolved_integrations={})
+
+    assert results == [{"out": "A"}, {"out": "B"}]
+
+
+def test_run_parallel_skips_executor_when_interpreter_is_finalizing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If ``sys.is_finalizing()`` is already true when _run_parallel is entered,
+    we should never touch the executor — go straight to sequential execution."""
+    monkeypatch.setattr("app.agent.investigation.sys.is_finalizing", lambda: True)
+
+    submit_calls: list[object] = []
+
+    def _track_submit(*args: object, **kwargs: object) -> None:
+        submit_calls.append((args, kwargs))
+        raise AssertionError("submit must not be called when sys.is_finalizing()")
+
+    monkeypatch.setattr(
+        "app.agent.investigation.ThreadPoolExecutor.submit",
+        _track_submit,
+    )
+
+    tool_calls = [_make_tool_call("alpha", id_="a"), _make_tool_call("beta", id_="b")]
+    tools = [
+        _registered_tool("alpha", "out-A"),
+        _registered_tool("beta", "out-B"),
+    ]
+
+    results = _run_parallel(tool_calls, tools, resolved_integrations={})
+
+    assert results == ["out-A", "out-B"]
+    assert submit_calls == []
+
+
+def test_run_parallel_re_raises_non_shutdown_runtime_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Defensive: a generic RuntimeError that's *not* the interpreter-shutdown
+    race must still propagate so we don't accidentally swallow real bugs in
+    the executor wiring."""
+
+    def _boom_submit(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("queue is full")  # unrelated to shutdown
+
+    monkeypatch.setattr(
+        "app.agent.investigation.ThreadPoolExecutor.submit",
+        _boom_submit,
+    )
+
+    tool_calls = [_make_tool_call("alpha", id_="a"), _make_tool_call("beta", id_="b")]
+    tools = [_registered_tool("alpha", "x"), _registered_tool("beta", "y")]
+
+    with pytest.raises(RuntimeError, match="queue is full"):
+        _run_parallel(tool_calls, tools, resolved_integrations={})
