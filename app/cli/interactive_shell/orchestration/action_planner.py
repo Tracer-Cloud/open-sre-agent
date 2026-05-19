@@ -322,10 +322,14 @@ def plan_actions_with_unhandled(message: str) -> tuple[list[PlannedAction], bool
     # payload into adjacent clauses ("... investigation" + 'send it "hello"').
     # When every unmatched clause is one of those fragments, treat the full request
     # as fully handled by the synthesized investigation action.
-    if has_unhandled_clause and has_investigation and all(
-        "investigation" in clause.text.lower()
-        or re.match(r'^\s*send\s+it\s+(?:"|\')', clause.text, re.IGNORECASE) is not None
-        for clause in unmatched_clauses
+    if (
+        has_unhandled_clause
+        and has_investigation
+        and all(
+            "investigation" in clause.text.lower()
+            or re.match(r'^\s*send\s+it\s+(?:"|\')', clause.text, re.IGNORECASE) is not None
+            for clause in unmatched_clauses
+        )
     ):
         has_unhandled_clause = False
 

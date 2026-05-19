@@ -65,11 +65,15 @@ class TestLiveClassifierBehavior:
     def test_follow_up_prompt_with_prior_state_never_raises(self) -> None:
         _require_live_llm_key()
         session = _fresh_session(with_prior_state=True)
-        decision = classifier.classify_intent_with_llm("what changed since that root cause?", session)
+        decision = classifier.classify_intent_with_llm(
+            "what changed since that root cause?", session
+        )
         assert decision is None or isinstance(decision.route_kind, RouteKind)
 
     def test_follow_up_is_overridden_without_prior_state(self) -> None:
         _require_live_llm_key()
         session = _fresh_session(with_prior_state=False)
-        decision = classifier.classify_intent_with_llm("what changed since that root cause?", session)
+        decision = classifier.classify_intent_with_llm(
+            "what changed since that root cause?", session
+        )
         assert decision is None or decision.route_kind != RouteKind.FOLLOW_UP

@@ -1178,7 +1178,7 @@ def run_text_investigation(
         session.record("alert", alert_text, ok=False)
         return
 
-    console.print(f'[bold]investigation:[/bold] {escape(alert_text)}')
+    console.print(f"[bold]investigation:[/bold] {escape(alert_text)}")
     task = session.task_registry.create(TaskKind.INVESTIGATION, command=f"investigate:{alert_text}")
     task.mark_running()
     try:

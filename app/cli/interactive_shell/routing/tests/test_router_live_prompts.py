@@ -51,10 +51,7 @@ def _load_prompt_cases(filename: str) -> list[RouterLivePromptCase]:
 
         expected_kind = str(raw_case.get("expected_kind", "")).strip()
         if expected_kind not in {kind.value for kind in RouteKind}:
-            msg = (
-                f"Fixture {filename} case {case_id!r} has invalid expected_kind "
-                f"{expected_kind!r}"
-            )
+            msg = f"Fixture {filename} case {case_id!r} has invalid expected_kind {expected_kind!r}"
             raise ValueError(msg)
 
         case: RouterLivePromptCase = {

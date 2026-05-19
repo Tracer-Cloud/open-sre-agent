@@ -578,10 +578,14 @@ def extract_quoted_investigation_request(clause: PromptClause) -> PlannedAction 
     match = QUOTED_INVESTIGATION_RE.search(clause.text)
     if match is None:
         return None
-    payload = (match.group("double") or match.group("single") or match.group("backtick") or "").strip()
+    payload = (
+        match.group("double") or match.group("single") or match.group("backtick") or ""
+    ).strip()
     if not payload:
         return None
-    group_name = "double" if match.group("double") else "single" if match.group("single") else "backtick"
+    group_name = (
+        "double" if match.group("double") else "single" if match.group("single") else "backtick"
+    )
     return investigation_action(payload, clause.position + match.start(group_name))
 
 
@@ -589,10 +593,14 @@ def extract_quoted_investigation_request_text(text: str) -> PlannedAction | None
     match = QUOTED_INVESTIGATION_RE.search(text)
     if match is None:
         return None
-    payload = (match.group("double") or match.group("single") or match.group("backtick") or "").strip()
+    payload = (
+        match.group("double") or match.group("single") or match.group("backtick") or ""
+    ).strip()
     if not payload:
         return None
-    group_name = "double" if match.group("double") else "single" if match.group("single") else "backtick"
+    group_name = (
+        "double" if match.group("double") else "single" if match.group("single") else "backtick"
+    )
     return investigation_action(payload, match.start(group_name))
 
 

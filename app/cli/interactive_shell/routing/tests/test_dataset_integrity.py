@@ -111,6 +111,5 @@ def test_routing_test_modules_do_not_use_mock_patterns() -> None:
 
     assert not violations, (
         "No-mocks policy violated in routing tests. "
-        "Remove mock usage from canonical routing suites.\n"
-        + "\n".join(violations)
+        "Remove mock usage from canonical routing suites.\n" + "\n".join(violations)
     )
