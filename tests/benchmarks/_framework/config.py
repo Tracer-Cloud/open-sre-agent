@@ -56,9 +56,13 @@ def benchmark_config_from_dict(payload: dict[str, Any]) -> BenchmarkConfig:
     modes = _as_tuple(payload.get("modes", list(DEFAULT_MODES)), field_name="modes")
     if not modes:
         modes = DEFAULT_MODES
-    unsupported_modes = sorted(set(modes) - {"opensre+llm", "llm_alone"})
+    unsupported_modes = sorted(set(modes) - {"opensre+llm"})
     if unsupported_modes:
-        raise ValueError(f"unsupported modes: {', '.join(unsupported_modes)}")
+        raise ValueError(
+            f"unsupported modes: {', '.join(unsupported_modes)}. "
+            "The framework compares against published LLM-alone paper baselines "
+            "in reports; it does not execute an LLM-alone runner."
+        )
 
     formats = _as_tuple(
         payload.get("report_formats", list(DEFAULT_REPORT_FORMATS)),

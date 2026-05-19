@@ -38,6 +38,10 @@ the checked-in paper A@1 comparison for GPT-4o, GPT-5, Claude-4-Sonnet, and
 DeepSeek-V3.2. Use `workers: 1` in YAML for serial execution; configs default to
 parallel execution.
 
+The executable mode is `opensre+llm`. The LLM-alone column comes from the
+published Cloud-OpsBench paper baselines and is added during report rendering;
+the harness intentionally does not relabel an OpenSRE run as an LLM-alone run.
+
 Run only a subset of cases:
 
 ```bash

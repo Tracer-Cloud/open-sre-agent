@@ -17,3 +17,8 @@ def test_benchmark_config_defaults_parallel_workers() -> None:
 def test_benchmark_config_rejects_unknown_modes() -> None:
     with pytest.raises(ValueError, match="unsupported modes"):
         benchmark_config_from_dict({"benchmark": "cloudopsbench", "modes": ["unknown"]})
+
+
+def test_benchmark_config_rejects_llm_alone_execution_mode() -> None:
+    with pytest.raises(ValueError, match="published LLM-alone paper baselines"):
+        benchmark_config_from_dict({"benchmark": "cloudopsbench", "modes": ["llm_alone"]})
