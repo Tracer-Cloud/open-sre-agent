@@ -6,7 +6,6 @@ import importlib
 import inspect
 import logging
 import pkgutil
-from contextlib import suppress
 from functools import lru_cache
 from types import ModuleType
 
@@ -46,11 +45,20 @@ def _record_import_health(import_failures: int) -> None:
     mutates the currently active scope; when ``clear_tool_registry_cache()`` is
     invoked from inside a request context, the tag attaches only to that
     request, which is acceptable for dashboards but is the reason this helper
-    rewrites unconditionally rather than skipping on zero. Best-effort: a
-    Sentry tag write must never break registry initialisation.
+    rewrites unconditionally rather than skipping on zero.
+
+    Best-effort: a Sentry tag write must never break registry initialisation,
+    so we still swallow failures — but we log them at debug so a broken Sentry
+    scope is visible to anyone running with ``--log-level debug`` rather than
+    being silently dropped.
     """
-    with suppress(Exception):
+    try:
         sentry_sdk.set_tag("tools.import_failures", str(import_failures))
+    except Exception:
+        logger.debug(
+            "Failed to record tools.import_failures Sentry tag",
+            exc_info=True,
+        )
 
 
 _SKIP_MODULE_NAMES = {

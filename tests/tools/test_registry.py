@@ -593,6 +593,30 @@ class TestImportFailuresReportToSentry:
         registry_writes = [(k, v) for k, v in tags_set if k == "tools.import_failures"]
         assert registry_writes[-1] == ("tools.import_failures", "0")
 
+    def test_sentry_tag_write_failure_does_not_break_registry(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """If ``sentry_sdk.set_tag`` raises (broken scope / SDK disabled mid-init),
+        registry initialisation must still complete — but the failure must be
+        logged at debug rather than silently swallowed by a bare
+        ``suppress(Exception)``, so a misconfigured Sentry scope is observable."""
+        monkeypatch.setattr(registry_module, "_iter_tool_module_names", lambda: [])
+
+        def _raise(_key: str, _value: str) -> None:
+            raise RuntimeError("sentry scope broken")
+
+        monkeypatch.setattr(registry_module.sentry_sdk, "set_tag", _raise)
+
+        with caplog.at_level("DEBUG", logger=registry_module.logger.name):
+            registry_module._record_import_health(0)
+
+        assert any(
+            "tools.import_failures" in record.message and record.levelname == "DEBUG"
+            for record in caplog.records
+        )
+
 
 def test_no_internal_app_imports_fail_on_default_extras() -> None:
     """Acceptance criterion: under the default extras matrix, no tool module
