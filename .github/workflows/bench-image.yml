@@ -65,9 +65,16 @@ jobs:
 
       - name: Resolve image tag
         id: tag
+        env:
+          # Route `inputs.tag` through env so the shell treats it as DATA,
+          # not code. Without this, a workflow_dispatch caller could inject
+          # shell commands via a crafted `tag` value containing $() or
+          # backticks. See:
+          # https://securitylab.github.com/research/github-actions-untrusted-input/
+          INPUT_TAG: ${{ inputs.tag }}
         run: |
-          if [ -n "${{ inputs.tag }}" ]; then
-            TAG="${{ inputs.tag }}"
+          if [ -n "$INPUT_TAG" ]; then
+            TAG="$INPUT_TAG"
           else
             TAG="$(git rev-parse --short HEAD)"
           fi
