@@ -8,12 +8,12 @@ timeouts enforced, result sizes capped.
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass
 from typing import Any
 
 from pydantic import Field, field_validator
 
+from app.credentials import get_opt
 from app.integrations._relational import (
     RelationalConfigBase,
     env_int,
@@ -86,7 +86,7 @@ def postgresql_config_from_env() -> PostgreSQLConfig | None:
             "port": env_int("POSTGRESQL_PORT", DEFAULT_POSTGRESQL_PORT),
             "database": database,
             "username": env_str("POSTGRESQL_USERNAME", DEFAULT_POSTGRESQL_USER),
-            "password": os.getenv("POSTGRESQL_PASSWORD", ""),
+            "password": get_opt("POSTGRESQL_PASSWORD"),
             "ssl_mode": env_str("POSTGRESQL_SSL_MODE", DEFAULT_POSTGRESQL_SSL_MODE),
         }
     )

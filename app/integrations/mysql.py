@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import logging
 import os
+
+from app.credentials import get_opt
 from dataclasses import dataclass
 from typing import Any
 
@@ -89,7 +91,7 @@ def mysql_config_from_env() -> MySQLConfig | None:
             "port": env_int("MYSQL_PORT", DEFAULT_MYSQL_PORT),
             "database": database,
             "username": env_str("MYSQL_USERNAME", DEFAULT_MYSQL_USER),
-            "password": os.getenv("MYSQL_PASSWORD", ""),
+            "password": get_opt("MYSQL_PASSWORD"),
             "ssl_mode": env_str("MYSQL_SSL_MODE", DEFAULT_MYSQL_SSL_MODE),
         }
     )

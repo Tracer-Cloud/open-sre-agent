@@ -11,6 +11,7 @@ from urllib.parse import quote
 import httpx
 from pydantic import Field, field_validator
 
+from app.credentials import get_opt
 from app.integrations._validation_helpers import report_validation_failure
 from app.strict_config import StrictConfigModel
 
@@ -76,26 +77,26 @@ def build_airflow_config(raw: dict[str, Any] | None) -> AirflowConfig:
 
 def airflow_config_from_env() -> AirflowConfig | None:
     """Load an Airflow config from env vars."""
-    username = os.getenv("AIRFLOW_USERNAME", "").strip()
-    auth_token = os.getenv("AIRFLOW_AUTH_TOKEN", "").strip()
+    username = get_opt("AIRFLOW_USERNAME").strip()
+    auth_token = get_opt("AIRFLOW_AUTH_TOKEN").strip()
 
     if not username and not auth_token:
         return None
 
     return build_airflow_config(
         {
-            "base_url": os.getenv("AIRFLOW_BASE_URL", DEFAULT_AIRFLOW_BASE_URL).strip()
+            "base_url": get_opt("AIRFLOW_BASE_URL", DEFAULT_AIRFLOW_BASE_URL).strip()
             or DEFAULT_AIRFLOW_BASE_URL,
             "username": username,
-            "password": os.getenv("AIRFLOW_PASSWORD", "").strip(),
+            "password": get_opt("AIRFLOW_PASSWORD").strip(),
             "auth_token": auth_token,
-            "timeout_seconds": os.getenv(
+            "timeout_seconds": get_opt(
                 "AIRFLOW_TIMEOUT_SECONDS",
                 str(DEFAULT_AIRFLOW_TIMEOUT_SECONDS),
             ),
-            "verify_ssl": os.getenv("AIRFLOW_VERIFY_SSL", "true").strip().lower()
+            "verify_ssl": get_opt("AIRFLOW_VERIFY_SSL", "true").strip().lower()
             in ("true", "1", "yes"),
-            "max_results": os.getenv(
+            "max_results": get_opt(
                 "AIRFLOW_MAX_RESULTS", str(DEFAULT_AIRFLOW_MAX_RESULTS)
             ).strip(),
         }

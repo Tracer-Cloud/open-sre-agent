@@ -10,17 +10,19 @@ from typing import Final
 import keyring  # type: ignore[import-not-found,import-untyped]
 import keyring.errors  # type: ignore[import-not-found,import-untyped]
 
+from app.credentials import get_opt
+
 _KEYRING_SERVICE: Final = "opensre.llm"
 _DISABLED_VALUES: Final = frozenset({"1", "true", "yes", "on"})
 
 
 def _keyring_is_disabled() -> bool:
-    return os.getenv("OPENSRE_DISABLE_KEYRING", "").strip().lower() in _DISABLED_VALUES
+    return os.environ.get("OPENSRE_DISABLE_KEYRING", "").strip().lower() in _DISABLED_VALUES
 
 
 def resolve_env_credential(env_var: str, *, default: str = "") -> str:
     """Resolve a credential from env first, then the local keychain."""
-    env_value = os.getenv(env_var, default).strip()
+    env_value = get_opt(env_var, default).strip()
     if env_value:
         return env_value
     return resolve_llm_api_key(env_var)
@@ -28,7 +30,7 @@ def resolve_env_credential(env_var: str, *, default: str = "") -> str:
 
 def resolve_llm_api_key(env_var: str) -> str:
     """Resolve an LLM API key from env first, then the local keychain."""
-    env_value = os.getenv(env_var, "").strip()
+    env_value = os.environ.get(env_var, "").strip()
     if env_value:
         return env_value
     if _keyring_is_disabled():
@@ -65,7 +67,7 @@ def get_keyring_setup_instructions(env_var: str) -> tuple[str, ...]:
             lines.append(
                 "Install it first: sudo apt update && sudo apt install -y gnome-keyring dbus-user-session"
             )
-        elif not os.getenv("DBUS_SESSION_BUS_ADDRESS", "").strip():
+        elif not os.environ.get("DBUS_SESSION_BUS_ADDRESS", "").strip():
             lines.append(
                 "GNOME Keyring is installed, but this shell is not running inside a D-Bus session."
             )

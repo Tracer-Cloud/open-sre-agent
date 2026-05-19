@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 import os
+
+from app.credentials import get_opt
 from dataclasses import dataclass
 from typing import Any
 
@@ -64,16 +66,16 @@ def build_sentry_config(raw: dict[str, Any] | None) -> SentryConfig:
 
 def sentry_config_from_env() -> SentryConfig | None:
     """Load a Sentry config from env vars."""
-    organization_slug = os.getenv("SENTRY_ORG_SLUG", "").strip()
-    auth_token = os.getenv("SENTRY_AUTH_TOKEN", "").strip()
+    organization_slug = get_opt("SENTRY_ORG_SLUG").strip()
+    auth_token = get_opt("SENTRY_AUTH_TOKEN").strip()
     if not organization_slug or not auth_token:
         return None
     return build_sentry_config(
         {
-            "base_url": os.getenv("SENTRY_URL", DEFAULT_SENTRY_URL).strip() or DEFAULT_SENTRY_URL,
+            "base_url": get_opt("SENTRY_URL", DEFAULT_SENTRY_URL).strip() or DEFAULT_SENTRY_URL,
             "organization_slug": organization_slug,
             "auth_token": auth_token,
-            "project_slug": os.getenv("SENTRY_PROJECT_SLUG", "").strip(),
+            "project_slug": get_opt("SENTRY_PROJECT_SLUG").strip(),
         }
     )
 

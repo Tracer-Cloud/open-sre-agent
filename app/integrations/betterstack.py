@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -27,6 +26,9 @@ from typing import Any
 import httpx
 from pydantic import Field, field_validator
 
+from app.credentials import get_opt
+
+from app.credentials import get_opt
 from app.integrations._validation_helpers import report_validation_failure
 from app.strict_config import StrictConfigModel
 
@@ -102,16 +104,16 @@ def betterstack_config_from_env() -> BetterStackConfig | None:
     surfaced to the planner via :func:`betterstack_extract_params`; it is
     not required for availability.
     """
-    endpoint = os.getenv("BETTERSTACK_QUERY_ENDPOINT", "").strip()
-    username = os.getenv("BETTERSTACK_USERNAME", "").strip()
+    endpoint = get_opt("BETTERSTACK_QUERY_ENDPOINT").strip()
+    username = get_opt("BETTERSTACK_USERNAME").strip()
     if not endpoint or not username:
         return None
     return build_betterstack_config(
         {
             "query_endpoint": endpoint,
             "username": username,
-            "password": os.getenv("BETTERSTACK_PASSWORD", ""),
-            "sources": os.getenv("BETTERSTACK_SOURCES", ""),
+            "password": get_opt("BETTERSTACK_PASSWORD"),
+            "sources": get_opt("BETTERSTACK_SOURCES"),
         }
     )
 

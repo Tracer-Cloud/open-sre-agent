@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Any
 from urllib import error, request
 
+from app.credentials import get_opt
+
 MAX_COMMENT_PREVIEW_CHARS = 500
 
 
@@ -150,10 +152,10 @@ def send_slack_webhook(payload: dict[str, Any], webhook_url: str) -> None:
 
 def main() -> int:
     """Entrypoint used by the GitHub Actions workflow."""
-    event_path = _string(os.getenv("GITHUB_EVENT_PATH"))
-    repository = _string(os.getenv("GITHUB_REPOSITORY"))
+    event_path = _string(os.environ.get("GITHUB_EVENT_PATH"))
+    repository = _string(os.environ.get("GITHUB_REPOSITORY"))
     webhook_url = _string(
-        os.getenv("SLACK_GITHUB_ISSUES_WEBHOOK_URL") or os.getenv("SLACK_WEBHOOK_URL")
+        get_opt("SLACK_GITHUB_ISSUES_WEBHOOK_URL") or get_opt("SLACK_WEBHOOK_URL")
     )
 
     if not event_path:

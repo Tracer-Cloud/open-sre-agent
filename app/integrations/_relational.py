@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import os
+from app.credentials import get_opt
 from collections.abc import Callable
 from typing import Any
 
@@ -16,18 +16,18 @@ _TRUE_ENV_VALUES = frozenset({"true", "1", "yes"})
 def env_bool(name: str, default: bool) -> bool:
     """Return a boolean environment variable with common truthy handling."""
     fallback = "true" if default else "false"
-    return os.getenv(name, fallback).strip().lower() in _TRUE_ENV_VALUES
+    return get_opt(name, fallback).strip().lower() in _TRUE_ENV_VALUES
 
 
 def env_int(name: str, default: int) -> int:
     """Return an integer environment variable, falling back on invalid input."""
-    raw = os.getenv(name, "").strip()
+    raw = get_opt(name).strip()
     return int(raw) if raw.isdecimal() else default
 
 
 def env_str(name: str, default: str = "") -> str:
     """Return a stripped environment variable with an optional fallback."""
-    normalized = os.getenv(name, default).strip()
+    normalized = get_opt(name, default).strip()
     return normalized or default
 
 

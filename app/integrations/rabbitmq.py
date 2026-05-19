@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import logging
 import os
+
+from app.credentials import get_opt
 import urllib.parse
 from dataclasses import dataclass
 from typing import Any
@@ -104,22 +106,22 @@ def build_rabbitmq_config(raw: dict[str, Any] | None) -> RabbitMQConfig:
 
 def rabbitmq_config_from_env() -> RabbitMQConfig | None:
     """Load a RabbitMQ config from env vars."""
-    host = os.getenv("RABBITMQ_HOST", "").strip()
-    username = os.getenv("RABBITMQ_USERNAME", "").strip()
+    host = get_opt("RABBITMQ_HOST").strip()
+    username = get_opt("RABBITMQ_USERNAME").strip()
     if not host or not username:
         return None
     return build_rabbitmq_config(
         {
             "host": host,
-            "management_port": os.getenv(
+            "management_port": get_opt(
                 "RABBITMQ_MANAGEMENT_PORT",
                 str(DEFAULT_RABBITMQ_MANAGEMENT_PORT),
             ).strip(),
             "username": username,
-            "password": os.getenv("RABBITMQ_PASSWORD", ""),
-            "vhost": os.getenv("RABBITMQ_VHOST", DEFAULT_RABBITMQ_VHOST).strip(),
-            "ssl": os.getenv("RABBITMQ_SSL", "false").strip().lower() in ("true", "1", "yes"),
-            "verify_ssl": os.getenv("RABBITMQ_VERIFY_SSL", "true").strip().lower()
+            "password": get_opt("RABBITMQ_PASSWORD"),
+            "vhost": get_opt("RABBITMQ_VHOST", DEFAULT_RABBITMQ_VHOST).strip(),
+            "ssl": get_opt("RABBITMQ_SSL", "false").strip().lower() in ("true", "1", "yes"),
+            "verify_ssl": get_opt("RABBITMQ_VERIFY_SSL", "true").strip().lower()
             in ("true", "1", "yes"),
         }
     )

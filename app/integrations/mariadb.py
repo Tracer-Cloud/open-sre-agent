@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import logging
 import os
+
+from app.credentials import get_opt
 from dataclasses import dataclass
 from typing import Any
 
@@ -79,7 +81,7 @@ def mariadb_config_from_env() -> MariaDBConfig | None:
             "port": env_str("MARIADB_PORT", str(DEFAULT_MARIADB_PORT)),
             "database": env_str("MARIADB_DATABASE"),
             "username": env_str("MARIADB_USERNAME"),
-            "password": os.getenv("MARIADB_PASSWORD", "").strip(),
+            "password": get_opt("MARIADB_PASSWORD").strip(),
             "ssl": env_bool("MARIADB_SSL", True),
         }
     )

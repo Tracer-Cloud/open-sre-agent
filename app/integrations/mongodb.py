@@ -8,12 +8,12 @@ timeouts enforced, result sizes capped.
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass
 from typing import Any
 
 from pydantic import Field, field_validator
 
+from app.credentials import get_opt
 from app.integrations._validation_helpers import report_validation_failure
 from app.strict_config import StrictConfigModel
 
@@ -71,15 +71,15 @@ def build_mongodb_config(raw: dict[str, Any] | None) -> MongoDBConfig:
 
 def mongodb_config_from_env() -> MongoDBConfig | None:
     """Load a MongoDB config from env vars."""
-    connection_string = os.getenv("MONGODB_CONNECTION_STRING", "").strip()
+    connection_string = get_opt("MONGODB_CONNECTION_STRING").strip()
     if not connection_string:
         return None
     return build_mongodb_config(
         {
             "connection_string": connection_string,
-            "database": os.getenv("MONGODB_DATABASE", "").strip(),
-            "auth_source": os.getenv("MONGODB_AUTH_SOURCE", DEFAULT_MONGODB_AUTH_SOURCE).strip(),
-            "tls": os.getenv("MONGODB_TLS", "true").strip().lower() in ("true", "1", "yes"),
+            "database": get_opt("MONGODB_DATABASE").strip(),
+            "auth_source": get_opt("MONGODB_AUTH_SOURCE", DEFAULT_MONGODB_AUTH_SOURCE).strip(),
+            "tls": get_opt("MONGODB_TLS", "true").strip().lower() in ("true", "1", "yes"),
         }
     )
 

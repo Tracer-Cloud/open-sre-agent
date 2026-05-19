@@ -100,7 +100,7 @@ def _string(value: object) -> str:
 
 
 def _bool_env(name: str, *, default: bool = False) -> bool:
-    value = os.getenv(name)
+    value = os.environ.get(name)
     if value is None:
         return default
     return value.strip().lower() not in {"", "0", "false", "no"}
@@ -134,11 +134,11 @@ def compute_daily_window(
 
 
 def _resolve_target_window() -> DailyWindow:
-    override_date = _string(os.getenv("DAILY_UPDATE_DATE"))
+    override_date = _string(os.environ.get("DAILY_UPDATE_DATE"))
     if override_date:
         return compute_daily_window(london_date=date.fromisoformat(override_date))
 
-    override_now = _string(os.getenv("DAILY_UPDATE_NOW"))
+    override_now = _string(os.environ.get("DAILY_UPDATE_NOW"))
     if override_now:
         return compute_daily_window(now=_parse_iso_datetime(override_now))
 
@@ -618,7 +618,7 @@ def _docs_json_path() -> Path:
 
 
 def _output_dir() -> Path:
-    configured = Path(_string(os.getenv("DAILY_UPDATE_OUTPUT_DIR")) or DEFAULT_OUTPUT_DIR)
+    configured = Path(_string(os.environ.get("DAILY_UPDATE_OUTPUT_DIR")) or DEFAULT_OUTPUT_DIR)
     if configured.is_absolute():
         return configured
     return _repo_root() / configured
@@ -734,7 +734,7 @@ def write_daily_archive(update: DailyUpdate, *, output_dir: Path | None = None) 
 
 
 def _append_github_output(name: str, value: str) -> None:
-    output_path = _string(os.getenv("GITHUB_OUTPUT"))
+    output_path = _string(os.environ.get("GITHUB_OUTPUT"))
     if not output_path:
         return
     with Path(output_path).open("a", encoding="utf-8") as handle:
@@ -743,8 +743,8 @@ def _append_github_output(name: str, value: str) -> None:
 
 def main() -> int:
     """Entrypoint used by the scheduled GitHub Actions workflow."""
-    repository = _string(os.getenv("GITHUB_REPOSITORY"))
-    token = _string(os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN"))
+    repository = _string(os.environ.get("GITHUB_REPOSITORY"))
+    token = _string(os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN"))
     if not repository:
         print("Missing GITHUB_REPOSITORY.", file=sys.stderr)
         return 1
