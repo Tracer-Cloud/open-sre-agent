@@ -1,7 +1,7 @@
 # Task role — assumed by the bench container at runtime.
 #
 # Grants:
-#   - Read the three bench secrets (anthropic, openai, hf_token)
+#   - Read the four bench secrets (anthropic, openai, deepseek, hf_token)
 #   - Read/write the results S3 bucket
 #   - No other AWS access
 #

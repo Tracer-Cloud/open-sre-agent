@@ -18,6 +18,7 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  id-token: write           # required for AWS OIDC role assumption
 
 concurrency:
   group: terraform-bench-${{ github.workflow }}-${{ github.head_ref || github.ref }}
@@ -48,13 +49,21 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.7.5"
-          terraform_wrapper: false
+          # Wrapper MUST stay enabled (default) — it's what populates
+          # `steps.<id>.outputs.stdout` for the `terraform show` step that
+          # feeds the sticky PR comment. Disabling it makes the comment
+          # render with a blank plan body. See greptile review on initial
+          # PR for details.
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials (OIDC role assumption)
+        # No long-lived AWS keys. The role is provisioned by infra/bench/
+        # Terraform; ARN is hardcoded here because Terraform outputs aren't
+        # available before the workflow can run. Account ID is the
+        # tracer-cloud account.
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: arn:aws:iam::395261708130:role/opensre-bench-terraform-plan
+          role-session-name: github-actions-terraform-plan-${{ github.run_id }}
           aws-region: us-east-1
 
       - name: terraform fmt

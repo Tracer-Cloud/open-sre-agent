@@ -7,7 +7,7 @@ on Fargate. Owned by the benchmark workstream (see project issue for context).
 
 - **ECR repo** for the bench container image
 - **Fargate cluster + task definition** (CPU/memory parameterized; default 4 vCPU / 8 GiB)
-- **IAM**: task role (container runtime), execution role (ECS), GitHub Actions OIDC role
+- **IAM**: task role (container runtime), execution role (ECS), and two GitHub Actions OIDC roles — `github-actions` (RunTask + Seed) and `terraform-plan` (ReadOnlyAccess + state bucket read). No long-lived AWS access keys required.
 - **S3 bucket** for per-run artifacts (`runs/<date>-<sha>/`), versioned + encrypted
 - **Secrets Manager** entries: `anthropic_api_key`, `openai_api_key`, `deepseek_api_key`, `hf_token` (values seeded out-of-band)
 - **CloudWatch log group** for task logs (30-day retention by default)
@@ -62,6 +62,19 @@ the matching values in `backend.tf` before `terraform init`.
 ## Seeding secret values
 
 Values are NOT stored in Terraform. After `terraform apply`:
+
+Two options — pick whichever matches your workflow.
+
+**Option 1 — via the seeding workflow (recommended).** Keeps the keys off your laptop entirely. Add `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `HF_TOKEN` as GitHub repo secrets (Settings → Secrets and variables → Actions), then trigger `.github/workflows/bench-seed-secret.yml` once per target — pick the secret from the dropdown:
+
+```bash
+gh workflow run bench-seed-secret.yml -f secret=anthropic_api_key
+gh workflow run bench-seed-secret.yml -f secret=openai_api_key
+gh workflow run bench-seed-secret.yml -f secret=deepseek_api_key
+gh workflow run bench-seed-secret.yml -f secret=hf_token
+```
+
+**Option 2 — direct AWS CLI from your laptop.** Faster for a one-off bootstrap, less centralized for rotation:
 
 ```bash
 aws secretsmanager put-secret-value \

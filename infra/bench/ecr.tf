@@ -17,9 +17,12 @@ resource "aws_ecr_repository" "bench" {
   }
 }
 
-# Retain the 20 most-recent images; delete older untagged blobs to control
-# storage cost. Pinned production images stay in repo because they keep their
-# tag.
+# Expire ONLY untagged image layers (orphan blobs left over when a tag is
+# overwritten or deleted). Tagged images live forever because the
+# pre-registration pins a specific tag/digest for reproducibility — a
+# lifecycle that expires tagged images would silently break a future
+# re-run of a published bench. ECR storage for tagged images is
+# negligible (~$0.10/GB/month); we will not push thousands.
 resource "aws_ecr_lifecycle_policy" "bench" {
   repository = aws_ecr_repository.bench.name
 
@@ -27,11 +30,12 @@ resource "aws_ecr_lifecycle_policy" "bench" {
     rules = [
       {
         rulePriority = 1
-        description  = "Retain 20 most recent images"
+        description  = "Expire untagged image layers older than 14 days"
         selection = {
-          tagStatus   = "any"
-          countType   = "imageCountMoreThan"
-          countNumber = 20
+          tagStatus   = "untagged"
+          countType   = "sinceImagePushed"
+          countUnit   = "days"
+          countNumber = 14
         }
         action = { type = "expire" }
       }

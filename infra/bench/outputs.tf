@@ -34,8 +34,13 @@ output "execution_role_arn" {
 }
 
 output "github_actions_role_arn" {
-  description = "Set this in .github/workflows/bench.yml as `role-to-assume` for aws-actions/configure-aws-credentials."
+  description = "Runtime role: assumed by .github/workflows/bench.yml (RunTask) and bench-seed-deepseek.yml (PutSecretValue)."
   value       = aws_iam_role.github_actions.arn
+}
+
+output "terraform_plan_role_arn" {
+  description = "Plan-only role: assumed by .github/workflows/terraform-bench.yml on PRs. ReadOnlyAccess + state-bucket read."
+  value       = aws_iam_role.terraform_plan.arn
 }
 
 output "results_bucket_name" {
