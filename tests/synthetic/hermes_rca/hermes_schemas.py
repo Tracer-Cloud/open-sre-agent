@@ -454,6 +454,8 @@ def validate_hermes_orchestration_state(data: dict[str, Any]) -> dict[str, Any]:
     declared_roles = data.get("declared_roles")
     if not isinstance(declared_roles, list):
         raise ValueError(f"{ctx}: 'declared_roles' must be a list")
+    if not declared_roles:
+        raise ValueError(f"{ctx}: 'declared_roles' must not be empty")
 
     for index, role in enumerate(declared_roles):
         rctx = f"{ctx}:declared_roles[{index}]"
@@ -471,6 +473,8 @@ def validate_hermes_orchestration_state(data: dict[str, Any]) -> dict[str, Any]:
     actual_runs = observed.get("actual_runs")
     if not isinstance(actual_runs, list):
         raise ValueError(f"{ctx}:observed: 'actual_runs' must be a list")
+    if not actual_runs:
+        raise ValueError(f"{ctx}:observed: 'actual_runs' must not be empty")
 
     for index, run in enumerate(actual_runs):
         actx = f"{ctx}:observed:actual_runs[{index}]"
@@ -621,6 +625,19 @@ def validate_hermes_answer_key(data: dict[str, Any]) -> HermesScenarioAnswerKeyS
             f"{ctx}: root_cause_category {root_cause_category!r} cannot also appear in "
             "'forbidden_categories'"
         )
+
+    required_evidence_sources = data.get("required_evidence_sources")
+    if isinstance(required_evidence_sources, list):
+        unknown_sources = [
+            source
+            for source in required_evidence_sources
+            if source not in VALID_HERMES_EVIDENCE_SOURCES
+        ]
+        if unknown_sources:
+            raise ValueError(
+                f"{ctx}: unknown required evidence source(s) {unknown_sources}; expected subset of "
+                f"{sorted(VALID_HERMES_EVIDENCE_SOURCES)}"
+            )
 
     trajectory = data.get("optimal_trajectory")
     if isinstance(trajectory, list):
