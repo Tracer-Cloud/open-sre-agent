@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HealOps — Alpha Waitlist</title>
+  <meta name="description" content="HealOps connects your Datadog, Kubernetes, and PagerDuty stack and handles the triage-to-resolution loop so your SRE team focuses on what matters." />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0e1a;
+      --bg-card: #111827;
+      --bg-card-2: #0f172a;
+      --border: #1e293b;
+      --accent: #00d2ff;
+      --accent-2: #7c3aed;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --success: #10b981;
+      --error: #ef4444;
+      --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 16px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* NAV */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(10, 14, 26, 0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+    }
+    .nav-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      color: var(--text);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .logo-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--accent);
+      border-radius: 50%;
+      display: inline-block;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(1.3); }
+    }
+    .nav-cta {
+      font-size: 14px;
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 500;
+      border: 1px solid var(--accent);
+      padding: 6px 16px;
+      border-radius: 6px;
+      transition: background 0.2s, color 0.2s;
+    }
+    .nav-cta:hover { background: var(--accent); color: #0a0e1a; }
+
+    /* HERO */
+    .hero {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 96px 24px 64px;
+      text-align: center;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0, 210, 255, 0.08);
+      border: 1px solid rgba(0, 210, 255, 0.2);
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 500;
+      padding: 5px 14px;
+      border-radius: 100px;
+      margin-bottom: 32px;
+      letter-spacing: 0.3px;
+    }
+    .badge-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    h1 {
+      font-size: clamp(36px, 6vw, 60px);
+      font-weight: 800;
+      letter-spacing: -1.5px;
+      line-height: 1.1;
+      color: var(--text);
+      margin-bottom: 24px;
+    }
+    h1 span {
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .subheadline {
+      font-size: clamp(17px, 2.5vw, 20px);
+      color: var(--text-muted);
+      max-width: 640px;
+      margin: 0 auto 48px;
+      line-height: 1.65;
+    }
+    .hero-stats {
+      display: flex;
+      justify-content: center;
+      gap: 48px;
+      flex-wrap: wrap;
+      padding-top: 16px;
+    }
+    .stat {
+      text-align: center;
+    }
+    .stat-num {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: -1px;
+    }
+    .stat-label {
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    /* DIVIDER */
+    .divider { height: 1px; background: var(--border); max-width: 1100px; margin: 0 auto; }
+
+    /* LEAD MAGNET */
+    .section { padding: 80px 24px; }
+    .section-inner { max-width: 900px; margin: 0 auto; }
+
+    .audit-card {
+      background: linear-gradient(135deg, rgba(0, 210, 255, 0.05) 0%, rgba(124, 58, 237, 0.05) 100%);
+      border: 1px solid rgba(0, 210, 255, 0.15);
+      border-radius: 16px;
+      padding: 48px;
+      position: relative;
+      overflow: hidden;
+    }
+    .audit-card::before {
+      content: '';
+      position: absolute;
+      top: 0; right: 0;
+      width: 300px; height: 300px;
+      background: radial-gradient(circle, rgba(0, 210, 255, 0.06) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .audit-label {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 12px;
+    }
+    .audit-title {
+      font-size: clamp(24px, 4vw, 36px);
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      color: var(--text);
+      margin-bottom: 32px;
+    }
+    .audit-bullets {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .audit-bullet {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      font-size: 17px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .audit-bullet-icon {
+      flex-shrink: 0;
+      width: 22px;
+      height: 22px;
+      background: rgba(0, 210, 255, 0.1);
+      border: 1px solid rgba(0, 210, 255, 0.3);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 2px;
+    }
+    .audit-bullet-icon svg { width: 12px; height: 12px; }
+
+    /* FORM SECTION */
+    .form-section { padding: 0 24px 96px; }
+    .form-wrapper {
+      max-width: 740px;
+      margin: 0 auto;
+    }
+    .form-header { text-align: center; margin-bottom: 48px; }
+    .form-header h2 {
+      font-size: clamp(28px, 5vw, 42px);
+      font-weight: 700;
+      letter-spacing: -1px;
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+    .form-header p {
+      color: var(--text-muted);
+      font-size: 17px;
+    }
+
+    .form-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 48px;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group.full { grid-column: 1 / -1; }
+
+    label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.2px;
+    }
+    label .req { color: var(--accent); margin-left: 2px; }
+
+    input[type="text"],
+    input[type="email"],
+    select,
+    textarea {
+      background: var(--bg-card-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 11px 14px;
+      color: var(--text);
+      font-size: 15px;
+      font-family: var(--font);
+      outline: none;
+      width: 100%;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(0, 210, 255, 0.12);
+    }
+    input::placeholder { color: var(--text-dim); }
+    select { cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' viewBox='0 0 24 24'%3E%3Cpath stroke='%2364748b' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 40px; }
+    select option { background: #1e293b; color: var(--text); }
+
+    /* checkboxes */
+    .checkbox-group-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.2px;
+      margin-bottom: 10px;
+      display: block;
+    }
+    .checkbox-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--bg-card-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      cursor: pointer;
+      transition: border-color 0.15s;
+      user-select: none;
+    }
+    .checkbox-item:hover { border-color: rgba(0, 210, 255, 0.4); }
+    .checkbox-item input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .checkbox-item span {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    /* section divider in form */
+    .form-sep {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 8px 0;
+    }
+
+    /* submit */
+    .submit-area { margin-top: 8px; }
+    .btn-submit {
+      width: 100%;
+      padding: 15px 24px;
+      background: linear-gradient(135deg, var(--accent) 0%, #0094b3 100%);
+      color: #0a0e1a;
+      font-size: 16px;
+      font-weight: 700;
+      font-family: var(--font);
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+      letter-spacing: 0.2px;
+    }
+    .btn-submit:hover { opacity: 0.9; }
+    .btn-submit:active { transform: scale(0.99); }
+    .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .form-fine-print {
+      text-align: center;
+      margin-top: 16px;
+      font-size: 13px;
+      color: var(--text-dim);
+      line-height: 1.5;
+    }
+    .form-fine-print strong { color: var(--text-muted); }
+
+    /* success/error messages */
+    .msg { display: none; border-radius: 10px; padding: 16px 20px; font-size: 15px; margin-top: 20px; }
+    .msg.success { background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: #6ee7b7; }
+    .msg.error { background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #fca5a5; }
+
+    /* SOCIAL PROOF */
+    .social-proof {
+      text-align: center;
+      padding: 16px 24px 64px;
+      color: var(--text-dim);
+      font-size: 14px;
+      font-style: italic;
+    }
+
+    /* FOOTER */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 32px 24px;
+      text-align: center;
+    }
+    .footer-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .footer-logo {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .footer-text {
+      font-size: 13px;
+      color: var(--text-dim);
+    }
+
+    /* RESPONSIVE */
+    @media (max-width: 640px) {
+      .hero { padding: 64px 20px 48px; }
+      .audit-card { padding: 32px 24px; }
+      .form-card { padding: 32px 24px; }
+      .form-grid { grid-template-columns: 1fr; }
+      .form-group.full { grid-column: 1; }
+      .checkbox-grid { grid-template-columns: 1fr; }
+      .hero-stats { gap: 32px; }
+      nav .nav-cta { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <div class="nav-inner">
+      <a href="#" class="logo">
+        <span class="logo-dot"></span>
+        HealOps
+      </a>
+      <a href="#waitlist" class="nav-cta">Join Alpha Waitlist</a>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="badge">
+      <span class="badge-dot"></span>
+      Alpha Access — 20 Design Partner Spots
+    </div>
+    <h1>Stop triaging alerts.<br /><span>Start resolving incidents.</span></h1>
+    <p class="subheadline">
+      HealOps connects your existing Datadog, Kubernetes, and PagerDuty stack and handles the triage-to-resolution loop so your SRE team focuses on what matters.
+    </p>
+    <div class="hero-stats">
+      <div class="stat">
+        <div class="stat-num">20</div>
+        <div class="stat-label">Design partner spots</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">48h</div>
+        <div class="stat-label">Response time</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">$0</div>
+        <div class="stat-label">Free audit included</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- LEAD MAGNET -->
+  <section class="section">
+    <div class="section-inner">
+      <div class="audit-card">
+        <div class="audit-label">Included with every application</div>
+        <div class="audit-title">Free Incident Response Audit</div>
+        <ul class="audit-bullets">
+          <li class="audit-bullet">
+            <div class="audit-bullet-icon">
+              <svg fill="none" viewBox="0 0 24 24" stroke="#00d2ff" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6-7l6-3m0 13l5.447-2.724A1 1 0 0021 16.382V5.618a1 1 0 00-.553-.894L15 2m0 5v13"/></svg>
+            </div>
+            Map your current alert &rarr; triage &rarr; resolution flow
+          </li>
+          <li class="audit-bullet">
+            <div class="audit-bullet-icon">
+              <svg fill="none" viewBox="0 0 24 24" stroke="#00d2ff" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+            </div>
+            Benchmark your signal/noise ratio, MTTR, and top time-waste points
+          </li>
+          <li class="audit-bullet">
+            <div class="audit-bullet-icon">
+              <svg fill="none" viewBox="0 0 24 24" stroke="#00d2ff" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            No pitch. Just data.
+          </li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- FORM -->
+  <section class="form-section" id="waitlist">
+    <div class="form-wrapper">
+      <div class="form-header">
+        <h2>Apply for Alpha Access</h2>
+        <p>Tell us about your stack so we can prioritize the right design partners.</p>
+      </div>
+
+      <div class="form-card">
+        <form id="waitlist-form" action="https://formspree.io/f/REPLACE_WITH_YOUR_FORM_ID" method="POST" novalidate>
+
+          <!-- Hidden field for Formspree subject line -->
+          <input type="hidden" name="_subject" value="New HealOps Alpha Waitlist Application" />
+          <input type="hidden" name="_next" value="https://healops.ai/alpha?submitted=true" />
+
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="name">Full name <span class="req">*</span></label>
+              <input type="text" id="name" name="name" placeholder="Jane Smith" required autocomplete="name" />
+            </div>
+            <div class="form-group">
+              <label for="email">Work email <span class="req">*</span></label>
+              <input type="email" id="email" name="email" placeholder="jane@company.com" required autocomplete="email" />
+            </div>
+            <div class="form-group">
+              <label for="company">Company name <span class="req">*</span></label>
+              <input type="text" id="company" name="company" placeholder="Acme Corp" required />
+            </div>
+            <div class="form-group">
+              <label for="role">Your role <span class="req">*</span></label>
+              <select id="role" name="role" required>
+                <option value="" disabled selected>Select your role</option>
+                <option value="SRE Lead">SRE Lead</option>
+                <option value="VP Engineering">VP Engineering</option>
+                <option value="Head of DevOps">Head of DevOps</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="team_size">Engineering team size <span class="req">*</span></label>
+              <select id="team_size" name="team_size" required>
+                <option value="" disabled selected>Select team size</option>
+                <option value="50–100">50–100</option>
+                <option value="100–250">100–250</option>
+                <option value="250–500">250–500</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="alert_volume">Weekly alert volume <span class="req">*</span></label>
+              <select id="alert_volume" name="alert_volume" required>
+                <option value="" disabled selected>Select volume</option>
+                <option value="Under 10">Under 10</option>
+                <option value="10–50">10–50</option>
+                <option value="50–200">50–200</option>
+                <option value="200+">200+</option>
+              </select>
+            </div>
+
+            <hr class="form-sep full" />
+
+            <div class="form-group full">
+              <span class="checkbox-group-label">Observability stack — check all that apply</span>
+              <div class="checkbox-grid">
+                <label class="checkbox-item">
+                  <input type="checkbox" name="observability[]" value="Datadog" />
+                  <span>Datadog</span>
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" name="observability[]" value="New Relic" />
+                  <span>New Relic</span>
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" name="observability[]" value="Grafana" />
+                  <span>Grafana</span>
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" name="observability[]" value="Prometheus" />
+                  <span>Prometheus</span>
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" name="observability[]" value="Other" />
+                  <span>Other</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="form-group full">
+              <span class="checkbox-group-label">Orchestration — check all that apply</span>
+              <div class="checkbox-grid">
+                <label class="checkbox-item">
+                  <input type="checkbox" name="orchestration[]" value="Kubernetes self-managed" />
+                  <span>Kubernetes self-managed</span>
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" name="orchestration[]" value="EKS" />
+                  <span>EKS</span>
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" name="orchestration[]" value="GKE" />
+                  <span>GKE</span>
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" name="orchestration[]" value="AKS" />
+                  <span>AKS</span>
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" name="orchestration[]" value="Other" />
+                  <span>Other</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="form-group full">
+              <label for="on_call">Formal on-call rotation? <span class="req">*</span></label>
+              <select id="on_call" name="on_call" required>
+                <option value="" disabled selected>Select an option</option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+                <option value="Ad hoc">Ad hoc</option>
+              </select>
+            </div>
+
+            <div class="form-group full submit-area">
+              <button type="submit" class="btn-submit" id="submit-btn">
+                Join the Alpha Waitlist &rarr;
+              </button>
+            </div>
+          </div><!-- /form-grid -->
+
+          <div class="msg success" id="success-msg">
+            You're on the list. We'll reach out within 48 hours to schedule your free Incident Response Audit.
+          </div>
+          <div class="msg error" id="error-msg">
+            Something went wrong. Please try again or email us directly.
+          </div>
+
+        </form>
+
+        <p class="form-fine-print">
+          <strong>Alpha access is limited to 20 design partners.</strong><br />
+          We'll reach out within 48 hours to schedule your free Incident Response Audit.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <p class="social-proof">Trusted by SRE and DevOps teams at forward-thinking SaaS companies.</p>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="footer-inner">
+      <div class="footer-logo">HealOps</div>
+      <div class="footer-text">&copy; 2026 HealOps. All rights reserved.</div>
+      <div class="footer-text"><a href="mailto:hello@healops.ai" style="color: var(--text-dim); text-decoration: none;">hello@healops.ai</a></div>
+    </div>
+  </footer>
+
+  <script>
+    // Check URL params for already-submitted state (Formspree redirect)
+    if (new URLSearchParams(window.location.search).get('submitted') === 'true') {
+      document.getElementById('waitlist-form').style.display = 'none';
+      document.getElementById('success-msg').style.display = 'block';
+    }
+
+    // AJAX submission for smoother UX (Formspree supports fetch)
+    const form = document.getElementById('waitlist-form');
+    const btn = document.getElementById('submit-btn');
+    const successMsg = document.getElementById('success-msg');
+    const errorMsg = document.getElementById('error-msg');
+
+    // Remove the _next redirect when using AJAX
+    form.querySelector('input[name="_next"]').remove();
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!form.checkValidity()) { form.reportValidity(); return; }
+
+      btn.disabled = true;
+      btn.textContent = 'Submitting…';
+      successMsg.style.display = 'none';
+      errorMsg.style.display = 'none';
+
+      try {
+        const data = new FormData(form);
+        const res = await fetch(form.action, {
+          method: 'POST',
+          body: data,
+          headers: { Accept: 'application/json' }
+        });
+
+        if (res.ok) {
+          form.style.display = 'none';
+          successMsg.style.display = 'block';
+          successMsg.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+          throw new Error('Non-OK response');
+        }
+      } catch {
+        errorMsg.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Join the Alpha Waitlist →';
+      }
+    });
+  </script>
+</body>
+</html>

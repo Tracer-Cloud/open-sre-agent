@@ -1,0 +1,12 @@
+[[redirects]]
+  from = "/alpha"
+  to = "/alpha/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/waitlist"
+  to = "/alpha/index.html"
+  status = 200
+
+[build]
+  publish = "."
