@@ -1,8 +1,7 @@
-"""Shared routing types for the interactive-shell router and intent classifier.
+"""Shared routing types for the interactive-shell router and LLM classifier phase.
 
-Extracted from the router module to break the cyclic import between the router
-and ``llm_intent_classifier``.  Both modules import from here instead of from
-each other.
+Extracted from the router module to keep routing and classifier modules
+decoupled and free of import cycles.
 """
 
 from __future__ import annotations
@@ -32,6 +31,8 @@ class RouteDecision:
     # Must contain only internal rule names; never user-derived content.
     matched_signals: tuple[str, ...] = ()
     fallback_reason: str | None = None
+    # Normalized slash command text to dispatch when route_kind == SLASH.
+    command_text: str | None = None
 
     def to_event_payload(self) -> dict[str, str | bool | int | float]:
         """Structured telemetry/debug payload for route decisions."""

@@ -7,7 +7,6 @@ import sys
 
 import pytest
 
-
 # Mirror test-suite defaults that normally come from tests/conftest.py.
 os.environ["OPENSRE_SENTRY_DISABLED"] = "1"
 os.environ["OPENSRE_NO_TELEMETRY"] = "1"

@@ -48,3 +48,19 @@ If all answers are weak, keep the logic inline.
 - When adding a new routing-phase test file, place it under
   `app/cli/interactive_shell/routing/tests/` and keep routing test fixtures
   under that subtree.
+
+## Important routing decisions (locked)
+
+- Keep `route_input` as a strict two-branch flow only:
+  1) `resolve_cli_command(...)`; else 2) `handle_message_with_agent(...)`.
+- `resolve_cli_command(...)` owns deterministic command routing only
+  (slash-prefixed commands and bare command aliases).
+- `handle_message_with_agent(...)` owns non-command routing and should stay
+  linear: LLM intent classifier -> default `cli_agent`.
+- Regex fallback has been intentionally removed from routing. Do **not**
+  re-introduce `regex_fallback`/`routes/route_regex_fallback`-style phases
+  unless there is an explicit product decision to restore them.
+- Keep the LLM intent classifier canonical in orchestration (`app/cli/interactive_shell/orchestration/llm_intent_classifier.py`);
+  routing can wrap/import it, but should not duplicate classifier logic.
+- Preserve routing decision observability contracts used in tests:
+  `fallback_reason` semantics and `matched_signals` (`cli_agent_action_plan`, etc.).

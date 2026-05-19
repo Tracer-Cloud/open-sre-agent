@@ -1,0 +1,35 @@
+- text: run synthetic test 002-connection-exhaustion
+  llm_route: cli_agent
+  expected_kind: cli_agent
+
+- text: launch synthetic test 005-memory-pressure
+  llm_route: cli_agent
+  expected_kind: cli_agent
+
+- text: start synthetic test 003-high-cpu
+  llm_route: cli_agent
+  expected_kind: cli_agent
+
+- text: run synthetic test 007-disk-failure
+  llm_route: cli_agent
+  expected_kind: cli_agent
+
+- text: execute synthetic test 008-timeout-cascade
+  llm_route: cli_agent
+  expected_kind: cli_agent
+
+- text: run synthetic test 009-pod-crash
+  llm_route: cli_agent
+  expected_kind: cli_agent
+
+- text: launch benchmark error-injection-test
+  llm_route: cli_agent
+  expected_kind: cli_agent
+
+- text: run a sample alert
+  llm_route: cli_agent
+  expected_kind: cli_agent
+
+- text: how do I measure latency with opensre?
+  llm_route: cli_help
+  expected_kind: cli_help

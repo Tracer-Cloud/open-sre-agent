@@ -5,12 +5,13 @@ from __future__ import annotations
 from app.cli.interactive_shell.routing.types import RouteDecision, RouteRule, RoutingSession
 
 
-def decision_from_rule(rule: RouteRule) -> RouteDecision:
+def decision_from_rule(rule: RouteRule, *, command_text: str | None = None) -> RouteDecision:
     """Convert a matched rule into the corresponding route decision."""
     return RouteDecision(
         route_kind=rule.route_kind,
         confidence=rule.confidence,
         matched_signals=(rule.name,),
+        command_text=command_text,
     )
 
 

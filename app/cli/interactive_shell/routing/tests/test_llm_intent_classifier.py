@@ -17,16 +17,20 @@ Test strategy:
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+import yaml
 
-from app.cli.interactive_shell.routing.llm_phase.intent_classifier import (
+from app.cli.interactive_shell.orchestration.llm_intent_classifier import (
     classify_intent_with_llm,
     clear_classify_cache,
 )
 from app.cli.interactive_shell.routing.router import RouteDecision, RouteKind, route_input
 from app.cli.interactive_shell.runtime.session import ReplSession
+
+PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers / fixtures
@@ -61,6 +65,14 @@ def _mock_llm_response(response_text: str) -> MagicMock:
     return mock_client
 
 
+def _load_fixture_cases(filename: str) -> list[dict[str, object]]:
+    payload = yaml.safe_load((PROMPTS_DIR / filename).read_text(encoding="utf-8"))
+    if not isinstance(payload, list):
+        msg = f"Fixture {filename} must contain a top-level YAML list"
+        raise ValueError(msg)
+    return payload
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. Unit tests: classify_intent_with_llm()
 # ─────────────────────────────────────────────────────────────────────────────
@@ -69,84 +81,23 @@ def _mock_llm_response(response_text: str) -> MagicMock:
 class TestClassifyIntentWithLLM:
     """Tests for the raw LLM classifier function."""
 
-    def test_llm_cli_agent_response_parsed(self) -> None:
-        session = _fresh_session()
+    @pytest.mark.parametrize(
+        "case",
+        _load_fixture_cases("unit_llm_parse_cases.yml"),
+        ids=lambda case: str(case["id"]),
+    )
+    def test_llm_parse_cases(self, case: dict[str, object]) -> None:
+        session = _fresh_session(with_prior_state=bool(case.get("with_prior_state", False)))
         with patch(
             "app.services.llm_client.get_llm_for_classification",
-            return_value=_mock_llm_response("cli_agent"),
+            return_value=_mock_llm_response(str(case["llm_response"])),
         ):
-            decision = classify_intent_with_llm(
-                "run synthetic test 002-connection-exhaustion", session
-            )
+            decision = classify_intent_with_llm(str(case["input"]), session)
         assert decision is not None
-        assert decision.route_kind == RouteKind.CLI_AGENT
-        assert decision.matched_signals == ("intent_classifier_llm",)
-
-    def test_llm_new_alert_response_parsed(self) -> None:
-        session = _fresh_session()
-        with patch(
-            "app.services.llm_client.get_llm_for_classification",
-            return_value=_mock_llm_response("new_alert"),
-        ):
-            decision = classify_intent_with_llm(
-                "CPU is spiking to 99% on the orders-api pods", session
-            )
-        assert decision is not None
-        assert decision.route_kind == RouteKind.NEW_ALERT
-
-    def test_llm_follow_up_response_parsed(self) -> None:
-        session = _fresh_session(with_prior_state=True)
-        with patch(
-            "app.services.llm_client.get_llm_for_classification",
-            return_value=_mock_llm_response("follow_up"),
-        ):
-            decision = classify_intent_with_llm("why did it fail?", session)
-        assert decision is not None
-        assert decision.route_kind == RouteKind.FOLLOW_UP
-
-    def test_llm_cli_help_response_parsed(self) -> None:
-        session = _fresh_session()
-        with patch(
-            "app.services.llm_client.get_llm_for_classification",
-            return_value=_mock_llm_response("cli_help"),
-        ):
-            decision = classify_intent_with_llm("how do I configure datadog?", session)
-        assert decision is not None
-        assert decision.route_kind == RouteKind.CLI_HELP
-
-    def test_llm_slash_response_parsed(self) -> None:
-        session = _fresh_session()
-        with patch(
-            "app.services.llm_client.get_llm_for_classification",
-            return_value=_mock_llm_response("slash"),
-        ):
-            decision = classify_intent_with_llm("/status", session)
-        assert decision is not None
-        assert decision.route_kind == RouteKind.SLASH
-
-    def test_llm_response_with_extra_whitespace_parsed(self) -> None:
-        """LLM may include leading/trailing whitespace; parse should still work."""
-        session = _fresh_session()
-        with patch(
-            "app.services.llm_client.get_llm_for_classification",
-            return_value=_mock_llm_response("  cli_agent  "),
-        ):
-            decision = classify_intent_with_llm("show connected services", session)
-        assert decision is not None
-        assert decision.route_kind == RouteKind.CLI_AGENT
-
-    def test_llm_response_wrapped_in_sentence_extracted(self) -> None:
-        """Even if LLM adds explanation, the route word should be extracted."""
-        session = _fresh_session()
-        with patch(
-            "app.services.llm_client.get_llm_for_classification",
-            return_value=_mock_llm_response(
-                "Based on the input this should be classified as: new_alert"
-            ),
-        ):
-            decision = classify_intent_with_llm("502s on checkout service", session)
-        assert decision is not None
-        assert decision.route_kind == RouteKind.NEW_ALERT
+        assert decision.route_kind == RouteKind(str(case["expected_kind"]))
+        expected_signals = case.get("expected_signals")
+        if expected_signals is not None:
+            assert decision.matched_signals == tuple(expected_signals)
 
     def test_llm_garbage_response_returns_none(self) -> None:
         """An unparseable LLM response should return None (trigger fallback)."""
@@ -236,76 +187,29 @@ class TestRouteInputWithLLM:
         )
         return mock
 
-    def test_synthetic_test_with_connection_in_id_routes_cli_agent(self) -> None:
-        """'run synthetic test 002-connection-exhaustion' must reach cli_agent.
-
-        This was the specific failure: 'connection' is an alert-signal word in
-        the regex ruleset, causing the request to be misrouted to new_alert.
-        The LLM understands context and correctly classifies it as cli_agent.
-        """
-        session = _fresh_session()
+    @pytest.mark.parametrize(
+        "case",
+        _load_fixture_cases("integration_llm_route_input_cases.yml"),
+        ids=lambda case: str(case["id"]),
+    )
+    def test_route_input_llm_cases(self, case: dict[str, object]) -> None:
+        session = _fresh_session(with_prior_state=bool(case.get("with_prior_state", False)))
         with patch(
-            "app.cli.interactive_shell.routing.llm_phase.intent_classifier.classify_intent_with_llm",
-            self._patch_llm_classifier("cli_agent"),
+            "app.cli.interactive_shell.orchestration.llm_intent_classifier.classify_intent_with_llm",
+            self._patch_llm_classifier(str(case["llm_route"])),
         ):
-            decision = route_input("run synthetic test 002-connection-exhaustion", session)
-        assert decision.route_kind == RouteKind.CLI_AGENT
-        assert decision.matched_signals == ("intent_classifier_llm",)
-
-    def test_synthetic_test_with_memory_in_id_routes_cli_agent(self) -> None:
-        """'memory' is an alert signal; LLM must not be fooled by it in an ID."""
-        session = _fresh_session()
-        with patch(
-            "app.cli.interactive_shell.routing.llm_phase.intent_classifier.classify_intent_with_llm",
-            self._patch_llm_classifier("cli_agent"),
-        ):
-            decision = route_input("run synthetic test 005-memory-pressure", session)
-        assert decision.route_kind == RouteKind.CLI_AGENT
-
-    def test_synthetic_test_with_cpu_in_id_routes_cli_agent(self) -> None:
-        session = _fresh_session()
-        with patch(
-            "app.cli.interactive_shell.routing.llm_phase.intent_classifier.classify_intent_with_llm",
-            self._patch_llm_classifier("cli_agent"),
-        ):
-            decision = route_input("launch synthetic test 003-cpu-spike", session)
-        assert decision.route_kind == RouteKind.CLI_AGENT
-
-    def test_real_alert_routes_new_alert_via_llm(self) -> None:
-        session = _fresh_session()
-        with patch(
-            "app.cli.interactive_shell.routing.llm_phase.intent_classifier.classify_intent_with_llm",
-            self._patch_llm_classifier("new_alert"),
-        ):
-            decision = route_input(
-                "the checkout service is returning 502 errors for 30% of requests", session
-            )
-        assert decision.route_kind == RouteKind.NEW_ALERT
-
-    def test_follow_up_with_prior_state_via_llm(self) -> None:
-        session = _fresh_session(with_prior_state=True)
-        with patch(
-            "app.cli.interactive_shell.routing.llm_phase.intent_classifier.classify_intent_with_llm",
-            self._patch_llm_classifier("follow_up"),
-        ):
-            decision = route_input("what caused the spike?", session)
-        assert decision.route_kind == RouteKind.FOLLOW_UP
-
-    def test_cli_help_via_llm(self) -> None:
-        session = _fresh_session()
-        with patch(
-            "app.cli.interactive_shell.routing.llm_phase.intent_classifier.classify_intent_with_llm",
-            self._patch_llm_classifier("cli_help"),
-        ):
-            decision = route_input("how do I set up the datadog integration?", session)
-        assert decision.route_kind == RouteKind.CLI_HELP
+            decision = route_input(str(case["input"]), session)
+        assert decision.route_kind == RouteKind(str(case["expected_kind"]))
+        expected_signals = case.get("expected_signals")
+        if expected_signals is not None:
+            assert decision.matched_signals == tuple(expected_signals)
 
     def test_slash_command_bypasses_llm(self) -> None:
         """Slash commands must be handled by the deterministic fast-path, never LLM."""
         session = _fresh_session()
         mock_llm = MagicMock()
         with patch(
-            "app.cli.interactive_shell.routing.llm_phase.intent_classifier.classify_intent_with_llm",
+            "app.cli.interactive_shell.orchestration.llm_intent_classifier.classify_intent_with_llm",
             mock_llm,
         ):
             decision = route_input("/help", session)
@@ -317,7 +221,7 @@ class TestRouteInputWithLLM:
         session = _fresh_session()
         mock_llm = MagicMock()
         with patch(
-            "app.cli.interactive_shell.routing.llm_phase.intent_classifier.classify_intent_with_llm",
+            "app.cli.interactive_shell.orchestration.llm_intent_classifier.classify_intent_with_llm",
             mock_llm,
         ):
             decision = route_input("help", session)
@@ -328,7 +232,7 @@ class TestRouteInputWithLLM:
         """When LLM returns None (unavailable), the regex rules must still route correctly."""
         session = _fresh_session()
         with patch(
-            "app.cli.interactive_shell.routing.llm_phase.intent_classifier.classify_intent_with_llm",
+            "app.cli.interactive_shell.orchestration.llm_intent_classifier.classify_intent_with_llm",
             return_value=None,
         ):
             # "how do I run an investigation?" matches a CLI help regex.
@@ -339,7 +243,7 @@ class TestRouteInputWithLLM:
         """Without LLM, non-command incident text now falls back to cli_agent."""
         session = _fresh_session()
         with patch(
-            "app.cli.interactive_shell.routing.llm_phase.intent_classifier.classify_intent_with_llm",
+            "app.cli.interactive_shell.orchestration.llm_intent_classifier.classify_intent_with_llm",
             return_value=None,
         ):
             decision = route_input("CPU spiked on orders-api", session)
@@ -354,7 +258,7 @@ class TestRouteInputWithLLM:
             matched_signals=("intent_classifier_llm",),
         )
         with patch(
-            "app.cli.interactive_shell.routing.llm_phase.intent_classifier.classify_intent_with_llm",
+            "app.cli.interactive_shell.orchestration.llm_intent_classifier.classify_intent_with_llm",
             return_value=llm_decision,
         ):
             decision = route_input("can you summarize current capabilities?", session)
@@ -371,64 +275,29 @@ class TestRegexFallbackRouting:
     """Ensure regex fallback still routes correctly when classifier returns None."""
 
     @pytest.mark.parametrize(
-        "text,expected",
-        [
-            # ── slash ──────────────────────────────────────────────────────
-            ("/help", "slash"),
-            ("  /status  ", "slash"),
-            ("/investigate alert.json", "slash"),
-            # ── bare aliases ───────────────────────────────────────────────
-            ("help", "slash"),
-            ("exit", "slash"),
-            ("quit", "slash"),
-            ("status", "slash"),
-            ("clear", "slash"),
-            ("reset", "slash"),
-            ("?", "slash"),
-            ("HELP", "slash"),  # case-insensitive
-            ("hlep", "slash"),  # typo-tolerance
-            # ── cli_help ───────────────────────────────────────────────────
-            ("how do I run an investigation?", "cli_help"),
-            ("what command do I use?", "cli_help"),
-            ("how do I configure datadog?", "cli_help"),
-            ("how to deploy OpenSRE on Railway?", "cli_help"),
-            ("does opensre support honeycomb?", "cli_help"),
-            ("can opensre integrate with bitbucket?", "cli_help"),
-            ("what are the supported integrations?", "cli_help"),
-            ("check the docs for datadog setup", "cli_help"),
-            ("what does opensre onboard do?", "cli_help"),
-            # ── new_alert ──────────────────────────────────────────────────
-            ("why is the database slow?", "cli_agent"),
-            ("CPU spiked on orders-api", "cli_agent"),
-            ('{"alertname": "HighCPU", "severity": "critical"}', "cli_agent"),
-            ("the checkout API returns 502s for 15% of requests since 14:00 UTC", "cli_agent"),
-            # ── cli_agent ──────────────────────────────────────────────────
-            ("run syntehtic test 002-connection-exhaustion", "cli_agent"),  # typo
-            ("show me connected services", "cli_agent"),
-            ("try a sample alert", "cli_agent"),
-            ("check the health of my opensre and then show me all connected services", "cli_agent"),
-            ("please connect to local llama", "cli_agent"),
-        ],
+        "case",
+        _load_fixture_cases("fallback_canonical_cases.yml"),
+        ids=lambda case: str(case["text"]),
     )
     def test_regex_fallback_canonical_cases(
         self,
-        text: str,
-        expected: str,
+        case: dict[str, object],
     ) -> None:
         session = _fresh_session()
         with patch(
-            "app.cli.interactive_shell.routing.llm_phase.intent_classifier.classify_intent_with_llm",
+            "app.cli.interactive_shell.orchestration.llm_intent_classifier.classify_intent_with_llm",
             return_value=None,
         ):
-            decision = route_input(text, session)
+            decision = route_input(str(case["text"]), session)
+        expected = str(case["expected"])
         assert decision.route_kind.value == expected, (
-            f"Expected {expected!r} for {text!r}, got {decision.route_kind.value!r}"
+            f"Expected {expected!r} for {case['text']!r}, got {decision.route_kind.value!r}"
         )
 
     def test_prior_state_short_follow_up(self) -> None:
         session = _fresh_session(with_prior_state=True)
         with patch(
-            "app.cli.interactive_shell.routing.llm_phase.intent_classifier.classify_intent_with_llm",
+            "app.cli.interactive_shell.orchestration.llm_intent_classifier.classify_intent_with_llm",
             return_value=None,
         ):
             assert route_input("why?", session).route_kind == RouteKind.CLI_AGENT
@@ -437,7 +306,7 @@ class TestRegexFallbackRouting:
     def test_prior_state_new_alert_still_routes_correctly(self) -> None:
         session = _fresh_session(with_prior_state=True)
         with patch(
-            "app.cli.interactive_shell.routing.llm_phase.intent_classifier.classify_intent_with_llm",
+            "app.cli.interactive_shell.orchestration.llm_intent_classifier.classify_intent_with_llm",
             return_value=None,
         ):
             assert route_input("CPU spiked on orders-api", session).route_kind == RouteKind.CLI_AGENT
@@ -445,7 +314,7 @@ class TestRegexFallbackRouting:
     def test_prior_state_small_talk_cli_agent(self) -> None:
         session = _fresh_session(with_prior_state=True)
         with patch(
-            "app.cli.interactive_shell.routing.llm_phase.intent_classifier.classify_intent_with_llm",
+            "app.cli.interactive_shell.orchestration.llm_intent_classifier.classify_intent_with_llm",
             return_value=None,
         ):
             assert route_input("thanks", session).route_kind == RouteKind.CLI_AGENT
@@ -466,83 +335,28 @@ class TestAlertVocabularyInNonAlertContexts:
     """
 
     @pytest.mark.parametrize(
-        "text,llm_route,expected_kind",
-        [
-            # "connection" in a synthetic test ID must not trigger new_alert.
-            (
-                "run synthetic test 002-connection-exhaustion",
-                "cli_agent",
-                RouteKind.CLI_AGENT,
-            ),
-            # "memory" in a test ID.
-            (
-                "launch synthetic test 005-memory-pressure",
-                "cli_agent",
-                RouteKind.CLI_AGENT,
-            ),
-            # "cpu" in a test ID.
-            (
-                "start synthetic test 003-high-cpu",
-                "cli_agent",
-                RouteKind.CLI_AGENT,
-            ),
-            # "disk" in a test ID.
-            (
-                "run synthetic test 007-disk-failure",
-                "cli_agent",
-                RouteKind.CLI_AGENT,
-            ),
-            # "timeout" in a test ID.
-            (
-                "execute synthetic test 008-timeout-cascade",
-                "cli_agent",
-                RouteKind.CLI_AGENT,
-            ),
-            # "crash" in a test ID.
-            (
-                "run synthetic test 009-pod-crash",
-                "cli_agent",
-                RouteKind.CLI_AGENT,
-            ),
-            # "error" in a benchmark name.
-            (
-                "launch benchmark error-injection-test",
-                "cli_agent",
-                RouteKind.CLI_AGENT,
-            ),
-            # "alert" in a sample test launch phrase.
-            (
-                "run a sample alert",
-                "cli_agent",
-                RouteKind.CLI_AGENT,
-            ),
-            # "latency" in a capabilities question.
-            (
-                "how do I measure latency with opensre?",
-                "cli_help",
-                RouteKind.CLI_HELP,
-            ),
-        ],
+        "case",
+        _load_fixture_cases("alert_vocab_non_alert_cases.yml"),
+        ids=lambda case: str(case["text"]),
     )
     def test_alert_vocab_in_non_alert_context(
         self,
-        text: str,
-        llm_route: str,
-        expected_kind: RouteKind,
+        case: dict[str, object],
     ) -> None:
         session = _fresh_session()
         mock_decision = RouteDecision(
-            route_kind=RouteKind(llm_route),
+            route_kind=RouteKind(str(case["llm_route"])),
             confidence=0.88,
             matched_signals=("intent_classifier_llm",),
         )
         with patch(
-            "app.cli.interactive_shell.routing.llm_phase.intent_classifier.classify_intent_with_llm",
+            "app.cli.interactive_shell.orchestration.llm_intent_classifier.classify_intent_with_llm",
             return_value=mock_decision,
         ):
-            decision = route_input(text, session)
+            decision = route_input(str(case["text"]), session)
+        expected_kind = RouteKind(str(case["expected_kind"]))
         assert decision.route_kind == expected_kind, (
-            f"Expected {expected_kind!r} for {text!r}, got {decision.route_kind!r}"
+            f"Expected {expected_kind!r} for {case['text']!r}, got {decision.route_kind!r}"
         )
 
 
@@ -562,7 +376,7 @@ class TestRouteDecisionFromLLM:
             matched_signals=("intent_classifier_llm",),
         )
         with patch(
-            "app.cli.interactive_shell.routing.llm_phase.intent_classifier.classify_intent_with_llm",
+            "app.cli.interactive_shell.orchestration.llm_intent_classifier.classify_intent_with_llm",
             return_value=llm_decision,
         ):
             decision = route_input("can you summarize current capabilities?", session)
@@ -581,7 +395,7 @@ class TestRouteDecisionFromLLM:
             matched_signals=("intent_classifier_llm",),
         )
         with patch(
-            "app.cli.interactive_shell.routing.llm_phase.intent_classifier.classify_intent_with_llm",
+            "app.cli.interactive_shell.orchestration.llm_intent_classifier.classify_intent_with_llm",
             return_value=llm_decision,
         ):
             decision = route_input("502 errors in production", session)
@@ -682,7 +496,9 @@ class TestSafetyBehaviours:
 
     def test_long_input_truncated_before_llm_call(self) -> None:
         """Input longer than _MAX_TEXT_LEN must be truncated before entering the prompt."""
-        from app.cli.interactive_shell.routing.llm_phase import intent_classifier
+        from app.cli.interactive_shell.orchestration import (
+            llm_intent_classifier as intent_classifier,
+        )
 
         session = _fresh_session()
         long_text = "run test " + "A" * 600

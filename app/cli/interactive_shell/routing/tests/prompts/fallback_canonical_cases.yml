@@ -1,0 +1,60 @@
+- text: /help
+  expected: slash
+- text: "  /status  "
+  expected: slash
+- text: /investigate alert.json
+  expected: slash
+- text: help
+  expected: slash
+- text: exit
+  expected: slash
+- text: quit
+  expected: slash
+- text: status
+  expected: slash
+- text: clear
+  expected: slash
+- text: reset
+  expected: slash
+- text: "?"
+  expected: slash
+- text: HELP
+  expected: slash
+- text: hlep
+  expected: slash
+- text: how do I run an investigation?
+  expected: cli_help
+- text: what command do I use?
+  expected: cli_help
+- text: how do I configure datadog?
+  expected: cli_help
+- text: how to deploy OpenSRE on Railway?
+  expected: cli_help
+- text: does opensre support honeycomb?
+  expected: cli_help
+- text: can opensre integrate with bitbucket?
+  expected: cli_help
+- text: what are the supported integrations?
+  expected: cli_help
+- text: check the docs for datadog setup
+  expected: cli_help
+- text: what does opensre onboard do?
+  expected: cli_help
+- text: why is the database slow?
+  expected: cli_agent
+- text: CPU spiked on orders-api
+  expected: cli_agent
+- text: '{"alertname": "HighCPU", "severity": "critical"}'
+  expected: cli_agent
+- text: the checkout API returns 502s for 15% of requests since 14:00 UTC
+  expected: cli_agent
+- text: run syntehtic test 002-connection-exhaustion
+  expected: cli_agent
+- text: show me connected services
+  expected: cli_agent
+- text: try a sample alert
+  expected: cli_agent
+- text: check the health of my opensre and then show me all connected services
+  expected: cli_agent
+- text: please connect to local llama
+  expected: cli_agent

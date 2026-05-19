@@ -1,0 +1,37 @@
+- id: cli_agent_basic
+  input: run synthetic test 002-connection-exhaustion
+  llm_response: cli_agent
+  expected_kind: cli_agent
+  expected_signals:
+    - intent_classifier_llm
+
+- id: new_alert_basic
+  input: CPU is spiking to 99% on the orders-api pods
+  llm_response: new_alert
+  expected_kind: new_alert
+
+- id: follow_up_with_prior
+  input: why did it fail?
+  llm_response: follow_up
+  expected_kind: follow_up
+  with_prior_state: true
+
+- id: cli_help_basic
+  input: how do I configure datadog?
+  llm_response: cli_help
+  expected_kind: cli_help
+
+- id: slash_basic
+  input: /status
+  llm_response: slash
+  expected_kind: slash
+
+- id: cli_agent_whitespace
+  input: show connected services
+  llm_response: "  cli_agent  "
+  expected_kind: cli_agent
+
+- id: wrapped_sentence_extracts_new_alert
+  input: 502s on checkout service
+  llm_response: "Based on the input this should be classified as: new_alert"
+  expected_kind: new_alert

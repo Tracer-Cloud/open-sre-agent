@@ -14,7 +14,7 @@ from app.cli.interactive_shell.routing import router as _router_module
 from app.cli.interactive_shell.routing.router import RouteKind, classify_input, route_input
 from app.cli.interactive_shell.runtime.session import ReplSession
 
-FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
+PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
 
 
 class TestClassifyInput:
@@ -334,7 +334,7 @@ class TestClassifyInput:
         )
 
         monkeypatch.setattr(
-            "app.cli.interactive_shell.routing.llm_phase.intent_classifier.classify_intent_with_llm",
+            "app.cli.interactive_shell.orchestration.llm_intent_classifier.classify_intent_with_llm",
             lambda *_args, **_kwargs: _router_module.RouteDecision(
                 _router_module.RouteKind.CLI_HELP,
                 0.99,
@@ -378,7 +378,7 @@ class TestClassifyInput:
             assert classify_input(text, session) == "cli_help", text
 
     def test_yaml_routing_regression_cases(self) -> None:
-        fixture_path = FIXTURES_DIR / "routing_cases.yml"
+        fixture_path = PROMPTS_DIR / "routing_cases.yml"
         payload = yaml.safe_load(fixture_path.read_text(encoding="utf-8"))
 
         session = ReplSession()

@@ -22,7 +22,6 @@ from prompt_toolkit.keys import Keys
 from prompt_toolkit.output import DummyOutput
 
 from app.cli.interactive_shell import loop
-from app.cli.interactive_shell.orchestration.agent_actions import TerminalActionExecutionResult
 from app.cli.interactive_shell.prompting import prompt_surface
 from app.cli.interactive_shell.prompting.prompt_surface import (
     _SHIFT_ENTER_SEQUENCE,
