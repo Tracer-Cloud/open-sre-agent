@@ -283,6 +283,23 @@ def test_verify_slack_captures_on_config_validation_error(
     assert mock_report.call_args.kwargs["tags"]["event"] == "invalid_config"
 
 
+@patch("app.integrations._verification_adapters.report_exception")
+@patch("app.integrations._verification_adapters.validate_supabase_config")
+@patch("app.integrations._verification_adapters.build_supabase_config")
+def test_verify_supabase_tags_integration_correctly(
+    mock_build: MagicMock, mock_validate: MagicMock, mock_report: MagicMock
+) -> None:
+    from app.integrations._verification_adapters import _verify_supabase
+
+    mock_build.side_effect = ValueError("bad supabase url")
+    res = _verify_supabase("env", {"url": "bad"})
+    assert res["status"] == "missing"
+    assert res["service"] == "supabase"
+    assert res["source"] == "env"
+    mock_report.assert_called_once()
+    assert mock_report.call_args.kwargs["tags"]["integration"] == "supabase"
+
+
 # ---------------------------------------------------------------------------
 # Discord ImportError special path
 # ---------------------------------------------------------------------------
