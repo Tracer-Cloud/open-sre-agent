@@ -14,7 +14,7 @@
 
   "commonAnnotations": {
     "context_sources": "hermes",
-    "session_id": "hermes-memory-030",
+    "hermes_session_id": "hermes-memory-030",
     "failure_mode": "memory_unavailable"
   }
 }

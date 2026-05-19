@@ -14,7 +14,7 @@
 
   "commonAnnotations": {
     "context_sources": "hermes",
-    "session_id": "hermes-routing-022",
+    "hermes_session_id": "hermes-routing-022",
     "failure_mode": "routing_ignored"
   }
 }

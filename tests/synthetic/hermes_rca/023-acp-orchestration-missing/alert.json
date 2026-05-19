@@ -14,7 +14,7 @@
 
   "commonAnnotations": {
     "context_sources": "hermes",
-    "session_id": "hermes-acp-023",
+    "hermes_session_id": "hermes-acp-023",
     "failure_mode": "orchestration_missing"
   }
 }
