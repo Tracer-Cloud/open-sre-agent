@@ -19,6 +19,13 @@ from app.analytics.cli import (
 )
 from app.cli.support.context import is_json_output, is_yes
 from app.cli.support.errors import OpenSREError
+from app.correlation.runtime import build_runtime_correlation
+from app.correlation.upstream import (
+    LogSignal,
+    MetricSeries,
+    TopologyHint,
+    UpstreamEvidenceBundle,
+)
 
 _TEST_CATEGORIES: tuple[str, ...] = (
     "all",
@@ -421,6 +428,90 @@ def list_tests(category: str, search: str) -> None:
 
     for item in items:
         _echo_catalog_item(item)
+
+
+@tests.command(name="upstream-correlation-smoke")
+@click.option("--json", "output_json", is_flag=True, help="Print machine-readable JSON output.")
+def upstream_correlation_smoke(output_json: bool) -> None:
+    """Run deterministic upstream-correlation smoke validation."""
+    evidence = UpstreamEvidenceBundle(
+        rds_metrics=(
+            MetricSeries(
+                source="datadog",
+                name="aws.rds.cpuutilization{dbinstanceidentifier:orders-rds-prod}",
+                timestamps=(
+                    "2026-04-15T14:00:00Z",
+                    "2026-04-15T14:01:00Z",
+                    "2026-04-15T14:02:00Z",
+                ),
+                values=(35.0, 92.0, 95.0),
+            ),
+        ),
+        upstream_metrics=(
+            MetricSeries(
+                source="datadog",
+                name="system.cpu.user{service:orders-web}",
+                timestamps=(
+                    "2026-04-15T14:00:00Z",
+                    "2026-04-15T14:01:00Z",
+                    "2026-04-15T14:02:00Z",
+                ),
+                values=(30.0, 90.0, 94.0),
+            ),
+        ),
+        web_request_logs=(
+            LogSignal(
+                source="datadog",
+                name="alb",
+                timestamps=("2026-04-15T14:01:00Z",),
+                messages=("GET /checkout 200",),
+            ),
+        ),
+        app_logs=(
+            LogSignal(
+                source="datadog",
+                name="orders-app",
+                timestamps=("2026-04-15T14:01:00Z",),
+                messages=("checkout fanout started",),
+            ),
+        ),
+        topology_hints=(
+            TopologyHint(
+                source="system.cpu.user{service:orders-web}",
+                target="orders-rds-prod",
+                relation="upstream_of",
+            ),
+        ),
+        operator_hints=("checkout traffic spike detected",),
+    )
+
+    result = build_runtime_correlation(
+        evidence,
+        target_resource="orders-rds-prod",
+    )
+
+    signals = result.get("correlated_signals") or []
+    drivers = result.get("most_likely_causal_drivers") or []
+
+    if not signals or not drivers:
+        raise OpenSREError("Upstream correlation smoke validation failed.")
+
+    if output_json or is_json_output():
+        click.echo(json.dumps(result, indent=2))
+        return
+
+    click.echo("")
+    click.echo("Upstream Correlation Smoke Validation")
+    click.echo("")
+    click.echo("Correlated signals:")
+    for signal in signals:
+        click.echo(f"- {signal['name']} (source={signal['source']}, score={signal['score']})")
+
+    click.echo("")
+    click.echo("Most likely causal driver(s):")
+    for driver in drivers:
+        click.echo(f"- {driver['name']} (confidence={driver['confidence']})")
+        click.echo(f"  rationale={driver['rationale']}")
 
 
 @tests.command(name="run")

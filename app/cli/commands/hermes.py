@@ -106,7 +106,7 @@ def hermes_command() -> None:
 )
 @click.option(
     "--escalation-threshold",
-    type=int,
+    type=click.IntRange(min=2),
     default=3,
     show_default=True,
     help=(

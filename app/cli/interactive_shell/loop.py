@@ -1115,6 +1115,8 @@ async def _run_interactive(
         try:  # noqa: SIM105
             await sampler_task
         except asyncio.CancelledError:
+            # Sampler cleanup must never raise — we're already in the
+            # REPL's outer ``finally`` and the session is shutting down.
             pass
         processor_task.cancel()
         alert_watcher_task.cancel()

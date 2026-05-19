@@ -59,6 +59,7 @@ from app.integrations.sentry import build_sentry_config
 from app.integrations.signoz import build_signoz_config, signoz_config_from_env
 from app.integrations.store import _STRUCTURAL_RECORD_FIELDS, load_integrations
 from app.integrations.supabase import build_supabase_config
+from app.llm_credentials import resolve_env_credential
 from app.services.vercel import VercelConfig
 from app.utils.coercion import safe_int
 
@@ -1131,7 +1132,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         )
 
-    gitlab_access_token = os.getenv("GITLAB_ACCESS_TOKEN", "").strip()
+    gitlab_access_token = resolve_env_credential("GITLAB_ACCESS_TOKEN")
     if gitlab_access_token:
         gitlab_config = build_gitlab_config(
             {
@@ -1272,7 +1273,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         )
 
-    incident_io_api_key = os.getenv("INCIDENT_IO_API_KEY", "").strip()
+    incident_io_api_key = resolve_env_credential("INCIDENT_IO_API_KEY")
     if incident_io_api_key:
         try:
             incident_io_config = IncidentIoIntegrationConfig.model_validate(
@@ -1311,7 +1312,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         )
 
-    discord_bot_token = os.getenv("DISCORD_BOT_TOKEN", "").strip()
+    discord_bot_token = resolve_env_credential("DISCORD_BOT_TOKEN")
     if discord_bot_token:
         discord_config = DiscordBotConfig.model_validate(
             {
@@ -1388,7 +1389,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     "args": [
                         part for part in os.getenv("OPENCLAW_MCP_ARGS", "").strip().split() if part
                     ],
-                    "auth_token": os.getenv("OPENCLAW_MCP_AUTH_TOKEN", "").strip(),
+                    "auth_token": resolve_env_credential("OPENCLAW_MCP_AUTH_TOKEN"),
                 }
             )
             integrations.append(
@@ -1621,9 +1622,9 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 "opensearch",
                 {
                     "url": opensearch_url.rstrip("/"),
-                    "api_key": os.getenv("OPENSEARCH_API_KEY", "").strip(),
+                    "api_key": resolve_env_credential("OPENSEARCH_API_KEY"),
                     "username": os.getenv("OPENSEARCH_USERNAME", "").strip(),
-                    "password": os.getenv("OPENSEARCH_PASSWORD", "").strip(),
+                    "password": resolve_env_credential("OPENSEARCH_PASSWORD"),
                     "index_pattern": os.getenv("OPENSEARCH_INDEX_PATTERN", "*").strip() or "*",
                     "max_results": safe_int(os.getenv("OPENSEARCH_MAX_RESULTS", "100"), 100),
                 },

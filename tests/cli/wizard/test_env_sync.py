@@ -7,6 +7,7 @@ import pytest
 
 from app.cli.wizard.config import PROVIDER_BY_VALUE
 from app.cli.wizard.env_sync import sync_env_values, sync_provider_env
+from app.llm_credentials import resolve_env_credential
 
 _SKIP_AS_ROOT = not hasattr(os, "getuid") or os.getuid() == 0
 
@@ -99,6 +100,31 @@ def test_sync_provider_env_permission_error(tmp_path) -> None:
             )
     finally:
         env_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+
+
+def test_sync_env_values_routes_secrets_to_keyring(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("GITLAB_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
+    monkeypatch.setenv("PYTHON_KEYRING_BACKEND", "tests.shared.keyring_backend.MemoryKeyring")
+
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "GITLAB_BASE_URL=https://gitlab.example.com\nGITLAB_ACCESS_TOKEN=legacy-plaintext\n",
+        encoding="utf-8",
+    )
+
+    sync_env_values(
+        {
+            "GITLAB_BASE_URL": "https://gitlab.corp.com",
+            "GITLAB_ACCESS_TOKEN": "gl-secret-token",
+        },
+        env_path=env_path,
+    )
+
+    content = env_path.read_text(encoding="utf-8")
+    assert "GITLAB_BASE_URL=https://gitlab.corp.com\n" in content
+    assert "GITLAB_ACCESS_TOKEN=" not in content
+    assert resolve_env_credential("GITLAB_ACCESS_TOKEN") == "gl-secret-token"
 
 
 @pytest.mark.skipif(_SKIP_AS_ROOT, reason="root bypasses file permission checks")

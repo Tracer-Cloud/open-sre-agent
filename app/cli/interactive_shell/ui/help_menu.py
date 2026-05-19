@@ -18,7 +18,7 @@ from app.cli.interactive_shell.ui.choice_menu import (
     read_menu_action,
     write_menu_line,
 )
-from app.cli.interactive_shell.ui.rendering import repl_table
+from app.cli.interactive_shell.ui.rendering import print_repl_table, repl_print, repl_table
 from app.cli.interactive_shell.ui.theme import (
     ANSI_RESET,
     BOLD_BRAND,
@@ -80,8 +80,8 @@ def render_help_index(console: Console, sections: Sequence[HelpSection]) -> None
                 end_section=(index == len(commands) - 1),
             )
 
-    console.print(table)
-    console.print(f"[{DIM}]Use[/] [bold]/help <command>[/bold] [{DIM}]for usage.[/]")
+    print_repl_table(console, table)
+    repl_print(console, f"[{DIM}]Use[/] [bold]/help <command>[/bold] [{DIM}]for usage.[/]")
 
 
 def render_section_detail(
@@ -95,8 +95,8 @@ def render_section_detail(
     table.add_column("description", style=DIM)
     for command in commands:
         table.add_row(f"[{HIGHLIGHT}]{escape(command.name)}[/]", escape(command.description))
-    console.print(table)
-    console.print(f"[{DIM}]Use[/] [bold]/help <command>[/bold] [{DIM}]for usage.[/]")
+    print_repl_table(console, table)
+    repl_print(console, f"[{DIM}]Use[/] [bold]/help <command>[/bold] [{DIM}]for usage.[/]")
 
 
 def render_command_detail(console: Console, command: SlashCommand) -> None:
@@ -113,7 +113,7 @@ def render_command_detail(console: Console, command: SlashCommand) -> None:
     if command.notes:
         table.add_row("notes", "\n".join(escape(item) for item in command.notes))
 
-    console.print(table)
+    print_repl_table(console, table)
 
 
 def has_help_details(command: SlashCommand) -> bool:

@@ -41,8 +41,22 @@ def repl_tty_interactive() -> bool:
     return bool(sys.stdin.isatty() and sys.stdout.isatty())
 
 
+def ensure_tty_column_zero() -> None:
+    """Reset the cursor column before Rich output when a TTY is active."""
+    if repl_tty_interactive():
+        reset_tty_column()
+
+
+def prepare_repl_output_line() -> None:
+    """Begin Rich output on a new line after inline menu I/O."""
+    if repl_tty_interactive():
+        sys.stdout.write(_TERMINAL_NEWLINE)
+        reset_tty_column()
+
+
 def repl_section_break(console: Console) -> None:
     """Blank line + dim rule between an inline menu step and Rich output."""
+    prepare_repl_output_line()
     console.print()
     console.rule(characters="─", style=DIM)
     console.print()
@@ -170,13 +184,25 @@ def write_menu_line(text: str = "") -> None:
 
 
 def _erase_menu_block(height: int) -> None:
-    sys.stdout.write(f"\r\x1b[{height}A\r\x1b[J")
+    if height:
+        sys.stdout.write(f"\r\x1b[{height}A\r\x1b[J")
+    reset_tty_column()
+
+
+def reset_tty_column() -> None:
+    """Return the cursor to column zero after inline menu I/O.
+
+    Menu rows are padded to the terminal width, so the cursor often ends on a
+    high column. Rich output that follows must start at column zero or tables
+    render as a diagonal block of leading whitespace.
+    """
+    sys.stdout.write("\r")
+    sys.stdout.flush()
 
 
 def erase_menu_lines(height: int) -> None:
     """Erase a previously-rendered inline menu block."""
     _erase_menu_block(height)
-    sys.stdout.flush()
 
 
 def _draw_menu(
@@ -302,7 +328,10 @@ __all__ = [
     "print_valid_choice_list",
     "read_menu_action",
     "repl_choose_one",
+    "ensure_tty_column_zero",
+    "prepare_repl_output_line",
     "repl_section_break",
     "repl_tty_interactive",
+    "reset_tty_column",
     "write_menu_line",
 ]

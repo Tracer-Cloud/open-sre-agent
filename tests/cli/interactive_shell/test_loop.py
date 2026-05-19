@@ -36,6 +36,20 @@ from app.cli.interactive_shell.runtime.session import ReplSession
 from app.cli.interactive_shell.ui.theme import ANSI_RESET, PROMPT_ACCENT_ANSI
 
 
+def test_streaming_console_status_does_not_recurse(monkeypatch) -> None:
+    """Regression: overriding Console.print broke Rich's status spinner."""
+    spinner = loop._SpinnerState()
+    console = loop._StreamingConsole(
+        spinner,
+        threading.Event(),
+        file=io.StringIO(),
+        force_terminal=False,
+        width=80,
+    )
+    with console.status("working", spinner="dots"):
+        pass
+
+
 def test_repl_input_lexer_highlights_first_slash_token() -> None:
     lexer = ReplInputLexer()
     get_line = lexer.lex_document(Document("/model show", len("/model")))

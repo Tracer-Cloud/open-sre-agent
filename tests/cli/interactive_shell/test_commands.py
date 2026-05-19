@@ -461,13 +461,30 @@ class TestIntegrationsCommand:
         assert "all integrations ok" in buf.getvalue()
 
     def test_show_known_service(self, monkeypatch: object) -> None:
-        self._patch(monkeypatch)
+        verified: list[str | None] = []
+
+        def _verify_one(service: str) -> dict[str, str]:
+            verified.append(service)
+            return {
+                "service": service,
+                "source": "env",
+                "status": "ok",
+                "detail": "ok",
+            }
+
+        monkeypatch.setattr(
+            repl_data_module,
+            "configured_integration_names",
+            lambda: ["datadog"],
+        )
+        monkeypatch.setattr(repl_data_module, "verify_integration", _verify_one)
         console, buf = _capture()
         dispatch_slash("/integrations show datadog", ReplSession(), console)
+        assert verified == ["datadog"]
         assert "datadog" in buf.getvalue()
 
     def test_show_unknown_service(self, monkeypatch: object) -> None:
-        self._patch(monkeypatch)
+        monkeypatch.setattr(repl_data_module, "configured_integration_names", lambda: ["datadog"])
         session = ReplSession()
         session.record("slash", "/integrations show bogus")
         console, buf = _capture()

@@ -49,6 +49,16 @@ def test_erase_menu_block_resets_to_column_zero(monkeypatch) -> None:
     rendered = out.getvalue()
     assert rendered.startswith("\r\x1b[")
     assert "A\r\x1b[J" in rendered
+    assert rendered.endswith("\r")
+
+
+def test_reset_tty_column_writes_carriage_return(monkeypatch) -> None:
+    out = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", out)
+
+    choice_menu.reset_tty_column()
+
+    assert out.getvalue() == "\r"
 
 
 def test_pick_ignores_unmapped_keys(monkeypatch) -> None:
