@@ -1,7 +1,7 @@
 -include .env
 export
 
-.PHONY: install onboard benchmark benchmark-update-readme test test-full demo alert-template investigate-alert opensre-hub-fetch opensre-hub-export opensre-hub-investigate verify-integrations check-docker grafana-local-up grafana-local-down grafana-local-seed clean lint format deploy deploy-lambda deploy-prefect deploy-flink destroy destroy-lambda destroy-prefect destroy-flink prefect-local-test simulate-k8s-alert test-k8s-local test-k8s test-k8s-datadog chaos-mesh-up chaos-mesh-down chaos-engineering-apply chaos-engineering-delete chaos-lab-up chaos-lab-down chaos-experiment-list chaos-experiment-up chaos-experiment-down deploy-dd-monitors cleanup-dd-monitors deploy-eks destroy-eks test-k8s-eks datadog-demo crashloop-demo regen-trigger-config test-rca test-rca-grafana test-synthetic test-rds-synthetic test-cli-smoke deploy-vercel destroy-vercel test-vercel deploy-ec2 destroy-ec2 test-ec2 deploy-ec2-hello destroy-ec2-hello deploy-remote destroy-remote deploy-bedrock destroy-bedrock test-bedrock download-cloudopsbench-hf validate-cloudopsbench test-openclaw test-openclaw-synthetic test-hermes test-hermes-synthetic dev dev-down
+.PHONY: install onboard benchmark benchmark-update-readme test test-full demo alert-template investigate-alert opensre-hub-fetch opensre-hub-export opensre-hub-investigate verify-integrations check-docker grafana-local-up grafana-local-down grafana-local-seed clean lint format deploy deploy-lambda deploy-prefect deploy-flink destroy destroy-lambda destroy-prefect destroy-flink prefect-local-test simulate-k8s-alert test-k8s-local test-k8s test-k8s-datadog chaos-mesh-up chaos-mesh-down chaos-engineering-apply chaos-engineering-delete chaos-lab-up chaos-lab-down chaos-experiment-list chaos-experiment-up chaos-experiment-down deploy-dd-monitors cleanup-dd-monitors deploy-eks destroy-eks test-k8s-eks datadog-demo crashloop-demo regen-trigger-config test-rca test-rca-grafana test-synthetic test-rds-synthetic test-cli-smoke deploy-vercel destroy-vercel test-vercel deploy-ec2 destroy-ec2 test-ec2 deploy-ec2-hello destroy-ec2-hello deploy-remote destroy-remote deploy-bedrock destroy-bedrock test-bedrock download-cloudopsbench-hf validate-cloudopsbench test-openclaw test-openclaw-synthetic test-hermes test-hermes-synthetic test-vault dev dev-down
 
 
 ifneq ($(wildcard .venv/bin/python),)
@@ -374,6 +374,14 @@ test-cli-smoke:
 test-grafana:
 	@echo "Running Grafana integration tests..."
 	$(PYTHON) -m pytest tests/e2e/grafana_validation/test_grafana_cloud_queries.py -v
+
+# Run VaultCredentialProvider integration tests against LocalStack.
+# Requires: docker run --rm -p 4566:4566 localstack/localstack
+test-vault:
+	@echo "Running VaultCredentialProvider integration tests against LocalStack..."
+	AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1 \
+	AWS_ENDPOINT_URL=http://localhost:4566 \
+	$(PYTHON) -m pytest -v -m vault_integration tests/test_vault_integration.py
 
 # Spin up the local RabbitMQ stack (broker + publisher + slow consumer), wait
 # for a backlog to accumulate, then exercise the read-only diagnostic tools

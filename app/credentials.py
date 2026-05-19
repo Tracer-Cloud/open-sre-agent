@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 from abc import ABC, abstractmethod
 from contextvars import ContextVar, Token
+from time import time
 from typing import Final
 
 _tenant_ctx: ContextVar[str] = ContextVar("tenant_id")
@@ -61,8 +62,84 @@ class EnvCredentialProvider(CredentialProvider):
         return os.environ[key]
 
 
+class VaultCredentialProvider(CredentialProvider):
+    """Multi-tenant provider that fetches per-tenant credentials from AWS Secrets Manager.
+
+    Secret naming convention: ``{prefix}/{tenant_id}/{CREDENTIAL_KEY}``
+
+    LLM platform keys bypass the vault and are always read directly from the
+    process environment — they are platform-owned, never tenant-scoped.
+    """
+
+    def __init__(self, region: str, prefix: str = "healops", ttl: int = 300) -> None:
+        import boto3  # lazy import so non-vault deployments don't require boto3
+
+        self._client = boto3.client("secretsmanager", region_name=region)
+        self._prefix = prefix
+        self._ttl = ttl
+        # (tenant_id, key) -> (value, expiry_timestamp)
+        self._cache: dict[tuple[str, str], tuple[str, float]] = {}
+
+    def get(self, key: str) -> str:
+        # LLM platform keys are always resolved from the process environment.
+        if key in LLM_PLATFORM_KEYS:
+            return os.environ[key]
+
+        tenant_id = get_current_tenant()
+        cache_key = (tenant_id, key)
+
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            value, expiry = cached
+            if time() < expiry:
+                return value
+
+        secret_name = f"{self._prefix}/{tenant_id}/{key}"
+        try:
+            from botocore.exceptions import ClientError
+
+            try:
+                resp = self._client.get_secret_value(SecretId=secret_name)
+                value = resp["SecretString"]
+                self._cache[cache_key] = (value, time() + self._ttl)
+                return value
+            except ClientError as exc:
+                if exc.response["Error"]["Code"] == "ResourceNotFoundException":
+                    raise KeyError(
+                        f"Credential {key!r} not found for tenant {tenant_id!r}"
+                    ) from exc
+                raise
+        except ImportError:
+            # botocore not available — fall through and let the raw error propagate.
+            resp = self._client.get_secret_value(SecretId=secret_name)
+            value = resp["SecretString"]
+            self._cache[cache_key] = (value, time() + self._ttl)
+            return value
+
+
+def build_credential_provider() -> CredentialProvider:
+    """Instantiate the correct provider from environment variables.
+
+    ``CREDENTIAL_BACKEND=vault`` activates :class:`VaultCredentialProvider`.
+    ``AWS_REGION`` (or ``VAULT_REGION``) and ``VAULT_PREFIX`` are honoured when
+    building the vault provider.  Falls back to :class:`EnvCredentialProvider`.
+    """
+    backend = os.environ.get("CREDENTIAL_BACKEND", "env").strip().lower()
+    if backend == "vault":
+        region = (
+            os.environ.get("VAULT_REGION")
+            or os.environ.get("AWS_REGION")
+            or os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+        )
+        prefix = os.environ.get("VAULT_PREFIX", "healops")
+        return VaultCredentialProvider(region=region, prefix=prefix)
+    return EnvCredentialProvider()
+
+
 # Module-level singleton — swapped out at startup for multi-tenant backends.
-credential_provider: CredentialProvider = EnvCredentialProvider()
+# Call build_credential_provider() at application startup (see app/config.py)
+# and reassign this name to activate the correct backend.
+credential_provider: CredentialProvider = build_credential_provider()
 
 
 def get_opt(key: str, default: str = "") -> str:
