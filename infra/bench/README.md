@@ -38,7 +38,7 @@ to re-run:
 
 The script creates:
 
-- S3 bucket `tracer-cloud-tfstate` — versioned, AES256-encrypted, public access blocked
+- S3 bucket `tracer-cloud-tfstate-<account-id>` — versioned, AES256-encrypted, public access blocked. Suffixed with account ID because S3 bucket names are global.
 - DynamoDB table `tracer-cloud-tflock` — partition key `LockID` (String), PAY_PER_REQUEST, SSE enabled
 
 Both in `us-east-1` by default. Override with env vars:

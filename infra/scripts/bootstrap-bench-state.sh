@@ -24,7 +24,11 @@
 set -euo pipefail
 
 REGION="${AWS_REGION:-us-east-1}"
-BUCKET="${TF_STATE_BUCKET:-tracer-cloud-tfstate}"
+# S3 bucket names are global. Default suffixes the account ID so the name
+# is unique across the world and obviously owned by your account. Override
+# via env var if you need to bootstrap into a different account.
+ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+BUCKET="${TF_STATE_BUCKET:-tracer-cloud-tfstate-${ACCOUNT_ID}}"
 TABLE="${TF_LOCK_TABLE:-tracer-cloud-tflock}"
 
 echo "Bootstrapping Terraform state backend"
