@@ -338,9 +338,7 @@ def _build_sentry_integrations() -> list[Any]:
     integrations: list[Any] = []
 
     if os.getenv("OPENSRE_SENTRY_LOGGING_DISABLED", "0") != "1":
-        integrations.append(
-            LoggingIntegration(level=logging.INFO, event_level=logging.ERROR)
-        )
+        integrations.append(LoggingIntegration(level=logging.INFO, event_level=logging.ERROR))
 
     integrations.append(AsyncioIntegration())
     integrations.append(HttpxIntegration())
@@ -438,6 +436,9 @@ def init_sentry(entrypoint: str | None = None) -> None:
     env var, then the bundled constant. Set ``OPENSRE_NO_TELEMETRY=1`` or
     ``DO_NOT_TRACK=1`` to disable both Sentry and PostHog product analytics.
     ``OPENSRE_SENTRY_DISABLED=1`` disables Sentry only;
+    ``OPENSRE_SENTRY_LOGGING_DISABLED=1`` disables automatic forwarding of
+    ``logger.error`` and ``logger.exception`` calls to Sentry as events,
+    without affecting ``capture_exception``.
     ``OPENSRE_ANALYTICS_DISABLED=1`` disables PostHog only.
 
     ``entrypoint`` identifies the calling surface (``cli``, ``webapp``,

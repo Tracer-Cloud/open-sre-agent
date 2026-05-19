@@ -11,6 +11,7 @@ from app.utils import sentry_sdk as sentry_mod
 
 _REAL_BUILD_INTEGRATIONS = sentry_mod._build_sentry_integrations
 
+
 @pytest.fixture(autouse=True)
 def _reset_sentry_module_state(monkeypatch: pytest.MonkeyPatch) -> None:
     """Clear cached init/tag state, and skip building real integrations.
@@ -823,4 +824,3 @@ def test_build_sentry_integrations_includes_logging_by_default(monkeypatch) -> N
     assert "LoggingIntegration" in integration_names
     assert "AsyncioIntegration" in integration_names
     assert "HttpxIntegration" in integration_names
-
