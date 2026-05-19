@@ -1,4 +1,4 @@
-"""State models for the interactive shell loop runtime."""
+"""State models for the interactive shell UI runtime."""
 
 from __future__ import annotations
 
@@ -41,6 +41,32 @@ class ReplState:
             return
         self.confirm_response.append(answer)
         self.confirm_event.set()
+
+    def bind_loop(self, loop: asyncio.AbstractEventLoop) -> None:
+        self.loop = loop
+
+    def request_exit(self) -> None:
+        self.exit_requested = True
+
+    def begin_confirmation(self, event: threading.Event) -> None:
+        self.confirm_response = []
+        self.confirm_event = event
+
+    def clear_confirmation(self) -> None:
+        self.confirm_event = None
+        self.confirm_response = []
+
+    def start_dispatch(self, *, task: asyncio.Task[None], cancel_event: threading.Event) -> None:
+        self.current_task = task
+        self.current_cancel_event = cancel_event
+
+    def clear_current_task(self, task: asyncio.Task[None] | None = None) -> None:
+        if task is None or self.current_task is task:
+            self.current_task = None
+
+    def finish_dispatch(self, cancel_event: threading.Event) -> None:
+        if self.current_cancel_event is cancel_event:
+            self.current_cancel_event = None
 
     def cancel_current_dispatch(self) -> None:
         if self.current_cancel_event is not None:

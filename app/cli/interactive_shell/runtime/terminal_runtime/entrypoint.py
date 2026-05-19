@@ -16,7 +16,7 @@ from app.cli.interactive_shell.runtime import HotReloadCoordinator, ReplSession,
 from app.cli.interactive_shell.ui import DIM, render_banner
 
 from .dispatch import run_initial_input
-from .ui_runtime import run_interactive
+from .terminal_runtime import run_interactive
 
 log = logging.getLogger(__name__)
 

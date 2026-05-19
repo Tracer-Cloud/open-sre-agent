@@ -492,7 +492,7 @@ def test_default_no_args_enters_repl(monkeypatch) -> None:
 
     with (
         patch("app.cli.interactive_shell.run_repl", return_value=0),
-        patch("app.cli.interactive_shell.loop.run_repl", return_value=0),
+        patch("app.cli.interactive_shell.runtime.terminal_runtime.run_repl", return_value=0),
     ):
         exit_code = main([])
 
@@ -525,7 +525,7 @@ def test_no_reload_flag_passes_reload_disabled(monkeypatch) -> None:
 
     with (
         patch("app.cli.interactive_shell.run_repl", return_value=0),
-        patch("app.cli.interactive_shell.loop.run_repl", return_value=0),
+        patch("app.cli.interactive_shell.runtime.terminal_runtime.run_repl", return_value=0),
     ):
         exit_code = main(["--no-reload"])
 

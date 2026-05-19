@@ -72,10 +72,10 @@ async def run_interactive(
 
     pt_app = pt_session.app
     main_loop = asyncio.get_running_loop()
-    state.loop = main_loop
+    state.bind_loop(main_loop)
 
     def _request_exit() -> None:
-        state.exit_requested = True
+        state.request_exit()
 
         def _exit_prompt_app(attempts_left: int = 5) -> None:
             if pt_app.is_running:
@@ -88,7 +88,11 @@ async def run_interactive(
 
     async def _run_one_dispatch(text: str) -> None:
         dispatch_cancel = threading.Event()
-        state.current_cancel_event = dispatch_cancel
+        current_task = asyncio.current_task()
+        if current_task is not None:
+            state.start_dispatch(task=current_task, cancel_event=dispatch_cancel)
+        else:
+            state.current_cancel_event = dispatch_cancel
         console = StreamingConsole(
             spinner,
             dispatch_cancel,
@@ -120,8 +124,7 @@ async def run_interactive(
         finally:
             if show_spinner:
                 spinner.stop()
-            if state.current_cancel_event is dispatch_cancel:
-                state.current_cancel_event = None
+            state.finish_dispatch(dispatch_cancel)
 
     async def _alert_watcher() -> None:
         if inbox is None:
@@ -157,7 +160,7 @@ async def run_interactive(
                 await state.current_task
             except (asyncio.CancelledError, Exception):
                 pass
-            state.current_task = None
+            state.clear_current_task()
             state.queue.task_done()
 
     def _message_with_spinner() -> ANSI:
@@ -231,7 +234,7 @@ async def run_interactive(
                 if wait_for_dispatch:
                     await state.queue.join()
     finally:
-        state.exit_requested = True
+        state.request_exit()
         state.cancel_current_dispatch()
         sampler_task.cancel()
         try:  # noqa: SIM105

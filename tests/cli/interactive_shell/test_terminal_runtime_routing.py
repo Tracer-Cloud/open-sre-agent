@@ -1,8 +1,4 @@
-"""Routing-focused tests for interactive shell loop dispatch helpers.
-
-NOTE: Keep this module in ``app/cli/interactive_shell/routing/tests/``; do not move
-it back into ``tests/cli/interactive_shell/routing/``.
-"""
+"""Routing-focused tests for interactive shell terminal runtime dispatch helpers."""
 
 from __future__ import annotations
 
@@ -11,11 +7,13 @@ import io
 import pytest
 from rich.console import Console
 
-from app.cli.interactive_shell import loop
 from app.cli.interactive_shell.intent.interaction_models import PlannedAction
 from app.cli.interactive_shell.orchestration.agent_actions import TerminalActionExecutionResult
 from app.cli.interactive_shell.routing.types import RouteDecision, RouteKind
+from app.cli.interactive_shell.runtime import terminal_runtime as loop
 from app.cli.interactive_shell.runtime.session import ReplSession
+from app.cli.interactive_shell.runtime.terminal_runtime import dispatch as loop_dispatch
+from app.cli.interactive_shell.runtime.terminal_runtime import execution as loop_execution
 
 
 def test_dispatch_one_turn_typoed_bare_alias_dispatches_canonical_slash(
@@ -29,15 +27,15 @@ def test_dispatch_one_turn_typoed_bare_alias_dispatches_canonical_slash(
         return True
 
     monkeypatch.setattr(
-        loop,
+        loop_dispatch._router,
         "route_input",
         lambda *_args: RouteDecision(RouteKind.SLASH, 0.98, ("bare_command_alias",)),
     )
-    monkeypatch.setattr(loop, "dispatch_slash", _dispatch)
+    monkeypatch.setattr(loop_execution, "dispatch_slash", _dispatch)
     session = ReplSession()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
 
-    loop._dispatch_one_turn("hlep", session, console, on_exit=lambda: None)
+    loop_dispatch._dispatch_one_turn("hlep", session, console, on_exit=lambda: None)
 
     assert dispatched == ["/help"]
 
@@ -52,15 +50,15 @@ def test_dispatch_one_turn_bare_integrations_alias_preserves_args(
         return True
 
     monkeypatch.setattr(
-        loop,
+        loop_dispatch._router,
         "route_input",
         lambda *_args: RouteDecision(RouteKind.SLASH, 0.98, ("bare_command_alias",)),
     )
-    monkeypatch.setattr(loop, "dispatch_slash", _dispatch)
+    monkeypatch.setattr(loop_execution, "dispatch_slash", _dispatch)
     session = ReplSession()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
 
-    loop._dispatch_one_turn("integrations list", session, console, on_exit=lambda: None)
+    loop_dispatch._dispatch_one_turn("integrations list", session, console, on_exit=lambda: None)
 
     assert dispatched == ["/integrations list"]
 
@@ -107,19 +105,19 @@ def test_dispatch_one_turn_routes_to_cli_help_for_help_questions(
     answered_with: list[str] = []
 
     monkeypatch.setattr(
-        loop,
+        loop_dispatch._router,
         "route_input",
         lambda *_args: RouteDecision(RouteKind.CLI_HELP, 0.9, ("test",)),
     )
     monkeypatch.setattr(
-        loop,
+        loop_execution,
         "answer_cli_help",
         lambda text, _session, _console: answered_with.append(text),
     )
 
     session = ReplSession()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
-    loop._dispatch_one_turn("explain deploy", session, console, on_exit=lambda: None)
+    loop_dispatch._dispatch_one_turn("explain deploy", session, console, on_exit=lambda: None)
 
     assert answered_with == ["explain deploy"]
 
@@ -161,20 +159,20 @@ def test_dispatch_one_turn_nitro_prompt_uses_cli_agent_actions_not_cli_help(
         llm_calls.append(text)
 
     monkeypatch.setattr(
-        loop,
+        loop_execution,
         "execute_cli_actions_with_metrics",
         _fake_execute_cli_actions_with_metrics,
     )
     monkeypatch.setattr(
-        loop,
+        loop_execution,
         "answer_cli_help",
         lambda text, _session, _console: help_calls.append(text),
     )
-    monkeypatch.setattr(loop, "answer_cli_agent", _fake_answer_cli_agent)
+    monkeypatch.setattr(loop_execution, "answer_cli_agent", _fake_answer_cli_agent)
 
     session = ReplSession()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
-    loop._dispatch_one_turn(nitro_prompt, session, console, on_exit=lambda: None)
+    loop_dispatch._dispatch_one_turn(nitro_prompt, session, console, on_exit=lambda: None)
 
     assert action_calls == [nitro_prompt]
     assert help_calls == []
@@ -214,12 +212,12 @@ def test_dispatch_one_turn_nitro_prompt_executes_remote_then_investigation(
         call_order.append(f"investigation:{alert_text}")
 
     monkeypatch.setattr(
-        loop,
+        loop_dispatch._router,
         "route_input",
         lambda *_args: RouteDecision(RouteKind.CLI_AGENT, 0.9, ("cli_agent_action_plan",)),
     )
     monkeypatch.setattr(
-        loop._agent_actions,
+        loop_execution._agent_actions,
         "_plan_actions",
         lambda _message: (
             [
@@ -229,17 +227,21 @@ def test_dispatch_one_turn_nitro_prompt_executes_remote_then_investigation(
             False,
         ),
     )
-    monkeypatch.setattr(loop._agent_actions, "dispatch_slash", _fake_dispatch)
-    monkeypatch.setattr(loop._agent_actions, "run_text_investigation", _fake_run_text_investigation)
+    monkeypatch.setattr(loop_execution._agent_actions, "dispatch_slash", _fake_dispatch)
     monkeypatch.setattr(
-        loop,
+        loop_execution._agent_actions,
+        "run_text_investigation",
+        _fake_run_text_investigation,
+    )
+    monkeypatch.setattr(
+        loop_execution,
         "answer_cli_help",
         lambda text, _session, _console: help_calls.append(text),
     )
 
     session = ReplSession()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
-    loop._dispatch_one_turn(nitro_prompt, session, console, on_exit=lambda: None)
+    loop_dispatch._dispatch_one_turn(nitro_prompt, session, console, on_exit=lambda: None)
 
     assert call_order == ["slash:/remote", "investigation:hello world"]
     assert help_calls == []

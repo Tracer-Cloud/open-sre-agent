@@ -15,15 +15,7 @@ from app.cli.interactive_shell.routing.handle_message_with_agent import (
     handle_message_with_agent,
     llm_phase_route,
 )
-from app.cli.interactive_shell.routing.resolve_cli_command import (
-    is_bare_command_alias as _is_bare_command_alias,
-)
-from app.cli.interactive_shell.routing.resolve_cli_command import (
-    resolve_cli_command,
-)
-from app.cli.interactive_shell.routing.resolve_cli_command import (
-    slash_dispatch_text as _slash_dispatch_text,
-)
+from app.cli.interactive_shell.routing.resolve_cli_command import resolve_cli_command
 from app.cli.interactive_shell.routing.types import (
     RouteDecision,
     RouteKind,
@@ -54,22 +46,10 @@ def classify_input(text: str, session: RoutingSession) -> str:
     return route_input(text, session).route_kind.value
 
 
-def is_bare_command_alias(text: str, _session: RoutingSession) -> bool:
-    """True when ``text`` is a bare slash-command alias or accepted typo."""
-    return _is_bare_command_alias(text)
-
-
-def slash_dispatch_text(text: str) -> str:
-    """Return slash command text, including typo-tolerant bare alias mapping."""
-    return _slash_dispatch_text(text)
-
-
 __all__ = [
     "RouteDecision",
     "RouteKind",
     "RoutingSession",
     "classify_input",
-    "is_bare_command_alias",
     "route_input",
-    "slash_dispatch_text",
 ]

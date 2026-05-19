@@ -1,4 +1,4 @@
-"""Turn-dispatch logic for the interactive shell loop."""
+"""Turn-dispatch logic for the interactive shell UI runtime."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import re
 import sys
 import threading
 from collections.abc import Callable
+from dataclasses import replace
 
 from prompt_toolkit.key_binding import KeyBindings, merge_key_bindings
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent
@@ -89,7 +90,20 @@ def dispatch_should_show_spinner(text: str, session: ReplSession) -> bool:
 
 
 def dispatch_needs_exclusive_stdin(text: str, session: ReplSession) -> bool:
-    if not repl_tty_interactive():
+    return _dispatch_needs_exclusive_stdin_impl(
+        text,
+        session,
+        tty_interactive_fn=repl_tty_interactive,
+    )
+
+
+def _dispatch_needs_exclusive_stdin_impl(
+    text: str,
+    session: ReplSession,
+    *,
+    tty_interactive_fn: Callable[[], bool],
+) -> bool:
+    if not tty_interactive_fn():
         return False
 
     t = text.strip()
@@ -128,6 +142,11 @@ def dispatch_one_turn(
     kind = decision.route_kind.value
     if kind in ("follow_up", "new_alert") and _looks_like_correction(text):
         session.record_intervention("correction")
+    if kind == "slash" and not getattr(decision, "command_text", None):
+        command_decision = resolve_cli_command(text.strip(), session)
+        normalized_command = command_decision.command_text if command_decision else text.strip()
+        if hasattr(decision, "__dataclass_fields__"):
+            decision = replace(decision, command_text=normalized_command)
     execute_routed_turn(
         text,
         session,
@@ -173,8 +192,7 @@ def route_confirm_through_prompt(state: ReplState, prompt_text: str) -> str:
     sys.stdout.flush()
 
     response_event = threading.Event()
-    state.confirm_response = []
-    state.confirm_event = response_event
+    state.begin_confirmation(response_event)
     try:
         while not response_event.is_set():
             cancel = state.current_cancel_event
@@ -185,8 +203,7 @@ def route_confirm_through_prompt(state: ReplState, prompt_text: str) -> str:
             raise DispatchCancelled("cancelled while awaiting confirmation")
         return state.confirm_response[0]
     finally:
-        state.confirm_event = None
-        state.confirm_response = []
+        state.clear_confirmation()
 
 
 def build_cancel_key_bindings(state: ReplState) -> KeyBindings:
@@ -218,6 +235,7 @@ _looks_like_confirmation_answer = looks_like_confirmation_answer
 _looks_like_cancel_request = looks_like_cancel_request
 _dispatch_should_show_spinner = dispatch_should_show_spinner
 _dispatch_needs_exclusive_stdin = dispatch_needs_exclusive_stdin
+_dispatch_needs_exclusive_stdin_impl = _dispatch_needs_exclusive_stdin_impl
 _dispatch_one_turn = dispatch_one_turn
 _run_initial_input = run_initial_input
 _route_confirm_through_prompt = route_confirm_through_prompt
@@ -237,6 +255,7 @@ __all__ = [
     "run_initial_input",
     "_build_cancel_key_bindings",
     "_dispatch_needs_exclusive_stdin",
+    "_dispatch_needs_exclusive_stdin_impl",
     "_dispatch_one_turn",
     "_dispatch_should_show_spinner",
     "_install_session_key_bindings",

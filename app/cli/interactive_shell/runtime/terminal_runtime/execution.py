@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
 
 from rich.console import Console
 from rich.markup import escape
@@ -16,7 +15,7 @@ from app.cli.interactive_shell import commands as _commands
 from app.cli.interactive_shell.chat import cli_agent as _cli_agent
 from app.cli.interactive_shell.chat import cli_help as _cli_help
 from app.cli.interactive_shell.prompting import follow_up as _follow_up
-from app.cli.interactive_shell.routing import router as _router
+from app.cli.interactive_shell.routing.types import RouteDecision
 from app.cli.interactive_shell.runtime import ReplSession
 from app.cli.interactive_shell.ui import DIM, ERROR, WARNING
 from app.cli.support.errors import OpenSREError
@@ -26,8 +25,6 @@ from app.llm_reasoning_effort import apply_reasoning_effort
 answer_cli_help = _cli_help.answer_cli_help
 answer_cli_agent = _cli_agent.answer_cli_agent
 answer_follow_up = _follow_up.answer_follow_up
-route_input = _router.route_input
-resolve_cli_command = _router.resolve_cli_command
 execute_cli_actions_with_metrics = _agent_actions.execute_cli_actions_with_metrics
 dispatch_slash = _commands.dispatch_slash
 
@@ -112,11 +109,9 @@ def execute_routed_turn(
     *,
     on_exit: Callable[[], None],
     confirm_fn: Callable[[str], str] | None = None,
-    decision: Any | None = None,
+    decision: RouteDecision,
 ) -> None:
     """Route + execute one accepted line."""
-    resolved_decision = decision or route_input(text, session)
-    decision = resolved_decision
     kind = decision.route_kind.value
     session.last_route_decision = decision
     get_analytics().capture(
@@ -127,8 +122,7 @@ def execute_routed_turn(
     if kind == "slash":
         cmd_text = decision.command_text
         if not cmd_text:
-            command_decision = resolve_cli_command(text.strip(), session)
-            cmd_text = command_decision.command_text if command_decision else text.strip()
+            cmd_text = text.strip()
         try:
             should_continue = dispatch_slash(cmd_text, session, console)
         except Exception as exc:

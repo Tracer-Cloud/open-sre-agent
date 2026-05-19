@@ -29,7 +29,7 @@ _INTERACTIVE_RELOAD_DEPENDENTS = (
     "app.cli.interactive_shell.references.cli_reference",
     "app.cli.interactive_shell.orchestration.agent_actions",
     "app.cli.interactive_shell.chat.cli_agent",
-    "app.cli.interactive_shell.loop",
+    "app.cli.interactive_shell.runtime.terminal_runtime",
 )
 
 

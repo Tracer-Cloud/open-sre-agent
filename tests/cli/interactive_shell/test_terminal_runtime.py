@@ -1,4 +1,4 @@
-"""Tests for the interactive shell loop helpers."""
+"""Tests for the interactive shell terminal runtime helpers."""
 
 from __future__ import annotations
 
@@ -21,7 +21,6 @@ from prompt_toolkit.input.defaults import create_pipe_input
 from prompt_toolkit.keys import Keys
 from prompt_toolkit.output import DummyOutput
 
-from app.cli.interactive_shell import loop
 from app.cli.interactive_shell.prompting import prompt_surface
 from app.cli.interactive_shell.prompting.prompt_surface import (
     _SHIFT_ENTER_SEQUENCE,
@@ -31,7 +30,9 @@ from app.cli.interactive_shell.prompting.prompt_surface import (
     _build_prompt_style,
     _tab_expand_or_menu,
 )
+from app.cli.interactive_shell.runtime import terminal_runtime as loop
 from app.cli.interactive_shell.runtime.session import ReplSession
+from app.cli.interactive_shell.runtime.terminal_runtime import state as loop_state
 from app.cli.interactive_shell.ui.theme import ANSI_RESET, PROMPT_ACCENT_ANSI
 
 
@@ -420,7 +421,10 @@ def test_dispatch_one_turn_reports_slash_dispatch_error(
     def _boom(*_args: object, **_kwargs: object) -> bool:
         raise RuntimeError("handler crashed")
 
-    monkeypatch.setattr(loop, "dispatch_slash", _boom)
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.runtime.terminal_runtime.execution.dispatch_slash",
+        _boom,
+    )
     monkeypatch.setattr(
         "app.cli.support.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
@@ -447,7 +451,10 @@ def test_dispatch_one_turn_calls_on_exit_when_slash_returns_false(
     """
     from rich.console import Console
 
-    monkeypatch.setattr(loop, "dispatch_slash", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.runtime.terminal_runtime.execution.dispatch_slash",
+        lambda *_args, **_kwargs: False,
+    )
 
     session = ReplSession()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
@@ -736,7 +743,7 @@ class TestSpinnerState:
         class _FakeApp:
             current_buffer = _FakeBuffer()
 
-        monkeypatch.setattr(loop, "get_app_or_none", lambda: _FakeApp())
+        monkeypatch.setattr(loop_state, "get_app_or_none", lambda: _FakeApp())
 
         spinner = loop._SpinnerState()
         rendered = _strip_ansi(spinner.toolbar_ansi().value)
