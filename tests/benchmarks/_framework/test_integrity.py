@@ -49,9 +49,7 @@ class _HonestAdapter(BenchmarkAdapter):
     def build_baseline_tools(self, _case: BenchmarkCase) -> dict[str, Any]:
         return {}
 
-    def score_case(
-        self, case: BenchmarkCase, _run: RunResult, _context: RunContext
-    ) -> CaseScore:
+    def score_case(self, case: BenchmarkCase, _run: RunResult, _context: RunContext) -> CaseScore:
         return CaseScore(case_id=case.case_id, metrics={"a1": 1.0, "grounding": 1.0})
 
     def metric_schema(self) -> MetricSchema:
