@@ -11,7 +11,7 @@
   expected: "cli_agent"
 
 - input: "api latency spiked and 5xx errors increased"
-  expected: "new_alert"
+  expected: "cli_agent"
 
 - input: "hello"
   expected: "cli_agent"

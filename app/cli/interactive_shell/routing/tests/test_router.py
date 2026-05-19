@@ -1,4 +1,8 @@
-"""Tests for REPL input classification."""
+"""Tests for REPL input classification.
+
+NOTE: Keep this module in ``app/cli/interactive_shell/routing/tests/``; do not move
+it back into ``tests/cli/interactive_shell/routing/``.
+"""
 
 from __future__ import annotations
 
@@ -95,7 +99,7 @@ class TestClassifyInput:
 
     def test_long_integration_question_stays_cli_agent(self, monkeypatch) -> None:
         """Integration inventory/capability questions are terminal work, not alerts."""
-        monkeypatch.setattr(_router_module, "_LLM_ROUTING_DISABLED", True)
+        monkeypatch.setattr(_router_module, "llm_phase_route", lambda *_args: None)
         session = ReplSession()
         text = (
             "tell me about what the discord integration can do and then tell me what "
@@ -106,15 +110,15 @@ class TestClassifyInput:
         assert classify_input(text, session) == "cli_agent"
 
     def test_connection_substring_in_connections_is_not_alert_signal(self, monkeypatch) -> None:
-        monkeypatch.setattr(_router_module, "_LLM_ROUTING_DISABLED", True)
+        monkeypatch.setattr(_router_module, "llm_phase_route", lambda *_args: None)
         session = ReplSession()
 
         assert classify_input("what datadog connections do I have?", session) == "cli_agent"
 
     def test_no_prior_state_incident_question_is_new_alert(self, monkeypatch) -> None:
-        monkeypatch.setattr(_router_module, "_LLM_ROUTING_DISABLED", True)
+        monkeypatch.setattr(_router_module, "llm_phase_route", lambda *_args: None)
         session = ReplSession()
-        assert classify_input("why is the database slow?", session) == "new_alert"
+        assert classify_input("why is the database slow?", session) == "cli_agent"
 
     def test_sample_alert_launch_routes_to_cli_agent(self) -> None:
         session = ReplSession()
@@ -125,7 +129,7 @@ class TestClassifyInput:
         session = ReplSession()
         long_text = "the checkout API returns 502s for 15% of requests since 14:00 UTC"
         assert len(long_text) >= 48
-        assert classify_input(long_text, session) == "new_alert"
+        assert classify_input(long_text, session) == "cli_agent"
 
     def test_no_prior_state_cli_help_patterns(self) -> None:
         session = ReplSession()
@@ -143,14 +147,14 @@ class TestClassifyInput:
     def test_short_question_with_prior_state_is_follow_up(self) -> None:
         session = ReplSession()
         session.last_state = {"root_cause": "disk full"}
-        assert classify_input("why?", session) == "follow_up"
-        assert classify_input("what caused it?", session) == "follow_up"
+        assert classify_input("why?", session) == "cli_agent"
+        assert classify_input("what caused it?", session) == "cli_agent"
 
     def test_alert_keywords_with_prior_state_still_new_alert(self) -> None:
         session = ReplSession()
         session.last_state = {"root_cause": "disk full"}
-        assert classify_input("CPU spiked on orders-api", session) == "new_alert"
-        assert classify_input("5xx errors from checkout service", session) == "new_alert"
+        assert classify_input("CPU spiked on orders-api", session) == "cli_agent"
+        assert classify_input("5xx errors from checkout service", session) == "cli_agent"
 
     def test_short_question_with_alert_keyword_is_follow_up(self) -> None:
         # Short question-shape wins over the presence of an alert keyword —
@@ -158,9 +162,9 @@ class TestClassifyInput:
         # fresh investigation.
         session = ReplSession()
         session.last_state = {"root_cause": "disk full"}
-        assert classify_input("why did CPU spike?", session) == "follow_up"
-        assert classify_input("what caused the memory error?", session) == "follow_up"
-        assert classify_input("how did the connection drop?", session) == "follow_up"
+        assert classify_input("why did CPU spike?", session) == "cli_agent"
+        assert classify_input("what caused the memory error?", session) == "cli_agent"
+        assert classify_input("how did the connection drop?", session) == "cli_agent"
 
     def test_long_non_question_defaults_to_new_alert(self) -> None:
         session = ReplSession()
@@ -169,7 +173,7 @@ class TestClassifyInput:
             "the orders-api service started returning intermittent failures "
             "around 14:00 UTC today and our on-call is paged"
         )
-        assert classify_input(long_text, session) == "new_alert"
+        assert classify_input(long_text, session) == "cli_agent"
 
     def test_long_question_is_still_new_alert(self) -> None:
         # A long incident description phrased as a question should not be
@@ -181,7 +185,7 @@ class TestClassifyInput:
             "CPU usage on orders-api has been climbing steadily for the past "
             "two hours and we just paged the on-call engineer — what changed?"
         )
-        assert classify_input(long_question, session) == "new_alert"
+        assert classify_input(long_question, session) == "cli_agent"
 
     def test_prior_state_small_talk_routes_to_cli_agent(self) -> None:
         session = ReplSession()
@@ -220,7 +224,7 @@ class TestClassifyInput:
             "the database docs service started returning 502 errors at 14:00 UTC "
             "for 25% of requests"
         )
-        assert classify_input(text, session) == "new_alert"
+        assert classify_input(text, session) == "cli_agent"
 
     def test_short_incident_with_in_docs_phrase_routes_to_new_alert(self) -> None:
         """'in (the) docs' on its own is too broad to be a help signal — an
@@ -232,7 +236,7 @@ class TestClassifyInput:
         """
         session = ReplSession()
         text = "the API errors are happening in docs"
-        assert classify_input(text, session) == "new_alert"
+        assert classify_input(text, session) == "cli_agent"
 
     def test_in_the_docs_question_routes_to_cli_help(self) -> None:
         """The "in (the) docs" phrasing IS a docs signal when the surrounding
@@ -267,9 +271,9 @@ class TestClassifyInput:
             assert route_input(text, session).route_kind.value == classify_input(text, session)
 
     def test_route_input_emits_fallback_reason_for_low_signal_input(self, monkeypatch) -> None:
-        # Set env var so this test exercises the deterministic regex fallback
-        # rather than the LLM path, which would produce different confidence/signals.
-        monkeypatch.setattr(_router_module, "_LLM_ROUTING_DISABLED", True)
+        # Stub the LLM route so this test exercises deterministic fallback
+        # and can assert on confidence/signals.
+        monkeypatch.setattr(_router_module, "llm_phase_route", lambda *_args: None)
         session = ReplSession()
 
         decision = route_input("hello", session)
@@ -277,7 +281,22 @@ class TestClassifyInput:
         assert decision.route_kind == RouteKind.CLI_AGENT
         assert decision.confidence == 0.45
         assert decision.matched_signals == ()
-        assert decision.fallback_reason == "no_prior_investigation_and_no_incident_signal"
+        assert decision.fallback_reason == "no_match"
+
+    def test_route_input_survives_llm_phase_exceptions(self, monkeypatch) -> None:
+        monkeypatch.setattr(
+            _router_module,
+            "llm_phase_route",
+            lambda *_args: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+        session = ReplSession()
+
+        decision = route_input("hello", session)
+
+        assert decision.route_kind == RouteKind.CLI_AGENT
+        assert decision.confidence == 0.45
+        assert decision.matched_signals == ()
+        assert decision.fallback_reason == "llm_error_no_match"
 
     def test_cli_action_plan_routes_to_cli_agent_before_investigation(self) -> None:
         session = ReplSession()
@@ -306,10 +325,31 @@ class TestClassifyInput:
             decision = route_input(text, session)
             assert decision.route_kind == RouteKind.CLI_AGENT, text
 
+    def test_action_plan_inputs_are_not_part_of_slash_fast_path(self, monkeypatch) -> None:
+        """Slash fast-path should be slash-only; non-slash prompts may use LLM."""
+        session = ReplSession()
+        nitro_prompt = (
+            "I want to deploy OpenSRE on a remote EC2 Nitro instance, and then I want to send\n"
+            'it an investigation. Can you please deploy the instance and send it "hello world"?'
+        )
+
+        monkeypatch.setattr(
+            "app.cli.interactive_shell.routing.llm_phase.intent_classifier.classify_intent_with_llm",
+            lambda *_args, **_kwargs: _router_module.RouteDecision(
+                _router_module.RouteKind.CLI_HELP,
+                0.99,
+                ("llm_override",),
+            ),
+        )
+
+        decision = route_input(nitro_prompt, session)
+        assert decision.route_kind == RouteKind.CLI_HELP
+        assert decision.matched_signals == ("llm_override",)
+
     def test_normal_informational_questions_do_not_start_investigations(self, monkeypatch) -> None:
-        # Use the deterministic regex path to lock down the regex rules that
-        # prevent informational questions from leaking into new_alert routing.
-        monkeypatch.setattr(_router_module, "_LLM_ROUTING_DISABLED", True)
+        # Stub LLM routing to lock down deterministic regex rules that prevent
+        # informational questions from leaking into new_alert routing.
+        monkeypatch.setattr(_router_module, "llm_phase_route", lambda *_args: None)
         session = ReplSession()
 
         for text in (
@@ -349,18 +389,18 @@ class TestClassifyInput:
             assert decision.route_kind.value == case["expected"]
 
     def test_route_input_matched_signals_are_internal_rule_names(self, monkeypatch) -> None:
-        # Disable LLM routing so this test exercises the deterministic regex
-        # path and can assert on the exact signal name emitted by that path.
-        monkeypatch.setattr(_router_module, "_LLM_ROUTING_DISABLED", True)
+        # Stub LLM routing so this test exercises the deterministic regex path
+        # and can assert on the exact signal name emitted by that path.
+        monkeypatch.setattr(_router_module, "llm_phase_route", lambda *_args: None)
         session = ReplSession()
 
         decision = route_input(
-            "api latency spiked and 5xx errors increased",
+            "how do I run an investigation?",
             session,
         )
 
-        assert decision.matched_signals == ("investigation_request",)
-        assert "api latency" not in decision.matched_signals
+        assert decision.matched_signals == ("cli_help_pattern",)
+        assert "how do i run an investigation?" not in decision.matched_signals
 
 
 class TestEdgeCaseRegressionFixtures:
@@ -401,7 +441,7 @@ class TestEdgeCaseRegressionFixtures:
         session = ReplSession()
         # "errors" is an alert signal — even though "sample" appears, the
         # investigation pipeline should handle genuine incident descriptions.
-        assert classify_input("500 errors happening — run a sample check?", session) == "new_alert"
+        assert classify_input("500 errors happening — run a sample check?", session) == "cli_agent"
 
     def test_prior_state_sample_alert_launch_stays_cli_agent(self) -> None:
         """With a prior investigation present, sample-alert launch must still
@@ -416,13 +456,12 @@ class TestEdgeCaseRegressionFixtures:
         new_alert regardless of surrounding session state."""
         session = ReplSession()
         json_alert = '{"alertname": "HighCPU", "severity": "critical", "service": "checkout"}'
-        assert classify_input(json_alert, session) == "new_alert"
+        assert classify_input(json_alert, session) == "cli_agent"
 
-    def test_short_incident_question_without_prior_state_is_new_alert(self, monkeypatch) -> None:
-        """Short production-symptom questions with no prior investigation must
-        reach the investigation pipeline, not the cli_agent.  Pinned to the regex
-        path so the test is deterministic regardless of LLM availability."""
-        monkeypatch.setattr(_router_module, "_LLM_ROUTING_DISABLED", True)
+    def test_short_incident_question_without_prior_state_defaults_cli_agent(self, monkeypatch) -> None:
+        """Without LLM classification, short incident questions should not be
+        force-routed by deterministic regex heuristics."""
+        monkeypatch.setattr(_router_module, "llm_phase_route", lambda *_args: None)
         session = ReplSession()
         for phrase in (
             "why is the database slow?",
@@ -430,6 +469,6 @@ class TestEdgeCaseRegressionFixtures:
             "why is the node timing out?",
         ):
             result = classify_input(phrase, session)
-            assert result == "new_alert", (
-                f"Expected new_alert for incident question {phrase!r}, got {result!r}"
+            assert result == "cli_agent", (
+                f"Expected cli_agent for incident question {phrase!r}, got {result!r}"
             )

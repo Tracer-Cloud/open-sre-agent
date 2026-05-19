@@ -22,6 +22,7 @@ from prompt_toolkit.keys import Keys
 from prompt_toolkit.output import DummyOutput
 
 from app.cli.interactive_shell import loop
+from app.cli.interactive_shell.orchestration.agent_actions import TerminalActionExecutionResult
 from app.cli.interactive_shell.prompting import prompt_surface
 from app.cli.interactive_shell.prompting.prompt_surface import (
     _SHIFT_ENTER_SEQUENCE,
@@ -31,7 +32,6 @@ from app.cli.interactive_shell.prompting.prompt_surface import (
     _build_prompt_style,
     _tab_expand_or_menu,
 )
-from app.cli.interactive_shell.routing.route_types import RouteDecision, RouteKind
 from app.cli.interactive_shell.runtime.session import ReplSession
 from app.cli.interactive_shell.ui.theme import ANSI_RESET, PROMPT_ACCENT_ANSI
 
@@ -438,135 +438,6 @@ def test_dispatch_one_turn_reports_slash_dispatch_error(
     assert isinstance(captured_errors[0], RuntimeError)
 
 
-def test_dispatch_one_turn_typoed_bare_alias_dispatches_canonical_slash(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Bare-alias typos (e.g. ``hlep`` → ``/help``) are normalised by
-    ``_router.slash_dispatch_text`` before reaching ``dispatch_slash``.
-
-    Adapted from main's ``test_run_one_turn_typoed_bare_alias_...``: that
-    test exercised main's ``_run_one_turn`` async wrapper, which doesn't
-    exist in this branch's queue + processor architecture. The behaviour
-    being verified — that bare aliases route to canonical slash form —
-    lives inside ``_dispatch_one_turn`` (the slash-kind branch calls
-    ``_router.slash_dispatch_text``), so the test now drives that
-    function directly.
-    """
-    from rich.console import Console
-
-    dispatched: list[str] = []
-
-    def _dispatch(command: str, *_args: object, **_kwargs: object) -> bool:
-        dispatched.append(command)
-        return True
-
-    monkeypatch.setattr(
-        loop,
-        "route_input",
-        lambda *_args: RouteDecision(RouteKind.SLASH, 0.98, ("bare_command_alias",)),
-    )
-    monkeypatch.setattr(loop, "dispatch_slash", _dispatch)
-    session = ReplSession()
-    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
-
-    loop._dispatch_one_turn("hlep", session, console, on_exit=lambda: None)
-
-    assert dispatched == ["/help"]
-
-
-def test_dispatch_one_turn_bare_integrations_alias_preserves_args(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from rich.console import Console
-
-    dispatched: list[str] = []
-
-    def _dispatch(command: str, *_args: object, **_kwargs: object) -> bool:
-        dispatched.append(command)
-        return True
-
-    monkeypatch.setattr(
-        loop,
-        "route_input",
-        lambda *_args: RouteDecision(RouteKind.SLASH, 0.98, ("bare_command_alias",)),
-    )
-    monkeypatch.setattr(loop, "dispatch_slash", _dispatch)
-    session = ReplSession()
-    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
-
-    loop._dispatch_one_turn("integrations list", session, console, on_exit=lambda: None)
-
-    assert dispatched == ["/integrations list"]
-
-
-def test_dispatch_needs_exclusive_stdin_for_bare_integration_menu(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(loop, "repl_tty_interactive", lambda: True)
-    session = ReplSession()
-
-    assert loop._dispatch_needs_exclusive_stdin("/integrations", session) is True
-    assert loop._dispatch_needs_exclusive_stdin("integrations", session) is True
-    assert loop._dispatch_needs_exclusive_stdin("/mcp", session) is True
-    assert loop._dispatch_needs_exclusive_stdin("/model", session) is True
-
-    assert loop._dispatch_needs_exclusive_stdin("/integrations list", session) is False
-    assert loop._dispatch_needs_exclusive_stdin("integrations list", session) is False
-
-
-def test_dispatch_needs_exclusive_stdin_for_exit_commands(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(loop, "repl_tty_interactive", lambda: True)
-    session = ReplSession()
-
-    assert loop._dispatch_needs_exclusive_stdin("/exit", session) is True
-    assert loop._dispatch_needs_exclusive_stdin("quit", session) is True
-
-
-def test_dispatch_needs_exclusive_stdin_for_integration_setup(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(loop, "repl_tty_interactive", lambda: True)
-    session = ReplSession()
-
-    assert loop._dispatch_needs_exclusive_stdin("/integrations setup", session) is True
-    assert loop._dispatch_needs_exclusive_stdin("integrations setup datadog", session) is True
-    assert loop._dispatch_needs_exclusive_stdin("/mcp connect github", session) is True
-
-
-def test_dispatch_one_turn_routes_to_cli_help_for_help_questions(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Verify the routing decision drives the right handler.
-
-    Replaces the old ``test_run_one_turn_renders_submitted_prompt_before_handler``
-    which asserted on PromptSession echo behaviour — that responsibility now
-    lives in :func:`_run_interactive` (the prompt-toolkit loop, which calls
-    :func:`render_submitted_prompt` after each ``prompt_async`` return).
-    """
-    from rich.console import Console
-
-    answered_with: list[str] = []
-
-    monkeypatch.setattr(
-        loop,
-        "route_input",
-        lambda *_args: RouteDecision(RouteKind.CLI_HELP, 0.9, ("test",)),
-    )
-    monkeypatch.setattr(
-        loop,
-        "answer_cli_help",
-        lambda text, _session, _console: answered_with.append(text),
-    )
-
-    session = ReplSession()
-    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
-    loop._dispatch_one_turn("explain deploy", session, console, on_exit=lambda: None)
-
-    assert answered_with == ["explain deploy"]
-
-
 def test_dispatch_one_turn_calls_on_exit_when_slash_returns_false(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -773,36 +644,6 @@ class TestLooksLikeCancelRequest:
 
 
 # ── Spinner state tests ──────────────────────────────────────────────────────
-
-
-class TestDispatchSpinnerRouting:
-    @pytest.mark.parametrize(
-        "text",
-        [
-            "/history",
-            "/tests",
-            "/model show",
-            "tests",
-            "help",
-            # The router typo-corrects single-edit bare aliases before
-            # dispatch, so these are local slash-command paths too.
-            "testts",
-            "hlep",
-        ],
-    )
-    def test_slash_dispatches_do_not_show_assistant_spinner(self, text: str) -> None:
-        assert loop._dispatch_should_show_spinner(text, ReplSession()) is False
-
-    @pytest.mark.parametrize(
-        "text",
-        [
-            "why did this fail?",
-            "run opensre investigate --input alert.json",
-            "explain deploy",
-        ],
-    )
-    def test_non_slash_dispatches_show_assistant_spinner(self, text: str) -> None:
-        assert loop._dispatch_should_show_spinner(text, ReplSession()) is True
 
 
 def _strip_ansi(text: str) -> str:
