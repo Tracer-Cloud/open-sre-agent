@@ -9,6 +9,7 @@ import pytest
 from app.constants import SENTRY_DSN, SENTRY_ERROR_SAMPLE_RATE, SENTRY_TRACES_SAMPLE_RATE
 from app.utils import sentry_sdk as sentry_mod
 
+_REAL_BUILD_INTEGRATIONS = sentry_mod._build_sentry_integrations
 
 @pytest.fixture(autouse=True)
 def _reset_sentry_module_state(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -800,3 +801,25 @@ def test_init_sentry_ignore_errors_includes_keyboard_interrupt(monkeypatch) -> N
 
     ignore_errors = init_mock.call_args.kwargs["ignore_errors"]
     assert KeyboardInterrupt in ignore_errors
+
+
+def test_build_sentry_integrations_excludes_logging_when_disabled(monkeypatch) -> None:
+    monkeypatch.setenv("OPENSRE_SENTRY_LOGGING_DISABLED", "1")
+
+    integrations = _REAL_BUILD_INTEGRATIONS()
+
+    integration_names = {type(i).__name__ for i in integrations}
+    assert "LoggingIntegration" not in integration_names
+    assert "AsyncioIntegration" in integration_names
+    assert "HttpxIntegration" in integration_names
+
+
+def test_build_sentry_integrations_includes_logging_by_default(monkeypatch) -> None:
+    monkeypatch.delenv("OPENSRE_SENTRY_LOGGING_DISABLED", raising=False)
+
+    integrations = _REAL_BUILD_INTEGRATIONS()
+
+    integration_names = {type(i).__name__ for i in integrations}
+    assert "LoggingIntegration" in integration_names
+    assert "AsyncioIntegration" in integration_names
+    assert "HttpxIntegration" in integration_names

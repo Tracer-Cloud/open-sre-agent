@@ -99,7 +99,7 @@ def run_startup_sweep() -> SweepResult:
         # Pinned by ``test_run_startup_sweep_swallows_exceptions`` which
         # mocks ``AgentRegistry()`` to raise. The REPL must boot even if
         # the sweep is broken; logging is the only side effect.
-        logger.warning("agent sweep failed at REPL boot", exc_info=True)
+        logger.warning("agent sweep failed at REPL boot")
         return SweepResult()
     if result.total > 0:
         logger.debug(

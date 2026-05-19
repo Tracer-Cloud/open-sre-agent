@@ -327,16 +327,24 @@ def _build_sentry_integrations() -> list[Any]:
     ModuleNotFoundError`` guard to keep ``opensre update`` working when the
     SDK is missing — that guard only fires if the import happens inside
     ``init_sentry``, not at top-level module load.
+
+    Set ``OPENSRE_SENTRY_LOGGING_DISABLED=1`` to disable the
+    ``LoggingIntegration`` without affecting ``capture_exception``.
     """
     from sentry_sdk.integrations.asyncio import AsyncioIntegration
     from sentry_sdk.integrations.httpx import HttpxIntegration
     from sentry_sdk.integrations.logging import LoggingIntegration
 
-    return [
-        LoggingIntegration(level=logging.INFO, event_level=logging.ERROR),
-        AsyncioIntegration(),
-        HttpxIntegration(),
-    ]
+    integrations: list[Any] = []
+
+    if os.getenv("OPENSRE_SENTRY_LOGGING_DISABLED", "0") != "1":
+        integrations.append(
+            LoggingIntegration(level=logging.INFO, event_level=logging.ERROR)
+        )
+
+    integrations.append(AsyncioIntegration())
+    integrations.append(HttpxIntegration())
+    return integrations
 
 
 @cache

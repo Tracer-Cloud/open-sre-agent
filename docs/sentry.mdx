@@ -89,6 +89,13 @@ Service: sentry
 Status: passed
 Detail: Sentry validated for org your-org; issues API responded successfully with 5 issue(s)
 ```
+## Telemetry knobs
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `OPENSRE_SENTRY_DSN` | — | Override the bundled Sentry DSN |
+| `OPENSRE_SENTRY_DISABLED` | `0` | Set to `1` to disable Sentry entirely |
+| `OPENSRE_SENTRY_LOGGING_DISABLED` | `0` | Set to `1` to disable automatic forwarding of `logger.error` and `logger.exception` calls to Sentry as events, without affecting `capture_exception` |
 
 ## Troubleshooting
 
