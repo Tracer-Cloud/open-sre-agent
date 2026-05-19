@@ -235,7 +235,6 @@ _looks_like_confirmation_answer = looks_like_confirmation_answer
 _looks_like_cancel_request = looks_like_cancel_request
 _dispatch_should_show_spinner = dispatch_should_show_spinner
 _dispatch_needs_exclusive_stdin = dispatch_needs_exclusive_stdin
-_dispatch_needs_exclusive_stdin_impl = _dispatch_needs_exclusive_stdin_impl
 _dispatch_one_turn = dispatch_one_turn
 _run_initial_input = run_initial_input
 _route_confirm_through_prompt = route_confirm_through_prompt

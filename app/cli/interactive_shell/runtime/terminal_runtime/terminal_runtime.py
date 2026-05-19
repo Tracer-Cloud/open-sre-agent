@@ -156,10 +156,12 @@ async def run_interactive(
                 state.queue.task_done()
                 return
             state.current_task = asyncio.create_task(_run_one_dispatch(text))
-            try:  # noqa: SIM105
+            try:
                 await state.current_task
-            except (asyncio.CancelledError, Exception):
+            except asyncio.CancelledError:
                 pass
+            except Exception as exc:
+                log.debug("Processor task ended with dispatch exception: %s", exc)
             state.clear_current_task()
             state.queue.task_done()
 
@@ -243,14 +245,18 @@ async def run_interactive(
             pass
         processor_task.cancel()
         alert_watcher_task.cancel()
-        try:  # noqa: SIM105
+        try:
             await processor_task
-        except (asyncio.CancelledError, Exception):
+        except asyncio.CancelledError:
             pass
-        try:  # noqa: SIM105
+        except Exception as exc:
+            log.debug("Processor task shutdown raised exception: %s", exc)
+        try:
             await alert_watcher_task
-        except (asyncio.CancelledError, Exception):
+        except asyncio.CancelledError:
             pass
+        except Exception as exc:
+            log.debug("Alert watcher shutdown raised exception: %s", exc)
 
 
 _StreamingConsole = StreamingConsole
