@@ -1,0 +1,50 @@
+# tfsec configuration for the bench Terraform module.
+#
+# Each entry under `exclude` is paired with a justification. The exclusion
+# list mirrors `.checkov.yaml` so the two tools agree on what we have
+# chosen NOT to enforce for this Phase 1 bench. If you remove an exclude,
+# the rationale should be addressed (fix the resource or document why the
+# rule no longer applies).
+#
+# tfsec rule IDs reference: https://aquasecurity.github.io/tfsec/
+
+exclude:
+  # ---- S3 results bucket ------------------------------------------------ #
+
+  - aws-s3-enable-bucket-logging
+    # AES256 SSE-S3 sufficient for non-PII bench artifacts. Versioning
+    # provides change recovery. Mirrors checkov CKV_AWS_18.
+
+  - aws-s3-encryption-customer-key
+    # AWS-managed encryption sufficient for non-PII bench data. Mirrors
+    # checkov CKV_AWS_145.
+
+  # ---- CloudWatch log group --------------------------------------------- #
+
+  - aws-cloudwatch-log-group-customer-key
+    # AWS-managed log encryption is sufficient. Mirrors checkov CKV_AWS_158.
+
+  # ---- Secrets Manager -------------------------------------------------- #
+
+  - aws-ssm-secret-use-customer-key
+    # AWS-managed encryption sufficient. CMK rotation buys nothing for
+    # external SaaS keys. Mirrors checkov CKV_AWS_149.
+
+  # ---- Networking ------------------------------------------------------- #
+
+  - aws-vpc-no-public-egress-sgr
+    # Egress to 0.0.0.0/0 is intentional and required — the bench task
+    # makes outbound HTTPS calls to LLM provider APIs (Anthropic, OpenAI,
+    # DeepSeek), Hugging Face, and AWS service endpoints. No NAT gateway
+    # provisioned; default VPC public subnet routes egress via IGW.
+
+  # ---- ECS / Fargate ---------------------------------------------------- #
+
+  # (No exclusions currently for ECS — read-only root FS is a checkov
+  # rule that tfsec does not mirror as of this writing. If tfsec adds it
+  # later, add the corresponding exclude here.)
+
+# `severity_overrides` could be used to downgrade specific rules (e.g.,
+# from HIGH to LOW) instead of fully excluding, if we wanted findings
+# visible but non-blocking. Not used here — excludes are simpler and the
+# decisions above are firm.

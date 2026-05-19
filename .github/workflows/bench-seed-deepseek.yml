@@ -1,0 +1,63 @@
+name: bench (seed deepseek secret)
+
+# Manually-triggered workflow that copies the `DEEPSEEK_API_KEY` GitHub repo
+# secret into AWS Secrets Manager at `opensre-bench/llm/deepseek_api_key`.
+#
+# Why a workflow instead of a developer running `aws secretsmanager put-secret-value`
+# locally: keeps the key off developer laptops + out of shell history, and
+# centralizes rotation — rotate the value in one place (the GH repo secret) and
+# re-run this workflow to propagate.
+#
+# Pre-req: `terraform apply` in infra/bench/ must have already created the
+# secret resource. Order of operations:
+#   1. terraform-bench.yml (plan) on PR
+#   2. terraform apply locally (or via a future apply workflow)
+#   3. this workflow (workflow_dispatch) to seed the value
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bench-seed-deepseek
+  cancel-in-progress: false
+
+jobs:
+  seed:
+    name: seed deepseek_api_key
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: us-east-1
+      SECRET_ID: opensre-bench/llm/deepseek_api_key
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Verify secret resource exists
+        run: |
+          if ! aws secretsmanager describe-secret --secret-id "$SECRET_ID" >/dev/null 2>&1; then
+            echo "::error::Secret $SECRET_ID not found. Run \`terraform apply\` in infra/bench/ first."
+            exit 1
+          fi
+
+      - name: Put secret value
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          if [ -z "${DEEPSEEK_API_KEY}" ]; then
+            echo "::error::GitHub repo secret DEEPSEEK_API_KEY is unset."
+            exit 1
+          fi
+          aws secretsmanager put-secret-value \
+            --secret-id "$SECRET_ID" \
+            --secret-string "$DEEPSEEK_API_KEY" \
+            >/dev/null
+          echo "Seeded $SECRET_ID (length=${#DEEPSEEK_API_KEY})."
