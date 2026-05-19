@@ -22,7 +22,7 @@ data "aws_iam_policy_document" "task_assume_role" {
 
 resource "aws_iam_role" "task" {
   name               = "${local.name_prefix}-task"
-  description        = "Runtime role for the bench container — secrets read + results write."
+  description        = "Runtime role for the bench container - secrets read + results write."
   assume_role_policy = data.aws_iam_policy_document.task_assume_role.json
 }
 

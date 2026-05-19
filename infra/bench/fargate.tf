@@ -30,7 +30,7 @@ data "aws_subnets" "default_public" {
 # Secrets Manager + ECR; no inbound traffic required.
 resource "aws_security_group" "task" {
   name        = "${local.name_prefix}-task"
-  description = "Bench Fargate task — outbound only."
+  description = "Bench Fargate task - outbound only."
   vpc_id      = data.aws_vpc.default.id
 
   egress {

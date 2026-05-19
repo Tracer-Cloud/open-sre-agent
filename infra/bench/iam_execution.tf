@@ -23,7 +23,7 @@ data "aws_iam_policy_document" "execution_assume_role" {
 
 resource "aws_iam_role" "execution" {
   name               = "${local.name_prefix}-execution"
-  description        = "ECS execution role — image pull, log write, secret resolution."
+  description        = "ECS execution role - image pull, log write, secret resolution."
   assume_role_policy = data.aws_iam_policy_document.execution_assume_role.json
 }
 

@@ -24,12 +24,12 @@ output "task_definition_arn" {
 }
 
 output "task_role_arn" {
-  description = "Task role ARN — runtime permissions for the bench container."
+  description = "Task role ARN - runtime permissions for the bench container."
   value       = aws_iam_role.task.arn
 }
 
 output "execution_role_arn" {
-  description = "Execution role ARN — ECS-side permissions for image pull + secret resolution."
+  description = "Execution role ARN - ECS-side permissions for image pull + secret resolution."
   value       = aws_iam_role.execution.arn
 }
 
@@ -64,7 +64,7 @@ output "subnet_ids" {
 }
 
 output "secret_arns" {
-  description = "Map of secret name → ARN. Use for `aws secretsmanager put-secret-value --secret-id <arn>` when seeding."
+  description = "Map of secret name to ARN. Use for `aws secretsmanager put-secret-value --secret-id <arn>` when seeding."
   value = {
     anthropic_api_key = aws_secretsmanager_secret.anthropic_api_key.arn
     openai_api_key    = aws_secretsmanager_secret.openai_api_key.arn
