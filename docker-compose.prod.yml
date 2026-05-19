@@ -1,0 +1,47 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: healops-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-healops}
+      POSTGRES_USER: ${POSTGRES_USER:-healops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-healops}
+    volumes:
+      - healops-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-healops} -d ${POSTGRES_DB:-healops}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: healops-redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    container_name: healops-app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URI: postgresql://${POSTGRES_USER:-healops}:${POSTGRES_PASSWORD:-healops}@db:5432/${POSTGRES_DB:-healops}
+      REDIS_URI: redis://redis:6379/0
+      ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  healops-postgres-data:
