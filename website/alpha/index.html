@@ -498,10 +498,12 @@
       </div>
 
       <div class="form-card">
-        <form id="waitlist-form" action="https://formspree.io/f/REPLACE_WITH_YOUR_FORM_ID" method="POST" novalidate>
+        <form id="waitlist-form" action="https://formsubmit.co/sourabh.kumawat@gobblecube.ai" method="POST" novalidate>
 
-          <!-- Hidden field for Formspree subject line -->
+          <!-- formsubmit.co controls -->
           <input type="hidden" name="_subject" value="New HealOps Alpha Waitlist Application" />
+          <input type="hidden" name="_captcha" value="false" />
+          <input type="hidden" name="_template" value="table" />
           <input type="hidden" name="_next" value="https://healops.ai/alpha?submitted=true" />
 
           <div class="form-grid">
@@ -659,38 +661,11 @@
     const successMsg = document.getElementById('success-msg');
     const errorMsg = document.getElementById('error-msg');
 
-    // Remove the _next redirect when using AJAX
-    form.querySelector('input[name="_next"]').remove();
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      if (!form.checkValidity()) { form.reportValidity(); return; }
-
+    // Client-side validation before native form submit (redirects to _next on success)
+    form.addEventListener('submit', (e) => {
+      if (!form.checkValidity()) { e.preventDefault(); form.reportValidity(); return; }
       btn.disabled = true;
       btn.textContent = 'Submitting…';
-      successMsg.style.display = 'none';
-      errorMsg.style.display = 'none';
-
-      try {
-        const data = new FormData(form);
-        const res = await fetch(form.action, {
-          method: 'POST',
-          body: data,
-          headers: { Accept: 'application/json' }
-        });
-
-        if (res.ok) {
-          form.style.display = 'none';
-          successMsg.style.display = 'block';
-          successMsg.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        } else {
-          throw new Error('Non-OK response');
-        }
-      } catch {
-        errorMsg.style.display = 'block';
-        btn.disabled = false;
-        btn.textContent = 'Join the Alpha Waitlist →';
-      }
     });
   </script>
 </body>
