@@ -238,6 +238,10 @@ jobs:
       - name: tfsec scan
         uses: aquasecurity/tfsec-action@v1.0.3
         with:
+          # GitHub-provided token avoids the 60-req/hr unauthenticated rate
+          # limit on shared runner IPs (this action makes an unauthenticated
+          # call to api.github.com to resolve the latest release otherwise).
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           working_directory: infra/bench
           soft_fail: false
           format: default
