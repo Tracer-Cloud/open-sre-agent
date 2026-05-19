@@ -74,9 +74,10 @@ def _is_github_copilot_generic_mcp_root(url: str) -> bool:
     if not raw:
         return False
     parsed = urlparse(raw)
-    host = parsed.netloc.lower()
-    if "@" in host:
-        host = host.split("@", 1)[-1]
+    # ``parsed.hostname`` is already lowercased and strips any ``user@`` prefix
+    # or ``:port`` suffix, so equivalent root URLs such as
+    # ``https://api.githubcopilot.com:443/mcp/`` (default-port form) match.
+    host = parsed.hostname or ""
     if host != "api.githubcopilot.com":
         return False
     path_norm = (parsed.path or "/").rstrip("/").lower() or "/"

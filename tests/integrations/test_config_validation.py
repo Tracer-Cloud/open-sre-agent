@@ -135,6 +135,36 @@ def test_remote_github_mcp_other_hosts_unchanged() -> None:
     assert _remote_github_mcp_session_url(url) == url
 
 
+def test_remote_github_mcp_root_url_with_explicit_port_rewrites() -> None:
+    # An explicit ``:443`` (or any default port) is the same logical root URL
+    # and must receive the same ``/mcp/x/all/readonly`` rewrite, otherwise the
+    # client silently negotiates a smaller default tool surface.
+    assert (
+        _remote_github_mcp_session_url("https://api.githubcopilot.com:443/mcp/")
+        == "https://api.githubcopilot.com:443/mcp/x/all/readonly"
+    )
+    assert (
+        _remote_github_mcp_session_url("https://api.githubcopilot.com:443/mcp")
+        == "https://api.githubcopilot.com:443/mcp/x/all/readonly"
+    )
+
+
+def test_remote_github_mcp_root_url_with_uppercase_host_rewrites() -> None:
+    # ``urlparse`` lowercases ``hostname`` but ``netloc`` preserves case;
+    # the root-URL detection must remain case-insensitive either way.
+    assert (
+        _remote_github_mcp_session_url("https://API.GitHubCopilot.com/mcp/")
+        == "https://API.GitHubCopilot.com/mcp/x/all/readonly"
+    )
+
+
+def test_remote_github_mcp_userinfo_host_treated_as_other_host() -> None:
+    # ``https://api.githubcopilot.com@evil.test/mcp/`` parses with host
+    # ``evil.test`` — it must NOT be treated as the Copilot MCP root.
+    url = "https://api.githubcopilot.com@evil.test/mcp/"
+    assert _remote_github_mcp_session_url(url) == url
+
+
 def test_github_mcp_custom_headers_can_override_x_mcp_toolsets() -> None:
     cfg = build_github_mcp_config(
         {
