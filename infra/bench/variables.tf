@@ -39,3 +39,19 @@ variable "task_memory" {
   type        = string
   default     = "8192"
 }
+
+variable "image_tag" {
+  description = <<-EOT
+    Container image tag to run. ECR is configured with IMMUTABLE tag
+    mutability, so a tag pushed once cannot be overwritten — every
+    image push must use a unique tag (semver, git SHA, or build ID),
+    and each Terraform apply explicitly chooses which tag to deploy.
+
+    Default 'bootstrap' is a placeholder so `terraform apply` succeeds
+    before the bench framework Dockerfile lands. Once images are being
+    pushed, override per apply: `terraform apply -var=image_tag=<tag>`,
+    or pin a value in terraform.tfvars / the pre-registration YAML.
+  EOT
+  type        = string
+  default     = "bootstrap"
+}

@@ -84,7 +84,7 @@ resource "aws_ecs_task_definition" "bench" {
   container_definitions = jsonencode([
     {
       name      = "bench"
-      image     = "${aws_ecr_repository.bench.repository_url}:latest"
+      image     = "${aws_ecr_repository.bench.repository_url}:${var.image_tag}"
       essential = true
 
       environment = [

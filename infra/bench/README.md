@@ -137,13 +137,33 @@ aws ecs run-task \
 
 Live logs: `aws logs tail /ecs/opensre-bench --follow` (or via the AWS Console).
 
+## Setting the container image tag
+
+ECR is configured with `IMMUTABLE` tag mutability — a tag can be pushed
+exactly once; subsequent pushes of the same tag fail. So **every image
+build must use a unique tag** (semver, git SHA, or build ID), and the
+Terraform apply explicitly chooses which tag to deploy.
+
+The placeholder default `bootstrap` lets `terraform apply` succeed before
+any image exists. Once you have a real image:
+
+```bash
+# One-shot
+terraform apply -var=image_tag=v1.0.0
+
+# Or pin in terraform.tfvars (NOT committed)
+echo 'image_tag = "v1.0.0"' >> terraform.tfvars
+terraform apply
+```
+
 ## Pre-registration pinning
 
 For a publication-grade bench run, pin in the pre-registration YAML:
 
 - `task_definition_arn` from `terraform output -raw task_definition_arn`
   (includes the revision number — different from `task_definition_family`)
-- Container image digest (not `:latest`) — set after the image is pushed
+- `image_tag` value used at apply time (or, better, the resolved image
+  digest from `docker inspect`/`aws ecr describe-images`)
 - AWS region from `var.region`
 - `task_cpu` and `task_memory` from the apply'd values
 
