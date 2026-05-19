@@ -57,6 +57,12 @@ tests/*
 !tests/__init__.py
 !tests/benchmarks
 
+# Exclude the downloaded State Snapshot dataset (~2.7 GB). It is
+# git-ignored and downloaded from Hugging Face at task start. Without
+# this exclusion, the image bloats to ~3.75 GB.
+tests/benchmarks/cloudopsbench/benchmark/
+tests/benchmarks/cloudopsbench/.cache/
+
 # ---- Local dev artifacts ------------------------------------------------ #
 plans/
 tasks/
