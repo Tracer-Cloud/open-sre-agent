@@ -520,6 +520,8 @@ def validate_hermes_routing_decisions(data: dict[str, Any]) -> dict[str, Any]:
     calls = data.get("calls")
     if not isinstance(calls, list):
         raise ValueError(f"{ctx}: 'calls' must be a list")
+    if not calls:
+        raise ValueError(f"{ctx}: 'calls' must not be empty")
 
     for index, call in enumerate(calls):
         cctx = f"{ctx}:calls[{index}]"
