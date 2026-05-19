@@ -201,6 +201,16 @@ def _load_evidence(scenario_dir: Path, available_evidence: list[str]) -> HermesS
 def load_scenario(scenario_dir: Path) -> HermesScenarioFixture:
     metadata = _parse_metadata(scenario_dir / "scenario.yml")
     answer_key = _parse_answer_key(scenario_dir / "answer.yml")
+
+    required_sources = set(answer_key.required_evidence_sources)
+    available_sources = set(metadata.available_evidence)
+    missing_required_sources = sorted(required_sources - available_sources)
+    if missing_required_sources:
+        raise ValueError(
+            f"{scenario_dir.name}: answer.yml required_evidence_sources not present in "
+            f"scenario.yml available_evidence: {missing_required_sources}"
+        )
+
     alert = validate_hermes_alert(_read_json(scenario_dir / "alert.json"))
     evidence = _load_evidence(scenario_dir, metadata.available_evidence)
 

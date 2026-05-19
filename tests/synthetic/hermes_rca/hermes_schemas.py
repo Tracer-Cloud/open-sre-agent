@@ -573,6 +573,8 @@ def validate_hermes_filesystem_state(data: dict[str, Any]) -> dict[str, Any]:
 
     if not isinstance(files, list):
         raise ValueError(f"{ctx}: 'files' must be a list")
+    if not files:
+        raise ValueError(f"{ctx}: 'files' must not be empty")
 
     for index, file_entry in enumerate(files):
         fctx = f"{ctx}:files[{index}]"
