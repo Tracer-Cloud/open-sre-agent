@@ -71,7 +71,6 @@ FROM python:3.12-slim AS bench
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    BENCH_DEFAULT_CONFIG=tests/benchmarks/configs/phase1.yml \
     PATH="/app/.venv/bin:${PATH}"
 
 WORKDIR /app

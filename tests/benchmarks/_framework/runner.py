@@ -48,7 +48,7 @@ from tests.benchmarks._framework.adapters import (
     RunResult,
 )
 from tests.benchmarks._framework.config import BenchmarkConfig
-from tests.benchmarks._framework.cost import CostBudgetExceeded, CostTracker
+from tests.benchmarks._framework.cost import CostBudgetExceeded, CostTracker, UnknownModel
 from tests.benchmarks._framework.integrity import (
     BenchmarkReport,
     IntegrityGuard,
@@ -352,6 +352,15 @@ class BenchmarkRunner:
         try:
             final_state = run_investigation(alert.raw, resolved_integrations=integrations)
             final_state_dict = dict(final_state)
+        except (CostBudgetExceeded, UnknownModel):
+            # Run-fatal: propagate up to _execute_llm_batch / _run_inner so
+            # the run halts at the configured budget ceiling. Without this
+            # explicit re-raise, the broad `except Exception` below would
+            # silently record the budget breach as a per-cell failure and
+            # the run would continue past the cap. UnknownModel is a
+            # pre-flight problem (model missing from pricing table) and
+            # should also halt rather than mask as a cell failure.
+            raise
         except Exception as exc:
             ok = False
             error = f"{type(exc).__name__}: {exc}"
