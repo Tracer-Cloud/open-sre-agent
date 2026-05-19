@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg16
     container_name: healops-db
     restart: unless-stopped
     environment:
