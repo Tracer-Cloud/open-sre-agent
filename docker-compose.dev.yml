@@ -1,0 +1,33 @@
+services:
+  opensre-db:
+    image: postgres:16-alpine
+    container_name: healops-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: opensre
+      POSTGRES_USER: opensre
+      POSTGRES_PASSWORD: opensre
+    ports:
+      - "5432:5432"
+    volumes:
+      - healops-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opensre -d opensre"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  opensre-redis:
+    image: redis:7-alpine
+    container_name: healops-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  healops-postgres-data:

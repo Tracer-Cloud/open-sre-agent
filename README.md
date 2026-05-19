@@ -1,3 +1,52 @@
+<!-- HealOps.ai fork of OpenSRE — pinned to OPENSRE_BASE_COMMIT 005e307d13625b95c2a34ce3558544664d4a06ac -->
+
+## HealOps.ai — Dev Environment Setup
+
+> This repo is the HealOps.ai fork of [Tracer-Cloud/opensre](https://github.com/Tracer-Cloud/opensre), pinned to commit `005e307d13625b95c2a34ce3558544664d4a06ac` (see `OPENSRE_BASE_COMMIT`).
+
+### Prerequisites
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or OrbStack / Colima) — required for Postgres + Redis
+- [uv](https://docs.astral.sh/uv/getting-started/installation/) — Python package manager
+- An Anthropic API key (for `opensre onboard`)
+
+### Quick start
+
+```bash
+# 1. Clone the repo
+git clone https://github.com/HealOps-ai/opensre.git
+cd opensre
+
+# 2. Start Postgres + Redis, install Python deps, create .env
+make dev
+
+# 3. Edit .env — set your ANTHROPIC_API_KEY (and any other integrations)
+$EDITOR .env
+
+# 4. Run interactive onboarding
+make onboard          # opensre onboard
+
+# 5. Run a synthetic investigation to verify setup
+opensre investigate -i tests/synthetic/sample_alert.json
+
+# 6. Tear down dev services when done
+make dev-down
+```
+
+### CI
+
+The HealOps CI pipeline runs on every push/PR to `main`:
+
+| Job | Tool | Trigger |
+|-----|------|---------|
+| `lint` | ruff | always |
+| `typecheck` | mypy | always |
+| `test-synthetic` | pytest (`-m synthetic`) | after lint + typecheck |
+
+See `.github/workflows/healops-ci.yml` for the full workflow. Set `ANTHROPIC_API_KEY` in your repo secrets to enable the synthetic test job.
+
+---
+
 <div align="center">
 
 <p align="center">
