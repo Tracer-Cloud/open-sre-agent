@@ -228,24 +228,30 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      # tfsec was absorbed into Trivy in 2023; the action is still
-      # maintained. Migrate to `aquasecurity/trivy-action --scanners
-      # misconfig` if/when consolidation is preferred.
+      # tfsec via Docker, bypassing aquasecurity/tfsec-action.
       #
-      # Suppressions live in infra/bench/.tfsec/config.yml. soft_fail is
-      # FALSE — real findings block the PR. Add a justified exclude to
-      # the config rather than disabling here.
-      - name: tfsec scan
-        uses: aquasecurity/tfsec-action@v1.0.3
-        with:
-          # GitHub-provided token avoids the 60-req/hr unauthenticated rate
-          # limit on shared runner IPs (this action makes an unauthenticated
-          # call to api.github.com to resolve the latest release otherwise).
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          working_directory: infra/bench
-          soft_fail: false
-          format: default
-          additional_args: --no-color --config-file=infra/bench/.tfsec/config.yml
+      # Why direct Docker run: the action shells out to api.github.com to
+      # resolve the latest release binary, and the aquasecurity org has an
+      # IP allow list that blocks GitHub Actions runner IPs — making the
+      # action effectively unusable from CI. The aquasec/tfsec image on
+      # Docker Hub has no such restriction.
+      #
+      # Migration path (v2): tfsec is in maintenance mode; rule set lives on
+      # in Trivy. Replace with `aquasec/trivy:latest config /src` when
+      # ready — same .tfsec/config.yml is recognized.
+      #
+      # Suppressions: infra/bench/.tfsec/config.yml. tfsec exits 1 on any
+      # finding by default, which fails the step — exactly the hard-fail
+      # behavior we want. Add a justified exclude to the config rather
+      # than disabling the step.
+      - name: tfsec scan (via Docker)
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}/infra/bench:/src" \
+            aquasec/tfsec:latest \
+            /src \
+            --config-file=/src/.tfsec/config.yml \
+            --no-color
 
   checkov:
     name: checkov
