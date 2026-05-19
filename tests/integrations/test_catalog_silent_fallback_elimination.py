@@ -312,14 +312,17 @@ def test_one_failing_env_loader_does_not_abort_remaining_integrations(
 ) -> None:
     """The regression #2036 was filed for: a single failing ``model_validate``
     in ``load_env_integrations`` must not abort discovery for every later
-    vendor. Enable two unrelated loaders (vercel + argocd), force vercel to
-    raise, and assert argocd still appears in the returned list.
+    vendor. The survivor must run *after* the failing loader — otherwise the
+    assertion passes even when the loop aborts on vercel (caught by
+    @VibhorGautam in review).
+
+    incident_io is loaded after vercel in ``load_env_integrations``, so its
+    presence in the result proves the loop continued past the vercel failure.
     """
     for var in list(os.environ):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("VERCEL_API_TOKEN", "tkn")
-    monkeypatch.setenv("ARGOCD_BASE_URL", "https://argo.example")
-    monkeypatch.setenv("ARGOCD_AUTH_TOKEN", "tkn")
+    monkeypatch.setenv("INCIDENT_IO_API_KEY", "tkn")
 
     def _boom(*_args: Any, **_kwargs: Any) -> None:
         raise RuntimeError("forced vercel failure")
@@ -331,7 +334,7 @@ def test_one_failing_env_loader_does_not_abort_remaining_integrations(
 
     services = {entry["service"] for entry in result}
     assert "vercel" not in services
-    assert "argocd" in services, (
-        "argocd was dropped — discovery aborted on the first failing loader instead of "
+    assert "incident_io" in services, (
+        "incident_io was dropped — discovery aborted on the vercel failure instead of "
         "continuing past it (this is exactly the bug #2036 is about)"
     )

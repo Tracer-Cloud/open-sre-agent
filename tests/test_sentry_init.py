@@ -425,6 +425,16 @@ def test_scrub_exception_value_is_idempotent() -> None:
     assert "leaky" not in once
 
 
+def test_scrub_exception_value_handles_truncated_message_without_input_type() -> None:
+    # Defense in depth (flagged by Greptile review): a custom-rendered or
+    # truncated message that ends mid-bracket with no `, input_type=` after
+    # the secret must still be scrubbed, not silently leaked.
+    text = "1 validation error\napi_token\n  bad [type=str, input_value='sk-leak'"
+    scrubbed = sentry_mod._scrub_exception_value(text)
+    assert "sk-leak" not in scrubbed
+    assert "input_value=[Filtered]" in scrubbed
+
+
 def test_before_breadcrumb_strips_query_string_for_http_categories() -> None:
     crumb = {
         "category": "httpx",

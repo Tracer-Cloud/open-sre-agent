@@ -32,11 +32,13 @@ _HOME_PATH_RE: re.Pattern[str] = re.compile(r"/(?:Users|home)/[^/\s]+")
 # ``api_token`` or ``password``, the raw secret lands in the rendered text
 # and reaches Sentry through ``exception.values[].value`` — a layer the
 # existing key-based scrubbers do not walk. Strip the value up to the next
-# pydantic field separator, which is always ``, input_type=``. The placeholder
+# pydantic field separator, which is always ``, input_type=``. ``\Z`` is the
+# end-of-string fallback so a truncated message (no ``, input_type=`` after
+# the secret) still gets scrubbed instead of silently leaking. The placeholder
 # left behind (``input_value=[Filtered]``) has no ``, input_type=`` immediately
 # after the bracket, so re-applying the scrub is a no-op (idempotent).
 _PYDANTIC_INPUT_RE: re.Pattern[str] = re.compile(
-    r"input(?:_value)?=.*?(?=,\s*input_type=)",
+    r"input(?:_value)?=.*?(?=,\s*input_type=|\Z)",
     flags=re.DOTALL,
 )
 _SENSITIVE_KEY_SUFFIXES: tuple[str, ...] = ("_token", "_key", "_secret", "_password")
