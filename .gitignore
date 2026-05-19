@@ -3,6 +3,8 @@
 .env
 .env.local
 .env.*.local
+.env.backup
+.env.backup*
 .secrets
 
 # Python
