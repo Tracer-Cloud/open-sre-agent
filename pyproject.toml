@@ -66,6 +66,13 @@ dependencies = [
     # File locking for atomic store operations
     "filelock>=3.29.0",
     "psutil>=5.9",
+    "sqlalchemy>=2.0.49",
+    "alembic>=1.18.4",
+    "redis>=7.4.0",
+    "psycopg2-binary>=2.9.12",
+    # Vector search (HEA-25: runbook store)
+    "pgvector>=0.3.0",
+    "tiktoken>=0.7.0",
 ]
 
 [project.urls]

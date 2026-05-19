@@ -9,13 +9,13 @@ enforced, result sizes capped.
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
 
 from pydantic import Field, field_validator
 
+from app.credentials import get_opt
 from app.services.supabase.client import supabase_http_get
 from app.strict_config import StrictConfigModel
 
@@ -72,8 +72,8 @@ def build_supabase_config(raw: dict[str, Any] | None) -> SupabaseConfig:
 
 def supabase_config_from_env() -> SupabaseConfig | None:
     """Load a Supabase config from environment variables."""
-    url = os.getenv("SUPABASE_URL", "").strip()
-    service_key = os.getenv("SUPABASE_SERVICE_KEY", "").strip()
+    url = get_opt("SUPABASE_URL").strip()
+    service_key = get_opt("SUPABASE_SERVICE_KEY").strip()
     if not url or not service_key:
         return None
     return build_supabase_config({"url": url, "service_key": service_key})

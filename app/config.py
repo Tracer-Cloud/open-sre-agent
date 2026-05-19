@@ -507,3 +507,16 @@ def get_tracer_base_url() -> str:
     return (
         TRACER_BASE_URL_PROD if get_environment() == Environment.PRODUCTION else TRACER_BASE_URL_DEV
     )
+
+
+def init_credential_backend() -> None:
+    """Swap the module-level credential_provider singleton based on CREDENTIAL_BACKEND.
+
+    Call once at application startup (before any request handling).  When
+    ``CREDENTIAL_BACKEND=vault`` the vault provider is instantiated using
+    ``AWS_REGION`` / ``VAULT_REGION`` and ``VAULT_PREFIX`` from the environment.
+    Any other value (or unset) keeps the default :class:`EnvCredentialProvider`.
+    """
+    import app.credentials as _creds
+
+    _creds.credential_provider = _creds.build_credential_provider()

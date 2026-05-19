@@ -13,12 +13,12 @@ and service-tier information unavailable in vanilla SQL Server.
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass
 from typing import Any
 
 from pydantic import Field, field_validator
 
+from app.credentials import get_opt
 from app.integrations._validation_helpers import report_validation_failure
 from app.strict_config import StrictConfigModel
 from app.utils.truncation import truncate
@@ -92,20 +92,20 @@ def build_azure_sql_config(raw: dict[str, Any] | None) -> AzureSQLConfig:
 
 def azure_sql_config_from_env() -> AzureSQLConfig | None:
     """Load an Azure SQL config from env vars."""
-    server = os.getenv("AZURE_SQL_SERVER", "").strip()
-    database = os.getenv("AZURE_SQL_DATABASE", "").strip()
+    server = get_opt("AZURE_SQL_SERVER").strip()
+    database = get_opt("AZURE_SQL_DATABASE").strip()
     if not server or not database:
         return None
-    _port = os.getenv("AZURE_SQL_PORT", "").strip()
+    _port = get_opt("AZURE_SQL_PORT").strip()
     return build_azure_sql_config(
         {
             "server": server,
             "port": int(_port) if _port.isdigit() else DEFAULT_AZURE_SQL_PORT,
             "database": database,
-            "username": os.getenv("AZURE_SQL_USERNAME", "").strip(),
-            "password": os.getenv("AZURE_SQL_PASSWORD", "").strip(),
-            "driver": os.getenv("AZURE_SQL_DRIVER", DEFAULT_AZURE_SQL_DRIVER).strip(),
-            "encrypt": os.getenv("AZURE_SQL_ENCRYPT", "true").strip().lower()
+            "username": get_opt("AZURE_SQL_USERNAME").strip(),
+            "password": get_opt("AZURE_SQL_PASSWORD").strip(),
+            "driver": get_opt("AZURE_SQL_DRIVER", DEFAULT_AZURE_SQL_DRIVER).strip(),
+            "encrypt": get_opt("AZURE_SQL_ENCRYPT", "true").strip().lower()
             in ("true", "1", "yes"),
         }
     )

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 import os
+
+from app.credentials import get_opt
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -103,24 +105,24 @@ def build_posthog_config(raw: dict[str, Any] | None) -> PostHogConfig:
 
 
 def posthog_config_from_env() -> PostHogConfig | None:
-    project_id = os.getenv("POSTHOG_PROJECT_ID", "").strip()
-    personal_api_key = os.getenv("POSTHOG_PERSONAL_API_KEY", "").strip()
+    project_id = get_opt("POSTHOG_PROJECT_ID").strip()
+    personal_api_key = get_opt("POSTHOG_PERSONAL_API_KEY").strip()
 
     if not project_id or not personal_api_key:
         return None
 
     return build_posthog_config(
         {
-            "base_url": os.getenv("POSTHOG_BASE_URL", DEFAULT_POSTHOG_URL),
+            "base_url": get_opt("POSTHOG_BASE_URL", DEFAULT_POSTHOG_URL),
             "project_id": project_id,
             "personal_api_key": personal_api_key,
-            "timeout_seconds": os.getenv(
+            "timeout_seconds": get_opt(
                 "POSTHOG_TIMEOUT_SECONDS", str(DEFAULT_POSTHOG_TIMEOUT_SECONDS)
             ),
-            "bounce_rate_threshold": os.getenv(
+            "bounce_rate_threshold": get_opt(
                 "POSTHOG_BOUNCE_THRESHOLD", str(DEFAULT_POSTHOG_BOUNCE_THRESHOLD)
             ),
-            "bounce_rate_window": os.getenv("POSTHOG_BOUNCE_WINDOW", DEFAULT_POSTHOG_BOUNCE_WINDOW),
+            "bounce_rate_window": get_opt("POSTHOG_BOUNCE_WINDOW", DEFAULT_POSTHOG_BOUNCE_WINDOW),
         }
     )
 

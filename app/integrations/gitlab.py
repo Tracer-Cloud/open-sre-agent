@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote
@@ -11,6 +10,7 @@ from urllib.parse import quote
 import httpx
 from pydantic import Field, field_validator
 
+from app.credentials import get_opt
 from app.integrations._validation_helpers import report_validation_failure
 from app.strict_config import StrictConfigModel
 
@@ -59,12 +59,12 @@ def build_gitlab_config(raw: dict[str, Any] | None) -> GitlabConfig:
 
 def gitlab_config_from_env() -> GitlabConfig | None:
     """Load a Gitlab config from env vars."""
-    auth_token = os.getenv("GITLAB_ACCESS_TOKEN", "").strip()
+    auth_token = get_opt("GITLAB_ACCESS_TOKEN").strip()
     if not auth_token:
         return None
     return build_gitlab_config(
         {
-            "base_url": os.getenv("GITLAB_BASE_URL", DEFAULT_GITLAB_BASE_URL).strip()
+            "base_url": get_opt("GITLAB_BASE_URL", DEFAULT_GITLAB_BASE_URL).strip()
             or DEFAULT_GITLAB_BASE_URL,
             "auth_token": auth_token,
         }

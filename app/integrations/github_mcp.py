@@ -27,6 +27,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from app.cli.interactive_shell.ui.theme import BRAND, DIM, ERROR, HIGHLIGHT
+from app.credentials import get_opt
 from app.integrations._validation_helpers import report_validation_failure
 from app.integrations.mcp_streamable_http_compat import streamable_http_client
 from app.strict_config import StrictConfigModel
@@ -394,12 +395,12 @@ def build_github_mcp_config(raw: dict[str, Any] | None) -> GitHubMCPConfig:
 
 def github_mcp_config_from_env() -> GitHubMCPConfig | None:
     """Load a GitHub MCP config from env vars."""
-    mode = os.getenv("GITHUB_MCP_MODE", DEFAULT_GITHUB_MCP_MODE).strip().lower()
-    url = os.getenv("GITHUB_MCP_URL", "").strip()
-    command = os.getenv("GITHUB_MCP_COMMAND", "").strip()
-    auth_token = os.getenv("GITHUB_MCP_AUTH_TOKEN", "").strip()
-    toolsets_env = os.getenv("GITHUB_MCP_TOOLSETS", "").strip()
-    args_env = os.getenv("GITHUB_MCP_ARGS", "").strip()
+    mode = get_opt("GITHUB_MCP_MODE", DEFAULT_GITHUB_MCP_MODE).strip().lower()
+    url = get_opt("GITHUB_MCP_URL").strip()
+    command = get_opt("GITHUB_MCP_COMMAND").strip()
+    auth_token = get_opt("GITHUB_MCP_AUTH_TOKEN").strip()
+    toolsets_env = get_opt("GITHUB_MCP_TOOLSETS").strip()
+    args_env = get_opt("GITHUB_MCP_ARGS").strip()
 
     if mode == "stdio":
         if not command:
@@ -644,7 +645,7 @@ def _owners_from_repo_full_names(names: Sequence[str]) -> tuple[str, ...]:
 
 
 def _repo_probe_capture_limit() -> int:
-    raw = os.getenv("OPENSRE_GITHUB_MCP_REPO_PROBE_LIMIT", "").strip()
+    raw = get_opt("OPENSRE_GITHUB_MCP_REPO_PROBE_LIMIT").strip()
     if not raw:
         return _DEFAULT_REPO_PROBE_LIMIT
     try:

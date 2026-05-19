@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import logging
 import os
+
+from app.credentials import get_opt
 from dataclasses import dataclass
 from typing import Any
 
@@ -111,24 +113,24 @@ def build_signoz_config(raw: dict[str, Any] | None) -> SigNozConfig:
 
 def signoz_config_from_env() -> SigNozConfig | None:
     """Load a SigNoz config from env vars."""
-    host = os.getenv("SIGNOZ_CLICKHOUSE_HOST", "").strip()
+    host = get_opt("SIGNOZ_CLICKHOUSE_HOST").strip()
     if not host:
         return None
     return build_signoz_config(
         {
-            "url": os.getenv("SIGNOZ_URL", "").strip(),
-            "api_key": os.getenv("SIGNOZ_API_KEY", "").strip(),
+            "url": get_opt("SIGNOZ_URL").strip(),
+            "api_key": get_opt("SIGNOZ_API_KEY").strip(),
             "clickhouse_host": host,
             "clickhouse_port": int(
-                os.getenv("SIGNOZ_CLICKHOUSE_PORT", str(DEFAULT_SIGNOZ_PORT))
+                get_opt("SIGNOZ_CLICKHOUSE_PORT", str(DEFAULT_SIGNOZ_PORT))
                 or str(DEFAULT_SIGNOZ_PORT)
             ),
-            "clickhouse_database": os.getenv(
+            "clickhouse_database": get_opt(
                 "SIGNOZ_CLICKHOUSE_DATABASE", DEFAULT_SIGNOZ_DATABASE
             ).strip(),
-            "clickhouse_user": os.getenv("SIGNOZ_CLICKHOUSE_USER", DEFAULT_SIGNOZ_USER).strip(),
-            "clickhouse_password": os.getenv("SIGNOZ_CLICKHOUSE_PASSWORD", "").strip(),
-            "secure": os.getenv("SIGNOZ_CLICKHOUSE_SECURE", "false").strip().lower()
+            "clickhouse_user": get_opt("SIGNOZ_CLICKHOUSE_USER", DEFAULT_SIGNOZ_USER).strip(),
+            "clickhouse_password": get_opt("SIGNOZ_CLICKHOUSE_PASSWORD").strip(),
+            "secure": get_opt("SIGNOZ_CLICKHOUSE_SECURE", "false").strip().lower()
             in ("true", "1", "yes"),
         }
     )

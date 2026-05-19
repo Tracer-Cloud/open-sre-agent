@@ -8,13 +8,13 @@ All operations are read-only with enforced timeouts.
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass
 from typing import Any
 
 import httpx
 from pydantic import Field, field_validator
 
+from app.credentials import get_opt
 from app.integrations._validation_helpers import report_validation_failure
 from app.strict_config import StrictConfigModel
 
@@ -67,15 +67,15 @@ def build_bitbucket_config(raw: dict[str, Any] | None) -> BitbucketConfig:
 
 def bitbucket_config_from_env() -> BitbucketConfig | None:
     """Load a Bitbucket config from env vars."""
-    workspace = os.getenv("BITBUCKET_WORKSPACE", "").strip()
+    workspace = get_opt("BITBUCKET_WORKSPACE").strip()
     if not workspace:
         return None
     return build_bitbucket_config(
         {
             "workspace": workspace,
-            "username": os.getenv("BITBUCKET_USERNAME", "").strip(),
-            "app_password": os.getenv("BITBUCKET_APP_PASSWORD", "").strip(),
-            "base_url": os.getenv("BITBUCKET_BASE_URL", DEFAULT_BITBUCKET_BASE_URL).strip(),
+            "username": get_opt("BITBUCKET_USERNAME").strip(),
+            "app_password": get_opt("BITBUCKET_APP_PASSWORD").strip(),
+            "base_url": get_opt("BITBUCKET_BASE_URL", DEFAULT_BITBUCKET_BASE_URL).strip(),
         }
     )
 

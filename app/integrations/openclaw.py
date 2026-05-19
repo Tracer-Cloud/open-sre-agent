@@ -32,6 +32,7 @@ from mcp.client.stdio import stdio_client  # type: ignore[import-not-found]
 from pydantic import Field, field_validator, model_validator
 from typing_extensions import TypedDict
 
+from app.credentials import get_opt
 from app.integrations._validation_helpers import report_validation_failure
 from app.integrations.mcp_streamable_http_compat import streamable_http_client
 from app.strict_config import StrictConfigModel
@@ -357,11 +358,11 @@ def build_openclaw_config(raw: Mapping[str, object] | None) -> OpenClawConfig:
 
 def openclaw_config_from_env() -> OpenClawConfig | None:
     """Load an OpenClaw bridge config from environment variables."""
-    mode = os.getenv("OPENCLAW_MCP_MODE", DEFAULT_OPENCLAW_MCP_MODE).strip().lower()
-    url = os.getenv("OPENCLAW_MCP_URL", "").strip()
-    command = os.getenv("OPENCLAW_MCP_COMMAND", "").strip()
-    auth_token = os.getenv("OPENCLAW_MCP_AUTH_TOKEN", "").strip()
-    args_env = os.getenv("OPENCLAW_MCP_ARGS", "").strip()
+    mode = get_opt("OPENCLAW_MCP_MODE", DEFAULT_OPENCLAW_MCP_MODE).strip().lower()
+    url = get_opt("OPENCLAW_MCP_URL").strip()
+    command = get_opt("OPENCLAW_MCP_COMMAND").strip()
+    auth_token = get_opt("OPENCLAW_MCP_AUTH_TOKEN").strip()
+    args_env = get_opt("OPENCLAW_MCP_ARGS").strip()
 
     if mode == "stdio":
         if not command:

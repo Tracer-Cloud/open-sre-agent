@@ -8,12 +8,12 @@ timeouts enforced, result sizes capped.
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass
 from typing import Any
 
 from pydantic import Field, field_validator
 
+from app.credentials import get_opt
 from app.integrations._validation_helpers import report_validation_failure
 from app.strict_config import StrictConfigModel
 
@@ -98,20 +98,20 @@ def build_clickhouse_config(raw: dict[str, Any] | None) -> ClickHouseConfig:
 
 def clickhouse_config_from_env() -> ClickHouseConfig | None:
     """Load a ClickHouse config from env vars."""
-    host = os.getenv("CLICKHOUSE_HOST", "").strip()
+    host = get_opt("CLICKHOUSE_HOST").strip()
     if not host:
         return None
     return build_clickhouse_config(
         {
             "host": host,
             "port": int(
-                os.getenv("CLICKHOUSE_PORT", str(DEFAULT_CLICKHOUSE_PORT))
+                get_opt("CLICKHOUSE_PORT", str(DEFAULT_CLICKHOUSE_PORT))
                 or str(DEFAULT_CLICKHOUSE_PORT)
             ),
-            "database": os.getenv("CLICKHOUSE_DATABASE", DEFAULT_CLICKHOUSE_DATABASE).strip(),
-            "username": os.getenv("CLICKHOUSE_USER", DEFAULT_CLICKHOUSE_USER).strip(),
-            "password": os.getenv("CLICKHOUSE_PASSWORD", "").strip(),
-            "secure": os.getenv("CLICKHOUSE_SECURE", "false").strip().lower()
+            "database": get_opt("CLICKHOUSE_DATABASE", DEFAULT_CLICKHOUSE_DATABASE).strip(),
+            "username": get_opt("CLICKHOUSE_USER", DEFAULT_CLICKHOUSE_USER).strip(),
+            "password": get_opt("CLICKHOUSE_PASSWORD").strip(),
+            "secure": get_opt("CLICKHOUSE_SECURE", "false").strip().lower()
             in ("true", "1", "yes"),
         }
     )

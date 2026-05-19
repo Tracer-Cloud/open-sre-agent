@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import logging
 import os
+
+from app.credentials import get_opt
 from dataclasses import dataclass
 from typing import Any
 
@@ -90,18 +92,18 @@ def build_kafka_config(raw: dict[str, Any] | None) -> KafkaConfig:
 
 def kafka_config_from_env() -> KafkaConfig | None:
     """Load a Kafka config from env vars."""
-    bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "").strip()
+    bootstrap_servers = get_opt("KAFKA_BOOTSTRAP_SERVERS").strip()
     if not bootstrap_servers:
         return None
     return build_kafka_config(
         {
             "bootstrap_servers": bootstrap_servers,
-            "security_protocol": os.getenv(
+            "security_protocol": get_opt(
                 "KAFKA_SECURITY_PROTOCOL", DEFAULT_KAFKA_SECURITY_PROTOCOL
             ).strip(),
-            "sasl_mechanism": os.getenv("KAFKA_SASL_MECHANISM", "").strip(),
-            "sasl_username": os.getenv("KAFKA_SASL_USERNAME", "").strip(),
-            "sasl_password": os.getenv("KAFKA_SASL_PASSWORD", "").strip(),
+            "sasl_mechanism": get_opt("KAFKA_SASL_MECHANISM").strip(),
+            "sasl_username": get_opt("KAFKA_SASL_USERNAME").strip(),
+            "sasl_password": get_opt("KAFKA_SASL_PASSWORD").strip(),
         }
     )
 

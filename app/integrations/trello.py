@@ -1,5 +1,7 @@
 import logging
 import os
+
+from app.credentials import get_opt
 from dataclasses import dataclass
 from typing import Any
 
@@ -49,19 +51,19 @@ def build_trello_config(raw: dict[str, Any] | None) -> TrelloConfig:
 
 def trello_config_from_env() -> TrelloConfig | None:
     """Load a Trello config from env vars."""
-    api_key = os.getenv("TRELLO_API_KEY", "").strip()
-    token = os.getenv("TRELLO_TOKEN", "").strip()
+    api_key = get_opt("TRELLO_API_KEY").strip()
+    token = get_opt("TRELLO_TOKEN").strip()
     if not api_key or not token:
         return None
 
     return build_trello_config(
         {
-            "base_url": os.getenv("TRELLO_BASE_URL", DEFAULT_TRELLO_BASE_URL).strip()
+            "base_url": get_opt("TRELLO_BASE_URL", DEFAULT_TRELLO_BASE_URL).strip()
             or DEFAULT_TRELLO_BASE_URL,
             "api_key": api_key,
             "token": token,
-            "board_id": os.getenv("TRELLO_BOARD_ID", "").strip(),
-            "list_id": os.getenv("TRELLO_LIST_ID", "").strip(),
+            "board_id": get_opt("TRELLO_BOARD_ID").strip(),
+            "list_id": get_opt("TRELLO_LIST_ID").strip(),
         }
     )
 
