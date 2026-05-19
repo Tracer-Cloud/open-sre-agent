@@ -106,8 +106,25 @@ def set_usage_hook(hook: UsageHook | None) -> None:
     The callback receives (model_id, tokens_in, tokens_out). Exceptions
     propagate — e.g. CostBudgetExceeded from CostTracker cleanly bubbles
     out of the calling invoke() so the framework can halt the run.
+
+    The hook is a **process-wide singleton** by design — it's the simplest
+    shape that fits the bench runner's pattern (set once before workers,
+    clear in `finally`). To prevent silent shared state when two callers
+    accidentally compete for it, registering a non-None hook over an
+    already-registered hook is rejected.
+
+    If you genuinely need concurrent observation (e.g. two `BenchmarkRunner`
+    instances in the same process), refactor to a per-context registry
+    (contextvars or a list-of-hooks) — out of scope for v1.
     """
     global _usage_hook
+    if hook is not None and _usage_hook is not None:
+        raise RuntimeError(
+            "A usage hook is already registered. Either the previous owner "
+            "failed to clear it (call set_usage_hook(None) in a finally), or "
+            "two concurrent users of llm_client are conflicting. See the "
+            "set_usage_hook docstring for the contract."
+        )
     _usage_hook = hook
 
 

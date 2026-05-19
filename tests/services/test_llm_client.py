@@ -2387,3 +2387,41 @@ def test_usage_hook_unset_is_default_noop(monkeypatch) -> None:
     client = llm_client.LLMClient(model="claude-sonnet-4-5-20250929")
     response = client.invoke("hi")
     assert response.content == "ok"
+
+
+def test_set_usage_hook_rejects_double_registration() -> None:
+    """The hook is a process-wide singleton — setting a real hook over an
+    already-registered hook would silently overwrite, attributing future
+    usage to the wrong observer. The guard makes that misuse fail loudly.
+    """
+    calls_a, hook_a = _make_recording_hook()
+    calls_b, hook_b = _make_recording_hook()
+
+    llm_client.set_usage_hook(hook_a)
+    try:
+        with pytest.raises(RuntimeError, match="already registered"):
+            llm_client.set_usage_hook(hook_b)
+    finally:
+        # Confirm the first hook is still the active one and clean up
+        llm_client.set_usage_hook(None)
+
+    assert calls_a == []
+    assert calls_b == []
+
+
+def test_set_usage_hook_allows_clear_then_set() -> None:
+    """Clearing with None then setting a new hook is the normal lifecycle
+    (between BenchmarkRunner invocations). Must not trip the guard."""
+    _, hook_a = _make_recording_hook()
+    _, hook_b = _make_recording_hook()
+
+    llm_client.set_usage_hook(hook_a)
+    llm_client.set_usage_hook(None)
+    llm_client.set_usage_hook(hook_b)  # should NOT raise
+    llm_client.set_usage_hook(None)
+
+
+def test_set_usage_hook_allows_redundant_clear() -> None:
+    """Setting None over None is a no-op (idempotent clear). Must not raise."""
+    llm_client.set_usage_hook(None)
+    llm_client.set_usage_hook(None)  # should NOT raise
