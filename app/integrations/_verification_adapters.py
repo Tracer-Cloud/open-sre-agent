@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Callable
 from contextlib import suppress
@@ -368,6 +369,14 @@ def _verify_tracer(source: str, config: dict[str, Any]) -> dict[str, str]:
     )
 
 
+def _has_running_event_loop() -> bool:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return False
+    return True
+
+
 def _verify_discord(source: str, config: dict[str, Any]) -> dict[str, str]:
     try:
         import discord  # type: ignore[import-not-found]
@@ -383,6 +392,16 @@ def _verify_discord(source: str, config: dict[str, Any]) -> dict[str, str]:
     if not bot_token:
         return result("discord", source, "missing", "Missing bot_token.")
 
+    if _has_running_event_loop():
+        err = RuntimeError("Cannot verify Discord token: event loop already running")
+        _report_probe_failure(err, integration="discord", expected=True)
+        return result(
+            "discord",
+            source,
+            "failed",
+            "Cannot verify Discord token inside a running event loop.",
+        )
+
     intents = discord.Intents.none()
     intents.guilds = True
     client = discord.Client(intents=intents)
@@ -392,15 +411,6 @@ def _verify_discord(source: str, config: dict[str, Any]) -> dict[str, str]:
         _report_probe_failure(err, integration="discord", expected=True)
         return result("discord", source, "failed", f"Discord login failed: {err}")
     except Exception as err:
-        detail = str(err)
-        if "run() cannot be called from a running event loop" in detail:
-            _report_probe_failure(err, integration="discord", expected=True)
-            return result(
-                "discord",
-                source,
-                "failed",
-                "Cannot verify Discord token inside a running event loop.",
-            )
         _report_probe_failure(err, integration="discord")
         return result("discord", source, "failed", f"Discord API check failed: {err}")
     return result("discord", source, "passed", "Discord bot token accepted.")

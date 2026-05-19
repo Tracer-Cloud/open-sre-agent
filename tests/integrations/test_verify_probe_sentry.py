@@ -332,15 +332,12 @@ def test_discord_import_failure_sets_sentry_tag(mock_report: MagicMock) -> None:
             sys.modules["discord"] = saved
 
 
+@patch("app.integrations._verification_adapters._has_running_event_loop", return_value=True)
 @patch("app.integrations._verification_adapters.report_exception")
-def test_verify_discord_event_loop_reports_as_expected(mock_report: MagicMock) -> None:
+def test_verify_discord_event_loop_reports_as_expected(
+    mock_report: MagicMock, _mock_loop: MagicMock
+) -> None:
     mock_discord = MagicMock()
-    mock_discord.LoginFailure = type("LoginFailure", (Exception,), {})
-    mock_discord.Intents.none.return_value = MagicMock(guilds=False)
-    mock_client = MagicMock()
-    mock_client.run.side_effect = RuntimeError("run() cannot be called from a running event loop")
-    mock_discord.Client.return_value = mock_client
-
     saved = sys.modules.pop("discord", None)
     real_import = builtins.__import__
 
@@ -353,6 +350,7 @@ def test_verify_discord_event_loop_reports_as_expected(mock_report: MagicMock) -
         with patch("builtins.__import__", side_effect=_mock_discord):
             res = _verify_discord("env", {"bot_token": "fake-token"})
         assert res["status"] == "failed"
+        mock_discord.Client.assert_not_called()
         mock_report.assert_called_once()
         assert mock_report.call_args.kwargs["severity"] == "info"
         assert mock_report.call_args.kwargs["tags"]["event"] == "vendor_failure"
