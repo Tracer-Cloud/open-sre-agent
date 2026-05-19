@@ -7,6 +7,10 @@ from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 
+# Import models so their metadata is registered on Base before autogenerate runs.
+import app.db.models  # noqa: F401
+from app.db.base import Base
+
 config = context.config
 
 if config.config_file_name is not None:
@@ -17,7 +21,7 @@ _db_url = os.environ.get("DATABASE_URI")
 if _db_url:
     config.set_main_option("sqlalchemy.url", _db_url)
 
-target_metadata = None
+target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
