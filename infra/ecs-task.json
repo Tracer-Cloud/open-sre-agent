@@ -40,8 +40,8 @@
           "valueFrom": "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:healops/OPENAI_API_KEY"
         },
         {
-          "name": "SENTRY_DSN",
-          "valueFrom": "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:healops/SENTRY_DSN"
+          "name": "OPENSRE_SENTRY_DSN",
+          "valueFrom": "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:healops/OPENSRE_SENTRY_DSN"
         }
       ],
       "logConfiguration": {
