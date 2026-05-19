@@ -307,6 +307,74 @@ def test_before_send_scrubs_home_paths_in_stack_frames() -> None:
     assert frame["vars"]["auth_token"] == "[Filtered]"
 
 
+def test_before_send_scrubs_secrets_in_exception_message() -> None:
+    """Pydantic ``ValidationError`` renders the offending value into the message
+    body (``input_value={'api_key': 'sk-leaked'}``). Without scrubbing the
+    ``exception.values[].value`` string, the raw key escapes the SDK."""
+    event = {
+        "exception": {
+            "values": [
+                {
+                    "type": "ValidationError",
+                    "value": (
+                        "1 validation error for VercelConfig\n"
+                        "api_key\n"
+                        "  Input should be a valid string, got int "
+                        "[type=string_type, input_value={'api_key': 'sk-leaked-1234', "
+                        "'project_id': 'prj_x'}, input_type=dict]"
+                    ),
+                }
+            ]
+        }
+    }
+
+    sentry_mod._before_send(event, {})
+
+    value = event["exception"]["values"][0]["value"]
+    assert "sk-leaked-1234" not in value
+    assert "[Filtered]" in value
+    # Non-secret fields are preserved so grouping/debuggability survive.
+    assert "prj_x" in value
+    assert "VercelConfig" in value
+
+
+@pytest.mark.parametrize(
+    "message,leaked",
+    [
+        ("api_key='sk-abc'", "sk-abc"),
+        ("token: 'gho_xxx'", "gho_xxx"),
+        ('password="hunter2"', "hunter2"),
+        ("{'auth_token': 'lk-1'}", "lk-1"),
+    ],
+)
+def test_before_send_scrubs_inline_secret_forms(message: str, leaked: str) -> None:
+    event = {"exception": {"values": [{"type": "RuntimeError", "value": message}]}}
+
+    sentry_mod._before_send(event, {})
+
+    assert leaked not in event["exception"]["values"][0]["value"]
+
+
+def test_before_send_leaves_unrelated_messages_intact() -> None:
+    """Regression — operator-actionable LLM routing relies on substrings like
+    ``MINIMAX_API_KEY to be set`` matching after scrubbing; the message scrub
+    must not over-redact when no ``key=value`` pattern is present."""
+    event = {
+        "exception": {
+            "values": [
+                {
+                    "type": "RuntimeError",
+                    "value": "Connection refused to upstream service",
+                }
+            ]
+        }
+    }
+
+    sentry_mod._before_send(event, {})
+
+    assert event["exception"]["values"][0]["value"] == "Connection refused to upstream service"
+
+
 def test_before_breadcrumb_strips_query_string_for_http_categories() -> None:
     crumb = {
         "category": "httpx",

@@ -37,6 +37,31 @@ _SENSITIVE_KEY_SUBSTRINGS: tuple[str, ...] = (
     "auth",
     "credential",
 )
+# Pydantic ValidationError and Python's default exception ``__str__`` render offending
+# values verbatim into the exception message — e.g. ``input_value={'api_key': 'sk-...'}``
+# or ``KeyError: "password='abc'"``. The structured scrubbers walk request/extra/locals
+# but not ``exception.values[].value``, so without this pass raw secrets reach Sentry.
+# Matches a sensitive-looking key followed by ``=`` or ``:`` (dict literal, kwargs repr,
+# or printf-style message) and replaces the value with ``[Filtered]`` while keeping the
+# key for grouping/debuggability.
+_SECRET_IN_MESSAGE_RE: re.Pattern[str] = re.compile(
+    r"""
+    (                                       # group 1: key + separator (kept)
+        ['"]?
+        \w*
+        (?:token|key|secret|password|auth|credential|bearer|dsn|cookie)
+        \w*
+        ['"]?
+        \s*[:=]\s*
+    )
+    (?:                                     # value (replaced)
+        '[^']*'
+        | "[^"]*"
+        | [^\s,'")}\]]+
+    )
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
 _SENSITIVE_HEADERS: frozenset[str] = frozenset(
     {"authorization", "cookie", "set-cookie", "x-api-key"}
 )
@@ -203,6 +228,10 @@ def _scrub_stacktrace_frames(frames: list[dict[str, Any]]) -> None:
                     local_vars[key] = _scrub_string(value)
 
 
+def _scrub_exception_message(value: str) -> str:
+    return _SECRET_IN_MESSAGE_RE.sub(r"\1[Filtered]", value)
+
+
 def _scrub_event_in_place(event: dict[str, Any]) -> None:
     request = event.get("request")
     if isinstance(request, dict):
@@ -215,7 +244,12 @@ def _scrub_event_in_place(event: dict[str, Any]) -> None:
     exception = event.get("exception")
     if isinstance(exception, dict):
         for entry in exception.get("values", []) or []:
-            stacktrace = entry.get("stacktrace") if isinstance(entry, dict) else None
+            if not isinstance(entry, dict):
+                continue
+            message = entry.get("value")
+            if isinstance(message, str):
+                entry["value"] = _scrub_exception_message(message)
+            stacktrace = entry.get("stacktrace")
             if isinstance(stacktrace, dict):
                 frames = stacktrace.get("frames")
                 if isinstance(frames, list):
