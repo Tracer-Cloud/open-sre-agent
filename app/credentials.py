@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 from abc import ABC, abstractmethod
-from contextvars import ContextVar
+from contextvars import ContextVar, Token
 from typing import Final
 
 _tenant_ctx: ContextVar[str] = ContextVar("tenant_id")
@@ -40,7 +40,7 @@ def get_current_tenant() -> str:
     return _tenant_ctx.get()
 
 
-def set_tenant_context(tenant_id: str) -> object:
+def set_tenant_context(tenant_id: str) -> Token[str]:
     """Set the tenant ID for the current async context. Returns the Token."""
     return _tenant_ctx.set(tenant_id)
 
