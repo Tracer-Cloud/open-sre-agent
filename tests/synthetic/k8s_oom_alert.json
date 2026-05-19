@@ -1,0 +1,65 @@
+{
+  "title": "[FIRING:1] K8s OOM Kill — payments-api pod memory limit exceeded",
+  "state": "alerting",
+  "alert_source": "datadog",
+  "alert_name": "KubernetesPodOOMKilled",
+  "pipeline_name": "k8s-oom-synthetic",
+  "severity": "critical",
+  "message": "Container payments-api was OOM-killed (exit code 137). Pod is in CrashLoopBackOff.",
+  "commonLabels": {
+    "alertname": "KubernetesPodOOMKilled",
+    "severity": "critical",
+    "pipeline_name": "k8s-oom-synthetic",
+    "service": "payments-api",
+    "cluster_name": "payments-prod-eks",
+    "namespace": "payments",
+    "workload_type": "deployment",
+    "workload_name": "payments-api"
+  },
+  "commonAnnotations": {
+    "summary": "Pod payments-api-7f9dd8b6c4-x7gr9 OOM-killed; restart_count=8 in last 25 min",
+    "description": "Container payments-api exceeded its memory limit (512Mi) and was terminated by the kernel OOM killer with exit code 137. The pod is now cycling in CrashLoopBackOff. Two sibling replicas remain healthy.",
+    "error": "Container exit code 137; OOMKilled reported by kubelet",
+    "suspected_symptom": "Memory limit exceeded — kernel OOM kill",
+    "cluster_name": "payments-prod-eks",
+    "kube_namespace": "payments",
+    "kube_deployment": "payments-api",
+    "kube_pod": "payments-api-7f9dd8b6c4-x7gr9",
+    "k8s_failure_mode": "oom_killed",
+    "context_sources": "eks,datadog"
+  },
+  "alerts": [
+    {
+      "status": "firing",
+      "labels": {
+        "alertname": "KubernetesPodOOMKilled",
+        "severity": "critical",
+        "pipeline_name": "k8s-oom-synthetic",
+        "service": "payments-api",
+        "cluster_name": "payments-prod-eks",
+        "namespace": "payments",
+        "workload_type": "deployment",
+        "workload_name": "payments-api"
+      },
+      "annotations": {
+        "summary": "Pod payments-api-7f9dd8b6c4-x7gr9 OOM-killed; restart_count=8 in last 25 min",
+        "description": "Container payments-api exceeded its memory limit (512Mi) and was terminated by the kernel OOM killer with exit code 137.",
+        "error": "Container exit code 137; OOMKilled reported by kubelet",
+        "kube_pod": "payments-api-7f9dd8b6c4-x7gr9",
+        "kube_namespace": "payments",
+        "kube_deployment": "payments-api"
+      },
+      "startsAt": "2026-04-18T10:05:00Z",
+      "endsAt": "0001-01-01T00:00:00Z",
+      "generatorURL": "",
+      "fingerprint": "k8s-oom-synthetic-001"
+    }
+  ],
+  "version": "4",
+  "groupLabels": {
+    "alertname": "KubernetesPodOOMKilled",
+    "namespace": "payments"
+  },
+  "groupKey": "{}:{alertname=\"KubernetesPodOOMKilled\",namespace=\"payments\"}",
+  "truncatedAlerts": 0
+}

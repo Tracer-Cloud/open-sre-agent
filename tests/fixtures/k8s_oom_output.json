@@ -1,0 +1,91 @@
+{
+  "_meta": {
+    "generated_by": "HEA-16 integration validation",
+    "scenario": "k8s_oom_alert — payments-api OOMKilled CrashLoopBackOff",
+    "fixture_source": "tests/synthetic/eks/001-oomkilled-crashloop",
+    "alert_input": "tests/synthetic/k8s_oom_alert.json",
+    "backends": "FixtureEKSBackend + FixtureDatadogBackend (no live API calls)",
+    "credential_check": "no credentials appear in this report — api_key and kubeconfig fields are empty stubs in the fixture backends"
+  },
+  "alert_name": "KubernetesPodOOMKilled",
+  "pipeline_name": "k8s-oom-synthetic",
+  "severity": "critical",
+  "root_cause": "Container payments-api in pod payments-api-7f9dd8b6c4-x7gr9 exceeded its memory limit (512Mi) and was terminated by the kernel OOM killer (exit code 137). Kubelet enters CrashLoopBackOff. Sibling replicas are unaffected.",
+  "root_cause_category": "resource_exhaustion",
+  "validated_claims": [
+    {
+      "claim": "Pod payments-api-7f9dd8b6c4-x7gr9 has restart_count=8 and last terminated state exit_code=137 (OOMKill signature).",
+      "evidence": "eks_pods"
+    },
+    {
+      "claim": "Kubernetes Warning event BackOff references 'reason: OOMKilled, exit code: 137' appearing 8 times.",
+      "evidence": "eks_events"
+    },
+    {
+      "claim": "Pod logs contain kernel OOM line: 'Memory cgroup out of memory: Killed process 1' immediately before container exit.",
+      "evidence": "eks_pod_logs"
+    },
+    {
+      "claim": "Datadog logs show heap approaching limit (496Mi / 512Mi) in the seconds before OOM kill.",
+      "evidence": "datadog_logs"
+    },
+    {
+      "claim": "Two sibling replicas (payments-api-7f9dd8b6c4-k2m4p, payments-api-7f9dd8b6c4-r8wz1) are Running and Ready with restart_count=0.",
+      "evidence": "eks_pods"
+    }
+  ],
+  "non_validated_claims": [
+    {
+      "claim": "No ImagePullBackOff events observed — image pull failure is ruled out.",
+      "evidence": "eks_events"
+    },
+    {
+      "claim": "No liveness/readiness probe failure events — probe misconfiguration is ruled out.",
+      "evidence": "eks_events"
+    },
+    {
+      "claim": "Datadog monitors show no network saturation or upstream dependency degradation at alert time.",
+      "evidence": "datadog_monitors"
+    }
+  ],
+  "causal_chain": [
+    "payments-api processes a large payment batch (batch_size=5000), driving heap to 496Mi.",
+    "Heap exceeds the 512Mi container memory limit; kernel OOM killer terminates PID 1 with SIGKILL.",
+    "Kubelet records exit code 137 and enters CrashLoopBackOff back-off loop.",
+    "Alert fires after 8 restart cycles in 25 minutes."
+  ],
+  "datadog_evidence": {
+    "logs_queried": true,
+    "log_query": "service:payments-api",
+    "log_window_start": "2026-04-18T10:00:00Z",
+    "log_window_end": "2026-04-18T10:50:00Z",
+    "error_log_count": 3,
+    "sample_error_log": "Memory cgroup out of memory: Killed process 1 (payments-api) total-vm:524288kB",
+    "monitors_queried": true,
+    "monitor_query": "payments-api",
+    "triggered_monitor_count": 0,
+    "credential_leak_check": "PASS — no api_key or app_key values appear in this section"
+  },
+  "k8s_evidence": {
+    "pods_queried": true,
+    "cluster_name": "payments-prod-eks",
+    "namespace": "payments",
+    "total_pods": 3,
+    "failing_pods": 1,
+    "oom_killed_pod": "payments-api-7f9dd8b6c4-x7gr9",
+    "restart_count": 8,
+    "exit_code": 137,
+    "events_queried": true,
+    "warning_event_count": 2,
+    "pod_logs_queried": true,
+    "credential_leak_check": "PASS — no kubeconfig or role_arn values appear in this section"
+  },
+  "slack_delivery": {
+    "attempted": true,
+    "method": "incoming_webhook",
+    "webhook_env_var": "SLACK_WEBHOOK_URL",
+    "result": "skipped_no_webhook_configured",
+    "note": "Staging SLACK_WEBHOOK_URL not set; delivery verified via mock in test_k8s_oom_integration.py"
+  },
+  "report": "## K8s OOM Kill — payments-api\n\n**Root Cause:** Container `payments-api` in pod `payments-api-7f9dd8b6c4-x7gr9` (namespace `payments`, cluster `payments-prod-eks`) exceeded its 512Mi memory limit and was terminated by the kernel OOM killer with exit code 137. Kubelet entered CrashLoopBackOff after 8 restarts in 25 minutes. Sibling replicas are unaffected.\n\n**Evidence:**\n- Pod logs: `Memory cgroup out of memory: Killed process 1` immediately before exit\n- K8s events: `BackOff` reason with `OOMKilled, exit code: 137` (×8)\n- Datadog logs: heap at 496Mi / 512Mi in the seconds before termination\n\n**Fix:** Increase `resources.limits.memory` in the payments-api Deployment spec, or reduce `batch_size` to keep peak heap under the limit."
+}
