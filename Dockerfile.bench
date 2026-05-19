@@ -1,0 +1,79 @@
+# Container image for running Cloud-OpsBench on AWS Fargate.
+#
+# Build:
+#   docker build -f Dockerfile.bench -t <ecr-url>:<tag> .
+#
+# Push:
+#   aws ecr get-login-password --region us-east-1 \
+#     | docker login --username AWS --password-stdin <acct>.dkr.ecr.us-east-1.amazonaws.com
+#   docker push <ecr-url>:<tag>
+#
+# Pin the resulting image tag (or digest) in the bench pre-registration YAML.
+# ECR is configured with IMMUTABLE tags — a tag pushed once cannot be
+# overwritten. Use a unique tag per build (semver, git SHA, or build ID).
+#
+# The image installs:
+#   - opensre (this repo's Python package)
+#   - tests/benchmarks/  (bench framework + adapters)
+# NOT included: docs, infra/, .github/, other workflows. Bench runs API-bound
+# work; the image is minimal to keep cold-start fast.
+
+FROM python:3.12-slim AS bench
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    UV_LINK_MODE=copy \
+    UV_NO_CACHE=1
+
+WORKDIR /app
+
+# System deps — minimum required for any source wheels lacking prebuilt
+# binaries for python:3.12-slim. ca-certificates is required for TLS to LLM
+# provider APIs.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        ca-certificates \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# uv from official image — fast, deterministic dep resolver, matches the
+# AGENTS.md workflow.
+COPY --from=ghcr.io/astral-sh/uv:0.5.18 /uv /uvx /usr/local/bin/
+
+# Dependency layer — separate from source so source changes don't bust
+# the (slow) dep install cache.
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
+
+# Source — only what the bench needs. Excludes docs, infra, .github,
+# unrelated tests, packaging assets, etc.
+COPY app/ ./app/
+COPY tests/__init__.py ./tests/__init__.py
+COPY tests/benchmarks/ ./tests/benchmarks/
+
+# Install the project itself now that source is in place
+RUN uv sync --frozen --no-dev
+
+# Hugging Face dataset cache lives in /cache (writable across task runs if
+# you ever attach an EFS mount; ephemeral otherwise). State Snapshot data
+# is downloaded by the bench at task start.
+ENV HF_HOME=/cache/huggingface \
+    HF_HUB_CACHE=/cache/huggingface/hub
+RUN mkdir -p /cache/huggingface/hub
+
+# Default config path inside the image. Override via task definition
+# `command`: e.g.
+#   aws ecs run-task --overrides '{"containerOverrides":[{"name":"bench",
+#     "command":["run","tests/benchmarks/configs/phase1.yml"]}]}'
+ENV BENCH_DEFAULT_CONFIG=tests/benchmarks/configs/phase1.yml
+
+# Bench framework CLI (entrypoint module lives in tests/benchmarks/_framework/cli.py
+# on the framework feature branch — image runtime requires that branch merged).
+ENTRYPOINT ["uv", "run", "--frozen", "--no-dev", "python", "-m", "tests.benchmarks._framework.cli"]
+
+# Default args — show CLI help if no subcommand is passed. Override by ECS
+# task `command` for actual runs.
+CMD ["--help"]
