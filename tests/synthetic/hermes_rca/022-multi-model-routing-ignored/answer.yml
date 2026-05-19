@@ -24,7 +24,7 @@ max_investigation_loops: 4
 model_response: |
   Hermes capability routing configuration was ignored during runtime.
 
-  The reasoning and codegen capability categories were configured to use
-  different models, but all requests were routed to the default model.
+  The configured capability-based routing policy was not respected and
+  requests were routed to the default fallback model instead.
 
   Root cause category: routing_ignored.
