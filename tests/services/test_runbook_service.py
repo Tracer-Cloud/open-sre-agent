@@ -15,6 +15,7 @@ from app.services.runbook_service import (
 )
 from app.state.runbook import Runbook
 
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -22,7 +23,7 @@ from app.state.runbook import Runbook
 
 def _make_runbook(tenant_id: str = "t1", title: str = "OOMKilled runbook") -> Runbook:
     r = Runbook()
-    r.id = uuid.uuid4()
+    r.id = str(uuid.uuid4())
     r.tenant_id = tenant_id
     r.title = title
     r.content = "Pod OOMKilled — increase memory limits."
@@ -83,8 +84,9 @@ def _mock_embed(texts: list[str]) -> list[list[float]]:
 @pytest.fixture
 def db_session() -> MagicMock:
     session = MagicMock()
-    # execute().scalars().first() chain used in upsert / search
-    session.execute.return_value.scalars.return_value.first.return_value = None
+    # query().filter().filter().first() chain used by TenantRepository.query()
+    session.query.return_value.filter.return_value.filter.return_value.first.return_value = None
+    # execute().scalars().all() chain used by search_by_embedding
     session.execute.return_value.scalars.return_value.all.return_value = []
     return session
 
@@ -106,7 +108,7 @@ def test_upsert_creates_new_runbook(mock_embed: Any, db_session: MagicMock) -> N
 @patch("app.services.runbook_service._embed", side_effect=_mock_embed)
 def test_upsert_updates_existing_runbook(mock_embed: Any, db_session: MagicMock) -> None:
     existing = _make_runbook()
-    db_session.execute.return_value.scalars.return_value.first.return_value = existing
+    db_session.query.return_value.filter.return_value.filter.return_value.first.return_value = existing
 
     svc = RunbookService(db_session)
     rb = svc.upsert(
@@ -133,7 +135,6 @@ def test_search_returns_results_for_tenant(
 
 
 def test_delete_returns_false_when_not_found(db_session: MagicMock) -> None:
-    db_session.execute.return_value.scalars.return_value.first.return_value = None
     svc = RunbookService(db_session)
     assert svc.delete(tenant_id="t1", runbook_id=uuid.uuid4()) is False
     db_session.delete.assert_not_called()
@@ -141,9 +142,9 @@ def test_delete_returns_false_when_not_found(db_session: MagicMock) -> None:
 
 def test_delete_returns_true_and_deletes(db_session: MagicMock) -> None:
     rb = _make_runbook()
-    db_session.execute.return_value.scalars.return_value.first.return_value = rb
+    db_session.query.return_value.filter.return_value.filter.return_value.first.return_value = rb
     svc = RunbookService(db_session)
-    assert svc.delete(tenant_id=rb.tenant_id, runbook_id=rb.id) is True
+    assert svc.delete(tenant_id=rb.tenant_id, runbook_id=uuid.UUID(rb.id)) is True
     db_session.delete.assert_called_once_with(rb)
 
 

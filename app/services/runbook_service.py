@@ -80,7 +80,7 @@ class RunbookRepository(TenantRepository[Runbook]):
         super().__init__(db, Runbook)
 
     def get_by_title(self, title: str) -> Runbook | None:
-        return self.query().filter(Runbook.title == title).first()
+        return self.query().filter(Runbook.title == title).first()  # type: ignore[return-value]
 
     def search_by_embedding(
         self, embedding: list[float], top_k: int
@@ -131,7 +131,7 @@ class RunbookService:
             return existing
 
         runbook = Runbook(
-            id=uuid.uuid4(),
+            id=str(uuid.uuid4()),
             title=title,
             content=content,
             embedding=embedding,
@@ -156,6 +156,6 @@ class RunbookService:
         runbook = self._repo.get(str(runbook_id))
         if runbook is None:
             return False
-        self._repo.delete(runbook)
+        self._db.delete(runbook)
         self._db.flush()
         return True

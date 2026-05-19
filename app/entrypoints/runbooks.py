@@ -23,7 +23,7 @@ class RunbookCreate(BaseModel):
 
 
 class RunbookResponse(BaseModel):
-    id: uuid.UUID
+    id: str
     tenant_id: str
     title: str
     content: str

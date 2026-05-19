@@ -7,12 +7,15 @@ from datetime import UTC, datetime
 
 from pgvector.sqlalchemy import Vector  # type: ignore[import-untyped]
 from sqlalchemy import ARRAY, DateTime, Index, String, Text
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TenantMixin
 
 EMBEDDING_DIM = 1536  # text-embedding-3-small / voyage-3
+
+
+def _uuid() -> str:
+    return str(uuid.uuid4())
 
 
 def _now() -> datetime:
@@ -22,9 +25,7 @@ def _now() -> datetime:
 class Runbook(TenantMixin, Base):
     __tablename__ = "runbooks"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     embedding: Mapped[list[float] | None] = mapped_column(

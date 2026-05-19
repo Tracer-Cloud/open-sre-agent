@@ -18,10 +18,15 @@ from app.db.models import Investigation
 from app.db.repository import TenantRepository
 
 
+_SQLITE_TABLES = ("investigations", "alerts", "investigation_steps")
+
+
 @pytest.fixture
 def db():
     engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    # Only create SQLite-compatible tables; Runbook uses ARRAY which SQLite can't render.
+    tables = [Base.metadata.tables[t] for t in _SQLITE_TABLES if t in Base.metadata.tables]
+    Base.metadata.create_all(engine, tables=tables)
     with Session(engine) as session:
         yield session
 

@@ -22,7 +22,7 @@ EMBEDDING_DIM = 1536
 def upgrade() -> None:
     op.create_table(
         "runbooks",
-        sa.Column("id", sa.dialects.postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column("id", sa.String(36), primary_key=True),
         sa.Column("tenant_id", sa.String(36), nullable=False),
         sa.Column("title", sa.String(500), nullable=False),
         sa.Column("content", sa.Text, nullable=False),
