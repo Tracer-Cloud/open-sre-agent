@@ -195,6 +195,19 @@ _EXCLUSIVE_STDIN_SUBCOMMANDS: frozenset[tuple[str, str]] = frozenset(
         ("/mcp", "connect"),
     }
 )
+_EXCLUSIVE_STDIN_PARITY_COMMANDS: frozenset[str] = frozenset(
+    {
+        "/config",
+        "/guardrails",
+        "/hermes",
+        "/messaging",
+        "/remote",
+        "/tests",
+        "/uninstall",
+        "/update",
+        "/watchdog",
+    }
+)
 _WAIT_FOR_COMPLETION_COMMANDS: frozenset[str] = frozenset({"/exit", "/quit"})
 
 
@@ -204,12 +217,13 @@ def _dispatch_needs_exclusive_stdin(text: str, session: ReplSession) -> bool:
     Most turns can run while prompt-toolkit immediately opens the next input
     frame, which is what gives the shell type-ahead during streaming. A few
     slash commands, however, temporarily own stdin themselves: inline
-    ``repl_choose_one`` menus and subprocess-backed interactive wizards. If the
+    ``repl_choose_one`` menus, subprocess-backed interactive wizards, and CLI
+    parity commands that write directly to the terminal PTY (like /update). If the
     next prompt starts underneath those, prompt-toolkit can send a cursor
     position request and the terminal's reply (for example ``[32;1R``) leaks
-    into the prompt or menu input. Exit commands also pause so the shell does
-    not draw one more prompt after printing goodbye. Waiting only for these
-    known cases preserves type-ahead everywhere else.
+    into the prompt or menu input, or redrawing the prompt overwrites the child
+    process's output. Waiting only for these known cases preserves type-ahead
+    everywhere else.
     """
     if not repl_tty_interactive():
         return False
@@ -232,9 +246,9 @@ def _dispatch_needs_exclusive_stdin(text: str, session: ReplSession) -> bool:
 
     if name in _WAIT_FOR_COMPLETION_COMMANDS:
         return True
-    if name in _EXCLUSIVE_STDIN_MENU_COMMANDS and not args:
+    if name in _EXCLUSIVE_STDIN_PARITY_COMMANDS:
         return True
-    if name == "/tests" and not args:
+    if name in _EXCLUSIVE_STDIN_MENU_COMMANDS and not args:
         return True
     return bool(args and (name, args[0]) in _EXCLUSIVE_STDIN_SUBCOMMANDS)
 

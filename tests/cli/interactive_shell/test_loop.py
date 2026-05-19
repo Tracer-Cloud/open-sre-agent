@@ -524,6 +524,19 @@ def test_dispatch_needs_exclusive_stdin_for_exit_commands(
     assert loop._dispatch_needs_exclusive_stdin("quit", session) is True
 
 
+def test_dispatch_needs_exclusive_stdin_for_parity_commands(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(loop, "repl_tty_interactive", lambda: True)
+    session = ReplSession()
+
+    assert loop._dispatch_needs_exclusive_stdin("/update", session) is True
+    assert loop._dispatch_needs_exclusive_stdin("/update --check", session) is True
+    assert loop._dispatch_needs_exclusive_stdin("/remote status", session) is True
+    assert loop._dispatch_needs_exclusive_stdin("/tests", session) is True
+    assert loop._dispatch_needs_exclusive_stdin("/tests list", session) is True
+
+
 def test_dispatch_needs_exclusive_stdin_for_integration_setup(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
