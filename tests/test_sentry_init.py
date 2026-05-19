@@ -823,3 +823,4 @@ def test_build_sentry_integrations_includes_logging_by_default(monkeypatch) -> N
     assert "LoggingIntegration" in integration_names
     assert "AsyncioIntegration" in integration_names
     assert "HttpxIntegration" in integration_names
+
