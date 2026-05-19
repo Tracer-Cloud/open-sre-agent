@@ -38,6 +38,21 @@ from tests.benchmarks._framework.config import (
 )
 from tests.benchmarks._framework.cost import CostBudgetExceeded
 from tests.benchmarks._framework.integrity import IntegrityViolation
+
+# --------------------------------------------------------------------------- #
+# Exit codes                                                                  #
+#                                                                              #
+# Stable contract: external tooling (ECS task definitions, CI conditionals,    #
+# wrapper scripts) may key off these. Document changes prominently. The        #
+# values match the module docstring at top.                                    #
+# --------------------------------------------------------------------------- #
+
+EXIT_OK = 0
+EXIT_USAGE_OR_INPUT = 1  # Bad path, missing file, config lint failure
+EXIT_INTEGRITY_VIOLATION = 2  # IntegrityGuard rejected the config or report
+EXIT_BUDGET_EXCEEDED = 3  # CostBudgetExceeded mid-run OR outcome.aborted
+EXIT_UNKNOWN_ADAPTER = 4  # No adapter registered for config.benchmark
+EXIT_PREFLIGHT_ERROR = 5  # Uncaught exception during run setup
 from tests.benchmarks._framework.reporting import render_report_dir
 from tests.benchmarks._framework.runner import BenchmarkRunner
 
@@ -86,19 +101,19 @@ def _cmd_list(_args: argparse.Namespace) -> int:
         if completeness:
             for err in completeness:
                 print(f"      - {err}")
-    return 0
+    return EXIT_OK
 
 
 def _cmd_validate(args: argparse.Namespace) -> int:
     path = Path(args.config)
     if not path.exists():
         print(f"  ✗ {path} does not exist", file=sys.stderr)
-        return 1
+        return EXIT_USAGE_OR_INPUT
     try:
         config = validate_config_or_raise(path)
     except (FileNotFoundError, ValueError) as exc:
         print(f"  ✗ {path}\n{exc}", file=sys.stderr)
-        return 1
+        return EXIT_USAGE_OR_INPUT
     print(f"  ✓ {path}")
     print(f"      benchmark: {config.benchmark}")
     print(f"      modes: {config.modes}")
@@ -109,7 +124,7 @@ def _cmd_validate(args: argparse.Namespace) -> int:
     print(f"      output_dir: {config.output_dir}")
     if config.pre_registration_path:
         print(f"      pre_registration_path: {config.pre_registration_path}")
-    return 0
+    return EXIT_OK
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
@@ -118,7 +133,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
         config = load_config(path)
     except FileNotFoundError as exc:
         print(f"  ✗ {exc}", file=sys.stderr)
-        return 1
+        return EXIT_USAGE_OR_INPUT
     if not args.dev:
         # Production runs MUST pass the lint pre-check
         lint_errors = config.lint()
@@ -126,7 +141,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
             print("  ✗ Config failed integrity lint:", file=sys.stderr)
             for err in lint_errors:
                 print(f"    - {err}", file=sys.stderr)
-            return 1
+            return EXIT_USAGE_OR_INPUT
 
     try:
         adapter = _build_adapter(config.benchmark)
@@ -136,7 +151,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
             f"Known: {_known_adapters()}",
             file=sys.stderr,
         )
-        return 4
+        return EXIT_UNKNOWN_ADAPTER
 
     runner = BenchmarkRunner(config=config, adapter=adapter)
 
@@ -144,37 +159,49 @@ def _cmd_run(args: argparse.Namespace) -> int:
         outcome = runner.run_without_integrity() if args.dev else runner.run()
     except IntegrityViolation as v:
         print(f"  ✗ Integrity gate blocked the run:\n{v}", file=sys.stderr)
-        return 2
+        return EXIT_INTEGRITY_VIOLATION
     except CostBudgetExceeded as exc:
+        # Defensive: BenchmarkRunner.run() normally catches CostBudgetExceeded
+        # internally and returns RunOutcome(aborted=True). This except remains
+        # for direct callers or future code paths that bypass that handling.
         print(f"  ✗ Cost budget exceeded mid-run: {exc}", file=sys.stderr)
-        return 3
+        return EXIT_BUDGET_EXCEEDED
     except Exception as exc:
         print(f"  ✗ Pre-flight failed: {type(exc).__name__}: {exc}", file=sys.stderr)
-        return 5
+        return EXIT_PREFLIGHT_ERROR
 
     print()
     print(f"  ✓ Run complete: {len(outcome.cells)} cell(s), aborted={outcome.aborted}")
     print(f"  ✓ run_id: {outcome.report.run_id}")
     print(f"  ✓ artifacts: {outcome.report.raw_artifacts_dir}")
     if outcome.abort_reason:
-        print(f"  ⚠ abort reason: {outcome.abort_reason}")
-    return 0
+        print(f"  ⚠ abort reason: {outcome.abort_reason}", file=sys.stderr)
+
+    # Aborted runs (e.g. budget overrun caught inside the runner) must NOT
+    # report success — ECS / CI determine task success from the exit code,
+    # and a halted run that exits 0 is silently lost. Return the same code
+    # as the CostBudgetExceeded path above so wrapping tooling can treat
+    # both as a single class of failure.
+    if outcome.aborted:
+        return EXIT_BUDGET_EXCEEDED
+
+    return EXIT_OK
 
 
 def _cmd_report(args: argparse.Namespace) -> int:
     run_dir = Path(args.run_dir)
     if not run_dir.exists():
         print(f"  ✗ {run_dir} does not exist", file=sys.stderr)
-        return 1
+        return EXIT_USAGE_OR_INPUT
     formats = [f.strip() for f in args.format.split(",")] if args.format else None
     try:
         rendered = render_report_dir(run_dir, formats=formats)
     except FileNotFoundError as exc:
         print(f"  ✗ {exc}", file=sys.stderr)
-        return 1
+        return EXIT_USAGE_OR_INPUT
     for fmt, path in rendered.items():
         print(f"  ✓ {fmt}: {path}  ({path.stat().st_size:,} bytes)")
-    return 0
+    return EXIT_OK
 
 
 # --------------------------------------------------------------------------- #

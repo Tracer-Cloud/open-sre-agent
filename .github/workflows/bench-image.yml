@@ -118,10 +118,17 @@ jobs:
           provenance: false   # smaller manifest; matches ECR's tolerance for OCI
 
       - name: Summarise
+        # Route step outputs through env so the shell sees them as DATA,
+        # not code. `steps.tag.outputs.tag` is derived verbatim from the
+        # `inputs.tag` user input — without env scoping, a workflow_dispatch
+        # caller could inject shell commands here even though the
+        # "Resolve image tag" step is hardened. Same risk applies to any
+        # tag-derived chain.
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          DIGEST: ${{ steps.build.outputs.digest }}
         run: |
-          REGISTRY="${{ steps.ecr-login.outputs.registry }}"
-          TAG="${{ steps.tag.outputs.tag }}"
-          DIGEST="${{ steps.build.outputs.digest }}"
           echo "## Image pushed" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| field | value |" >> "$GITHUB_STEP_SUMMARY"

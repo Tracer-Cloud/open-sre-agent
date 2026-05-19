@@ -63,6 +63,10 @@ PRICING_TABLE: dict[str, TokenPricing] = {
     "claude-sonnet-4-5-20250929": TokenPricing(3.0, 15.0),
     "claude-opus-4-7": TokenPricing(15.0, 75.0),
     "claude-3-5-haiku-20241022": TokenPricing(0.8, 4.0),
+    # Claude Haiku 4.5 - used as the toolcall model for claude-4-sonnet and
+    # claude-4-opus specs in llm_dispatch.py. Anthropic published pricing
+    # at $1/MTok input, $5/MTok output. Verify before any large run.
+    "claude-haiku-4-5-20251001": TokenPricing(1.0, 5.0),
     # OpenAI GPT family
     "gpt-4o-2024-11-20": TokenPricing(2.5, 10.0),
     "gpt-5-2025-08-07": TokenPricing(5.0, 20.0),  # approx — verify before run
