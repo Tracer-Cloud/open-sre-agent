@@ -70,8 +70,14 @@ def run_cli_command(
             console.print(f"[{ERROR}]CLI command exited with non-zero code {result.returncode}[/]")
     except subprocess.TimeoutExpired as exc:
         if subprocess_timeout is not None:
-            print_command_output(console, exc.stdout or "")
-            print_command_output(console, exc.stderr or "", style=ERROR)
+            _stdout = exc.stdout
+            if isinstance(_stdout, bytes):
+                _stdout = _stdout.decode("utf-8", errors="replace")
+            _stderr = exc.stderr
+            if isinstance(_stderr, bytes):
+                _stderr = _stderr.decode("utf-8", errors="replace")
+            print_command_output(console, _stdout or "")
+            print_command_output(console, _stderr or "", style=ERROR)
         console.print(f"[{ERROR}]error:[/] CLI command timed out")
     except KeyboardInterrupt:
         console.print(f"[{DIM}]CLI command cancelled (Ctrl+C).[/]")
