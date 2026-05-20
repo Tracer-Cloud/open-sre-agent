@@ -15,7 +15,7 @@ from rich.console import Console
 
 import app.cli.interactive_shell.orchestration.action_executor as action_executor
 import app.cli.interactive_shell.orchestration.agent_actions as agent_actions
-from app.cli.interactive_shell.intent import intent_parser as intent_parser_module
+from app.cli.interactive_shell.orchestration import intent_parser as intent_parser_module
 from app.cli.interactive_shell.runtime.session import ReplSession
 from app.cli.interactive_shell.runtime.tasks import TaskKind, TaskStatus
 from app.cli.interactive_shell.shell import execution as shell_execution

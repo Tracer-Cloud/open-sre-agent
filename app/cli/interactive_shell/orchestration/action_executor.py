@@ -20,7 +20,7 @@ from rich.console import Console
 from rich.markup import escape
 from rich.text import Text
 
-import app.cli.interactive_shell.intent.intent_parser as _intent_parser
+import app.cli.interactive_shell.orchestration.intent_parser as _intent_parser
 from app.cli.interactive_shell.orchestration.action_planner import (
     DEFAULT_SYNTHETIC_SCENARIO,
     SYNTHETIC_UNKNOWN_PREFIX,

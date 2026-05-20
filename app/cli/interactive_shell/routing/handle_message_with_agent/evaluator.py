@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from app.cli.interactive_shell.orchestration import llm_intent_classifier
+from app.cli.interactive_shell.routing import llm_intent_classifier
 from app.cli.interactive_shell.routing.types import RouteDecision, RouteKind, RoutingSession
 
 

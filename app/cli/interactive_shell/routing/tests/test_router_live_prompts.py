@@ -10,7 +10,7 @@ from typing import TypedDict
 import pytest
 import yaml
 
-from app.cli.interactive_shell.orchestration.llm_intent_classifier import clear_classify_cache
+from app.cli.interactive_shell.routing.llm_intent_classifier import clear_classify_cache
 from app.cli.interactive_shell.routing.router import RouteKind, route_input
 from app.cli.interactive_shell.runtime.session import ReplSession
 

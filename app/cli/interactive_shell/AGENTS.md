@@ -20,8 +20,8 @@ should be predictable, interruptible, explainable, and safe by default.
 | `loop.py` / `commands.py` | top-level REPL wiring and compatibility shims | feature-specific business logic |
 | `command_registry/` | slash-command definitions, argument validation, command dispatch | long-running implementation details better placed in services/runtime modules |
 | `runtime/` | `ReplSession`, background tasks, hot reload, lifecycle state | UI rendering and prompt text |
-| `routing/` | route selection/classification and fallback behavior | direct action execution |
-| `orchestration/` | action planning, execution policy, action executor, deterministic parsing, and interaction models | raw UI formatting and provider-specific clients |
+| `routing/` | route selection/classification, LLM intent classifier, and fallback behavior | direct action execution |
+| `orchestration/` | action planning, execution policy, action executor, deterministic parsing, and interaction models | LLM classification and raw UI formatting |
 | `shell/` | shell command parsing, allow/deny policy, subprocess execution | slash-command routing |
 | `chat/` | assistant/help answer surfaces | direct mutation of runtime state outside the action executor |
 | `prompting/` | reusable prompt rules and follow-up wording | docs/source retrieval |

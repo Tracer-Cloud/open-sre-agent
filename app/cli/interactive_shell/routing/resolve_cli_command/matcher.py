@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.cli.interactive_shell.intent.intent_parser import (
+from app.cli.interactive_shell.orchestration.intent_parser import (
     is_single_edit_typo,
     normalize_intent_text,
 )
