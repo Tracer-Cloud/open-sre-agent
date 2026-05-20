@@ -29,13 +29,10 @@ jobs:
     name: routing-live shard ${{ matrix.shard_index }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    if: >-
-      github.event_name != 'workflow_dispatch' ||
-      contains(format(',{0},', github.event.inputs.shard_indexes), format(',{0},', matrix.shard_index))
     strategy:
       fail-fast: false
       matrix:
-        shard_index: [0, 1, 2, 3, 4]
+        shard_index: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('[{0}]', github.event.inputs.shard_indexes) || '[0, 1, 2, 3, 4]') }}
 
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
