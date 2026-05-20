@@ -2,15 +2,22 @@
 
 from __future__ import annotations
 
-import os
 import sys
 
 import pytest
 
-# Mirror test-suite defaults that normally come from tests/conftest.py.
-os.environ["OPENSRE_SENTRY_DISABLED"] = "1"
-os.environ["OPENSRE_NO_TELEMETRY"] = "1"
-os.environ["OPENSRE_INVESTIGATION_SOURCE"] = "test"
+_ROUTING_TEST_DEFAULT_ENV = {
+    "OPENSRE_SENTRY_DISABLED": "1",
+    "OPENSRE_NO_TELEMETRY": "1",
+    "OPENSRE_INVESTIGATION_SOURCE": "test",
+}
+
+
+@pytest.fixture(autouse=True)
+def _routing_test_env_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Mirror test-suite defaults while keeping env mutations isolated per test."""
+    for key, value in _ROUTING_TEST_DEFAULT_ENV.items():
+        monkeypatch.setenv(key, value)
 
 
 @pytest.fixture(autouse=True)
