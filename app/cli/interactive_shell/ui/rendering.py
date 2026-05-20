@@ -80,9 +80,9 @@ def _prepare_tty_for_rich(console: Console) -> int:
     return _repl_table_width(console)
 
 
-def print_repl_table(console: Console, table: Table) -> None:
+def print_repl_table(console: Console, table: Table, *, width: int | None = None) -> None:
     """Print a Rich table using REPL-safe TTY width."""
-    width = _prepare_tty_for_rich(console)
+    width = width if width is not None else _prepare_tty_for_rich(console)
     if table.width is None:
         table.width = width
     _console_print_prepared(console, table, width=width)
@@ -122,7 +122,7 @@ def render_integrations_table(console: Console, results: list[dict[str, str]]) -
             f"[{status_style(st)}]{escape(st)}[/]",
             escape(row.get("detail", "")),
         )
-    print_repl_table(console, table)
+    print_repl_table(console, table, width=width)
 
 
 def render_mcp_table(console: Console, results: list[dict[str, str]]) -> None:
@@ -145,7 +145,7 @@ def render_mcp_table(console: Console, results: list[dict[str, str]]) -> None:
             f"[{status_style(st)}]{escape(st)}[/]",
             escape(row.get("detail", "")),
         )
-    print_repl_table(console, table)
+    print_repl_table(console, table, width=width)
 
 
 def render_models_table(console: Console, settings: Any) -> None:
@@ -164,7 +164,7 @@ def render_models_table(console: Console, settings: Any) -> None:
     table.add_row("provider", provider)
     table.add_row("reasoning model", reasoning_model)
     table.add_row("toolcall model", toolcall_model)
-    print_repl_table(console, table)
+    print_repl_table(console, table, width=width)
 
 
 def print_command_output(console: Console, output: str, *, style: str | None = None) -> None:

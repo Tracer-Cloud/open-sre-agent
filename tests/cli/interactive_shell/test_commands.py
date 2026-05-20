@@ -1474,6 +1474,38 @@ class TestRunCliCommand:
         ]
         assert buf.getvalue() == "\n\n"
 
+    def test_timeout_replays_decoded_partial_output(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from app.cli.interactive_shell.command_registry import cli_parity as m
+
+        replayed: list[tuple[str, str | None]] = []
+
+        def _fake_print_command_output(
+            _console: Console,
+            output: str,
+            *,
+            style: str | None = None,
+        ) -> None:
+            replayed.append((output, style))
+
+        def _fake_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+            raise subprocess.TimeoutExpired(
+                cmd=[sys.executable, "-m", "app.cli", "update"],
+                timeout=30.0,
+                output="partial stdout\n".encode("utf-8"),
+                stderr="partial stderr\n".encode("utf-8"),
+            )
+
+        monkeypatch.setattr(m, "print_command_output", _fake_print_command_output)
+        monkeypatch.setattr(m.subprocess, "run", _fake_run)
+
+        console, buf = _capture()
+        assert m.run_cli_command(console, ["update"], subprocess_timeout=30.0) is True
+        assert replayed == [("partial stdout\n", None), ("partial stderr\n", m.ERROR)]
+        assert "timed out" in buf.getvalue()
+
 
 class TestCliDelegatedCommands:
     """Coverage for commands that simply delegate to the underlying Click CLI."""

@@ -12,6 +12,7 @@ from app.cli.interactive_shell.runtime import terminal_runtime as loop
 from app.cli.interactive_shell.ui.rendering import (
     print_planned_actions,
     render_integrations_table,
+    render_mcp_table,
     repl_print,
     repl_table,
 )
@@ -124,8 +125,34 @@ def test_render_integrations_table_resets_tty_before_print(monkeypatch) -> None:
         ],
     )
 
-    assert len(resets) >= 1
+    assert len(resets) == 1
     assert "grafana" in buf.getvalue()
+
+
+def test_render_mcp_table_prepares_tty_once(monkeypatch) -> None:
+    resets: list[bool] = []
+
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.ui.choice_menu.prepare_repl_output_line",
+        lambda: resets.append(True),
+    )
+
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False, width=80)
+    render_mcp_table(
+        console,
+        [
+            {
+                "service": "github",
+                "source": "local store",
+                "status": "configured",
+                "detail": "Connected",
+            }
+        ],
+    )
+
+    assert len(resets) == 1
+    assert "github" in buf.getvalue()
 
 
 def test_print_planned_actions_formats_kinds() -> None:
