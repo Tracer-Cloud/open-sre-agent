@@ -1408,8 +1408,8 @@ class TestPrePolicyValidation:
         assert "/investigate <file>" in buf.getvalue()
         assert confirm_calls == [], "trust mode must not skip arg validation"
 
-    def test_valid_arg_still_fires_policy_prompt(self, tmp_path: Path) -> None:
-        """The fix must not accidentally remove the policy gate entirely."""
+    def test_investigate_with_valid_arg_skips_policy_prompt(self, tmp_path: Path) -> None:
+        """RCA from a file is the primary REPL action — no Proceed? gate."""
         alert_file = tmp_path / "alert.json"
         alert_file.write_text('{"alert_name": "test"}', encoding="utf-8")
 
@@ -1417,10 +1417,10 @@ class TestPrePolicyValidation:
 
         def _confirm(prompt: str) -> str:
             confirm_calls.append(prompt)
-            return "n"  # decline so we don't run a real investigation
+            return "n"
 
         session = ReplSession()
-        console, _ = _capture()
+        console, buf = _capture()
         dispatch_slash(
             f"/investigate {alert_file}",
             session,
@@ -1429,7 +1429,8 @@ class TestPrePolicyValidation:
             is_tty=True,
         )
 
-        assert len(confirm_calls) == 1, "policy prompt must still fire for valid args"
+        assert confirm_calls == []
+        assert "Proceed?" not in buf.getvalue()
 
 
 class TestSlashValidatorFunctions:
@@ -1579,11 +1580,12 @@ class TestCliDelegatedCommands:
         dispatch_slash(command, ReplSession(), Console())
         assert captured == [expected_args]
 
-    def test_slash_onboard_refuses_with_helpful_message(self, monkeypatch: object) -> None:
-        """``/onboard`` must NOT spawn the onboarding subprocess from inside
-        the REPL — the wizard's prompt_toolkit Application fights the
-        shell's active one and produces a stacked-widget rendering bug.
-        Refuse with a clear pointer to the right invocation instead.
+    def test_slash_onboard_delegates_to_run_cli_command(self, monkeypatch: object) -> None:
+        """``/onboard`` must delegate to ``run_cli_command`` so the wizard runs
+        with inherited stdin. The REPL loop guarantees exclusive stdin for
+        ``/onboard`` via ``_WAIT_FOR_COMPLETION_COMMANDS`` in dispatch.py, so
+        the wizard's prompt_toolkit Application no longer conflicts with the
+        shell's active one.
         """
         from app.cli.interactive_shell.command_registry import cli_parity as m
 
@@ -1597,29 +1599,13 @@ class TestCliDelegatedCommands:
 
         session = ReplSession()
         buf = io.StringIO()
-        # Width >80 so the multi-line warning doesn't wrap mid-substring.
         console = Console(file=buf, force_terminal=False, width=200)
         dispatch_slash("/onboard", session, console)
 
-        assert captured == [], "subprocess delegate must not be called"
-        out = buf.getvalue()
-        assert "needs a full terminal" in out
-        assert "opensre onboard" in out
-        # Mirrors the LLM-classified path: refused-attempt is recorded so
-        # session history captures the user's intent regardless of entry
-        # point.
-        assert session.history[-1] == {
-            "type": "cli_command",
-            "text": "opensre onboard",
-            "ok": False,
-        }
+        assert captured == [["onboard"]], "run_cli_command must be called with onboard args"
 
-    def test_slash_onboard_with_args_forwards_them_in_hint(self, monkeypatch: object) -> None:
-        """Refusal message should preserve user-supplied args so
-        the user can copy-paste the suggested ``opensre onboard …``
-        invocation without re-typing. The session record also keeps
-        the args so the assistant sees the full attempted command.
-        """
+    def test_slash_onboard_with_args_forwards_them_to_subprocess(self, monkeypatch: object) -> None:
+        """Args passed to ``/onboard`` must be forwarded to the subprocess."""
         from app.cli.interactive_shell.command_registry import cli_parity as m
 
         captured: list[list[str]] = []
@@ -1632,18 +1618,10 @@ class TestCliDelegatedCommands:
 
         session = ReplSession()
         buf = io.StringIO()
-        # Width >80 so the multi-line warning doesn't wrap mid-substring.
         console = Console(file=buf, force_terminal=False, width=200)
         dispatch_slash("/onboard local_llm", session, console)
 
-        assert captured == []
-        out = buf.getvalue()
-        assert "opensre onboard local_llm" in out
-        assert session.history[-1] == {
-            "type": "cli_command",
-            "text": "opensre onboard local_llm",
-            "ok": False,
-        }
+        assert captured == [["onboard", "local_llm"]]
 
     def test_tests_run_subcommand_starts_background_task(self, monkeypatch: object) -> None:
         from app.cli.interactive_shell.command_registry import cli_parity as m

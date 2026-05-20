@@ -41,10 +41,16 @@ from app.cli.interactive_shell.runtime.state import (
 from app.cli.interactive_shell.ui import ERROR, WARNING
 from app.cli.support.exception_reporting import report_exception
 from app.cli.support.prompt_support import repl_prompt_note_ctrl_c, repl_reset_ctrl_c_gate
+from app.cli.support.repl_progress import repl_safe_progress_scope
 
 log = logging.getLogger(__name__)
 
-_CPR_SEQUENCE_RE = re.compile(r"(?:\x1b\[|\x9b|\[)\d{1,3};\d{1,3}R")
+_CPR_SEQUENCE_RE = re.compile(
+    r"(?:\x1b\[|\x9b)\d{1,4};\d{1,4}R"  # ESC [ row ; col R
+    r"|\[\d{1,4};\d{1,4}R"  # [row;colR without ESC (leaked into input)
+    r"|\d{1,4};\d{1,4}R"  # row;colR without ESC or [
+    r"|\d{1,4}R(?=[\[\d])"  # trailing rowR before another CPR fragment
+)
 
 
 def _drain_stale_cpr_bytes() -> None:
@@ -179,14 +185,15 @@ async def run_interactive(
         if show_spinner:
             spinner.start()
         try:
-            await asyncio.to_thread(
-                dispatch_one_turn,
-                text,
-                session,
-                console,
-                on_exit=_request_exit,
-                confirm_fn=lambda prompt: route_confirm_through_prompt(state, prompt),
-            )
+            with repl_safe_progress_scope():
+                await asyncio.to_thread(
+                    dispatch_one_turn,
+                    text,
+                    session,
+                    console,
+                    on_exit=_request_exit,
+                    confirm_fn=lambda prompt: route_confirm_through_prompt(state, prompt),
+                )
         except asyncio.CancelledError:
             console.print(f"[{WARNING}]· interrupted[/]")
             raise
@@ -199,6 +206,10 @@ async def run_interactive(
             if show_spinner:
                 spinner.stop()
             state.finish_dispatch(dispatch_cancel)
+            # Investigation Rich Live + bottom-toolbar CPR can leave bytes in stdin;
+            # drain before the next prompt_async so they are not typed into the field.
+            await asyncio.sleep(0.05)
+            _drain_stale_cpr_bytes()
 
     async def _alert_watcher() -> None:
         if inbox is None:
@@ -245,7 +256,8 @@ async def run_interactive(
         if state.is_awaiting_confirmation():
             confirm_text = state.confirm_prompt_text
             return ANSI(f"{confirm_text}\n{base}")
-        return ANSI(f"{spinner.inline_spinner_ansi()}\n{base}")
+        prefix = spinner.inline_spinner_ansi() or spinner.idle_hint_ansi()
+        return ANSI(f"{prefix}\n{base}")
 
     processor_task = asyncio.create_task(_processor())
     alert_watcher_task = asyncio.create_task(_alert_watcher())

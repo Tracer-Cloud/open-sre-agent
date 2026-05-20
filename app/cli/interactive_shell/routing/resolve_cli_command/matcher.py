@@ -15,6 +15,10 @@ from app.cli.interactive_shell.routing.resolve_cli_command.catalog import (
 )
 
 _OPENSRE_WRAPPED_SLASH_RE = re.compile(r"^/opensre(?:\s+(?P<inner>.+))?$", re.IGNORECASE)
+_OPENSRE_INVESTIGATE_RE = re.compile(
+    r"^\s*opensre\s+investigate(?:\s+(?:-i|--input|--input-file)\s+(?P<path>\S+))?\s*$",
+    re.IGNORECASE,
+)
 
 
 def _unwrap_opensre_wrapped_slash(text: str) -> str:
@@ -27,6 +31,15 @@ def _unwrap_opensre_wrapped_slash(text: str) -> str:
     if inner.startswith("/"):
         return inner
     return f"/{inner}"
+
+
+def opensre_investigate_slash_text(text: str) -> str | None:
+    """Map ``opensre investigate -i <file>`` to ``/investigate <file>`` for deterministic routing."""
+    match = _OPENSRE_INVESTIGATE_RE.match(text.strip())
+    if match is None:
+        return None
+    alert_path = match.group("path") or "alert.json"
+    return f"/investigate {alert_path}"
 
 
 def is_bare_command_alias(text: str) -> bool:
@@ -62,5 +75,6 @@ def slash_dispatch_text(text: str) -> str:
 
 __all__ = [
     "is_bare_command_alias",
+    "opensre_investigate_slash_text",
     "slash_dispatch_text",
 ]

@@ -1,0 +1,55 @@
+id: 311-freeform-checkout-500-rich-context
+title: Rich multi-line checkout API 500 incident with service, region, deploy context
+intent_class: investigation
+risk_level: medium
+input:
+  prompt: |
+    Checkout API is returning HTTP 500s for 30% of requests since 14:05 UTC.
+    Service: checkout-api
+    Region: us-east-1
+    Recent deploy at 14:00 UTC.
+    Logs mention database connection timeout and pool exhausted.
+  surface: interactive_cli
+session:
+  has_prior_state: false
+  remote_connected: false
+  configured_integrations: []
+available_capabilities:
+  slash_commands: []
+  cli_commands: []
+  synthetic_suites: []
+notes:
+- "Reproduces the core paste-incident-description flow: rich multi-line alert with\
+  \ service name, region, deploy time, and log symptoms. Without configured integrations\
+  \ the agent must hand off to the assistant rather than blindly executing\
+  \ opensre investigate --input-json with potentially malformed JSON."
+- "Complements 307-new-alert-checkout-502 (single-line) by covering the structured\
+  \ multi-line format users naturally paste from incident dashboards."
+route:
+  expected_kind: cli_agent
+  expected_signals: []
+  expected_command_text: null
+policy:
+  should_execute: false
+  has_unhandled_clause: true
+  fail_closed: true
+planned_actions:
+- kind: assistant_handoff
+  content: incident_description:checkout_api_500_db_timeout
+  source: llm
+executed_actions: []
+response_contract:
+  must_contain_any:
+  - checkout
+  - "500"
+  - database
+  - investigate
+  - integration
+  must_not_contain:
+  - $ /
+history:
+  expected:
+  - type: cli_agent
+    ok: true
+tier: full
+runs: 3

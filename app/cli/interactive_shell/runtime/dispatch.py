@@ -61,7 +61,7 @@ _EXCLUSIVE_STDIN_SUBCOMMANDS: frozenset[tuple[str, str]] = frozenset(
         ("/mcp", "connect"),
     }
 )
-_WAIT_FOR_COMPLETION_COMMANDS: frozenset[str] = frozenset({"/exit", "/quit", "/update"})
+_WAIT_FOR_COMPLETION_COMMANDS: frozenset[str] = frozenset({"/exit", "/quit", "/update", "/onboard"})
 
 
 class DispatchCancelled(Exception):

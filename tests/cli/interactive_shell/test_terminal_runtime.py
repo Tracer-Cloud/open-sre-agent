@@ -60,6 +60,8 @@ def test_streaming_console_status_does_not_recurse(monkeypatch) -> None:
         ("\x9b32;1R", ""),
         ("what is our current model?[32;1R", "what is our current model?"),
         ("before \x1b[12;80R after", "before  after"),
+        ("7R[25;57R23;57R", ""),
+        ("25;57R", ""),
     ],
 )
 def test_strip_cpr_sequences_removes_terminal_cursor_replies(
@@ -761,27 +763,45 @@ class TestSpinnerState:
         assert spinner.streaming is False
         assert spinner.inline_spinner_ansi() == ""
 
-    def test_toolbar_idle_hint_lists_shortcut_keys_when_buffer_empty(self) -> None:
+    def test_toolbar_always_returns_empty_string(self) -> None:
+        """toolbar_ansi() must always return '' in both idle and streaming states.
+
+        A visible toolbar causes prompt_toolkit to emit \\033[6n (CPR)
+        cursor-position queries on every refresh_interval; those responses
+        corrupt the vt100 input parser with stray keystrokes.  Hiding the
+        toolbar unconditionally also keeps its height at zero in *both* states,
+        which prevents the one-row height delta that causes prompt_toolkit to
+        misplace the cursor and leave stale spinner lines on screen.  Idle hints
+        are surfaced through idle_hint_ansi() rendered in the prompt message's
+        reserved first line instead.
+        """
+        spinner = loop_state.SpinnerState()
+        assert spinner.toolbar_ansi() == ""
+
+        spinner.start()
+        assert spinner.toolbar_ansi() == ""
+
+    def test_idle_hint_lists_shortcut_keys_when_buffer_empty(self) -> None:
         """When idle and the input buffer is empty (no prompt-toolkit app
         running in this test → ``get_app_or_none()`` returns None →
-        treated as empty), the toolbar advertises the always-useful keys
+        treated as empty), the idle hint advertises the always-useful keys
         but hides ``esc to clear`` since Esc is a no-op on empty buffer.
         """
         spinner = loop_state.SpinnerState()
-        rendered = _strip_ansi(spinner.toolbar_ansi().value)
+        rendered = _strip_ansi(spinner.idle_hint_ansi())
         assert "/ for commands" in rendered
         assert "history" in rendered
         # Hidden — buffer is empty, Esc would be a no-op, so the hint
         # would mislead the user.
         assert "esc to clear" not in rendered
 
-    def test_toolbar_idle_hint_includes_esc_to_clear_when_buffer_has_text(
+    def test_idle_hint_includes_esc_to_clear_when_buffer_has_text(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """When idle and the input buffer has text, the toolbar appends
-        ``esc to clear`` to the hint so the user knows the shortcut
-        exists. ``get_app_or_none`` is monkeypatched to return a fake
-        app whose ``current_buffer.text`` is non-empty.
+        """When idle and the input buffer has text, the idle hint appends
+        ``esc to clear`` so the user knows the shortcut exists.
+        ``get_app_or_none`` is monkeypatched to return a fake app whose
+        ``current_buffer.text`` is non-empty.
         """
 
         class _FakeBuffer:
@@ -793,42 +813,40 @@ class TestSpinnerState:
         monkeypatch.setattr(loop_state, "get_app_or_none", lambda: _FakeApp())
 
         spinner = loop_state.SpinnerState()
-        rendered = _strip_ansi(spinner.toolbar_ansi().value)
+        rendered = _strip_ansi(spinner.idle_hint_ansi())
         assert "esc to clear" in rendered
         assert "/ for commands" in rendered
 
-    def test_toolbar_streaming_hint_says_interrupt(self) -> None:
-        """During streaming the toolbar hint switches to ``esc to interrupt``."""
+    def test_inline_spinner_contains_esc_to_cancel_when_streaming(self) -> None:
+        """During streaming the inline spinner (shown in the prompt's first
+        reserved line) carries the ``esc to cancel`` hint so the user can
+        interrupt the dispatch.
+        """
         spinner = loop_state.SpinnerState()
         spinner.start()
-        rendered = _strip_ansi(spinner.toolbar_ansi().value)
-        assert "esc to interrupt" in rendered
-        # Idle hint should NOT be shown when streaming.
-        assert "esc to clear" not in rendered
+        rendered = _strip_ansi(spinner.inline_spinner_ansi())
+        assert "esc to cancel" in rendered
+        # Idle hint text should NOT appear in the spinner row.
+        assert "/ for commands" not in rendered
 
-    def test_toolbar_is_single_row_in_both_states(self) -> None:
-        """The toolbar must stay one row tall whether streaming or idle.
-
-        A height delta between streaming and idle would shift every
-        visible row of output up by one line when streaming starts and
-        back down when it stops — the "jumping" Vaibhav reported. The
-        spinner row lives in the prompt message instead
-        (see :func:`_message_with_spinner`), where it's a *reserved*
-        line that's blank when idle and populated when streaming, so
-        the input cursor never moves.
+    def test_prompt_prefix_is_consistent_height(self) -> None:
+        """The first line of the prompt message is always exactly one row —
+        it shows the idle hint when not streaming and the spinner when
+        streaming.  Using ``idle_hint_ansi()`` or ``inline_spinner_ansi()``
+        as the prefix means height never changes between states, so
+        prompt_toolkit's cursor management stays accurate and stale spinner
+        lines do not accumulate on screen.
         """
         spinner = loop_state.SpinnerState()
 
-        idle_rendered = _strip_ansi(spinner.toolbar_ansi().value)
-        assert "\n" not in idle_rendered, f"idle toolbar should be 1 row, got: {idle_rendered!r}"
+        idle_prefix = _strip_ansi(spinner.idle_hint_ansi())
+        assert "\n" not in idle_prefix, f"idle prefix must be 1 row, got: {idle_prefix!r}"
 
         spinner.start()
-        streaming_rendered = _strip_ansi(spinner.toolbar_ansi().value)
-        assert "\n" not in streaming_rendered, (
-            f"streaming toolbar should be 1 row, got: {streaming_rendered!r}"
+        streaming_prefix = _strip_ansi(spinner.inline_spinner_ansi())
+        assert "\n" not in streaming_prefix, (
+            f"streaming prefix must be 1 row, got: {streaming_prefix!r}"
         )
-        # And streaming state still shows the right hint.
-        assert "esc to interrupt" in streaming_rendered
 
 
 def _extract_glyph(ansi_text: str, frames: tuple[str, ...]) -> str:

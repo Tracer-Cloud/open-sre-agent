@@ -1183,10 +1183,12 @@ def test_run_synthetic_test_forwards_columns_to_subprocess(
     ],
 )
 def test_is_interactive_wizard_classifies_command_paths(tokens: list[str], expected: bool) -> None:
-    """The wizard classifier is the data-driven contract behind both the
-    LLM-classified refusal and the ``/onboard`` slash refusal. Adding a
-    new interactive command later should be a one-line set entry — this
-    test pins the current set + the case-insensitive lookup behavior.
+    """The wizard classifier is the data-driven contract for the LLM-classified
+    path (``cli_exec`` tool). When the LLM tries to invoke a wizard via
+    ``cli_exec``, we redirect the user to the equivalent slash command instead
+    because exclusive stdin is only guaranteed for the slash-command path.
+    Adding a new interactive command later should be a one-line set entry —
+    this test pins the current set + the case-insensitive lookup behavior.
     """
     assert _is_interactive_wizard(tokens) is expected
 
@@ -1194,11 +1196,10 @@ def test_is_interactive_wizard_classifies_command_paths(tokens: list[str], expec
 def test_run_opensre_cli_command_refuses_onboard_with_helpful_message(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The onboarding wizard is a full-TTY interactive flow. Running it
-    from inside the persistent REPL produces broken cursor rendering
-    because the wizard's prompt_toolkit Application fights the shell's
-    own active one. Regression for the stacked-widget bug seen with
-    ``opensre onboard`` invoked via natural-language intent.
+    """The LLM-classified path (``cli_exec`` tool) for ``opensre onboard``
+    must not spawn a subprocess — exclusive stdin is not guaranteed when the
+    LLM planner is involved. It must instead print a message directing the
+    user to the ``/onboard`` slash command, which does have exclusive stdin.
     """
     popen_calls: list[list[str]] = []
     run_calls: list[list[str]] = []
@@ -1240,6 +1241,8 @@ def test_run_opensre_cli_command_refuses_onboard_with_helpful_message(
     out = buf.getvalue()
     assert "needs a full terminal" in out
     assert "opensre onboard" in out
+    # Directs user to the slash command (not "exit the shell").
+    assert "/onboard" in out
     assert popen_calls == []
     assert run_calls == []
     assert session.history[-1] == {
@@ -1252,8 +1255,8 @@ def test_run_opensre_cli_command_refuses_onboard_with_helpful_message(
 def test_run_opensre_cli_command_refuses_integrations_setup_with_helpful_message(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """``opensre integrations setup`` is also a full-TTY wizard. Same
-    rendering conflict as ``onboard``; same fix.
+    """``opensre integrations setup`` via the LLM ``cli_exec`` path must redirect
+    to ``/integrations setup`` (which has exclusive stdin). Same pattern as ``onboard``.
     """
     popen_calls: list[list[str]] = []
     run_calls: list[list[str]] = []
@@ -1287,6 +1290,8 @@ def test_run_opensre_cli_command_refuses_integrations_setup_with_helpful_message
     out = buf.getvalue()
     assert "needs a full terminal" in out
     assert "opensre integrations setup" in out
+    # Directs user to the slash command (not "exit the shell").
+    assert "/integrations setup" in out
     assert popen_calls == []
     assert run_calls == []
     assert session.history[-1] == {
@@ -1294,6 +1299,49 @@ def test_run_opensre_cli_command_refuses_integrations_setup_with_helpful_message
         "text": "opensre integrations setup",
         "ok": False,
     }
+
+
+def test_run_opensre_cli_command_skips_confirmation_for_investigate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``opensre investigate`` is the primary REPL purpose — no Proceed? prompt."""
+    confirm_calls: list[str] = []
+    start_calls: list[list[str]] = []
+
+    def _fake_confirm(prompt: str) -> str:
+        confirm_calls.append(prompt)
+        return "n"
+
+    def _fake_start_background_cli_task(*, argv_list: list[str], **_kw: object) -> None:
+        start_calls.append(argv_list)
+
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.start_background_cli_task",
+        _fake_start_background_cli_task,
+    )
+
+    session = ReplSession()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    assert (
+        run_opensre_cli_command(
+            "investigate -i alert.json",
+            session,
+            console,
+            confirm_fn=_fake_confirm,
+            is_tty=True,
+        )
+        is True
+    )
+
+    assert confirm_calls == []
+    assert start_calls
+    assert "investigate" in start_calls[0]
+    assert "-i" in start_calls[0]
+    assert "alert.json" in start_calls[0]
+    assert "Proceed?" not in buf.getvalue()
+    assert "may change local config" not in buf.getvalue()
 
 
 def test_run_opensre_cli_command_allows_integrations_list_without_blocking(

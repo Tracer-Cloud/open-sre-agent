@@ -9,7 +9,6 @@ import time
 from dataclasses import dataclass, field
 
 from prompt_toolkit.application.current import get_app_or_none
-from prompt_toolkit.formatted_text import ANSI
 
 from app.cli.interactive_shell.ui import ANSI_DIM, ANSI_RESET, PROMPT_ACCENT_ANSI
 from app.cli.interactive_shell.ui.streaming import _CHARS_PER_TOKEN, format_token_count_short
@@ -119,22 +118,26 @@ class SpinnerState:
     def stop(self) -> None:
         self.streaming = False
 
-    def toolbar_ansi(self) -> ANSI | str:
-        # Return empty string while streaming so prompt_toolkit's
-        # ConditionalContainer hides the toolbar entirely.  A visible toolbar
-        # causes prompt_toolkit to send \033[6n (CPR) queries every
-        # refresh_interval; with patch_stdout(raw=True) + background subprocess
-        # output in flight those CPR responses arrive out-of-sync and leak into
-        # the vt100 input parser as literal keystrokes, corrupting the input
-        # field.  The inline spinner already shows progress and the esc-hint is
-        # appended there instead.
-        if self.streaming:
-            return ""
+    def toolbar_ansi(self) -> str:
+        # Always return an empty string so prompt_toolkit's ConditionalContainer
+        # collapses the toolbar in every state.  A visible toolbar causes
+        # prompt_toolkit to emit \033[6n (CPR) cursor-position queries on every
+        # refresh_interval; those responses leak into the vt100 input parser as
+        # literal keystrokes, corrupting the input field.  Hiding the toolbar
+        # unconditionally also keeps its height at zero in both streaming and
+        # idle states, which prevents the one-row height delta that would cause
+        # prompt_toolkit to misplace the cursor and leave stale spinner lines on
+        # screen.  Idle hints are surfaced through idle_hint_ansi() instead,
+        # which is rendered in the prompt message's reserved first line.
+        return ""
+
+    def idle_hint_ansi(self) -> str:
+        """Dim hint line shown above the rule when no dispatch is running."""
         hint = "/ for commands  ·  ↑↓ history"
         app = get_app_or_none()
         if app is not None and app.current_buffer.text:
             hint += "  ·  esc to clear"
-        return ANSI(f"{ANSI_DIM}{hint}{ANSI_RESET}")
+        return f"{ANSI_DIM}{hint}{ANSI_RESET}"
 
     def inline_spinner_ansi(self) -> str:
         if not self.streaming:

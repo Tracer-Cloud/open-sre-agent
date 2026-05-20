@@ -121,6 +121,22 @@ def test_dispatch_needs_exclusive_stdin_for_integration_setup(
     assert loop_dispatch.dispatch_needs_exclusive_stdin("/mcp connect github", session) is True
 
 
+def test_dispatch_needs_exclusive_stdin_for_onboard(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``/onboard`` is an interactive wizard; the REPL must wait for it to
+    finish before reading the next prompt so the wizard subprocess has
+    exclusive stdin and can drive its own questionary widgets.
+    """
+    monkeypatch.setattr(loop_dispatch, "repl_tty_interactive", lambda: True)
+    session = ReplSession()
+
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("/onboard", session) is True
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("onboard", session) is True
+    # Args don't change the exclusive-stdin requirement.
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("/onboard local_llm", session) is True
+
+
 def test_dispatch_one_turn_routes_to_cli_help_for_help_questions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -286,6 +302,7 @@ class TestDispatchSpinnerRouting:
             # The router typo-corrects single-edit bare aliases before dispatch.
             "testts",
             "hlep",
+            "opensre investigate -i alert.json",
         ],
     )
     def test_slash_dispatches_do_not_show_assistant_spinner(self, text: str) -> None:
@@ -295,7 +312,6 @@ class TestDispatchSpinnerRouting:
         "text",
         [
             "why did this fail?",
-            "run opensre investigate --input alert.json",
             "explain deploy",
         ],
     )

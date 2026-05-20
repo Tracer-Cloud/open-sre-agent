@@ -32,6 +32,7 @@ from app.cli.interactive_shell.ui.theme import (
     TEXT,
     WARNING,
 )
+from app.cli.support.repl_progress import repl_safe_progress_requested
 from app.tools.registry import get_registered_tool_map, resolve_tool_display_name
 from app.utils.tool_trace import format_json_preview
 
@@ -68,6 +69,22 @@ def get_output_format() -> str:
 def _is_silent_output() -> bool:
     """Return whether output rendering is explicitly disabled."""
     return get_output_format() == "none"
+
+
+def _repl_progress_active() -> bool:
+    """True when investigation progress must not use Rich Live.
+
+    Rich ``Live`` progress redraws fight ``prompt_toolkit.patch_stdout`` and leak
+    CPR escape sequences (``ESC[row;colR``) into the input field. Use append-only
+    progress lines instead.
+    """
+    if repl_safe_progress_requested():
+        return True
+    try:
+        from prompt_toolkit.application.current import get_app_or_none
+    except ImportError:  # pragma: no cover - optional in minimal installs
+        return False
+    return get_app_or_none() is not None
 
 
 def _safe_print(text: str) -> None:
@@ -673,6 +690,130 @@ class _EventLogDisplay:
         self._live.console.print(renderable)
 
 
+def _build_progress_step_text(
+    *,
+    node_name: str,
+    elapsed_total: float,
+    elapsed_step_ms: int | None = None,
+    status: str = "active",
+    message: str | None = None,
+) -> Text:
+    """Shared Rich ``Text`` for one investigation progress line."""
+    ev_type = _node_event_type(node_name)
+    badge_label, badge_color = _BADGE_STYLES.get(ev_type, ("DIAG  ", WARNING))
+    label = _node_label(node_name)
+    err = status == "error"
+    timing = _fmt_timing(elapsed_step_ms) if elapsed_step_ms is not None else ""
+
+    t = Text()
+    t.append(f"{_elapsed_hms(elapsed_total)}  ", style=SECONDARY)
+    if status == "active":
+        t.append("◐  ", style=SECONDARY)
+    else:
+        t.append("✗  " if err else "✓  ", style=f"bold {ERROR if err else HIGHLIGHT}")
+    t.append(f"[{badge_label}]", style=f"bold {badge_color}")
+    t.append("  ")
+    t.append(label, style=f"bold {TEXT}")
+    msg = _humanise_message(message or "")
+    if msg:
+        t.append(f"  {msg}", style=BRAND)
+    if timing:
+        t.append(f"  {timing}", style=SECONDARY)
+    return t
+
+
+class _ReplEventLogDisplay:
+    """Append-only investigation progress for the interactive REPL (no Rich Live)."""
+
+    def __init__(self, model: str = "", mode: str = "local", t0: float | None = None) -> None:
+        self._model = model
+        self._mode = mode
+        self._t0 = t0 if t0 is not None else time.monotonic()
+        self._active_steps: dict[str, dict[str, Any]] = {}
+        self._current_phase = "LOAD"
+        self._lock = threading.Lock()
+        self._console = Console(highlight=False)
+
+    def stop(self) -> None:
+        return
+
+    def _emit(self, line: Text | Any) -> None:
+        from app.cli.interactive_shell.ui.choice_menu import prepare_repl_output_line
+
+        prepare_repl_output_line()
+        self._console.print(line)
+
+    def step_start(self, node_name: str) -> None:
+        with self._lock:
+            self._active_steps[node_name] = {
+                "t0": time.monotonic(),
+                "subtext": None,
+                "subtext_until": 0.0,
+            }
+            self._current_phase = _node_phase_label(node_name)
+        elapsed_total = time.monotonic() - self._t0
+        self._emit(
+            _build_progress_step_text(
+                node_name=node_name,
+                elapsed_total=elapsed_total,
+                status="active",
+            )
+        )
+
+    def set_tool_details(
+        self,
+        *,
+        visible: bool,
+        records: list[dict[str, Any]],
+        summary: str,
+        clear: bool = False,
+    ) -> None:
+        del visible, records, summary, clear
+
+    def step_complete(self, node_name: str, event: ProgressEvent) -> None:
+        with self._lock:
+            info = self._active_steps.pop(node_name, {})
+            subtext = info.get("subtext")
+        elapsed_total = time.monotonic() - self._t0
+        line = _build_progress_step_text(
+            node_name=node_name,
+            elapsed_total=elapsed_total,
+            elapsed_step_ms=event.elapsed_ms,
+            status=event.status,
+            message=event.message,
+        )
+        if subtext:
+            line.append(f"  ↳ {subtext}", style=BRAND)
+        self._emit(line)
+
+    def step_subtext(self, node_name: str, text: str, duration: float = 4.0) -> None:
+        if not text.strip():
+            return
+        with self._lock:
+            if node_name in self._active_steps:
+                self._active_steps[node_name]["subtext"] = text
+                self._active_steps[node_name]["subtext_until"] = time.monotonic() + duration
+
+    def print_above(self, text: str) -> None:
+        if not text.strip():
+            return
+        from rich.markdown import Markdown
+
+        from app.cli.interactive_shell.ui.theme import MARKDOWN_THEME
+
+        with self._console.use_theme(MARKDOWN_THEME):
+            self._emit(Markdown(text, code_theme="ansi_dark"))
+
+    def print_above_renderable(self, renderable: Any) -> None:
+        self._emit(renderable)
+
+
+def _make_event_log_display(*, t0: float) -> _EventLogDisplay | _ReplEventLogDisplay:
+    if _repl_progress_active():
+        return _ReplEventLogDisplay(t0=t0)
+    return _EventLogDisplay(t0=t0)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Progress event + tracker
 # ─────────────────────────────────────────────────────────────────────────────
@@ -696,7 +837,8 @@ class ProgressTracker:
         self._t0: float = time.monotonic()
         self._silent = _is_silent_output()
         self._rich = get_output_format() == "rich"
-        self._display: _EventLogDisplay | None = None
+        self._repl_append_only = _repl_progress_active()
+        self._display: _EventLogDisplay | _ReplEventLogDisplay | None = None
         self._tool_start_times: dict[str, float] = {}
         self._tool_inputs: dict[str, Any] = {}
         self._tool_details_visible = False
@@ -706,9 +848,10 @@ class ProgressTracker:
         self._tool_summary_order: list[tuple[str, str]] = []
         self._toggle_watcher: CtrlOToggleWatcher | None = None
         if self._rich and not self._silent:
-            self._display = _EventLogDisplay(t0=self._t0)
-            self._toggle_watcher = CtrlOToggleWatcher(self.toggle_tool_details)
-            self._toggle_watcher.start()
+            self._display = _make_event_log_display(t0=self._t0)
+            if not self._repl_append_only:
+                self._toggle_watcher = CtrlOToggleWatcher(self.toggle_tool_details)
+                self._toggle_watcher.start()
 
     @property
     def has_active_display(self) -> bool:
@@ -743,7 +886,7 @@ class ProgressTracker:
                     self._display = None
             else:
                 if self._display is None:
-                    self._display = _EventLogDisplay(t0=self._t0)
+                    self._display = _make_event_log_display(t0=self._t0)
                 self._display.step_start(node_name)
         else:
             _safe_print(f"  … {_node_label(node_name)}")
@@ -768,15 +911,29 @@ class ProgressTracker:
         if self._display:
             self._display.print_above(text)
         elif text.strip():
-            for line in text.strip().splitlines():
-                print(f"  {line}")
+            import os
+            import textwrap as _tw
+
+            # Wrap long lines so the parent's pump thread can prefix each one.
+            # COLUMNS is set by _subprocess_env_with_aligned_width to
+            # (user_terminal_width - prefix_width), so wrapping here keeps each
+            # emitted line short enough that the parent can prepend the task
+            # prefix without causing Rich to word-wrap the combined line into
+            # unlabelled continuation runs.
+            _cols = max(40, int(os.getenv("COLUMNS", "80")))
+            for para in text.strip().splitlines():
+                if not para.strip():
+                    print()  # preserve paragraph spacing (filtered by pump thread)
+                else:
+                    # -2 to leave room for the "  " indent prefix below
+                    for chunk in _tw.wrap(para, width=max(40, _cols - 2)) or [para]:
+                        print(f"  {chunk}")
 
     def print_above_renderable(self, renderable: Any) -> None:
         """Print a rich renderable permanently above the active live region, or to console."""
         if self._display:
             self._display.print_above_renderable(renderable)
         else:
-            _get_console().print()
             _get_console().print(renderable)
 
     def set_tool_detail_view(
@@ -841,16 +998,27 @@ class ProgressTracker:
         if self._silent:
             return
         self._tool_details_visible = not self._tool_details_visible
-        if self._rich and self._display:
-            self._sync_tool_detail_view(clear=True)
-            return
+        if self._rich and self._display is not None:
+            if isinstance(self._display, _ReplEventLogDisplay):
+                label = "shown" if self._tool_details_visible else "hidden"
+                _safe_print(f"  Tool details {label} (ctrl+o)")
+                if self._tool_details_visible:
+                    self._flush_tool_details()
+                return
+            if hasattr(self._display, "set_tool_details"):
+                self._sync_tool_detail_view(clear=True)
+                return
         label = "shown" if self._tool_details_visible else "hidden"
         _safe_print(f"  Tool details {label} (ctrl+o)")
         if self._tool_details_visible:
             self._flush_tool_details()
 
     def _sync_tool_detail_view(self, *, clear: bool = False) -> None:
-        if self._rich and self._display:
+        if (
+            self._rich
+            and self._display is not None
+            and not isinstance(self._display, _ReplEventLogDisplay)
+        ):
             self.set_tool_detail_view(
                 visible=self._tool_details_visible,
                 records=self._tool_detail_records,
@@ -906,7 +1074,11 @@ class ProgressTracker:
         }
         self._tool_detail_records.append(record)
         if self._tool_details_visible:
-            if self._rich and self._display:
+            if (
+                self._rich
+                and self._display is not None
+                and not isinstance(self._display, _ReplEventLogDisplay)
+            ):
                 self._sync_tool_detail_view()
             else:
                 self._print_tool_detail(record)
