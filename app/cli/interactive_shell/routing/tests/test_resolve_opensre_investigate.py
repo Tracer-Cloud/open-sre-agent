@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from app.cli.interactive_shell.routing.resolve_cli_command import (
-    opensre_investigate_slash_text,
+from app.cli.interactive_shell.routing.resolve_cli_command.evaluator import (
     resolve_cli_command,
+)
+from app.cli.interactive_shell.routing.resolve_cli_command.matcher import (
+    opensre_investigate_slash_text,
 )
 from app.cli.interactive_shell.routing.router import RouteKind, route_input
 from app.cli.interactive_shell.runtime.session import ReplSession
