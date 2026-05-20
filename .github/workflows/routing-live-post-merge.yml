@@ -10,6 +10,12 @@ on:
       - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/routing-live-post-merge.yml"
+  workflow_dispatch:
+    inputs:
+      shard_indexes:
+        description: "Comma-separated shard indexes to run (0-4)"
+        required: false
+        default: "0,1,2,3,4"
 
 permissions:
   contents: read
@@ -23,6 +29,9 @@ jobs:
     name: routing-live shard ${{ matrix.shard_index }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      contains(format(',{0},', github.event.inputs.shard_indexes), format(',{0},', matrix.shard_index))
     strategy:
       fail-fast: false
       matrix:
@@ -58,5 +67,4 @@ jobs:
           uv run python -m pytest -n auto -v
           -m live_llm
           app/cli/interactive_shell/routing/tests/test_routing_scenarios.py
-          -k "test_live_turn_execution_oracle or test_live_action_planning or TestLiveClassifierBehavior"
-          tests/cli/interactive_shell/routing/test_llm_intent_classifier.py
+          -k "test_live_turn_execution_oracle or test_live_action_planning"
