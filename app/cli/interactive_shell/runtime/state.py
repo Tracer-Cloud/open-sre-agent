@@ -119,14 +119,21 @@ class SpinnerState:
     def stop(self) -> None:
         self.streaming = False
 
-    def toolbar_ansi(self) -> ANSI:
+    def toolbar_ansi(self) -> ANSI | str:
+        # Return empty string while streaming so prompt_toolkit's
+        # ConditionalContainer hides the toolbar entirely.  A visible toolbar
+        # causes prompt_toolkit to send \033[6n (CPR) queries every
+        # refresh_interval; with patch_stdout(raw=True) + background subprocess
+        # output in flight those CPR responses arrive out-of-sync and leak into
+        # the vt100 input parser as literal keystrokes, corrupting the input
+        # field.  The inline spinner already shows progress and the esc-hint is
+        # appended there instead.
         if self.streaming:
-            hint = "esc to interrupt"
-        else:
-            hint = "/ for commands  ·  ↑↓ history"
-            app = get_app_or_none()
-            if app is not None and app.current_buffer.text:
-                hint += "  ·  esc to clear"
+            return ""
+        hint = "/ for commands  ·  ↑↓ history"
+        app = get_app_or_none()
+        if app is not None and app.current_buffer.text:
+            hint += "  ·  esc to clear"
         return ANSI(f"{ANSI_DIM}{hint}{ANSI_RESET}")
 
     def inline_spinner_ansi(self) -> str:
@@ -142,7 +149,8 @@ class SpinnerState:
         else:
             suffix = f" ({elapsed:.0f}s)"
         return (
-            f"{PROMPT_ACCENT_ANSI}{glyph} {self._verb}…{ANSI_RESET}{ANSI_DIM}{suffix}{ANSI_RESET}"
+            f"{PROMPT_ACCENT_ANSI}{glyph} {self._verb}…{ANSI_RESET}"
+            f"{ANSI_DIM}{suffix}  esc to cancel{ANSI_RESET}"
         )
 
 
