@@ -1328,7 +1328,9 @@ def test_run_wizard_configures_opensearch(monkeypatch, tmp_path) -> None:
 
 def test_run_wizard_opensearch_retries_on_validation_failure(monkeypatch, tmp_path) -> None:
     """When OpenSearch validation fails the first time, the wizard retries and succeeds."""
-    select_responses = iter(["quickstart", "anthropic", "claude-opus-4-7", "opensearch", "basic", "basic"])
+    select_responses = iter(
+        ["quickstart", "anthropic", "claude-opus-4-7", "opensearch", "basic", "basic"]
+    )
     password_responses = iter(["llm-secret", "wrong-pass", "correct-pass"])
     text_responses = iter(
         [
@@ -1421,7 +1423,9 @@ def test_run_wizard_opensearch_rejects_empty_api_key(monkeypatch, tmp_path) -> N
     that validation is only called once the user supplies a non-empty key.
     """
     # User picks: opensearch -> api_key auth -> (rejected, empty) -> api_key auth retry
-    select_responses = iter(["quickstart", "anthropic", "claude-opus-4-7", "opensearch", "api_key", "api_key"])
+    select_responses = iter(
+        ["quickstart", "anthropic", "claude-opus-4-7", "opensearch", "api_key", "api_key"]
+    )
     # First api_key prompt: empty (rejected). Second: valid key.
     password_responses = iter(["llm-secret", "", "valid-api-key"])
     text_responses = iter(
@@ -1512,7 +1516,9 @@ def test_run_wizard_opensearch_rejects_empty_basic_password(monkeypatch, tmp_pat
     validation is only called once the user supplies both halves.
     """
     # User picks: opensearch -> basic auth -> (rejected, empty pass) -> basic auth retry
-    select_responses = iter(["quickstart", "anthropic", "claude-opus-4-7", "opensearch", "basic", "basic"])
+    select_responses = iter(
+        ["quickstart", "anthropic", "claude-opus-4-7", "opensearch", "basic", "basic"]
+    )
     # First password prompt: empty (rejected). Second attempt: valid password.
     password_responses = iter(["llm-secret", "", "real-pass"])
     text_responses = iter(

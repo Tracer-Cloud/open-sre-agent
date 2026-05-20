@@ -121,8 +121,7 @@ def switch_llm_provider(
                 provider.value, selected_toolcall, provider.models
             ):
                 console.print(
-                    f"[{ERROR}]unknown model for {provider.value}:[/] "
-                    f"{escape(selected_toolcall)}"
+                    f"[{ERROR}]unknown model for {provider.value}:[/] {escape(selected_toolcall)}"
                 )
                 console.print(
                     f"[{DIM}]known toolcall models:[/] "
