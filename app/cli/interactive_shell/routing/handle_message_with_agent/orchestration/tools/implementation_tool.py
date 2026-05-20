@@ -51,4 +51,3 @@ REGISTRY.register(
         execute=execute_implementation_action,
     )
 )
-

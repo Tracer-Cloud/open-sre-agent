@@ -130,4 +130,3 @@ REGISTRY.register(
         execute=execute_task_cancel_action,
     )
 )
-

@@ -142,7 +142,12 @@ def execute_tool_calls(state: AgentState) -> dict[str, Any]:
                 if validation_error:
                     result = json.dumps({"error": validation_error})
                     tool_messages.append(
-                        {"role": "tool", "content": result, "tool_call_id": tool_id, "name": tool_name}
+                        {
+                            "role": "tool",
+                            "content": result,
+                            "tool_call_id": tool_id,
+                            "name": tool_name,
+                        }
                     )
                     continue
                 out = reg(**tool_args)

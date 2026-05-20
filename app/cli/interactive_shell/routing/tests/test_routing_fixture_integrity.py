@@ -145,14 +145,18 @@ def test_should_execute_invariants() -> None:
         # so this invariant always holds on loaded data.
         must_not = case.answer.response_contract.get("must_not_contain", [])
         if not policy.should_execute and "$ /" not in must_not:
-            violations.append(f"{scenario_id}: non-executing cases must include '$ /' in must_not_contain")
+            violations.append(
+                f"{scenario_id}: non-executing cases must include '$ /' in must_not_contain"
+            )
         # Validate forbidden_actions entries reference real action kinds.
         forbidden = case.answer.response_contract.get("forbidden_actions", [])
         from app.cli.interactive_shell.routing.tests.scenario_loader import VALID_ACTION_KINDS
 
         for entry in forbidden:
             if entry not in VALID_ACTION_KINDS:
-                violations.append(f"{scenario_id}: forbidden_actions entry {entry!r} is not a valid kind")
+                violations.append(
+                    f"{scenario_id}: forbidden_actions entry {entry!r} is not a valid kind"
+                )
     assert not violations, "policy invariant violations:\n" + "\n".join(violations)
 
 

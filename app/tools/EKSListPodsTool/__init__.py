@@ -30,7 +30,9 @@ class ListEKSPodsOutput(BaseModel):
     cluster_name: str | None = Field(default=None, description="Cluster queried.")
     namespace: str = Field(description="Namespace scope used for pod query.")
     total_pods: int = Field(default=0, description="Total number of pods discovered.")
-    pods: list[dict[str, Any]] = Field(default_factory=list, description="All pod entries returned.")
+    pods: list[dict[str, Any]] = Field(
+        default_factory=list, description="All pod entries returned."
+    )
     failing_pods: list[dict[str, Any]] = Field(
         default_factory=list,
         description="Pods not in Running/Succeeded phases.",

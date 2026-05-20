@@ -91,16 +91,24 @@ def test_required_properties_have_descriptions() -> None:
 
 def test_llm_set_provider_schema_enum_matches_runtime_providers() -> None:
     spec = next(
-        tool for tool in REGISTRY.tool_specs_for_llm(ReplSession()) if tool["name"] == "llm_set_provider"
+        tool
+        for tool in REGISTRY.tool_specs_for_llm(ReplSession())
+        if tool["name"] == "llm_set_provider"
     )
     target = spec["input_schema"]["properties"]["target"]
     target_variants = target.get("oneOf", [])
-    enum_variant = next(variant for variant in target_variants if isinstance(variant, dict) and "enum" in variant)
+    enum_variant = next(
+        variant for variant in target_variants if isinstance(variant, dict) and "enum" in variant
+    )
     assert set(enum_variant["enum"]) == set(PROVIDER_BY_VALUE.keys())
 
 
 def test_slash_invoke_schema_enum_matches_registered_commands() -> None:
-    spec = next(tool for tool in REGISTRY.tool_specs_for_llm(ReplSession()) if tool["name"] == "slash_invoke")
+    spec = next(
+        tool
+        for tool in REGISTRY.tool_specs_for_llm(ReplSession())
+        if tool["name"] == "slash_invoke"
+    )
     command = spec["input_schema"]["properties"]["command"]
     assert set(command["enum"]) == set(SLASH_COMMANDS.keys())
 
@@ -117,4 +125,3 @@ def test_tools_hidden_when_capabilities_are_explicitly_empty() -> None:
     assert "slash_invoke" not in names
     assert "cli_exec" not in names
     assert "synthetic_run" not in names
-

@@ -51,4 +51,3 @@ REGISTRY.register(
         execute=execute_investigation_action,
     )
 )
-

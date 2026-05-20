@@ -44,4 +44,3 @@ REGISTRY.register(
         execute=execute_assistant_handoff_action,
     )
 )
-

@@ -62,7 +62,9 @@ def _llm_planner_bridge(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         agent_actions,
         "plan_actions_with_llm",
-        lambda message, *, _session=None: action_planner_module.plan_actions_with_unhandled(message),
+        lambda message, *, _session=None: action_planner_module.plan_actions_with_unhandled(
+            message
+        ),
     )
 
 

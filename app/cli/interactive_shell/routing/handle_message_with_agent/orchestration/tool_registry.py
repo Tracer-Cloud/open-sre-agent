@@ -74,7 +74,9 @@ def object_schema(*, properties: dict[str, ToolSchema], required: tuple[str, ...
 def capability_not_explicitly_disabled(session: ReplSession, capability_name: str) -> bool:
     available_capabilities = getattr(session, "available_capabilities", {})
     capability_values = (
-        available_capabilities.get(capability_name) if isinstance(available_capabilities, dict) else None
+        available_capabilities.get(capability_name)
+        if isinstance(available_capabilities, dict)
+        else None
     )
     return not (isinstance(capability_values, tuple) and capability_values == ())
 
@@ -140,4 +142,3 @@ ACTION_KIND_TO_TOOL: dict[ActionKind, str] = {
 }
 
 REGISTRY = ActionToolRegistry()
-

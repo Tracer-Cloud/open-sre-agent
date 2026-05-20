@@ -256,9 +256,7 @@ def map_actions(message: str) -> list[PlannedAction]:
 def map_cli_actions(message: str) -> list[str]:
     """Return safe read-only slash commands and CLI commands requested by a natural-language turn."""
     return [
-        action.content
-        for action in map_actions(message)
-        if action.kind in ("slash", "cli_command")
+        action.content for action in map_actions(message) if action.kind in ("slash", "cli_command")
     ]
 
 

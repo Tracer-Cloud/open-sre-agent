@@ -53,7 +53,11 @@ def match_actions(actual: list[dict[str, Any]], expected: list[dict[str, Any]]) 
 
 def execution_expected_actions(actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [
-        {key: value for key, value in action.items() if key not in {"source", "target_surface", "content"}}
+        {
+            key: value
+            for key, value in action.items()
+            if key not in {"source", "target_surface", "content"}
+        }
         for action in actions
     ]
 
@@ -199,7 +203,9 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
     normalized_response = normalize_response_text(console_buffer.getvalue())
     history_delta = [normalize_history_entry(entry) for entry in session.history[history_start:]]
 
-    executed_expected = execution_expected_actions([dict(action) for action in answer.executed_actions])
+    executed_expected = execution_expected_actions(
+        [dict(action) for action in answer.executed_actions]
+    )
     history_expected = [dict(item) for item in answer.history_expected]
 
     executed_match = match_actions(executed, executed_expected)
@@ -212,14 +218,10 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
     any_match = contains_any(normalized_response, must_contain_any)
     all_match = contains_all(normalized_response, must_contain_all)
     forbidden_tokens = [
-        token
-        for token in must_not_contain
-        if normalize_response_text(token) in normalized_response
+        token for token in must_not_contain if normalize_response_text(token) in normalized_response
     ]
     forbidden_executed = [
-        action["kind"]
-        for action in executed
-        if action.get("kind") in forbidden_action_kinds
+        action["kind"] for action in executed if action.get("kind") in forbidden_action_kinds
     ]
 
     passed = True

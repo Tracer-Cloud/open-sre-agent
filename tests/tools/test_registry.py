@@ -411,7 +411,11 @@ def test_registry_regression_import_failures(
 
 
 def _v2_tools() -> list[RegisteredTool]:
-    return [tool for tool in registry_module.get_registered_tools() if tool.name in _V2_TOOL_CONTRACT_NAMES]
+    return [
+        tool
+        for tool in registry_module.get_registered_tools()
+        if tool.name in _V2_TOOL_CONTRACT_NAMES
+    ]
 
 
 def test_v2_registry_tool_contracts_exist() -> None:

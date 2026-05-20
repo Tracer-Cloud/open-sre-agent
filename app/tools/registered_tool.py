@@ -159,17 +159,23 @@ def _value_matches_schema(value: Any, schema: dict[str, Any]) -> bool:
 
     one_of = schema.get("oneOf")
     if isinstance(one_of, list) and one_of:
-        return any(isinstance(option, dict) and _value_matches_schema(value, option) for option in one_of)
+        return any(
+            isinstance(option, dict) and _value_matches_schema(value, option) for option in one_of
+        )
 
     any_of = schema.get("anyOf")
     if isinstance(any_of, list) and any_of:
-        return any(isinstance(option, dict) and _value_matches_schema(value, option) for option in any_of)
+        return any(
+            isinstance(option, dict) and _value_matches_schema(value, option) for option in any_of
+        )
 
     schema_type = schema.get("type")
     if isinstance(schema_type, str):
         return _json_type_matches(value, schema_type)
     if isinstance(schema_type, list):
-        return any(isinstance(item, str) and _json_type_matches(value, item) for item in schema_type)
+        return any(
+            isinstance(item, str) and _json_type_matches(value, item) for item in schema_type
+        )
     return True
 
 
@@ -348,7 +354,9 @@ class RegisteredTool:
         metadata = tool.metadata()
         input_model = cast(type[BaseModel] | None, getattr(tool, "input_model", None))
         output_model = cast(type[BaseModel] | None, getattr(tool, "output_model", None))
-        resolved_input_schema = model_to_json_schema(input_model) if input_model else metadata.input_schema
+        resolved_input_schema = (
+            model_to_json_schema(input_model) if input_model else metadata.input_schema
+        )
         resolved_output_schema = (
             model_to_json_schema(output_model) if output_model else metadata.output_schema
         )

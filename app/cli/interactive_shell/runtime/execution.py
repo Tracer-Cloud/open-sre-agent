@@ -148,7 +148,9 @@ def execute_routed_turn(
         with apply_reasoning_effort(session.reasoning_effort):
             run = answer_cli_help(text, session, console)
         if recorder is not None:
-            recorder.set_response(run.response_text if run is not None and run.response_text else "", run)
+            recorder.set_response(
+                run.response_text if run is not None and run.response_text else "", run
+            )
             recorder.flush()
         session.record("cli_help", text)
         session.last_assistant_intent = "cli_help"
@@ -203,7 +205,9 @@ def execute_routed_turn(
     with apply_reasoning_effort(session.reasoning_effort):
         run = answer_follow_up(text, session, console)
     if recorder is not None:
-        recorder.set_response(run.response_text if run is not None and run.response_text else "", run)
+        recorder.set_response(
+            run.response_text if run is not None and run.response_text else "", run
+        )
         recorder.flush()
     session.record("follow_up", text)
     session.last_assistant_intent = "follow_up"

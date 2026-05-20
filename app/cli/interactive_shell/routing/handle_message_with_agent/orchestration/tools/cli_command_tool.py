@@ -60,4 +60,3 @@ REGISTRY.register(
         is_available=lambda session: capability_not_explicitly_disabled(session, "cli_commands"),
     )
 )
-

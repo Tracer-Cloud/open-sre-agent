@@ -59,4 +59,3 @@ REGISTRY.register(
         execute=execute_shell_action,
     )
 )
-

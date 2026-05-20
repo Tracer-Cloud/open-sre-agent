@@ -37,6 +37,16 @@ launch, cancel, connect, switch, or start an operation. Compound requests
 joined by "and", "and then", "then", etc. should emit one tool call per
 component action, in the order requested.
 
+Interpret "kick off sample alert", "run sample alert", or "trigger sample alert"
+(including variants like "kick off a sample alert investigation") as the
+alert_sample tool with template="generic", not investigation_start.
+
+If the user asks for a slash action and then asks to investigate/send quoted
+follow-up text (for example: connect with /remote and then investigate "hello world"),
+emit TWO actions in order:
+1) slash_invoke for the slash command
+2) investigation_start with alert_text set to the quoted follow-up text.
+
 For operational REPL requests, prefer slash_invoke and choose the command
 from the slash catalog below. Each entry lists when to use it and when not to.
 Other tools:

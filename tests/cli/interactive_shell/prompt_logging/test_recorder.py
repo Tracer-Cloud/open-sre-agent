@@ -16,7 +16,9 @@ def test_prompt_recorder_start_respects_supported_routes(monkeypatch, tmp_path: 
         max_chars=100,
         log_path=tmp_path / "prompt_log.jsonl",
     )
-    monkeypatch.setattr("app.cli.interactive_shell.prompt_logging.recorder.PromptLogConfig.load", lambda: cfg)
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.prompt_logging.recorder.PromptLogConfig.load", lambda: cfg
+    )
     session = ReplSession()
     assert PromptRecorder.start(session=session, text="hello", route_kind="slash") is None
     assert PromptRecorder.start(session=session, text="hello", route_kind="cli_help") is not None
@@ -32,7 +34,9 @@ def test_prompt_recorder_flush_writes_and_redacts(monkeypatch, tmp_path: Path) -
         max_chars=1000,
         log_path=log_path,
     )
-    monkeypatch.setattr("app.cli.interactive_shell.prompt_logging.recorder.PromptLogConfig.load", lambda: cfg)
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.prompt_logging.recorder.PromptLogConfig.load", lambda: cfg
+    )
     session = ReplSession()
     recorder = PromptRecorder.start(
         session=session,
@@ -60,7 +64,9 @@ def test_prompt_recorder_sends_ai_generation(monkeypatch, tmp_path: Path) -> Non
         max_chars=1000,
         log_path=tmp_path / "prompt_log.jsonl",
     )
-    monkeypatch.setattr("app.cli.interactive_shell.prompt_logging.recorder.PromptLogConfig.load", lambda: cfg)
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.prompt_logging.recorder.PromptLogConfig.load", lambda: cfg
+    )
     monkeypatch.setattr(
         "app.cli.interactive_shell.prompt_logging.recorder.capture_ai_generation",
         lambda payload: captured.append(payload),

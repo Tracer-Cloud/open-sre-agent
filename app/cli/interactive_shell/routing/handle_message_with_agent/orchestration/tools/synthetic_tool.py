@@ -58,7 +58,8 @@ REGISTRY.register(
         ),
         execution_tier=ExecutionTier.ELEVATED,
         execute=execute_synthetic_action,
-        is_available=lambda session: capability_not_explicitly_disabled(session, "synthetic_suites"),
+        is_available=lambda session: capability_not_explicitly_disabled(
+            session, "synthetic_suites"
+        ),
     )
 )
-

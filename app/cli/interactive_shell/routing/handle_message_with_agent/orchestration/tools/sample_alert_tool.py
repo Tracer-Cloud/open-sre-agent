@@ -53,4 +53,3 @@ REGISTRY.register(
         execute=execute_sample_alert_action,
     )
 )
-

@@ -371,7 +371,9 @@ def _parse_answer_yaml(answer_path: Path, *, scenario_id: str) -> Answer:
 
     planned_actions = tuple(
         _normalize_planned_action(dict(item))
-        for item in _action_list(data.get("planned_actions"), label=f"{answer_path} planned_actions")
+        for item in _action_list(
+            data.get("planned_actions"), label=f"{answer_path} planned_actions"
+        )
     )
     executed_actions = _action_list(
         data.get("executed_actions"),
@@ -449,7 +451,9 @@ def _parse_answer_yaml(answer_path: Path, *, scenario_id: str) -> Answer:
 
     command_text = route_raw.get("expected_command_text")
     expected_command_text = (
-        str(command_text).strip() if isinstance(command_text, str) and command_text.strip() else None
+        str(command_text).strip()
+        if isinstance(command_text, str) and command_text.strip()
+        else None
     )
 
     return Answer(

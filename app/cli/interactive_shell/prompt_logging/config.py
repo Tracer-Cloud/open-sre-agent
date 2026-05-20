@@ -51,7 +51,9 @@ class PromptLogConfig:
         enabled = not _coerce_bool(disabled, default=False)
         local_enabled = not _coerce_bool(local_disabled, default=False)
         posthog_enabled = _coerce_bool(file_conf.get("posthog_enabled"), default=True)
-        redact = _coerce_bool(redact_env, default=_coerce_bool(file_conf.get("redact"), default=False))
+        redact = _coerce_bool(
+            redact_env, default=_coerce_bool(file_conf.get("redact"), default=False)
+        )
         max_chars = _coerce_int(file_conf.get("max_chars"), default=_DEFAULT_MAX_CHARS)
 
         raw_path = path_env or file_conf.get("path")

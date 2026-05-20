@@ -587,7 +587,9 @@ def _cmd_model(session: ReplSession, console: Console, args: list[str]) -> bool:
                 )
                 session.mark_latest(ok=False, kind="slash")
                 return True
-            model_value = provider_name if reasoning_model is None else f"{provider_name}-{reasoning_model}"
+            model_value = (
+                provider_name if reasoning_model is None else f"{provider_name}-{reasoning_model}"
+            )
             switched = switch_reasoning_model(model_value, console)
             if not switched:
                 session.mark_latest(ok=False, kind="slash")
