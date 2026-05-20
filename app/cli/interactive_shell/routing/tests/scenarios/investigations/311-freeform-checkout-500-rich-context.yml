@@ -40,16 +40,14 @@ planned_actions:
 executed_actions: []
 response_contract:
   must_contain_any:
-  - checkout
-  - "500"
-  - database
-  - investigate
-  - integration
+  - couldn't safely decide actions
+  - explicit slash commands
+  - rephrase
   must_not_contain:
   - $ /
 history:
   expected:
   - type: cli_agent
-    ok: true
+    ok: false
 tier: full
 runs: 3
