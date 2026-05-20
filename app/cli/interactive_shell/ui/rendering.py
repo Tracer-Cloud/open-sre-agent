@@ -156,7 +156,7 @@ def print_command_output(console: Console, output: str, *, style: str | None = N
     if not output:
         return
     text = output.rstrip()
-    console.print(Text(text) if style is None else Text(text, style=style))
+    repl_print(console, Text(text) if style is None else Text(text, style=style))
 
 
 def print_planned_actions(console: Console, actions: list[PlannedAction]) -> None:

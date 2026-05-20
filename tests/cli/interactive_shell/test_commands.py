@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import subprocess
 import sys
 from pathlib import Path
 
@@ -1416,6 +1417,62 @@ class TestSlashValidatorFunctions:
     )
     def test_returns_none_when_args_present(self, validator: object, args: list[str]) -> None:
         assert validator(args) is None  # type: ignore[operator]
+
+
+class TestRunCliCommand:
+    """Regression: captured subprocess output must survive REPL prompt redraw."""
+
+    def test_timed_delegate_replays_stdout_through_console(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from app.cli.interactive_shell.command_registry import cli_parity as m
+
+        def _fake_run(
+            cmd: list[str],
+            *,
+            check: bool,
+            timeout: float | None,
+            capture_output: bool,
+            text: bool,
+            encoding: str,
+            errors: str,
+        ) -> subprocess.CompletedProcess[str]:
+            del check, timeout, text, encoding, errors
+            assert capture_output is True
+            assert cmd[:3] == [sys.executable, "-m", "app.cli"]
+            assert cmd[3:] == ["update"]
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="  opensre 1.0.0 is already up to date.\n",
+                stderr="",
+            )
+
+        monkeypatch.setattr(m.subprocess, "run", _fake_run)
+        console, buf = _capture()
+        assert m.run_cli_command(console, ["update"], subprocess_timeout=30.0) is True
+        assert "already up to date" in buf.getvalue()
+
+    def test_interactive_delegate_does_not_capture_output(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from app.cli.interactive_shell.command_registry import cli_parity as m
+
+        run_kwargs: list[dict[str, object]] = []
+
+        def _fake_run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            run_kwargs.append({"cmd": cmd, **kwargs})
+            return subprocess.CompletedProcess(cmd, 0)
+
+        monkeypatch.setattr(m.subprocess, "run", _fake_run)
+        console, buf = _capture()
+        assert m.run_cli_command(console, ["config", "show"]) is True
+        assert run_kwargs == [
+            {"cmd": [sys.executable, "-m", "app.cli", "config", "show"], "check": False}
+        ]
+        assert buf.getvalue() == "\n\n"
 
 
 class TestCliDelegatedCommands:

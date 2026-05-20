@@ -22,7 +22,7 @@ from app.cli.interactive_shell.orchestration.action_executor import (
     start_background_cli_task,
 )
 from app.cli.interactive_shell.runtime import ReplSession, TaskKind
-from app.cli.interactive_shell.ui import DIM, ERROR
+from app.cli.interactive_shell.ui import DIM, ERROR, print_command_output
 
 _UPDATE_SUBPROCESS_TIMEOUT_SECONDS = 300
 _BACKGROUND_TEST_SUBCOMMANDS = frozenset({"run", "synthetic", "cloudopsbench"})
@@ -41,7 +41,9 @@ def run_cli_command(
     ``subprocess_timeout`` caps how long ``subprocess.run`` waits before raising
     :class:`~subprocess.TimeoutExpired`. Interactive flows use ``None`` so the
     child can prompt as long as needed; callers that hit the network without a
-    TTY (like ``opensre update``) pass a bounded timeout.
+    TTY (like ``opensre update``) pass a bounded timeout. When a timeout is set,
+    stdout/stderr are captured and replayed through ``console`` so output survives
+    prompt-toolkit ``patch_stdout`` redraws in the REPL.
 
     Ctrl+C sends :exc:`KeyboardInterrupt`, which subclasses :exc:`BaseException`
     rather than :exc:`Exception`; it is handled here so the REPL survives and the
@@ -50,10 +52,26 @@ def run_cli_command(
     console.print()
     cmd = [sys.executable, "-m", "app.cli", *args]
     try:
-        result = subprocess.run(cmd, check=False, timeout=subprocess_timeout)
+        if subprocess_timeout is not None:
+            result = subprocess.run(
+                cmd,
+                check=False,
+                timeout=subprocess_timeout,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            print_command_output(console, result.stdout or "")
+            print_command_output(console, result.stderr or "", style=ERROR)
+        else:
+            result = subprocess.run(cmd, check=False)
         if result.returncode != 0:
             console.print(f"[{ERROR}]CLI command exited with non-zero code {result.returncode}[/]")
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        if subprocess_timeout is not None:
+            print_command_output(console, exc.stdout or "")
+            print_command_output(console, exc.stderr or "", style=ERROR)
         console.print(f"[{ERROR}]error:[/] CLI command timed out")
     except KeyboardInterrupt:
         console.print(f"[{DIM}]CLI command cancelled (Ctrl+C).[/]")
