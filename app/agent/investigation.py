@@ -480,7 +480,9 @@ def _run_parallel(
         return [_call(tool_calls[0])]
 
     results: list[Any] = [_UNSET] * len(tool_calls)
-    submitted: dict[Future[Any], int] = {}  # future -> index, built incrementally to survive partial submit
+    submitted: dict[
+        Future[Any], int
+    ] = {}  # future -> index, built incrementally to survive partial submit
     try:
         with ThreadPoolExecutor(max_workers=min(_TOOL_EXECUTOR_WORKERS, len(tool_calls))) as pool:
             for i, tc in enumerate(tool_calls):
