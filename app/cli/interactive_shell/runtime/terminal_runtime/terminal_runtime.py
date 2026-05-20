@@ -62,10 +62,10 @@ class StreamingConsole(Console):
         section rules) must start at column zero or lines appear broken.
         """
         if not self._spinner.streaming:
-            from app.cli.interactive_shell.ui.choice_menu import ensure_tty_column_zero
+            from app.cli.interactive_shell.ui.choice_menu import prepare_repl_output_line
             from app.cli.interactive_shell.ui.rendering import _repl_table_width
 
-            ensure_tty_column_zero()
+            prepare_repl_output_line()
             if sys.stdout.isatty() and "width" not in kwargs:
                 kwargs["width"] = _repl_table_width(self)
         super().print(*args, **kwargs)
