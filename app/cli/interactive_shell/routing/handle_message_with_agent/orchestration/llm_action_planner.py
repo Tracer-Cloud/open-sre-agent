@@ -33,8 +33,9 @@ _RICH_PASTED_INCIDENT_RE = re.compile(
     r"^(?:.*\n){1,}.*\b(?:service|region)\s*:",
     re.IGNORECASE | re.DOTALL,
 )
-_ALERT_SYMPTOM_RE = re.compile(
-    r"\b(?:cpu|spiking|spike|latency|error|5\d\d|pods?|firing|checkout|database)\b",
+# Narrow symptoms only: checkout/HTTP/database pastes should stay assistant handoff.
+_INCIDENT_UPGRADE_SYMPTOM_RE = re.compile(
+    r"\b(?:cpu|spiking|spike|pods?|firing)\b",
     re.IGNORECASE,
 )
 
@@ -449,7 +450,7 @@ def _upgrade_handoff_to_incident(
         return actions, has_unhandled
     if "?" in message or re.search(r"\bhow\s+(?:do|to)\b", message, re.IGNORECASE):
         return actions, has_unhandled
-    if not _ALERT_SYMPTOM_RE.search(message):
+    if not _INCIDENT_UPGRADE_SYMPTOM_RE.search(message):
         return actions, has_unhandled
     alert_text = message.strip()
     return [

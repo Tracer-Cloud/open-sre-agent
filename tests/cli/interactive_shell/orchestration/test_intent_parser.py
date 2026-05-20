@@ -159,6 +159,25 @@ def test_fail_closed_vague_local_llama_connect() -> None:
     assert result == ([], True)
 
 
+def test_finalize_preserves_handoff_for_checkout_http_errors() -> None:
+    handoff = [
+        PlannedAction(
+            kind="assistant_handoff",
+            content="incident_description:checkout_502_rate",
+            position=0,
+            source="llm",
+        )
+    ]
+    actions, has_unhandled = _finalize_planner_result(
+        "the checkout service is returning 502 errors for 30% of requests",
+        handoff,
+        True,
+    )
+    assert has_unhandled is True
+    assert len(actions) == 1
+    assert actions[0].kind == "assistant_handoff"
+
+
 def test_finalize_upgrades_handoff_to_investigation_for_cpu_spike() -> None:
     handoff = [
         PlannedAction(
