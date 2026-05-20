@@ -866,9 +866,7 @@ def test_openai_invoke_stream_invalid_model_identifier_raises_not_found(monkeypa
 
 def test_is_openai_invalid_model_identifier_matches_both_phrases() -> None:
     """Both the LiteLLM/Anthropic and OpenRouter phrasings must be detected."""
-    openai_err = _make_fake_openai_bad_request_error(
-        "The provided model identifier is invalid."
-    )
+    openai_err = _make_fake_openai_bad_request_error("The provided model identifier is invalid.")
     openrouter_err = _make_fake_openai_bad_request_error(
         "{'error': '/chat/completions: Invalid model name passed in model=claude-sonnet-4-6.'}"
     )
