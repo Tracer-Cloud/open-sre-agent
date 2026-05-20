@@ -159,6 +159,11 @@ def test_dispatch_one_turn_nitro_prompt_uses_cli_agent_actions_not_cli_help(
         llm_calls.append(text)
 
     monkeypatch.setattr(
+        loop_dispatch._router,
+        "route_input",
+        lambda *_args: RouteDecision(RouteKind.CLI_AGENT, 0.9, ("cli_agent_action_plan",)),
+    )
+    monkeypatch.setattr(
         loop_execution,
         "execute_cli_actions_with_metrics",
         _fake_execute_cli_actions_with_metrics,
