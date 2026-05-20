@@ -77,6 +77,7 @@ def _drain_stale_cpr_bytes() -> None:
             if not chunk:
                 break
     except OSError:
+        # Draining stdin is best-effort; ignore when the fd is not readable.
         pass
 
 

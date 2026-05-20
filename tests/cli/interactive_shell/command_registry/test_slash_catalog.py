@@ -10,9 +10,6 @@ from app.cli.interactive_shell.command_registry.slash_catalog import (
     slash_invoke_input_schema,
     slash_invoke_tool_description,
 )
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration import (  # noqa: F401
-    tools,
-)
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_registry import (
     REGISTRY,
 )

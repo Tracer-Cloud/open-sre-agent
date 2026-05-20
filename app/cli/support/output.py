@@ -768,7 +768,7 @@ class _ReplEventLogDisplay:
         summary: str,
         clear: bool = False,
     ) -> None:
-        del visible, records, summary, clear
+        pass
 
     def step_complete(self, node_name: str, event: ProgressEvent) -> None:
         with self._lock:

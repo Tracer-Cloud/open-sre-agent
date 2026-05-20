@@ -5,11 +5,6 @@ from __future__ import annotations
 import re
 
 from app.cli.interactive_shell.commands import SLASH_COMMANDS
-
-# Ensure side-effect registrations are loaded.
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration import (  # noqa: F401
-    tools,
-)
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_registry import (
     ACTION_KIND_TO_TOOL,
     REGISTRY,

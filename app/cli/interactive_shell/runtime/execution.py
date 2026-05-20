@@ -123,7 +123,7 @@ def execute_routed_turn(
     session.last_route_decision = decision
     get_analytics().capture(
         Event.INTERACTIVE_SHELL_ROUTE_DECISION,
-        cast("dict[str, JsonValue]", decision.to_event_payload()),
+        cast(dict[str, JsonValue], decision.to_event_payload()),
     )
 
     if kind == "slash":

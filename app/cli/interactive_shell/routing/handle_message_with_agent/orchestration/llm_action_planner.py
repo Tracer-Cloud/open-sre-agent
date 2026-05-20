@@ -7,12 +7,12 @@ import logging
 import re
 from typing import Any
 
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.intent_parser import (
+    split_prompt_clauses,
+)
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
     PlannedAction,
     default_target_surface,
-)
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.intent_parser import (
-    split_prompt_clauses,
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.slash_commands.deterministic_action_mapper import (
     map_actions_with_unhandled,

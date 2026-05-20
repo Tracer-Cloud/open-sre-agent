@@ -6,10 +6,6 @@ import ast
 from pathlib import Path
 from typing import cast
 
-# Ensure side-effect registrations are loaded.
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration import (  # noqa: F401
-    tools,
-)
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
     ActionKind,
 )
@@ -119,7 +115,7 @@ def test_scenario_action_kinds_have_registered_tools() -> None:
                 continue
             if kind == "assistant_handoff":
                 continue
-            tool_name = ACTION_KIND_TO_TOOL.get(cast("ActionKind", kind))
+            tool_name = ACTION_KIND_TO_TOOL.get(cast(ActionKind, kind))
             if tool_name is None:
                 missing.append(f"{case.scenario.id}: kind {kind!r} has no tool mapping")
                 continue

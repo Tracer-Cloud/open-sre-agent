@@ -13,11 +13,11 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.i
     shutil,
     split_prompt_clauses,
 )
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.slash_commands.deterministic_action_mapper import (
-    map_actions_with_unhandled,
-)
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
     PromptClause,
+)
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.slash_commands.deterministic_action_mapper import (
+    map_actions_with_unhandled,
 )
 
 

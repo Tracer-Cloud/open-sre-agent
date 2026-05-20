@@ -102,7 +102,8 @@ def _write_env(target_path: Path, lines: list[str]) -> None:
     try:
         target_path.parent.mkdir(parents=True, exist_ok=True)
         with target_path.open("w", encoding="utf-8", newline="") as env_file:
-            env_file.writelines(public_lines)  # lgtm[py/clear-text-storage-sensitive-data]
+            # Sensitive keys are stripped above; only non-secret config is persisted.
+            env_file.writelines(public_lines)  # codeql[py/clear-text-storage-sensitive-data]
     except PermissionError as exc:
         raise PermissionError(
             f"Cannot write to {target_path}: permission denied. "

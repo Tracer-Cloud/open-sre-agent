@@ -59,13 +59,14 @@ def _llm_planner_bridge(monkeypatch: pytest.MonkeyPatch) -> None:
     deterministic bridge by default. LLM-specific deny-path tests override this.
     """
 
-    monkeypatch.setattr(
-        agent_actions,
-        "plan_actions_with_llm",
-        lambda message, *, session=None: action_planner_module.plan_actions_with_unhandled(  # noqa: ARG005
-            message
-        ),
-    )
+    def _deterministic_planner(
+        message: str,
+        *,
+        session: ReplSession | None = None,  # noqa: ARG001
+    ) -> tuple[list[PlannedAction], bool]:
+        return action_planner_module.plan_actions_with_unhandled(message)
+
+    monkeypatch.setattr(agent_actions, "plan_actions_with_llm", _deterministic_planner)
 
 
 def test_health_then_connected_services_plans_two_actions_in_order() -> None:

@@ -8,10 +8,6 @@ from typing import Any
 
 from rich.console import Console
 
-# Load tool registrations.
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration import (  # noqa: F401
-    tools,
-)
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
     PlannedAction,
 )

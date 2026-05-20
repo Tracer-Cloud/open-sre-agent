@@ -29,6 +29,7 @@ def _require_live_llm_key() -> None:
         settings = resolve_llm_settings()
     except Exception as exc:
         pytest.skip(f"Live LLM contract test requires usable LLM configuration: {exc}")
+        return
     from app.services.llm_client import reset_llm_singletons
 
     os.environ["LLM_PROVIDER"] = settings.provider
