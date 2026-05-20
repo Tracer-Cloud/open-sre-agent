@@ -1342,6 +1342,7 @@ def run_synthetic_test(
         f"[{HIGHLIGHT}]/tasks[/] [{DIM}]to monitor,[/] "
         f"[{HIGHLIGHT}]/cancel {escape(task.task_id)}[/] [{DIM}]to stop.[/]"
     )
+    session.record("synthetic_test", suite_name)
 
 
 __all__ = [
