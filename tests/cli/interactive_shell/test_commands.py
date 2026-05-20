@@ -1494,8 +1494,8 @@ class TestRunCliCommand:
             raise subprocess.TimeoutExpired(
                 cmd=[sys.executable, "-m", "app.cli", "update"],
                 timeout=30.0,
-                output="partial stdout\n".encode("utf-8"),
-                stderr="partial stderr\n".encode("utf-8"),
+                output=b"partial stdout\n",
+                stderr=b"partial stderr\n",
             )
 
         monkeypatch.setattr(m, "print_command_output", _fake_print_command_output)
