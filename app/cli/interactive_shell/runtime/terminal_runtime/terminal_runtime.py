@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import select
+import sys
 import threading
 from typing import Any
 
@@ -36,6 +39,33 @@ from .dispatch import (
 from .state import _PROMPT_REFRESH_INTERVAL_S, ReplState, SpinnerState
 
 log = logging.getLogger(__name__)
+
+
+def _drain_stale_cpr_bytes() -> None:
+    """Discard any CPR escape-sequence bytes left in stdin after a prompt_async teardown.
+
+    When prompt_async returns (e.g. after the user types Y to confirm), the
+    prompt_toolkit Application tears down its input-reader thread.  CPR responses
+    (ESC[row;colR) that the bottom-toolbar refresh sent but that arrived just after
+    the reader stopped are left sitting in the OS stdin buffer.  The *next*
+    prompt_async call reads those bytes with a fresh vt100 parser, which has no
+    open escape-sequence context; the bytes then appear as literal keystrokes in
+    the input field.
+
+    This function does a non-blocking drain of stdin between prompt_async calls —
+    exactly when no Application is active and it is safe to read from stdin
+    directly.  Only called on TTY stdin on POSIX; silently skipped otherwise.
+    """
+    if os.name == "nt" or not sys.stdin.isatty():
+        return
+    try:
+        fd = sys.stdin.fileno()
+        while select.select([fd], [], [], 0)[0]:
+            chunk = os.read(fd, 256)
+            if not chunk:
+                break
+    except OSError:
+        pass
 
 
 class StreamingConsole(Console):
@@ -221,6 +251,13 @@ async def run_interactive(
                 if state.is_awaiting_confirmation():
                     if _looks_like_confirmation_answer(text):
                         state.deliver_confirmation(text or "")
+                        # CPR responses sent during the confirmation prompt's
+                        # refresh cycles may have accumulated in stdin while the
+                        # Application's input-reader thread was shutting down.
+                        # Drain them now, before the next prompt_async starts a
+                        # new Application with a fresh vt100 parser — otherwise
+                        # those bytes appear as literal keystrokes in the prompt.
+                        _drain_stale_cpr_bytes()
                         continue
                     echo_console.print(
                         "[dim](type y/N to confirm the pending action; your input has been queued for after)[/]"

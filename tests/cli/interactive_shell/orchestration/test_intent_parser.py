@@ -12,7 +12,9 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.i
     shutil,
     split_prompt_clauses,
 )
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import PromptClause
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
+    PromptClause,
+)
 
 
 def test_split_prompt_clauses_preserves_positions() -> None:

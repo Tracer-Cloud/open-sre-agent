@@ -8,7 +8,9 @@ from unittest.mock import MagicMock
 import pytest
 
 import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner as planner_module
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import PlannedAction
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
+    PlannedAction,
+)
 
 
 def _make_llm_response(

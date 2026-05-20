@@ -14,7 +14,9 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.e
     execution_allowed,
     resolve_slash_execution_tier,
 )
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_tier import ExecutionTier
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_tier import (
+    ExecutionTier,
+)
 from app.cli.interactive_shell.runtime.session import ReplSession
 
 
