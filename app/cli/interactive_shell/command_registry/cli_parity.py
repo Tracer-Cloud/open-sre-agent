@@ -30,6 +30,14 @@ _TEST_SUBCOMMANDS = ("list", "run", "synthetic", "cloudopsbench")
 _TEST_PICKER_SELECTION_FILE_ENV = "OPENSRE_TEST_PICKER_SELECTION_FILE"
 
 
+def _decode_subprocess_stream(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
+
+
 def run_cli_command(
     console: Console,
     args: list[str],
@@ -53,7 +61,7 @@ def run_cli_command(
     cmd = [sys.executable, "-m", "app.cli", *args]
     try:
         if subprocess_timeout is not None:
-            result = subprocess.run(
+            timed_result = subprocess.run(
                 cmd,
                 check=False,
                 timeout=subprocess_timeout,
@@ -62,21 +70,21 @@ def run_cli_command(
                 encoding="utf-8",
                 errors="replace",
             )
-            print_command_output(console, result.stdout or "")
-            print_command_output(console, result.stderr or "", style=ERROR)
+            print_command_output(console, timed_result.stdout or "")
+            print_command_output(console, timed_result.stderr or "", style=ERROR)
+            if timed_result.returncode != 0:
+                console.print(
+                    f"[{ERROR}]CLI command exited with non-zero code {timed_result.returncode}[/]"
+                )
         else:
-            result = subprocess.run(cmd, check=False)
-        if result.returncode != 0:
-            console.print(f"[{ERROR}]CLI command exited with non-zero code {result.returncode}[/]")
+            interactive_result = subprocess.run(cmd, check=False)
+            if interactive_result.returncode != 0:
+                console.print(
+                    f"[{ERROR}]CLI command exited with non-zero code {interactive_result.returncode}[/]"
+                )
     except subprocess.TimeoutExpired as exc:
-        _stdout = exc.stdout
-        if isinstance(_stdout, bytes):
-            _stdout = _stdout.decode("utf-8", errors="replace")
-        _stderr = exc.stderr
-        if isinstance(_stderr, bytes):
-            _stderr = _stderr.decode("utf-8", errors="replace")
-        print_command_output(console, _stdout or "")
-        print_command_output(console, _stderr or "", style=ERROR)
+        print_command_output(console, _decode_subprocess_stream(exc.stdout))
+        print_command_output(console, _decode_subprocess_stream(exc.stderr), style=ERROR)
         console.print(f"[{ERROR}]error:[/] CLI command timed out")
     except KeyboardInterrupt:
         console.print(f"[{DIM}]CLI command cancelled (Ctrl+C).[/]")
