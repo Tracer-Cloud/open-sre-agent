@@ -7,7 +7,6 @@ from app.analytics.provider import (
     capture_install_detected_if_needed,
     shutdown_analytics,
 )
-
 from app.utils.sentry_sdk import init_sentry
 
 _INSTALL_PROPERTIES: Properties = {

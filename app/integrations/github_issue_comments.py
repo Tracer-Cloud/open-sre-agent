@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib import error, request
+
 from app.utils.sentry_sdk import init_sentry
 
 MAX_COMMENT_PREVIEW_CHARS = 500

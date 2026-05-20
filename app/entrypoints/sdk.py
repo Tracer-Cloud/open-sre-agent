@@ -10,6 +10,7 @@ from app.utils.sentry_sdk import init_sentry
 
 init_sentry(entrypoint="entrypoints.sdk")
 
+
 def run_investigation(*args: Any, **kwargs: Any) -> Any:
     """Lazily import the full runner stack to avoid optional dependency churn at import time."""
     from app.pipeline.runners import run_investigation as _run_investigation

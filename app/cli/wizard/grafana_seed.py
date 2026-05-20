@@ -6,7 +6,6 @@ import json
 import time
 from contextlib import suppress
 from typing import Any
-from app.utils.sentry_sdk import init_sentry
 
 import requests
 

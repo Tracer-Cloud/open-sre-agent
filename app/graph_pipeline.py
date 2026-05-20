@@ -8,7 +8,7 @@ Production deployment config and older internal docs still reference
 from __future__ import annotations
 
 from app.pipeline.graph import build_graph
-from app.utils.sentry_sdk  import init_sentry
+from app.utils.sentry_sdk import init_sentry
 
 init_sentry(entrypoint="graph_pipeline")
 

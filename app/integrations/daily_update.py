@@ -17,8 +17,8 @@ from zoneinfo import ZoneInfo
 from pydantic import BaseModel, Field
 
 from app.services.llm_client import get_llm_for_reasoning
-from app.version import get_version
 from app.utils.sentry_sdk import init_sentry
+from app.version import get_version
 
 GITHUB_API_BASE_URL = "https://api.github.com"
 GITHUB_API_VERSION = "2022-11-28"
