@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/alpha", "destination": "/alpha/index.html" },
+    { "source": "/waitlist", "destination": "/alpha/index.html" }
+  ]
+}
