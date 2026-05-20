@@ -168,6 +168,9 @@ async def run_interactive(
 
     def _message_with_spinner() -> ANSI:
         base = _prompt_surface._prompt_message(session).value
+        if state.is_awaiting_confirmation():
+            confirm_text = state.confirm_prompt_text
+            return ANSI(f"{confirm_text}\n{base}")
         return ANSI(f"{spinner.inline_spinner_ansi()}\n{base}")
 
     processor_task = asyncio.create_task(_processor())

@@ -29,6 +29,7 @@ class ReplState:
     exit_requested: bool = False
     confirm_event: threading.Event | None = None
     confirm_response: list[str] = field(default_factory=list)
+    confirm_prompt_text: str = ""
 
     def is_dispatch_running(self) -> bool:
         return self.current_task is not None and not self.current_task.done()
@@ -48,13 +49,15 @@ class ReplState:
     def request_exit(self) -> None:
         self.exit_requested = True
 
-    def begin_confirmation(self, event: threading.Event) -> None:
+    def begin_confirmation(self, event: threading.Event, prompt_text: str = "") -> None:
         self.confirm_response = []
+        self.confirm_prompt_text = prompt_text
         self.confirm_event = event
 
     def clear_confirmation(self) -> None:
         self.confirm_event = None
         self.confirm_response = []
+        self.confirm_prompt_text = ""
 
     def start_dispatch(self, *, task: asyncio.Task[None], cancel_event: threading.Event) -> None:
         self.current_task = task
@@ -130,12 +133,17 @@ class SpinnerState:
         if not self.streaming:
             return ""
         elapsed = time.monotonic() - self.started_at
-        tokens_str = format_token_count_short(self.bytes_in // _CHARS_PER_TOKEN)
+        token_count = self.bytes_in // _CHARS_PER_TOKEN
         glyph = self._SPINNER_FRAMES[self._frame_idx % len(self._SPINNER_FRAMES)]
         self._frame_idx += 1
+        if token_count > 0:
+            tokens_str = format_token_count_short(token_count)
+            suffix = f" ({elapsed:.0f}s · ↓ {tokens_str} tokens)"
+        else:
+            suffix = f" ({elapsed:.0f}s)"
         return (
             f"{PROMPT_ACCENT_ANSI}{glyph} {self._verb}…{ANSI_RESET}"
-            f"{ANSI_DIM} ({elapsed:.0f}s · ↓ {tokens_str} tokens){ANSI_RESET}"
+            f"{ANSI_DIM}{suffix}{ANSI_RESET}"
         )
 
 

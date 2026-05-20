@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-import sys
 import threading
 from collections.abc import Callable
 from dataclasses import replace
@@ -188,11 +187,8 @@ def run_initial_input(
 
 
 def route_confirm_through_prompt(state: ReplState, prompt_text: str) -> str:
-    sys.stdout.write(prompt_text)
-    sys.stdout.flush()
-
     response_event = threading.Event()
-    state.begin_confirmation(response_event)
+    state.begin_confirmation(response_event, prompt_text)
     try:
         while not response_event.is_set():
             cancel = state.current_cancel_event

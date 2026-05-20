@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import io
 import re
-import sys
 import threading
 import time
 from pathlib import Path
@@ -681,6 +680,30 @@ class TestSpinnerState:
         # Spinner glyph from the brail palette.
         assert any(g in rendered for g in spinner._SPINNER_FRAMES)
 
+    def test_streaming_inline_spinner_hides_token_count_when_zero(self) -> None:
+        """When no tokens have been received yet, the spinner should not
+        display ``↓ 0 tokens`` — the count is meaningless until streaming
+        starts. Only the elapsed time is shown in the parenthetical.
+        """
+        spinner = loop._SpinnerState()
+        spinner.start()
+        # bytes_in defaults to 0 → token_count = 0
+        rendered = _strip_ansi(spinner.inline_spinner_ansi())
+        assert "tokens" not in rendered, (
+            "expected no token count in spinner before any tokens arrive"
+        )
+        assert "0" not in rendered or "0s" in rendered or "0." in rendered, (
+            "zero-token count leaked into spinner display"
+        )
+
+    def test_streaming_inline_spinner_shows_token_count_once_tokens_arrive(self) -> None:
+        """Once bytes arrive, the token count reappears in the spinner."""
+        spinner = loop._SpinnerState()
+        spinner.start()
+        spinner.bytes_in = 100 * loop._CHARS_PER_TOKEN  # = 100 tokens
+        rendered = _strip_ansi(spinner.inline_spinner_ansi())
+        assert "tokens" in rendered
+
     def test_streaming_inline_spinner_verb_stays_constant_across_calls(self) -> None:
         """A turn's verb is fixed at ``start()`` so the indicator
         doesn't flicker between words mid-stream."""
@@ -1088,20 +1111,12 @@ class TestRouteConfirmThroughPrompt:
         t.start()
         return t, result, exc
 
-    def test_returns_delivered_response_and_clears_state(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_delivered_response_and_clears_state(self) -> None:
         """Happy path: main loop calls ``state.deliver_confirmation('y')``
         → worker wakes from poll → returns ``"y"``; ``confirm_event`` and
         ``confirm_response`` are cleared so the next confirmation starts
         from a fresh slate.
         """
-        # Capture stdout so the prompt text doesn't leak into pytest's
-        # captured output. The function writes via ``sys.stdout`` (not
-        # the Rich Console), so a plain ``StringIO`` swap suffices.
-        captured = io.StringIO()
-        monkeypatch.setattr(sys, "stdout", captured)
-
         state = loop._ReplState()
         # Active dispatch must have a cancel event parked; in production
         # ``_run_one_dispatch`` allocates this before invoking the
@@ -1110,6 +1125,9 @@ class TestRouteConfirmThroughPrompt:
 
         t, result, exc = self._run_in_thread(state, "Proceed? [y/N] ")
         self._wait_until_parked(state)
+
+        # Prompt text is stored in state so prompt-toolkit owns the render.
+        assert state.confirm_prompt_text == "Proceed? [y/N] "
 
         state.deliver_confirmation("y")
         t.join(timeout=self._JOIN_TIMEOUT_S)
@@ -1120,12 +1138,9 @@ class TestRouteConfirmThroughPrompt:
         # Finally-block invariant: state cleared for the next prompt.
         assert state.confirm_event is None
         assert state.confirm_response == []
-        # Prompt text was written before parking.
-        assert "Proceed? [y/N]" in captured.getvalue()
+        assert state.confirm_prompt_text == ""
 
-    def test_raises_dispatch_cancelled_when_cancel_event_fires(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_raises_dispatch_cancelled_when_cancel_event_fires(self) -> None:
         """Esc / ``/cancel`` **user-facing** path: routes through
         ``state.cancel_current_dispatch()``, which sets BOTH
         ``current_cancel_event`` AND ``confirm_event``. The worker
@@ -1143,8 +1158,6 @@ class TestRouteConfirmThroughPrompt:
         surrounding action loop instead, matching what the user
         expects from ``Esc``.
         """
-        monkeypatch.setattr(sys, "stdout", io.StringIO())
-
         state = loop._ReplState()
         state.current_cancel_event = threading.Event()
 
@@ -1163,9 +1176,7 @@ class TestRouteConfirmThroughPrompt:
         assert state.confirm_event is None
         assert state.confirm_response == []
 
-    def test_raises_dispatch_cancelled_when_cancel_already_set_before_park(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_raises_dispatch_cancelled_when_cancel_already_set_before_park(self) -> None:
         """Race-safety: if the user pressed Esc *before* the worker
         reaches the poll loop, the first iteration must observe
         ``current_cancel_event.is_set()`` and raise immediately rather
@@ -1178,8 +1189,6 @@ class TestRouteConfirmThroughPrompt:
         :class:`loop.DispatchCancelled`. Deleting the cancel-check
         would make this test hang to ``_JOIN_TIMEOUT_S`` and fail.
         """
-        monkeypatch.setattr(sys, "stdout", io.StringIO())
-
         state = loop._ReplState()
         cancel = threading.Event()
         cancel.set()  # already cancelled
@@ -1194,9 +1203,7 @@ class TestRouteConfirmThroughPrompt:
         assert isinstance(exc[0], loop.DispatchCancelled)
         assert state.confirm_event is None
 
-    def test_in_loop_cancel_check_raises_after_wait_timeout(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_in_loop_cancel_check_raises_after_wait_timeout(self) -> None:
         """In-loop cancel-check on a SUBSEQUENT iteration: the worker
         is already parked in ``response_event.wait(timeout=0.1s)`` when
         cancel fires. The wait times out (because we don't touch
@@ -1213,8 +1220,6 @@ class TestRouteConfirmThroughPrompt:
         would still pass that test. This test sets ONLY the cancel
         event so the only way out is through the check.
         """
-        monkeypatch.setattr(sys, "stdout", io.StringIO())
-
         state = loop._ReplState()
         cancel = threading.Event()
         state.current_cancel_event = cancel
@@ -1254,8 +1259,6 @@ class TestRouteConfirmThroughPrompt:
         deterministically — timing-based tests can't reliably hit the
         sub-microsecond race window even when the bug is present.
         """
-        monkeypatch.setattr(sys, "stdout", io.StringIO())
-
         state = loop._ReplState()
         state.current_cancel_event = threading.Event()
 
@@ -1302,9 +1305,7 @@ class TestRouteConfirmThroughPrompt:
             f"confirm_response was reset — order was {setup_order}"
         )
 
-    def test_empty_string_delivery_returns_empty_string(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_empty_string_delivery_returns_empty_string(self) -> None:
         """User presses Enter on the confirmation prompt without typing
         anything → ``state.deliver_confirmation("")`` is called →
         function returns ``""``. Real production case: ``[Y/n]`` prompts
@@ -1319,8 +1320,6 @@ class TestRouteConfirmThroughPrompt:
         :class:`loop.DispatchCancelled` (see the cancel-path tests
         above).
         """
-        monkeypatch.setattr(sys, "stdout", io.StringIO())
-
         state = loop._ReplState()
         state.current_cancel_event = threading.Event()
 
