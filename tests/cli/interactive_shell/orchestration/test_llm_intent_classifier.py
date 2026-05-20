@@ -63,9 +63,7 @@ class TestUserTemplateFormat:
         # Any extra bare format spec (e.g. {actions}) would raise KeyError at runtime
         # when _call_llm passes user-supplied JSON through _USER_TEMPLATE.format(text=...).
         specs = re.findall(r"(?<!\{)\{[^{}]+\}(?!\})", classifier._USER_TEMPLATE)
-        assert specs == ["{text}"], (
-            f"_USER_TEMPLATE contains unexpected format specs: {specs!r}"
-        )
+        assert specs == ["{text}"], f"_USER_TEMPLATE contains unexpected format specs: {specs!r}"
 
     def test_multiline_json_with_nested_braces_doesnt_raise(self) -> None:
         # Verifies _sanitise_text preserves braces and that the sanitised value
