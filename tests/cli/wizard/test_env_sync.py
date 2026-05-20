@@ -69,7 +69,10 @@ def test_is_sensitive_env_key_leaves_non_secrets(key: str) -> None:
     assert _is_sensitive_env_key(key) is False
 
 
-def test_sync_provider_env_updates_provider_specific_keys(tmp_path) -> None:
+def test_sync_provider_env_updates_provider_specific_keys(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("OPENAI_REASONING_MODEL", raising=False)
+    monkeypatch.delenv("OPENAI_MODEL", raising=False)
     env_path = tmp_path / ".env"
     env_path.write_text(
         "ENV=development\n"
@@ -95,7 +98,10 @@ def test_sync_provider_env_updates_provider_specific_keys(tmp_path) -> None:
     assert "OPENAI_MODEL=gpt-5-mini\n" in content
 
 
-def test_sync_provider_env_appends_to_file_without_final_newline(tmp_path) -> None:
+def test_sync_provider_env_appends_to_file_without_final_newline(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("OPENAI_REASONING_MODEL", raising=False)
+    monkeypatch.delenv("OPENAI_MODEL", raising=False)
     env_path = tmp_path / ".env"
     env_path.write_text(
         "ENV=development\n"
@@ -117,7 +123,9 @@ def test_sync_provider_env_appends_to_file_without_final_newline(tmp_path) -> No
     assert "ANTHROPIC_API_KEY=" not in content
 
 
-def test_sync_provider_env_codex_writes_codex_model(tmp_path) -> None:
+def test_sync_provider_env_codex_writes_codex_model(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("CODEX_MODEL", raising=False)
     env_path = tmp_path / ".env"
     env_path.write_text("LLM_PROVIDER=anthropic\n", encoding="utf-8")
     sync_provider_env(
@@ -130,7 +138,9 @@ def test_sync_provider_env_codex_writes_codex_model(tmp_path) -> None:
     assert "CODEX_MODEL=\n" in content
 
 
-def test_sync_provider_env_gemini_cli_writes_model(tmp_path) -> None:
+def test_sync_provider_env_gemini_cli_writes_model(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("GEMINI_CLI_MODEL", raising=False)
     env_path = tmp_path / ".env"
     env_path.write_text("LLM_PROVIDER=anthropic\n", encoding="utf-8")
     sync_provider_env(

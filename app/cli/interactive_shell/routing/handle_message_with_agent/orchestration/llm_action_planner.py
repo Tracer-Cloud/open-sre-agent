@@ -53,6 +53,11 @@ Example mapping for sequence + sample alert:
 - Input: "run /health and then kick off a sample alert investigation"
 - Tool calls (in order): slash_invoke("/health"), alert_sample(template="generic")
 
+Example mapping for compound slash commands:
+- Input: "check the health of my opensre and then show me all connected services"
+- Tool calls (in order): slash_invoke("/health"), slash_invoke("/list", args=["integrations"])
+  ("connected services/integrations" → /list integrations)
+
 For operational REPL requests, prefer slash_invoke and choose the command
 from the slash catalog below. Each entry lists when to use it and when not to.
 Other tools:

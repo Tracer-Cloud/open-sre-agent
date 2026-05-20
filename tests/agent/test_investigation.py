@@ -190,6 +190,7 @@ def test_run_parallel_handles_interpreter_shutdown() -> None:
     must fall back to sequential execution and still return results for all slots."""
     mock_tool = MagicMock()
     mock_tool.name = "good_tool"
+    mock_tool.validate_public_input.return_value = None
     mock_tool.extract_params.return_value = {}
     mock_tool.run.return_value = {"result": "ok"}
 

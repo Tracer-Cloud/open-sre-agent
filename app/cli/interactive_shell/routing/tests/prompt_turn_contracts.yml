@@ -281,8 +281,8 @@
   input: "please connect to local llama"
   expected_route_kind: "cli_agent"
   expected_planned_actions:
-    - kind: "assistant_handoff"
-      content: "clarify:local_llm_connection"
+    - kind: "llm_provider"
+      content: "ollama"
   expected_executed_actions: []
   expected_terminal_response_contains:
     - "ollama"
@@ -351,11 +351,11 @@
   input: "CPU is spiking to 99% on the orders-api pods"
   expected_route_kind: "cli_agent"
   expected_planned_actions:
-    - kind: "assistant_handoff"
-      content: "incident_description:orders_cpu_spike"
+    - kind: "investigation"
+      content: "CPU is spiking to 99% on the orders-api pods"
   expected_executed_actions: []
   expected_terminal_response_contains:
-    - "incident"
+    - "orders"
   expected_session_history_delta:
     - type: "cli_agent"
       text: "CPU is spiking to 99% on the orders-api pods"

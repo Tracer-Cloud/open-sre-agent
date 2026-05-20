@@ -19,25 +19,28 @@ route:
   expected_signals: []
   expected_command_text: null
 policy:
-  should_execute: false
-  has_unhandled_clause: true
-  fail_closed: true
+  should_execute: true
+  has_unhandled_clause: false
+  fail_closed: false
 planned_actions:
-- kind: assistant_handoff
-  content: incident_description:orders_cpu_spike
+- kind: investigation
+  content: CPU is spiking to 99% on the orders-api pods
   source: llm
-executed_actions: []
+  target_surface: investigation
+executed_actions:
+- kind: investigation
 response_contract:
   must_contain_any:
   - orders
-  - investigate
-  - incident
-  - alert
+  - investigation
+  - cpu
   must_not_contain:
   - $ /
 history:
   expected:
   - type: cli_agent
+    ok: true
+  - type: alert
     ok: true
 tier: full
 runs: 1

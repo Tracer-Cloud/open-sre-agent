@@ -17,7 +17,7 @@ from app.config import (
 )
 from app.utils.config import load_env
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[6]
+_PROJECT_ROOT = Path(__file__).resolve().parents[5]
 _ENV_PATH = _PROJECT_ROOT / ".env"
 _ROUTING_TEST_DEFAULT_ENV = {
     "OPENSRE_SENTRY_DISABLED": "1",

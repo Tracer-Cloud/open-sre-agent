@@ -61,15 +61,16 @@ def test_check_env_file_missing(monkeypatch, tmp_path) -> None:
 
 def test_check_llm_provider_not_set(monkeypatch) -> None:
     monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.setattr("app.config.get_llm_provider_api_key", lambda _provider: ("ANTHROPIC_API_KEY", ""))
     ok, detail = doctor._check_llm_provider()
     assert ok is False
-    assert "not set" in detail
+    assert "ANTHROPIC_API_KEY" in detail
+    assert "not available" in detail
 
 
 def test_check_llm_provider_hosted_missing_key(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "anthropic")
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.setattr(doctor, "has_llm_api_key", lambda _env_var: False)
+    monkeypatch.setattr("app.config.get_llm_provider_api_key", lambda _provider: ("ANTHROPIC_API_KEY", ""))
     ok, detail = doctor._check_llm_provider()
     assert ok is False
     assert "ANTHROPIC_API_KEY" in detail
@@ -78,11 +79,9 @@ def test_check_llm_provider_hosted_missing_key(monkeypatch) -> None:
 
 def test_check_llm_provider_hosted_keyring_key(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "gemini")
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.setattr(
-        doctor,
-        "has_llm_api_key",
-        lambda env_var: env_var == "GEMINI_API_KEY",
+        "app.config.get_llm_provider_api_key",
+        lambda _provider: ("GEMINI_API_KEY", "keyring-backed-key"),
     )
 
     ok, detail = doctor._check_llm_provider()
@@ -93,12 +92,7 @@ def test_check_llm_provider_hosted_keyring_key(monkeypatch) -> None:
 
 def test_check_llm_provider_non_secret_env_stays_env_only(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "bedrock")
-    monkeypatch.delenv("AWS_DEFAULT_REGION", raising=False)
-
-    def _raise_if_called(_env_var: str) -> bool:
-        raise AssertionError("non-secret provider env should not use keyring lookup")
-
-    monkeypatch.setattr(doctor, "has_llm_api_key", _raise_if_called)
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "")
 
     ok, detail = doctor._check_llm_provider()
 
