@@ -16,6 +16,7 @@ import httpx
 
 from app.integrations.config_models import DatadogIntegrationConfig
 from app.integrations.probes import ProbeResult
+from app.services._error_helpers import capture_service_error
 
 logger = logging.getLogger(__name__)
 
@@ -68,10 +69,13 @@ class DatadogClient:
         query: str,
         time_range_minutes: int = 60,
         limit: int = 50,
+        *,
+        start: datetime | None = None,
+        end: datetime | None = None,
     ) -> dict[str, Any]:
         """Search Datadog logs using the Log Search API (v2)."""
-        now = datetime.now(UTC)
-        from_ts = now - timedelta(minutes=time_range_minutes)
+        now = end or datetime.now(UTC)
+        from_ts = start or (now - timedelta(minutes=time_range_minutes))
 
         payload = {
             "filter": {
@@ -105,13 +109,73 @@ class DatadogClient:
                 logs.append(log)
 
             return {"success": True, "logs": logs, "total": len(logs)}
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="datadog",
+                method="search_logs",
+                extras={"query": query, "time_range_minutes": time_range_minutes},
+            )
+            return {
+                "success": False,
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
+            }
+        except Exception as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="datadog",
+                method="search_logs",
+                extras={"query": query, "time_range_minutes": time_range_minutes},
+            )
+            return {"success": False, "error": str(exc)}
+
+    def query_metrics(
+        self,
+        query: str,
+        *,
+        start: datetime,
+        end: datetime,
+    ) -> dict[str, Any]:
+        """Query Datadog metrics (v1 query API) for a bounded time range."""
+        params: dict[str, str | int] = {
+            "from": int(start.timestamp()),
+            "to": int(end.timestamp()),
+            "query": query,
+        }
+        try:
+            resp = self._get_client().get("/api/v1/query", params=params)
+            resp.raise_for_status()
+            payload = resp.json()
+            series_list = payload.get("series") or []
+            if not isinstance(series_list, list) or not series_list:
+                return {"success": True, "timestamps": [], "values": []}
+
+            first = series_list[0] if isinstance(series_list[0], dict) else {}
+            pointlist = first.get("pointlist") or []
+
+            timestamps: list[str] = []
+            values: list[float] = []
+            for point in pointlist:
+                if not (isinstance(point, list | tuple) and len(point) >= 2):
+                    continue
+                ts_ms, value = point[0], point[1]
+                if value is None:
+                    continue
+                try:
+                    ts = datetime.fromtimestamp(float(ts_ms) / 1000.0, tz=UTC)
+                    timestamps.append(ts.isoformat().replace("+00:00", "Z"))
+                    values.append(float(value))
+                except Exception:
+                    continue
+
+            return {"success": True, "timestamps": timestamps, "values": values}
         except httpx.HTTPStatusError as e:
             logger.warning(
-                "[datadog] Log search HTTP failure status=%s query=%r window=%sm "
-                "(check API/app key permissions and query syntax)",
+                "[datadog] Metrics query HTTP failure status=%s query=%r",
                 e.response.status_code,
                 query,
-                time_range_minutes,
             )
             return {
                 "success": False,
@@ -119,8 +183,7 @@ class DatadogClient:
             }
         except Exception as e:
             logger.warning(
-                "[datadog] Log search request error type=%s detail=%s "
-                "(network/auth/timeout likely)",
+                "[datadog] Metrics query request error type=%s detail=%s",
                 type(e).__name__,
                 e,
             )
@@ -155,24 +218,27 @@ class DatadogClient:
                 )
 
             return {"success": True, "monitors": results, "total": len(results)}
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "[datadog] List monitors HTTP failure status=%s query=%r "
-                "(verify monitor.read scope and org/site)",
-                e.response.status_code,
-                query,
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="datadog",
+                method="list_monitors",
+                extras={"query": query},
             )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning(
-                "[datadog] List monitors request error type=%s detail=%s",
-                type(e).__name__,
-                e,
+        except Exception as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="datadog",
+                method="list_monitors",
+                extras={"query": query},
             )
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": str(exc)}
 
     def get_pods_on_node(
         self,
@@ -286,15 +352,15 @@ class DatadogClient:
                 )
 
             return {"success": True, "events": events, "total": len(events)}
-        except httpx.HTTPStatusError as e:
-            logger.warning("[datadog] Events query failed: %s", e.response.status_code)
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(exc, logger=logger, integration="datadog", method="get_events")
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning("[datadog] Events query error: %s", e)
-            return {"success": False, "error": str(e)}
+        except Exception as exc:
+            capture_service_error(exc, logger=logger, integration="datadog", method="get_events")
+            return {"success": False, "error": str(exc)}
 
 
 class DatadogAsyncClient:
@@ -346,18 +412,30 @@ class DatadogAsyncClient:
                 log.update({k: v for k, v in custom.items() if isinstance(k, str)})
                 logs.append(log)
             return {"success": True, "logs": logs, "total": len(logs), "duration_ms": duration_ms}
-        except httpx.HTTPStatusError as e:
+        except httpx.HTTPStatusError as exc:
             duration_ms = int((time.monotonic() - t0) * 1000)
-            logger.warning("[datadog] Async log search failed: %s", e.response.status_code)
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="datadog",
+                method="_search_logs",
+                extras={"query": query, "time_range_minutes": time_range_minutes},
+            )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
                 "duration_ms": duration_ms,
             }
-        except Exception as e:
+        except Exception as exc:
             duration_ms = int((time.monotonic() - t0) * 1000)
-            logger.warning("[datadog] Async log search error: %s", e)
-            return {"success": False, "error": str(e), "duration_ms": duration_ms}
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="datadog",
+                method="_search_logs",
+                extras={"query": query, "time_range_minutes": time_range_minutes},
+            )
+            return {"success": False, "error": str(exc), "duration_ms": duration_ms}
 
     async def _list_monitors(
         self,
@@ -392,18 +470,30 @@ class DatadogAsyncClient:
                 "total": len(results),
                 "duration_ms": duration_ms,
             }
-        except httpx.HTTPStatusError as e:
+        except httpx.HTTPStatusError as exc:
             duration_ms = int((time.monotonic() - t0) * 1000)
-            logger.warning("[datadog] Async list monitors failed: %s", e.response.status_code)
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="datadog",
+                method="_list_monitors",
+                extras={"query": query},
+            )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
                 "duration_ms": duration_ms,
             }
-        except Exception as e:
+        except Exception as exc:
             duration_ms = int((time.monotonic() - t0) * 1000)
-            logger.warning("[datadog] Async list monitors error: %s", e)
-            return {"success": False, "error": str(e), "duration_ms": duration_ms}
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="datadog",
+                method="_list_monitors",
+                extras={"query": query},
+            )
+            return {"success": False, "error": str(exc), "duration_ms": duration_ms}
 
     async def _get_events(
         self,
@@ -447,18 +537,18 @@ class DatadogAsyncClient:
                 "total": len(events),
                 "duration_ms": duration_ms,
             }
-        except httpx.HTTPStatusError as e:
+        except httpx.HTTPStatusError as exc:
             duration_ms = int((time.monotonic() - t0) * 1000)
-            logger.warning("[datadog] Async events query failed: %s", e.response.status_code)
+            capture_service_error(exc, logger=logger, integration="datadog", method="_get_events")
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
                 "duration_ms": duration_ms,
             }
-        except Exception as e:
+        except Exception as exc:
             duration_ms = int((time.monotonic() - t0) * 1000)
-            logger.warning("[datadog] Async events query error: %s", e)
-            return {"success": False, "error": str(e), "duration_ms": duration_ms}
+            capture_service_error(exc, logger=logger, integration="datadog", method="_get_events")
+            return {"success": False, "error": str(exc), "duration_ms": duration_ms}
 
     async def fetch_all(
         self,

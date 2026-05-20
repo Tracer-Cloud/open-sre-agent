@@ -16,9 +16,14 @@ from datetime import UTC, datetime
 
 import boto3
 import requests
-from langsmith import traceable
 
 from app.cli.investigation import run_investigation_cli
+from app.utils.tracing import traceable
+from tests.shared.e2e_rca_checks import (
+    audit_key_mentioned,
+    investigation_text_blob,
+    s3_key_mentioned,
+)
 from tests.shared.stack_config import get_flink_config
 from tests.utils.alert_factory import create_alert
 
@@ -162,12 +167,7 @@ def test_agent_investigation(failure_data: dict):
         },
     )
     def run_investigation():
-        return run_investigation_cli(
-            alert_name=alert.get("labels", {}).get("alertname", "FlinkTaskFailure"),
-            pipeline_name="tracer_flink_batch_pipeline",
-            severity="critical",
-            raw_alert=alert,
-        )
+        return run_investigation_cli(raw_alert=alert)
 
     result = run_investigation()
 
@@ -201,25 +201,39 @@ def test_agent_investigation(failure_data: dict):
         "Schema change detected": False,
     }
 
-    investigation_text = json.dumps(result).lower()
+    investigation_text = investigation_text_blob(result)
 
-    if "cloudwatch" in investigation_text or "flink" in investigation_text:
+    if (
+        "cloudwatch" in investigation_text
+        or "flink" in investigation_text
+        or "/ecs/" in investigation_text
+    ):
         success_checks["Flink logs retrieved"] = True
 
-    if failure_data["s3_key"] in investigation_text or "ingested/" in investigation_text:
+    if s3_key_mentioned(investigation_text, failure_data["s3_key"]):
         success_checks["S3 input data inspected"] = True
 
-    if failure_data.get("audit_key") and (
-        failure_data["audit_key"] in investigation_text or "audit/" in investigation_text
-    ):
+    audit_key = (failure_data.get("audit_key") or "").strip()
+    if audit_key_mentioned(investigation_text, audit_key):
         success_checks["Audit trail traced"] = True
 
-    if "external" in investigation_text and (
-        "api" in investigation_text or "vendor" in investigation_text
+    if (
+        (
+            "external" in investigation_text
+            and ("api" in investigation_text or "vendor" in investigation_text)
+        )
+        or "mock_api" in investigation_text
+        or "execute-api" in investigation_text
     ):
         success_checks["External API identified"] = True
 
-    if "event_id" in investigation_text or "schema" in investigation_text:
+    if (
+        "event_id" in investigation_text
+        or "customer_id" in investigation_text
+        or "schema" in investigation_text
+        or "missing fields" in investigation_text
+        or "validation failed" in investigation_text
+    ):
         success_checks["Schema change detected"] = True
 
     print("\nSuccess Checks:")

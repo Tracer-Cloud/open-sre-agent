@@ -124,7 +124,7 @@ Guardrails protect all LLM call paths:
 - Custom Anthropic client (`LLMClient.invoke`)
 - OpenAI-compatible client (`OpenAILLMClient.invoke`)
 - Structured output calls (delegated to base client)
-- LangChain chat nodes (`chat_agent_node`, `general_node`)
+- Interactive shell and investigation chat calls
 - Alert extraction prompts
 - Root cause diagnosis prompts
 - Action planning prompts

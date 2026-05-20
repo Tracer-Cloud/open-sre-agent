@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
+
 from app.analytics.provider import (
     Properties,
     capture_install_detected_if_needed,
     shutdown_analytics,
 )
-from contextlib import suppress
 from app.utils.sentry_sdk import init_sentry
 
 _INSTALL_PROPERTIES: Properties = {

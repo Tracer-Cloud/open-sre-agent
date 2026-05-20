@@ -67,6 +67,21 @@ def test_llm_settings_from_env_minimax(monkeypatch) -> None:
     assert settings.minimax_api_key == "mm-stored-key"
 
 
+@pytest.mark.parametrize(
+    "raw_host, expected",
+    [
+        ("localhost:11434", "http://localhost:11434"),
+        ("192.168.1.5:11434", "http://192.168.1.5:11434"),
+        ("my-server:11434", "http://my-server:11434"),
+        ("http://localhost:11434", "http://localhost:11434"),
+        ("https://ollama.internal", "https://ollama.internal"),
+    ],
+)
+def test_llm_settings_ollama_host_protocol_normalized(raw_host: str, expected: str) -> None:
+    settings = LLMSettings.model_validate({"provider": "ollama", "ollama_host": raw_host})
+    assert settings.ollama_host == expected
+
+
 def test_llm_settings_from_env_max_tokens_override(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "ollama")
     monkeypatch.setenv("LLM_MAX_TOKENS", "8192")

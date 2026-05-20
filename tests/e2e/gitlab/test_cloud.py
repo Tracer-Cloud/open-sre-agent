@@ -169,8 +169,8 @@ def test_gitlab_list_pipelines():
 # error rate, service degradation, etc.) and the agent also queries GitLab
 # to correlate recent commits and MRs that may have caused it.
 #
-# detect_sources.py picks up GitLab via repo_url or annotations["repository"],
-# exactly the same way GitHub is detected — not from a "gitlab_ci" alert.
+# GitLab is picked up via repo_url or annotations["repository"], exactly the
+# same way GitHub is detected — not from a "gitlab_ci" alert.
 # ---------------------------------------------------------------------------
 
 
@@ -188,7 +188,7 @@ def test_gitlab_investigation_e2e():
     from app.cli.investigation import run_investigation_cli
 
     # Load the shared fixture and patch in the real project URL so the
-    # detect_sources.py repo_url parser picks up the configured project.
+    # The repo_url hint lets the agent correlate the alert with this project.
     fixture_path = FIXTURES_DIR / "gitlab_high_error_rate_alert.json"
     raw_alert = json.loads(fixture_path.read_text())
     repo_url = _gitlab_project_url(base_url, project_id)
@@ -198,12 +198,7 @@ def test_gitlab_investigation_e2e():
 
     print(f"\nRunning investigation — primary: Grafana alert, supplementary: GitLab ({project_id})")
 
-    investigation_result = run_investigation_cli(
-        alert_name="High error rate: api_service",
-        pipeline_name="api_service",
-        severity="critical",
-        raw_alert=raw_alert,
-    )
+    investigation_result = run_investigation_cli(raw_alert=raw_alert)
 
     root_cause = investigation_result.get("root_cause", "")
     remediation_steps = investigation_result.get("remediation_steps", [])
@@ -251,7 +246,7 @@ def test_gitlab_post_mr_note():
 
     # Read back from annotations — the same way the agent would in production.
     annotations = raw_alert["alerts"][0]["annotations"]
-    project_id_from_annotation = project_id  # derived from repo_url by detect_sources
+    project_id_from_annotation = project_id
     mr_iid_from_annotation = annotations["mr_iid"]
 
     config = _gitlab_config(access_token, base_url)

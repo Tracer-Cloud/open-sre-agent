@@ -31,9 +31,9 @@ def test_run_investigation_wraps_runner_with_tracking(monkeypatch) -> None:
 
     from app.entrypoints.sdk import run_investigation
 
-    result = run_investigation("alert-name", raw_alert={"foo": "bar"})
+    result = run_investigation(raw_alert={"foo": "bar"})
 
     assert result == {"ok": True}
-    assert captured_kwargs["args"] == ("alert-name",)
+    assert captured_kwargs["args"] == ()
     assert captured_kwargs["kwargs"] == {"raw_alert": {"foo": "bar"}}
     assert track_calls == [("sdk", "service_runtime")]

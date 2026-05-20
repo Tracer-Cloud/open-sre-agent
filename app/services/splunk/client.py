@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -10,6 +11,10 @@ import httpx
 
 from app.integrations.config_models import SplunkIntegrationConfig
 from app.integrations.probes import ProbeResult
+from app.services._error_helpers import capture_service_error
+from app.services._streaming import StreamingParseStats
+
+logger = logging.getLogger(__name__)
 
 _DEFAULT_TIMEOUT_SECONDS = 30.0
 
@@ -101,11 +106,13 @@ class SplunkClient:
             )
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
+            capture_service_error(exc, logger=logger, integration="splunk", method="search_logs")
             return {
                 "success": False,
                 "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
         except Exception as exc:
+            capture_service_error(exc, logger=logger, integration="splunk", method="search_logs")
             return {"success": False, "error": str(exc)}
 
         logs = self._parse_export_response(response.text)
@@ -119,19 +126,23 @@ class SplunkClient:
     def _parse_export_response(self, response_text: str) -> list[dict[str, Any]]:
         """Parse the NDJSON export stream into normalized log dicts."""
         logs: list[dict[str, Any]] = []
+        stats = StreamingParseStats()
         for line in response_text.splitlines():
             stripped = line.strip()
             if not stripped:
                 continue
             try:
                 payload = json.loads(stripped)
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as exc:
+                stats.record_error(exc)
                 continue
+            stats.record_parsed()
             if not isinstance(payload, dict):
                 continue
             result_type = payload.get("result")
             if isinstance(result_type, dict):
                 logs.append(self._normalize_row(result_type))
+        stats.report_if_unhealthy(logger=logger, integration="splunk", source="search/jobs/export")
         return logs
 
     def _normalize_row(self, row: dict[str, Any]) -> dict[str, Any]:
@@ -166,11 +177,17 @@ class SplunkClient:
                 "detail": f"Connected to Splunk {version}",
             }
         except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc, logger=logger, integration="splunk", method="validate_access"
+            )
             return {
                 "success": False,
                 "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
         except Exception as exc:
+            capture_service_error(
+                exc, logger=logger, integration="splunk", method="validate_access"
+            )
             return {"success": False, "error": str(exc)}
 
     def probe_access(self) -> ProbeResult:

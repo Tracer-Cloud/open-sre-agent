@@ -513,6 +513,7 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
             PtyAction(expect="How do you want to get started?", send=b"\r"),
             PtyAction(expect="Choose your LLM provider", send=b"\r"),
             PtyAction(expect="Anthropic API key", send=b"smoke-test-key\r"),
+            PtyAction(expect="Choose Anthropic model", send=b"\r"),
             PtyAction(
                 expect="Choose an integration to configure",
                 send=b"\r",
@@ -593,6 +594,7 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
                 ),
                 PtyAction(expect="Choose your LLM provider", send=b"\r"),
                 PtyAction(expect="Anthropic API key", send=b"smoke-test-key\r"),
+                PtyAction(expect="Choose Anthropic model", send=b"\r"),
                 PtyAction(
                     expect="Choose an integration to configure",
                     send=b"\r",
@@ -700,8 +702,7 @@ def test_tests_interactive_launcher_smoke(cli_sandbox: CliSandbox) -> None:
 
 
 def test_deploy_help_smoke(cli_sandbox: CliSandbox) -> None:
-    result = _run_cli(cli_sandbox, "deploy", "-h")
+    result = _run_cli(cli_sandbox, "remote", "-h")
 
     assert result.exit_code == 0
-    assert "ec2" in result.stdout
-    assert "langsmith" in result.stdout
+    assert "health" in result.stdout

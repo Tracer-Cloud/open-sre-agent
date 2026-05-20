@@ -48,6 +48,7 @@ from app.analytics.cli import capture_investigation_failed, track_investigation
 from app.analytics.source import EntrypointSource, TriggerMode
 from app.cli.support.cli_error_mapping import reraise_cli_runtime_error
 from app.cli.support.errors import OpenSREError
+from app.remote.error_reporting import report_remote_exception
 from app.remote.vercel_poller import (
     VercelInvestigationCandidate,
     VercelPoller,
@@ -77,7 +78,44 @@ _INSTANCE_METADATA: dict[str, str | None] = {
     "region": os.getenv("AWS_REGION") or None,
     "public_ip": None,
 }
+# Process-local dedup. This mainly protects long-lived remote servers from
+# reporting the same fallback failure every health cycle.
+_REPORTED_REMOTE_EVENTS: set[tuple[str, str]] = set()
 logger = logging.getLogger(__name__)
+
+
+def _remote_report_key(event: str, extras: dict[str, Any] | None = None) -> tuple[str, str]:
+    return (event, str(extras or ""))
+
+
+def _mark_remote_recovered(event: str, extras: dict[str, Any] | None = None) -> None:
+    """Allow a future failure to report after the matching probe recovers."""
+    _REPORTED_REMOTE_EVENTS.discard(_remote_report_key(event, extras))
+
+
+def _report_remote_once(
+    exc: BaseException,
+    *,
+    component: str,
+    event: str,
+    message: str,
+    severity: str,
+    extras: dict[str, Any] | None = None,
+) -> None:
+    """Report noisy remote fallbacks once per process and event/detail key."""
+    dedupe_key = _remote_report_key(event, extras)
+    if dedupe_key in _REPORTED_REMOTE_EVENTS:
+        return
+    _REPORTED_REMOTE_EVENTS.add(dedupe_key)
+    report_remote_exception(
+        exc,
+        logger=logger,
+        component=component,
+        event=event,
+        message=message,
+        severity=severity,
+        extras=extras,
+    )
 
 
 def _configured_auth_key() -> str | None:
@@ -395,9 +433,9 @@ def investigate(req: InvestigateRequest) -> InvestigateResponse:
 async def investigate_stream(req: InvestigateRequest) -> Response:
     """Stream investigation events as SSE using ``astream_events``.
 
-    Returns ``text/event-stream`` with the same SSE format the LangGraph
+    Returns ``text/event-stream`` with the same SSE format the remote threads
     API uses, so ``RemoteAgentClient`` / ``StreamRenderer`` can consume
-    this endpoint identically to a LangGraph deployment.
+    this endpoint identically to a threads-API deployment.
 
     The final pipeline state is accumulated during streaming and persisted
     as a ``.md`` file once the stream completes, matching the behaviour of
@@ -413,12 +451,13 @@ async def investigate_stream(req: InvestigateRequest) -> Response:
     except VercelResolutionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    alert_name, pipeline_name, severity = resolve_investigation_context(
+    investigation_metadata = resolve_investigation_context(
         raw_alert=raw_alert,
         alert_name=req.alert_name,
         pipeline_name=req.pipeline_name,
         severity=req.severity,
     )
+    alert_name, pipeline_name, severity = investigation_metadata
 
     accumulated_state: dict[str, Any] = {}
 
@@ -430,10 +469,8 @@ async def investigate_stream(req: InvestigateRequest) -> Response:
             ) as tracker:
                 try:
                     async for event in astream_investigation(
-                        alert_name,
-                        pipeline_name,
-                        severity,
                         raw_alert=raw_alert,
+                        investigation_metadata=investigation_metadata,
                     ):
                         if event.kind == "on_chain_end":
                             output = event.data.get("data", {}).get("output", {})
@@ -616,18 +653,38 @@ def _imds_token() -> str | None:
     )
     try:
         with urllib.request.urlopen(req, timeout=0.3) as response:
-            return response.read().decode("utf-8").strip() or None
-    except (urllib.error.URLError, TimeoutError, OSError):
+            token = response.read().decode("utf-8").strip() or None
+            _mark_remote_recovered("imds_token_fetch_failed")
+            return token
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        _report_remote_once(
+            exc,
+            component="server",
+            event="imds_token_fetch_failed",
+            message="IMDS token fetch failed",
+            severity="info",
+        )
         return None
 
 
 def _imds_get(path: str, *, token: str | None) -> str | None:
     headers = {"X-aws-ec2-metadata-token": token} if token else {}
     req = urllib.request.Request(f"http://169.254.169.254/{path}", headers=headers)
+    extras = {"imds_path": path}
     try:
         with urllib.request.urlopen(req, timeout=0.3) as response:
-            return response.read().decode("utf-8").strip() or None
-    except (urllib.error.URLError, TimeoutError, OSError):
+            value = response.read().decode("utf-8").strip() or None
+            _mark_remote_recovered("imds_metadata_fetch_failed", extras)
+            return value
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        _report_remote_once(
+            exc,
+            component="server",
+            event="imds_metadata_fetch_failed",
+            message=f"IMDS metadata fetch failed for {path}",
+            severity="info",
+            extras=extras,
+        )
         return None
 
 
@@ -646,12 +703,24 @@ def _check_llm_connectivity() -> DeepHealthCheck:
 
         bedrock = boto3.client("bedrock", region_name=region)
         bedrock.list_foundation_models(byProvider="Anthropic")
+        _mark_remote_recovered(
+            "llm_connectivity_check_failed",
+            {"provider": provider, "region": region},
+        )
         return DeepHealthCheck(
             name="Bedrock connectivity",
             status="passed",
             detail=f"Connected to Bedrock in {region}.",
         )
     except Exception as exc:
+        _report_remote_once(
+            exc,
+            component="server",
+            event="llm_connectivity_check_failed",
+            message=f"Bedrock connectivity check failed in {region}",
+            severity="warning",
+            extras={"provider": provider, "region": region},
+        )
         return DeepHealthCheck(
             name="Bedrock connectivity",
             status="failed",
@@ -777,7 +846,7 @@ def _execute_investigation(
     """Run the RCA pipeline and return both the result and resolved metadata."""
     from app.cli.investigation import resolve_investigation_context, run_investigation_cli
 
-    resolved_alert_name, resolved_pipeline_name, resolved_severity = resolve_investigation_context(
+    investigation_metadata = resolve_investigation_context(
         raw_alert=raw_alert,
         alert_name=alert_name,
         pipeline_name=pipeline_name,
@@ -789,8 +858,7 @@ def _execute_investigation(
     ):
         result = run_investigation_cli(
             raw_alert=raw_alert,
-            alert_name=resolved_alert_name,
-            pipeline_name=resolved_pipeline_name,
-            severity=resolved_severity,
+            investigation_metadata=investigation_metadata,
         )
+    resolved_alert_name, resolved_pipeline_name, resolved_severity = investigation_metadata
     return result, resolved_alert_name, resolved_pipeline_name, resolved_severity

@@ -52,6 +52,10 @@ class ProviderOption:
     #: providers that don't expose a separate toolcall model (e.g. CLI-backed
     #: providers like ``codex``/``claude-code``, or Ollama).
     toolcall_model_env: str | None = None
+    #: Env var that holds the *classification* model for this provider. When
+    #: unset, ``sync_provider_env`` falls back to replacing ``_REASONING_MODEL``
+    #: with ``_CLASSIFICATION_MODEL`` in ``model_env``.
+    classification_model_env: str | None = None
     #: Human-readable name for the credential requested during onboarding. Most
     #: providers want an API key; Ollama wants a host URL. Used as the wizard
     #: prompt label, e.g. ``{label} {credential_label} ({api_key_env})``.
@@ -353,6 +357,7 @@ SUPPORTED_PROVIDERS = (
         models=ANTHROPIC_MODELS,
         legacy_model_env="ANTHROPIC_MODEL",
         toolcall_model_env="ANTHROPIC_TOOLCALL_MODEL",
+        classification_model_env="ANTHROPIC_CLASSIFICATION_MODEL",
     ),
     ProviderOption(
         value="openai",
@@ -364,6 +369,7 @@ SUPPORTED_PROVIDERS = (
         models=OPENAI_MODELS,
         legacy_model_env="OPENAI_MODEL",
         toolcall_model_env="OPENAI_TOOLCALL_MODEL",
+        classification_model_env="OPENAI_CLASSIFICATION_MODEL",
     ),
     ProviderOption(
         value="openrouter",
@@ -375,6 +381,7 @@ SUPPORTED_PROVIDERS = (
         models=OPENROUTER_MODELS,
         legacy_model_env="OPENROUTER_MODEL",
         toolcall_model_env="OPENROUTER_TOOLCALL_MODEL",
+        classification_model_env="OPENROUTER_CLASSIFICATION_MODEL",
     ),
     ProviderOption(
         value="requesty",
@@ -385,6 +392,7 @@ SUPPORTED_PROVIDERS = (
         default_model=REQUESTY_REASONING_MODEL,
         models=REQUESTY_MODELS,
         legacy_model_env="REQUESTY_MODEL",
+        classification_model_env="REQUESTY_CLASSIFICATION_MODEL",
     ),
     ProviderOption(
         value="gemini",
@@ -396,6 +404,7 @@ SUPPORTED_PROVIDERS = (
         models=GEMINI_MODELS,
         legacy_model_env="GEMINI_MODEL",
         toolcall_model_env="GEMINI_TOOLCALL_MODEL",
+        classification_model_env="GEMINI_CLASSIFICATION_MODEL",
     ),
     ProviderOption(
         value="nvidia",
@@ -407,6 +416,7 @@ SUPPORTED_PROVIDERS = (
         models=NVIDIA_MODELS,
         legacy_model_env="NVIDIA_MODEL",
         toolcall_model_env="NVIDIA_TOOLCALL_MODEL",
+        classification_model_env="NVIDIA_CLASSIFICATION_MODEL",
     ),
     ProviderOption(
         value="bedrock",
@@ -421,6 +431,7 @@ SUPPORTED_PROVIDERS = (
         default_model=BEDROCK_REASONING_MODEL,
         models=BEDROCK_MODELS,
         toolcall_model_env="BEDROCK_TOOLCALL_MODEL",
+        classification_model_env="BEDROCK_CLASSIFICATION_MODEL",
         credential_label="AWS region (uses IAM credentials)",
         credential_secret=False,
         # credential_kind="none" causes flow.py to skip the credential prompt

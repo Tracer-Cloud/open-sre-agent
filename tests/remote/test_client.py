@@ -299,18 +299,18 @@ class TestPreflightResult:
         r = PreflightResult(ok=True, endpoints=["/investigate"])
         assert r.supports_investigate is True
 
-    def test_supports_langgraph(self) -> None:
-        r = PreflightResult(ok=True, server_type="langgraph")
-        assert r.supports_langgraph is True
+    def test_supports_remote_threads_api(self) -> None:
+        r = PreflightResult(ok=True, server_type="threads_api")
+        assert r.supports_remote_threads_api is True
 
     def test_supports_live_stream_for_lightweight_endpoint(self) -> None:
         r = PreflightResult(ok=True, endpoints=["/investigate", "/investigate/stream"])
         assert r.supports_live_stream is True
 
-    def test_supports_live_stream_for_langgraph_endpoint(self) -> None:
+    def test_supports_live_stream_for_threads_api_endpoint(self) -> None:
         r = PreflightResult(
             ok=True,
-            server_type="langgraph",
+            server_type="threads_api",
             endpoints=["/threads", "/threads/*/runs/stream"],
         )
         assert r.supports_live_stream is True
@@ -319,9 +319,9 @@ class TestPreflightResult:
         r = PreflightResult(ok=True, endpoints=["/investigate"])
         assert r.supports_live_stream is False
 
-    def test_not_langgraph(self) -> None:
+    def test_not_threads_api(self) -> None:
         r = PreflightResult(ok=True, server_type="lightweight")
-        assert r.supports_langgraph is False
+        assert r.supports_remote_threads_api is False
 
     def test_status_label_unreachable(self) -> None:
         r = PreflightResult(ok=False, error="connection refused")
@@ -373,7 +373,7 @@ class TestPreflight:
         assert result.supports_stream is False
         assert result.supports_investigate is True
 
-    def test_preflight_old_server_detects_langgraph(self) -> None:
+    def test_preflight_old_server_detects_threads_api(self) -> None:
         client = RemoteAgentClient("http://host:2024")
         health_data = {"ok": True}
         with (
@@ -381,14 +381,14 @@ class TestPreflight:
             patch.object(
                 client,
                 "_detect_server_type",
-                return_value=("langgraph", ["/threads", "/threads/*/runs/stream"]),
+                return_value=("threads_api", ["/threads", "/threads/*/runs/stream"]),
             ),
         ):
             result = client.preflight()
 
         assert result.ok is True
-        assert result.server_type == "langgraph"
-        assert result.supports_langgraph is True
+        assert result.server_type == "threads_api"
+        assert result.supports_remote_threads_api is True
 
     def test_preflight_timeout(self) -> None:
         client = RemoteAgentClient("http://host:2024")
@@ -419,3 +419,85 @@ class TestPreflight:
 
         assert result.ok is False
         assert "403" in (result.error or "")
+
+    def test_fetch_remote_version_reports_fallback_failure(self) -> None:
+        client = RemoteAgentClient("http://host:2024")
+        http_client = MagicMock()
+        http_client.get.side_effect = RuntimeError("version down")
+
+        with patch("app.remote.client.report_remote_exception") as report:
+            result = client._fetch_remote_version(http_client, "0.1.0")
+
+        assert result == ("0.1.0", "/ok")
+        report.assert_called_once()
+        assert report.call_args.kwargs["event"] == "remote_version_fetch_failed"
+        assert report.call_args.kwargs["severity"] == "warning"
+
+    def test_fetch_deep_checks_reports_fallback_failure(self) -> None:
+        client = RemoteAgentClient("http://host:2024")
+        http_client = MagicMock()
+        http_client.get.side_effect = RuntimeError("deep down")
+
+        with patch("app.remote.client.report_remote_exception") as report:
+            result = client._fetch_deep_checks(http_client)
+
+        assert result == []
+        report.assert_called_once()
+        assert report.call_args.kwargs["event"] == "deep_health_fetch_failed"
+        assert report.call_args.kwargs["severity"] == "warning"
+
+    def test_endpoint_exists_reports_probe_failure(self) -> None:
+        client = RemoteAgentClient("http://host:2024")
+        http_client = MagicMock()
+        http_client.get.side_effect = RuntimeError("probe down")
+
+        with patch("app.remote.client.report_remote_exception") as report:
+            assert client._endpoint_exists(http_client, "/investigate") is False
+
+        report.assert_called_once()
+        assert report.call_args.kwargs["event"] == "endpoint_probe_failed"
+        assert report.call_args.kwargs["severity"] == "warning"
+
+    def test_preflight_reports_timeout(self) -> None:
+        client = RemoteAgentClient("http://host:2024")
+        with (
+            patch.object(client, "health", side_effect=httpx.TimeoutException("timed out")),
+            patch("app.remote.client.report_remote_exception") as report,
+        ):
+            result = client.preflight()
+
+        assert result.ok is False
+        assert result.error == "connection timed out"
+        report.assert_called_once()
+        assert report.call_args.kwargs["event"] == "preflight_timeout"
+        assert report.call_args.kwargs["severity"] == "warning"
+        assert report.call_args.kwargs["include_traceback"] is False
+
+    def test_preflight_reports_connection_refused_without_traceback(self) -> None:
+        client = RemoteAgentClient("http://host:2024")
+        with (
+            patch.object(client, "health", side_effect=httpx.ConnectError("refused")),
+            patch("app.remote.client.report_remote_exception") as report,
+        ):
+            result = client.preflight()
+
+        assert result.ok is False
+        assert "connection refused" in (result.error or "")
+        report.assert_called_once()
+        assert report.call_args.kwargs["event"] == "preflight_connection_refused"
+        assert report.call_args.kwargs["severity"] == "warning"
+        assert report.call_args.kwargs["include_traceback"] is False
+
+    def test_preflight_reports_unexpected_failure(self) -> None:
+        client = RemoteAgentClient("http://host:2024")
+        with (
+            patch.object(client, "health", side_effect=RuntimeError("bad shape")),
+            patch("app.remote.client.report_remote_exception") as report,
+        ):
+            result = client.preflight()
+
+        assert result.ok is False
+        assert result.error == "bad shape"
+        report.assert_called_once()
+        assert report.call_args.kwargs["event"] == "preflight_failed"
+        assert report.call_args.kwargs["severity"] == "warning"

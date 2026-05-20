@@ -153,6 +153,8 @@ def _resolve_macos_target(pid: int) -> _ResolvedTarget:
             ["lsof", "-F", "ftn", "-p", str(pid)],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=_LSOF_TIMEOUT_S,
             check=False,
         )

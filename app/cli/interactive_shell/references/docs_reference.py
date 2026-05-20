@@ -46,6 +46,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import app.cli.interactive_shell.references.grounding_diagnostics as _gd
+
 # Docs live at the repository root, four levels above this file
 # (.../app/cli/interactive_shell/references/docs_reference.py -> repo root).
 _DOCS_ROOT = Path(__file__).resolve().parents[4] / "docs"
@@ -451,6 +453,15 @@ def build_docs_reference_text(
     return text
 
 
+_gd.register_grounding_source(
+    _gd.GroundingSource(
+        name="docs",
+        stats_fn=get_docs_cache_stats,
+        format_fn=lambda s: (
+            f"hits={s['hits']} misses={s['misses']} entries={s['currsize']}/{s['maxsize']}"
+        ),
+    )
+)
 __all__ = [
     "DocPage",
     "build_docs_index",

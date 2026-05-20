@@ -28,5 +28,15 @@ def reraise_cli_runtime_error(exc: BaseException) -> NoReturn:
                 str(exc),
                 suggestion="Verify your model name in ANTHROPIC_REASONING_MODEL or ANTHROPIC_TOOLCALL_MODEL environment variables.",
             ) from exc
+        if "bedrock model" in msg and "not available for your account" in msg:
+            raise OpenSREError(
+                str(exc),
+                suggestion=(
+                    "Enable access to the configured Bedrock model in the AWS region, "
+                    "verify the AWS Marketplace subscription/payment setup, and ensure "
+                    "the IAM user or role can use aws-marketplace:ViewSubscriptions "
+                    "and aws-marketplace:Subscribe."
+                ),
+            ) from exc
 
     raise exc

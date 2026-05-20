@@ -19,6 +19,7 @@ from app.cli.interactive_shell.orchestration.action_executor import (
     run_sample_alert,
     run_shell_command,
     run_synthetic_test,
+    run_text_investigation,
 )
 from app.cli.interactive_shell.orchestration.action_planner import (
     plan_actions_with_unhandled,
@@ -286,6 +287,15 @@ def execute_cli_actions(
             )
         elif action.kind == "sample_alert":
             run_sample_alert(
+                action.content,
+                session,
+                console,
+                confirm_fn=confirm_fn,
+                is_tty=is_tty,
+                action_already_listed=True,
+            )
+        elif action.kind == "investigation":
+            run_text_investigation(
                 action.content,
                 session,
                 console,

@@ -360,21 +360,21 @@ def test_parse_and_explain_failure() -> None:
 
 
 @patch("app.integrations.llm_cli.runner.subprocess.run")
-def test_cli_backed_client_raises_transient_error_on_exit_75(mock_run: MagicMock) -> None:
-    """Runner raises CLITransientError (not RuntimeError) for EX_TEMPFAIL exit code 75."""
+def test_cli_backed_client_exit_75_raises_cli_timeout_error(mock_run: MagicMock) -> None:
+    """Exit code 75 (EX_TEMPFAIL) must raise CLITimeoutError, not RuntimeError.
+
+    Sentry ignores CLITimeoutError so transient kimi failures do not create
+    spurious bug reports.
+    """
     import pytest
 
-    from app.integrations.llm_cli.errors import CLITransientError
     from app.integrations.llm_cli.kimi import KimiAdapter
-    from app.integrations.llm_cli.runner import CLIBackedLLMClient
+    from app.integrations.llm_cli.runner import CLIBackedLLMClient, CLITimeoutError
 
     mock_adapter = MagicMock(spec=KimiAdapter)
     mock_adapter.name = "kimi"
     mock_adapter.detect.return_value = MagicMock(
-        installed=True,
-        bin_path="/usr/bin/kimi",
-        logged_in=True,
-        detail="ok",
+        installed=True, bin_path="/usr/bin/kimi", logged_in=True, detail="ok"
     )
     mock_adapter.build.return_value = MagicMock(
         argv=["/usr/bin/kimi", "--print", "--yolo"],
@@ -383,18 +383,10 @@ def test_cli_backed_client_raises_transient_error_on_exit_75(mock_run: MagicMock
         env=None,
         timeout_sec=30.0,
     )
-    mock_adapter.explain_failure.return_value = (
-        "kimi exited with code 75. To resume this session: kimi -r abc123"
-    )
-
-    mock_run.return_value = MagicMock(
-        returncode=75,
-        stdout="",
-        stderr="To resume this session: kimi -r abc123",
-    )
+    mock_run.return_value = MagicMock(returncode=75, stdout="", stderr="rate limit")
 
     with patch("app.guardrails.engine.get_guardrail_engine") as gr:
         gr.return_value.is_active = False
-        client = CLIBackedLLMClient(mock_adapter, model="kimi-k2.5")
-        with pytest.raises(CLITransientError, match="kimi exited with code 75"):
+        client = CLIBackedLLMClient(mock_adapter, model="kimi-k2.5", max_tokens=256)
+        with pytest.raises(CLITimeoutError, match="exit 75"):
             client.invoke("hello")

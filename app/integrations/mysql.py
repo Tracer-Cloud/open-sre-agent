@@ -7,6 +7,7 @@ timeouts enforced, result sizes capped.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from typing import Any
@@ -19,7 +20,10 @@ from app.integrations._relational import (
     env_str,
     resolve_stored_or_env_config,
 )
+from app.integrations._validation_helpers import report_validation_failure
 from app.utils.truncation import truncate
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_MYSQL_PORT = 3306
 DEFAULT_MYSQL_USER = "root"
@@ -177,6 +181,12 @@ def validate_mysql_config(config: MySQLConfig) -> MySQLValidationResult:
         finally:
             conn.close()
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mysql",
+            method="validate_mysql_config",
+        )
         return MySQLValidationResult(ok=False, detail=f"MySQL connection failed: {err}")
 
 
@@ -291,6 +301,12 @@ def get_server_status(config: MySQLConfig) -> dict[str, Any]:
         finally:
             conn.close()
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mysql",
+            method="get_server_status",
+        )
         return {"source": "mysql", "available": False, "error": str(err)}
 
 
@@ -347,6 +363,12 @@ def get_current_processes(
         finally:
             conn.close()
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mysql",
+            method="get_current_processes",
+        )
         return {"source": "mysql", "available": False, "error": str(err)}
 
 
@@ -421,6 +443,12 @@ def get_replication_status(config: MySQLConfig) -> dict[str, Any]:
         finally:
             conn.close()
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mysql",
+            method="get_replication_status",
+        )
         return {"source": "mysql", "available": False, "error": str(err)}
 
 
@@ -518,6 +546,12 @@ def get_slow_queries(
         finally:
             conn.close()
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mysql",
+            method="get_slow_queries",
+        )
         return {"source": "mysql", "available": False, "error": str(err)}
 
 
@@ -593,4 +627,10 @@ def get_table_stats(
         finally:
             conn.close()
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mysql",
+            method="get_table_stats",
+        )
         return {"source": "mysql", "available": False, "error": str(err)}

@@ -11,6 +11,7 @@ from urllib.parse import quote
 import httpx
 from pydantic import Field, field_validator
 
+from app.integrations._validation_helpers import report_validation_failure
 from app.strict_config import StrictConfigModel
 
 logger = logging.getLogger(__name__)
@@ -147,6 +148,12 @@ def validate_airflow_config(config: AirflowConfig) -> AirflowValidationResult:
         detail = err.response.text.strip() or str(err)
         return AirflowValidationResult(ok=False, detail=f"Airflow validation failed: {detail}")
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="airflow",
+            method="validate_airflow_config",
+        )
         return AirflowValidationResult(ok=False, detail=f"Airflow validation failed: {err}")
 
 
@@ -288,10 +295,12 @@ def get_recent_airflow_failures(
                 dag_run_id=dag_run_id,
             )
         except Exception as err:
-            logger.warning(
-                "Failed to fetch Airflow task instances for dag_run_id=%s: %s",
-                dag_run_id,
-                type(err).__name__,
+            report_validation_failure(
+                err,
+                logger=logger,
+                integration="airflow",
+                method="get_recent_airflow_failures.task_instances",
+                extras={"dag_id": dag_id, "dag_run_id": dag_run_id},
             )
             continue
 

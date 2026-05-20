@@ -15,9 +15,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.integrations.catalog import classify_integrations as _classify_integrations
 from app.integrations.verify import verify_integrations
-from app.nodes.plan_actions.detect_sources import detect_sources
-from app.nodes.resolve_integrations.node import _classify_integrations
+from tests.e2e.source_helpers import resolve_available_tool_sources
 
 
 class TestMongoDBIntegrationResolution:
@@ -67,17 +67,11 @@ class TestMongoDBIntegrationResolution:
         assert resolved.get("mongodb") is None
 
 
-class TestMongoDBSourceDetection:
-    """Test MongoDB source detection in investigation context."""
+class TestMongoDBToolSourceAvailability:
+    """Test MongoDB source availability in the tool-registry investigation path."""
 
-    def test_detect_mongodb_source_from_alert(self):
-        """MongoDB source detected from alert annotations."""
-        raw_alert = {
-            "commonAnnotations": {
-                "mongodb_database": "analytics",
-                "mongodb_collection": "events",
-            }
-        }
+    def test_mongodb_tool_source_available_from_resolved_integration(self):
+        """MongoDB source is available when a configured integration exists."""
         resolved_integrations = {
             "mongodb": {
                 "connection_string": "mongodb://localhost",
@@ -87,18 +81,14 @@ class TestMongoDBSourceDetection:
             }
         }
 
-        sources = detect_sources(raw_alert, {}, resolved_integrations)
+        sources = resolve_available_tool_sources(resolved_integrations)
 
         assert "mongodb" in sources
         assert sources["mongodb"]["connection_string"] == "mongodb://localhost"
         assert sources["mongodb"]["database"] == "analytics"
-        assert sources["mongodb"]["collection"] == "events"
 
-    def test_detect_mongodb_source_fallback_to_config(self):
-        """MongoDB source falls back to configured database if not in alert."""
-        raw_alert = {
-            "commonAnnotations": {},
-        }
+    def test_mongodb_tool_source_uses_configured_database(self):
+        """MongoDB tool params come from the resolved integration config."""
         resolved_integrations = {
             "mongodb": {
                 "connection_string": "mongodb://localhost",
@@ -108,17 +98,16 @@ class TestMongoDBSourceDetection:
             }
         }
 
-        sources = detect_sources(raw_alert, {}, resolved_integrations)
+        sources = resolve_available_tool_sources(resolved_integrations)
 
         assert "mongodb" in sources
         assert sources["mongodb"]["database"] == "default_db"
 
-    def test_mongodb_source_not_detected_if_unconfigured(self):
+    def test_mongodb_tool_source_unavailable_if_unconfigured(self):
         """MongoDB source is not included if not configured."""
-        raw_alert = {"commonAnnotations": {}}
         resolved_integrations = {}
 
-        sources = detect_sources(raw_alert, {}, resolved_integrations)
+        sources = resolve_available_tool_sources(resolved_integrations)
 
         assert "mongodb" not in sources
 

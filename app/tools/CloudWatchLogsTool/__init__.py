@@ -7,6 +7,7 @@ from typing import Any
 
 import boto3
 
+from app.tools._telemetry import report_run_error
 from app.tools.tool_decorator import tool
 
 
@@ -128,6 +129,18 @@ def get_cloudwatch_logs(
         return result
 
     except Exception as e:
+        report_run_error(
+            e,
+            tool_name="get_cloudwatch_logs",
+            source="cloudwatch",
+            component="app.tools.CloudWatchLogsTool",
+            method="boto3.client('logs')",
+            extras={
+                "log_group": log_group,
+                "log_stream": log_stream,
+                "filter_pattern": filter_pattern,
+            },
+        )
         return {
             "error": str(e),
             "log_group": log_group,

@@ -29,18 +29,28 @@ def _resolve_grafana_client(
 
 def _grafana_creds(grafana: dict) -> dict:
     return {
-        "grafana_endpoint": grafana.get("grafana_endpoint"),
-        "grafana_api_key": grafana.get("grafana_api_key"),
+        "grafana_endpoint": grafana.get("grafana_endpoint") or grafana.get("endpoint"),
+        "grafana_api_key": grafana.get("grafana_api_key") or grafana.get("api_key"),
     }
 
 
+def _grafana_source(sources: dict) -> dict:
+    grafana = sources.get("grafana") or sources.get("grafana_local") or {}
+    return grafana if isinstance(grafana, dict) else {}
+
+
 def _grafana_available(sources: dict) -> bool:
-    grafana = sources.get("grafana", {})
-    return bool(grafana.get("connection_verified") or grafana.get("_backend"))
+    grafana = _grafana_source(sources)
+    return bool(
+        grafana.get("connection_verified")
+        or grafana.get("_backend")
+        or grafana.get("grafana_endpoint")
+        or grafana.get("endpoint")
+    )
 
 
 def _query_grafana_logs_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
-    grafana = sources["grafana"]
+    grafana = _grafana_source(sources)
     return {
         "service_name": grafana.get("service_name", ""),
         "pipeline_name": grafana.get("pipeline_name"),

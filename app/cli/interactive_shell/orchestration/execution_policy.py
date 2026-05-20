@@ -270,7 +270,7 @@ def evaluate_slash_tier(tier: ExecutionTier) -> ExecutionPolicyResult:
 def evaluate_investigation_launch(
     *, action_type: Literal["investigation", "sample_alert"]
 ) -> ExecutionPolicyResult:
-    """Policy for starting an RCA / LangGraph investigation from the REPL."""
+    """Policy for starting an RCA / investigation pipeline from the REPL."""
     return ExecutionPolicyResult(
         verdict="ask",
         action_type=action_type,

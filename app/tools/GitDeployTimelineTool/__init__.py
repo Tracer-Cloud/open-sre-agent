@@ -130,7 +130,7 @@ def _extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     gh = sources["github"]
     # ``_meta`` carries investigation-level context shared across tools
     # (today: incident_window). Tools that don't care about it ignore the
-    # key. See app.nodes.plan_actions.plan_actions for where this is set.
+    # key. See the investigation agent tool context for where this is set.
     # Defensive isinstance check: if anything ever stuffs a non-dict under
     # the reserved ``_meta`` key, we degrade to no-shared-window rather
     # than crashing with AttributeError on the .get below.

@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass, field
 
 from app.cli.support.errors import OpenSREError
-from app.utils.telegram_delivery import post_telegram_message
+from app.utils.telegram_delivery import post_telegram_message, truncate_for_telegram_html
 from app.utils.truncation import truncate
 
 logger = logging.getLogger(__name__)
@@ -69,9 +69,11 @@ class AlarmDispatcher:
         creds: AlarmCredentials,
         *,
         cooldown_seconds: float = _DEFAULT_COOLDOWN_SECONDS,
+        parse_mode: str = "",
     ) -> None:
         self._creds = creds
         self._cooldown_seconds = cooldown_seconds
+        self._parse_mode = parse_mode
         self._last_dispatched: dict[str, float] = {}
         self._lock = threading.Lock()
 
@@ -95,10 +97,16 @@ class AlarmDispatcher:
                 return False
             self._last_dispatched[threshold_name] = now
 
+        if self._parse_mode.upper() == "HTML":
+            text = truncate_for_telegram_html(message, _TELEGRAM_MESSAGE_LIMIT, suffix="…")
+        else:
+            text = truncate(message, _TELEGRAM_MESSAGE_LIMIT, suffix="…")
+
         ok, error, _ = post_telegram_message(
             chat_id=self._creds.chat_id,
-            text=truncate(message, _TELEGRAM_MESSAGE_LIMIT, suffix="…"),
+            text=text,
             bot_token=self._creds.bot_token,
+            parse_mode=self._parse_mode,
         )
         if ok:
             return True

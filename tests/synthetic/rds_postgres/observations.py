@@ -45,6 +45,7 @@ class RunObservation:
     trajectory_policy_version: str
     reasoning: dict[str, Any] | None
     reasoning_status: str
+    correlation: dict[str, Any] | None
     observed_evidence_sources: list[str]
     required_evidence_sources: list[str]
     missing_required_evidence_sources: list[str]
@@ -165,6 +166,7 @@ def _canonical_report_payload(
     evaluated_golden_actions: list[str],
     trajectory_policy: TrajectoryPolicyResult | None,
     evidence_source_coverage: dict[str, Any],
+    correlation: dict[str, Any] | None,
 ) -> dict[str, Any]:
     policy_payload: dict[str, Any] | None = None
     if trajectory_policy is not None:
@@ -198,6 +200,12 @@ def _canonical_report_payload(
             "source_presence": dict(evidence_source_coverage["source_presence"]),
             "required_coverage": evidence_source_coverage["required_coverage"],
             "available_coverage": evidence_source_coverage["available_coverage"],
+        },
+        "correlation": correlation
+        if correlation is not None
+        else {
+            "correlated_signals": [],
+            "most_likely_causal_drivers": [],
         },
         "trajectory": {
             "golden": list(evaluated_golden_actions),
@@ -323,6 +331,7 @@ def build_observation(
     required_evidence_sources: list[str],
     started_at: datetime,
     wall_time_s: float,
+    correlation: dict[str, Any] | None = None,
 ) -> RunObservation:
     evidence = final_state.get("evidence") or {}
     evidence_source_coverage = _source_aware_evidence_coverage(
@@ -350,6 +359,7 @@ def build_observation(
         trajectory_policy_version="default_v1",
         reasoning=reasoning,
         reasoning_status="captured" if reasoning is not None else "not_captured",
+        correlation=correlation,
         observed_evidence_sources=observed_sources,
         required_evidence_sources=required_sources,
         missing_required_evidence_sources=missing_required_sources,
@@ -360,6 +370,7 @@ def build_observation(
             evaluated_golden_actions=evaluated_golden_actions,
             trajectory_policy=trajectory_policy,
             evidence_source_coverage=evidence_source_coverage,
+            correlation=correlation,
         ),
         final_state_digest=final_state_digest(final_state),
     )

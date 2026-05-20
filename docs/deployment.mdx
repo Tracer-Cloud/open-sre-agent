@@ -1,22 +1,18 @@
 ---
 title: "Deployment"
 slug: "deployment"
-description: "Deploy OpenSRE on LangGraph Platform (official) and Railway (self-hosted alternative)"
+description: "Deploy OpenSRE as a standard Python/FastAPI runtime"
 ---
 
-OpenSRE's official deployment path is **LangGraph Platform**.
+OpenSRE deploys as a standard Python/FastAPI runtime. Use the repo `Dockerfile`,
+Railway, EC2, ECS, Vercel, or another ASGI-capable host.
 
-## Deploy on LangGraph Platform (official)
+## Runtime environment
 
 <Steps>
-  <Step title="Create a LangGraph deployment">
-    In LangGraph Platform, create a new deployment and connect this repository.
+  <Step title="Deploy the app">
+    Deploy this repository using your hosting provider's normal app workflow.
   </Step>
-
-<Step title="Use the repo's graph config">
-    Keep `langgraph.json` at the repository root so LangGraph can load OpenSRE's
-    graph and HTTP entrypoints.
-</Step>
 
 <Step title="Configure your model provider">
     Add `LLM_PROVIDER` as an environment variable (for example `anthropic`,
@@ -34,7 +30,7 @@ OpenSRE's official deployment path is **LangGraph Platform**.
   </Step>
 
   <Step title="Add integration env vars and deploy">
-    Add any additional environment variables required by your integrations, then deploy and verify health in LangGraph Platform.
+    Add any storage and integration environment variables required by your runtime, then deploy and verify health.
   </Step>
 </Steps>
 
@@ -47,17 +43,13 @@ ANTHROPIC_API_KEY=...
 
 The complete list of provider keys and optional model overrides is documented in `.env.example`.
 
-## Railway deployment (self-hosted alternative)
+## Railway deployment
 
-Railway is still supported if you prefer self-hosting.
+Railway is still supported as a hosted runtime option.
 
-Before running `opensre deploy railway`, make sure your Railway service has:
+Before deploying on Railway, make sure your service has:
 
 - `DATABASE_URI` pointing to your Railway Postgres instance
 - `REDIS_URI` pointing to your Railway Redis instance
 
-Then deploy:
-
-```bash
-opensre deploy railway --project <project> --service <service> --yes
-```
+Then deploy the service using your Railway project workflow.

@@ -1,9 +1,8 @@
-"""Per-PID resource snapshot for the monitor-local-agents fleet view.
+"""Per-PID process helpers for the monitor-local-agents fleet view.
 
-Pure collector: one function, one PID, one snapshot. No background
-loop, no caching, no UI wiring. The wiring layer (#1490) batches calls
-in a REPL background task; the registry layer (#1487) decides which
-PIDs to ask about.
+Pure collectors: no background loop, no caching, no UI wiring. The
+wiring layer (#1490) batches calls in a REPL background task; the
+registry layer (#1487) decides which PIDs to ask about.
 
 The acceptance criterion for the parent issue (#1489) requires that
 ``psutil`` stay confined to this module so the dependency surface
@@ -13,8 +12,10 @@ explicit import.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 
 import psutil
 
@@ -23,6 +24,13 @@ import psutil
 # Datadog, Grafana) labels the same 1024² unit as "MB"; the constant
 # stays precise so the unit math is unambiguous.
 _BYTES_PER_MIB = 1024 * 1024
+
+PROCESS_NOT_FOUND: tuple[type[BaseException], ...] = (psutil.NoSuchProcess,)
+PROCESS_INACCESSIBLE_OR_GONE: tuple[type[BaseException], ...] = (
+    psutil.NoSuchProcess,
+    psutil.AccessDenied,
+)
+PROCESS_ERROR: tuple[type[BaseException], ...] = (psutil.Error,)
 
 
 @dataclass(frozen=True)
@@ -66,6 +74,40 @@ def pid_exists(pid: int) -> bool:
         return False
 
 
+def process(pid: int) -> psutil.Process:
+    """Return a handle for ``pid`` while keeping psutil access local."""
+    return psutil.Process(pid)
+
+
+def process_iter(attrs: Iterable[str]) -> Iterator[psutil.Process]:
+    """Yield process handles with preloaded attrs from the local probe module."""
+    return psutil.process_iter(list(attrs))
+
+
+def process_has_open_codex_rollout(pid: int) -> bool:
+    """Return whether ``pid`` has an open Codex ``rollout-*.jsonl`` file."""
+    try:
+        proc = psutil.Process(pid)
+        open_files = proc.open_files()
+    # The stdlib exceptions cover invalid/raced PIDs and platform-specific
+    # ``open_files()`` failures that psutil may surface directly.
+    except PROCESS_ERROR + (
+        ProcessLookupError,
+        OSError,
+        ValueError,
+        OverflowError,
+    ):
+        return False
+
+    for open_file in open_files:
+        path = getattr(open_file, "path", None)
+        if isinstance(path, str):
+            name = Path(path).name
+            if name.startswith("rollout-") and name.endswith(".jsonl"):
+                return True
+    return False
+
+
 def probe(pid: int, *, cpu_interval: float = 0.1) -> ProcessSnapshot | None:
     """Return a one-shot resource snapshot for ``pid``.
 
@@ -88,8 +130,9 @@ def probe(pid: int, *, cpu_interval: float = 0.1) -> ProcessSnapshot | None:
         return None
 
     try:
+        cpu = proc.cpu_percent(interval=cpu_interval)
+
         with proc.oneshot():
-            cpu = proc.cpu_percent(interval=cpu_interval)
             rss_mb = proc.memory_info().rss / _BYTES_PER_MIB
             num_fds = _safe_num_fds(proc)
             num_connections = _safe_num_connections(proc)

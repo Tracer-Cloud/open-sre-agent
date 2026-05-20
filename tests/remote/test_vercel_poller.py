@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 import types
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 
 from app.remote.vercel_poller import (
+    VercelInvestigationCandidate,
     VercelPoller,
     VercelPollerSettings,
     VercelResolutionError,
@@ -159,6 +162,28 @@ def test_parse_vercel_url_extracts_project_and_selected_log_id() -> None:
     assert parsed.team_slug == "vincenthus-projects"
     assert parsed.project_slug == "tracer-marketing-website-v3"
     assert parsed.selected_log_id == "54w4s-1775494460431-b04b1df81301"
+
+
+def test_parse_vercel_url_accepts_vercel_subdomain() -> None:
+    parsed = parse_vercel_url(
+        "https://api.vercel.com/vincenthus-projects/tracer-marketing-website-v3/logs"
+    )
+
+    assert parsed.team_slug == "vincenthus-projects"
+    assert parsed.project_slug == "tracer-marketing-website-v3"
+
+
+@pytest.mark.parametrize(
+    "vercel_url",
+    [
+        "https://vercel.com.evil.test/vincenthus-projects/tracer-marketing-website-v3/logs",
+        "https://evilvercel.com/vincenthus-projects/tracer-marketing-website-v3/logs",
+        "https://vercel.com@evil.test/vincenthus-projects/tracer-marketing-website-v3/logs",
+    ],
+)
+def test_parse_vercel_url_rejects_spoofed_vercel_hosts(vercel_url: str) -> None:
+    with pytest.raises(VercelResolutionError, match="Unsupported Vercel URL host"):
+        parse_vercel_url(vercel_url)
 
 
 def test_enrich_remote_alert_from_vercel_resolves_selected_log_id(
@@ -340,6 +365,99 @@ def test_collect_vercel_candidates_raises_on_api_error_when_requested(monkeypatc
 
     with pytest.raises(VercelResolutionError, match="Failed to list Vercel projects"):
         collect_vercel_candidates(fail_on_error=True)
+
+
+def test_resolve_vercel_config_reports_invalid_config(monkeypatch) -> None:
+    from app.remote import vercel_poller as module
+
+    monkeypatch.setattr(
+        module,
+        "resolve_effective_integrations",
+        lambda: {"vercel": {"config": {"team_id": "team-only"}}},
+    )
+
+    with patch("app.remote.vercel_poller.report_remote_exception") as report:
+        assert module.resolve_vercel_config() is None
+
+    report.assert_called_once()
+    assert report.call_args.kwargs["component"] == "vercel_poller"
+    assert report.call_args.kwargs["event"] == "config_resolve_failed"
+    assert report.call_args.kwargs["severity"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_run_forever_reports_candidate_handler_failure(monkeypatch, tmp_path: Path) -> None:
+    candidate = VercelInvestigationCandidate(
+        dedupe_key="dpl_123",
+        signature="sig",
+        raw_alert={},
+        alert_name="alert",
+        pipeline_name="pipeline",
+        severity="warning",
+    )
+    settings = VercelPollerSettings(
+        enabled=True,
+        interval_seconds=30,
+        project_allowlist=("proj_123",),
+        deployment_limit=1,
+        log_limit=1,
+    )
+    poller = VercelPoller(investigations_dir=tmp_path, settings=settings)
+    monkeypatch.setattr(poller, "collect_candidates", lambda: [candidate])
+
+    async def _raise_handler(_candidate: VercelInvestigationCandidate) -> bool:
+        raise RuntimeError("handler down")
+
+    async def _cancel_sleep(_seconds: int) -> None:
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr("app.remote.vercel_poller.asyncio.sleep", _cancel_sleep)
+
+    with (
+        patch("app.remote.vercel_poller.report_remote_exception") as report,
+        pytest.raises(asyncio.CancelledError),
+    ):
+        await poller.run_forever(_raise_handler)
+
+    report.assert_called_once()
+    assert report.call_args.kwargs["component"] == "vercel_poller"
+    assert report.call_args.kwargs["event"] == "candidate_handler_failed"
+    assert report.call_args.kwargs["tags"] == {"candidate_id": "dpl_123"}
+
+
+@pytest.mark.asyncio
+async def test_run_forever_reports_iteration_failure(monkeypatch, tmp_path: Path) -> None:
+    settings = VercelPollerSettings(
+        enabled=True,
+        interval_seconds=30,
+        project_allowlist=("proj_123",),
+        deployment_limit=1,
+        log_limit=1,
+    )
+    poller = VercelPoller(investigations_dir=tmp_path, settings=settings)
+    monkeypatch.setattr(
+        poller,
+        "collect_candidates",
+        lambda: (_ for _ in ()).throw(RuntimeError("poll down")),
+    )
+
+    async def _handler(_candidate: VercelInvestigationCandidate) -> bool:
+        return True
+
+    async def _cancel_sleep(_seconds: int) -> None:
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr("app.remote.vercel_poller.asyncio.sleep", _cancel_sleep)
+
+    with (
+        patch("app.remote.vercel_poller.report_remote_exception") as report,
+        pytest.raises(asyncio.CancelledError),
+    ):
+        await poller.run_forever(_handler)
+
+    report.assert_called_once()
+    assert report.call_args.kwargs["component"] == "vercel_poller"
+    assert report.call_args.kwargs["event"] == "poller_iteration_failed"
 
 
 def test_parse_vercel_url_extracts_log_id() -> None:

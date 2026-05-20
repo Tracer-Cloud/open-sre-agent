@@ -324,6 +324,27 @@ def _questionary_choice(choice: Choice) -> questionary.Choice:
     )
 
 
+def _choose_model(provider: ProviderOption, *, default: str | None) -> str:
+    """Prompt for a model from the provider's wizard catalog."""
+    resolved_default = (default or "").strip() or provider.default_model
+    if not provider.models:
+        return resolved_default
+    choices = [Choice(value=opt.value, label=opt.label) for opt in provider.models]
+    default_choice = (
+        resolved_default
+        if any(c.value == resolved_default for c in choices)
+        else provider.default_model
+    )
+    if not any(c.value == default_choice for c in choices):
+        default_choice = choices[0].value
+    _step("Model")
+    return _choose(
+        f"Choose {provider.label} model",
+        choices,
+        default=default_choice,
+    )
+
+
 def _choose(prompt: str, choices: list[Choice], *, default: str | None = None) -> str:
     q_choices = [_questionary_choice(choice) for choice in choices]
 
@@ -2157,6 +2178,14 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                         return 1
                     if not _persist_llm_api_key(provider.api_key_env, api_key):
                         return 1
+
+        if change_provider:
+            model = _choose_model(provider, default=model)
+        elif provider.models:
+            current_display = model or "CLI default"
+            _console.print(f"[{SECONDARY}]current model  {current_display}[/]")
+            if _confirm("Change model?", default=False):
+                model = _choose_model(provider, default=model)
 
         if provider.credential_kind == "cli":
             cli_out = _run_cli_llm_onboarding(provider)

@@ -73,33 +73,30 @@ def _cmd_trust(session: ReplSession, console: Console, args: list[str]) -> bool:
 
 
 def _cmd_status(session: ReplSession, console: Console, _args: list[str]) -> bool:
-    from app.cli.interactive_shell.references.cli_reference import (
-        get_cli_reference_cache_stats,
-    )
-    from app.cli.interactive_shell.references.docs_reference import (
-        get_docs_cache_stats,
-    )
+    from app.cli.interactive_shell.references.grounding_diagnostics import iter_grounding_sources
 
     table = repl_table(title="Session status", title_style=BOLD_BRAND, show_header=False)
     table.add_column("key", style="bold")
     table.add_column("value")
     table.add_row("interactions", str(len(session.history)))
+
+    # Show incoming alerts count and most recent age
+    if session.incoming_alerts:
+        from app.cli.interactive_shell.alert_renderer import time_ago
+
+        most_recent = session.incoming_alerts[-1]
+        age_str = time_ago(most_recent.received_at)
+        table.add_row("incoming alerts", f"{len(session.incoming_alerts)} (last {age_str})")
+    else:
+        table.add_row("incoming alerts", "0")
+
     table.add_row("last investigation", "yes" if session.last_state else "none")
     table.add_row("trust mode", "on" if session.trust_mode else "off")
     table.add_row("reasoning effort", display_reasoning_effort(session.reasoning_effort))
     table.add_row("provider", os.getenv("LLM_PROVIDER", "anthropic"))
-    cli_stats = get_cli_reference_cache_stats()
-    doc_stats = get_docs_cache_stats()
-    table.add_row(
-        "grounding cli cache",
-        f"hits={cli_stats['hits']} misses={cli_stats['misses']} "
-        f"cached={'yes' if cli_stats['cached'] else 'no'}",
-    )
-    table.add_row(
-        "grounding docs cache",
-        f"hits={doc_stats['hits']} misses={doc_stats['misses']} "
-        f"entries={doc_stats['currsize']}/{doc_stats['maxsize']}",
-    )
+    for source in iter_grounding_sources():
+        stats = source.stats_fn()
+        table.add_row(f"grounding {source.name} cache", source.format_fn(stats))
     acc = session.accumulated_context
     if acc:
         table.add_row("accumulated context", ", ".join(sorted(acc.keys())))
@@ -119,7 +116,7 @@ def _cmd_cost(session: ReplSession, console: Console, _args: list[str]) -> bool:
         table.add_row("input tokens", f"{inp:,}")
         table.add_row("output tokens", f"{out:,}")
     else:
-        table.add_row("token usage", f"[{DIM}]not available (LangSmith not wired yet)[/]")
+        table.add_row("token usage", f"[{DIM}]not available (not wired yet)[/]")
 
     console.print(table)
     return True
@@ -242,31 +239,36 @@ _EFFORT_FIRST_ARGS: tuple[tuple[str, str], ...] = (
 )
 
 COMMANDS: list[SlashCommand] = [
-    SlashCommand("/clear", "clear the screen and re-render the banner", _cmd_clear),
-    SlashCommand("/reset", "clear session state (keeps trust mode)", _cmd_reset),
+    SlashCommand("/clear", "Clear the screen and re-render the banner.", _cmd_clear),
+    SlashCommand("/reset", "Clear session state.", _cmd_reset, notes=("Trust mode is preserved.",)),
     SlashCommand(
         "/trust",
-        "toggle trust mode (TTY: bare '/trust' opens menu; else '/trust off')",
+        "Manage trust mode.",
         _cmd_trust,
+        usage=("/trust", "/trust on", "/trust off"),
+        notes=("In a TTY, bare /trust opens an interactive menu.",),
         first_arg_completions=_TRUST_FIRST_ARGS,
         execution_tier=ExecutionTier.EXEMPT,
     ),
-    SlashCommand("/status", "show session status", _cmd_status),
-    SlashCommand("/context", "show accumulated infra context", _cmd_context),
-    SlashCommand("/cost", "show token usage and session cost", _cmd_cost),
+    SlashCommand("/status", "Show session status.", _cmd_status),
+    SlashCommand("/context", "Show accumulated infra context.", _cmd_context),
+    SlashCommand("/cost", "Show token usage and session cost.", _cmd_cost),
     SlashCommand(
         "/effort",
-        "set REPL reasoning effort ('/effort low|medium|high|xhigh|max')",
+        "Set REPL reasoning effort.",
         _cmd_effort,
+        usage=("/effort <low|medium|high|xhigh|max>",),
         first_arg_completions=_EFFORT_FIRST_ARGS,
     ),
     SlashCommand(
         "/verbose",
-        "toggle verbose logging (TTY: bare '/verbose' opens menu; else '/verbose off')",
+        "Manage verbose logging.",
         _cmd_verbose,
+        usage=("/verbose", "/verbose on", "/verbose off"),
+        notes=("In a TTY, bare /verbose opens an interactive menu.",),
         first_arg_completions=_VERBOSE_FIRST_ARGS,
     ),
-    SlashCommand("/compact", "trim old session history to free memory", _cmd_compact),
+    SlashCommand("/compact", "Trim old session history to free memory.", _cmd_compact),
 ]
 
 __all__ = ["COMMANDS"]

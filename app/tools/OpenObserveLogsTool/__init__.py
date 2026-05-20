@@ -8,6 +8,7 @@ from typing import Any
 
 import httpx
 
+from app.tools._telemetry import report_run_error
 from app.tools.tool_decorator import tool
 
 _DEFAULT_MAX_RESULTS = 100
@@ -168,6 +169,14 @@ def query_openobserve_logs(
         response.raise_for_status()
         body = response.json()
     except Exception as err:
+        report_run_error(
+            err,
+            tool_name="query_openobserve_logs",
+            source="openobserve",
+            component="app.tools.OpenObserveLogsTool",
+            method="httpx.post",
+            extras={"endpoint": endpoint, "integration_id": integration_id},
+        )
         return {"source": "openobserve", "available": False, "error": str(err), "records": []}
 
     records = _extract_records(body if isinstance(body, dict) else {})[:effective_limit]

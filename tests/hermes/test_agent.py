@@ -91,17 +91,21 @@ class TestAgentLifecycle:
             emitted.append(incident)
             seen.set()
 
+        # ``from_start=True`` avoids a race where an append lands before the first
+        # poll: default live-tail would seek to EOF and skip that line (``tail -f``).
         agent = HermesAgent(
             sink=sink,
             log_path=log,
             poll_interval_s=0.01,
+            from_start=True,
             classifier=IncidentClassifier(warning_burst_threshold=2, warning_burst_window_s=60.0),
         )
         agent.start()
         try:
             with log.open("a", encoding="utf-8") as fh:
                 fh.write("2026-05-12 00:00:00,000 ERROR root: live failure\n")
-            assert seen.wait(timeout=2.0), "agent did not surface a live ERROR record"
+                fh.flush()
+            assert seen.wait(timeout=5.0), "agent did not surface a live ERROR record"
         finally:
             agent.stop()
 
@@ -142,7 +146,7 @@ class TestAgentLifecycle:
             if incident.rule == "traceback":
                 traceback_seen.set()
 
-        agent = HermesAgent(sink=sink, log_path=log, poll_interval_s=0.01)
+        agent = HermesAgent(sink=sink, log_path=log, poll_interval_s=0.01, from_start=True)
         agent.start()
         try:
             with log.open("a", encoding="utf-8") as fh:
@@ -150,6 +154,7 @@ class TestAgentLifecycle:
                     "2026-05-12 00:00:00,000 ERROR tools.x: Traceback (most recent call last):\n"
                 )
                 fh.write('  File "/x", line 1, in foo\n')
+                fh.flush()
             time.sleep(0.2)
         finally:
             agent.stop()
@@ -174,13 +179,15 @@ class TestAgentLifecycle:
             sink=sink,
             log_path=log,
             poll_interval_s=0.01,
+            from_start=True,
             classifier=IncidentClassifier(warning_burst_threshold=2, warning_burst_window_s=60.0),
         )
         agent.start()
         try:
             with log.open("a", encoding="utf-8") as fh:
                 fh.write("2026-05-12 00:00:00,000 ERROR root: blocks shutdown\n")
-            assert sink_invoked.wait(timeout=2.0), (
+                fh.flush()
+            assert sink_invoked.wait(timeout=5.0), (
                 "sink not invoked — poller may have missed the line"
             )
 

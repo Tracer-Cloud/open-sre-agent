@@ -7,6 +7,23 @@ from app.analytics.events import Event
 from app.analytics.source import EntrypointSource, TriggerMode
 
 
+def _assert_investigation_events_have_source(
+    events: list[tuple[Event, dict[str, object] | None]],
+) -> None:
+    investigation_events = {
+        Event.INVESTIGATION_STARTED,
+        Event.INVESTIGATION_COMPLETED,
+        Event.INVESTIGATION_FAILED,
+    }
+    for event, properties in events:
+        if event not in investigation_events:
+            continue
+        assert properties is not None, f"{event.value} must include properties"
+        source = properties.get("source")
+        assert isinstance(source, str), f"{event.value} must include a string source"
+        assert source.strip(), f"{event.value} source must be non-empty"
+
+
 class _StubAnalytics:
     def __init__(self) -> None:
         self.events: list[tuple[Event, dict[str, object] | None]] = []
@@ -180,6 +197,7 @@ def test_track_investigation_emits_lifecycle_once(monkeypatch: pytest.MonkeyPatc
 
     emitted_events = [event for event, _ in stub.events]
     assert emitted_events == [Event.INVESTIGATION_STARTED, Event.INVESTIGATION_COMPLETED]
+    _assert_investigation_events_have_source(stub.events)
     started_props = stub.events[0][1] or {}
     completed_props = stub.events[1][1] or {}
     assert started_props["source"] == "test"
@@ -196,17 +214,24 @@ def test_track_investigation_emits_failed_on_exception(
     stub = _StubAnalytics()
     monkeypatch.setattr(cli, "get_analytics", lambda: stub)
 
-    with pytest.raises(RuntimeError, match="boom"):  # noqa: SIM117
-        # Keep nested (not combined) so CodeQL can prove control flow past the
-        # raise via pytest.raises is reachable (see PR #1846 review threads).
+    # Wrap the raise in a callable so the ``raise`` lives inside ``_trigger``
+    # rather than directly in the test body. ``pytest.raises`` then sees a
+    # plain function call as its protected expression, which lets CodeQL
+    # ``py/unreachable-statement`` prove the assertions below are reachable
+    # (the previous nested-``with`` workaround still tripped the rule).
+    def _trigger() -> None:
         with cli.track_investigation(
             entrypoint=EntrypointSource.MCP,
             trigger_mode=TriggerMode.SERVICE_RUNTIME,
         ):
             raise RuntimeError("boom")
 
+    with pytest.raises(RuntimeError, match="boom"):
+        _trigger()
+
     emitted_events = [event for event, _ in stub.events]
     assert emitted_events == [Event.INVESTIGATION_STARTED, Event.INVESTIGATION_FAILED]
+    _assert_investigation_events_have_source(stub.events)
     failed_props = stub.events[1][1] or {}
     assert failed_props["failure_type"] == "RuntimeError"
 
@@ -229,3 +254,4 @@ def test_track_investigation_nested_context_dedupes(monkeypatch: pytest.MonkeyPa
 
     emitted_events = [event for event, _ in stub.events]
     assert emitted_events == [Event.INVESTIGATION_STARTED, Event.INVESTIGATION_COMPLETED]
+    _assert_investigation_events_have_source(stub.events)

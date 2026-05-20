@@ -20,6 +20,9 @@ _ctrl_c_patch_installed: list[bool] = [False]
 
 # Shared timestamp of the last Ctrl+C press (None = never pressed).
 _last_ctrl_c: list[float | None] = [None]
+# Reentrancy guard: prevents a second SIGINT from re-entering the handler while
+# a print() flush in the first invocation is still running on the same buffer.
+_handling_ctrl_c: list[bool] = [False]
 
 CTRL_C_DOUBLE_PRESS_WINDOW_S: float = 2.0
 _CTRL_C_EXIT_WINDOW: float = CTRL_C_DOUBLE_PRESS_WINDOW_S
@@ -91,12 +94,18 @@ def handle_ctrl_c_press() -> None:
     First call:  prints hint.
     Second call within _CTRL_C_EXIT_WINDOW seconds:  prints Goodbye and exits.
     """
-    now = time.monotonic()
-    if _last_ctrl_c[0] is not None and now - _last_ctrl_c[0] <= _CTRL_C_EXIT_WINDOW:
-        print("\nGoodbye!", flush=True)
-        sys.exit(0)
-    _last_ctrl_c[0] = now
-    print("\n(Press Ctrl+C again to exit)", flush=True)
+    if _handling_ctrl_c[0]:
+        return
+    _handling_ctrl_c[0] = True
+    try:
+        now = time.monotonic()
+        if _last_ctrl_c[0] is not None and now - _last_ctrl_c[0] <= _CTRL_C_EXIT_WINDOW:
+            print("\nGoodbye!", flush=True)
+            sys.exit(0)
+        _last_ctrl_c[0] = now
+        print("\n(Press Ctrl+C again to exit)", flush=True)
+    finally:
+        _handling_ctrl_c[0] = False
 
 
 def _with_ctrl_c_double_exit(

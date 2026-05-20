@@ -1,22 +1,63 @@
-"""Standalone runners for testing and CLI — run the pipeline without LangGraph."""
+"""Public runner API — wraps the pipeline for CLI and external callers."""
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
-from collections.abc import AsyncIterator
+import queue
+import threading
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from typing import Any, cast
 
-from app.nodes.chat import chat_agent_node, general_node, router_node
 from app.remote.stream import StreamEvent
 from app.state import AgentState, make_initial_state
 from app.types.config import NodeConfig
 from app.utils.errors import report_and_reraise
-from app.utils.sentry_sdk import capture_exception, init_sentry
+from app.utils.sentry_sdk import init_sentry
 
 logger = logging.getLogger(__name__)
 
-_GRAPH_RECURSION_LIMIT = 50
+# Serializes temporary render_report monkeypatches when multiple streaming
+# investigations run concurrently (e.g. remote server).
+_render_report_patch_lock = threading.Lock()
+_SENTRY_CAPTURED_ATTR = "_opensre_sentry_captured"
+
+
+def _exception_was_captured(exc: BaseException) -> bool:
+    return bool(getattr(exc, _SENTRY_CAPTURED_ATTR, False))
+
+
+def _mark_exception_captured(exc: BaseException) -> None:
+    with contextlib.suppress(Exception):
+        setattr(exc, _SENTRY_CAPTURED_ATTR, True)
+
+
+def _capture_exception_once(
+    exc: BaseException,
+    *,
+    context: str,
+    tags: dict[str, str] | None = None,
+) -> None:
+    if _exception_was_captured(exc):
+        return
+    from app.utils.sentry_sdk import capture_exception
+
+    capture_exception(exc, context=context, tags=tags)
+    _mark_exception_captured(exc)
+
+
+def _traced_node(node_name: str, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    try:
+        return fn(*args, **kwargs)
+    except Exception as exc:
+        _capture_exception_once(
+            exc,
+            context=f"node.{node_name}",
+            tags={"surface": "node", "node": node_name},
+        )
+        raise
 
 
 def _merge_state(state: AgentState, updates: dict[str, Any]) -> None:
@@ -32,138 +73,303 @@ def _merge_state(state: AgentState, updates: dict[str, Any]) -> None:
         state_any[key] = value
 
 
-def run_chat(state: AgentState, config: NodeConfig | None = None) -> AgentState:
-    """Run chat routing + response without LangGraph (for testing)."""
-    init_sentry(entrypoint="graph_pipeline")
-    cfg = config or {"configurable": {}}
-    with report_and_reraise(
-        logger=logger,
-        message="run_chat failed",
-        tags={"surface": "pipeline", "component": "app.pipeline.runners"},
-    ):
-        _merge_state(state, router_node(state))
-        if state.get("route") == "tracer_data":
-            _merge_state(state, chat_agent_node(state, cfg))
-        else:
-            _merge_state(state, general_node(state, cfg))
-    return state
-
-
 def run_investigation(
-    alert_name: str,
-    pipeline_name: str,
-    severity: str,
-    raw_alert: str | dict[str, Any] | None = None,
+    raw_alert: str | dict[str, Any],
+    *,
     resolved_integrations: dict[str, Any] | None = None,
     openclaw_context: dict[str, Any] | None = None,
-    *,
     opensre_evaluate: bool = False,
+    investigation_metadata: tuple[str, str, str] | None = None,
 ) -> AgentState:
-    """Run investigation pipeline via LangGraph. Pure function: inputs in, state out.
+    """Run the investigation from a raw alert payload. Pure function: inputs in, state out.
 
     Args:
+        raw_alert: The original alert payload or free-text alert description.
         resolved_integrations: Optional pre-resolved integrations dict. When provided,
-            node_resolve_integrations is skipped — useful for synthetic testing where a
+            integration resolution is skipped — useful for synthetic testing where a
             FixtureGrafanaBackend should be injected without real credential resolution.
+        investigation_metadata: Optional ``(alert_name, pipeline_name, severity)`` for
+            initial state; avoids copying those fields onto ``raw_alert``.
     """
-    init_sentry(entrypoint="graph_pipeline")
-    from app.pipeline.graph import graph as compiled_graph  # lazy to avoid circular import
+    init_sentry(entrypoint="pipeline")
+    from app.pipeline.pipeline import run_connected_investigation as _run
 
     initial = make_initial_state(
-        alert_name,
-        pipeline_name,
-        severity,
         raw_alert=raw_alert,
         opensre_evaluate=opensre_evaluate,
+        investigation_metadata=investigation_metadata,
     )
     if resolved_integrations is not None:
         cast(dict[str, Any], initial)["resolved_integrations"] = resolved_integrations
     if openclaw_context:
         cast(dict[str, Any], initial)["openclaw_context"] = dict(openclaw_context)
+
     with report_and_reraise(
         logger=logger,
         message="run_investigation failed",
         tags={"surface": "pipeline", "component": "app.pipeline.runners"},
     ):
-        return cast(
-            AgentState,
-            compiled_graph.invoke(initial, {"recursion_limit": _GRAPH_RECURSION_LIMIT}),
-        )
+        return _run(initial)
+
+
+def run_chat(state: AgentState, _config: NodeConfig | None = None) -> AgentState:
+    """Run chat routing + response (for testing/CLI use)."""
+    init_sentry(entrypoint="pipeline")
+    from app.pipeline.pipeline import run_chat as _run
+
+    with report_and_reraise(
+        logger=logger,
+        message="run_chat failed",
+        tags={"surface": "pipeline", "component": "app.pipeline.runners"},
+    ):
+        return _run(state)
 
 
 async def astream_investigation(
-    alert_name: str,
-    pipeline_name: str,
-    severity: str,
-    raw_alert: str | dict[str, Any] | None = None,
+    raw_alert: str | dict[str, Any],
     *,
     opensre_evaluate: bool = False,
-) -> AsyncIterator[StreamEvent]:
-    """Stream investigation events via LangGraph's ``astream_events``.
+    investigation_metadata: tuple[str, str, str] | None = None,
+) -> AsyncIterator[Any]:
+    """Stream investigation events in real time.
 
-    Yields :class:`StreamEvent` objects compatible with the remote
-    ``StreamRenderer``, so local and remote investigations share the
-    same terminal UX.
+    Runs the pipeline in a background thread and yields StreamEvents as each
+    stage and tool call happens. The renderer sees individual tool_start /
+    tool_end events and shows them as spinner subtext, just like Claude Code.
     """
-    init_sentry(entrypoint="graph_pipeline")
-    from app.pipeline.graph import graph as compiled_graph  # lazy to avoid circular import
+    init_sentry(entrypoint="pipeline")
 
     initial = make_initial_state(
-        alert_name,
-        pipeline_name,
-        severity,
         raw_alert=raw_alert,
         opensre_evaluate=opensre_evaluate,
+        investigation_metadata=investigation_metadata,
     )
 
-    try:
-        async for event in compiled_graph.astream_events(
-            initial, version="v2", config={"recursion_limit": _GRAPH_RECURSION_LIMIT}
-        ):
-            yield _map_langgraph_event(dict(event))
-    except Exception as exc:
-        capture_exception(exc)
-        raise
+    # Silence the global ProgressTracker before starting the background thread
+    # so pipeline internals (extract_alert, resolve_integrations, etc.) don't
+    # open their own Rich Live display — the StreamRenderer drives it instead.
+    from app.cli.support.output import set_silent_tracker
 
+    set_silent_tracker()
 
-def _map_langgraph_event(event: dict[str, Any]) -> StreamEvent:
-    """Convert a raw LangGraph ``astream_events`` dict to a ``StreamEvent``."""
-    kind = event.get("event", "")
-    name = event.get("name", "")
-    metadata = event.get("metadata", {})
-    node_name = metadata.get("langgraph_node", "") if isinstance(metadata, dict) else ""
-    tags = event.get("tags", [])
-    run_id = event.get("run_id", "")
-    data = {
-        "event": kind,
-        "name": name,
-        "data": event.get("data", {}),
-        "metadata": metadata,
-    }
+    event_queue: queue.Queue[StreamEvent | BaseException | None] = queue.Queue()
+    loop = asyncio.get_running_loop()
 
-    return StreamEvent(
-        event_type="events",
-        data=data,
-        node_name=node_name or name,
-        kind=kind,
-        run_id=run_id,
-        tags=list(tags) if isinstance(tags, list) else [],
-    )
+    def _put(evt: StreamEvent) -> None:
+        with contextlib.suppress(RuntimeError):  # loop already closed; consumer is gone
+            loop.call_soon_threadsafe(event_queue.put_nowait, evt)
+
+    def _make_node_event(kind: str, node: str, data: dict[str, Any]) -> StreamEvent:
+        return StreamEvent(
+            event_type="events",
+            data={"event": kind, "name": node, "data": data},
+            node_name=node,
+            kind=kind,
+            run_id="",
+            tags=["graph:step:0"],
+        )
+
+    def _make_tool_event(kind: str, name: str, data: dict[str, Any]) -> StreamEvent:
+        # Tool events carry the name in data so the renderer can extract it.
+        payload = dict(data)
+        payload["name"] = name
+        payload["event"] = kind
+        return StreamEvent(
+            event_type="events",
+            data=payload,
+            node_name="investigation_agent",
+            kind=kind,
+            run_id="",
+            tags=[],
+        )
+
+    def _on_agent_event(event_kind: str, data: dict[str, Any]) -> None:
+        if event_kind == "agent_start":
+            _put(_make_node_event("on_chain_start", "investigation_agent", data))
+        elif event_kind == "tool_start":
+            _put(_make_tool_event("on_tool_start", data.get("name", "tool"), data))
+        elif event_kind == "tool_end":
+            _put(_make_tool_event("on_tool_end", data.get("name", "tool"), data))
+        elif event_kind == "agent_end":
+            _put(
+                _make_node_event(
+                    "on_chain_end",
+                    "investigation_agent",
+                    {"output": data},
+                )
+            )
+
+    def _run_pipeline() -> None:
+        try:
+            from app.agent.context import resolve_integrations
+            from app.agent.extract import extract_alert
+            from app.agent.investigation import ConnectedInvestigationAgent
+            from app.delivery.publish_findings.node import generate_report
+            from app.pipeline.pipeline import _merge
+
+            state_any = cast(dict[str, Any], initial)
+
+            # --- resolve_integrations ---
+            _put(_make_node_event("on_chain_start", "resolve_integrations", {}))
+            resolved = _traced_node("resolve_integrations", resolve_integrations, initial)
+            _merge(state_any, {"resolved_integrations": resolved})
+            _put(
+                _make_node_event(
+                    "on_chain_end",
+                    "resolve_integrations",
+                    {
+                        "output": {
+                            "resolved_integrations": {
+                                k: v for k, v in resolved.items() if k != "_all"
+                            }
+                        }
+                    },
+                )
+            )
+
+            # --- extract_alert ---
+            _put(_make_node_event("on_chain_start", "extract_alert", {}))
+            _merge(state_any, _traced_node("extract_alert", extract_alert, initial))
+            _put(
+                _make_node_event(
+                    "on_chain_end",
+                    "extract_alert",
+                    {
+                        "output": {
+                            k: state_any.get(k) for k in ("alert_name", "pipeline_name", "severity")
+                        }
+                    },
+                )
+            )
+
+            if state_any.get("is_noise"):
+                with contextlib.suppress(RuntimeError):  # loop closed (consumer cancelled)
+                    loop.call_soon_threadsafe(event_queue.put_nowait, None)
+                return
+
+            # --- investigation agent (with real tool events) ---
+            _merge(
+                state_any,
+                _traced_node(
+                    "investigation_agent",
+                    ConnectedInvestigationAgent().run,
+                    state_any,
+                    on_event=_on_agent_event,
+                ),
+            )
+
+            # --- upstream correlation ---
+            from app.correlation.node import node_correlate_upstream
+            from app.pipeline.pipeline import _build_correlation_config
+
+            _put(
+                _make_node_event(
+                    "on_chain_start",
+                    "correlate_upstream",
+                    {},
+                )
+            )
+
+            _merge(
+                state_any,
+                _traced_node(
+                    "correlate_upstream",
+                    node_correlate_upstream,
+                    cast("AgentState", state_any),
+                    _build_correlation_config(state_any),
+                ),
+            )
+
+            _put(
+                _make_node_event(
+                    "on_chain_end",
+                    "correlate_upstream",
+                    {
+                        "output": {
+                            "correlation": state_any.get("correlation", {}),
+                        }
+                    },
+                )
+            )
+
+            # --- deliver / publish (skip terminal render — StreamRenderer owns it) ---
+            _put(_make_node_event("on_chain_start", "publish_findings", {}))
+
+            # Patch render_report to a no-op so generate_report handles external
+            # delivery but leaves terminal rendering to the StreamRenderer.
+            from app.delivery.publish_findings import node as _publish_node
+            from app.delivery.publish_findings.renderers import terminal as _term_mod
+
+            with _render_report_patch_lock:
+                _orig_terminal_render = _term_mod.render_report
+                _orig_node_render = _publish_node.render_report
+                _term_mod.render_report = lambda *_a, **_kw: None  # type: ignore[assignment]
+                _publish_node.render_report = lambda *_a, **_kw: None  # type: ignore[assignment]
+                try:
+                    _merge(
+                        state_any,
+                        _traced_node("publish_findings", generate_report, cast("Any", state_any)),
+                    )
+                finally:
+                    _term_mod.render_report = _orig_terminal_render  # type: ignore[assignment]
+                    _publish_node.render_report = _orig_node_render  # type: ignore[assignment]
+
+            _put(
+                _make_node_event(
+                    "on_chain_end",
+                    "publish_findings",
+                    {
+                        "output": {
+                            "root_cause": state_any.get("root_cause", ""),
+                            "root_cause_category": state_any.get("root_cause_category", ""),
+                            "validity_score": state_any.get("validity_score"),
+                            "report": state_any.get("report", ""),
+                            "slack_message": state_any.get("slack_message", ""),
+                            "problem_md": state_any.get("problem_md", ""),
+                            "validated_claims": state_any.get("validated_claims", []),
+                            "remediation_steps": state_any.get("remediation_steps", []),
+                        }
+                    },
+                )
+            )
+
+        except Exception as exc:
+            _capture_exception_once(exc, context="pipeline.astream_investigation")
+            with contextlib.suppress(RuntimeError):
+                loop.call_soon_threadsafe(event_queue.put_nowait, exc)
+        finally:
+            with contextlib.suppress(RuntimeError):
+                loop.call_soon_threadsafe(event_queue.put_nowait, None)
+
+    thread = threading.Thread(target=_run_pipeline, daemon=True)
+    thread.start()
+
+    while True:
+        # Drain the queue without blocking the event loop
+        try:
+            item = event_queue.get_nowait()
+        except queue.Empty:
+            await asyncio.sleep(0.01)
+            continue
+
+        if item is None:
+            break
+        if isinstance(item, BaseException):
+            raise item
+        yield item
+
+    thread.join()
 
 
 @dataclass
 class SimpleAgent:
-    def invoke(self, state: AgentState, config: NodeConfig | None = None) -> AgentState:
-        init_sentry(entrypoint="graph_pipeline")
-        from app.pipeline.graph import graph as compiled_graph  # lazy to avoid circular import
+    def invoke(self, state: AgentState, _config: NodeConfig | None = None) -> AgentState:
+        init_sentry(entrypoint="pipeline")
+        from app.pipeline.pipeline import run_connected_investigation as _run
 
-        cfg: dict[str, Any] = {
-            **(config or {"configurable": {}}),
-            "recursion_limit": _GRAPH_RECURSION_LIMIT,
-        }
         with report_and_reraise(
             logger=logger,
             message="SimpleAgent.invoke failed",
             tags={"surface": "pipeline", "component": "app.pipeline.runners"},
         ):
-            return cast(AgentState, compiled_graph.invoke(state, cast(Any, cfg)))
+            return _run(state)

@@ -13,6 +13,7 @@ Supported transports:
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import re
 import shutil
@@ -31,8 +32,11 @@ from mcp.client.stdio import stdio_client  # type: ignore[import-not-found]
 from pydantic import Field, field_validator, model_validator
 from typing_extensions import TypedDict
 
+from app.integrations._validation_helpers import report_validation_failure
 from app.integrations.mcp_streamable_http_compat import streamable_http_client
 from app.strict_config import StrictConfigModel
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_OPENCLAW_MCP_MODE: Literal["streamable-http", "sse", "stdio"] = "streamable-http"
 _OPENCLAW_CONTROL_UI_HOSTS = frozenset({"127.0.0.1", "localhost", "0.0.0.0"})
@@ -214,6 +218,8 @@ def _openclaw_cli_preflight_output(command: str) -> str:
             [command, "--help"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=5,
             check=False,
         )
@@ -274,6 +280,13 @@ def _describe_exception(err: BaseException) -> list[str]:
             return [f"Could not connect to {request.url}: {err}"]
         return [str(err) or err.__class__.__name__]
 
+    # ``asyncio.wait_for`` raises ``asyncio.TimeoutError`` which is
+    # ``TimeoutError`` in 3.11+. ``str()`` is empty, so the default
+    # branch below would surface just ``"TimeoutError"`` — useless for
+    # a user trying to debug a hung MCP tool. Spell it out.
+    if isinstance(err, TimeoutError):
+        return ["OpenClaw MCP tool call timed out"]
+
     return [str(err).strip() or err.__class__.__name__]
 
 
@@ -320,6 +333,13 @@ def describe_openclaw_error(
                     "Re-run `uv run opensre integrations verify openclaw` after the gateway is healthy.",
                 ),
             )
+        )
+
+    if any("timed out" in message.lower() for message in messages):
+        hints.append(
+            f"The tool did not return within {config.timeout_seconds:.1f}s. "
+            "Check whether the OpenClaw Gateway is responsive (`openclaw gateway health`) "
+            "or raise `OpenClawConfig.timeout_seconds` if the tool is expected to be slow."
         )
 
     if hints:
@@ -398,6 +418,10 @@ async def _open_openclaw_session(config: OpenClawConfig) -> AsyncIterator[Client
                 args=list(config.args),
                 env={
                     **os.environ,
+                    # Suppress terminal control codes so the MCP server's stdout
+                    # stays clean JSON-RPC (mirrors github_mcp.py mitigation).
+                    "NO_COLOR": "1",
+                    "TERM": "dumb",
                     **({"OPENCLAW_AUTH_TOKEN": config.auth_token} if config.auth_token else {}),
                 },
             )
@@ -527,7 +551,17 @@ async def _call_tool_async(
     arguments: dict[str, object] | None = None,
 ) -> OpenClawToolCallResult:
     async with _open_openclaw_session(config) as session:
-        result = await session.call_tool(tool_name, arguments or {})
+        # ``OpenClawConfig.timeout_seconds`` previously bounded only the
+        # SSE / streamable-http transport handshake; ``session.call_tool``
+        # itself was unbounded, so a hung MCP tool over stdio would
+        # block the investigation pipeline indefinitely. Wrap the call
+        # with ``asyncio.wait_for`` so the same timeout governs all
+        # transport modes uniformly. :func:`describe_openclaw_error`
+        # surfaces a "timed out" hint when ``TimeoutError`` propagates.
+        result = await asyncio.wait_for(
+            session.call_tool(tool_name, arguments or {}),
+            timeout=config.timeout_seconds,
+        )
         payload = _tool_result_to_dict(result)
         payload["tool"] = tool_name
         payload["arguments"] = arguments or {}
@@ -581,6 +615,12 @@ def validate_openclaw_config(config: OpenClawConfig) -> OpenClawValidationResult
             tool_names=tool_names,
         )
     except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="openclaw",
+            method="validate_openclaw_config",
+        )
         return OpenClawValidationResult(
             ok=False,
             detail=f"OpenClaw bridge validation failed: {describe_openclaw_error(err, config)}",

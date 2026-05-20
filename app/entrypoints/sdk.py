@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
 from typing import Any
 
 from app.analytics.cli import track_investigation
 from app.analytics.source import EntrypointSource, TriggerMode
 from app.utils.sentry_sdk import init_sentry
-from contextlib import suppress
 
 with suppress(ModuleNotFoundError):
     init_sentry(entrypoint="entrypoints.sdk")

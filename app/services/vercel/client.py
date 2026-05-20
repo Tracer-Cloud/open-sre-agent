@@ -18,6 +18,8 @@ import httpx
 
 from app.integrations.config_models import VercelIntegrationConfig
 from app.integrations.probes import ProbeResult
+from app.services._error_helpers import capture_service_error
+from app.services._streaming import StreamingParseStats
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +135,12 @@ def _append_parsed_runtime_stream_value(
                     return
 
 
-def _ingest_runtime_log_stream_line(line: str, bucket: list[dict[str, Any]], limit: int) -> bool:
+def _ingest_runtime_log_stream_line(
+    line: str,
+    bucket: list[dict[str, Any]],
+    limit: int,
+    stats: StreamingParseStats | None = None,
+) -> bool:
     """Parse a single text line from the stream; return True if ``bucket`` has reached ``limit``."""
     stripped = line.strip()
     if not stripped:
@@ -142,8 +149,12 @@ def _ingest_runtime_log_stream_line(line: str, bucket: list[dict[str, Any]], lim
         stripped = stripped[5:].lstrip()
     try:
         parsed: Any = json.loads(stripped)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as exc:
+        if stats is not None:
+            stats.record_error(exc)
         return len(bucket) >= limit
+    if stats is not None:
+        stats.record_parsed()
     _append_parsed_runtime_stream_value(parsed, bucket, limit=limit)
     return len(bucket) >= limit
 
@@ -151,9 +162,11 @@ def _ingest_runtime_log_stream_line(line: str, bucket: list[dict[str, Any]], lim
 def _collect_runtime_logs_from_stream(response: httpx.Response, limit: int) -> list[dict[str, Any]]:
     """Read Vercel's streamed runtime logs (NDJSON / stream+json); stop after ``limit`` dict rows."""
     bucket: list[dict[str, Any]] = []
+    stats = StreamingParseStats()
     for line in response.iter_lines():
-        if _ingest_runtime_log_stream_line(line, bucket, limit):
+        if _ingest_runtime_log_stream_line(line, bucket, limit, stats=stats):
             break
+    stats.report_if_unhealthy(logger=logger, integration="vercel", source="runtime-logs/stream")
     return bucket[:limit]
 
 
@@ -228,18 +241,15 @@ class VercelClient:
                 for p in data.get("projects", [])
             ]
             return {"success": True, "projects": projects, "total": len(projects)}
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "[vercel] list_projects HTTP failure status=%s",
-                e.response.status_code,
-            )
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(exc, logger=logger, integration="vercel", method="list_projects")
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning("[vercel] list_projects error type=%s detail=%s", type(e).__name__, e)
-            return {"success": False, "error": str(e)}
+        except Exception as exc:
+            capture_service_error(exc, logger=logger, integration="vercel", method="list_projects")
+            return {"success": False, "error": str(exc)}
 
     def get_project(self, project_id_or_name: str) -> dict[str, Any]:
         """Fetch project details including the current production deployment (no deployment list)."""
@@ -268,19 +278,27 @@ class VercelClient:
                 "production_deployment_id": prod_id,
                 "production_target": prod,
             }
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "[vercel] get_project HTTP failure status=%s project=%r",
-                e.response.status_code,
-                cleaned,
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="vercel",
+                method="get_project",
+                extras={"project": cleaned},
             )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning("[vercel] get_project error type=%s detail=%s", type(e).__name__, e)
-            return {"success": False, "error": str(e)}
+        except Exception as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="vercel",
+                method="get_project",
+                extras={"project": cleaned},
+            )
+            return {"success": False, "error": str(exc)}
 
     def list_deployments(
         self,
@@ -320,20 +338,27 @@ class VercelClient:
                 for d in data.get("deployments", [])
             ]
             return {"success": True, "deployments": deployments, "total": len(deployments)}
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "[vercel] list_deployments HTTP failure status=%s project=%s state=%s",
-                e.response.status_code,
-                _scrub_log_fragment(project_id),
-                _scrub_log_fragment(state),
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="vercel",
+                method="list_deployments",
+                extras={"project_id": project_id, "state": state},
             )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning("[vercel] list_deployments error type=%s detail=%s", type(e).__name__, e)
-            return {"success": False, "error": str(e)}
+        except Exception as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="vercel",
+                method="list_deployments",
+                extras={"project_id": project_id, "state": state},
+            )
+            return {"success": False, "error": str(exc)}
 
     def get_deployment(self, deployment_id: str) -> dict[str, Any]:
         """Fetch full details for a single deployment including build errors and git metadata."""
@@ -361,19 +386,27 @@ class VercelClient:
                     "build": data.get("build", {}),
                 },
             }
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "[vercel] get_deployment HTTP failure status=%s id=%s",
-                e.response.status_code,
-                _scrub_log_fragment(deployment_id),
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="vercel",
+                method="get_deployment",
+                extras={"deployment_id": deployment_id},
             )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning("[vercel] get_deployment error type=%s detail=%s", type(e).__name__, e)
-            return {"success": False, "error": str(e)}
+        except Exception as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="vercel",
+                method="get_deployment",
+                extras={"deployment_id": deployment_id},
+            )
+            return {"success": False, "error": str(exc)}
 
     def get_deployment_events(self, deployment_id: str, limit: int = 100) -> dict[str, Any]:
         """Fetch the build and runtime event stream for a deployment."""
@@ -400,21 +433,27 @@ class VercelClient:
                     }
                 )
             return {"success": True, "events": events, "total": len(events)}
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "[vercel] get_deployment_events HTTP failure status=%s id=%s",
-                e.response.status_code,
-                _scrub_log_fragment(deployment_id),
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="vercel",
+                method="get_deployment_events",
+                extras={"deployment_id": deployment_id},
             )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning(
-                "[vercel] get_deployment_events error type=%s detail=%s", type(e).__name__, e
+        except Exception as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="vercel",
+                method="get_deployment_events",
+                extras={"deployment_id": deployment_id},
             )
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": str(exc)}
 
     def get_runtime_logs(
         self,
@@ -488,33 +527,39 @@ class VercelClient:
             except (httpx.ReadTimeout, httpx.ReadError, httpx.RemoteProtocolError) as exc:
                 last_retryable_detail = str(exc)
                 last_retryable_kind = type(exc).__name__
-                logger.warning(
-                    "[vercel] get_runtime_logs %s attempt %s/%s deployment=%s",
-                    last_retryable_kind,
-                    attempt,
-                    _RUNTIME_LOGS_READ_ATTEMPTS,
-                    _scrub_log_fragment(deployment_id),
-                )
                 if attempt >= _RUNTIME_LOGS_READ_ATTEMPTS:
+                    capture_service_error(
+                        exc,
+                        logger=logger,
+                        integration="vercel",
+                        method="get_runtime_logs",
+                        extras={"deployment_id": deployment_id},
+                    )
                     break
                 time.sleep(min(8.0, 2.0**attempt))
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 404:
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code == 404:
                     return {"success": True, "logs": [], "total": 0}
-                logger.warning(
-                    "[vercel] get_runtime_logs HTTP failure status=%s id=%s",
-                    e.response.status_code,
-                    _scrub_log_fragment(deployment_id),
+                capture_service_error(
+                    exc,
+                    logger=logger,
+                    integration="vercel",
+                    method="get_runtime_logs",
+                    extras={"deployment_id": deployment_id},
                 )
                 return {
                     "success": False,
-                    "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                    "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
                 }
-            except Exception as e:
-                logger.warning(
-                    "[vercel] get_runtime_logs error type=%s detail=%s", type(e).__name__, e
+            except Exception as exc:
+                capture_service_error(
+                    exc,
+                    logger=logger,
+                    integration="vercel",
+                    method="get_runtime_logs",
+                    extras={"deployment_id": deployment_id},
                 )
-                return {"success": False, "error": str(e)}
+                return {"success": False, "error": str(exc)}
 
         detail = last_retryable_detail or "Transient runtime log transport error"
         if last_retryable_kind == "ReadTimeout":

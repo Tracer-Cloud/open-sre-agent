@@ -15,9 +15,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.integrations.catalog import classify_integrations as _classify_integrations
 from app.integrations.verify import verify_integrations
-from app.nodes.plan_actions.detect_sources import detect_sources
-from app.nodes.resolve_integrations.node import _classify_integrations
+from tests.e2e.source_helpers import resolve_available_tool_sources
 
 
 class TestPostgreSQLIntegrationResolution:
@@ -87,18 +87,11 @@ class TestPostgreSQLIntegrationResolution:
         assert resolved.get("postgresql") is None
 
 
-class TestPostgreSQLSourceDetection:
-    """Test PostgreSQL source detection in investigation context."""
+class TestPostgreSQLToolSourceAvailability:
+    """Test PostgreSQL source availability in the tool-registry investigation path."""
 
-    def test_detect_postgresql_source_from_alert(self):
-        """PostgreSQL source detected from alert annotations."""
-        raw_alert = {
-            "commonAnnotations": {
-                "postgresql_database": "application_db",
-                "postgresql_table": "events",
-                "postgresql_schema": "public",
-            }
-        }
+    def test_postgresql_tool_source_available_from_resolved_integration(self):
+        """PostgreSQL source is available when a configured integration exists."""
         resolved_integrations = {
             "postgresql": {
                 "host": "localhost",
@@ -110,19 +103,14 @@ class TestPostgreSQLSourceDetection:
             }
         }
 
-        sources = detect_sources(raw_alert, {}, resolved_integrations)
+        sources = resolve_available_tool_sources(resolved_integrations)
 
         assert "postgresql" in sources
         assert sources["postgresql"]["host"] == "localhost"
         assert sources["postgresql"]["database"] == "application_db"
-        assert sources["postgresql"]["table"] == "events"
-        assert sources["postgresql"]["schema"] == "public"
 
-    def test_detect_postgresql_source_fallback_to_config(self):
-        """PostgreSQL source falls back to configured database if not in alert."""
-        raw_alert = {
-            "commonAnnotations": {},
-        }
+    def test_postgresql_tool_source_uses_configured_database(self):
+        """PostgreSQL tool params come from the resolved integration config."""
         resolved_integrations = {
             "postgresql": {
                 "host": "localhost",
@@ -134,17 +122,16 @@ class TestPostgreSQLSourceDetection:
             }
         }
 
-        sources = detect_sources(raw_alert, {}, resolved_integrations)
+        sources = resolve_available_tool_sources(resolved_integrations)
 
         assert "postgresql" in sources
         assert sources["postgresql"]["database"] == "default_db"
 
-    def test_postgresql_source_not_detected_if_unconfigured(self):
+    def test_postgresql_tool_source_unavailable_if_unconfigured(self):
         """PostgreSQL source is not included if not configured."""
-        raw_alert = {"commonAnnotations": {}}
         resolved_integrations = {}
 
-        sources = detect_sources(raw_alert, {}, resolved_integrations)
+        sources = resolve_available_tool_sources(resolved_integrations)
 
         assert "postgresql" not in sources
 

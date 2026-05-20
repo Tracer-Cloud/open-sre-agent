@@ -42,6 +42,9 @@ def test_slash_registry_includes_modular_commands() -> None:
         "/integrations",
         "/investigate",
         "/tasks",
+        "/watch",
+        "/watches",
+        "/unwatch",
         "/health",
     ):
         assert name in SLASH_COMMANDS

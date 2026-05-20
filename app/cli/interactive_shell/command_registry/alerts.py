@@ -33,7 +33,7 @@ def _cmd_alerts(_session: ReplSession, console: Console, _args: list[str]) -> bo
 
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
-        "/alerts", "show alert listener status", _cmd_alerts, execution_tier=ExecutionTier.SAFE
+        "/alerts", "Show alert listener status.", _cmd_alerts, execution_tier=ExecutionTier.SAFE
     ),
 ]
 

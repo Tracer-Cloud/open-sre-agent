@@ -1,7 +1,7 @@
 """Terminal renderer for remote agent streaming events.
 
-Reuses spinner and label patterns from app.output so that remote investigation
-output looks identical to a local ``opensre investigate`` run.
+Reuses spinner and label patterns from app.cli.support.output so that remote
+investigation output looks identical to a local ``opensre investigate`` run.
 
 Handles both ``stream_mode: ["updates"]`` (legacy node-level) and
 ``stream_mode: ["events"]`` (fine-grained tool/LLM callbacks).
@@ -36,17 +36,18 @@ from app.cli.interactive_shell.ui.theme import (
     HIGHLIGHT_ANSI,
     TEXT_ANSI,
 )
-from app.output import (
+from app.cli.support.output import (
+    CtrlOToggleWatcher,
     ProgressTracker,
     get_output_format,
-    render_investigation_header,
     set_live_console,
     stop_display,
     unregister_live_console,
 )
 from app.remote.reasoning import reasoning_text
 from app.remote.stream import StreamEvent
-from app.tools.registry import resolve_tool_display_name
+from app.tools.registry import get_registered_tool_map, resolve_tool_display_name
+from app.utils.tool_trace import format_json_preview
 
 _RESET = ANSI_RESET
 _DIM = ANSI_DIM
@@ -67,14 +68,14 @@ _NODE_END_KINDS = frozenset(
     }
 )
 
-# LangGraph emits this kind for every text-token delta from a chat model
+# Remote streams emit this kind for every text-token delta from a chat model
 # inside a node. Held as a constant alongside the lifecycle kinds above so
 # the events-mode handler doesn't carry a magic string.
 _TOKEN_STREAM_KIND = "on_chat_model_stream"
 
 # Diagnose is the only node where the LLM's reasoning is visible enough to
 # warrant streaming the raw token deltas live as Markdown. Other nodes keep
-# the compact spinner UX from ``_LiveSpinner`` in app.output.
+# the compact spinner UX from ``_LiveSpinner`` in app.cli.support.output.
 _DIAGNOSE_NODE = "diagnose_root_cause"
 # Same Rich.Live refresh / spinner choices as the interactive-shell streamer
 # so the two surfaces feel identical.
@@ -86,6 +87,7 @@ _DIAGNOSE_LIVE_REFRESH = 20
 _DIAGNOSE_RENDER_INTERVAL_S = 1.0 / _DIAGNOSE_LIVE_REFRESH
 _DIAGNOSE_SPINNER_NAME = "dots12"
 _DIAGNOSE_SPINNER_COLOR = "orange1"
+_HIDDEN_PROGRESS_NODES = frozenset({"publish_findings"})
 
 
 def _render_source(*, local: bool) -> str:
@@ -179,7 +181,7 @@ class _DiagnoseStreamRenderer:
         """Append a token delta to the buffer; refresh the Live region (throttled).
 
         The chunk's ``content`` shape varies by provider: OpenAI emits a
-        plain string; langchain-anthropic emits a list of content blocks.
+        plain string; some Anthropic SDK paths emit a list of content blocks.
         :func:`_flatten_chunk_content` handles both — calling ``str()`` on
         the list shape would render its Python repr instead of reasoning.
         """
@@ -310,7 +312,7 @@ def _report_line_looks_like_heading(line: str, *, inner: str) -> bool:
 
 
 class StreamRenderer:
-    """Renders a stream of LangGraph SSE events as live terminal progress.
+    """Renders a stream of remote SSE events as live terminal progress.
 
     Wraps ProgressTracker to show the same spinners and resolved-dot lines
     that local investigations produce, driven by remote streaming events.
@@ -332,8 +334,16 @@ class StreamRenderer:
         # orchestrates lifecycle (active_node tracking, finish-on-end).
         self._console = Console(highlight=False)
         self._diagnose = _DiagnoseStreamRenderer(self._console, self._tracker, local=self._local)
-        self._alert_header_printed = False
         self._plan_preview_printed = False
+        # Track tool call start times keyed by tool name for elapsed display
+        self._tool_start_times: dict[str, float] = {}
+        self._tool_inputs: dict[str, Any] = {}
+        self._tool_details_visible = False
+        self._tool_detail_records: list[dict[str, Any]] = []
+        self._printed_tool_detail_ids: set[int] = set()
+        self._tool_summary_counts: dict[str, dict[str, int]] = {}
+        self._tool_summary_order: list[tuple[str, str]] = []
+        self._toggle_watcher: CtrlOToggleWatcher | None = None
 
     def _print_above_renderable(self, renderable: Any) -> None:
         """Print a rich renderable permanently above the active live region (even during diagnose)."""
@@ -360,6 +370,40 @@ class StreamRenderer:
     def stream_completed(self) -> bool:
         return self._stream_completed
 
+    def _mark_node_seen(self, canonical: str) -> None:
+        if canonical not in self._node_names_seen:
+            self._node_names_seen.append(canonical)
+
+    def _start_toggle_watcher(self) -> None:
+        if get_output_format() != "rich":
+            return
+        self._toggle_watcher = CtrlOToggleWatcher(self._toggle_tool_details)
+        self._toggle_watcher.start()
+
+    def _stop_toggle_watcher(self) -> None:
+        if self._toggle_watcher is not None:
+            self._toggle_watcher.stop()
+            self._toggle_watcher = None
+
+    def _toggle_tool_details(self) -> None:
+        self._tool_details_visible = not self._tool_details_visible
+        if get_output_format() == "rich" and self._tracker.has_active_display:
+            self._sync_tool_detail_view(clear=True)
+            return
+        label = "shown" if self._tool_details_visible else "hidden"
+        self._print_above_renderable(Text(f"  Tool details {label} (ctrl+o)", style="dim"))
+        if self._tool_details_visible:
+            self._flush_tool_details()
+
+    def _sync_tool_detail_view(self, *, clear: bool = False) -> None:
+        if get_output_format() == "rich" and self._tracker.has_active_display:
+            self._tracker.set_tool_detail_view(
+                visible=self._tool_details_visible,
+                records=self._tool_detail_records,
+                summary=self._format_tool_summary(),
+                clear=clear,
+            )
+
     def render_stream(self, events: Iterator[StreamEvent]) -> dict[str, Any]:
         """Consume a full event stream and render progress to the terminal.
 
@@ -367,6 +411,7 @@ class StreamRenderer:
         """
         if not self._local:
             _print_connection_banner()
+        self._start_toggle_watcher()
 
         _interrupted = False
         try:
@@ -383,6 +428,7 @@ class StreamRenderer:
             )
             raise
         finally:
+            self._stop_toggle_watcher()
             # Always stop the active spinner thread and flush whatever
             # final state was accumulated, even if the stream raises
             # (e.g. LLM quota exhausted). Otherwise the spinner keeps
@@ -419,12 +465,15 @@ class StreamRenderer:
             return
 
         canonical = _canonical_node_name(node)
+        if canonical in _HIDDEN_PROGRESS_NODES:
+            self._mark_node_seen(canonical)
+            self._merge_state(event.data.get(node, event.data))
+            return
 
         if canonical != self._active_node:
             self._finish_active_node()
             self._active_node = canonical
-            if canonical not in self._node_names_seen:
-                self._node_names_seen.append(canonical)
+            self._mark_node_seen(canonical)
             self._tracker.start(canonical)
 
         self._merge_state(event.data.get(node, event.data))
@@ -433,7 +482,7 @@ class StreamRenderer:
         """Process a fine-grained ``events``-mode SSE event.
 
         Node lifecycle is inferred from ``on_chain_start`` /
-        ``on_chain_end`` events whose ``langgraph_node`` matches a
+        ``on_chain_end`` events whose pipeline node metadata matches a
         graph-level node.  Sub-node callbacks (tool calls, LLM
         reasoning) update the active spinner's subtext in real time.
 
@@ -449,6 +498,15 @@ class StreamRenderer:
             return
 
         canonical = _canonical_node_name(node)
+
+        if canonical in _HIDDEN_PROGRESS_NODES:
+            self._mark_node_seen(canonical)
+            if kind in _NODE_START_KINDS and self._is_graph_node_event(event):
+                self._merge_chain_start_input(event)
+                return
+            if kind in _NODE_END_KINDS and self._is_graph_node_event(event):
+                self._merge_chain_end_output(event)
+                return
 
         if canonical == _DIAGNOSE_NODE:
             if kind in _NODE_START_KINDS and self._is_graph_node_event(event):
@@ -470,11 +528,8 @@ class StreamRenderer:
             if canonical != self._active_node:
                 self._finish_active_node()
                 self._active_node = canonical
-                if canonical not in self._node_names_seen:
-                    self._node_names_seen.append(canonical)
+                self._mark_node_seen(canonical)
                 self._tracker.start(canonical)
-                # Trigger alert header as early as possible (often on the first node)
-                self._print_alert_header()
             return
 
         if kind in _NODE_END_KINDS and self._is_graph_node_event(event):
@@ -483,10 +538,126 @@ class StreamRenderer:
                 self._finish_active_node()
             return
 
+        if kind == "on_tool_start":
+            self._handle_tool_start(event)
+            return
+
+        if kind == "on_tool_end":
+            self._handle_tool_end(event)
+            return
+
         if canonical == self._active_node:
             text = reasoning_text(kind, event.data, canonical)
             if text:
                 self._tracker.update_subtext(canonical, text)
+
+    def _handle_tool_start(self, event: StreamEvent) -> None:
+        data = event.data
+        name = data.get("name") or data.get("data", {}).get("name") or "tool"
+        event_key = _tool_event_key(data, name)
+        self._tool_start_times[event_key] = time.monotonic()
+        self._tool_inputs[event_key] = _tool_input(data)
+        self._record_tool_summary(name)
+        self._update_tool_summary_subtext()
+
+    def _handle_tool_end(self, event: StreamEvent) -> None:
+        data = event.data
+        name = data.get("name") or data.get("data", {}).get("name") or "tool"
+        display = resolve_tool_display_name(name)
+        event_key = _tool_event_key(data, name)
+        start = self._tool_start_times.pop(event_key, None)
+        elapsed = f"  {int((time.monotonic() - start) * 1000)}ms" if start is not None else ""
+        self._update_tool_summary_subtext()
+        self._record_tool_detail(
+            display,
+            self._tool_inputs.pop(event_key, None),
+            _tool_output(data),
+            elapsed=elapsed.strip(),
+        )
+
+    def _record_tool_summary(self, tool_name: str) -> None:
+        source = _tool_source_label(tool_name)
+        label = _tool_short_label(tool_name, source)
+        source_counts = self._tool_summary_counts.setdefault(source, {})
+        if label not in source_counts:
+            self._tool_summary_order.append((source, label))
+        source_counts[label] = source_counts.get(label, 0) + 1
+        self._sync_tool_detail_view()
+
+    def _update_tool_summary_subtext(self) -> None:
+        if not self._active_node:
+            return
+        summary = self._format_tool_summary()
+        if summary:
+            self._tracker.update_subtext(self._active_node, summary, duration=30.0)
+
+    def _format_tool_summary(self) -> str:
+        source_labels: dict[str, list[str]] = {}
+        for source, label in self._tool_summary_order:
+            count = self._tool_summary_counts.get(source, {}).get(label, 0)
+            if count <= 0:
+                continue
+            rendered = f"{label} x{count}" if count > 1 else label
+            source_labels.setdefault(source, []).append(rendered)
+        parts = [
+            f"{source}: {', '.join(labels[:4])}{', ...' if len(labels) > 4 else ''}"
+            for source, labels in source_labels.items()
+        ]
+        summary = " | ".join(parts[:2])
+        return summary[:117] + "..." if len(summary) > 120 else summary
+
+    def _record_tool_detail(
+        self,
+        display: str,
+        tool_input: Any,
+        output: Any,
+        *,
+        elapsed: str = "",
+    ) -> None:
+        if tool_input in ({}, None) and output in ({}, None, ""):
+            return
+        record = {
+            "display": display,
+            "input": tool_input,
+            "output": output,
+            "elapsed": elapsed,
+        }
+        self._tool_detail_records.append(record)
+        if self._tool_details_visible:
+            if get_output_format() == "rich" and self._tracker.has_active_display:
+                self._sync_tool_detail_view()
+            else:
+                self._print_tool_detail(record)
+
+    def _flush_tool_details(self) -> None:
+        for record in self._tool_detail_records:
+            if id(record) not in self._printed_tool_detail_ids:
+                self._print_tool_detail(record)
+
+    def _print_tool_detail(self, record: dict[str, Any]) -> None:
+        display = str(record.get("display") or "tool")
+        tool_input = record.get("input")
+        output = record.get("output")
+        body_parts: list[str] = []
+        if tool_input not in ({}, None):
+            body_parts.append(f"Input:\n{format_json_preview(tool_input, max_chars=1600)}")
+        if output not in ({}, None, ""):
+            body_parts.append(f"Output:\n{format_json_preview(output, max_chars=3000)}")
+        body = "\n\n".join(body_parts)
+        elapsed = str(record.get("elapsed") or "")
+        suffix = f"  {elapsed}" if elapsed else ""
+        if get_output_format() == "rich":
+            detail = Text()
+            detail.append(f"  Tool details: {display}{suffix}\n", style="bold")
+            for line in body.splitlines():
+                detail.append(f"    {line}\n", style="dim")
+            self._print_above_renderable(detail)
+            self._printed_tool_detail_ids.add(id(record))
+            return
+        self._console.print(f"  Tool details: {display}{suffix}", markup=False)
+        for line in body.splitlines():
+            self._console.print(f"      {line}", markup=False)
+        self._printed_tool_detail_ids.add(id(record))
 
     def _begin_diagnose(self, canonical: str) -> None:
         """Mark diagnose as the active node and let the helper open its Live region.
@@ -497,9 +668,7 @@ class StreamRenderer:
         if self._active_node and self._active_node != canonical:
             self._finish_active_node()
         self._active_node = canonical
-        if canonical not in self._node_names_seen:
-            self._node_names_seen.append(canonical)
-        self._print_alert_header()
+        self._mark_node_seen(canonical)
         self._diagnose.start()
 
     def _end_diagnose(self) -> None:
@@ -511,14 +680,14 @@ class StreamRenderer:
     def _is_graph_node_event(event: StreamEvent) -> bool:
         """True when the event is a top-level graph node transition.
 
-        LangGraph tags graph-level node chains with ``graph:step:<N>``.
+        Top-level graph node chains are tagged with ``graph:step:<N>``.
         Sub-chains inside a node (tool executors, LLM calls) lack this tag.
         """
         name = str(event.data.get("name", ""))
         tags = event.tags
         if any(t.startswith("graph:step:") for t in tags):
             return True
-        if any(t.startswith("langsmith:") for t in tags):
+        if any(t.startswith("tracing:") for t in tags):
             return False
         return bool(name == event.node_name)
 
@@ -533,8 +702,6 @@ class StreamRenderer:
         node = self._active_node
         message = self._build_node_message(node)
         self._tracker.complete(node, message=message)
-        if get_output_format() == "rich":
-            self._print_alert_header()
         if (
             node == "plan_actions"
             and get_output_format() == "rich"
@@ -558,7 +725,6 @@ class StreamRenderer:
     def _merge_state(self, update: Any) -> None:
         if isinstance(update, dict):
             self._final_state.update(update)
-            self._print_alert_header()
 
     def _merge_chain_start_input(self, event: StreamEvent) -> None:
         """Pull the ``input`` payload from a chain-start event into ``_final_state``."""
@@ -596,286 +762,105 @@ class StreamRenderer:
                 return f"validity:{pct}"
         return None
 
-    def _print_alert_header(self) -> None:
-        if self._alert_header_printed:
-            return
-        alert_name = self._final_state.get("alert_name", "Unknown")
-        pipeline = self._final_state.get("pipeline_name", "Unknown")
-        severity = self._final_state.get("severity", "unknown")
-
-        if alert_name != "Unknown" or pipeline != "Unknown":
-            if get_output_format() == "rich":
-                panel = Panel(
-                    f"  • [dim]Source/Name:[/dim] [bold white]{escape(alert_name)}[/bold white]\n"
-                    f"  • [dim]Pipeline:[/dim] [cyan]{escape(pipeline)}[/cyan]\n"
-                    f"  • [dim]Severity:[/dim] [bold yellow]{escape(severity)}[/bold yellow]",
-                    title="[bold cyan]📥 Alert Ingested & Parsed[/bold cyan]",
-                    border_style="cyan",
-                    expand=False,
-                )
-                self._print_above_renderable(panel)
-            else:
-                render_investigation_header(alert_name, pipeline, severity)
-            self._alert_header_printed = True
-
     def _print_report(self) -> None:
-        from app.output import stop_display
+        from app.cli.support.output import stop_display
 
         stop_display()
 
-        self._print_alert_header()
+        slack_message = self._final_state.get("slack_message") or self._final_state.get(
+            "report", ""
+        )
+        root_cause_category = self._final_state.get("root_cause_category")
 
-        root_cause = self._final_state.get("root_cause", "")
-        report = self._final_state.get("report", "")
-        score = self._final_state.get("validity_score")
-        confidence_str = _validity_score_percent(score) or "N/A"
+        if not slack_message:
+            if self._final_state.get("is_noise"):
+                _print_info("Alert classified as noise — no investigation needed.")
+            elif self._events_received == 0:
+                _print_info("No events received from the remote agent.")
+            return
 
-        if get_output_format() == "rich" and root_cause:
-            self._console.print()
+        from app.delivery.publish_findings.renderers.terminal import render_report as _render
 
-            evidence_lines = []
-            next_actions = []
-            claims_lines: list[str] = []
-            root_cause_report_detail: list[str] = []
-
-            lines = report.strip().splitlines()
-            current_section = None
-            consumed_indices = set()
-
-            _RCA_LINE = "[dim]" + ("─" * 48) + "[/dim]"
-
-            def is_header_candidate(line: str, keywords: list[str]) -> bool:
-                stripped_full = line.strip()
-                if not stripped_full:
-                    return False
-                inner = _normalized_report_heading_inner(stripped_full)
-                if len(inner) > 72:
-                    return False
-                if inner.endswith((".", "?", "!")) and not inner.endswith(":"):
-                    return False
-                if len(inner.split()) > 12:
-                    return False
-                if not _report_line_looks_like_heading(stripped_full, inner=inner):
-                    return False
-                lowered = inner.lower()
-                return any(kw in lowered for kw in keywords)
-
-            for idx, line in enumerate(lines):
-                stripped = line.strip()
-                if not stripped:
-                    continue
-
-                if is_header_candidate(line, ["root cause"]):
-                    current_section = "root_cause"
-                    consumed_indices.add(idx)
-                    continue
-                if is_header_candidate(
-                    line,
-                    ["non-validated claims", "inferred claims", "unvalidated claims"],
-                ):
-                    current_section = "claims"
-                    consumed_indices.add(idx)
-                    continue
-                if is_header_candidate(
-                    line, ["supporting evidence", "cited evidence", "evidence cited"]
-                ):
-                    current_section = "evidence"
-                    consumed_indices.add(idx)
-                    continue
-                if is_header_candidate(
-                    line,
-                    [
-                        "next actions",
-                        "next steps",
-                        "remediation",
-                        "recommendations",
-                        "recommended actions",
-                    ],
-                ):
-                    current_section = "next_actions"
-                    consumed_indices.add(idx)
-                    continue
-
-                if current_section in ("claims", "evidence", "next_actions", "root_cause"):
-                    clean_line = _clean_markdown_line(stripped)
-                    # Always consume body lines under an active section so the verb-fallback
-                    # pass cannot treat root-cause narrative (e.g. "• Review …") as actions.
-                    consumed_indices.add(idx)
-                    if clean_line:
-                        if current_section == "claims":
-                            claims_lines.append(clean_line)
-                        elif current_section == "evidence":
-                            evidence_lines.append(clean_line)
-                        elif current_section == "next_actions":
-                            next_actions.append(clean_line)
-                        else:
-                            root_cause_report_detail.append(clean_line)
-
-            if not next_actions:
-                action_verbs = {
-                    "check",
-                    "review",
-                    "restart",
-                    "fix",
-                    "verify",
-                    "investigate",
-                    "debug",
-                    "update",
-                    "scale",
-                    "run",
-                    "test",
-                    "enable",
-                    "escalate",
-                }
-                for idx, line in enumerate(lines):
-                    if idx in consumed_indices:
-                        continue
-                    stripped = line.strip()
-                    if not stripped:
-                        continue
-
-                    # Verb fallback only applies to lines formatted as list items
-                    is_ast_bullet = stripped.startswith("*") and (
-                        stripped.startswith("* ") or re.match(r"^\*\t", stripped) is not None
-                    )
-                    is_bullet = stripped.startswith(("-", "•", "●", "—")) or is_ast_bullet
-                    is_numbered = bool(re.match(r"^\s*\d+[.)]\s*", stripped))
-                    if not (is_bullet or is_numbered):
-                        continue
-
-                    clean_line = _clean_markdown_line(stripped)
-                    tokens = clean_line.lower().split()
-                    if tokens:
-                        first_word = tokens[0].strip("*_`")
-                        if first_word in action_verbs:
-                            next_actions.append(clean_line)
-                            consumed_indices.add(idx)
-
-            additional_report_lines = [
-                line.strip()
-                for idx, line in enumerate(lines)
-                if idx not in consumed_indices and line.strip()
-            ]
-
-            def _bullet_block(title_markup: str, items: list[str]) -> str:
-                block = title_markup + "\n"
-                for item in items:
-                    block += f"  [cyan]\u2022[/cyan] {escape(item)}\n"
-                return block.rstrip()
-
-            raw_conf = score
-            low_confidence = (
-                isinstance(raw_conf, (int, float))
-                and not isinstance(raw_conf, bool)
-                and math.isfinite(float(raw_conf))
-                and float(raw_conf) * 100 <= 12.5
-            )
-            if confidence_str == "N/A":
-                conf_render = f"[dim]{escape(confidence_str)}[/dim]"
-            elif low_confidence:
-                conf_render = f"[bold yellow]{escape(confidence_str)}[/bold yellow]"
-            else:
-                conf_render = f"[bold green]{escape(confidence_str)}[/bold green]"
-
-            content = (
-                "[bold bright_white]\u2591 Root Cause[/bold bright_white]\n"
-                f"  [default]{escape(root_cause)}[/default]\n"
-            )
-            if root_cause_report_detail:
-                content += "\n"
-                for detail in root_cause_report_detail:
-                    content += f"  [cyan]\u2022[/cyan] {escape(detail)}\n"
-
-            content += (
-                f"\n[bold bright_white]\u2591 Confidence[/bold bright_white]\n  {conf_render}\n"
-            )
-
-            has_structured_body = claims_lines or evidence_lines or next_actions
-            has_tail = additional_report_lines
-            if has_structured_body or has_tail:
-                content += "\n" + _RCA_LINE + "\n"
-
-            if claims_lines:
-                content += (
-                    "\n"
-                    + _bullet_block(
-                        "[bold magenta]\u2591 Claims & inference[/bold magenta]",
-                        claims_lines,
-                    )
-                    + "\n"
-                )
-
-            if evidence_lines:
-                content += (
-                    "\n"
-                    + _bullet_block(
-                        "[bold cyan]\u2591 Supporting Evidence[/bold cyan]",
-                        evidence_lines,
-                    )
-                    + "\n"
-                )
-
-            if next_actions:
-                content += (
-                    "\n"
-                    + _bullet_block(
-                        "[bold yellow]\u2591 Next Actions[/bold yellow]",
-                        next_actions,
-                    )
-                    + "\n"
-                )
-
-            if additional_report_lines:
-                content += (
-                    "\n[bold white]\u2591 Additional report context[/bold white]"
-                    "[dim] — unclassified lines below [/dim]\n"
-                )
-                for raw in additional_report_lines:
-                    show = escape(_clean_markdown_line(raw) or raw)
-                    content += f"  [dim]\u2514[/dim] {show}\n"
-
-            self._console.print(
-                Panel(
-                    content.strip(),
-                    title="[bold green]🏆 Final Root Cause Analysis (RCA)[/bold green]",
-                    border_style="green",
-                    expand=False,
-                )
-            )
-            self._console.print()
-        else:
-            # Skip the Root Cause one-liner if the diagnose node already streamed
-            # its reasoning live — the user has just watched the full analysis
-            # appear on screen, so the condensed summary adds noise rather than
-            # value. The Report section still prints because publish_findings
-            # adds alert framing and timing the diagnose stream doesn't carry.
-            diagnose_streamed = self._diagnose.streamed
-            if root_cause and not diagnose_streamed:
-                _print_section("Root Cause", root_cause, console=self._console)
-            if report:
-                _print_section("Report", report, console=self._console)
-            elif not root_cause:
-                if self._final_state.get("is_noise"):
-                    _print_info("Alert classified as noise — no investigation needed.")
-                elif self._events_received == 0:
-                    _print_info("No events received from the remote agent.")
+        _render(slack_message, root_cause_category=root_cause_category)
 
 
 def _canonical_node_name(name: str) -> str:
-    """Map LangGraph node names to the canonical names used by ProgressTracker."""
+    """Map node names to the canonical names used by ProgressTracker."""
     mapping = {
         "diagnose_root_cause": "diagnose_root_cause",
         "diagnose": "diagnose_root_cause",
         "publish_findings": "publish_findings",
         "publish": "publish_findings",
+        "investigation_agent": "investigation_agent",
     }
     return mapping.get(name, name)
+
+
+def _tool_event_key(data: dict[str, Any], name: str) -> str:
+    nested = data.get("data", {}) if isinstance(data.get("data"), dict) else {}
+    return str(
+        data.get("id")
+        or data.get("tool_call_id")
+        or nested.get("id")
+        or nested.get("tool_call_id")
+        or name
+    )
+
+
+def _tool_source_label(tool_name: str) -> str:
+    tool = get_registered_tool_map().get(tool_name)
+    source = str(tool.source) if tool is not None else _infer_tool_source(tool_name)
+    if source == "grafana":
+        return "Grafana"
+    if source == "knowledge":
+        return "SRE"
+    if source == "openclaw":
+        return "OpenClaw"
+    return source.replace("_", " ").title() if source else "Tools"
+
+
+def _infer_tool_source(tool_name: str) -> str:
+    lowered = tool_name.lower()
+    for source in ("grafana", "datadog", "cloudwatch", "sentry", "honeycomb", "openclaw"):
+        if source in lowered:
+            return source
+    if lowered.startswith("get_sre_"):
+        return "knowledge"
+    return "tools"
+
+
+def _tool_short_label(tool_name: str, source_label: str) -> str:
+    display = resolve_tool_display_name(tool_name)
+    label = display
+    for prefix in (
+        source_label,
+        source_label.lower(),
+        f"{source_label} ",
+        f"{source_label.lower()} ",
+        "query ",
+        "get ",
+    ):
+        if label.startswith(prefix):
+            label = label[len(prefix) :].strip()
+    if source_label == "Grafana" and label.lower().startswith("grafana "):
+        label = label[len("grafana ") :].strip()
+    return label or display
+
+
+def _tool_input(data: dict[str, Any]) -> Any:
+    nested = data.get("data", {}) if isinstance(data.get("data"), dict) else {}
+    return data.get("input", nested.get("input", {}))
+
+
+def _tool_output(data: dict[str, Any]) -> Any:
+    nested = data.get("data", {}) if isinstance(data.get("data"), dict) else {}
+    return data.get("output", nested.get("output", {}))
 
 
 def _flatten_chunk_content(content: Any) -> str:
     """Resolve a chat-model chunk's ``content`` to plain text.
 
-    OpenAI emits a string. langchain-anthropic emits a list of content
+    OpenAI emits a string. Anthropic-style adapters may emit a list of content
     blocks where each block may be an object with ``.text`` or a dict
     with a ``"text"`` key. Non-text blocks (tool-use, image) are skipped.
     """

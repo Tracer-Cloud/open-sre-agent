@@ -265,7 +265,7 @@ class TestChatNodeGuardrails:
         monkeypatch.setattr("app.guardrails.engine.get_default_rules_path", lambda: config)
         monkeypatch.setattr("app.guardrails.rules.get_default_rules_path", lambda: config)
 
-        from app.nodes.chat import _apply_guardrails_to_messages
+        from app.agent.chat import _apply_guardrails as _apply_guardrails_to_messages
 
         secret = "key is AKIAIOSFODNN7EXAMPLE"
         msgs: list[dict[str, Any]] = [
@@ -293,7 +293,7 @@ class TestChatNodeGuardrails:
         monkeypatch.setattr("app.guardrails.engine.get_default_rules_path", lambda: config)
         monkeypatch.setattr("app.guardrails.rules.get_default_rules_path", lambda: config)
 
-        from app.nodes.chat import _apply_guardrails_to_messages
+        from app.agent.chat import _apply_guardrails as _apply_guardrails_to_messages
 
         msgs: list[dict[str, Any]] = [{"role": "user", "content": "this is forbidden"}]
         with pytest.raises(GuardrailBlockedError):
@@ -313,7 +313,7 @@ class TestChatNodeGuardrails:
         monkeypatch.setattr("app.guardrails.engine.get_default_rules_path", lambda: config)
         monkeypatch.setattr("app.guardrails.rules.get_default_rules_path", lambda: config)
 
-        from app.nodes.chat import _apply_guardrails_to_messages
+        from app.agent.chat import _apply_guardrails as _apply_guardrails_to_messages
 
         msgs: list[dict[str, Any]] = [{"role": "user", "content": None}]
         _apply_guardrails_to_messages(msgs)
@@ -328,7 +328,7 @@ class TestChatNodeGuardrails:
             lambda: tmp_path / "missing.yml",
         )
 
-        from app.nodes.chat import _apply_guardrails_to_messages
+        from app.agent.chat import _apply_guardrails as _apply_guardrails_to_messages
 
         msgs: list[dict[str, Any]] = [{"role": "user", "content": "AKIAIOSFODNN7EXAMPLE"}]
         result = _apply_guardrails_to_messages(msgs)
@@ -445,11 +445,11 @@ class TestOverlappingRedactionReachesDownstream:
     def test_chat_node_emits_merged_redaction(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """The LangGraph chat node must mirror the LLM-client behavior on
+        """The chat agent must mirror the LLM-client behavior on
         overlapping rules, leaving originals untouched (it copies)."""
         self._install_rules(tmp_path, monkeypatch)
 
-        from app.nodes.chat import _apply_guardrails_to_messages
+        from app.agent.chat import _apply_guardrails as _apply_guardrails_to_messages
 
         original = "Investigation: api_key=AKIAIOSFODNN7EXAMPLE surfaced in logs"
         msgs: list[dict[str, Any]] = [{"role": "user", "content": original}]

@@ -14,8 +14,11 @@ from app.cli.interactive_shell.runtime import ReplSession
 @dataclass(frozen=True)
 class SlashCommand:
     name: str
-    help_text: str
+    description: str
     handler: Callable[[ReplSession, Console, list[str]], bool]
+    usage: tuple[str, ...] = ()
+    examples: tuple[str, ...] = ()
+    notes: tuple[str, ...] = ()
     #: Tab-completion hints for the first argument after the command name (keyword, meta text).
     first_arg_completions: tuple[tuple[str, str], ...] = ()
     execution_tier: ExecutionTier = ExecutionTier.SAFE

@@ -174,19 +174,9 @@ def _execute_rca(candidate: VercelInvestigationCandidate) -> None:
     print()
     print(f"  Executing RCA for {candidate.pipeline_name} ({candidate.dedupe_key})...")
     result = (
-        run_investigation_cli(
-            raw_alert=candidate.raw_alert,
-            alert_name=candidate.alert_name,
-            pipeline_name=candidate.pipeline_name,
-            severity=candidate.severity,
-        )
+        run_investigation_cli(raw_alert=candidate.raw_alert)
         if is_json_output()
-        else run_investigation_cli_streaming(
-            raw_alert=candidate.raw_alert,
-            alert_name=candidate.alert_name,
-            pipeline_name=candidate.pipeline_name,
-            severity=candidate.severity,
-        )
+        else run_investigation_cli_streaming(raw_alert=candidate.raw_alert)
     )
     report_path = _save_report(candidate, result)
     if is_json_output():

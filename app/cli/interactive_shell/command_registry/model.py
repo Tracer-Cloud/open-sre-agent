@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import sys
 
 from rich.console import Console
 from rich.markup import escape
@@ -45,12 +44,13 @@ def _is_model_supported(
 
 def _reset_runtime_llm_caches() -> None:
     """Force subsequent REPL assistant calls to use the updated model env."""
+    from app.agent.chat import reset_chat_cache
+    from app.services.agent_llm_client import reset_agent_client
     from app.services.llm_client import reset_llm_singletons
 
     reset_llm_singletons()
-    chat_module = sys.modules.get("app.nodes.chat")
-    if chat_module is not None:
-        chat_module.reset_chat_llm_cache()
+    reset_agent_client()
+    reset_chat_cache()
 
 
 def switch_llm_provider(
@@ -61,7 +61,7 @@ def switch_llm_provider(
     toolcall_model: str | None = None,
 ) -> bool:
     from app.cli.wizard.config import PROVIDER_BY_VALUE
-    from app.cli.wizard.env_sync import sync_env_values
+    from app.cli.wizard.env_sync import sync_provider_env
     from app.llm_credentials import has_llm_api_key
 
     provider_key = provider_name.strip().lower()
@@ -108,10 +108,6 @@ def switch_llm_provider(
         )
         return False
 
-    values = {"LLM_PROVIDER": provider.value, provider.model_env: selected_model}
-    if provider.legacy_model_env:
-        values[provider.legacy_model_env] = selected_model
-
     selected_toolcall: str | None = None
     if toolcall_model is not None:
         if not provider.toolcall_model_env:
@@ -121,21 +117,23 @@ def switch_llm_provider(
             )
         else:
             selected_toolcall = toolcall_model.strip()
-            if selected_toolcall:
-                if not _is_model_supported(provider.value, selected_toolcall, provider.models):
-                    console.print(
-                        f"[{ERROR}]unknown model for {provider.value}:[/] "
-                        f"{escape(selected_toolcall)}"
-                    )
-                    console.print(
-                        f"[{DIM}]known toolcall models:[/] "
-                        f"{escape(_format_supported_models(provider.models))}"
-                    )
-                    return False
-                values[provider.toolcall_model_env] = selected_toolcall
+            if selected_toolcall and not _is_model_supported(
+                provider.value, selected_toolcall, provider.models
+            ):
+                console.print(
+                    f"[{ERROR}]unknown model for {provider.value}:[/] {escape(selected_toolcall)}"
+                )
+                console.print(
+                    f"[{DIM}]known toolcall models:[/] "
+                    f"{escape(_format_supported_models(provider.models))}"
+                )
+                return False
 
-    env_path = sync_env_values(values)
-    os.environ.update(values)
+    env_path = sync_provider_env(
+        provider=provider,
+        model=selected_model,
+        toolcall_model=selected_toolcall or None,
+    )
     _reset_runtime_llm_caches()
 
     # Be explicit about which slot each model lands in.
@@ -555,13 +553,19 @@ _MODEL_FIRST_ARGS: tuple[tuple[str, str], ...] = (
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
         "/model",
-        "show or set the active LLM (TTY: bare '/model' opens an inline menu — "
-        "show stays open for more actions; set / restore / toolcall exit after success; "
-        "done or Esc closes; TTY set: LLM provider then reasoning — pick "
-        "'provider default (one step)' to skip toolcall tuning (like bare `/model set p`); "
-        "else '/model show', '/model set <provider> [model] [--toolcall-model <m>]', "
-        "'/model restore [provider]', '/model toolcall set <model>')",
+        "Show or change active LLM settings.",
         _cmd_model,
+        usage=(
+            "/model",
+            "/model show",
+            "/model set <provider> [model] [--toolcall-model <model>]",
+            "/model restore [provider]",
+            "/model toolcall set <model>",
+        ),
+        notes=(
+            "In a TTY, bare /model opens an interactive menu.",
+            "The menu stays open after show actions and closes after set, restore, or toolcall changes.",
+        ),
         first_arg_completions=_MODEL_FIRST_ARGS,
         execution_tier=ExecutionTier.SAFE,
     ),

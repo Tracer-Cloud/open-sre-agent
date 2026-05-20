@@ -235,13 +235,21 @@ _HISTORY_FIRST_ARGS: tuple[tuple[str, str], ...] = (
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
         "/history",
-        "command history (TTY: bare '/history' opens menu; else clear | off | on | retention <N>)",
+        "Manage command history.",
         _cmd_history,
+        usage=(
+            "/history",
+            "/history clear",
+            "/history off",
+            "/history on",
+            "/history retention <N>",
+        ),
+        notes=("In a TTY, bare /history opens an interactive menu.",),
         first_arg_completions=_HISTORY_FIRST_ARGS,
     ),
     SlashCommand(
         "/privacy",
-        "show history persistence + redaction status and threat model",
+        "Show history persistence, redaction status, and threat model.",
         _cmd_privacy,
     ),
 ]

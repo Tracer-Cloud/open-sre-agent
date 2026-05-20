@@ -158,6 +158,7 @@ def _pump_task_stream(
                 _print_task_output_line(console, task, stream_name, line, style=style)
                 task.update_progress(line)
     except Exception as exc:  # noqa: BLE001
+        report_exception(exc, context=f"interactive_shell.task_stream.{stream_name}")
         console.print(f"[{DIM}]task output stream ended unexpectedly:[/] {escape(str(exc))}")
 
 
@@ -230,6 +231,7 @@ def _pump_task_pty(
             console.file.write(chunk.decode("utf-8", errors="replace"))
             console.file.flush()
     except Exception as exc:  # noqa: BLE001
+        report_exception(exc, context="interactive_shell.task_pty_stream")
         console.print(f"[{DIM}]task terminal stream ended unexpectedly:[/] {escape(str(exc))}")
     finally:
         with contextlib.suppress(OSError):
@@ -298,6 +300,7 @@ def start_background_cli_task(
             stdout_buf.close()
         stderr_buf.close()
         task.mark_failed(str(exc))
+        report_exception(exc, context="interactive_shell.background_cli_task.start")
         console.print(f"[{ERROR}]failed to start:[/] {escape(str(exc))}")
         return None
 
@@ -359,6 +362,7 @@ def start_background_cli_task(
                 console.print(f"[{ERROR}]command failed (exit {code}):[/]")
         except Exception as exc:  # noqa: BLE001
             task.mark_failed(str(exc))
+            report_exception(exc, context="interactive_shell.background_cli_task.watch")
             console.print(f"[{ERROR}]error:[/] {escape(str(exc))}")
         finally:
             _join_task_output_streams(output_threads)
@@ -426,36 +430,37 @@ def watch_synthetic_subprocess(
         session.record("synthetic_test", _history_text(), ok=ok)
 
     def _run() -> None:
-        output_threads = (
-            _start_task_output_streams(
-                task=task,
-                proc=proc,
-                console=console,
-                stderr_capture=stderr_buf,
-            )
-            if console is not None
-            else []
-        )
-        started = time.monotonic()
-        timed_out = False
-        # Track whether *we* explicitly terminated the process so we can
-        # distinguish a cancel-driven exit from a natural exit that happened
-        # to race with a concurrent /cancel.
-        terminated_by_watcher = False
-        while proc.poll() is None:
-            if time.monotonic() - started > SYNTHETIC_TEST_TIMEOUT_SECONDS:
-                timed_out = True
-                task.request_cancel()
-                terminate_child_process(proc)
-                terminated_by_watcher = True
-                break
-            if task.cancel_requested.is_set():
-                terminate_child_process(proc)
-                terminated_by_watcher = True
-                break
-            time.sleep(_SYNTHETIC_POLL_SECONDS)
-
+        output_threads: list[threading.Thread] = []
         try:
+            output_threads = (
+                _start_task_output_streams(
+                    task=task,
+                    proc=proc,
+                    console=console,
+                    stderr_capture=stderr_buf,
+                )
+                if console is not None
+                else []
+            )
+            started = time.monotonic()
+            timed_out = False
+            # Track whether *we* explicitly terminated the process so we can
+            # distinguish a cancel-driven exit from a natural exit that happened
+            # to race with a concurrent /cancel.
+            terminated_by_watcher = False
+            while proc.poll() is None:
+                if time.monotonic() - started > SYNTHETIC_TEST_TIMEOUT_SECONDS:
+                    timed_out = True
+                    task.request_cancel()
+                    terminate_child_process(proc)
+                    terminated_by_watcher = True
+                    break
+                if task.cancel_requested.is_set():
+                    terminate_child_process(proc)
+                    terminated_by_watcher = True
+                    break
+                time.sleep(_SYNTHETIC_POLL_SECONDS)
+
             if timed_out:
                 task.mark_failed(f"timed out after {SYNTHETIC_TEST_TIMEOUT_SECONDS}s")
                 _record_synthetic_if_current_session(ok=False)
@@ -487,6 +492,13 @@ def watch_synthetic_subprocess(
                 task.mark_failed(error_msg)
                 _record_synthetic_if_current_session(ok=False)
                 _suggest_follow_up_on_failure()
+        except Exception as exc:  # noqa: BLE001
+            task.mark_failed(str(exc))
+            report_exception(exc, context="interactive_shell.synthetic_test.watch")
+            _record_synthetic_if_current_session(ok=False)
+            _suggest_follow_up_on_failure()
+            if console is not None:
+                console.print(f"[{ERROR}]synthetic watcher failed:[/] {escape(str(exc))}")
         finally:
             _join_task_output_streams(output_threads)
             stderr_buf.close()
@@ -790,6 +802,7 @@ def run_cd_command(command: str, session: ReplSession, console: Console) -> None
     try:
         os.chdir(target)
     except Exception as exc:
+        report_exception(exc, context="interactive_shell.shell_cd")
         console.print(f"[{ERROR}]cd failed:[/] {escape(str(exc))}")
         session.record("shell", command, ok=False)
         return
@@ -816,6 +829,65 @@ def run_pwd_command(command: str, session: ReplSession, console: Console) -> Non
 
 
 _OPENSRE_BLOCKED_SUBCOMMANDS: frozenset[str] = frozenset({"agent"})
+
+# Command paths (one or two whitespace-joined tokens) that drive a
+# full-TTY interactive wizard — ``questionary`` radio widgets, multi-
+# step prompts. They cannot run inside the persistent REPL: the
+# wizard's prompt_toolkit Application fights the shell's active one
+# over the same terminal. Stdout piped through ``_print_task_output_line``
+# strips cursor-control escapes and stacks each redraw as plain text;
+# stdout inherited leaves two prompt_toolkit apps writing to the same
+# TTY. Both look broken to the user. Refusing with a clear message and
+# pointing at the right invocation is the smallest fix that doesn't
+# strand the user.
+#
+# Stored as space-joined paths (e.g. ``"integrations setup"``) so both
+# one-token (``"onboard"``) and two-token cases live in a single
+# data-driven set; :func:`_is_interactive_wizard` does the lookup.
+_INTERACTIVE_OPENSRE_COMMAND_PATHS: frozenset[str] = frozenset(
+    {
+        "onboard",
+        "integrations setup",
+    }
+)
+
+
+def _is_interactive_wizard(tokens: list[str]) -> bool:
+    """True when ``tokens`` name an opensre subcommand whose Click
+    handler drives an interactive wizard (questionary-backed widgets)
+    that needs a full TTY.
+    """
+    if not tokens:
+        return False
+    one = tokens[0].lower()
+    if one in _INTERACTIVE_OPENSRE_COMMAND_PATHS:
+        return True
+    if len(tokens) < 2:
+        return False
+    two = f"{one} {tokens[1].lower()}"
+    return two in _INTERACTIVE_OPENSRE_COMMAND_PATHS
+
+
+def print_interactive_wizard_handoff(console: Console, command_str: str) -> None:
+    """Print the standardized 'wizard needs a full terminal' handoff
+    message. Used by both :func:`run_opensre_cli_command` (LLM-classified
+    intent path) and ``cli_parity._cmd_onboard`` (slash-command path) so
+    the user sees the same message regardless of how the wizard was
+    triggered.
+
+    Exported (no leading underscore) because it crosses module
+    boundaries — Greptile flagged that a private name imported across
+    modules creates a hidden public contract.
+    """
+    console.print(
+        f"[{WARNING}]`opensre {command_str}` is an interactive wizard "
+        "that needs a full terminal.[/]"
+    )
+    console.print(
+        f"[{DIM}]Exit the interactive shell (Ctrl+D or `/exit`) and run "
+        f"[bold]opensre {command_str}[/bold] directly from your shell prompt.[/]"
+    )
+
 
 _READ_ONLY_OPENSRE_SUBCOMMANDS: frozenset[str] = frozenset(
     {
@@ -960,6 +1032,13 @@ def run_opensre_cli_command(
         console.print(f"[{ERROR}]Cannot run `opensre {first_token}`: subcommand is blocked.[/]")
         return False
 
+    if _is_interactive_wizard(tokens):
+        command_str = " ".join(tokens)
+        print_interactive_wizard_handoff(console, command_str)
+        session.record("cli_command", f"opensre {command_str}", ok=False)
+        # True = wizard exists and was handed off; the ``_OPENSRE_BLOCKED_SUBCOMMANDS`` branch above returns False for "shouldn't run at all".
+        return True
+
     command_classification = _classify_opensre_command(tokens)
     from app.cli.interactive_shell.orchestration.execution_policy import (
         ExecutionPolicyResult,
@@ -1073,6 +1152,65 @@ def run_sample_alert(
     session.last_state = final_state
     session.accumulate_from_state(final_state)
     session.record("alert", f"sample:{template_name}")
+
+
+def run_text_investigation(
+    alert_text: str,
+    session: ReplSession,
+    console: Console,
+    *,
+    confirm_fn: Callable[[str], str] | None = None,
+    is_tty: bool | None = None,
+    action_already_listed: bool = False,
+) -> None:
+    from app.cli.investigation import run_investigation_for_session
+
+    policy = evaluate_investigation_launch(action_type="investigation")
+    if not execution_allowed(
+        policy,
+        session=session,
+        console=console,
+        action_summary=f'investigation from text "{alert_text}"',
+        confirm_fn=confirm_fn,
+        is_tty=is_tty,
+        action_already_listed=action_already_listed,
+    ):
+        session.record("alert", alert_text, ok=False)
+        return
+
+    console.print(f"[bold]investigation:[/bold] {escape(alert_text)}")
+    task = session.task_registry.create(TaskKind.INVESTIGATION, command=f"investigate:{alert_text}")
+    task.mark_running()
+    try:
+        final_state = run_investigation_for_session(
+            alert_text=alert_text,
+            context_overrides=session.accumulated_context or None,
+            cancel_requested=task.cancel_requested,
+        )
+    except KeyboardInterrupt:
+        task.mark_cancelled()
+        console.print(f"[{WARNING}]investigation cancelled.[/]")
+        session.record("alert", alert_text, ok=False)
+        return
+    except OpenSREError as exc:
+        task.mark_failed(str(exc))
+        console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
+        if exc.suggestion:
+            console.print(f"[{WARNING}]suggestion:[/] {escape(exc.suggestion)}")
+        session.record("alert", alert_text, ok=False)
+        return
+    except Exception as exc:
+        task.mark_failed(str(exc))
+        report_exception(exc, context="interactive_shell.text_investigation")
+        console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
+        session.record("alert", alert_text, ok=False)
+        return
+
+    root = final_state.get("root_cause")
+    task.mark_completed(result=str(root) if root is not None else "")
+    session.last_state = final_state
+    session.accumulate_from_state(final_state)
+    session.record("alert", alert_text)
 
 
 def run_synthetic_test(
@@ -1215,6 +1353,7 @@ __all__ = [
     "run_opensre_cli_command",
     "run_pwd_command",
     "run_sample_alert",
+    "run_text_investigation",
     "run_shell_command",
     "run_synthetic_test",
     "start_background_cli_task",

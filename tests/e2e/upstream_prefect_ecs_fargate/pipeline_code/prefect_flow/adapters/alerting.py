@@ -46,7 +46,7 @@ def fire_pipeline_alert(
     """Standardized alerting for pipeline failures.
 
     Note: This currently just logs the alert. In production, this would
-    fire to a LangGraph endpoint or alerting system.
+    forward to an alerting or ticketing system.
     """
     run_id = f"run_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
 
@@ -69,7 +69,7 @@ def fire_pipeline_alert(
         },
     )
 
-    # Log the alert (in production, this would fire to LangGraph)
+    # Log the alert (in production, this would forward to your on-call path)
     print("ALERT: Pipeline failure detected")
     print(f"  Pipeline: {pipeline_name}")
     print(f"  Correlation ID: {correlation_id}")

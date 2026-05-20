@@ -97,6 +97,7 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
     try:
         text = path.read_text(encoding="utf-8")
     except Exception as exc:
+        report_exception(exc, context="interactive_shell.investigate_file.read")
         console.print(f"[{ERROR}]cannot read file:[/] {escape(str(exc))}")
         session.mark_latest(ok=False, kind="slash")
         return True
@@ -200,6 +201,7 @@ def _cmd_save(session: ReplSession, console: Console, args: list[str]) -> bool:
             dest.write_text("\n".join(lines) or "(no report content)", encoding="utf-8")
         console.print(f"[{HIGHLIGHT}]saved:[/] {escape(str(dest))}")
     except Exception as exc:
+        report_exception(exc, context="interactive_shell.save_report")
         console.print(f"[{ERROR}]save failed:[/] {escape(str(exc))}")
     return True
 
@@ -215,29 +217,39 @@ _TEMPLATE_FIRST_ARGS: tuple[tuple[str, str], ...] = (
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
         "/template",
-        "print a starter alert JSON template (TTY: bare '/template' opens menu; "
-        "else '/template generic|datadog|grafana|honeycomb|coralogix')",
+        "Print a starter alert JSON template.",
         _cmd_template,
+        usage=(
+            "/template",
+            "/template generic",
+            "/template datadog",
+            "/template grafana",
+            "/template honeycomb",
+            "/template coralogix",
+        ),
+        notes=("In a TTY, bare /template opens an interactive menu.",),
         first_arg_completions=_TEMPLATE_FIRST_ARGS,
         execution_tier=ExecutionTier.SAFE,
     ),
     SlashCommand(
         "/investigate",
-        "run an RCA investigation from a file ('/investigate <file>')",
+        "Run an RCA investigation from a file.",
         _cmd_investigate_file,
+        usage=("/investigate <file>",),
         execution_tier=ExecutionTier.ELEVATED,
         validate_args=_validate_investigate_args,
     ),
     SlashCommand(
         "/last",
-        "reprint the most recent investigation report",
+        "Reprint the most recent investigation report.",
         _cmd_last,
         execution_tier=ExecutionTier.SAFE,
     ),
     SlashCommand(
         "/save",
-        "save last investigation to a file ('/save <path>')",
+        "Save the last investigation to a file.",
         _cmd_save,
+        usage=("/save <path>",),
         execution_tier=ExecutionTier.ELEVATED,
         validate_args=_validate_save_args,
     ),

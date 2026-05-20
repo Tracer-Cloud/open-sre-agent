@@ -19,7 +19,7 @@ from rich.text import Text
 
 from app.cli.interactive_shell.commands import SLASH_COMMANDS
 from app.cli.interactive_shell.history import load_prompt_history
-from app.cli.interactive_shell.routing.router import BARE_COMMAND_ALIASES
+from app.cli.interactive_shell.routing.resolve_cli_command.catalog import BARE_COMMAND_ALIASES
 from app.cli.interactive_shell.runtime import ReplSession
 from app.cli.interactive_shell.ui import (
     ANSI_DIM,
@@ -183,7 +183,7 @@ class ShellCompleter(Completer):
                         cmd.name,
                         start_position=-len(parts[0]),
                         display=cmd.name,
-                        display_meta=_short_meta(cmd.help_text),
+                        display_meta=_short_meta(cmd.description),
                     )
             return
 

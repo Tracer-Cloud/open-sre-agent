@@ -694,9 +694,20 @@ def _cmd_agents(session: ReplSession, console: Console, args: list[str]) -> bool
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
         "/agents",
-        "show registered local AI agents (subcommands: budget, bus, claim, conflicts, kill, "
-        "release, trace, wait, graph)",
+        "Show and manage registered local AI agents.",
         _cmd_agents,
+        usage=(
+            "/agents",
+            "/agents budget",
+            "/agents bus",
+            "/agents claim",
+            "/agents conflicts",
+            "/agents kill",
+            "/agents release",
+            "/agents trace",
+            "/agents wait",
+            "/agents graph",
+        ),
         first_arg_completions=_AGENTS_FIRST_ARGS,
     ),
 ]

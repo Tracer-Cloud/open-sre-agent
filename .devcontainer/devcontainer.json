@@ -20,11 +20,11 @@
     "PYTHONUTF8": "1"
   },
   "forwardPorts": [
-    2024
+    8000
   ],
   "portsAttributes": {
-    "2024": {
-      "label": "LangGraph dev server",
+    "8000": {
+      "label": "OpenSRE health app",
       "onAutoForward": "notify"
     }
   },

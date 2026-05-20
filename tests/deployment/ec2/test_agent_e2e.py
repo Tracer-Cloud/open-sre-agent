@@ -1,4 +1,4 @@
-"""End-to-end test: deploy OpenSRE on EC2 and verify the LangGraph API.
+"""End-to-end test: deploy OpenSRE on EC2 and verify the HTTP health API.
 
 Requires deployed infrastructure (see conftest.py / deploy.py).
 Run with: pytest tests/deployment/ec2/ -v -s
@@ -39,9 +39,9 @@ class TestEC2Health:
     """Validate that the OpenSRE container is healthy on EC2."""
 
     def test_health_endpoint(self, ec2_deployment: dict[str, Any]) -> None:
-        """Verify the LangGraph API health endpoint responds."""
+        """Verify the OpenSRE health endpoint responds."""
         ip = ec2_deployment["PublicIpAddress"]
-        url = f"http://{ip}:2024/ok"
+        url = f"http://{ip}:8000/health"
 
         try:
             resp = requests.get(url, timeout=30)
@@ -50,20 +50,21 @@ class TestEC2Health:
             return
 
         assert resp.status_code == 200, f"Health returned {resp.status_code}: {resp.text[:200]}"
+        payload = resp.json()
+        assert "ok" in payload
         logger.info("Health endpoint OK: %d", resp.status_code)
 
-    def test_threads_endpoint(self, ec2_deployment: dict[str, Any]) -> None:
-        """Verify the LangGraph threads API is accessible."""
+    def test_health_reports_version(self, ec2_deployment: dict[str, Any]) -> None:
+        """Verify the health payload includes a version string."""
         ip = ec2_deployment["PublicIpAddress"]
-        url = f"http://{ip}:2024/threads"
+        url = f"http://{ip}:8000/health"
 
         try:
-            resp = requests.post(url, json={}, timeout=30)
+            resp = requests.get(url, timeout=30)
         except requests.exceptions.RequestException as exc:
-            pytest.skip(f"Threads endpoint unreachable: {exc}")
+            pytest.skip(f"Health endpoint unreachable: {exc}")
             return
 
-        assert resp.status_code in (200, 201, 401, 422), (
-            f"Threads returned unexpected status: {resp.status_code}"
-        )
-        logger.info("Threads endpoint accessible: %d", resp.status_code)
+        payload = resp.json()
+        assert payload.get("version"), "version missing from health payload"
+        logger.info("Health version OK: %s", payload.get("version"))
