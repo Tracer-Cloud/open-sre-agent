@@ -90,19 +90,24 @@ def test_valid_plan_multiple_actions_ordered_by_position(
 
 def test_target_surface_set_correctly_for_each_kind(monkeypatch: pytest.MonkeyPatch) -> None:
     cases = [
-        ("slash", "slash"),
+        ("slash", "/help", "slash"),
         ("llm_provider", "slash"),
         ("task_cancel", "slash"),
         ("shell", "terminal"),
         ("cli_command", "terminal"),
         ("implementation", "implementation"),
         ("investigation", "investigation"),
-        ("synthetic_test", "investigation"),
+        ("synthetic_test", "rds_postgres:001-replication-lag", "investigation"),
         ("sample_alert", "investigation"),
     ]
-    for kind, expected_surface in cases:
+    for case in cases:
+        if len(case) == 3:
+            kind, content, expected_surface = case
+        else:
+            kind, expected_surface = case
+            content = "x"
         payload = _make_llm_response(
-            [{"kind": kind, "content": "x", "confidence": 0.9, "rationale": "r"}]
+            [{"kind": kind, "content": content, "confidence": 0.9, "rationale": "r"}]
         )
         monkeypatch.setattr(planner_module, "_call_llm", lambda _text, p=payload: p)
         result = planner_module.plan_actions_with_llm("test")
@@ -263,7 +268,7 @@ def test_empty_unhandled_text_sets_has_unhandled_false(monkeypatch: pytest.Monke
 def test_content_is_clamped_to_max_length(monkeypatch: pytest.MonkeyPatch) -> None:
     long_content = "x" * 500
     payload = _make_llm_response(
-        [{"kind": "slash", "content": long_content, "confidence": 0.9, "rationale": ""}]
+        [{"kind": "investigation", "content": long_content, "confidence": 0.9, "rationale": ""}]
     )
     monkeypatch.setattr(planner_module, "_call_llm", lambda _text: payload)
 
@@ -271,3 +276,41 @@ def test_content_is_clamped_to_max_length(monkeypatch: pytest.MonkeyPatch) -> No
     assert result is not None
     actions, _ = result
     assert len(actions[0].content) == planner_module._MAX_CONTENT_LEN
+
+
+def test_slash_action_with_unknown_command_is_dropped(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = _make_llm_response(
+        [{"kind": "slash", "content": "/not-a-command", "confidence": 0.9, "rationale": ""}]
+    )
+    monkeypatch.setattr(planner_module, "_call_llm", lambda _text: payload)
+
+    result = planner_module.plan_actions_with_llm("do unknown thing")
+    assert result is not None
+    actions, _ = result
+    assert actions == []
+
+
+def test_synthetic_action_with_unknown_scenario_is_dropped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        planner_module,
+        "_list_synthetic_scenarios",
+        lambda: ("001-replication-lag",),
+    )
+    payload = _make_llm_response(
+        [
+            {
+                "kind": "synthetic_test",
+                "content": "rds_postgres:999-missing",
+                "confidence": 0.9,
+                "rationale": "",
+            }
+        ]
+    )
+    monkeypatch.setattr(planner_module, "_call_llm", lambda _text: payload)
+
+    result = planner_module.plan_actions_with_llm("run synthetic test 999")
+    assert result is not None
+    actions, _ = result
+    assert actions == []

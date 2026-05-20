@@ -16,7 +16,7 @@ from app.cli.interactive_shell.chat import cli_agent as _cli_agent
 from app.cli.interactive_shell.chat import cli_help as _cli_help
 from app.cli.interactive_shell.prompting import follow_up as _follow_up
 from app.cli.interactive_shell.routing.types import RouteDecision
-from app.cli.interactive_shell.runtime import ReplSession
+from app.cli.interactive_shell.runtime.session import ReplSession
 from app.cli.interactive_shell.ui import DIM, ERROR, WARNING
 from app.cli.support.errors import OpenSREError
 from app.cli.support.exception_reporting import report_exception

@@ -20,23 +20,27 @@ from app.agents.sampler import start_sampler
 from app.cli.interactive_shell import alert_inbox as _alert_inbox
 from app.cli.interactive_shell.alert_renderer import drain_and_render_incoming
 from app.cli.interactive_shell.prompting import prompt_surface as _prompt_surface
-from app.cli.interactive_shell.runtime import HotReloadCoordinator, ReplSession
+from app.cli.interactive_shell.runtime.dispatch import (
+    DispatchCancelled,
+    build_cancel_key_bindings,
+    dispatch_needs_exclusive_stdin,
+    dispatch_one_turn,
+    dispatch_should_show_spinner,
+    install_session_key_bindings,
+    looks_like_cancel_request,
+    looks_like_confirmation_answer,
+    route_confirm_through_prompt,
+)
+from app.cli.interactive_shell.runtime.hot_reload import HotReloadCoordinator
+from app.cli.interactive_shell.runtime.session import ReplSession
+from app.cli.interactive_shell.runtime.state import (
+    PROMPT_REFRESH_INTERVAL_S,
+    ReplState,
+    SpinnerState,
+)
 from app.cli.interactive_shell.ui import ERROR, WARNING
 from app.cli.support.exception_reporting import report_exception
 from app.cli.support.prompt_support import repl_prompt_note_ctrl_c, repl_reset_ctrl_c_gate
-
-from .dispatch import (
-    DispatchCancelled,
-    _build_cancel_key_bindings,
-    _dispatch_needs_exclusive_stdin,
-    _dispatch_one_turn,
-    _dispatch_should_show_spinner,
-    _install_session_key_bindings,
-    _looks_like_cancel_request,
-    _looks_like_confirmation_answer,
-    _route_confirm_through_prompt,
-)
-from .state import _PROMPT_REFRESH_INTERVAL_S, ReplState, SpinnerState
 
 log = logging.getLogger(__name__)
 
@@ -97,8 +101,8 @@ async def run_interactive(
     state = ReplState()
     sampler_task = start_sampler()
 
-    cancel_kb = _build_cancel_key_bindings(state)
-    _install_session_key_bindings(pt_session, cancel_kb)
+    cancel_kb = build_cancel_key_bindings(state)
+    install_session_key_bindings(pt_session, cancel_kb)
 
     pt_app = pt_session.app
     main_loop = asyncio.get_running_loop()
@@ -131,17 +135,17 @@ async def run_interactive(
             color_system="truecolor",
             legacy_windows=False,
         )
-        show_spinner = _dispatch_should_show_spinner(text, session)
+        show_spinner = dispatch_should_show_spinner(text, session)
         if show_spinner:
             spinner.start()
         try:
             await asyncio.to_thread(
-                _dispatch_one_turn,
+                dispatch_one_turn,
                 text,
                 session,
                 console,
                 on_exit=_request_exit,
-                confirm_fn=lambda prompt: _route_confirm_through_prompt(state, prompt),
+                confirm_fn=lambda prompt: route_confirm_through_prompt(state, prompt),
             )
         except asyncio.CancelledError:
             console.print(f"[{WARNING}]· interrupted[/]")
@@ -220,21 +224,20 @@ async def run_interactive(
                 if hot_reloader is not None and not state.is_dispatch_running():
                     hot_reloader.check_and_reload(echo_console)
                 # Drain any CPR bytes (ESC[row;colR) left in stdin from the
-                # previous prompt_async's bottom-toolbar refresh cycles.  Each
-                # prompt_async call tears down its Application; responses that
-                # arrive after the input-reader thread stops are left in the OS
-                # buffer and would appear as literal keystrokes in the new
-                # Application's fresh vt100 parser.  The brief sleep lets
-                # in-transit terminal responses land before the non-blocking
-                # drain runs; without it the terminal's write latency means
-                # some bytes arrive after the drain and still corrupt input.
+                # previous prompt_async's bottom-toolbar refresh cycles.
+                # Each prompt_async tears down its Application; CPR responses
+                # that arrive after the input-reader thread stops sit in the OS
+                # stdin buffer and appear as literal keystrokes in the next
+                # Application's fresh vt100 parser.
+                # The brief sleep lets in-transit terminal responses land in the
+                # buffer before the non-blocking select drain runs.
                 await asyncio.sleep(0.05)
                 _drain_stale_cpr_bytes()
                 try:
                     text = await pt_session.prompt_async(
                         message=_message_with_spinner,
                         bottom_toolbar=spinner.toolbar_ansi,
-                        refresh_interval=_PROMPT_REFRESH_INTERVAL_S,
+                        refresh_interval=PROMPT_REFRESH_INTERVAL_S,
                     )
                 except EOFError:
                     if state.is_dispatch_running():
@@ -253,14 +256,14 @@ async def run_interactive(
 
                 if state.exit_requested:
                     return
-                if state.is_dispatch_running() and _looks_like_cancel_request(text):
+                if state.is_dispatch_running() and looks_like_cancel_request(text):
                     stripped = (text or "").strip()
                     _prompt_surface.render_submitted_prompt(echo_console, session, stripped)
                     state.cancel_current_dispatch()
                     continue
 
                 if state.is_awaiting_confirmation():
-                    if _looks_like_confirmation_answer(text):
+                    if looks_like_confirmation_answer(text):
                         state.deliver_confirmation(text or "")
                         continue
                     echo_console.print(
@@ -276,7 +279,7 @@ async def run_interactive(
                 if not stripped:
                     continue
                 _prompt_surface.render_submitted_prompt(echo_console, session, stripped)
-                wait_for_dispatch = _dispatch_needs_exclusive_stdin(stripped, session)
+                wait_for_dispatch = dispatch_needs_exclusive_stdin(stripped, session)
                 await state.queue.put(stripped)
                 if wait_for_dispatch:
                     await state.queue.join()
@@ -307,7 +310,4 @@ async def run_interactive(
             log.debug("Alert watcher shutdown raised exception: %s", exc)
 
 
-_StreamingConsole = StreamingConsole
-_run_interactive = run_interactive
-
-__all__ = ["StreamingConsole", "run_interactive", "_StreamingConsole", "_run_interactive"]
+__all__ = ["StreamingConsole", "run_interactive"]

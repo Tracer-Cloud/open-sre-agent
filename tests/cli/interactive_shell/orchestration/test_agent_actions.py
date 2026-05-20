@@ -14,6 +14,7 @@ import pytest
 from rich.console import Console
 
 import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor as action_executor
+import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_planner as action_planner_module
 import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions as agent_actions
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration import (
     intent_parser as intent_parser_module,
@@ -32,6 +33,31 @@ _NITRO_PROMPT = (
     "I want to deploy OpenSRE on a remote EC2 Nitro instance, and then I want to send\n"
     'it an investigation. Can you please deploy the instance and send it "hello world"?'
 )
+
+# Same intent as _NITRO_PROMPT but using "connect" instead of "deploy".
+# Regression: "connect" was not a trigger verb for the /remote pattern, so the
+# planner only saw the quoted investigation and silently dropped the remote step.
+_NITRO_CONNECT_PROMPT = (
+    "I want to connect to OpenSRE that I have running on a remote EC2 Nitro instance, "
+    "and then I want to send it an investigation. Can you please connect the instance "
+    'and send it "hello world"'
+)
+
+
+@pytest.fixture(autouse=True)
+def _llm_planner_bridge(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep legacy deterministic behavior for broad action-execution tests.
+
+    The runtime now uses LLM-first planning. Most tests in this file validate
+    action execution mechanics, not LLM planner quality, so they use a stable
+    deterministic bridge by default. LLM-specific deny-path tests override this.
+    """
+
+    monkeypatch.setattr(
+        agent_actions,
+        "plan_actions_with_llm",
+        lambda message: action_planner_module.plan_actions_with_unhandled(message),
+    )
 
 
 def test_health_then_connected_services_plans_two_actions_in_order() -> None:
@@ -132,7 +158,7 @@ def test_execute_cli_actions_skips_remaining_actions_when_cancelled(
 ) -> None:
     """Multi-action plan: if the user pressed Esc / typed ``/cancel``
     between actions, the per-dispatch cancel event is set on the
-    ``_StreamingConsole``. The action loop checks ``cancel_requested``
+    ``StreamingConsole``. The action loop checks ``cancel_requested``
     at the top of each iteration and breaks, so the remaining actions
     in the plan are NOT dispatched.
 
@@ -213,9 +239,11 @@ def test_execute_cli_actions_falls_through_for_local_llama_request(monkeypatch: 
     console, _ = _capture()
     handled = agent_actions.execute_cli_actions("please connect to local llama", session, console)
 
-    assert handled is False
+    assert handled is True
     assert dispatched == []
-    assert session.history == []
+    assert session.history == [
+        {"type": "cli_agent", "text": "please connect to local llama", "ok": False}
+    ]
 
 
 def test_execute_cli_actions_switches_llm_provider(monkeypatch: object) -> None:
@@ -338,11 +366,20 @@ def test_execute_cli_actions_answers_discord_then_dispatches_datadog(
         console,
     )
 
-    assert handled is False
-    assert dispatched == ["/integrations show datadog"]
+    assert handled is True
+    assert dispatched == []
+    assert session.history == [
+        {
+            "type": "cli_agent",
+            "text": (
+                "tell me about what the discord integration can do and then tell me what "
+                "datadog services I have connections to"
+            ),
+            "ok": False,
+        }
+    ]
     output = buf.getvalue()
-    assert "Discord integration" not in output
-    assert "ran /integrations show datadog" in output
+    assert "couldn't safely decide actions" in output.lower()
 
 
 def test_compound_prompt_plans_chat_list_and_cli_command() -> None:
@@ -381,6 +418,16 @@ def test_compound_prompt_plans_chat_list_and_slash_deploy_paraphrase() -> None:
 def test_nitro_prompt_plans_remote_then_quoted_investigation() -> None:
     assert agent_actions.plan_terminal_tasks(_NITRO_PROMPT) == ["slash", "investigation"]
     assert agent_actions.plan_cli_actions(_NITRO_PROMPT) == ["/remote"]
+
+
+def test_nitro_connect_prompt_plans_remote_then_quoted_investigation() -> None:
+    """'connect' variant of the Nitro prompt must plan /remote before the investigation.
+
+    Regression: "connect" was not a trigger verb for the /remote pattern, so the
+    planner only planned the quoted investigation and silently dropped the remote step.
+    """
+    assert agent_actions.plan_terminal_tasks(_NITRO_CONNECT_PROMPT) == ["slash", "investigation"]
+    assert agent_actions.plan_cli_actions(_NITRO_CONNECT_PROMPT) == ["/remote"]
 
 
 def test_services_version_deploy_prompt_plans_all_actions() -> None:
@@ -451,12 +498,20 @@ def test_compound_prompt_executes_all_supported_tasks(monkeypatch: object) -> No
         console,
     )
 
-    assert handled is False
-    assert dispatched == ["/list integrations", "/remote"]
+    assert handled is True
+    assert dispatched == []
+    assert session.history == [
+        {
+            "type": "cli_agent",
+            "text": (
+                "tell me how you are doing AND show me all the services we are connected to "
+                "AND then deploy OpenSRE to EC2"
+            ),
+            "ok": False,
+        }
+    ]
     output = buf.getvalue()
-    assert "I'm doing fine" not in output
-    assert "EC2 deployment creates AWS" not in output
-    assert "ran /list integrations" in output
+    assert "couldn't safely decide actions" in output.lower()
 
 
 def test_nitro_prompt_executes_remote_then_investigation(monkeypatch: object) -> None:
@@ -770,19 +825,20 @@ def test_partial_match_reports_unhandled_clause(monkeypatch: object) -> None:
     session = ReplSession()
     console, buf = _capture()
 
-    assert not agent_actions.execute_cli_actions(
+    assert agent_actions.execute_cli_actions(
         "show me connected services and sing a song", session, console
     )
-    assert dispatched == ["/list integrations"]
-    assert "don't have a safe built-in action" not in buf.getvalue()
+    assert dispatched == []
+    output = buf.getvalue()
+    assert "couldn't safely decide actions" in output.lower()
 
 
 def test_execute_cli_actions_falls_through_for_chat() -> None:
     session = ReplSession()
     console, _ = _capture()
 
-    assert agent_actions.execute_cli_actions("hey", session, console) is False
-    assert session.history == []
+    assert agent_actions.execute_cli_actions("hey", session, console) is True
+    assert session.history == [{"type": "cli_agent", "text": "hey", "ok": False}]
 
 
 def test_execute_cli_actions_runs_shell_command(monkeypatch: object) -> None:
@@ -1157,3 +1213,58 @@ def test_execute_cli_actions_with_metrics_counts_planned_and_executed(monkeypatc
     assert result.executed_success_count == 1
     assert captured_planned == [(1, False)]
     assert captured_executed == [(1, 1, 1)]
+
+
+def test_execute_cli_actions_denies_when_llm_plan_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(agent_actions, "plan_actions_with_llm", lambda _message: None)
+
+    session = ReplSession()
+    console, buf = _capture()
+    handled = agent_actions.execute_cli_actions("check health", session, console)
+
+    assert handled is True
+    assert session.history == [{"type": "cli_agent", "text": "check health", "ok": False}]
+    output = buf.getvalue()
+    assert "couldn't safely decide actions" in output.lower()
+
+
+def test_execute_cli_actions_with_metrics_denies_when_llm_plan_has_unhandled_clause(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        agent_actions,
+        "plan_actions_with_llm",
+        lambda _message: (
+            [action_planner_module.slash_action("/health", 0)],
+            True,
+        ),
+    )
+
+    captured_planned: list[tuple[int, bool]] = []
+    captured_executed: list[tuple[int, int, int]] = []
+    monkeypatch.setattr(
+        "app.analytics.cli.capture_terminal_actions_planned",
+        lambda *, planned_count, has_unhandled_clause: captured_planned.append(
+            (planned_count, has_unhandled_clause)
+        ),
+    )
+    monkeypatch.setattr(
+        "app.analytics.cli.capture_terminal_actions_executed",
+        lambda *, planned_count, executed_count, executed_success_count: captured_executed.append(
+            (planned_count, executed_count, executed_success_count)
+        ),
+    )
+
+    session = ReplSession()
+    console, _ = _capture()
+    result = agent_actions.execute_cli_actions_with_metrics("check health", session, console)
+
+    assert result.handled is True
+    assert result.planned_count == 0
+    assert result.executed_count == 0
+    assert result.executed_success_count == 0
+    assert result.has_unhandled_clause is True
+    assert captured_planned == [(0, True)]
+    assert captured_executed == [(0, 0, 0)]

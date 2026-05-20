@@ -12,11 +12,12 @@ from app.agents.sweep import run_startup_sweep
 from app.cli.interactive_shell import alert_inbox as _alert_inbox
 from app.cli.interactive_shell.config import ReplConfig
 from app.cli.interactive_shell.prompting import prompt_surface as _prompt_surface
-from app.cli.interactive_shell.runtime import HotReloadCoordinator, ReplSession, TaskRegistry
+from app.cli.interactive_shell.runtime.dispatch import run_initial_input
+from app.cli.interactive_shell.runtime.hot_reload import HotReloadCoordinator
+from app.cli.interactive_shell.runtime.loop import run_interactive
+from app.cli.interactive_shell.runtime.session import ReplSession
+from app.cli.interactive_shell.runtime.tasks import TaskRegistry
 from app.cli.interactive_shell.ui import DIM, render_banner
-
-from .dispatch import run_initial_input
-from .terminal_runtime import run_interactive
 
 log = logging.getLogger(__name__)
 
@@ -89,6 +90,4 @@ def run_repl(initial_input: str | None = None, config: ReplConfig | None = None)
         return 0
 
 
-_repl_main = repl_main
-
-__all__ = ["repl_main", "run_repl", "_repl_main"]
+__all__ = ["repl_main", "run_repl"]

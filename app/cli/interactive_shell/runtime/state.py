@@ -15,7 +15,7 @@ from app.cli.interactive_shell.ui import ANSI_DIM, ANSI_RESET, PROMPT_ACCENT_ANS
 from app.cli.interactive_shell.ui.streaming import _CHARS_PER_TOKEN, format_token_count_short
 
 # How often prompt-toolkit refreshes prompt callbacks and confirmation polling.
-_PROMPT_REFRESH_INTERVAL_S = 0.25
+PROMPT_REFRESH_INTERVAL_S = 0.25
 
 
 @dataclass
@@ -146,4 +146,4 @@ class SpinnerState:
         )
 
 
-__all__ = ["ReplState", "SpinnerState", "_PROMPT_REFRESH_INTERVAL_S"]
+__all__ = ["PROMPT_REFRESH_INTERVAL_S", "ReplState", "SpinnerState"]

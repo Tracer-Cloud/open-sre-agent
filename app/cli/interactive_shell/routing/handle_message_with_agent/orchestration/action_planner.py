@@ -1,4 +1,8 @@
-"""Plan deterministic actions from natural-language REPL input."""
+"""Deterministic fallback action planner for natural-language REPL input.
+
+The runtime path is LLM-first. This module is retained as a strict fallback and
+for deterministic regression coverage in unit tests.
+"""
 
 from __future__ import annotations
 

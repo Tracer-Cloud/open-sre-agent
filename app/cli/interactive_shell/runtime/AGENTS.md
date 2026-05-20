@@ -1,8 +1,8 @@
-# Terminal runtime package rules
+# Runtime package rules
 
 ## Human summary
 
-The `terminal_runtime` package is the interactive shell runtime for OpenSRE. It keeps
+The `runtime` package is the interactive shell runtime for OpenSRE. It keeps
 the prompt alive, accepts user input turn by turn, routes each turn to the
 right handler, executes actions, and keeps the terminal responsive while work
 is running.
@@ -10,27 +10,35 @@ is running.
 In simple terms:
 
 - `entrypoint.py` starts the interactive session and handles startup/shutdown.
-- `terminal_runtime.py` runs the async prompt loop, queue, and cancellation wiring.
+- `loop.py` runs the async prompt loop, queue, and cancellation wiring.
 - `dispatch.py` is the control-plane router for one turn: it decides **how** a
   turn should be handled (slash command vs agent/help/follow-up path), handles
   cancel/confirm gating, and delegates execution.
 - `execution.py` performs the side effects (run slash commands, answer via
   agent/help/follow-up, run investigations, emit analytics).
 - `state.py` holds shared runtime state (`ReplState`, `SpinnerState`) used by
-  the runtime and dispatch flow.
+  the loop and dispatch flow.
+- `session.py` owns the per-REPL-process `ReplSession` (history, accumulated
+  context, trust mode, interaction counters).
+- `tasks.py` owns the cross-session task registry surfaced via `/tasks` and
+  `/cancel`.
+- `hot_reload.py` watches `app/` and reloads loaded modules between turns.
 
-These instructions apply to `app/cli/interactive_shell/runtime/terminal_runtime/` and all
+These instructions apply to `app/cli/interactive_shell/runtime/` and all
 subdirectories. Parent `AGENTS.md` files still apply.
 
 ## Architectural intent (locked)
 
-The UI runtime package is intentionally split into five concerns:
+The runtime package is intentionally split into focused concerns:
 
 - `state.py` — runtime state and transition helpers only.
 - `dispatch.py` — control-plane routing/input gating only.
 - `execution.py` — side-effectful execution only.
-- `terminal_runtime.py` — async prompt runtime/event loop orchestration only.
+- `loop.py` — async prompt runtime/event loop orchestration only.
 - `entrypoint.py` — process/bootstrap boundary only.
+- `session.py` — session-scoped REPL state only.
+- `tasks.py` — task registry + persistence only.
+- `hot_reload.py` — file-watch + module reload only.
 
 Keep these boundaries strict. If a change crosses concerns, move code to the
 owner module instead of broadening module responsibilities.
@@ -40,8 +48,7 @@ owner module instead of broadening module responsibilities.
 The interactive runtime must keep this shape:
 
 1. `entrypoint.run_repl` sets up process-level concerns and calls `repl_main`.
-2. `terminal_runtime.run_interactive` owns queueing, prompt lifecycle, and task
-   scheduling.
+2. `loop.run_interactive` owns queueing, prompt lifecycle, and task scheduling.
 3. `dispatch.dispatch_one_turn` computes control decisions and delegates.
 4. `execution.execute_routed_turn` performs side effects.
 
@@ -52,7 +59,7 @@ Do not invert this dependency direction.
 ```mermaid
 flowchart TD
   runRepl["entrypoint.run_repl"] --> replMain["entrypoint.repl_main"]
-  replMain --> runInteractive["terminal_runtime.run_interactive"]
+  replMain --> runInteractive["loop.run_interactive"]
   runInteractive --> dispatchTurn["dispatch.dispatch_one_turn"]
   dispatchTurn --> executeTurn["execution.execute_routed_turn"]
   executeTurn --> sideEffects["slash/help/agent/follow-up/investigation side effects"]
@@ -93,9 +100,9 @@ flowchart TD
 - `execute_routed_turn` must receive a `RouteDecision` from dispatch/runtime;
   execution should not re-route user input.
 
-## Runtime rules
+## Loop rules
 
-- `terminal_runtime.py` owns:
+- `loop.py` owns:
   - prompt-toolkit wiring
   - queue processor
   - dispatch task lifecycle
@@ -116,26 +123,27 @@ flowchart TD
 
 ## Compatibility surface policy
 
-- `terminal_runtime/__init__.py` should be a thin export layer.
+- `runtime/__init__.py` should be a thin export layer.
 - Do not duplicate business logic in `__init__.py`.
-- Keep compatibility aliases only when required by active callers/tests.
-- When caller/test imports are migrated, remove stale aliases in the same
-  change.
+- Do not re-add `_xxx` underscore aliases or wrapper functions for
+  compatibility. Tests and callers should import canonical names from their
+  owning submodule.
 
 ## Test seam policy
 
 - Prefer patching canonical module seams:
-  - `terminal_runtime.dispatch.*` for control-plane behavior
-  - `terminal_runtime.execution.*` for side effects
-  - `terminal_runtime.entrypoint.*` for process/bootstrap behavior
-  - `terminal_runtime.state.*` for state-specific behavior
+  - `runtime.dispatch.*` for control-plane behavior
+  - `runtime.execution.*` for side effects
+  - `runtime.entrypoint.*` for process/bootstrap behavior
+  - `runtime.state.*` for state-specific behavior
+  - `runtime.loop.*` for prompt-loop / streaming console behavior
 - Avoid adding new tests that monkeypatch package-root internals in
-  `terminal_runtime.__init__` unless there is no stable canonical seam.
+  `runtime.__init__` unless there is no stable canonical seam.
 
 ## Refactor guardrails
 
 - No behavior changes to routing policy should be introduced from
-  `runtime/terminal_runtime/` refactors.
+  `runtime/` refactors.
 - Keep interruption semantics unchanged:
   - Esc or bare cancel commands interrupt active dispatch
   - confirmation prompts are cancel-safe and never silently auto-confirm

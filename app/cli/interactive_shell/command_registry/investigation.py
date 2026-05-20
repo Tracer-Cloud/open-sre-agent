@@ -144,7 +144,7 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
     root = final_state.get("root_cause")
     task.mark_completed(result=str(root) if root is not None else "")
     session.last_state = final_state
-    # Match `_run_new_alert` in loop.py: inherit service / cluster / region
+    # Match `run_new_alert` in runtime/execution.py: inherit service / cluster / region
     # across subsequent investigations in the same REPL session.
     session.accumulate_from_state(final_state)
     session.record("alert", f"/investigate {args[0]}")

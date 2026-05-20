@@ -1,4 +1,4 @@
-"""Deterministic actions for the interactive terminal assistant."""
+"""Terminal action planning/execution for the interactive assistant."""
 
 from __future__ import annotations
 
@@ -22,7 +22,6 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.a
     run_text_investigation,
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_planner import (
-    plan_actions_with_unhandled,
     plan_cli_actions,
     plan_terminal_tasks,
 )
@@ -31,6 +30,12 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.e
     evaluate_slash_tier,
     execution_allowed,
     resolve_slash_execution_tier,
+)
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
+    PlannedAction,
+)
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner import (
+    plan_actions_with_llm,
 )
 from app.cli.interactive_shell.runtime import ReplSession, TaskKind, TaskRecord, TaskStatus
 from app.cli.interactive_shell.ui import DIM, print_planned_actions
@@ -46,8 +51,8 @@ class TerminalActionExecutionResult:
     handled: bool
 
 
-def _plan_actions(message: str) -> tuple[list, bool]:
-    """Plan actions for a free-text message.
+def _plan_actions(message: str) -> tuple[list[PlannedAction], bool, bool]:
+    """Plan actions for a free-text message using LLM-first planning.
 
     Used to wrap the call in a ``rich.Live`` spinner for in-place
     "thinking…" feedback, but ``Live``'s cursor manipulation fights
@@ -59,7 +64,22 @@ def _plan_actions(message: str) -> tuple[list, bool]:
     phase — so the user still sees feedback; no separate in-place
     indicator is needed here.
     """
-    return plan_actions_with_unhandled(message)
+    llm_plan = plan_actions_with_llm(message)
+    if llm_plan is None:
+        return [], True, True
+    actions, has_unhandled_clause = llm_plan
+    if has_unhandled_clause or not actions:
+        return [], True, True
+    return actions, False, False
+
+
+def _render_plan_denied(console: Console) -> None:
+    console.print()
+    render_response_header(console, "assistant")
+    console.print(
+        "[yellow]I couldn't safely decide actions for that request.[/] "
+        "Please rephrase or use explicit slash commands."
+    )
 
 
 def _running_task_matches(session: ReplSession, target: str) -> list[TaskRecord]:
@@ -152,23 +172,16 @@ def _execute_task_cancel_action(
     )
 
 
-def execute_cli_actions(
+def _execute_planned_actions(
+    *,
+    actions: list[PlannedAction],
+    has_unhandled_clause: bool,
     message: str,
     session: ReplSession,
     console: Console,
-    *,
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
 ) -> bool:
-    """Execute inferred CLI and shell actions.
-
-    Returns True when the message was handled. Unknown or ambiguous requests fall
-    through to the LLM-backed assistant.
-    """
-    actions, has_unhandled_clause = _plan_actions(message)
-    if not actions:
-        return False
-
     console.print()
     render_response_header(console, "assistant")
     print_planned_actions(console, actions)
@@ -178,7 +191,7 @@ def execute_cli_actions(
     for action in actions:
         # Multi-action plans: if the user pressed Esc / typed
         # ``/cancel`` between actions, the per-dispatch cancel event
-        # is set on the ``_StreamingConsole``. Skip the rest of the
+        # is set on the ``StreamingConsole``. Skip the rest of the
         # plan so a "run all of these" plan doesn't keep marching
         # through after an explicit cancel. ``getattr`` with a default
         # keeps non-streaming consoles (used by the seeded-input
@@ -317,6 +330,38 @@ def execute_cli_actions(
     return not has_unhandled_clause
 
 
+def execute_cli_actions(
+    message: str,
+    session: ReplSession,
+    console: Console,
+    *,
+    confirm_fn: Callable[[str], str] | None = None,
+    is_tty: bool | None = None,
+) -> bool:
+    """Execute inferred actions from LLM-first planning.
+
+    Returns True when the request was handled (including explicit fail-closed
+    denials). Returns False only for legacy/test paths that pass through with no
+    planned actions and no deny signal.
+    """
+    actions, has_unhandled_clause, denied = _plan_actions(message)
+    if denied:
+        _render_plan_denied(console)
+        session.record("cli_agent", message, ok=False)
+        return True
+    if not actions:
+        return False
+    return _execute_planned_actions(
+        actions=actions,
+        has_unhandled_clause=has_unhandled_clause,
+        message=message,
+        session=session,
+        console=console,
+        confirm_fn=confirm_fn,
+        is_tty=is_tty,
+    )
+
+
 def execute_cli_actions_with_metrics(
     message: str,
     session: ReplSession,
@@ -324,7 +369,7 @@ def execute_cli_actions_with_metrics(
     *,
     confirm_fn: Callable[[str], str] | None = None,
 ) -> TerminalActionExecutionResult:
-    """Execute deterministic actions and return per-turn action counters.
+    """Execute planned actions and return per-turn action counters.
 
     ``confirm_fn`` is forwarded to :func:`execute_cli_actions` so the
     interactive REPL can route mid-dispatch ``Proceed? [y/N]`` prompts
@@ -336,11 +381,26 @@ def execute_cli_actions_with_metrics(
         capture_terminal_actions_planned,
     )
 
-    actions, has_unhandled_clause = _plan_actions(message)
+    actions, has_unhandled_clause, denied = _plan_actions(message)
     capture_terminal_actions_planned(
         planned_count=len(actions),
         has_unhandled_clause=has_unhandled_clause,
     )
+    if denied:
+        _render_plan_denied(console)
+        session.record("cli_agent", message, ok=False)
+        capture_terminal_actions_executed(
+            planned_count=0,
+            executed_count=0,
+            executed_success_count=0,
+        )
+        return TerminalActionExecutionResult(
+            planned_count=0,
+            executed_count=0,
+            executed_success_count=0,
+            has_unhandled_clause=True,
+            handled=True,
+        )
     if not actions:
         return TerminalActionExecutionResult(
             planned_count=0,
@@ -351,7 +411,14 @@ def execute_cli_actions_with_metrics(
         )
 
     history_start = len(session.history)
-    handled = execute_cli_actions(message, session, console, confirm_fn=confirm_fn)
+    handled = _execute_planned_actions(
+        actions=actions,
+        has_unhandled_clause=has_unhandled_clause,
+        message=message,
+        session=session,
+        console=console,
+        confirm_fn=confirm_fn,
+    )
     executed_entries = [
         item
         for item in session.history[history_start:]

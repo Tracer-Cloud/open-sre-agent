@@ -6,8 +6,8 @@ from types import SimpleNamespace
 import pytest
 
 from app.cli.interactive_shell.config import ReplConfig
-from app.cli.interactive_shell.runtime.terminal_runtime import dispatch as loop_dispatch
-from app.cli.interactive_shell.runtime.terminal_runtime import entrypoint as loop_entrypoint
+from app.cli.interactive_shell.runtime import dispatch as loop_dispatch
+from app.cli.interactive_shell.runtime import entrypoint as loop_entrypoint
 
 
 def _patch_seeded_repl(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -29,7 +29,7 @@ def _patch_seeded_repl(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     monkeypatch.setattr(loop_dispatch, "execute_routed_turn", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
-        "app.cli.interactive_shell.runtime.terminal_runtime.execution.dispatch_slash",
+        "app.cli.interactive_shell.runtime.execution.dispatch_slash",
         lambda *_args, **_kwargs: False,
     )
 

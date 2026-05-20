@@ -106,7 +106,10 @@ def test_run_cd_command_chdirs_to_target(monkeypatch: pytest.MonkeyPatch) -> Non
     def _chdir(target: Path) -> None:
         directories.append(target)
 
-    monkeypatch.setattr("app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.os.chdir", _chdir)
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.os.chdir",
+        _chdir,
+    )
 
     session = ReplSession()
     buf = io.StringIO()
@@ -123,7 +126,10 @@ def test_run_cd_command_reports_chdir_failure(monkeypatch: pytest.MonkeyPatch) -
     def _chdir(_target: Path) -> None:
         raise OSError("permission denied")
 
-    monkeypatch.setattr("app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.os.chdir", _chdir)
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.os.chdir",
+        _chdir,
+    )
     monkeypatch.setattr(
         "app.cli.support.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
@@ -232,7 +238,8 @@ def test_run_claude_code_implementation_starts_tracked_task(
         _FakeAdapter,
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.Popen", _fake_popen
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        _fake_popen,
     )
     monkeypatch.setattr(
         "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.threading.Thread",
@@ -390,7 +397,8 @@ def test_run_opensre_agents_scan_prints_clean_foreground_output(
         )
 
     monkeypatch.setattr(
-        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.run", _fake_run
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.run",
+        _fake_run,
     )
 
     session = ReplSession()
@@ -420,7 +428,8 @@ def test_run_opensre_agents_scan_register_explains_confirmation(
         )
 
     monkeypatch.setattr(
-        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.run", _fake_run
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.run",
+        _fake_run,
     )
 
     session = ReplSession()
@@ -466,7 +475,8 @@ def test_run_opensre_agents_watch_runs_in_foreground(
         return _FakeProcess()
 
     monkeypatch.setattr(
-        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.Popen", _fake_popen
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        _fake_popen,
     )
 
     session = ReplSession()
@@ -534,14 +544,16 @@ def test_start_background_cli_task_uses_pty_for_live_terminal_output(
         raising=False,
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.os.read", _fake_read
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.os.read",
+        _fake_read,
     )
     monkeypatch.setattr(
         "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.os.close",
         lambda fd: closed_fds.append(fd),
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.Popen", _fake_popen
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        _fake_popen,
     )
     monkeypatch.setattr(
         "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.threading.Thread",
@@ -597,7 +609,8 @@ def test_start_background_cli_task_falls_back_to_pipes_when_pty_unavailable(
         raising=False,
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.Popen", _fake_popen
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        _fake_popen,
     )
     monkeypatch.setattr(
         "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.threading.Thread",
@@ -889,7 +902,8 @@ def test_run_synthetic_test_streams_subprocess_output(
         return _FakeProcess()
 
     monkeypatch.setattr(
-        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.Popen", _fake_popen
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        _fake_popen,
     )
     monkeypatch.setattr(
         "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.threading.Thread",
@@ -939,7 +953,8 @@ def test_run_synthetic_test_honours_explicit_scenario(
         return _FakeProcess()
 
     monkeypatch.setattr(
-        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.Popen", _fake_popen
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        _fake_popen,
     )
     monkeypatch.setattr(
         "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.threading.Thread",
@@ -980,7 +995,8 @@ def test_run_synthetic_test_all_launches_suite_alias(
         return _FakeProcess()
 
     monkeypatch.setattr(
-        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.Popen", _fake_popen
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        _fake_popen,
     )
     monkeypatch.setattr(
         "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.threading.Thread",
@@ -1035,7 +1051,8 @@ def _capture_popen_kwargs(
         return _CapturedPopen()
 
     monkeypatch.setattr(
-        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.Popen", _fake_popen
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        _fake_popen,
     )
     monkeypatch.setattr(
         "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.threading.Thread",
@@ -1195,10 +1212,12 @@ def test_run_opensre_cli_command_refuses_onboard_with_helpful_message(
         raise AssertionError("subprocess.run must not be called for interactive subcommand")
 
     monkeypatch.setattr(
-        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.Popen", _fake_popen
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        _fake_popen,
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.run", _fake_run
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.run",
+        _fake_run,
     )
 
     session = ReplSession()

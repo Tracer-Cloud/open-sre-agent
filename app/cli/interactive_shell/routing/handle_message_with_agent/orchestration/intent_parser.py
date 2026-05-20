@@ -1,4 +1,8 @@
-"""Parse natural-language terminal input into structured intents (pure helpers)."""
+"""Deterministic intent helpers used by the fallback action planner.
+
+LLM-first planning is the primary path for non-slash requests. These helpers are
+kept for deterministic fallback behavior and regression tests.
+"""
 
 from __future__ import annotations
 
@@ -52,7 +56,9 @@ ACTION_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     ),
     (
         re.compile(
-            r"\b(?:deploy|ship|push)\b.{0,80}?\b(?:to|opensre)\b",
+            r"\b(?:deploy|ship|push)\b.{0,80}?\b(?:to|opensre)\b"
+            r"|"
+            r"\bconnect\b.{0,80}?\b(?:opensre|ec2|nitro|instance|remote)\b",
             re.IGNORECASE,
         ),
         "/remote",

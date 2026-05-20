@@ -89,7 +89,7 @@ class ReplSession:
 
     correction_intervention_count: int = 0
     """Incremented when a follow-up or new-alert message starts with a
-    correction cue (see ``_looks_like_correction`` in ``loop.py``).
+    correction cue (see ``looks_like_correction`` in ``dispatch.py``).
     Slash and CLI-agent turns are not counted because content like
     ``actually run ps aux`` is a command, not a correction."""
 

@@ -1054,7 +1054,7 @@ class TestInvestigateFileCommand:
         self, tmp_path: object, monkeypatch: object
     ) -> None:
         """Regression for Greptile P1 (PR #591): /investigate previously skipped
-        the context-accumulation step that `loop._run_new_alert` does after a
+        the context-accumulation step that `execution.run_new_alert` does after a
         free-text investigation, so subsequent follow-up alerts lost the infra
         hints (service / cluster / region) that /investigate just discovered."""
 

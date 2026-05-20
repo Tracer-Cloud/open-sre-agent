@@ -13,12 +13,12 @@ from rich.console import Console
 
 from app.cli.interactive_shell.prompting import prompt_surface as _prompt_surface
 from app.cli.interactive_shell.routing import router as _router
-from app.cli.interactive_shell.runtime import HotReloadCoordinator, ReplSession
+from app.cli.interactive_shell.runtime.execution import execute_routed_turn
+from app.cli.interactive_shell.runtime.hot_reload import HotReloadCoordinator
+from app.cli.interactive_shell.runtime.session import ReplSession
+from app.cli.interactive_shell.runtime.state import PROMPT_REFRESH_INTERVAL_S, ReplState
 from app.cli.interactive_shell.ui import render_banner
 from app.cli.interactive_shell.ui.choice_menu import repl_tty_interactive
-
-from .execution import execute_routed_turn
-from .state import _PROMPT_REFRESH_INTERVAL_S, ReplState
 
 render_submitted_prompt = _prompt_surface.render_submitted_prompt
 resolve_cli_command = _router.resolve_cli_command
@@ -77,7 +77,7 @@ def looks_like_cancel_request(text: str | None) -> bool:
     return (text or "").strip().lower() in _CANCEL_REQUEST_TOKENS
 
 
-def _looks_like_correction(text: str) -> bool:
+def looks_like_correction(text: str) -> bool:
     stripped = text.lstrip()
     if not stripped or stripped.startswith("```"):
         return False
@@ -89,20 +89,7 @@ def dispatch_should_show_spinner(text: str, session: ReplSession) -> bool:
 
 
 def dispatch_needs_exclusive_stdin(text: str, session: ReplSession) -> bool:
-    return _dispatch_needs_exclusive_stdin_impl(
-        text,
-        session,
-        tty_interactive_fn=repl_tty_interactive,
-    )
-
-
-def _dispatch_needs_exclusive_stdin_impl(
-    text: str,
-    session: ReplSession,
-    *,
-    tty_interactive_fn: Callable[[], bool],
-) -> bool:
-    if not tty_interactive_fn():
+    if not repl_tty_interactive():
         return False
 
     t = text.strip()
@@ -139,7 +126,7 @@ def dispatch_one_turn(
 ) -> None:
     decision = _router.route_input(text, session)
     kind = decision.route_kind.value
-    if kind in ("follow_up", "new_alert") and _looks_like_correction(text):
+    if kind in ("follow_up", "new_alert") and looks_like_correction(text):
         session.record_intervention("correction")
     if kind == "slash" and not getattr(decision, "command_text", None):
         command_decision = resolve_cli_command(text.strip(), session)
@@ -194,7 +181,7 @@ def route_confirm_through_prompt(state: ReplState, prompt_text: str) -> str:
             cancel = state.current_cancel_event
             if cancel is not None and cancel.is_set():
                 raise DispatchCancelled("cancelled while awaiting confirmation")
-            response_event.wait(timeout=_PROMPT_REFRESH_INTERVAL_S)
+            response_event.wait(timeout=PROMPT_REFRESH_INTERVAL_S)
         if not state.confirm_response:
             raise DispatchCancelled("cancelled while awaiting confirmation")
         return state.confirm_response[0]
@@ -226,17 +213,6 @@ def install_session_key_bindings(pt_session: object, extra_kb: KeyBindings) -> N
     pt_session.key_bindings = merged  # type: ignore[attr-defined]
 
 
-# Backward-compatible aliases for existing tests/imports.
-_looks_like_confirmation_answer = looks_like_confirmation_answer
-_looks_like_cancel_request = looks_like_cancel_request
-_dispatch_should_show_spinner = dispatch_should_show_spinner
-_dispatch_needs_exclusive_stdin = dispatch_needs_exclusive_stdin
-_dispatch_one_turn = dispatch_one_turn
-_run_initial_input = run_initial_input
-_route_confirm_through_prompt = route_confirm_through_prompt
-_build_cancel_key_bindings = build_cancel_key_bindings
-_install_session_key_bindings = install_session_key_bindings
-
 __all__ = [
     "DispatchCancelled",
     "build_cancel_key_bindings",
@@ -246,16 +222,7 @@ __all__ = [
     "install_session_key_bindings",
     "looks_like_cancel_request",
     "looks_like_confirmation_answer",
+    "looks_like_correction",
     "route_confirm_through_prompt",
     "run_initial_input",
-    "_build_cancel_key_bindings",
-    "_dispatch_needs_exclusive_stdin",
-    "_dispatch_needs_exclusive_stdin_impl",
-    "_dispatch_one_turn",
-    "_dispatch_should_show_spinner",
-    "_install_session_key_bindings",
-    "_looks_like_cancel_request",
-    "_looks_like_confirmation_answer",
-    "_route_confirm_through_prompt",
-    "_run_initial_input",
 ]

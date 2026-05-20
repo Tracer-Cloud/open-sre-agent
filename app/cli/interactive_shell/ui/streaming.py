@@ -20,7 +20,7 @@ called per chunk (throttled to ~10/s) so the bottom-toolbar token
 counter updates live, and ``cancel_requested`` is polled between chunks
 so an Esc press in the prompt cancels promptly. The ``getattr``
 indirection keeps this module decoupled from the UI runtime's
-``_StreamingConsole`` shim.
+``StreamingConsole`` shim.
 """
 
 from __future__ import annotations
@@ -35,13 +35,13 @@ from rich.markdown import Markdown
 from app.cli.interactive_shell.ui.theme import BOLD_BRAND, DIM, MARKDOWN_THEME
 
 # Approximate characters per token. Single source of truth for the
-# streaming layer and ``terminal_runtime._SpinnerState`` (which imports this so the
+# streaming layer and ``runtime.state.SpinnerState`` (which imports this so the
 # live spinner and the post-stream footer can't drift apart).
 _CHARS_PER_TOKEN = 4
 
 # Throttle for the optional ``update_streaming_progress`` hook on the
 # console — caps cross-thread queueing on long bursts of chunks. Same
-# value (and intent) as ``terminal_runtime._PROMPT_REFRESH_INTERVAL_S``.
+# value (and intent) as ``runtime.state.PROMPT_REFRESH_INTERVAL_S``.
 _PROGRESS_INTERVAL_S = 0.1
 
 # Markdown rendering constants — extracted so streaming.py and any
@@ -74,7 +74,7 @@ def render_response_header(console: Console, label: str) -> None:
 def format_token_count_short(token_count: int) -> str:
     """Format a token count as a short string — ``42`` / ``1.2k`` / ``5.2k``.
 
-    Shared with :class:`app.cli.interactive_shell.runtime.terminal_runtime._SpinnerState` so
+    Shared with :class:`app.cli.interactive_shell.runtime.state.SpinnerState` so
     the streaming footer (``· 9.5s · ↓ 1.2k tokens``) and the live
     spinner (``⠋ thinking… (5s · ↓ 1.2k tokens)``) format identically.
     """
@@ -176,7 +176,7 @@ def stream_to_console(
 
     def _is_cancelled() -> bool:
         # ``getattr`` keeps this layer decoupled from the loop's
-        # ``_StreamingConsole`` — non-interactive callers (the test
+        # ``StreamingConsole`` — non-interactive callers (the test
         # harness, the non-TTY path above) never expose the attribute
         # so this stays False for them.
         return bool(getattr(console, "cancel_requested", False))

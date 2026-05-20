@@ -1,9 +1,8 @@
 """LLM-backed structured action planner for interactive-shell input.
 
-The LLM is asked to return a JSON plan describing what actions to take for a
-given natural-language message.  This module is intentionally defensive: any
-LLM or parse failure returns ``None`` so callers can fall back to the
-deterministic planner.
+The planner is intentionally strict: unsupported commands, invented synthetic
+scenario IDs, malformed payloads, or low-confidence actions are rejected so the
+caller can fail closed.
 """
 
 from __future__ import annotations
@@ -36,6 +35,7 @@ _VALID_KINDS: frozenset[str] = frozenset(
 _MAX_TEXT_LEN = 512
 _MAX_CONTENT_LEN = 256
 _MIN_CONFIDENCE = 0.5
+_SAFE_TEXT_RE = re.compile(r"[\r\n\t]")
 
 _SYSTEM_PROMPT = """\
 You are a structured action planner for an SRE terminal assistant called OpenSRE.
@@ -73,6 +73,13 @@ Rules:
 - content must be a non-empty string no longer than 256 characters.
 - confidence must be a float between 0.0 and 1.0.
 - Omit actions with confidence below 0.5.
+- For slash actions:
+  - content must start with "/"
+  - command name must be one of: {slash_commands}
+- For synthetic_test actions:
+  - content must be "rds_postgres:all" OR "rds_postgres:<scenario-id>" where
+    scenario-id is one of: {synthetic_scenarios}
+- Never invent slash commands, scenario IDs, task IDs, providers, or shell commands.
 - If no actions can be confidently identified, return:
   {"actions": [], "unhandled_text": "<original message>"}
 """
@@ -88,6 +95,47 @@ def _sanitise_text(text: str) -> str:
     return sanitised[:_MAX_TEXT_LEN]
 
 
+def _list_synthetic_scenarios() -> tuple[str, ...]:
+    from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_planner import (
+        _list_rds_postgres_scenarios,
+    )
+
+    return _list_rds_postgres_scenarios()
+
+
+def _valid_slash_commands() -> frozenset[str]:
+    from app.cli.interactive_shell.commands import SLASH_COMMANDS
+
+    return frozenset(SLASH_COMMANDS.keys())
+
+
+def _normalise_action_content(kind: str, content: str) -> str | None:
+    candidate = content.strip()[:_MAX_CONTENT_LEN]
+    if not candidate:
+        return None
+    if _SAFE_TEXT_RE.search(candidate):
+        return None
+    if kind == "slash":
+        if not candidate.startswith("/"):
+            return None
+        name = candidate.split(maxsplit=1)[0].lower()
+        if name not in _valid_slash_commands():
+            return None
+    if kind == "synthetic_test":
+        if candidate == "rds_postgres:all":
+            return candidate
+        prefix = "rds_postgres:"
+        if not candidate.startswith(prefix):
+            return None
+        scenario_id = candidate[len(prefix) :]
+        if scenario_id not in _list_synthetic_scenarios():
+            return None
+    if kind == "cli_command" and candidate.lower().startswith("opensre "):
+        # cli_command content is the subcommand payload without "opensre ".
+        return None
+    return candidate
+
+
 def _call_llm(sanitised_text: str) -> str | None:
     """Invoke the classification LLM; return raw response text or ``None``."""
     try:
@@ -96,7 +144,11 @@ def _call_llm(sanitised_text: str) -> str | None:
         logger.debug("llm_action_planner: LLM client import failed; skipping")
         return None
 
-    prompt = f"{_SYSTEM_PROMPT}\n\n{_USER_TEMPLATE.format(text=sanitised_text)}"
+    prompt = _SYSTEM_PROMPT.format(
+        slash_commands=", ".join(sorted(_valid_slash_commands())),
+        synthetic_scenarios=", ".join(_list_synthetic_scenarios()) or "none",
+    )
+    prompt = f"{prompt}\n\n{_USER_TEMPLATE.format(text=sanitised_text)}"
     try:
         client = get_llm_for_classification()
         response = client.invoke(prompt)
@@ -135,9 +187,12 @@ def _parse_plan(raw: str) -> tuple[list[PlannedAction], bool] | None:
             continue
 
         content = entry.get("content")
-        if not isinstance(content, str) or not content.strip():
+        if not isinstance(content, str):
             continue
-        content = content.strip()[:_MAX_CONTENT_LEN]
+        normalized_content = _normalise_action_content(kind, content)
+        if normalized_content is None:
+            logger.debug("llm_action_planner: dropped invalid content for action kind %r", kind)
+            continue
 
         raw_confidence = entry.get("confidence", 1.0)
         try:
@@ -159,7 +214,7 @@ def _parse_plan(raw: str) -> tuple[list[PlannedAction], bool] | None:
         actions.append(
             PlannedAction(
                 kind=kind,  # type: ignore[arg-type]
-                content=content,
+                content=normalized_content,
                 position=idx,
                 source="llm",
                 confidence=confidence,

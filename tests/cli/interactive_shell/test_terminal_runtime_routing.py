@@ -14,10 +14,9 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.i
     PlannedAction,
 )
 from app.cli.interactive_shell.routing.types import RouteDecision, RouteKind
-from app.cli.interactive_shell.runtime import terminal_runtime as loop
+from app.cli.interactive_shell.runtime import dispatch as loop_dispatch
+from app.cli.interactive_shell.runtime import execution as loop_execution
 from app.cli.interactive_shell.runtime.session import ReplSession
-from app.cli.interactive_shell.runtime.terminal_runtime import dispatch as loop_dispatch
-from app.cli.interactive_shell.runtime.terminal_runtime import execution as loop_execution
 
 
 def test_dispatch_one_turn_typoed_bare_alias_dispatches_canonical_slash(
@@ -39,7 +38,7 @@ def test_dispatch_one_turn_typoed_bare_alias_dispatches_canonical_slash(
     session = ReplSession()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
 
-    loop_dispatch._dispatch_one_turn("hlep", session, console, on_exit=lambda: None)
+    loop_dispatch.dispatch_one_turn("hlep", session, console, on_exit=lambda: None)
 
     assert dispatched == ["/help"]
 
@@ -62,7 +61,7 @@ def test_dispatch_one_turn_bare_integrations_alias_preserves_args(
     session = ReplSession()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
 
-    loop_dispatch._dispatch_one_turn("integrations list", session, console, on_exit=lambda: None)
+    loop_dispatch.dispatch_one_turn("integrations list", session, console, on_exit=lambda: None)
 
     assert dispatched == ["/integrations list"]
 
@@ -70,37 +69,39 @@ def test_dispatch_one_turn_bare_integrations_alias_preserves_args(
 def test_dispatch_needs_exclusive_stdin_for_bare_integration_menu(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(loop, "repl_tty_interactive", lambda: True)
+    monkeypatch.setattr(loop_dispatch, "repl_tty_interactive", lambda: True)
     session = ReplSession()
 
-    assert loop._dispatch_needs_exclusive_stdin("/integrations", session) is True
-    assert loop._dispatch_needs_exclusive_stdin("integrations", session) is True
-    assert loop._dispatch_needs_exclusive_stdin("/mcp", session) is True
-    assert loop._dispatch_needs_exclusive_stdin("/model", session) is True
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("/integrations", session) is True
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("integrations", session) is True
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("/mcp", session) is True
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("/model", session) is True
 
-    assert loop._dispatch_needs_exclusive_stdin("/integrations list", session) is False
-    assert loop._dispatch_needs_exclusive_stdin("integrations list", session) is False
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("/integrations list", session) is False
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("integrations list", session) is False
 
 
 def test_dispatch_needs_exclusive_stdin_for_exit_commands(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(loop, "repl_tty_interactive", lambda: True)
+    monkeypatch.setattr(loop_dispatch, "repl_tty_interactive", lambda: True)
     session = ReplSession()
 
-    assert loop._dispatch_needs_exclusive_stdin("/exit", session) is True
-    assert loop._dispatch_needs_exclusive_stdin("quit", session) is True
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("/exit", session) is True
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("quit", session) is True
 
 
 def test_dispatch_needs_exclusive_stdin_for_integration_setup(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(loop, "repl_tty_interactive", lambda: True)
+    monkeypatch.setattr(loop_dispatch, "repl_tty_interactive", lambda: True)
     session = ReplSession()
 
-    assert loop._dispatch_needs_exclusive_stdin("/integrations setup", session) is True
-    assert loop._dispatch_needs_exclusive_stdin("integrations setup datadog", session) is True
-    assert loop._dispatch_needs_exclusive_stdin("/mcp connect github", session) is True
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("/integrations setup", session) is True
+    assert (
+        loop_dispatch.dispatch_needs_exclusive_stdin("integrations setup datadog", session) is True
+    )
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("/mcp connect github", session) is True
 
 
 def test_dispatch_one_turn_routes_to_cli_help_for_help_questions(
@@ -121,7 +122,7 @@ def test_dispatch_one_turn_routes_to_cli_help_for_help_questions(
 
     session = ReplSession()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
-    loop_dispatch._dispatch_one_turn("explain deploy", session, console, on_exit=lambda: None)
+    loop_dispatch.dispatch_one_turn("explain deploy", session, console, on_exit=lambda: None)
 
     assert answered_with == ["explain deploy"]
 
@@ -181,7 +182,7 @@ def test_dispatch_one_turn_nitro_prompt_uses_cli_agent_actions_not_cli_help(
 
     session = ReplSession()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
-    loop_dispatch._dispatch_one_turn(nitro_prompt, session, console, on_exit=lambda: None)
+    loop_dispatch.dispatch_one_turn(nitro_prompt, session, console, on_exit=lambda: None)
 
     assert action_calls == [nitro_prompt]
     assert help_calls == []
@@ -234,6 +235,7 @@ def test_dispatch_one_turn_nitro_prompt_executes_remote_then_investigation(
                 PlannedAction(kind="investigation", content="hello world", position=1),
             ],
             False,
+            False,
         ),
     )
     monkeypatch.setattr(loop_execution._agent_actions, "dispatch_slash", _fake_dispatch)
@@ -250,7 +252,7 @@ def test_dispatch_one_turn_nitro_prompt_executes_remote_then_investigation(
 
     session = ReplSession()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
-    loop_dispatch._dispatch_one_turn(nitro_prompt, session, console, on_exit=lambda: None)
+    loop_dispatch.dispatch_one_turn(nitro_prompt, session, console, on_exit=lambda: None)
 
     assert call_order == ["slash:/remote", "investigation:hello world"]
     assert help_calls == []
@@ -274,7 +276,7 @@ class TestDispatchSpinnerRouting:
         ],
     )
     def test_slash_dispatches_do_not_show_assistant_spinner(self, text: str) -> None:
-        assert loop._dispatch_should_show_spinner(text, ReplSession()) is False
+        assert loop_dispatch.dispatch_should_show_spinner(text, ReplSession()) is False
 
     @pytest.mark.parametrize(
         "text",
@@ -285,4 +287,4 @@ class TestDispatchSpinnerRouting:
         ],
     )
     def test_non_slash_dispatches_show_assistant_spinner(self, text: str) -> None:
-        assert loop._dispatch_should_show_spinner(text, ReplSession()) is True
+        assert loop_dispatch.dispatch_should_show_spinner(text, ReplSession()) is True
