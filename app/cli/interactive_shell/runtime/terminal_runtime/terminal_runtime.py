@@ -159,6 +159,7 @@ async def run_interactive(
             try:
                 await state.current_task
             except asyncio.CancelledError:
+                # Expected when shutdown/cancel interrupts in-flight dispatch.
                 pass
             except Exception as exc:
                 log.debug("Processor task ended with dispatch exception: %s", exc)
@@ -242,18 +243,21 @@ async def run_interactive(
         try:  # noqa: SIM105
             await sampler_task
         except asyncio.CancelledError:
+            # Expected during shutdown after explicit task cancellation.
             pass
         processor_task.cancel()
         alert_watcher_task.cancel()
         try:
             await processor_task
         except asyncio.CancelledError:
+            # Expected during shutdown after explicit task cancellation.
             pass
         except Exception as exc:
             log.debug("Processor task shutdown raised exception: %s", exc)
         try:
             await alert_watcher_task
         except asyncio.CancelledError:
+            # Expected during shutdown after explicit task cancellation.
             pass
         except Exception as exc:
             log.debug("Alert watcher shutdown raised exception: %s", exc)
