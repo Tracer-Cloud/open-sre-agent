@@ -4,6 +4,7 @@ import logging
 import os
 
 from fastapi import FastAPI, Response, status
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ValidationError
 
 from app.config import LLMSettings, get_environment
@@ -18,6 +19,19 @@ from app.version import get_version
 init_sentry(entrypoint="webapp")
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_CORS_ORIGINS = [
+    "https://healops.ai",
+    "https://dashboard.healops.ai",
+    "https://alpha.healops.ai",
+]
+
+
+def _cors_origins() -> list[str]:
+    raw = os.environ.get("CORS_ALLOWED_ORIGINS", "")
+    if raw:
+        return [o.strip() for o in raw.split(",") if o.strip()]
+    return _DEFAULT_CORS_ORIGINS
 
 
 class HealthResponse(BaseModel):
@@ -35,6 +49,13 @@ app.include_router(alerts_router)
 app.include_router(runbooks_router)
 app.include_router(credentials_router)
 app.add_middleware(TenantMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins(),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def _llm_configured() -> bool:
