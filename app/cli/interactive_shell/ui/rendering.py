@@ -11,7 +11,7 @@ from rich.markup import escape
 from rich.table import Table
 from rich.text import Text
 
-from app.cli.interactive_shell.orchestration.interaction_models import PlannedAction
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import PlannedAction
 from app.cli.interactive_shell.ui.banner import resolve_provider_models
 from app.cli.interactive_shell.ui.theme import (
     BOLD_BRAND,

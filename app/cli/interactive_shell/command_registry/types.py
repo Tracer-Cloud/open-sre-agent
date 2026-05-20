@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from rich.console import Console
 
-from app.cli.interactive_shell.orchestration.execution_tier import ExecutionTier
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_tier import ExecutionTier
 from app.cli.interactive_shell.runtime import ReplSession
 
 

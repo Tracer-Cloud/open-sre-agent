@@ -228,7 +228,7 @@ def _execute_action_plan(
         switch_llm_provider,
         switch_toolcall_model,
     )
-    from app.cli.interactive_shell.orchestration.execution_policy import (
+    from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
         evaluate_llm_runtime_switch,
         evaluate_slash_tier,
         execution_allowed,
@@ -369,7 +369,7 @@ def _execute_action_plan(
             if not args:
                 console.print(f"[{ERROR}]missing args for run_cli_command action[/]")
                 continue
-            from app.cli.interactive_shell.orchestration.action_executor import (
+            from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor import (
                 run_opensre_cli_command,
             )
 

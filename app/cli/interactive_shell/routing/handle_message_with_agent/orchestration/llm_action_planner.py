@@ -12,7 +12,7 @@ import json
 import logging
 import re
 
-from app.cli.interactive_shell.orchestration.interaction_models import (
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
     PlannedAction,
     default_target_surface,
 )

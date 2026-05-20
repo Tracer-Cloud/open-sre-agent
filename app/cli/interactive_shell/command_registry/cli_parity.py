@@ -16,7 +16,7 @@ from rich.markup import escape
 
 from app.cli.interactive_shell.command_registry.suggestions import closest_choice
 from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
-from app.cli.interactive_shell.orchestration.action_executor import (
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor import (
     SYNTHETIC_TEST_TIMEOUT_SECONDS,
     print_interactive_wizard_handoff,
     start_background_cli_task,

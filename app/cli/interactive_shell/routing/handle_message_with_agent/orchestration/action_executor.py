@@ -20,13 +20,13 @@ from rich.console import Console
 from rich.markup import escape
 from rich.text import Text
 
-import app.cli.interactive_shell.orchestration.intent_parser as _intent_parser
-from app.cli.interactive_shell.orchestration.action_planner import (
+import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.intent_parser as _intent_parser
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_planner import (
     DEFAULT_SYNTHETIC_SCENARIO,
     SYNTHETIC_UNKNOWN_PREFIX,
     _list_rds_postgres_scenarios,
 )
-from app.cli.interactive_shell.orchestration.execution_policy import (
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
     evaluate_code_agent_launch,
     evaluate_investigation_launch,
     evaluate_shell_from_parsed,
@@ -1040,7 +1040,7 @@ def run_opensre_cli_command(
         return True
 
     command_classification = _classify_opensre_command(tokens)
-    from app.cli.interactive_shell.orchestration.execution_policy import (
+    from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
         ExecutionPolicyResult,
         execution_allowed,
     )

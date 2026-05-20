@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-import app.cli.interactive_shell.orchestration.action_planner as action_planner_module
+import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_planner as action_planner_module
 
 
 def test_plan_cli_actions_health_and_list() -> None:
@@ -119,6 +119,25 @@ def test_plan_synthetic_test_full_id_matches_deterministically(
     assert not unhandled
     assert [(a.kind, a.content) for a in actions] == [
         ("synthetic_test", "rds_postgres:003-storage-full")
+    ]
+
+
+def test_plan_synthetic_test_bare_numeric_id_resolves_to_matching_scenario(
+    _clear_scenario_cache: None,
+) -> None:
+    """A bare number that matches a known scenario prefix resolves to that scenario.
+
+    Regression: "run synthetic test 005 now" was silently routing to
+    DEFAULT_SYNTHETIC_SCENARIO (001-replication-lag) because _detect_unresolved_numeric_hint
+    returned None (the hint WAS resolved), but the resolved scenario was never used —
+    the code fell straight through to the default fallback.
+    """
+    msg = "run synthetic test 005 now"
+    actions, unhandled = action_planner_module.plan_actions_with_unhandled(msg)
+
+    assert not unhandled
+    assert [(a.kind, a.content) for a in actions] == [
+        ("synthetic_test", "rds_postgres:005-failover")
     ]
 
 

@@ -7,7 +7,7 @@ from collections.abc import Callable
 from rich.console import Console
 from rich.markup import escape
 
-import app.cli.interactive_shell.orchestration.agent_actions as _agent_actions
+import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions as _agent_actions
 from app.analytics.cli import capture_terminal_turn_summarized
 from app.analytics.events import Event
 from app.analytics.provider import get_analytics
@@ -40,7 +40,7 @@ def run_new_alert(
     """Dispatch a free-text alert description to the streaming pipeline."""
     from app.analytics.cli import track_investigation
     from app.analytics.source import EntrypointSource, TriggerMode
-    from app.cli.interactive_shell.orchestration.execution_policy import (
+    from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
         evaluate_investigation_launch,
         execution_allowed,
     )

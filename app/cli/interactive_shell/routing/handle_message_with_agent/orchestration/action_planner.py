@@ -6,7 +6,7 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
-from app.cli.interactive_shell.orchestration.intent_parser import (
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.intent_parser import (
     ACTION_PATTERNS,
     INTEGRATION_CAPABILITY_RE,
     INTEGRATION_CONFIG_DETAIL_RE,
@@ -27,7 +27,10 @@ from app.cli.interactive_shell.orchestration.intent_parser import (
     split_prompt_clauses,
     synthetic_test_action,
 )
-from app.cli.interactive_shell.orchestration.interaction_models import PlannedAction, PromptClause
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
+    PlannedAction,
+    PromptClause,
+)
 
 # Deterministic match for an already-canonical scenario ID like "003-storage-full".
 # A regex is appropriate here because the format is exact and unambiguous; no
@@ -68,17 +71,14 @@ DEFAULT_SYNTHETIC_SCENARIO = "001-replication-lag"
 # "no such scenario" error rather than the wrong test getting launched.
 SYNTHETIC_UNKNOWN_PREFIX = "rds_postgres:unknown:"
 
-# ``parents[4]`` is the repo root. The earlier ``parents[3]`` survived from
-# when this module lived in the flat ``interactive_shell/`` layout, and after
-# the move into ``orchestration/`` it silently resolved to ``app/`` —
-# ``_list_rds_postgres_scenarios()`` then always returned an empty tuple, the
-# LLM scenario resolver received an empty allowlist, and every fuzzy
-# synthetic-test request fell back to ``DEFAULT_SYNTHETIC_SCENARIO``
-# regardless of what the user typed. Counting parents from this file:
-#   parents[0] orchestration / parents[1] interactive_shell / parents[2] cli
-#   parents[3] app           / parents[4] <repo root>
+# ``parents[6]`` is the repo root. Counting parents from this file's current
+# location (routing/handle_message_with_agent/orchestration/):
+#   parents[0] orchestration          / parents[1] handle_message_with_agent
+#   parents[2] routing                / parents[3] interactive_shell
+#   parents[4] cli                    / parents[5] app
+#   parents[6] <repo root>
 _RDS_POSTGRES_SUITE_DIR = (
-    Path(__file__).resolve().parents[4] / "tests" / "synthetic" / "rds_postgres"
+    Path(__file__).resolve().parents[6] / "tests" / "synthetic" / "rds_postgres"
 )
 
 
@@ -105,6 +105,25 @@ def _list_rds_postgres_scenarios() -> tuple[str, ...]:
             and entry.name[3] == "-"
         )
     )
+
+
+def _resolve_numeric_hint(
+    text: str,
+    scenarios: tuple[str, ...],
+) -> tuple[str, int] | None:
+    """Return ``(scenario_name, match_start)`` when a bare number in *text* maps to a known scenario.
+
+    The user typing "test 005" when "005-failover" exists should resolve to
+    that scenario rather than falling through to ``DEFAULT_SYNTHETIC_SCENARIO``.
+    Returns ``None`` when no numeric token matches any known scenario prefix.
+    """
+    for match in _SYNTHETIC_NUMERIC_HINT_RE.finditer(text):
+        raw = match.group("num")
+        padded = raw.zfill(3) if len(raw) <= 3 else raw
+        matched = [name for name in scenarios if name.startswith(f"{padded}-")]
+        if matched:
+            return matched[0], match.start()
+    return None
 
 
 def _detect_unresolved_numeric_hint(
@@ -164,6 +183,15 @@ def _synthetic_action_content(clause: PromptClause, *, synthetic_start: int) -> 
         )
 
     scenarios = _list_rds_postgres_scenarios()
+
+    resolved = _resolve_numeric_hint(clause.text, scenarios)
+    if resolved is not None:
+        scenario_id, match_start = resolved
+        return (
+            f"rds_postgres:{scenario_id}",
+            clause.position + match_start,
+        )
+
     unresolved_hint = _detect_unresolved_numeric_hint(clause.text, scenarios)
     if unresolved_hint is not None:
         return (

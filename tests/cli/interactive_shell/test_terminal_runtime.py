@@ -1357,7 +1357,7 @@ class TestExecutionAllowedRespectsDispatchCancelled:
     ) -> None:
         from rich.console import Console
 
-        from app.cli.interactive_shell.orchestration.execution_policy import (
+        from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
             ExecutionPolicyResult,
             execution_allowed,
         )
@@ -1399,7 +1399,7 @@ class TestExecutionAllowedRespectsDispatchCancelled:
         """
         from rich.console import Console
 
-        from app.cli.interactive_shell.orchestration.execution_policy import (
+        from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
             ExecutionPolicyResult,
             execution_allowed,
         )

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.cli.interactive_shell.orchestration.intent_parser import (
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.intent_parser import (
     SAMPLE_ALERT_RE,
     extract_implementation_request,
     extract_shell_command,
@@ -12,7 +12,7 @@ from app.cli.interactive_shell.orchestration.intent_parser import (
     shutil,
     split_prompt_clauses,
 )
-from app.cli.interactive_shell.orchestration.interaction_models import PromptClause
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import PromptClause
 
 
 def test_split_prompt_clauses_preserves_positions() -> None:

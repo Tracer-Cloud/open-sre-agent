@@ -10,10 +10,12 @@ from typing import Literal
 from rich.console import Console
 from rich.markup import escape
 
-import app.cli.interactive_shell.orchestration.intent_parser as _intent_parser
+import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.intent_parser as _intent_parser
 from app.analytics.cli import capture_repl_execution_policy_decision
 from app.analytics.provider import Properties
-from app.cli.interactive_shell.orchestration.execution_tier import ExecutionTier
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_tier import (
+    ExecutionTier,
+)
 from app.cli.interactive_shell.runtime import ReplSession
 from app.cli.interactive_shell.shell import (
     ParsedShellCommand,

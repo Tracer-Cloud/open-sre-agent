@@ -27,7 +27,7 @@ _INTERACTIVE_RELOAD_DEPENDENTS = (
     "app.cli.interactive_shell.commands",
     "app.cli.interactive_shell.prompting.prompt_surface",
     "app.cli.interactive_shell.references.cli_reference",
-    "app.cli.interactive_shell.orchestration.agent_actions",
+    "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions",
     "app.cli.interactive_shell.chat.cli_agent",
     "app.cli.interactive_shell.runtime.terminal_runtime",
 )

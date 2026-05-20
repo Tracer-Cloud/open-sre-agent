@@ -8,7 +8,7 @@ import shlex
 import shutil
 from pathlib import Path
 
-from app.cli.interactive_shell.orchestration.interaction_models import (
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
     ActionKind,
     PlannedAction,
     PromptClause,
@@ -109,9 +109,13 @@ ACTION_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     ),
     (
         re.compile(
-            r"\bopensre\s+(?P<subcmd>(?!health|version)[a-z][a-z0-9-]*)(?:\s+(?P<rest>.*))?\b"
+            # Only match bare "opensre <subcmd>" when opensre is at the very start of the
+            # clause (i.e. the user typed it as a direct command). Matching mid-sentence
+            # would fire on product-name references like "OpenSRE that I have running…"
+            # and treat the next English word as a subcommand.
+            r"(?:^|\A)\s*opensre\s+(?P<subcmd>(?!health|version)[a-z][a-z0-9-]*)(?:\s+(?P<rest>.*))?"
             r"|"
-            r"\b(?:run|execute)\s+opensre\s+(?P<subcmd2>[a-z][a-z0-9-]*)(?:\s+(?P<rest2>.*))?\b",
+            r"\b(?:run|execute|use|try)\s+opensre\s+(?P<subcmd2>[a-z][a-z0-9-]*)(?:\s+(?P<rest2>.*))?\b",
             re.IGNORECASE,
         ),
         "cli_command",

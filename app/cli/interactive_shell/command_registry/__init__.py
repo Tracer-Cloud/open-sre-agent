@@ -37,7 +37,7 @@ from app.cli.interactive_shell.command_registry.system import COMMANDS as SYSTEM
 from app.cli.interactive_shell.command_registry.tasks_cmds import COMMANDS as TASK_COMMANDS
 from app.cli.interactive_shell.command_registry.types import SlashCommand
 from app.cli.interactive_shell.command_registry.watch_cmds import COMMANDS as WATCH_COMMANDS
-from app.cli.interactive_shell.orchestration.execution_policy import (
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
     evaluate_slash_tier,
     execution_allowed,
     resolve_slash_execution_tier,

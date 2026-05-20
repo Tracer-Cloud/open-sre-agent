@@ -70,7 +70,7 @@ def test_render_integrations_table_resets_tty_before_print(monkeypatch) -> None:
 
 
 def test_print_planned_actions_formats_kinds() -> None:
-    from app.cli.interactive_shell.orchestration.interaction_models import PlannedAction
+    from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import PlannedAction
 
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)

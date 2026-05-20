@@ -13,7 +13,7 @@ from app.cli.interactive_shell.commands import (
     dispatch_slash,
     switch_llm_provider,
 )
-from app.cli.interactive_shell.orchestration.action_executor import (
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor import (
     run_claude_code_implementation,
     run_opensre_cli_command,
     run_sample_alert,
@@ -21,12 +21,12 @@ from app.cli.interactive_shell.orchestration.action_executor import (
     run_synthetic_test,
     run_text_investigation,
 )
-from app.cli.interactive_shell.orchestration.action_planner import (
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_planner import (
     plan_actions_with_unhandled,
     plan_cli_actions,
     plan_terminal_tasks,
 )
-from app.cli.interactive_shell.orchestration.execution_policy import (
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
     evaluate_llm_runtime_switch,
     evaluate_slash_tier,
     execution_allowed,

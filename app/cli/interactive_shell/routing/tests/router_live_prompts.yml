@@ -46,6 +46,10 @@
   input: "run synthetic test 005-memory-pressure"
   expected_kind: "cli_agent"
 
+- id: cli_agent_synthetic_bare_numeric_id
+  input: "run synthetic test 005 now"
+  expected_kind: "cli_agent"
+
 - id: cli_agent_synthetic_cpu_spike
   input: "launch synthetic test 003-cpu-spike"
   expected_kind: "cli_agent"

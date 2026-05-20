@@ -7,8 +7,8 @@ import io
 import pytest
 from rich.console import Console
 
-from app.cli.interactive_shell.orchestration.agent_actions import TerminalActionExecutionResult
-from app.cli.interactive_shell.orchestration.interaction_models import PlannedAction
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions import TerminalActionExecutionResult
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import PlannedAction
 from app.cli.interactive_shell.routing.types import RouteDecision, RouteKind
 from app.cli.interactive_shell.runtime import terminal_runtime as loop
 from app.cli.interactive_shell.runtime.session import ReplSession

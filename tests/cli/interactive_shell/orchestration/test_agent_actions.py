@@ -13,9 +13,9 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-import app.cli.interactive_shell.orchestration.action_executor as action_executor
-import app.cli.interactive_shell.orchestration.agent_actions as agent_actions
-from app.cli.interactive_shell.orchestration import intent_parser as intent_parser_module
+import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor as action_executor
+import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions as agent_actions
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration import intent_parser as intent_parser_module
 from app.cli.interactive_shell.runtime.session import ReplSession
 from app.cli.interactive_shell.runtime.tasks import TaskKind, TaskStatus
 from app.cli.interactive_shell.shell import execution as shell_execution
@@ -1041,7 +1041,7 @@ def test_execute_cli_actions_declines_mutating_shell_when_user_rejects_prompt(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "app.cli.interactive_shell.orchestration.execution_policy.DEFAULT_CONFIRM_FN",
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy.DEFAULT_CONFIRM_FN",
         lambda _p: "n",
     )
     session = ReplSession()
