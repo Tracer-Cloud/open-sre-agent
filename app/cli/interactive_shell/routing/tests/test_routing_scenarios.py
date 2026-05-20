@@ -244,6 +244,7 @@ def test_live_turn_execution_oracle(
     if passed_count >= required:
         return
 
+    failed_details = [item.details for item in run_results if not item.passed]
     artifact_dir = tmp_path_factory.mktemp("router_live_action_oracles")
     artifact_file = Path(artifact_dir) / f"{live_oracle_case.scenario.id}.json"
     artifact_file.write_text(
@@ -252,5 +253,5 @@ def test_live_turn_execution_oracle(
     )
     pytest.fail(
         f"oracle case {live_oracle_case.scenario.id!r} failed {runs - passed_count}/{runs} runs; "
-        f"artifact: {artifact_file}"
+        f"artifact: {artifact_file}; failed_details={json.dumps(failed_details, ensure_ascii=True)}"
     )
