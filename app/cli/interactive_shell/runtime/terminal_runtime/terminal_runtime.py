@@ -67,7 +67,7 @@ class StreamingConsole(Console):
 
             ensure_tty_column_zero()
             if sys.stdout.isatty() and "width" not in kwargs:
-                kwargs.setdefault("width", _repl_table_width(self))
+                kwargs["width"] = _repl_table_width(self)
         super().print(*args, **kwargs)
 
 
