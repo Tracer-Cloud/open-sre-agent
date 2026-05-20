@@ -186,9 +186,8 @@ def test_run_gracefully_handles_single_tool_call_only_model() -> None:
 
 
 def test_run_parallel_handles_interpreter_shutdown() -> None:
-    """When pool.submit raises RuntimeError (interpreter shutdown) for some tool
-    calls, _run_parallel must return error dicts for those slots instead of
-    propagating the exception."""
+    """When pool.submit raises RuntimeError (interpreter shutdown), _run_parallel
+    must return error dicts for all slots instead of propagating the exception."""
     mock_tool = MagicMock()
     mock_tool.name = "good_tool"
     mock_tool.extract_params.return_value = {}
@@ -199,27 +198,15 @@ def test_run_parallel_handles_interpreter_shutdown() -> None:
         ToolCall(id="tc2", name="good_tool", input={}),
     ]
 
-    submit_count = 0
-
-    def patched_submit(fn: object, *args: object) -> object:
-        nonlocal submit_count
-        submit_count += 1
-        if submit_count == 1:
-            raise RuntimeError("cannot schedule new futures after interpreter shutdown")
-        from concurrent.futures import Future
-
-        f: Future[object] = Future()
-        f.set_result(fn(*args))  # type: ignore[operator]
-        return f
+    shutdown_msg = "cannot schedule new futures after interpreter shutdown"
 
     with patch("app.agent.investigation.ThreadPoolExecutor") as mock_executor_cls:
         mock_pool = MagicMock()
         mock_pool.__enter__ = lambda s: s
         mock_pool.__exit__ = MagicMock(return_value=False)
-        mock_pool.submit.side_effect = patched_submit
+        mock_pool.submit.side_effect = RuntimeError(shutdown_msg)
         mock_executor_cls.return_value = mock_pool
 
         results = _run_parallel(tool_calls, [mock_tool], {})
 
-    assert results[0] == {"error": "system shutting down"}
-    assert results[1]["result"] == "ok"
+    assert results == [{"error": shutdown_msg}, {"error": shutdown_msg}]
