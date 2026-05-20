@@ -16,8 +16,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: routing-live-post-merge-${{ github.ref }}
-  cancel-in-progress: true
+  group: routing-live-post-merge-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
 
 jobs:
   routing-live:
