@@ -1,0 +1,299 @@
+{
+  "summary": {
+    "total": 32,
+    "passed": 28,
+    "failed": 4
+  },
+  "failed": [
+    {
+      "surface": "cli",
+      "command": "health",
+      "expected": "integration health table",
+      "passed": false,
+      "actual": "\n\u256d\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 OpenSRE Health \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\nEnvironment       development                                 ",
+      "notes": "exit=1"
+    },
+    {
+      "surface": "repl",
+      "command": "/tests list",
+      "expected": "test inventory",
+      "passed": false,
+      "actual": "\n\n",
+      "notes": ""
+    },
+    {
+      "surface": "repl",
+      "command": "/template",
+      "expected": "alert JSON template",
+      "passed": false,
+      "actual": "usage: /template <type>  (choices: generic, datadog, grafana, honeycomb, \ncoralogix)\n",
+      "notes": ""
+    },
+    {
+      "surface": "repl",
+      "command": "/guardrails",
+      "expected": "guardrails info or init hint",
+      "passed": false,
+      "actual": "\nCLI command exited with non-zero code 2\n\n",
+      "notes": ""
+    }
+  ],
+  "all": [
+    {
+      "surface": "cli",
+      "command": "version",
+      "expected": "prints version and python",
+      "passed": true,
+      "actual": "opensre 0.1\nPython  3.13.11\nOS      linux (x86_64)\n",
+      "notes": ""
+    },
+    {
+      "surface": "cli",
+      "command": "doctor",
+      "expected": "diagnostic table with python + llm",
+      "passed": true,
+      "actual": "\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\u001b[1m  OpenSRE Doctor\u001b[0m\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+      "notes": ""
+    },
+    {
+      "surface": "cli",
+      "command": "health",
+      "expected": "integration health table",
+      "passed": false,
+      "actual": "\n\u256d\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 OpenSRE Health \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\nEnvironment       development                                 ",
+      "notes": "exit=1"
+    },
+    {
+      "surface": "cli",
+      "command": "config show",
+      "expected": "shows config path or yaml",
+      "passed": true,
+      "actual": "# /home/muddles/.config/opensre/config.yml (on-disk values; environment variables do not override this output)\n{}\n",
+      "notes": ""
+    },
+    {
+      "surface": "cli",
+      "command": "integrations list",
+      "expected": "lists integrations or empty message",
+      "passed": true,
+      "actual": "  No integrations. Run: opensre integrations setup <service>, or opensre onboard for the guided wizard.\n",
+      "notes": ""
+    },
+    {
+      "surface": "cli",
+      "command": "agents list",
+      "expected": "agent table headers",
+      "passed": true,
+      "actual": "                            agents                             \n\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501",
+      "notes": ""
+    },
+    {
+      "surface": "cli",
+      "command": "agents scan",
+      "expected": "scan completes",
+      "passed": true,
+      "actual": "                               agent scan                               \n   pid \u2502 agent        \u2502 command                ",
+      "notes": ""
+    },
+    {
+      "surface": "cli",
+      "command": "tests list",
+      "expected": "lists synthetic tests",
+      "passed": true,
+      "actual": "synthetic:000-healthy - 000-healthy  [healthy] [synthetic, rds, test]\n  Run the '000-healthy' synthetic RCA scenario aga",
+      "notes": ""
+    },
+    {
+      "surface": "cli",
+      "command": "guardrails rules",
+      "expected": "rules or not-configured message",
+      "passed": true,
+      "actual": "  No guardrails config at /home/muddles/.config/opensre/guardrails.yml\n",
+      "notes": ""
+    },
+    {
+      "surface": "cli",
+      "command": "messaging status --platform telegram",
+      "expected": "messaging status output",
+      "passed": true,
+      "actual": "\nMessaging Security Status \u2014 telegram\n\nNo telegram integration configured.\nRun the setup wizard or configure the integra",
+      "notes": ""
+    },
+    {
+      "surface": "cli",
+      "command": "remote health",
+      "expected": "fails without URL (expected)",
+      "passed": true,
+      "actual": "Error: Connection timed out reaching http://10.0.0.1:2024. Instance may still be starting. Retry in 30s or check AWS con",
+      "notes": ""
+    },
+    {
+      "surface": "cli",
+      "command": "watchdog --help",
+      "expected": "watchdog usage",
+      "passed": true,
+      "actual": "Usage: opensre watchdog [OPTIONS]\n\n  Monitor a process and send Telegram alarms when thresholds trip.\n\nOptions:\n  --pid ",
+      "notes": ""
+    },
+    {
+      "surface": "repl",
+      "command": "/help",
+      "expected": "shows command index",
+      "passed": true,
+      "actual": "                                 Slash commands                                 \nHelp                  \u2502                                              ",
+      "notes": ""
+    },
+    {
+      "surface": "repl",
+      "command": "/status",
+      "expected": "session status table",
+      "passed": true,
+      "actual": "                     Session status                     \ninteractions              \u2502 1                           \nincoming alerts           \u2502 0       ",
+      "notes": ""
+    },
+    {
+      "surface": "repl",
+      "command": "/version",
+      "expected": "version info",
+      "passed": true,
+      "actual": "      Version info      \nopensre \u2502 0.1           \npython  \u2502 3.13.11       \nos      \u2502 linux (x86_64)\n",
+      "notes": ""
+    },
+    {
+      "surface": "repl",
+      "command": "/doctor",
+      "expected": "doctor output",
+      "passed": true,
+      "actual": "                                 OpenSRE Doctor                                 \ncheck        \u2502 status \u2502 detail                                       ",
+      "notes": ""
+    },
+    {
+      "surface": "repl",
+      "command": "/health",
+      "expected": "health summary",
+      "passed": true,
+      "actual": "\n\u256d\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 OpenSRE Health \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\nEnvironment       development                                    \nIntegration store /home/mu",
+      "notes": ""
+    },
+    {
+      "surface": "repl",
+      "command": "/model",
+      "expected": "shows LLM provider/model",
+      "passed": true,
+      "actual": "LLM settings unavailable \u2014 check provider env vars.\n",
+      "notes": ""
+    },
+    {
+      "surface": "repl",
+      "command": "/integrations",
+      "expected": "integrations list or setup hint",
+      "passed": true,
+      "actual": "no integrations configured.  try `opensre onboard` to add one.\n",
+      "notes": ""
+    },
+    {
+      "surface": "repl",
+      "command": "/agents",
+      "expected": "agents table",
+      "passed": true,
+      "actual": "                            agents                             \n\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 agent \u2503    pid \u2503 upt",
+      "notes": ""
+    },
+    {
+      "surface": "repl",
+      "command": "/tests list",
+      "expected": "test inventory",
+      "passed": false,
+      "actual": "\n\n",
+      "notes": ""
+    },
+    {
+      "surface": "repl",
+      "command": "/template",
+      "expected": "alert JSON template",
+      "passed": false,
+      "actual": "usage: /template <type>  (choices: generic, datadog, grafana, honeycomb, \ncoralogix)\n",
+      "notes": ""
+    },
+    {
+      "surface": "repl",
+      "command": "/trust on",
+      "expected": "enables trust mode",
+      "passed": true,
+      "actual": "trust mode on \u2014 future approval prompts will be skipped\n",
+      "notes": ""
+    },
+    {
+      "surface": "repl",
+      "command": "/reset",
+      "expected": "clears session",
+      "passed": true,
+      "actual": "session state cleared.\n",
+      "notes": ""
+    },
+    {
+      "surface": "repl",
+      "command": "/tasks",
+      "expected": "task list (may be empty)",
+      "passed": true,
+      "actual": "no tasks recorded this session.\n",
+      "notes": ""
+    },
+    {
+      "surface": "repl",
+      "command": "/watches",
+      "expected": "watchdog task list",
+      "passed": true,
+      "actual": "no watchdog tasks in this session.\n",
+      "notes": ""
+    },
+    {
+      "surface": "repl",
+      "command": "/onboard",
+      "expected": "handoff message (cannot run in REPL)",
+      "passed": true,
+      "actual": "`opensre onboard` is an interactive wizard that needs a full terminal.\nExit the interactive shell (Ctrl+D or `/exit`) and run opensre onboard directly",
+      "notes": ""
+    },
+    {
+      "surface": "repl",
+      "command": "/privacy",
+      "expected": "privacy / history info",
+      "passed": true,
+      "actual": "                            Privacy settings                             \n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502 ",
+      "notes": ""
+    },
+    {
+      "surface": "repl",
+      "command": "/guardrails",
+      "expected": "guardrails info or init hint",
+      "passed": false,
+      "actual": "\nCLI command exited with non-zero code 2\n\n",
+      "notes": ""
+    },
+    {
+      "surface": "repl",
+      "command": "/list",
+      "expected": "browse integrations/models/tools",
+      "passed": true,
+      "actual": "no integrations configured.  try `opensre onboard` to add one.\n                                  MCP servers                                   \nserver",
+      "notes": ""
+    },
+    {
+      "surface": "repl",
+      "command": "/investigate <fixture>",
+      "expected": "starts or completes file-based investigation",
+      "passed": true,
+      "actual": "investigation failed: LLM provider 'anthropic' requires ANTHROPIC_API_KEY to be \nset.\nsuggestion: Run `opensre onboard` to configure your LLM provider and API \ncredentials.\n",
+      "notes": "requires LLM_PROVIDER in .env via opensre entrypoint"
+    },
+    {
+      "surface": "repl-ui",
+      "command": "/help rendering",
+      "expected": "no broken Rich markup in help",
+      "passed": true,
+      "actual": "len=5539",
+      "notes": "manual: verify tables align in real TTY"
+    }
+  ]
+}
