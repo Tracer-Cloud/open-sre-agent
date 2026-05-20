@@ -324,12 +324,17 @@ def _questionary_choice(choice: Choice) -> questionary.Choice:
     )
 
 
-def _choose_model(provider: ProviderOption, *, default: str) -> str:
+def _choose_model(provider: ProviderOption, *, default: str | None) -> str:
     """Prompt for a model from the provider's wizard catalog."""
+    resolved_default = (default or "").strip() or provider.default_model
     if not provider.models:
-        return default
+        return resolved_default
     choices = [Choice(value=opt.value, label=opt.label) for opt in provider.models]
-    default_choice = default if any(c.value == default for c in choices) else provider.default_model
+    default_choice = (
+        resolved_default
+        if any(c.value == resolved_default for c in choices)
+        else provider.default_model
+    )
     if not any(c.value == default_choice for c in choices):
         default_choice = choices[0].value
     _step("Model")
