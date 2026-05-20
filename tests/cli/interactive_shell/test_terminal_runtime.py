@@ -836,6 +836,34 @@ class TestStreamingConsole:
         cancel.clear()
         assert console.cancel_requested is False
 
+    def test_blank_print_resets_column_without_preparing_new_line(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        import threading as _threading
+
+        spinner = loop._SpinnerState()
+        console = loop._StreamingConsole(
+            spinner,
+            _threading.Event(),
+            file=io.StringIO(),
+            force_terminal=False,
+            width=80,
+        )
+
+        calls: list[str] = []
+        monkeypatch.setattr(
+            "app.cli.interactive_shell.ui.choice_menu.ensure_tty_column_zero",
+            lambda: calls.append("ensure"),
+        )
+        monkeypatch.setattr(
+            "app.cli.interactive_shell.ui.choice_menu.prepare_repl_output_line",
+            lambda: calls.append("prepare"),
+        )
+
+        console.print()
+        assert calls == ["ensure"]
+
 
 # ── ReplState dataclass tests ────────────────────────────────────────────────
 
