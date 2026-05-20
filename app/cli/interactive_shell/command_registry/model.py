@@ -61,7 +61,7 @@ def switch_llm_provider(
     toolcall_model: str | None = None,
 ) -> bool:
     from app.cli.wizard.config import PROVIDER_BY_VALUE
-    from app.cli.wizard.env_sync import sync_env_values, sync_provider_env
+    from app.cli.wizard.env_sync import sync_provider_env
     from app.llm_credentials import has_llm_api_key
 
     provider_key = provider_name.strip().lower()
@@ -129,10 +129,11 @@ def switch_llm_provider(
                 )
                 return False
 
-    env_path = sync_provider_env(provider=provider, model=selected_model)
-    if selected_toolcall and provider.toolcall_model_env:
-        env_path = sync_env_values({provider.toolcall_model_env: selected_toolcall})
-        os.environ[provider.toolcall_model_env] = selected_toolcall
+    env_path = sync_provider_env(
+        provider=provider,
+        model=selected_model,
+        toolcall_model=selected_toolcall,
+    )
     _reset_runtime_llm_caches()
 
     # Be explicit about which slot each model lands in.

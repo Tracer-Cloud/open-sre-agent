@@ -240,6 +240,33 @@ def test_sync_provider_env_updates_os_environ(tmp_path, monkeypatch) -> None:
 
 
 @pytest.mark.skipif(_SKIP_AS_ROOT, reason="root bypasses file permission checks")
+def test_sync_provider_env_writes_toolcall_model_atomically(tmp_path, monkeypatch) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "LLM_PROVIDER=openai\n"
+        "OPENAI_REASONING_MODEL=gpt-5.4\n"
+        "OPENAI_MODEL=gpt-5.4\n"
+        "OPENAI_TOOLCALL_MODEL=old-toolcall\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_REASONING_MODEL", "gpt-5.4")
+    monkeypatch.setenv("OPENAI_TOOLCALL_MODEL", "old-toolcall")
+
+    sync_provider_env(
+        provider=PROVIDER_BY_VALUE["openai"],
+        model="gpt-5.4-mini",
+        toolcall_model="gpt-5.4-nano",
+        env_path=env_path,
+    )
+
+    content = env_path.read_text(encoding="utf-8")
+    assert "OPENAI_REASONING_MODEL=gpt-5.4-mini\n" in content
+    assert "OPENAI_TOOLCALL_MODEL=gpt-5.4-nano\n" in content
+    assert os.environ["OPENAI_REASONING_MODEL"] == "gpt-5.4-mini"
+    assert os.environ["OPENAI_TOOLCALL_MODEL"] == "gpt-5.4-nano"
+
+
 def test_sync_provider_env_permission_error(tmp_path) -> None:
     env_path = tmp_path / ".env"
     env_path.write_text("LLM_PROVIDER=anthropic\n", encoding="utf-8")
