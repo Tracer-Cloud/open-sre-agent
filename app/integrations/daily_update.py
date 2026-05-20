@@ -8,6 +8,7 @@ import os
 import re
 import sys
 from collections.abc import Iterable
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
@@ -21,7 +22,6 @@ from app.integrations._validation_helpers import report_validation_failure
 from app.services.llm_client import get_llm_for_reasoning
 from app.utils.sentry_sdk import init_sentry
 from app.version import get_version
-from contextlib import suppress
 
 logger = logging.getLogger(__name__)
 

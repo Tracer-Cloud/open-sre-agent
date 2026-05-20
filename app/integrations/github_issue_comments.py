@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -142,7 +143,9 @@ def send_slack_webhook(payload: dict[str, Any], webhook_url: str) -> None:
             status_code = getattr(response, "status", response.getcode())
     except error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Slack webhook failed with HTTP {exc.code}: {detail}") from exc
+        raise RuntimeError(
+            f"Slack webhook failed with HTTP {exc.code}: {detail}"
+        ) from exc
     except error.URLError as exc:
         raise RuntimeError(f"Slack webhook failed: {exc.reason}") from exc
 
@@ -152,7 +155,9 @@ def send_slack_webhook(payload: dict[str, Any], webhook_url: str) -> None:
 
 def main() -> int:
     """Entrypoint used by the GitHub Actions workflow."""
-    init_sentry(entrypoint="integrations.github_issue_comments")
+    with suppress(ModuleNotFoundError):
+        init_sentry(entrypoint="integrations.github_issue_comments")
+
     event_path = _string(os.getenv("GITHUB_EVENT_PATH"))
     repository = _string(os.getenv("GITHUB_REPOSITORY"))
     webhook_url = _string(
@@ -177,7 +182,9 @@ def main() -> int:
 
     payload = build_slack_payload(notification)
     send_slack_webhook(payload, webhook_url)
-    print(f"Posted Slack notification for {notification.repository}#{notification.issue_number}.")
+    print(
+        f"Posted Slack notification for {notification.repository}#{notification.issue_number}."
+    )
     return 0
 
 
