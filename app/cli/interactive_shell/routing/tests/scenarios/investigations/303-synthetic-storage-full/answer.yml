@@ -12,17 +12,12 @@ planned_actions:
   target_surface: investigation
   suite: rds_postgres
   scenario: 003-storage-full
+  content: rds_postgres:003-storage-full
 executed_actions:
 - kind: synthetic_test
   suite: rds_postgres
   scenario: 003-storage-full
-classification_actions:
-- kind: synthetic_test
-  source: llm
-  target_surface: investigation
   content: rds_postgres:003-storage-full
-  suite: rds_postgres
-  scenario: 003-storage-full
 response_contract:
   must_contain_any:
   - synthetic test rds_postgres:003-storage-full

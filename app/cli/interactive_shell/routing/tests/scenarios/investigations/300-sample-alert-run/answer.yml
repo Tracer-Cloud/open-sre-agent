@@ -11,13 +11,10 @@ planned_actions:
   content: generic
   source: llm
   target_surface: investigation
+  template: generic
 executed_actions:
 - kind: sample_alert
   template: generic
-classification_actions:
-- kind: sample_alert
-  source: llm
-  target_surface: investigation
   content: generic
 response_contract:
   must_contain_any:

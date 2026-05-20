@@ -13,11 +13,12 @@ planned_actions:
   target_surface: slash
   command: /definitely-not-a-command
   args: []
+  content: /definitely-not-a-command
 executed_actions:
 - kind: slash
   command: /definitely-not-a-command
   args: []
-classification_actions: []
+  content: /definitely-not-a-command
 response_contract:
   must_contain_any:
   - ran /definitely-not-a-command

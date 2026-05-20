@@ -55,7 +55,7 @@ def _anthropic_tool_schema(tool: Any) -> dict[str, Any]:
     return {
         "name": tool.name,
         "description": tool.description,
-        "input_schema": tool.input_schema,
+        "input_schema": tool.public_input_schema,
     }
 
 
@@ -65,7 +65,7 @@ def _openai_tool_schema(tool: Any) -> dict[str, Any]:
         "function": {
             "name": tool.name,
             "description": tool.description,
-            "parameters": tool.input_schema,
+            "parameters": tool.public_input_schema,
         },
     }
 

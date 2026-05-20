@@ -15,7 +15,6 @@ planned_actions:
   args:
   - integrations
 executed_actions: []
-classification_actions: []
 response_contract:
   must_contain_any:
   - couldn't safely decide actions

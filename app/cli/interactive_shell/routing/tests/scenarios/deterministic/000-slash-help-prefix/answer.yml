@@ -13,11 +13,12 @@ planned_actions:
   target_surface: slash
   command: /help
   args: []
+  content: /help
 executed_actions:
 - kind: slash
   command: /help
   args: []
-classification_actions: []
+  content: /help
 response_contract:
   must_contain_any:
   - ran /help

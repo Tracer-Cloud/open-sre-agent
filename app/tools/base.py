@@ -3,13 +3,26 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Literal
 
-from pydantic import Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from app.strict_config import StrictConfigModel
 from app.types.evidence import EvidenceSource
 from app.types.retrieval import RetrievalControls
+
+EvidenceType = Literal[
+    "logs",
+    "metrics",
+    "traces",
+    "events",
+    "topology",
+    "deployment_metadata",
+    "query_stats",
+    "artifact",
+    "other",
+]
+SideEffectLevel = Literal["none", "read_only", "mutating", "external"]
 
 
 class ToolMetadata(StrictConfigModel):
@@ -20,9 +33,16 @@ class ToolMetadata(StrictConfigModel):
     display_name: str | None = None
     input_schema: dict[str, Any]
     source: EvidenceSource
+    source_id: str | None = None
+    evidence_type: EvidenceType | None = None
+    side_effect_level: SideEffectLevel | None = None
     use_cases: list[str] = Field(default_factory=list)
+    examples: list[str] = Field(default_factory=list)
+    anti_examples: list[str] = Field(default_factory=list)
     requires: list[str] = Field(default_factory=list)
     outputs: dict[str, str] = Field(default_factory=dict)
+    output_schema: dict[str, Any] | None = None
+    injected_params: list[str] = Field(default_factory=list)
     retrieval_controls: RetrievalControls = Field(
         default_factory=RetrievalControls,
         description="Declares which structured retrieval controls this tool supports",
@@ -63,10 +83,19 @@ class BaseTool(ABC):
     description: ClassVar[str]
     display_name: ClassVar[str | None] = None
     input_schema: ClassVar[dict[str, Any]]  # JSON Schema — consumed by LLM planner
+    input_model: ClassVar[type[BaseModel] | None] = None
     source: ClassVar[EvidenceSource]
+    source_id: ClassVar[str | None] = None
+    evidence_type: ClassVar[EvidenceType | None] = None
+    side_effect_level: ClassVar[SideEffectLevel | None] = None
     use_cases: ClassVar[list[str]] = []
+    examples: ClassVar[list[str]] = []
+    anti_examples: ClassVar[list[str]] = []
     requires: ClassVar[list[str]] = []
     outputs: ClassVar[dict[str, str]] = {}  # Output field -> description (optional, for prompting)
+    output_schema: ClassVar[dict[str, Any] | None] = None
+    output_model: ClassVar[type[BaseModel] | None] = None
+    injected_params: ClassVar[list[str]] = []
     retrieval_controls: ClassVar[RetrievalControls] = (
         RetrievalControls()
     )  # Declares supported controls
@@ -87,9 +116,16 @@ class BaseTool(ABC):
         cls.display_name = metadata.display_name
         cls.input_schema = metadata.input_schema
         cls.source = metadata.source
+        cls.source_id = metadata.source_id
+        cls.evidence_type = metadata.evidence_type
+        cls.side_effect_level = metadata.side_effect_level
         cls.use_cases = metadata.use_cases
+        cls.examples = metadata.examples
+        cls.anti_examples = metadata.anti_examples
         cls.requires = metadata.requires
         cls.outputs = metadata.outputs
+        cls.output_schema = metadata.output_schema
+        cls.injected_params = metadata.injected_params
         cls.retrieval_controls = metadata.retrieval_controls
 
     @classmethod
@@ -101,10 +137,17 @@ class BaseTool(ABC):
                 "description": getattr(cls, "description", ""),
                 "display_name": getattr(cls, "display_name", None),
                 "input_schema": getattr(cls, "input_schema", {}),
+                "source_id": getattr(cls, "source_id", None),
                 "source": getattr(cls, "source", ""),
+                "evidence_type": getattr(cls, "evidence_type", None),
+                "side_effect_level": getattr(cls, "side_effect_level", None),
                 "use_cases": list(getattr(cls, "use_cases", [])),
+                "examples": list(getattr(cls, "examples", [])),
+                "anti_examples": list(getattr(cls, "anti_examples", [])),
                 "requires": list(getattr(cls, "requires", [])),
                 "outputs": dict(getattr(cls, "outputs", {})),
+                "output_schema": getattr(cls, "output_schema", None),
+                "injected_params": list(getattr(cls, "injected_params", [])),
                 "retrieval_controls": getattr(cls, "retrieval_controls", RetrievalControls()),
             }
         )

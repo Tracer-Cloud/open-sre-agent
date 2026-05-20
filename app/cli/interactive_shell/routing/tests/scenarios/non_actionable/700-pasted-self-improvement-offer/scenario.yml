@@ -16,4 +16,4 @@ available_capabilities:
   cli_commands: []
   synthetic_suites: []
 notes:
-  - "Prompt reads like the assistant offering a code change; nothing to execute."
+- Prompt reads like the assistant offering a code change; nothing to execute.

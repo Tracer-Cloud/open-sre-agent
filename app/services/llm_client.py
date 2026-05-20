@@ -163,6 +163,7 @@ class LLMClient:
         self._model = model
         self._max_tokens = max_tokens
         self._temperature = temperature
+        self._bound_tools: list[dict[str, Any]] = []
 
     def with_config(self, **_kwargs) -> LLMClient:
         return self
@@ -170,7 +171,8 @@ class LLMClient:
     def with_structured_output(self, model: type[BaseModel]) -> StructuredOutputClient:
         return StructuredOutputClient(self, model)
 
-    def bind_tools(self, _tools: list) -> LLMClient:
+    def bind_tools(self, tools: list[dict[str, Any]]) -> LLMClient:
+        self._bound_tools = [dict(item) for item in tools]
         return self
 
     def _ensure_client(self) -> None:
@@ -210,6 +212,8 @@ class LLMClient:
             kwargs["system"] = system
         if self._temperature is not None:
             kwargs["temperature"] = self._temperature
+        if self._bound_tools:
+            kwargs["tools"] = self._bound_tools
         return kwargs
 
     def invoke(self, prompt_or_messages: Any) -> LLMResponse:
@@ -246,7 +250,27 @@ class LLMClient:
         else:
             raise RuntimeError("LLM invocation failed without a concrete error") from last_err
 
-        content = _extract_text(response)
+        if self._bound_tools:
+            tool_calls: list[dict[str, Any]] = []
+            text_parts: list[str] = []
+            for block in getattr(response, "content", []):
+                block_type = getattr(block, "type", None)
+                if block_type == "text":
+                    text_parts.append(str(getattr(block, "text", "")))
+                elif block_type == "tool_use":
+                    tool_calls.append(
+                        {
+                            "name": str(getattr(block, "name", "")),
+                            "arguments": getattr(block, "input", {}),
+                        }
+                    )
+            if tool_calls:
+                payload = {"tool_calls": tool_calls, "text": "".join(text_parts).strip()}
+                content = json.dumps(payload, ensure_ascii=True)
+            else:
+                content = "".join(text_parts).strip() or _extract_text(response)
+        else:
+            content = _extract_text(response)
         usage = getattr(response, "usage", None)
         _emit_usage(
             self._model,
@@ -340,6 +364,7 @@ class BedrockLLMClient:
         self._model = model
         self._max_tokens = max_tokens
         self._temperature = temperature
+        self._bound_tools: list[dict[str, Any]] = []
         self._use_anthropic = _is_anthropic_bedrock_model(model)
         self._aws_region = os.getenv("AWS_REGION", os.getenv("AWS_DEFAULT_REGION", "us-east-1"))
 
@@ -358,7 +383,8 @@ class BedrockLLMClient:
     def with_structured_output(self, model: type[BaseModel]) -> StructuredOutputClient:
         return StructuredOutputClient(self, model)
 
-    def bind_tools(self, _tools: list[Any]) -> BedrockLLMClient:
+    def bind_tools(self, tools: list[dict[str, Any]]) -> BedrockLLMClient:
+        self._bound_tools = [dict(item) for item in tools]
         return self
 
     def _invoke_anthropic(self, prompt_or_messages: Any) -> LLMResponse:
@@ -384,6 +410,8 @@ class BedrockLLMClient:
             kwargs["system"] = system
         if self._temperature is not None:
             kwargs["temperature"] = self._temperature
+        if self._bound_tools:
+            kwargs["tools"] = self._bound_tools
 
         backoff_seconds = _RETRY_INITIAL_BACKOFF_SEC
         max_attempts = _RETRY_MAX_ATTEMPTS
@@ -439,7 +467,27 @@ class BedrockLLMClient:
         else:
             raise RuntimeError("Bedrock invocation failed without a concrete error") from last_err
 
-        content = _extract_text(response)
+        if self._bound_tools:
+            tool_calls: list[dict[str, Any]] = []
+            text_parts: list[str] = []
+            for block in getattr(response, "content", []):
+                block_type = getattr(block, "type", None)
+                if block_type == "text":
+                    text_parts.append(str(getattr(block, "text", "")))
+                elif block_type == "tool_use":
+                    tool_calls.append(
+                        {
+                            "name": str(getattr(block, "name", "")),
+                            "arguments": getattr(block, "input", {}),
+                        }
+                    )
+            if tool_calls:
+                payload = {"tool_calls": tool_calls, "text": "".join(text_parts).strip()}
+                content = json.dumps(payload, ensure_ascii=True)
+            else:
+                content = "".join(text_parts).strip() or _extract_text(response)
+        else:
+            content = _extract_text(response)
         usage = getattr(response, "usage", None)
         _emit_usage(
             self._model,
@@ -723,6 +771,7 @@ class OpenAILLMClient:
         self._model = model
         self._max_tokens = max_tokens
         self._temperature = temperature
+        self._bound_tools: list[dict[str, Any]] = []
 
     def _build_client(self, api_key: str) -> OpenAI:
         return OpenAI(
@@ -738,7 +787,8 @@ class OpenAILLMClient:
     def with_structured_output(self, model: type[BaseModel]) -> StructuredOutputClient:
         return StructuredOutputClient(self, model)
 
-    def bind_tools(self, _tools: list) -> OpenAILLMClient:
+    def bind_tools(self, tools: list[dict[str, Any]]) -> OpenAILLMClient:
+        self._bound_tools = [dict(item) for item in tools]
         return self
 
     def _ensure_client(self) -> OpenAI:
@@ -784,6 +834,9 @@ class OpenAILLMClient:
             kwargs["reasoning_effort"] = reasoning_effort
         if self._temperature is not None:
             kwargs["temperature"] = self._temperature
+        if self._bound_tools:
+            kwargs["tools"] = self._bound_tools
+            kwargs["tool_choice"] = "auto"
         return kwargs
 
     def invoke(self, prompt_or_messages: Any) -> LLMResponse:
@@ -866,7 +919,26 @@ class OpenAILLMClient:
 
         if not response.choices:
             raise RuntimeError("OpenAI API returned an empty choices list")
-        content = response.choices[0].message.content or ""
+        message = response.choices[0].message
+        if self._bound_tools:
+            tool_calls_raw = getattr(message, "tool_calls", None) or []
+            if tool_calls_raw:
+                tool_calls: list[dict[str, Any]] = []
+                for call in tool_calls_raw:
+                    function = getattr(call, "function", None)
+                    name = str(getattr(function, "name", ""))
+                    raw_args = str(getattr(function, "arguments", "") or "")
+                    try:
+                        parsed_args = json.loads(raw_args) if raw_args else {}
+                    except (json.JSONDecodeError, ValueError):
+                        parsed_args = {}
+                    tool_calls.append({"name": name, "arguments": parsed_args})
+                payload = {"tool_calls": tool_calls, "text": (message.content or "").strip()}
+                content = json.dumps(payload, ensure_ascii=True)
+            else:
+                content = (message.content or "").strip()
+        else:
+            content = message.content or ""
         usage = getattr(response, "usage", None)
         _emit_usage(
             self._model,

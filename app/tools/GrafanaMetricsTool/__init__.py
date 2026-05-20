@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import BaseModel, Field
+
 from app.tools.GrafanaLogsTool import (
     _grafana_available,
     _grafana_creds,
@@ -11,6 +13,28 @@ from app.tools.GrafanaLogsTool import (
     _resolve_grafana_client,
 )
 from app.tools.tool_decorator import tool
+
+
+class QueryGrafanaMetricsInput(BaseModel):
+    metric_name: str = Field(
+        description="Grafana Mimir metric query expression to execute.",
+        examples=["pipeline_runs_total", "sum(rate(http_requests_total[5m]))"],
+    )
+    service_name: str | None = Field(
+        default=None,
+        description="Optional service filter applied by Grafana helper query wrappers.",
+    )
+
+
+class QueryGrafanaMetricsOutput(BaseModel):
+    source: str = Field(description="Evidence source label.")
+    available: bool = Field(description="Whether Grafana query execution succeeded.")
+    metric_name: str = Field(description="Metric query string that was executed.")
+    service_name: str | None = Field(default=None, description="Service filter used for the query.")
+    total_series: int = Field(default=0, description="Number of timeseries returned.")
+    metrics: list[dict[str, Any]] = Field(default_factory=list, description="Raw metrics payload.")
+    error: str | None = Field(default=None, description="Error details when query fails.")
+    account_id: int | None = Field(default=None, description="Grafana account id when available.")
 
 
 def _query_grafana_metrics_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
@@ -38,16 +62,17 @@ def _query_grafana_metrics_available(sources: dict[str, dict]) -> bool:
         "Correlating metric anomalies with alert triggers",
     ],
     requires=["metric_name"],
-    input_schema={
-        "type": "object",
-        "properties": {
-            "metric_name": {"type": "string"},
-            "service_name": {"type": "string"},
-            "grafana_endpoint": {"type": "string"},
-            "grafana_api_key": {"type": "string"},
-        },
-        "required": ["metric_name"],
-    },
+    source_id="grafana_mimir",
+    evidence_type="metrics",
+    side_effect_level="read_only",
+    examples=[
+        "Query `pipeline_runs_total` to verify throughput drops.",
+        "Query HTTP error rate metric with a `service_name` filter.",
+    ],
+    anti_examples=["Use this tool for pod logs or deployment status."],
+    input_model=QueryGrafanaMetricsInput,
+    output_model=QueryGrafanaMetricsOutput,
+    injected_params=("grafana_endpoint", "grafana_api_key", "grafana_backend"),
     is_available=_query_grafana_metrics_available,
     extract_params=_query_grafana_metrics_extract_params,
 )

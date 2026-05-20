@@ -17,13 +17,7 @@ executed_actions:
 - kind: synthetic_test
   suite: rds_postgres
   scenario: 002-connection-exhaustion
-classification_actions:
-- kind: synthetic_test
-  source: llm
-  target_surface: investigation
   content: rds_postgres:002-connection-exhaustion
-  suite: rds_postgres
-  scenario: 002-connection-exhaustion
 response_contract:
   must_contain_any:
   - synthetic test rds_postgres:002-connection-exhaustion

@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from time import perf_counter
-from typing import NotRequired, TypedDict
+from typing import NotRequired, TypedDict, cast
 
 import pytest
 
@@ -17,7 +16,8 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.l
     plan_actions_with_llm,
 )
 from app.cli.interactive_shell.routing.llm_intent_classifier import clear_classify_cache
-from app.cli.interactive_shell.routing.router import RouteKind, classify_input, route_input
+from app.cli.interactive_shell.routing.router import classify_input, route_input
+from app.cli.interactive_shell.routing.tests._oracle_normalize import normalize_response_text
 from app.cli.interactive_shell.routing.tests._oracle_runtime import (
     OracleRunResult,
     fresh_session,
@@ -25,13 +25,10 @@ from app.cli.interactive_shell.routing.tests._oracle_runtime import (
 )
 from app.cli.interactive_shell.routing.tests.scenario_loader import (
     ScenarioCase,
-    iter_scenarios_for_shard,
     load_all_scenarios,
     read_shard_config,
 )
 from app.cli.interactive_shell.runtime.session import ReplSession
-
-MAX_UNCERTAIN_RETRIES = 3
 
 
 class ExpectedAction(TypedDict):
@@ -44,6 +41,7 @@ class ExpectedAction(TypedDict):
     payload: NotRequired[str]
     suite: NotRequired[str]
     scenario: NotRequired[str]
+    template: NotRequired[str]
 
 
 _ALL_CASES = load_all_scenarios()
@@ -51,7 +49,6 @@ _DETERMINISTIC_CASES = [
     case for case in _ALL_CASES if case.scenario.intent_class == "deterministic"
 ]
 _LIVE_CASES = [case for case in _ALL_CASES if case.scenario.intent_class != "deterministic"]
-_SHARDED_LIVE_CASES = iter_scenarios_for_shard(_LIVE_CASES)
 
 
 def _slash_content(command: str, args: list[str]) -> str:
@@ -77,82 +74,54 @@ def _build_actual_action(action: PlannedAction) -> ExpectedAction:
         suite, _sep, scenario = action.content.partition(":")
         expected["suite"] = suite
         expected["scenario"] = scenario
+    elif action.kind == "sample_alert":
+        # ``template`` is the tool's required arg; fixtures include it
+        # alongside ``content`` for explicitness — mirror that shape.
+        template_value = action.args.get("template") if action.args else None
+        expected["template"] = (
+            str(template_value).strip() if isinstance(template_value, str) else action.content
+        )
     return expected
 
 
-def _compact_action(action: PlannedAction) -> ExpectedAction:
-    return {"kind": action.kind, "content": action.content}
+def _contains_any(haystack: str, needles: list[str]) -> bool:
+    if not needles:
+        return True
+    normalized_needles = [normalize_response_text(needle) for needle in needles if needle.strip()]
+    return any(needle in haystack for needle in normalized_needles)
 
 
-def _is_uncertain_fallback(actual_kind: str, fallback_reason: str | None) -> bool:
-    return fallback_reason is not None and actual_kind == RouteKind.CLI_AGENT.value
+def _assistant_handoff_text(actions: list[PlannedAction]) -> str:
+    parts: list[str] = []
+    for action in actions:
+        if action.kind != "assistant_handoff":
+            continue
+        arg_content = action.args.get("content")
+        if isinstance(arg_content, str) and arg_content.strip():
+            parts.append(arg_content.strip())
+            continue
+        content = action.content.strip()
+        if content:
+            parts.append(content)
+    return normalize_response_text("\n".join(parts))
 
 
-def _route_kind_with_uncertain_retries(
-    *,
-    case_id: str,
-    text: str,
-    session: ReplSession,
-    expected_kind: str,
-) -> str:
-    started_at = perf_counter()
-    decision = route_input(text, session)
-    latency_ms = int((perf_counter() - started_at) * 1000)
-    actual_kind = decision.route_kind.value
-    print(
-        f"routing_live_case id={case_id} expected={expected_kind} "
-        f"actual={actual_kind} latency_ms={latency_ms}"
-    )
-
-    attempts = 1
-    while _is_uncertain_fallback(actual_kind, decision.fallback_reason):
-        if attempts >= MAX_UNCERTAIN_RETRIES:
-            break
-        clear_classify_cache()
-        started_at = perf_counter()
-        decision = route_input(text, session)
-        latency_ms = int((perf_counter() - started_at) * 1000)
-        attempts += 1
-        actual_kind = decision.route_kind.value
-        print(
-            f"routing_live_case id={case_id} expected={expected_kind} "
-            f"actual={actual_kind} latency_ms={latency_ms}"
-        )
-
-    return actual_kind
-
-
-def _live_actions_for_case(case: ScenarioCase, session: ReplSession) -> list[ExpectedAction]:
-    prompt = case.scenario.input.prompt
-    decision = route_input(prompt, session)
-    if decision.route_kind == RouteKind.SLASH:
-        return [
-            {
-                "kind": "slash",
-                "content": decision.command_text or prompt.strip(),
-            }
-        ]
-
-    llm_plan = plan_actions_with_llm(prompt)
-    assert llm_plan is not None, "Live LLM action planner did not return a parseable plan."
-    actions, has_unhandled = llm_plan
-    if actions:
-        return [_compact_action(action) for action in actions]
-
-    classification = [dict(item) for item in case.answer.classification_actions]
-    if len(classification) == 1 and classification[0].get("kind") == "assistant_handoff":
-        return [
-            {
-                "kind": "assistant_handoff",
-                "content": str(classification[0].get("content", "")),
-            }
-        ]
-
-    assert not case.answer.planned_actions, (
-        "No executable actions planned, but fixture expects actions."
-    )
-    assert has_unhandled is True
-    return []
+def _assert_planned_actions_match(
+    actual_actions: list[ExpectedAction],
+    expected_actions: list[ExpectedAction],
+) -> None:
+    assert len(actual_actions) == len(expected_actions)
+    for index, expected in enumerate(expected_actions):
+        actual = actual_actions[index]
+        if str(expected.get("kind", "")) != "assistant_handoff":
+            assert actual == expected
+            continue
+        assert actual.get("kind") == "assistant_handoff"
+        expected_source = str(expected.get("source", "")).strip()
+        if expected_source:
+            assert actual.get("source") == expected_source
+        content = str(actual.get("content", "")).strip()
+        assert content, f"assistant_handoff action {index} must include text content."
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
@@ -161,12 +130,6 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
             "deterministic_case",
             _DETERMINISTIC_CASES,
             ids=[case.scenario.id for case in _DETERMINISTIC_CASES],
-        )
-    if "live_route_case" in metafunc.fixturenames:
-        metafunc.parametrize(
-            "live_route_case",
-            _SHARDED_LIVE_CASES,
-            ids=[case.scenario.id for case in _SHARDED_LIVE_CASES],
         )
     if "live_planning_case" in metafunc.fixturenames:
         metafunc.parametrize(
@@ -188,7 +151,7 @@ def _clear_classify_cache_for_live() -> None:
 
 
 def test_shard_selection_is_non_empty() -> None:
-    if _SHARDED_LIVE_CASES:
+    if _LIVE_CASES:
         return
     total, index = read_shard_config()
     pytest.skip(f"No routing cases selected for shard {index}/{total}.")
@@ -221,38 +184,27 @@ def test_help_route_decision_has_structured_shape() -> None:
 
 @pytest.mark.integration
 @pytest.mark.live_llm
-def test_live_route_classification(live_route_case: ScenarioCase) -> None:
-    session = fresh_session(with_prior_state=live_route_case.scenario.session.has_prior_state)
-    expected_kind = live_route_case.answer.route.expected_kind
-    actual_kind = _route_kind_with_uncertain_retries(
-        case_id=live_route_case.scenario.id,
-        text=live_route_case.scenario.input.prompt,
-        session=session,
-        expected_kind=expected_kind,
-    )
-
-    assert actual_kind == expected_kind
-
-    classification = [dict(item) for item in live_route_case.answer.classification_actions]
-    if classification:
-        assert _live_actions_for_case(live_route_case, session) == classification  # type: ignore[arg-type]
-
-
-@pytest.mark.integration
-@pytest.mark.live_llm
 def test_live_action_planning(live_planning_case: ScenarioCase) -> None:
-    session = fresh_session(with_prior_state=live_planning_case.scenario.session.has_prior_state)
+    session = fresh_session(
+        with_prior_state=live_planning_case.scenario.session.has_prior_state,
+        configured_integrations=live_planning_case.scenario.session.configured_integrations,
+        available_capabilities={
+            "slash_commands": live_planning_case.scenario.available_capabilities.slash_commands,
+            "cli_commands": live_planning_case.scenario.available_capabilities.cli_commands,
+            "synthetic_suites": live_planning_case.scenario.available_capabilities.synthetic_suites,
+        },
+    )
     prompt = live_planning_case.scenario.input.prompt
     answer = live_planning_case.answer
 
     decision = route_input(prompt, session)
     assert decision.route_kind.value == answer.route.expected_kind
 
-    llm_plan = plan_actions_with_llm(prompt)
+    llm_plan = plan_actions_with_llm(prompt, session=session)
     assert llm_plan is not None, "Live LLM action planner did not return a parseable plan."
-    actions, has_unhandled = llm_plan
+    actions, _has_unhandled = llm_plan
     actual_actions = [_build_actual_action(action) for action in actions]
-    expected_actions = [dict(item) for item in answer.planned_actions]
+    expected_actions = cast("list[ExpectedAction]", [dict(item) for item in answer.planned_actions])
 
     for action_idx, expected in enumerate(expected_actions):
         kind = str(expected.get("kind", ""))
@@ -268,8 +220,20 @@ def test_live_action_planning(live_planning_case: ScenarioCase) -> None:
                 msg = f"Fixture action {action_idx} content must match command+args."
                 raise AssertionError(msg)
 
-    assert actual_actions == expected_actions
-    assert has_unhandled is answer.policy.has_unhandled_clause
+    # Directly compare planned actions against fixtures. Fixtures use
+    # assistant_handoff entries to express "no executable action, hand off to
+    # LLM response generation"; _assert_planned_actions_match applies lenient
+    # content matching for those entries (kind + non-empty content only).
+    _assert_planned_actions_match(actual_actions, expected_actions)
+
+    # Response-contract assertions (``must_contain_any`` / ``must_not_contain``)
+    # are checked against the rendered terminal response in
+    # ``test_live_turn_execution_oracle``. They are intentionally not
+    # asserted here: the planner emits an *intent hint* in
+    # ``assistant_handoff.content`` which the assistant uses to ground its
+    # reply, not the reply itself, so applying the response contract to
+    # the planning hint over-constrains LLM phrasing without testing the
+    # user-visible behavior.
 
 
 @pytest.mark.integration

@@ -174,6 +174,7 @@ def print_planned_actions(console: Console, actions: list[PlannedAction]) -> Non
             "task_cancel": "cancel task",
             "cli_command": "opensre",
             "implementation": "implementation",
+            "assistant_handoff": "assistant handoff",
         }[action.kind]
         console.print(f"[{DIM}]{index}.[/] [{BOLD_BRAND}]{label}[/] {escape(action.content)}")
 

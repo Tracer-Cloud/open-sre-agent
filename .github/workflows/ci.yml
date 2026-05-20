@@ -125,7 +125,7 @@ jobs:
           --cov-report=html
           --ignore=tests/e2e/kubernetes_local_alert_simulation
           --ignore=tests/synthetic
-          -m "${{ matrix.os == 'windows-latest' && 'not live_llm and not synthetic and not integration' || 'not live_llm and not synthetic' }}"
+          -m "${{ matrix.os == 'windows-latest' && 'not synthetic and not integration' || 'not synthetic' }}"
 
       - name: Upload coverage
         if: >-

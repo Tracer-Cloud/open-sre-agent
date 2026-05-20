@@ -13,11 +13,12 @@ planned_actions:
   target_surface: slash
   command: /quit
   args: []
+  content: /quit
 executed_actions:
 - kind: slash
   command: /quit
   args: []
-classification_actions: []
+  content: /quit
 response_contract:
   must_contain_any:
   - ran /quit

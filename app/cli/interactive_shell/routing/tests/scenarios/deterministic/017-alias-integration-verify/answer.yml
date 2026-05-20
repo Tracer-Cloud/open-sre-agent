@@ -14,12 +14,13 @@ planned_actions:
   command: /integrations
   args:
   - verify
+  content: /integrations verify
 executed_actions:
 - kind: slash
   command: /integrations
   args:
   - verify
-classification_actions: []
+  content: /integrations verify
 response_contract:
   must_contain_any:
   - ran /integrations verify

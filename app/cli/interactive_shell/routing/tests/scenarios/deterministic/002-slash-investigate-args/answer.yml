@@ -14,12 +14,13 @@ planned_actions:
   command: /investigate
   args:
   - alert.json
+  content: /investigate alert.json
 executed_actions:
 - kind: slash
   command: /investigate
   args:
   - alert.json
-classification_actions: []
+  content: /investigate alert.json
 response_contract:
   must_contain_any:
   - ran /investigate alert.json

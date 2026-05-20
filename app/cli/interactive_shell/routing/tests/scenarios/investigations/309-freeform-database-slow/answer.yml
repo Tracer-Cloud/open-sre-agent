@@ -6,18 +6,18 @@ policy:
   should_execute: false
   has_unhandled_clause: true
   fail_closed: true
-planned_actions: []
-executed_actions: []
-classification_actions:
+planned_actions:
 - kind: assistant_handoff
   content: diagnostic_question:database_slow
+  source: llm
+executed_actions: []
 response_contract:
   must_contain_any:
-    - investigate
-    - rca
-    - incident
+  - investigate
+  - rca
+  - incident
   must_not_contain:
-    - $ /
+  - $ /
 history:
   expected:
   - type: cli_agent

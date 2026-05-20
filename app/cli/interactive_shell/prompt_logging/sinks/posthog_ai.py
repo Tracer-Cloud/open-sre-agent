@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from app.analytics.events import Event
-from app.analytics.provider import get_analytics
+from app.analytics.provider import JsonValue, get_analytics
 
 
-def capture_ai_generation(properties: dict[str, object]) -> None:
+def capture_ai_generation(properties: dict[str, JsonValue]) -> None:
     get_analytics().capture(Event.AI_GENERATION, properties)

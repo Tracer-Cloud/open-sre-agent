@@ -11,6 +11,7 @@ session:
   configured_integrations: []
 available_capabilities:
   slash_commands: []
-  cli_commands: []
+  cli_commands:
+  - integrations
   synthetic_suites: []
 notes: []

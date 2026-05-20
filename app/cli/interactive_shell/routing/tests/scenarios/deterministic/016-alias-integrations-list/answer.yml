@@ -14,12 +14,13 @@ planned_actions:
   command: /integrations
   args:
   - list
+  content: /integrations list
 executed_actions:
 - kind: slash
   command: /integrations
   args:
   - list
-classification_actions: []
+  content: /integrations list
 response_contract:
   must_contain_any:
   - ran /integrations list

@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any, cast
 
+from pydantic import BaseModel, Field
+
 from app.integrations.rds import (
     DEFAULT_RDS_REGION,
     rds_extract_params,
@@ -14,6 +16,39 @@ from app.services.aws_sdk_client import execute_aws_sdk_call
 from app.tools.tool_decorator import tool
 
 logger = logging.getLogger(__name__)
+
+
+class DescribeRDSInstanceInput(BaseModel):
+    db_instance_identifier: str = Field(
+        description="RDS DB instance identifier, for example `prod-orders-db`."
+    )
+    region: str = Field(
+        default=DEFAULT_RDS_REGION,
+        description="AWS region where the RDS instance is deployed.",
+    )
+
+
+class DescribeRDSInstanceOutput(BaseModel):
+    source: str = Field(description="Evidence source label.")
+    available: bool = Field(description="Whether instance metadata could be retrieved.")
+    db_instance_identifier: str = Field(description="Queried RDS instance identifier.")
+    status: str | None = Field(default=None, description="Current DB instance lifecycle status.")
+    engine: str | None = Field(default=None, description="Database engine name.")
+    engine_version: str | None = Field(default=None, description="Database engine version.")
+    instance_class: str | None = Field(default=None, description="Instance class size.")
+    multi_az: bool | None = Field(default=None, description="Whether Multi-AZ is enabled.")
+    publicly_accessible: bool | None = Field(default=None, description="Public accessibility flag.")
+    storage_type: str | None = Field(default=None, description="RDS storage type.")
+    allocated_storage_gb: int | None = Field(default=None, description="Allocated storage in GiB.")
+    endpoint: dict[str, Any] | None = Field(default=None, description="Database endpoint details.")
+    availability_zone: str | None = Field(default=None, description="Availability zone placement.")
+    preferred_backup_window: str | None = Field(
+        default=None, description="Configured backup window."
+    )
+    backup_retention_period: int | None = Field(
+        default=None, description="Backup retention period in days."
+    )
+    error: str | None = Field(default=None, description="Error details when lookup fails.")
 
 
 @tool(
@@ -29,14 +64,17 @@ logger = logging.getLogger(__name__)
         "Verifying RDS instance status (available, modifying, failed)",
     ],
     requires=["db_instance_identifier"],
-    input_schema={
-        "type": "object",
-        "properties": {
-            "db_instance_identifier": {"type": "string"},
-            "region": {"type": "string", "default": DEFAULT_RDS_REGION},
-        },
-        "required": ["db_instance_identifier"],
-    },
+    source_id="aws_rds",
+    evidence_type="deployment_metadata",
+    side_effect_level="read_only",
+    examples=[
+        "Describe `prod-orders-db` to confirm if status is `modifying` during an incident.",
+        "Check engine version and backup configuration before rollback decisions.",
+    ],
+    anti_examples=["Use this tool to inspect SQL query text or Postgres locks."],
+    input_model=DescribeRDSInstanceInput,
+    output_model=DescribeRDSInstanceOutput,
+    injected_params=("aws_backend",),
     is_available=rds_is_available,
     extract_params=rds_extract_params,
 )

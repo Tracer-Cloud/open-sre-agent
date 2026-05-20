@@ -13,11 +13,12 @@ planned_actions:
   target_surface: slash
   command: /status
   args: []
+  content: /status
 executed_actions:
 - kind: slash
   command: /status
   args: []
-classification_actions: []
+  content: /status
 response_contract:
   must_contain_any:
   - ran /status

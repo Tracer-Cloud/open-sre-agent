@@ -107,6 +107,7 @@ class AnswerRoute:
 @dataclass(frozen=True)
 class AnswerPolicy:
     should_execute: bool
+    # Deprecated: use forbidden_actions in response_contract instead.
     has_unhandled_clause: bool
     fail_closed: bool
 
@@ -117,7 +118,6 @@ class Answer:
     policy: AnswerPolicy
     planned_actions: tuple[dict[str, Any], ...]
     executed_actions: tuple[dict[str, Any], ...]
-    classification_actions: tuple[dict[str, Any], ...]
     response_contract: dict[str, list[str]]
     history_expected: tuple[dict[str, Any], ...]
     tier: str
@@ -397,12 +397,30 @@ def _parse_answer_yaml(answer_path: Path, *, scenario_id: str) -> Answer:
             label=f"{answer_path} response_contract.must_contain_any",
         )
     )
+    must_contain_all = list(
+        _string_list(
+            response_raw.get("must_contain_all"),
+            label=f"{answer_path} response_contract.must_contain_all",
+        )
+    )
     must_not_contain = list(
         _string_list(
             response_raw.get("must_not_contain"),
             label=f"{answer_path} response_contract.must_not_contain",
         )
     )
+    forbidden_actions = list(
+        _string_list(
+            response_raw.get("forbidden_actions"),
+            label=f"{answer_path} response_contract.forbidden_actions",
+        )
+    )
+    # Validate that forbidden_actions entries reference known action kinds.
+    for entry in forbidden_actions:
+        if entry not in VALID_ACTION_KINDS:
+            msg = f"{answer_path}: forbidden_actions entry {entry!r} is not a valid action kind."
+            raise ValueError(msg)
+
     if not should_execute and "$ /" not in must_not_contain:
         must_not_contain.append("$ /")
 
@@ -428,13 +446,6 @@ def _parse_answer_yaml(answer_path: Path, *, scenario_id: str) -> Answer:
         history_raw.get("expected"),
         label=f"{answer_path} history.expected",
     )
-    classification_actions = tuple(
-        {"kind": str(item.get("kind", "")).strip(), "content": str(item.get("content", "")).strip()}
-        for item in _action_list(
-            data.get("classification_actions"),
-            label=f"{answer_path} classification_actions",
-        )
-    )
 
     command_text = route_raw.get("expected_command_text")
     expected_command_text = (
@@ -457,10 +468,11 @@ def _parse_answer_yaml(answer_path: Path, *, scenario_id: str) -> Answer:
         ),
         planned_actions=planned_actions,
         executed_actions=executed_actions,
-        classification_actions=classification_actions,
         response_contract={
             "must_contain_any": must_contain_any,
+            "must_contain_all": must_contain_all,
             "must_not_contain": must_not_contain,
+            "forbidden_actions": forbidden_actions,
         },
         history_expected=history_expected,
         tier=tier,

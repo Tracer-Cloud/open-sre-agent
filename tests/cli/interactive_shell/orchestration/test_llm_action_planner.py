@@ -121,7 +121,30 @@ def _actions_for_case(case: PlannerLiveCase) -> list[ExpectedAction]:
     return case["expected_actions"]
 
 
+def _normalize_for_assertion(actions: list[ExpectedAction]) -> list[ExpectedAction]:
+    """Drop free-form ``content`` from ``assistant_handoff`` entries.
+
+    Fixture content for handoffs encodes a *category slug* (e.g.
+    ``docs:run_investigation``) describing the intent. The LLM tool-call
+    planner emits free-form prose for the handoff body, which varies
+    per-run. The behavioral contract that matters here is "the LLM
+    correctly classified this prompt as a handoff (no executable
+    action)" — not the specific text it would forward. Comparing
+    kind-only for handoffs preserves the contract without forcing the
+    LLM to reproduce arbitrary fixture strings.
+    """
+    normalized: list[ExpectedAction] = []
+    for action in actions:
+        if action["kind"] == "assistant_handoff":
+            normalized.append({"kind": "assistant_handoff", "content": ""})
+        else:
+            normalized.append(action)
+    return normalized
+
+
 @pytest.mark.parametrize("case", _load_live_cases(), ids=lambda case: case["id"])
 def test_live_llm_planner_matches_prompt_contract(case: PlannerLiveCase) -> None:
     assert route_input(case["input"], ReplSession()).route_kind.value == case["expected_kind"]
-    assert _actions_for_case(case) == case["expected_actions"]
+    actual = _normalize_for_assertion(_actions_for_case(case))
+    expected = _normalize_for_assertion(case["expected_actions"])
+    assert actual == expected

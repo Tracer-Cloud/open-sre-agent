@@ -16,6 +16,9 @@ from rich.console import Console
 import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor as action_executor
 import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions as agent_actions
 import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.slash_commands.deterministic_action_mapper as action_planner_module
+import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tools.implementation_tool as implementation_tool
+import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tools.llm_provider_tool as llm_provider_tool
+import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tools.slash_tool as slash_tool
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration import (
     intent_parser as intent_parser_module,
 )
@@ -59,7 +62,7 @@ def _llm_planner_bridge(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         agent_actions,
         "plan_actions_with_llm",
-        lambda message: action_planner_module.plan_actions_with_unhandled(message),
+        lambda message, *, _session=None: action_planner_module.plan_actions_with_unhandled(message),
     )
 
 
@@ -127,7 +130,7 @@ def test_execute_cli_actions_dispatches_planned_commands(monkeypatch: object) ->
         console.print(f"ran {command}")
         return True
 
-    monkeypatch.setattr(agent_actions, "dispatch_slash", _fake_dispatch)  # type: ignore[attr-defined]
+    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
 
     session = ReplSession()
     console, buf = _capture()
@@ -199,7 +202,7 @@ def test_execute_cli_actions_skips_remaining_actions_when_cancelled(
         console.print(f"ran {command}")
         return True
 
-    monkeypatch.setattr(agent_actions, "dispatch_slash", _fake_dispatch)  # type: ignore[attr-defined]
+    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
 
     session = ReplSession()
     inner_console, buf = _capture()
@@ -236,7 +239,7 @@ def test_execute_cli_actions_falls_through_for_local_llama_request(monkeypatch: 
         console.print(f"ran {command}")
         return True
 
-    monkeypatch.setattr(agent_actions, "dispatch_slash", _fake_dispatch)  # type: ignore[attr-defined]
+    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
 
     session = ReplSession()
     console, _ = _capture()
@@ -256,7 +259,7 @@ def test_execute_cli_actions_switches_llm_provider(monkeypatch: object) -> None:
         console.print(f"switched to {provider}")
         return True
 
-    monkeypatch.setattr(agent_actions, "switch_llm_provider", _fake_switch)  # type: ignore[attr-defined]
+    monkeypatch.setattr(llm_provider_tool, "switch_llm_provider", _fake_switch)
 
     session = ReplSession()
     console, buf = _capture()
@@ -288,7 +291,7 @@ def test_execute_cli_actions_records_llm_provider_failure(monkeypatch: object) -
         console.print("missing credential")
         return False
 
-    monkeypatch.setattr(agent_actions, "switch_llm_provider", _fake_switch)  # type: ignore[attr-defined]
+    monkeypatch.setattr(llm_provider_tool, "switch_llm_provider", _fake_switch)
 
     session = ReplSession()
     console, _ = _capture()
@@ -310,7 +313,7 @@ def test_execute_cli_actions_sets_bare_model_for_active_provider(
     monkeypatch.setattr(
         agent_actions,
         "plan_actions_with_llm",
-        lambda _message: (
+        lambda _message, *, _session=None: (
             [
                 PlannedAction(
                     kind="llm_provider",
@@ -324,7 +327,7 @@ def test_execute_cli_actions_sets_bare_model_for_active_provider(
         ),
     )
     monkeypatch.setattr(
-        agent_actions,
+        llm_provider_tool,
         "switch_reasoning_model",
         lambda model, console: (reasoning_models.append(model), console.print(model), True)[2],
     )
@@ -353,7 +356,7 @@ def test_execute_cli_actions_runs_implementation_action(monkeypatch: object) -> 
         console.print(f"implemented {request}")
 
     monkeypatch.setattr(
-        agent_actions,
+        implementation_tool,
         "run_claude_code_implementation",
         _fake_run_implementation,
     )
@@ -391,7 +394,7 @@ def test_execute_cli_actions_answers_discord_then_dispatches_datadog(
         console.print(f"ran {command}")
         return True
 
-    monkeypatch.setattr(agent_actions, "dispatch_slash", _fake_dispatch)  # type: ignore[attr-defined]
+    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
 
     session = ReplSession()
     console, buf = _capture()
@@ -523,7 +526,7 @@ def test_compound_prompt_executes_all_supported_tasks(monkeypatch: object) -> No
         console.print(f"ran {command}")
         return True
 
-    monkeypatch.setattr(agent_actions, "dispatch_slash", _fake_dispatch)  # type: ignore[attr-defined]
+    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
 
     session = ReplSession()
     console, buf = _capture()
@@ -577,7 +580,7 @@ def test_nitro_prompt_executes_remote_then_investigation(monkeypatch: object) ->
         investigation_payloads.append(alert_text)
         return {"root_cause": "hello world handled"}
 
-    monkeypatch.setattr(agent_actions, "dispatch_slash", _fake_dispatch)  # type: ignore[attr-defined]
+    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
     import app.cli.investigation as investigation_module
 
     monkeypatch.setattr(
@@ -614,7 +617,7 @@ def test_services_version_deploy_prompt_executes_in_order(monkeypatch: object) -
         console.print(f"ran {command}")
         return True
 
-    monkeypatch.setattr(agent_actions, "dispatch_slash", _fake_dispatch)  # type: ignore[attr-defined]
+    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
 
     session = ReplSession()
     console, buf = _capture()
@@ -731,7 +734,7 @@ def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch:
         proc.returncode = 0
         return proc
 
-    monkeypatch.setattr(agent_actions, "dispatch_slash", _fake_dispatch)  # type: ignore[attr-defined]
+    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
     monkeypatch.setattr(action_executor.subprocess, "Popen", _fake_popen)
 
     session = ReplSession()
@@ -858,7 +861,7 @@ def test_partial_match_reports_unhandled_clause(monkeypatch: object) -> None:
         console.print(f"ran {command}")
         return True
 
-    monkeypatch.setattr(agent_actions, "dispatch_slash", _fake_dispatch)  # type: ignore[attr-defined]
+    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
 
     session = ReplSession()
     console, buf = _capture()
@@ -1256,7 +1259,9 @@ def test_execute_cli_actions_with_metrics_counts_planned_and_executed(monkeypatc
 def test_execute_cli_actions_denies_when_llm_plan_is_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(agent_actions, "plan_actions_with_llm", lambda _message: None)
+    monkeypatch.setattr(
+        agent_actions, "plan_actions_with_llm", lambda _message, *, _session=None: None
+    )
 
     session = ReplSession()
     console, buf = _capture()
@@ -1274,7 +1279,7 @@ def test_execute_cli_actions_with_metrics_denies_when_llm_plan_has_unhandled_cla
     monkeypatch.setattr(
         agent_actions,
         "plan_actions_with_llm",
-        lambda _message: (
+        lambda _message, *, _session=None: (
             [action_planner_module.slash_action("/health", 0)],
             True,
         ),

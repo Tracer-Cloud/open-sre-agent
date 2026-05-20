@@ -14,12 +14,13 @@ planned_actions:
   command: /mcp
   args:
   - list
+  content: /mcp list
 executed_actions:
 - kind: slash
   command: /mcp
   args:
   - list
-classification_actions: []
+  content: /mcp list
 response_contract:
   must_contain_any:
   - ran /mcp list

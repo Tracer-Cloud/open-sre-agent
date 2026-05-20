@@ -13,11 +13,12 @@ planned_actions:
   target_surface: slash
   command: /welcome
   args: []
+  content: /welcome
 executed_actions:
 - kind: slash
   command: /welcome
   args: []
-classification_actions: []
+  content: /welcome
 response_contract:
   must_contain_any:
   - ran /welcome

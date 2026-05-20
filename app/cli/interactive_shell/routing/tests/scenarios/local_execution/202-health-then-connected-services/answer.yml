@@ -24,24 +24,12 @@ executed_actions:
 - kind: slash
   command: /health
   args: []
-- kind: slash
-  command: /list
-  args:
-  - integrations
-classification_actions:
-- kind: slash
-  source: llm
-  target_surface: slash
   content: /health
-  command: /health
-  args: []
 - kind: slash
-  source: llm
-  target_surface: slash
-  content: /list integrations
   command: /list
   args:
   - integrations
+  content: /list integrations
 response_contract:
   must_contain_any:
   - ran /health

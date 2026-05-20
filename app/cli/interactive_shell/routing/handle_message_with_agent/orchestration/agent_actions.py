@@ -4,29 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 from rich.console import Console
-from rich.markup import escape
 
-from app.cli.interactive_shell.commands import (
-    SLASH_COMMANDS,
-    dispatch_slash,
-    switch_llm_provider,
-    switch_reasoning_model,
-)
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor import (
-    run_claude_code_implementation,
-    run_opensre_cli_command,
-    run_sample_alert,
-    run_shell_command,
-    run_synthetic_test,
-    run_text_investigation,
-)
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
-    evaluate_llm_runtime_switch,
-    evaluate_slash_tier,
-    execution_allowed,
-    resolve_slash_execution_tier,
+# Load tool registrations.
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration import (  # noqa: F401
+    tools,
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
     PlannedAction,
@@ -38,7 +22,12 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.s
     map_cli_actions,
     map_terminal_tasks,
 )
-from app.cli.interactive_shell.runtime import ReplSession, TaskKind, TaskRecord, TaskStatus
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_registry import (
+    ACTION_KIND_TO_TOOL,
+    REGISTRY,
+    ToolContext,
+)
+from app.cli.interactive_shell.runtime import ReplSession
 from app.cli.interactive_shell.ui import DIM, print_planned_actions
 from app.cli.interactive_shell.ui.streaming import render_response_header
 
@@ -52,7 +41,7 @@ class TerminalActionExecutionResult:
     handled: bool
 
 
-def _plan_actions(message: str) -> tuple[list[PlannedAction], bool, bool]:
+def _plan_actions(message: str, session: ReplSession) -> tuple[list[PlannedAction], bool, bool]:
     """Plan actions for a free-text message using LLM-first planning.
 
     Used to wrap the call in a ``rich.Live`` spinner for in-place
@@ -65,12 +54,19 @@ def _plan_actions(message: str) -> tuple[list[PlannedAction], bool, bool]:
     phase — so the user still sees feedback; no separate in-place
     indicator is needed here.
     """
-    llm_plan = plan_actions_with_llm(message)
+    llm_plan = plan_actions_with_llm(message, session=session)
     if llm_plan is None:
         return [], True, True
     actions, has_unhandled_clause = llm_plan
     if not actions:
         return [], has_unhandled_clause, False
+    if all(action.kind == "assistant_handoff" for action in actions):
+        # If the planner surfaced an assistant handoff *and* flagged unhandled
+        # content, treat this as a fail-closed deny path. This handles partial
+        # prompts where only some clauses were actionable.
+        if has_unhandled_clause:
+            return [], True, True
+        return actions, False, False
     if has_unhandled_clause:
         return [], True, True
     return actions, False, False
@@ -85,103 +81,34 @@ def _render_plan_denied(console: Console) -> None:
     )
 
 
-def _apply_model_set_target(target: str, console: Console) -> bool:
-    from app.cli.wizard.config import PROVIDER_BY_VALUE
-
-    candidate = target.strip()
-    if candidate.lower() in PROVIDER_BY_VALUE:
-        return switch_llm_provider(candidate, console)
-    return switch_reasoning_model(candidate, console)
-
-
-def _running_task_matches(session: ReplSession, target: str) -> list[TaskRecord]:
-    running = [
-        task
-        for task in session.task_registry.list_recent(n=50)
-        if task.status == TaskStatus.RUNNING
-    ]
-    if target == "synthetic_test":
-        return [task for task in running if task.kind == TaskKind.SYNTHETIC_TEST]
-    if target == "task":
-        return running
-    return []
-
-
-def _resolve_task_cancel_target(
-    target: str,
-    session: ReplSession,
-    console: Console,
-) -> str | None:
-    if target in {"synthetic_test", "task"}:
-        matches = _running_task_matches(session, target)
-        if not matches:
-            console.print(
-                f"[dim]no running {escape(target)} task found. use[/] [bold]/tasks[/bold]"
-            )
-            session.record("slash", f"/cancel {target}", ok=False)
-            return None
-        if len(matches) > 1:
-            ids = ", ".join(task.task_id for task in matches)
-            console.print(
-                f"[yellow]multiple running tasks match {escape(target)}:[/] "
-                f"{escape(ids)} [dim](run /cancel <id>)[/]"
-            )
-            session.record("slash", f"/cancel {target}", ok=False)
-            return None
-        return matches[0].task_id
-
-    candidates = session.task_registry.candidates(target)
-    if not candidates:
-        console.print(f"[red]no task matches id:[/] {escape(target)}")
-        session.record("slash", f"/cancel {target}", ok=False)
-        return None
-    if len(candidates) > 1:
-        console.print(
-            f"[red]ambiguous id prefix:[/] {escape(target)} "
-            f"[dim]({len(candidates)} matches — use a longer prefix)[/]"
-        )
-        session.record("slash", f"/cancel {target}", ok=False)
-        return None
-    return candidates[0].task_id
-
-
-def _execute_task_cancel_action(
-    target: str,
-    session: ReplSession,
-    console: Console,
-    *,
-    confirm_fn: Callable[[str], str] | None = None,
-    is_tty: bool | None = None,
-) -> None:
-    task_id = _resolve_task_cancel_target(target, session, console)
-    if task_id is None:
-        return
-
-    command = f"/cancel {task_id}"
-    cmd = SLASH_COMMANDS["/cancel"]
-    tier = resolve_slash_execution_tier("/cancel", [task_id], cmd.execution_tier)
-    policy = evaluate_slash_tier(tier)
-    if not execution_allowed(
-        policy,
-        session=session,
-        console=console,
-        action_summary=command,
-        confirm_fn=confirm_fn,
-        is_tty=is_tty,
-        action_already_listed=True,
-    ):
-        session.record("slash", command, ok=False)
-        return
-
-    console.print(f"[bold]$ {escape(command)}[/bold]")
-    dispatch_slash(
-        command,
-        session,
-        console,
-        confirm_fn=confirm_fn,
-        is_tty=is_tty,
-        policy_precleared=True,
-    )
+def _tool_args_for_action(action: PlannedAction) -> dict[str, Any]:
+    if action.args:
+        return dict(action.args)
+    content = action.content.strip()
+    if action.kind == "slash":
+        parts = content.split()
+        return {
+            "command": parts[0] if parts else "",
+            "args": parts[1:] if len(parts) > 1 else [],
+        }
+    if action.kind == "llm_provider":
+        return {"provider": content}
+    if action.kind == "shell":
+        return {"command": content}
+    if action.kind == "sample_alert":
+        return {"template": content}
+    if action.kind == "investigation":
+        return {"alert_text": content}
+    if action.kind == "synthetic_test":
+        suite, _sep, scenario = content.partition(":")
+        return {"suite": suite, "scenario": scenario}
+    if action.kind == "task_cancel":
+        return {"target": content}
+    if action.kind == "cli_command":
+        return {"payload": content}
+    if action.kind == "implementation":
+        return {"task": content}
+    return {"content": content}
 
 
 def _execute_planned_actions(
@@ -212,131 +139,20 @@ def _execute_planned_actions(
             console.print(f"[{DIM}](remaining actions cancelled)[/]")
             break
         console.print()
-        if action.kind == "slash":
-            stripped = action.content.strip()
-            parts = stripped.split()
-            if stripped == "/" or not parts:
-                if not dispatch_slash(
-                    action.content,
-                    session,
-                    console,
-                    confirm_fn=confirm_fn,
-                    is_tty=is_tty,
-                ):
-                    return True
-                continue
-            name = parts[0].lower()
-            args = parts[1:]
-            cmd = SLASH_COMMANDS.get(name)
-            if cmd is None:
-                if not dispatch_slash(
-                    action.content,
-                    session,
-                    console,
-                    confirm_fn=confirm_fn,
-                    is_tty=is_tty,
-                ):
-                    return True
-                continue
-            tier = resolve_slash_execution_tier(name, args, cmd.execution_tier)
-            policy = evaluate_slash_tier(tier)
-            if not execution_allowed(
-                policy,
+        tool_name = ACTION_KIND_TO_TOOL.get(action.kind)
+        if tool_name is None:
+            continue
+        REGISTRY.dispatch(
+            tool_name=tool_name,
+            args=_tool_args_for_action(action),
+            ctx=ToolContext(
                 session=session,
                 console=console,
-                action_summary=stripped,
                 confirm_fn=confirm_fn,
                 is_tty=is_tty,
                 action_already_listed=True,
-            ):
-                session.record("slash", stripped, ok=False)
-                continue
-            console.print(f"[bold]$ {escape(action.content)}[/bold]")
-            if not dispatch_slash(
-                action.content,
-                session,
-                console,
-                confirm_fn=confirm_fn,
-                is_tty=is_tty,
-                policy_precleared=True,
-            ):
-                return True
-        elif action.kind == "llm_provider":
-            pol = evaluate_llm_runtime_switch(action_type="switch_llm_provider")
-            if not execution_allowed(
-                pol,
-                session=session,
-                console=console,
-                action_summary=f"/model set {action.content}",
-                confirm_fn=confirm_fn,
-                is_tty=is_tty,
-                action_already_listed=True,
-            ):
-                continue
-            console.print(f"[bold]$ /model set {escape(action.content)}[/bold]")
-            ok = _apply_model_set_target(action.content, console)
-            session.record("slash", f"/model set {action.content}", ok=ok)
-        elif action.kind == "shell":
-            run_shell_command(
-                action.content,
-                session,
-                console,
-                confirm_fn=confirm_fn,
-                is_tty=is_tty,
-                action_already_listed=True,
-            )
-        elif action.kind == "cli_command":
-            run_opensre_cli_command(
-                action.content,
-                session,
-                console,
-                confirm_fn=confirm_fn,
-                is_tty=is_tty,
-            )
-        elif action.kind == "task_cancel":
-            _execute_task_cancel_action(
-                action.content,
-                session,
-                console,
-                confirm_fn=confirm_fn,
-                is_tty=is_tty,
-            )
-        elif action.kind == "implementation":
-            run_claude_code_implementation(
-                action.content,
-                session,
-                console,
-                confirm_fn=confirm_fn,
-                is_tty=is_tty,
-                action_already_listed=True,
-            )
-        elif action.kind == "sample_alert":
-            run_sample_alert(
-                action.content,
-                session,
-                console,
-                confirm_fn=confirm_fn,
-                is_tty=is_tty,
-                action_already_listed=True,
-            )
-        elif action.kind == "investigation":
-            run_text_investigation(
-                action.content,
-                session,
-                console,
-                confirm_fn=confirm_fn,
-                is_tty=is_tty,
-                action_already_listed=True,
-            )
-        else:
-            run_synthetic_test(
-                action.content,
-                session,
-                console,
-                confirm_fn=confirm_fn,
-                is_tty=is_tty,
-                action_already_listed=True,
-            )
+            ),
+        )
 
     console.print()
     return not has_unhandled_clause
@@ -356,7 +172,7 @@ def execute_cli_actions(
     denials). Returns False only for legacy/test paths that pass through with no
     planned actions and no deny signal.
     """
-    actions, has_unhandled_clause, denied = _plan_actions(message)
+    actions, has_unhandled_clause, denied = _plan_actions(message, session)
     if denied:
         _render_plan_denied(console)
         session.record("cli_agent", message, ok=False)
@@ -393,7 +209,7 @@ def execute_cli_actions_with_metrics(
         capture_terminal_actions_planned,
     )
 
-    actions, has_unhandled_clause, denied = _plan_actions(message)
+    actions, has_unhandled_clause, denied = _plan_actions(message, session)
     capture_terminal_actions_planned(
         planned_count=len(actions),
         has_unhandled_clause=has_unhandled_clause,
@@ -434,7 +250,8 @@ def execute_cli_actions_with_metrics(
     executed_entries = [
         item
         for item in session.history[history_start:]
-        if item.get("type") in {"slash", "shell", "alert", "synthetic_test", "implementation"}
+        if item.get("type")
+        in {"slash", "shell", "alert", "synthetic_test", "implementation", "cli_command"}
     ]
     executed_count = len(executed_entries)
     executed_success_count = sum(1 for item in executed_entries if item.get("ok", True))

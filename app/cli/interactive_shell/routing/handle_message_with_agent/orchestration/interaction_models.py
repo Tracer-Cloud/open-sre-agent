@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 ActionKind = Literal[
@@ -15,13 +15,16 @@ ActionKind = Literal[
     "task_cancel",
     "cli_command",
     "implementation",
+    "assistant_handoff",
 ]
 ActionSource = Literal["deterministic", "llm"]
 TargetSurface = Literal["slash", "terminal", "investigation", "implementation"]
 
 
-def default_target_surface(kind: ActionKind) -> TargetSurface:
+def default_target_surface(kind: ActionKind) -> TargetSurface | None:
     """Return the canonical execution surface for a given action kind."""
+    if kind == "assistant_handoff":
+        return None
     if kind in {"slash", "llm_provider", "task_cancel"}:
         return "slash"
     if kind in {"shell", "cli_command"}:
@@ -42,6 +45,7 @@ class PlannedAction:
     confidence: float = 1.0
     rationale: str | None = None
     target_surface: TargetSurface | None = None
+    args: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

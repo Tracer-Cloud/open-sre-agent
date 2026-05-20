@@ -6,19 +6,19 @@ policy:
   should_execute: false
   has_unhandled_clause: true
   fail_closed: true
-planned_actions: []
-executed_actions: []
-classification_actions:
+planned_actions:
 - kind: assistant_handoff
   content: incident_description:orders_cpu_spike
+  source: llm
+executed_actions: []
 response_contract:
   must_contain_any:
-    - orders
-    - investigate
-    - incident
-    - alert
+  - orders
+  - investigate
+  - incident
+  - alert
   must_not_contain:
-    - $ /
+  - $ /
 history:
   expected:
   - type: cli_agent

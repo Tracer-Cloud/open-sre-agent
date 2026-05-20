@@ -15,13 +15,14 @@ planned_actions:
   args:
   - show
   - datadog
+  content: /integrations show datadog
 executed_actions:
 - kind: slash
   command: /integrations
   args:
   - show
   - datadog
-classification_actions: []
+  content: /integrations show datadog
 response_contract:
   must_contain_any:
   - ran /integrations show datadog

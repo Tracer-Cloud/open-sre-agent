@@ -12,7 +12,8 @@ session:
   remote_connected: false
   configured_integrations: []
 available_capabilities:
-  slash_commands: []
+  slash_commands:
+  - /remote
   cli_commands: []
   synthetic_suites: []
 notes: []

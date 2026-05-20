@@ -49,6 +49,22 @@ class ReplSession:
     last_route_decision: Any | None = None
     """Most recent structured routing decision for observability/debugging."""
 
+    last_assistant_intent: str | None = None
+    """Intent label set by the runtime after each routed turn.
+
+    Values: "slash", "cli_help", "investigation", "follow_up",
+    "cli_agent_handled" (actions executed), "cli_agent_denied" (fail-closed),
+    "cli_agent_handoff" (assistant-handoff only), "cli_agent_fallback"
+    (no plan, fell through to LLM chat).
+    """
+
+    configured_integrations: tuple[str, ...] = ()
+    """Session-scoped configured integration names for planning-time capability checks."""
+    configured_integrations_known: bool = False
+    """Whether configured_integrations reflects known state (vs default unknown)."""
+    available_capabilities: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    """Optional planning-time capability constraints (slash/cli/synthetic)."""
+
     accumulated_context: dict[str, Any] = field(default_factory=dict)
     """Reusable infra context — service names, clusters, regions — learned from
     earlier investigations that should seed future ones."""
@@ -175,6 +191,10 @@ class ReplSession:
         self.history.clear()
         self.last_state = None
         self.last_route_decision = None
+        self.last_assistant_intent = None
+        self.configured_integrations = ()
+        self.configured_integrations_known = False
+        self.available_capabilities.clear()
         self.accumulated_context.clear()
         self.token_usage.clear()
         self.cli_agent_messages.clear()

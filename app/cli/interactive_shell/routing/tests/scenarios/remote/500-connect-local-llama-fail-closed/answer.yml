@@ -6,14 +6,15 @@ policy:
   should_execute: false
   has_unhandled_clause: true
   fail_closed: true
-planned_actions: []
-executed_actions: []
-classification_actions:
+planned_actions:
 - kind: assistant_handoff
-  content: clarify:local_llm_connection
+  content: unhandled:local_llama_connection
+  source: llm
+executed_actions: []
 response_contract:
   must_contain_any:
-  - ollama
+  - unhandled
+  - local llama
   must_not_contain:
   - $ /
 history:

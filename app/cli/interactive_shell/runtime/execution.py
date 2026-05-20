@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import cast
 
 from rich.console import Console
 from rich.markup import escape
@@ -10,7 +11,7 @@ from rich.markup import escape
 import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions as _agent_actions
 from app.analytics.cli import capture_terminal_turn_summarized
 from app.analytics.events import Event
-from app.analytics.provider import get_analytics
+from app.analytics.provider import JsonValue, get_analytics
 from app.cli.interactive_shell import commands as _commands
 from app.cli.interactive_shell.chat import cli_agent as _cli_agent
 from app.cli.interactive_shell.chat import cli_help as _cli_help
@@ -122,7 +123,7 @@ def execute_routed_turn(
     session.last_route_decision = decision
     get_analytics().capture(
         Event.INTERACTIVE_SHELL_ROUTE_DECISION,
-        decision.to_event_payload(),
+        cast("dict[str, JsonValue]", decision.to_event_payload()),
     )
 
     if kind == "slash":
@@ -138,6 +139,7 @@ def execute_routed_turn(
                 f" [{DIM}](the REPL is still running)[/]"
             )
             should_continue = True
+        session.last_assistant_intent = "slash"
         if not should_continue:
             on_exit()
         return
@@ -149,6 +151,7 @@ def execute_routed_turn(
             recorder.set_response(run.response_text if run is not None and run.response_text else "", run)
             recorder.flush()
         session.record("cli_help", text)
+        session.last_assistant_intent = "cli_help"
         return
 
     if kind == "cli_agent":
@@ -170,6 +173,12 @@ def execute_routed_turn(
             session_fallback_rate_percent=snapshot.fallback_rate_percent,
         )
         if turn.handled:
+            if turn.has_unhandled_clause:
+                session.last_assistant_intent = "cli_agent_denied"
+            elif turn.executed_count > 0:
+                session.last_assistant_intent = "cli_agent_handled"
+            else:
+                session.last_assistant_intent = "cli_agent_handoff"
             if recorder is not None:
                 recorder.flush()
             return
@@ -180,6 +189,7 @@ def execute_routed_turn(
             recorder.set_response(assistant_text, run)
             recorder.flush()
         session.record("cli_agent", text)
+        session.last_assistant_intent = "cli_agent_fallback"
         return
 
     if kind == "new_alert":
@@ -187,6 +197,7 @@ def execute_routed_turn(
         if recorder is not None:
             recorder.set_response(response or "")
             recorder.flush()
+        session.last_assistant_intent = "investigation"
         return
 
     with apply_reasoning_effort(session.reasoning_effort):
@@ -195,6 +206,7 @@ def execute_routed_turn(
         recorder.set_response(run.response_text if run is not None and run.response_text else "", run)
         recorder.flush()
     session.record("follow_up", text)
+    session.last_assistant_intent = "follow_up"
 
 
 __all__ = ["execute_routed_turn", "run_new_alert"]

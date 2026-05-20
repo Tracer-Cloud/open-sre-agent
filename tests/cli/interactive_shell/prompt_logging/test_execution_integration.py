@@ -15,7 +15,7 @@ class _FakeRecorder:
         self.responses: list[str] = []
         self.flushed = False
 
-    def set_response(self, text: str, run: LlmRunInfo | None = None) -> None:
+    def set_response(self, text: str, _run: LlmRunInfo | None = None) -> None:
         self.responses.append(text)
 
     def flush(self) -> None:

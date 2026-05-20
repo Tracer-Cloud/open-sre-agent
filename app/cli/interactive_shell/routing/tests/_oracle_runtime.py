@@ -9,9 +9,10 @@ from typing import Any
 import pytest
 from rich.console import Console
 
-import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor as action_executor
-import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions as agent_actions
-import app.cli.interactive_shell.runtime.execution as runtime_execution
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_registry import (
+    ACTION_KIND_TO_TOOL,
+    REGISTRY,
+)
 from app.cli.interactive_shell.routing.router import route_input
 from app.cli.interactive_shell.routing.tests._oracle_normalize import (
     normalize_history_entry,
@@ -29,10 +30,18 @@ class OracleRunResult:
     details: dict[str, Any]
 
 
-def fresh_session(*, with_prior_state: bool) -> ReplSession:
+def fresh_session(
+    *,
+    with_prior_state: bool,
+    configured_integrations: tuple[str, ...] = (),
+    available_capabilities: dict[str, tuple[str, ...]] | None = None,
+) -> ReplSession:
     session = ReplSession()
     if with_prior_state:
         session.last_state = {"root_cause": "disk full on orders-api"}
+    session.configured_integrations = configured_integrations
+    session.configured_integrations_known = True
+    session.available_capabilities = available_capabilities or {}
     return session
 
 
@@ -54,6 +63,14 @@ def contains_any(haystack: str, needles: list[str]) -> bool:
         return True
     normalized_needles = [normalize_response_text(needle) for needle in needles if needle.strip()]
     return any(needle in haystack for needle in normalized_needles)
+
+
+def contains_all(haystack: str, needles: list[str]) -> bool:
+    """True only when every needle appears in the haystack (or needles is empty)."""
+    if not needles:
+        return True
+    normalized_needles = [normalize_response_text(needle) for needle in needles if needle.strip()]
+    return all(needle in haystack for needle in normalized_needles)
 
 
 def history_matches(actual: list[dict[str, Any]], expected: list[dict[str, Any]]) -> bool:
@@ -79,29 +96,54 @@ def patch_execution_boundary(
     monkeypatch: pytest.MonkeyPatch,
     executed: list[dict[str, Any]],
 ) -> None:
-    def _record_and_print(
-        *,
-        kind: str,
-        content: str,
-        session: ReplSession,
-        console: Console,
-        history_type: str,
-    ) -> None:
-        action: dict[str, Any] = {"kind": kind}
+    def _record_and_print(*, kind: str, action: dict[str, Any], ctx: Any) -> None:
+        session = ctx.session
+        console = ctx.console
+        content = ""
+        action_data = dict(action)
+        action = {"kind": kind}
         if kind == "slash":
-            parts = content.split()
-            action["command"] = parts[0] if parts else ""
-            action["args"] = parts[1:] if len(parts) > 1 else []
+            command = str(action_data.get("command", "")).strip()
+            raw_args = action_data.get("args")
+            parsed_args = (
+                [str(item).strip() for item in raw_args] if isinstance(raw_args, list) else []
+            )
+            action["command"] = command
+            action["args"] = parsed_args
+            content = " ".join([command, *parsed_args]) if parsed_args else command
+            history_type = "slash"
         elif kind == "synthetic_test":
-            suite, _sep, scenario = content.partition(":")
+            suite = str(action_data.get("suite", "")).strip()
+            scenario = str(action_data.get("scenario", "")).strip()
             action["suite"] = suite
             action["scenario"] = scenario
+            content = f"{suite}:{scenario}"
+            history_type = "synthetic_test"
         elif kind == "cli_command":
-            action["payload"] = content
+            payload = str(action_data.get("payload", "")).strip()
+            action["payload"] = payload
+            content = payload
+            history_type = "cli_command"
         elif kind == "sample_alert":
-            action["template"] = content
+            template = str(action_data.get("template", "")).strip()
+            action["template"] = template
+            content = template
+            history_type = "alert"
+        elif kind == "investigation":
+            content = str(action_data.get("alert_text", "")).strip()
+            action["content"] = content
+            history_type = "alert"
+        elif kind == "shell":
+            content = str(action_data.get("command", "")).strip()
+            action["content"] = content
+            history_type = "shell"
+        elif kind == "implementation":
+            content = str(action_data.get("task", "")).strip()
+            action["content"] = content
+            history_type = "implementation"
         else:
             action["content"] = content
+            history_type = "cli_agent"
         executed.append(action)
         session.record(history_type, content, ok=True)
         if kind == "slash":
@@ -109,101 +151,31 @@ def patch_execution_boundary(
         else:
             console.print(f"executed {kind}: {content}")
 
-    def _fake_dispatch(command: str, session: ReplSession, console: Console, **_: object) -> bool:
-        _record_and_print(
-            kind="slash",
-            content=command.strip(),
-            session=session,
-            console=console,
-            history_type="slash",
-        )
+    tool_to_kind = {tool: kind for kind, tool in ACTION_KIND_TO_TOOL.items()}
+
+    def _fake_dispatch(*, tool_name: str, args: dict[str, Any], ctx: Any) -> bool:
+        kind = tool_to_kind.get(tool_name)
+        if kind is None:
+            return False
+        if kind == "assistant_handoff":
+            return True
+        action_data = dict(args)
+        _record_and_print(kind=kind, action=action_data, ctx=ctx)
         return True
 
-    def _fake_sample(
-        template_name: str,
-        session: ReplSession,
-        console: Console,
-        **_: object,
-    ) -> None:
-        _record_and_print(
-            kind="sample_alert",
-            content=template_name.strip(),
-            session=session,
-            console=console,
-            history_type="alert",
-        )
-
-    def _fake_synthetic(
-        suite_name: str,
-        session: ReplSession,
-        console: Console,
-        **_: object,
-    ) -> None:
-        _record_and_print(
-            kind="synthetic_test",
-            content=suite_name.strip(),
-            session=session,
-            console=console,
-            history_type="synthetic_test",
-        )
-
-    def _fake_cli_command(
-        args: str,
-        session: ReplSession,
-        console: Console,
-        **_: object,
-    ) -> bool:
-        _record_and_print(
-            kind="cli_command",
-            content=args.strip(),
-            session=session,
-            console=console,
-            history_type="cli_command",
-        )
-        return True
-
-    def _fake_shell(
-        command: str,
-        session: ReplSession,
-        console: Console,
-        **_: object,
-    ) -> None:
-        _record_and_print(
-            kind="shell",
-            content=command.strip(),
-            session=session,
-            console=console,
-            history_type="shell",
-        )
-
-    def _fake_investigation(
-        alert_text: str,
-        session: ReplSession,
-        console: Console,
-        **_: object,
-    ) -> None:
-        _record_and_print(
-            kind="investigation",
-            content=alert_text.strip(),
-            session=session,
-            console=console,
-            history_type="alert",
-        )
-
-    monkeypatch.setattr(runtime_execution, "dispatch_slash", _fake_dispatch)
-    monkeypatch.setattr(agent_actions, "dispatch_slash", _fake_dispatch)
-    monkeypatch.setattr(agent_actions, "run_sample_alert", _fake_sample)
-    monkeypatch.setattr(agent_actions, "run_synthetic_test", _fake_synthetic)
-    monkeypatch.setattr(action_executor, "run_opensre_cli_command", _fake_cli_command)
-    monkeypatch.setattr(action_executor, "run_shell_command", _fake_shell)
-    monkeypatch.setattr(action_executor, "run_text_investigation", _fake_investigation)
-    monkeypatch.setattr(agent_actions, "run_opensre_cli_command", _fake_cli_command)
-    monkeypatch.setattr(agent_actions, "run_shell_command", _fake_shell)
-    monkeypatch.setattr(agent_actions, "run_text_investigation", _fake_investigation)
+    monkeypatch.setattr(REGISTRY, "dispatch", _fake_dispatch)
 
 
 def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> OracleRunResult:
-    session = fresh_session(with_prior_state=case.scenario.session.has_prior_state)
+    session = fresh_session(
+        with_prior_state=case.scenario.session.has_prior_state,
+        configured_integrations=case.scenario.session.configured_integrations,
+        available_capabilities={
+            "slash_commands": case.scenario.available_capabilities.slash_commands,
+            "cli_commands": case.scenario.available_capabilities.cli_commands,
+            "synthetic_suites": case.scenario.available_capabilities.synthetic_suites,
+        },
+    )
     executed: list[dict[str, Any]] = []
     patch_execution_boundary(monkeypatch, executed)
 
@@ -233,12 +205,21 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
     executed_match = match_actions(executed, executed_expected)
     history_match = history_matches(history_delta, history_expected)
     must_contain_any = answer.response_contract.get("must_contain_any", [])
+    must_contain_all = answer.response_contract.get("must_contain_all", [])
     must_not_contain = answer.response_contract.get("must_not_contain", [])
+    forbidden_action_kinds = answer.response_contract.get("forbidden_actions", [])
+
     any_match = contains_any(normalized_response, must_contain_any)
-    forbidden = [
+    all_match = contains_all(normalized_response, must_contain_all)
+    forbidden_tokens = [
         token
         for token in must_not_contain
         if normalize_response_text(token) in normalized_response
+    ]
+    forbidden_executed = [
+        action["kind"]
+        for action in executed
+        if action.get("kind") in forbidden_action_kinds
     ]
 
     passed = True
@@ -252,9 +233,18 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
             passed = False
         if normalize_response_text("$ /") in normalized_response:
             passed = False
+    # Always enforce the response contract against actual runtime output;
+    # there is no bypass for handoff-only runs. The oracle captures real console
+    # output including any text printed by _execute_planned_actions or
+    # _render_plan_denied, so must_contain_any / must_contain_all must match
+    # what the runtime actually emitted.
     if not any_match:
         passed = False
-    if forbidden:
+    if not all_match:
+        passed = False
+    if forbidden_tokens:
+        passed = False
+    if forbidden_executed:
         passed = False
     if not history_match:
         passed = False
@@ -271,6 +261,8 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
             "history_expected": history_expected,
             "response_normalized": normalized_response,
             "response_contract": answer.response_contract,
-            "forbidden_matches": forbidden,
+            "forbidden_tokens_matched": forbidden_tokens,
+            "forbidden_executed_kinds": forbidden_executed,
+            "last_assistant_intent": session.last_assistant_intent,
         },
     )

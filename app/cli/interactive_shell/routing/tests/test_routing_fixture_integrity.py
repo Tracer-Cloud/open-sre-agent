@@ -4,7 +4,19 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
+from typing import cast
 
+# Ensure side-effect registrations are loaded.
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration import (  # noqa: F401
+    tools,
+)
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
+    ActionKind,
+)
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_registry import (
+    ACTION_KIND_TO_TOOL,
+    REGISTRY,
+)
 from app.cli.interactive_shell.routing.tests.scenario_loader import (
     INTENT_TO_BEHAVIOR_CLASS,
     SCENARIOS_DIR,
@@ -101,18 +113,50 @@ def test_planned_and_executed_action_shapes() -> None:
     assert not violations, "action shape violations:\n" + "\n".join(violations)
 
 
+def test_scenario_action_kinds_have_registered_tools() -> None:
+    missing: list[str] = []
+    for case in load_all_scenarios():
+        actions = [*case.answer.planned_actions, *case.answer.executed_actions]
+        for action in actions:
+            kind = str(action.get("kind", "")).strip()
+            if not kind:
+                continue
+            if kind == "assistant_handoff":
+                continue
+            tool_name = ACTION_KIND_TO_TOOL.get(cast("ActionKind", kind))
+            if tool_name is None:
+                missing.append(f"{case.scenario.id}: kind {kind!r} has no tool mapping")
+                continue
+            if REGISTRY.get(tool_name) is None:
+                missing.append(
+                    f"{case.scenario.id}: kind {kind!r} mapped to missing tool {tool_name!r}"
+                )
+    assert not missing, "scenario action kinds missing tool registrations:\n" + "\n".join(missing)
+
+
 def test_should_execute_invariants() -> None:
     violations: list[str] = []
     for case in load_all_scenarios():
         scenario_id = case.scenario.id
         policy = case.answer.policy
+        # has_unhandled_clause is deprecated; when still present it must not
+        # contradict should_execute.
         if policy.has_unhandled_clause and policy.should_execute:
             violations.append(f"{scenario_id}: has_unhandled_clause requires should_execute=false")
         if not policy.should_execute and case.answer.executed_actions:
             violations.append(f"{scenario_id}: should_execute=false requires executed_actions=[]")
+        # The loader auto-injects "$ /" into must_not_contain when should_execute=false,
+        # so this invariant always holds on loaded data.
         must_not = case.answer.response_contract.get("must_not_contain", [])
         if not policy.should_execute and "$ /" not in must_not:
             violations.append(f"{scenario_id}: non-executing cases must include '$ /' in must_not_contain")
+        # Validate forbidden_actions entries reference real action kinds.
+        forbidden = case.answer.response_contract.get("forbidden_actions", [])
+        from app.cli.interactive_shell.routing.tests.scenario_loader import VALID_ACTION_KINDS
+
+        for entry in forbidden:
+            if entry not in VALID_ACTION_KINDS:
+                violations.append(f"{scenario_id}: forbidden_actions entry {entry!r} is not a valid kind")
     assert not violations, "policy invariant violations:\n" + "\n".join(violations)
 
 

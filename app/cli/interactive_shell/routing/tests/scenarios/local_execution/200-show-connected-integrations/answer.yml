@@ -19,7 +19,7 @@ executed_actions:
   command: /list
   args:
   - integrations
-classification_actions: []
+  content: /list integrations
 response_contract:
   must_contain_any:
   - ran /list integrations

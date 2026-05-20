@@ -21,9 +21,9 @@ executed_actions:
 - kind: slash
   command: /remote
   args: *id001
+  content: /remote
 - kind: investigation
   content: hello world
-classification_actions: []
 response_contract:
   must_contain_any:
   - ran /remote

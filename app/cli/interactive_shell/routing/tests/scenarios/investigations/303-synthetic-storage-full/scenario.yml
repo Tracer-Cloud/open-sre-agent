@@ -12,5 +12,6 @@ session:
 available_capabilities:
   slash_commands: []
   cli_commands: []
-  synthetic_suites: []
+  synthetic_suites:
+  - rds_postgres
 notes: []

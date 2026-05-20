@@ -468,6 +468,9 @@ def _run_parallel(
         if tool is None:
             return {"error": f"unknown tool: {tc.name}"}
         try:
+            validation_error = tool.validate_public_input(tc.input)
+            if validation_error:
+                return {"error": validation_error}
             injected = tool.extract_params(resolved_integrations)
             kwargs = {**injected, **tc.input}
             return tool.run(**kwargs)
