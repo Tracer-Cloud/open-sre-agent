@@ -86,6 +86,11 @@ def _build_actual_action(action: PlannedAction) -> ExpectedAction:
     return expected
 
 
+def _action_match_view(action: ExpectedAction) -> ExpectedAction:
+    """Ignore action provenance; live tests assert behavior, not planner path."""
+    return {key: value for key, value in action.items() if key != "source"}
+
+
 def _assert_planned_actions_match(
     actual_actions: list[ExpectedAction],
     expected_actions: list[ExpectedAction],
@@ -94,7 +99,7 @@ def _assert_planned_actions_match(
     for index, expected in enumerate(expected_actions):
         actual = actual_actions[index]
         if str(expected.get("kind", "")) != "assistant_handoff":
-            assert actual == expected
+            assert _action_match_view(actual) == _action_match_view(expected)
             continue
         assert actual.get("kind") == "assistant_handoff"
         expected_source = str(expected.get("source", "")).strip()

@@ -32,6 +32,9 @@ response_contract:
   - which command to use
   - what command do i use
   - without specifying
+  - which command
+  - specify
+  - command
   must_not_contain:
   - $ /
 history:

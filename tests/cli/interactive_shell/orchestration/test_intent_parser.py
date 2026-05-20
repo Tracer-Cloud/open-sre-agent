@@ -14,7 +14,13 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.i
     split_prompt_clauses,
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
+    PlannedAction,
     PromptClause,
+)
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner import (
+    _fail_closed_vague_local_model,
+    _finalize_planner_result,
+    _reconcile_compound_actions,
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.slash_commands.deterministic_action_mapper import (
     map_actions_with_unhandled,
@@ -133,3 +139,40 @@ def test_map_actions_with_unhandled_health_then_connected_services() -> None:
         ("slash", "/health"),
         ("slash", "/list integrations"),
     ]
+
+
+def test_reconcile_compound_actions_relabels_source_as_llm() -> None:
+    llm_actions = [
+        PlannedAction(kind="slash", content="/health", position=0, source="llm", target_surface="slash")
+    ]
+    actions, _has_unhandled = _reconcile_compound_actions(
+        "run /health and then trigger a sample alert investigation",
+        llm_actions,
+        False,
+    )
+    assert len(actions) == 2
+    assert all(action.source == "llm" for action in actions)
+
+
+def test_fail_closed_vague_local_llama_connect() -> None:
+    result = _fail_closed_vague_local_model("please connect to local llama")
+    assert result == ([], True)
+
+
+def test_finalize_upgrades_handoff_to_investigation_for_cpu_spike() -> None:
+    handoff = [
+        PlannedAction(
+            kind="assistant_handoff",
+            content="diagnostic_question:cpu",
+            position=0,
+            source="llm",
+        )
+    ]
+    actions, has_unhandled = _finalize_planner_result(
+        "CPU is spiking to 99% on the orders-api pods",
+        handoff,
+        False,
+    )
+    assert has_unhandled is False
+    assert len(actions) == 1
+    assert actions[0].kind == "investigation"

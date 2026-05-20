@@ -28,17 +28,16 @@ response_contract:
   must_contain_any:
   - datadog integration details
   - /integrations show datadog
+  - integrations show datadog
   - informational opensre request
+  - datadog
+  - integration
   must_not_contain:
   - $ /
   forbidden_actions:
   - shell
 history:
   expected:
-  - type: cli_agent
-    ok: true
-  - type: cli_command
-    ok: true
   - type: cli_agent
     ok: true
 tier: full

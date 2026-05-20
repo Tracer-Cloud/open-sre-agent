@@ -37,6 +37,7 @@ from app.cli.interactive_shell.ui import (
     ERROR,
     MARKDOWN_THEME,
     STREAM_LABEL_ASSISTANT,
+    WARNING,
     stream_to_console,
 )
 from app.cli.support.exception_reporting import report_exception
@@ -107,6 +108,14 @@ _ALLOWED_SLASH_ACTIONS = frozenset(
         "/version",
     }
 )
+
+
+def _opensre_integration_command_blocked(payload: str, session: ReplSession) -> bool:
+    """Block integration-management CLI runs when the session has none configured."""
+    if not session.configured_integrations_known or session.configured_integrations:
+        return False
+    lowered = payload.strip().lower()
+    return lowered.startswith("integrations") or "integration" in lowered
 
 
 def _format_history_for_prompt(session: ReplSession) -> str:
@@ -384,6 +393,12 @@ def _execute_action_plan(
             if not args:
                 console.print(f"[{ERROR}]missing args for run_cli_command action[/]")
                 continue
+            if _opensre_integration_command_blocked(args, session):
+                console.print(
+                    f"[{WARNING}]integration command blocked: no integrations are configured "
+                    "in this session.[/]"
+                )
+                continue
             from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor import (
                 run_opensre_cli_command,
             )
@@ -442,6 +457,13 @@ def answer_cli_agent(
     prior_investigation = (
         _summarize_last_state(session.last_state) if session.last_state is not None else ""
     )
+    integration_guard = ""
+    if session.configured_integrations_known and not session.configured_integrations:
+        integration_guard = (
+            "No integrations are configured in this session. Do not emit run_cli_command "
+            "or slash actions for integration setup/show/verify/remove; answer with guidance "
+            "only.\n\n"
+        )
     system = _build_system_prompt(
         reference,
         history,
@@ -463,7 +485,7 @@ def answer_cli_agent(
                 "that you lack context — the run completed and this file was written.\n\n"
                 f"--- observation_json ---\n{obs_text}\n\n"
             )
-    prompt = f"{system}\n{synthetic_block}{user_block}"
+    prompt = f"{system}\n{integration_guard}{synthetic_block}{user_block}"
 
     try:
         client = get_llm_for_reasoning()

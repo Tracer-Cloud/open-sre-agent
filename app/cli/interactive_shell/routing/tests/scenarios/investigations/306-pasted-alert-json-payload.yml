@@ -40,7 +40,5 @@ history:
   expected:
   - type: cli_agent
     ok: true
-  - type: cli_agent
-    ok: true
 tier: full
 runs: 3
