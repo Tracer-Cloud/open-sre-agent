@@ -98,18 +98,13 @@ def _cached_classify(sanitised_text: str) -> str | None:
     return _parse_route(raw)
 
 
-def _classify_cached(sanitised_text: str) -> str | None:
-    """Classify with bounded caching and no global eviction side effects."""
-    return _cached_classify(sanitised_text)
-
-
 def classify_intent_with_llm(
     text: str,
     session: RoutingSession,  # noqa: ARG001
 ) -> RouteDecision | None:
     """Classify *text* using the mid-tier classification LLM."""
     sanitised = _sanitise_text(text.strip())
-    route_word = _classify_cached(sanitised)
+    route_word = _cached_classify(sanitised)
     if route_word is None:
         return None
 
