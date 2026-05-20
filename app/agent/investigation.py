@@ -493,7 +493,7 @@ def _run_parallel(
             for fut in as_completed(submitted):
                 try:
                     results[submitted[fut]] = fut.result()
-                except BaseException as fut_exc:  # noqa: BLE001
+                except Exception as fut_exc:  # noqa: BLE001
                     results[submitted[fut]] = {"error": str(fut_exc)}
     except RuntimeError as exc:
         # interpreter is shutting down; executor.__exit__ has already waited for submitted futures
@@ -502,7 +502,7 @@ def _run_parallel(
             if results[i] is _UNSET and fut.done():
                 try:
                     results[i] = fut.result()
-                except BaseException as fut_exc:  # noqa: BLE001
+                except Exception as fut_exc:  # noqa: BLE001
                     results[i] = {"error": str(fut_exc)}
         for i, tc in enumerate(tool_calls):
             if results[i] is _UNSET:
