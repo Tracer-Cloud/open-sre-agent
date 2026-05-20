@@ -1,0 +1,11 @@
+- id: cli_agent_nitro_remote_then_investigation
+  input: |
+    I want to deploy OpenSRE on a remote EC2 Nitro instance, and then I want to
+    send it an investigation. Can you please deploy the instance and send it "hello world"?
+  expected_kind: "cli_agent"
+  expected_unhandled_clause: false
+  required_actions:
+    - kind: "remote_deploy"
+      content: "ec2_remote"
+    - kind: "remote_investigation"
+      content: "hello world"

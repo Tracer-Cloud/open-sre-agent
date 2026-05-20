@@ -47,13 +47,6 @@ ACTION_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     ),
     (
         re.compile(
-            r"\b(?:deploy|ship|push)\b.{0,80}?\b(?:to|opensre)\b",
-            re.IGNORECASE,
-        ),
-        "/remote",
-    ),
-    (
-        re.compile(
             r"\b(?:check|trigger|run|show|list|get|which|what)\b.{0,80}?"
             r"\b(?:remote(?:'s)?|deployed|deployments?)\b",
             re.IGNORECASE,
@@ -104,7 +97,8 @@ ACTION_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     ),
     (
         re.compile(
-            r"\bopensre\s+(?P<subcmd>(?!health|version)[a-z][a-z0-9-]*)(?:\s+(?P<rest>.*))?\b"
+            r"\bopensre\s+(?P<subcmd>(?!health|version|on|to|for|in|at|with\b)[a-z][a-z0-9-]*)"
+            r"(?:\s+(?P<rest>.*))?\b"
             r"|"
             r"\b(?:run|execute)\s+opensre\s+(?P<subcmd2>[a-z][a-z0-9-]*)(?:\s+(?P<rest2>.*))?\b",
             re.IGNORECASE,
@@ -117,6 +111,11 @@ SAMPLE_ALERT_RE = re.compile(
     r"\b(?:try|run|start|launch|fire|send|trigger)\b.{0,60}?"
     r"\b(?:sample|simple|test|demo)\s+(?:alert|event)\b",
     re.IGNORECASE,
+)
+REMOTE_DEPLOY_RE = re.compile(
+    r"\b(?:deploy|ship|push|provision|launch)\b.{0,120}?"
+    r"\b(?:remote|ec2|nitro|instance)\b",
+    re.IGNORECASE | re.DOTALL,
 )
 QUOTED_INVESTIGATION_RE = re.compile(
     r"\b(?:send|start|run|launch|trigger)\b.{0,80}?\binvestigation\b.{0,260}?"
@@ -439,6 +438,14 @@ def slash_action(command: str, position: int) -> PlannedAction:
     return PlannedAction(kind="slash", content=command, position=position)
 
 
+def remote_deploy_action(provider: str, position: int) -> PlannedAction:
+    return PlannedAction(kind="remote_deploy", content=provider, position=position)
+
+
+def remote_investigation_action(payload: str, position: int) -> PlannedAction:
+    return PlannedAction(kind="remote_investigation", content=payload, position=position)
+
+
 def shell_action(command: str, position: int) -> PlannedAction:
     return PlannedAction(kind="shell", content=command, position=position)
 
@@ -574,7 +581,16 @@ def extract_implementation_request(clause: PromptClause) -> PlannedAction | None
     return implementation_action(content, position)
 
 
-def extract_quoted_investigation_request(clause: PromptClause) -> PlannedAction | None:
+def extract_remote_deploy_request(clause: PromptClause) -> PlannedAction | None:
+    match = REMOTE_DEPLOY_RE.search(clause.text)
+    if match is None:
+        return None
+    return remote_deploy_action("ec2_remote", clause.position + match.start())
+
+
+def extract_quoted_investigation_request(
+    clause: PromptClause, *, prefer_remote: bool = False
+) -> PlannedAction | None:
     match = QUOTED_INVESTIGATION_RE.search(clause.text)
     if match is None:
         return None
@@ -586,10 +602,15 @@ def extract_quoted_investigation_request(clause: PromptClause) -> PlannedAction 
     group_name = (
         "double" if match.group("double") else "single" if match.group("single") else "backtick"
     )
-    return investigation_action(payload, clause.position + match.start(group_name))
+    position = clause.position + match.start(group_name)
+    if prefer_remote:
+        return remote_investigation_action(payload, position)
+    return investigation_action(payload, position)
 
 
-def extract_quoted_investigation_request_text(text: str) -> PlannedAction | None:
+def extract_quoted_investigation_request_text(
+    text: str, *, prefer_remote: bool = False
+) -> PlannedAction | None:
     match = QUOTED_INVESTIGATION_RE.search(text)
     if match is None:
         return None
@@ -601,7 +622,10 @@ def extract_quoted_investigation_request_text(text: str) -> PlannedAction | None
     group_name = (
         "double" if match.group("double") else "single" if match.group("single") else "backtick"
     )
-    return investigation_action(payload, match.start(group_name))
+    position = match.start(group_name)
+    if prefer_remote:
+        return remote_investigation_action(payload, position)
+    return investigation_action(payload, position)
 
 
 def split_prompt_clauses(message: str) -> list[PromptClause]:
@@ -654,6 +678,7 @@ __all__ = [
     "cli_command_action",
     "extract_quoted_investigation_request",
     "extract_quoted_investigation_request_text",
+    "extract_remote_deploy_request",
     "extract_implementation_request",
     "extract_llm_provider_switch",
     "extract_shell_command",
@@ -664,6 +689,8 @@ __all__ = [
     "looks_like_direct_shell_command",
     "sample_alert_action",
     "slash_action",
+    "remote_deploy_action",
+    "remote_investigation_action",
     "shell_action",
     "normalize_intent_text",
     "split_prompt_clauses",

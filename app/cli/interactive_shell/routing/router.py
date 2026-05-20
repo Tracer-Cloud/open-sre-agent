@@ -1,26 +1,20 @@
 """Top-level interactive-shell router entrypoint.
 
-THIS MODULE NEEDS TO BE A MAXIMUM OF 100 LINES OF CODE. IF IT IS NOT, YOU WILL BE FIRED.
-REMOVE ANY CODE THAT IS NOT ESSENTIAL TO THE ROUTER.
 This module intentionally exposes one orchestration function, :func:`route_input`,
 and delegates all implementation details to sibling modules:
 
-- ``resolve_cli_command/``: deterministic slash command resolver and alias matcher
-- ``handle_message_with_agent/``: LLM + fallback routing for non-command text
+- ``command_route/``: deterministic slash command resolver and alias matcher
+- ``message_route/``: LLM + fallback routing for non-command text
 """
 
 from __future__ import annotations
 
-from app.cli.interactive_shell.routing.handle_message_with_agent import (
+from app.cli.interactive_shell.routing.command_route import resolve_cli_command
+from app.cli.interactive_shell.routing.message_route import (
     handle_message_with_agent,
     llm_phase_route,
 )
-from app.cli.interactive_shell.routing.resolve_cli_command import resolve_cli_command
-from app.cli.interactive_shell.routing.types import (
-    RouteDecision,
-    RouteKind,
-    RoutingSession,
-)
+from app.cli.interactive_shell.routing.types import RouteDecision, RouteKind, RoutingSession
 
 
 def route_input(text: str, session: RoutingSession) -> RouteDecision:
@@ -34,6 +28,8 @@ def route_input(text: str, session: RoutingSession) -> RouteDecision:
     cli_decision = resolve_cli_command(t, session)
     if cli_decision:
         return cli_decision
+    # Guardrail: non-command routing must flow through the LLM classifier path.
+    # Do not add deterministic regex/keyword classification at this layer.
     return handle_message_with_agent(
         t,
         session,
@@ -41,15 +37,9 @@ def route_input(text: str, session: RoutingSession) -> RouteDecision:
     )
 
 
-def classify_input(text: str, session: RoutingSession) -> str:
-    """Legacy InputKind adapter built on top of route_input()."""
-    return route_input(text, session).route_kind.value
-
-
 __all__ = [
     "RouteDecision",
     "RouteKind",
     "RoutingSession",
-    "classify_input",
     "route_input",
 ]

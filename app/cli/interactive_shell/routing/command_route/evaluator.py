@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.cli.interactive_shell.routing.resolve_cli_command.matcher import (
+from app.cli.interactive_shell.routing.command_route.matcher import (
     is_bare_command_alias,
     slash_dispatch_text,
 )

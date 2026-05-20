@@ -197,24 +197,23 @@ def test_dispatch_one_turn_nitro_prompt_executes_remote_then_investigation(
     call_order: list[str] = []
     help_calls: list[str] = []
 
-    def _fake_dispatch(
-        command: str,
+    def _fake_run_remote_deploy(
+        provider: str,
         session: ReplSession,
         console: Console,
         **_kwargs: object,
-    ) -> bool:
-        call_order.append(f"slash:{command}")
-        session.record("slash", command, ok=True)
-        console.print(f"ran {command}")
-        return True
+    ) -> None:
+        call_order.append(f"remote_deploy:{provider}")
+        session.record("remote_deploy", provider, ok=True)
+        console.print(f"ran remote deploy {provider}")
 
-    def _fake_run_text_investigation(
+    def _fake_run_remote_investigation(
         alert_text: str,
         _session: ReplSession,
         _console: Console,
         **_kwargs: object,
     ) -> None:
-        call_order.append(f"investigation:{alert_text}")
+        call_order.append(f"remote_investigation:{alert_text}")
 
     monkeypatch.setattr(
         loop_dispatch._router,
@@ -226,17 +225,19 @@ def test_dispatch_one_turn_nitro_prompt_executes_remote_then_investigation(
         "_plan_actions",
         lambda _message: (
             [
-                PlannedAction(kind="slash", content="/remote", position=0),
-                PlannedAction(kind="investigation", content="hello world", position=1),
+                PlannedAction(kind="remote_deploy", content="ec2_remote", position=0),
+                PlannedAction(kind="remote_investigation", content="hello world", position=1),
             ],
             False,
         ),
     )
-    monkeypatch.setattr(loop_execution._agent_actions, "dispatch_slash", _fake_dispatch)
+    monkeypatch.setattr(
+        loop_execution._agent_actions, "run_remote_deploy", _fake_run_remote_deploy
+    )
     monkeypatch.setattr(
         loop_execution._agent_actions,
-        "run_text_investigation",
-        _fake_run_text_investigation,
+        "run_remote_investigation",
+        _fake_run_remote_investigation,
     )
     monkeypatch.setattr(
         loop_execution,
@@ -248,7 +249,10 @@ def test_dispatch_one_turn_nitro_prompt_executes_remote_then_investigation(
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
     loop_dispatch._dispatch_one_turn(nitro_prompt, session, console, on_exit=lambda: None)
 
-    assert call_order == ["slash:/remote", "investigation:hello world"]
+    assert call_order == [
+        "remote_deploy:ec2_remote",
+        "remote_investigation:hello world",
+    ]
     assert help_calls == []
     assert session.last_route_decision is not None
     assert session.last_route_decision.route_kind == RouteKind.CLI_AGENT

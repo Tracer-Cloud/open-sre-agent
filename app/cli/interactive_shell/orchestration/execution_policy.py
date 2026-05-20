@@ -278,6 +278,24 @@ def evaluate_investigation_launch(
     )
 
 
+def evaluate_remote_deploy_launch() -> ExecutionPolicyResult:
+    """Policy for provisioning a remote EC2 deployment from the REPL."""
+    return ExecutionPolicyResult(
+        verdict="ask",
+        action_type="remote_deploy",
+        reason="remote deployment provisions cloud infrastructure and incurs cost",
+    )
+
+
+def evaluate_remote_investigation_send() -> ExecutionPolicyResult:
+    """Policy for sending investigation payloads to a remote deployment."""
+    return ExecutionPolicyResult(
+        verdict="ask",
+        action_type="remote_investigation",
+        reason="this sends alert payloads to a remote host and runs an investigation there",
+    )
+
+
 def evaluate_synthetic_test_launch() -> ExecutionPolicyResult:
     return ExecutionPolicyResult(
         verdict="ask",
@@ -309,6 +327,8 @@ __all__ = [
     "evaluate_code_agent_launch",
     "evaluate_investigation_launch",
     "evaluate_llm_runtime_switch",
+    "evaluate_remote_deploy_launch",
+    "evaluate_remote_investigation_send",
     "evaluate_shell_command",
     "evaluate_shell_from_parsed",
     "evaluate_slash_tier",

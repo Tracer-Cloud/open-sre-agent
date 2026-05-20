@@ -1,4 +1,10 @@
-"""High-level message routing pipeline for non-command input."""
+"""High-level message routing pipeline for non-command input.
+
+IMPORTANT ROUTING GUARDRAIL:
+- Never add deterministic fallback classification for non-command text.
+- Do not add regex-, keyword-, or rule-based non-command routing here.
+- Non-command intent must come from the LLM classifier.
+"""
 
 from __future__ import annotations
 
@@ -6,16 +12,6 @@ from collections.abc import Callable
 
 from app.cli.interactive_shell.orchestration import llm_intent_classifier
 from app.cli.interactive_shell.routing.types import RouteDecision, RouteKind, RoutingSession
-
-
-def _looks_like_cli_agent_action_plan(text: str) -> bool:
-    lowered = text.lower()
-    return (
-        "run synthetic test" in lowered
-        or "deploy" in lowered
-        or "connected services" in lowered
-        or "switch to " in lowered
-    )
 
 
 def llm_phase_route(
@@ -42,11 +38,12 @@ def handle_message_with_agent(
     if llm_decision:
         return llm_decision
 
-    matched_signals = ("cli_agent_action_plan",) if _looks_like_cli_agent_action_plan(text) else ()
-
+    # Policy guardrail: when the LLM cannot classify, never introduce
+    # deterministic regex/keyword/rule fallback for non-command text.
+    # Keep fallback neutral and route to cli_agent.
     return RouteDecision(
         RouteKind.CLI_AGENT,
         0.45,
-        matched_signals,
+        (),
         "llm_error_no_match" if llm_failed else "no_match",
     )

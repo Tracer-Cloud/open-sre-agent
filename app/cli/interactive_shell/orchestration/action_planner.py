@@ -18,6 +18,7 @@ from app.cli.interactive_shell.intent.intent_parser import (
     extract_llm_provider_switch,
     extract_quoted_investigation_request,
     extract_quoted_investigation_request_text,
+    extract_remote_deploy_request,
     extract_shell_command,
     extract_task_cancel_request,
     normalize_intent_text,
@@ -191,8 +192,12 @@ def plan_clause_actions(
     clause: PromptClause,
     *,
     seen_slash: set[str],
+    remote_deploy_seen: bool = False,
 ) -> list[PlannedAction]:
     planned: list[PlannedAction] = []
+    remote_deploy = extract_remote_deploy_request(clause)
+    if remote_deploy is not None and not remote_deploy_seen:
+        planned.append(remote_deploy)
 
     # Prioritize explicit synthetic benchmark requests over the generic /tests
     # intent so phrases like "run all synthetic tests" launch the suite
@@ -260,7 +265,7 @@ def plan_clause_actions(
             planned.append(slash_action(slash, position))
             seen_slash.add(slash)
 
-    if planned:
+    if planned and remote_deploy is None:
         return planned
 
     provider_switch_action = extract_llm_provider_switch(clause)
@@ -273,7 +278,10 @@ def plan_clause_actions(
         planned.append(sample_alert_action("generic", clause.position + sample_match.start()))
         return planned
 
-    investigation = extract_quoted_investigation_request(clause)
+    investigation = extract_quoted_investigation_request(
+        clause,
+        prefer_remote=remote_deploy is not None or remote_deploy_seen,
+    )
     if investigation is not None:
         planned.append(investigation)
         return planned
@@ -298,6 +306,7 @@ def plan_clause_actions(
 def plan_actions_with_unhandled(message: str) -> tuple[list[PlannedAction], bool]:
     planned: list[PlannedAction] = []
     seen_slash: set[str] = set()
+    remote_deploy_seen = False
     has_unhandled_clause = False
     unmatched_clauses: list[PromptClause] = []
 
@@ -305,15 +314,22 @@ def plan_actions_with_unhandled(message: str) -> tuple[list[PlannedAction], bool
         clause_actions = plan_clause_actions(
             clause,
             seen_slash=seen_slash,
+            remote_deploy_seen=remote_deploy_seen,
         )
         if not clause_actions:
             has_unhandled_clause = True
             unmatched_clauses.append(clause)
+        if any(action.kind == "remote_deploy" for action in clause_actions):
+            remote_deploy_seen = True
         planned.extend(clause_actions)
 
-    has_investigation = any(action.kind == "investigation" for action in planned)
+    has_investigation = any(
+        action.kind in {"investigation", "remote_investigation"} for action in planned
+    )
     if not has_investigation:
-        text_level_investigation = extract_quoted_investigation_request_text(message)
+        text_level_investigation = extract_quoted_investigation_request_text(
+            message, prefer_remote=remote_deploy_seen
+        )
         if text_level_investigation is not None:
             planned.append(text_level_investigation)
             has_investigation = True

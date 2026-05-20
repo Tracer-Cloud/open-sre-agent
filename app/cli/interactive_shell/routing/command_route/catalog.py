@@ -44,6 +44,7 @@ BARE_COMMAND_ALIASES_WITH_ARGS = frozenset(
     if target in _TARGETS_WITH_ARGS
     for alias in aliases
 )
+
 __all__ = [
     "BARE_COMMAND_ALIASES",
     "BARE_COMMAND_ALIASES_WITH_ARGS",

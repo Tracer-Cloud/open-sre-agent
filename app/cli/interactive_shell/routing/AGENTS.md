@@ -67,17 +67,19 @@ If all answers are weak, keep the logic inline.
 - Do **not** stub or monkeypatch the LLM client path in routing tests.
 - Do **not** stub or monkeypatch `llm_phase_route` in routing tests.
 - Routing contract tests must exercise the real routing stack
-  (`route_input` -> `handle_message_with_agent` -> classifier/fallback) and
+  (`route_input` -> `message_route` -> classifier/fallback) and
   rely on curated prompts instead of synthetic mocked return values.
 
 ## Important routing decisions (locked)
 
 - Keep `route_input` as a strict two-branch flow only:
   1) `resolve_cli_command(...)`; else 2) `handle_message_with_agent(...)`.
-- `resolve_cli_command(...)` owns deterministic command routing only
+- `command_route` owns deterministic command routing only
   (slash-prefixed commands and bare command aliases).
-- `handle_message_with_agent(...)` owns non-command routing and should stay
+- `message_route` owns non-command routing and should stay
   linear: LLM intent classifier -> default `cli_agent`.
+- Deterministic non-command fallback is forbidden by policy. Do **not** add
+  regex/keyword/rule-based routing for non-command text in `message_route`.
 - Regex fallback has been intentionally removed from routing. Do **not**
   re-introduce `regex_fallback`/`routes/route_regex_fallback`-style phases
   unless there is an explicit product decision to restore them.

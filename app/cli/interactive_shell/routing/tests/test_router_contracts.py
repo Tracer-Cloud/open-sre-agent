@@ -8,7 +8,7 @@ from typing import TypedDict
 import pytest
 import yaml
 
-from app.cli.interactive_shell.routing.router import classify_input, route_input
+from app.cli.interactive_shell.routing.router import route_input
 from app.cli.interactive_shell.runtime.session import ReplSession
 
 TESTS_DIR = Path(__file__).resolve().parent
@@ -57,7 +57,6 @@ def test_router_contract_cases(case: RouterContractCase) -> None:
     session = ReplSession()
 
     decision = route_input(case["input"], session)
-    assert classify_input(case["input"], session) == case["expected_kind"]
 
     assert decision.route_kind.value == case["expected_kind"]
     assert decision.matched_signals == tuple(case["expected_signals"])

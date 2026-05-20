@@ -6,7 +6,7 @@ from app.cli.interactive_shell.intent.intent_parser import (
     is_single_edit_typo,
     normalize_intent_text,
 )
-from app.cli.interactive_shell.routing.resolve_cli_command.catalog import (
+from app.cli.interactive_shell.routing.command_route.catalog import (
     BARE_COMMAND_ALIAS_MAP,
     BARE_COMMAND_ALIASES,
     BARE_COMMAND_ALIASES_WITH_ARGS,

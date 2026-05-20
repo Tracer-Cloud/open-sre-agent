@@ -16,6 +16,8 @@ from app.cli.interactive_shell.commands import (
 from app.cli.interactive_shell.orchestration.action_executor import (
     run_claude_code_implementation,
     run_opensre_cli_command,
+    run_remote_deploy,
+    run_remote_investigation,
     run_sample_alert,
     run_shell_command,
     run_synthetic_test,
@@ -303,6 +305,24 @@ def execute_cli_actions(
                 is_tty=is_tty,
                 action_already_listed=True,
             )
+        elif action.kind == "remote_deploy":
+            run_remote_deploy(
+                action.content,
+                session,
+                console,
+                confirm_fn=confirm_fn,
+                is_tty=is_tty,
+                action_already_listed=True,
+            )
+        elif action.kind == "remote_investigation":
+            run_remote_investigation(
+                action.content,
+                session,
+                console,
+                confirm_fn=confirm_fn,
+                is_tty=is_tty,
+                action_already_listed=True,
+            )
         else:
             run_synthetic_test(
                 action.content,
@@ -355,7 +375,16 @@ def execute_cli_actions_with_metrics(
     executed_entries = [
         item
         for item in session.history[history_start:]
-        if item.get("type") in {"slash", "shell", "alert", "synthetic_test", "implementation"}
+        if item.get("type")
+        in {
+            "slash",
+            "shell",
+            "alert",
+            "synthetic_test",
+            "implementation",
+            "remote_deploy",
+            "remote_alert",
+        }
     ]
     executed_count = len(executed_entries)
     executed_success_count = sum(1 for item in executed_entries if item.get("ok", True))

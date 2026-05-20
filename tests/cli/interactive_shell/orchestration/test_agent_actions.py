@@ -372,13 +372,16 @@ def test_compound_prompt_plans_chat_list_and_slash_deploy_paraphrase() -> None:
         "AND then deploy OpenSRE to EC2"
     )
 
-    assert agent_actions.plan_terminal_tasks(message) == ["slash", "slash"]
-    assert agent_actions.plan_cli_actions(message) == ["/list integrations", "/remote"]
+    assert agent_actions.plan_terminal_tasks(message) == ["slash", "remote_deploy"]
+    assert agent_actions.plan_cli_actions(message) == ["/list integrations"]
 
 
 def test_nitro_prompt_plans_remote_then_quoted_investigation() -> None:
-    assert agent_actions.plan_terminal_tasks(_NITRO_PROMPT) == ["slash", "investigation"]
-    assert agent_actions.plan_cli_actions(_NITRO_PROMPT) == ["/remote"]
+    assert agent_actions.plan_terminal_tasks(_NITRO_PROMPT) == [
+        "remote_deploy",
+        "remote_investigation",
+    ]
+    assert agent_actions.plan_cli_actions(_NITRO_PROMPT) == []
 
 
 def test_services_version_deploy_prompt_plans_all_actions() -> None:
@@ -387,8 +390,8 @@ def test_services_version_deploy_prompt_plans_all_actions() -> None:
         "AND then deploy to EC2 within 90 seconds"
     )
 
-    assert agent_actions.plan_terminal_tasks(message) == ["slash", "slash", "slash"]
-    assert agent_actions.plan_cli_actions(message) == ["/list integrations", "/version", "/remote"]
+    assert agent_actions.plan_terminal_tasks(message) == ["slash", "slash", "remote_deploy"]
+    assert agent_actions.plan_cli_actions(message) == ["/list integrations", "/version"]
 
 
 def test_explicit_shell_command_plans_shell_action() -> None:
@@ -424,6 +427,7 @@ def test_synthetic_scenario_id_plans_synthetic_action_kind() -> None:
 
 def test_compound_prompt_executes_all_supported_tasks(monkeypatch: object) -> None:
     dispatched: list[str] = []
+    remote_deploy_calls: list[str] = []
 
     def _fake_dispatch(
         command: str,
@@ -436,7 +440,18 @@ def test_compound_prompt_executes_all_supported_tasks(monkeypatch: object) -> No
         console.print(f"ran {command}")
         return True
 
+    def _fake_run_remote_deploy(
+        provider: str,
+        session: ReplSession,
+        console: Console,
+        **_kwargs: object,
+    ) -> None:
+        remote_deploy_calls.append(provider)
+        session.record("remote_deploy", provider, ok=True)
+        console.print(f"remote deploy {provider}")
+
     monkeypatch.setattr(agent_actions, "dispatch_slash", _fake_dispatch)  # type: ignore[attr-defined]
+    monkeypatch.setattr(agent_actions, "run_remote_deploy", _fake_run_remote_deploy)
 
     session = ReplSession()
     console, buf = _capture()
@@ -450,7 +465,8 @@ def test_compound_prompt_executes_all_supported_tasks(monkeypatch: object) -> No
     )
 
     assert handled is False
-    assert dispatched == ["/list integrations", "/remote"]
+    assert dispatched == ["/list integrations"]
+    assert remote_deploy_calls == ["ec2_remote"]
     output = buf.getvalue()
     assert "I'm doing fine" not in output
     assert "EC2 deployment creates AWS" not in output
@@ -458,37 +474,33 @@ def test_compound_prompt_executes_all_supported_tasks(monkeypatch: object) -> No
 
 
 def test_nitro_prompt_executes_remote_then_investigation(monkeypatch: object) -> None:
-    dispatched: list[str] = []
-    investigation_payloads: list[str] = []
+    call_order: list[str] = []
 
-    def _fake_dispatch(
-        command: str,
+    def _fake_run_remote_deploy(
+        provider: str,
         session: ReplSession,
         console: Console,
         **_kwargs: object,
-    ) -> bool:
-        dispatched.append(command)
-        session.record("slash", command, ok=True)
-        console.print(f"ran {command}")
-        return True
+    ) -> None:
+        call_order.append(f"remote_deploy:{provider}")
+        session.record("remote_deploy", provider, ok=True)
+        console.print(f"remote deploy {provider}")
 
-    def _fake_run_investigation_for_session(
-        *,
+    def _fake_run_remote_investigation(
         alert_text: str,
-        context_overrides: dict[str, object] | None = None,
-        cancel_requested: object | None = None,
-    ) -> dict[str, object]:
-        _ = (context_overrides, cancel_requested)
-        investigation_payloads.append(alert_text)
-        return {"root_cause": "hello world handled"}
+        session: ReplSession,
+        console: Console,
+        **_kwargs: object,
+    ) -> None:
+        call_order.append(f"remote_investigation:{alert_text}")
+        session.record("remote_alert", alert_text, ok=True)
+        console.print(f"remote investigation {alert_text}")
 
-    monkeypatch.setattr(agent_actions, "dispatch_slash", _fake_dispatch)  # type: ignore[attr-defined]
-    import app.cli.investigation as investigation_module
-
+    monkeypatch.setattr(agent_actions, "run_remote_deploy", _fake_run_remote_deploy)
     monkeypatch.setattr(
-        investigation_module,
-        "run_investigation_for_session",
-        _fake_run_investigation_for_session,
+        agent_actions,
+        "run_remote_investigation",
+        _fake_run_remote_investigation,
     )
 
     session = ReplSession()
@@ -496,17 +508,21 @@ def test_nitro_prompt_executes_remote_then_investigation(monkeypatch: object) ->
     handled = agent_actions.execute_cli_actions(_NITRO_PROMPT, session, console)
 
     assert handled is True
-    assert dispatched == ["/remote"]
-    assert investigation_payloads == ["hello world"]
+    assert call_order == [
+        "remote_deploy:ec2_remote",
+        "remote_investigation:hello world",
+    ]
     output = buf.getvalue()
-    assert "EC2 deployment creates AWS" not in output
-    assert "ran /remote" in output
-    assert "investigation: hello world" in output
-    assert output.index("ran /remote") < output.index("investigation: hello world")
+    assert "remote deploy ec2_remote" in output
+    assert "remote investigation hello world" in output
+    assert output.index("remote deploy ec2_remote") < output.index(
+        "remote investigation hello world"
+    )
 
 
 def test_services_version_deploy_prompt_executes_in_order(monkeypatch: object) -> None:
     dispatched: list[str] = []
+    remote_deploy_calls: list[str] = []
 
     def _fake_dispatch(
         command: str,
@@ -519,7 +535,18 @@ def test_services_version_deploy_prompt_executes_in_order(monkeypatch: object) -
         console.print(f"ran {command}")
         return True
 
+    def _fake_run_remote_deploy(
+        provider: str,
+        session: ReplSession,
+        console: Console,
+        **_kwargs: object,
+    ) -> None:
+        remote_deploy_calls.append(provider)
+        session.record("remote_deploy", provider, ok=True)
+        console.print(f"remote deploy {provider}")
+
     monkeypatch.setattr(agent_actions, "dispatch_slash", _fake_dispatch)  # type: ignore[attr-defined]
+    monkeypatch.setattr(agent_actions, "run_remote_deploy", _fake_run_remote_deploy)
 
     session = ReplSession()
     console, buf = _capture()
@@ -533,10 +560,12 @@ def test_services_version_deploy_prompt_executes_in_order(monkeypatch: object) -
     )
 
     assert handled is True
-    assert dispatched == ["/list integrations", "/version", "/remote"]
+    assert dispatched == ["/list integrations", "/version"]
+    assert remote_deploy_calls == ["ec2_remote"]
     output = buf.getvalue()
-    assert output.index("ran /list integrations") < output.index("ran /version")
-    assert "EC2 deployment creates AWS" not in output
+    assert "ran /list integrations" in output
+    assert "ran /version" in output
+    assert "remote deploy ec2_remote" in output
 
 
 def test_execute_cli_actions_runs_sample_alert(monkeypatch: object) -> None:

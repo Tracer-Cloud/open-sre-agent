@@ -164,6 +164,8 @@ def print_planned_actions(console: Console, actions: list[PlannedAction]) -> Non
     for index, action in enumerate(actions, start=1):
         label = {
             "llm_provider": "LLM provider",
+            "remote_deploy": "remote deploy",
+            "remote_investigation": "remote investigation",
             "sample_alert": "sample alert",
             "investigation": "investigation",
             "shell": "shell",

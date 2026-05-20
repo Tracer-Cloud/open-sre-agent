@@ -13,6 +13,8 @@ class PlannedAction:
     kind: Literal[
         "llm_provider",
         "slash",
+        "remote_deploy",
+        "remote_investigation",
         "shell",
         "sample_alert",
         "investigation",

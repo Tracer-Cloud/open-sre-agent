@@ -29,6 +29,8 @@ from app.cli.interactive_shell.orchestration.action_planner import (
 from app.cli.interactive_shell.orchestration.execution_policy import (
     evaluate_code_agent_launch,
     evaluate_investigation_launch,
+    evaluate_remote_deploy_launch,
+    evaluate_remote_investigation_send,
     evaluate_shell_from_parsed,
     evaluate_synthetic_test_launch,
     execution_allowed,
@@ -1213,6 +1215,119 @@ def run_text_investigation(
     session.record("alert", alert_text)
 
 
+def run_remote_deploy(
+    provider: str,
+    session: ReplSession,
+    console: Console,
+    *,
+    confirm_fn: Callable[[str], str] | None = None,
+    is_tty: bool | None = None,
+    action_already_listed: bool = False,
+    stack_name: str | None = None,
+) -> None:
+    """Provision a managed remote EC2 deployment and persist its outputs."""
+    policy = evaluate_remote_deploy_launch()
+    if not execution_allowed(
+        policy,
+        session=session,
+        console=console,
+        action_summary=f"remote deploy ({provider})",
+        confirm_fn=confirm_fn,
+        is_tty=is_tty,
+        action_already_listed=action_already_listed,
+    ):
+        session.record("remote_deploy", provider, ok=False)
+        return
+
+    from app.deployment.methods.ec2_remote import deploy_remote
+
+    deploy_stack = (
+        stack_name
+        or os.getenv("OPENSRE_REMOTE_STACK_NAME")
+        or "tracer-ec2-remote"
+    ).strip() or "tracer-ec2-remote"
+    task = session.task_registry.create(TaskKind.CLI_COMMAND, command=f"remote_deploy:{deploy_stack}")
+    task.mark_running()
+    console.print(f"[bold]remote deploy:[/bold] {escape(deploy_stack)}")
+    try:
+        outputs = deploy_remote(stack_name=deploy_stack)
+    except Exception as exc:  # noqa: BLE001
+        task.mark_failed(str(exc))
+        report_exception(exc, context="interactive_shell.remote_deploy")
+        console.print(f"[{ERROR}]remote deploy failed:[/] {escape(str(exc))}")
+        session.record("remote_deploy", provider, ok=False)
+        return
+
+    public_ip = str(outputs.get("PublicIpAddress", "")).strip()
+    server_port = str(outputs.get("ServerPort", "")).strip()
+    task.mark_completed(result=public_ip or "ok")
+    session.record("remote_deploy", provider, ok=True)
+    if public_ip and server_port:
+        console.print(f"[{HIGHLIGHT}]remote ready:[/] http://{escape(public_ip)}:{escape(server_port)}")
+
+
+def run_remote_investigation(
+    alert_text: str,
+    session: ReplSession,
+    console: Console,
+    *,
+    confirm_fn: Callable[[str], str] | None = None,
+    is_tty: bool | None = None,
+    action_already_listed: bool = False,
+) -> None:
+    """Send an investigation payload to the managed remote deployment."""
+    policy = evaluate_remote_investigation_send()
+    if not execution_allowed(
+        policy,
+        session=session,
+        console=console,
+        action_summary=f'remote investigation from text "{alert_text}"',
+        confirm_fn=confirm_fn,
+        is_tty=is_tty,
+        action_already_listed=action_already_listed,
+    ):
+        session.record("remote_alert", alert_text, ok=False)
+        return
+
+    from app.deployment.operations.ec2_config import load_remote_outputs
+    from app.remote.client import RemoteAgentClient
+
+    task = session.task_registry.create(
+        TaskKind.INVESTIGATION, command=f"remote_investigate:{alert_text}"
+    )
+    task.mark_running()
+    console.print(f"[bold]remote investigation:[/bold] {escape(alert_text)}")
+    try:
+        outputs = load_remote_outputs()
+        host = str(outputs.get("PublicIpAddress", "")).strip()
+        port = str(outputs.get("ServerPort", "8080")).strip() or "8080"
+        if not host:
+            raise ValueError("remote deployment outputs missing PublicIpAddress")
+        base_url = f"http://{host}:{port}"
+        client = RemoteAgentClient(base_url=base_url, api_key=os.getenv("OPENSRE_API_KEY"))
+        result = client.investigate(
+            raw_alert={"message": alert_text},
+            alert_name="interactive-shell-remote-investigation",
+            pipeline_name="interactive_shell_remote",
+            severity="info",
+        )
+    except Exception as exc:  # noqa: BLE001
+        task.mark_failed(str(exc))
+        report_exception(exc, context="interactive_shell.remote_investigation")
+        console.print(f"[{ERROR}]remote investigation failed:[/] {escape(str(exc))}")
+        session.record("remote_alert", alert_text, ok=False)
+        return
+
+    report_text = str(result.get("report", "")).strip()
+    root_cause = str(result.get("root_cause", "")).strip()
+    task.mark_completed(result=root_cause or "ok")
+    session.record("remote_alert", alert_text, ok=True)
+    if root_cause:
+        console.print(f"[bold]remote root cause:[/bold] {escape(root_cause)}")
+    if report_text:
+        console.print(f"[bold]remote report:[/bold] {escape(report_text)}")
+
+
 def run_synthetic_test(
     suite_name: str,
     session: ReplSession,
@@ -1352,6 +1467,8 @@ __all__ = [
     "run_cd_command",
     "run_opensre_cli_command",
     "run_pwd_command",
+    "run_remote_deploy",
+    "run_remote_investigation",
     "run_sample_alert",
     "run_text_investigation",
     "run_shell_command",
