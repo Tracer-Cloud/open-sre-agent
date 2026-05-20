@@ -1,0 +1,47 @@
+id: 203-cli-verify-dry-run
+title: CLI integrations verify dry-run
+intent_class: local_execution
+risk_level: medium
+input:
+  prompt: please run opensre integrations verify --dry-run
+  surface: interactive_cli
+session:
+  has_prior_state: false
+  remote_connected: false
+  configured_integrations: []
+available_capabilities:
+  slash_commands: []
+  cli_commands:
+  - integrations
+  synthetic_suites: []
+notes: []
+route:
+  expected_kind: cli_agent
+  expected_signals: []
+  expected_command_text: null
+policy:
+  should_execute: true
+  has_unhandled_clause: false
+  fail_closed: false
+planned_actions:
+- kind: cli_command
+  content: integrations verify --dry-run
+  source: llm
+  target_surface: terminal
+  payload: integrations verify --dry-run
+executed_actions:
+- kind: cli_command
+  payload: integrations verify --dry-run
+  content: integrations verify --dry-run
+response_contract:
+  must_contain_any:
+  - opensre integrations verify --dry-run
+  must_not_contain: []
+history:
+  expected:
+  - type: cli_agent
+    ok: true
+  - type: cli_command
+    ok: true
+tier: critical
+runs: 1

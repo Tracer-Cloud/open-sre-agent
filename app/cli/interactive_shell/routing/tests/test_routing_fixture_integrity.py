@@ -52,21 +52,17 @@ def _mock_policy_violations(module_path: Path) -> list[str]:
     return violations
 
 
-def test_every_scenario_has_paired_files() -> None:
+def test_every_scenario_file_exists() -> None:
     violations: list[str] = []
     for behavior_dir in sorted(SCENARIOS_DIR.iterdir()):
         if not behavior_dir.is_dir():
             continue
-        for scenario_dir in sorted(behavior_dir.iterdir()):
-            if not scenario_dir.is_dir():
+        for scenario_file in sorted(behavior_dir.iterdir()):
+            if scenario_file.suffix != ".yml":
                 continue
-            scenario_file = scenario_dir / "scenario.yml"
-            answer_file = scenario_dir / "answer.yml"
             if not scenario_file.is_file():
-                violations.append(f"{scenario_dir}: missing scenario.yml")
-            if not answer_file.is_file():
-                violations.append(f"{scenario_dir}: missing answer.yml")
-    assert not violations, "scenario pairing violations:\n" + "\n".join(violations)
+                violations.append(f"{scenario_file}: missing file")
+    assert not violations, "scenario file violations:\n" + "\n".join(violations)
 
 
 def test_scenario_ids_are_globally_unique() -> None:
@@ -75,10 +71,10 @@ def test_scenario_ids_are_globally_unique() -> None:
     assert len(ids) == len(set(ids))
 
 
-def test_scenario_directory_name_matches_id() -> None:
+def test_scenario_filename_matches_id() -> None:
     cases = load_all_scenarios()
     for case in cases:
-        assert case.scenario.scenario_dir.name == case.scenario.id
+        assert case.scenario.scenario_dir.stem == case.scenario.id
 
 
 def test_scenario_class_matches_directory() -> None:

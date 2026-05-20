@@ -344,7 +344,7 @@ def _parse_scenario_yaml(
         ),
         notes=_string_list(data.get("notes"), label=f"{scenario_path} notes"),
         behavior_class=behavior_class,
-        scenario_dir=scenario_path.parent,
+        scenario_dir=scenario_path,
     )
 
 
@@ -480,31 +480,26 @@ def _parse_answer_yaml(answer_path: Path, *, scenario_id: str) -> Answer:
     )
 
 
-def load_scenario_case(scenario_dir: Path, *, behavior_class: str) -> ScenarioCase:
-    """Load one scenario directory into a ScenarioCase."""
-    scenario_path = scenario_dir / "scenario.yml"
-    answer_path = scenario_dir / "answer.yml"
-    if not scenario_path.is_file():
-        msg = f"Missing scenario.yml in {scenario_dir}"
-        raise FileNotFoundError(msg)
-    if not answer_path.is_file():
-        msg = f"Missing answer.yml in {scenario_dir}"
+def load_scenario_case(scenario_file: Path, *, behavior_class: str) -> ScenarioCase:
+    """Load one scenario file into a ScenarioCase."""
+    if not scenario_file.is_file():
+        msg = f"Missing scenario file: {scenario_file}"
         raise FileNotFoundError(msg)
 
-    scenario = _parse_scenario_yaml(scenario_path, behavior_class=behavior_class)
-    if scenario.scenario_dir.name != scenario.id:
+    scenario = _parse_scenario_yaml(scenario_file, behavior_class=behavior_class)
+    if scenario.scenario_dir.stem != scenario.id:
         msg = (
-            f"{scenario_dir}: directory name {scenario.scenario_dir.name!r} "
+            f"{scenario_file}: file stem {scenario.scenario_dir.stem!r} "
             f"does not match scenario id {scenario.id!r}."
         )
         raise ValueError(msg)
 
-    answer = _parse_answer_yaml(answer_path, scenario_id=scenario.id)
+    answer = _parse_answer_yaml(scenario_file, scenario_id=scenario.id)
     return ScenarioCase(scenario=scenario, answer=answer)
 
 
 def load_all_scenarios() -> list[ScenarioCase]:
-    """Discover and load every scenario under scenarios/<behavior_class>/<id>/."""
+    """Discover and load every scenario under scenarios/<behavior_class>/*.yml."""
     if not SCENARIOS_DIR.is_dir():
         return []
 
@@ -515,10 +510,10 @@ def load_all_scenarios() -> list[ScenarioCase]:
         if not behavior_dir.is_dir():
             continue
         behavior_class = behavior_dir.name
-        for scenario_dir in sorted(behavior_dir.iterdir()):
-            if not scenario_dir.is_dir():
+        for scenario_file in sorted(behavior_dir.iterdir()):
+            if not scenario_file.is_file() or scenario_file.suffix != ".yml":
                 continue
-            case = load_scenario_case(scenario_dir, behavior_class=behavior_class)
+            case = load_scenario_case(scenario_file, behavior_class=behavior_class)
             if case.scenario.id in seen_ids:
                 msg = f"Duplicate scenario id {case.scenario.id!r}."
                 raise ValueError(msg)

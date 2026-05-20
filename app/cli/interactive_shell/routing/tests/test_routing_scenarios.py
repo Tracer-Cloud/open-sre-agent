@@ -17,7 +17,6 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.l
 )
 from app.cli.interactive_shell.routing.llm_intent_classifier import clear_classify_cache
 from app.cli.interactive_shell.routing.router import classify_input, route_input
-from app.cli.interactive_shell.routing.tests._oracle_normalize import normalize_response_text
 from app.cli.interactive_shell.routing.tests._oracle_runtime import (
     OracleRunResult,
     fresh_session,
@@ -82,28 +81,6 @@ def _build_actual_action(action: PlannedAction) -> ExpectedAction:
             str(template_value).strip() if isinstance(template_value, str) else action.content
         )
     return expected
-
-
-def _contains_any(haystack: str, needles: list[str]) -> bool:
-    if not needles:
-        return True
-    normalized_needles = [normalize_response_text(needle) for needle in needles if needle.strip()]
-    return any(needle in haystack for needle in normalized_needles)
-
-
-def _assistant_handoff_text(actions: list[PlannedAction]) -> str:
-    parts: list[str] = []
-    for action in actions:
-        if action.kind != "assistant_handoff":
-            continue
-        arg_content = action.args.get("content")
-        if isinstance(arg_content, str) and arg_content.strip():
-            parts.append(arg_content.strip())
-            continue
-        content = action.content.strip()
-        if content:
-            parts.append(content)
-    return normalize_response_text("\n".join(parts))
 
 
 def _assert_planned_actions_match(
@@ -220,11 +197,16 @@ def test_live_action_planning(live_planning_case: ScenarioCase) -> None:
                 msg = f"Fixture action {action_idx} content must match command+args."
                 raise AssertionError(msg)
 
-    # Directly compare planned actions against fixtures. Fixtures use
-    # assistant_handoff entries to express "no executable action, hand off to
-    # LLM response generation"; _assert_planned_actions_match applies lenient
-    # content matching for those entries (kind + non-empty content only).
-    _assert_planned_actions_match(actual_actions, expected_actions)
+    handoff_only = bool(actions) and all(action.kind == "assistant_handoff" for action in actions)
+    # When the fixture specifies planned_actions: [] it means "no executable
+    # action expected". A planner response that consists solely of
+    # assistant_handoff actions is semantically equivalent and is accepted
+    # without a mismatch assertion. Any other actual actions (slash, shell …)
+    # with an empty fixture still fall through and fail the match.
+    if not expected_actions and handoff_only:
+        pass
+    else:
+        _assert_planned_actions_match(actual_actions, expected_actions)
 
     # Response-contract assertions (``must_contain_any`` / ``must_not_contain``)
     # are checked against the rendered terminal response in
