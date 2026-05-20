@@ -621,19 +621,22 @@ def _format_anthropic_retry_error(err: Exception) -> str:
     return f"Anthropic API request failed after multiple retries: {error_name}."
 
 
-# LiteLLM/Anthropic surfaces an unrecognized model ID as an HTTP 400 with a
-# message containing "The provided model identifier is invalid." (note: the
-# OpenAI-compatible 404 code-path is preferred, but LiteLLM relays 400 here).
-# Detection is intentionally a substring match because there is no stable error
-# code for this case across LiteLLM/Anthropic. Update this constant if upstream
-# rewords the message — the failure mode is "fall through to a generic HTTP 400
-# message that is not Sentry-filtered" (see issue #1806).
-_OPENAI_INVALID_MODEL_IDENTIFIER_PHRASE = "model identifier"
+# Substrings that signal an unknown/invalid model name in a 400 response.
+# OpenAI:    "The provided model identifier is invalid."
+# OpenRouter: "Invalid model name passed in model=<name>. Call `/v1/models`…"
+# Detection is an any-match because there is no stable error code across
+# providers. Add phrases here when a new provider uses different wording —
+# the failure mode is "fall through to a generic HTTP 400 message" (#1806).
+_OPENAI_INVALID_MODEL_IDENTIFIER_PHRASES = (
+    "model identifier",  # OpenAI / LiteLLM
+    "invalid model name",  # OpenRouter
+)
 
 
 def _is_openai_invalid_model_identifier(err: OpenAIBadRequestError) -> bool:
     """True if the OpenAIBadRequestError message indicates an unknown model id."""
-    return _OPENAI_INVALID_MODEL_IDENTIFIER_PHRASE in (err.message or "").lower()
+    msg = (err.message or "").lower()
+    return any(phrase in msg for phrase in _OPENAI_INVALID_MODEL_IDENTIFIER_PHRASES)
 
 
 def _format_openai_connection_error(err: Exception, provider_label: str) -> str:
