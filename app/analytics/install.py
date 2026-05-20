@@ -7,6 +7,7 @@ from app.analytics.provider import (
     capture_install_detected_if_needed,
     shutdown_analytics,
 )
+from contextlib import suppress
 from app.utils.sentry_sdk import init_sentry
 
 _INSTALL_PROPERTIES: Properties = {
@@ -22,5 +23,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    init_sentry(entrypoint="analytics.install")
+    with suppress(ModuleNotFoundError):
+        init_sentry(entrypoint="analytics.install")
     raise SystemExit(main())

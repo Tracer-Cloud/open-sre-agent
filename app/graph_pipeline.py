@@ -7,9 +7,12 @@ Production deployment config and older internal docs still reference
 
 from __future__ import annotations
 
+from contextlib import suppress
+
 from app.pipeline.graph import build_graph
 from app.utils.sentry_sdk import init_sentry
 
-init_sentry(entrypoint="graph_pipeline")
+with suppress(ModuleNotFoundError):
+    init_sentry(entrypoint="graph_pipeline")
 
 __all__ = ["build_graph"]
