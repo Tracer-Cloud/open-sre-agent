@@ -44,7 +44,7 @@ from app.config import (
     NVIDIA_BASE_URL,
     OPENAI_LLM_CONFIG,
     OPENROUTER_BASE_URL,
-    LLMSettings,
+    resolve_llm_settings,
 )
 from app.llm_credentials import resolve_llm_api_key
 from app.llm_reasoning_effort import get_active_reasoning_effort
@@ -1151,7 +1151,7 @@ def _select_model(settings: Any, provider_prefix: str, model_type: ModelType) ->
 
 def _create_llm_client(model_type: ModelType) -> _LLMClientType:
     try:
-        settings = LLMSettings.from_env()
+        settings = resolve_llm_settings()
     except ValidationError as exc:
         errors = exc.errors()
         if len(errors) == 1:

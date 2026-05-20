@@ -242,11 +242,9 @@ def test_execute_cli_actions_falls_through_for_local_llama_request(monkeypatch: 
     console, _ = _capture()
     handled = agent_actions.execute_cli_actions("please connect to local llama", session, console)
 
-    assert handled is True
+    assert handled is False
     assert dispatched == []
-    assert session.history == [
-        {"type": "cli_agent", "text": "please connect to local llama", "ok": False}
-    ]
+    assert session.history == []
 
 
 def test_execute_cli_actions_switches_llm_provider(monkeypatch: object) -> None:
@@ -877,8 +875,8 @@ def test_execute_cli_actions_falls_through_for_chat() -> None:
     session = ReplSession()
     console, _ = _capture()
 
-    assert agent_actions.execute_cli_actions("hey", session, console) is True
-    assert session.history == [{"type": "cli_agent", "text": "hey", "ok": False}]
+    assert agent_actions.execute_cli_actions("hey", session, console) is False
+    assert session.history == []
 
 
 def test_execute_cli_actions_runs_shell_command(monkeypatch: object) -> None:

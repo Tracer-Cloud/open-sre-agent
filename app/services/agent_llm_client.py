@@ -589,10 +589,10 @@ def get_agent_llm() -> _AgentClientType:
 
     from pydantic import ValidationError
 
-    from app.config import LLMSettings
+    from app.config import resolve_llm_settings
 
     try:
-        settings = LLMSettings.from_env()
+        settings = resolve_llm_settings()
     except ValidationError as exc:
         raise RuntimeError(str(exc)) from exc
 
@@ -606,8 +606,6 @@ def get_agent_llm() -> _AgentClientType:
         )
     elif provider in ("openrouter", "gemini", "nvidia", "minimax", "ollama"):
         # All OpenAI-compatible providers
-        from app.config import LLMSettings
-
         _agent_client = _create_openai_compat_client(settings, provider)
     elif provider == "bedrock":
         from app.config import BEDROCK_LLM_CONFIG
