@@ -240,6 +240,31 @@ def test_sync_provider_env_updates_os_environ(tmp_path, monkeypatch) -> None:
 
 
 @pytest.mark.skipif(_SKIP_AS_ROOT, reason="root bypasses file permission checks")
+def test_sync_provider_env_skips_empty_preserved_values_in_os_environ(
+    tmp_path, monkeypatch
+) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "LLM_PROVIDER=openai\n"
+        "OPENAI_REASONING_MODEL=gpt-5.4\n"
+        "OPENAI_MODEL=gpt-5.4\n"
+        "OPENAI_TOOLCALL_MODEL=\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_REASONING_MODEL", "gpt-5.4")
+    monkeypatch.delenv("OPENAI_TOOLCALL_MODEL", raising=False)
+
+    sync_provider_env(
+        provider=PROVIDER_BY_VALUE["openai"],
+        model="gpt-5.4",
+        env_path=env_path,
+    )
+
+    assert os.environ["OPENAI_REASONING_MODEL"] == "gpt-5.4"
+    assert "OPENAI_TOOLCALL_MODEL" not in os.environ
+
+
 def test_sync_provider_env_writes_toolcall_model_atomically(tmp_path, monkeypatch) -> None:
     env_path = tmp_path / ".env"
     env_path.write_text(

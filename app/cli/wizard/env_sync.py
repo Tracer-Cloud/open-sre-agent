@@ -179,7 +179,7 @@ def _env_value_from_lines(lines: list[str], key: str) -> str | None:
         match = _ENV_ASSIGNMENT.match(line)
         if match and match.group(1) == key:
             _, _, rhs = line.partition("=")
-            return rhs.strip().strip("\"'")
+            return rhs.strip().strip("\"'") or None
     return None
 
 
