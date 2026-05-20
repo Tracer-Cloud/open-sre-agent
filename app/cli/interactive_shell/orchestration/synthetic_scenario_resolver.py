@@ -101,12 +101,9 @@ def _cached_resolve(sanitised_text: str, scenarios: tuple[str, ...]) -> str | No
     return _parse_scenario(raw, frozenset(scenarios))
 
 
-def _resolve_with_retry_on_none(sanitised_text: str, scenarios: tuple[str, ...]) -> str | None:
-    """Evict the cache entry when the result was None (transient failure)."""
-    result = _cached_resolve(sanitised_text, scenarios)
-    if result is None:
-        _cached_resolve.cache_clear()
-    return result
+def _resolve_cached(sanitised_text: str, scenarios: tuple[str, ...]) -> str | None:
+    """Resolve with bounded caching and no global eviction side effects."""
+    return _cached_resolve(sanitised_text, scenarios)
 
 
 def resolve_synthetic_scenario_with_llm(
@@ -121,7 +118,7 @@ def resolve_synthetic_scenario_with_llm(
     sanitised = _sanitise_text(text.strip())
     if not sanitised:
         return None
-    return _resolve_with_retry_on_none(sanitised, tuple(available_scenarios))
+    return _resolve_cached(sanitised, tuple(available_scenarios))
 
 
 def clear_resolver_cache() -> None:

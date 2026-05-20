@@ -19,7 +19,7 @@ ROUTER_LIVE_PROMPTS_DATASET = "router_live_prompts.yml"
 
 
 def _extract_loaded_prompt_fixtures(module_path: Path) -> set[str]:
-    """Extract literal fixture filenames passed to _load_prompt_cases()."""
+    """Extract literal fixture filenames passed to dataset loader helpers."""
     source = module_path.read_text(encoding="utf-8")
     module = ast.parse(source, filename=str(module_path))
     loaded_filenames: set[str] = set()
@@ -27,7 +27,9 @@ def _extract_loaded_prompt_fixtures(module_path: Path) -> set[str]:
     for node in ast.walk(module):
         if not isinstance(node, ast.Call):
             continue
-        if not isinstance(node.func, ast.Name) or node.func.id != "_load_prompt_cases":
+        if not isinstance(node.func, ast.Name):
+            continue
+        if node.func.id not in {"_load_prompt_cases", "_load_contract_cases"}:
             continue
         if not node.args:
             continue

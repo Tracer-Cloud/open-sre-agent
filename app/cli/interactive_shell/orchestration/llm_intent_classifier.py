@@ -113,12 +113,9 @@ def _cached_classify(sanitised_text: str, has_prior_state: bool) -> str | None:
     return _parse_route(raw)
 
 
-def _classify_with_retry_on_none(sanitised_text: str, has_prior_state: bool) -> str | None:
-    """Classify and evict the cache entry if the result was None."""
-    result = _cached_classify(sanitised_text, has_prior_state)
-    if result is None:
-        _cached_classify.cache_clear()
-    return result
+def _classify_cached(sanitised_text: str, has_prior_state: bool) -> str | None:
+    """Classify with bounded caching and no global eviction side effects."""
+    return _cached_classify(sanitised_text, has_prior_state)
 
 
 def classify_intent_with_llm(
@@ -128,7 +125,7 @@ def classify_intent_with_llm(
     """Classify *text* using the mid-tier classification LLM."""
     has_prior = session.last_state is not None
     sanitised = _sanitise_text(text.strip())
-    route_word = _classify_with_retry_on_none(sanitised, has_prior)
+    route_word = _classify_cached(sanitised, has_prior)
     if route_word is None:
         return None
 
