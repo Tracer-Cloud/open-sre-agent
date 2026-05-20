@@ -167,6 +167,7 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
     "/mcp": _mcp(
         "Manage connected MCP servers. Subcommands: list, connect, disconnect.",
         "User asks to list, connect, or disconnect MCP servers",
+        anti_examples=("User asks about remote deployments or remote agents (use /remote)",),
     ),
     "/messaging": _mcp(
         "Manage messaging security and Telegram identities. Subcommands: pair, allow, revoke, status.",
@@ -192,8 +193,11 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks to quit the REPL",
     ),
     "/remote": _mcp(
-        "Connect to and operate a remote deployed OpenSRE agent.",
+        "Connect to, list, and operate remote deployed OpenSRE agents. "
+        "Subcommands: health, investigate, ops, pull, trigger.",
         "User explicitly asks to connect to a remote/hosted/EC2/Nitro OpenSRE instance",
+        "User asks how many remote deployments are configured or wants to inspect a remote agent",
+        "User asks about remote deployment status, health, or operations",
         anti_examples=("Vague connect to X without remote/hosted context (assistant_handoff)",),
     ),
     "/reset": _mcp(
