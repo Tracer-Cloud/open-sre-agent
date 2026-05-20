@@ -149,6 +149,10 @@ def _provider_specific_keys(p: ProviderOption) -> set[str]:
         keys.add(p.api_key_env)
     if p.legacy_model_env:
         keys.add(p.legacy_model_env)
+    if p.toolcall_model_env:
+        keys.add(p.toolcall_model_env)
+    if p.model_env.endswith("_REASONING_MODEL"):
+        keys.add(p.model_env.replace("_REASONING_MODEL", "_CLASSIFICATION_MODEL"))
     return keys
 
 
@@ -226,4 +230,9 @@ def sync_provider_env(
         lines = _set_env_value(lines, key, value)
 
     _write_env(target_path, lines)
+
+    for key in keys_to_remove:
+        os.environ.pop(key, None)
+    os.environ.update(values)
+
     return target_path
