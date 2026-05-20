@@ -209,6 +209,12 @@ def sync_provider_env(
     active_non_secret: set[str] = {provider.model_env}
     if provider.legacy_model_env:
         active_non_secret.add(provider.legacy_model_env)
+    if provider.toolcall_model_env:
+        active_non_secret.add(provider.toolcall_model_env)
+    if provider.model_env.endswith("_REASONING_MODEL"):
+        active_non_secret.add(
+            provider.model_env.replace("_REASONING_MODEL", "_CLASSIFICATION_MODEL")
+        )
     keys_to_remove -= active_non_secret
 
     prior_provider = _llm_provider_value_from_lines(existing)

@@ -134,7 +134,9 @@ def test_sync_provider_env_gemini_cli_writes_model(tmp_path) -> None:
     assert "GEMINI_CLI_MODEL=\n" in content
 
 
-def test_sync_provider_env_removes_stale_toolcall_and_classification_keys(tmp_path) -> None:
+def test_sync_provider_env_removes_stale_toolcall_and_classification_keys(
+    tmp_path, monkeypatch
+) -> None:
     env_path = tmp_path / ".env"
     env_path.write_text(
         "LLM_PROVIDER=openai\n"
@@ -145,6 +147,9 @@ def test_sync_provider_env_removes_stale_toolcall_and_classification_keys(tmp_pa
         "CODEX_MODEL=\n",
         encoding="utf-8",
     )
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_REASONING_MODEL", "gpt-5.4")
+    monkeypatch.setenv("OPENAI_TOOLCALL_MODEL", "gpt-5.4-mini")
 
     sync_provider_env(
         provider=PROVIDER_BY_VALUE["codex"],
@@ -158,6 +163,31 @@ def test_sync_provider_env_removes_stale_toolcall_and_classification_keys(tmp_pa
     assert "OPENAI_TOOLCALL_MODEL=" not in content
     assert "OPENAI_CLASSIFICATION_MODEL=" not in content
     assert "OPENAI_REASONING_MODEL=" not in content
+    assert "OPENAI_TOOLCALL_MODEL" not in os.environ
+
+
+def test_sync_provider_env_preserves_active_provider_toolcall_key(tmp_path, monkeypatch) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "LLM_PROVIDER=openai\n"
+        "OPENAI_REASONING_MODEL=gpt-5.4\n"
+        "OPENAI_MODEL=gpt-5.4\n"
+        "OPENAI_TOOLCALL_MODEL=gpt-5.4-mini\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_REASONING_MODEL", "gpt-5.4")
+    monkeypatch.setenv("OPENAI_TOOLCALL_MODEL", "gpt-5.4-mini")
+
+    sync_provider_env(
+        provider=PROVIDER_BY_VALUE["openai"],
+        model="gpt-5.4",
+        env_path=env_path,
+    )
+
+    content = env_path.read_text(encoding="utf-8")
+    assert "OPENAI_TOOLCALL_MODEL=gpt-5.4-mini\n" in content
+    assert os.environ.get("OPENAI_TOOLCALL_MODEL") == "gpt-5.4-mini"
 
 
 def test_sync_provider_env_updates_os_environ(tmp_path, monkeypatch) -> None:
