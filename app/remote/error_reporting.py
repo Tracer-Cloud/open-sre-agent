@@ -20,6 +20,7 @@ def report_remote_exception(
     severity: str = "error",
     tags: dict[str, str] | None = None,
     extras: dict[str, Any] | None = None,
+    include_traceback: bool = True,
 ) -> None:
     """Report a swallowed remote-runtime exception with consistent tags."""
     report_tags = {
@@ -36,4 +37,5 @@ def report_remote_exception(
         severity=severity,
         tags=report_tags,
         extras=extras,
+        include_traceback=include_traceback,
     )

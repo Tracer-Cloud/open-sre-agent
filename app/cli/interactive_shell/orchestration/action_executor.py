@@ -1154,6 +1154,65 @@ def run_sample_alert(
     session.record("alert", f"sample:{template_name}")
 
 
+def run_text_investigation(
+    alert_text: str,
+    session: ReplSession,
+    console: Console,
+    *,
+    confirm_fn: Callable[[str], str] | None = None,
+    is_tty: bool | None = None,
+    action_already_listed: bool = False,
+) -> None:
+    from app.cli.investigation import run_investigation_for_session
+
+    policy = evaluate_investigation_launch(action_type="investigation")
+    if not execution_allowed(
+        policy,
+        session=session,
+        console=console,
+        action_summary=f'investigation from text "{alert_text}"',
+        confirm_fn=confirm_fn,
+        is_tty=is_tty,
+        action_already_listed=action_already_listed,
+    ):
+        session.record("alert", alert_text, ok=False)
+        return
+
+    console.print(f"[bold]investigation:[/bold] {escape(alert_text)}")
+    task = session.task_registry.create(TaskKind.INVESTIGATION, command=f"investigate:{alert_text}")
+    task.mark_running()
+    try:
+        final_state = run_investigation_for_session(
+            alert_text=alert_text,
+            context_overrides=session.accumulated_context or None,
+            cancel_requested=task.cancel_requested,
+        )
+    except KeyboardInterrupt:
+        task.mark_cancelled()
+        console.print(f"[{WARNING}]investigation cancelled.[/]")
+        session.record("alert", alert_text, ok=False)
+        return
+    except OpenSREError as exc:
+        task.mark_failed(str(exc))
+        console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
+        if exc.suggestion:
+            console.print(f"[{WARNING}]suggestion:[/] {escape(exc.suggestion)}")
+        session.record("alert", alert_text, ok=False)
+        return
+    except Exception as exc:
+        task.mark_failed(str(exc))
+        report_exception(exc, context="interactive_shell.text_investigation")
+        console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
+        session.record("alert", alert_text, ok=False)
+        return
+
+    root = final_state.get("root_cause")
+    task.mark_completed(result=str(root) if root is not None else "")
+    session.last_state = final_state
+    session.accumulate_from_state(final_state)
+    session.record("alert", alert_text)
+
+
 def run_synthetic_test(
     suite_name: str,
     session: ReplSession,
@@ -1294,6 +1353,7 @@ __all__ = [
     "run_opensre_cli_command",
     "run_pwd_command",
     "run_sample_alert",
+    "run_text_investigation",
     "run_shell_command",
     "run_synthetic_test",
     "start_background_cli_task",

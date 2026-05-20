@@ -482,10 +482,15 @@ def _run_parallel(
     with ThreadPoolExecutor(max_workers=min(_TOOL_EXECUTOR_WORKERS, len(tool_calls))) as pool:
         try:
             futures = {pool.submit(_call, tc): i for i, tc in enumerate(tool_calls)}
-        except RuntimeError:
+        except RuntimeError as exc:
+            logger.warning("[agent] tool execution aborted: %s", exc)
+            return [{"error": str(exc)}] * len(tool_calls)
+        try:
+            for fut in as_completed(futures):
+                results[futures[fut]] = fut.result()
+        except BaseException as exc:
+            logger.warning("[agent] tool result collection aborted: %s", exc)
             return [{"error": "interpreter shutting down"} for _ in tool_calls]
-        for fut in as_completed(futures):
-            results[futures[fut]] = fut.result()
     return results
 
 

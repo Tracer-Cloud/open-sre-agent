@@ -29,6 +29,7 @@ def report_exception(
     severity: str = "error",
     tags: dict[str, str] | None = None,
     extras: dict[str, Any] | None = None,
+    include_traceback: bool = True,
 ) -> None:
     """Log + Sentry-capture an exception with structured context.
 
@@ -36,7 +37,9 @@ def report_exception(
     function returns a degraded value to its caller).
     """
     log_fn = getattr(logger, severity, logger.error)
-    log_fn("%s", message, exc_info=exc)
+    # Some expected fallback paths (e.g. remote network probe timeouts) should
+    # remain visible in logs without dumping a full traceback into the terminal UI.
+    log_fn("%s", message, exc_info=exc if include_traceback else False)
     combined: dict[str, Any] = {}
     if tags:
         combined.update({f"tag.{k}": v for k, v in tags.items()})

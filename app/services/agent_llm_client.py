@@ -357,8 +357,10 @@ class OpenAIAgentClient:
         else:
             raise RuntimeError("OpenAI invocation failed") from last_err
 
-        if not response.choices:
-            raise RuntimeError(f"OpenAI-compatible API returned no choices; model={self._model!r}")
+        if not hasattr(response, "choices") or not response.choices:
+            raise RuntimeError(
+                f"OpenAI API returned an unexpected response: {type(response).__name__}"
+            )
         choice = response.choices[0]
         msg = choice.message
         content = msg.content or ""

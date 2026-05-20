@@ -34,4 +34,5 @@ def test_report_remote_exception_adds_remote_tags() -> None:
             "candidate_id": "dpl_123",
         },
         extras={"base_url": "http://host:2024"},
+        include_traceback=True,
     )

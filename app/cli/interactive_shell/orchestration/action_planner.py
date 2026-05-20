@@ -16,6 +16,8 @@ from app.cli.interactive_shell.intent.intent_parser import (
     cli_command_action,
     extract_implementation_request,
     extract_llm_provider_switch,
+    extract_quoted_investigation_request,
+    extract_quoted_investigation_request_text,
     extract_shell_command,
     extract_task_cancel_request,
     normalize_intent_text,
@@ -26,7 +28,7 @@ from app.cli.interactive_shell.intent.intent_parser import (
 )
 from app.cli.interactive_shell.intent.interaction_models import PlannedAction, PromptClause
 from app.cli.interactive_shell.intent.terminal_intent import mentioned_integration_services
-from app.cli.interactive_shell.routing.llm_synthetic_scenario_resolver import (
+from app.cli.interactive_shell.orchestration.synthetic_scenario_resolver import (
     resolve_synthetic_scenario_with_llm,
 )
 
@@ -271,6 +273,11 @@ def plan_clause_actions(
         planned.append(sample_alert_action("generic", clause.position + sample_match.start()))
         return planned
 
+    investigation = extract_quoted_investigation_request(clause)
+    if investigation is not None:
+        planned.append(investigation)
+        return planned
+
     implementation = extract_implementation_request(clause)
     if implementation is not None:
         planned.append(implementation)
@@ -292,6 +299,7 @@ def plan_actions_with_unhandled(message: str) -> tuple[list[PlannedAction], bool
     planned: list[PlannedAction] = []
     seen_slash: set[str] = set()
     has_unhandled_clause = False
+    unmatched_clauses: list[PromptClause] = []
 
     for clause in split_prompt_clauses(message):
         clause_actions = plan_clause_actions(
@@ -300,7 +308,30 @@ def plan_actions_with_unhandled(message: str) -> tuple[list[PlannedAction], bool
         )
         if not clause_actions:
             has_unhandled_clause = True
+            unmatched_clauses.append(clause)
         planned.extend(clause_actions)
+
+    has_investigation = any(action.kind == "investigation" for action in planned)
+    if not has_investigation:
+        text_level_investigation = extract_quoted_investigation_request_text(message)
+        if text_level_investigation is not None:
+            planned.append(text_level_investigation)
+            has_investigation = True
+
+    # Clause splitting can separate "send ... investigation" from a trailing quoted
+    # payload into adjacent clauses ("... investigation" + 'send it "hello"').
+    # When every unmatched clause is one of those fragments, treat the full request
+    # as fully handled by the synthesized investigation action.
+    if (
+        has_unhandled_clause
+        and has_investigation
+        and all(
+            "investigation" in clause.text.lower()
+            or re.match(r'^\s*send\s+it\s+(?:"|\')', clause.text, re.IGNORECASE) is not None
+            for clause in unmatched_clauses
+        )
+    ):
+        has_unhandled_clause = False
 
     return sorted(planned, key=lambda action: action.position), has_unhandled_clause
 
