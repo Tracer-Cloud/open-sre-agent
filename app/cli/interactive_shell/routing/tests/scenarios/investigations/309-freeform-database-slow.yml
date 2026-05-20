@@ -29,9 +29,9 @@ planned_actions:
 executed_actions: []
 response_contract:
   must_contain_any:
-  - investigate
-  - rca
-  - incident
+  - why is the database slow
+  - vague operational question
+  - specific system
   must_not_contain:
   - $ /
 history:

@@ -174,16 +174,18 @@ def execute_routed_turn(
             session_action_success_percent=snapshot.action_success_percent,
             session_fallback_rate_percent=snapshot.fallback_rate_percent,
         )
-        if turn.handled:
+        if turn.handled and (turn.has_unhandled_clause or turn.executed_count > 0):
+            # Denied or at least one real action executed — done, no LLM reply needed.
             if turn.has_unhandled_clause:
                 session.last_assistant_intent = "cli_agent_denied"
-            elif turn.executed_count > 0:
-                session.last_assistant_intent = "cli_agent_handled"
             else:
-                session.last_assistant_intent = "cli_agent_handoff"
+                session.last_assistant_intent = "cli_agent_handled"
             if recorder is not None:
                 recorder.flush()
             return
+        # Either the planner produced no actions (fallback) or a handoff-only plan
+        # (executed_count == 0, handled == True). In both cases the assistant must
+        # generate an actual reply.
         with apply_reasoning_effort(session.reasoning_effort):
             run = answer_cli_agent(text, session, console, confirm_fn=confirm_fn)
         if recorder is not None:
@@ -191,7 +193,9 @@ def execute_routed_turn(
             recorder.set_response(assistant_text, run)
             recorder.flush()
         session.record("cli_agent", text)
-        session.last_assistant_intent = "cli_agent_fallback"
+        session.last_assistant_intent = (
+            "cli_agent_handoff" if turn.handled else "cli_agent_fallback"
+        )
         return
 
     if kind == "new_alert":

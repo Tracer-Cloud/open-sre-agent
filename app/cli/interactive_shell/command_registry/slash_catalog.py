@@ -262,6 +262,11 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "List active watchdog background tasks with latest resource samples.",
         "User asks to list running watchdog watches",
     ),
+    "/debug": _mcp(
+        "Run targeted runtime diagnostics (e.g. /debug sentry to trigger a Sentry smoke test).",
+        "User asks to run a debug check or diagnostic",
+        anti_examples=("User asks a general debugging or troubleshooting question",),
+    ),
 }
 
 

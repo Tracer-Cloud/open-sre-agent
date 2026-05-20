@@ -13,6 +13,12 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.a
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
     PlannedAction,
 )
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tools import (
+    investigation_tool as _investigation_tool,
+)
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tools import (
+    slash_tool as _slash_tool,
+)
 from app.cli.interactive_shell.routing.types import RouteDecision, RouteKind
 from app.cli.interactive_shell.runtime import dispatch as loop_dispatch
 from app.cli.interactive_shell.runtime import execution as loop_execution
@@ -240,7 +246,7 @@ def test_dispatch_one_turn_nitro_prompt_executes_remote_then_investigation(
     monkeypatch.setattr(
         loop_execution._agent_actions,
         "_plan_actions",
-        lambda _message: (
+        lambda _message, _session: (
             [
                 PlannedAction(kind="slash", content="/remote", position=0),
                 PlannedAction(kind="investigation", content="hello world", position=1),
@@ -249,12 +255,8 @@ def test_dispatch_one_turn_nitro_prompt_executes_remote_then_investigation(
             False,
         ),
     )
-    monkeypatch.setattr(loop_execution._agent_actions, "dispatch_slash", _fake_dispatch)
-    monkeypatch.setattr(
-        loop_execution._agent_actions,
-        "run_text_investigation",
-        _fake_run_text_investigation,
-    )
+    monkeypatch.setattr(_slash_tool, "dispatch_slash", _fake_dispatch)
+    monkeypatch.setattr(_investigation_tool, "run_text_investigation", _fake_run_text_investigation)
     monkeypatch.setattr(
         loop_execution,
         "answer_cli_help",

@@ -40,12 +40,18 @@ component action, in the order requested.
 Interpret "kick off sample alert", "run sample alert", or "trigger sample alert"
 (including variants like "kick off a sample alert investigation") as the
 alert_sample tool with template="generic", not investigation_start.
+If this appears as one clause in a compound request, still emit alert_sample
+for that clause in sequence.
 
 If the user asks for a slash action and then asks to investigate/send quoted
 follow-up text (for example: connect with /remote and then investigate "hello world"),
 emit TWO actions in order:
 1) slash_invoke for the slash command
 2) investigation_start with alert_text set to the quoted follow-up text.
+
+Example mapping for sequence + sample alert:
+- Input: "run /health and then kick off a sample alert investigation"
+- Tool calls (in order): slash_invoke("/health"), alert_sample(template="generic")
 
 For operational REPL requests, prefer slash_invoke and choose the command
 from the slash catalog below. Each entry lists when to use it and when not to.
@@ -62,6 +68,12 @@ Other tools:
 - assistant_handoff — informational/conversational requests (docs, greetings,
   pasted alerts for analysis discussion, follow-ups, vague ops questions)
 - mark_unhandled — flag a clause that cannot be mapped (see below)
+
+Never use shell_run for OpenSRE product requests like "show integration details",
+"list connected services", "show model/provider", or docs/how-to questions.
+Those are assistant_handoff or slash/cli operations, not shell diagnostics.
+Use shell_run only when the user explicitly asks for a local shell command
+(for example: backticks, command names, or "run command ...").
 
 If ANY clause in the user's request (clauses split by "and", "and then",
 "then", ",", or ";") is one of the following:

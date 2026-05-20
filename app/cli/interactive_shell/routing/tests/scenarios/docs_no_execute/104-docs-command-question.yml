@@ -29,9 +29,9 @@ planned_actions:
 executed_actions: []
 response_contract:
   must_contain_any:
-  - opensre investigate
-  - common starting points
-  - what are you trying to do
+  - which command to use
+  - what command do i use
+  - without specifying
   must_not_contain:
   - $ /
 history:

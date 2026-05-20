@@ -30,13 +30,15 @@ planned_actions:
 executed_actions: []
 response_contract:
   must_contain_any:
-  - investigate
-  - rca
-  - incident
+  - incident context
+  - spike
+  - alert text or json
   must_not_contain:
   - $ /
 history:
   expected:
+  - type: cli_agent
+    ok: true
   - type: cli_agent
     ok: true
 tier: full

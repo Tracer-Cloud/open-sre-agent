@@ -29,8 +29,9 @@ planned_actions:
 executed_actions: []
 response_contract:
   must_contain_any:
-  - opensre investigate
-  - alert
+  - running an investigation
+  - how to run an investigation
+  - investigation commands
   must_not_contain:
   - $ /
 history:

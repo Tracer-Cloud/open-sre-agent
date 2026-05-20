@@ -29,11 +29,15 @@ planned_actions:
 executed_actions: []
 response_contract:
   must_contain_any:
-  - HighCPU
+  - alert payload
+  - run an rca investigation
+  - opensre investigate --input-json
   must_not_contain:
   - $ /
 history:
   expected:
+  - type: cli_agent
+    ok: true
   - type: cli_agent
     ok: true
 tier: full

@@ -62,7 +62,7 @@ def _llm_planner_bridge(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         agent_actions,
         "plan_actions_with_llm",
-        lambda message, *, _session=None: action_planner_module.plan_actions_with_unhandled(
+        lambda message, *, session=None: action_planner_module.plan_actions_with_unhandled(  # noqa: ARG005
             message
         ),
     )
@@ -315,7 +315,7 @@ def test_execute_cli_actions_sets_bare_model_for_active_provider(
     monkeypatch.setattr(
         agent_actions,
         "plan_actions_with_llm",
-        lambda _message, *, _session=None: (
+        lambda _message, *, session=None: (  # noqa: ARG005
             [
                 PlannedAction(
                     kind="llm_provider",
@@ -1262,7 +1262,9 @@ def test_execute_cli_actions_denies_when_llm_plan_is_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        agent_actions, "plan_actions_with_llm", lambda _message, *, _session=None: None
+        agent_actions,
+        "plan_actions_with_llm",
+        lambda _message, *, session=None: None,  # noqa: ARG005
     )
 
     session = ReplSession()
@@ -1281,7 +1283,7 @@ def test_execute_cli_actions_with_metrics_denies_when_llm_plan_has_unhandled_cla
     monkeypatch.setattr(
         agent_actions,
         "plan_actions_with_llm",
-        lambda _message, *, _session=None: (
+        lambda _message, *, session=None: (  # noqa: ARG005
             [action_planner_module.slash_action("/health", 0)],
             True,
         ),

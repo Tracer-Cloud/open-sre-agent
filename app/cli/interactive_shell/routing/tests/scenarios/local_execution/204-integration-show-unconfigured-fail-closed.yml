@@ -20,20 +20,26 @@ route:
   expected_command_text: null
 policy:
   should_execute: false
-planned_actions:
-- kind: assistant_handoff
-  source: llm
-  target_surface: terminal
+  has_unhandled_clause: true
+  fail_closed: true
+planned_actions: []
 executed_actions: []
 response_contract:
   must_contain_any:
-  - datadog
-  - integration
+  - datadog integration details
+  - /integrations show datadog
+  - informational opensre request
   must_not_contain:
   - $ /
+  forbidden_actions:
+  - shell
 history:
   expected:
   - type: cli_agent
     ok: true
+  - type: cli_command
+    ok: true
+  - type: cli_agent
+    ok: true
 tier: full
-runs: 1
+runs: 3

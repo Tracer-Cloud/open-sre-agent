@@ -23,15 +23,14 @@ policy:
   should_execute: false
   has_unhandled_clause: true
   fail_closed: true
-planned_actions:
-- kind: assistant_handoff
-  content: unhandled:local_llama_connection
-  source: llm
+planned_actions: []
 executed_actions: []
 response_contract:
   must_contain_any:
-  - unhandled
   - local llama
+  - provider
+  - /model set
+  - local-model connection tool
   must_not_contain:
   - $ /
 history:
