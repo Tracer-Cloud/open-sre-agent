@@ -52,6 +52,23 @@ def test_streaming_console_status_does_not_recurse(monkeypatch) -> None:
         pass
 
 
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("\x1b[32;1R", ""),
+        ("[32;1R", ""),
+        ("\x9b32;1R", ""),
+        ("what is our current model?[32;1R", "what is our current model?"),
+        ("before \x1b[12;80R after", "before  after"),
+    ],
+)
+def test_strip_cpr_sequences_removes_terminal_cursor_replies(
+    text: str,
+    expected: str,
+) -> None:
+    assert loop_module._strip_cpr_sequences(text) == expected
+
+
 def test_repl_input_lexer_highlights_first_slash_token() -> None:
     lexer = ReplInputLexer()
     get_line = lexer.lex_document(Document("/model show", len("/model")))

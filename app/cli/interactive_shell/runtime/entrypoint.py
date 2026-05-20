@@ -13,7 +13,6 @@ from app.cli.interactive_shell import alert_inbox as _alert_inbox
 from app.cli.interactive_shell.config import ReplConfig
 from app.cli.interactive_shell.prompting import prompt_surface as _prompt_surface
 from app.cli.interactive_shell.runtime.dispatch import run_initial_input
-from app.cli.interactive_shell.runtime.hot_reload import HotReloadCoordinator
 from app.cli.interactive_shell.runtime.loop import run_interactive
 from app.cli.interactive_shell.runtime.session import ReplSession
 from app.cli.interactive_shell.runtime.tasks import TaskRegistry
@@ -28,10 +27,9 @@ async def repl_main(initial_input: str | None = None, _config: ReplConfig | None
     session.task_registry = TaskRegistry.persistent()
     pt_session = _prompt_surface._build_prompt_session()
     session.prompt_history_backend = pt_session.history
-    hot_reloader = HotReloadCoordinator() if cfg.reload else None
 
     if initial_input:
-        return run_initial_input(initial_input, session, hot_reloader)
+        return run_initial_input(initial_input, session)
 
     alert_listener_handle: _alert_inbox.AlertListenerHandle | None = None
     inbox: _alert_inbox.AlertInbox | None = None
@@ -58,7 +56,7 @@ async def repl_main(initial_input: str | None = None, _config: ReplConfig | None
             log.warning("Alert listener could not start: %s — continuing without it.", exc)
 
     try:
-        await run_interactive(session, hot_reloader, pt_session=pt_session, inbox=inbox)
+        await run_interactive(session, pt_session=pt_session, inbox=inbox)
         return 0
     finally:
         if alert_listener_handle is not None:

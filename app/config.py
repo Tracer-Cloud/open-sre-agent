@@ -13,6 +13,7 @@ from pydantic import Field, ValidationError, field_validator, model_validator
 
 from app.llm_credentials import resolve_llm_api_key
 from app.strict_config import StrictConfigModel
+from app.utils.config import load_env
 
 
 class LLMModelConfig(StrictConfigModel):
@@ -99,11 +100,6 @@ OPENROUTER_REASONING_MODEL = "openrouter/auto"
 OPENROUTER_CLASSIFICATION_MODEL = "openrouter/auto"
 OPENROUTER_TOOLCALL_MODEL = "openrouter/auto"
 
-# Requesty model constants (OpenAI-compatible gateway; uses provider/model naming)
-REQUESTY_REASONING_MODEL = "anthropic/claude-sonnet-4-6"
-REQUESTY_CLASSIFICATION_MODEL = "anthropic/claude-sonnet-4-6"
-REQUESTY_TOOLCALL_MODEL = "anthropic/claude-sonnet-4-6"
-
 # Gemini model constants (Google AI preview IDs; OpenAI-compatible endpoint)
 # UNVERIFIED PLACEHOLDER — gemini-3.1-pro-preview / gemini-3.1-flash-lite-preview are
 # forward-looking IDs that may not yet exist. Override via GEMINI_REASONING_MODEL env var.
@@ -125,7 +121,6 @@ MINIMAX_TOOLCALL_MODEL = "MiniMax-M2.7-highspeed"
 
 # Base URLs for OpenAI-compatible providers
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-REQUESTY_BASE_URL = "https://router.requesty.ai/v1"
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
 MINIMAX_BASE_URL = "https://api.minimax.io/v1"
@@ -143,7 +138,6 @@ LLMProvider = Literal[
     "anthropic",
     "openai",
     "openrouter",
-    "requesty",
     "gemini",
     "nvidia",
     "ollama",
@@ -158,6 +152,48 @@ LLMProvider = Literal[
     "copilot",
 ]
 
+KEYLESS_LLM_PROVIDERS = frozenset(
+    {
+        "ollama",
+        "bedrock",
+        "codex",
+        "cursor",
+        "claude-code",
+        "gemini-cli",
+        "opencode",
+        "kimi",
+        "copilot",
+    }
+)
+LLM_PROVIDER_API_KEY_ENVS = {
+    "anthropic": "ANTHROPIC_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "openrouter": "OPENROUTER_API_KEY",
+    "gemini": "GEMINI_API_KEY",
+    "nvidia": "NVIDIA_API_KEY",
+    "minimax": "MINIMAX_API_KEY",
+}
+
+
+def get_configured_llm_provider() -> str:
+    """Return the active LLM provider from env/project .env."""
+    load_env(override=False)
+    return os.getenv("LLM_PROVIDER", "anthropic").strip().lower() or "anthropic"
+
+
+def get_llm_provider_api_key_env(provider: str | None = None) -> str | None:
+    """Return the API-key env var required by an LLM provider, if any."""
+    provider_name = (provider or get_configured_llm_provider()).strip().lower()
+    return LLM_PROVIDER_API_KEY_ENVS.get(provider_name)
+
+
+def get_llm_provider_api_key(provider: str | None = None) -> tuple[str | None, str]:
+    """Resolve the API key for *provider* from env or secure local storage."""
+    env_var = get_llm_provider_api_key_env(provider)
+    if env_var is None:
+        return None, ""
+    return env_var, resolve_llm_api_key(env_var)
+
 
 class LLMSettings(StrictConfigModel):
     """Strict runtime configuration for selecting and authenticating an LLM provider."""
@@ -166,7 +202,6 @@ class LLMSettings(StrictConfigModel):
     anthropic_api_key: str = ""
     openai_api_key: str = ""
     openrouter_api_key: str = ""
-    requesty_api_key: str = ""
     gemini_api_key: str = ""
     nvidia_api_key: str = ""
     minimax_api_key: str = ""
@@ -181,9 +216,6 @@ class LLMSettings(StrictConfigModel):
     openrouter_reasoning_model: str = OPENROUTER_REASONING_MODEL
     openrouter_classification_model: str = OPENROUTER_CLASSIFICATION_MODEL
     openrouter_toolcall_model: str = OPENROUTER_TOOLCALL_MODEL
-    requesty_reasoning_model: str = REQUESTY_REASONING_MODEL
-    requesty_classification_model: str = REQUESTY_CLASSIFICATION_MODEL
-    requesty_toolcall_model: str = REQUESTY_TOOLCALL_MODEL
     gemini_reasoning_model: str = GEMINI_REASONING_MODEL
     gemini_classification_model: str = GEMINI_CLASSIFICATION_MODEL
     gemini_toolcall_model: str = GEMINI_TOOLCALL_MODEL
@@ -206,7 +238,6 @@ class LLMSettings(StrictConfigModel):
             "anthropic",
             "openai",
             "openrouter",
-            "requesty",
             "gemini",
             "nvidia",
             "ollama",
@@ -233,23 +264,12 @@ class LLMSettings(StrictConfigModel):
 
     @model_validator(mode="after")
     def _require_api_key_for_selected_provider(self) -> "LLMSettings":
-        if self.provider in (
-            "ollama",
-            "bedrock",
-            "codex",
-            "cursor",
-            "claude-code",
-            "gemini-cli",
-            "opencode",
-            "kimi",
-            "copilot",
-        ):
-            return self  # ollama: local; bedrock: IAM; CLI providers: vendor auth
+        if self.provider in KEYLESS_LLM_PROVIDERS:
+            return self  # local, IAM, or CLI-provider auth is handled outside API keys
         provider_to_key = {
             "anthropic": self.anthropic_api_key,
             "openai": self.openai_api_key,
             "openrouter": self.openrouter_api_key,
-            "requesty": self.requesty_api_key,
             "gemini": self.gemini_api_key,
             "nvidia": self.nvidia_api_key,
             "minimax": self.minimax_api_key,
@@ -257,27 +277,19 @@ class LLMSettings(StrictConfigModel):
         if provider_to_key[self.provider]:
             return self
 
-        env_var = {
-            "anthropic": "ANTHROPIC_API_KEY",
-            "openai": "OPENAI_API_KEY",
-            "openrouter": "OPENROUTER_API_KEY",
-            "requesty": "REQUESTY_API_KEY",
-            "gemini": "GEMINI_API_KEY",
-            "nvidia": "NVIDIA_API_KEY",
-            "minimax": "MINIMAX_API_KEY",
-        }[self.provider]
+        env_var = get_llm_provider_api_key_env(self.provider)
         raise ValueError(f"LLM provider '{self.provider}' requires {env_var} to be set.")
 
     @classmethod
     def from_env(cls) -> "LLMSettings":
         """Build validated LLM settings from environment variables."""
+        load_env(override=False)
         return cls.model_validate(
             {
-                "provider": os.getenv("LLM_PROVIDER", "anthropic").strip().lower() or "anthropic",
+                "provider": get_configured_llm_provider(),
                 "anthropic_api_key": resolve_llm_api_key("ANTHROPIC_API_KEY"),
                 "openai_api_key": resolve_llm_api_key("OPENAI_API_KEY"),
                 "openrouter_api_key": resolve_llm_api_key("OPENROUTER_API_KEY"),
-                "requesty_api_key": resolve_llm_api_key("REQUESTY_API_KEY"),
                 "gemini_api_key": resolve_llm_api_key("GEMINI_API_KEY"),
                 "nvidia_api_key": resolve_llm_api_key("NVIDIA_API_KEY"),
                 "minimax_api_key": resolve_llm_api_key("MINIMAX_API_KEY"),
@@ -320,21 +332,6 @@ class LLMSettings(StrictConfigModel):
                     os.getenv("OPENROUTER_MODEL", OPENROUTER_TOOLCALL_MODEL),
                 ).strip()
                 or OPENROUTER_TOOLCALL_MODEL,
-                "requesty_reasoning_model": os.getenv(
-                    "REQUESTY_REASONING_MODEL",
-                    os.getenv("REQUESTY_MODEL", REQUESTY_REASONING_MODEL),
-                ).strip()
-                or REQUESTY_REASONING_MODEL,
-                "requesty_classification_model": os.getenv(
-                    "REQUESTY_CLASSIFICATION_MODEL",
-                    os.getenv("REQUESTY_MODEL", REQUESTY_CLASSIFICATION_MODEL),
-                ).strip()
-                or REQUESTY_CLASSIFICATION_MODEL,
-                "requesty_toolcall_model": os.getenv(
-                    "REQUESTY_TOOLCALL_MODEL",
-                    os.getenv("REQUESTY_MODEL", REQUESTY_TOOLCALL_MODEL),
-                ).strip()
-                or REQUESTY_TOOLCALL_MODEL,
                 "gemini_reasoning_model": os.getenv(
                     "GEMINI_REASONING_MODEL",
                     os.getenv("GEMINI_MODEL", GEMINI_REASONING_MODEL),
@@ -451,13 +448,6 @@ OPENROUTER_LLM_CONFIG = LLMModelConfig(
     reasoning_model=OPENROUTER_REASONING_MODEL,
     classification_model=OPENROUTER_CLASSIFICATION_MODEL,
     toolcall_model=OPENROUTER_TOOLCALL_MODEL,
-    max_tokens=DEFAULT_MAX_TOKENS,
-)
-
-REQUESTY_LLM_CONFIG = LLMModelConfig(
-    reasoning_model=REQUESTY_REASONING_MODEL,
-    classification_model=REQUESTY_CLASSIFICATION_MODEL,
-    toolcall_model=REQUESTY_TOOLCALL_MODEL,
     max_tokens=DEFAULT_MAX_TOKENS,
 )
 

@@ -17,7 +17,6 @@ from app.config import (
     NVIDIA_REASONING_MODEL,
     OPENAI_REASONING_MODEL,
     OPENROUTER_REASONING_MODEL,
-    REQUESTY_REASONING_MODEL,
 )
 from app.integrations.llm_cli.base import LLMCLIAdapter
 
@@ -65,6 +64,10 @@ class ProviderOption:
     #: ``cli`` providers use ``adapter_factory`` and vendor auth (no API key in .env).
     credential_kind: CredentialKind = "api_key"
     adapter_factory: Callable[[], LLMCLIAdapter] | None = None
+    #: Whether the CLI should accept model IDs outside the curated quick-pick list.
+    #: Use this for providers whose model catalogs are large, account-gated, or
+    #: updated independently of OpenSRE releases.
+    allow_custom_models: bool = False
 
 
 ANTHROPIC_MODELS = (
@@ -113,22 +116,6 @@ OPENROUTER_MODELS = (
     ModelOption(value="minimax/minimax-m2", label="MiniMax M2 (via OpenRouter)"),
     ModelOption(value="deepseek/deepseek-v3.2", label="DeepSeek V3.2 (via OpenRouter)"),
     ModelOption(value="qwen/qwen-3.6-plus-preview", label="Qwen 3.6 Plus (via OpenRouter)"),
-)
-
-REQUESTY_MODELS = (
-    ModelOption(value=REQUESTY_REASONING_MODEL, label="Claude Sonnet 4.6 (via Requesty)"),
-    ModelOption(value="bedrock/claude-opus-4-7", label="Claude Opus 4.7 Bedrock (via Requesty)"),
-    ModelOption(
-        value="bedrock/claude-sonnet-4-6", label="Claude Sonnet 4.6 Bedrock (via Requesty)"
-    ),
-    ModelOption(value="openai/gpt-5.5", label="GPT-5.5 (via Requesty)"),
-    ModelOption(
-        value="vertex/gemini-3.1-pro-preview", label="Gemini 3.1 Pro (preview, via Requesty)"
-    ),
-    ModelOption(
-        value="vertex/gemini-3.1-flash-lite-preview",
-        label="Gemini 3.1 Flash-Lite (preview, via Requesty)",
-    ),
 )
 
 GEMINI_MODELS = (
@@ -364,6 +351,7 @@ SUPPORTED_PROVIDERS = (
         models=OPENAI_MODELS,
         legacy_model_env="OPENAI_MODEL",
         toolcall_model_env="OPENAI_TOOLCALL_MODEL",
+        allow_custom_models=True,
     ),
     ProviderOption(
         value="openrouter",
@@ -375,16 +363,7 @@ SUPPORTED_PROVIDERS = (
         models=OPENROUTER_MODELS,
         legacy_model_env="OPENROUTER_MODEL",
         toolcall_model_env="OPENROUTER_TOOLCALL_MODEL",
-    ),
-    ProviderOption(
-        value="requesty",
-        label="Requesty",
-        group="Hosted providers",
-        api_key_env="REQUESTY_API_KEY",
-        model_env="REQUESTY_REASONING_MODEL",
-        default_model=REQUESTY_REASONING_MODEL,
-        models=REQUESTY_MODELS,
-        legacy_model_env="REQUESTY_MODEL",
+        allow_custom_models=True,
     ),
     ProviderOption(
         value="gemini",
@@ -396,6 +375,7 @@ SUPPORTED_PROVIDERS = (
         models=GEMINI_MODELS,
         legacy_model_env="GEMINI_MODEL",
         toolcall_model_env="GEMINI_TOOLCALL_MODEL",
+        allow_custom_models=True,
     ),
     ProviderOption(
         value="nvidia",
@@ -407,6 +387,7 @@ SUPPORTED_PROVIDERS = (
         models=NVIDIA_MODELS,
         legacy_model_env="NVIDIA_MODEL",
         toolcall_model_env="NVIDIA_TOOLCALL_MODEL",
+        allow_custom_models=True,
     ),
     ProviderOption(
         value="bedrock",
@@ -426,6 +407,7 @@ SUPPORTED_PROVIDERS = (
         # credential_kind="none" causes flow.py to skip the credential prompt
         # entirely.  Region is picked up from AWS_DEFAULT_REGION / ~/.aws/config.
         credential_kind="none",
+        allow_custom_models=True,
     ),
     ProviderOption(
         value="codex",
@@ -438,6 +420,7 @@ SUPPORTED_PROVIDERS = (
         credential_kind="cli",
         credential_secret=False,
         adapter_factory=_codex_adapter_factory,
+        allow_custom_models=True,
     ),
     ProviderOption(
         value="cursor",
@@ -450,6 +433,7 @@ SUPPORTED_PROVIDERS = (
         credential_kind="cli",
         credential_secret=False,
         adapter_factory=_cursor_adapter_factory,
+        allow_custom_models=True,
     ),
     ProviderOption(
         value="claude-code",
@@ -462,6 +446,7 @@ SUPPORTED_PROVIDERS = (
         credential_kind="cli",
         credential_secret=False,
         adapter_factory=_claude_code_adapter_factory,
+        allow_custom_models=True,
     ),
     ProviderOption(
         value="gemini-cli",
@@ -474,6 +459,7 @@ SUPPORTED_PROVIDERS = (
         credential_kind="cli",
         credential_secret=False,
         adapter_factory=_gemini_cli_adapter_factory,
+        allow_custom_models=True,
     ),
     ProviderOption(
         value="opencode",
@@ -486,6 +472,7 @@ SUPPORTED_PROVIDERS = (
         credential_kind="cli",
         credential_secret=False,
         adapter_factory=_opencode_adapter_factory,
+        allow_custom_models=True,
     ),
     ProviderOption(
         value="kimi",
@@ -498,6 +485,7 @@ SUPPORTED_PROVIDERS = (
         credential_kind="cli",
         credential_secret=False,
         adapter_factory=_kimi_adapter_factory,
+        allow_custom_models=True,
     ),
     ProviderOption(
         value="copilot",
@@ -510,6 +498,7 @@ SUPPORTED_PROVIDERS = (
         credential_kind="cli",
         credential_secret=False,
         adapter_factory=_copilot_adapter_factory,
+        allow_custom_models=True,
     ),
     ProviderOption(
         value="ollama",
@@ -522,6 +511,7 @@ SUPPORTED_PROVIDERS = (
         credential_label="host URL",
         credential_secret=False,
         credential_default=DEFAULT_OLLAMA_HOST,
+        allow_custom_models=True,
     ),
 )
 

@@ -24,25 +24,18 @@ def _masked(value: str | None) -> str:
 def _emit_llm_config() -> None:
     """Print current LLM provider and model from environment (legacy `opensre config`)."""
     from app.cli.support.context import is_json_output
+    from app.config import (
+        get_configured_llm_provider,
+        get_llm_provider_api_key,
+        get_llm_provider_api_key_env,
+    )
 
-    provider = os.getenv("LLM_PROVIDER", "anthropic").strip().lower() or "anthropic"
+    provider = get_configured_llm_provider()
 
-    key_env_by_provider: dict[str, str] = {
-        "anthropic": "ANTHROPIC_API_KEY",
-        "openai": "OPENAI_API_KEY",
-        "openrouter": "OPENROUTER_API_KEY",
-        "requesty": "REQUESTY_API_KEY",
-        "gemini": "GEMINI_API_KEY",
-        "nvidia": "NVIDIA_API_KEY",
-        "bedrock": "AWS_DEFAULT_REGION",
-        "minimax": "MINIMAX_API_KEY",
-        "ollama": "OLLAMA_HOST",
-    }
     model_env_by_provider: dict[str, str] = {
         "anthropic": "ANTHROPIC_REASONING_MODEL",
         "openai": "OPENAI_REASONING_MODEL",
         "openrouter": "OPENROUTER_REASONING_MODEL",
-        "requesty": "REQUESTY_REASONING_MODEL",
         "gemini": "GEMINI_REASONING_MODEL",
         "nvidia": "NVIDIA_REASONING_MODEL",
         "bedrock": "BEDROCK_MODEL",
@@ -50,8 +43,12 @@ def _emit_llm_config() -> None:
         "ollama": "OLLAMA_MODEL",
     }
 
-    key_env = key_env_by_provider.get(provider, "")
-    key_value = os.getenv(key_env, "") if key_env else ""
+    key_env = get_llm_provider_api_key_env(provider) or {
+        "bedrock": "AWS_DEFAULT_REGION",
+        "ollama": "OLLAMA_HOST",
+    }.get(provider, "")
+    _api_key_env, resolved_api_key = get_llm_provider_api_key(provider)
+    key_value = resolved_api_key if resolved_api_key else os.getenv(key_env, "") if key_env else ""
     model_env = model_env_by_provider.get(provider, "")
     model_value = os.getenv(model_env, "") if model_env else ""
 

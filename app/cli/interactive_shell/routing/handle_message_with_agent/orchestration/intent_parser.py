@@ -31,8 +31,13 @@ ACTION_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     ),
     (
         re.compile(
-            r"\b(?:show|list|get|which|what)\b.{0,80}?"
-            r"\b(?:connected\s+)?(?:services|integrations)\b",
+            r"\b(?:show|list|get)\b.{0,80}?\b(?:services|integrations)\b"
+            r"|"
+            r"\b(?:which|what)\b.{0,80}?\b(?:connected|configured|local)\b.{0,40}?"
+            r"\b(?:services|integrations)\b"
+            r"|"
+            r"\b(?:which|what)\b.{0,80}?\b(?:services|integrations)\b.{0,40}?"
+            r"\b(?:connected|configured|local)\b",
             re.IGNORECASE,
         ),
         "/list integrations",
@@ -56,7 +61,8 @@ ACTION_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     ),
     (
         re.compile(
-            r"\b(?:deploy|ship|push)\b.{0,80}?\b(?:to|opensre)\b"
+            r"(?<!how to )(?<!how do i )(?<!how can i )\b(?:deploy|ship|push)\b.{0,80}?"
+            r"\b(?:to|opensre)\b"
             r"|"
             r"\bconnect\b.{0,80}?\b(?:opensre|ec2|nitro|instance|remote)\b",
             re.IGNORECASE,
@@ -164,7 +170,6 @@ _LLM_PROVIDER_NAMES = frozenset(
         "anthropic",
         "openai",
         "openrouter",
-        "requesty",
         "gemini",
         "nvidia",
         "ollama",

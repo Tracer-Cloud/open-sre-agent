@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.markup import escape
 
+from app.cli.interactive_shell.prompt_logging import LlmRunInfo
 from app.cli.interactive_shell.prompting.prompt_rules import (
     CLI_ASSISTANT_MARKDOWN_RULE,
     INTERACTIVE_SHELL_TERMINOLOGY_RULE,
@@ -90,7 +92,9 @@ _ACTION_RULE = (
     "/model show, /list models, /health, /doctor, /version; "
     '`{"action":"run_cli_command","args":"<subcommand> <flags>"}` '
     "to run any opensre subcommand (agent is blocked). For ordinary "
-    "questions, return normal Markdown."
+    "questions, return normal Markdown. Do not return action JSON for vague "
+    "local model requests such as `connect to local llama`; answer with a brief "
+    "clarification or mention `/model set ollama` as an option instead."
 )
 
 _ALLOWED_SLASH_ACTIONS = frozenset(
@@ -401,7 +405,7 @@ def answer_cli_agent(
     console: Console,
     *,
     confirm_fn: Callable[[str], str] | None = None,
-) -> None:
+) -> LlmRunInfo | None:
     """Run one turn of the terminal assistant (guidance only; no investigation run).
 
     For documentation-grounded procedural Q&A use :func:`answer_cli_help`, which
@@ -417,7 +421,7 @@ def answer_cli_agent(
     except Exception as exc:
         report_exception(exc, context="interactive_shell.cli_agent.import")
         console.print(f"[{ERROR}]LLM client unavailable:[/] {escape(str(exc))}")
-        return
+        return None
 
     reference = build_cli_reference_text()
     agents_md = build_agents_md_reference_text()
@@ -448,6 +452,7 @@ def answer_cli_agent(
 
     try:
         client = get_llm_for_reasoning()
+        started = time.monotonic()
         text_str = stream_to_console(
             console,
             label=STREAM_LABEL_ASSISTANT,
@@ -459,7 +464,7 @@ def answer_cli_agent(
         )
     except KeyboardInterrupt:
         console.print(f"[{DIM}]· cancelled[/]")
-        return
+        return None
     except Exception as exc:
         report_exception(
             exc,
@@ -467,12 +472,19 @@ def answer_cli_agent(
             expected=isinstance(exc, CLITimeoutError),
         )
         console.print(f"[{ERROR}]assistant failed:[/] {escape(str(exc))}")
-        return
+        return None
+
+    run_info = LlmRunInfo(
+        model=_resolve_model_name(client),
+        provider=_resolve_provider_name(client),
+        latency_ms=int((time.monotonic() - started) * 1000),
+        response_text=text_str,
+    )
 
     actions = _parse_action_plan(text_str)
     if _execute_action_plan(actions, session, console, confirm_fn=confirm_fn):
         _record_cli_agent_turn(session, message, text_str)
-        return
+        return run_info
 
     _record_cli_agent_turn(session, message, text_str)
 
@@ -485,6 +497,28 @@ def answer_cli_agent(
         with console.use_theme(MARKDOWN_THEME):
             console.print(Markdown(text_str, code_theme="ansi_dark"))
         console.print()
+    return run_info
+
+
+def _resolve_model_name(client: object) -> str | None:
+    value = getattr(client, "_model", None)
+    return value if isinstance(value, str) and value else None
+
+
+def _resolve_provider_name(client: object) -> str | None:
+    provider_label = getattr(client, "_provider_label", None)
+    if isinstance(provider_label, str) and provider_label:
+        return provider_label.strip().lower().replace(" ", "_")
+    name = type(client).__name__.lower()
+    if "openai" in name:
+        return "openai"
+    if "bedrock" in name:
+        return "bedrock"
+    if "cli" in name:
+        return "cli"
+    if "anthropic" in name or "llmclient" in name:
+        return "anthropic"
+    return None
 
 
 __all__ = ["answer_cli_agent"]

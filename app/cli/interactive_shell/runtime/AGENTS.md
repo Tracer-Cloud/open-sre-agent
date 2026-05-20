@@ -22,7 +22,6 @@ In simple terms:
   context, trust mode, interaction counters).
 - `tasks.py` owns the cross-session task registry surfaced via `/tasks` and
   `/cancel`.
-- `hot_reload.py` watches `app/` and reloads loaded modules between turns.
 
 These instructions apply to `app/cli/interactive_shell/runtime/` and all
 subdirectories. Parent `AGENTS.md` files still apply.
@@ -38,7 +37,6 @@ The runtime package is intentionally split into focused concerns:
 - `entrypoint.py` — process/bootstrap boundary only.
 - `session.py` — session-scoped REPL state only.
 - `tasks.py` — task registry + persistence only.
-- `hot_reload.py` — file-watch + module reload only.
 
 Keep these boundaries strict. If a change crosses concerns, move code to the
 owner module instead of broadening module responsibilities.

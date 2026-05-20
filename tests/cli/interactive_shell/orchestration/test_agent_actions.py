@@ -14,10 +14,13 @@ import pytest
 from rich.console import Console
 
 import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor as action_executor
-import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_planner as action_planner_module
 import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions as agent_actions
+import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.slash_commands.deterministic_action_mapper as action_planner_module
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration import (
     intent_parser as intent_parser_module,
+)
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
+    PlannedAction,
 )
 from app.cli.interactive_shell.runtime.session import ReplSession
 from app.cli.interactive_shell.runtime.tasks import TaskKind, TaskStatus
@@ -299,6 +302,43 @@ def test_execute_cli_actions_records_llm_provider_failure(monkeypatch: object) -
 
     assert handled is True
     assert session.history[-1] == {"type": "slash", "text": "/model set anthropic", "ok": False}
+
+
+def test_execute_cli_actions_sets_bare_model_for_active_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reasoning_models: list[str] = []
+
+    monkeypatch.setattr(
+        agent_actions,
+        "plan_actions_with_llm",
+        lambda _message: (
+            [
+                PlannedAction(
+                    kind="llm_provider",
+                    content="gpt-5.5",
+                    position=0,
+                    source="llm",
+                    target_surface="slash",
+                )
+            ],
+            False,
+        ),
+    )
+    monkeypatch.setattr(
+        agent_actions,
+        "switch_reasoning_model",
+        lambda model, console: (reasoning_models.append(model), console.print(model), True)[2],
+    )
+
+    session = ReplSession()
+    console, buf = _capture()
+    handled = agent_actions.execute_cli_actions("switch model to gpt 5.5", session, console)
+
+    assert handled is True
+    assert reasoning_models == ["gpt-5.5"]
+    assert session.history[-1] == {"type": "slash", "text": "/model set gpt-5.5", "ok": True}
+    assert "$ /model set gpt-5.5" in buf.getvalue()
 
 
 def test_execute_cli_actions_runs_implementation_action(monkeypatch: object) -> None:

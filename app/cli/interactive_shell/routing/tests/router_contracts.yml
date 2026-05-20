@@ -19,6 +19,13 @@
     - "slash_prefix"
   expected_command_text: "/investigate alert.json"
 
+- id: slash_opensre_wrapped_onboard
+  input: "/opensre onboard"
+  expected_kind: "slash"
+  expected_signals:
+    - "slash_prefix"
+  expected_command_text: "/onboard"
+
 - id: slash_unknown_command_passthrough
   input: "/definitely-not-a-command"
   expected_kind: "slash"

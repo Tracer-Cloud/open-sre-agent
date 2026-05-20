@@ -28,6 +28,17 @@ def _fake_client(response_text: str) -> MagicMock:
     return client
 
 
+def test_render_system_prompt_preserves_literal_json_shape() -> None:
+    prompt = planner_module._render_system_prompt(
+        slash_commands="/health, /help",
+        synthetic_scenarios="001-replication-lag",
+    )
+    assert '"actions": [' in prompt
+    assert '{"actions": [], "unhandled_text": "<original message>"}' in prompt
+    assert "command name must be one of: /health, /help" in prompt
+    assert "scenario-id is one of: 001-replication-lag" in prompt
+
+
 # ---------------------------------------------------------------------------
 # Happy-path: valid JSON plan
 # ---------------------------------------------------------------------------

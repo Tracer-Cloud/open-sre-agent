@@ -14,6 +14,7 @@ from app.analytics.provider import get_analytics
 from app.cli.interactive_shell import commands as _commands
 from app.cli.interactive_shell.chat import cli_agent as _cli_agent
 from app.cli.interactive_shell.chat import cli_help as _cli_help
+from app.cli.interactive_shell.prompt_logging import PromptRecorder
 from app.cli.interactive_shell.prompting import follow_up as _follow_up
 from app.cli.interactive_shell.routing.types import RouteDecision
 from app.cli.interactive_shell.runtime.session import ReplSession
@@ -36,7 +37,7 @@ def run_new_alert(
     *,
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
-) -> None:
+) -> str | None:
     """Dispatch a free-text alert description to the streaming pipeline."""
     from app.analytics.cli import track_investigation
     from app.analytics.source import EntrypointSource, TriggerMode
@@ -57,7 +58,7 @@ def run_new_alert(
         is_tty=is_tty,
     ):
         session.record("alert", text, ok=False)
-        return
+        return None
 
     task = session.task_registry.create(TaskKind.INVESTIGATION, command="free-text investigation")
     task.mark_running()
@@ -80,26 +81,30 @@ def run_new_alert(
         session.record_intervention("ctrl_c")
         console.print(f"[{WARNING}]investigation cancelled.[/]")
         session.record("alert", text, ok=False)
-        return
+        return None
     except OpenSREError as exc:
         task.mark_failed(str(exc))
         console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
         if exc.suggestion:
             console.print(f"[{WARNING}]suggestion:[/] {escape(exc.suggestion)}")
         session.record("alert", text, ok=False)
-        return
+        return None
     except Exception as exc:
         task.mark_failed(str(exc))
         report_exception(exc, context="interactive_shell.new_alert")
         console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
         session.record("alert", text, ok=False)
-        return
+        return None
 
     root = final_state.get("root_cause")
     task.mark_completed(result=str(root) if root is not None else "")
     session.last_state = final_state
     session.accumulate_from_state(final_state)
     session.record("alert", text)
+    if root:
+        return str(root)
+    slack_message = final_state.get("slack_message")
+    return str(slack_message) if slack_message else None
 
 
 def execute_routed_turn(
@@ -113,6 +118,7 @@ def execute_routed_turn(
 ) -> None:
     """Route + execute one accepted line."""
     kind = decision.route_kind.value
+    recorder = PromptRecorder.start(session=session, text=text, route_kind=kind)
     session.last_route_decision = decision
     get_analytics().capture(
         Event.INTERACTIVE_SHELL_ROUTE_DECISION,
@@ -138,7 +144,10 @@ def execute_routed_turn(
 
     if kind == "cli_help":
         with apply_reasoning_effort(session.reasoning_effort):
-            answer_cli_help(text, session, console)
+            run = answer_cli_help(text, session, console)
+        if recorder is not None:
+            recorder.set_response(run.response_text if run is not None and run.response_text else "", run)
+            recorder.flush()
         session.record("cli_help", text)
         return
 
@@ -161,18 +170,30 @@ def execute_routed_turn(
             session_fallback_rate_percent=snapshot.fallback_rate_percent,
         )
         if turn.handled:
+            if recorder is not None:
+                recorder.flush()
             return
         with apply_reasoning_effort(session.reasoning_effort):
-            answer_cli_agent(text, session, console, confirm_fn=confirm_fn)
+            run = answer_cli_agent(text, session, console, confirm_fn=confirm_fn)
+        if recorder is not None:
+            assistant_text = run.response_text if run is not None and run.response_text else ""
+            recorder.set_response(assistant_text, run)
+            recorder.flush()
         session.record("cli_agent", text)
         return
 
     if kind == "new_alert":
-        run_new_alert(text, session, console, confirm_fn=confirm_fn)
+        response = run_new_alert(text, session, console, confirm_fn=confirm_fn)
+        if recorder is not None:
+            recorder.set_response(response or "")
+            recorder.flush()
         return
 
     with apply_reasoning_effort(session.reasoning_effort):
-        answer_follow_up(text, session, console)
+        run = answer_follow_up(text, session, console)
+    if recorder is not None:
+        recorder.set_response(run.response_text if run is not None and run.response_text else "", run)
+        recorder.flush()
     session.record("follow_up", text)
 
 

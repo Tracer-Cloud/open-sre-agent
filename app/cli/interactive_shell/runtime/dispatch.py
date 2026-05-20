@@ -14,7 +14,6 @@ from rich.console import Console
 from app.cli.interactive_shell.prompting import prompt_surface as _prompt_surface
 from app.cli.interactive_shell.routing import router as _router
 from app.cli.interactive_shell.runtime.execution import execute_routed_turn
-from app.cli.interactive_shell.runtime.hot_reload import HotReloadCoordinator
 from app.cli.interactive_shell.runtime.session import ReplSession
 from app.cli.interactive_shell.runtime.state import PROMPT_REFRESH_INTERVAL_S, ReplState
 from app.cli.interactive_shell.ui import render_banner
@@ -146,7 +145,6 @@ def dispatch_one_turn(
 def run_initial_input(
     initial_input: str,
     session: ReplSession,
-    hot_reloader: HotReloadCoordinator | None = None,
 ) -> int:
     console = Console(
         highlight=False,
@@ -161,8 +159,6 @@ def run_initial_input(
         exit_requested[0] = True
 
     for line in initial_input.splitlines():
-        if hot_reloader is not None:
-            hot_reloader.check_and_reload(console)
         stripped = line.strip()
         if not stripped:
             continue

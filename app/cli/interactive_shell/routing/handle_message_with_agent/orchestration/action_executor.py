@@ -21,17 +21,17 @@ from rich.markup import escape
 from rich.text import Text
 
 import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.intent_parser as _intent_parser
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_planner import (
-    DEFAULT_SYNTHETIC_SCENARIO,
-    SYNTHETIC_UNKNOWN_PREFIX,
-    _list_rds_postgres_scenarios,
-)
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
     evaluate_code_agent_launch,
     evaluate_investigation_launch,
     evaluate_shell_from_parsed,
     evaluate_synthetic_test_launch,
     execution_allowed,
+)
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.synthetic_scenarios import (
+    DEFAULT_SYNTHETIC_SCENARIO,
+    SYNTHETIC_UNKNOWN_PREFIX,
+    list_rds_postgres_scenarios,
 )
 from app.cli.interactive_shell.runtime import ReplSession, TaskKind, TaskRecord
 from app.cli.interactive_shell.runtime.session import (
@@ -1231,7 +1231,7 @@ def run_synthetic_test(
     if suite_spec.startswith(SYNTHETIC_UNKNOWN_PREFIX):
         hint = suite_spec[len(SYNTHETIC_UNKNOWN_PREFIX) :]
         console.print(f"[{ERROR}]no synthetic scenario matches[/] '{escape(hint)}'.")
-        available = _list_rds_postgres_scenarios()
+        available = list_rds_postgres_scenarios()
         if available:
             console.print(f"Available scenarios ({len(available)}):")
             for name in available:

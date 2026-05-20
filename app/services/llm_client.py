@@ -1175,17 +1175,6 @@ def _create_llm_client(model_type: ModelType) -> _LLMClientType:
             base_url=OPENROUTER_BASE_URL,
             api_key_env="OPENROUTER_API_KEY",
         )
-    elif provider == "requesty":
-        from app.config import REQUESTY_BASE_URL, REQUESTY_LLM_CONFIG
-
-        config = REQUESTY_LLM_CONFIG
-        return OpenAILLMClient(
-            model=_select_model(settings, "requesty", model_type),
-            max_tokens=config.max_tokens,
-            base_url=REQUESTY_BASE_URL,
-            api_key_env="REQUESTY_API_KEY",
-            default_headers={"X-Title": "OpenSRE"},
-        )
     elif provider == "gemini":
         from app.config import GEMINI_LLM_CONFIG
 
@@ -1278,8 +1267,8 @@ def get_llm_for_classification() -> _LLMClientType:
     """
     Get or create the LLM client singleton for the mid-tier classification tier.
 
-    Uses a Sonnet-class model (Claude Sonnet for Anthropic/Bedrock/Requesty,
-    Gemini Flash for Gemini, GPT-5 mini for OpenAI). Heavier and slower than
+    Uses a Sonnet-class model (Claude Sonnet for Anthropic/Bedrock, Gemini
+    Flash for Gemini, GPT-5 mini for OpenAI). Heavier and slower than
     the toolcall tier but markedly more capable on tasks that need real
     instruction-following — e.g. interactive-shell intent classification —
     while still being substantially cheaper than the reasoning tier.

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import select
 import sys
 import threading
@@ -31,7 +32,6 @@ from app.cli.interactive_shell.runtime.dispatch import (
     looks_like_confirmation_answer,
     route_confirm_through_prompt,
 )
-from app.cli.interactive_shell.runtime.hot_reload import HotReloadCoordinator
 from app.cli.interactive_shell.runtime.session import ReplSession
 from app.cli.interactive_shell.runtime.state import (
     PROMPT_REFRESH_INTERVAL_S,
@@ -43,6 +43,8 @@ from app.cli.support.exception_reporting import report_exception
 from app.cli.support.prompt_support import repl_prompt_note_ctrl_c, repl_reset_ctrl_c_gate
 
 log = logging.getLogger(__name__)
+
+_CPR_SEQUENCE_RE = re.compile(r"(?:\x1b\[|\x9b|\[)\d{1,3};\d{1,3}R")
 
 
 def _drain_stale_cpr_bytes() -> None:
@@ -72,6 +74,17 @@ def _drain_stale_cpr_bytes() -> None:
         pass
 
 
+def _strip_cpr_sequences(text: str | None) -> str:
+    """Remove terminal cursor-position replies that leaked into submitted text."""
+    if not text:
+        return ""
+    return _CPR_SEQUENCE_RE.sub("", text)
+
+
+def _contains_cpr_sequence(text: str | None) -> bool:
+    return bool(text and _CPR_SEQUENCE_RE.search(text))
+
+
 class StreamingConsole(Console):
     """Console adapter for streaming progress + cancellation checks."""
 
@@ -90,7 +103,6 @@ class StreamingConsole(Console):
 
 async def run_interactive(
     session: ReplSession,
-    hot_reloader: HotReloadCoordinator | None = None,
     pt_session: PromptSession[str] | None = None,
     inbox: _alert_inbox.AlertInbox | None = None,
 ) -> None:
@@ -221,8 +233,6 @@ async def run_interactive(
                     except Exception as exc:
                         log.warning("Error draining alerts at turn start: %s", exc)
 
-                if hot_reloader is not None and not state.is_dispatch_running():
-                    hot_reloader.check_and_reload(echo_console)
                 # Drain any CPR bytes (ESC[row;colR) left in stdin from the
                 # previous prompt_async's bottom-toolbar refresh cycles.
                 # Each prompt_async tears down its Application; CPR responses
@@ -253,6 +263,10 @@ async def run_interactive(
                     continue
                 else:
                     repl_reset_ctrl_c_gate()
+                    raw_text = text
+                    text = _strip_cpr_sequences(text)
+                    if not text.strip() and _contains_cpr_sequence(raw_text):
+                        continue
 
                 if state.exit_requested:
                     return

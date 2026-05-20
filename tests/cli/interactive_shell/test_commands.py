@@ -200,11 +200,11 @@ class TestDispatchSlash:
     def test_slash_commands_proxy_reads_current_registry(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        command = command_types.SlashCommand("/hot", "hot reload test", lambda *_args: True)
-        monkeypatch.setattr(registry_module, "SLASH_COMMANDS", {"/hot": command})
+        command = command_types.SlashCommand("/demo", "demo command", lambda *_args: True)
+        monkeypatch.setattr(registry_module, "SLASH_COMMANDS", {"/demo": command})
 
-        assert SLASH_COMMANDS.get("/hot") is command
-        assert list(SLASH_COMMANDS) == ["/hot"]
+        assert SLASH_COMMANDS.get("/demo") is command
+        assert list(SLASH_COMMANDS) == ["/demo"]
 
     def test_dispatch_slash_proxy_calls_current_registry(
         self, monkeypatch: pytest.MonkeyPatch
@@ -748,7 +748,7 @@ class TestModelCommand:
         assert not env_path.exists()
         assert session.history[-1]["ok"] is False
 
-    def test_set_unknown_reasoning_model_is_rejected_for_openai(
+    def test_set_custom_reasoning_model_is_accepted_for_openai(
         self,
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
@@ -761,13 +761,56 @@ class TestModelCommand:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
 
         console, buf = _capture()
-        dispatch_slash("/model set openai not-a-real-model-xyz", ReplSession(), console)
+        dispatch_slash("/model set openai gpt-5.5", ReplSession(), console)
 
         output = buf.getvalue()
-        assert "unknown model for openai" in output
-        assert "not-a-real-model-xyz" in output
-        assert "switched LLM provider" not in output
-        assert not env_path.exists()
+        assert "switched LLM provider" in output
+        assert "gpt-5.5" in output
+        contents = env_path.read_text(encoding="utf-8")
+        assert "LLM_PROVIDER=openai" in contents
+        assert "OPENAI_REASONING_MODEL=gpt-5.5" in contents
+        assert "OPENAI_MODEL=gpt-5.5" in contents
+
+    def test_set_bare_model_updates_active_provider_reasoning_model(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        self._patch_llm(monkeypatch)
+        import app.cli.wizard.env_sync as env_sync
+
+        env_path = tmp_path / ".env"
+        monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setenv("LLM_PROVIDER", "openai")
+
+        console, buf = _capture()
+        dispatch_slash("/model set gpt-5.5", ReplSession(), console)
+
+        output = buf.getvalue()
+        assert "reasoning model set to" in output
+        assert "gpt-5.5" in output
+        contents = env_path.read_text(encoding="utf-8")
+        assert "LLM_PROVIDER=" not in contents
+        assert "OPENAI_REASONING_MODEL=gpt-5.5" in contents
+        assert "OPENAI_MODEL=gpt-5.5" in contents
+
+    def test_set_bare_gpt_words_normalizes_to_model_id(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        self._patch_llm(monkeypatch)
+        import app.cli.wizard.env_sync as env_sync
+
+        env_path = tmp_path / ".env"
+        monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setenv("LLM_PROVIDER", "openai")
+
+        dispatch_slash("/model set gpt 5.5", ReplSession(), _capture()[0])
+
+        contents = env_path.read_text(encoding="utf-8")
+        assert "OPENAI_REASONING_MODEL=gpt-5.5" in contents
+        assert "OPENAI_MODEL=gpt-5.5" in contents
 
     def test_set_unknown_toolcall_model_is_rejected(
         self,

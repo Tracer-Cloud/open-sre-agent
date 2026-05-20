@@ -12,6 +12,7 @@ from app.cli.interactive_shell.commands import (
     SLASH_COMMANDS,
     dispatch_slash,
     switch_llm_provider,
+    switch_reasoning_model,
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor import (
     run_claude_code_implementation,
@@ -20,10 +21,6 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.a
     run_shell_command,
     run_synthetic_test,
     run_text_investigation,
-)
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_planner import (
-    plan_cli_actions,
-    plan_terminal_tasks,
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
     evaluate_llm_runtime_switch,
@@ -36,6 +33,10 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.i
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner import (
     plan_actions_with_llm,
+)
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.slash_commands.deterministic_action_mapper import (
+    map_cli_actions,
+    map_terminal_tasks,
 )
 from app.cli.interactive_shell.runtime import ReplSession, TaskKind, TaskRecord, TaskStatus
 from app.cli.interactive_shell.ui import DIM, print_planned_actions
@@ -68,7 +69,9 @@ def _plan_actions(message: str) -> tuple[list[PlannedAction], bool, bool]:
     if llm_plan is None:
         return [], True, True
     actions, has_unhandled_clause = llm_plan
-    if has_unhandled_clause or not actions:
+    if not actions:
+        return [], has_unhandled_clause, False
+    if has_unhandled_clause:
         return [], True, True
     return actions, False, False
 
@@ -80,6 +83,15 @@ def _render_plan_denied(console: Console) -> None:
         "[yellow]I couldn't safely decide actions for that request.[/] "
         "Please rephrase or use explicit slash commands."
     )
+
+
+def _apply_model_set_target(target: str, console: Console) -> bool:
+    from app.cli.wizard.config import PROVIDER_BY_VALUE
+
+    candidate = target.strip()
+    if candidate.lower() in PROVIDER_BY_VALUE:
+        return switch_llm_provider(candidate, console)
+    return switch_reasoning_model(candidate, console)
 
 
 def _running_task_matches(session: ReplSession, target: str) -> list[TaskRecord]:
@@ -262,7 +274,7 @@ def _execute_planned_actions(
             ):
                 continue
             console.print(f"[bold]$ /model set {escape(action.content)}[/bold]")
-            ok = switch_llm_provider(action.content, console)
+            ok = _apply_model_set_target(action.content, console)
             session.record("slash", f"/model set {action.content}", ok=ok)
         elif action.kind == "shell":
             run_shell_command(
@@ -440,10 +452,22 @@ def execute_cli_actions_with_metrics(
     )
 
 
+def plan_cli_actions(message: str) -> list[str]:
+    """Backward-compatible alias for ``map_cli_actions``."""
+    return map_cli_actions(message)
+
+
+def plan_terminal_tasks(message: str) -> list[str]:
+    """Backward-compatible alias for ``map_terminal_tasks``."""
+    return map_terminal_tasks(message)
+
+
 __all__ = [
     "TerminalActionExecutionResult",
     "execute_cli_actions",
     "execute_cli_actions_with_metrics",
+    "map_cli_actions",
+    "map_terminal_tasks",
     "plan_cli_actions",
     "plan_terminal_tasks",
 ]

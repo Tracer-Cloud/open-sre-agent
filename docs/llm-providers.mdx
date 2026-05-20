@@ -12,7 +12,6 @@ OpenSRE is provider-agnostic: bring your own model. Selection is controlled by t
 | Anthropic    | `anthropic`    | `ANTHROPIC_API_KEY`             | `claude-sonnet-4-6`                           | `claude-haiku-4-5-20251001`                     |
 | OpenAI       | `openai`       | `OPENAI_API_KEY`                | `gpt-5.4`                                     | `gpt-5.4-mini`                                  |
 | OpenRouter   | `openrouter`   | `OPENROUTER_API_KEY`            | `openrouter/auto`                             | `openrouter/auto`                               |
-| Requesty     | `requesty`     | `REQUESTY_API_KEY`              | `anthropic/claude-sonnet-4-6`                 | `anthropic/claude-sonnet-4-6`                   |
 | Google Gemini| `gemini`       | `GEMINI_API_KEY`                | `gemini-3.1-pro-preview`                      | `gemini-3.1-flash-lite-preview`                 |
 | NVIDIA NIM   | `nvidia`       | `NVIDIA_API_KEY`                | `meta/llama-3.1-405b-instruct`                | `meta/llama-3.1-8b-instruct`                    |
 | MiniMax      | `minimax`      | `MINIMAX_API_KEY`               | `MiniMax-M2.7`                                | `MiniMax-M2.7-highspeed`                        |
@@ -40,6 +39,15 @@ Or run the onboarding wizard, which writes the same values to `.env`:
 
 ```bash
 opensre onboard
+```
+
+In the interactive shell, `/model` shows curated quick-pick choices for common models. Providers
+with fast-changing or account-gated catalogs (OpenAI, OpenRouter, Gemini, NVIDIA, Bedrock, local
+CLIs, and Ollama) also accept custom model IDs:
+
+```bash
+/model set openai gpt-5.5
+/model set openai gpt-5.5 --toolcall-model gpt-5.5-mini
 ```
 
 Override the default model for a slot via env vars:
@@ -90,20 +98,6 @@ export OPENROUTER_TOOLCALL_MODEL=openai/gpt-4o-mini
 ```
 
 OpenAI-compatible proxy — pick any model on [openrouter.ai/models](https://openrouter.ai/models). Base URL: `https://openrouter.ai/api/v1`.
-
-### Requesty
-
-```bash
-export LLM_PROVIDER=requesty
-export REQUESTY_API_KEY=...
-# Optional override (single value applies to both slots if set):
-export REQUESTY_MODEL=anthropic/claude-sonnet-4-6
-# Or per-slot:
-export REQUESTY_REASONING_MODEL=anthropic/claude-sonnet-4-6
-export REQUESTY_TOOLCALL_MODEL=anthropic/claude-sonnet-4-6
-```
-
-OpenAI-compatible gateway at `https://router.requesty.ai/v1`. Sends an `X-Title: OpenSRE` header for usage attribution. Browse models on [requesty.ai](https://requesty.ai/).
 
 ### Google Gemini
 

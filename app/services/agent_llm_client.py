@@ -604,7 +604,7 @@ def get_agent_llm() -> _AgentClientType:
             model=settings.openai_reasoning_model,
             max_tokens=OPENAI_LLM_CONFIG.max_tokens,
         )
-    elif provider in ("openrouter", "gemini", "nvidia", "minimax", "requesty", "ollama"):
+    elif provider in ("openrouter", "gemini", "nvidia", "minimax", "ollama"):
         # All OpenAI-compatible providers
         from app.config import LLMSettings
 
@@ -648,11 +648,6 @@ def _create_openai_compat_client(settings: Any, provider: str) -> OpenAIAgentCli
         "gemini": (GEMINI_BASE_URL, "GEMINI_API_KEY", settings.gemini_reasoning_model),
         "nvidia": (NVIDIA_BASE_URL, "NVIDIA_API_KEY", settings.nvidia_reasoning_model),
         "minimax": (MINIMAX_BASE_URL, "MINIMAX_API_KEY", settings.minimax_reasoning_model),
-        "requesty": (
-            "https://router.requesty.ai/v1",
-            "REQUESTY_API_KEY",
-            settings.requesty_reasoning_model,
-        ),
     }
     if provider == "ollama":
         host = settings.ollama_host.rstrip("/")

@@ -1,0 +1,581 @@
+- id: slash_help_prefix
+  tier: critical
+  input: "/help"
+  context:
+    with_prior_state: false
+  expected:
+    route_kind: slash
+    should_execute: true
+    has_unhandled_clause: false
+    actions:
+      - kind: slash
+        source: deterministic
+        target_surface: slash
+        command: /help
+        args: []
+    response_contract:
+      any_of_contains: ["ran /help"]
+      must_not_contain: []
+    history:
+      - type: slash
+        ok: true
+
+- id: bare_help_alias
+  tier: critical
+  input: "help"
+  context:
+    with_prior_state: false
+  expected:
+    route_kind: slash
+    should_execute: true
+    has_unhandled_clause: false
+    actions:
+      - kind: slash
+        source: deterministic
+        target_surface: slash
+        command: /help
+        args: []
+    response_contract:
+      any_of_contains: ["ran /help"]
+      must_not_contain: []
+    history:
+      - type: slash
+        ok: true
+
+- id: typoed_help_alias
+  tier: critical
+  input: "hlep"
+  context:
+    with_prior_state: false
+  expected:
+    route_kind: slash
+    should_execute: true
+    has_unhandled_clause: false
+    actions:
+      - kind: slash
+        source: deterministic
+        target_surface: slash
+        command: /help
+        args: []
+    response_contract:
+      any_of_contains: ["ran /help"]
+      must_not_contain: []
+    history:
+      - type: slash
+        ok: true
+
+- id: docs_run_investigation
+  tier: critical
+  input: "how do I run an investigation?"
+  context:
+    with_prior_state: false
+  expected:
+    route_kind: cli_agent
+    should_execute: false
+    has_unhandled_clause: true
+    actions: []
+    response_contract:
+      any_of_contains: ["opensre investigate", "alert"]
+      must_not_contain: ["$ /"]
+    history:
+      - type: cli_agent
+        ok: true
+
+- id: docs_datadog_setup
+  tier: critical
+  input: "how do I configure datadog?"
+  context:
+    with_prior_state: false
+  expected:
+    route_kind: cli_agent
+    should_execute: false
+    has_unhandled_clause: true
+    actions: []
+    response_contract:
+      any_of_contains: ["datadog"]
+      must_not_contain: ["$ /"]
+    history:
+      - type: cli_agent
+        ok: true
+
+- id: docs_supported_integrations
+  tier: critical
+  input: "what are the supported integrations?"
+  context:
+    with_prior_state: false
+  expected:
+    route_kind: cli_agent
+    should_execute: false
+    has_unhandled_clause: true
+    actions: []
+    response_contract:
+      any_of_contains: ["integrations"]
+      must_not_contain: ["$ /"]
+    history:
+      - type: cli_agent
+        ok: true
+
+- id: docs_railway_deploy
+  tier: critical
+  input: "how to deploy OpenSRE on Railway?"
+  context:
+    with_prior_state: false
+  expected:
+    route_kind: cli_agent
+    should_execute: false
+    has_unhandled_clause: true
+    actions: []
+    response_contract:
+      any_of_contains: ["railway"]
+      must_not_contain: ["$ /"]
+    history:
+      - type: cli_agent
+        ok: true
+
+- id: docs_command_question
+  tier: critical
+  input: "what command do I use?"
+  context:
+    with_prior_state: false
+  expected:
+    route_kind: cli_agent
+    should_execute: false
+    has_unhandled_clause: true
+    actions: []
+    response_contract:
+      any_of_contains: ["command"]
+      must_not_contain: ["$ /"]
+    history:
+      - type: cli_agent
+        ok: true
+
+- id: docs_verify_dry_run_no_execute
+  tier: critical
+  input: "how do I run opensre integrations verify --dry-run?"
+  context:
+    with_prior_state: false
+  expected:
+    route_kind: cli_agent
+    should_execute: false
+    has_unhandled_clause: true
+    actions: []
+    response_contract:
+      any_of_contains: ["verify --dry-run"]
+      must_not_contain: ["$ /"]
+    history:
+      - type: cli_agent
+        ok: true
+
+- id: cli_agent_run_sample_alert
+  tier: critical
+  input: "run a sample alert"
+  context:
+    with_prior_state: false
+  expected:
+    route_kind: cli_agent
+    should_execute: true
+    has_unhandled_clause: false
+    actions:
+      - kind: sample_alert
+        source: llm
+        target_surface: investigation
+        template: generic
+    response_contract:
+      any_of_contains: ["sample alert generic"]
+      must_not_contain: []
+    history:
+      - type: cli_agent
+        ok: true
+      - type: alert
+        ok: true
+
+- id: cli_agent_try_sample_alert
+  tier: full
+  input: "try a sample alert"
+  context:
+    with_prior_state: false
+  expected:
+    route_kind: cli_agent
+    should_execute: true
+    has_unhandled_clause: false
+    actions:
+      - kind: sample_alert
+        source: llm
+        target_surface: investigation
+        template: generic
+    response_contract:
+      any_of_contains: ["sample alert generic"]
+      must_not_contain: []
+    history:
+      - type: cli_agent
+        ok: true
+      - type: alert
+        ok: true
+
+- id: cli_agent_synthetic_connection_exhaustion
+  tier: critical
+  input: "run synthetic test 002-connection-exhaustion"
+  context:
+    with_prior_state: false
+  expected:
+    route_kind: cli_agent
+    should_execute: true
+    has_unhandled_clause: false
+    actions:
+      - kind: synthetic_test
+        source: llm
+        target_surface: investigation
+        suite: rds_postgres
+        scenario: 002-connection-exhaustion
+    response_contract:
+      any_of_contains: ["synthetic test rds_postgres:002-connection-exhaustion"]
+      must_not_contain: []
+    history:
+      - type: cli_agent
+        ok: true
+      - type: synthetic_test
+        ok: true
+
+- id: cli_agent_synthetic_storage_full
+  tier: full
+  input: "run synthetic test 003-storage-full"
+  context:
+    with_prior_state: false
+  expected:
+    route_kind: cli_agent
+    should_execute: true
+    has_unhandled_clause: false
+    actions:
+      - kind: synthetic_test
+        source: llm
+        target_surface: investigation
+        suite: rds_postgres
+        scenario: 003-storage-full
+    response_contract:
+      any_of_contains: ["synthetic test rds_postgres:003-storage-full"]
+      must_not_contain: []
+    history:
+      - type: cli_agent
+        ok: true
+      - type: synthetic_test
+        ok: true
+
+- id: cli_agent_synthetic_bare_numeric_id
+  tier: critical
+  input: "run synthetic test 005 now"
+  context:
+    with_prior_state: false
+  expected:
+    route_kind: cli_agent
+    should_execute: true
+    has_unhandled_clause: false
+    actions:
+      - kind: synthetic_test
+        source: llm
+        target_surface: investigation
+        suite: rds_postgres
+        scenario: 005-failover
+    response_contract:
+      any_of_contains: ["synthetic test rds_postgres:005-failover"]
+      must_not_contain: []
+    history:
+      - type: cli_agent
+        ok: true
+      - type: synthetic_test
+        ok: true
+
+- id: cli_agent_synthetic_cpu_saturation
+  tier: full
+  input: "launch synthetic test 004-cpu-saturation-bad-query"
+  context:
+    with_prior_state: false
+  expected:
+    route_kind: cli_agent
+    should_execute: true
+    has_unhandled_clause: false
+    actions:
+      - kind: synthetic_test
+        source: llm
+        target_surface: investigation
+        suite: rds_postgres
+        scenario: 004-cpu-saturation-bad-query
+    response_contract:
+      any_of_contains: ["synthetic test rds_postgres:004-cpu-saturation-bad-query"]
+      must_not_contain: []
+    history:
+      - type: cli_agent
+        ok: true
+      - type: synthetic_test
+        ok: true
+
+- id: cli_agent_show_connected_integrations
+  tier: critical
+  input: "show me connected integrations"
+  context:
+    with_prior_state: false
+  expected:
+    route_kind: cli_agent
+    should_execute: true
+    has_unhandled_clause: false
+    actions:
+      - kind: slash
+        source: llm
+        target_surface: slash
+        command: /list
+        args: ["integrations"]
+    response_contract:
+      any_of_contains: ["ran /list integrations"]
+      must_not_contain: []
+    history:
+      - type: cli_agent
+        ok: true
+      - type: slash
+        ok: true
+
+- id: cli_agent_show_connected_services
+  tier: full
+  input: "show me connected services"
+  context:
+    with_prior_state: false
+  expected:
+    route_kind: cli_agent
+    should_execute: true
+    has_unhandled_clause: false
+    actions:
+      - kind: slash
+        source: llm
+        target_surface: slash
+        command: /list
+        args: ["integrations"]
+    response_contract:
+      any_of_contains: ["ran /list integrations"]
+      must_not_contain: []
+    history:
+      - type: cli_agent
+        ok: true
+      - type: slash
+        ok: true
+
+- id: cli_agent_health_then_connected_services
+  tier: critical
+  input: "check the health of my opensre and then show me all connected services"
+  context:
+    with_prior_state: false
+  expected:
+    route_kind: cli_agent
+    should_execute: true
+    has_unhandled_clause: false
+    actions:
+      - kind: slash
+        source: llm
+        target_surface: slash
+        command: /health
+        args: []
+      - kind: slash
+        source: llm
+        target_surface: slash
+        command: /list
+        args: ["integrations"]
+    response_contract:
+      any_of_contains: ["ran /health", "ran /list integrations"]
+      must_not_contain: []
+    history:
+      - type: cli_agent
+        ok: true
+      - type: slash
+        ok: true
+      - type: slash
+        ok: true
+
+- id: cli_agent_verify_dry_run
+  tier: critical
+  input: "please run opensre integrations verify --dry-run"
+  context:
+    with_prior_state: false
+  expected:
+    route_kind: cli_agent
+    should_execute: true
+    has_unhandled_clause: false
+    actions:
+      - kind: cli_command
+        source: llm
+        target_surface: terminal
+        payload: integrations verify --dry-run
+    response_contract:
+      any_of_contains: ["opensre integrations verify --dry-run"]
+      must_not_contain: []
+    history:
+      - type: cli_agent
+        ok: true
+      - type: cli_command
+        ok: true
+
+- id: compound_partial_fail_closed
+  tier: critical
+  input: "show connected services and sing a song"
+  context:
+    with_prior_state: false
+  expected:
+    route_kind: cli_agent
+    should_execute: false
+    has_unhandled_clause: true
+    actions: []
+    response_contract:
+      any_of_contains: ["couldn't safely decide actions"]
+      must_not_contain: ["$ /"]
+    history:
+      - type: cli_agent
+        ok: false
+
+- id: cli_agent_connect_local_llama
+  tier: critical
+  input: "please connect to local llama"
+  context:
+    with_prior_state: false
+  expected:
+    route_kind: cli_agent
+    should_execute: false
+    has_unhandled_clause: true
+    actions: []
+    response_contract:
+      any_of_contains: ["ollama"]
+      must_not_contain: ["$ /"]
+    history:
+      - type: cli_agent
+        ok: true
+
+- id: cli_agent_low_signal_greeting
+  tier: full
+  input: "hello"
+  context:
+    with_prior_state: false
+  expected:
+    route_kind: cli_agent
+    should_execute: false
+    has_unhandled_clause: true
+    actions: []
+    response_contract:
+      any_of_contains: ["OpenSRE"]
+      must_not_contain: ["$ /"]
+    history:
+      - type: cli_agent
+        ok: true
+
+- id: cli_agent_freeform_operational
+  tier: full
+  input: "why is the database slow?"
+  context:
+    with_prior_state: false
+  expected:
+    route_kind: cli_agent
+    should_execute: false
+    has_unhandled_clause: true
+    actions: []
+    response_contract:
+      any_of_contains: ["investigation"]
+      must_not_contain: ["$ /"]
+    history:
+      - type: cli_agent
+        ok: true
+
+- id: cli_agent_alert_json_blob
+  tier: full
+  input: '{"alertname": "HighCPU", "severity": "critical"}'
+  context:
+    with_prior_state: false
+  expected:
+    route_kind: cli_agent
+    should_execute: false
+    has_unhandled_clause: true
+    actions: []
+    response_contract:
+      any_of_contains: ["HighCPU"]
+      must_not_contain: ["$ /"]
+    history:
+      - type: cli_agent
+        ok: true
+
+- id: new_alert_checkout_502_rate
+  tier: full
+  input: "the checkout service is returning 502 errors for 30% of requests"
+  context:
+    with_prior_state: false
+  expected:
+    route_kind: cli_agent
+    should_execute: false
+    has_unhandled_clause: true
+    actions: []
+    response_contract:
+      any_of_contains: ["checkout"]
+      must_not_contain: ["$ /"]
+    history:
+      - type: cli_agent
+        ok: true
+
+- id: new_alert_orders_cpu_99
+  tier: full
+  input: "CPU is spiking to 99% on the orders-api pods"
+  context:
+    with_prior_state: false
+  expected:
+    route_kind: cli_agent
+    should_execute: false
+    has_unhandled_clause: true
+    actions: []
+    response_contract:
+      any_of_contains: ["orders"]
+      must_not_contain: ["$ /"]
+    history:
+      - type: cli_agent
+        ok: true
+
+- id: follow_up_why_failed_with_state
+  tier: full
+  input: "why did it fail?"
+  context:
+    with_prior_state: true
+  expected:
+    route_kind: cli_agent
+    should_execute: false
+    has_unhandled_clause: true
+    actions: []
+    response_contract:
+      any_of_contains: ["context"]
+      must_not_contain: ["$ /"]
+    history:
+      - type: cli_agent
+        ok: true
+
+- id: follow_up_spike_cause_with_state
+  tier: full
+  input: "what caused the spike?"
+  context:
+    with_prior_state: true
+  expected:
+    route_kind: cli_agent
+    should_execute: false
+    has_unhandled_clause: true
+    actions: []
+    response_contract:
+      any_of_contains: ["investigation"]
+      must_not_contain: ["$ /"]
+    history:
+      - type: cli_agent
+        ok: true
+
+- id: cli_help_latency_measurement
+  tier: full
+  input: "how do I measure latency with opensre?"
+  context:
+    with_prior_state: false
+  expected:
+    route_kind: cli_agent
+    should_execute: false
+    has_unhandled_clause: true
+    actions: []
+    response_contract:
+      any_of_contains: ["latency"]
+      must_not_contain: ["$ /"]
+    history:
+      - type: cli_agent
+        ok: true

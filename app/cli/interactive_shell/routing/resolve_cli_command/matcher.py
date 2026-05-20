@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.intent_parser import (
     is_single_edit_typo,
     normalize_intent_text,
@@ -11,6 +13,20 @@ from app.cli.interactive_shell.routing.resolve_cli_command.catalog import (
     BARE_COMMAND_ALIASES,
     BARE_COMMAND_ALIASES_WITH_ARGS,
 )
+
+_OPENSRE_WRAPPED_SLASH_RE = re.compile(r"^/opensre(?:\s+(?P<inner>.+))?$", re.IGNORECASE)
+
+
+def _unwrap_opensre_wrapped_slash(text: str) -> str:
+    match = _OPENSRE_WRAPPED_SLASH_RE.match(text)
+    if match is None:
+        return text
+    inner = (match.group("inner") or "").strip()
+    if not inner:
+        return text
+    if inner.startswith("/"):
+        return inner
+    return f"/{inner}"
 
 
 def is_bare_command_alias(text: str) -> bool:
@@ -31,7 +47,7 @@ def slash_dispatch_text(text: str) -> str:
     """Return slash command text, including typo-tolerant bare alias mapping."""
     stripped = text.strip()
     if stripped.startswith("/"):
-        return stripped
+        return _unwrap_opensre_wrapped_slash(stripped)
     first, sep, rest = stripped.partition(" ")
     if sep:
         mapped_first = BARE_COMMAND_ALIAS_MAP.get(first.lower())

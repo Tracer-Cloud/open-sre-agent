@@ -31,6 +31,19 @@ _VALID_KINDS: frozenset[str] = frozenset(
         "implementation",
     }
 )
+_VALID_LLM_PROVIDERS: frozenset[str] = frozenset(
+    {
+        "anthropic",
+        "openai",
+        "openrouter",
+        "gemini",
+        "nvidia",
+        "ollama",
+        "codex",
+        "claude-code",
+        "gemini-cli",
+    }
+)
 
 _MAX_TEXT_LEN = 512
 _MAX_CONTENT_LEN = 256
@@ -73,9 +86,28 @@ Rules:
 - content must be a non-empty string no longer than 256 characters.
 - confidence must be a float between 0.0 and 1.0.
 - Omit actions with confidence below 0.5.
+- Only produce executable terminal actions for explicit user instructions to run,
+  show, connect, verify, launch, execute, cancel, switch, or start something.
+- For informational/help/chat prompts, return no actions and put the original
+  prompt in unhandled_text. This includes how-to questions, "what command do I use",
+  "what are the supported integrations", greetings, follow-up questions, raw alert
+  JSON, incident descriptions, and vague operational questions like "why is the
+  database slow?".
 - For slash actions:
   - content must start with "/"
   - command name must be one of: {slash_commands}
+  - Use "/list integrations" for requests to show/list connected services or
+    integrations. Do not use bare "/integrations" for that intent.
+  - Use "/remote" for explicit requests to connect/deploy/operate a remote OpenSRE
+    instance. Never invent ssh commands or remote hostnames.
+- For sample_alert actions:
+  - content must be exactly "generic".
+- For investigation actions:
+  - Only use this when the user explicitly asks to run/start/launch/send an
+    investigation, and use the quoted payload when present.
+- For implementation actions:
+  - Only use this when the user directly asks you to implement or patch something.
+    Do not treat examples, offers, or "if you want..." text as implementation work.
 - For synthetic_test actions:
   - content must be "rds_postgres:all" OR "rds_postgres:<scenario-id>" where
     scenario-id is one of: {synthetic_scenarios}
@@ -96,11 +128,11 @@ def _sanitise_text(text: str) -> str:
 
 
 def _list_synthetic_scenarios() -> tuple[str, ...]:
-    from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_planner import (
-        _list_rds_postgres_scenarios,
+    from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.synthetic_scenarios import (
+        list_rds_postgres_scenarios,
     )
 
-    return _list_rds_postgres_scenarios()
+    return list_rds_postgres_scenarios()
 
 
 def _valid_slash_commands() -> frozenset[str]:
@@ -118,9 +150,20 @@ def _normalise_action_content(kind: str, content: str) -> str | None:
     if kind == "slash":
         if not candidate.startswith("/"):
             return None
+        if candidate == "/integrations":
+            return "/list integrations"
         name = candidate.split(maxsplit=1)[0].lower()
         if name not in _valid_slash_commands():
             return None
+    if kind == "llm_provider" and candidate.lower() not in _VALID_LLM_PROVIDERS:
+        return None
+    if kind == "sample_alert":
+        if candidate.lower() == "generic":
+            return "generic"
+        lower = candidate.lower()
+        if "sample" in lower and "alert" in lower:
+            return "generic"
+        return None
     if kind == "synthetic_test":
         if candidate == "rds_postgres:all":
             return candidate
@@ -136,6 +179,17 @@ def _normalise_action_content(kind: str, content: str) -> str | None:
     return candidate
 
 
+def _render_system_prompt(*, slash_commands: str, synthetic_scenarios: str) -> str:
+    """Render the planner system prompt with token replacement.
+
+    ``str.format`` cannot be used here because the prompt includes literal JSON
+    braces that are part of the instructions we send to the model.
+    """
+    return _SYSTEM_PROMPT.replace("{slash_commands}", slash_commands).replace(
+        "{synthetic_scenarios}", synthetic_scenarios
+    )
+
+
 def _call_llm(sanitised_text: str) -> str | None:
     """Invoke the classification LLM; return raw response text or ``None``."""
     try:
@@ -144,7 +198,7 @@ def _call_llm(sanitised_text: str) -> str | None:
         logger.debug("llm_action_planner: LLM client import failed; skipping")
         return None
 
-    prompt = _SYSTEM_PROMPT.format(
+    prompt = _render_system_prompt(
         slash_commands=", ".join(sorted(_valid_slash_commands())),
         synthetic_scenarios=", ".join(_list_synthetic_scenarios()) or "none",
     )
@@ -223,7 +277,41 @@ def _parse_plan(raw: str) -> tuple[list[PlannedAction], bool] | None:
             )
         )
 
+    if raw_actions and not actions and not has_unhandled:
+        has_unhandled = True
+
     return actions, has_unhandled
+
+
+def _filter_context_sensitive_actions(
+    message: str,
+    actions: list[PlannedAction],
+    has_unhandled: bool,
+) -> tuple[list[PlannedAction], bool]:
+    """Drop high-impact action kinds unless the source text explicitly asks for them."""
+    from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.intent_parser import (
+        extract_implementation_request,
+        extract_quoted_investigation_request_text,
+    )
+    from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
+        PromptClause,
+    )
+
+    filtered: list[PlannedAction] = []
+    implementation_request = extract_implementation_request(PromptClause(message, 0))
+    investigation_request = extract_quoted_investigation_request_text(message)
+    dropped = False
+
+    for action in actions:
+        if action.kind == "implementation" and implementation_request is None:
+            dropped = True
+            continue
+        if action.kind == "investigation" and investigation_request is None:
+            dropped = True
+            continue
+        filtered.append(action)
+
+    return filtered, has_unhandled or dropped
 
 
 def plan_actions_with_llm(message: str) -> tuple[list[PlannedAction], bool] | None:
@@ -237,7 +325,11 @@ def plan_actions_with_llm(message: str) -> tuple[list[PlannedAction], bool] | No
     raw = _call_llm(sanitised)
     if raw is None:
         return None
-    return _parse_plan(raw)
+    parsed = _parse_plan(raw)
+    if parsed is None:
+        return None
+    actions, has_unhandled = parsed
+    return _filter_context_sensitive_actions(message.strip(), actions, has_unhandled)
 
 
 __all__ = ["plan_actions_with_llm"]

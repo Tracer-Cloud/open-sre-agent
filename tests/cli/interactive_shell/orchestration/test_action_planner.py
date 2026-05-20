@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_planner as action_planner_module
+import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.slash_commands.deterministic_action_mapper as action_planner_module
 
 
 def test_plan_cli_actions_health_and_list() -> None:
@@ -69,7 +69,7 @@ def test_plan_typoed_synthetic_test_with_explicit_scenario_id() -> None:
 @pytest.fixture()
 def _clear_scenario_cache() -> None:
     """Drop the lru_cache so each test sees a fresh scenario list snapshot."""
-    action_planner_module._list_rds_postgres_scenarios.cache_clear()
+    action_planner_module.list_rds_postgres_scenarios.cache_clear()
 
 
 def test_plan_synthetic_test_unknown_numeric_id_emits_unknown_sentinel(

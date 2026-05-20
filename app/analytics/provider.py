@@ -66,8 +66,10 @@ _CI_FINGERPRINT_ENV_KEYS: Final[tuple[str, ...]] = (
     "JOB_NAME",
 )
 
-type PropertyValue = str | bool | int | float
-type Properties = dict[str, PropertyValue]
+type JsonScalar = str | bool | int | float
+type JsonValue = JsonScalar | list["JsonValue"] | dict[str, "JsonValue"]
+type PropertyValue = JsonValue
+type Properties = dict[str, JsonValue]
 
 
 @dataclass(frozen=True, slots=True)
@@ -435,11 +437,11 @@ def _event_logging_enabled() -> bool:
     return os.getenv(_EVENT_LOG_ENV_VAR, "1") != "0"
 
 
-def _format_property(key: str, value: PropertyValue) -> str:
+def _format_property(key: str, value: JsonValue) -> str:
     if isinstance(value, bool):
         rendered = "true" if value else "false"
     else:
-        rendered = json.dumps(value, ensure_ascii=False)
+        rendered = json.dumps(value, ensure_ascii=False, default=str)
     return f"{key}={rendered}"
 
 
@@ -551,7 +553,7 @@ def _scrub_error_message(message: str) -> str:
     return scrubbed
 
 
-def _format_failure_extra(value: object) -> PropertyValue:
+def _format_failure_extra(value: object) -> JsonValue:
     if isinstance(value, bool):
         return value
     return str(value)
@@ -660,6 +662,8 @@ def _coerce_properties(
             continue
         elif isinstance(value, int | float):
             coerced[key] = str(value)
+        elif _is_json_value(value):
+            coerced[key] = value
         else:
             _log_failure(
                 "invalid_property",
@@ -671,6 +675,16 @@ def _coerce_properties(
                 value_type=type(value).__name__,
             )
     return coerced
+
+
+def _is_json_value(value: object) -> bool:
+    if isinstance(value, bool | str | int | float):
+        return True
+    if isinstance(value, list):
+        return all(_is_json_value(item) for item in value)
+    if isinstance(value, dict):
+        return all(isinstance(k, str) and _is_json_value(v) for k, v in value.items())
+    return False
 
 
 _COMPOSITE_FINGERPRINT = _build_composite_fingerprint()

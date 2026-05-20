@@ -24,6 +24,7 @@ from app.cli.interactive_shell.command_registry.investigation import (
 from app.cli.interactive_shell.command_registry.model import COMMANDS as MODEL_COMMANDS
 from app.cli.interactive_shell.command_registry.model import (
     switch_llm_provider,
+    switch_reasoning_model,
     switch_toolcall_model,
 )
 from app.cli.interactive_shell.command_registry.privacy_cmds import COMMANDS as PRIVACY_COMMANDS
@@ -167,5 +168,6 @@ __all__ = [
     "load_llm_settings",
     "load_verified_integrations",
     "switch_llm_provider",
+    "switch_reasoning_model",
     "switch_toolcall_model",
 ]
