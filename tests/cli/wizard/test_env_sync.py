@@ -6,10 +6,58 @@ import stat
 import pytest
 
 from app.cli.wizard.config import PROVIDER_BY_VALUE
-from app.cli.wizard.env_sync import sync_env_values, sync_provider_env
+from app.cli.wizard.env_sync import (
+    _is_sensitive_env_key,
+    sync_env_values,
+    sync_provider_env,
+)
 from app.llm_credentials import resolve_env_credential
 
 _SKIP_AS_ROOT = not hasattr(os, "getuid") or os.getuid() == 0
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        # Suffix-style sensitive keys (existing behavior).
+        "GITLAB_ACCESS_TOKEN",
+        "ANTHROPIC_API_KEY",
+        "AWS_SECRET_ACCESS_KEY",
+        "DB_PASSWORD",
+        # Bare sensitive keys (previously slipped past the suffix-only filter
+        # and reached plain-text .env, which CodeQL flagged as alert #1019).
+        "PASSWORD",
+        "TOKEN",
+        "SECRET",
+        "KEY",
+        "APIKEY",
+        "CREDENTIAL",
+        # Substring-based sensitives.
+        "DATABASE_CONNECTION_STRING",
+    ],
+)
+def test_is_sensitive_env_key_marks_secrets(key: str) -> None:
+    assert _is_sensitive_env_key(key) is True
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        # Non-secret configuration env vars must stay writable to .env.
+        "LLM_PROVIDER",
+        "OPENAI_REASONING_MODEL",
+        "OPENAI_MODEL",
+        "GITLAB_BASE_URL",
+        "ENV",
+        # Terminal token is not in the sensitive set even though "TOKEN"
+        # appears as a substring — the limit count is not itself a secret.
+        "OPENAI_TOKEN_LIMIT",
+        # Explicit exception: a public discord key is not sensitive.
+        "DISCORD_PUBLIC_KEY",
+    ],
+)
+def test_is_sensitive_env_key_leaves_non_secrets(key: str) -> None:
+    assert _is_sensitive_env_key(key) is False
 
 
 def test_sync_provider_env_updates_provider_specific_keys(tmp_path) -> None:

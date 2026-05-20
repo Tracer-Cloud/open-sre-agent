@@ -228,12 +228,10 @@ class BenchmarkAdapter(ABC):
         """Stream cases matching the filter. Seeded random selection is the
         adapter's responsibility (integrity Mechanism 6).
         """
-        ...
 
     @abstractmethod
     def build_alert(self, case: BenchmarkCase) -> AlertPayload:
         """Convert a case into the alert opensre / LLM consume."""
-        ...
 
     @abstractmethod
     def build_opensre_integrations(self, case: BenchmarkCase) -> dict[str, Any]:
@@ -241,7 +239,6 @@ class BenchmarkAdapter(ABC):
         ``run_investigation``. For CloudOpsBench, this wires the replay
         backend in place of live AWS/K8s/Datadog clients.
         """
-        ...
 
     @abstractmethod
     def build_baseline_tools(self, case: BenchmarkCase) -> dict[str, Any]:
@@ -249,7 +246,6 @@ class BenchmarkAdapter(ABC):
         access as opensre+LLM (fairness) but no extract/context/diagnose
         pipeline — just direct LLM with tool-calling.
         """
-        ...
 
     @abstractmethod
     def score_case(self, case: BenchmarkCase, run: RunResult, context: RunContext) -> CaseScore:
@@ -262,11 +258,9 @@ class BenchmarkAdapter(ABC):
         Passing context explicitly (vs caching on the adapter) is what
         makes the adapter thread-safe for parallel runner execution.
         """
-        ...
 
     @abstractmethod
     def metric_schema(self) -> MetricSchema:
         """Declare which metrics this adapter emits, for CLI validation +
         comparable reporting across adapters.
         """
-        ...

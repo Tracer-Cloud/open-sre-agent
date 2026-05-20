@@ -184,8 +184,16 @@ def test_activate_restores_env_when_body_raises(
     monkeypatch.setenv("ANTHROPIC_API_KEY", "key")
     monkeypatch.setenv("LLM_PROVIDER", "before")
     dispatcher = LLMDispatcher()
-    with pytest.raises(RuntimeError, match="boom"), dispatcher.activate("claude-4-sonnet"):
-        raise RuntimeError("boom")
+
+    # Isolating the raise in a helper keeps the post-`with` assertion clearly
+    # reachable to static analysis (which does not model pytest.raises as an
+    # exception-suppressing context manager).
+    def _raise_inside_dispatch_context() -> None:
+        with dispatcher.activate("claude-4-sonnet"):
+            raise RuntimeError("boom")
+
+    with pytest.raises(RuntimeError, match="boom"):
+        _raise_inside_dispatch_context()
     assert os.environ["LLM_PROVIDER"] == "before"
 
 
