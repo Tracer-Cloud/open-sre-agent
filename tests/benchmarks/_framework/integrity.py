@@ -52,6 +52,27 @@ class IntegrityViolation(RuntimeError):
 
 
 # --------------------------------------------------------------------------- #
+# Pre-registration placeholder sentinels                                      #
+# --------------------------------------------------------------------------- #
+
+
+# Sentinels that ship in the template pre-registration (see
+# ``tests/benchmarks/configs/preregistrations/example.yml``) and any cycle YAML
+# stamped from it. The framework refuses to start a run while any of these are
+# still present in the on-disk pre-registration, because the integrity story
+# depends on the file being a real commitment rather than a template.
+#
+# Flagged on #2234 — the existing M1 only checked existence and non-emptiness,
+# so a YAML with ``opensre_sha: REPLACE_AT_COMMIT_TIME`` or
+# ``date: 2026-05-XX`` would pass pre_flight and produce a run whose
+# provenance fields point at literally nothing.
+_PREREG_PLACEHOLDER_SENTINELS: tuple[str, ...] = (
+    "REPLACE_AT_COMMIT_TIME",
+    "-XX",  # catches both `2026-05-XX` and `XXXX-XX-XX` date stubs
+)
+
+
+# --------------------------------------------------------------------------- #
 # Report shape — what report_validation expects                                #
 # --------------------------------------------------------------------------- #
 
@@ -129,6 +150,20 @@ class IntegrityGuard:
                 f"M1: pre_registration_path={config.pre_registration_path} is empty. "
                 f"A real pre-registration with expected deltas is required."
             )
+        else:
+            # M1 (content) — the file exists and is non-empty, but unfilled
+            # template sentinels (REPLACE_AT_COMMIT_TIME, `2026-05-XX` dates)
+            # still pass the existence + size checks and produce runs with
+            # meaningless provenance. Reject them here.
+            content = config.pre_registration_path.read_text(encoding="utf-8")
+            found = [s for s in _PREREG_PLACEHOLDER_SENTINELS if s in content]
+            if found:
+                violations.append(
+                    f"M1: pre_registration_path={config.pre_registration_path} "
+                    f"still contains unfilled template sentinels: {found}. "
+                    f"Stamp the real commit SHA, dataset revision, and run "
+                    f"date before commit."
+                )
 
         # M3 — adapter declares enough metrics (multi-metric, no Streetlight)
         schema = adapter.metric_schema()
