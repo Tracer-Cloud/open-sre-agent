@@ -219,6 +219,14 @@ async def run_interactive(
 
                 if hot_reloader is not None and not state.is_dispatch_running():
                     hot_reloader.check_and_reload(echo_console)
+                # Drain any CPR bytes (ESC[row;colR) left in stdin from the
+                # previous prompt_async's bottom-toolbar refresh cycles.  Each
+                # prompt_async call tears down its Application; responses that
+                # arrive after the input-reader thread stops are left in the OS
+                # buffer and would appear as literal keystrokes in the new
+                # Application's fresh vt100 parser.  The drain is safe here
+                # because no Application is reading stdin at this point.
+                _drain_stale_cpr_bytes()
                 try:
                     text = await pt_session.prompt_async(
                         message=_message_with_spinner,
@@ -251,13 +259,6 @@ async def run_interactive(
                 if state.is_awaiting_confirmation():
                     if _looks_like_confirmation_answer(text):
                         state.deliver_confirmation(text or "")
-                        # CPR responses sent during the confirmation prompt's
-                        # refresh cycles may have accumulated in stdin while the
-                        # Application's input-reader thread was shutting down.
-                        # Drain them now, before the next prompt_async starts a
-                        # new Application with a fresh vt100 parser — otherwise
-                        # those bytes appear as literal keystrokes in the prompt.
-                        _drain_stale_cpr_bytes()
                         continue
                     echo_console.print(
                         "[dim](type y/N to confirm the pending action; your input has been queued for after)[/]"
