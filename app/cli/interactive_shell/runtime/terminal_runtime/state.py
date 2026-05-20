@@ -142,8 +142,7 @@ class SpinnerState:
         else:
             suffix = f" ({elapsed:.0f}s)"
         return (
-            f"{PROMPT_ACCENT_ANSI}{glyph} {self._verb}…{ANSI_RESET}"
-            f"{ANSI_DIM}{suffix}{ANSI_RESET}"
+            f"{PROMPT_ACCENT_ANSI}{glyph} {self._verb}…{ANSI_RESET}{ANSI_DIM}{suffix}{ANSI_RESET}"
         )
 
 

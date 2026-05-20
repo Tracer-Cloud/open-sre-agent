@@ -28,9 +28,6 @@ from app.cli.interactive_shell.intent.intent_parser import (
 )
 from app.cli.interactive_shell.intent.interaction_models import PlannedAction, PromptClause
 from app.cli.interactive_shell.intent.terminal_intent import mentioned_integration_services
-from app.cli.interactive_shell.orchestration.synthetic_scenario_resolver import (
-    resolve_synthetic_scenario_with_llm,
-)
 
 # Deterministic match for an already-canonical scenario ID like "003-storage-full".
 # A regex is appropriate here because the format is exact and unambiguous; no
@@ -167,13 +164,6 @@ def _synthetic_action_content(clause: PromptClause, *, synthetic_start: int) -> 
         )
 
     scenarios = _list_rds_postgres_scenarios()
-    resolved = resolve_synthetic_scenario_with_llm(clause.text, scenarios)
-    if resolved is not None:
-        return (
-            f"rds_postgres:{resolved}",
-            clause.position + synthetic_start,
-        )
-
     unresolved_hint = _detect_unresolved_numeric_hint(clause.text, scenarios)
     if unresolved_hint is not None:
         return (
