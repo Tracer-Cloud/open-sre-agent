@@ -143,9 +143,7 @@ def send_slack_webhook(payload: dict[str, Any], webhook_url: str) -> None:
             status_code = getattr(response, "status", response.getcode())
     except error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(
-            f"Slack webhook failed with HTTP {exc.code}: {detail}"
-        ) from exc
+        raise RuntimeError(f"Slack webhook failed with HTTP {exc.code}: {detail}") from exc
     except error.URLError as exc:
         raise RuntimeError(f"Slack webhook failed: {exc.reason}") from exc
 
@@ -182,9 +180,7 @@ def main() -> int:
 
     payload = build_slack_payload(notification)
     send_slack_webhook(payload, webhook_url)
-    print(
-        f"Posted Slack notification for {notification.repository}#{notification.issue_number}."
-    )
+    print(f"Posted Slack notification for {notification.repository}#{notification.issue_number}.")
     return 0
 
 
