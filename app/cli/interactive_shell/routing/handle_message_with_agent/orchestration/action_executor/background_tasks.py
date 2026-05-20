@@ -18,10 +18,10 @@ from app.cli.interactive_shell.ui import DIM, ERROR, HIGHLIGHT
 from app.cli.support.exception_reporting import report_exception
 
 from .task_streaming import (
-    SHELL_COMMAND_TIMEOUT_SECONDS,
     _MAX_COMMAND_OUTPUT_CHARS,
     _SYNTHETIC_DIAG_CHARS,
     _SYNTHETIC_POLL_SECONDS,
+    SHELL_COMMAND_TIMEOUT_SECONDS,
     _ae_resolve,
     _join_task_output_streams,
     _pump_task_pty,

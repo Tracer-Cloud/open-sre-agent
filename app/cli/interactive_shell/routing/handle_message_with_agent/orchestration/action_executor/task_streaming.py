@@ -12,13 +12,20 @@ import tempfile
 import threading
 from typing import IO, Any
 
+from rich.console import Console
+from rich.markup import escape
+from rich.text import Text
+
+from app.cli.interactive_shell.runtime import TaskRecord
+from app.cli.interactive_shell.ui import DIM, ERROR
+from app.cli.support.exception_reporting import report_exception
+
 # Full dotted name of the ``action_executor`` package. Submodules use this to
 # look up patchable names from the parent namespace at call time so that tests
 # using ``monkeypatch.setattr("…action_executor.X", fake)`` take effect even
 # when the implementation lives in a submodule.
 _ACTION_EXECUTOR_MODULE = (
-    "app.cli.interactive_shell.routing.handle_message_with_agent"
-    ".orchestration.action_executor"
+    "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor"
 )
 
 
@@ -31,13 +38,6 @@ def _ae_resolve(name: str, default: Any) -> Any:
     ae = sys.modules.get(_ACTION_EXECUTOR_MODULE)
     return getattr(ae, name, default) if ae is not None else default
 
-from rich.console import Console
-from rich.markup import escape
-from rich.text import Text
-
-from app.cli.interactive_shell.runtime import TaskKind, TaskRecord
-from app.cli.interactive_shell.ui import DIM, ERROR
-from app.cli.support.exception_reporting import report_exception
 
 SHELL_COMMAND_TIMEOUT_SECONDS = 120
 SYNTHETIC_TEST_TIMEOUT_SECONDS = 1800

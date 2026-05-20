@@ -94,7 +94,9 @@ def test_delete_named_remote_does_not_clear_url_when_different_remote_is_active(
     store_path = tmp_path / "opensre.json"
 
     save_named_remote("ec2", "http://1.2.3.4:8080", set_active=False, source="ec2", path=store_path)
-    save_named_remote("railway", "http://railway.app", set_active=True, source="railway", path=store_path)
+    save_named_remote(
+        "railway", "http://railway.app", set_active=True, source="railway", path=store_path
+    )
 
     delete_named_remote("ec2", store_path)
 

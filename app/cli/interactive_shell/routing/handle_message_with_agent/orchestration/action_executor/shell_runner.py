@@ -26,8 +26,8 @@ from app.cli.interactive_shell.ui import ERROR, HIGHLIGHT, print_command_output
 from app.cli.support.exception_reporting import report_exception
 
 from .task_streaming import (
-    SHELL_COMMAND_TIMEOUT_SECONDS,
     _MAX_COMMAND_OUTPUT_CHARS,
+    SHELL_COMMAND_TIMEOUT_SECONDS,
     _ae_resolve,
 )
 

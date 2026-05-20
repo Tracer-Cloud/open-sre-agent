@@ -14,20 +14,22 @@ from __future__ import annotations
 
 # Stdlib singletons — imported so that monkeypatch paths resolve correctly in tests:
 # ``"…action_executor.os.chdir"``, ``"…action_executor.subprocess.Popen"``,
-# ``"…action_executor.threading.Thread"``, ``"…action_executor.time.sleep"``.
+# ``"…action_executor.threading.Thread"``, ``"…action_executor.time.sleep"``,
+# ``"…action_executor.Path.cwd"``.
 import os  # noqa: F401
 import subprocess  # noqa: F401
 import threading  # noqa: F401
 import time  # noqa: F401
-
-# ClaudeCodeAdapter is imported here so that the monkeypatch path
-# ``"…action_executor.ClaudeCodeAdapter"`` resolves in tests.
-from app.integrations.llm_cli.claude_code import ClaudeCodeAdapter  # noqa: F401
+from pathlib import Path  # noqa: F401
 
 # execute_shell_command is imported here so that the monkeypatch path
 # ``"…action_executor.execute_shell_command"`` resolves in tests. The
 # actual call site in shell_runner.py uses ``_ae_resolve`` to pick up any patch.
 from app.cli.interactive_shell.shell import execute_shell_command  # noqa: F401
+
+# ClaudeCodeAdapter is imported here so that the monkeypatch path
+# ``"…action_executor.ClaudeCodeAdapter"`` resolves in tests.
+from app.integrations.llm_cli.claude_code import ClaudeCodeAdapter  # noqa: F401
 
 from .background_tasks import start_background_cli_task
 from .implementation_runner import run_claude_code_implementation
@@ -52,15 +54,15 @@ from .synthetic_tasks import (
     watch_synthetic_subprocess,
 )
 from .task_streaming import (
-    CLAUDE_CODE_IMPLEMENTATION_TIMEOUT_SECONDS,
-    SHELL_COMMAND_TIMEOUT_SECONDS,
-    SYNTHETIC_TEST_TIMEOUT_SECONDS,
     _MAX_COMMAND_OUTPUT_CHARS,
     _MIN_SUBPROCESS_TERMINAL_WIDTH,
     _SYNTHETIC_DIAG_CHARS,
     _SYNTHETIC_POLL_SECONDS,
     _TASK_OUTPUT_JOIN_TIMEOUT_SECONDS,
     _TASK_OUTPUT_PREFIX_WIDTH,
+    CLAUDE_CODE_IMPLEMENTATION_TIMEOUT_SECONDS,
+    SHELL_COMMAND_TIMEOUT_SECONDS,
+    SYNTHETIC_TEST_TIMEOUT_SECONDS,
     _console_file_is_tty,
     _join_task_output_streams,
     _print_task_output_line,
@@ -74,8 +76,34 @@ from .task_streaming import (
 )
 
 __all__ = [
+    "CLAUDE_CODE_IMPLEMENTATION_TIMEOUT_SECONDS",
     "SHELL_COMMAND_TIMEOUT_SECONDS",
     "SYNTHETIC_TEST_TIMEOUT_SECONDS",
+    "_INTERACTIVE_OPENSRE_COMMAND_PATHS",
+    "_MAX_COMMAND_OUTPUT_CHARS",
+    "_MIN_SUBPROCESS_TERMINAL_WIDTH",
+    "_OPENSRE_BLOCKED_SUBCOMMANDS",
+    "_SYNTHETIC_DIAG_CHARS",
+    "_SYNTHETIC_POLL_SECONDS",
+    "_TASK_OUTPUT_JOIN_TIMEOUT_SECONDS",
+    "_TASK_OUTPUT_PREFIX_WIDTH",
+    "_classify_opensre_command",
+    "_console_file_is_tty",
+    "_is_interactive_wizard",
+    "_join_task_output_streams",
+    "_opensre_confirmation_reason",
+    "_print_task_output_line",
+    "_pump_task_pty",
+    "_pump_task_stream",
+    "_run_opensre_foreground",
+    "_run_opensre_foreground_streaming",
+    "_scenario_id_from_synthetic_suite_name",
+    "_should_run_opensre_in_foreground",
+    "_should_use_pty",
+    "_start_task_output_streams",
+    "_subprocess_env_with_aligned_width",
+    "_try_bind_synthetic_observation",
+    "print_interactive_wizard_handoff",
     "read_diag",
     "run_claude_code_implementation",
     "run_cd_command",

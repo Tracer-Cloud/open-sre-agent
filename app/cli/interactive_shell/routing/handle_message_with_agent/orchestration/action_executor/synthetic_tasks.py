@@ -31,9 +31,9 @@ from app.cli.interactive_shell.ui import DIM, ERROR, HIGHLIGHT
 from app.cli.support.exception_reporting import report_exception
 
 from .task_streaming import (
-    SYNTHETIC_TEST_TIMEOUT_SECONDS,
     _SYNTHETIC_DIAG_CHARS,
     _SYNTHETIC_POLL_SECONDS,
+    SYNTHETIC_TEST_TIMEOUT_SECONDS,
     _join_task_output_streams,
     _start_task_output_streams,
     _subprocess_env_with_aligned_width,

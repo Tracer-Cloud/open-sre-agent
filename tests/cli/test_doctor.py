@@ -61,7 +61,9 @@ def test_check_env_file_missing(monkeypatch, tmp_path) -> None:
 
 def test_check_llm_provider_not_set(monkeypatch) -> None:
     monkeypatch.delenv("LLM_PROVIDER", raising=False)
-    monkeypatch.setattr("app.config.get_llm_provider_api_key", lambda _provider: ("ANTHROPIC_API_KEY", ""))
+    monkeypatch.setattr(
+        "app.config.get_llm_provider_api_key", lambda _provider: ("ANTHROPIC_API_KEY", "")
+    )
     ok, detail = doctor._check_llm_provider()
     assert ok is False
     assert "ANTHROPIC_API_KEY" in detail
@@ -70,7 +72,9 @@ def test_check_llm_provider_not_set(monkeypatch) -> None:
 
 def test_check_llm_provider_hosted_missing_key(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "anthropic")
-    monkeypatch.setattr("app.config.get_llm_provider_api_key", lambda _provider: ("ANTHROPIC_API_KEY", ""))
+    monkeypatch.setattr(
+        "app.config.get_llm_provider_api_key", lambda _provider: ("ANTHROPIC_API_KEY", "")
+    )
     ok, detail = doctor._check_llm_provider()
     assert ok is False
     assert "ANTHROPIC_API_KEY" in detail

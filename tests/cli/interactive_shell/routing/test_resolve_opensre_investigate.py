@@ -11,9 +11,14 @@ from app.cli.interactive_shell.runtime.session import ReplSession
 
 
 def test_opensre_investigate_slash_text_maps_input_flag() -> None:
-    assert opensre_investigate_slash_text("opensre investigate -i alert.json") == "/investigate alert.json"
     assert (
-        opensre_investigate_slash_text("opensre investigate --input tests/fixtures/openclaw_test_alert.json")
+        opensre_investigate_slash_text("opensre investigate -i alert.json")
+        == "/investigate alert.json"
+    )
+    assert (
+        opensre_investigate_slash_text(
+            "opensre investigate --input tests/fixtures/openclaw_test_alert.json"
+        )
         == "/investigate tests/fixtures/openclaw_test_alert.json"
     )
 

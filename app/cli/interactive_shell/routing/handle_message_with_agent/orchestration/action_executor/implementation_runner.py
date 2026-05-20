@@ -23,6 +23,13 @@ from app.cli.support.exception_reporting import report_exception
 from app.integrations.llm_cli.claude_code import ClaudeCodeAdapter
 from app.integrations.llm_cli.subprocess_env import build_cli_subprocess_env
 
+from .task_streaming import (
+    _MAX_COMMAND_OUTPUT_CHARS,
+    _SYNTHETIC_DIAG_CHARS,
+    CLAUDE_CODE_IMPLEMENTATION_TIMEOUT_SECONDS,
+    terminate_child_process,
+)
+
 _ACTION_EXECUTOR_MODULE = (
     "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor"
 )
@@ -40,12 +47,6 @@ def _get_claude_code_adapter_cls() -> type[Any]:
     cls = getattr(ae, "ClaudeCodeAdapter", None) if ae is not None else None
     return cls if cls is not None else ClaudeCodeAdapter
 
-from .task_streaming import (
-    CLAUDE_CODE_IMPLEMENTATION_TIMEOUT_SECONDS,
-    _MAX_COMMAND_OUTPUT_CHARS,
-    _SYNTHETIC_DIAG_CHARS,
-    terminate_child_process,
-)
 
 _IMPLEMENT_PERMISSION_MODE_ENV = "CLAUDE_CODE_IMPLEMENT_PERMISSION_MODE"
 _DEFAULT_IMPLEMENT_PERMISSION_MODE = "acceptEdits"
