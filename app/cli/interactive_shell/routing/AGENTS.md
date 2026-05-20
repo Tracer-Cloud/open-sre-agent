@@ -58,7 +58,7 @@ If all answers are weak, keep the logic inline.
 | `app/cli/interactive_shell/routing/tests/scenario_loader.py` | Routing package owners | Load `scenarios/<behavior_class>/<id>/{scenario.yml,answer.yml}` |
 | `app/cli/interactive_shell/routing/tests/scenarios/**/scenario.yml` | Routing package owners | Input world: prompt, session, capabilities, intent metadata |
 | `app/cli/interactive_shell/routing/tests/scenarios/**/answer.yml` | Routing package owners | Expected behavior: route, policy, planned/executed actions, response contract |
-| `tests/cli/interactive_shell/orchestration/test_llm_intent_classifier.py` | Orchestration owners | Classifier internals (sanitization + live cache/override behavior) |
+| `tests/cli/interactive_shell/routing/test_llm_intent_classifier.py` | Routing package owners | Classifier internals (sanitization + live cache/override behavior) |
 
 ## Routing test isolation policy (no mocks)
 
@@ -81,8 +81,8 @@ If all answers are weak, keep the logic inline.
 - Regex fallback has been intentionally removed from routing. Do **not**
   re-introduce `regex_fallback`/`routes/route_regex_fallback`-style phases
   unless there is an explicit product decision to restore them.
-- Keep the LLM intent classifier canonical in orchestration (`app/cli/interactive_shell/orchestration/llm_intent_classifier.py`);
-  routing can wrap/import it, but should not duplicate classifier logic.
+- Keep the LLM intent classifier canonical in routing (`app/cli/interactive_shell/routing/llm_intent_classifier.py`);
+  do not duplicate classifier logic in other packages.
 - Preserve routing decision observability contracts used in tests:
   `fallback_reason` semantics and `matched_signals` (`cli_agent_action_plan`, etc.).
 
@@ -93,7 +93,7 @@ If all answers are weak, keep the logic inline.
 - Keep deterministic routing contracts (`test_routing_scenarios.py::test_deterministic_routing` and
   `test_routing_fixture_integrity.py`) in the default PR CI flow.
 - Run live-LLM suites (`test_routing_scenarios.py` live tests and
-  `tests/cli/interactive_shell/orchestration/test_llm_intent_classifier.py`)
+  `tests/cli/interactive_shell/routing/test_llm_intent_classifier.py`)
   in the post-merge sharded workflow.
 - Execute routing suites with heavy parallelism (`pytest-xdist`, e.g. `-n auto`)
   in both local and CI environments.

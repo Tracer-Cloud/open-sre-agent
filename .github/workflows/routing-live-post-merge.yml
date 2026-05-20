@@ -5,8 +5,7 @@ on:
     branches: [main]
     paths:
       - "app/cli/interactive_shell/routing/**"
-      - "app/cli/interactive_shell/orchestration/**"
-      - "tests/cli/interactive_shell/orchestration/**"
+      - "tests/cli/interactive_shell/routing/**"
       - "pytest.ini"
       - "pyproject.toml"
       - "uv.lock"
@@ -59,5 +58,5 @@ jobs:
           uv run python -m pytest -n auto -v
           -m live_llm
           app/cli/interactive_shell/routing/tests/test_routing_scenarios.py
-          -k "test_live_route_classification or test_live_turn_execution_oracle or test_live_action_planning"
-          tests/cli/interactive_shell/orchestration/test_llm_intent_classifier.py
+          -k "test_live_turn_execution_oracle or test_live_action_planning or TestLiveClassifierBehavior"
+          tests/cli/interactive_shell/routing/test_llm_intent_classifier.py

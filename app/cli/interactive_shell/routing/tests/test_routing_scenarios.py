@@ -24,6 +24,7 @@ from app.cli.interactive_shell.routing.tests._oracle_runtime import (
 )
 from app.cli.interactive_shell.routing.tests.scenario_loader import (
     ScenarioCase,
+    iter_scenarios_for_shard,
     load_all_scenarios,
     read_shard_config,
 )
@@ -47,7 +48,9 @@ _ALL_CASES = load_all_scenarios()
 _DETERMINISTIC_CASES = [
     case for case in _ALL_CASES if case.scenario.intent_class == "deterministic"
 ]
-_LIVE_CASES = [case for case in _ALL_CASES if case.scenario.intent_class != "deterministic"]
+_LIVE_CASES = iter_scenarios_for_shard(
+    [case for case in _ALL_CASES if case.scenario.intent_class != "deterministic"]
+)
 
 
 def _slash_content(command: str, args: list[str]) -> str:
