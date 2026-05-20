@@ -21,6 +21,7 @@ from app.integrations._validation_helpers import report_validation_failure
 from app.services.llm_client import get_llm_for_reasoning
 from app.utils.sentry_sdk import init_sentry
 from app.version import get_version
+from contextlib import suppress
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +164,9 @@ def _github_json(url: str, token: str) -> tuple[Any, Any]:
             return payload, response.headers
     except error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"GitHub API request failed with HTTP {exc.code}: {detail}") from exc
+        raise RuntimeError(
+            f"GitHub API request failed with HTTP {exc.code}: {detail}"
+        ) from exc
     except error.URLError as exc:
         raise RuntimeError(f"GitHub API request failed: {exc.reason}") from exc
 
@@ -196,11 +199,15 @@ def _paginate_github(url: str, token: str) -> list[Any]:
 def _github_repo_api_url(repository: str, suffix: str) -> str:
     owner, separator, repo = repository.partition("/")
     if not owner or separator != "/" or not repo:
-        raise ValueError(f"Expected GITHUB_REPOSITORY in owner/repo format, got {repository!r}")
+        raise ValueError(
+            f"Expected GITHUB_REPOSITORY in owner/repo format, got {repository!r}"
+        )
 
     quoted_owner = parse.quote(owner, safe="")
     quoted_repo = parse.quote(repo, safe="")
-    return f"{GITHUB_API_BASE_URL}/repos/{quoted_owner}/{quoted_repo}/{suffix.lstrip('/')}"
+    return (
+        f"{GITHUB_API_BASE_URL}/repos/{quoted_owner}/{quoted_repo}/{suffix.lstrip('/')}"
+    )
 
 
 def _user_is_bot(user: dict[str, Any] | None) -> bool:
@@ -210,7 +217,9 @@ def _user_is_bot(user: dict[str, Any] | None) -> bool:
     if not login:
         return False
     return (
-        login in BOT_LOGINS or login.endswith("[bot]") or _string(user.get("type")).lower() == "bot"
+        login in BOT_LOGINS
+        or login.endswith("[bot]")
+        or _string(user.get("type")).lower() == "bot"
     )
 
 
@@ -287,7 +296,9 @@ def _build_contributors(
                 if isinstance(author_payload, dict):
                     add_name(_string(author_payload.get("name")))
 
-    return tuple(sorted(contributors.values(), key=lambda item: item.display_name.lower()))
+    return tuple(
+        sorted(contributors.values(), key=lambda item: item.display_name.lower())
+    )
 
 
 def fetch_merged_pull_requests(
@@ -322,8 +333,12 @@ def fetch_merged_pull_requests(
             continue
 
         detail_url = _github_repo_api_url(repository, f"pulls/{number}")
-        files_url = _github_repo_api_url(repository, f"pulls/{number}/files?per_page=100")
-        commits_url = _github_repo_api_url(repository, f"pulls/{number}/commits?per_page=100")
+        files_url = _github_repo_api_url(
+            repository, f"pulls/{number}/files?per_page=100"
+        )
+        commits_url = _github_repo_api_url(
+            repository, f"pulls/{number}/commits?per_page=100"
+        )
 
         detail_payload, _detail_headers = _github_json(detail_url, token)
         file_payloads = _paginate_github(files_url, token)
@@ -338,7 +353,9 @@ def fetch_merged_pull_requests(
         if isinstance(author_user, dict):
             author_login = _string(author_user.get("login"))
             if author_login:
-                author_display_name = _resolve_user_display_name(author_login, token, user_cache)
+                author_display_name = _resolve_user_display_name(
+                    author_login, token, user_cache
+                )
 
         labels_payload = detail_payload.get("labels")
         labels = (
@@ -402,7 +419,9 @@ def _thanks_line(pull_requests: tuple[PullRequestSummary, ...]) -> str:
     for pull_request in pull_requests:
         for contributor in pull_request.contributors:
             key = (
-                contributor.login.lower() if contributor.login else contributor.display_name.lower()
+                contributor.login.lower()
+                if contributor.login
+                else contributor.display_name.lower()
             )
             contributors[key] = contributor.display_name
     return (
@@ -452,7 +471,9 @@ def _build_summary_prompt(
     for pull_request in pull_requests:
         labels = ", ".join(pull_request.labels) or "none"
         contributors = (
-            ", ".join(contributor.display_name for contributor in pull_request.contributors)
+            ", ".join(
+                contributor.display_name for contributor in pull_request.contributors
+            )
             or "unknown"
         )
         sections.extend(
@@ -481,7 +502,9 @@ def _format_pr_highlight(pr: PullRequestSummary) -> str:
     return f"{title} (#{pr.number}) \u2014 {author}"
 
 
-def build_fallback_highlights(pull_requests: tuple[PullRequestSummary, ...]) -> tuple[str, ...]:
+def build_fallback_highlights(
+    pull_requests: tuple[PullRequestSummary, ...],
+) -> tuple[str, ...]:
     """Fallback to deterministic PR-title bullets when LLM summarization is unavailable."""
     if not pull_requests:
         return ("No pull requests were merged into `main` today.",)
@@ -491,7 +514,11 @@ def build_fallback_highlights(pull_requests: tuple[PullRequestSummary, ...]) -> 
     secondary: list[PullRequestSummary] = []
 
     for pr in pull_requests:
-        key = pr.author_login.lower() if pr.author_login else pr.author_display_name.lower()
+        key = (
+            pr.author_login.lower()
+            if pr.author_login
+            else pr.author_display_name.lower()
+        )
         if key not in seen_authors:
             seen_authors.add(key)
             primary.append(pr)
@@ -517,7 +544,11 @@ def summarize_highlights(
 
     prompt = _build_summary_prompt(repository, window, pull_requests)
     try:
-        response = get_llm_for_reasoning().with_structured_output(HighlightResponse).invoke(prompt)
+        response = (
+            get_llm_for_reasoning()
+            .with_structured_output(HighlightResponse)
+            .invoke(prompt)
+        )
         highlights = tuple(item.strip() for item in response.highlights if item.strip())
         if highlights:
             return highlights, False
@@ -587,7 +618,9 @@ def render_markdown(update: DailyUpdate) -> str:
             )
             if len(pull_request.changed_files) > 10:
                 files += f", and {len(pull_request.changed_files) - 10} more"
-            labels = ", ".join(f"`{label}`" for label in pull_request.labels) or "_none_"
+            labels = (
+                ", ".join(f"`{label}`" for label in pull_request.labels) or "_none_"
+            )
             lines.append(
                 f"- [#{pull_request.number}]({pull_request.url}) {pull_request.title} "
                 f"(author: {pull_request.author_display_name or pull_request.author_login or 'unknown'}; "
@@ -619,7 +652,9 @@ def _docs_json_path() -> Path:
 
 
 def _output_dir() -> Path:
-    configured = Path(_string(os.getenv("DAILY_UPDATE_OUTPUT_DIR")) or DEFAULT_OUTPUT_DIR)
+    configured = Path(
+        _string(os.getenv("DAILY_UPDATE_OUTPUT_DIR")) or DEFAULT_OUTPUT_DIR
+    )
     if configured.is_absolute():
         return configured
     return _repo_root() / configured
@@ -744,7 +779,9 @@ def _append_github_output(name: str, value: str) -> None:
 
 def main() -> int:
     """Entrypoint used by the scheduled GitHub Actions workflow."""
-    init_sentry(entrypoint="integrations.daily_update")
+    with suppress(ModuleNotFoundError):
+        init_sentry(entrypoint="integrations.daily_update")
+
     repository = _string(os.getenv("GITHUB_REPOSITORY"))
     token = _string(os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN"))
     if not repository:
