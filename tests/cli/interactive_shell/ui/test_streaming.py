@@ -558,7 +558,7 @@ class TestMidStreamError:
 
         The double-press absorption logic that used to live here was moved
         to the prompt_toolkit cancel key bindings (see
-        :func:`app.cli.interactive_shell.loop._build_cancel_key_bindings`)
+        :func:`app.cli.interactive_shell.runtime.terminal_runtime._build_cancel_key_bindings`)
         — the streaming code just lets ``KeyboardInterrupt`` propagate,
         and the ``finally`` block in :func:`stream_to_console` ensures
         the partial buffer is rendered.

@@ -165,6 +165,7 @@ def print_planned_actions(console: Console, actions: list[PlannedAction]) -> Non
         label = {
             "llm_provider": "LLM provider",
             "sample_alert": "sample alert",
+            "investigation": "investigation",
             "shell": "shell",
             "slash": "command",
             "synthetic_test": "synthetic test",

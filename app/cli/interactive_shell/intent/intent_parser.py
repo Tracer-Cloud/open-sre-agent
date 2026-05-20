@@ -118,6 +118,11 @@ SAMPLE_ALERT_RE = re.compile(
     r"\b(?:sample|simple|test|demo)\s+(?:alert|event)\b",
     re.IGNORECASE,
 )
+QUOTED_INVESTIGATION_RE = re.compile(
+    r"\b(?:send|start|run|launch|trigger)\b.{0,80}?\binvestigation\b.{0,260}?"
+    r"(?:\"(?P<double>[^\"]+)\"|'(?P<single>[^']+)'|`(?P<backtick>[^`]+)`)",
+    re.IGNORECASE | re.DOTALL,
+)
 SYNTHETIC_RDS_TEST_RE = re.compile(
     r"\b(?:run|start|launch|execute)\b.{0,80}?"
     r"\b(?:synthetic(?:\s+test)?|benchmark)\b"
@@ -442,6 +447,10 @@ def sample_alert_action(template_name: str, position: int) -> PlannedAction:
     return PlannedAction(kind="sample_alert", content=template_name, position=position)
 
 
+def investigation_action(payload: str, position: int) -> PlannedAction:
+    return PlannedAction(kind="investigation", content=payload, position=position)
+
+
 def synthetic_test_action(suite_name: str, position: int) -> PlannedAction:
     return PlannedAction(kind="synthetic_test", content=suite_name, position=position)
 
@@ -565,6 +574,36 @@ def extract_implementation_request(clause: PromptClause) -> PlannedAction | None
     return implementation_action(content, position)
 
 
+def extract_quoted_investigation_request(clause: PromptClause) -> PlannedAction | None:
+    match = QUOTED_INVESTIGATION_RE.search(clause.text)
+    if match is None:
+        return None
+    payload = (
+        match.group("double") or match.group("single") or match.group("backtick") or ""
+    ).strip()
+    if not payload:
+        return None
+    group_name = (
+        "double" if match.group("double") else "single" if match.group("single") else "backtick"
+    )
+    return investigation_action(payload, clause.position + match.start(group_name))
+
+
+def extract_quoted_investigation_request_text(text: str) -> PlannedAction | None:
+    match = QUOTED_INVESTIGATION_RE.search(text)
+    if match is None:
+        return None
+    payload = (
+        match.group("double") or match.group("single") or match.group("backtick") or ""
+    ).strip()
+    if not payload:
+        return None
+    group_name = (
+        "double" if match.group("double") else "single" if match.group("single") else "backtick"
+    )
+    return investigation_action(payload, match.start(group_name))
+
+
 def split_prompt_clauses(message: str) -> list[PromptClause]:
     """Split compound prompts while preserving each clause's source position."""
     clauses: list[PromptClause] = []
@@ -609,13 +648,17 @@ __all__ = [
     "INTEGRATION_CONFIG_DETAIL_RE",
     "INTEGRATION_DETAIL_RE",
     "IS_WINDOWS",
+    "QUOTED_INVESTIGATION_RE",
     "SAMPLE_ALERT_RE",
     "SYNTHETIC_RDS_TEST_RE",
     "cli_command_action",
+    "extract_quoted_investigation_request",
+    "extract_quoted_investigation_request_text",
     "extract_implementation_request",
     "extract_llm_provider_switch",
     "extract_shell_command",
     "extract_task_cancel_request",
+    "investigation_action",
     "implementation_action",
     "is_single_edit_typo",
     "looks_like_direct_shell_command",

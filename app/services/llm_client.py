@@ -11,7 +11,7 @@ import logging
 import os
 import re
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
@@ -81,6 +81,61 @@ _RETRY_MAX_ATTEMPTS = 3
 # generations (Opus, GPT-5) headroom while preventing indefinite hangs on
 # silent network drops.
 _CLIENT_TIMEOUT_SEC = 60.0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Usage hook — pluggable observer for cost / token accounting
+# ─────────────────────────────────────────────────────────────────────────────
+# Production stays at None (zero overhead). The benchmark framework registers
+# CostTracker.add so per-cell token usage feeds aggregate cost numbers and
+# the hard-cap budget can halt overruns. The hook must be thread-safe — the
+# framework's parallel cells share one tracker. Streaming (invoke_stream) is
+# not hooked in v1: totals only arrive on the stream's final event and no
+# parallel-cell path streams today.
+
+# Return type is ``object`` (not ``None``) so callables that return a value —
+# e.g. CostTracker.add which returns the per-call cost in USD — can be
+# registered directly without wrapping. The return value is discarded.
+UsageHook = Callable[[str, int, int], object]
+_usage_hook: UsageHook | None = None
+
+
+def set_usage_hook(hook: UsageHook | None) -> None:
+    """Register (or clear with None) the observer fired after each successful invoke.
+
+    The callback receives (model_id, tokens_in, tokens_out). Exceptions
+    propagate — e.g. CostBudgetExceeded from CostTracker cleanly bubbles
+    out of the calling invoke() so the framework can halt the run.
+
+    The hook is a **process-wide singleton** by design — it's the simplest
+    shape that fits the bench runner's pattern (set once before workers,
+    clear in `finally`). To prevent silent shared state when two callers
+    accidentally compete for it, registering a non-None hook over an
+    already-registered hook is rejected.
+
+    If you genuinely need concurrent observation (e.g. two `BenchmarkRunner`
+    instances in the same process), refactor to a per-context registry
+    (contextvars or a list-of-hooks) — out of scope for v1.
+    """
+    global _usage_hook
+    if hook is not None and _usage_hook is not None:
+        raise RuntimeError(
+            "A usage hook is already registered. Either the previous owner "
+            "failed to clear it (call set_usage_hook(None) in a finally), or "
+            "two concurrent users of llm_client are conflicting. See the "
+            "set_usage_hook docstring for the contract."
+        )
+    _usage_hook = hook
+
+
+def _emit_usage(model: str, tokens_in: int | None, tokens_out: int | None) -> None:
+    """Notify the registered hook (if any). No-op when no hook or token counts missing."""
+    hook = _usage_hook
+    if hook is None:
+        return
+    if tokens_in is None and tokens_out is None:
+        return
+    hook(model, int(tokens_in or 0), int(tokens_out or 0))
 
 
 @dataclass(frozen=True)
@@ -192,6 +247,12 @@ class LLMClient:
             raise RuntimeError("LLM invocation failed without a concrete error") from last_err
 
         content = _extract_text(response)
+        usage = getattr(response, "usage", None)
+        _emit_usage(
+            self._model,
+            getattr(usage, "input_tokens", None) if usage else None,
+            getattr(usage, "output_tokens", None) if usage else None,
+        )
         return LLMResponse(content=content)
 
     def invoke_stream(self, prompt_or_messages: Any) -> Iterator[str]:
@@ -379,6 +440,12 @@ class BedrockLLMClient:
             raise RuntimeError("Bedrock invocation failed without a concrete error") from last_err
 
         content = _extract_text(response)
+        usage = getattr(response, "usage", None)
+        _emit_usage(
+            self._model,
+            getattr(usage, "input_tokens", None) if usage else None,
+            getattr(usage, "output_tokens", None) if usage else None,
+        )
         return LLMResponse(content=content)
 
     def _invoke_converse(self, prompt_or_messages: Any) -> LLMResponse:
@@ -494,6 +561,13 @@ class BedrockLLMClient:
             )
             raise RuntimeError(
                 f"Bedrock converse returned no text content (stopReason={stop_reason!r})"
+            )
+        usage_dict = response.get("usage") if isinstance(response, dict) else None
+        if isinstance(usage_dict, dict):
+            _emit_usage(
+                self._model,
+                usage_dict.get("inputTokens"),
+                usage_dict.get("outputTokens"),
             )
         return LLMResponse(content=content)
 
@@ -793,6 +867,12 @@ class OpenAILLMClient:
         if not response.choices:
             raise RuntimeError("OpenAI API returned an empty choices list")
         content = response.choices[0].message.content or ""
+        usage = getattr(response, "usage", None)
+        _emit_usage(
+            self._model,
+            getattr(usage, "prompt_tokens", None) if usage else None,
+            getattr(usage, "completion_tokens", None) if usage else None,
+        )
         return LLMResponse(content=content.strip())
 
     def invoke_stream(self, prompt_or_messages: Any) -> Iterator[str]:
