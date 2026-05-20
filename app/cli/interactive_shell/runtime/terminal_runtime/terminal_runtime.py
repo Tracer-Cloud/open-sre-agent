@@ -224,8 +224,11 @@ async def run_interactive(
                 # prompt_async call tears down its Application; responses that
                 # arrive after the input-reader thread stops are left in the OS
                 # buffer and would appear as literal keystrokes in the new
-                # Application's fresh vt100 parser.  The drain is safe here
-                # because no Application is reading stdin at this point.
+                # Application's fresh vt100 parser.  The brief sleep lets
+                # in-transit terminal responses land before the non-blocking
+                # drain runs; without it the terminal's write latency means
+                # some bytes arrive after the drain and still corrupt input.
+                await asyncio.sleep(0.05)
                 _drain_stale_cpr_bytes()
                 try:
                     text = await pt_session.prompt_async(
