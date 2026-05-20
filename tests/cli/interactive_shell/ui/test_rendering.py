@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import threading
 
+import pytest
 from rich.console import Console
 
 from app.cli.interactive_shell.runtime import terminal_runtime as loop
@@ -62,6 +63,42 @@ def test_repl_print_does_not_double_prepare_with_streaming_console(monkeypatch) 
     repl_print(console, "line")
 
     assert len(resets) == 1
+
+
+def test_repl_print_streaming_console_prepares_tty_once_when_interactive(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeStdout:
+        def __init__(self) -> None:
+            self.writes: list[str] = []
+
+        def write(self, text: str) -> int:
+            self.writes.append(text)
+            return len(text)
+
+        def flush(self) -> None:
+            return None
+
+        def isatty(self) -> bool:
+            return True
+
+    fake_stdout = _FakeStdout()
+    monkeypatch.setattr("sys.stdout", fake_stdout)
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.ui.choice_menu.repl_tty_interactive",
+        lambda: True,
+    )
+
+    console = loop._StreamingConsole(
+        loop._SpinnerState(),
+        threading.Event(),
+        file=io.StringIO(),
+        force_terminal=False,
+        width=80,
+    )
+    repl_print(console, "line")
+
+    assert fake_stdout.writes == ["\r\n", "\r"]
 
 
 def test_render_integrations_table_resets_tty_before_print(monkeypatch) -> None:
