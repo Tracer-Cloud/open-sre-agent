@@ -459,6 +459,8 @@ def validate_hermes_orchestration_state(data: dict[str, Any]) -> dict[str, Any]:
 
     for index, role in enumerate(declared_roles):
         rctx = f"{ctx}:declared_roles[{index}]"
+        if not isinstance(role, dict):
+            raise ValueError(f"{rctx}: each declared_roles entry must be an object")
 
         _require_str(role, "name", rctx)
         _require_str(role, "model", rctx)
@@ -478,6 +480,8 @@ def validate_hermes_orchestration_state(data: dict[str, Any]) -> dict[str, Any]:
 
     for index, run in enumerate(actual_runs):
         actx = f"{ctx}:observed:actual_runs[{index}]"
+        if not isinstance(run, dict):
+            raise ValueError(f"{actx}: each actual_runs entry must be an object")
 
         _require_str(run, "role", actx)
         _require_str(run, "model", actx)
@@ -525,6 +529,8 @@ def validate_hermes_routing_decisions(data: dict[str, Any]) -> dict[str, Any]:
 
     for index, call in enumerate(calls):
         cctx = f"{ctx}:calls[{index}]"
+        if not isinstance(call, dict):
+            raise ValueError(f"{cctx}: each calls entry must be an object")
 
         for field in (
             "ts",
@@ -581,6 +587,8 @@ def validate_hermes_filesystem_state(data: dict[str, Any]) -> dict[str, Any]:
 
     for index, file_entry in enumerate(files):
         fctx = f"{ctx}:files[{index}]"
+        if not isinstance(file_entry, dict):
+            raise ValueError(f"{fctx}: each files entry must be an object")
 
         for field in ("path", "sha256", "last_modified"):
             _require_str(file_entry, field, fctx)
