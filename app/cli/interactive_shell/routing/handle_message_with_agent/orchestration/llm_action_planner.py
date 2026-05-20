@@ -366,116 +366,6 @@ def _parse_tool_plan(
     return actions, has_unhandled
 
 
-def _filter_context_sensitive_actions(
-    message: str,
-    actions: list[PlannedAction],
-    has_unhandled: bool,
-) -> tuple[list[PlannedAction], bool]:
-    """Drop high-impact action kinds unless the source text explicitly asks for them."""
-    from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.intent_parser import (
-        extract_implementation_request,
-        extract_quoted_investigation_request_text,
-    )
-    from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
-        PromptClause,
-    )
-    from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.slash_commands.deterministic_action_mapper import (
-        plan_actions_with_unhandled,
-    )
-
-    filtered: list[PlannedAction] = []
-    implementation_request = extract_implementation_request(PromptClause(message, 0))
-    investigation_request = extract_quoted_investigation_request_text(message)
-    det_actions, _det_unhandled = plan_actions_with_unhandled(message)
-    has_det_investigation = any(item.kind == "investigation" for item in det_actions)
-    dropped = False
-
-    for action in actions:
-        if action.kind == "implementation" and implementation_request is None:
-            dropped = True
-            continue
-        if (
-            action.kind == "investigation"
-            and investigation_request is None
-            and not has_det_investigation
-        ):
-            dropped = True
-            continue
-        filtered.append(action)
-
-    return filtered, has_unhandled or dropped
-
-
-def _apply_deterministic_unhandled_guard(
-    message: str,
-    actions: list[PlannedAction],
-    has_unhandled: bool,
-) -> tuple[list[PlannedAction], bool]:
-    """Conservatively preserve fail-closed behavior for partial prompts.
-
-    Live LLM tool-calling occasionally drops unmatched conjunction clauses
-    (for example, "show connected services and sing a song") and reports the
-    matched executable action as fully handled. We keep the LLM plan as-is, but
-    consult the deterministic clause splitter as a safety backstop: if it finds
-    unmatched clauses, mark the plan as unhandled so callers can fail closed.
-    """
-    if has_unhandled:
-        return actions, True
-    if not actions:
-        return actions, False
-    from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.slash_commands.deterministic_action_mapper import (
-        plan_actions_with_unhandled,
-    )
-
-    det_actions, det_unhandled = plan_actions_with_unhandled(message)
-    handoff_only = all(action.kind == "assistant_handoff" for action in actions)
-    has_llm_investigation = any(action.kind == "investigation" for action in actions)
-    det_investigations = [item for item in det_actions if item.kind == "investigation"]
-    if not has_llm_investigation and det_investigations and not handoff_only:
-        # Some multi-step prompts intermittently lose the investigation clause in
-        # LLM tool output (for example: remote-connect + quoted investigation).
-        # Backfill the deterministic investigation action so execution matches the
-        # user's compound intent instead of silently truncating it.
-        det = det_investigations[0]
-        backfilled = PlannedAction(
-            kind="investigation",
-            content=det.content,
-            position=det.position,
-            source="llm",
-            confidence=1.0,
-            rationale="Backfilled from deterministic compound-clause mapper.",
-            target_surface=default_target_surface("investigation"),
-            args={"alert_text": det.content},
-        )
-        actions = sorted([*actions, backfilled], key=lambda action: action.position)
-    if handoff_only:
-        if det_actions:
-            lowered = message.lower()
-            informational_cues = (
-                "how do",
-                "how can",
-                "what is",
-                "what are",
-                "why ",
-                "which ",
-                "help ",
-                "docs",
-            )
-            is_informational_query = lowered.strip().endswith("?") or any(
-                cue in lowered for cue in informational_cues
-            )
-            if is_informational_query:
-                return actions, False
-            # LLM marked this as informational but deterministic mapping found a
-            # concrete executable action candidate; fail closed instead of silently
-            # treating it as a successful handoff.
-            return actions, True
-        # Pure handoff flows (docs/chat/follow-up) are allowed to remain handled
-        # even if deterministic parsing labels the clause as unmatched.
-        return actions, False
-    return actions, det_unhandled
-
-
 def plan_actions_with_llm(
     message: str,
     *,
@@ -486,16 +376,7 @@ def plan_actions_with_llm(
     raw = _call_llm(sanitised, session)
     if raw is None:
         return None
-    parsed = _parse_tool_plan(raw, session=session)
-    if parsed is None:
-        return None
-    actions, has_unhandled = parsed
-    actions, has_unhandled = _filter_context_sensitive_actions(
-        message.strip(),
-        actions,
-        has_unhandled,
-    )
-    return _apply_deterministic_unhandled_guard(message.strip(), actions, has_unhandled)
+    return _parse_tool_plan(raw, session=session)
 
 
 __all__ = ["plan_actions_with_llm"]
