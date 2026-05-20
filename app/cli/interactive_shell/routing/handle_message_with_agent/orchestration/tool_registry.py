@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import importlib
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -147,16 +148,12 @@ REGISTRY = ActionToolRegistry()
 _ACTION_TOOLS_MODULE = (
     "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tools"
 )
-_action_tools_loaded = False
 
 
+@functools.cache
 def ensure_action_tools_loaded() -> None:
     """Import tool modules so ``REGISTRY`` side-effect registrations run."""
-    global _action_tools_loaded
-    if _action_tools_loaded:
-        return
     importlib.import_module(_ACTION_TOOLS_MODULE)
-    _action_tools_loaded = True
 
 
 ensure_action_tools_loaded()

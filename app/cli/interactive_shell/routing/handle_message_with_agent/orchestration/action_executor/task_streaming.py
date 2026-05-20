@@ -44,8 +44,6 @@ SYNTHETIC_TEST_TIMEOUT_SECONDS = 1800
 CLAUDE_CODE_IMPLEMENTATION_TIMEOUT_SECONDS = 1800
 _SYNTHETIC_POLL_SECONDS = 0.25
 _MAX_COMMAND_OUTPUT_CHARS = 24_000
-# Referenced by shell_runner, background_tasks, synthetic_tasks, and implementation_runner.
-_STREAMING_LIMITS = (_SYNTHETIC_POLL_SECONDS, _MAX_COMMAND_OUTPUT_CHARS)
 _SYNTHETIC_DIAG_CHARS = 2_000  # max stderr bytes captured from a failing synthetic run
 _SIGTERM_GRACE_SECONDS = 10  # wait for clean exit after SIGTERM before escalating to SIGKILL
 _TASK_OUTPUT_JOIN_TIMEOUT_SECONDS = 2

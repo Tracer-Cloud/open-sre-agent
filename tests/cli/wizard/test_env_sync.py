@@ -8,6 +8,7 @@ import pytest
 from app.cli.wizard.config import PROVIDER_BY_VALUE
 from app.cli.wizard.env_sync import (
     _is_sensitive_env_key,
+    sync_env_secret,
     sync_env_values,
     sync_provider_env,
 )
@@ -350,6 +351,14 @@ def test_sync_provider_env_permission_error(tmp_path) -> None:
         env_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
 
 
+def test_sync_env_values_rejects_sensitive_keys(tmp_path) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text("FOO=bar\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="sync_env_secret"):
+        sync_env_values({"GITLAB_ACCESS_TOKEN": "secret"}, env_path=env_path)
+
+
 def test_sync_env_values_routes_secrets_to_keyring(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("GITLAB_ACCESS_TOKEN", raising=False)
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
@@ -361,11 +370,9 @@ def test_sync_env_values_routes_secrets_to_keyring(tmp_path, monkeypatch) -> Non
         encoding="utf-8",
     )
 
+    sync_env_secret("GITLAB_ACCESS_TOKEN", "gl-secret-token")
     sync_env_values(
-        {
-            "GITLAB_BASE_URL": "https://gitlab.corp.com",
-            "GITLAB_ACCESS_TOKEN": "gl-secret-token",
-        },
+        {"GITLAB_BASE_URL": "https://gitlab.corp.com"},
         env_path=env_path,
     )
 

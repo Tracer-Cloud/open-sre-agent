@@ -67,6 +67,10 @@ def _persist_env_secret(key: str, value: str) -> bool:
 
 
 def _set_env_value(lines: list[str], key: str, value: str) -> list[str]:
+    if _is_sensitive_env_key(key):
+        raise RuntimeError(
+            f"Refusing to write sensitive env key {key!r} to .env; use sync_env_secret()."
+        )
     updated: list[str] = []
     replaced = False
     for line in lines:
@@ -102,8 +106,7 @@ def _write_env(target_path: Path, lines: list[str]) -> None:
     try:
         target_path.parent.mkdir(parents=True, exist_ok=True)
         with target_path.open("w", encoding="utf-8", newline="") as env_file:
-            # Sensitive keys are stripped above; only non-secret config is persisted.
-            env_file.writelines(public_lines)  # codeql[py/clear-text-storage-sensitive-data]
+            env_file.writelines(public_lines)
     except PermissionError as exc:
         raise PermissionError(
             f"Cannot write to {target_path}: permission denied. "
@@ -114,16 +117,28 @@ def _write_env(target_path: Path, lines: list[str]) -> None:
             target_path.chmod(0o600)
 
 
+def sync_env_secret(key: str, value: str) -> None:
+    """Persist a sensitive env value in the system keyring, not in ``.env``."""
+    if not _is_sensitive_env_key(key):
+        raise ValueError(f"{key!r} is not classified as sensitive; use sync_env_values instead.")
+    _persist_env_secret(key, value)
+
+
 def sync_env_values(
     values: dict[str, str],
     *,
     env_path: Path | None = None,
 ) -> Path:
-    """Write multiple environment values into the target .env file.
+    """Write multiple non-sensitive environment values into the target .env file.
 
-    Sensitive keys are persisted in the system keyring instead of plain text.
+    Sensitive keys must be persisted with :func:`sync_env_secret` instead.
     When keyring storage is unavailable, sensitive values are not written to ``.env``.
     """
+    sensitive_keys = [key for key in values if _is_sensitive_env_key(key)]
+    if sensitive_keys:
+        joined = ", ".join(repr(key) for key in sensitive_keys)
+        raise ValueError(f"Refusing to sync sensitive env keys {joined}; use sync_env_secret().")
+
     target_path = env_path or PROJECT_ENV_PATH
     existing = (
         target_path.read_text(encoding="utf-8").splitlines(keepends=True)
@@ -133,10 +148,6 @@ def sync_env_values(
 
     lines = _strip_sensitive_env_lines(existing)
     for key, value in values.items():
-        if _is_sensitive_env_key(key):
-            _persist_env_secret(key, value)
-            lines = _remove_keys(lines, {key})
-            continue
         lines = _set_env_value(lines, key, value)
 
     _write_env(target_path, lines)

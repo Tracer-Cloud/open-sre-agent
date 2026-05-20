@@ -1084,6 +1084,7 @@ def test_run_wizard_configures_gitlab(monkeypatch, tmp_path) -> None:
     text_responses = iter(["https://gitlab.example.com/api/v4"])
     saved_integrations: list[tuple[str, dict]] = []
     synced_env_values: list[dict[str, str]] = []
+    synced_env_secrets: list[tuple[str, str]] = []
 
     def _mock_select(*_args, **_kwargs):
         m = MagicMock()
@@ -1118,7 +1119,11 @@ def test_run_wizard_configures_gitlab(monkeypatch, tmp_path) -> None:
         synced_env_values.append(values)
         return tmp_path / ".env"
 
+    def _sync_env_secret(key: str, value: str) -> None:
+        synced_env_secrets.append((key, value))
+
     monkeypatch.setattr(flow, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(flow, "sync_env_secret", _sync_env_secret)
     monkeypatch.setattr(
         flow,
         "upsert_integration",
@@ -1139,10 +1144,10 @@ def test_run_wizard_configures_gitlab(monkeypatch, tmp_path) -> None:
             },
         )
     ]
+    assert synced_env_secrets == [("GITLAB_ACCESS_TOKEN", "glpat_test")]
     assert synced_env_values == [
         {
             "GITLAB_BASE_URL": "https://gitlab.example.com/api/v4",
-            "GITLAB_ACCESS_TOKEN": "glpat_test",
         }
     ]
 
@@ -1161,6 +1166,7 @@ def test_run_wizard_gitlab_retries_on_validation_failure(monkeypatch, tmp_path) 
     )
     saved_integrations: list[tuple[str, dict]] = []
     synced_env_values: list[dict[str, str]] = []
+    synced_env_secrets: list[tuple[str, str]] = []
     validation_call_count = 0
 
     def _mock_select(*_args, **_kwargs):
@@ -1199,7 +1205,11 @@ def test_run_wizard_gitlab_retries_on_validation_failure(monkeypatch, tmp_path) 
         synced_env_values.append(values)
         return tmp_path / ".env"
 
+    def _sync_env_secret(key: str, value: str) -> None:
+        synced_env_secrets.append((key, value))
+
     monkeypatch.setattr(flow, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(flow, "sync_env_secret", _sync_env_secret)
     monkeypatch.setattr(
         flow,
         "upsert_integration",
@@ -1221,10 +1231,10 @@ def test_run_wizard_gitlab_retries_on_validation_failure(monkeypatch, tmp_path) 
             },
         )
     ]
+    assert synced_env_secrets == [("GITLAB_ACCESS_TOKEN", "glpat_good")]
     assert synced_env_values == [
         {
             "GITLAB_BASE_URL": "https://gitlab.com/api/v4",
-            "GITLAB_ACCESS_TOKEN": "glpat_good",
         }
     ]
 
@@ -1320,6 +1330,7 @@ def test_run_wizard_configures_opensearch(monkeypatch, tmp_path) -> None:
     text_responses = iter(["https://my-cluster.example.com", "admin"])
     saved_integrations: list[tuple[str, dict]] = []
     synced_env_values: list[dict[str, str]] = []
+    synced_env_secrets: list[tuple[str, str]] = []
 
     def _mock_select(*_args, **_kwargs):
         m = MagicMock()
@@ -1354,7 +1365,11 @@ def test_run_wizard_configures_opensearch(monkeypatch, tmp_path) -> None:
         synced_env_values.append(values)
         return tmp_path / ".env"
 
+    def _sync_env_secret(key: str, value: str) -> None:
+        synced_env_secrets.append((key, value))
+
     monkeypatch.setattr(flow, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(flow, "sync_env_secret", _sync_env_secret)
     monkeypatch.setattr(
         flow,
         "upsert_integration",
@@ -1381,11 +1396,11 @@ def test_run_wizard_configures_opensearch(monkeypatch, tmp_path) -> None:
             },
         )
     ]
+    assert synced_env_secrets == [("OPENSEARCH_PASSWORD", "secret-pass")]
     assert synced_env_values == [
         {
             "OPENSEARCH_URL": "https://my-cluster.example.com",
             "OPENSEARCH_USERNAME": "admin",
-            "OPENSEARCH_PASSWORD": "secret-pass",
         }
     ]
 
