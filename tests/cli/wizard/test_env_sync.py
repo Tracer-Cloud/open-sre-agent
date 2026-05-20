@@ -239,7 +239,6 @@ def test_sync_provider_env_updates_os_environ(tmp_path, monkeypatch) -> None:
     assert "OPENAI_REASONING_MODEL" not in os.environ
 
 
-@pytest.mark.skipif(_SKIP_AS_ROOT, reason="root bypasses file permission checks")
 def test_sync_provider_env_skips_empty_preserved_values_in_os_environ(
     tmp_path, monkeypatch
 ) -> None:
@@ -292,6 +291,7 @@ def test_sync_provider_env_writes_toolcall_model_atomically(tmp_path, monkeypatc
     assert os.environ["OPENAI_TOOLCALL_MODEL"] == "gpt-5.4-nano"
 
 
+@pytest.mark.skipif(_SKIP_AS_ROOT, reason="root bypasses file permission checks")
 def test_sync_provider_env_permission_error(tmp_path) -> None:
     env_path = tmp_path / ".env"
     env_path.write_text("LLM_PROVIDER=anthropic\n", encoding="utf-8")
