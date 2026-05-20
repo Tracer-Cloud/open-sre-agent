@@ -6,7 +6,9 @@ from typing import Any
 
 from app.analytics.cli import track_investigation
 from app.analytics.source import EntrypointSource, TriggerMode
+from app.utils.sentry_sdk import init_sentry
 
+init_sentry(entrypoint="entrypoints.sdk")
 
 def run_investigation(*args: Any, **kwargs: Any) -> Any:
     """Lazily import the full runner stack to avoid optional dependency churn at import time."""

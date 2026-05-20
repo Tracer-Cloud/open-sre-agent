@@ -6,6 +6,7 @@ import json
 import time
 from contextlib import suppress
 from typing import Any
+from app.utils.sentry_sdk import init_sentry
 
 import requests
 
@@ -164,7 +165,7 @@ def seed_logs() -> None:
 
 def main() -> int:
     with suppress(ModuleNotFoundError):
-        init_sentry(entrypoint="wizard")
+        init_sentry(entrypoint="wizard.grafana_seed")
     seed_logs()
     return 0
 

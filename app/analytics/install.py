@@ -8,6 +8,8 @@ from app.analytics.provider import (
     shutdown_analytics,
 )
 
+from app.utils.sentry_sdk import init_sentry
+
 _INSTALL_PROPERTIES: Properties = {
     "install_source": "make_install",
     "entrypoint": "make install",
@@ -21,4 +23,5 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    init_sentry(entrypoint="analytics.install")
     raise SystemExit(main())

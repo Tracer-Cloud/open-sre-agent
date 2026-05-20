@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from app.services.llm_client import get_llm_for_reasoning
 from app.version import get_version
+from app.utils.sentry_sdk import init_sentry
 
 GITHUB_API_BASE_URL = "https://api.github.com"
 GITHUB_API_VERSION = "2022-11-28"
@@ -732,6 +733,7 @@ def _append_github_output(name: str, value: str) -> None:
 
 def main() -> int:
     """Entrypoint used by the scheduled GitHub Actions workflow."""
+    init_sentry(entrypoint="integrations.daily_update")
     repository = _string(os.getenv("GITHUB_REPOSITORY"))
     token = _string(os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN"))
     if not repository:
