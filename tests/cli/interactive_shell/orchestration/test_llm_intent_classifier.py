@@ -56,15 +56,20 @@ class TestUserTemplateFormat:
     interpreted as missing format-string arguments, raising KeyError at runtime.
     """
 
-    def test_json_with_actions_key_doesnt_raise(self) -> None:
-        sanitised = classifier._sanitise_text(
-            '{"actions": ["deploy", "rollback"], "severity": "critical"}'
+    def test_user_template_has_only_text_format_spec(self) -> None:
+        import re
+
+        # _USER_TEMPLATE must contain exactly the {text} placeholder and nothing else.
+        # Any extra bare format spec (e.g. {actions}) would raise KeyError at runtime
+        # when _call_llm passes user-supplied JSON through _USER_TEMPLATE.format(text=...).
+        specs = re.findall(r"(?<!\{)\{[^{}]+\}(?!\})", classifier._USER_TEMPLATE)
+        assert specs == ["{text}"], (
+            f"_USER_TEMPLATE contains unexpected format specs: {specs!r}"
         )
-        # Must not raise KeyError even though the text contains {actions}
-        result = classifier._USER_TEMPLATE.format(text=sanitised)
-        assert sanitised in result
 
     def test_multiline_json_with_nested_braces_doesnt_raise(self) -> None:
+        # Verifies _sanitise_text preserves braces and that the sanitised value
+        # embeds correctly in the template (structural, not a KeyError guard).
         payload = '{\n  "actions": [\n    "restart",\n    "rollback"\n  ]\n}'
         sanitised = classifier._sanitise_text(payload)
         result = classifier._USER_TEMPLATE.format(text=sanitised)
