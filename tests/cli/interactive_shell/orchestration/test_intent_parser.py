@@ -143,7 +143,9 @@ def test_map_actions_with_unhandled_health_then_connected_services() -> None:
 
 def test_reconcile_compound_actions_relabels_source_as_llm() -> None:
     llm_actions = [
-        PlannedAction(kind="slash", content="/health", position=0, source="llm", target_surface="slash")
+        PlannedAction(
+            kind="slash", content="/health", position=0, source="llm", target_surface="slash"
+        )
     ]
     actions, _has_unhandled = _reconcile_compound_actions(
         "run /health and then trigger a sample alert investigation",
@@ -174,6 +176,48 @@ def test_finalize_preserves_handoff_for_checkout_http_errors() -> None:
         True,
     )
     assert has_unhandled is True
+    assert len(actions) == 1
+    assert actions[0].kind == "assistant_handoff"
+
+
+def test_finalize_coerces_investigation_to_handoff_for_checkout_http_errors() -> None:
+    investigation = [
+        PlannedAction(
+            kind="investigation",
+            content="the checkout service is returning 502 errors for 30% of requests",
+            position=0,
+            source="llm",
+            target_surface="investigation",
+            args={"alert_text": "the checkout service is returning 502 errors for 30% of requests"},
+        )
+    ]
+    actions, has_unhandled = _finalize_planner_result(
+        "the checkout service is returning 502 errors for 30% of requests",
+        investigation,
+        False,
+    )
+    assert has_unhandled is False
+    assert len(actions) == 1
+    assert actions[0].kind == "assistant_handoff"
+
+
+def test_finalize_coerces_rich_paste_investigation_without_unhandled_flag() -> None:
+    message = (
+        "Checkout API is returning HTTP 500s for 30% of requests since 14:05 UTC.\n"
+        "Service: checkout-api\n"
+        "Region: us-east-1"
+    )
+    investigation = [
+        PlannedAction(
+            kind="investigation",
+            content=message,
+            position=0,
+            source="llm",
+            target_surface="investigation",
+        )
+    ]
+    actions, has_unhandled = _finalize_planner_result(message, investigation, False)
+    assert has_unhandled is False
     assert len(actions) == 1
     assert actions[0].kind == "assistant_handoff"
 

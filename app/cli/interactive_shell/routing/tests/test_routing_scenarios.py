@@ -88,7 +88,10 @@ def _build_actual_action(action: PlannedAction) -> ExpectedAction:
 
 def _action_match_view(action: ExpectedAction) -> ExpectedAction:
     """Ignore action provenance; live tests assert behavior, not planner path."""
-    return {key: value for key, value in action.items() if key != "source"}
+    return cast(
+        ExpectedAction,
+        {key: value for key, value in action.items() if key != "source"},
+    )
 
 
 def _assert_planned_actions_match(

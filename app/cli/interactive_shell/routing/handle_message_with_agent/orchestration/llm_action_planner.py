@@ -33,9 +33,13 @@ _RICH_PASTED_INCIDENT_RE = re.compile(
     r"^(?:.*\n){1,}.*\b(?:service|region)\s*:",
     re.IGNORECASE | re.DOTALL,
 )
-# Narrow symptoms only: checkout/HTTP/database pastes should stay assistant handoff.
+# Narrow upgrade symptoms: checkout/HTTP/database pastes should stay assistant handoff.
 _INCIDENT_UPGRADE_SYMPTOM_RE = re.compile(
     r"\b(?:cpu|spiking|spike|pods?|firing)\b",
+    re.IGNORECASE,
+)
+_HTTP_INCIDENT_PASTE_RE = re.compile(
+    r"\b(?:checkout|5\d\d|http\s+\d{3}|returning\s+\d{3})\b",
     re.IGNORECASE,
 )
 
@@ -482,36 +486,45 @@ def _fail_closed_unconfigured_integration_detail(
             and re.search(r"\b(show|details|verify|remove|integration)\b", lowered)
         ):
             return [
-                    PlannedAction(
-                        kind="assistant_handoff",
-                        content=f"integration_details:{service}_unconfigured",
-                        position=0,
-                        source="llm",
-                    )
-                ], False
+                PlannedAction(
+                    kind="assistant_handoff",
+                    content=f"integration_details:{service}_unconfigured",
+                    position=0,
+                    source="llm",
+                )
+            ], False
     return actions, has_unhandled
 
 
-def _coerce_rich_paste_handoff(
+def _coerce_incident_paste_handoff(
     message: str,
     actions: list[PlannedAction],
     has_unhandled: bool,
 ) -> tuple[list[PlannedAction], bool]:
-    """Rich pasted incidents should hand off, not auto-launch investigation."""
-    if _RICH_PASTED_INCIDENT_RE.search(message) is None:
-        return actions, has_unhandled
+    """Incident-style pastes should hand off, not auto-launch investigation."""
     if not actions or not all(action.kind == "investigation" for action in actions):
+        return actions, has_unhandled
+    if _INCIDENT_UPGRADE_SYMPTOM_RE.search(message):
         return actions, has_unhandled
     if re.search(r"\bhow\s+(?:do|to)\b", message, re.IGNORECASE):
         return actions, has_unhandled
+    is_rich_paste = _RICH_PASTED_INCIDENT_RE.search(message) is not None
+    is_http_incident = _HTTP_INCIDENT_PASTE_RE.search(message) is not None
+    if not is_rich_paste and not is_http_incident:
+        return actions, has_unhandled
+    content = (
+        "incident_description:rich_context"
+        if is_rich_paste
+        else "incident_description:http_incident"
+    )
     return [
         PlannedAction(
             kind="assistant_handoff",
-            content="incident_description:rich_context",
+            content=content,
             position=0,
             source="llm",
         )
-    ], True
+    ], False
 
 
 def _finalize_planner_result(
@@ -531,7 +544,7 @@ def _finalize_planner_result(
         return actions, has_unhandled
     actions, has_unhandled = _reconcile_compound_actions(message, actions, has_unhandled)
     actions, has_unhandled = _upgrade_handoff_to_incident(message, actions, has_unhandled)
-    return _coerce_rich_paste_handoff(message, actions, has_unhandled)
+    return _coerce_incident_paste_handoff(message, actions, has_unhandled)
 
 
 def plan_actions_with_llm(
