@@ -59,10 +59,7 @@ def normalize_history_entry(entry: dict[str, Any]) -> dict[str, Any]:
 
 def oracle_action_matches(actual_norm: dict[str, Any], expected: dict[str, Any]) -> bool:
     """Compare only expected keys to keep fixture declarations compact."""
-    for key, expected_value in expected.items():
-        if actual_norm.get(key) != expected_value:
-            return False
-    return True
+    return all(actual_norm.get(key) == expected_value for key, expected_value in expected.items())
 
 
 __all__ = [

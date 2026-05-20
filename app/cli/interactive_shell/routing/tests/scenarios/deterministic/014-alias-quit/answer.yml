@@ -1,0 +1,30 @@
+route:
+  expected_kind: slash
+  expected_signals:
+  - bare_command_alias
+  expected_command_text: /quit
+policy:
+  should_execute: true
+  has_unhandled_clause: false
+  fail_closed: false
+planned_actions:
+- kind: slash
+  source: deterministic
+  target_surface: slash
+  command: /quit
+  args: []
+executed_actions:
+- kind: slash
+  command: /quit
+  args: []
+classification_actions: []
+response_contract:
+  must_contain_any:
+  - ran /quit
+  must_not_contain: []
+history:
+  expected:
+  - type: slash
+    ok: true
+tier: critical
+runs: 1

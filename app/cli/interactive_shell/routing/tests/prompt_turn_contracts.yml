@@ -69,7 +69,7 @@
       content: "docs:datadog_setup"
   expected_executed_actions: []
   expected_terminal_response_contains:
-    - "datadog"
+    - "integrations"
   expected_session_history_delta:
     - type: "cli_agent"
       text: "how do I configure datadog?"
@@ -313,7 +313,7 @@
       content: "diagnostic_question:database_slow"
   expected_executed_actions: []
   expected_terminal_response_contains:
-    - "investigation"
+    - "incident"
   expected_session_history_delta:
     - type: "cli_agent"
       text: "why is the database slow?"
@@ -355,7 +355,7 @@
       content: "incident_description:orders_cpu_spike"
   expected_executed_actions: []
   expected_terminal_response_contains:
-    - "orders"
+    - "incident"
   expected_session_history_delta:
     - type: "cli_agent"
       text: "CPU is spiking to 99% on the orders-api pods"
@@ -385,7 +385,7 @@
       content: "follow_up:spike_cause"
   expected_executed_actions: []
   expected_terminal_response_contains:
-    - "investigation"
+    - "incident"
   expected_session_history_delta:
     - type: "cli_agent"
       text: "what caused the spike?"

@@ -1,0 +1,26 @@
+route:
+  expected_kind: cli_agent
+  expected_signals: []
+  expected_command_text: null
+policy:
+  should_execute: false
+  has_unhandled_clause: true
+  fail_closed: true
+planned_actions: []
+executed_actions: []
+classification_actions:
+- kind: assistant_handoff
+  content: diagnostic_question:database_slow
+response_contract:
+  must_contain_any:
+    - investigate
+    - rca
+    - incident
+  must_not_contain:
+    - $ /
+history:
+  expected:
+  - type: cli_agent
+    ok: true
+tier: full
+runs: 1

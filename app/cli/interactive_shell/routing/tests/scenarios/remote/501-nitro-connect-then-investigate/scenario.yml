@@ -1,0 +1,18 @@
+id: 501-nitro-connect-then-investigate
+title: Nitro connect then investigate
+intent_class: remote
+risk_level: high
+input:
+  prompt: I want to connect to OpenSRE that I have running on a remote EC2 Nitro instance,
+    and then I want to send it an investigation. Can you please connect the instance
+    and send it "hello world"
+  surface: interactive_cli
+session:
+  has_prior_state: false
+  remote_connected: false
+  configured_integrations: []
+available_capabilities:
+  slash_commands: []
+  cli_commands: []
+  synthetic_suites: []
+notes: []

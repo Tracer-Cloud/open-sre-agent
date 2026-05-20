@@ -1,0 +1,38 @@
+route:
+  expected_kind: cli_agent
+  expected_signals: []
+  expected_command_text: null
+policy:
+  should_execute: true
+  has_unhandled_clause: false
+  fail_closed: false
+planned_actions:
+- kind: synthetic_test
+  content: rds_postgres:005-failover
+  source: llm
+  target_surface: investigation
+  suite: rds_postgres
+  scenario: 005-failover
+executed_actions:
+- kind: synthetic_test
+  suite: rds_postgres
+  scenario: 005-failover
+classification_actions:
+- kind: synthetic_test
+  source: llm
+  target_surface: investigation
+  content: rds_postgres:005-failover
+  suite: rds_postgres
+  scenario: 005-failover
+response_contract:
+  must_contain_any:
+  - synthetic test rds_postgres:005-failover
+  must_not_contain: []
+history:
+  expected:
+  - type: cli_agent
+    ok: true
+  - type: synthetic_test
+    ok: true
+tier: critical
+runs: 1

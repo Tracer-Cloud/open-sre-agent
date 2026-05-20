@@ -1,0 +1,16 @@
+id: 500-connect-local-llama-fail-closed
+title: Connect local llama fail-closed
+intent_class: remote
+risk_level: medium
+input:
+  prompt: please connect to local llama
+  surface: interactive_cli
+session:
+  has_prior_state: false
+  remote_connected: false
+  configured_integrations: []
+available_capabilities:
+  slash_commands: []
+  cli_commands: []
+  synthetic_suites: []
+notes: []

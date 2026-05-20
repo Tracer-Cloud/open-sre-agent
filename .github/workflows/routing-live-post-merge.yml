@@ -58,5 +58,6 @@ jobs:
         run: >-
           uv run python -m pytest -n auto -v
           -m live_llm
-          app/cli/interactive_shell/routing/tests/test_router_live_prompts.py
+          app/cli/interactive_shell/routing/tests/test_routing_scenarios.py
+          -k "test_live_route_classification or test_live_turn_execution_oracle or test_live_action_planning"
           tests/cli/interactive_shell/orchestration/test_llm_intent_classifier.py

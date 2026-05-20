@@ -1,0 +1,16 @@
+id: 601-follow-up-spike-cause
+title: Follow-up spike cause
+intent_class: follow_up
+risk_level: medium
+input:
+  prompt: what caused the spike?
+  surface: interactive_cli
+session:
+  has_prior_state: true
+  remote_connected: false
+  configured_integrations: []
+available_capabilities:
+  slash_commands: []
+  cli_commands: []
+  synthetic_suites: []
+notes: []

@@ -1,0 +1,40 @@
+route:
+  expected_kind: cli_agent
+  expected_signals: []
+  expected_command_text: null
+policy:
+  should_execute: true
+  has_unhandled_clause: false
+  fail_closed: false
+planned_actions:
+- kind: slash
+  content: /remote
+  source: llm
+  target_surface: slash
+  command: /remote
+  args: &id001 []
+- kind: investigation
+  content: hello world
+  source: llm
+  target_surface: investigation
+executed_actions:
+- kind: slash
+  command: /remote
+  args: *id001
+- kind: investigation
+  content: hello world
+classification_actions: []
+response_contract:
+  must_contain_any:
+  - ran /remote
+  must_not_contain: []
+history:
+  expected:
+  - type: cli_agent
+    ok: true
+  - type: slash
+    ok: true
+  - type: alert
+    ok: true
+tier: critical
+runs: 1

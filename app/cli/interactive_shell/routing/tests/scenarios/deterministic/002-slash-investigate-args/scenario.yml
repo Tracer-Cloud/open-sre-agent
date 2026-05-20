@@ -1,0 +1,16 @@
+id: 002-slash-investigate-args
+title: Slash /investigate with args
+intent_class: deterministic
+risk_level: medium
+input:
+  prompt: /investigate alert.json
+  surface: interactive_cli
+session:
+  has_prior_state: false
+  remote_connected: false
+  configured_integrations: []
+available_capabilities:
+  slash_commands: []
+  cli_commands: []
+  synthetic_suites: []
+notes: []

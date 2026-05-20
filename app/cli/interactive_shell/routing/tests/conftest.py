@@ -3,10 +3,18 @@
 from __future__ import annotations
 
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
+from app.config import (
+    DEFAULT_LLM_RESOLUTION_FALLBACK_PROVIDERS,
+    get_configured_llm_provider,
+    get_llm_provider_api_key_env,
+    resolve_llm_settings,
+)
 from app.utils.config import load_env
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[6]
@@ -21,22 +29,6 @@ _ROUTING_TEST_DEFAULT_ENV = {
 def pytest_configure(config: pytest.Config) -> None:  # noqa: ARG001
     """Load project settings for co-located routing tests."""
     load_env(_ENV_PATH, override=False)
-
-
-def pytest_addoption(parser: pytest.Parser) -> None:
-    """Expose CLI toggles for routing test suites."""
-    parser.addoption(
-        "--run-full-oracle",
-        action="store_true",
-        default=False,
-        help="Include tier=full live action oracle cases.",
-    )
-
-
-@pytest.fixture()
-def run_full_oracle(pytestconfig: pytest.Config) -> bool:
-    """Whether full-tier oracle cases are enabled for this run."""
-    return bool(pytestconfig.getoption("--run-full-oracle"))
 
 
 @pytest.fixture(autouse=True)
@@ -55,6 +47,36 @@ def _disable_system_keyring(
     if request.node.get_closest_marker("live_llm") is not None:
         return
     monkeypatch.setenv("OPENSRE_DISABLE_KEYRING", "1")
+
+
+@pytest.fixture(autouse=True)
+def _resolve_live_llm_configuration(
+    request: pytest.FixtureRequest,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[None]:
+    """Let live LLM routing tests run with Anthropic or OpenAI credentials."""
+    if request.node.get_closest_marker("live_llm") is None:
+        yield
+        return
+
+    try:
+        settings = resolve_llm_settings()
+    except ValidationError as exc:
+        provider = get_configured_llm_provider()
+        env_var = get_llm_provider_api_key_env(provider)
+        msg = exc.errors()[0].get("msg", str(exc)) if exc.errors() else str(exc)
+        hint = f" configured provider={provider!r}"
+        if env_var is not None:
+            hint += f", required key={env_var}"
+        hint += f", fallback providers={DEFAULT_LLM_RESOLUTION_FALLBACK_PROVIDERS!r}"
+        pytest.fail(f"Live LLM routing tests require usable LLM configuration:{hint}. {msg}")
+
+    from app.services.llm_client import reset_llm_singletons
+
+    monkeypatch.setenv("LLM_PROVIDER", settings.provider)
+    reset_llm_singletons()
+    yield
+    reset_llm_singletons()
 
 
 @pytest.fixture(autouse=True)
