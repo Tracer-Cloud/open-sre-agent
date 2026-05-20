@@ -75,6 +75,9 @@ _OPERATOR_ACTIONABLE_LLM_ERROR_PATTERNS: tuple[re.Pattern[str], ...] = (
     # Bedrock cross-region inference profile misconfiguration (HTTP 400 "on-demand throughput
     # isn't supported") — user must add the 'us.' prefix to their model ID.
     re.compile(r"\brequires a cross-region inference profile\b", re.I),
+    # Bedrock temporary credential expiry (ExpiredTokenException / TokenRefreshRequired).
+    # The IAM role/instance-profile token needs refreshing — operator-actionable, not a code bug.
+    re.compile(r"\bAWS security token has expired\b", re.I),
 )
 
 

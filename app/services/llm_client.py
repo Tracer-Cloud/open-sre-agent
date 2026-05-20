@@ -498,6 +498,11 @@ class BedrockLLMClient:
                         f"Bedrock model '{self._model}' was not found in the configured region. "
                         "Check the model ID, region, or inference profile."
                     ) from err
+                if code in ("ExpiredTokenException", "TokenRefreshRequired"):
+                    raise RuntimeError(
+                        "Bedrock API request failed: your AWS security token has expired. "
+                        "Refresh your credentials (IAM role, instance profile, or ~/.aws/credentials)."
+                    ) from err
                 if code in ("AccessDeniedException", "UnauthorizedException"):
                     # AccessDeniedException is overloaded on Bedrock: it can mean
                     # missing IAM, missing per-region/per-model Bedrock access
@@ -624,16 +629,18 @@ def _format_anthropic_retry_error(err: Exception) -> str:
 # LiteLLM/Anthropic surfaces an unrecognized model ID as an HTTP 400 with a
 # message containing "The provided model identifier is invalid." (note: the
 # OpenAI-compatible 404 code-path is preferred, but LiteLLM relays 400 here).
-# Detection is intentionally a substring match because there is no stable error
-# code for this case across LiteLLM/Anthropic. Update this constant if upstream
-# rewords the message — the failure mode is "fall through to a generic HTTP 400
+# Self-hosted proxies may use different wording (e.g. "Invalid model name passed
+# in model=..."). Detection is intentionally a substring match because there is
+# no stable error code for this case across proxies. Update this tuple if a new
+# proxy wording appears — the failure mode is "fall through to a generic HTTP 400
 # message that is not Sentry-filtered" (see issue #1806).
-_OPENAI_INVALID_MODEL_IDENTIFIER_PHRASE = "model identifier"
+_OPENAI_INVALID_MODEL_IDENTIFIER_PHRASES = ("model identifier", "invalid model name")
 
 
 def _is_openai_invalid_model_identifier(err: OpenAIBadRequestError) -> bool:
     """True if the OpenAIBadRequestError message indicates an unknown model id."""
-    return _OPENAI_INVALID_MODEL_IDENTIFIER_PHRASE in (err.message or "").lower()
+    msg = (err.message or "").lower()
+    return any(phrase in msg for phrase in _OPENAI_INVALID_MODEL_IDENTIFIER_PHRASES)
 
 
 def _format_openai_connection_error(err: Exception, provider_label: str) -> str:
