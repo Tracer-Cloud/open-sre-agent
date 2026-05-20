@@ -132,7 +132,7 @@ def switch_llm_provider(
     env_path = sync_provider_env(
         provider=provider,
         model=selected_model,
-        toolcall_model=selected_toolcall,
+        toolcall_model=selected_toolcall or None,
     )
     _reset_runtime_llm_caches()
 

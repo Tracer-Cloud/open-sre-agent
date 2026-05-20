@@ -539,6 +539,70 @@ def test_run_wizard_reuses_saved_defaults_when_user_keeps_provider(monkeypatch, 
     assert saved_llm_keys == [("OPENAI_API_KEY", "saved-secret")]
 
 
+def test_run_wizard_changes_model_when_user_keeps_provider(monkeypatch, tmp_path) -> None:
+    """When provider is kept but user opts to change model, the new choice is saved."""
+    saved: dict[str, object] = {}
+    confirm_prompts: list[str] = []
+
+    def _mock_select(*_args, choices=None, default=None, **_kwargs):
+        m = MagicMock()
+        prompt = str(_args[0]) if _args else ""
+        if "Choose your LLM provider" in prompt:
+            m.ask.return_value = "openai"
+        elif "Choose OpenAI model" in prompt:
+            m.ask.return_value = "gpt-5.4-mini"
+        else:
+            m.ask.return_value = default
+        return m
+
+    def _mock_confirm(*_args, **_kwargs):
+        m = MagicMock()
+        prompt = str(_args[0]) if _args else ""
+        confirm_prompts.append(prompt)
+        if "Change provider?" in prompt:
+            m.ask.return_value = False
+        elif "Change model?" in prompt:
+            m.ask.return_value = True
+        else:
+            m.ask.return_value = False
+        return m
+
+    monkeypatch.setattr(flow, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "confirm", _mock_confirm)
+    monkeypatch.setattr(flow, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(
+        flow,
+        "load_local_config",
+        lambda _path: {
+            "wizard": {"mode": "quickstart"},
+            "targets": {
+                "local": {
+                    "provider": "openai",
+                    "model": "gpt-5.4",
+                    "api_key_env": "OPENAI_API_KEY",
+                    "api_key": "saved-secret",
+                }
+            },
+        },
+    )
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "has_llm_api_key", lambda _env: True)
+
+    def _save_local_config(**kwargs):
+        saved.update(kwargs)
+        return tmp_path / "opensre.json"
+
+    monkeypatch.setattr(flow, "save_local_config", _save_local_config)
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+
+    exit_code = flow.run_wizard()
+
+    assert exit_code == 0
+    assert saved["provider"] == "openai"
+    assert saved["model"] == "gpt-5.4-mini"
+    assert "Change model?" in confirm_prompts
+
+
 def test_run_wizard_persists_matching_local_config_and_env(monkeypatch, tmp_path) -> None:
     select_responses = iter(["quickstart", "openai", "gpt-5.4", "skip"])
     saved_llm_keys: list[tuple[str, str]] = []

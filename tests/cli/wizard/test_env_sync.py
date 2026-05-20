@@ -264,6 +264,30 @@ def test_sync_provider_env_skips_empty_preserved_values_in_os_environ(
     assert "OPENAI_TOOLCALL_MODEL" not in os.environ
 
 
+def test_sync_provider_env_skips_empty_toolcall_model_override(tmp_path, monkeypatch) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "LLM_PROVIDER=openai\n"
+        "OPENAI_REASONING_MODEL=gpt-5.4\n"
+        "OPENAI_MODEL=gpt-5.4\n"
+        "OPENAI_TOOLCALL_MODEL=gpt-5.4-mini\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_TOOLCALL_MODEL", "gpt-5.4-mini")
+
+    sync_provider_env(
+        provider=PROVIDER_BY_VALUE["openai"],
+        model="gpt-5.4",
+        toolcall_model="",
+        env_path=env_path,
+    )
+
+    content = env_path.read_text(encoding="utf-8")
+    assert "OPENAI_TOOLCALL_MODEL=gpt-5.4-mini\n" in content
+    assert os.environ["OPENAI_TOOLCALL_MODEL"] == "gpt-5.4-mini"
+
+
 def test_sync_provider_env_writes_toolcall_model_atomically(tmp_path, monkeypatch) -> None:
     env_path = tmp_path / ".env"
     env_path.write_text(

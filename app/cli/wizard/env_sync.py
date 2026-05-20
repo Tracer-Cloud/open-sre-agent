@@ -249,7 +249,7 @@ def sync_provider_env(
     values: dict[str, str] = {"LLM_PROVIDER": provider.value, provider.model_env: model}
     if provider.legacy_model_env:
         values[provider.legacy_model_env] = model
-    if toolcall_model is not None and provider.toolcall_model_env:
+    if toolcall_model and provider.toolcall_model_env:
         values[provider.toolcall_model_env] = toolcall_model
 
     for key, value in values.items():
