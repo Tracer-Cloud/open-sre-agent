@@ -198,6 +198,14 @@ class LLMSettings(StrictConfigModel):
     bedrock_toolcall_model: str = BEDROCK_TOOLCALL_MODEL
     max_tokens: int = Field(default=DEFAULT_MAX_TOKENS, gt=0)
 
+    @field_validator("ollama_host", mode="before")
+    @classmethod
+    def _normalize_ollama_host(cls, value: object) -> str:
+        host = str(value or DEFAULT_OLLAMA_HOST).strip() or DEFAULT_OLLAMA_HOST
+        if not host.startswith(("http://", "https://")):
+            host = f"http://{host}"
+        return host
+
     @field_validator("provider", mode="before")
     @classmethod
     def _normalize_provider(cls, value: object) -> str:
