@@ -864,6 +864,75 @@ def test_openai_invoke_stream_invalid_model_identifier_raises_not_found(monkeypa
         list(client.invoke_stream("hello"))
 
 
+def test_is_openai_invalid_model_identifier_matches_both_phrases() -> None:
+    """Both the LiteLLM/Anthropic and OpenRouter phrasings must be detected."""
+    openai_err = _make_fake_openai_bad_request_error(
+        "The provided model identifier is invalid."
+    )
+    openrouter_err = _make_fake_openai_bad_request_error(
+        "{'error': '/chat/completions: Invalid model name passed in model=claude-sonnet-4-6.'}"
+    )
+    unrelated_err = _make_fake_openai_bad_request_error("content policy violation")
+
+    assert llm_client._is_openai_invalid_model_identifier(openai_err)
+    assert llm_client._is_openai_invalid_model_identifier(openrouter_err)
+    assert not llm_client._is_openai_invalid_model_identifier(unrelated_err)
+
+
+def test_openai_invoke_openrouter_invalid_model_name_raises_not_found(monkeypatch) -> None:
+    """OpenRouter's 'Invalid model name' 400 error maps to the user-friendly not-found message."""
+
+    class _Completions:
+        def create(self, **_kwargs):
+            raise _make_fake_openai_bad_request_error(
+                "Error code: 400 - {'error': {'message': \"{'error': '/chat/completions: "
+                "Invalid model name passed in model=claude-sonnet-4-6.'}\"}}"
+            )
+
+    class _Chat:
+        def __init__(self) -> None:
+            self.completions = _Completions()
+
+    class _OpenAI:
+        def __init__(self, **_kwargs) -> None:
+            self.chat = _Chat()
+
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "OpenAI", _OpenAI)
+
+    client = llm_client.OpenAILLMClient(model="claude-sonnet-4-6")
+    with pytest.raises(RuntimeError, match="Check your configured model name or endpoint"):
+        client.invoke("hello")
+
+
+def test_openai_invoke_stream_openrouter_invalid_model_name_raises_not_found(
+    monkeypatch,
+) -> None:
+    """Same detection in the streaming path."""
+
+    class _Completions:
+        def create(self, **_kwargs):
+            raise _make_fake_openai_bad_request_error(
+                "Error code: 400 - {'error': {'message': \"{'error': '/chat/completions: "
+                "Invalid model name passed in model=claude-sonnet-4-6.'}\"}}"
+            )
+
+    class _Chat:
+        def __init__(self) -> None:
+            self.completions = _Completions()
+
+    class _OpenAI:
+        def __init__(self, **_kwargs) -> None:
+            self.chat = _Chat()
+
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "OpenAI", _OpenAI)
+
+    client = llm_client.OpenAILLMClient(model="claude-sonnet-4-6")
+    with pytest.raises(RuntimeError, match="Check your configured model name or endpoint"):
+        list(client.invoke_stream("hello"))
+
+
 def test_openai_invoke_stream_yields_delta_content_chunks(monkeypatch) -> None:
     """invoke_stream() routes through the same builder and yields delta.content in order."""
     fake, captured = _make_capturing_openai(chunk_contents=["Hel", "lo, ", "world"])
