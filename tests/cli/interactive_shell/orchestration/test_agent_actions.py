@@ -1315,3 +1315,105 @@ def test_execute_cli_actions_with_metrics_denies_when_llm_plan_has_unhandled_cla
     assert result.has_unhandled_clause is True
     assert captured_planned == [(0, True)]
     assert captured_executed == [(0, 0, 0)]
+
+
+def test_execute_cli_actions_bang_prefix_routes_to_shell_bypassing_llm(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """!cmd prefix must be routed deterministically to shell execution without calling
+    the LLM planner.  Regression: bare `!cmd` (and multiline `!cmd\\n   args`) was
+    passed to the LLM which misidentified it as a pasted snippet and returned
+    assistant_handoff instead of shell_run.
+    """
+    llm_called: list[str] = []
+
+    def _fail_if_called(message: str, *, session: object = None) -> None:  # pragma: no cover
+        llm_called.append(message)
+        raise AssertionError("LLM planner must not be called for !cmd input")
+
+    monkeypatch.setattr(agent_actions, "plan_actions_with_llm", _fail_if_called)
+
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    def _fake_run(command: str, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append((command, kwargs))
+        return subprocess.CompletedProcess(args=command, returncode=0, stdout="ok\n", stderr="")
+
+    monkeypatch.setattr(shell_execution.subprocess, "run", _fake_run)
+
+    session = ReplSession()
+    console, buf = _capture()
+
+    # Multiline !cmd with internal whitespace — the exact shape the user types.
+    handled = agent_actions.execute_cli_actions("!curl\n      wttr.in/London", session, console)
+
+    assert handled is True
+    assert llm_called == [], "LLM planner must not have been invoked for !cmd input"
+    assert session.history[-1] == {"type": "shell", "text": "!curl wttr.in/London", "ok": True}
+    # The executor strips `!` and runs with shell=True.
+    assert calls[0][0] == "curl wttr.in/London"
+    assert calls[0][1]["shell"] is True
+    assert "explicit shell passthrough enabled" in buf.getvalue()
+
+
+def test_execute_cli_actions_bang_prefix_single_line_routes_to_shell(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Single-line !cmd routes to shell execution without any LLM involvement."""
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    def _fake_run(command: str, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append((command, kwargs))
+        return subprocess.CompletedProcess(args=command, returncode=0, stdout="out\n", stderr="")
+
+    monkeypatch.setattr(shell_execution.subprocess, "run", _fake_run)
+
+    session = ReplSession()
+    console, _ = _capture()
+
+    handled = agent_actions.execute_cli_actions("!echo hello world", session, console)
+
+    assert handled is True
+    assert session.history[-1] == {"type": "shell", "text": "!echo hello world", "ok": True}
+    assert calls[0][0] == "echo hello world"
+    assert calls[0][1]["shell"] is True
+
+
+def test_execute_cli_actions_with_metrics_handoff_only_plan_falls_through_silently(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A pure assistant_handoff LLM plan must not print a 'Requested actions' header.
+
+    Regression: when the planner returned only assistant_handoff, _execute_planned_actions
+    was called and printed '● assistant / Requested actions: 1. assistant handoff [reason]'
+    before the real LLM reply ran.  The user saw two assistant headers and internal
+    planner reasoning that should have been invisible.
+    """
+    monkeypatch.setattr(
+        agent_actions,
+        "plan_actions_with_llm",
+        lambda _message, *, session=None: (  # noqa: ARG005
+            [
+                PlannedAction(
+                    kind="assistant_handoff",
+                    content="informational question about current model",
+                    position=0,
+                )
+            ],
+            False,
+        ),
+    )
+
+    session = ReplSession()
+    console, buf = _capture()
+    result = agent_actions.execute_cli_actions_with_metrics(
+        "what is our current model?", session, console
+    )
+
+    # Must fall through (not handled) so the caller invokes the LLM for the real reply.
+    assert result.handled is False
+    assert result.executed_count == 0
+    # No "Requested actions" block should appear — the handoff plan is internal state.
+    output = buf.getvalue()
+    assert "Requested actions" not in output
+    assert "assistant handoff" not in output.lower()

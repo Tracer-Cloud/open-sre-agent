@@ -54,6 +54,19 @@ def _plan_actions(message: str, session: ReplSession) -> tuple[list[PlannedActio
     phase — so the user still sees feedback; no separate in-place
     indicator is needed here.
     """
+    # Fast path: `!cmd` is an explicit shell-passthrough prefix that must bypass
+    # the LLM planner entirely. The LLM misidentifies bare `!cmd` input (especially
+    # multi-line `!cmd\n   args`) as a pasted snippet and returns assistant_handoff.
+    stripped = message.strip()
+    if stripped.startswith("!") and len(stripped) > 1:
+        from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.intent_parser import (
+            shell_action,
+        )
+
+        cmd = " ".join(stripped[1:].split())  # normalise internal whitespace/newlines
+        if cmd:
+            return [shell_action(f"!{cmd}", 0)], False, False
+
     llm_plan = plan_actions_with_llm(message, session=session)
     if llm_plan is None:
         return [], True, True
@@ -66,7 +79,9 @@ def _plan_actions(message: str, session: ReplSession) -> tuple[list[PlannedActio
         # prompts where only some clauses were actionable.
         if has_unhandled_clause:
             return [], True, True
-        return actions, False, False
+        # Pure handoff: let the caller invoke the LLM reply directly without
+        # printing a noisy "Requested actions: assistant handoff …" header.
+        return [], False, False
     if has_unhandled_clause:
         return [], True, True
     return actions, False, False
