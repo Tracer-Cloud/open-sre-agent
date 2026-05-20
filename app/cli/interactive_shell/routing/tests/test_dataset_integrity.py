@@ -70,7 +70,13 @@ def test_router_contracts_dataset_schema() -> None:
     validate_prompt_dataset(
         dataset,
         dataset_name=ROUTER_CONTRACTS_DATASET,
-        required_fields=("id", "input", "expected_kind"),
+        required_fields=(
+            "id",
+            "input",
+            "expected_kind",
+            "expected_signals",
+            "expected_command_text",
+        ),
         non_empty_string_fields=("id", "input", "expected_kind"),
     )
 
