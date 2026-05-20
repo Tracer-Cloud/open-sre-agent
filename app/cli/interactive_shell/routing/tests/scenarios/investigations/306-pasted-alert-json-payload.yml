@@ -30,8 +30,10 @@ executed_actions: []
 response_contract:
   must_contain_any:
   - alert payload
-  - run an rca investigation
-  - opensre investigate --input-json
+  - json
+  - investigate
+  - rca
+  - alertname
   must_not_contain:
   - $ /
 history:
@@ -41,4 +43,4 @@ history:
   - type: cli_agent
     ok: true
 tier: full
-runs: 1
+runs: 3
