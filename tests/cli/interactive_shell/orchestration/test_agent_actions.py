@@ -26,6 +26,12 @@ def _capture() -> tuple[Console, io.StringIO]:
     return Console(file=buf, force_terminal=False, highlight=False), buf
 
 
+_NITRO_PROMPT = (
+    "I want to deploy OpenSRE on a remote EC2 Nitro instance, and then I want to send\n"
+    'it an investigation. Can you please deploy the instance and send it "hello world"?'
+)
+
+
 def test_health_then_connected_services_plans_two_actions_in_order() -> None:
     message = "check the health of my opensre and then show me all connected services"
 
@@ -370,6 +376,11 @@ def test_compound_prompt_plans_chat_list_and_slash_deploy_paraphrase() -> None:
     assert agent_actions.plan_cli_actions(message) == ["/list integrations", "/remote"]
 
 
+def test_nitro_prompt_plans_remote_then_quoted_investigation() -> None:
+    assert agent_actions.plan_terminal_tasks(_NITRO_PROMPT) == ["slash", "investigation"]
+    assert agent_actions.plan_cli_actions(_NITRO_PROMPT) == ["/remote"]
+
+
 def test_services_version_deploy_prompt_plans_all_actions() -> None:
     message = (
         "tell me which services are connected AND then tell me the current CLI version "
@@ -444,6 +455,54 @@ def test_compound_prompt_executes_all_supported_tasks(monkeypatch: object) -> No
     assert "I'm doing fine" not in output
     assert "EC2 deployment creates AWS" not in output
     assert "ran /list integrations" in output
+
+
+def test_nitro_prompt_executes_remote_then_investigation(monkeypatch: object) -> None:
+    dispatched: list[str] = []
+    investigation_payloads: list[str] = []
+
+    def _fake_dispatch(
+        command: str,
+        session: ReplSession,
+        console: Console,
+        **_kwargs: object,
+    ) -> bool:
+        dispatched.append(command)
+        session.record("slash", command, ok=True)
+        console.print(f"ran {command}")
+        return True
+
+    def _fake_run_investigation_for_session(
+        *,
+        alert_text: str,
+        context_overrides: dict[str, object] | None = None,
+        cancel_requested: object | None = None,
+    ) -> dict[str, object]:
+        _ = (context_overrides, cancel_requested)
+        investigation_payloads.append(alert_text)
+        return {"root_cause": "hello world handled"}
+
+    monkeypatch.setattr(agent_actions, "dispatch_slash", _fake_dispatch)  # type: ignore[attr-defined]
+    import app.cli.investigation as investigation_module
+
+    monkeypatch.setattr(
+        investigation_module,
+        "run_investigation_for_session",
+        _fake_run_investigation_for_session,
+    )
+
+    session = ReplSession()
+    console, buf = _capture()
+    handled = agent_actions.execute_cli_actions(_NITRO_PROMPT, session, console)
+
+    assert handled is True
+    assert dispatched == ["/remote"]
+    assert investigation_payloads == ["hello world"]
+    output = buf.getvalue()
+    assert "EC2 deployment creates AWS" not in output
+    assert "ran /remote" in output
+    assert "investigation: hello world" in output
+    assert output.index("ran /remote") < output.index("investigation: hello world")
 
 
 def test_services_version_deploy_prompt_executes_in_order(monkeypatch: object) -> None:

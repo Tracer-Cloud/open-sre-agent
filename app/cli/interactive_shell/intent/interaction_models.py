@@ -15,6 +15,7 @@ class PlannedAction:
         "slash",
         "shell",
         "sample_alert",
+        "investigation",
         "synthetic_test",
         "task_cancel",
         "cli_command",

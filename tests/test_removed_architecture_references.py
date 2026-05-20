@@ -16,6 +16,7 @@ SKIP_DIRS = {
     "node_modules",
     "opensre.egg-info",
     "plans",
+    "tasks",
 }
 TEXT_SUFFIXES = {
     ".cfg",

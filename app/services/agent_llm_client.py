@@ -359,8 +359,7 @@ class OpenAIAgentClient:
 
         if not hasattr(response, "choices") or not response.choices:
             raise RuntimeError(
-                f"OpenAI-compatible provider returned an unexpected response "
-                f"({type(response).__name__!r}) — check provider/model compatibility"
+                f"OpenAI API returned an unexpected response: {type(response).__name__}"
             )
         choice = response.choices[0]
         msg = choice.message

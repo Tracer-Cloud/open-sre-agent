@@ -3,217 +3,127 @@
 from app.integrations.catalog import load_env_integrations
 from app.integrations.signoz import (
     SigNozConfig,
-    SigNozValidationResult,
     build_signoz_config,
     signoz_config_from_env,
     signoz_extract_params,
     signoz_is_available,
+    validate_signoz_config,
 )
 
 
 class TestSigNozConfig:
-    """Tests for SigNozConfig model."""
-
     def test_defaults(self) -> None:
-        config = SigNozConfig(clickhouse_host="localhost")
-        assert config.clickhouse_host == "localhost"
-        assert config.clickhouse_port == 8123
-        assert config.clickhouse_database == "default"
-        assert config.clickhouse_user == "default"
-        assert config.clickhouse_password == ""
-        assert config.secure is False
-        assert config.timeout_seconds == 10.0
-        assert config.max_results == 50
+        config = SigNozConfig()
         assert config.url == ""
         assert config.api_key == ""
+        assert config.timeout_seconds == 10.0
+        assert config.max_results == 50
 
-    def test_is_configured_with_host(self) -> None:
-        config = SigNozConfig(clickhouse_host="ch.example.com")
+    def test_is_configured_with_url_and_key(self) -> None:
+        config = SigNozConfig(url="http://localhost:8080", api_key="test-key")
         assert config.is_configured is True
 
-    def test_is_configured_without_host(self) -> None:
-        config = SigNozConfig()
+    def test_is_configured_without_credentials(self) -> None:
+        config = SigNozConfig(url="http://localhost:8080")
         assert config.is_configured is False
-
-    def test_normalize_host_strips_whitespace(self) -> None:
-        config = SigNozConfig(clickhouse_host="  ch.example.com  ")
-        assert config.clickhouse_host == "ch.example.com"
-
-    def test_normalize_database_default(self) -> None:
-        config = SigNozConfig(clickhouse_host="localhost", clickhouse_database="")
-        assert config.clickhouse_database == "default"
-
-    def test_normalize_user_default(self) -> None:
-        config = SigNozConfig(clickhouse_host="localhost", clickhouse_user="")
-        assert config.clickhouse_user == "default"
-
-    def test_to_clickhouse_config(self) -> None:
-        config = SigNozConfig(
-            clickhouse_host="ch.prod.internal",
-            clickhouse_port=9440,
-            clickhouse_database="analytics",
-            clickhouse_user="reader",
-            clickhouse_password="secret",
-            secure=True,
-            timeout_seconds=30.0,
-            max_results=100,
-        )
-        ch = config.to_clickhouse_config()
-        assert ch.host == "ch.prod.internal"
-        assert ch.port == 9440
-        assert ch.database == "analytics"
-        assert ch.username == "reader"
-        assert ch.password == "secret"
-        assert ch.secure is True
-        assert ch.timeout_seconds == 30.0
-        assert ch.max_results == 100
+        config = SigNozConfig(api_key="test-key")
+        assert config.is_configured is False
 
 
 class TestBuildSigNozConfig:
-    """Tests for build_signoz_config helper."""
-
     def test_from_dict(self) -> None:
-        config = build_signoz_config({"clickhouse_host": "ch.example.com", "clickhouse_port": 8123})
-        assert config.clickhouse_host == "ch.example.com"
-        assert config.clickhouse_port == 8123
+        config = build_signoz_config({"url": "http://signoz.example.com", "api_key": "secret"})
+        assert config.url == "http://signoz.example.com"
+        assert config.api_key == "secret"
 
     def test_from_none(self) -> None:
         config = build_signoz_config(None)
-        assert config.clickhouse_host == ""
-        assert config.is_configured is False
-
-    def test_from_empty_dict(self) -> None:
-        config = build_signoz_config({})
-        assert config.clickhouse_host == ""
         assert config.is_configured is False
 
 
 class TestSigNozConfigFromEnv:
-    """Tests for signoz_config_from_env helper."""
-
-    def test_returns_none_without_host(self) -> None:
+    def test_returns_none_without_credentials(self) -> None:
         import os
 
-        old = os.environ.get("SIGNOZ_CLICKHOUSE_HOST")
-        os.environ.pop("SIGNOZ_CLICKHOUSE_HOST", None)
-        try:
-            result = signoz_config_from_env()
-            assert result is None
-        finally:
-            if old is not None:
-                os.environ["SIGNOZ_CLICKHOUSE_HOST"] = old
+        for key in ("SIGNOZ_URL", "SIGNOZ_API_KEY"):
+            os.environ.pop(key, None)
+        assert signoz_config_from_env() is None
 
-    def test_returns_config_with_host(self) -> None:
+    def test_returns_config_with_url_and_key(self) -> None:
         import os
 
-        os.environ["SIGNOZ_CLICKHOUSE_HOST"] = "ch.test.local"
-        os.environ["SIGNOZ_CLICKHOUSE_PORT"] = "9440"
-        os.environ["SIGNOZ_CLICKHOUSE_DATABASE"] = "testdb"
-        os.environ["SIGNOZ_CLICKHOUSE_USER"] = "testuser"
-        os.environ["SIGNOZ_CLICKHOUSE_PASSWORD"] = "testpass"
-        os.environ["SIGNOZ_CLICKHOUSE_SECURE"] = "true"
-        os.environ["SIGNOZ_URL"] = "http://localhost:3301"
-        os.environ["SIGNOZ_API_KEY"] = "sk-test"
+        os.environ["SIGNOZ_URL"] = "http://localhost:8080"
+        os.environ["SIGNOZ_API_KEY"] = "api-key"
         try:
             config = signoz_config_from_env()
             assert config is not None
-            assert config.clickhouse_host == "ch.test.local"
-            assert config.clickhouse_port == 9440
-            assert config.clickhouse_database == "testdb"
-            assert config.clickhouse_user == "testuser"
-            assert config.clickhouse_password == "testpass"
-            assert config.secure is True
-            assert config.url == "http://localhost:3301"
-            assert config.api_key == "sk-test"
+            assert config.url == "http://localhost:8080"
+            assert config.api_key == "api-key"
+            assert config.is_configured is True
         finally:
-            for key in [
-                "SIGNOZ_CLICKHOUSE_HOST",
-                "SIGNOZ_CLICKHOUSE_PORT",
-                "SIGNOZ_CLICKHOUSE_DATABASE",
-                "SIGNOZ_CLICKHOUSE_USER",
-                "SIGNOZ_CLICKHOUSE_PASSWORD",
-                "SIGNOZ_CLICKHOUSE_SECURE",
-                "SIGNOZ_URL",
-                "SIGNOZ_API_KEY",
-            ]:
-                os.environ.pop(key, None)
+            os.environ.pop("SIGNOZ_URL", None)
+            os.environ.pop("SIGNOZ_API_KEY", None)
 
 
-class TestSigNozValidationResult:
-    """Tests for SigNozValidationResult dataclass."""
-
-    def test_ok_result(self) -> None:
-        result = SigNozValidationResult(ok=True, detail="Connected.")
-        assert result.ok is True
-        assert result.detail == "Connected."
-
-    def test_error_result(self) -> None:
-        result = SigNozValidationResult(ok=False, detail="Connection refused.")
+class TestSigNozValidation:
+    def test_validate_requires_credentials(self) -> None:
+        result = validate_signoz_config(SigNozConfig())
         assert result.ok is False
-        assert result.detail == "Connection refused."
+        assert "SIGNOZ_URL" in result.detail
 
+    def test_validate_query_api_mode(self, monkeypatch) -> None:
+        class _FakeResponse:
+            def raise_for_status(self) -> None:
+                return None
 
-class TestSigNozIsAvailable:
-    """Tests for signoz_is_available helper."""
+        captured: dict[str, object] = {}
 
-    def test_available_when_connection_verified(self) -> None:
-        sources = {"signoz": {"connection_verified": True}}
-        assert signoz_is_available(sources) is True
+        def _fake_get(url: str, **kwargs: object) -> _FakeResponse:
+            captured["url"] = url
+            captured["headers"] = kwargs.get("headers")
+            return _FakeResponse()
 
-    def test_unavailable_without_connection_verified(self) -> None:
-        sources = {"signoz": {"clickhouse_host": "localhost"}}
-        assert signoz_is_available(sources) is False
+        monkeypatch.setattr("app.integrations.signoz.httpx.get", _fake_get)
 
-    def test_unavailable_when_missing(self) -> None:
-        sources = {}
-        assert signoz_is_available(sources) is False
+        config = SigNozConfig(url="http://localhost:8080", api_key="test-key")
+        result = validate_signoz_config(config)
+
+        assert result.ok is True
+        assert "Query API" in result.detail
+        assert str(captured["url"]).endswith("/api/v2/metrics")
 
 
 class TestSigNozExtractParams:
-    """Tests for signoz_extract_params helper."""
-
     def test_extracts_params(self) -> None:
         sources = {
             "signoz": {
-                "clickhouse_host": "ch.example.com",
-                "clickhouse_port": 8123,
-                "clickhouse_database": "default",
-                "clickhouse_user": "default",
-                "clickhouse_password": "secret",
-                "secure": True,
                 "url": "http://signoz.example.com",
                 "api_key": "key",
             }
         }
         params = signoz_extract_params(sources)
-        assert params["clickhouse_host"] == "ch.example.com"
-        assert params["clickhouse_port"] == 8123
-        assert params["clickhouse_database"] == "default"
-        assert params["clickhouse_user"] == "default"
-        assert params["clickhouse_password"] == "secret"
-        assert params["secure"] is True
         assert params["url"] == "http://signoz.example.com"
         assert params["api_key"] == "key"
 
     def test_uses_defaults_when_missing(self) -> None:
-        sources = {}
-        params = signoz_extract_params(sources)
-        assert params["clickhouse_host"] == ""
-        assert params["clickhouse_port"] == 8123
-        assert params["clickhouse_database"] == "default"
-        assert params["clickhouse_user"] == "default"
-        assert params["clickhouse_password"] == ""
-        assert params["secure"] is False
+        params = signoz_extract_params({})
         assert params["url"] == ""
         assert params["api_key"] == ""
 
 
-class TestSigNozEnvCatalogLoading:
-    """Tests for SigNoz env loading in load_env_integrations."""
+class TestSigNozIsAvailable:
+    def test_available_when_connection_verified(self) -> None:
+        assert signoz_is_available({"signoz": {"connection_verified": True}}) is True
 
-    def test_invalid_port_does_not_raise(self, monkeypatch) -> None:
-        monkeypatch.setenv("SIGNOZ_CLICKHOUSE_HOST", "localhost")
-        monkeypatch.setenv("SIGNOZ_CLICKHOUSE_PORT", "abc")
+    def test_unavailable_without_connection_verified(self) -> None:
+        assert signoz_is_available({"signoz": {"url": "http://localhost:8080"}}) is False
+
+
+class TestSigNozEnvCatalogLoading:
+    def test_loads_from_env(self, monkeypatch) -> None:
+        monkeypatch.setenv("SIGNOZ_URL", "http://localhost:8080")
+        monkeypatch.setenv("SIGNOZ_API_KEY", "test-key")
         records = load_env_integrations()
-        assert isinstance(records, list)
-        assert all(record.get("service") != "signoz" for record in records)
+        signoz_records = [r for r in records if r.get("service") == "signoz"]
+        assert len(signoz_records) == 1
+        assert signoz_records[0]["credentials"]["url"] == "http://localhost:8080"

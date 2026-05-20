@@ -7,6 +7,23 @@ from app.analytics.events import Event
 from app.analytics.source import EntrypointSource, TriggerMode
 
 
+def _assert_investigation_events_have_source(
+    events: list[tuple[Event, dict[str, object] | None]],
+) -> None:
+    investigation_events = {
+        Event.INVESTIGATION_STARTED,
+        Event.INVESTIGATION_COMPLETED,
+        Event.INVESTIGATION_FAILED,
+    }
+    for event, properties in events:
+        if event not in investigation_events:
+            continue
+        assert properties is not None, f"{event.value} must include properties"
+        source = properties.get("source")
+        assert isinstance(source, str), f"{event.value} must include a string source"
+        assert source.strip(), f"{event.value} source must be non-empty"
+
+
 class _StubAnalytics:
     def __init__(self) -> None:
         self.events: list[tuple[Event, dict[str, object] | None]] = []
@@ -180,6 +197,7 @@ def test_track_investigation_emits_lifecycle_once(monkeypatch: pytest.MonkeyPatc
 
     emitted_events = [event for event, _ in stub.events]
     assert emitted_events == [Event.INVESTIGATION_STARTED, Event.INVESTIGATION_COMPLETED]
+    _assert_investigation_events_have_source(stub.events)
     started_props = stub.events[0][1] or {}
     completed_props = stub.events[1][1] or {}
     assert started_props["source"] == "test"
@@ -213,6 +231,7 @@ def test_track_investigation_emits_failed_on_exception(
 
     emitted_events = [event for event, _ in stub.events]
     assert emitted_events == [Event.INVESTIGATION_STARTED, Event.INVESTIGATION_FAILED]
+    _assert_investigation_events_have_source(stub.events)
     failed_props = stub.events[1][1] or {}
     assert failed_props["failure_type"] == "RuntimeError"
 
@@ -235,3 +254,4 @@ def test_track_investigation_nested_context_dedupes(monkeypatch: pytest.MonkeyPa
 
     emitted_events = [event for event, _ in stub.events]
     assert emitted_events == [Event.INVESTIGATION_STARTED, Event.INVESTIGATION_COMPLETED]
+    _assert_investigation_events_have_source(stub.events)

@@ -11,8 +11,24 @@ from app.cli.wizard.config import PROJECT_ENV_PATH, ProviderOption
 from app.llm_credentials import delete_llm_api_key, has_llm_api_key, save_llm_api_key
 
 _ENV_ASSIGNMENT = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=")
-_SENSITIVE_KEY_SUFFIXES: tuple[str, ...] = ("_token", "_secret", "_password")
 _NON_SECRET_ENV_KEYS: frozenset[str] = frozenset({"DISCORD_PUBLIC_KEY"})
+# Underscore-separated terminal tokens that mark an env var as sensitive.
+# Matching the terminal component (rather than a substring or a fixed suffix
+# like ``_token``) catches both ``GITLAB_ACCESS_TOKEN`` and a bare ``TOKEN``
+# while leaving ``OPENAI_TOKEN_LIMIT`` (terminal ``limit``) alone.
+_SENSITIVE_TERMINAL_TOKENS: frozenset[str] = frozenset(
+    {
+        "token",
+        "secret",
+        "password",
+        "passwd",
+        "key",
+        "apikey",
+        "credential",
+        "credentials",
+    }
+)
+_SENSITIVE_SUBSTRINGS: tuple[str, ...] = ("connection_string",)
 
 
 def _is_sensitive_env_key(key: str) -> bool:
@@ -20,11 +36,10 @@ def _is_sensitive_env_key(key: str) -> bool:
     if key in _NON_SECRET_ENV_KEYS:
         return False
     lowered = key.lower()
-    if any(lowered.endswith(suffix) for suffix in _SENSITIVE_KEY_SUFFIXES):
+    terminal = lowered.rsplit("_", 1)[-1]
+    if terminal in _SENSITIVE_TERMINAL_TOKENS:
         return True
-    return (
-        lowered.endswith("_key") or "secret_access_key" in lowered or "connection_string" in lowered
-    )
+    return any(needle in lowered for needle in _SENSITIVE_SUBSTRINGS)
 
 
 def _strip_sensitive_env_lines(lines: list[str]) -> list[str]:
@@ -87,7 +102,6 @@ def _write_env(target_path: Path, lines: list[str]) -> None:
     try:
         target_path.parent.mkdir(parents=True, exist_ok=True)
         with target_path.open("w", encoding="utf-8", newline="") as env_file:
-            # codeql[py/clear-text-storage-sensitive-data]
             env_file.writelines(public_lines)
     except PermissionError as exc:
         raise PermissionError(

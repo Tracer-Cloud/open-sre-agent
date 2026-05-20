@@ -1,0 +1,62 @@
+name: Routing Live Post Merge
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/cli/interactive_shell/routing/**"
+      - "app/cli/interactive_shell/orchestration/**"
+      - "tests/cli/interactive_shell/orchestration/**"
+      - "pytest.ini"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/routing-live-post-merge.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: routing-live-post-merge-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  routing-live:
+    name: routing-live shard ${{ matrix.shard_index }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard_index: [0, 1, 2, 3, 4]
+
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      ROUTING_SHARD_TOTAL: "5"
+      ROUTING_SHARD_INDEX: ${{ matrix.shard_index }}
+      PYTHONUTF8: "1"
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev
+
+      - name: Run sharded live routing suite
+        run: >-
+          uv run python -m pytest -n auto -v
+          -m live_llm
+          app/cli/interactive_shell/routing/tests/test_router_live_prompts.py
+          tests/cli/interactive_shell/orchestration/test_llm_intent_classifier.py
