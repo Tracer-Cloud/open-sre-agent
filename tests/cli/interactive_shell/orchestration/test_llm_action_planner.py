@@ -9,7 +9,6 @@ import pytest
 
 import app.cli.interactive_shell.orchestration.llm_action_planner as planner_module
 from app.cli.interactive_shell.orchestration.interaction_models import PlannedAction
-from app.cli.interactive_shell.orchestration.llm_action_planner import plan_actions_with_llm
 
 
 def _make_llm_response(
@@ -49,7 +48,7 @@ def test_valid_plan_returns_llm_sourced_planned_actions(monkeypatch: pytest.Monk
         lambda _text: payload,
     )
 
-    result = plan_actions_with_llm("check health")
+    result = planner_module.plan_actions_with_llm("check health")
     assert result is not None
     actions, has_unhandled = result
     assert len(actions) == 1
@@ -80,7 +79,7 @@ def test_valid_plan_multiple_actions_ordered_by_position(
     )
     monkeypatch.setattr(planner_module, "_call_llm", lambda _text: payload)
 
-    result = plan_actions_with_llm("show version and investigate high cpu")
+    result = planner_module.plan_actions_with_llm("show version and investigate high cpu")
     assert result is not None
     actions, _ = result
     assert [a.kind for a in actions] == ["slash", "investigation"]
@@ -104,7 +103,7 @@ def test_target_surface_set_correctly_for_each_kind(monkeypatch: pytest.MonkeyPa
             [{"kind": kind, "content": "x", "confidence": 0.9, "rationale": "r"}]
         )
         monkeypatch.setattr(planner_module, "_call_llm", lambda _text, p=payload: p)
-        result = plan_actions_with_llm("test")
+        result = planner_module.plan_actions_with_llm("test")
         assert result is not None
         actions, _ = result
         assert len(actions) == 1
@@ -127,7 +126,7 @@ def test_invalid_kind_is_dropped(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     monkeypatch.setattr(planner_module, "_call_llm", lambda _text: payload)
 
-    result = plan_actions_with_llm("do stuff")
+    result = planner_module.plan_actions_with_llm("do stuff")
     assert result is not None
     actions, _ = result
     assert len(actions) == 1
@@ -140,7 +139,7 @@ def test_all_invalid_kinds_returns_empty_actions(monkeypatch: pytest.MonkeyPatch
     )
     monkeypatch.setattr(planner_module, "_call_llm", lambda _text: payload)
 
-    result = plan_actions_with_llm("something")
+    result = planner_module.plan_actions_with_llm("something")
     assert result is not None
     actions, _ = result
     assert actions == []
@@ -160,7 +159,7 @@ def test_low_confidence_action_is_dropped(monkeypatch: pytest.MonkeyPatch) -> No
     )
     monkeypatch.setattr(planner_module, "_call_llm", lambda _text: payload)
 
-    result = plan_actions_with_llm("something")
+    result = planner_module.plan_actions_with_llm("something")
     assert result is not None
     actions, _ = result
     assert len(actions) == 1
@@ -175,7 +174,7 @@ def test_low_confidence_action_is_dropped(monkeypatch: pytest.MonkeyPatch) -> No
 def test_malformed_json_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(planner_module, "_call_llm", lambda _text: "this is not json {{{")
 
-    result = plan_actions_with_llm("check health")
+    result = planner_module.plan_actions_with_llm("check health")
     assert result is None
 
 
@@ -186,7 +185,7 @@ def test_json_missing_actions_key_returns_none(monkeypatch: pytest.MonkeyPatch) 
         lambda _text: json.dumps({"unhandled_text": "oops"}),
     )
 
-    result = plan_actions_with_llm("check health")
+    result = planner_module.plan_actions_with_llm("check health")
     assert result is None
 
 
@@ -197,7 +196,7 @@ def test_json_not_a_dict_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
         lambda _text: json.dumps(["slash", "/health"]),
     )
 
-    result = plan_actions_with_llm("check health")
+    result = planner_module.plan_actions_with_llm("check health")
     assert result is None
 
 
@@ -209,7 +208,7 @@ def test_json_not_a_dict_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_llm_call_failure_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(planner_module, "_call_llm", lambda _text: None)
 
-    result = plan_actions_with_llm("check health")
+    result = planner_module.plan_actions_with_llm("check health")
     assert result is None
 
 
@@ -220,7 +219,7 @@ def test_llm_import_failure_returns_none(monkeypatch: pytest.MonkeyPatch) -> Non
         return None
 
     monkeypatch.setattr(planner_module, "_call_llm", _broken_import)
-    assert plan_actions_with_llm("anything") is None
+    assert planner_module.plan_actions_with_llm("anything") is None
 
 
 # ---------------------------------------------------------------------------
@@ -235,7 +234,7 @@ def test_unhandled_text_sets_has_unhandled_true(monkeypatch: pytest.MonkeyPatch)
     )
     monkeypatch.setattr(planner_module, "_call_llm", lambda _text: payload)
 
-    result = plan_actions_with_llm("check health and tell me a joke")
+    result = planner_module.plan_actions_with_llm("check health and tell me a joke")
     assert result is not None
     _, has_unhandled = result
     assert has_unhandled is True
@@ -248,7 +247,7 @@ def test_empty_unhandled_text_sets_has_unhandled_false(monkeypatch: pytest.Monke
     )
     monkeypatch.setattr(planner_module, "_call_llm", lambda _text: payload)
 
-    result = plan_actions_with_llm("check health")
+    result = planner_module.plan_actions_with_llm("check health")
     assert result is not None
     _, has_unhandled = result
     assert has_unhandled is False
@@ -266,7 +265,7 @@ def test_content_is_clamped_to_max_length(monkeypatch: pytest.MonkeyPatch) -> No
     )
     monkeypatch.setattr(planner_module, "_call_llm", lambda _text: payload)
 
-    result = plan_actions_with_llm("do something long")
+    result = planner_module.plan_actions_with_llm("do something long")
     assert result is not None
     actions, _ = result
     assert len(actions[0].content) == planner_module._MAX_CONTENT_LEN

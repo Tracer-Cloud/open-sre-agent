@@ -685,7 +685,6 @@ __all__ = [
     "QUOTED_INVESTIGATION_RE",
     "SAMPLE_ALERT_RE",
     "SYNTHETIC_RDS_TEST_RE",
-    "_deterministic_action",
     "cli_command_action",
     "extract_quoted_investigation_request",
     "extract_quoted_investigation_request_text",

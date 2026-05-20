@@ -6,7 +6,7 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
-from app.cli.interactive_shell.intent.intent_parser import (
+from app.cli.interactive_shell.orchestration.intent_parser import (
     ACTION_PATTERNS,
     INTEGRATION_CAPABILITY_RE,
     INTEGRATION_CONFIG_DETAIL_RE,
@@ -20,14 +20,14 @@ from app.cli.interactive_shell.intent.intent_parser import (
     extract_quoted_investigation_request_text,
     extract_shell_command,
     extract_task_cancel_request,
+    mentioned_integration_services,
     normalize_intent_text,
     sample_alert_action,
     slash_action,
     split_prompt_clauses,
     synthetic_test_action,
 )
-from app.cli.interactive_shell.intent.interaction_models import PlannedAction, PromptClause
-from app.cli.interactive_shell.intent.terminal_intent import mentioned_integration_services
+from app.cli.interactive_shell.orchestration.interaction_models import PlannedAction, PromptClause
 
 # Deterministic match for an already-canonical scenario ID like "003-storage-full".
 # A regex is appropriate here because the format is exact and unambiguous; no
