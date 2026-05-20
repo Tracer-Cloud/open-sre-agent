@@ -63,9 +63,13 @@ class StreamingConsole(Console):
         """
         if not self._spinner.streaming:
             from app.cli.interactive_shell.ui.choice_menu import prepare_repl_output_line
-            from app.cli.interactive_shell.ui.rendering import _repl_table_width
+            from app.cli.interactive_shell.ui.rendering import (
+                _repl_output_already_prepared,
+                _repl_table_width,
+            )
 
-            prepare_repl_output_line()
+            if not _repl_output_already_prepared():
+                prepare_repl_output_line()
             if sys.stdout.isatty() and "width" not in kwargs:
                 kwargs["width"] = _repl_table_width(self)
         super().print(*args, **kwargs)

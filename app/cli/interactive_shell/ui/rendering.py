@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+from contextvars import ContextVar
 from typing import Any
 
 from rich import box
@@ -49,6 +50,20 @@ def status_style(status: str) -> str:
 # MCP-type services are rendered separately under `/list mcp` so the default
 # `/list integrations` view stays focused on alert-source / data integrations.
 MCP_INTEGRATION_SERVICES = frozenset({"github", "openclaw"})
+_REPL_OUTPUT_PREPARED = ContextVar("_REPL_OUTPUT_PREPARED", default=False)
+
+
+def _repl_output_already_prepared() -> bool:
+    """Whether current call stack already prepared the TTY for Rich output."""
+    return _REPL_OUTPUT_PREPARED.get()
+
+
+def _console_print_prepared(console: Console, *objects: Any, **kwargs: Any) -> None:
+    token = _REPL_OUTPUT_PREPARED.set(True)
+    try:
+        console.print(*objects, **kwargs)
+    finally:
+        _REPL_OUTPUT_PREPARED.reset(token)
 
 
 def _repl_table_width(console: Console) -> int:
@@ -70,7 +85,7 @@ def print_repl_table(console: Console, table: Table) -> None:
     width = _prepare_tty_for_rich(console)
     if table.width is None:
         table.width = width
-    console.print(table, width=width)
+    _console_print_prepared(console, table, width=width)
 
 
 def repl_print(console: Console, *objects: Any, **kwargs: Any) -> None:
@@ -78,7 +93,7 @@ def repl_print(console: Console, *objects: Any, **kwargs: Any) -> None:
     from app.cli.interactive_shell.ui.choice_menu import prepare_repl_output_line
 
     prepare_repl_output_line()
-    console.print(*objects, **kwargs)
+    _console_print_prepared(console, *objects, **kwargs)
 
 
 def render_integrations_table(console: Console, results: list[dict[str, str]]) -> None:

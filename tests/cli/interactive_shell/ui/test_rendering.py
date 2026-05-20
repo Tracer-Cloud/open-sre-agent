@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import io
+import threading
 
 from rich.console import Console
 
+from app.cli.interactive_shell.runtime import terminal_runtime as loop
 from app.cli.interactive_shell.ui.rendering import (
     print_planned_actions,
     render_integrations_table,
@@ -40,6 +42,26 @@ def test_repl_print_resets_before_each_line(monkeypatch) -> None:
     repl_print(console, "line two")
 
     assert len(resets) == 2
+
+
+def test_repl_print_does_not_double_prepare_with_streaming_console(monkeypatch) -> None:
+    resets: list[bool] = []
+
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.ui.choice_menu.prepare_repl_output_line",
+        lambda: resets.append(True),
+    )
+
+    console = loop._StreamingConsole(
+        loop._SpinnerState(),
+        threading.Event(),
+        file=io.StringIO(),
+        force_terminal=False,
+        width=80,
+    )
+    repl_print(console, "line")
+
+    assert len(resets) == 1
 
 
 def test_render_integrations_table_resets_tty_before_print(monkeypatch) -> None:
