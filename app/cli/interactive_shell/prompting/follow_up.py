@@ -4,16 +4,18 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rich.console import Console
 from rich.markup import escape
 
-from app.cli.interactive_shell.runtime import ReplSession
 from app.cli.interactive_shell.ui import DIM, ERROR, STREAM_LABEL_ANSWER, WARNING, stream_to_console
 from app.cli.support.exception_reporting import report_exception
 
 _logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from app.cli.interactive_shell.runtime.session import ReplSession
 
 
 def _summarize_evidence(evidence: Any) -> list[str]:
