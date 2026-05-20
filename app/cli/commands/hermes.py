@@ -106,13 +106,14 @@ def hermes_command() -> None:
 )
 @click.option(
     "--escalation-threshold",
-    type=click.IntRange(min=2),
+    type=int,
     default=3,
     show_default=True,
     help=(
         "Number of repeat hits within --escalation-window-seconds that "
-        "bumps an incident's severity one rung (HIGH→CRITICAL). Must be ≥2. "
-        "Ignored when --no-correlate is set."
+        "bumps an incident's severity one rung (HIGH→CRITICAL). Must be ≥2 "
+        "when --correlate is active. Ignored when --no-correlate is set, "
+        "so any int is accepted in that path."
     ),
 )
 @click.option(
@@ -152,6 +153,11 @@ def hermes_watch(
     correlator: IncidentCorrelator | None = None
     sink: Any
     if correlate:
+        if escalation_threshold < 2:
+            raise click.BadParameter(
+                "must be >= 2 when --correlate is active",
+                param_hint="'--escalation-threshold'",
+            )
         correlator = IncidentCorrelator(
             dedup_window_s=dedup_window_seconds,
             escalation_window_s=escalation_window_seconds,
