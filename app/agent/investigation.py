@@ -6,7 +6,7 @@ import contextlib
 import json
 import logging
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from typing import Any
 
 from app.agent.prompt import build_system_prompt, format_alert_context
@@ -22,6 +22,7 @@ from app.utils.tool_trace import redact_sensitive
 logger = logging.getLogger(__name__)
 
 _TOOL_EXECUTOR_WORKERS = 10
+_UNSET: object = object()  # sentinel distinguishing "not yet started" from a None tool result
 
 # Maps alert_source → tool source keys. Tools from these sources are auto-called
 # before the LLM loop starts when the alert source is known.
@@ -478,18 +479,31 @@ def _run_parallel(
     if len(tool_calls) == 1:
         return [_call(tool_calls[0])]
 
-    results: list[Any] = [None] * len(tool_calls)
-    with ThreadPoolExecutor(max_workers=min(_TOOL_EXECUTOR_WORKERS, len(tool_calls))) as pool:
-        try:
-            futures = {pool.submit(_call, tc): i for i, tc in enumerate(tool_calls)}
-        except RuntimeError as exc:
-            logger.warning("[agent] tool execution aborted: %s", exc)
-            return [{"error": str(exc)}] * len(tool_calls)
-        for fut in as_completed(futures):
-            try:
-                results[futures[fut]] = fut.result()
-            except BaseException as exc:  # noqa: BLE001
-                results[futures[fut]] = {"error": str(exc)}
+    results: list[Any] = [_UNSET] * len(tool_calls)
+    submitted: dict[
+        Future[Any], int
+    ] = {}  # future -> index, built incrementally to survive partial submit
+    try:
+        with ThreadPoolExecutor(max_workers=min(_TOOL_EXECUTOR_WORKERS, len(tool_calls))) as pool:
+            for i, tc in enumerate(tool_calls):
+                submitted[pool.submit(_call, tc)] = i
+            for fut in as_completed(submitted):
+                try:
+                    results[submitted[fut]] = fut.result()
+                except BaseException as fut_exc:  # noqa: BLE001
+                    results[submitted[fut]] = {"error": str(fut_exc)}
+    except RuntimeError as exc:
+        # interpreter is shutting down; executor.__exit__ has already waited for submitted futures
+        logger.warning("[_run_parallel] RuntimeError – falling back to sequential: %s", exc)
+        for fut, i in submitted.items():
+            if results[i] is _UNSET and fut.done():
+                try:
+                    results[i] = fut.result()
+                except BaseException as fut_exc:  # noqa: BLE001
+                    results[i] = {"error": str(fut_exc)}
+        for i, tc in enumerate(tool_calls):
+            if results[i] is _UNSET:
+                results[i] = _call(tc)
     return results
 
 

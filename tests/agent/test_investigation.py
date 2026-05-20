@@ -187,7 +187,7 @@ def test_run_gracefully_handles_single_tool_call_only_model() -> None:
 
 def test_run_parallel_handles_interpreter_shutdown() -> None:
     """When pool.submit raises RuntimeError (interpreter shutdown), _run_parallel
-    must return error dicts for all slots instead of propagating the exception."""
+    must fall back to sequential execution and still return results for all slots."""
     mock_tool = MagicMock()
     mock_tool.name = "good_tool"
     mock_tool.extract_params.return_value = {}
@@ -209,4 +209,6 @@ def test_run_parallel_handles_interpreter_shutdown() -> None:
 
         results = _run_parallel(tool_calls, [mock_tool], {})
 
-    assert results == [{"error": shutdown_msg}, {"error": shutdown_msg}]
+    # The concurrent path raises RuntimeError; fallback sequential execution succeeds
+    assert len(results) == 2
+    assert all(r == {"result": "ok"} for r in results)
