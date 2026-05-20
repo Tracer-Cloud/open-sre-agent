@@ -48,6 +48,39 @@ class TestSanitiseText:
         assert classifier._sanitise_text(text) == text
 
 
+class TestUserTemplateFormat:
+    """Regression tests for Sentry PYTHON-78 (GitHub #2282).
+
+    The old llm_action_planner._call_llm called _SYSTEM_PROMPT.format(...) on a
+    prompt containing JSON examples whose keys (e.g. ``\\n  "actions"``) were
+    interpreted as missing format-string arguments, raising KeyError at runtime.
+    """
+
+    def test_json_with_actions_key_doesnt_raise(self) -> None:
+        sanitised = classifier._sanitise_text(
+            '{"actions": ["deploy", "rollback"], "severity": "critical"}'
+        )
+        # Must not raise KeyError even though the text contains {actions}
+        result = classifier._USER_TEMPLATE.format(text=sanitised)
+        assert sanitised in result
+
+    def test_multiline_json_with_nested_braces_doesnt_raise(self) -> None:
+        payload = '{\n  "actions": [\n    "restart",\n    "rollback"\n  ]\n}'
+        sanitised = classifier._sanitise_text(payload)
+        result = classifier._USER_TEMPLATE.format(text=sanitised)
+        assert sanitised in result
+
+    def test_system_prompt_has_no_bare_format_specs(self) -> None:
+        import re
+
+        # Detect single-brace format specs ({key}) that would cause KeyError if
+        # _SYSTEM_PROMPT were ever accidentally passed to str.format().
+        bare = re.findall(r"(?<!\{)\{[^{}]+\}(?!\})", classifier._SYSTEM_PROMPT)
+        assert bare == [], (
+            f"_SYSTEM_PROMPT contains format specs that would raise KeyError: {bare!r}"
+        )
+
+
 @pytest.mark.live_llm
 class TestLiveClassifierBehavior:
     def test_identical_inputs_remain_stable(self) -> None:
