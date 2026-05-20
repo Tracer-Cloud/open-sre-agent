@@ -89,6 +89,36 @@ Service: sentry
 Status: passed
 Detail: Sentry validated for org your-org; issues API responded successfully with 5 issue(s)
 ```
+## Telemetry knobs
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `OPENSRE_SENTRY_DSN` | — | Override the bundled Sentry DSN |
+| `OPENSRE_SENTRY_DISABLED` | `0` | Set to `1` to disable Sentry entirely |
+| `OPENSRE_SENTRY_LOGGING_DISABLED` | `0` | Set to `1` to disable automatic forwarding of `logger.error` and `logger.exception` calls to Sentry as events, without affecting `capture_exception` |
+
+## Verify Error Reporting
+
+Send one test event to confirm OpenSRE can report runtime errors:
+
+```bash
+opensre debug sentry
+```
+
+For a custom or self-hosted project, set the DSN first:
+
+```bash
+OPENSRE_SENTRY_DSN=https://public-key@example.ingest.sentry.io/123 opensre debug sentry
+```
+
+```text
+Sentry DSN host: example.ingest.sentry.io
+Sentry event ID: <event-id>
+Sentry flush sent: yes
+```
+
+The event is synthetic and tagged `debug=true`. If telemetry is disabled, the
+command exits non-zero without sending anything.
 
 ## Troubleshooting
 

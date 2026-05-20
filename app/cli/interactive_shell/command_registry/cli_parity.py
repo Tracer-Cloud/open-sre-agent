@@ -22,12 +22,20 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.a
     start_background_cli_task,
 )
 from app.cli.interactive_shell.runtime import ReplSession, TaskKind
-from app.cli.interactive_shell.ui import DIM, ERROR
+from app.cli.interactive_shell.ui import DIM, ERROR, print_command_output
 
 _UPDATE_SUBPROCESS_TIMEOUT_SECONDS = 300
 _BACKGROUND_TEST_SUBCOMMANDS = frozenset({"run", "synthetic", "cloudopsbench"})
 _TEST_SUBCOMMANDS = ("list", "run", "synthetic", "cloudopsbench")
 _TEST_PICKER_SELECTION_FILE_ENV = "OPENSRE_TEST_PICKER_SELECTION_FILE"
+
+
+def _decode_subprocess_stream(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
 
 
 def run_cli_command(
@@ -41,7 +49,9 @@ def run_cli_command(
     ``subprocess_timeout`` caps how long ``subprocess.run`` waits before raising
     :class:`~subprocess.TimeoutExpired`. Interactive flows use ``None`` so the
     child can prompt as long as needed; callers that hit the network without a
-    TTY (like ``opensre update``) pass a bounded timeout.
+    TTY (like ``opensre update``) pass a bounded timeout. When a timeout is set,
+    stdout/stderr are captured and replayed through ``console`` so output survives
+    prompt-toolkit ``patch_stdout`` redraws in the REPL.
 
     Ctrl+C sends :exc:`KeyboardInterrupt`, which subclasses :exc:`BaseException`
     rather than :exc:`Exception`; it is handled here so the REPL survives and the
@@ -50,10 +60,31 @@ def run_cli_command(
     console.print()
     cmd = [sys.executable, "-m", "app.cli", *args]
     try:
-        result = subprocess.run(cmd, check=False, timeout=subprocess_timeout)
-        if result.returncode != 0:
-            console.print(f"[{ERROR}]CLI command exited with non-zero code {result.returncode}[/]")
-    except subprocess.TimeoutExpired:
+        if subprocess_timeout is not None:
+            timed_result = subprocess.run(
+                cmd,
+                check=False,
+                timeout=subprocess_timeout,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            print_command_output(console, timed_result.stdout or "")
+            print_command_output(console, timed_result.stderr or "", style=ERROR)
+            if timed_result.returncode != 0:
+                console.print(
+                    f"[{ERROR}]CLI command exited with non-zero code {timed_result.returncode}[/]"
+                )
+        else:
+            interactive_result = subprocess.run(cmd, check=False)
+            if interactive_result.returncode != 0:
+                console.print(
+                    f"[{ERROR}]CLI command exited with non-zero code {interactive_result.returncode}[/]"
+                )
+    except subprocess.TimeoutExpired as exc:
+        print_command_output(console, _decode_subprocess_stream(exc.stdout))
+        print_command_output(console, _decode_subprocess_stream(exc.stderr), style=ERROR)
         console.print(f"[{ERROR}]error:[/] CLI command timed out")
     except KeyboardInterrupt:
         console.print(f"[{DIM}]CLI command cancelled (Ctrl+C).[/]")
@@ -234,6 +265,10 @@ def _cmd_watchdog(session: ReplSession, console: Console, args: list[str]) -> bo
     return run_cli_command(console, ["watchdog", *args])
 
 
+def _cmd_debug(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+    return run_cli_command(console, ["debug", *args])
+
+
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
         "/onboard",
@@ -319,6 +354,12 @@ COMMANDS: list[SlashCommand] = [
         _cmd_watchdog,
         usage=("/watchdog --pid <pid> [--max-rss <size>] [--max-cpu <percent>]",),
         examples=("/watchdog --pid 123 --max-rss 1G",),
+        execution_tier=ExecutionTier.SAFE,
+    ),
+    SlashCommand(
+        "/debug",
+        "run targeted runtime diagnostics",
+        _cmd_debug,
         execution_tier=ExecutionTier.SAFE,
     ),
 ]

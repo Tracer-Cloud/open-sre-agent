@@ -44,6 +44,48 @@ class TestAgentRecord:
         assert record.pid == 9999
         assert isinstance(record.pid, int)
 
+    def test_provider_defaults_to_none(self) -> None:
+        # ``provider`` is optional and unset on records created before the
+        # field existed (#2023); guarantees backward compatibility for any
+        # construction site that has not been updated.
+        record = AgentRecord(name="bot", pid=1, command="bot")
+        assert record.provider is None
+
+    def test_record_with_provider_round_trips_through_jsonl(
+        self, tmp_path: Path, sample_record: AgentRecord
+    ) -> None:
+        path = tmp_path / "agents.jsonl"
+        reg1 = AgentRegistry(path=path)
+        record = AgentRecord(
+            name="claude-code-8421",
+            pid=8421,
+            command="claude",
+            registered_at=sample_record.registered_at,
+            provider="claude-code",
+        )
+        reg1.register(record)
+
+        reg2 = AgentRegistry(path=path)
+        rehydrated = reg2.get(8421)
+        assert rehydrated is not None
+        assert rehydrated.provider == "claude-code"
+
+    def test_legacy_jsonl_without_provider_loads_with_provider_none(self, tmp_path: Path) -> None:
+        # A registry written before #2023 has no ``provider`` key on its
+        # lines. ``from_dict`` must accept these without raising and yield
+        # ``provider=None`` rather than crashing the REPL on boot.
+        path = tmp_path / "agents.jsonl"
+        path.write_text(
+            '{"name":"claude-code","pid":8421,"command":"claude",'
+            '"registered_at":"2026-05-07T12:00:00+00:00","source":"registered",'
+            '"waits_on":[]}\n',
+            encoding="utf-8",
+        )
+        reg = AgentRegistry(path=path)
+        record = reg.get(8421)
+        assert record is not None
+        assert record.provider is None
+
 
 class TestAgentRegistry:
     def test_register_and_list(self, registry: AgentRegistry, sample_record: AgentRecord) -> None:

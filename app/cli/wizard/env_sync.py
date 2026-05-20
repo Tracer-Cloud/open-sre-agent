@@ -142,6 +142,14 @@ def sync_env_values(
     return target_path
 
 
+def _classification_model_env(p: ProviderOption) -> str | None:
+    if p.classification_model_env:
+        return p.classification_model_env
+    if p.model_env.endswith("_REASONING_MODEL"):
+        return p.model_env.replace("_REASONING_MODEL", "_CLASSIFICATION_MODEL")
+    return None
+
+
 def _provider_specific_keys(p: ProviderOption) -> set[str]:
     """Return all env keys owned by a provider (api key + model keys)."""
     keys: set[str] = {p.model_env}
@@ -149,6 +157,11 @@ def _provider_specific_keys(p: ProviderOption) -> set[str]:
         keys.add(p.api_key_env)
     if p.legacy_model_env:
         keys.add(p.legacy_model_env)
+    if p.toolcall_model_env:
+        keys.add(p.toolcall_model_env)
+    classification_env = _classification_model_env(p)
+    if classification_env:
+        keys.add(classification_env)
     return keys
 
 
@@ -156,6 +169,15 @@ def _llm_provider_value_from_lines(lines: list[str]) -> str | None:
     for line in lines:
         match = _ENV_ASSIGNMENT.match(line)
         if match and match.group(1) == "LLM_PROVIDER":
+            _, _, rhs = line.partition("=")
+            return rhs.strip().strip("\"'") or None
+    return None
+
+
+def _env_value_from_lines(lines: list[str], key: str) -> str | None:
+    for line in lines:
+        match = _ENV_ASSIGNMENT.match(line)
+        if match and match.group(1) == key:
             _, _, rhs = line.partition("=")
             return rhs.strip().strip("\"'") or None
     return None
@@ -176,6 +198,7 @@ def sync_provider_env(
     *,
     provider: ProviderOption,
     model: str,
+    toolcall_model: str | None = None,
     env_path: Path | None = None,
 ) -> Path:
     """Write non-secret provider settings into the project .env.
@@ -205,6 +228,11 @@ def sync_provider_env(
     active_non_secret: set[str] = {provider.model_env}
     if provider.legacy_model_env:
         active_non_secret.add(provider.legacy_model_env)
+    if provider.toolcall_model_env:
+        active_non_secret.add(provider.toolcall_model_env)
+    classification_env = _classification_model_env(provider)
+    if classification_env:
+        active_non_secret.add(classification_env)
     keys_to_remove -= active_non_secret
 
     prior_provider = _llm_provider_value_from_lines(existing)
@@ -221,9 +249,20 @@ def sync_provider_env(
     values: dict[str, str] = {"LLM_PROVIDER": provider.value, provider.model_env: model}
     if provider.legacy_model_env:
         values[provider.legacy_model_env] = model
+    if toolcall_model and provider.toolcall_model_env:
+        values[provider.toolcall_model_env] = toolcall_model
 
     for key, value in values.items():
         lines = _set_env_value(lines, key, value)
 
     _write_env(target_path, lines)
+
+    for key in keys_to_remove:
+        os.environ.pop(key, None)
+    for key in active_non_secret:
+        preserved = _env_value_from_lines(lines, key)
+        if preserved is not None:
+            values[key] = preserved
+    os.environ.update(values)
+
     return target_path

@@ -66,7 +66,7 @@ def switch_llm_provider(
     toolcall_model: str | None = None,
 ) -> bool:
     from app.cli.wizard.config import PROVIDER_BY_VALUE
-    from app.cli.wizard.env_sync import sync_env_values
+    from app.cli.wizard.env_sync import sync_provider_env
     from app.llm_credentials import has_llm_api_key
 
     provider_key = provider_name.strip().lower()
@@ -113,10 +113,6 @@ def switch_llm_provider(
         )
         return False
 
-    values = {"LLM_PROVIDER": provider.value, provider.model_env: selected_model}
-    if provider.legacy_model_env:
-        values[provider.legacy_model_env] = selected_model
-
     selected_toolcall: str | None = None
     if toolcall_model is not None:
         if not provider.toolcall_model_env:
@@ -126,21 +122,21 @@ def switch_llm_provider(
             )
         else:
             selected_toolcall = toolcall_model.strip()
-            if selected_toolcall:
-                if not _is_model_allowed(provider, selected_toolcall):
-                    console.print(
-                        f"[{ERROR}]unknown model for {provider.value}:[/] "
-                        f"{escape(selected_toolcall)}"
-                    )
-                    console.print(
-                        f"[{DIM}]known toolcall models:[/] "
-                        f"{escape(_format_supported_models(provider.models))}"
-                    )
-                    return False
-                values[provider.toolcall_model_env] = selected_toolcall
+            if selected_toolcall and not _is_model_allowed(provider, selected_toolcall):
+                console.print(
+                    f"[{ERROR}]unknown model for {provider.value}:[/] {escape(selected_toolcall)}"
+                )
+                console.print(
+                    f"[{DIM}]known toolcall models:[/] "
+                    f"{escape(_format_supported_models(provider.models))}"
+                )
+                return False
 
-    env_path = sync_env_values(values)
-    os.environ.update(values)
+    env_path = sync_provider_env(
+        provider=provider,
+        model=selected_model,
+        toolcall_model=selected_toolcall or None,
+    )
     _reset_runtime_llm_caches()
 
     # Be explicit about which slot each model lands in.

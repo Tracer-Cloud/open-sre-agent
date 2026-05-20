@@ -111,17 +111,19 @@ def test_handles_each_event_type_in_isolation(meter: ClaudeCodeMeter) -> None:
 
 def test_cache_token_counters_are_not_summed(meter: ClaudeCodeMeter) -> None:
     """``cache_creation_input_tokens`` and ``cache_read_input_tokens``
-    are deliberately ignored — they're billed at different rates and
-    the dashboard's ``$/hr`` column will need them broken out
-    separately when cache-cost tracking ships in a follow-up.
+    are included in visible activity and broken out for exact pricing.
     """
     chunk_with_cache = (
         '{"type":"assistant","message":{"usage":{"input_tokens":100,'
         '"cache_creation_input_tokens":500,"cache_read_input_tokens":2000,'
         '"output_tokens":50}}}'
     )
-    # 100 + 50 = 150, NOT 100 + 500 + 2000 + 50 = 2650
-    assert meter.parse_chunk(chunk_with_cache) == 150
+    sample = meter.sample_chunk(chunk_with_cache)
+    assert sample.tokens == 2650
+    assert sample.usage.input_tokens == 100
+    assert sample.usage.cache_creation_input_tokens == 500
+    assert sample.usage.cache_read_input_tokens == 2000
+    assert sample.usage.output_tokens == 50
 
 
 def test_malformed_json_lines_are_skipped(meter: ClaudeCodeMeter) -> None:
@@ -135,3 +137,61 @@ def test_malformed_json_lines_are_skipped(meter: ClaudeCodeMeter) -> None:
         '{"type":"assistant","message":{"usage":'  # truncated
     )
     assert meter.parse_chunk(chunk) == 15
+
+
+def test_sample_chunk_surfaces_latest_assistant_model(meter: ClaudeCodeMeter) -> None:
+    """``sample_chunk`` (#2023) returns the model from the *latest*
+    assistant event so pricing follows the active model. A mid-stream
+    ``/model`` switch should be reflected immediately rather than
+    sticking on the first model seen.
+    """
+    chunk = "\n".join(
+        [
+            (
+                '{"type":"assistant","message":{"model":"claude-sonnet-4-5",'
+                '"usage":{"input_tokens":10,"output_tokens":5}}}'
+            ),
+            (
+                '{"type":"assistant","message":{"model":"claude-opus-4-1",'
+                '"usage":{"input_tokens":20,"output_tokens":8}}}'
+            ),
+        ]
+    )
+    sample = meter.sample_chunk(chunk)
+    assert sample.tokens == 43
+    assert sample.model == "claude-opus-4-1"
+
+
+def test_sample_chunk_returns_none_model_when_assistant_lacks_model_field(
+    meter: ClaudeCodeMeter,
+) -> None:
+    """Older fixtures and some Claude Code releases omit
+    ``message.model`` on assistant events. ``sample_chunk`` must
+    accept that without raising and surface ``model=None`` — the
+    wiring layer then falls back to yaml override or env var.
+    """
+    chunk = '{"type":"assistant","message":{"usage":{"input_tokens":10,"output_tokens":5}}}'
+    sample = meter.sample_chunk(chunk)
+    assert sample.tokens == 15
+    assert sample.model is None
+
+
+def test_sample_chunk_ignores_model_on_non_assistant_events(meter: ClaudeCodeMeter) -> None:
+    """The ``system.init`` event carries a top-level ``model`` field
+    but is not an assistant event. The meter must not surface it from
+    a chunk with no assistant turns, or the dashboard would price an
+    empty window against a model the user has not yet used.
+    """
+    chunk = '{"type":"system","subtype":"init","session_id":"abc","model":"claude-opus-4-7"}'
+    sample = meter.sample_chunk(chunk)
+    assert sample.tokens == 0
+    assert sample.model is None
+
+
+def test_sample_chunk_tokens_match_parse_chunk_for_back_compat(meter: ClaudeCodeMeter) -> None:
+    """Locking the invariant that the integer-only API and the
+    structured API agree on the token count — any callers still using
+    ``parse_chunk`` must continue to see the same numbers.
+    """
+    chunk = _FIXTURE.read_text(encoding="utf-8")
+    assert meter.parse_chunk(chunk) == meter.sample_chunk(chunk).tokens

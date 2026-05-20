@@ -17,6 +17,7 @@ from app.config import (
     NVIDIA_REASONING_MODEL,
     OPENAI_REASONING_MODEL,
     OPENROUTER_REASONING_MODEL,
+    REQUESTY_REASONING_MODEL,
 )
 from app.integrations.llm_cli.base import LLMCLIAdapter
 
@@ -51,6 +52,10 @@ class ProviderOption:
     #: providers that don't expose a separate toolcall model (e.g. CLI-backed
     #: providers like ``codex``/``claude-code``, or Ollama).
     toolcall_model_env: str | None = None
+    #: Env var that holds the *classification* model for this provider. When
+    #: unset, ``sync_provider_env`` falls back to replacing ``_REASONING_MODEL``
+    #: with ``_CLASSIFICATION_MODEL`` in ``model_env``.
+    classification_model_env: str | None = None
     #: Human-readable name for the credential requested during onboarding. Most
     #: providers want an API key; Ollama wants a host URL. Used as the wizard
     #: prompt label, e.g. ``{label} {credential_label} ({api_key_env})``.
@@ -116,6 +121,22 @@ OPENROUTER_MODELS = (
     ModelOption(value="minimax/minimax-m2", label="MiniMax M2 (via OpenRouter)"),
     ModelOption(value="deepseek/deepseek-v3.2", label="DeepSeek V3.2 (via OpenRouter)"),
     ModelOption(value="qwen/qwen-3.6-plus-preview", label="Qwen 3.6 Plus (via OpenRouter)"),
+)
+
+REQUESTY_MODELS = (
+    ModelOption(value=REQUESTY_REASONING_MODEL, label="Claude Sonnet 4.6 (via Requesty)"),
+    ModelOption(value="bedrock/claude-opus-4-7", label="Claude Opus 4.7 Bedrock (via Requesty)"),
+    ModelOption(
+        value="bedrock/claude-sonnet-4-6", label="Claude Sonnet 4.6 Bedrock (via Requesty)"
+    ),
+    ModelOption(value="openai/gpt-5.5", label="GPT-5.5 (via Requesty)"),
+    ModelOption(
+        value="vertex/gemini-3.1-pro-preview", label="Gemini 3.1 Pro (preview, via Requesty)"
+    ),
+    ModelOption(
+        value="vertex/gemini-3.1-flash-lite-preview",
+        label="Gemini 3.1 Flash-Lite (preview, via Requesty)",
+    ),
 )
 
 GEMINI_MODELS = (
@@ -340,6 +361,7 @@ SUPPORTED_PROVIDERS = (
         models=ANTHROPIC_MODELS,
         legacy_model_env="ANTHROPIC_MODEL",
         toolcall_model_env="ANTHROPIC_TOOLCALL_MODEL",
+        classification_model_env="ANTHROPIC_CLASSIFICATION_MODEL",
     ),
     ProviderOption(
         value="openai",
@@ -351,6 +373,7 @@ SUPPORTED_PROVIDERS = (
         models=OPENAI_MODELS,
         legacy_model_env="OPENAI_MODEL",
         toolcall_model_env="OPENAI_TOOLCALL_MODEL",
+        classification_model_env="OPENAI_CLASSIFICATION_MODEL",
         allow_custom_models=True,
     ),
     ProviderOption(
@@ -363,7 +386,19 @@ SUPPORTED_PROVIDERS = (
         models=OPENROUTER_MODELS,
         legacy_model_env="OPENROUTER_MODEL",
         toolcall_model_env="OPENROUTER_TOOLCALL_MODEL",
+        classification_model_env="OPENROUTER_CLASSIFICATION_MODEL",
         allow_custom_models=True,
+    ),
+    ProviderOption(
+        value="requesty",
+        label="Requesty",
+        group="Hosted providers",
+        api_key_env="REQUESTY_API_KEY",
+        model_env="REQUESTY_REASONING_MODEL",
+        default_model=REQUESTY_REASONING_MODEL,
+        models=REQUESTY_MODELS,
+        legacy_model_env="REQUESTY_MODEL",
+        classification_model_env="REQUESTY_CLASSIFICATION_MODEL",
     ),
     ProviderOption(
         value="gemini",
@@ -375,6 +410,7 @@ SUPPORTED_PROVIDERS = (
         models=GEMINI_MODELS,
         legacy_model_env="GEMINI_MODEL",
         toolcall_model_env="GEMINI_TOOLCALL_MODEL",
+        classification_model_env="GEMINI_CLASSIFICATION_MODEL",
         allow_custom_models=True,
     ),
     ProviderOption(
@@ -387,6 +423,7 @@ SUPPORTED_PROVIDERS = (
         models=NVIDIA_MODELS,
         legacy_model_env="NVIDIA_MODEL",
         toolcall_model_env="NVIDIA_TOOLCALL_MODEL",
+        classification_model_env="NVIDIA_CLASSIFICATION_MODEL",
         allow_custom_models=True,
     ),
     ProviderOption(
@@ -402,6 +439,7 @@ SUPPORTED_PROVIDERS = (
         default_model=BEDROCK_REASONING_MODEL,
         models=BEDROCK_MODELS,
         toolcall_model_env="BEDROCK_TOOLCALL_MODEL",
+        classification_model_env="BEDROCK_CLASSIFICATION_MODEL",
         credential_label="AWS region (uses IAM credentials)",
         credential_secret=False,
         # credential_kind="none" causes flow.py to skip the credential prompt

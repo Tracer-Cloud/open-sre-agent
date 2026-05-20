@@ -45,7 +45,10 @@ def report_exception(
         combined.update({f"tag.{k}": v for k, v in tags.items()})
     if extras:
         combined.update(extras)
-    capture_exception(exc, extra=combined or None)
+    if tags:
+        capture_exception(exc, extra=combined or None, tags=tags)
+    else:
+        capture_exception(exc, extra=combined or None)
 
 
 @contextmanager

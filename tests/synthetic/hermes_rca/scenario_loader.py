@@ -15,9 +15,13 @@ from tests.synthetic.hermes_rca.hermes_schemas import (
     validate_hermes_answer_key,
     validate_hermes_config,
     validate_hermes_cron_state,
+    validate_hermes_filesystem_state,
     validate_hermes_kv_cache_state,
+    validate_hermes_memory_state,
     validate_hermes_message_history,
+    validate_hermes_orchestration_state,
     validate_hermes_provider_traffic,
+    validate_hermes_routing_decisions,
     validate_hermes_runtime_state,
     validate_hermes_scenario_metadata,
     validate_hermes_session_log,
@@ -117,6 +121,10 @@ def _load_evidence(scenario_dir: Path, available_evidence: list[str]) -> HermesS
     kv_cache_state = None
     cron_state = None
     session_topology = None
+    orchestration_state = None
+    routing_decisions = None
+    memory_state = None
+    filesystem_state = None
 
     if "hermes_session_log" in available_evidence:
         session_log = validate_hermes_session_log(
@@ -154,6 +162,26 @@ def _load_evidence(scenario_dir: Path, available_evidence: list[str]) -> HermesS
             _read_json(scenario_dir / "hermes_session_topology.json")
         )
 
+    if "hermes_orchestration_state" in available_evidence:
+        orchestration_state = validate_hermes_orchestration_state(
+            _read_json(scenario_dir / "hermes_orchestration_state.json")
+        )
+
+    if "hermes_routing_decisions" in available_evidence:
+        routing_decisions = validate_hermes_routing_decisions(
+            _read_json(scenario_dir / "hermes_routing_decisions.json")
+        )
+
+    if "hermes_memory_state" in available_evidence:
+        memory_state = validate_hermes_memory_state(
+            _read_json(scenario_dir / "hermes_memory_state.json")
+        )
+
+    if "hermes_filesystem_state" in available_evidence:
+        filesystem_state = validate_hermes_filesystem_state(
+            _read_json(scenario_dir / "hermes_filesystem_state.json")
+        )
+
     return HermesScenarioEvidence(
         hermes_session_log=session_log,
         hermes_provider_traffic=provider_traffic,
@@ -163,12 +191,26 @@ def _load_evidence(scenario_dir: Path, available_evidence: list[str]) -> HermesS
         hermes_kv_cache_state=kv_cache_state,
         hermes_cron_state=cron_state,
         hermes_session_topology=session_topology,
+        hermes_orchestration_state=orchestration_state,
+        hermes_routing_decisions=routing_decisions,
+        hermes_memory_state=memory_state,
+        hermes_filesystem_state=filesystem_state,
     )
 
 
 def load_scenario(scenario_dir: Path) -> HermesScenarioFixture:
     metadata = _parse_metadata(scenario_dir / "scenario.yml")
     answer_key = _parse_answer_key(scenario_dir / "answer.yml")
+
+    required_sources = set(answer_key.required_evidence_sources)
+    available_sources = set(metadata.available_evidence)
+    missing_required_sources = sorted(required_sources - available_sources)
+    if missing_required_sources:
+        raise ValueError(
+            f"{scenario_dir.name}: answer.yml required_evidence_sources not present in "
+            f"scenario.yml available_evidence: {missing_required_sources}"
+        )
+
     alert = validate_hermes_alert(_read_json(scenario_dir / "alert.json"))
     evidence = _load_evidence(scenario_dir, metadata.available_evidence)
 
