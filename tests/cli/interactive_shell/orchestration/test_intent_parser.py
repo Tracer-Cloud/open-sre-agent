@@ -7,10 +7,14 @@ import pytest
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.intent_parser import (
     SAMPLE_ALERT_RE,
     extract_implementation_request,
+    extract_quoted_investigation_request,
     extract_shell_command,
     normalize_shell_command,
     shutil,
     split_prompt_clauses,
+)
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.slash_commands.deterministic_action_mapper import (
+    map_actions_with_unhandled,
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
     PromptClause,
@@ -98,3 +102,34 @@ class TestSampleAlertRE:
             assert SAMPLE_ALERT_RE.search(phrase) is None, (
                 f"SAMPLE_ALERT_RE should NOT match: {phrase!r}"
             )
+
+
+def test_extract_quoted_investigation_request_matches_bare_investigate_verb() -> None:
+    action = extract_quoted_investigation_request(
+        PromptClause(text='investigate "hello world"', position=0)
+    )
+    assert action is not None
+    assert action.kind == "investigation"
+    assert action.content == "hello world"
+
+
+def test_map_actions_with_unhandled_remote_then_investigate_compound() -> None:
+    actions, has_unhandled = map_actions_with_unhandled(
+        'run /remote and then investigate "hello world"'
+    )
+    assert not has_unhandled
+    assert [(item.kind, item.content) for item in actions] == [
+        ("slash", "/remote"),
+        ("investigation", "hello world"),
+    ]
+
+
+def test_map_actions_with_unhandled_health_then_connected_services() -> None:
+    actions, has_unhandled = map_actions_with_unhandled(
+        "check the health of my opensre and then show me all connected services"
+    )
+    assert not has_unhandled
+    assert [(item.kind, item.content) for item in actions] == [
+        ("slash", "/health"),
+        ("slash", "/list integrations"),
+    ]

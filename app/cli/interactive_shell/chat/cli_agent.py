@@ -12,6 +12,7 @@ from rich.markdown import Markdown
 from rich.markup import escape
 
 from app.cli.interactive_shell.prompt_logging import LlmRunInfo
+from app.cli.interactive_shell.prompting.follow_up import _summarize_last_state
 from app.cli.interactive_shell.prompting.prompt_rules import (
     CLI_ASSISTANT_MARKDOWN_RULE,
     INTERACTIVE_SHELL_TERMINOLOGY_RULE,
@@ -123,6 +124,7 @@ def _build_system_prompt(
     history: str,
     agents_md: str = "",
     investigation_flow: str = "",
+    prior_investigation: str = "",
 ) -> str:
     """Build the system prompt for one assistant turn.
 
@@ -137,6 +139,11 @@ def _build_system_prompt(
     investigation_flow_block = (
         f"--- Investigation flow reference ---\n{investigation_flow}\n\n"
         if investigation_flow
+        else ""
+    )
+    prior_investigation_block = (
+        f"--- Prior investigation in this session ---\n{prior_investigation}\n\n"
+        if prior_investigation
         else ""
     )
     return (
@@ -157,10 +164,14 @@ def _build_system_prompt(
         "Be brief and friendly. Ground CLI facts in the reference below; do "
         "not invent subcommands. For investigation-flow questions, use the "
         "investigation flow reference below and do not claim the pipeline "
-        "definition is unavailable.\n\n"
+        "definition is unavailable.\n"
+        "For vague operational questions (for example why a database is slow) "
+        "with no pasted alert, restate the user's question in your reply and "
+        "ask for the target system, service, or alert context.\n\n"
         f"{_TERMINOLOGY_RULE}\n{_MARKDOWN_RULE}\n{_ACTION_RULE}\n\n"
         f"--- CLI reference ---\n{reference}\n\n"
         f"{investigation_flow_block}"
+        f"{prior_investigation_block}"
         f"{repo_map_block}"
         f"--- Recent CLI conversation ---\n{history}\n"
     )
@@ -428,11 +439,15 @@ def answer_cli_agent(
     investigation_flow = build_investigation_flow_reference_text()
     log_grounding_cache_diagnostics("cli_agent_grounding")
     history = _format_history_for_prompt(session)
+    prior_investigation = (
+        _summarize_last_state(session.last_state) if session.last_state is not None else ""
+    )
     system = _build_system_prompt(
         reference,
         history,
         agents_md=agents_md,
         investigation_flow=investigation_flow,
+        prior_investigation=prior_investigation,
     )
     user_block = f"--- User message ---\n{message}"
     synthetic_block = ""

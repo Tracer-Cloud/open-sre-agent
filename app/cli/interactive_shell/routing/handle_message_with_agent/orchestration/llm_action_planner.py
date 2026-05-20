@@ -7,13 +7,15 @@ import logging
 import re
 from typing import Any
 
-# Load tool registrations.
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration import (  # noqa: F401
-    tools,
-)
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
     PlannedAction,
     default_target_surface,
+)
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.intent_parser import (
+    split_prompt_clauses,
+)
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.slash_commands.deterministic_action_mapper import (
+    map_actions_with_unhandled,
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_registry import (
     ACTION_KIND_TO_TOOL,
@@ -393,6 +395,23 @@ def _parse_tool_plan(
     return actions, has_unhandled
 
 
+def _reconcile_compound_actions(
+    message: str,
+    actions: list[PlannedAction],
+    has_unhandled: bool,
+) -> tuple[list[PlannedAction], bool]:
+    """Prefer deterministic multi-clause plans when the LLM under-plans compounds."""
+    if len(split_prompt_clauses(message)) <= 1:
+        return actions, has_unhandled
+    if actions and all(action.kind == "assistant_handoff" for action in actions):
+        return actions, has_unhandled
+
+    det_actions, det_unhandled = map_actions_with_unhandled(message)
+    if not det_actions or len(det_actions) <= len(actions):
+        return actions, has_unhandled
+    return det_actions, det_unhandled
+
+
 def plan_actions_with_llm(
     message: str,
     *,
@@ -403,7 +422,11 @@ def plan_actions_with_llm(
     raw = _call_llm(sanitised, session)
     if raw is None:
         return None
-    return _parse_tool_plan(raw, session=session)
+    parsed = _parse_tool_plan(raw, session=session)
+    if parsed is None:
+        return None
+    actions, has_unhandled = parsed
+    return _reconcile_compound_actions(sanitised, actions, has_unhandled)
 
 
 __all__ = ["plan_actions_with_llm"]

@@ -128,7 +128,8 @@ SAMPLE_ALERT_RE = re.compile(
     re.IGNORECASE,
 )
 QUOTED_INVESTIGATION_RE = re.compile(
-    r"\b(?:send|start|run|launch|trigger)\b.{0,80}?\binvestigation\b.{0,260}?"
+    r"(?:\b(?:send|start|run|launch|trigger)\b.{0,80}?\binvestigation\b.{0,260}?|"
+    r"\binvestigate\b\s+)"
     r"(?:\"(?P<double>[^\"]+)\"|'(?P<single>[^']+)'|`(?P<backtick>[^`]+)`)",
     re.IGNORECASE | re.DOTALL,
 )
@@ -224,3 +225,13 @@ _NON_COMMAND_STARTS = frozenset(
 # Shell builtins that may not be discoverable via `shutil.which()` on all platforms.
 # Keep this list intentionally small and add tests when extending it.
 _SHELL_BUILTINS = frozenset({"cd", "pwd"})
+
+# Imported by extractors.py; bundle for static analysis.
+_EXTRACTOR_PATTERNS = (
+    _LLM_PROVIDER_RE,
+    _LLM_PROVIDER_SWITCH_RE,
+    _EXPLICIT_SHELL_RE,
+    _SHELL_PROMPT_RE,
+    _NON_COMMAND_STARTS,
+    _SHELL_BUILTINS,
+)
