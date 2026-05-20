@@ -95,11 +95,11 @@ def test_dispatch_needs_exclusive_stdin_for_update(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """``/update`` hits the network; block the next prompt until output is printed."""
-    monkeypatch.setattr(loop, "repl_tty_interactive", lambda: True)
+    monkeypatch.setattr(loop_dispatch, "repl_tty_interactive", lambda: True)
     session = ReplSession()
 
-    assert loop._dispatch_needs_exclusive_stdin("/update", session) is True
-    assert loop._dispatch_needs_exclusive_stdin("update", session) is True
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("/update", session) is True
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("update", session) is True
 
 
 def test_dispatch_needs_exclusive_stdin_for_integration_setup(

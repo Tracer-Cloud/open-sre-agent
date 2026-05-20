@@ -17,7 +17,6 @@ from app.config import (
     NVIDIA_REASONING_MODEL,
     OPENAI_REASONING_MODEL,
     OPENROUTER_REASONING_MODEL,
-    REQUESTY_REASONING_MODEL,
 )
 from app.integrations.llm_cli.base import LLMCLIAdapter
 
@@ -121,22 +120,6 @@ OPENROUTER_MODELS = (
     ModelOption(value="minimax/minimax-m2", label="MiniMax M2 (via OpenRouter)"),
     ModelOption(value="deepseek/deepseek-v3.2", label="DeepSeek V3.2 (via OpenRouter)"),
     ModelOption(value="qwen/qwen-3.6-plus-preview", label="Qwen 3.6 Plus (via OpenRouter)"),
-)
-
-REQUESTY_MODELS = (
-    ModelOption(value=REQUESTY_REASONING_MODEL, label="Claude Sonnet 4.6 (via Requesty)"),
-    ModelOption(value="bedrock/claude-opus-4-7", label="Claude Opus 4.7 Bedrock (via Requesty)"),
-    ModelOption(
-        value="bedrock/claude-sonnet-4-6", label="Claude Sonnet 4.6 Bedrock (via Requesty)"
-    ),
-    ModelOption(value="openai/gpt-5.5", label="GPT-5.5 (via Requesty)"),
-    ModelOption(
-        value="vertex/gemini-3.1-pro-preview", label="Gemini 3.1 Pro (preview, via Requesty)"
-    ),
-    ModelOption(
-        value="vertex/gemini-3.1-flash-lite-preview",
-        label="Gemini 3.1 Flash-Lite (preview, via Requesty)",
-    ),
 )
 
 GEMINI_MODELS = (
@@ -388,17 +371,6 @@ SUPPORTED_PROVIDERS = (
         toolcall_model_env="OPENROUTER_TOOLCALL_MODEL",
         classification_model_env="OPENROUTER_CLASSIFICATION_MODEL",
         allow_custom_models=True,
-    ),
-    ProviderOption(
-        value="requesty",
-        label="Requesty",
-        group="Hosted providers",
-        api_key_env="REQUESTY_API_KEY",
-        model_env="REQUESTY_REASONING_MODEL",
-        default_model=REQUESTY_REASONING_MODEL,
-        models=REQUESTY_MODELS,
-        legacy_model_env="REQUESTY_MODEL",
-        classification_model_env="REQUESTY_CLASSIFICATION_MODEL",
     ),
     ProviderOption(
         value="gemini",

@@ -889,8 +889,8 @@ class TestStreamingConsole:
     ) -> None:
         import threading as _threading
 
-        spinner = loop._SpinnerState()
-        console = loop._StreamingConsole(
+        spinner = loop_state.SpinnerState()
+        console = loop_module.StreamingConsole(
             spinner,
             _threading.Event(),
             file=io.StringIO(),
