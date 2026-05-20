@@ -165,6 +165,15 @@ def _llm_provider_value_from_lines(lines: list[str]) -> str | None:
     return None
 
 
+def _env_value_from_lines(lines: list[str], key: str) -> str | None:
+    for line in lines:
+        match = _ENV_ASSIGNMENT.match(line)
+        if match and match.group(1) == key:
+            _, _, rhs = line.partition("=")
+            return rhs.strip().strip("\"'")
+    return None
+
+
 def _remove_keys(lines: list[str], keys_to_remove: set[str]) -> list[str]:
     """Drop lines whose env key is in *keys_to_remove*."""
     result: list[str] = []
@@ -239,6 +248,10 @@ def sync_provider_env(
 
     for key in keys_to_remove:
         os.environ.pop(key, None)
+    for key in active_non_secret:
+        preserved = _env_value_from_lines(lines, key)
+        if preserved is not None:
+            values[key] = preserved
     os.environ.update(values)
 
     return target_path

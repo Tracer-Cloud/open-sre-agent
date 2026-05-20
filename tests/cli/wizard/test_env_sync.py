@@ -166,6 +166,33 @@ def test_sync_provider_env_removes_stale_toolcall_and_classification_keys(
     assert "OPENAI_TOOLCALL_MODEL" not in os.environ
 
 
+def test_sync_provider_env_loads_preserved_keys_from_env_file(tmp_path, monkeypatch) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "LLM_PROVIDER=openai\n"
+        "OPENAI_REASONING_MODEL=gpt-5.4\n"
+        "OPENAI_MODEL=gpt-5.4\n"
+        "OPENAI_TOOLCALL_MODEL=gpt-5.4-mini\n"
+        "OPENAI_CLASSIFICATION_MODEL=gpt-5.4-mini\n",
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("OPENAI_TOOLCALL_MODEL", raising=False)
+    monkeypatch.delenv("OPENAI_CLASSIFICATION_MODEL", raising=False)
+    monkeypatch.setenv("LLM_PROVIDER", "anthropic")
+    monkeypatch.setenv("OPENAI_REASONING_MODEL", "stale")
+
+    sync_provider_env(
+        provider=PROVIDER_BY_VALUE["openai"],
+        model="gpt-5.4",
+        env_path=env_path,
+    )
+
+    assert os.environ["LLM_PROVIDER"] == "openai"
+    assert os.environ["OPENAI_REASONING_MODEL"] == "gpt-5.4"
+    assert os.environ["OPENAI_TOOLCALL_MODEL"] == "gpt-5.4-mini"
+    assert os.environ["OPENAI_CLASSIFICATION_MODEL"] == "gpt-5.4-mini"
+
+
 def test_sync_provider_env_preserves_active_provider_toolcall_key(tmp_path, monkeypatch) -> None:
     env_path = tmp_path / ".env"
     env_path.write_text(
