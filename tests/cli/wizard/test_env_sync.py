@@ -70,9 +70,7 @@ def test_is_sensitive_env_key_leaves_non_secrets(key: str) -> None:
     assert _is_sensitive_env_key(key) is False
 
 
-def test_sync_provider_env_updates_provider_specific_keys(
-    tmp_path, monkeypatch
-) -> None:
+def test_sync_provider_env_updates_provider_specific_keys(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("LLM_PROVIDER", raising=False)
     monkeypatch.delenv("OPENAI_REASONING_MODEL", raising=False)
     monkeypatch.delenv("OPENAI_MODEL", raising=False)
@@ -101,9 +99,7 @@ def test_sync_provider_env_updates_provider_specific_keys(
     assert "OPENAI_MODEL=gpt-5-mini\n" in content
 
 
-def test_sync_provider_env_appends_to_file_without_final_newline(
-    tmp_path, monkeypatch
-) -> None:
+def test_sync_provider_env_appends_to_file_without_final_newline(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("LLM_PROVIDER", raising=False)
     monkeypatch.delenv("OPENAI_REASONING_MODEL", raising=False)
     monkeypatch.delenv("OPENAI_MODEL", raising=False)
@@ -190,9 +186,7 @@ def test_sync_provider_env_removes_stale_toolcall_and_classification_keys(
     assert "OPENAI_TOOLCALL_MODEL" not in os.environ
 
 
-def test_sync_provider_env_loads_preserved_keys_from_env_file(
-    tmp_path, monkeypatch
-) -> None:
+def test_sync_provider_env_loads_preserved_keys_from_env_file(tmp_path, monkeypatch) -> None:
     env_path = tmp_path / ".env"
     env_path.write_text(
         "LLM_PROVIDER=openai\n"
@@ -219,9 +213,7 @@ def test_sync_provider_env_loads_preserved_keys_from_env_file(
     assert os.environ["OPENAI_CLASSIFICATION_MODEL"] == "gpt-5.4-mini"
 
 
-def test_sync_provider_env_preserves_active_provider_toolcall_key(
-    tmp_path, monkeypatch
-) -> None:
+def test_sync_provider_env_preserves_active_provider_toolcall_key(tmp_path, monkeypatch) -> None:
     env_path = tmp_path / ".env"
     env_path.write_text(
         "LLM_PROVIDER=openai\n"
@@ -292,9 +284,7 @@ def test_sync_provider_env_skips_empty_preserved_values_in_os_environ(
     assert "OPENAI_TOOLCALL_MODEL" not in os.environ
 
 
-def test_sync_provider_env_skips_empty_toolcall_model_override(
-    tmp_path, monkeypatch
-) -> None:
+def test_sync_provider_env_skips_empty_toolcall_model_override(tmp_path, monkeypatch) -> None:
     env_path = tmp_path / ".env"
     env_path.write_text(
         "LLM_PROVIDER=openai\n"
@@ -318,9 +308,7 @@ def test_sync_provider_env_skips_empty_toolcall_model_override(
     assert os.environ["OPENAI_TOOLCALL_MODEL"] == "gpt-5.4-mini"
 
 
-def test_sync_provider_env_writes_toolcall_model_atomically(
-    tmp_path, monkeypatch
-) -> None:
+def test_sync_provider_env_writes_toolcall_model_atomically(tmp_path, monkeypatch) -> None:
     env_path = tmp_path / ".env"
     env_path.write_text(
         "LLM_PROVIDER=openai\n"
@@ -374,9 +362,7 @@ def test_sync_env_values_rejects_sensitive_keys(tmp_path) -> None:
 def test_sync_env_values_routes_secrets_to_keyring(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("GITLAB_ACCESS_TOKEN", raising=False)
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
-    monkeypatch.setenv(
-        "PYTHON_KEYRING_BACKEND", "tests.shared.keyring_backend.MemoryKeyring"
-    )
+    monkeypatch.setenv("PYTHON_KEYRING_BACKEND", "tests.shared.keyring_backend.MemoryKeyring")
 
     env_path = tmp_path / ".env"
     env_path.write_text(
