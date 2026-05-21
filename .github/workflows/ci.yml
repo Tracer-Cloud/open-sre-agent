@@ -218,8 +218,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-data-${{ matrix.shard }}
-          path: .coverage.${{ matrix.shard }}
+          path: .coverage.${{ matrix.shard }}*
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 7
 
   coverage-report:
