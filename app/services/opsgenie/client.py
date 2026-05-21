@@ -271,7 +271,17 @@ def make_opsgenie_client(api_key: str | None, region: str | None = None) -> OpsG
         return None
     try:
         return OpsGenieClient(OpsGenieConfig(api_key=token, region=region or "us"))
-    except ValidationError:
+    except ValidationError as exc:
+        report_exception(
+            exc,
+            logger=logger,
+            message="opsgenie client construction failed (validation)",
+            tags={
+                "surface": "service_client",
+                "integration": "opsgenie",
+                "event": "factory_failure",
+            },
+        )
         raise
     except Exception as exc:
         report_exception(
@@ -284,4 +294,4 @@ def make_opsgenie_client(api_key: str | None, region: str | None = None) -> OpsG
                 "event": "factory_failure",
             },
         )
-        raise ServiceClientUnavailable("opsgenie", "client construction failed", ) from exc
+        raise ServiceClientUnavailable("opsgenie", "client construction failed") from exc

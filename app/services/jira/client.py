@@ -300,7 +300,13 @@ def make_jira_client(
             project_key=(project_key or "").strip(),
         )
         return JiraClient(config)
-    except ValidationError:
+    except ValidationError as exc:
+        report_exception(
+            exc,
+            logger=logger,
+            message="jira client construction failed (validation)",
+            tags={"surface": "service_client", "integration": "jira", "event": "factory_failure"},
+        )
         raise
     except Exception as exc:
         report_exception(
@@ -309,4 +315,4 @@ def make_jira_client(
             message="jira client construction failed",
             tags={"surface": "service_client", "integration": "jira", "event": "factory_failure"},
         )
-        raise ServiceClientUnavailable("jira", "client construction failed", ) from exc
+        raise ServiceClientUnavailable("jira", "client construction failed") from exc

@@ -592,7 +592,13 @@ def make_vercel_client(api_token: str | None, team_id: str | None = None) -> Ver
         return None
     try:
         return VercelClient(VercelConfig(api_token=token, team_id=team_id or ""))
-    except ValidationError:
+    except ValidationError as exc:
+        report_exception(
+            exc,
+            logger=logger,
+            message="vercel client construction failed (validation)",
+            tags={"surface": "service_client", "integration": "vercel", "event": "factory_failure"},
+        )
         raise
     except Exception as exc:
         report_exception(
@@ -601,4 +607,4 @@ def make_vercel_client(api_token: str | None, team_id: str | None = None) -> Ver
             message="vercel client construction failed",
             tags={"surface": "service_client", "integration": "vercel", "event": "factory_failure"},
         )
-        raise ServiceClientUnavailable("vercel", "client construction failed", ) from exc
+        raise ServiceClientUnavailable("vercel", "client construction failed") from exc

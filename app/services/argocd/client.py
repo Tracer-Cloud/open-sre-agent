@@ -545,7 +545,13 @@ def make_argocd_client(
                 verify_ssl=_normalize_verify_ssl(verify_ssl),
             )
         )
-    except ValidationError:
+    except ValidationError as exc:
+        report_exception(
+            exc,
+            logger=logger,
+            message="argocd client construction failed (validation)",
+            tags={"surface": "service_client", "integration": "argocd", "event": "factory_failure"},
+        )
         raise
     except Exception as exc:
         report_exception(
@@ -554,4 +560,4 @@ def make_argocd_client(
             message="argocd client construction failed",
             tags={"surface": "service_client", "integration": "argocd", "event": "factory_failure"},
         )
-        raise ServiceClientUnavailable("argocd", "client construction failed", ) from exc
+        raise ServiceClientUnavailable("argocd", "client construction failed") from exc

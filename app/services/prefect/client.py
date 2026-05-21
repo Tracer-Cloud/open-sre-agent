@@ -350,7 +350,17 @@ def make_prefect_client(
                 workspace_id=workspace_id or "",
             )
         )
-    except ValidationError:
+    except ValidationError as exc:
+        report_exception(
+            exc,
+            logger=logger,
+            message="prefect client construction failed (validation)",
+            tags={
+                "surface": "service_client",
+                "integration": "prefect",
+                "event": "factory_failure",
+            },
+        )
         raise
     except Exception as exc:
         report_exception(
@@ -363,4 +373,4 @@ def make_prefect_client(
                 "event": "factory_failure",
             },
         )
-        raise ServiceClientUnavailable("prefect", "client construction failed", ) from exc
+        raise ServiceClientUnavailable("prefect", "client construction failed") from exc

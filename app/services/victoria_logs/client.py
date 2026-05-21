@@ -204,7 +204,17 @@ def make_victoria_logs_client(
         return None
     try:
         return VictoriaLogsClient(VictoriaLogsConfig(base_url=url, tenant_id=tenant_id))
-    except ValidationError:
+    except ValidationError as exc:
+        report_exception(
+            exc,
+            logger=logger,
+            message="victoria_logs client construction failed (validation)",
+            tags={
+                "surface": "service_client",
+                "integration": "victoria_logs",
+                "event": "factory_failure",
+            },
+        )
         raise
     except Exception as exc:
         report_exception(
@@ -217,4 +227,4 @@ def make_victoria_logs_client(
                 "event": "factory_failure",
             },
         )
-        raise ServiceClientUnavailable("victoria_logs", "client construction failed", ) from exc
+        raise ServiceClientUnavailable("victoria_logs", "client construction failed") from exc

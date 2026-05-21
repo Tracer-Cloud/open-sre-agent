@@ -237,7 +237,17 @@ def make_alertmanager_client(
                 password=password or "",
             )
         )
-    except ValidationError:
+    except ValidationError as exc:
+        report_exception(
+            exc,
+            logger=logger,
+            message="alertmanager client construction failed (validation)",
+            tags={
+                "surface": "service_client",
+                "integration": "alertmanager",
+                "event": "factory_failure",
+            },
+        )
         raise
     except Exception as exc:
         report_exception(
@@ -250,4 +260,4 @@ def make_alertmanager_client(
                 "event": "factory_failure",
             },
         )
-        raise ServiceClientUnavailable("alertmanager", "client construction failed", ) from exc
+        raise ServiceClientUnavailable("alertmanager", "client construction failed") from exc
