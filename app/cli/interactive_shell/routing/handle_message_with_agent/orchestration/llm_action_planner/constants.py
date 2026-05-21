@@ -4,6 +4,19 @@ from __future__ import annotations
 
 import re
 
+__all__ = (
+    "_LOCAL_LLAMA_CONNECT_RE",
+    "_RICH_PASTED_INCIDENT_LINE_RE",
+    "_INCIDENT_UPGRADE_SYMPTOM_RE",
+    "_HTTP_INCIDENT_PASTE_RE",
+    "_MAX_TEXT_LEN",
+    "_USER_TEMPLATE",
+    "_UNHANDLED_MARKER",
+    "_OPENAI_STYLE_PROVIDERS",
+    "_SYSTEM_PROMPT_BASE",
+    "is_rich_pasted_incident",
+)
+
 _LOCAL_LLAMA_CONNECT_RE = re.compile(
     r"\b(?:please\s+)?(?:connect|use)\b.{0,40}\b(?:to\s+)?(?:local\s+)?llama\b",
     re.IGNORECASE,
