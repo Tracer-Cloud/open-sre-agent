@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 from dotenv import load_dotenv
@@ -118,7 +119,8 @@ def run_rca(
 
 
 def main() -> None:
-    mcp.run()
+    with contextlib.suppress(BrokenPipeError):
+        mcp.run()
 
 
 if __name__ == "__main__":
