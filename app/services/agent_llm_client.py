@@ -265,6 +265,197 @@ class BedrockAgentClient(AnthropicAgentClient):
         return f"{self.provider_name} request rejected (HTTP 400): {err.message}"
 
 
+# Keys that the Bedrock Converse API rejects inside JSON Schema objects.
+# ``title`` and ``$schema`` are informational and safe to strip; ``$defs`` /
+# ``$ref`` require full resolution which is out of scope — we strip them and
+# rely on the schema being self-contained after tool registry processing.
+_CONVERSE_UNSUPPORTED_SCHEMA_KEYS = frozenset({"title", "$schema", "$defs", "$ref"})
+
+
+def _sanitize_converse_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of *schema* with keys unsupported by the Converse API removed.
+
+    Operates recursively so nested ``properties`` and ``items`` are cleaned too.
+    """
+    cleaned: dict[str, Any] = {}
+    for key, value in schema.items():
+        if key in _CONVERSE_UNSUPPORTED_SCHEMA_KEYS:
+            continue
+        if isinstance(value, dict):
+            cleaned[key] = _sanitize_converse_schema(value)
+        elif isinstance(value, list):
+            cleaned[key] = [
+                _sanitize_converse_schema(item) if isinstance(item, dict) else item
+                for item in value
+            ]
+        else:
+            cleaned[key] = value
+    return cleaned
+
+
+class BedrockConverseAgentClient:
+    """Bedrock-backed client using the boto3 converse API for non-Anthropic models."""
+
+    provider_name = "Bedrock"
+
+    def __init__(self, model: str, max_tokens: int = 4096) -> None:
+        import boto3
+
+        self._model = model
+        self._max_tokens = max_tokens
+        region = (os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "").strip()
+        if not region:
+            raise RuntimeError("Bedrock requires AWS_REGION or AWS_DEFAULT_REGION to be set.")
+
+        self._boto3_client = boto3.client("bedrock-runtime", region_name=region)
+
+    def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
+        return [
+            {
+                "toolSpec": {
+                    "name": t.name,
+                    "description": t.description,
+                    "inputSchema": {
+                        "json": _sanitize_converse_schema(t.public_input_schema)
+                    },
+                }
+            }
+            for t in tools
+        ]
+
+    def invoke(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        system: str | None = None,
+        tools: list[dict[str, Any]] | None = None,
+    ) -> AgentLLMResponse:
+        import botocore.exceptions
+
+        from app.guardrails.engine import GuardrailBlockedError
+
+        kwargs: dict[str, Any] = {
+            "modelId": self._model,
+            "inferenceConfig": {"maxTokens": self._max_tokens},
+            "messages": messages,
+        }
+        if system:
+            kwargs["system"] = [{"text": system}]
+        if tools:
+            kwargs["toolConfig"] = {"tools": tools}
+
+        backoff = _RETRY_INITIAL_BACKOFF_SEC
+        last_err: Exception | None = None
+        for attempt in range(_RETRY_MAX_ATTEMPTS):
+            try:
+                response = self._boto3_client.converse(**kwargs)
+                break
+            except GuardrailBlockedError:
+                raise
+            except botocore.exceptions.ClientError as err:
+                code = err.response.get("Error", {}).get("Code", "")
+                if code == "ValidationException":
+                    raise RuntimeError(
+                        f"{self.provider_name} request rejected (HTTP 400): {err.response.get('Error', {}).get('Message')}"
+                    ) from err
+                if code == "ResourceNotFoundException":
+                    raise RuntimeError(
+                        f"Bedrock model '{self._model}' was not found in the configured region. "
+                        "Check the model ID, region, or inference profile."
+                    ) from err
+                if code in ("AccessDeniedException", "UnauthorizedException"):
+                    err_msg = err.response.get("Error", {}).get("Message", "") or ""
+                    err_msg_str = str(err_msg)
+                    if (
+                        "INVALID_PAYMENT_INSTRUMENT" in err_msg_str
+                        or "payment instrument" in err_msg_str.lower()
+                    ):
+                        aws_message = err_msg_str.strip().rstrip(".")
+                        detail = f" Cause: {aws_message}." if aws_message else ""
+                        raise RuntimeError(
+                            f"Access denied for Bedrock model '{self._model}'.{detail} "
+                            "A valid AWS payment instrument is required."
+                        ) from err
+                    aws_message = err_msg_str.strip().rstrip(".")
+                    detail = f" Cause: {aws_message}." if aws_message else ""
+                    raise RuntimeError(
+                        f"Access denied for Bedrock model '{self._model}'.{detail} "
+                        "Check Bedrock model access (per-region opt-in), your "
+                        "AWS Marketplace subscription / payment method, and "
+                        "IAM permissions."
+                    ) from err
+                if code == "ThrottlingException":
+                    raise RuntimeError(
+                        f"Bedrock rate limit exceeded for model '{self._model}'. "
+                        "Reduce request frequency or request a quota increase."
+                    ) from err
+                last_err = err
+                if attempt == _RETRY_MAX_ATTEMPTS - 1:
+                    raise RuntimeError(f"Bedrock API request failed: {err}") from err
+                time.sleep(backoff)
+                backoff *= 2
+            except Exception as err:
+                last_err = err
+                if attempt == _RETRY_MAX_ATTEMPTS - 1:
+                    raise RuntimeError(f"Bedrock API request failed: {err}") from err
+                time.sleep(backoff)
+                backoff *= 2
+        else:
+            raise RuntimeError("Bedrock invocation failed without a concrete error") from last_err
+
+        output_message = response.get("output", {}).get("message", {})
+        content_blocks = output_message.get("content", [])
+
+        text_parts: list[str] = []
+        tool_calls: list[ToolCall] = []
+
+        for block in content_blocks:
+            if "text" in block:
+                text_parts.append(block["text"])
+            elif "toolUse" in block:
+                tu = block["toolUse"]
+                tool_calls.append(
+                    ToolCall(id=tu["toolUseId"], name=tu["name"], input=tu["input"])
+                )
+
+        return AgentLLMResponse(
+            content="".join(text_parts),
+            tool_calls=tool_calls,
+            stop_reason=response.get("stopReason", "end_turn"),
+            raw_content=output_message,
+        )
+
+    @staticmethod
+    def build_tool_result_message(tool_calls: list[ToolCall], results: list[Any]) -> dict[str, Any]:
+        """Build the Converse API toolResult user message for one round of tool calls."""
+        content = []
+        for tc, result in zip(tool_calls, results):
+            is_error = isinstance(result, dict) and "error" in result
+            if isinstance(result, dict):
+                # Round-trip through JSON to ensure serializability — tool
+                # outputs may contain datetime, set, or other non-JSON types.
+                sanitized = json.loads(json.dumps(result, default=str))
+                result_content: list[dict[str, Any]] = [{"json": sanitized}]
+            else:
+                result_content = [{"text": json.dumps(result, default=str)}]
+            tool_result: dict[str, Any] = {
+                "toolUseId": tc.id,
+                "content": result_content,
+            }
+            if is_error:
+                tool_result["status"] = "error"
+            content.append({"toolResult": tool_result})
+        return {
+            "role": "user",
+            "content": content,
+        }
+
+    @staticmethod
+    def build_assistant_message(raw_content: Any) -> dict[str, Any]:
+        """Build the assistant message preserving the full Converse API output message."""
+        return raw_content  # type: ignore[no-any-return]
+
+
 _OPENAI_O_SERIES_RE = re.compile(r"(?:^|[^A-Za-z0-9])o\d", re.IGNORECASE)
 _OPENAI_GPT5_RE = re.compile(r"(?:^|[^A-Za-z0-9])gpt-5", re.IGNORECASE)
 
@@ -577,7 +768,7 @@ def _try_parse_tool_call_json(text: str) -> dict[str, Any] | None:
     return None
 
 
-_AgentClientType = AnthropicAgentClient | OpenAIAgentClient | CLIBackedAgentClient
+_AgentClientType = AnthropicAgentClient | OpenAIAgentClient | CLIBackedAgentClient | BedrockConverseAgentClient
 _agent_client: _AgentClientType | None = None
 
 
@@ -609,11 +800,19 @@ def get_agent_llm() -> _AgentClientType:
         _agent_client = _create_openai_compat_client(settings, provider)
     elif provider == "bedrock":
         from app.config import BEDROCK_LLM_CONFIG
+        from app.services.llm_client import _is_anthropic_bedrock_model
 
-        _agent_client = BedrockAgentClient(
-            model=settings.bedrock_reasoning_model,
-            max_tokens=BEDROCK_LLM_CONFIG.max_tokens,
-        )
+        model = settings.bedrock_reasoning_model
+        if _is_anthropic_bedrock_model(model):
+            _agent_client = BedrockAgentClient(
+                model=model,
+                max_tokens=BEDROCK_LLM_CONFIG.max_tokens,
+            )
+        else:
+            _agent_client = BedrockConverseAgentClient(
+                model=model,
+                max_tokens=BEDROCK_LLM_CONFIG.max_tokens,
+            )
     elif (cli_reg := _get_cli_provider_registration(provider)) is not None:
         model_name = os.getenv(cli_reg.model_env_key, "").strip() or None
         _agent_client = CLIBackedAgentClient(cli_reg.adapter_factory(), model=model_name)

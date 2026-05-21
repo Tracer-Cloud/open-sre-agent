@@ -876,3 +876,322 @@ def test_openai_empty_choices_raises_runtime_error(
 
     with pytest.raises(RuntimeError, match="unexpected response"):
         client.invoke(messages=[{"role": "user", "content": "hi"}])
+
+
+
+# ─── BedrockConverseAgentClient tests ─────────────────────────────────────────
+
+_MISTRAL_MODEL = "mistral.mistral-large-3-675b-instruct"
+
+
+def _make_converse_response(
+    *,
+    text: str = "",
+    tool_uses: list[dict] | None = None,
+    stop_reason: str = "end_turn",
+) -> dict:
+    """Build a fake Converse API response dict."""
+    content: list[dict] = []
+    if text:
+        content.append({"text": text})
+    for tu in tool_uses or []:
+        content.append({"toolUse": tu})
+    return {
+        "output": {"message": {"role": "assistant", "content": content}},
+        "stopReason": stop_reason,
+    }
+
+
+import pytest
+
+
+@pytest.fixture()
+def _converse_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Set AWS_REGION and stub boto3 with a no-op client."""
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+    _stub_boto3(monkeypatch)
+
+
+def _stub_boto3(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    converse_response: dict | None = None,
+    converse_side_effect: Exception | None = None,
+) -> None:
+    """Replace sys.modules['boto3'] with a fake that returns a converse stub."""
+
+    def fake_converse(**_: object) -> dict:
+        if converse_side_effect is not None:
+            raise converse_side_effect
+        return converse_response or {}
+
+    fake_client = types.SimpleNamespace(converse=fake_converse)
+    monkeypatch.setitem(
+        sys.modules,
+        "boto3",
+        types.SimpleNamespace(client=lambda *_a, **_kw: fake_client),
+    )
+
+
+def _make_client(model: str = _MISTRAL_MODEL):
+    from app.services.agent_llm_client import BedrockConverseAgentClient
+    return BedrockConverseAgentClient(model=model)
+
+
+# --- Init ---
+
+
+def test_bedrock_converse_requires_region_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("AWS_REGION", raising=False)
+    monkeypatch.delenv("AWS_DEFAULT_REGION", raising=False)
+    monkeypatch.setitem(
+        sys.modules, "boto3", types.SimpleNamespace(client=lambda *_a, **_kw: None)
+    )
+
+    from app.services.agent_llm_client import BedrockConverseAgentClient
+
+    with pytest.raises(RuntimeError, match="Bedrock requires AWS_REGION or AWS_DEFAULT_REGION"):
+        BedrockConverseAgentClient(model=_MISTRAL_MODEL)
+
+
+# --- Tool schemas ---
+
+
+@pytest.mark.usefixtures("_converse_env")
+def test_bedrock_converse_tool_schemas_format() -> None:
+    client = _make_client()
+    fake_tool = types.SimpleNamespace(
+        name="query_logs",
+        description="Query application logs",
+        public_input_schema={"type": "object", "properties": {"query": {"type": "string"}}},
+    )
+
+    schemas = client.tool_schemas([fake_tool])
+
+    assert len(schemas) == 1
+    spec = schemas[0]["toolSpec"]
+    assert spec["name"] == "query_logs"
+    assert spec["description"] == "Query application logs"
+    assert spec["inputSchema"]["json"]["type"] == "object"
+
+
+@pytest.mark.usefixtures("_converse_env")
+def test_bedrock_converse_tool_schemas_strip_unsupported_keys() -> None:
+    client = _make_client()
+    fake_tool = types.SimpleNamespace(
+        name="my_tool",
+        description="desc",
+        public_input_schema={
+            "title": "MySchema",
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": {"name": {"type": "string", "title": "Name Field"}},
+            "$defs": {"Ref": {"type": "string"}},
+        },
+    )
+
+    schema = client.tool_schemas([fake_tool])[0]["toolSpec"]["inputSchema"]["json"]
+
+    assert "title" not in schema
+    assert "$schema" not in schema
+    assert "$defs" not in schema
+    assert "title" not in schema["properties"]["name"]
+    assert schema["type"] == "object"
+
+
+# --- Invoke ---
+
+
+def test_bedrock_converse_invoke_text_and_tool_use(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+    _stub_boto3(
+        monkeypatch,
+        converse_response=_make_converse_response(
+            text="Let me check the logs.",
+            tool_uses=[{"toolUseId": "tu_1", "name": "query_logs", "input": {"query": "error"}}],
+            stop_reason="tool_use",
+        ),
+    )
+
+    result = _make_client().invoke(messages=[{"role": "user", "content": [{"text": "hi"}]}])
+
+    assert result.content == "Let me check the logs."
+    assert result.has_tool_calls
+    assert len(result.tool_calls) == 1
+    assert result.tool_calls[0].id == "tu_1"
+    assert result.tool_calls[0].name == "query_logs"
+    assert result.tool_calls[0].input == {"query": "error"}
+    assert result.stop_reason == "tool_use"
+    assert result.raw_content is not None
+
+
+def test_bedrock_converse_invoke_text_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+    _stub_boto3(monkeypatch, converse_response=_make_converse_response(text="Memory leak."))
+
+    result = _make_client().invoke(messages=[{"role": "user", "content": [{"text": "hi"}]}])
+
+    assert result.content == "Memory leak."
+    assert not result.has_tool_calls
+    assert result.stop_reason == "end_turn"
+
+
+# --- Error handling ---
+
+
+def _make_client_error(code: str, message: str):
+    import botocore.exceptions
+    return botocore.exceptions.ClientError({"Error": {"Code": code, "Message": message}}, "Converse")
+
+
+def test_bedrock_converse_validation_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+    _stub_boto3(monkeypatch, converse_side_effect=_make_client_error("ValidationException", "bad"))
+
+    with pytest.raises(RuntimeError, match="request rejected"):
+        _make_client("bad-model-id").invoke(messages=[{"role": "user", "content": [{"text": "hi"}]}])
+
+
+def test_bedrock_converse_access_denied(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+    _stub_boto3(monkeypatch, converse_side_effect=_make_client_error("AccessDeniedException", "No"))
+
+    with pytest.raises(RuntimeError, match="Access denied") as exc_info:
+        _make_client().invoke(messages=[{"role": "user", "content": [{"text": "hi"}]}])
+    assert _MISTRAL_MODEL in str(exc_info.value)
+
+
+def test_bedrock_converse_access_denied_payment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+    _stub_boto3(
+        monkeypatch,
+        converse_side_effect=_make_client_error(
+            "AccessDeniedException", "INVALID_PAYMENT_INSTRUMENT: No valid payment instrument"
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="payment instrument"):
+        _make_client().invoke(messages=[{"role": "user", "content": [{"text": "hi"}]}])
+
+
+def test_bedrock_converse_resource_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+    _stub_boto3(monkeypatch, converse_side_effect=_make_client_error("ResourceNotFoundException", "x"))
+
+    with pytest.raises(RuntimeError, match="was not found"):
+        _make_client("nonexistent.model").invoke(messages=[{"role": "user", "content": [{"text": "hi"}]}])
+
+
+def test_bedrock_converse_throttling_is_not_retried(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+    monkeypatch.setattr("app.services.agent_llm_client.time.sleep", lambda _: None)
+
+    call_count = 0
+
+    def raise_throttle(**_: object) -> dict:
+        nonlocal call_count
+        call_count += 1
+        raise _make_client_error("ThrottlingException", "Rate exceeded")
+
+    monkeypatch.setitem(
+        sys.modules,
+        "boto3",
+        types.SimpleNamespace(client=lambda *_a, **_kw: types.SimpleNamespace(converse=raise_throttle)),
+    )
+
+    with pytest.raises(RuntimeError, match="rate limit exceeded"):
+        _make_client().invoke(messages=[{"role": "user", "content": [{"text": "hi"}]}])
+    assert call_count == 1, "ThrottlingException should not be retried"
+
+
+# --- build_tool_result_message ---
+
+
+def test_bedrock_converse_build_tool_result_dict() -> None:
+    from app.services.agent_llm_client import BedrockConverseAgentClient, ToolCall
+
+    tc = ToolCall(id="tu_1", name="query_logs", input={"q": "error"})
+    msg = BedrockConverseAgentClient.build_tool_result_message([tc], [{"logs": ["line1"], "count": 1}])
+
+    tr = msg["content"][0]["toolResult"]
+    assert msg["role"] == "user"
+    assert tr["toolUseId"] == "tu_1"
+    assert "status" not in tr
+
+
+def test_bedrock_converse_build_tool_result_non_dict() -> None:
+    from app.services.agent_llm_client import BedrockConverseAgentClient, ToolCall
+
+    msg = BedrockConverseAgentClient.build_tool_result_message(
+        [ToolCall(id="tu_2", name="ping", input={})], ["pong"]
+    )
+    assert msg["content"][0]["toolResult"]["content"] == [{"text": '"pong"'}]
+
+
+def test_bedrock_converse_build_tool_result_error_status() -> None:
+    from app.services.agent_llm_client import BedrockConverseAgentClient, ToolCall
+
+    msg = BedrockConverseAgentClient.build_tool_result_message(
+        [ToolCall(id="tu_3", name="fail", input={})], [{"error": "timeout"}]
+    )
+    tr = msg["content"][0]["toolResult"]
+    assert tr["status"] == "error"
+    assert tr["content"] == [{"json": {"error": "timeout"}}]
+
+
+def test_bedrock_converse_build_tool_result_sanitizes_non_serializable() -> None:
+    """Dict results with non-JSON types must be sanitized via JSON round-trip."""
+    from datetime import datetime
+
+    from app.services.agent_llm_client import BedrockConverseAgentClient, ToolCall
+
+    dt = datetime(2026, 5, 21, 12, 0, 0)
+    msg = BedrockConverseAgentClient.build_tool_result_message(
+        [ToolCall(id="tu_4", name="t", input={})], [{"timestamp": dt, "data": "ok"}]
+    )
+    json_content = msg["content"][0]["toolResult"]["content"][0]["json"]
+    assert isinstance(json_content["timestamp"], str)
+    assert json_content["data"] == "ok"
+
+
+def test_bedrock_converse_build_assistant_message() -> None:
+    from app.services.agent_llm_client import BedrockConverseAgentClient
+
+    raw: dict = {"role": "assistant", "content": [{"text": "hello"}]}
+    assert BedrockConverseAgentClient.build_assistant_message(raw) is raw
+
+
+# --- get_agent_llm routing ---
+
+
+def test_get_agent_llm_routes_non_anthropic_bedrock_to_converse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "bedrock")
+    monkeypatch.setenv("BEDROCK_REASONING_MODEL", _MISTRAL_MODEL)
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+    _stub_boto3(monkeypatch)
+
+    from app.services.agent_llm_client import (
+        BedrockConverseAgentClient,
+        get_agent_llm,
+        reset_agent_client,
+    )
+
+    reset_agent_client()
+    assert isinstance(get_agent_llm(), BedrockConverseAgentClient)
+
+
+def test_get_agent_llm_routes_anthropic_bedrock_to_sdk(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from tests.services.test_agent_llm_client import _install_fake_anthropic
+    _install_fake_anthropic(monkeypatch)
+    monkeypatch.setenv("LLM_PROVIDER", "bedrock")
+    monkeypatch.setenv("BEDROCK_REASONING_MODEL", "us.anthropic.claude-sonnet-4-6")
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+
+    from app.services.agent_llm_client import BedrockAgentClient, get_agent_llm, reset_agent_client
+
+    reset_agent_client()
+    assert isinstance(get_agent_llm(), BedrockAgentClient)

@@ -419,6 +419,7 @@ def _build_synthetic_assistant_tool_call_msg(
     """
     from app.services.agent_llm_client import (
         AnthropicAgentClient,
+        BedrockConverseAgentClient,
         CLIBackedAgentClient,
         OpenAIAgentClient,
     )
@@ -434,6 +435,23 @@ def _build_synthetic_assistant_tool_call_msg(
             for tc in tool_calls
         ]
         return {"role": "assistant", "content": content}
+
+    if isinstance(llm, BedrockConverseAgentClient):
+        # Converse API requires toolUse blocks in the assistant message so
+        # the subsequent toolResult user message can reference valid toolUseIds.
+        return {
+            "role": "assistant",
+            "content": [
+                {
+                    "toolUse": {
+                        "toolUseId": tc.id,
+                        "name": tc.name,
+                        "input": tc.input,
+                    }
+                }
+                for tc in tool_calls
+            ],
+        }
 
     if isinstance(llm, OpenAIAgentClient):
         return {
@@ -587,9 +605,14 @@ def _merge_tool_evidence(
 
 
 def _build_assistant_msg(llm: Any, response: Any) -> dict[str, Any]:
-    from app.services.agent_llm_client import AnthropicAgentClient
+    from app.services.agent_llm_client import AnthropicAgentClient, BedrockConverseAgentClient
 
     if isinstance(llm, AnthropicAgentClient):
+        return llm.build_assistant_message(response.raw_content)
+    if isinstance(llm, BedrockConverseAgentClient):
+        # Converse API assistant messages are the raw output message dict;
+        # build_assistant_message is a passthrough but call it explicitly so
+        # the contract is clear and not dependent on raw_content being set.
         return llm.build_assistant_message(response.raw_content)
     # Use raw_content when set — preserves provider-specific fields such as
     # Gemini's thought_signature that must be echoed back in the next request.

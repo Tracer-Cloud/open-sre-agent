@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -213,3 +214,41 @@ def test_run_parallel_handles_interpreter_shutdown() -> None:
     # The concurrent path raises RuntimeError; fallback sequential execution succeeds
     assert len(results) == 2
     assert all(r == {"result": "ok"} for r in results)
+
+
+def test_build_synthetic_assistant_msg_for_bedrock_converse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Seed assistant turn must use Converse API toolUse blocks, not plain text."""
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+
+    import types as _types
+
+    monkeypatch.setitem(
+        sys.modules,
+        "boto3",
+        _types.SimpleNamespace(
+            client=lambda *_a, **_kw: _types.SimpleNamespace(converse=lambda **_: {})
+        ),
+    )
+
+    from app.services.agent_llm_client import BedrockConverseAgentClient
+
+    llm = BedrockConverseAgentClient(model="mistral.mistral-large-3-675b-instruct")
+    calls = [
+        ToolCall(id="seed_query_logs", name="query_logs", input={"query": "error"}),
+        ToolCall(id="seed_query_metrics", name="query_metrics", input={"metric": "cpu"}),
+    ]
+    msg = _build_synthetic_assistant_tool_call_msg(llm, calls)
+
+    assert msg["role"] == "assistant"
+    assert isinstance(msg["content"], list)
+    assert len(msg["content"]) == 2
+    # Verify toolUse block structure
+    first_block = msg["content"][0]
+    assert "toolUse" in first_block
+    assert first_block["toolUse"]["toolUseId"] == "seed_query_logs"
+    assert first_block["toolUse"]["name"] == "query_logs"
+    assert first_block["toolUse"]["input"] == {"query": "error"}
+    # Ensure it's NOT a plain text fallback
+    assert "I will start by querying" not in str(msg)
