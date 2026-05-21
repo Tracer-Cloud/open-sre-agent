@@ -375,13 +375,14 @@ def _build_seed_calls(state: dict[str, Any], tools: list[RegisteredTool]) -> lis
     if not seed_tools:
         return []
 
+    import uuid
+
     calls: list[ToolCall] = []
     for tool in seed_tools:
         try:
             injected = tool.extract_params(resolved)
         except Exception:
             injected = {}
-        import uuid
 
         calls.append(
             ToolCall(id=uuid.uuid4().hex[:9], name=tool.name, input=_public_tool_input(injected))

@@ -295,7 +295,7 @@ def _sanitize_converse_schema(schema: dict[str, Any]) -> dict[str, Any]:
         cleaned["type"] = "object"
 
     if cleaned.get("type") == "array" and "items" not in cleaned:
-        cleaned["items"] = {"type": "string"}
+        cleaned["items"] = {}
 
     return cleaned
 
@@ -366,14 +366,6 @@ class BedrockConverseAgentClient:
         if tools:
             kwargs["toolConfig"] = {"tools": tools}
 
-        import json
-
-        try:
-            with open("/tmp/mistral_debug_kwargs.json", "w") as f:
-                json.dump(kwargs, f, indent=2)
-        except Exception:
-            pass
-
         backoff = _RETRY_INITIAL_BACKOFF_SEC
         last_err: Exception | None = None
         for attempt in range(_RETRY_MAX_ATTEMPTS):
@@ -385,14 +377,6 @@ class BedrockConverseAgentClient:
             except botocore.exceptions.ClientError as err:
                 code = err.response.get("Error", {}).get("Code", "")
                 if code == "ValidationException":
-                    try:
-                        import json
-
-                        with open("/tmp/mistral_crash_debug.txt", "w") as f:
-                            f.write(json.dumps(kwargs, indent=2))
-                    except Exception as e:
-                        with open("/tmp/mistral_crash_debug.txt", "w") as f:
-                            f.write(repr(kwargs) + "\n\nError dumping json: " + str(e))
                     raise RuntimeError(
                         f"{self.provider_name} request rejected (HTTP 400): {err.response.get('Error', {}).get('Message')}"
                     ) from err
