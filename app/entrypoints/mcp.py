@@ -119,6 +119,9 @@ def run_rca(
 
 
 def main() -> None:
+    # anyio.run() (called inside mcp.run()) unwraps single-item ExceptionGroups at the
+    # sync boundary, so BrokenPipeError / ConnectionResetError arrive as bare exceptions
+    # here even though they originate inside an anyio TaskGroup.
     with contextlib.suppress(BrokenPipeError, ConnectionResetError):
         mcp.run()
 
