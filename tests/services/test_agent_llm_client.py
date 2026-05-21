@@ -876,3 +876,23 @@ def test_openai_empty_choices_raises_runtime_error(
 
     with pytest.raises(RuntimeError, match="unexpected response"):
         client.invoke(messages=[{"role": "user", "content": "hi"}])
+
+
+def test_anthropic_tool_schema_includes_type_custom() -> None:
+    """Regression: Bedrock's API validator rejects tool defs missing the 'type' field."""
+    from app.services.agent_llm_client import AnthropicAgentClient
+
+    fake_tool = types.SimpleNamespace(
+        name="get_logs",
+        description="Fetch log entries",
+        public_input_schema={"type": "object", "properties": {}},
+    )
+    client = AnthropicAgentClient.__new__(AnthropicAgentClient)
+    schemas = client.tool_schemas([fake_tool])
+
+    assert len(schemas) == 1
+    schema = schemas[0]
+    assert schema["type"] == "custom", "Bedrock requires type='custom' on every tool definition"
+    assert schema["name"] == "get_logs"
+    assert schema["description"] == "Fetch log entries"
+    assert "input_schema" in schema
