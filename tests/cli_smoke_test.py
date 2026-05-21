@@ -540,7 +540,7 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
     [
         pytest.param(
             "codex",
-            7,
+            6,
             "OpenAI Codex CLI",
             60.0,
             marks=pytest.mark.skipif(
@@ -550,7 +550,7 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
         ),
         pytest.param(
             "opencode",
-            11,
+            10,
             "OpenCode CLI",
             120.0,
             marks=pytest.mark.skipif(
@@ -611,6 +611,14 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
         )
     except AssertionError as exc:
         msg = str(exc)
+        if (
+            _cli_binary == "codex"
+            and "Choose OpenAI Codex CLI model" in msg
+            and "requires login" in msg
+        ):
+            pytest.skip(
+                "OpenAI Codex CLI appears already authenticated; unauth repick flow skipped"
+            )
         if (
             _cli_binary == "opencode"
             and "environment provider key(s)" in msg

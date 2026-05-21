@@ -14,6 +14,9 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.i
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner import (
     plan_actions_with_llm,
 )
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.planner_result_adapter import (
+    normalize_planner_result,
+)
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.slash_commands.deterministic_action_mapper import (
     map_cli_actions,
     map_terminal_tasks,
@@ -37,7 +40,24 @@ class TerminalActionExecutionResult:
     handled: bool
 
 
-def _plan_actions(message: str, session: ReplSession) -> tuple[list[PlannedAction], bool, bool]:
+@dataclass(frozen=True)
+class ActionExecutionDeps:
+    """Stable adapter boundary for planner and tool-dispatch dependencies."""
+
+    planner: Callable[..., Any]
+    dispatch: Callable[..., bool]
+
+
+def _default_execution_deps() -> ActionExecutionDeps:
+    return ActionExecutionDeps(planner=plan_actions_with_llm, dispatch=REGISTRY.dispatch)
+
+
+def _plan_actions(
+    message: str,
+    session: ReplSession,
+    *,
+    deps: ActionExecutionDeps | None = None,
+) -> tuple[list[PlannedAction], bool, bool]:
     """Plan actions for a free-text message using LLM-first planning.
 
     Used to wrap the call in a ``rich.Live`` spinner for in-place
@@ -63,10 +83,14 @@ def _plan_actions(message: str, session: ReplSession) -> tuple[list[PlannedActio
         if cmd:
             return [shell_action(f"!{cmd}", 0)], False, False
 
-    llm_plan = plan_actions_with_llm(message, session=session)
-    if llm_plan is None:
+    runtime_deps = deps or _default_execution_deps()
+    normalized_plan = normalize_planner_result(runtime_deps.planner(message, session=session))
+    if normalized_plan.unavailable:
         return [], True, True
-    actions, has_unhandled_clause = llm_plan
+    actions, has_unhandled_clause = (
+        normalized_plan.actions,
+        normalized_plan.has_unhandled_clause,
+    )
     if not actions:
         return [], has_unhandled_clause, False
     if all(action.kind == "assistant_handoff" for action in actions):
@@ -131,7 +155,9 @@ def _execute_planned_actions(
     console: Console,
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
+    deps: ActionExecutionDeps | None = None,
 ) -> bool:
+    runtime_deps = deps or _default_execution_deps()
     console.print()
     render_response_header(console, "assistant")
     print_planned_actions(console, actions)
@@ -153,7 +179,7 @@ def _execute_planned_actions(
         tool_name = ACTION_KIND_TO_TOOL.get(action.kind)
         if tool_name is None:
             continue
-        REGISTRY.dispatch(
+        runtime_deps.dispatch(
             tool_name=tool_name,
             args=_tool_args_for_action(action),
             ctx=ToolContext(
@@ -176,6 +202,7 @@ def execute_cli_actions(
     *,
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
+    deps: ActionExecutionDeps | None = None,
 ) -> bool:
     """Execute inferred actions from LLM-first planning.
 
@@ -183,7 +210,10 @@ def execute_cli_actions(
     denials). Returns False only for legacy/test paths that pass through with no
     planned actions and no deny signal.
     """
-    actions, has_unhandled_clause, denied = _plan_actions(message, session)
+    if deps is None:
+        actions, has_unhandled_clause, denied = _plan_actions(message, session)
+    else:
+        actions, has_unhandled_clause, denied = _plan_actions(message, session, deps=deps)
     if denied:
         _render_plan_denied(console)
         session.record("cli_agent", message, ok=False)
@@ -198,6 +228,7 @@ def execute_cli_actions(
         console=console,
         confirm_fn=confirm_fn,
         is_tty=is_tty,
+        deps=deps,
     )
 
 
@@ -207,6 +238,7 @@ def execute_cli_actions_with_metrics(
     console: Console,
     *,
     confirm_fn: Callable[[str], str] | None = None,
+    deps: ActionExecutionDeps | None = None,
 ) -> TerminalActionExecutionResult:
     """Execute planned actions and return per-turn action counters.
 
@@ -220,7 +252,10 @@ def execute_cli_actions_with_metrics(
         capture_terminal_actions_planned,
     )
 
-    actions, has_unhandled_clause, denied = _plan_actions(message, session)
+    if deps is None:
+        actions, has_unhandled_clause, denied = _plan_actions(message, session)
+    else:
+        actions, has_unhandled_clause, denied = _plan_actions(message, session, deps=deps)
     capture_terminal_actions_planned(
         planned_count=len(actions),
         has_unhandled_clause=has_unhandled_clause,
@@ -257,6 +292,7 @@ def execute_cli_actions_with_metrics(
         session=session,
         console=console,
         confirm_fn=confirm_fn,
+        deps=deps,
     )
     executed_entries = [
         item
@@ -291,6 +327,7 @@ def plan_terminal_tasks(message: str) -> list[str]:
 
 
 __all__ = [
+    "ActionExecutionDeps",
     "TerminalActionExecutionResult",
     "execute_cli_actions",
     "execute_cli_actions_with_metrics",

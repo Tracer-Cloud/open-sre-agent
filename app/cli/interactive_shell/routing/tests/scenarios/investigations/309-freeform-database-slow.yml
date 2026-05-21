@@ -32,6 +32,7 @@ response_contract:
   - why is the database slow
   - vague operational question
   - specific system
+  - don't have any alert or context yet
   must_not_contain:
   - $ /
 history:

@@ -32,6 +32,10 @@ One-shot (includes heavier `test-full`): `make check`.
 
 Before a PR, run at least `make lint`, `make format-check`, `make typecheck`, and `make test-cov` (see [CONTRIBUTING.md](https://github.com/Tracer-Cloud/opensre/blob/main/CONTRIBUTING.md)).
 
+## Routing policy architecture
+
+Routing precedence, postprocessing transforms, compatibility seams, and the rule-extension checklist are documented in [`docs/routing-policy-architecture.md`](https://github.com/Tracer-Cloud/opensre/blob/main/docs/routing-policy-architecture.md).
+
 ## Interactive shell: REPL watchdog demo
 
 PR reviewers expect a **visible demo** (terminal log or screenshot) in the PR under **Demo/Screenshot**, not only tests. Copy the exact steps from this section into your PR description, then attach your terminal output or recording.
