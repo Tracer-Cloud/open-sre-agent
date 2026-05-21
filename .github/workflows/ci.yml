@@ -74,16 +74,96 @@ jobs:
         run: uv run python -m mypy app/
 
   test:
-    name: test (${{ matrix.os }})
+    name: test (${{ matrix.shard }})
     needs: [quality]
-    continue-on-error: ${{ matrix.os == 'windows-latest' }}
     strategy:
       fail-fast: false
+      max-parallel: 5
       matrix:
-        os: [ubuntu-latest]
+        include:
+          - os: ubuntu-latest
+            shard: tools-services
+            pytest_paths: >-
+              tests/tools
+              tests/services
+              tests/utils
+              tests/masking
+              tests/types
+              tests/watch_dog
+          - os: ubuntu-latest
+            shard: cli-runtime
+            pytest_paths: >-
+              tests/cli
+              tests/remote
+              tests/agent
+              tests/agents
+              tests/app
+              tests/analytics
+              tests/nodes
+              tests/pipeline
+              tests/delivery
+              tests/entrypoints
+              tests/sandbox
+              tests/hermes
+              tests/github
+          - os: ubuntu-latest
+            shard: integrations-and-misc
+            pytest_paths: >-
+              tests/integrations
+              tests/deployment
+              tests/benchmarks
+              tests/chaos_engineering
+              tests/packaging
+              tests/shared
+              tests/test_guardrails
+              tests/cli_smoke_test.py
+              tests/test_aws_urls.py
+              tests/test_bug_fixes_e2e.py
+              tests/test_chaos_engineering_paths.py
+              tests/test_config.py
+              tests/test_datadog_adapter.py
+              tests/test_datadog_provider.py
+              tests/test_deployment_health.py
+              tests/test_devcontainer.py
+              tests/test_dockerfile.py
+              tests/test_ec2_deploy.py
+              tests/test_ec2_instance.py
+              tests/test_google_docs.py
+              tests/test_kill_switch_matrix.py
+              tests/test_llm_credentials.py
+              tests/test_llm_reasoning_effort.py
+              tests/test_mariadb_integration.py
+              tests/test_mongodb_atlas_integration.py
+              tests/test_mongodb_integration.py
+              tests/test_naming_conventions.py
+              tests/test_openclaw_integration.py
+              tests/test_removed_architecture_references.py
+              tests/test_sentry_init.py
+              tests/test_state.py
+              tests/test_upstream_correlation_provider.py
+              tests/test_version.py
+              tests/test_webapp.py
+          - os: ubuntu-latest
+            shard: e2e-general
+            pytest_paths: >-
+              tests/e2e
+            extra_pytest_args: >-
+              --ignore=tests/e2e/kubernetes
+              --ignore=tests/e2e/openclaw
+              --ignore=tests/e2e/upstream_lambda
+              --ignore=tests/e2e/upstream_prefect_ecs_fargate
+              --ignore=tests/e2e/upstream_apache_flink_ecs
+          - os: ubuntu-latest
+            shard: e2e-provider-and-openclaw
+            pytest_paths: >-
+              tests/e2e/openclaw
+              tests/e2e/upstream_lambda
+              tests/e2e/upstream_prefect_ecs_fargate
+              tests/e2e/upstream_apache_flink_ecs
+              tests/e2e/kubernetes
 
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 25
+    timeout-minutes: 30
 
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -118,22 +198,73 @@ jobs:
         run: uv sync --frozen --extra dev
 
       - name: Run tests
+        env:
+          COVERAGE_FILE: .coverage.${{ matrix.shard }}
         run: >-
           uv run python -m pytest -n auto -v
+          ${{ matrix.pytest_paths }}
           --cov=app
-          --cov-report=term-missing
-          --cov-report=html
+          --cov-report=
           --ignore=tests/e2e/kubernetes_local_alert_simulation
           --ignore=tests/synthetic
-          -m "${{ matrix.os == 'windows-latest' && 'not synthetic and not integration' || 'not synthetic' }}"
+          ${{ matrix.extra_pytest_args || '' }}
+          -m "not synthetic"
 
-      - name: Upload coverage
+      - name: Upload shard coverage data
         if: >-
-          always() && matrix.os == 'ubuntu-latest' &&
+          always() &&
           (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false)
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report-${{ matrix.os }}
+          name: coverage-data-${{ matrix.shard }}
+          path: .coverage.${{ matrix.shard }}
+          if-no-files-found: error
+          retention-days: 7
+
+  coverage-report:
+    name: coverage-report
+    runs-on: ubuntu-latest
+    needs: [test]
+    if: >-
+      always() &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false)
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev
+
+      - name: Download shard coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-data-*
+          path: ./
+          merge-multiple: true
+
+      - name: Combine coverage and build report
+        run: |
+          uv run python -m coverage combine .
+          uv run python -m coverage html
+
+      - name: Upload combined coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-ubuntu-latest
           path: |
             htmlcov/
             .coverage
