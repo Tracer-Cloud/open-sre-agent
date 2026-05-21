@@ -122,7 +122,8 @@ class AnthropicAgentClient:
         last_err: Exception | None = None
         for attempt in range(_RETRY_MAX_ATTEMPTS):
             try:
-                response = self._client.messages.create(**kwargs)
+                # Cast to Any to prevent Pyrefly/Pyright from thinking this is a Stream
+                response = cast(Any, self._client.messages.create(**kwargs))
                 break
             except AuthenticationError as err:
                 raise RuntimeError(self._authentication_error_message()) from err
@@ -547,7 +548,7 @@ class OpenAIAgentClient:
         last_err: Exception | None = None
         for attempt in range(_RETRY_MAX_ATTEMPTS):
             try:
-                response = self._client.chat.completions.create(**kwargs)
+                response = cast(Any, self._client.chat.completions.create(**kwargs))
                 break
             except AuthenticationError as err:
                 raise RuntimeError("OpenAI authentication failed.") from err
