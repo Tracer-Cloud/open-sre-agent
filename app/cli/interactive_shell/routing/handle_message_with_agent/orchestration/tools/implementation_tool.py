@@ -10,7 +10,7 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.a
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_tier import (
     ExecutionTier,
 )
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_registry import (
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_contracts import (
     ToolContext,
     ToolEntry,
     object_schema,

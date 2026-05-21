@@ -391,6 +391,36 @@
       text: "what caused the spike?"
       ok: true
 
+- id: follow_up_what_happened_with_state
+  input: "what happened?"
+  expected_route_kind: "cli_agent"
+  with_prior_state: true
+  expected_planned_actions:
+    - kind: "assistant_handoff"
+      content: "follow_up:last_investigation_summary"
+  expected_executed_actions: []
+  expected_terminal_response_contains:
+    - "incident"
+  expected_session_history_delta:
+    - type: "cli_agent"
+      text: "what happened?"
+      ok: true
+
+- id: follow_up_last_investigation_wording_with_state
+  input: "No, during the last investigation"
+  expected_route_kind: "cli_agent"
+  with_prior_state: true
+  expected_planned_actions:
+    - kind: "assistant_handoff"
+      content: "follow_up:last_investigation_summary"
+  expected_executed_actions: []
+  expected_terminal_response_contains:
+    - "investigation"
+  expected_session_history_delta:
+    - type: "cli_agent"
+      text: "No, during the last investigation"
+      ok: true
+
 - id: cli_help_latency_measurement
   input: "how do I measure latency with opensre?"
   expected_route_kind: "cli_agent"

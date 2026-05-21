@@ -221,7 +221,7 @@ def _map_clause_actions_with_phase_internal(
     mapped, phase = run_first_match(
         (clause, seen_slash),
         _CLAUSE_MAPPING_PHASES,
-        is_match=lambda actions: bool(actions),
+        is_match=bool,
     )
     if mapped is None:
         return [], None

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_registry import (
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_contracts import (
     ToolEntry,
 )
 
