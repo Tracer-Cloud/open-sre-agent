@@ -309,4 +309,4 @@ def make_jira_client(
             message="jira client construction failed",
             tags={"surface": "service_client", "integration": "jira", "event": "factory_failure"},
         )
-        raise ServiceClientUnavailable("jira", "client construction failed", exc) from exc
+        raise ServiceClientUnavailable("jira", "client construction failed", ) from exc

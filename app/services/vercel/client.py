@@ -601,4 +601,4 @@ def make_vercel_client(api_token: str | None, team_id: str | None = None) -> Ver
             message="vercel client construction failed",
             tags={"surface": "service_client", "integration": "vercel", "event": "factory_failure"},
         )
-        raise ServiceClientUnavailable("vercel", "client construction failed", exc) from exc
+        raise ServiceClientUnavailable("vercel", "client construction failed", ) from exc

@@ -284,4 +284,4 @@ def make_opsgenie_client(api_key: str | None, region: str | None = None) -> OpsG
                 "event": "factory_failure",
             },
         )
-        raise ServiceClientUnavailable("opsgenie", "client construction failed", exc) from exc
+        raise ServiceClientUnavailable("opsgenie", "client construction failed", ) from exc

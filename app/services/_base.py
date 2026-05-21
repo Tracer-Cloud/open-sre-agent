@@ -7,9 +7,7 @@ class ServiceClientUnavailable(RuntimeError):
     integration: str
     reason: str
 
-    def __init__(
-        self, integration: str, reason: str, original: BaseException | None = None
-    ) -> None:
+    def __init__(self, integration: str, reason: str) -> None:
         super().__init__(f"{integration}: {reason}")
         self.integration = integration
         self.reason = reason

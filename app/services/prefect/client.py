@@ -363,4 +363,4 @@ def make_prefect_client(
                 "event": "factory_failure",
             },
         )
-        raise ServiceClientUnavailable("prefect", "client construction failed", exc) from exc
+        raise ServiceClientUnavailable("prefect", "client construction failed", ) from exc

@@ -217,4 +217,4 @@ def make_victoria_logs_client(
                 "event": "factory_failure",
             },
         )
-        raise ServiceClientUnavailable("victoria_logs", "client construction failed", exc) from exc
+        raise ServiceClientUnavailable("victoria_logs", "client construction failed", ) from exc

@@ -554,4 +554,4 @@ def make_argocd_client(
             message="argocd client construction failed",
             tags={"surface": "service_client", "integration": "argocd", "event": "factory_failure"},
         )
-        raise ServiceClientUnavailable("argocd", "client construction failed", exc) from exc
+        raise ServiceClientUnavailable("argocd", "client construction failed", ) from exc

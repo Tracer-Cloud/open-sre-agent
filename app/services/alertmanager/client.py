@@ -250,4 +250,4 @@ def make_alertmanager_client(
                 "event": "factory_failure",
             },
         )
-        raise ServiceClientUnavailable("alertmanager", "client construction failed", exc) from exc
+        raise ServiceClientUnavailable("alertmanager", "client construction failed", ) from exc
