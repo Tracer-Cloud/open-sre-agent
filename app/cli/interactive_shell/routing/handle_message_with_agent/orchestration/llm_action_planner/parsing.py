@@ -11,7 +11,9 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.i
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_registry import (
     ACTION_KIND_TO_TOOL,
+    REGISTRY,
 )
+from app.cli.interactive_shell.runtime.session import ReplSession
 
 from .constants import _UNHANDLED_MARKER
 from .normalization import _content_from_tool_args, _normalize_tool_args
@@ -55,12 +57,17 @@ def _parse_tool_plan(
                     break
 
     actions: list[PlannedAction] = []
+    session_for_availability = session if isinstance(session, ReplSession) else ReplSession()
     for idx, call in enumerate(raw_calls):
         if not isinstance(call, dict):
             continue
         tool_name = str(call.get("name", "")).strip()
         kind = _TOOL_TO_ACTION_KIND.get(tool_name)
         if kind is None:
+            continue
+        entry = REGISTRY.get(tool_name)
+        if entry is None or not entry.is_available(session_for_availability):
+            has_unhandled = True
             continue
 
         raw_args = call.get("arguments")

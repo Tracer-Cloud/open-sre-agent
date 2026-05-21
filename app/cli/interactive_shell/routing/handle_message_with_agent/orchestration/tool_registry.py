@@ -53,6 +53,8 @@ class ActionToolRegistry:
         entry = self.get(tool_name)
         if entry is None:
             return False
+        if not entry.is_available(ctx.session):
+            return False
         return entry.execute(args, ctx)
 
 

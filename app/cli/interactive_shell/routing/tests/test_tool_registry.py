@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import re
 
+from rich.console import Console
+
 from app.cli.interactive_shell.commands import SLASH_COMMANDS
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_contracts import (
+    ToolContext,
+)
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_registry import (
     ACTION_KIND_TO_TOOL,
     REGISTRY,
@@ -114,9 +119,24 @@ def test_tools_hidden_when_capabilities_are_explicitly_empty() -> None:
             "slash_commands": (),
             "cli_commands": (),
             "synthetic_suites": (),
+            "shell_commands": (),
+            "implementation": (),
         }
     )
     names = {spec["name"] for spec in REGISTRY.tool_specs_for_llm(session)}
     assert "slash_invoke" not in names
     assert "cli_exec" not in names
     assert "synthetic_run" not in names
+    assert "shell_run" not in names
+    assert "code_implement" not in names
+
+
+def test_registry_dispatch_blocks_unavailable_tool() -> None:
+    session = ReplSession(available_capabilities={"slash_commands": ()})
+    ctx = ToolContext(session=session, console=Console(force_terminal=False))
+    ok = REGISTRY.dispatch(
+        tool_name="slash_invoke",
+        args={"command": "/help", "args": []},
+        ctx=ctx,
+    )
+    assert ok is False

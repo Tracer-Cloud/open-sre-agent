@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import shlex
 
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.intent_parser import (
     is_single_edit_typo,
@@ -35,11 +36,27 @@ def _unwrap_opensre_wrapped_slash(text: str) -> str:
 
 def opensre_investigate_slash_text(text: str) -> str | None:
     """Map ``opensre investigate -i <file>`` to ``/investigate <file>`` for deterministic routing."""
-    match = _OPENSRE_INVESTIGATE_RE.match(text.strip())
-    if match is None:
+    stripped = text.strip()
+    match = _OPENSRE_INVESTIGATE_RE.match(stripped)
+    if match is not None:
+        alert_path = match.group("path") or "alert.json"
+        return f"/investigate {alert_path}"
+
+    try:
+        tokens = shlex.split(stripped)
+    except ValueError:
         return None
-    alert_path = match.group("path") or "alert.json"
-    return f"/investigate {alert_path}"
+    if len(tokens) < 2 or tokens[0].lower() != "opensre" or tokens[1].lower() != "investigate":
+        return None
+    if len(tokens) == 2:
+        return "/investigate alert.json"
+    if len(tokens) == 4 and tokens[2].lower() in {"-i", "--input", "--input-file"}:
+        return f"/investigate {tokens[3]}"
+    if len(tokens) == 3 and tokens[2].lower().startswith("--input-file="):
+        alert_path = tokens[2].split("=", 1)[1].strip()
+        if alert_path:
+            return f"/investigate {alert_path}"
+    return None
 
 
 def is_bare_command_alias(text: str) -> bool:

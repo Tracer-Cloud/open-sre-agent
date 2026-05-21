@@ -30,9 +30,9 @@ planned_actions:
 executed_actions: []
 response_contract:
   must_contain_any:
-  - what happened
-  - follow-up
-  - alert text
+  - root cause
+  - investigation
+  - happened
   must_not_contain:
   - $ /
 history:

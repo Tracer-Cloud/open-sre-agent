@@ -30,6 +30,7 @@ executed_actions: []
 response_contract:
   must_contain_any:
   - checkout
+  - incident
   must_not_contain:
   - $ /
 history:
@@ -37,4 +38,4 @@ history:
   - type: cli_agent
     ok: true
 tier: full
-runs: 1
+runs: 3
