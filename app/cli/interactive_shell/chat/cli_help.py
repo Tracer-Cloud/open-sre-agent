@@ -12,9 +12,12 @@ docs-grounded surface and never executes actions.
 
 from __future__ import annotations
 
+import time
+
 from rich.console import Console
 from rich.markup import escape
 
+from app.cli.interactive_shell.prompt_logging import LlmRunInfo
 from app.cli.interactive_shell.prompting.prompt_rules import (
     CLI_ASSISTANT_MARKDOWN_RULE,
     INTERACTIVE_SHELL_TERMINOLOGY_RULE,
@@ -80,7 +83,7 @@ def answer_cli_help(
     question: str,
     _session: ReplSession,
     console: Console,
-) -> None:
+) -> LlmRunInfo | None:
     """Run one turn of the documentation-aware procedural assistant.
 
     Pulls the top-N relevant docs pages for ``question``, combines them with
@@ -97,7 +100,7 @@ def answer_cli_help(
     except Exception as exc:
         report_exception(exc, context="interactive_shell.cli_help.import")
         console.print(f"[{ERROR}]LLM client unavailable:[/] {escape(str(exc))}")
-        return
+        return None
 
     cli_reference = build_cli_reference_text()
     docs_reference = build_docs_reference_text(question)
@@ -106,18 +109,46 @@ def answer_cli_help(
 
     try:
         client = get_llm_for_reasoning()
-        stream_to_console(
+        started = time.monotonic()
+        response_text = stream_to_console(
             console,
             label=STREAM_LABEL_ASSISTANT,
             chunks=client.invoke_stream(prompt),
         )
     except KeyboardInterrupt:
         console.print(f"[{DIM}]· cancelled[/]")
-        return
+        return None
     except Exception as exc:
         report_exception(exc, context="interactive_shell.cli_help.stream")
         console.print(f"[{ERROR}]assistant failed:[/] {escape(str(exc))}")
-        return
+        return None
+    return LlmRunInfo(
+        model=_resolve_model_name(client),
+        provider=_resolve_provider_name(client),
+        latency_ms=int((time.monotonic() - started) * 1000),
+        response_text=response_text,
+    )
+
+
+def _resolve_model_name(client: object) -> str | None:
+    value = getattr(client, "_model", None)
+    return value if isinstance(value, str) and value else None
+
+
+def _resolve_provider_name(client: object) -> str | None:
+    provider_label = getattr(client, "_provider_label", None)
+    if isinstance(provider_label, str) and provider_label:
+        return provider_label.strip().lower().replace(" ", "_")
+    name = type(client).__name__.lower()
+    if "openai" in name:
+        return "openai"
+    if "bedrock" in name:
+        return "bedrock"
+    if "cli" in name:
+        return "cli"
+    if "anthropic" in name or "llmclient" in name:
+        return "anthropic"
+    return None
 
 
 __all__ = ["answer_cli_help"]

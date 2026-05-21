@@ -113,7 +113,7 @@ data "aws_iam_policy_document" "github_actions_run_bench" {
       "secretsmanager:PutSecretValue",
       "secretsmanager:DescribeSecret",
     ]
-    # Per-ARN — workflow can seed only these four LLM-key secrets.
+    # Per-ARN - workflow can seed only these four LLM-key secrets.
     # No GetSecretValue here (the seed workflow writes values; it never
     # reads them back).
     resources = [
@@ -122,6 +122,34 @@ data "aws_iam_policy_document" "github_actions_run_bench" {
       aws_secretsmanager_secret.deepseek_api_key.arn,
       aws_secretsmanager_secret.hf_token.arn,
     ]
+  }
+
+  # ECR authorization. GetAuthorizationToken does not accept a resource ARN
+  # (must be "*") - tfsec flags this; suppression in .tfsec/config.yml
+  # under aws-iam-no-policy-wildcards already covers IAM patterns that
+  # cannot be ARN-scoped.
+  statement {
+    sid       = "EcrAuth"
+    effect    = "Allow"
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+
+  # ECR push - scoped to the bench repo only.
+  statement {
+    sid    = "EcrPushBenchImage"
+    effect = "Allow"
+    actions = [
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:InitiateLayerUpload",
+      "ecr:UploadLayerPart",
+      "ecr:CompleteLayerUpload",
+      "ecr:PutImage",
+      "ecr:BatchGetImage",
+      "ecr:DescribeImages",
+      "ecr:DescribeRepositories",
+    ]
+    resources = [aws_ecr_repository.bench.arn]
   }
 }
 

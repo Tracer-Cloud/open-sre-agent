@@ -41,6 +41,10 @@ def switch_llm_provider(*args: Any, **kwargs: Any) -> bool:
     return cast(bool, _registry_module().switch_llm_provider(*args, **kwargs))
 
 
+def switch_reasoning_model(*args: Any, **kwargs: Any) -> bool:
+    return cast(bool, _registry_module().switch_reasoning_model(*args, **kwargs))
+
+
 def switch_toolcall_model(*args: Any, **kwargs: Any) -> bool:
     return cast(bool, _registry_module().switch_toolcall_model(*args, **kwargs))
 
@@ -50,5 +54,6 @@ __all__ = [
     "SlashCommand",
     "dispatch_slash",
     "switch_llm_provider",
+    "switch_reasoning_model",
     "switch_toolcall_model",
 ]

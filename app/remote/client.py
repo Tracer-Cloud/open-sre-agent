@@ -298,6 +298,7 @@ class RemoteAgentClient:
                 message="Remote preflight timed out",
                 severity="warning",
                 extras={"base_url": self.base_url},
+                include_traceback=False,
             )
             return PreflightResult(ok=False, error="connection timed out")
         except httpx.ConnectError as exc:
@@ -309,6 +310,7 @@ class RemoteAgentClient:
                 message="Remote preflight connection failed",
                 severity="warning",
                 extras={"base_url": self.base_url},
+                include_traceback=False,
             )
             return PreflightResult(ok=False, error="connection refused")
         except httpx.HTTPStatusError as exc:
@@ -320,6 +322,7 @@ class RemoteAgentClient:
                 message=f"Remote preflight returned HTTP {exc.response.status_code}",
                 severity="warning",
                 extras={"base_url": self.base_url, "status_code": exc.response.status_code},
+                include_traceback=False,
             )
             code = exc.response.status_code
             return PreflightResult(ok=False, error=f"HTTP {code}")

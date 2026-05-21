@@ -836,3 +836,43 @@ def test_bedrock_bad_request_generic_error_uses_default_message(
     message = str(exc.value)
     assert "Bedrock request rejected (HTTP 400)" in message
     assert "cross-region" not in message
+
+
+def test_openai_unexpected_response_type_raises_runtime_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When an OpenAI-compatible provider returns a non-ChatCompletion object
+    invoke() must raise RuntimeError instead of an opaque AttributeError."""
+    _install_fake_openai(monkeypatch)
+
+    client = OpenAIAgentClient.__new__(OpenAIAgentClient)
+    client._client = types.SimpleNamespace(
+        chat=types.SimpleNamespace(
+            completions=types.SimpleNamespace(create=lambda **_: "unexpected string response")
+        )
+    )
+    client._model = "some-provider/model"
+    client._max_tokens = 512
+
+    with pytest.raises(RuntimeError, match="unexpected response"):
+        client.invoke(messages=[{"role": "user", "content": "hi"}])
+
+
+def test_openai_empty_choices_raises_runtime_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When the provider returns a response with an empty choices list
+    invoke() must raise RuntimeError."""
+    _install_fake_openai(monkeypatch)
+
+    client = OpenAIAgentClient.__new__(OpenAIAgentClient)
+    client._client = types.SimpleNamespace(
+        chat=types.SimpleNamespace(
+            completions=types.SimpleNamespace(create=lambda **_: types.SimpleNamespace(choices=[]))
+        )
+    )
+    client._model = "some-provider/model"
+    client._max_tokens = 512
+
+    with pytest.raises(RuntimeError, match="unexpected response"):
+        client.invoke(messages=[{"role": "user", "content": "hi"}])

@@ -43,6 +43,7 @@ from app.integrations._verification_adapters import (
     _verify_supabase,
     _verify_telegram,
     _verify_tracer,
+    _verify_twilio,
     _verify_vercel,
     _verify_victoria_logs,
     _verify_whatsapp,
@@ -166,6 +167,7 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
     ),
     IntegrationSpec(
         service="rabbitmq",
+        aliases=("amqp",),
         verifier=_verify_rabbitmq,
         direct_effective=True,
         verify_order=17,
@@ -224,6 +226,13 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         direct_effective=True,
         setup_order=19,
         verify_order=27,
+    ),
+    IntegrationSpec(
+        service="twilio",
+        verifier=_verify_twilio,
+        direct_effective=True,
+        setup_order=20,
+        verify_order=28,
     ),
     IntegrationSpec(
         service="openclaw",

@@ -53,7 +53,7 @@ def _read_config_file() -> dict[str, Any]:
 
 @dataclass(frozen=True)
 class ReplConfig:
-    """Two-axis REPL configuration.
+    """REPL configuration.
 
     Axes
     ----
@@ -68,17 +68,10 @@ class ReplConfig:
         is accepted and stored so the flag round-trips cleanly once P3 lands.
         Controlled by ``--layout`` CLI option, ``OPENSRE_LAYOUT`` env var, or
         ``interactive.layout`` in ``~/.config/opensre/config.yml``.
-
-    reload : bool
-        When True, the interactive shell watches repo-local Python files and
-        reloads changed modules between prompt turns. Controlled by the
-        ``--reload`` / ``--no-reload`` CLI option, ``OPENSRE_RELOAD`` env var,
-        or ``interactive.reload`` in ``~/.config/opensre/config.yml``.
     """
 
     enabled: bool = True
     layout: str = "classic"
-    reload: bool = True
     alert_listener_enabled: bool = False
     alert_listener_host: str = "127.0.0.1"
     alert_listener_port: int = 0
@@ -98,13 +91,12 @@ class ReplConfig:
         *,
         cli_enabled: bool | None = None,
         cli_layout: str | None = None,
-        cli_reload: bool | None = None,
     ) -> ReplConfig:
         """Resolve config from all three tiers.
 
         Priority (highest wins):
-            1. CLI flag   — ``cli_enabled`` / ``cli_layout`` / ``cli_reload`` params
-            2. Env var    — ``OPENSRE_INTERACTIVE`` / ``OPENSRE_LAYOUT`` / ``OPENSRE_RELOAD``
+            1. CLI flag   — ``cli_enabled`` / ``cli_layout`` params
+            2. Env var    — ``OPENSRE_INTERACTIVE`` / ``OPENSRE_LAYOUT``
             3. Config file — ``~/.config/opensre/config.yml`` ``interactive`` section
             4. Built-in defaults (enabled=True, layout="classic")
         """
@@ -128,14 +120,6 @@ class ReplConfig:
 
         if layout not in _VALID_LAYOUTS:
             layout = "classic"
-
-        # --- reload ---
-        if cli_reload is not None:
-            reload = cli_reload
-        elif (env_val := os.getenv("OPENSRE_RELOAD")) is not None:
-            reload = cls._coerce_bool(env_val, default=True)
-        else:
-            reload = cls._coerce_bool(file_conf.get("reload"), default=True)
 
         # --- alert_listener_enabled ---
         if (env_val := os.getenv("OPENSRE_ALERT_LISTENER_ENABLED")) is not None:
@@ -180,7 +164,6 @@ class ReplConfig:
         return cls(
             enabled=enabled,
             layout=layout,
-            reload=reload,
             alert_listener_enabled=alert_listener_enabled,
             alert_listener_host=alert_listener_host,
             alert_listener_port=alert_listener_port,
@@ -197,4 +180,11 @@ def read_history_settings() -> dict[str, Any]:
     """Return the ``interactive.history`` config block, or empty dict."""
     interactive = _read_config_file()
     raw = interactive.get("history", {})
+    return raw if isinstance(raw, dict) else {}
+
+
+def read_prompt_log_settings() -> dict[str, Any]:
+    """Return the ``interactive.prompt_log`` config block, or empty dict."""
+    interactive = _read_config_file()
+    raw = interactive.get("prompt_log", {})
     return raw if isinstance(raw, dict) else {}

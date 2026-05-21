@@ -31,6 +31,7 @@ from app.integrations.config_models import (
     SlackWebhookConfig,
     SplunkIntegrationConfig,
     TelegramBotConfig,
+    TwilioIntegrationConfig,
     VictoriaLogsIntegrationConfig,
     WhatsAppConfig,
 )
@@ -62,8 +63,54 @@ from app.integrations.supabase import build_supabase_config
 from app.llm_credentials import resolve_env_credential
 from app.services.vercel import VercelConfig
 from app.utils.coercion import safe_int
+from app.utils.errors import report_exception
 
 logger = logging.getLogger(__name__)
+
+
+def _report_classify_failure(exc: BaseException, *, integration: str, record_id: str) -> None:
+    """Route a per-instance classify failure to Sentry + warning log.
+
+    Replaces the historic ``except Exception: return None, None`` pattern in
+    ``_classify_service_instance``: the caller still gets ``(None, None)``
+    and skips the integration, but the failure is now visible to operators
+    instead of being silently swallowed (#1468).
+    """
+    report_exception(
+        exc,
+        logger=logger,
+        message=f"classify_failed: integration={integration} record_id={record_id}",
+        severity="warning",
+        tags={
+            "surface": "integration",
+            "component": "app.integrations._catalog_impl",
+            "integration": integration,
+            "event": "classify_failed",
+        },
+        extras={"record_id": record_id},
+    )
+
+
+def _report_env_loader_failure(exc: BaseException, *, integration: str) -> None:
+    """Route a per-vendor env-loader failure to Sentry + warning log.
+
+    Replaces ``except Exception: pass`` and ``logger.debug(..., exc_info=True)``
+    paths in ``load_env_integrations``: integration is still skipped, but the
+    misconfiguration reaches Sentry rather than being lost to debug output
+    (#1468).
+    """
+    report_exception(
+        exc,
+        logger=logger,
+        message=f"env_loader_failed: integration={integration}",
+        severity="warning",
+        tags={
+            "surface": "integration",
+            "component": "app.integrations._catalog_impl",
+            "integration": integration,
+            "event": "env_loader_failed",
+        },
+    )
 
 
 def _should_publish_instance_siblings(instances: object) -> bool:
@@ -167,7 +214,8 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         if not grafana_config.endpoint:
             return None, None
@@ -199,7 +247,8 @@ def _classify_service_instance(
                 AWSIntegrationConfig.model_validate(raw_config).model_dump(exclude_none=True),
                 "aws",
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
 
     if key == "datadog":
@@ -212,7 +261,8 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         if datadog_config.api_key and datadog_config.app_key:
             return datadog_config.model_dump(), "datadog"
@@ -228,7 +278,8 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         if honeycomb_config.api_key:
             return honeycomb_config.model_dump(), "honeycomb"
@@ -245,7 +296,8 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         if coralogix_config.api_key:
             return coralogix_config.model_dump(), "coralogix"
@@ -264,7 +316,8 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         return github_config.model_dump(), "github"
 
@@ -279,7 +332,8 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         if sentry_config.organization_slug and sentry_config.auth_token:
             return sentry_config.model_dump(), "sentry"
@@ -293,7 +347,8 @@ def _classify_service_instance(
                     "auth_token": credentials.get("auth_token", ""),
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         return gitlab_config.model_dump(), "gitlab"
 
@@ -307,7 +362,8 @@ def _classify_service_instance(
                     "tls": credentials.get("tls", True),
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         if mongodb_config.connection_string:
             return mongodb_config.model_dump(), "mongodb"
@@ -325,7 +381,8 @@ def _classify_service_instance(
                     "ssl_mode": credentials.get("ssl_mode", "prefer"),
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         if postgresql_config.host and postgresql_config.database:
             return postgresql_config.model_dump(), "postgresql"
@@ -343,7 +400,8 @@ def _classify_service_instance(
                     ),
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         if atlas_config.api_public_key and atlas_config.api_private_key and atlas_config.project_id:
             return {
@@ -367,7 +425,8 @@ def _classify_service_instance(
                     "ssl": credentials.get("ssl", True),
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         if mariadb_config.host and mariadb_config.database:
             return {
@@ -390,7 +449,8 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         if vercel_config.api_token:
             return vercel_config.model_dump(), "vercel"
@@ -405,7 +465,8 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         if opsgenie_config.api_key:
             return opsgenie_config.model_dump(), "opsgenie"
@@ -420,7 +481,8 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         if incident_io_config.api_key:
             return incident_io_config.model_dump(), "incident_io"
@@ -437,7 +499,8 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         if jira_config.base_url and jira_config.email and jira_config.api_token:
             return jira_config.model_dump(), "jira"
@@ -453,7 +516,8 @@ def _classify_service_instance(
                     "default_channel_id": credentials.get("default_channel_id"),
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         if discord_config.bot_token:
             return discord_config.model_dump(), "discord"
@@ -467,7 +531,8 @@ def _classify_service_instance(
                     "default_chat_id": credentials.get("default_chat_id"),
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         if tg_config.bot_token:
             return tg_config.model_dump(), "telegram"
@@ -487,6 +552,20 @@ def _classify_service_instance(
             return None, None
         return wa_config.model_dump(), "whatsapp"
 
+    if key == "twilio":
+        try:
+            twilio_config = TwilioIntegrationConfig.model_validate(
+                {
+                    "account_sid": credentials.get("account_sid", ""),
+                    "auth_token": credentials.get("auth_token", ""),
+                    "sms": credentials.get("sms", {}),
+                    "integration_id": record_id,
+                }
+            )
+        except Exception:
+            return None, None
+        return twilio_config.model_dump(), "twilio"
+
     if key == "openclaw":
         try:
             openclaw_config = build_openclaw_config(
@@ -499,7 +578,8 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         if openclaw_config.is_configured:
             config_dict = openclaw_config.model_dump()
@@ -519,7 +599,8 @@ def _classify_service_instance(
                     "ssl_mode": credentials.get("ssl_mode", "preferred"),
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         if mysql_config.host and mysql_config.database:
             return {
@@ -546,7 +627,8 @@ def _classify_service_instance(
                     "verify_ssl": credentials.get("verify_ssl", True),
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         if rabbitmq_config.host and rabbitmq_config.username:
             return {
@@ -569,7 +651,8 @@ def _classify_service_instance(
                     "region": credentials.get("region", DEFAULT_RDS_REGION),
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         if rds_config.is_configured:
             return {**rds_config.model_dump(), "integration_id": record_id}, "rds"
@@ -588,7 +671,8 @@ def _classify_service_instance(
                     "max_results": credentials.get("max_results", 50),
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         if airflow_config.is_configured:
             return {
@@ -607,7 +691,8 @@ def _classify_service_instance(
                     "sources": credentials.get("sources", []),
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         if bs_config.query_endpoint and bs_config.username:
             return {
@@ -632,7 +717,8 @@ def _classify_service_instance(
                     "encrypt": credentials.get("encrypt", True),
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         if azure_sql_config.server and azure_sql_config.database:
             return azure_sql_config.model_dump(), "azure_sql"
@@ -649,7 +735,8 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         if alertmanager_config.base_url:
             return alertmanager_config.model_dump(), "alertmanager"
@@ -671,7 +758,8 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         if argocd_config.base_url and (
             argocd_config.bearer_token or (argocd_config.username and argocd_config.password)
@@ -694,7 +782,8 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         return helm_config.model_dump(), "helm"
 
@@ -707,7 +796,8 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         if victoria_logs_config.base_url:
             return victoria_logs_config.model_dump(), "victoria_logs"
@@ -816,7 +906,8 @@ def _classify_service_instance(
                     "integration_id": record_id,
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         if splunk_config.base_url and splunk_config.token:
             return splunk_config.model_dump(), "splunk"
@@ -830,7 +921,8 @@ def _classify_service_instance(
                     "service_key": credentials.get("service_key", ""),
                 }
             )
-        except Exception:
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         if sb_config.is_configured:
             return {
@@ -845,18 +937,12 @@ def _classify_service_instance(
                 {
                     "url": credentials.get("url", ""),
                     "api_key": credentials.get("api_key", ""),
-                    "clickhouse_host": credentials.get("clickhouse_host", ""),
-                    "clickhouse_port": int(credentials.get("clickhouse_port", 8123) or 8123),
-                    "clickhouse_database": credentials.get("clickhouse_database", "default"),
-                    "clickhouse_user": credentials.get("clickhouse_user", "default"),
-                    "clickhouse_password": credentials.get("clickhouse_password", ""),
-                    "secure": credentials.get("secure", False),
                     "integration_id": record_id,
                 }
             )
         except Exception:
             return None, None
-        if signoz_config.clickhouse_host:
+        if signoz_config.is_configured:
             return signoz_config.model_dump(), "signoz"
         return None, None
 
@@ -1207,9 +1293,10 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     "verify_ssl": os.getenv("ARGOCD_VERIFY_SSL", "true").strip(),
                 }
             )
-        except Exception:
-            # invalid env-derived config: skip ArgoCD entry rather than fail discovery
-            pass
+        except Exception as exc:
+            # Invalid env-derived config: skip ArgoCD entry rather than fail
+            # discovery, but report so operators can see the misconfig.
+            _report_env_loader_failure(exc, integration="argocd")
         else:
             integrations.append(
                 _active_env_record(
@@ -1233,8 +1320,8 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     "default_namespace": os.getenv("HELM_NAMESPACE", "").strip(),
                 }
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="helm")
         else:
             integrations.append(
                 _active_env_record(
@@ -1245,33 +1332,41 @@ def load_env_integrations() -> list[dict[str, Any]]:
 
     vercel_api_token = os.getenv("VERCEL_API_TOKEN", "").strip()
     if vercel_api_token:
-        vercel_config = VercelConfig.model_validate(
-            {
-                "api_token": vercel_api_token,
-                "team_id": os.getenv("VERCEL_TEAM_ID", "").strip(),
-            }
-        )
-        integrations.append(
-            _active_env_record(
-                "vercel",
-                vercel_config.model_dump(exclude={"integration_id"}),
+        try:
+            vercel_config = VercelConfig.model_validate(
+                {
+                    "api_token": vercel_api_token,
+                    "team_id": os.getenv("VERCEL_TEAM_ID", "").strip(),
+                }
             )
-        )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="vercel")
+        else:
+            integrations.append(
+                _active_env_record(
+                    "vercel",
+                    vercel_config.model_dump(exclude={"integration_id"}),
+                )
+            )
 
     opsgenie_api_key = os.getenv("OPSGENIE_API_KEY", "").strip()
     if opsgenie_api_key:
-        opsgenie_config = OpsGenieIntegrationConfig.model_validate(
-            {
-                "api_key": opsgenie_api_key,
-                "region": os.getenv("OPSGENIE_REGION", "us").strip() or "us",
-            }
-        )
-        integrations.append(
-            _active_env_record(
-                "opsgenie",
-                opsgenie_config.model_dump(exclude={"integration_id"}),
+        try:
+            opsgenie_config = OpsGenieIntegrationConfig.model_validate(
+                {
+                    "api_key": opsgenie_api_key,
+                    "region": os.getenv("OPSGENIE_REGION", "us").strip() or "us",
+                }
             )
-        )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="opsgenie")
+        else:
+            integrations.append(
+                _active_env_record(
+                    "opsgenie",
+                    opsgenie_config.model_dump(exclude={"integration_id"}),
+                )
+            )
 
     incident_io_api_key = resolve_env_credential("INCIDENT_IO_API_KEY")
     if incident_io_api_key:
@@ -1282,8 +1377,8 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     "base_url": os.getenv("INCIDENT_IO_BASE_URL", "").strip(),
                 }
             )
-        except Exception:
-            logger.debug("Failed to load incident.io config from env", exc_info=True)
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="incident_io")
         else:
             integrations.append(
                 _active_env_record(
@@ -1297,32 +1392,41 @@ def load_env_integrations() -> list[dict[str, Any]]:
     jira_api_token = os.getenv("JIRA_API_TOKEN", "").strip()
     jira_project_key = os.getenv("JIRA_PROJECT_KEY", "").strip()
     if jira_base_url and jira_email and jira_api_token:
-        jira_config = JiraIntegrationConfig.model_validate(
-            {
-                "base_url": jira_base_url,
-                "email": jira_email,
-                "api_token": jira_api_token,
-                "project_key": jira_project_key,
-            }
-        )
-        integrations.append(
-            _active_env_record(
-                "jira",
-                jira_config.model_dump(exclude={"integration_id"}),
+        try:
+            jira_config = JiraIntegrationConfig.model_validate(
+                {
+                    "base_url": jira_base_url,
+                    "email": jira_email,
+                    "api_token": jira_api_token,
+                    "project_key": jira_project_key,
+                }
             )
-        )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="jira")
+        else:
+            integrations.append(
+                _active_env_record(
+                    "jira",
+                    jira_config.model_dump(exclude={"integration_id"}),
+                )
+            )
 
     discord_bot_token = resolve_env_credential("DISCORD_BOT_TOKEN")
     if discord_bot_token:
-        discord_config = DiscordBotConfig.model_validate(
-            {
-                "bot_token": discord_bot_token,
-                "application_id": os.getenv("DISCORD_APPLICATION_ID", "").strip(),
-                "public_key": os.getenv("DISCORD_PUBLIC_KEY", "").strip(),
-                "default_channel_id": os.getenv("DISCORD_DEFAULT_CHANNEL_ID", "").strip() or None,
-            }
-        )
-        integrations.append(_active_env_record("discord", discord_config.model_dump()))
+        try:
+            discord_config = DiscordBotConfig.model_validate(
+                {
+                    "bot_token": discord_bot_token,
+                    "application_id": os.getenv("DISCORD_APPLICATION_ID", "").strip(),
+                    "public_key": os.getenv("DISCORD_PUBLIC_KEY", "").strip(),
+                    "default_channel_id": os.getenv("DISCORD_DEFAULT_CHANNEL_ID", "").strip()
+                    or None,
+                }
+            )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="discord")
+        else:
+            integrations.append(_active_env_record("discord", discord_config.model_dump()))
 
     airflow_config = airflow_config_from_env()
     if airflow_config is not None:
@@ -1330,48 +1434,91 @@ def load_env_integrations() -> list[dict[str, Any]]:
 
     telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
     if telegram_bot_token:
-        tg_config = TelegramBotConfig.model_validate(
-            {
-                "bot_token": telegram_bot_token,
-                "default_chat_id": os.getenv("TELEGRAM_DEFAULT_CHAT_ID", "").strip() or None,
-            }
-        )
-        integrations.append(_active_env_record("telegram", tg_config.model_dump()))
+        try:
+            tg_config = TelegramBotConfig.model_validate(
+                {
+                    "bot_token": telegram_bot_token,
+                    "default_chat_id": os.getenv("TELEGRAM_DEFAULT_CHAT_ID", "").strip() or None,
+                }
+            )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="telegram")
+        else:
+            integrations.append(_active_env_record("telegram", tg_config.model_dump()))
 
-    wa_account_sid = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
-    wa_auth_token = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
-    wa_from_number = os.getenv("TWILIO_WHATSAPP_FROM", "").strip()
-    if wa_account_sid and wa_auth_token and wa_from_number:
+    # Shared Twilio account credentials — consumed by both the WhatsApp and
+    # the SMS env-bootstrap blocks below.
+    twilio_account_sid = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
+    twilio_auth_token = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
+
+    whatsapp_from_number = os.getenv("TWILIO_WHATSAPP_FROM", "").strip()
+    if twilio_account_sid and twilio_auth_token and whatsapp_from_number:
         wa_config = WhatsAppConfig.model_validate(
             {
-                "account_sid": wa_account_sid,
-                "auth_token": wa_auth_token,
-                "from_number": wa_from_number,
+                "account_sid": twilio_account_sid,
+                "auth_token": twilio_auth_token,
+                "from_number": whatsapp_from_number,
                 "default_to": os.getenv("WHATSAPP_DEFAULT_TO", "").strip() or None,
             }
         )
         integrations.append(_active_env_record("whatsapp", wa_config.model_dump()))
 
+    # Twilio SMS integration — independent of the legacy WhatsApp record.
+    # Hydrated when account+token are present AND an SMS sender is set
+    # (a from_number or a Messaging Service SID).
+    twilio_sms_from = os.getenv("TWILIO_SMS_FROM", "").strip()
+    twilio_sms_messaging_service = os.getenv("TWILIO_SMS_MESSAGING_SERVICE_SID", "").strip()
+    if (
+        twilio_account_sid
+        and twilio_auth_token
+        and (twilio_sms_from or twilio_sms_messaging_service)
+    ):
+        twilio_payload: dict[str, Any] = {
+            "account_sid": twilio_account_sid,
+            "auth_token": twilio_auth_token,
+            "sms": {
+                "enabled": True,
+                "from_number": twilio_sms_from,
+                "messaging_service_sid": twilio_sms_messaging_service,
+                "default_to": os.getenv("TWILIO_SMS_DEFAULT_TO", "").strip() or None,
+            },
+        }
+        try:
+            twilio_config = TwilioIntegrationConfig.model_validate(twilio_payload)
+        except Exception:
+            twilio_config = None
+        if twilio_config is not None:
+            integrations.append(
+                _active_env_record(
+                    "twilio",
+                    twilio_config.model_dump(exclude={"integration_id"}),
+                )
+            )
+
     atlas_pub = os.getenv("MONGODB_ATLAS_PUBLIC_KEY", "").strip()
     atlas_priv = os.getenv("MONGODB_ATLAS_PRIVATE_KEY", "").strip()
     atlas_project = os.getenv("MONGODB_ATLAS_PROJECT_ID", "").strip()
     if atlas_pub and atlas_priv and atlas_project:
-        atlas_config = build_mongodb_atlas_config(
-            {
-                "api_public_key": atlas_pub,
-                "api_private_key": atlas_priv,
-                "project_id": atlas_project,
-                "base_url": os.getenv(
-                    "MONGODB_ATLAS_BASE_URL", "https://cloud.mongodb.com/api/atlas/v2"
-                ).strip(),
-            }
-        )
-        integrations.append(
-            _active_env_record(
-                "mongodb_atlas",
-                atlas_config.model_dump(exclude={"integration_id"}),
+        try:
+            atlas_config = build_mongodb_atlas_config(
+                {
+                    "api_public_key": atlas_pub,
+                    "api_private_key": atlas_priv,
+                    "project_id": atlas_project,
+                    "base_url": os.getenv(
+                        "MONGODB_ATLAS_BASE_URL", "https://cloud.mongodb.com/api/atlas/v2"
+                    ).strip(),
+                }
             )
-        )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="mongodb_atlas")
+        else:
+            integrations.append(
+                _active_env_record(
+                    "mongodb_atlas",
+                    atlas_config.model_dump(exclude={"integration_id"}),
+                )
+            )
 
     openclaw_url = os.getenv("OPENCLAW_MCP_URL", "").strip()
     openclaw_command = os.getenv("OPENCLAW_MCP_COMMAND", "").strip()
@@ -1401,8 +1548,8 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     },
                 )
             )
-        except Exception:
-            logger.debug("Failed to load OpenClaw config from env", exc_info=True)
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="openclaw")
 
     mariadb_host = os.getenv("MARIADB_HOST", "").strip()
     mariadb_database = os.getenv("MARIADB_DATABASE", "").strip()
@@ -1424,8 +1571,8 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     mariadb_config.model_dump(exclude={"integration_id"}),
                 )
             )
-        except Exception:
-            logger.debug("Failed to load MariaDB config from env", exc_info=True)
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="mariadb")
 
     rabbitmq_host = os.getenv("RABBITMQ_HOST", "").strip()
     rabbitmq_username = os.getenv("RABBITMQ_USERNAME", "").strip()
@@ -1450,14 +1597,14 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     rabbitmq_config.model_dump(exclude={"integration_id"}),
                 )
             )
-        except Exception:
-            logger.debug("Failed to load RabbitMQ config from env", exc_info=True)
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="rabbitmq")
 
     try:
         rds_config = rds_config_from_env()
-    except Exception:
+    except Exception as exc:
         rds_config = None
-        logger.debug("Failed to load RDS config from env", exc_info=True)
+        _report_env_loader_failure(exc, integration="rds")
     if rds_config is not None and rds_config.is_configured:
         integrations.append(
             _active_env_record(
@@ -1484,8 +1631,8 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     bs_config.model_dump(exclude={"integration_id"}),
                 )
             )
-        except Exception:
-            logger.debug("Failed to load Better Stack config from env", exc_info=True)
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="betterstack")
 
     mysql_host = os.getenv("MYSQL_HOST", "").strip()
     mysql_database = os.getenv("MYSQL_DATABASE", "").strip()
@@ -1648,8 +1795,8 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     alertmanager_config.model_dump(exclude={"integration_id"}),
                 )
             )
-        except Exception:
-            logger.debug("Failed to load Alertmanager config from env", exc_info=True)
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="alertmanager")
 
     victoria_logs_url = os.getenv("VICTORIA_LOGS_URL", "").strip().rstrip("/")
     if victoria_logs_url:
@@ -1666,8 +1813,8 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     victoria_logs_config.model_dump(exclude={"integration_id"}),
                 )
             )
-        except Exception:
-            logger.debug("Failed to load VictoriaLogs config from env", exc_info=True)
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="victoria_logs")
 
     splunk_multi = _parse_instances_env("SPLUNK_INSTANCES", "splunk")
     if splunk_multi is not None:
@@ -1705,8 +1852,8 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     {"project_url": sb_config.url},
                 )
             )
-        except Exception:
-            logger.debug("Failed to load Supabase config from env", exc_info=True)
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="supabase")
 
     try:
         signoz_config = signoz_config_from_env()

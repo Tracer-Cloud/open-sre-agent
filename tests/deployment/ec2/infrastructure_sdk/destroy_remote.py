@@ -7,6 +7,7 @@ import time
 
 from botocore.exceptions import ClientError
 
+from app.cli.wizard.store import delete_named_remote
 from app.deployment.operations.ec2_config import delete_remote_outputs, load_remote_outputs
 from tests.deployment.ec2.infrastructure_sdk.instance import (
     delete_instance_profile,
@@ -82,6 +83,7 @@ def destroy() -> dict[str, list[str]]:
         print(f"  - Failed: {e}")
 
     delete_remote_outputs()
+    delete_named_remote(STACK_NAME)
 
     elapsed = time.time() - start_time
     print()

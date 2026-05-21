@@ -342,7 +342,7 @@ class TestSyntheticSubprocessWatcher:
         monkeypatch: pytest.MonkeyPatch,
         stderr_buf: tempfile.SpooledTemporaryFile,  # type: ignore[type-arg]
     ) -> None:
-        import app.cli.interactive_shell.orchestration.action_executor as ae
+        import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor as ae
 
         monkeypatch.setattr(ae.threading, "Thread", _ImmediateThread)
 
@@ -372,7 +372,7 @@ class TestSyntheticSubprocessWatcher:
         cancel_requested branch runs, so terminated_by_watcher stays False.
         The task must be COMPLETED, not CANCELLED — the process succeeded.
         """
-        import app.cli.interactive_shell.orchestration.action_executor as ae
+        import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor as ae
 
         monkeypatch.setattr(ae.threading, "Thread", _ImmediateThread)
 
@@ -410,7 +410,7 @@ class TestSyntheticSubprocessWatcher:
         stderr_buf: tempfile.SpooledTemporaryFile,  # type: ignore[type-arg]
     ) -> None:
         """cancel_requested is set while proc is still running; watcher terminates it."""
-        import app.cli.interactive_shell.orchestration.action_executor as ae
+        import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor as ae
 
         monkeypatch.setattr(ae.threading, "Thread", _ImmediateThread)
 
@@ -445,7 +445,7 @@ class TestSyntheticSubprocessWatcher:
         The watcher should mark the task COMPLETED, not CANCELLED, because we
         never called _terminate_child_process — the process was already gone.
         """
-        import app.cli.interactive_shell.orchestration.action_executor as ae
+        import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor as ae
 
         monkeypatch.setattr(ae.threading, "Thread", _ImmediateThread)
 
@@ -470,7 +470,7 @@ class TestSyntheticSubprocessWatcher:
         stderr_buf: tempfile.SpooledTemporaryFile,  # type: ignore[type-arg]
     ) -> None:
         """Diagnostic stderr output is included in mark_failed message."""
-        import app.cli.interactive_shell.orchestration.action_executor as ae
+        import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor as ae
 
         monkeypatch.setattr(ae.threading, "Thread", _ImmediateThread)
 
@@ -493,7 +493,7 @@ class TestSyntheticSubprocessWatcher:
         monkeypatch: pytest.MonkeyPatch,
         stderr_buf: tempfile.SpooledTemporaryFile,  # type: ignore[type-arg]
     ) -> None:
-        import app.cli.interactive_shell.orchestration.action_executor as ae
+        import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor as ae
 
         _DeferredSyntheticThread.pending.clear()
         monkeypatch.setattr(ae.threading, "Thread", _DeferredSyntheticThread)
@@ -518,7 +518,7 @@ class TestSyntheticSubprocessWatcher:
         monkeypatch: pytest.MonkeyPatch,
         stderr_buf: tempfile.SpooledTemporaryFile,  # type: ignore[type-arg]
     ) -> None:
-        import app.cli.interactive_shell.orchestration.action_executor as ae
+        import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor as ae
 
         _DeferredSyntheticThread.pending.clear()
         monkeypatch.setattr(ae.threading, "Thread", _DeferredSyntheticThread)

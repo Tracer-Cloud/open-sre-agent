@@ -4,16 +4,20 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+import time
+from typing import TYPE_CHECKING, Any
 
 from rich.console import Console
 from rich.markup import escape
 
-from app.cli.interactive_shell.runtime import ReplSession
+from app.cli.interactive_shell.prompt_logging import LlmRunInfo
 from app.cli.interactive_shell.ui import DIM, ERROR, STREAM_LABEL_ANSWER, WARNING, stream_to_console
 from app.cli.support.exception_reporting import report_exception
 
 _logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from app.cli.interactive_shell.runtime.session import ReplSession
 
 
 def _summarize_evidence(evidence: Any) -> list[str]:
@@ -73,7 +77,7 @@ def answer_follow_up(
     question: str,
     session: ReplSession,
     console: Console,
-) -> None:
+) -> LlmRunInfo | None:
     """Answer a follow-up question about the previous investigation.
 
     The answer is grounded strictly in the prior investigation state.
@@ -83,14 +87,14 @@ def answer_follow_up(
             f"[{WARNING}]no prior investigation in this session.[/] "
             "describe an alert first, then ask follow-up questions about it."
         )
-        return
+        return None
 
     try:
         from app.services.llm_client import get_llm_for_reasoning
     except Exception as exc:
         report_exception(exc, context="interactive_shell.follow_up.import")
         console.print(f"[{ERROR}]LLM client unavailable:[/] {escape(str(exc))}")
-        return
+        return None
 
     context = _summarize_last_state(session.last_state)
     prompt = (
@@ -104,18 +108,46 @@ def answer_follow_up(
 
     try:
         client = get_llm_for_reasoning()
-        stream_to_console(
+        started = time.monotonic()
+        response_text = stream_to_console(
             console,
             label=STREAM_LABEL_ANSWER,
             chunks=client.invoke_stream(prompt),
         )
     except KeyboardInterrupt:
         console.print(f"[{DIM}]· cancelled[/]")
-        return
+        return None
     except Exception as exc:
         report_exception(exc, context="interactive_shell.follow_up.stream")
         console.print(f"[{ERROR}]follow-up failed:[/] {escape(str(exc))}")
-        return
+        return None
+    return LlmRunInfo(
+        model=_resolve_model_name(client),
+        provider=_resolve_provider_name(client),
+        latency_ms=int((time.monotonic() - started) * 1000),
+        response_text=response_text,
+    )
+
+
+def _resolve_model_name(client: object) -> str | None:
+    value = getattr(client, "_model", None)
+    return value if isinstance(value, str) and value else None
+
+
+def _resolve_provider_name(client: object) -> str | None:
+    provider_label = getattr(client, "_provider_label", None)
+    if isinstance(provider_label, str) and provider_label:
+        return provider_label.strip().lower().replace(" ", "_")
+    name = type(client).__name__.lower()
+    if "openai" in name:
+        return "openai"
+    if "bedrock" in name:
+        return "bedrock"
+    if "cli" in name:
+        return "cli"
+    if "anthropic" in name or "llmclient" in name:
+        return "anthropic"
+    return None
 
 
 __all__ = ["answer_follow_up"]

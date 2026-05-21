@@ -435,6 +435,12 @@ async def _open_github_mcp_session(config: GitHubMCPConfig) -> AsyncIterator[Cli
                 args=list(config.args),
                 env={
                     **os.environ,
+                    # Suppress terminal control codes (cursor, color) so the MCP
+                    # server's stdout stays clean JSON-RPC. Some server binaries
+                    # output ANSI escape sequences when TERM is set, breaking
+                    # the stdio reader with a JSONRPCMessage parse error.
+                    "NO_COLOR": "1",
+                    "TERM": "dumb",
                     **(
                         {"GITHUB_PERSONAL_ACCESS_TOKEN": config.auth_token}
                         if config.auth_token

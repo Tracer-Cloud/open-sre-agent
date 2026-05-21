@@ -1,0 +1,44 @@
+id: 204-integration-show-unconfigured-fail-closed
+title: Show unconfigured Datadog integration fails closed
+intent_class: local_execution
+risk_level: medium
+input:
+  prompt: show datadog integration details
+  surface: interactive_cli
+session:
+  has_prior_state: false
+  remote_connected: false
+  configured_integrations: []
+available_capabilities:
+  slash_commands: []
+  cli_commands: []
+  synthetic_suites: []
+notes: []
+route:
+  expected_kind: cli_agent
+  expected_signals: []
+  expected_command_text: null
+policy:
+  should_execute: false
+  has_unhandled_clause: true
+  fail_closed: true
+planned_actions: []
+executed_actions: []
+response_contract:
+  must_contain_any:
+  - datadog integration details
+  - /integrations show datadog
+  - integrations show datadog
+  - informational opensre request
+  - datadog
+  - integration
+  must_not_contain:
+  - $ /
+  forbidden_actions:
+  - shell
+history:
+  expected:
+  - type: cli_agent
+    ok: true
+tier: full
+runs: 3

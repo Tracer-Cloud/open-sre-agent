@@ -1,0 +1,49 @@
+id: 004-slash-unknown-passthrough
+title: Unknown slash command passthrough
+intent_class: deterministic
+risk_level: low
+input:
+  prompt: /definitely-not-a-command
+  surface: interactive_cli
+session:
+  has_prior_state: false
+  remote_connected: false
+  configured_integrations: []
+available_capabilities:
+  slash_commands:
+  - /definitely-not-a-command
+  cli_commands: []
+  synthetic_suites: []
+notes: []
+
+route:
+  expected_kind: slash
+  expected_signals:
+  - slash_prefix
+  expected_command_text: /definitely-not-a-command
+policy:
+  should_execute: true
+  has_unhandled_clause: false
+  fail_closed: false
+planned_actions:
+- kind: slash
+  source: deterministic
+  target_surface: slash
+  command: /definitely-not-a-command
+  args: []
+  content: /definitely-not-a-command
+executed_actions:
+- kind: slash
+  command: /definitely-not-a-command
+  args: []
+  content: /definitely-not-a-command
+response_contract:
+  must_contain_any:
+  - ran /definitely-not-a-command
+  must_not_contain: []
+history:
+  expected:
+  - type: slash
+    ok: true
+tier: critical
+runs: 1

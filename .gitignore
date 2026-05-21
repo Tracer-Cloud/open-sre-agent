@@ -1,10 +1,11 @@
-# Environment variables
+# Environment variables 
 *.env
 .env
 .env.local
 .env.*.local
-.env.backup
 .env.backup*
+.env.bak
+.env.bench
 .secrets
 
 # Python
@@ -114,6 +115,7 @@ Temporary Items
 # Project specific
 output/
 .cloudopsbench-results/
+.bench-results/
 tests/benchmarks/cloudopsbench/benchmark/
 tests/benchmarks/cloudopsbench/.cache/
 

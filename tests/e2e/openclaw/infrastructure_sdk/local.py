@@ -53,7 +53,7 @@ _GATEWAY_READY_MARKER = b"[gateway] ready"
 _ANSI_ESCAPE_RE = re.compile(rb"\x1b\[[0-9;]*[A-Za-z]")
 
 # SIGTERM grace before escalating to SIGKILL — matches the pattern used
-# by ``app.cli.interactive_shell.orchestration.action_executor.terminate_child_process``.
+# by ``app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.terminate_child_process``.
 _TEARDOWN_GRACE_S = 5.0
 
 

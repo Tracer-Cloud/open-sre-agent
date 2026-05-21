@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import time
 
+from app.cli.wizard.store import save_named_remote
 from app.deployment.operations.ec2_config import save_remote_outputs
 from tests.deployment.ec2.infrastructure_sdk.instance import (
     create_instance_profile,
@@ -150,6 +151,9 @@ def deploy(branch: str = "main") -> dict[str, str]:
     }
 
     save_remote_outputs(outputs)
+
+    remote_url = f"http://{public_ip}:{SERVER_PORT}"
+    save_named_remote(STACK_NAME, remote_url, set_active=True, source="ec2")
 
     elapsed = time.time() - start_time
     print()

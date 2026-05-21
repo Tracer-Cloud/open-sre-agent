@@ -208,6 +208,74 @@ def generate_report(state: InvestigationState) -> dict:
     else:
         logger.debug("[publish] whatsapp delivery: no whatsapp integration configured")
 
+    # Twilio SMS — dispatched independently of the legacy WhatsApp record
+    # above. WhatsApp delivery is owned solely by the ``whatsapp`` integration.
+    twilio_creds = resolved.get("twilio", {})
+    if twilio_creds:
+        sms_cfg = twilio_creds.get("sms") or {}
+        if sms_cfg.get("enabled"):
+            from app.utils.twilio_delivery import send_twilio_sms_report
+
+            twilio_sms_ctx: dict[str, Any] = state.get("twilio_sms_context") or {}
+            sms_to = twilio_sms_ctx.get("to") or sms_cfg.get("default_to") or ""
+            sms_from = sms_cfg.get("from_number", "")
+            messaging_service_sid = sms_cfg.get("messaging_service_sid", "")
+            account_sid = twilio_creds.get("account_sid", "")
+            auth_token = twilio_creds.get("auth_token", "")
+            logger.debug(
+                "[publish] twilio sms delivery: to=%s from=%s msg_service=%s account_sid_present=%s",
+                sms_to,
+                sms_from,
+                messaging_service_sid,
+                bool(account_sid),
+            )
+            if account_sid and auth_token and sms_to and (sms_from or messaging_service_sid):
+                # SMS currently reuses the WhatsApp-formatted body — both
+                # channels render the same plain-text RCA summary. If
+                # formatting needs to diverge (e.g. shorter SMS body or
+                # different headers), introduce ``format_sms_message`` in
+                # ``formatters/report.py`` and route it through here.
+                sms_message = whatsapp_message
+                sms_ok, sms_error, sms_sid = send_twilio_sms_report(
+                    sms_message,
+                    {
+                        "account_sid": account_sid,
+                        "auth_token": auth_token,
+                        "from_number": sms_from,
+                        "messaging_service_sid": messaging_service_sid,
+                        "to": sms_to,
+                    },
+                )
+                logger.debug(
+                    "[publish] twilio sms delivery: posted=%s sid=%s error=%s",
+                    sms_ok,
+                    sms_sid,
+                    sms_error,
+                )
+                if not sms_ok:
+                    logger.warning(
+                        "[publish] Twilio SMS delivery failed: to=%s error=%s",
+                        sms_to,
+                        sms_error,
+                    )
+            else:
+                # SMS channel is enabled but something required for delivery
+                # is missing — most commonly no recipient (default_to unset and
+                # no runtime twilio_sms_context.to). Warn so the misconfig is
+                # visible rather than silently swallowed.
+                logger.warning(
+                    "[publish] twilio sms delivery: skipped — SMS channel is enabled "
+                    "but not deliverable (recipient_present=%s sender_present=%s "
+                    "account_sid_present=%s auth_token_present=%s). "
+                    "Set TWILIO_SMS_DEFAULT_TO to enable auto-delivery.",
+                    bool(sms_to),
+                    bool(sms_from or messaging_service_sid),
+                    bool(account_sid),
+                    bool(auth_token),
+                )
+    else:
+        logger.debug("[publish] twilio delivery: no twilio integration configured")
+
     openclaw_creds = resolved.get("openclaw", {})
     if openclaw_creds:
         from app.utils.openclaw_delivery import send_openclaw_report

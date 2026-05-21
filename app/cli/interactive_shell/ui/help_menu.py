@@ -34,7 +34,7 @@ from app.cli.interactive_shell.ui.theme import (
 
 HelpSection = tuple[str, Sequence[SlashCommand]]
 _HELP_VIEW_ROWS = 21
-_HELP_HINT = "↑↓/j/k navigate  ·  Enter/Space toggle details  ·  Esc/q close"
+_HELP_HINT = "↑↓/j/k navigate  ·  Enter run command  ·  Space toggle details  ·  Esc/q close"
 
 
 @dataclass(frozen=True)
@@ -420,7 +420,7 @@ def _draw_help_menu(
     return height
 
 
-def choose_help_command(sections: Sequence[HelpSection]) -> None:
+def choose_help_command(sections: Sequence[HelpSection]) -> str | None:
     """Let a TTY user browse command details from a grouped viewport."""
     rows = _flatten_help_rows(sections)
     selected = _first_selectable_index(rows)
@@ -437,11 +437,15 @@ def choose_help_command(sections: Sequence[HelpSection]) -> None:
             erase_lines=erase_lines,
         )
         action = read_menu_action()
-        if action == "enter":
+        if action == "space":
             command = rows[selected].command
             if command is not None and has_help_details(command):
                 expanded = None if expanded == selected else selected
             continue
+        if action == "enter":
+            command = rows[selected].command
+            erase_menu_lines(erase_lines)
+            return command.name if command is not None else None
         if action in ("cancel", "eof"):
             erase_menu_lines(erase_lines)
             return None

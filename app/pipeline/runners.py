@@ -7,7 +7,7 @@ import contextlib
 import logging
 import queue
 import threading
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -22,6 +22,42 @@ logger = logging.getLogger(__name__)
 # Serializes temporary render_report monkeypatches when multiple streaming
 # investigations run concurrently (e.g. remote server).
 _render_report_patch_lock = threading.Lock()
+_SENTRY_CAPTURED_ATTR = "_opensre_sentry_captured"
+
+
+def _exception_was_captured(exc: BaseException) -> bool:
+    return bool(getattr(exc, _SENTRY_CAPTURED_ATTR, False))
+
+
+def _mark_exception_captured(exc: BaseException) -> None:
+    with contextlib.suppress(Exception):
+        setattr(exc, _SENTRY_CAPTURED_ATTR, True)
+
+
+def _capture_exception_once(
+    exc: BaseException,
+    *,
+    context: str,
+    tags: dict[str, str] | None = None,
+) -> None:
+    if _exception_was_captured(exc):
+        return
+    from app.utils.sentry_sdk import capture_exception
+
+    capture_exception(exc, context=context, tags=tags)
+    _mark_exception_captured(exc)
+
+
+def _traced_node(node_name: str, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    try:
+        return fn(*args, **kwargs)
+    except Exception as exc:
+        _capture_exception_once(
+            exc,
+            context=f"node.{node_name}",
+            tags={"surface": "node", "node": node_name},
+        )
+        raise
 
 
 def _merge_state(state: AgentState, updates: dict[str, Any]) -> None:
@@ -175,7 +211,7 @@ async def astream_investigation(
 
             # --- resolve_integrations ---
             _put(_make_node_event("on_chain_start", "resolve_integrations", {}))
-            resolved = resolve_integrations(initial)
+            resolved = _traced_node("resolve_integrations", resolve_integrations, initial)
             _merge(state_any, {"resolved_integrations": resolved})
             _put(
                 _make_node_event(
@@ -193,7 +229,7 @@ async def astream_investigation(
 
             # --- extract_alert ---
             _put(_make_node_event("on_chain_start", "extract_alert", {}))
-            _merge(state_any, extract_alert(initial))
+            _merge(state_any, _traced_node("extract_alert", extract_alert, initial))
             _put(
                 _make_node_event(
                     "on_chain_end",
@@ -213,7 +249,13 @@ async def astream_investigation(
 
             # --- investigation agent (with real tool events) ---
             _merge(
-                state_any, ConnectedInvestigationAgent().run(state_any, on_event=_on_agent_event)
+                state_any,
+                _traced_node(
+                    "investigation_agent",
+                    ConnectedInvestigationAgent().run,
+                    state_any,
+                    on_event=_on_agent_event,
+                ),
             )
 
             # --- upstream correlation ---
@@ -230,7 +272,9 @@ async def astream_investigation(
 
             _merge(
                 state_any,
-                node_correlate_upstream(
+                _traced_node(
+                    "correlate_upstream",
+                    node_correlate_upstream,
                     cast("AgentState", state_any),
                     _build_correlation_config(state_any),
                 ),
@@ -262,7 +306,10 @@ async def astream_investigation(
                 _term_mod.render_report = lambda *_a, **_kw: None  # type: ignore[assignment]
                 _publish_node.render_report = lambda *_a, **_kw: None  # type: ignore[assignment]
                 try:
-                    _merge(state_any, generate_report(cast("Any", state_any)))
+                    _merge(
+                        state_any,
+                        _traced_node("publish_findings", generate_report, cast("Any", state_any)),
+                    )
                 finally:
                     _term_mod.render_report = _orig_terminal_render  # type: ignore[assignment]
                     _publish_node.render_report = _orig_node_render  # type: ignore[assignment]
@@ -287,9 +334,7 @@ async def astream_investigation(
             )
 
         except Exception as exc:
-            from app.utils.sentry_sdk import capture_exception
-
-            capture_exception(exc)
+            _capture_exception_once(exc, context="pipeline.astream_investigation")
             with contextlib.suppress(RuntimeError):
                 loop.call_soon_threadsafe(event_queue.put_nowait, exc)
         finally:

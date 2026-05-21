@@ -552,6 +552,42 @@ def _setup_whatsapp() -> None:
     )
 
 
+def _setup_twilio() -> None:
+    """Wizard for the Twilio SMS integration.
+
+    WhatsApp delivery is configured separately via ``setup whatsapp``.
+    """
+    account_sid = _p("Twilio Account SID (starts with AC...)")
+    auth_token = _p("Twilio Auth Token", secret=True)
+    if not account_sid or not auth_token:
+        _die("account_sid and auth_token are required.")
+
+    sms_from = _p(
+        "Twilio SMS From number (E.164, e.g. +14155551234; leave blank to use a Messaging Service SID)"
+    )
+    messaging_service_sid = ""
+    if not sms_from:
+        messaging_service_sid = _p("Twilio Messaging Service SID (starts with MG...)")
+        if not messaging_service_sid:
+            _die("SMS requires either a from_number or a messaging_service_sid.")
+
+    upsert_integration(
+        "twilio",
+        {
+            "credentials": {
+                "account_sid": account_sid,
+                "auth_token": auth_token,
+                "sms": {
+                    "enabled": True,
+                    "from_number": sms_from,
+                    "messaging_service_sid": messaging_service_sid,
+                    "default_to": _p("Default SMS recipient (optional, E.164)") or None,
+                },
+            }
+        },
+    )
+
+
 def _setup_openclaw() -> None:
     print("  1) stdio (recommended)  2) Streamable HTTP  3) SSE")
     choice = _p("Choice", default="1")
@@ -751,24 +787,16 @@ def _setup_alertmanager() -> None:
 
 
 def _setup_signoz() -> None:
-    clickhouse_host = _p("ClickHouse host")
-    clickhouse_port = _p("ClickHouse port", default="8123")
-    clickhouse_user = _p("ClickHouse user", default="default")
-    clickhouse_password = _p("ClickHouse password", secret=True)
-    clickhouse_database = _p("ClickHouse database", default="default")
-    url = _p("SigNoz URL (optional)")
-    api_key = _p("SigNoz API key (optional)", secret=True)
-    if not clickhouse_host:
-        _die("clickhouse_host is required.")
+    url = _p("SigNoz URL (e.g. http://localhost:8080 for local Docker)")
+    api_key = _p("SigNoz API key (service account key)", secret=True)
+
+    if not (url and api_key):
+        _die("SigNoz URL and API key are required.")
+
     upsert_integration(
         "signoz",
         {
             "credentials": {
-                "clickhouse_host": clickhouse_host,
-                "clickhouse_port": int(clickhouse_port) if clickhouse_port.isdigit() else 8123,
-                "clickhouse_user": clickhouse_user,
-                "clickhouse_password": clickhouse_password,
-                "clickhouse_database": clickhouse_database,
                 "url": url,
                 "api_key": api_key,
             }
@@ -798,6 +826,7 @@ _HANDLERS: dict[str, Any] = {
     "mongodb": _setup_mongodb,
     "discord": _setup_discord,
     "whatsapp": _setup_whatsapp,
+    "twilio": _setup_twilio,
     "openclaw": _setup_openclaw,
     "postgresql": _setup_postgresql,
     "mysql": _setup_mysql,

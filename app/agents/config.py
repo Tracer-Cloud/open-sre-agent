@@ -1,9 +1,11 @@
-"""Per-agent budget config loaded from ``~/.config/opensre/agents.yaml``.
+"""Per-agent SLO + pricing config loaded from ``~/.config/opensre/agents.yaml``.
 
-The ``/agents`` dashboard reads ``hourly_budget_usd`` and surfaces it
-in the ``$/hr`` column. ``progress_minutes`` and ``error_rate_pct``
-are stored for the SLO watchdog landing in a later phase of the
-monitor-local-agents roadmap; nothing consumes them today.
+``hourly_budget_usd`` is reserved for the future budget-alarm
+feature (the dashboard's ``$/hr`` column shows observed cost, not the
+budget). ``progress_minutes`` and ``error_rate_pct`` are stored for
+the SLO watchdog landing in a later phase. ``model`` and the
+``*_usd_per_million_tokens`` fields override the meter / pricing
+defaults when the user wants a per-agent rate.
 """
 
 from __future__ import annotations
@@ -35,6 +37,13 @@ class AgentBudget(StrictConfigModel):
     hourly_budget_usd: float | None = Field(default=None, gt=0, allow_inf_nan=False)
     progress_minutes: int | None = Field(default=None, ge=0)
     error_rate_pct: float | None = Field(default=None, ge=0, le=100, allow_inf_nan=False)
+    model: str | None = Field(default=None, min_length=1)
+    # Optional per-agent rate override (USD per 1M tokens). Lets users
+    # update pricing without a code change when providers bump rates
+    # between releases. Either or both can be set; missing fields fall
+    # back to the table in :mod:`app.agents.pricing`.
+    input_usd_per_million_tokens: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+    output_usd_per_million_tokens: float | None = Field(default=None, gt=0, allow_inf_nan=False)
 
 
 class AgentsConfig(StrictConfigModel):

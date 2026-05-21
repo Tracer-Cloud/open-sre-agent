@@ -24,6 +24,7 @@ from app.cli.interactive_shell.command_registry.investigation import (
 from app.cli.interactive_shell.command_registry.model import COMMANDS as MODEL_COMMANDS
 from app.cli.interactive_shell.command_registry.model import (
     switch_llm_provider,
+    switch_reasoning_model,
     switch_toolcall_model,
 )
 from app.cli.interactive_shell.command_registry.privacy_cmds import COMMANDS as PRIVACY_COMMANDS
@@ -37,7 +38,7 @@ from app.cli.interactive_shell.command_registry.system import COMMANDS as SYSTEM
 from app.cli.interactive_shell.command_registry.tasks_cmds import COMMANDS as TASK_COMMANDS
 from app.cli.interactive_shell.command_registry.types import SlashCommand
 from app.cli.interactive_shell.command_registry.watch_cmds import COMMANDS as WATCH_COMMANDS
-from app.cli.interactive_shell.orchestration.execution_policy import (
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
     evaluate_slash_tier,
     execution_allowed,
     resolve_slash_execution_tier,
@@ -167,5 +168,6 @@ __all__ = [
     "load_llm_settings",
     "load_verified_integrations",
     "switch_llm_provider",
+    "switch_reasoning_model",
     "switch_toolcall_model",
 ]

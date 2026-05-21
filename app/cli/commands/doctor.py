@@ -45,7 +45,6 @@ from app.cli.interactive_shell.ui.theme import (
 from app.cli.support.context import is_json_output
 from app.cli.support.exit_codes import ERROR as EXIT_ERROR
 from app.cli.support.exit_codes import SUCCESS
-from app.llm_credentials import has_llm_api_key
 from app.version import get_version
 
 
@@ -77,21 +76,13 @@ def _check_env_file() -> tuple[bool, str]:
 
 
 def _check_llm_provider() -> tuple[bool, str]:
-    provider = os.getenv("LLM_PROVIDER", "").lower() or "not set"
-    api_key_vars = {
-        "anthropic": "ANTHROPIC_API_KEY",
-        "openai": "OPENAI_API_KEY",
-        "openrouter": "OPENROUTER_API_KEY",
-        "requesty": "REQUESTY_API_KEY",
-        "gemini": "GEMINI_API_KEY",
-        "nvidia": "NVIDIA_API_KEY",
-    }
+    from app.config import get_configured_llm_provider, get_llm_provider_api_key
+
+    provider = get_configured_llm_provider()
     env_vars = {
         "bedrock": "AWS_DEFAULT_REGION",
         "ollama": "OLLAMA_HOST",
     }
-    if provider == "not set":
-        return False, "LLM_PROVIDER env var is not set"
 
     from app.integrations.llm_cli.registry import get_cli_provider_registration
 
@@ -106,8 +97,8 @@ def _check_llm_provider() -> tuple[bool, str]:
             return False, f"provider={provider}, CLI auth status unclear ({probe.detail})"
         return True, f"provider={provider}, CLI ready ({probe.detail})"
 
-    expected_key = api_key_vars.get(provider)
-    if expected_key and not has_llm_api_key(expected_key):
+    expected_key, api_key = get_llm_provider_api_key(provider)
+    if expected_key and not api_key:
         return False, f"provider={provider}, but {expected_key} is not available in env or keyring"
 
     expected_env = env_vars.get(provider)

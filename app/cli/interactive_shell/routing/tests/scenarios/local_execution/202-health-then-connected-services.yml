@@ -1,0 +1,65 @@
+id: 202-health-then-connected-services
+title: Health then connected services
+intent_class: local_execution
+risk_level: medium
+input:
+  prompt: check the health of my opensre and then show me all connected services
+  surface: interactive_cli
+session:
+  has_prior_state: false
+  remote_connected: false
+  configured_integrations: []
+available_capabilities:
+  slash_commands:
+  - /health
+  - /list
+  cli_commands: []
+  synthetic_suites: []
+notes: []
+route:
+  expected_kind: cli_agent
+  expected_signals: []
+  expected_command_text: null
+policy:
+  should_execute: true
+  has_unhandled_clause: false
+  fail_closed: false
+planned_actions:
+- kind: slash
+  content: /health
+  source: llm
+  target_surface: slash
+  command: /health
+  args: []
+- kind: slash
+  content: /list integrations
+  source: llm
+  target_surface: slash
+  command: /list
+  args:
+  - integrations
+executed_actions:
+- kind: slash
+  command: /health
+  args: []
+  content: /health
+- kind: slash
+  command: /list
+  args:
+  - integrations
+  content: /list integrations
+response_contract:
+  must_contain_any:
+  - ran /health
+  - ran /list integrations
+  must_not_contain: []
+history:
+  expected:
+  - type: cli_agent
+    ok: true
+  - type: slash
+    ok: true
+  - type: slash
+    ok: true
+tier: critical
+runs: 1

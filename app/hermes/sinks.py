@@ -53,6 +53,7 @@ from dataclasses import dataclass
 from typing import Final
 
 from app.hermes.agent import IncidentSink
+from app.hermes.errors import InvestigationOutcome
 from app.hermes.incident import HermesIncident, IncidentSeverity, LogRecord
 from app.watch_dog.alarms import AlarmDispatcher
 
@@ -366,44 +367,44 @@ class _InvestigationResult:
     operator-visible marker for each state easy to audit in tests.
     """
 
-    state: str  # not_attempted | success | empty | failed | timed_out | sink_closed
+    state: InvestigationOutcome
     summary: str | None = None
     timeout_s: float | None = None
 
     @classmethod
     def not_attempted(cls) -> _InvestigationResult:
-        return cls(state="not_attempted")
+        return cls(state=InvestigationOutcome.NOT_ATTEMPTED)
 
     @classmethod
     def success(cls, summary: str) -> _InvestigationResult:
-        return cls(state="success", summary=summary)
+        return cls(state=InvestigationOutcome.SUCCESS, summary=summary)
 
     @classmethod
     def empty(cls) -> _InvestigationResult:
-        return cls(state="empty")
+        return cls(state=InvestigationOutcome.EMPTY)
 
     @classmethod
     def failed(cls) -> _InvestigationResult:
-        return cls(state="failed")
+        return cls(state=InvestigationOutcome.FAILED)
 
     @classmethod
     def timed_out(cls, timeout_s: float) -> _InvestigationResult:
-        return cls(state="timed_out", timeout_s=timeout_s)
+        return cls(state=InvestigationOutcome.TIMED_OUT, timeout_s=timeout_s)
 
     @classmethod
     def sink_closed(cls) -> _InvestigationResult:
-        return cls(state="sink_closed")
+        return cls(state=InvestigationOutcome.SINK_CLOSED)
 
     def render(self, severity: IncidentSeverity) -> str:
-        if self.state == "sink_closed":
+        if self.state is InvestigationOutcome.SINK_CLOSED:
             return "investigation: skipped (Hermes sink closed — notification only)"
-        if self.state == "success" and self.summary is not None:
+        if self.state is InvestigationOutcome.SUCCESS and self.summary is not None:
             return "investigation summary:\n" + self.summary
-        if self.state == "empty":
+        if self.state is InvestigationOutcome.EMPTY:
             return "investigation: attempted (no summary produced)"
-        if self.state == "failed":
+        if self.state is InvestigationOutcome.FAILED:
             return "investigation: attempted (failed — see server logs)"
-        if self.state == "timed_out" and self.timeout_s is not None:
+        if self.state is InvestigationOutcome.TIMED_OUT and self.timeout_s is not None:
             return (
                 f"investigation: attempted (timed out after "
                 f"{self.timeout_s:.1f}s — see server logs)"

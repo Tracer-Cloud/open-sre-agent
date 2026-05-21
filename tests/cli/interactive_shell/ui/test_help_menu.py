@@ -282,7 +282,7 @@ def test_draw_help_menu_expands_viewport_to_show_all_details(monkeypatch) -> Non
     assert "…" not in plain
 
 
-def test_choose_help_command_toggles_inline_details_and_exits(monkeypatch) -> None:
+def test_choose_help_command_space_toggles_inline_details_and_exits(monkeypatch) -> None:
     sections = [
         (
             "Session",
@@ -298,7 +298,7 @@ def test_choose_help_command_toggles_inline_details_and_exits(monkeypatch) -> No
         )
     ]
     out = io.StringIO()
-    actions = iter(["down", "enter", "cancel"])
+    actions = iter(["down", "space", "cancel"])
     monkeypatch.setattr(sys, "stdout", out)
     monkeypatch.setattr(help_menu, "menu_columns", lambda: 80)
     monkeypatch.setattr(help_menu, "read_menu_action", lambda: next(actions))
@@ -313,15 +313,15 @@ def test_choose_help_command_toggles_inline_details_and_exits(monkeypatch) -> No
     assert "/trust on" in plain
 
 
-def test_choose_help_command_ignores_enter_for_commands_without_details(monkeypatch) -> None:
+def test_choose_help_command_enter_selects_command_without_details(monkeypatch) -> None:
     sections = [("Session", [_cmd("/status")])]
     out = io.StringIO()
-    actions = iter(["enter", "cancel"])
+    actions = iter(["enter"])
     monkeypatch.setattr(sys, "stdout", out)
     monkeypatch.setattr(help_menu, "menu_columns", lambda: 80)
     monkeypatch.setattr(help_menu, "read_menu_action", lambda: next(actions))
 
-    assert help_menu.choose_help_command(sections) is None
+    assert help_menu.choose_help_command(sections) == "/status"
 
     plain = _ANSI_RE.sub("", out.getvalue())
     assert "No additional usage." not in plain

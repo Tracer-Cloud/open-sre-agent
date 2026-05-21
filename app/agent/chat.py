@@ -138,6 +138,18 @@ def execute_tool_calls(state: AgentState) -> dict[str, Any]:
             if reg is None:
                 result = json.dumps({"error": f"Unknown tool: {tool_name}"})
             else:
+                validation_error = reg.validate_public_input(tool_args)
+                if validation_error:
+                    result = json.dumps({"error": validation_error})
+                    tool_messages.append(
+                        {
+                            "role": "tool",
+                            "content": result,
+                            "tool_call_id": tool_id,
+                            "name": tool_name,
+                        }
+                    )
+                    continue
                 out = reg(**tool_args)
                 result = out if isinstance(out, str) else json.dumps(out, default=str)
         except GuardrailBlockedError:

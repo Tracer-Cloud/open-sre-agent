@@ -17,7 +17,6 @@ from app.config import (
     NVIDIA_REASONING_MODEL,
     OPENAI_REASONING_MODEL,
     OPENROUTER_REASONING_MODEL,
-    REQUESTY_REASONING_MODEL,
 )
 from app.integrations.llm_cli.base import LLMCLIAdapter
 
@@ -52,6 +51,10 @@ class ProviderOption:
     #: providers that don't expose a separate toolcall model (e.g. CLI-backed
     #: providers like ``codex``/``claude-code``, or Ollama).
     toolcall_model_env: str | None = None
+    #: Env var that holds the *classification* model for this provider. When
+    #: unset, ``sync_provider_env`` falls back to replacing ``_REASONING_MODEL``
+    #: with ``_CLASSIFICATION_MODEL`` in ``model_env``.
+    classification_model_env: str | None = None
     #: Human-readable name for the credential requested during onboarding. Most
     #: providers want an API key; Ollama wants a host URL. Used as the wizard
     #: prompt label, e.g. ``{label} {credential_label} ({api_key_env})``.
@@ -65,6 +68,10 @@ class ProviderOption:
     #: ``cli`` providers use ``adapter_factory`` and vendor auth (no API key in .env).
     credential_kind: CredentialKind = "api_key"
     adapter_factory: Callable[[], LLMCLIAdapter] | None = None
+    #: Whether the CLI should accept model IDs outside the curated quick-pick list.
+    #: Use this for providers whose model catalogs are large, account-gated, or
+    #: updated independently of OpenSRE releases.
+    allow_custom_models: bool = False
 
 
 ANTHROPIC_MODELS = (
@@ -73,8 +80,8 @@ ANTHROPIC_MODELS = (
 )
 
 OPENAI_MODELS = (
-    ModelOption(value=OPENAI_REASONING_MODEL, label="GPT-5.4"),
-    ModelOption(value="gpt-5.4-mini", label="GPT-5.4 mini"),
+    ModelOption(value=OPENAI_REASONING_MODEL, label="GPT-5.4 mini"),
+    ModelOption(value="gpt-5.4", label="GPT-5.4"),
     ModelOption(value="gpt-5.4-nano", label="GPT-5.4 nano"),
     ModelOption(value="gpt-5.3-codex", label="GPT-5.3-Codex"),
 )
@@ -113,22 +120,6 @@ OPENROUTER_MODELS = (
     ModelOption(value="minimax/minimax-m2", label="MiniMax M2 (via OpenRouter)"),
     ModelOption(value="deepseek/deepseek-v3.2", label="DeepSeek V3.2 (via OpenRouter)"),
     ModelOption(value="qwen/qwen-3.6-plus-preview", label="Qwen 3.6 Plus (via OpenRouter)"),
-)
-
-REQUESTY_MODELS = (
-    ModelOption(value=REQUESTY_REASONING_MODEL, label="Claude Sonnet 4.6 (via Requesty)"),
-    ModelOption(value="bedrock/claude-opus-4-7", label="Claude Opus 4.7 Bedrock (via Requesty)"),
-    ModelOption(
-        value="bedrock/claude-sonnet-4-6", label="Claude Sonnet 4.6 Bedrock (via Requesty)"
-    ),
-    ModelOption(value="openai/gpt-5.5", label="GPT-5.5 (via Requesty)"),
-    ModelOption(
-        value="vertex/gemini-3.1-pro-preview", label="Gemini 3.1 Pro (preview, via Requesty)"
-    ),
-    ModelOption(
-        value="vertex/gemini-3.1-flash-lite-preview",
-        label="Gemini 3.1 Flash-Lite (preview, via Requesty)",
-    ),
 )
 
 GEMINI_MODELS = (
@@ -218,13 +209,13 @@ CODEX_MODELS = (
         value="",
         label="CLI default (no -m; use Codex configured model)",
     ),
+    ModelOption(value="gpt-5.4-mini", label="gpt-5.4-mini — fast, cost-efficient"),
     ModelOption(value="gpt-5.4", label="gpt-5.4 — strong default for everyday coding"),
     ModelOption(value="gpt-5.2-codex", label="gpt-5.2-codex — frontier agentic coding"),
     ModelOption(
         value="gpt-5.1-codex-max",
         label="gpt-5.1-codex-max — deep / fast reasoning",
     ),
-    ModelOption(value="gpt-5.4-mini", label="gpt-5.4-mini — fast, cost-efficient"),
     ModelOption(value="gpt-5.3-codex", label="gpt-5.3-codex — coding-optimized"),
     ModelOption(value="gpt-5.2", label="gpt-5.2 — long-running agents"),
     ModelOption(value="gpt-5.1-codex-mini", label="gpt-5.1-codex-mini"),
@@ -255,8 +246,8 @@ OPENCODE_MODELS = (
         value="anthropic/claude-haiku-4-5-20251001",
         label="Claude Haiku 4.5 (via OpenCode)— fast, cost-efficient",
     ),
-    ModelOption(value="openai/gpt-5.4", label="GPT-5.4 (via OpenCode)"),
     ModelOption(value="openai/gpt-5.4-mini", label="GPT-5.4 mini (via OpenCode)"),
+    ModelOption(value="openai/gpt-5.4", label="GPT-5.4 (via OpenCode)"),
     ModelOption(value="openai/gpt-5.3-codex", label="GPT-5.3 Codex (via OpenCode)"),
     ModelOption(value="google/gemini-3.1-pro-preview", label="Gemini 3.1 Pro (via OpenCode)"),
     ModelOption(value="meta-llama/llama-4-maverick", label="Llama 4 Maverick (via OpenCode)"),
@@ -353,6 +344,7 @@ SUPPORTED_PROVIDERS = (
         models=ANTHROPIC_MODELS,
         legacy_model_env="ANTHROPIC_MODEL",
         toolcall_model_env="ANTHROPIC_TOOLCALL_MODEL",
+        classification_model_env="ANTHROPIC_CLASSIFICATION_MODEL",
     ),
     ProviderOption(
         value="openai",
@@ -364,6 +356,8 @@ SUPPORTED_PROVIDERS = (
         models=OPENAI_MODELS,
         legacy_model_env="OPENAI_MODEL",
         toolcall_model_env="OPENAI_TOOLCALL_MODEL",
+        classification_model_env="OPENAI_CLASSIFICATION_MODEL",
+        allow_custom_models=True,
     ),
     ProviderOption(
         value="openrouter",
@@ -375,16 +369,8 @@ SUPPORTED_PROVIDERS = (
         models=OPENROUTER_MODELS,
         legacy_model_env="OPENROUTER_MODEL",
         toolcall_model_env="OPENROUTER_TOOLCALL_MODEL",
-    ),
-    ProviderOption(
-        value="requesty",
-        label="Requesty",
-        group="Hosted providers",
-        api_key_env="REQUESTY_API_KEY",
-        model_env="REQUESTY_REASONING_MODEL",
-        default_model=REQUESTY_REASONING_MODEL,
-        models=REQUESTY_MODELS,
-        legacy_model_env="REQUESTY_MODEL",
+        classification_model_env="OPENROUTER_CLASSIFICATION_MODEL",
+        allow_custom_models=True,
     ),
     ProviderOption(
         value="gemini",
@@ -396,6 +382,8 @@ SUPPORTED_PROVIDERS = (
         models=GEMINI_MODELS,
         legacy_model_env="GEMINI_MODEL",
         toolcall_model_env="GEMINI_TOOLCALL_MODEL",
+        classification_model_env="GEMINI_CLASSIFICATION_MODEL",
+        allow_custom_models=True,
     ),
     ProviderOption(
         value="nvidia",
@@ -407,6 +395,8 @@ SUPPORTED_PROVIDERS = (
         models=NVIDIA_MODELS,
         legacy_model_env="NVIDIA_MODEL",
         toolcall_model_env="NVIDIA_TOOLCALL_MODEL",
+        classification_model_env="NVIDIA_CLASSIFICATION_MODEL",
+        allow_custom_models=True,
     ),
     ProviderOption(
         value="bedrock",
@@ -421,11 +411,13 @@ SUPPORTED_PROVIDERS = (
         default_model=BEDROCK_REASONING_MODEL,
         models=BEDROCK_MODELS,
         toolcall_model_env="BEDROCK_TOOLCALL_MODEL",
+        classification_model_env="BEDROCK_CLASSIFICATION_MODEL",
         credential_label="AWS region (uses IAM credentials)",
         credential_secret=False,
         # credential_kind="none" causes flow.py to skip the credential prompt
         # entirely.  Region is picked up from AWS_DEFAULT_REGION / ~/.aws/config.
         credential_kind="none",
+        allow_custom_models=True,
     ),
     ProviderOption(
         value="codex",
@@ -438,6 +430,7 @@ SUPPORTED_PROVIDERS = (
         credential_kind="cli",
         credential_secret=False,
         adapter_factory=_codex_adapter_factory,
+        allow_custom_models=True,
     ),
     ProviderOption(
         value="cursor",
@@ -450,6 +443,7 @@ SUPPORTED_PROVIDERS = (
         credential_kind="cli",
         credential_secret=False,
         adapter_factory=_cursor_adapter_factory,
+        allow_custom_models=True,
     ),
     ProviderOption(
         value="claude-code",
@@ -462,6 +456,7 @@ SUPPORTED_PROVIDERS = (
         credential_kind="cli",
         credential_secret=False,
         adapter_factory=_claude_code_adapter_factory,
+        allow_custom_models=True,
     ),
     ProviderOption(
         value="gemini-cli",
@@ -474,6 +469,7 @@ SUPPORTED_PROVIDERS = (
         credential_kind="cli",
         credential_secret=False,
         adapter_factory=_gemini_cli_adapter_factory,
+        allow_custom_models=True,
     ),
     ProviderOption(
         value="opencode",
@@ -486,6 +482,7 @@ SUPPORTED_PROVIDERS = (
         credential_kind="cli",
         credential_secret=False,
         adapter_factory=_opencode_adapter_factory,
+        allow_custom_models=True,
     ),
     ProviderOption(
         value="kimi",
@@ -498,6 +495,7 @@ SUPPORTED_PROVIDERS = (
         credential_kind="cli",
         credential_secret=False,
         adapter_factory=_kimi_adapter_factory,
+        allow_custom_models=True,
     ),
     ProviderOption(
         value="copilot",
@@ -510,6 +508,7 @@ SUPPORTED_PROVIDERS = (
         credential_kind="cli",
         credential_secret=False,
         adapter_factory=_copilot_adapter_factory,
+        allow_custom_models=True,
     ),
     ProviderOption(
         value="ollama",
@@ -522,6 +521,7 @@ SUPPORTED_PROVIDERS = (
         credential_label="host URL",
         credential_secret=False,
         credential_default=DEFAULT_OLLAMA_HOST,
+        allow_custom_models=True,
     ),
 )
 

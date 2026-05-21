@@ -11,8 +11,24 @@ from app.cli.wizard.config import PROJECT_ENV_PATH, ProviderOption
 from app.llm_credentials import delete_llm_api_key, has_llm_api_key, save_llm_api_key
 
 _ENV_ASSIGNMENT = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=")
-_SENSITIVE_KEY_SUFFIXES: tuple[str, ...] = ("_token", "_secret", "_password")
 _NON_SECRET_ENV_KEYS: frozenset[str] = frozenset({"DISCORD_PUBLIC_KEY"})
+# Underscore-separated terminal tokens that mark an env var as sensitive.
+# Matching the terminal component (rather than a substring or a fixed suffix
+# like ``_token``) catches both ``GITLAB_ACCESS_TOKEN`` and a bare ``TOKEN``
+# while leaving ``OPENAI_TOKEN_LIMIT`` (terminal ``limit``) alone.
+_SENSITIVE_TERMINAL_TOKENS: frozenset[str] = frozenset(
+    {
+        "token",
+        "secret",
+        "password",
+        "passwd",
+        "key",
+        "apikey",
+        "credential",
+        "credentials",
+    }
+)
+_SENSITIVE_SUBSTRINGS: tuple[str, ...] = ("connection_string",)
 
 
 def _is_sensitive_env_key(key: str) -> bool:
@@ -20,11 +36,10 @@ def _is_sensitive_env_key(key: str) -> bool:
     if key in _NON_SECRET_ENV_KEYS:
         return False
     lowered = key.lower()
-    if any(lowered.endswith(suffix) for suffix in _SENSITIVE_KEY_SUFFIXES):
+    terminal = lowered.rsplit("_", 1)[-1]
+    if terminal in _SENSITIVE_TERMINAL_TOKENS:
         return True
-    return (
-        lowered.endswith("_key") or "secret_access_key" in lowered or "connection_string" in lowered
-    )
+    return any(needle in lowered for needle in _SENSITIVE_SUBSTRINGS)
 
 
 def _strip_sensitive_env_lines(lines: list[str]) -> list[str]:
@@ -52,6 +67,10 @@ def _persist_env_secret(key: str, value: str) -> bool:
 
 
 def _set_env_value(lines: list[str], key: str, value: str) -> list[str]:
+    if _is_sensitive_env_key(key):
+        raise RuntimeError(
+            f"Refusing to write sensitive env key {key!r} to .env; use sync_env_secret()."
+        )
     updated: list[str] = []
     replaced = False
     for line in lines:
@@ -87,7 +106,6 @@ def _write_env(target_path: Path, lines: list[str]) -> None:
     try:
         target_path.parent.mkdir(parents=True, exist_ok=True)
         with target_path.open("w", encoding="utf-8", newline="") as env_file:
-            # codeql[py/clear-text-storage-sensitive-data]
             env_file.writelines(public_lines)
     except PermissionError as exc:
         raise PermissionError(
@@ -99,16 +117,28 @@ def _write_env(target_path: Path, lines: list[str]) -> None:
             target_path.chmod(0o600)
 
 
+def sync_env_secret(key: str, value: str) -> None:
+    """Persist a sensitive env value in the system keyring, not in ``.env``."""
+    if not _is_sensitive_env_key(key):
+        raise ValueError(f"{key!r} is not classified as sensitive; use sync_env_values instead.")
+    _persist_env_secret(key, value)
+
+
 def sync_env_values(
     values: dict[str, str],
     *,
     env_path: Path | None = None,
 ) -> Path:
-    """Write multiple environment values into the target .env file.
+    """Write multiple non-sensitive environment values into the target .env file.
 
-    Sensitive keys are persisted in the system keyring instead of plain text.
+    Sensitive keys must be persisted with :func:`sync_env_secret` instead.
     When keyring storage is unavailable, sensitive values are not written to ``.env``.
     """
+    sensitive_keys = [key for key in values if _is_sensitive_env_key(key)]
+    if sensitive_keys:
+        joined = ", ".join(repr(key) for key in sensitive_keys)
+        raise ValueError(f"Refusing to sync sensitive env keys {joined}; use sync_env_secret().")
+
     target_path = env_path or PROJECT_ENV_PATH
     existing = (
         target_path.read_text(encoding="utf-8").splitlines(keepends=True)
@@ -118,14 +148,18 @@ def sync_env_values(
 
     lines = _strip_sensitive_env_lines(existing)
     for key, value in values.items():
-        if _is_sensitive_env_key(key):
-            _persist_env_secret(key, value)
-            lines = _remove_keys(lines, {key})
-            continue
         lines = _set_env_value(lines, key, value)
 
     _write_env(target_path, lines)
     return target_path
+
+
+def _classification_model_env(p: ProviderOption) -> str | None:
+    if p.classification_model_env:
+        return p.classification_model_env
+    if p.model_env.endswith("_REASONING_MODEL"):
+        return p.model_env.replace("_REASONING_MODEL", "_CLASSIFICATION_MODEL")
+    return None
 
 
 def _provider_specific_keys(p: ProviderOption) -> set[str]:
@@ -135,6 +169,11 @@ def _provider_specific_keys(p: ProviderOption) -> set[str]:
         keys.add(p.api_key_env)
     if p.legacy_model_env:
         keys.add(p.legacy_model_env)
+    if p.toolcall_model_env:
+        keys.add(p.toolcall_model_env)
+    classification_env = _classification_model_env(p)
+    if classification_env:
+        keys.add(classification_env)
     return keys
 
 
@@ -142,6 +181,15 @@ def _llm_provider_value_from_lines(lines: list[str]) -> str | None:
     for line in lines:
         match = _ENV_ASSIGNMENT.match(line)
         if match and match.group(1) == "LLM_PROVIDER":
+            _, _, rhs = line.partition("=")
+            return rhs.strip().strip("\"'") or None
+    return None
+
+
+def _env_value_from_lines(lines: list[str], key: str) -> str | None:
+    for line in lines:
+        match = _ENV_ASSIGNMENT.match(line)
+        if match and match.group(1) == key:
             _, _, rhs = line.partition("=")
             return rhs.strip().strip("\"'") or None
     return None
@@ -162,6 +210,7 @@ def sync_provider_env(
     *,
     provider: ProviderOption,
     model: str,
+    toolcall_model: str | None = None,
     env_path: Path | None = None,
 ) -> Path:
     """Write non-secret provider settings into the project .env.
@@ -191,6 +240,11 @@ def sync_provider_env(
     active_non_secret: set[str] = {provider.model_env}
     if provider.legacy_model_env:
         active_non_secret.add(provider.legacy_model_env)
+    if provider.toolcall_model_env:
+        active_non_secret.add(provider.toolcall_model_env)
+    classification_env = _classification_model_env(provider)
+    if classification_env:
+        active_non_secret.add(classification_env)
     keys_to_remove -= active_non_secret
 
     prior_provider = _llm_provider_value_from_lines(existing)
@@ -207,9 +261,20 @@ def sync_provider_env(
     values: dict[str, str] = {"LLM_PROVIDER": provider.value, provider.model_env: model}
     if provider.legacy_model_env:
         values[provider.legacy_model_env] = model
+    if toolcall_model and provider.toolcall_model_env:
+        values[provider.toolcall_model_env] = toolcall_model
 
     for key, value in values.items():
         lines = _set_env_value(lines, key, value)
 
     _write_env(target_path, lines)
+
+    for key in keys_to_remove:
+        os.environ.pop(key, None)
+    for key in active_non_secret:
+        preserved = _env_value_from_lines(lines, key)
+        if preserved is not None:
+            values[key] = preserved
+    os.environ.update(values)
+
     return target_path

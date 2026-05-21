@@ -5,6 +5,7 @@ These are public endpoints and issuer URLs, not secrets.
 """
 
 import os
+from collections.abc import Sequence
 from difflib import get_close_matches
 from enum import Enum
 from typing import Literal
@@ -13,6 +14,7 @@ from pydantic import Field, ValidationError, field_validator, model_validator
 
 from app.llm_credentials import resolve_llm_api_key
 from app.strict_config import StrictConfigModel
+from app.utils.config import load_env
 
 
 class LLMModelConfig(StrictConfigModel):
@@ -85,9 +87,9 @@ ANTHROPIC_CLASSIFICATION_MODEL = "claude-sonnet-4-6"
 ANTHROPIC_TOOLCALL_MODEL = "claude-haiku-4-5-20251001"
 
 # OpenAI model constants
-# UNVERIFIED PLACEHOLDER — gpt-5.4 / gpt-5.4-mini do not exist as of 2026-04.
-# Update to a real model ID once OpenAI releases it, or override via OPENAI_REASONING_MODEL env var.
-OPENAI_REASONING_MODEL = "gpt-5.4"
+# Default to GPT-5.4 mini for both reasoning and toolcall paths; override via
+# OPENAI_REASONING_MODEL / OPENAI_TOOLCALL_MODEL when needed.
+OPENAI_REASONING_MODEL = "gpt-5.4-mini"
 # Mid-tier mirrors the toolcall (mini) model by default — OpenAI's mini sits
 # between full and nano, which matches the "Sonnet-equivalent" classification
 # tier well enough; override via OPENAI_CLASSIFICATION_MODEL when needed.
@@ -98,11 +100,6 @@ OPENAI_TOOLCALL_MODEL = "gpt-5.4-mini"
 OPENROUTER_REASONING_MODEL = "openrouter/auto"
 OPENROUTER_CLASSIFICATION_MODEL = "openrouter/auto"
 OPENROUTER_TOOLCALL_MODEL = "openrouter/auto"
-
-# Requesty model constants (OpenAI-compatible gateway; uses provider/model naming)
-REQUESTY_REASONING_MODEL = "anthropic/claude-sonnet-4-6"
-REQUESTY_CLASSIFICATION_MODEL = "anthropic/claude-sonnet-4-6"
-REQUESTY_TOOLCALL_MODEL = "anthropic/claude-sonnet-4-6"
 
 # Gemini model constants (Google AI preview IDs; OpenAI-compatible endpoint)
 # UNVERIFIED PLACEHOLDER — gemini-3.1-pro-preview / gemini-3.1-flash-lite-preview are
@@ -125,7 +122,6 @@ MINIMAX_TOOLCALL_MODEL = "MiniMax-M2.7-highspeed"
 
 # Base URLs for OpenAI-compatible providers
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-REQUESTY_BASE_URL = "https://router.requesty.ai/v1"
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
 MINIMAX_BASE_URL = "https://api.minimax.io/v1"
@@ -143,7 +139,6 @@ LLMProvider = Literal[
     "anthropic",
     "openai",
     "openrouter",
-    "requesty",
     "gemini",
     "nvidia",
     "ollama",
@@ -158,6 +153,173 @@ LLMProvider = Literal[
     "copilot",
 ]
 
+KEYLESS_LLM_PROVIDERS = frozenset(
+    {
+        "ollama",
+        "bedrock",
+        "codex",
+        "cursor",
+        "claude-code",
+        "gemini-cli",
+        "opencode",
+        "kimi",
+        "copilot",
+    }
+)
+LLM_PROVIDER_API_KEY_ENVS = {
+    "anthropic": "ANTHROPIC_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "openrouter": "OPENROUTER_API_KEY",
+    "gemini": "GEMINI_API_KEY",
+    "nvidia": "NVIDIA_API_KEY",
+    "minimax": "MINIMAX_API_KEY",
+}
+DEFAULT_LLM_RESOLUTION_FALLBACK_PROVIDERS: tuple[str, ...] = ("openai", "anthropic")
+
+
+def get_configured_llm_provider() -> str:
+    """Return the active LLM provider from env/project .env."""
+    load_env(override=False)
+    return os.getenv("LLM_PROVIDER", "anthropic").strip().lower() or "anthropic"
+
+
+def get_llm_provider_api_key_env(provider: str | None = None) -> str | None:
+    """Return the API-key env var required by an LLM provider, if any."""
+    provider_name = (provider or get_configured_llm_provider()).strip().lower()
+    return LLM_PROVIDER_API_KEY_ENVS.get(provider_name)
+
+
+def get_llm_provider_api_key(provider: str | None = None) -> tuple[str | None, str]:
+    """Resolve the API key for *provider* from env or secure local storage."""
+    env_var = get_llm_provider_api_key_env(provider)
+    if env_var is None:
+        return None, ""
+    return env_var, resolve_llm_api_key(env_var)
+
+
+def _llm_settings_env_payload(provider: str) -> dict[str, object]:
+    """Build the raw env-backed payload used to validate LLM settings."""
+    return {
+        "provider": provider,
+        "anthropic_api_key": resolve_llm_api_key("ANTHROPIC_API_KEY"),
+        "openai_api_key": resolve_llm_api_key("OPENAI_API_KEY"),
+        "openrouter_api_key": resolve_llm_api_key("OPENROUTER_API_KEY"),
+        "gemini_api_key": resolve_llm_api_key("GEMINI_API_KEY"),
+        "nvidia_api_key": resolve_llm_api_key("NVIDIA_API_KEY"),
+        "minimax_api_key": resolve_llm_api_key("MINIMAX_API_KEY"),
+        "anthropic_reasoning_model": os.getenv(
+            "ANTHROPIC_REASONING_MODEL", ANTHROPIC_REASONING_MODEL
+        ).strip()
+        or ANTHROPIC_REASONING_MODEL,
+        "anthropic_classification_model": os.getenv(
+            "ANTHROPIC_CLASSIFICATION_MODEL", ANTHROPIC_CLASSIFICATION_MODEL
+        ).strip()
+        or ANTHROPIC_CLASSIFICATION_MODEL,
+        "anthropic_toolcall_model": os.getenv(
+            "ANTHROPIC_TOOLCALL_MODEL", ANTHROPIC_TOOLCALL_MODEL
+        ).strip()
+        or ANTHROPIC_TOOLCALL_MODEL,
+        "openai_reasoning_model": os.getenv(
+            "OPENAI_REASONING_MODEL", OPENAI_REASONING_MODEL
+        ).strip()
+        or OPENAI_REASONING_MODEL,
+        "openai_classification_model": os.getenv(
+            "OPENAI_CLASSIFICATION_MODEL", OPENAI_CLASSIFICATION_MODEL
+        ).strip()
+        or OPENAI_CLASSIFICATION_MODEL,
+        "openai_toolcall_model": os.getenv("OPENAI_TOOLCALL_MODEL", OPENAI_TOOLCALL_MODEL).strip()
+        or OPENAI_TOOLCALL_MODEL,
+        "openrouter_reasoning_model": os.getenv(
+            "OPENROUTER_REASONING_MODEL",
+            os.getenv("OPENROUTER_MODEL", OPENROUTER_REASONING_MODEL),
+        ).strip()
+        or OPENROUTER_REASONING_MODEL,
+        "openrouter_classification_model": os.getenv(
+            "OPENROUTER_CLASSIFICATION_MODEL",
+            os.getenv("OPENROUTER_MODEL", OPENROUTER_CLASSIFICATION_MODEL),
+        ).strip()
+        or OPENROUTER_CLASSIFICATION_MODEL,
+        "openrouter_toolcall_model": os.getenv(
+            "OPENROUTER_TOOLCALL_MODEL",
+            os.getenv("OPENROUTER_MODEL", OPENROUTER_TOOLCALL_MODEL),
+        ).strip()
+        or OPENROUTER_TOOLCALL_MODEL,
+        "gemini_reasoning_model": os.getenv(
+            "GEMINI_REASONING_MODEL",
+            os.getenv("GEMINI_MODEL", GEMINI_REASONING_MODEL),
+        ).strip()
+        or GEMINI_REASONING_MODEL,
+        "gemini_classification_model": os.getenv(
+            "GEMINI_CLASSIFICATION_MODEL",
+            os.getenv("GEMINI_MODEL", GEMINI_CLASSIFICATION_MODEL),
+        ).strip()
+        or GEMINI_CLASSIFICATION_MODEL,
+        "gemini_toolcall_model": os.getenv(
+            "GEMINI_TOOLCALL_MODEL",
+            os.getenv("GEMINI_MODEL", GEMINI_TOOLCALL_MODEL),
+        ).strip()
+        or GEMINI_TOOLCALL_MODEL,
+        "nvidia_reasoning_model": os.getenv(
+            "NVIDIA_REASONING_MODEL",
+            os.getenv("NVIDIA_MODEL", NVIDIA_REASONING_MODEL),
+        ).strip()
+        or NVIDIA_REASONING_MODEL,
+        "nvidia_classification_model": os.getenv(
+            "NVIDIA_CLASSIFICATION_MODEL",
+            os.getenv("NVIDIA_MODEL", NVIDIA_CLASSIFICATION_MODEL),
+        ).strip()
+        or NVIDIA_CLASSIFICATION_MODEL,
+        "nvidia_toolcall_model": os.getenv(
+            "NVIDIA_TOOLCALL_MODEL",
+            os.getenv("NVIDIA_MODEL", NVIDIA_TOOLCALL_MODEL),
+        ).strip()
+        or NVIDIA_TOOLCALL_MODEL,
+        "minimax_reasoning_model": os.getenv(
+            "MINIMAX_REASONING_MODEL",
+            os.getenv("MINIMAX_MODEL", MINIMAX_REASONING_MODEL),
+        ).strip()
+        or MINIMAX_REASONING_MODEL,
+        "minimax_classification_model": os.getenv(
+            "MINIMAX_CLASSIFICATION_MODEL",
+            os.getenv("MINIMAX_MODEL", MINIMAX_CLASSIFICATION_MODEL),
+        ).strip()
+        or MINIMAX_CLASSIFICATION_MODEL,
+        "minimax_toolcall_model": os.getenv(
+            "MINIMAX_TOOLCALL_MODEL",
+            os.getenv("MINIMAX_MODEL", MINIMAX_TOOLCALL_MODEL),
+        ).strip()
+        or MINIMAX_TOOLCALL_MODEL,
+        "bedrock_reasoning_model": os.getenv(
+            "BEDROCK_REASONING_MODEL", BEDROCK_REASONING_MODEL
+        ).strip()
+        or BEDROCK_REASONING_MODEL,
+        "bedrock_classification_model": os.getenv(
+            "BEDROCK_CLASSIFICATION_MODEL", BEDROCK_CLASSIFICATION_MODEL
+        ).strip()
+        or BEDROCK_CLASSIFICATION_MODEL,
+        "bedrock_toolcall_model": os.getenv(
+            "BEDROCK_TOOLCALL_MODEL", BEDROCK_TOOLCALL_MODEL
+        ).strip()
+        or BEDROCK_TOOLCALL_MODEL,
+        "ollama_model": os.getenv("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL).strip()
+        or DEFAULT_OLLAMA_MODEL,
+        "ollama_host": os.getenv("OLLAMA_HOST", DEFAULT_OLLAMA_HOST).strip() or DEFAULT_OLLAMA_HOST,
+        "max_tokens": os.getenv("LLM_MAX_TOKENS", str(DEFAULT_MAX_TOKENS)),
+    }
+
+
+def _candidate_llm_providers(
+    configured_provider: str,
+    fallback_providers: Sequence[str],
+) -> tuple[str, ...]:
+    """Return provider candidates in priority order without duplicates."""
+    candidates: list[str] = []
+    for provider in (configured_provider, *fallback_providers):
+        normalized = str(provider).strip().lower()
+        if normalized and normalized not in candidates:
+            candidates.append(normalized)
+    return tuple(candidates)
+
 
 class LLMSettings(StrictConfigModel):
     """Strict runtime configuration for selecting and authenticating an LLM provider."""
@@ -166,7 +328,6 @@ class LLMSettings(StrictConfigModel):
     anthropic_api_key: str = ""
     openai_api_key: str = ""
     openrouter_api_key: str = ""
-    requesty_api_key: str = ""
     gemini_api_key: str = ""
     nvidia_api_key: str = ""
     minimax_api_key: str = ""
@@ -181,9 +342,6 @@ class LLMSettings(StrictConfigModel):
     openrouter_reasoning_model: str = OPENROUTER_REASONING_MODEL
     openrouter_classification_model: str = OPENROUTER_CLASSIFICATION_MODEL
     openrouter_toolcall_model: str = OPENROUTER_TOOLCALL_MODEL
-    requesty_reasoning_model: str = REQUESTY_REASONING_MODEL
-    requesty_classification_model: str = REQUESTY_CLASSIFICATION_MODEL
-    requesty_toolcall_model: str = REQUESTY_TOOLCALL_MODEL
     gemini_reasoning_model: str = GEMINI_REASONING_MODEL
     gemini_classification_model: str = GEMINI_CLASSIFICATION_MODEL
     gemini_toolcall_model: str = GEMINI_TOOLCALL_MODEL
@@ -198,6 +356,14 @@ class LLMSettings(StrictConfigModel):
     bedrock_toolcall_model: str = BEDROCK_TOOLCALL_MODEL
     max_tokens: int = Field(default=DEFAULT_MAX_TOKENS, gt=0)
 
+    @field_validator("ollama_host", mode="before")
+    @classmethod
+    def _normalize_ollama_host(cls, value: object) -> str:
+        host = str(value or DEFAULT_OLLAMA_HOST).strip() or DEFAULT_OLLAMA_HOST
+        if not host.startswith(("http://", "https://")):
+            host = f"http://{host}"
+        return host
+
     @field_validator("provider", mode="before")
     @classmethod
     def _normalize_provider(cls, value: object) -> str:
@@ -206,7 +372,6 @@ class LLMSettings(StrictConfigModel):
             "anthropic",
             "openai",
             "openrouter",
-            "requesty",
             "gemini",
             "nvidia",
             "ollama",
@@ -233,23 +398,12 @@ class LLMSettings(StrictConfigModel):
 
     @model_validator(mode="after")
     def _require_api_key_for_selected_provider(self) -> "LLMSettings":
-        if self.provider in (
-            "ollama",
-            "bedrock",
-            "codex",
-            "cursor",
-            "claude-code",
-            "gemini-cli",
-            "opencode",
-            "kimi",
-            "copilot",
-        ):
-            return self  # ollama: local; bedrock: IAM; CLI providers: vendor auth
+        if self.provider in KEYLESS_LLM_PROVIDERS:
+            return self  # local, IAM, or CLI-provider auth is handled outside API keys
         provider_to_key = {
             "anthropic": self.anthropic_api_key,
             "openai": self.openai_api_key,
             "openrouter": self.openrouter_api_key,
-            "requesty": self.requesty_api_key,
             "gemini": self.gemini_api_key,
             "nvidia": self.nvidia_api_key,
             "minimax": self.minimax_api_key,
@@ -257,148 +411,14 @@ class LLMSettings(StrictConfigModel):
         if provider_to_key[self.provider]:
             return self
 
-        env_var = {
-            "anthropic": "ANTHROPIC_API_KEY",
-            "openai": "OPENAI_API_KEY",
-            "openrouter": "OPENROUTER_API_KEY",
-            "requesty": "REQUESTY_API_KEY",
-            "gemini": "GEMINI_API_KEY",
-            "nvidia": "NVIDIA_API_KEY",
-            "minimax": "MINIMAX_API_KEY",
-        }[self.provider]
+        env_var = get_llm_provider_api_key_env(self.provider)
         raise ValueError(f"LLM provider '{self.provider}' requires {env_var} to be set.")
 
     @classmethod
     def from_env(cls) -> "LLMSettings":
         """Build validated LLM settings from environment variables."""
-        return cls.model_validate(
-            {
-                "provider": os.getenv("LLM_PROVIDER", "anthropic").strip().lower() or "anthropic",
-                "anthropic_api_key": resolve_llm_api_key("ANTHROPIC_API_KEY"),
-                "openai_api_key": resolve_llm_api_key("OPENAI_API_KEY"),
-                "openrouter_api_key": resolve_llm_api_key("OPENROUTER_API_KEY"),
-                "requesty_api_key": resolve_llm_api_key("REQUESTY_API_KEY"),
-                "gemini_api_key": resolve_llm_api_key("GEMINI_API_KEY"),
-                "nvidia_api_key": resolve_llm_api_key("NVIDIA_API_KEY"),
-                "minimax_api_key": resolve_llm_api_key("MINIMAX_API_KEY"),
-                "anthropic_reasoning_model": os.getenv(
-                    "ANTHROPIC_REASONING_MODEL", ANTHROPIC_REASONING_MODEL
-                ).strip()
-                or ANTHROPIC_REASONING_MODEL,
-                "anthropic_classification_model": os.getenv(
-                    "ANTHROPIC_CLASSIFICATION_MODEL", ANTHROPIC_CLASSIFICATION_MODEL
-                ).strip()
-                or ANTHROPIC_CLASSIFICATION_MODEL,
-                "anthropic_toolcall_model": os.getenv(
-                    "ANTHROPIC_TOOLCALL_MODEL", ANTHROPIC_TOOLCALL_MODEL
-                ).strip()
-                or ANTHROPIC_TOOLCALL_MODEL,
-                "openai_reasoning_model": os.getenv(
-                    "OPENAI_REASONING_MODEL", OPENAI_REASONING_MODEL
-                ).strip()
-                or OPENAI_REASONING_MODEL,
-                "openai_classification_model": os.getenv(
-                    "OPENAI_CLASSIFICATION_MODEL", OPENAI_CLASSIFICATION_MODEL
-                ).strip()
-                or OPENAI_CLASSIFICATION_MODEL,
-                "openai_toolcall_model": os.getenv(
-                    "OPENAI_TOOLCALL_MODEL", OPENAI_TOOLCALL_MODEL
-                ).strip()
-                or OPENAI_TOOLCALL_MODEL,
-                "openrouter_reasoning_model": os.getenv(
-                    "OPENROUTER_REASONING_MODEL",
-                    os.getenv("OPENROUTER_MODEL", OPENROUTER_REASONING_MODEL),
-                ).strip()
-                or OPENROUTER_REASONING_MODEL,
-                "openrouter_classification_model": os.getenv(
-                    "OPENROUTER_CLASSIFICATION_MODEL",
-                    os.getenv("OPENROUTER_MODEL", OPENROUTER_CLASSIFICATION_MODEL),
-                ).strip()
-                or OPENROUTER_CLASSIFICATION_MODEL,
-                "openrouter_toolcall_model": os.getenv(
-                    "OPENROUTER_TOOLCALL_MODEL",
-                    os.getenv("OPENROUTER_MODEL", OPENROUTER_TOOLCALL_MODEL),
-                ).strip()
-                or OPENROUTER_TOOLCALL_MODEL,
-                "requesty_reasoning_model": os.getenv(
-                    "REQUESTY_REASONING_MODEL",
-                    os.getenv("REQUESTY_MODEL", REQUESTY_REASONING_MODEL),
-                ).strip()
-                or REQUESTY_REASONING_MODEL,
-                "requesty_classification_model": os.getenv(
-                    "REQUESTY_CLASSIFICATION_MODEL",
-                    os.getenv("REQUESTY_MODEL", REQUESTY_CLASSIFICATION_MODEL),
-                ).strip()
-                or REQUESTY_CLASSIFICATION_MODEL,
-                "requesty_toolcall_model": os.getenv(
-                    "REQUESTY_TOOLCALL_MODEL",
-                    os.getenv("REQUESTY_MODEL", REQUESTY_TOOLCALL_MODEL),
-                ).strip()
-                or REQUESTY_TOOLCALL_MODEL,
-                "gemini_reasoning_model": os.getenv(
-                    "GEMINI_REASONING_MODEL",
-                    os.getenv("GEMINI_MODEL", GEMINI_REASONING_MODEL),
-                ).strip()
-                or GEMINI_REASONING_MODEL,
-                "gemini_classification_model": os.getenv(
-                    "GEMINI_CLASSIFICATION_MODEL",
-                    os.getenv("GEMINI_MODEL", GEMINI_CLASSIFICATION_MODEL),
-                ).strip()
-                or GEMINI_CLASSIFICATION_MODEL,
-                "gemini_toolcall_model": os.getenv(
-                    "GEMINI_TOOLCALL_MODEL",
-                    os.getenv("GEMINI_MODEL", GEMINI_TOOLCALL_MODEL),
-                ).strip()
-                or GEMINI_TOOLCALL_MODEL,
-                "nvidia_reasoning_model": os.getenv(
-                    "NVIDIA_REASONING_MODEL",
-                    os.getenv("NVIDIA_MODEL", NVIDIA_REASONING_MODEL),
-                ).strip()
-                or NVIDIA_REASONING_MODEL,
-                "nvidia_classification_model": os.getenv(
-                    "NVIDIA_CLASSIFICATION_MODEL",
-                    os.getenv("NVIDIA_MODEL", NVIDIA_CLASSIFICATION_MODEL),
-                ).strip()
-                or NVIDIA_CLASSIFICATION_MODEL,
-                "nvidia_toolcall_model": os.getenv(
-                    "NVIDIA_TOOLCALL_MODEL",
-                    os.getenv("NVIDIA_MODEL", NVIDIA_TOOLCALL_MODEL),
-                ).strip()
-                or NVIDIA_TOOLCALL_MODEL,
-                "minimax_reasoning_model": os.getenv(
-                    "MINIMAX_REASONING_MODEL",
-                    os.getenv("MINIMAX_MODEL", MINIMAX_REASONING_MODEL),
-                ).strip()
-                or MINIMAX_REASONING_MODEL,
-                "minimax_classification_model": os.getenv(
-                    "MINIMAX_CLASSIFICATION_MODEL",
-                    os.getenv("MINIMAX_MODEL", MINIMAX_CLASSIFICATION_MODEL),
-                ).strip()
-                or MINIMAX_CLASSIFICATION_MODEL,
-                "minimax_toolcall_model": os.getenv(
-                    "MINIMAX_TOOLCALL_MODEL",
-                    os.getenv("MINIMAX_MODEL", MINIMAX_TOOLCALL_MODEL),
-                ).strip()
-                or MINIMAX_TOOLCALL_MODEL,
-                "bedrock_reasoning_model": os.getenv(
-                    "BEDROCK_REASONING_MODEL", BEDROCK_REASONING_MODEL
-                ).strip()
-                or BEDROCK_REASONING_MODEL,
-                "bedrock_classification_model": os.getenv(
-                    "BEDROCK_CLASSIFICATION_MODEL", BEDROCK_CLASSIFICATION_MODEL
-                ).strip()
-                or BEDROCK_CLASSIFICATION_MODEL,
-                "bedrock_toolcall_model": os.getenv(
-                    "BEDROCK_TOOLCALL_MODEL", BEDROCK_TOOLCALL_MODEL
-                ).strip()
-                or BEDROCK_TOOLCALL_MODEL,
-                "ollama_model": os.getenv("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL).strip()
-                or DEFAULT_OLLAMA_MODEL,
-                "ollama_host": os.getenv("OLLAMA_HOST", DEFAULT_OLLAMA_HOST).strip()
-                or DEFAULT_OLLAMA_HOST,
-                "max_tokens": os.getenv("LLM_MAX_TOKENS", str(DEFAULT_MAX_TOKENS)),
-            }
-        )
+        load_env(override=False)
+        return cls.model_validate(_llm_settings_env_payload(get_configured_llm_provider()))
 
 
 def _is_only_missing_llm_api_key_validation(exc: ValidationError) -> bool:
@@ -415,16 +435,44 @@ def _is_only_missing_llm_api_key_validation(exc: ValidationError) -> bool:
     return "LLM provider" in msg and "requires" in msg and "API_KEY" in msg and "to be set" in msg
 
 
+def resolve_llm_settings(
+    fallback_providers: Sequence[str] = DEFAULT_LLM_RESOLUTION_FALLBACK_PROVIDERS,
+) -> LLMSettings:
+    """Resolve usable LLM settings from env, falling back when only the key is missing.
+
+    ``LLMSettings.from_env`` remains strict: it validates the configured provider
+    exactly. This resolver is for runtime and live-test paths that can safely use
+    another hosted provider when the configured/default provider lacks credentials
+    but an equivalent provider, such as OpenAI, is configured.
+    """
+    load_env(override=False)
+    configured_provider = get_configured_llm_provider()
+    configured_missing_key_error: ValidationError | None = None
+
+    for provider in _candidate_llm_providers(configured_provider, fallback_providers):
+        try:
+            return LLMSettings.model_validate(_llm_settings_env_payload(provider))
+        except ValidationError as exc:
+            if not _is_only_missing_llm_api_key_validation(exc):
+                raise
+            if provider == configured_provider:
+                configured_missing_key_error = exc
+
+    if configured_missing_key_error is not None:
+        raise configured_missing_key_error
+    return LLMSettings.from_env()
+
+
 def has_credentials_for_active_llm_provider() -> bool:
-    """Return True when :meth:`LLMSettings.from_env` succeeds.
+    """Return True when the active LLM provider, or an equivalent fallback, is usable.
 
     Runs full LLM env validation (provider, model names, ``LLM_MAX_TOKENS``, keys via
     :func:`resolve_llm_api_key`, etc.). Callers such as synthetic tests skip only when
-    validation fails *solely* because the active provider's API key is absent; any other
+    validation fails solely because no acceptable provider has credentials; any other
     misconfiguration is re-raised so the run fails loudly.
     """
     try:
-        LLMSettings.from_env()
+        resolve_llm_settings()
         return True
     except ValidationError as exc:
         if _is_only_missing_llm_api_key_validation(exc):
@@ -451,13 +499,6 @@ OPENROUTER_LLM_CONFIG = LLMModelConfig(
     reasoning_model=OPENROUTER_REASONING_MODEL,
     classification_model=OPENROUTER_CLASSIFICATION_MODEL,
     toolcall_model=OPENROUTER_TOOLCALL_MODEL,
-    max_tokens=DEFAULT_MAX_TOKENS,
-)
-
-REQUESTY_LLM_CONFIG = LLMModelConfig(
-    reasoning_model=REQUESTY_REASONING_MODEL,
-    classification_model=REQUESTY_CLASSIFICATION_MODEL,
-    toolcall_model=REQUESTY_TOOLCALL_MODEL,
     max_tokens=DEFAULT_MAX_TOKENS,
 )
 

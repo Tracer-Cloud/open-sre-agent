@@ -137,6 +137,45 @@ aws ecs run-task \
 
 Live logs: `aws logs tail /ecs/opensre-bench --follow` (or via the AWS Console).
 
+## Building and pushing the bench container image
+
+`Dockerfile.bench` at the repo root builds the bench container.
+
+```bash
+# From repo root
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+ECR_URL=$(cd infra/bench && terraform output -raw ecr_repository_url)
+TAG=$(git rev-parse --short HEAD)         # or any unique value
+
+# Login to ECR
+aws ecr get-login-password --region us-east-1 \
+  | docker login --username AWS --password-stdin "$ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com"
+
+# Build (linux/amd64 — Fargate runs amd64 unless you opt into ARM)
+docker buildx build \
+  --platform linux/amd64 \
+  -f Dockerfile.bench \
+  -t "$ECR_URL:$TAG" \
+  --load .
+
+# Push
+docker push "$ECR_URL:$TAG"
+
+# Apply Terraform with the new tag
+cd infra/bench
+terraform apply -var="image_tag=$TAG"
+```
+
+The image references `tests.benchmarks._framework.cli` as its entrypoint —
+that module lives on the bench framework feature branch. The image will
+**build** cleanly today (the `tests/benchmarks/` directory exists on main)
+but the runtime entrypoint requires the framework branch merged. Sequencing:
+
+1. Merge bench framework feature branch → main
+2. Build and push the image (above)
+3. `terraform apply -var=image_tag=<TAG>` to point the task definition at it
+4. `aws ecs run-task` to launch the bench
+
 ## Setting the container image tag
 
 ECR is configured with `IMMUTABLE` tag mutability — a tag can be pushed

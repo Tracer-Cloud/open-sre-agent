@@ -27,7 +27,7 @@ from app.cli.interactive_shell.ui.theme import (
     WARNING,
 )
 from app.cli.wizard.config import PROVIDER_BY_VALUE, SUPPORTED_PROVIDERS, ProviderOption
-from app.cli.wizard.env_sync import sync_env_values, sync_provider_env
+from app.cli.wizard.env_sync import sync_env_secret, sync_env_values, sync_provider_env
 from app.cli.wizard.integration_health import IntegrationHealthResult
 from app.cli.wizard.probes import ProbeResult, probe_local_target, probe_remote_target
 from app.cli.wizard.prompts import select as select_prompt
@@ -321,6 +321,27 @@ def _questionary_choice(choice: Choice) -> questionary.Choice:
         title=_choice_title(choice),
         value=choice.value,
         description=_choice_description(choice),
+    )
+
+
+def _choose_model(provider: ProviderOption, *, default: str | None) -> str:
+    """Prompt for a model from the provider's wizard catalog."""
+    resolved_default = (default or "").strip() or provider.default_model
+    if not provider.models:
+        return resolved_default
+    choices = [Choice(value=opt.value, label=opt.label) for opt in provider.models]
+    default_choice = (
+        resolved_default
+        if any(c.value == resolved_default for c in choices)
+        else provider.default_model
+    )
+    if not any(c.value == default_choice for c in choices):
+        default_choice = choices[0].value
+    _step("Model")
+    return _choose(
+        f"Choose {provider.label} model",
+        choices,
+        default=default_choice,
     )
 
 
@@ -1129,11 +1150,11 @@ def _configure_openclaw() -> tuple[str, str]:
                 "args": args,
             }
             upsert_integration("openclaw", {"credentials": credentials_dict})
+            sync_env_secret("OPENCLAW_MCP_AUTH_TOKEN", auth_token)
             env_path = sync_env_values(
                 {
                     "OPENCLAW_MCP_URL": url,
                     "OPENCLAW_MCP_MODE": mode,
-                    "OPENCLAW_MCP_AUTH_TOKEN": auth_token,
                     "OPENCLAW_MCP_COMMAND": command,
                     "OPENCLAW_MCP_ARGS": " ".join(args),
                 }
@@ -1173,10 +1194,10 @@ def _configure_gitlab() -> tuple[str, str]:
         if result.ok:
             credentials = {"base_url": base_url, "auth_token": auth_token}
             upsert_integration("gitlab", {"credentials": credentials})
+            sync_env_secret("GITLAB_ACCESS_TOKEN", auth_token)
             env_path = sync_env_values(
                 {
                     "GITLAB_BASE_URL": base_url,
-                    "GITLAB_ACCESS_TOKEN": auth_token,
                 }
             )
             return "Gitlab", str(env_path)
@@ -1510,9 +1531,9 @@ def _configure_incident_io() -> tuple[str, str]:
                 "base_url": base_url,
             }
             upsert_integration("incident_io", {"credentials": credentials_payload})
+            sync_env_secret("INCIDENT_IO_API_KEY", api_key)
             env_path = sync_env_values(
                 {
-                    "INCIDENT_IO_API_KEY": api_key,
                     "INCIDENT_IO_BASE_URL": base_url,
                 }
             )
@@ -1563,9 +1584,9 @@ def _configure_discord() -> tuple[str, str]:
             from app.integrations.cli import _register_discord_slash_command
 
             _register_discord_slash_command(application_id, bot_token)
+            sync_env_secret("DISCORD_BOT_TOKEN", bot_token)
             env_path = sync_env_values(
                 {
-                    "DISCORD_BOT_TOKEN": bot_token,
                     "DISCORD_APPLICATION_ID": application_id,
                     "DISCORD_PUBLIC_KEY": public_key,
                     "DISCORD_DEFAULT_CHANNEL_ID": default_channel_id,
@@ -1723,10 +1744,10 @@ def _configure_opensearch() -> tuple[str, str]:
                 "OPENSEARCH_URL": url,
             }
             if api_key:
-                env_values["OPENSEARCH_API_KEY"] = api_key
+                sync_env_secret("OPENSEARCH_API_KEY", api_key)
             if username:
                 env_values["OPENSEARCH_USERNAME"] = username
-                env_values["OPENSEARCH_PASSWORD"] = password
+                sync_env_secret("OPENSEARCH_PASSWORD", password)
             env_path = sync_env_values(env_values)
             return "OpenSearch", str(env_path)
         _console.print(f"[{DIM}]Try again or press Ctrl+C to cancel.[/]")
@@ -2157,6 +2178,14 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                         return 1
                     if not _persist_llm_api_key(provider.api_key_env, api_key):
                         return 1
+
+        if change_provider:
+            model = _choose_model(provider, default=model)
+        elif provider.models:
+            current_display = model or "CLI default"
+            _console.print(f"[{SECONDARY}]current model  {current_display}[/]")
+            if _confirm("Change model?", default=False):
+                model = _choose_model(provider, default=model)
 
         if provider.credential_kind == "cli":
             cli_out = _run_cli_llm_onboarding(provider)

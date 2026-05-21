@@ -25,6 +25,13 @@ VALID_HERMES_FAILURE_MODES = frozenset(
         "delivery_hang",
         "performance_degradation",
         "ghost_session",
+        # Part 3/5
+        "orchestration_missing",
+        "protocol_unsupported",
+        "routing_ignored",
+        "memory_unavailable",
+        "memory_corruption",
+        "memory_parse_failure",
     }
 )
 
@@ -38,6 +45,10 @@ VALID_HERMES_EVIDENCE_SOURCES = frozenset(
         "hermes_kv_cache_state",
         "hermes_cron_state",
         "hermes_session_topology",
+        "hermes_orchestration_state",
+        "hermes_routing_decisions",
+        "hermes_memory_state",
+        "hermes_filesystem_state",
     }
 )
 
@@ -52,6 +63,10 @@ VALID_HERMES_TRAJECTORY_ACTIONS = frozenset(
         "get_hermes_cron_state",
         "get_hermes_session_topology",
         "get_hermes_logs",
+        "get_hermes_orchestration_state",
+        "get_hermes_routing_decisions",
+        "get_hermes_memory_state",
+        "get_hermes_filesystem_state",
     }
 )
 
@@ -200,6 +215,10 @@ class HermesScenarioEvidence:
     hermes_kv_cache_state: HermesKVCacheStateFixture | None
     hermes_cron_state: HermesCronStateFixture | None
     hermes_session_topology: HermesSessionTopologyFixture | None
+    hermes_orchestration_state: dict[str, Any] | None
+    hermes_routing_decisions: dict[str, Any] | None
+    hermes_memory_state: dict[str, Any] | None
+    hermes_filesystem_state: dict[str, Any] | None
 
     def as_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {}
@@ -429,6 +448,156 @@ def validate_hermes_session_topology(data: dict[str, Any]) -> HermesSessionTopol
     return data  # type: ignore[return-value]
 
 
+def validate_hermes_orchestration_state(data: dict[str, Any]) -> dict[str, Any]:
+    ctx = "hermes_orchestration_state.json"
+
+    declared_roles = data.get("declared_roles")
+    if not isinstance(declared_roles, list):
+        raise ValueError(f"{ctx}: 'declared_roles' must be a list")
+    if not declared_roles:
+        raise ValueError(f"{ctx}: 'declared_roles' must not be empty")
+
+    for index, role in enumerate(declared_roles):
+        rctx = f"{ctx}:declared_roles[{index}]"
+
+        _require_str(role, "name", rctx)
+        _require_str(role, "model", rctx)
+        _require_str(role, "system_prompt_excerpt", rctx)
+
+    _require_str(data, "declared_topology", ctx)
+
+    observed = data.get("observed")
+    if not isinstance(observed, dict):
+        raise ValueError(f"{ctx}: 'observed' must be an object")
+
+    actual_runs = observed.get("actual_runs")
+    if not isinstance(actual_runs, list):
+        raise ValueError(f"{ctx}:observed: 'actual_runs' must be a list")
+    if not actual_runs:
+        raise ValueError(f"{ctx}:observed: 'actual_runs' must not be empty")
+
+    for index, run in enumerate(actual_runs):
+        actx = f"{ctx}:observed:actual_runs[{index}]"
+
+        _require_str(run, "role", actx)
+        _require_str(run, "model", actx)
+
+        for field in (
+            "input_tokens",
+            "output_tokens",
+            "context_window_used",
+        ):
+            if not isinstance(run.get(field), int):
+                raise ValueError(f"{actx}: '{field}' must be an integer")
+
+    _require_str(observed, "actual_topology", f"{ctx}:observed")
+
+    return data
+
+
+def validate_hermes_routing_decisions(data: dict[str, Any]) -> dict[str, Any]:
+    ctx = "hermes_routing_decisions.json"
+
+    config = data.get("config")
+    if not isinstance(config, dict):
+        raise ValueError(f"{ctx}: 'config' must be an object")
+
+    capability_categories = config.get("capability_categories")
+    if not isinstance(capability_categories, dict):
+        raise ValueError(f"{ctx}:config: 'capability_categories' must be an object")
+
+    if not capability_categories:
+        raise ValueError(f"{ctx}:config: 'capability_categories' must not be empty")
+
+    for field, value in capability_categories.items():
+        if not isinstance(field, str) or not field.strip():
+            raise ValueError(
+                f"{ctx}:capability_categories: category name must be a non-empty string"
+            )
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{ctx}:capability_categories: '{field}' must be a non-empty string")
+
+    calls = data.get("calls")
+    if not isinstance(calls, list):
+        raise ValueError(f"{ctx}: 'calls' must be a list")
+    if not calls:
+        raise ValueError(f"{ctx}: 'calls' must not be empty")
+
+    for index, call in enumerate(calls):
+        cctx = f"{ctx}:calls[{index}]"
+
+        for field in (
+            "ts",
+            "capability_category",
+            "requested_model",
+            "routed_model",
+            "router_reason",
+        ):
+            _require_str(call, field, cctx)
+
+        if call["capability_category"] not in capability_categories:
+            raise ValueError(f"{cctx}: unknown capability_category {call['capability_category']!r}")
+
+    return data
+
+
+def validate_hermes_memory_state(data: dict[str, Any]) -> dict[str, Any]:
+    ctx = "hermes_memory_state.json"
+
+    for field in ("backend", "backend_status"):
+        _require_str(data, field, ctx)
+
+    for field in ("last_read_ts", "last_write_ts", "fallback_reason"):
+        value = data.get(field)
+        if value is not None and not isinstance(value, str):
+            raise ValueError(f"{ctx}: '{field}' must be a string or null")
+
+    if not isinstance(data.get("fallback_active"), bool):
+        raise ValueError(f"{ctx}: 'fallback_active' must be a boolean")
+
+    last_parse_error = data.get("last_parse_error")
+
+    if last_parse_error is not None:
+        if not isinstance(last_parse_error, dict):
+            raise ValueError(f"{ctx}: 'last_parse_error' must be an object or null")
+
+        for field in ("error_class", "snippet", "model_name"):
+            _require_str(last_parse_error, field, f"{ctx}:last_parse_error")
+
+    return data
+
+
+def validate_hermes_filesystem_state(data: dict[str, Any]) -> dict[str, Any]:
+    ctx = "hermes_filesystem_state.json"
+
+    _require_str(data, "hermes_home", ctx)
+
+    files = data.get("files")
+
+    if not isinstance(files, list):
+        raise ValueError(f"{ctx}: 'files' must be a list")
+    if not files:
+        raise ValueError(f"{ctx}: 'files' must not be empty")
+
+    for index, file_entry in enumerate(files):
+        fctx = f"{ctx}:files[{index}]"
+
+        for field in ("path", "sha256", "last_modified"):
+            _require_str(file_entry, field, fctx)
+
+        if not isinstance(file_entry.get("size_bytes"), int):
+            raise ValueError(f"{fctx}: 'size_bytes' must be an integer")
+
+        if not isinstance(file_entry.get("is_corrupted"), bool):
+            raise ValueError(f"{fctx}: 'is_corrupted' must be a boolean")
+
+    for field in ("backups_present", "vcs_present"):
+        if not isinstance(data.get(field), bool):
+            raise ValueError(f"{ctx}: '{field}' must be a boolean")
+
+    return data
+
+
 def validate_hermes_answer_key(data: dict[str, Any]) -> HermesScenarioAnswerKeySchema:
     ctx = "answer.yml"
     _require_str(data, "root_cause_category", ctx)
@@ -463,6 +632,19 @@ def validate_hermes_answer_key(data: dict[str, Any]) -> HermesScenarioAnswerKeyS
             f"{ctx}: root_cause_category {root_cause_category!r} cannot also appear in "
             "'forbidden_categories'"
         )
+
+    required_evidence_sources = data.get("required_evidence_sources")
+    if isinstance(required_evidence_sources, list):
+        unknown_sources = [
+            source
+            for source in required_evidence_sources
+            if source not in VALID_HERMES_EVIDENCE_SOURCES
+        ]
+        if unknown_sources:
+            raise ValueError(
+                f"{ctx}: unknown required evidence source(s) {unknown_sources}; expected subset of "
+                f"{sorted(VALID_HERMES_EVIDENCE_SOURCES)}"
+            )
 
     trajectory = data.get("optimal_trajectory")
     if isinstance(trajectory, list):

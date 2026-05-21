@@ -270,7 +270,30 @@ def _format_tools_by_source(tools_by_source: dict[str, list[Any]]) -> str:
     )
     for source in ordered_sources:
         tools = tools_by_source[source]
-        tool_lines = [f"  - `{t.name}`: {t.description}" for t in tools]
+        tool_lines = []
+        for tool in tools:
+            details: list[str] = []
+            if getattr(tool, "source_id", None):
+                details.append(f"source_id={tool.source_id}")
+            if getattr(tool, "evidence_type", None):
+                details.append(f"evidence={tool.evidence_type}")
+            if getattr(tool, "side_effect_level", None):
+                details.append(f"side_effect={tool.side_effect_level}")
+            examples = getattr(tool, "examples", None) or []
+            anti_examples = getattr(tool, "anti_examples", None) or []
+            output_schema = getattr(tool, "output_schema", None)
+            if isinstance(output_schema, dict):
+                output_props = output_schema.get("properties")
+                if isinstance(output_props, dict) and output_props:
+                    output_keys = ", ".join(sorted(str(key) for key in output_props)[:6])
+                    details.append(f"outputs={output_keys}")
+            if examples:
+                details.append(f"example={examples[0]}")
+            if anti_examples:
+                details.append(f"avoid={anti_examples[0]}")
+
+            suffix = f" ({'; '.join(details)})" if details else ""
+            tool_lines.append(f"  - `{tool.name}`: {tool.description}{suffix}")
         sections.append(f"**{source}**:\n" + "\n".join(tool_lines))
 
     return "\n\n".join(sections)

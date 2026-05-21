@@ -62,7 +62,7 @@ jobs:
         # tracer-cloud account.
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::395261708130:role/opensre-bench-terraform-plan
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/opensre-bench-terraform-plan
           role-session-name: github-actions-terraform-plan-${{ github.run_id }}
           aws-region: us-east-1
 
