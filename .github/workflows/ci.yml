@@ -167,6 +167,7 @@ jobs:
 
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       JWT_TOKEN: ${{ secrets.JWT_TOKEN }}
       GRAFANA_READ_TOKEN: ${{ secrets.GRAFANA_READ_TOKEN }}
       GCLOUD_HOSTED_METRICS_ID: ${{ secrets.GCLOUD_HOSTED_METRICS_ID }}

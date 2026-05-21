@@ -69,7 +69,9 @@ def _resolve_live_llm_configuration(
         if env_var is not None:
             hint += f", required key={env_var}"
         hint += f", fallback providers={DEFAULT_LLM_RESOLUTION_FALLBACK_PROVIDERS!r}"
-        pytest.skip(f"Live LLM routing tests skipped (no usable LLM configuration):{hint}. {msg}")
+        # Keep live_llm tests fail-closed for credential/config regressions.
+        # Live suites must run with real credentials and fail on misconfiguration.
+        pytest.fail(f"Live LLM routing tests require usable LLM configuration:{hint}. {msg}")
 
     from app.services.llm_client import reset_llm_singletons
 

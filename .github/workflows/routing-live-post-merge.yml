@@ -36,6 +36,9 @@ jobs:
 
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      LLM_PROVIDER: openai
+      OPENSRE_DISABLE_KEYRING: "1"
       ROUTING_SHARD_TOTAL: "5"
       ROUTING_SHARD_INDEX: ${{ matrix.shard_index }}
       PYTHONUTF8: "1"
@@ -58,6 +61,13 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --frozen --extra dev
+
+      - name: Validate live LLM credential wiring
+        run: |
+          if [ -z "${OPENAI_API_KEY}" ]; then
+            echo "::error::OPENAI_API_KEY is missing for live routing tests."
+            exit 1
+          fi
 
       - name: Run sharded live routing suite
         run: >-
