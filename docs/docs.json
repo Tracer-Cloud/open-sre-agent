@@ -132,7 +132,7 @@
               "messaging/discord",
               "messaging/telegram",
               "messaging/whatsapp",
-              "messaging/twilio"
+              "messaging/twilio-sms"
             ]
           },
           {
@@ -334,6 +334,12 @@
       "hjsv": "6"
     }
   },
+  "redirects": [
+    {
+      "source": "/messaging/twilio",
+      "destination": "/messaging/twilio-sms"
+    }
+  ],
   "seo": {
     "indexing": "all",
     "metatags": {}
