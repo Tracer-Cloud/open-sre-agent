@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Literal
 
 from rich.console import Console
@@ -27,6 +28,12 @@ from app.cli.interactive_shell.ui import DIM, WARNING
 ExecutionVerdict = Literal["allow", "ask", "deny"]
 
 
+class ActionExecutionMode(StrEnum):
+    FOREGROUND = "foreground"
+    BACKGROUND = "background"
+    FOREGROUND_STREAMING = "foreground_streaming"
+
+
 @dataclass(frozen=True)
 class ExecutionPolicyResult:
     """Result of evaluating whether an action may run."""
@@ -36,6 +43,16 @@ class ExecutionPolicyResult:
     reason: str | None
     hint: str | None = None
     shell_classification: str | None = None
+
+
+@dataclass(frozen=True)
+class ActionExecutionPlan:
+    """Unified execution plan contract shared across action executors."""
+
+    action_type: str
+    classification: str
+    execution_mode: ActionExecutionMode
+    policy: ExecutionPolicyResult
 
 
 def _default_confirm_fn(prompt: str) -> str:
@@ -252,6 +269,17 @@ def evaluate_shell_from_parsed(parsed: ParsedShellCommand) -> ExecutionPolicyRes
     )
 
 
+def plan_shell_execution(parsed: ParsedShellCommand) -> ActionExecutionPlan:
+    policy = evaluate_shell_from_parsed(parsed)
+    classification = policy.shell_classification or "unknown"
+    return ActionExecutionPlan(
+        action_type="shell",
+        classification=classification,
+        execution_mode=ActionExecutionMode.FOREGROUND,
+        policy=policy,
+    )
+
+
 def evaluate_shell_command(command: str) -> ExecutionPolicyResult:
     """Map shell policy + passthrough rules into allow/ask/deny."""
     parsed = parse_shell_command(command, is_windows=_intent_parser.IS_WINDOWS)
@@ -269,6 +297,19 @@ def evaluate_slash_tier(tier: ExecutionTier) -> ExecutionPolicyResult:
     )
 
 
+def plan_slash_execution(
+    command_name: str, args: list[str], registered: ExecutionTier
+) -> ActionExecutionPlan:
+    tier = resolve_slash_execution_tier(command_name, args, registered)
+    policy = evaluate_slash_tier(tier)
+    return ActionExecutionPlan(
+        action_type="slash",
+        classification=tier.value,
+        execution_mode=ActionExecutionMode.FOREGROUND,
+        policy=policy,
+    )
+
+
 def evaluate_investigation_launch(
     *, action_type: Literal["investigation", "sample_alert"]
 ) -> ExecutionPolicyResult:
@@ -277,6 +318,18 @@ def evaluate_investigation_launch(
         verdict="ask",
         action_type=action_type,
         reason="investigations call external tools and consume LLM quota",
+    )
+
+
+def plan_investigation_execution(
+    *, action_type: Literal["investigation", "sample_alert"]
+) -> ActionExecutionPlan:
+    policy = evaluate_investigation_launch(action_type=action_type)
+    return ActionExecutionPlan(
+        action_type=action_type,
+        classification="investigation_launch",
+        execution_mode=ActionExecutionMode.FOREGROUND,
+        policy=policy,
     )
 
 

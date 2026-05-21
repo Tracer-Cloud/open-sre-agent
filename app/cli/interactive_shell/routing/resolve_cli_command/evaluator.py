@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.cli.interactive_shell.routing.policy_tags import RouteSignal
 from app.cli.interactive_shell.routing.resolve_cli_command.matcher import (
     is_bare_command_alias,
     opensre_investigate_slash_text,
@@ -26,13 +27,13 @@ def _is_bare_command_alias_rule(text: str, _session: RoutingSession) -> bool:
 
 CLI_COMMAND_RULES: tuple[RouteRule, ...] = (
     RouteRule(
-        "slash_prefix",
+        RouteSignal.SLASH_PREFIX.value,
         RouteKind.SLASH,
         1.0,
         _is_slash_prefix,
     ),
     RouteRule(
-        "bare_command_alias",
+        RouteSignal.BARE_COMMAND_ALIAS.value,
         RouteKind.SLASH,
         0.98,
         _is_bare_command_alias_rule,
@@ -52,7 +53,7 @@ def resolve_cli_command(
         return RouteDecision(
             route_kind=RouteKind.SLASH,
             confidence=0.99,
-            matched_signals=("opensre_investigate",),
+            matched_signals=(RouteSignal.OPENSRE_INVESTIGATE.value,),
             command_text=investigate_slash,
         )
 

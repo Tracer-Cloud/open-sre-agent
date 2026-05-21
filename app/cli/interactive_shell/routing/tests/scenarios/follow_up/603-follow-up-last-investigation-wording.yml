@@ -1,12 +1,12 @@
-id: 307-new-alert-checkout-502
-title: Checkout 502 incident paste
-intent_class: investigation
+id: 603-follow-up-last-investigation-wording
+title: Follow-up last investigation wording
+intent_class: follow_up
 risk_level: medium
 input:
-  prompt: the checkout service is returning 502 errors for 30% of requests
+  prompt: No, during the last investigation
   surface: interactive_cli
 session:
-  has_prior_state: false
+  has_prior_state: true
   remote_connected: false
   configured_integrations: []
 available_capabilities:
@@ -14,6 +14,7 @@ available_capabilities:
   cli_commands: []
   synthetic_suites: []
 notes: []
+
 route:
   expected_kind: cli_agent
   expected_signals: []
@@ -24,13 +25,14 @@ policy:
   fail_closed: true
 planned_actions:
 - kind: assistant_handoff
-  content: incident_description:checkout_502_rate
+  content: follow_up:last_investigation_summary
   source: llm
 executed_actions: []
 response_contract:
   must_contain_any:
-  - checkout
-  - incident
+  - investigation
+  - follow-up
+  - alert text
   must_not_contain:
   - $ /
 history:

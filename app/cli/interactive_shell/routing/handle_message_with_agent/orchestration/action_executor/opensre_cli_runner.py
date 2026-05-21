@@ -6,10 +6,18 @@ import shlex
 import subprocess
 import sys
 from collections.abc import Callable
+from dataclasses import dataclass
+from enum import StrEnum
 
 from rich.console import Console
 from rich.markup import escape
 
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
+    ActionExecutionMode,
+    ActionExecutionPlan,
+    ExecutionPolicyResult,
+    execution_allowed,
+)
 from app.cli.interactive_shell.runtime import ReplSession
 from app.cli.interactive_shell.ui import DIM, ERROR, WARNING, print_command_output
 from app.cli.support.exception_reporting import report_exception
@@ -94,19 +102,55 @@ _READ_ONLY_OPENSRE_SUBCOMMANDS: frozenset[str] = frozenset(
 _INVESTIGATION_OPENSRE_SUBCOMMANDS: frozenset[str] = frozenset({"investigate"})
 
 
+class OpensreCommandClass(StrEnum):
+    READ_ONLY = "read_only"
+    INVESTIGATION = "investigation"
+    MUTATING = "mutating"
+
+
+class OpensreExecutionMode(StrEnum):
+    FOREGROUND = "foreground"
+    FOREGROUND_STREAMING = "foreground_streaming"
+    BACKGROUND = "background"
+
+
+class OpensreRunOutcome(StrEnum):
+    BLOCKED = "blocked"
+    HANDED_OFF = "handed_off"
+    EXECUTED_FOREGROUND = "executed_foreground"
+    EXECUTED_BACKGROUND = "executed_background"
+    DECLINED = "declined"
+    INVALID = "invalid"
+
+
+@dataclass(frozen=True)
+class OpensreExecutionPlan:
+    classification: OpensreCommandClass
+    execution_mode: OpensreExecutionMode
+    requires_confirmation: bool
+    confirmation_reason: str | None
+
+
+@dataclass(frozen=True)
+class OpensreRunResult:
+    outcome: OpensreRunOutcome
+    attempted: bool
+    display_command: str | None = None
+
+
 def _classify_opensre_command(tokens: list[str]) -> str:
     first_token = tokens[0].lower()
     if first_token in _READ_ONLY_OPENSRE_SUBCOMMANDS:
-        return "read_only"
+        return OpensreCommandClass.READ_ONLY.value
     if first_token in _INVESTIGATION_OPENSRE_SUBCOMMANDS:
-        return "investigation"
+        return OpensreCommandClass.INVESTIGATION.value
     if first_token == "agents":
         subcommand = tokens[1].lower() if len(tokens) > 1 else "list"
         if subcommand in {"list"}:
-            return "read_only"
+            return OpensreCommandClass.READ_ONLY.value
         if subcommand == "scan" and "--register" not in tokens[2:]:
-            return "read_only"
-    return "mutating"
+            return OpensreCommandClass.READ_ONLY.value
+    return OpensreCommandClass.MUTATING.value
 
 
 def _opensre_confirmation_reason(tokens: list[str]) -> str:
@@ -118,13 +162,69 @@ def _opensre_confirmation_reason(tokens: list[str]) -> str:
 
 
 def _should_run_opensre_in_foreground(tokens: list[str]) -> bool:
+    return _build_opensre_execution_plan(tokens).execution_mode in {
+        OpensreExecutionMode.FOREGROUND,
+        OpensreExecutionMode.FOREGROUND_STREAMING,
+    }
+
+
+def _build_opensre_execution_plan(tokens: list[str]) -> OpensreExecutionPlan:
+    """Compute classification + execution mode from one canonical policy table."""
+    classification = OpensreCommandClass(_classify_opensre_command(tokens))
     first_token = tokens[0].lower()
+
+    execution_mode = OpensreExecutionMode.BACKGROUND
     if first_token in _READ_ONLY_OPENSRE_SUBCOMMANDS:
-        return True
-    if first_token == "agents":
+        execution_mode = OpensreExecutionMode.FOREGROUND
+    elif first_token == "agents":
         subcommand = tokens[1].lower() if len(tokens) > 1 else "list"
-        return subcommand in {"list", "register", "forget", "scan", "watch"}
-    return False
+        if subcommand == "watch":
+            execution_mode = OpensreExecutionMode.FOREGROUND_STREAMING
+        elif subcommand in {"list", "register", "forget", "scan"}:
+            execution_mode = OpensreExecutionMode.FOREGROUND
+
+    requires_confirmation = classification is OpensreCommandClass.MUTATING
+    reason = (
+        _opensre_confirmation_reason([token.lower() for token in tokens])
+        if requires_confirmation
+        else None
+    )
+    return OpensreExecutionPlan(
+        classification=classification,
+        execution_mode=execution_mode,
+        requires_confirmation=requires_confirmation,
+        confirmation_reason=reason,
+    )
+
+
+def _to_action_execution_plan(plan: OpensreExecutionPlan) -> ActionExecutionPlan:
+    mode = ActionExecutionMode.BACKGROUND
+    if plan.execution_mode is OpensreExecutionMode.FOREGROUND:
+        mode = ActionExecutionMode.FOREGROUND
+    elif plan.execution_mode is OpensreExecutionMode.FOREGROUND_STREAMING:
+        mode = ActionExecutionMode.FOREGROUND_STREAMING
+    if not plan.requires_confirmation:
+        policy = ExecutionPolicyResult(
+            verdict="allow",
+            action_type="cli_command",
+            reason=None,
+            hint=None,
+            shell_classification=plan.classification.value,
+        )
+    else:
+        policy = ExecutionPolicyResult(
+            verdict="ask",
+            action_type="cli_command",
+            reason=plan.confirmation_reason,
+            hint="Use a read-only subcommand (health, version, list, status, show)",
+            shell_classification=plan.classification.value,
+        )
+    return ActionExecutionPlan(
+        action_type="cli_command",
+        classification=plan.classification.value,
+        execution_mode=mode,
+        policy=policy,
+    )
 
 
 def _run_opensre_foreground(
@@ -206,10 +306,28 @@ def run_opensre_cli_command(
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
 ) -> bool:
+    result = run_opensre_cli_command_result(
+        args,
+        session,
+        console,
+        confirm_fn=confirm_fn,
+        is_tty=is_tty,
+    )
+    return result.attempted
+
+
+def run_opensre_cli_command_result(
+    args: str,
+    session: ReplSession,
+    console: Console,
+    *,
+    confirm_fn: Callable[[str], str] | None = None,
+    is_tty: bool | None = None,
+) -> OpensreRunResult:
     """Run an opensre subcommand (not agent).
 
-    Returns True if the command was attempted (regardless of success),
-    False if the subcommand is blocked or args are empty.
+    Returns a typed outcome so callers can distinguish blocked/declined/
+    handed-off/executed states without overloading ``bool``.
 
     ``confirm_fn`` is forwarded to :func:`execution_allowed` so the
     interactive REPL can route mid-dispatch ``Proceed? [y/N]`` prompts
@@ -221,46 +339,28 @@ def run_opensre_cli_command(
     except ValueError:
         tokens = args.split()
     if not tokens:
-        return False
+        return OpensreRunResult(outcome=OpensreRunOutcome.INVALID, attempted=False)
 
     first_token = tokens[0].lower()
     if first_token in _OPENSRE_BLOCKED_SUBCOMMANDS:
         console.print(f"[{ERROR}]Cannot run `opensre {first_token}`: subcommand is blocked.[/]")
-        return False
+        return OpensreRunResult(outcome=OpensreRunOutcome.BLOCKED, attempted=False)
 
     if _is_interactive_wizard(tokens):
         command_str = " ".join(tokens)
         print_interactive_wizard_handoff(console, command_str)
         session.record("cli_command", f"opensre {command_str}", ok=False)
-        # True = wizard exists and was handed off; the ``_OPENSRE_BLOCKED_SUBCOMMANDS`` branch
-        # above returns False for "shouldn't run at all".
-        return True
-
-    command_classification = _classify_opensre_command(tokens)
-    from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
-        ExecutionPolicyResult,
-        execution_allowed,
-    )
-
-    if command_classification in {"read_only", "investigation"}:
-        policy_result = ExecutionPolicyResult(
-            verdict="allow",
-            action_type="cli_command",
-            reason=None,
-            hint=None,
-            shell_classification=command_classification,
+        return OpensreRunResult(
+            outcome=OpensreRunOutcome.HANDED_OFF,
+            attempted=True,
+            display_command=f"opensre {command_str}",
         )
-    else:
-        policy_result = ExecutionPolicyResult(
-            verdict="ask",
-            action_type="cli_command",
-            reason=_opensre_confirmation_reason([token.lower() for token in tokens]),
-            hint="Use a read-only subcommand (health, version, list, status, show)",
-            shell_classification=command_classification,
-        )
+
+    plan = _build_opensre_execution_plan(tokens)
+    execution_plan = _to_action_execution_plan(plan)
 
     if not execution_allowed(
-        policy_result,
+        execution_plan.policy,
         session=session,
         console=console,
         action_summary=f"$ opensre {' '.join(tokens)}",
@@ -269,16 +369,31 @@ def run_opensre_cli_command(
         action_already_listed=True,
     ):
         session.record("cli_command", f"opensre {' '.join(tokens)}", ok=False)
-        return True
+        return OpensreRunResult(
+            outcome=OpensreRunOutcome.DECLINED,
+            attempted=True,
+            display_command=f"opensre {' '.join(tokens)}",
+        )
 
     argv_list = [sys.executable, "-m", "app.cli"] + tokens
     display_command = f"opensre {' '.join(tokens)}"
-    if _should_run_opensre_in_foreground(tokens):
-        if [token.lower() for token in tokens[:2]] == ["agents", "watch"]:
+    if execution_plan.execution_mode in {
+        ActionExecutionMode.FOREGROUND,
+        ActionExecutionMode.FOREGROUND_STREAMING,
+    }:
+        if execution_plan.execution_mode is ActionExecutionMode.FOREGROUND_STREAMING:
             _run_opensre_foreground_streaming(argv_list, display_command, session, console)
-            return True
+            return OpensreRunResult(
+                outcome=OpensreRunOutcome.EXECUTED_FOREGROUND,
+                attempted=True,
+                display_command=display_command,
+            )
         _run_opensre_foreground(argv_list, display_command, session, console)
-        return True
+        return OpensreRunResult(
+            outcome=OpensreRunOutcome.EXECUTED_FOREGROUND,
+            attempted=True,
+            display_command=display_command,
+        )
 
     session.record("cli_command", display_command)
     _ae_resolve("start_background_cli_task", _start_background_cli_task_default)(
@@ -287,4 +402,8 @@ def run_opensre_cli_command(
         session=session,
         console=console,
     )
-    return True
+    return OpensreRunResult(
+        outcome=OpensreRunOutcome.EXECUTED_BACKGROUND,
+        attempted=True,
+        display_command=display_command,
+    )

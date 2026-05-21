@@ -10,7 +10,7 @@ OpenSRE is provider-agnostic: bring your own model. Selection is controlled by t
 | Provider     | `LLM_PROVIDER` | Auth                            | Reasoning model default                       | Toolcall model default                          |
 | ------------ | -------------- | ------------------------------- | --------------------------------------------- | ----------------------------------------------- |
 | Anthropic    | `anthropic`    | `ANTHROPIC_API_KEY`             | `claude-sonnet-4-6`                           | `claude-haiku-4-5-20251001`                     |
-| OpenAI       | `openai`       | `OPENAI_API_KEY`                | `gpt-5.4`                                     | `gpt-5.4-mini`                                  |
+| OpenAI       | `openai`       | `OPENAI_API_KEY`                | `gpt-5.4-mini`                                | `gpt-5.4-mini`                                  |
 | OpenRouter   | `openrouter`   | `OPENROUTER_API_KEY`            | `openrouter/auto`                             | `openrouter/auto`                               |
 | Google Gemini| `gemini`       | `GEMINI_API_KEY`                | `gemini-3.1-pro-preview`                      | `gemini-3.1-flash-lite-preview`                 |
 | NVIDIA NIM   | `nvidia`       | `NVIDIA_API_KEY`                | `meta/llama-3.1-405b-instruct`                | `meta/llama-3.1-8b-instruct`                    |
@@ -47,13 +47,13 @@ CLIs, and Ollama) also accept custom model IDs:
 
 ```bash
 /model set openai gpt-5.5
-/model set openai gpt-5.5 --toolcall-model gpt-5.5-mini
+/model set openai gpt-5.5 --toolcall-model gpt-5.4-mini
 ```
 
 Override the default model for a slot via env vars:
 
 ```bash
-export OPENAI_REASONING_MODEL=gpt-5.4
+export OPENAI_REASONING_MODEL=gpt-5.4-mini
 export OPENAI_TOOLCALL_MODEL=gpt-5.4-mini
 ```
 
@@ -79,7 +79,7 @@ The default. Uses the Anthropic Python SDK directly. Get an API key at [console.
 export LLM_PROVIDER=openai
 export OPENAI_API_KEY=sk-...
 # Optional overrides:
-export OPENAI_REASONING_MODEL=gpt-5.4
+export OPENAI_REASONING_MODEL=gpt-5.4-mini
 export OPENAI_TOOLCALL_MODEL=gpt-5.4-mini
 ```
 

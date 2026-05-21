@@ -87,9 +87,9 @@ ANTHROPIC_CLASSIFICATION_MODEL = "claude-sonnet-4-6"
 ANTHROPIC_TOOLCALL_MODEL = "claude-haiku-4-5-20251001"
 
 # OpenAI model constants
-# UNVERIFIED PLACEHOLDER — gpt-5.4 / gpt-5.4-mini do not exist as of 2026-04.
-# Update to a real model ID once OpenAI releases it, or override via OPENAI_REASONING_MODEL env var.
-OPENAI_REASONING_MODEL = "gpt-5.4"
+# Default to GPT-5.4 mini for both reasoning and toolcall paths; override via
+# OPENAI_REASONING_MODEL / OPENAI_TOOLCALL_MODEL when needed.
+OPENAI_REASONING_MODEL = "gpt-5.4-mini"
 # Mid-tier mirrors the toolcall (mini) model by default — OpenAI's mini sits
 # between full and nano, which matches the "Sonnet-equivalent" classification
 # tier well enough; override via OPENAI_CLASSIFICATION_MODEL when needed.

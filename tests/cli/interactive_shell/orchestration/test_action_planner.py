@@ -161,6 +161,16 @@ def test_plan_task_cancel_before_shell_kill() -> None:
     assert action_planner_module.map_cli_actions(msg) == []
 
 
+def test_plan_integration_detail_request_maps_to_integrations_show() -> None:
+    msg = "show me what configured datadog integration connections I have"
+    assert action_planner_module.map_cli_actions(msg) == ["/integrations show datadog"]
+
+
+def test_plan_integration_capability_only_request_does_not_map_detail_command() -> None:
+    msg = "what can the datadog integration do for me?"
+    assert action_planner_module.map_cli_actions(msg) == []
+
+
 def test_stop_process_prompt_is_not_task_cancel() -> None:
     msg = "stop the process of auto-investigation and give me a manual runbook"
     actions, unhandled = action_planner_module.map_actions_with_unhandled(msg)

@@ -8,8 +8,8 @@ from rich.console import Console
 from rich.markup import escape
 
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
-    evaluate_investigation_launch,
     execution_allowed,
+    plan_investigation_execution,
 )
 from app.cli.interactive_shell.runtime import ReplSession, TaskKind
 from app.cli.interactive_shell.ui import ERROR, WARNING
@@ -28,9 +28,9 @@ def run_sample_alert(
 ) -> None:
     from app.cli.investigation import run_sample_alert_for_session
 
-    policy = evaluate_investigation_launch(action_type="sample_alert")
+    plan = plan_investigation_execution(action_type="sample_alert")
     if not execution_allowed(
-        policy,
+        plan.policy,
         session=session,
         console=console,
         action_summary=f"sample alert investigation ({template_name})",
@@ -89,9 +89,9 @@ def run_text_investigation(
 ) -> None:
     from app.cli.investigation import run_investigation_for_session
 
-    policy = evaluate_investigation_launch(action_type="investigation")
+    plan = plan_investigation_execution(action_type="investigation")
     if not execution_allowed(
-        policy,
+        plan.policy,
         session=session,
         console=console,
         action_summary=f'investigation from text "{alert_text}"',

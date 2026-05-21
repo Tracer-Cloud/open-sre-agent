@@ -80,8 +80,8 @@ ANTHROPIC_MODELS = (
 )
 
 OPENAI_MODELS = (
-    ModelOption(value=OPENAI_REASONING_MODEL, label="GPT-5.4"),
-    ModelOption(value="gpt-5.4-mini", label="GPT-5.4 mini"),
+    ModelOption(value=OPENAI_REASONING_MODEL, label="GPT-5.4 mini"),
+    ModelOption(value="gpt-5.4", label="GPT-5.4"),
     ModelOption(value="gpt-5.4-nano", label="GPT-5.4 nano"),
     ModelOption(value="gpt-5.3-codex", label="GPT-5.3-Codex"),
 )
@@ -209,13 +209,13 @@ CODEX_MODELS = (
         value="",
         label="CLI default (no -m; use Codex configured model)",
     ),
+    ModelOption(value="gpt-5.4-mini", label="gpt-5.4-mini — fast, cost-efficient"),
     ModelOption(value="gpt-5.4", label="gpt-5.4 — strong default for everyday coding"),
     ModelOption(value="gpt-5.2-codex", label="gpt-5.2-codex — frontier agentic coding"),
     ModelOption(
         value="gpt-5.1-codex-max",
         label="gpt-5.1-codex-max — deep / fast reasoning",
     ),
-    ModelOption(value="gpt-5.4-mini", label="gpt-5.4-mini — fast, cost-efficient"),
     ModelOption(value="gpt-5.3-codex", label="gpt-5.3-codex — coding-optimized"),
     ModelOption(value="gpt-5.2", label="gpt-5.2 — long-running agents"),
     ModelOption(value="gpt-5.1-codex-mini", label="gpt-5.1-codex-mini"),
@@ -246,8 +246,8 @@ OPENCODE_MODELS = (
         value="anthropic/claude-haiku-4-5-20251001",
         label="Claude Haiku 4.5 (via OpenCode)— fast, cost-efficient",
     ),
-    ModelOption(value="openai/gpt-5.4", label="GPT-5.4 (via OpenCode)"),
     ModelOption(value="openai/gpt-5.4-mini", label="GPT-5.4 mini (via OpenCode)"),
+    ModelOption(value="openai/gpt-5.4", label="GPT-5.4 (via OpenCode)"),
     ModelOption(value="openai/gpt-5.3-codex", label="GPT-5.3 Codex (via OpenCode)"),
     ModelOption(value="google/gemini-3.1-pro-preview", label="Gemini 3.1 Pro (via OpenCode)"),
     ModelOption(value="meta-llama/llama-4-maverick", label="Llama 4 Maverick (via OpenCode)"),

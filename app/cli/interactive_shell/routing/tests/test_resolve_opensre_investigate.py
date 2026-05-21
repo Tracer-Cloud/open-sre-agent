@@ -23,6 +23,12 @@ def test_opensre_investigate_slash_text_maps_input_flag() -> None:
         )
         == "/investigate tests/fixtures/openclaw_test_alert.json"
     )
+    assert (
+        opensre_investigate_slash_text(
+            'opensre investigate --input-file "tests/fixtures/alert payload.json"'
+        )
+        == "/investigate tests/fixtures/alert payload.json"
+    )
 
 
 def test_opensre_investigate_without_path_defaults_to_demo_alert() -> None:

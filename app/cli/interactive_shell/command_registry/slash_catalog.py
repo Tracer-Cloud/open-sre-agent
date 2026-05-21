@@ -9,7 +9,7 @@ from app.cli.interactive_shell.command_registry.types import SlashCommand
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_tier import (
     ExecutionTier,
 )
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_registry import (
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_contracts import (
     object_schema,
     string_array_property,
     string_property,

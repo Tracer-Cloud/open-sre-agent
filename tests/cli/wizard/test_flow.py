@@ -507,7 +507,7 @@ def test_run_wizard_reuses_saved_defaults_when_user_keeps_provider(monkeypatch, 
             "targets": {
                 "local": {
                     "provider": "openai",
-                    "model": "gpt-5.4",
+                    "model": "gpt-5.4-mini",
                     "api_key_env": "OPENAI_API_KEY",
                     "api_key": "saved-secret",
                 }
@@ -534,7 +534,7 @@ def test_run_wizard_reuses_saved_defaults_when_user_keeps_provider(monkeypatch, 
     assert exit_code == 0
     assert saved["wizard_mode"] == "quickstart"
     assert saved["provider"] == "openai"
-    assert saved["model"] == "gpt-5.4"
+    assert saved["model"] == "gpt-5.4-mini"
     assert "api_key" not in saved
     assert saved_llm_keys == [("OPENAI_API_KEY", "saved-secret")]
 
@@ -578,7 +578,7 @@ def test_run_wizard_changes_model_when_user_keeps_provider(monkeypatch, tmp_path
             "targets": {
                 "local": {
                     "provider": "openai",
-                    "model": "gpt-5.4",
+                    "model": "gpt-5.4-mini",
                     "api_key_env": "OPENAI_API_KEY",
                     "api_key": "saved-secret",
                 }
@@ -604,7 +604,7 @@ def test_run_wizard_changes_model_when_user_keeps_provider(monkeypatch, tmp_path
 
 
 def test_run_wizard_persists_matching_local_config_and_env(monkeypatch, tmp_path) -> None:
-    select_responses = iter(["quickstart", "openai", "gpt-5.4", "skip"])
+    select_responses = iter(["quickstart", "openai", "gpt-5.4-mini", "skip"])
     saved_llm_keys: list[tuple[str, str]] = []
 
     def _mock_select(*_args, **_kwargs):
@@ -1243,7 +1243,7 @@ def test_run_wizard_switches_provider_and_keeps_store_and_env_in_sync(
     monkeypatch, tmp_path
 ) -> None:
     # Saved: anthropic. User says yes to "Change provider?" and picks openai.
-    select_responses = iter(["quickstart", "openai", "gpt-5.4", "skip"])
+    select_responses = iter(["quickstart", "openai", "gpt-5.4-mini", "skip"])
     confirm_responses = iter([True])  # "Change provider?" -> Yes
     saved_llm_keys: list[tuple[str, str]] = []
 

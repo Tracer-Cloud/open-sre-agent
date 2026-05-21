@@ -160,26 +160,26 @@ def test_sync_provider_env_removes_stale_toolcall_and_classification_keys(
     env_path = tmp_path / ".env"
     env_path.write_text(
         "LLM_PROVIDER=openai\n"
-        "OPENAI_REASONING_MODEL=gpt-5.4\n"
-        "OPENAI_MODEL=gpt-5.4\n"
+        "OPENAI_REASONING_MODEL=gpt-5.4-mini\n"
+        "OPENAI_MODEL=gpt-5.4-mini\n"
         "OPENAI_TOOLCALL_MODEL=gpt-5.4-mini\n"
         "OPENAI_CLASSIFICATION_MODEL=gpt-5.4-mini\n"
         "CODEX_MODEL=\n",
         encoding="utf-8",
     )
     monkeypatch.setenv("LLM_PROVIDER", "openai")
-    monkeypatch.setenv("OPENAI_REASONING_MODEL", "gpt-5.4")
+    monkeypatch.setenv("OPENAI_REASONING_MODEL", "gpt-5.4-mini")
     monkeypatch.setenv("OPENAI_TOOLCALL_MODEL", "gpt-5.4-mini")
 
     sync_provider_env(
         provider=PROVIDER_BY_VALUE["codex"],
-        model="gpt-5.4",
+        model="gpt-5.4-mini",
         env_path=env_path,
     )
 
     content = env_path.read_text(encoding="utf-8")
     assert "LLM_PROVIDER=codex\n" in content
-    assert "CODEX_MODEL=gpt-5.4\n" in content
+    assert "CODEX_MODEL=gpt-5.4-mini\n" in content
     assert "OPENAI_TOOLCALL_MODEL=" not in content
     assert "OPENAI_CLASSIFICATION_MODEL=" not in content
     assert "OPENAI_REASONING_MODEL=" not in content
@@ -190,8 +190,8 @@ def test_sync_provider_env_loads_preserved_keys_from_env_file(tmp_path, monkeypa
     env_path = tmp_path / ".env"
     env_path.write_text(
         "LLM_PROVIDER=openai\n"
-        "OPENAI_REASONING_MODEL=gpt-5.4\n"
-        "OPENAI_MODEL=gpt-5.4\n"
+        "OPENAI_REASONING_MODEL=gpt-5.4-mini\n"
+        "OPENAI_MODEL=gpt-5.4-mini\n"
         "OPENAI_TOOLCALL_MODEL=gpt-5.4-mini\n"
         "OPENAI_CLASSIFICATION_MODEL=gpt-5.4-mini\n",
         encoding="utf-8",
@@ -203,12 +203,12 @@ def test_sync_provider_env_loads_preserved_keys_from_env_file(tmp_path, monkeypa
 
     sync_provider_env(
         provider=PROVIDER_BY_VALUE["openai"],
-        model="gpt-5.4",
+        model="gpt-5.4-mini",
         env_path=env_path,
     )
 
     assert os.environ["LLM_PROVIDER"] == "openai"
-    assert os.environ["OPENAI_REASONING_MODEL"] == "gpt-5.4"
+    assert os.environ["OPENAI_REASONING_MODEL"] == "gpt-5.4-mini"
     assert os.environ["OPENAI_TOOLCALL_MODEL"] == "gpt-5.4-mini"
     assert os.environ["OPENAI_CLASSIFICATION_MODEL"] == "gpt-5.4-mini"
 
@@ -217,18 +217,18 @@ def test_sync_provider_env_preserves_active_provider_toolcall_key(tmp_path, monk
     env_path = tmp_path / ".env"
     env_path.write_text(
         "LLM_PROVIDER=openai\n"
-        "OPENAI_REASONING_MODEL=gpt-5.4\n"
-        "OPENAI_MODEL=gpt-5.4\n"
+        "OPENAI_REASONING_MODEL=gpt-5.4-mini\n"
+        "OPENAI_MODEL=gpt-5.4-mini\n"
         "OPENAI_TOOLCALL_MODEL=gpt-5.4-mini\n",
         encoding="utf-8",
     )
     monkeypatch.setenv("LLM_PROVIDER", "openai")
-    monkeypatch.setenv("OPENAI_REASONING_MODEL", "gpt-5.4")
+    monkeypatch.setenv("OPENAI_REASONING_MODEL", "gpt-5.4-mini")
     monkeypatch.setenv("OPENAI_TOOLCALL_MODEL", "gpt-5.4-mini")
 
     sync_provider_env(
         provider=PROVIDER_BY_VALUE["openai"],
-        model="gpt-5.4",
+        model="gpt-5.4-mini",
         env_path=env_path,
     )
 
@@ -240,11 +240,11 @@ def test_sync_provider_env_preserves_active_provider_toolcall_key(tmp_path, monk
 def test_sync_provider_env_updates_os_environ(tmp_path, monkeypatch) -> None:
     env_path = tmp_path / ".env"
     env_path.write_text(
-        "LLM_PROVIDER=openai\nOPENAI_REASONING_MODEL=gpt-5.4\nOPENAI_TOOLCALL_MODEL=gpt-5.4-mini\n",
+        "LLM_PROVIDER=openai\nOPENAI_REASONING_MODEL=gpt-5.4-mini\nOPENAI_TOOLCALL_MODEL=gpt-5.4-mini\n",
         encoding="utf-8",
     )
     monkeypatch.setenv("LLM_PROVIDER", "openai")
-    monkeypatch.setenv("OPENAI_REASONING_MODEL", "gpt-5.4")
+    monkeypatch.setenv("OPENAI_REASONING_MODEL", "gpt-5.4-mini")
     monkeypatch.setenv("OPENAI_TOOLCALL_MODEL", "gpt-5.4-mini")
 
     sync_provider_env(
@@ -265,22 +265,22 @@ def test_sync_provider_env_skips_empty_preserved_values_in_os_environ(
     env_path = tmp_path / ".env"
     env_path.write_text(
         "LLM_PROVIDER=openai\n"
-        "OPENAI_REASONING_MODEL=gpt-5.4\n"
-        "OPENAI_MODEL=gpt-5.4\n"
+        "OPENAI_REASONING_MODEL=gpt-5.4-mini\n"
+        "OPENAI_MODEL=gpt-5.4-mini\n"
         "OPENAI_TOOLCALL_MODEL=\n",
         encoding="utf-8",
     )
     monkeypatch.setenv("LLM_PROVIDER", "openai")
-    monkeypatch.setenv("OPENAI_REASONING_MODEL", "gpt-5.4")
+    monkeypatch.setenv("OPENAI_REASONING_MODEL", "gpt-5.4-mini")
     monkeypatch.delenv("OPENAI_TOOLCALL_MODEL", raising=False)
 
     sync_provider_env(
         provider=PROVIDER_BY_VALUE["openai"],
-        model="gpt-5.4",
+        model="gpt-5.4-mini",
         env_path=env_path,
     )
 
-    assert os.environ["OPENAI_REASONING_MODEL"] == "gpt-5.4"
+    assert os.environ["OPENAI_REASONING_MODEL"] == "gpt-5.4-mini"
     assert "OPENAI_TOOLCALL_MODEL" not in os.environ
 
 
@@ -288,8 +288,8 @@ def test_sync_provider_env_skips_empty_toolcall_model_override(tmp_path, monkeyp
     env_path = tmp_path / ".env"
     env_path.write_text(
         "LLM_PROVIDER=openai\n"
-        "OPENAI_REASONING_MODEL=gpt-5.4\n"
-        "OPENAI_MODEL=gpt-5.4\n"
+        "OPENAI_REASONING_MODEL=gpt-5.4-mini\n"
+        "OPENAI_MODEL=gpt-5.4-mini\n"
         "OPENAI_TOOLCALL_MODEL=gpt-5.4-mini\n",
         encoding="utf-8",
     )
@@ -298,7 +298,7 @@ def test_sync_provider_env_skips_empty_toolcall_model_override(tmp_path, monkeyp
 
     sync_provider_env(
         provider=PROVIDER_BY_VALUE["openai"],
-        model="gpt-5.4",
+        model="gpt-5.4-mini",
         toolcall_model="",
         env_path=env_path,
     )
@@ -312,13 +312,13 @@ def test_sync_provider_env_writes_toolcall_model_atomically(tmp_path, monkeypatc
     env_path = tmp_path / ".env"
     env_path.write_text(
         "LLM_PROVIDER=openai\n"
-        "OPENAI_REASONING_MODEL=gpt-5.4\n"
-        "OPENAI_MODEL=gpt-5.4\n"
+        "OPENAI_REASONING_MODEL=gpt-5.4-mini\n"
+        "OPENAI_MODEL=gpt-5.4-mini\n"
         "OPENAI_TOOLCALL_MODEL=old-toolcall\n",
         encoding="utf-8",
     )
     monkeypatch.setenv("LLM_PROVIDER", "openai")
-    monkeypatch.setenv("OPENAI_REASONING_MODEL", "gpt-5.4")
+    monkeypatch.setenv("OPENAI_REASONING_MODEL", "gpt-5.4-mini")
     monkeypatch.setenv("OPENAI_TOOLCALL_MODEL", "old-toolcall")
 
     sync_provider_env(

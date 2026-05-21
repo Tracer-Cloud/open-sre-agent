@@ -403,7 +403,7 @@ class TestDispatcherIntegration:
 
         # Calling the pooled bridge path directly must return sink_closed, not raise.
         result = sink._run_bridge_in_pool(_bridge, _incident(severity=IncidentSeverity.HIGH))  # type: ignore[attr-defined]
-        assert "sink_closed" in result.state
+        assert result.state.value == "sink_closed"
 
     def test_submit_runtime_error_still_dispatches_telegram(
         self, monkeypatch: pytest.MonkeyPatch
@@ -470,7 +470,7 @@ class TestDispatcherIntegration:
         result = sink._run_bridge_in_pool(  # type: ignore[attr-defined]
             _bridge, _incident(severity=IncidentSeverity.HIGH)
         )
-        assert result.state == "sink_closed", (
-            f"CancelledError should yield sink_closed, got: {result.state}"
+        assert result.state.value == "sink_closed", (
+            f"CancelledError should yield sink_closed, got: {result.state.value}"
         )
         sink.close()

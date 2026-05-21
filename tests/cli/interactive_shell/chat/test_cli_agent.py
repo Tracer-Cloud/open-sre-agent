@@ -265,6 +265,25 @@ class TestAssistantOutputRendering:
             ("assistant", "Sure thing."),
         ]
 
+    def test_command_selection_prompt_uses_deterministic_response(self) -> None:
+        session = ReplSession()
+        console, buf = _capture()
+        answer_cli_agent("what command do I use?", session, console)
+        output = _strip_ansi(buf.getvalue()).casefold()
+        assert "which command to use" in output
+        assert "opensre investigate" in output
+        assert "opensre --help" in output
+        assert session.cli_agent_messages[-2:] == [
+            ("user", "what command do I use?"),
+            (
+                "assistant",
+                "If you're asking which command to use, start with `opensre investigate` "
+                "for incidents and paste alert text, JSON, or a concrete incident "
+                "description into this interactive shell.\n\n"
+                "If you want a full command list, run `opensre --help`.",
+            ),
+        ]
+
     def test_structured_content_blocks_are_rendered(self, monkeypatch: Any) -> None:
         class _Block:
             def __init__(self, text: str) -> None:

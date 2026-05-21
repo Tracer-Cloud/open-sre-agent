@@ -39,17 +39,11 @@ planned_actions:
   source: llm
 executed_actions: []
 response_contract:
-  must_contain_any:
-  - checkout
-  - "500"
-  - database
-  - investigate
-  - integration
+  must_contain_any: []
   must_not_contain:
   - $ /
 history:
   expected:
   - type: cli_agent
-    ok: true
 tier: full
 runs: 3

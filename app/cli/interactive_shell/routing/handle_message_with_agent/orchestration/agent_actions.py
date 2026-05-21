@@ -13,9 +13,7 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.i
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner import (
     plan_actions_with_llm,
-)
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.planner_result_adapter import (
-    normalize_planner_result,
+    plan_actions_with_llm_result,
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.slash_commands.deterministic_action_mapper import (
     map_cli_actions,
@@ -30,6 +28,8 @@ from app.cli.interactive_shell.runtime import ReplSession
 from app.cli.interactive_shell.ui import DIM, print_planned_actions
 from app.cli.interactive_shell.ui.streaming import render_response_header
 
+_DEFAULT_PLAN_ACTIONS_WITH_LLM = plan_actions_with_llm
+
 
 @dataclass(frozen=True)
 class TerminalActionExecutionResult:
@@ -41,23 +41,35 @@ class TerminalActionExecutionResult:
 
 
 @dataclass(frozen=True)
-class ActionExecutionDeps:
-    """Stable adapter boundary for planner and tool-dispatch dependencies."""
-
-    planner: Callable[..., Any]
-    dispatch: Callable[..., bool]
-
-
-def _default_execution_deps() -> ActionExecutionDeps:
-    return ActionExecutionDeps(planner=plan_actions_with_llm, dispatch=REGISTRY.dispatch)
+class _ActionPlanningDecision:
+    actions: tuple[PlannedAction, ...]
+    has_unhandled_clause: bool
+    denied: bool
+    policy_trace: tuple[str, ...]
 
 
-def _plan_actions(
-    message: str,
-    session: ReplSession,
-    *,
-    deps: ActionExecutionDeps | None = None,
-) -> tuple[list[PlannedAction], bool, bool]:
+def _coerce_action_plan_decision(
+    raw: _ActionPlanningDecision
+    | tuple[list[PlannedAction], bool]
+    | tuple[list[PlannedAction], bool, bool],
+) -> _ActionPlanningDecision:
+    """Back-compat adapter for tests that monkeypatch _plan_actions to tuple output."""
+    if isinstance(raw, _ActionPlanningDecision):
+        return raw
+    if len(raw) == 2:
+        actions, has_unhandled_clause = raw
+        denied = False
+    else:
+        actions, has_unhandled_clause, denied = raw
+    return _ActionPlanningDecision(
+        actions=tuple(actions),
+        has_unhandled_clause=has_unhandled_clause,
+        denied=denied,
+        policy_trace=(),
+    )
+
+
+def _plan_actions(message: str, session: ReplSession) -> _ActionPlanningDecision:
     """Plan actions for a free-text message using LLM-first planning.
 
     Used to wrap the call in a ``rich.Live`` spinner for in-place
@@ -81,30 +93,41 @@ def _plan_actions(
 
         cmd = " ".join(stripped[1:].split())  # normalise internal whitespace/newlines
         if cmd:
-            return [shell_action(f"!{cmd}", 0)], False, False
+            return _ActionPlanningDecision(
+                actions=(shell_action(f"!{cmd}", 0),),
+                has_unhandled_clause=False,
+                denied=False,
+                policy_trace=("deterministic_bang_shell",),
+            )
 
-    runtime_deps = deps or _default_execution_deps()
-    normalized_plan = normalize_planner_result(runtime_deps.planner(message, session=session))
-    if normalized_plan.unavailable:
-        return [], True, True
-    actions, has_unhandled_clause = (
-        normalized_plan.actions,
-        normalized_plan.has_unhandled_clause,
-    )
+    if plan_actions_with_llm is _DEFAULT_PLAN_ACTIONS_WITH_LLM:
+        llm_plan_result = plan_actions_with_llm_result(message, session=session)
+        if llm_plan_result is None:
+            return _ActionPlanningDecision((), True, True, ("planner_unavailable",))
+        actions = list(llm_plan_result.actions)
+        has_unhandled_clause = llm_plan_result.has_unhandled_clause
+        policy_trace = llm_plan_result.policy_trace
+    else:
+        # Preserve existing monkeypatch seam used by unit tests and debug harnesses.
+        llm_plan_legacy = plan_actions_with_llm(message, session=session)
+        if llm_plan_legacy is None:
+            return _ActionPlanningDecision((), True, True, ("planner_unavailable",))
+        actions, has_unhandled_clause = llm_plan_legacy
+        policy_trace = ()
     if not actions:
-        return [], has_unhandled_clause, False
+        return _ActionPlanningDecision((), has_unhandled_clause, False, policy_trace)
     if all(action.kind == "assistant_handoff" for action in actions):
         # If the planner surfaced an assistant handoff *and* flagged unhandled
         # content, treat this as a fail-closed deny path. This handles partial
         # prompts where only some clauses were actionable.
         if has_unhandled_clause:
-            return [], True, True
+            return _ActionPlanningDecision((), True, True, policy_trace)
         # Pure handoff: let the caller invoke the LLM reply directly without
         # printing a noisy "Requested actions: assistant handoff …" header.
-        return [], False, False
+        return _ActionPlanningDecision((), False, False, policy_trace)
     if has_unhandled_clause:
-        return [], True, True
-    return actions, False, False
+        return _ActionPlanningDecision((), True, True, policy_trace)
+    return _ActionPlanningDecision(tuple(actions), False, False, policy_trace)
 
 
 def _render_plan_denied(console: Console) -> None:
@@ -155,9 +178,7 @@ def _execute_planned_actions(
     console: Console,
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
-    deps: ActionExecutionDeps | None = None,
 ) -> bool:
-    runtime_deps = deps or _default_execution_deps()
     console.print()
     render_response_header(console, "assistant")
     print_planned_actions(console, actions)
@@ -179,7 +200,7 @@ def _execute_planned_actions(
         tool_name = ACTION_KIND_TO_TOOL.get(action.kind)
         if tool_name is None:
             continue
-        runtime_deps.dispatch(
+        REGISTRY.dispatch(
             tool_name=tool_name,
             args=_tool_args_for_action(action),
             ctx=ToolContext(
@@ -202,7 +223,6 @@ def execute_cli_actions(
     *,
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
-    deps: ActionExecutionDeps | None = None,
 ) -> bool:
     """Execute inferred actions from LLM-first planning.
 
@@ -210,10 +230,10 @@ def execute_cli_actions(
     denials). Returns False only for legacy/test paths that pass through with no
     planned actions and no deny signal.
     """
-    if deps is None:
-        actions, has_unhandled_clause, denied = _plan_actions(message, session)
-    else:
-        actions, has_unhandled_clause, denied = _plan_actions(message, session, deps=deps)
+    plan = _coerce_action_plan_decision(_plan_actions(message, session))
+    actions = list(plan.actions)
+    has_unhandled_clause = plan.has_unhandled_clause
+    denied = plan.denied
     if denied:
         _render_plan_denied(console)
         session.record("cli_agent", message, ok=False)
@@ -228,7 +248,6 @@ def execute_cli_actions(
         console=console,
         confirm_fn=confirm_fn,
         is_tty=is_tty,
-        deps=deps,
     )
 
 
@@ -238,7 +257,6 @@ def execute_cli_actions_with_metrics(
     console: Console,
     *,
     confirm_fn: Callable[[str], str] | None = None,
-    deps: ActionExecutionDeps | None = None,
 ) -> TerminalActionExecutionResult:
     """Execute planned actions and return per-turn action counters.
 
@@ -248,17 +266,27 @@ def execute_cli_actions_with_metrics(
     ``input()`` (which deadlocks against the running ``prompt_async``).
     """
     from app.analytics.cli import (
+        capture_repl_execution_policy_decision,
         capture_terminal_actions_executed,
         capture_terminal_actions_planned,
     )
 
-    if deps is None:
-        actions, has_unhandled_clause, denied = _plan_actions(message, session)
-    else:
-        actions, has_unhandled_clause, denied = _plan_actions(message, session, deps=deps)
+    plan = _coerce_action_plan_decision(_plan_actions(message, session))
+    actions = list(plan.actions)
+    has_unhandled_clause = plan.has_unhandled_clause
+    denied = plan.denied
     capture_terminal_actions_planned(
         planned_count=len(actions),
         has_unhandled_clause=has_unhandled_clause,
+    )
+    capture_repl_execution_policy_decision(
+        {
+            "policy_stage": "terminal_action_planning",
+            "policy_trace": ",".join(plan.policy_trace),
+            "planned_count": len(actions),
+            "has_unhandled_clause": has_unhandled_clause,
+            "denied": denied,
+        }
     )
     if denied:
         _render_plan_denied(console)
@@ -292,7 +320,6 @@ def execute_cli_actions_with_metrics(
         session=session,
         console=console,
         confirm_fn=confirm_fn,
-        deps=deps,
     )
     executed_entries = [
         item
@@ -327,7 +354,6 @@ def plan_terminal_tasks(message: str) -> list[str]:
 
 
 __all__ = [
-    "ActionExecutionDeps",
     "TerminalActionExecutionResult",
     "execute_cli_actions",
     "execute_cli_actions_with_metrics",
