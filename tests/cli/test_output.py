@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 from typing import Any
 
@@ -164,6 +165,62 @@ def test_fmt_timing(elapsed_ms: int, expected: str) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # ProgressTracker — text mode
 # ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_tracker_uses_repl_append_display_when_prompt_app_active(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(output, "get_output_format", lambda: "rich")
+    monkeypatch.setattr(output, "_repl_progress_active", lambda: True)
+    tracker = ProgressTracker()
+    assert isinstance(tracker._display, output._ReplEventLogDisplay)
+    assert tracker._toggle_watcher is None
+
+
+def test_tracker_uses_repl_append_display_under_repl_safe_scope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(output, "get_output_format", lambda: "rich")
+    from app.cli.support.repl_progress import repl_safe_progress_scope
+
+    with repl_safe_progress_scope():
+        tracker = ProgressTracker()
+    assert isinstance(tracker._display, output._ReplEventLogDisplay)
+    assert tracker._toggle_watcher is None
+
+
+def test_repl_display_buffers_subtext_until_step_complete(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(output, "get_output_format", lambda: "rich")
+    monkeypatch.setattr(output, "_repl_progress_active", lambda: True)
+    display = output._ReplEventLogDisplay()
+    display.step_start("investigate")
+    out_after_start = _strip_ansi(capsys.readouterr().out)
+    assert "Gathering evidence" in out_after_start
+    assert "↳" not in out_after_start
+
+    display.step_subtext("investigate", "Hermes: log poll")
+    display.step_subtext("investigate", "Hermes: log poll x2")
+    assert "↳" not in _strip_ansi(capsys.readouterr().out)
+
+    display.step_complete(
+        "investigate",
+        output.ProgressEvent(node_name="investigate", elapsed_ms=1200, status="completed"),
+    )
+    out = _strip_ansi(capsys.readouterr().out)
+    assert out.count("↳") == 1
+    assert "Hermes: log poll x2" in out
+    assert "Hermes: log poll\n" not in out
+
+
+@pytest.mark.asyncio
+async def test_repl_safe_progress_scope_propagates_to_asyncio_thread() -> None:
+    from app.cli.support.repl_progress import repl_safe_progress_scope
+
+    with repl_safe_progress_scope():
+        assert await asyncio.to_thread(output._repl_progress_active) is True
 
 
 @pytest.mark.usefixtures("force_text_mode")

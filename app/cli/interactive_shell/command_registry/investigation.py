@@ -87,8 +87,9 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
     from app.analytics.cli import track_investigation
     from app.analytics.source import EntrypointSource, TriggerMode
     from app.cli.investigation import run_investigation_for_session
+    from app.cli.investigation.payload import resolve_alert_path
 
-    path = Path(args[0])
+    path = resolve_alert_path(args[0])
     if not path.exists():
         console.print(f"[{ERROR}]file not found:[/] {escape(str(path))}")
         session.mark_latest(ok=False, kind="slash")
@@ -144,7 +145,7 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
     root = final_state.get("root_cause")
     task.mark_completed(result=str(root) if root is not None else "")
     session.last_state = final_state
-    # Match `_run_new_alert` in loop.py: inherit service / cluster / region
+    # Match `run_new_alert` in runtime/execution.py: inherit service / cluster / region
     # across subsequent investigations in the same REPL session.
     session.accumulate_from_state(final_state)
     session.record("alert", f"/investigate {args[0]}")
@@ -236,7 +237,7 @@ COMMANDS: list[SlashCommand] = [
         "Run an RCA investigation from a file.",
         _cmd_investigate_file,
         usage=("/investigate <file>",),
-        execution_tier=ExecutionTier.ELEVATED,
+        execution_tier=ExecutionTier.SAFE,
         validate_args=_validate_investigate_args,
     ),
     SlashCommand(

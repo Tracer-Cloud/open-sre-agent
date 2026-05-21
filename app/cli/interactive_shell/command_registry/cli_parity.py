@@ -16,9 +16,8 @@ from rich.markup import escape
 
 from app.cli.interactive_shell.command_registry.suggestions import closest_choice
 from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
-from app.cli.interactive_shell.orchestration.action_executor import (
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor import (
     SYNTHETIC_TEST_TIMEOUT_SECONDS,
-    print_interactive_wizard_handoff,
     start_background_cli_task,
 )
 from app.cli.interactive_shell.runtime import ReplSession, TaskKind
@@ -94,23 +93,13 @@ def run_cli_command(
     return True
 
 
-def _cmd_onboard(session: ReplSession, console: Console, args: list[str]) -> bool:
-    # Onboard is a full-TTY interactive wizard. It cannot run inside
-    # the persistent REPL — the wizard's prompt_toolkit Application
-    # fights the shell's active one over the same terminal, producing
-    # the stacked-widget rendering bug. Refuse with a clear handoff to
-    # the right invocation instead of spawning a subprocess that will
-    # fail visually. Message body lives in
-    # ``action_executor.print_interactive_wizard_handoff`` so the
-    # LLM-classified path and this slash path stay in lock-step.
-    command_str = "onboard" + ((" " + " ".join(args)) if args else "")
-    print_interactive_wizard_handoff(console, command_str)
-    # Mirror :func:`run_opensre_cli_command`: record the attempted-but-
-    # refused invocation so the AI assistant's session history captures
-    # user intent regardless of which entry point they used.
-    session.record("cli_command", f"opensre {command_str}", ok=False)
-    # True = wizard exists and was handed off; ``_OPENSRE_BLOCKED_SUBCOMMANDS`` returns False for "shouldn't run at all".
-    return True
+def _cmd_onboard(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+    # The REPL loop adds ``/onboard`` to ``_WAIT_FOR_COMPLETION_COMMANDS``
+    # (dispatch.py) so the prompt_toolkit Application is torn down before
+    # this handler runs — the wizard subprocess therefore gets exclusive
+    # stdin and can drive its own interactive prompts without conflicting
+    # with the shell's UI.
+    return run_cli_command(console, ["onboard", *args])
 
 
 def _cmd_remote(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001

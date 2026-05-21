@@ -26,6 +26,7 @@ class AgentRecord:
     registered_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     source: str = "registered"
     waits_on: tuple[int, ...] = ()
+    provider: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -36,6 +37,8 @@ class AgentRecord:
         raw_waits = data.get("waits_on", [])
         pid = int(str(raw_pid))
         waits_on = tuple(int(str(p)) for p in raw_waits) if isinstance(raw_waits, list) else ()
+        raw_provider = data.get("provider")
+        provider = str(raw_provider) if raw_provider is not None else None
         return cls(
             name=str(data["name"]),
             pid=pid,
@@ -43,6 +46,7 @@ class AgentRecord:
             registered_at=str(data.get("registered_at", datetime.now(UTC).isoformat())),
             source=str(data.get("source", "registered")),
             waits_on=waits_on,
+            provider=provider,
         )
 
     def add_waits_on(self, record: AgentRecord) -> AgentRecord:

@@ -13,13 +13,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
 from rich.console import Console
 from rich.table import Table
 
 from app.agents import config as config_mod
 from app.agents.probe import ProcessSnapshot
 from app.agents.registry import AgentRecord
+from app.agents.token_rate import TOKEN_RATE_TRACKER
 from app.cli.interactive_shell.ui import agents_view as agents_view_mod
 from app.cli.interactive_shell.ui.agents_view import render_agents_table
 
@@ -35,6 +35,31 @@ def isolated_agents_yaml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Pat
     target = tmp_path / "agents.yaml"
     monkeypatch.setattr(config_mod, "agents_config_path", lambda: target)
     return target
+
+
+@pytest.fixture(autouse=True)
+def _clear_sampler_module_state() -> None:
+    """Reset module-level state in the sampler before each test.
+
+    Three globals can leak across test files:
+
+    - :data:`app.agents.sampler._latest` (probe snapshots dict)
+    - :data:`app.agents.token_rate.TOKEN_RATE_TRACKER` (per-PID deque)
+    - :data:`app.agents.sampler._TickCache.registry_snapshot` and
+      :data:`_TickCache.agents_config` (tick caches added in #2023 to
+      avoid re-reading the disk on every render)
+
+    Sampler tests populate all of them; view tests must start clean
+    so placeholder assertions are stable under ``pytest-xdist`` and
+    in arbitrary alphabetical order.
+    """
+    from app.agents import sampler as sampler_mod
+
+    sampler_mod._latest.clear()
+    sampler_mod._TickCache.registry_snapshot = {}
+    sampler_mod._TickCache.agents_config = None
+    for pid in list(TOKEN_RATE_TRACKER.known_pids()):
+        TOKEN_RATE_TRACKER.forget(pid)
 
 
 # The columns this PR ships are the contract for #1490 and later
@@ -123,9 +148,14 @@ def test_row_contains_agent_name_and_pid() -> None:
     assert "8421" in out
 
 
-def test_metric_cells_are_placeholders_until_wired() -> None:
-    """``uptime``, ``cpu%``, ``tokens/min``, ``$/hr``, and ``status`` render as
-    placeholders when no sampler snapshot exists for the process."""
+def test_metric_cells_are_placeholders_when_no_sampler_data() -> None:
+    """All five metric cells render ``-`` when the sampler has no
+    data for the PID (REPL not running, non-interactive ``opensre
+    agents list``, or fresh registration that has not yet been
+    sampled). #2023 split ``tokens/min`` and ``$/hr`` from the
+    yaml budget; both still fall back to ``-`` here for the same
+    "no data" reason.
+    """
     table, _ = _render([AgentRecord(name="claude-code", pid=8421, command="claude")])
     # row_count == 1, so iterate directly to inspect the rendered cells
     assert table.row_count == 1
@@ -159,7 +189,81 @@ def test_table_shows_live_probe_data_when_snapshot_exists(monkeypatch: pytest.Mo
     table, _ = _render([AgentRecord(name="cursor", pid=8444, command="cursor")])
 
     rendered_cells = [list(col.cells)[0] for col in table.columns]
+    # ``tokens/min`` and ``$/hr`` are still ``-`` because no token
+    # tracker entry exists for this PID — the snapshot fixture covers
+    # only the resource side. The full live-data case is covered by
+    # ``test_table_shows_tokens_and_cost_when_tracker_has_data``.
+    # Status: started_at is 2 h ago and ``last_output_at`` is ``None``
+    # in the view code, so ``compute_status`` returns STUCK with a
+    # progress-time annotation (from the upstream status heuristic).
     assert rendered_cells[2:] == ["2h0m", "23.5", "-", "-", "[red]stuck (2h0m no progress)[/red]"]
+
+
+def test_table_shows_tokens_and_cost_when_tracker_has_data(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """End-to-end of the #2023 wiring on the view side: when the
+    sampler's accessors return live numbers, the view formats them
+    into the ``tokens/min`` and ``$/hr`` columns.
+    """
+    monkeypatch.setattr(agents_view_mod, "get_tokens_per_min", lambda _pid: 120.0)
+    monkeypatch.setattr(agents_view_mod, "get_usd_per_hour", lambda _pid: 0.27)
+
+    table, _ = _render([AgentRecord(name="claude-code-8421", pid=8421, command="claude")])
+
+    rendered_cells = [list(col.cells)[0] for col in table.columns]
+    # cells[4] = tokens/min, cells[5] = $/hr
+    assert rendered_cells[4] == "120"
+    assert rendered_cells[5] == "$0.27"
+
+
+def test_tokens_per_min_formatter_uses_k_suffix_above_1000(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A busy session emitting > 1k tokens/min must not blow out the
+    column width; the formatter falls back to ``1.2k`` shorthand.
+    """
+    monkeypatch.setattr(agents_view_mod, "get_tokens_per_min", lambda _pid: 1234.0)
+    monkeypatch.setattr(agents_view_mod, "get_usd_per_hour", lambda _pid: None)
+
+    table, _ = _render([AgentRecord(name="claude-code", pid=8421, command="claude")])
+    rendered_cells = [list(col.cells)[0] for col in table.columns]
+    assert rendered_cells[4] == "1.2k"
+
+
+def test_idle_observed_agent_renders_zero_tokens_per_min_not_dash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The ``0`` vs ``-`` distinction the tracker enforces must
+    propagate to the cell: a known-but-idle agent renders ``0``,
+    a never-observed agent renders ``-``.
+    """
+    monkeypatch.setattr(agents_view_mod, "get_tokens_per_min", lambda _pid: 0.0)
+    monkeypatch.setattr(agents_view_mod, "get_usd_per_hour", lambda _pid: 0.0)
+
+    table, _ = _render([AgentRecord(name="claude-code", pid=8421, command="claude")])
+    rendered_cells = [list(col.cells)[0] for col in table.columns]
+    assert rendered_cells[4] == "0"
+    assert rendered_cells[5] == "$0.00"
+
+
+def test_usd_per_hour_renders_dash_when_model_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``get_usd_per_hour`` returns ``None`` when the model cannot
+    be resolved (and therefore pricing cannot be applied). The cell
+    must render ``-`` rather than ``$0.00`` so the user does not
+    misread "unknown" as "free".
+    """
+    monkeypatch.setattr(agents_view_mod, "get_tokens_per_min", lambda _pid: 500.0)
+    monkeypatch.setattr(agents_view_mod, "get_usd_per_hour", lambda _pid: None)
+
+    table, _ = _render([AgentRecord(name="claude-code", pid=8421, command="claude")])
+    rendered_cells = [list(col.cells)[0] for col in table.columns]
+    # tokens/min still shows the live figure …
+    assert rendered_cells[4] == "500"
+    # … but $/hr is honest about the missing rate.
+    assert rendered_cells[5] == "-"
 
 
 def test_multiple_records_are_each_rendered_in_order() -> None:
@@ -195,33 +299,6 @@ def test_record_name_is_rich_escaped_so_markup_does_not_render() -> None:
     assert "[bold red]ghost[/]" in out
 
 
-# ---------------------------------------------------------------------------
-# Graceful degradation when agents.yaml has a schema violation
-# ---------------------------------------------------------------------------
-
-
-def test_schema_invalid_budget_config_does_not_crash_render(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A typo'd field key in ``agents.yaml`` raises
-    ``pydantic.ValidationError`` from ``load_agents_config()``. The
-    rendering function must catch it and fall back to empty budgets so
-    bare ``/agents`` still renders (with ``$/hr`` as ``-``) instead of
-    crashing the REPL with a raw traceback. The same hand-edit is
-    surfaced as a friendly error in ``/agents budget``, which is the
-    surface that exists to fix it.
-    """
-
-    def _raise(*_args: object, **_kwargs: object) -> None:
-        raise ValidationError.from_exception_data("AgentsConfig", [])
-
-    monkeypatch.setattr(agents_view_mod, "load_agents_config", _raise)
-
-    table, out = _render([AgentRecord(name="claude-code", pid=8421, command="claude")])
-    assert table.row_count == 1
-    assert "claude-code" in out
-    # $/hr cell falls back to the placeholder rather than the
-    # configured value, but the table still renders.
-    rendered_cells = [list(col.cells)[0] for col in table.columns]
-    # cells[5] is the $/hr column.
-    assert rendered_cells[5] == "-"
+# Resilience to a schema-invalid ``agents.yaml`` is now enforced by
+# the sampler's catch-all around ``load_agents_config`` (see
+# ``test_sampler.py``); the view no longer touches the config.

@@ -15,8 +15,9 @@ fleet view lives behind one slash command in the interactive shell:
 ```
 
 Subcommands drill into specific surfaces. Below: how the agent fleet is
-discovered (`opensre agents scan`), live tail of agent stdout
-(`/agents trace`), then the cross-agent context bus (`/agents bus`).
+discovered (`opensre agents scan`), the dashboard itself (`/agents`),
+then live tail of agent stdout (`/agents trace`), then the cross-agent
+context bus (`/agents bus`).
 
 ## `opensre agents scan` — discover running agent sessions
 
@@ -70,6 +71,117 @@ opensre agents scan --register
 writes every discovered session into the local agent registry so that the
 rest of the fleet surface (`/agents`, `/agents trace`, `/agents bus`) can
 target it by PID. Without `--register`, the command is read-only.
+
+## `/agents` — fleet dashboard
+
+The dashboard renders a seven-column table of every registered or
+discovered local AI agent. Run from the interactive REPL:
+
+```text
+> /agents
+       agents
+agent              pid   uptime   cpu%   tokens/min   $/hr    status
+claude-code-8421   8421  2h12m    18.4   320          $0.08   running
+codex-13442        13442 11m      4.2    175          $0.04   running
+cursor-agent-9999  9999  47m      0.6    -            -       running
+```
+
+### Column data sources
+
+| Column | Source | Notes |
+| --- | --- | --- |
+| `agent` | `AgentRecord.name` | Registered name or discovery-generated `<provider>-<pid>`. |
+| `pid` | `AgentRecord.pid` | OS process id. |
+| `uptime` | sampler probe (psutil `create_time`) | Compact form: `45s` / `12m` / `2h12m` / `3d4h`. |
+| `cpu%` | sampler probe (psutil) | Trailing 100 ms `cpu_percent`. |
+| `tokens/min` | per-PID 60 s rolling window | Real for `claude-code` and `codex`; `-` for the rest. |
+| `$/hr` | observed cost from token rate × model pricing | Renders `-` when the model is unknown. |
+| `status` | sampler probe (psutil) | `running` / `sleeping` / `zombie` / etc. |
+
+### `tokens/min` semantics
+
+The cell shows the **sum of tokens emitted in the trailing 60 seconds**,
+scaled to a per-minute figure. Three states:
+
+- **Real value** (`320`, `1.2k`): the agent's provider has a working
+  meter and the on-disk session log was readable. Today this is
+  `claude-code` (reads `~/.claude/projects/<mangled-cwd>/<session>.jsonl`)
+  and `codex` (reads `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl`,
+  default `$CODEX_HOME=~/.codex`).
+- **`0`**: the agent was observed at least once but emitted nothing in
+  the last 60 s. Honest UX — distinguishes "idle session" from
+  "not observable".
+- **`-`**: never observed. Either the provider has no meter yet
+  (cursor, aider, gemini-cli, opencode, kimi, copilot in this PR),
+  the session log is unreadable (rare; macOS hardened-runtime
+  processes can deny `psutil.cwd()`), or the interactive REPL is
+  not running (non-interactive `opensre agents list` never starts
+  the sampler).
+
+Claude Code cache-read/cache-creation tokens are included in the
+visible activity count because they are separate input work. Codex
+`cached_input_tokens` are treated as a discounted subset of
+`input_tokens`, so they affect `$/hr` but are not added again to the
+visible `tokens/min` total.
+
+### `$/hr` semantics
+
+`$/hr` is a **projected hourly burn rate** derived from the same
+trailing 60 s window the `tokens/min` column reports — not the
+actual spend over the last hour:
+
+```text
+$/hr = cost_of_usage_buckets_in_the_trailing_60s_window(model) × 60
+```
+
+Reads as "if the agent sustains the current ritmo for one hour, it
+will cost this much". Useful as an operational signal: it tracks
+`cpu%` in spirit, reacts immediately when an agent goes idle or
+switches model, and keeps memory bounded (a ~12-entry deque per PID
+at the default 5 s tick instead of an unbounded hour-long history).
+If you need actual spend over the last hour, that's a different
+metric — open a follow-up issue.
+
+Pricing uses per-bucket rates for input, output, cached input, cache
+read, and cache creation where the provider emits those counters. The
+local pricing table is a vendored `models.dev` snapshot for the
+Claude Code and Codex models supported here, with optional
+`agents.yaml` input/output overrides. Pricing returns `None` for
+unknown models and the cell falls back to `-`; the dashboard never
+invents a rate. The yaml `hourly_budget_usd` field is **not** the
+cell content — it's reserved for a future budget-alarm feature.
+
+Model resolution order (highest to lowest):
+
+1. **NDJSON model hint** from the meter (most accurate — reflects
+   the model the running session is currently using).
+2. **`agents.yaml` override** (`AgentBudget.model`):
+
+   ```yaml
+   agents:
+     claude-code-8421:
+       model: claude-sonnet-4-5
+     codex-13442:
+       model: gpt-5-codex
+   ```
+
+3. **Provider env var** (`CLAUDE_CODE_MODEL`, `CODEX_MODEL`) read via
+   psutil. May fail on macOS hardened-runtime processes, in which
+   case the cell falls back to `-` unless one of the two higher
+   priority sources resolved.
+
+### Provider coverage today
+
+| Provider | `tokens/min` | `$/hr` |
+| --- | --- | --- |
+| `claude-code` | real | real |
+| `codex` | real | real |
+| `cursor`, `aider`, `gemini-cli`, `opencode`, `kimi`, `copilot` | `-` | `-` |
+
+Adding a real meter for another provider is a self-contained
+follow-up PR: implement the `TokenMeter` and `TokenSource`
+protocols, register both instances, add tests. No changes to the
+sampler, tracker, view, or pricing layer are needed.
 
 ## `/agents trace` — live stdout tail
 

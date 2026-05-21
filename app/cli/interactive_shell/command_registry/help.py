@@ -117,7 +117,13 @@ def _cmd_help(_session: ReplSession, console: Console, args: list[str]) -> bool:
         return True
 
     if repl_tty_interactive():
-        choose_help_command(sections)
+        selected = choose_help_command(sections)
+        if selected:
+            # Re-dispatch the selected slash command so Enter in the help picker
+            # runs the command directly instead of only opening details.
+            from app.cli.interactive_shell.command_registry import dispatch_slash
+
+            return dispatch_slash(selected, _session, console)
         return True
 
     render_help_index(console, sections)

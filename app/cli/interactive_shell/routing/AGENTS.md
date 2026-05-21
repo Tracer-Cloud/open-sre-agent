@@ -53,21 +53,19 @@ If all answers are weak, keep the logic inline.
 
 | File | Ownership | Scope |
 | --- | --- | --- |
-| `app/cli/interactive_shell/routing/tests/test_router_contracts.py` | Routing package owners | Deterministic slash/alias routing contracts |
-| `app/cli/interactive_shell/routing/tests/test_router_live_prompts.py` | Routing package owners | Curated high-signal live `route_input` prompt contracts |
-| `app/cli/interactive_shell/routing/tests/test_dataset_integrity.py` | Routing package owners | Dataset/schema/no-mocks guardrails |
-| `tests/cli/interactive_shell/orchestration/test_llm_intent_classifier.py` | Orchestration owners | Classifier internals (sanitization + live cache/override behavior) |
-| `app/cli/interactive_shell/routing/tests/router_contracts.yml` | Routing package owners | Deterministic slash/alias command contracts |
-| `app/cli/interactive_shell/routing/tests/router_live_prompts.yml` | Routing package owners | Canonical live prompt corpus for shardable contract runs |
+| `app/cli/interactive_shell/routing/tests/test_routing_scenarios.py` | Routing package owners | Canonical runner: deterministic routing, live classification, action planning, turn-execution oracles |
+| `app/cli/interactive_shell/routing/tests/test_routing_fixture_integrity.py` | Routing package owners | Scenario-tree/schema/no-mocks guardrails |
+| `app/cli/interactive_shell/routing/tests/scenario_loader.py` | Routing package owners | Load `scenarios/<behavior_class>/<id>/{scenario.yml,answer.yml}` |
+| `app/cli/interactive_shell/routing/tests/scenarios/**/scenario.yml` | Routing package owners | Input world: prompt, session, capabilities, intent metadata |
+| `app/cli/interactive_shell/routing/tests/scenarios/**/answer.yml` | Routing package owners | Expected behavior: route, policy, planned/executed actions, response contract |
 
 ## Routing test isolation policy (no mocks)
 
 - Do **not** use `unittest.mock`, `patch`, `MagicMock`, or equivalent mocking
   primitives in routing tests.
 - Do **not** stub or monkeypatch the LLM client path in routing tests.
-- Do **not** stub or monkeypatch `llm_phase_route` in routing tests.
 - Routing contract tests must exercise the real routing stack
-  (`route_input` -> `handle_message_with_agent` -> classifier/fallback) and
+  (`route_input` -> `handle_message_with_agent`) and
   rely on curated prompts instead of synthetic mocked return values.
 
 ## Important routing decisions (locked)
@@ -77,12 +75,10 @@ If all answers are weak, keep the logic inline.
 - `resolve_cli_command(...)` owns deterministic command routing only
   (slash-prefixed commands and bare command aliases).
 - `handle_message_with_agent(...)` owns non-command routing and should stay
-  linear: LLM intent classifier -> default `cli_agent`.
+  linear: direct default `cli_agent` routing for non-command input.
 - Regex fallback has been intentionally removed from routing. Do **not**
   re-introduce `regex_fallback`/`routes/route_regex_fallback`-style phases
   unless there is an explicit product decision to restore them.
-- Keep the LLM intent classifier canonical in orchestration (`app/cli/interactive_shell/orchestration/llm_intent_classifier.py`);
-  routing can wrap/import it, but should not duplicate classifier logic.
 - Preserve routing decision observability contracts used in tests:
   `fallback_reason` semantics and `matched_signals` (`cli_agent_action_plan`, etc.).
 
@@ -90,10 +86,9 @@ If all answers are weak, keep the logic inline.
 
 - Routing tests are part of the default CI/CD flow; do **not** move them to
   optional-only jobs.
-- Keep deterministic routing contracts (`test_router_contracts.py` and
-  `test_dataset_integrity.py`) in the default PR CI flow.
-- Run live-LLM suites (`test_router_live_prompts.py`,
-  `tests/cli/interactive_shell/orchestration/test_llm_intent_classifier.py`)
+- Keep deterministic routing contracts (`test_routing_scenarios.py::test_deterministic_routing` and
+  `test_routing_fixture_integrity.py`) in the default PR CI flow.
+- Run live-LLM routing suites (`test_routing_scenarios.py` live tests)
   in the post-merge sharded workflow.
 - Execute routing suites with heavy parallelism (`pytest-xdist`, e.g. `-n auto`)
   in both local and CI environments.

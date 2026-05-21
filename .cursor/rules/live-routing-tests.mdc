@@ -1,0 +1,15 @@
+---
+description: Always include live routing tests
+alwaysApply: true
+---
+
+# Live Routing Test Policy
+
+- When validating interactive-shell routing scenarios, run the live suite by default.
+- Do not exclude live routing tests with deselection filters like `-k "not live_llm"`.
+- Never "fix" routing scenario failures by forcing deterministic routing paths, bypassing live
+  planner decisions, or disabling fail-closed/live checks.
+- Scenario failures should be resolved by correcting planner/tool behavior or by intentional
+  fixture updates approved as behavior changes.
+- Prefer full live routing commands such as:
+  - `uv run python -m pytest app/cli/interactive_shell/routing/tests/test_routing_scenarios.py`

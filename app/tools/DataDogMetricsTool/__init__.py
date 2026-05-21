@@ -4,7 +4,31 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import BaseModel, Field
+
 from app.tools.tool_decorator import tool
+
+
+class QueryDatadogMetricsInput(BaseModel):
+    metric_name: str = Field(
+        description="Datadog metric name to query, for example `system.cpu.user`."
+    )
+    time_range_minutes: int = Field(
+        default=60,
+        description="Lookback window in minutes for metric retrieval.",
+    )
+    query: str | None = Field(
+        default=None,
+        description="Optional full Datadog metrics query string override.",
+    )
+
+
+class QueryDatadogMetricsOutput(BaseModel):
+    source: str = Field(description="Evidence source label.")
+    available: bool = Field(description="Whether Datadog metrics query is available.")
+    metric_name: str = Field(description="Metric name requested.")
+    metrics: list[dict[str, Any]] = Field(default_factory=list, description="Returned metric data.")
+    error: str | None = Field(default=None, description="Error details when unavailable.")
 
 
 def _metrics_is_available(_sources: dict[str, dict]) -> bool:
@@ -35,26 +59,24 @@ def _metrics_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
         "Checking host resource utilisation trends",
     ],
     requires=[],
-    input_schema={
-        "type": "object",
-        "properties": {
-            "metric_name": {
-                "type": "string",
-                "description": "Datadog metric name (e.g. 'system.cpu.user')",
-            },
-            "time_range_minutes": {"type": "integer", "default": 60},
-            "query": {"type": "string", "description": "Full Datadog metrics query string"},
-            "api_key": {"type": "string"},
-            "app_key": {"type": "string"},
-            "site": {"type": "string", "default": "datadoghq.com"},
-        },
-        "required": ["metric_name"],
-    },
+    source_id="datadog_metrics_api",
+    evidence_type="metrics",
+    side_effect_level="read_only",
+    examples=[
+        "Check `system.cpu.user` around incident window for saturation patterns.",
+        "Run a custom metrics query string for service-specific error-rate metrics.",
+    ],
+    anti_examples=["Use this tool for log content or deployment timeline evidence."],
+    input_model=QueryDatadogMetricsInput,
+    output_model=QueryDatadogMetricsOutput,
+    injected_params=("api_key", "app_key", "site"),
     is_available=_metrics_is_available,
     extract_params=_metrics_extract_params,
 )
 def query_datadog_metrics(
     metric_name: str,
+    time_range_minutes: int = 60,
+    query: str | None = None,
     **_kwargs: Any,
 ) -> dict[str, Any]:
     """Query Datadog metrics for infrastructure and application performance data.
@@ -68,5 +90,7 @@ def query_datadog_metrics(
         "available": False,
         "error": "DataDogMetricsTool is not yet implemented.",
         "metric_name": metric_name,
+        "time_range_minutes": time_range_minutes,
+        "query": query,
         "metrics": [],
     }

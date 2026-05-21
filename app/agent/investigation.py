@@ -469,6 +469,9 @@ def _run_parallel(
         if tool is None:
             return {"error": f"unknown tool: {tc.name}"}
         try:
+            validation_error = tool.validate_public_input(tc.input)
+            if validation_error:
+                return {"error": validation_error}
             injected = tool.extract_params(resolved_integrations)
             kwargs = {**injected, **tc.input}
             return tool.run(**kwargs)
@@ -490,7 +493,7 @@ def _run_parallel(
             for fut in as_completed(submitted):
                 try:
                     results[submitted[fut]] = fut.result()
-                except BaseException as fut_exc:  # noqa: BLE001
+                except Exception as fut_exc:  # noqa: BLE001  # lgtm[py/catch-base-exception]
                     results[submitted[fut]] = {"error": str(fut_exc)}
     except RuntimeError as exc:
         # interpreter is shutting down; executor.__exit__ has already waited for submitted futures
@@ -499,7 +502,7 @@ def _run_parallel(
             if results[i] is _UNSET and fut.done():
                 try:
                     results[i] = fut.result()
-                except BaseException as fut_exc:  # noqa: BLE001
+                except Exception as fut_exc:  # noqa: BLE001  # lgtm[py/catch-base-exception]
                     results[i] = {"error": str(fut_exc)}
         for i, tc in enumerate(tool_calls):
             if results[i] is _UNSET:

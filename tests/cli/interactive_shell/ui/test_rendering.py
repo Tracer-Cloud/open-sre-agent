@@ -8,7 +8,7 @@ import threading
 import pytest
 from rich.console import Console
 
-from app.cli.interactive_shell.runtime import terminal_runtime as loop
+from app.cli.interactive_shell.runtime import loop
 from app.cli.interactive_shell.ui.rendering import (
     print_planned_actions,
     render_integrations_table,
@@ -54,8 +54,8 @@ def test_repl_print_does_not_double_prepare_with_streaming_console(monkeypatch) 
         lambda: resets.append(True),
     )
 
-    console = loop._StreamingConsole(
-        loop._SpinnerState(),
+    console = loop.StreamingConsole(
+        loop.SpinnerState(),
         threading.Event(),
         file=io.StringIO(),
         force_terminal=False,
@@ -90,8 +90,8 @@ def test_repl_print_streaming_console_prepares_tty_once_when_interactive(
         lambda: True,
     )
 
-    console = loop._StreamingConsole(
-        loop._SpinnerState(),
+    console = loop.StreamingConsole(
+        loop.SpinnerState(),
         threading.Event(),
         file=io.StringIO(),
         force_terminal=False,
@@ -156,7 +156,9 @@ def test_render_mcp_table_prepares_tty_once(monkeypatch) -> None:
 
 
 def test_print_planned_actions_formats_kinds() -> None:
-    from app.cli.interactive_shell.intent.interaction_models import PlannedAction
+    from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
+        PlannedAction,
+    )
 
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)

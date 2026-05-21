@@ -55,7 +55,7 @@ def _anthropic_tool_schema(tool: Any) -> dict[str, Any]:
     return {
         "name": tool.name,
         "description": tool.description,
-        "input_schema": tool.input_schema,
+        "input_schema": tool.public_input_schema,
     }
 
 
@@ -65,7 +65,7 @@ def _openai_tool_schema(tool: Any) -> dict[str, Any]:
         "function": {
             "name": tool.name,
             "description": tool.description,
-            "parameters": tool.input_schema,
+            "parameters": tool.public_input_schema,
         },
     }
 
@@ -589,10 +589,10 @@ def get_agent_llm() -> _AgentClientType:
 
     from pydantic import ValidationError
 
-    from app.config import LLMSettings
+    from app.config import resolve_llm_settings
 
     try:
-        settings = LLMSettings.from_env()
+        settings = resolve_llm_settings()
     except ValidationError as exc:
         raise RuntimeError(str(exc)) from exc
 
@@ -604,10 +604,8 @@ def get_agent_llm() -> _AgentClientType:
             model=settings.openai_reasoning_model,
             max_tokens=OPENAI_LLM_CONFIG.max_tokens,
         )
-    elif provider in ("openrouter", "gemini", "nvidia", "minimax", "requesty", "ollama"):
+    elif provider in ("openrouter", "gemini", "nvidia", "minimax", "ollama"):
         # All OpenAI-compatible providers
-        from app.config import LLMSettings
-
         _agent_client = _create_openai_compat_client(settings, provider)
     elif provider == "bedrock":
         from app.config import BEDROCK_LLM_CONFIG
@@ -648,11 +646,6 @@ def _create_openai_compat_client(settings: Any, provider: str) -> OpenAIAgentCli
         "gemini": (GEMINI_BASE_URL, "GEMINI_API_KEY", settings.gemini_reasoning_model),
         "nvidia": (NVIDIA_BASE_URL, "NVIDIA_API_KEY", settings.nvidia_reasoning_model),
         "minimax": (MINIMAX_BASE_URL, "MINIMAX_API_KEY", settings.minimax_reasoning_model),
-        "requesty": (
-            "https://router.requesty.ai/v1",
-            "REQUESTY_API_KEY",
-            settings.requesty_reasoning_model,
-        ),
     }
     if provider == "ollama":
         host = settings.ollama_host.rstrip("/")

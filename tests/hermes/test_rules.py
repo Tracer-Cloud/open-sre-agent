@@ -34,6 +34,16 @@ def _rec(
     )
 
 
+def _message_variants(message: str) -> tuple[str, ...]:
+    """Benign transforms that should not change rule match outcomes."""
+    return (
+        message,
+        message.upper(),
+        f"[ingest] {message}",
+        f"{message} [trace_id=abc123]",
+    )
+
+
 @pytest.mark.parametrize(
     "rule_name,message",
     [
@@ -60,6 +70,29 @@ def test_default_pattern_rules_match_expected_messages(rule_name: str, message: 
     incident = rule.evaluate(record)
     assert incident is not None
     assert incident.rule == rule_name
+
+
+@pytest.mark.parametrize(
+    "rule_name,message",
+    [
+        ("oom_killed", "MemoryError: out of memory while allocating buffer"),
+        ("context_window_exceeded", "context_length_exceeded: 65798 tokens > 32768"),
+        ("auth_failure", "401 Unauthorized: invalid api_key"),
+        ("rate_limit", "429 Too Many Requests"),
+        ("database_wal_growth", "WAL backlog growing: 1284 MB"),
+        ("deadlock", "deadlock detected, transaction rolled back"),
+        ("disk_full", "no space left on device"),
+    ],
+)
+def test_default_pattern_rules_match_metamorphic_message_variants(
+    rule_name: str, message: str
+) -> None:
+    rules = {r.name: r for r in default_pattern_rules()}
+    rule = rules[rule_name]
+    for variant in _message_variants(message):
+        incident = rule.evaluate(_rec(variant))
+        assert incident is not None, f"rule={rule_name} failed for variant={variant!r}"
+        assert incident.rule == rule_name
 
 
 def test_pattern_rules_respect_min_level() -> None:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import logging
 from collections.abc import Generator
 from types import ModuleType
@@ -13,6 +14,16 @@ from app.tools.investigation_registry.actions import get_available_actions
 from app.tools.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool
 from app.tools.tool_decorator import tool
 from app.types.retrieval import RetrievalControls
+
+_V2_TOOL_CONTRACT_NAMES = frozenset(
+    {
+        "query_grafana_metrics",
+        "describe_rds_instance",
+        "get_postgresql_slow_queries",
+        "query_datadog_metrics",
+        "list_eks_pods",
+    }
+)
 
 
 @pytest.fixture(autouse=True)
@@ -397,3 +408,95 @@ def test_registry_regression_import_failures(
         "Skipping broken_module" in record.message and record.levelname == "WARNING"
         for record in caplog.records
     )
+
+
+def _v2_tools() -> list[RegisteredTool]:
+    return [
+        tool
+        for tool in registry_module.get_registered_tools()
+        if tool.name in _V2_TOOL_CONTRACT_NAMES
+    ]
+
+
+def test_v2_registry_tool_contracts_exist() -> None:
+    discovered = {tool.name for tool in _v2_tools()}
+    assert discovered == _V2_TOOL_CONTRACT_NAMES
+
+
+def test_v2_registry_schemas_are_closed_objects() -> None:
+    for tool_def in _v2_tools():
+        schema = tool_def.public_input_schema
+        assert schema.get("type") == "object"
+        assert schema.get("additionalProperties") is False
+
+
+def test_v2_registry_property_schemas_are_typed_and_described() -> None:
+    for tool_def in _v2_tools():
+        schema = tool_def.public_input_schema
+        properties = schema.get("properties", {})
+        assert isinstance(properties, dict)
+        for prop_name, prop_schema in properties.items():
+            assert isinstance(prop_schema, dict), (
+                f"{tool_def.name}.{prop_name} must have an object property schema."
+            )
+            has_type = isinstance(prop_schema.get("type"), str) or isinstance(
+                prop_schema.get("oneOf"), list
+            )
+            has_type = has_type or isinstance(prop_schema.get("anyOf"), list)
+            assert has_type, f"{tool_def.name}.{prop_name} must declare type or oneOf."
+            assert str(prop_schema.get("description", "")).strip(), (
+                f"{tool_def.name}.{prop_name} must include description."
+            )
+
+
+def test_v2_registry_required_fields_are_declared() -> None:
+    for tool_def in _v2_tools():
+        schema = tool_def.public_input_schema
+        properties = schema.get("properties", {})
+        required = schema.get("required", [])
+        assert isinstance(properties, dict)
+        assert isinstance(required, list)
+        for required_field in required:
+            assert required_field in properties, (
+                f"{tool_def.name} required field {required_field!r} missing from schema properties."
+            )
+
+
+def test_v2_registry_public_schema_matches_run_signature() -> None:
+    for tool_def in _v2_tools():
+        schema = tool_def.public_input_schema
+        schema_props = set(schema.get("properties", {}).keys())
+        run_sig = inspect.signature(tool_def.run)
+        public_params = {
+            param.name
+            for param in run_sig.parameters.values()
+            if param.kind
+            in (
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                inspect.Parameter.KEYWORD_ONLY,
+            )
+            and not param.name.startswith("_")
+            and param.name not in set(tool_def.injected_params)
+        }
+        assert schema_props == public_params, (
+            f"{tool_def.name} schema properties do not match run signature public params."
+        )
+
+
+def test_v2_registry_injected_params_are_hidden_from_public_schema() -> None:
+    for tool_def in _v2_tools():
+        schema = tool_def.public_input_schema
+        props = schema.get("properties", {})
+        required = schema.get("required", [])
+        for injected in tool_def.injected_params:
+            assert injected not in props, f"{tool_def.name} leaked injected param {injected!r}."
+            assert injected not in required, (
+                f"{tool_def.name} keeps injected param {injected!r} as required."
+            )
+
+
+def test_v2_registry_tools_define_output_schema() -> None:
+    for tool_def in _v2_tools():
+        output_schema = tool_def.output_schema
+        assert isinstance(output_schema, dict), f"{tool_def.name} must define output_schema."
+        assert output_schema.get("type") == "object"

@@ -179,6 +179,11 @@ Basic steps:
 - Single RCA test: `make test-rca FILE=<name>`
 - Lint: `make lint`
 - Type check: `make typecheck`
+- Routing live tests: always run with live coverage enabled by default. Do not use deselection
+  filters like `-k "not live_llm"` for routing scenario runs.
+- Do not make routing scenario tests pass by forcing deterministic shortcuts or bypassing live
+  planner behavior. Fix failures by improving planner/tool correctness or updating fixtures only
+  when behavior changes are explicitly intended and approved.
 
 ### Fast Local Testing
 

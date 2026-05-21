@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.agents.probe import process_has_open_codex_rollout
+from app.agents.provider_ids import provider_from_classified_name
 from app.agents.registry import AgentRecord, AgentRegistry
 
 logger = logging.getLogger(__name__)
@@ -66,7 +67,13 @@ class DiscoveredAgent:
     command: str
 
     def to_record(self) -> AgentRecord:
-        return AgentRecord(name=self.name, pid=self.pid, command=self.command, source="discovered")
+        return AgentRecord(
+            name=self.name,
+            pid=self.pid,
+            command=self.command,
+            source="discovered",
+            provider=provider_from_classified_name(self.name),
+        )
 
 
 @dataclass(frozen=True)
@@ -132,6 +139,7 @@ def discover_agents(
             pid=row.pid,
             command=row.command,
             source="discovered",
+            provider=provider_from_classified_name(name),
         )
 
     for record in _discover_cursor_terminal_agents(cursor_projects_dir):
@@ -184,6 +192,39 @@ def display_command(command: str) -> str:
     if len(collapsed) <= _MAX_DISPLAY_COMMAND_LENGTH:
         return collapsed
     return f"{collapsed[: _MAX_DISPLAY_COMMAND_LENGTH - 3]}..."
+
+
+def classify_command_provider(command: str) -> str | None:
+    """Return the canonical provider id for ``command``, or ``None``.
+
+    Strict argv[0]-only matching for claude / aider / gemini, plus
+    Cursor-extension substring rules, plus ``_is_codex_cmdline`` so
+    Node-launched Codex wrappers (``node /opt/codex.js`` and friends)
+    classify correctly without re-introducing the loose token-scan
+    false-positives that ``provider_from_command`` was tightened to
+    avoid.
+    """
+    cmdline = _split_command(command)
+    if not cmdline:
+        return None
+    executable = _normalized_token(cmdline[0])
+    lower = command.lower()
+
+    if ".cursor/extensions/anthropic.claude-code" in lower:
+        return "claude-code"
+    if "extension-host (agent-exec)" in lower:
+        return "cursor"
+    if "cursor-agent" in lower or "cursor agent" in lower:
+        return "cursor"
+    if executable in {"claude", "claude-code"}:
+        return "claude-code"
+    if executable == "aider":
+        return "aider"
+    if executable == "gemini":
+        return "gemini-cli"
+    if _is_codex_cmdline(cmdline):
+        return "codex"
+    return None
 
 
 def _current_process_rows() -> list[ProcessRow]:
@@ -357,7 +398,13 @@ def _record_from_cursor_terminal(path: Path) -> AgentRecord | None:
     name = _agent_name_for_command(command)
     if name is None:
         return None
-    return AgentRecord(name=name, pid=pid, command=command, source="discovered")
+    return AgentRecord(
+        name=name,
+        pid=pid,
+        command=command,
+        source="discovered",
+        provider=provider_from_classified_name(name),
+    )
 
 
 def _agent_name_for_command(command: str) -> str | None:

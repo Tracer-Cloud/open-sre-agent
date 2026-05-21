@@ -7,7 +7,12 @@ from pathlib import Path
 import pytest
 
 from app.agents import discovery
-from app.agents.discovery import ProcessRow, discover_agents, registered_and_discovered_agents
+from app.agents.discovery import (
+    ProcessRow,
+    classify_command_provider,
+    discover_agents,
+    registered_and_discovered_agents,
+)
 from app.agents.registry import AgentRecord, AgentRegistry
 
 
@@ -448,6 +453,9 @@ def test_discovers_cursor_claude_code_process() -> None:
     assert records[0].name == "cursor-claude-code"
     assert records[0].pid == 80435
     assert records[0].source == "discovered"
+    # cursor-claude-code wraps the real Claude Code NDJSON output, so the
+    # provider rolls up to the same meter (#2023).
+    assert records[0].provider == "claude-code"
 
 
 def test_discovers_cursor_agent_exec_helper() -> None:
@@ -464,6 +472,10 @@ def test_discovers_cursor_agent_exec_helper() -> None:
     )
 
     assert [(record.name, record.pid) for record in records] == [("cursor-agent-exec", 23995)]
+    # cursor-agent-exec emits Cursor-proprietary output that the Anthropic
+    # meter cannot parse; rolls up to the ``cursor`` provider so it routes
+    # to ``NullMeter`` rather than misreading as claude-code (#2023).
+    assert records[0].provider == "cursor"
 
 
 def test_ignores_generic_desktop_cursor_processes() -> None:
@@ -502,6 +514,29 @@ def test_discovers_agent_cli_from_cursor_terminal_metadata(tmp_path: Path) -> No
     assert [(record.name, record.pid, record.source) for record in records] == [
         ("claude-code", 12345, "discovered")
     ]
+    # ``provider`` is set on cursor-terminal discoveries so the dashboard
+    # wiring (#2023) can resolve them without re-classifying.
+    assert records[0].provider == "claude-code"
+
+
+def test_discovered_claude_code_record_carries_provider() -> None:
+    records = discover_agents(
+        process_rows=[ProcessRow(pid=42, command="claude code")],
+        cursor_projects_dir=Path("/does/not/exist"),
+    )
+
+    assert records[0].name == "claude-code"
+    assert records[0].provider == "claude-code"
+
+
+def test_discovered_codex_record_carries_provider() -> None:
+    records = discover_agents(
+        process_rows=[ProcessRow(pid=99, command="codex exec --ephemeral")],
+        cursor_projects_dir=Path("/does/not/exist"),
+    )
+
+    assert records[0].name == "codex"
+    assert records[0].provider == "codex"
 
 
 def test_ignores_plain_claude_commands_with_code_prefix_arguments() -> None:
@@ -743,3 +778,53 @@ def test_registered_and_discovered_agents_returns_sorted_rows(
     records = registered_and_discovered_agents(registry)
 
     assert [(record.name, record.pid) for record in records] == [("aider", 10), ("z-manual", 20)]
+
+
+class TestClassifyCommandProvider:
+    def test_native_codex_binary(self) -> None:
+        assert classify_command_provider("/opt/bin/codex exec") == "codex"
+
+    def test_node_launched_codex_js(self) -> None:
+        assert (
+            classify_command_provider("node /usr/local/bin/codex.js exec --model gpt-5-codex")
+            == "codex"
+        )
+
+    def test_node_launched_codex_with_intermediate_flag(self) -> None:
+        assert classify_command_provider("node --inspect /usr/local/bin/codex.js exec") == "codex"
+
+    def test_node_launched_codex_mjs_and_cjs(self) -> None:
+        assert classify_command_provider("node /opt/codex/dist/codex.mjs") == "codex"
+        assert classify_command_provider("nodejs /opt/codex/dist/codex.cjs --help") == "codex"
+
+    def test_node_with_unrelated_script_is_not_codex(self) -> None:
+        assert classify_command_provider("node /opt/codex-utils/main.js") is None
+        assert classify_command_provider("node /opt/app/server.js") is None
+
+    def test_claude_argv0(self) -> None:
+        assert classify_command_provider("claude --dangerously-skip-permissions") == "claude-code"
+
+    def test_cursor_extension_substring(self) -> None:
+        assert (
+            classify_command_provider(
+                "/Users/me/.cursor/extensions/anthropic.claude-code/resources/"
+                "native-binary/claude --output-format stream-json"
+            )
+            == "claude-code"
+        )
+
+    def test_aider_argv0(self) -> None:
+        assert classify_command_provider("aider --model gpt-4o") == "aider"
+
+    def test_gemini_argv0(self) -> None:
+        assert classify_command_provider("gemini chat") == "gemini-cli"
+
+    def test_unknown_command_returns_none(self) -> None:
+        assert classify_command_provider("python -m app.worker") is None
+
+    def test_empty_command_returns_none(self) -> None:
+        assert classify_command_provider("") is None
+
+    def test_loose_claude_code_argv_does_not_false_positive(self) -> None:
+        # Hardened against the old ``"claude" in tokens and "code" in tokens`` check.
+        assert classify_command_provider("run-tests --model claude --format code --verbose") is None

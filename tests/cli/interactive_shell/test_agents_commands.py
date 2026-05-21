@@ -57,6 +57,24 @@ def isolated_agents_yaml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Pat
     return target
 
 
+@pytest.fixture(autouse=True)
+def _clear_sampler_module_state() -> None:
+    """Reset module-level state in the sampler before each test (#2023).
+
+    Same isolation pattern as ``tests/cli/interactive_shell/ui/test_agents_view.py``:
+    probe snapshots, the token rate tracker, and the per-tick caches
+    all live as module globals and can leak across test files.
+    """
+    from app.agents import sampler as sampler_mod
+    from app.agents.token_rate import TOKEN_RATE_TRACKER
+
+    sampler_mod._latest.clear()
+    sampler_mod._TickCache.registry_snapshot = {}
+    sampler_mod._TickCache.agents_config = None
+    for pid in list(TOKEN_RATE_TRACKER.known_pids()):
+        TOKEN_RATE_TRACKER.forget(pid)
+
+
 class TestAgentsRegistration:
     def test_agents_command_is_registered(self) -> None:
         assert "/agents" in SLASH_COMMANDS
@@ -163,21 +181,35 @@ class TestAgentsDispatch:
         assert "bus" in out
         assert "trace" in out
 
-    def test_dollar_hr_cell_reads_from_agents_yaml(
+    def test_dollar_hr_cell_does_not_read_budget_from_agents_yaml(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        """Regression for #2023's semantic split: ``$/hr`` is observed
+        cost (sampler-driven), not the configured budget.
+
+        Setting ``/agents budget`` persists ``hourly_budget_usd`` for
+        a future alarm feature, but it must NOT appear in the ``$/hr``
+        column of ``/agents``. The cell renders ``-`` for a
+        not-yet-observed PID, regardless of any configured budget.
+        """
         registry = _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
         registry.register(AgentRecord(name="claude-code", pid=8421, command="claude"))
 
-        # Pre-seed the budget via the slash command itself so we exercise
-        # the full write→read round-trip (set → list).
+        # Seed a budget — exercises the full slash write path.
         session = ReplSession()
         write_console, _ = _capture()
         assert dispatch_slash("/agents budget claude-code 5", session, write_console) is True
 
         list_console, list_buf = _capture()
         assert dispatch_slash("/agents", session, list_console) is True
-        assert "$5.00" in list_buf.getvalue()
+        out = list_buf.getvalue()
+        # The budget is persisted in agents.yaml (verified by the
+        # ``/agents budget`` round-trip test above), but the ``$/hr``
+        # cell intentionally does not surface it. No ``$5.00`` should
+        # appear anywhere in the rendered dashboard.
+        assert "$5.00" not in out
+        # The dashboard does render the row though.
+        assert "claude-code" in out
 
     def test_bare_agents_does_not_crash_on_schema_invalid_config(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, isolated_agents_yaml: Path

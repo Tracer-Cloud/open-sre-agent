@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any, cast
 
+from pydantic import BaseModel, Field
+
 from app.services.eks.eks_k8s_client import build_k8s_clients
 from app.tools._telemetry import report_run_error
 from app.tools.tool_decorator import tool
@@ -12,6 +14,34 @@ from app.tools.utils.availability import eks_available_or_backend
 from app.tools.utils.eks_workload_helper import extract_workload_params
 
 logger = logging.getLogger(__name__)
+
+
+class ListEKSPodsInput(BaseModel):
+    cluster_name: str = Field(description="EKS cluster name.")
+    namespace: str = Field(
+        description="Kubernetes namespace to inspect, or `all` for every namespace."
+    )
+    region: str = Field(default="us-east-1", description="AWS region of the EKS cluster.")
+
+
+class ListEKSPodsOutput(BaseModel):
+    source: str = Field(description="Evidence source label.")
+    available: bool = Field(description="Whether pod listing succeeded.")
+    cluster_name: str | None = Field(default=None, description="Cluster queried.")
+    namespace: str = Field(description="Namespace scope used for pod query.")
+    total_pods: int = Field(default=0, description="Total number of pods discovered.")
+    pods: list[dict[str, Any]] = Field(
+        default_factory=list, description="All pod entries returned."
+    )
+    failing_pods: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Pods not in Running/Succeeded phases.",
+    )
+    high_restart_pods: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Pods with container restart count above threshold.",
+    )
+    error: str | None = Field(default=None, description="Error details when listing fails.")
 
 
 @tool(
@@ -24,18 +54,17 @@ logger = logging.getLogger(__name__)
         "Checking restart counts for crash-looping containers",
     ],
     requires=["cluster_name"],
-    input_schema={
-        "type": "object",
-        "properties": {
-            "cluster_name": {"type": "string"},
-            "namespace": {"type": "string", "description": "Use 'all' to scan all namespaces"},
-            "role_arn": {"type": "string"},
-            "external_id": {"type": "string", "default": ""},
-            "region": {"type": "string", "default": "us-east-1"},
-            "credentials": {"type": ["object", "null"], "default": None},
-        },
-        "required": ["cluster_name", "namespace", "role_arn"],
-    },
+    source_id="eks_core_v1",
+    evidence_type="topology",
+    side_effect_level="read_only",
+    examples=[
+        "List pods in `payments` namespace to identify CrashLoopBackOff pods.",
+        "Use namespace `all` to detect widespread node scheduling issues.",
+    ],
+    anti_examples=["Use this tool to run kubectl exec or mutate Kubernetes resources."],
+    input_model=ListEKSPodsInput,
+    output_model=ListEKSPodsOutput,
+    injected_params=("role_arn", "external_id", "credentials", "eks_backend"),
     is_available=eks_available_or_backend,
     extract_params=extract_workload_params,
 )

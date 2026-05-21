@@ -19,10 +19,9 @@ should be predictable, interruptible, explainable, and safe by default.
 | --- | --- | --- |
 | `loop.py` / `commands.py` | top-level REPL wiring and compatibility shims | feature-specific business logic |
 | `command_registry/` | slash-command definitions, argument validation, command dispatch | long-running implementation details better placed in services/runtime modules |
-| `runtime/` | `ReplSession`, background tasks, hot reload, lifecycle state | UI rendering and prompt text |
-| `intent/` | deterministic parsing and interaction models | LLM calls and command side effects |
-| `routing/` | route selection/classification and fallback behavior | direct action execution |
-| `orchestration/` | action planning, execution policy, action executor | raw UI formatting and provider-specific clients |
+| `runtime/` | `ReplSession`, background tasks, lifecycle state | UI rendering and prompt text |
+| `routing/` | route selection/classification, LLM intent classifier, and fallback behavior | direct action execution |
+| `orchestration/` | action planning, execution policy, action executor, deterministic parsing, and interaction models | LLM classification and raw UI formatting |
 | `shell/` | shell command parsing, allow/deny policy, subprocess execution | slash-command routing |
 | `chat/` | assistant/help answer surfaces | direct mutation of runtime state outside the action executor |
 | `prompting/` | reusable prompt rules and follow-up wording | docs/source retrieval |
@@ -68,9 +67,9 @@ owning area rather than adding more logic to the caller.
 - Preserve non-TTY behavior: commands that require confirmation must fail closed
   when stdin is not interactive unless trust mode explicitly allows them.
 
-## Routing, intent, and action execution
+## Routing and action execution
 
-- Keep deterministic parsing in `intent/`; use LLM classification only where the
+- Keep deterministic parsing in `orchestration/`; use LLM classification only where the
   deterministic rules cannot reasonably decide.
 - Route uncertainty to a safe surface: help/chat or a clarification, not direct
   mutation or shell execution.

@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Callable, Iterable
+from copy import deepcopy
 from dataclasses import dataclass, field
 from types import NoneType
 from typing import Any, Literal, cast, get_args, get_origin, get_type_hints
 
-from app.tools.base import BaseTool, ToolMetadata
+from pydantic import BaseModel
+
+from app.tools.base import BaseTool, EvidenceType, SideEffectLevel, ToolMetadata
 from app.types.evidence import EvidenceSource
 from app.types.retrieval import RetrievalControls
 from app.types.tools import ToolSurface
@@ -118,6 +121,64 @@ def infer_input_schema(func: Callable[..., Any]) -> dict[str, Any]:
     }
 
 
+def model_to_json_schema(model: type[BaseModel]) -> dict[str, Any]:
+    """Convert a Pydantic model to a JSON object schema for tools."""
+    schema = model.model_json_schema()
+    if not isinstance(schema, dict):
+        return {"type": "object", "properties": {}, "required": [], "additionalProperties": False}
+    schema.setdefault("type", "object")
+    if schema.get("type") == "object":
+        schema.setdefault("properties", {})
+        schema.setdefault("required", [])
+        schema.setdefault("additionalProperties", False)
+    return schema
+
+
+def _json_type_matches(value: Any, schema_type: str) -> bool:
+    if schema_type == "string":
+        return isinstance(value, str)
+    if schema_type == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if schema_type == "number":
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if schema_type == "boolean":
+        return isinstance(value, bool)
+    if schema_type == "array":
+        return isinstance(value, list)
+    if schema_type == "object":
+        return isinstance(value, dict)
+    return True
+
+
+def _value_matches_schema(value: Any, schema: dict[str, Any]) -> bool:
+    if value is None and bool(schema.get("nullable")):
+        return True
+
+    if "enum" in schema and value not in schema.get("enum", []):
+        return False
+
+    one_of = schema.get("oneOf")
+    if isinstance(one_of, list) and one_of:
+        return any(
+            isinstance(option, dict) and _value_matches_schema(value, option) for option in one_of
+        )
+
+    any_of = schema.get("anyOf")
+    if isinstance(any_of, list) and any_of:
+        return any(
+            isinstance(option, dict) and _value_matches_schema(value, option) for option in any_of
+        )
+
+    schema_type = schema.get("type")
+    if isinstance(schema_type, str):
+        return _json_type_matches(value, schema_type)
+    if isinstance(schema_type, list):
+        return any(
+            isinstance(item, str) and _json_type_matches(value, item) for item in schema_type
+        )
+    return True
+
+
 @dataclass
 class RegisteredTool:
     """Uniform runtime representation shared by all registered tools."""
@@ -128,10 +189,17 @@ class RegisteredTool:
     source: EvidenceSource
     run: Callable[..., Any] = field(repr=False)
     display_name: str | None = None
+    source_id: str | None = None
+    evidence_type: EvidenceType | None = None
+    side_effect_level: SideEffectLevel | None = None
     surfaces: tuple[ToolSurface, ...] = _DEFAULT_SURFACES
     use_cases: list[str] = field(default_factory=list)
+    examples: list[str] = field(default_factory=list)
+    anti_examples: list[str] = field(default_factory=list)
     requires: list[str] = field(default_factory=list)
     outputs: dict[str, str] = field(default_factory=dict)
+    output_schema: dict[str, Any] | None = None
+    injected_params: tuple[str, ...] = ()
     retrieval_controls: RetrievalControls = field(
         default_factory=RetrievalControls,
     )
@@ -160,9 +228,16 @@ class RegisteredTool:
                 "display_name": self.display_name,
                 "input_schema": self.input_schema,
                 "source": self.source,
+                "source_id": self.source_id,
+                "evidence_type": self.evidence_type,
+                "side_effect_level": self.side_effect_level,
                 "use_cases": self.use_cases,
+                "examples": self.examples,
+                "anti_examples": self.anti_examples,
                 "requires": self.requires,
                 "outputs": self.outputs,
+                "output_schema": self.output_schema,
+                "injected_params": list(self.injected_params),
                 "retrieval_controls": self.retrieval_controls,
             }
         )
@@ -171,9 +246,16 @@ class RegisteredTool:
         self.display_name = metadata.display_name
         self.input_schema = metadata.input_schema
         self.source = metadata.source
+        self.source_id = metadata.source_id
+        self.evidence_type = metadata.evidence_type
+        self.side_effect_level = metadata.side_effect_level
         self.use_cases = metadata.use_cases
+        self.examples = metadata.examples
+        self.anti_examples = metadata.anti_examples
         self.requires = metadata.requires
         self.outputs = metadata.outputs
+        self.output_schema = metadata.output_schema
+        self.injected_params = tuple(metadata.injected_params)
         self.retrieval_controls = metadata.retrieval_controls
         self.surfaces = _normalize_surfaces(self.surfaces)
         if self.cost_tier is not None:
@@ -200,6 +282,52 @@ class RegisteredTool:
             for param, info in props.items()
         }
 
+    @property
+    def public_input_schema(self) -> dict[str, Any]:
+        """Return a schema exposed to the model (without injected params)."""
+        schema = deepcopy(self.input_schema)
+        properties = schema.get("properties")
+        if not isinstance(properties, dict):
+            return schema
+        for injected in self.injected_params:
+            properties.pop(injected, None)
+        required = schema.get("required")
+        if isinstance(required, list):
+            schema["required"] = [name for name in required if name not in self.injected_params]
+        return schema
+
+    def validate_public_input(self, payload: dict[str, Any]) -> str | None:
+        """Validate model-provided input against this tool's public schema."""
+        schema = self.public_input_schema
+        if schema.get("type") != "object":
+            return f"{self.name} exposes a non-object input schema."
+        if not isinstance(payload, dict):
+            return f"{self.name} expected object input."
+
+        properties = schema.get("properties")
+        if not isinstance(properties, dict):
+            properties = {}
+        required = schema.get("required")
+        if not isinstance(required, list):
+            required = []
+
+        missing = [name for name in required if name not in payload]
+        if missing:
+            return f"{self.name} missing required args: {', '.join(sorted(missing))}."
+
+        if schema.get("additionalProperties") is False:
+            extra = sorted(name for name in payload if name not in properties)
+            if extra:
+                return f"{self.name} got unexpected args: {', '.join(extra)}."
+
+        for key, value in payload.items():
+            prop_schema = properties.get(key)
+            if not isinstance(prop_schema, dict):
+                continue
+            if not _value_matches_schema(value, prop_schema):
+                return f"{self.name}.{key} has invalid type/value."
+        return None
+
     def __call__(self, **kwargs: Any) -> Any:
         try:
             return self.run(**kwargs)
@@ -224,6 +352,14 @@ class RegisteredTool:
         cost_tier: CostTier | None = None,
     ) -> RegisteredTool:
         metadata = tool.metadata()
+        input_model = cast(type[BaseModel] | None, getattr(tool, "input_model", None))
+        output_model = cast(type[BaseModel] | None, getattr(tool, "output_model", None))
+        resolved_input_schema = (
+            model_to_json_schema(input_model) if input_model else metadata.input_schema
+        )
+        resolved_output_schema = (
+            model_to_json_schema(output_model) if output_model else metadata.output_schema
+        )
         resolved_surfaces = (
             surfaces or getattr(tool, "surfaces", None) or getattr(tool.__class__, "surfaces", None)
         )
@@ -243,11 +379,18 @@ class RegisteredTool:
             name=metadata.name,
             description=metadata.description,
             display_name=metadata.display_name,
-            input_schema=metadata.input_schema,
+            input_schema=resolved_input_schema,
             source=metadata.source,
+            source_id=metadata.source_id,
+            evidence_type=metadata.evidence_type,
+            side_effect_level=metadata.side_effect_level,
             use_cases=metadata.use_cases,
+            examples=metadata.examples,
+            anti_examples=metadata.anti_examples,
             requires=metadata.requires,
             outputs=metadata.outputs,
+            output_schema=resolved_output_schema,
+            injected_params=tuple(metadata.injected_params),
             retrieval_controls=retrieval_controls or metadata.retrieval_controls,
             surfaces=_normalize_surfaces(resolved_surfaces),
             run=tool.run,  # type: ignore[attr-defined]
@@ -272,11 +415,20 @@ class RegisteredTool:
         description: str | None = None,
         display_name: str | None = None,
         input_schema: dict[str, Any] | None = None,
+        input_model: type[BaseModel] | None = None,
         source: EvidenceSource | None,
+        source_id: str | None = None,
+        evidence_type: EvidenceType | None = None,
+        side_effect_level: SideEffectLevel | None = None,
         surfaces: Iterable[str] | None = None,
         use_cases: list[str] | None = None,
+        examples: list[str] | None = None,
+        anti_examples: list[str] | None = None,
         requires: list[str] | None = None,
         outputs: dict[str, str] | None = None,
+        output_schema: dict[str, Any] | None = None,
+        output_model: type[BaseModel] | None = None,
+        injected_params: tuple[str, ...] | None = None,
         retrieval_controls: RetrievalControls | None = None,
         is_available: Callable[[dict[str, dict]], bool] | None = None,
         extract_params: Callable[[dict[str, dict]], dict[str, Any]] | None = None,
@@ -286,17 +438,32 @@ class RegisteredTool:
         if source is None:
             raise ValueError("Function tools must declare a source.")
 
+        resolved_input_schema = (
+            input_schema
+            or (model_to_json_schema(input_model) if input_model is not None else None)
+            or infer_input_schema(func)
+        )
+        resolved_output_schema = output_schema or (
+            model_to_json_schema(output_model) if output_model is not None else None
+        )
         inferred_description = inspect.getdoc(func) or func.__name__.replace("_", " ")
         return cls(
             name=name or func.__name__,
             description=description or inferred_description,
             display_name=display_name,
-            input_schema=input_schema or infer_input_schema(func),
+            input_schema=resolved_input_schema,
             source=source,
+            source_id=source_id,
+            evidence_type=evidence_type,
+            side_effect_level=side_effect_level,
             surfaces=_normalize_surfaces(surfaces),
             use_cases=list(use_cases or []),
+            examples=list(examples or []),
+            anti_examples=list(anti_examples or []),
             requires=list(requires or []),
             outputs=dict(outputs or {}),
+            output_schema=resolved_output_schema,
+            injected_params=tuple(injected_params or ()),
             retrieval_controls=retrieval_controls or RetrievalControls(),
             run=func,
             is_available=is_available or _always_available,

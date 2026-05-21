@@ -8,6 +8,28 @@ import sys
 from pathlib import Path
 from typing import Any
 
+_DEMO_ALERT_FILENAME = "alert.json"
+
+
+def bundled_demo_alert_path() -> Path | None:
+    """Return the packaged demo alert used by ``opensre investigate -i alert.json``."""
+    candidate = Path(__file__).resolve().parents[1] / "fixtures" / _DEMO_ALERT_FILENAME
+    if candidate.is_file():
+        return candidate
+    return None
+
+
+def resolve_alert_path(path_str: str) -> Path:
+    """Resolve an alert path, using the bundled demo when ``alert.json`` is missing locally."""
+    path = Path(path_str)
+    if path.is_file():
+        return path
+    if path.name == _DEMO_ALERT_FILENAME and not path.is_absolute() and path.parent == Path("."):
+        bundled = bundled_demo_alert_path()
+        if bundled is not None:
+            return bundled
+    return path
+
 
 def parse_payload_text(raw_text: str, source_label: str) -> dict[str, Any]:
     """Parse and validate a JSON object payload."""
@@ -29,8 +51,9 @@ def load_file(path_str: str) -> dict[str, Any]:
     - ``.md`` / ``.txt`` / other — first ```json``` block is extracted and parsed;
       if none is found, raw content is passed as ``{"raw_text": ...}`` for the agent.
     """
+    path = resolve_alert_path(path_str)
     try:
-        raw_text = Path(path_str).read_text(encoding="utf-8")
+        raw_text = path.read_text(encoding="utf-8")
     except FileNotFoundError as exc:
         raise SystemExit(f"Alert file not found: {path_str}") from exc
     except UnicodeDecodeError as exc:
@@ -38,7 +61,7 @@ def load_file(path_str: str) -> dict[str, Any]:
     except OSError as exc:
         raise SystemExit(f"Could not read alert file {path_str}: {exc}") from exc
 
-    if Path(path_str).suffix.lower() == ".json":
+    if path.suffix.lower() == ".json":
         return parse_payload_text(raw_text, path_str)
 
     # For .md, .txt, and everything else: try to pull a fenced JSON block

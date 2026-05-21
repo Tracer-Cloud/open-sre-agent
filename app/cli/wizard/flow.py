@@ -27,7 +27,7 @@ from app.cli.interactive_shell.ui.theme import (
     WARNING,
 )
 from app.cli.wizard.config import PROVIDER_BY_VALUE, SUPPORTED_PROVIDERS, ProviderOption
-from app.cli.wizard.env_sync import sync_env_values, sync_provider_env
+from app.cli.wizard.env_sync import sync_env_secret, sync_env_values, sync_provider_env
 from app.cli.wizard.integration_health import IntegrationHealthResult
 from app.cli.wizard.probes import ProbeResult, probe_local_target, probe_remote_target
 from app.cli.wizard.prompts import select as select_prompt
@@ -1150,11 +1150,11 @@ def _configure_openclaw() -> tuple[str, str]:
                 "args": args,
             }
             upsert_integration("openclaw", {"credentials": credentials_dict})
+            sync_env_secret("OPENCLAW_MCP_AUTH_TOKEN", auth_token)
             env_path = sync_env_values(
                 {
                     "OPENCLAW_MCP_URL": url,
                     "OPENCLAW_MCP_MODE": mode,
-                    "OPENCLAW_MCP_AUTH_TOKEN": auth_token,
                     "OPENCLAW_MCP_COMMAND": command,
                     "OPENCLAW_MCP_ARGS": " ".join(args),
                 }
@@ -1194,10 +1194,10 @@ def _configure_gitlab() -> tuple[str, str]:
         if result.ok:
             credentials = {"base_url": base_url, "auth_token": auth_token}
             upsert_integration("gitlab", {"credentials": credentials})
+            sync_env_secret("GITLAB_ACCESS_TOKEN", auth_token)
             env_path = sync_env_values(
                 {
                     "GITLAB_BASE_URL": base_url,
-                    "GITLAB_ACCESS_TOKEN": auth_token,
                 }
             )
             return "Gitlab", str(env_path)
@@ -1531,9 +1531,9 @@ def _configure_incident_io() -> tuple[str, str]:
                 "base_url": base_url,
             }
             upsert_integration("incident_io", {"credentials": credentials_payload})
+            sync_env_secret("INCIDENT_IO_API_KEY", api_key)
             env_path = sync_env_values(
                 {
-                    "INCIDENT_IO_API_KEY": api_key,
                     "INCIDENT_IO_BASE_URL": base_url,
                 }
             )
@@ -1584,9 +1584,9 @@ def _configure_discord() -> tuple[str, str]:
             from app.integrations.cli import _register_discord_slash_command
 
             _register_discord_slash_command(application_id, bot_token)
+            sync_env_secret("DISCORD_BOT_TOKEN", bot_token)
             env_path = sync_env_values(
                 {
-                    "DISCORD_BOT_TOKEN": bot_token,
                     "DISCORD_APPLICATION_ID": application_id,
                     "DISCORD_PUBLIC_KEY": public_key,
                     "DISCORD_DEFAULT_CHANNEL_ID": default_channel_id,
@@ -1744,10 +1744,10 @@ def _configure_opensearch() -> tuple[str, str]:
                 "OPENSEARCH_URL": url,
             }
             if api_key:
-                env_values["OPENSEARCH_API_KEY"] = api_key
+                sync_env_secret("OPENSEARCH_API_KEY", api_key)
             if username:
                 env_values["OPENSEARCH_USERNAME"] = username
-                env_values["OPENSEARCH_PASSWORD"] = password
+                sync_env_secret("OPENSEARCH_PASSWORD", password)
             env_path = sync_env_values(env_values)
             return "OpenSearch", str(env_path)
         _console.print(f"[{DIM}]Try again or press Ctrl+C to cancel.[/]")

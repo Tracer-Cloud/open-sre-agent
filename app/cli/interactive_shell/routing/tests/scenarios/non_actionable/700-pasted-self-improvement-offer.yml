@@ -1,0 +1,40 @@
+id: 700-pasted-self-improvement-offer
+title: User pastes assistant-style self-improvement offer
+intent_class: non_actionable
+risk_level: low
+input:
+  prompt: If you want, I can patch the action planner so phrases like "switch my model
+    to gpt-5.5" infer both provider+model automatically instead of misclassifying
+    the model as a provider.
+  surface: interactive_cli
+session:
+  has_prior_state: false
+  remote_connected: false
+  configured_integrations: []
+available_capabilities:
+  slash_commands: []
+  cli_commands: []
+  synthetic_suites: []
+notes:
+- Prompt reads like the assistant offering a code change; nothing to execute.
+
+route:
+  expected_kind: cli_agent
+  expected_signals: []
+  expected_command_text: null
+policy:
+  should_execute: false
+  has_unhandled_clause: true
+  fail_closed: true
+planned_actions: []
+executed_actions: []
+response_contract:
+  must_contain_any: []
+  must_not_contain:
+  - $ /
+history:
+  expected:
+  - type: cli_agent
+    ok: true
+tier: full
+runs: 3

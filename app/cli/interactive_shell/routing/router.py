@@ -11,11 +11,12 @@ and delegates all implementation details to sibling modules:
 
 from __future__ import annotations
 
-from app.cli.interactive_shell.routing.handle_message_with_agent import (
+from app.cli.interactive_shell.routing.handle_message_with_agent.evaluator import (
     handle_message_with_agent,
-    llm_phase_route,
 )
-from app.cli.interactive_shell.routing.resolve_cli_command import resolve_cli_command
+from app.cli.interactive_shell.routing.resolve_cli_command.evaluator import (
+    resolve_cli_command,
+)
 from app.cli.interactive_shell.routing.types import (
     RouteDecision,
     RouteKind,
@@ -34,11 +35,7 @@ def route_input(text: str, session: RoutingSession) -> RouteDecision:
     cli_decision = resolve_cli_command(t, session)
     if cli_decision:
         return cli_decision
-    return handle_message_with_agent(
-        t,
-        session,
-        llm_resolver=llm_phase_route,
-    )
+    return handle_message_with_agent(t, session)
 
 
 def classify_input(text: str, session: RoutingSession) -> str:

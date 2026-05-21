@@ -5,12 +5,17 @@ on:
     branches: [main]
     paths:
       - "app/cli/interactive_shell/routing/**"
-      - "app/cli/interactive_shell/orchestration/**"
-      - "tests/cli/interactive_shell/orchestration/**"
+      - "tests/cli/interactive_shell/routing/**"
       - "pytest.ini"
       - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/routing-live-post-merge.yml"
+  workflow_dispatch:
+    inputs:
+      shard_indexes:
+        description: "Comma-separated shard indexes to run (0-4)"
+        required: false
+        default: "0,1,2,3,4"
 
 permissions:
   contents: read
@@ -27,10 +32,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard_index: [0, 1, 2, 3, 4]
+        shard_index: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('[{0}]', github.event.inputs.shard_indexes) || '[0, 1, 2, 3, 4]') }}
 
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      LLM_PROVIDER: openai
+      OPENSRE_DISABLE_KEYRING: "1"
       ROUTING_SHARD_TOTAL: "5"
       ROUTING_SHARD_INDEX: ${{ matrix.shard_index }}
       PYTHONUTF8: "1"
@@ -54,9 +62,16 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --extra dev
 
+      - name: Validate live LLM credential wiring
+        run: |
+          if [ -z "${OPENAI_API_KEY}" ]; then
+            echo "::error::OPENAI_API_KEY is missing for live routing tests."
+            exit 1
+          fi
+
       - name: Run sharded live routing suite
         run: >-
           uv run python -m pytest -n auto -v
           -m live_llm
-          app/cli/interactive_shell/routing/tests/test_router_live_prompts.py
-          tests/cli/interactive_shell/orchestration/test_llm_intent_classifier.py
+          app/cli/interactive_shell/routing/tests/test_routing_scenarios.py
+          -k "test_live_turn_execution_oracle or test_live_action_planning"

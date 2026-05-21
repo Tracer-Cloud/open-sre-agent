@@ -12,7 +12,9 @@ from rich.markup import escape
 from rich.table import Table
 from rich.text import Text
 
-from app.cli.interactive_shell.intent.interaction_models import PlannedAction
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
+    PlannedAction,
+)
 from app.cli.interactive_shell.ui.banner import resolve_provider_models
 from app.cli.interactive_shell.ui.theme import (
     BOLD_BRAND,
@@ -187,6 +189,7 @@ def print_planned_actions(console: Console, actions: list[PlannedAction]) -> Non
             "task_cancel": "cancel task",
             "cli_command": "opensre",
             "implementation": "implementation",
+            "assistant_handoff": "assistant handoff",
         }[action.kind]
         console.print(f"[{DIM}]{index}.[/] [{BOLD_BRAND}]{label}[/] {escape(action.content)}")
 

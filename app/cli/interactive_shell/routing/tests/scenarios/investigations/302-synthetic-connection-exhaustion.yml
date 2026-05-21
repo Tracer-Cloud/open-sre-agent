@@ -1,0 +1,49 @@
+id: 302-synthetic-connection-exhaustion
+title: Synthetic connection exhaustion
+intent_class: investigation
+risk_level: medium
+input:
+  prompt: run synthetic test 002-connection-exhaustion
+  surface: interactive_cli
+session:
+  has_prior_state: false
+  remote_connected: false
+  configured_integrations: []
+available_capabilities:
+  slash_commands: []
+  cli_commands: []
+  synthetic_suites:
+  - rds_postgres
+notes: []
+route:
+  expected_kind: cli_agent
+  expected_signals: []
+  expected_command_text: null
+policy:
+  should_execute: true
+  has_unhandled_clause: false
+  fail_closed: false
+planned_actions:
+- kind: synthetic_test
+  content: rds_postgres:002-connection-exhaustion
+  source: llm
+  target_surface: investigation
+  suite: rds_postgres
+  scenario: 002-connection-exhaustion
+executed_actions:
+- kind: synthetic_test
+  suite: rds_postgres
+  scenario: 002-connection-exhaustion
+  content: rds_postgres:002-connection-exhaustion
+response_contract:
+  must_contain_any:
+  - synthetic test rds_postgres:002-connection-exhaustion
+  must_not_contain: []
+history:
+  expected:
+  - type: cli_agent
+    ok: true
+  - type: synthetic_test
+    ok: true
+tier: critical
+runs: 1

@@ -54,6 +54,7 @@ class Event(StrEnum):
     TERMINAL_ACTIONS_PLANNED = "terminal_actions_planned"
     TERMINAL_ACTIONS_EXECUTED = "terminal_actions_executed"
     TERMINAL_TURN_SUMMARIZED = "terminal_turn_summarized"
+    AI_GENERATION = "$ai_generation"
 
     # Update
     UPDATE_STARTED = "update_started"

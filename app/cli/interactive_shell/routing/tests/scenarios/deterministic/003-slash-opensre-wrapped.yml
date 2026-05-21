@@ -1,0 +1,49 @@
+id: 003-slash-opensre-wrapped
+title: Slash /opensre onboard wrapper
+intent_class: deterministic
+risk_level: low
+input:
+  prompt: /opensre onboard
+  surface: interactive_cli
+session:
+  has_prior_state: false
+  remote_connected: false
+  configured_integrations: []
+available_capabilities:
+  slash_commands:
+  - /onboard
+  cli_commands: []
+  synthetic_suites: []
+notes: []
+
+route:
+  expected_kind: slash
+  expected_signals:
+  - slash_prefix
+  expected_command_text: /onboard
+policy:
+  should_execute: true
+  has_unhandled_clause: false
+  fail_closed: false
+planned_actions:
+- kind: slash
+  source: deterministic
+  target_surface: slash
+  command: /onboard
+  args: []
+  content: /onboard
+executed_actions:
+- kind: slash
+  command: /onboard
+  args: []
+  content: /onboard
+response_contract:
+  must_contain_any:
+  - ran /onboard
+  must_not_contain: []
+history:
+  expected:
+  - type: slash
+    ok: true
+tier: critical
+runs: 1
