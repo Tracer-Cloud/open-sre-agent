@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Any
 
 from app.cli.interactive_shell.routing.handle_message_with_agent.errors import (
     ParseError,
@@ -39,6 +40,9 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.p
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.slash_commands.integration_detail_policy import (
     map_integration_detail_actions,
+)
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.slash_commands.mapper_runner import (
+    run_clause_rules,
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.slash_commands.synthetic_resolution import (
     resolve_synthetic_action_content,
@@ -353,6 +357,73 @@ def map_actions_result(message: str) -> DeterministicMappingResult:
         raise PlannerUnavailable("Routing planner became unavailable during finalization.") from exc
 
 
+def map_actions_with_trace(
+    message: str,
+) -> tuple[list[PlannedAction], bool, list[dict[str, Any]]]:
+    """Backward-compatible mapping API that also emits per-clause trace metadata."""
+
+    mapped: list[PlannedAction] = []
+    seen_slash: set[str] = set()
+    has_unhandled_clause = False
+    unmatched_clauses: list[PromptClause] = []
+    trace: list[dict[str, Any]] = []
+
+    try:
+        clauses = split_prompt_clauses(message)
+    except Exception as exc:
+        report_exception(
+            exc,
+            context="interactive_shell.routing.mapper.split_prompt_clauses",
+            extra={"degrade_reason_tag": ParseError.reason_tag, "text_length": len(message)},
+        )
+        raise ParseError("Failed to split prompt into clauses for action mapping.") from exc
+
+    try:
+        for clause in clauses:
+            clause_result = run_clause_rules(clause, seen_slash=seen_slash)
+            clause_actions = clause_result.actions
+            if clause_result.trace:
+                trace.append(
+                    {
+                        "clause_text": clause.text,
+                        "clause_position": clause.position,
+                        "rules": list(clause_result.trace),
+                        "matched_action_kinds": [action.kind for action in clause_actions],
+                    }
+                )
+            if not clause_actions:
+                has_unhandled_clause = True
+                unmatched_clauses.append(clause)
+            mapped.extend(clause_actions)
+    except Exception as exc:
+        report_exception(
+            exc,
+            context="interactive_shell.routing.mapper.map_clause_actions",
+            extra={"degrade_reason_tag": PolicyError.reason_tag, "text_length": len(message)},
+        )
+        raise PolicyError("Failed to apply routing policy to one or more prompt clauses.") from exc
+
+    try:
+        has_investigation = _apply_text_level_investigation_policy(message, mapped, [])
+        has_unhandled_clause = _apply_investigation_only_unhandled_waiver_policy(
+            has_unhandled_clause=has_unhandled_clause,
+            has_investigation=has_investigation,
+            unmatched_clauses=unmatched_clauses,
+            applied_policies=[],
+        )
+        return sorted(mapped, key=lambda action: action.position), has_unhandled_clause, trace
+    except Exception as exc:
+        report_exception(
+            exc,
+            context="interactive_shell.routing.mapper.finalize",
+            extra={
+                "degrade_reason_tag": PlannerUnavailable.reason_tag,
+                "text_length": len(message),
+            },
+        )
+        raise PlannerUnavailable("Routing planner became unavailable during finalization.") from exc
+
+
 def map_cli_actions(message: str) -> list[str]:
     """Return safe read-only slash commands and CLI commands requested by a natural-language turn."""
     actions = map_actions_result(message).actions
@@ -369,6 +440,7 @@ __all__ = [
     "ClausePhaseTraceEntry",
     "DeterministicMappingResult",
     "map_actions_result",
+    "map_actions_with_trace",
     "map_actions_with_unhandled",
     "map_clause_actions",
     "map_clause_actions_with_phase",
