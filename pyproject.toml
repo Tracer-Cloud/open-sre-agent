@@ -23,7 +23,7 @@ dependencies = [
     "pydantic-settings>=2.12.0,<3",
     "kubernetes>=28.1.0",
     # HTTP and async
-    "httpx>=0.27.0",
+    "httpx[socks]>=0.27.0",
     "aiohttp>=3.9.0",
     "fastapi>=0.135.3",
     "uvicorn[standard]>=0.30.0",
