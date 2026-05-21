@@ -2,10 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.e2e.hermes.long_running.conftest import (
-    LLM_CREDENTIAL_SKIP_REASON,
-    llm_ready,
-)
+from tests.e2e.hermes.common import LLM_CREDENTIAL_SKIP_REASON, llm_ready
 from tests.e2e.hermes.orchestrator import run_hermes_scenario
 
 pytestmark = pytest.mark.e2e
