@@ -26,6 +26,15 @@ def test_write_json_writes_to_file(tmp_path: Path) -> None:
     assert output_path.read_text(encoding="utf-8") == json.dumps(payload, indent=2) + "\n"
 
 
+def test_write_json_creates_missing_parent_dirs(tmp_path: Path) -> None:
+    payload = {"status": "ok", "count": 2}
+    output_path = tmp_path / "nested" / "deep" / "result.json"
+
+    write_json(payload, str(output_path))
+
+    assert output_path.read_text(encoding="utf-8") == json.dumps(payload, indent=2) + "\n"
+
+
 @pytest.mark.parametrize(
     ("argv", "expected_error"),
     [
