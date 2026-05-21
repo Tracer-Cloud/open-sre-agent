@@ -119,7 +119,7 @@ def run_rca(
 
 
 def main() -> None:
-    with contextlib.suppress(BrokenPipeError):
+    with contextlib.suppress(BrokenPipeError, ConnectionResetError):
         mcp.run()
 
 
