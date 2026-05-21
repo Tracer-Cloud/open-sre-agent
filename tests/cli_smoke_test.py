@@ -536,11 +536,11 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
 
 
 @pytest.mark.parametrize(
-    ("_cli_binary", "stagger_j", "provider_label", "pty_timeout"),
+    ("_cli_binary", "provider_key", "provider_label", "pty_timeout"),
     [
         pytest.param(
             "codex",
-            7,
+            "codex",
             "OpenAI Codex CLI",
             60.0,
             marks=pytest.mark.skipif(
@@ -550,7 +550,7 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
         ),
         pytest.param(
             "opencode",
-            11,
+            "opencode",
             "OpenCode CLI",
             120.0,
             marks=pytest.mark.skipif(
@@ -564,20 +564,32 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
 def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
     cli_sandbox: CliSandbox,
     _cli_binary: str,
-    stagger_j: int,
+    provider_key: str,
     provider_label: str,
     pty_timeout: float,
 ) -> None:
     """PTY: quickstart → local CLI LLM → repick when unauthenticated, then finish as Anthropic.
 
-    Navigates from the default provider with ``stagger_j`` ``j`` presses (0-based index in
-    ``SUPPORTED_PROVIDERS``, e.g. codex=7 after Bedrock). Fresh HOME has no CLI auth, so either ``requires login`` or
-    ``Could not verify … login`` is accepted before choosing repick. Skips when the CLI binary
-    for each parametrized case is not on PATH.
+    Navigates from the default provider using the current runtime provider list order.
+    Fresh HOME has no CLI auth, so either ``requires login`` or ``Could not verify … login``
+    is accepted before choosing repick. Skips when the CLI binary for each parametrized
+    case is not on PATH.
     """
+    from app.cli.wizard.config import SUPPORTED_PROVIDERS
+
+    stagger_j = next(
+        (i for i, provider in enumerate(SUPPORTED_PROVIDERS) if provider.value == provider_key),
+        -1,
+    )
+    assert stagger_j >= 0, f"Provider '{provider_key}' missing from SUPPORTED_PROVIDERS"
+
     login_prompt: tuple[str, ...] = (
         f"{provider_label} requires login. What next?",
         f"Could not verify {provider_label} login. What next?",
+    )
+    model_prompt: tuple[str, ...] = (
+        f"Choose {provider_label} model",
+        "Model",
     )
     try:
         result = _run_cli_pty(
@@ -586,6 +598,7 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
             actions=[
                 PtyAction(expect="How do you want to get started?", send=b"\r"),
                 PtyAction(expect="Choose your LLM provider", send=b"\r", stagger_j=stagger_j),
+                PtyAction(expect=model_prompt, send=b"\r", timeout=30.0),
                 PtyAction(
                     expect=login_prompt,
                     send=b"\r",
