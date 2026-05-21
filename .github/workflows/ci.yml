@@ -320,6 +320,7 @@ jobs:
     outputs:
       thorough: ${{ steps.filter.outputs.thorough }}
     steps:
+      - uses: actions/checkout@v5
       - uses: dorny/paths-filter@v4
         id: filter
         with:

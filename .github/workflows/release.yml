@@ -125,7 +125,7 @@ jobs:
         run: make test-cli-smoke
 
   build-python-dist:
-    if: needs.prepare.outputs.channel == 'release'
+    if: needs.prepare.outputs.channel == 'release' && needs.verify.result == 'success'
     runs-on: ubuntu-latest
     needs: [verify, prepare]
     env:
@@ -173,6 +173,7 @@ jobs:
           if-no-files-found: error
 
   build-binaries:
+    if: needs.prepare.outputs.channel == 'main' || needs.verify.result == 'success'
     needs: [verify, prepare]
     strategy:
       fail-fast: false
