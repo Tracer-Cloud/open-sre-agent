@@ -53,6 +53,7 @@ class AgentLLMResponse:
 
 def _anthropic_tool_schema(tool: Any) -> dict[str, Any]:
     return {
+        "type": "custom",
         "name": tool.name,
         "description": tool.description,
         "input_schema": tool.public_input_schema,
