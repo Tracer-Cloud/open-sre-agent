@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -48,6 +49,18 @@ _MAX_CLI_AGENT_TURNS = 12
 
 _MAX_SYNTHETIC_OBSERVATION_PROMPT_CHARS = 120_000
 
+_COMMAND_SELECTION_EXACT_PROMPTS = frozenset(
+    {
+        "what command do i use",
+        "which command do i use",
+        "what command should i use",
+        "which command should i use",
+        "which command",
+    }
+)
+
+_TRAILING_PUNCTUATION_RE = re.compile(r"[\s?.!]+$")
+
 
 def _user_message_requests_synthetic_failure_explanation(message: str) -> bool:
     """True when the user is likely asking about a failed synthetic benchmark."""
@@ -75,6 +88,27 @@ def _load_synthetic_observation_text(
             + f"\n… [truncated for prompt size; observation is {len(raw)} characters total]"
         )
     return raw
+
+
+def _normalize_short_prompt(message: str) -> str:
+    lowered = " ".join(message.strip().casefold().split())
+    return _TRAILING_PUNCTUATION_RE.sub("", lowered)
+
+
+def _is_command_selection_prompt(message: str) -> bool:
+    normalized = _normalize_short_prompt(message)
+    if normalized in _COMMAND_SELECTION_EXACT_PROMPTS:
+        return True
+    return normalized.startswith("which command ") and "use" in normalized
+
+
+def _command_selection_response() -> str:
+    return (
+        "If you're asking which command to use, start with `opensre investigate` "
+        "for incidents and paste alert text, JSON, or a concrete incident "
+        "description into this interactive shell.\n\n"
+        "If you want a full command list, run `opensre --help`."
+    )
 
 
 _TERMINOLOGY_RULE = INTERACTIVE_SHELL_TERMINOLOGY_RULE
@@ -442,6 +476,21 @@ def answer_cli_agent(
     through its active prompt_toolkit input instead of the stdlib
     ``input()`` (which deadlocks against the running ``prompt_async``).
     """
+    if _is_command_selection_prompt(message):
+        deterministic_response = _command_selection_response()
+        stream_to_console(
+            console,
+            label=STREAM_LABEL_ASSISTANT,
+            chunks=iter((deterministic_response,)),
+        )
+        _record_cli_agent_turn(session, message, deterministic_response)
+        return LlmRunInfo(
+            model="deterministic_command_selection",
+            provider="local",
+            latency_ms=0,
+            response_text=deterministic_response,
+        )
+
     try:
         from app.services.llm_client import get_llm_for_reasoning
     except Exception as exc:
