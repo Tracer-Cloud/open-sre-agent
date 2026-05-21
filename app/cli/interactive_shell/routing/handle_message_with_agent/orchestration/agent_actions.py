@@ -41,6 +41,14 @@ class TerminalActionExecutionResult:
 
 
 @dataclass(frozen=True)
+class ActionExecutionDeps:
+    """Optional dependency seams used by tests/harnesses."""
+
+    planner: Callable[..., Any] | None = None
+    dispatch: Callable[..., bool] | None = None
+
+
+@dataclass(frozen=True)
 class _ActionPlanningDecision:
     actions: tuple[PlannedAction, ...]
     has_unhandled_clause: bool
@@ -67,6 +75,21 @@ def _coerce_action_plan_decision(
         denied=denied,
         policy_trace=(),
     )
+
+
+def _enforce_plan_fail_closed_policy(plan: _ActionPlanningDecision) -> _ActionPlanningDecision:
+    if plan.denied:
+        return plan
+    actions = list(plan.actions)
+    if not actions:
+        return plan
+    if all(action.kind == "assistant_handoff" for action in actions):
+        if plan.has_unhandled_clause:
+            return _ActionPlanningDecision((), True, True, plan.policy_trace)
+        return _ActionPlanningDecision((), False, False, plan.policy_trace)
+    if plan.has_unhandled_clause:
+        return _ActionPlanningDecision((), True, True, plan.policy_trace)
+    return _ActionPlanningDecision(tuple(actions), False, False, plan.policy_trace)
 
 
 def _plan_actions(message: str, session: ReplSession) -> _ActionPlanningDecision:
@@ -178,6 +201,7 @@ def _execute_planned_actions(
     console: Console,
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
+    dispatch_fn: Callable[..., bool] | None = None,
 ) -> bool:
     console.print()
     render_response_header(console, "assistant")
@@ -200,17 +224,30 @@ def _execute_planned_actions(
         tool_name = ACTION_KIND_TO_TOOL.get(action.kind)
         if tool_name is None:
             continue
-        REGISTRY.dispatch(
-            tool_name=tool_name,
-            args=_tool_args_for_action(action),
-            ctx=ToolContext(
-                session=session,
-                console=console,
-                confirm_fn=confirm_fn,
-                is_tty=is_tty,
-                action_already_listed=True,
-            ),
-        )
+        if dispatch_fn is None:
+            REGISTRY.dispatch(
+                tool_name=tool_name,
+                args=_tool_args_for_action(action),
+                ctx=ToolContext(
+                    session=session,
+                    console=console,
+                    confirm_fn=confirm_fn,
+                    is_tty=is_tty,
+                    action_already_listed=True,
+                ),
+            )
+        else:
+            dispatch_fn(
+                tool_name=tool_name,
+                args=_tool_args_for_action(action),
+                ctx=ToolContext(
+                    session=session,
+                    console=console,
+                    confirm_fn=confirm_fn,
+                    is_tty=is_tty,
+                    action_already_listed=True,
+                ),
+            )
 
     console.print()
     return not has_unhandled_clause
@@ -223,6 +260,7 @@ def execute_cli_actions(
     *,
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
+    deps: ActionExecutionDeps | None = None,
 ) -> bool:
     """Execute inferred actions from LLM-first planning.
 
@@ -230,7 +268,16 @@ def execute_cli_actions(
     denials). Returns False only for legacy/test paths that pass through with no
     planned actions and no deny signal.
     """
-    plan = _coerce_action_plan_decision(_plan_actions(message, session))
+    if deps is not None and deps.planner is not None:
+        planned = deps.planner(message, session=session)
+        plan = (
+            _ActionPlanningDecision((), True, True, ("planner_unavailable",))
+            if planned is None
+            else _coerce_action_plan_decision(planned)
+        )
+    else:
+        plan = _coerce_action_plan_decision(_plan_actions(message, session))
+    plan = _enforce_plan_fail_closed_policy(plan)
     actions = list(plan.actions)
     has_unhandled_clause = plan.has_unhandled_clause
     denied = plan.denied
@@ -248,6 +295,7 @@ def execute_cli_actions(
         console=console,
         confirm_fn=confirm_fn,
         is_tty=is_tty,
+        dispatch_fn=deps.dispatch if deps is not None else None,
     )
 
 
@@ -257,6 +305,7 @@ def execute_cli_actions_with_metrics(
     console: Console,
     *,
     confirm_fn: Callable[[str], str] | None = None,
+    deps: ActionExecutionDeps | None = None,
 ) -> TerminalActionExecutionResult:
     """Execute planned actions and return per-turn action counters.
 
@@ -271,7 +320,16 @@ def execute_cli_actions_with_metrics(
         capture_terminal_actions_planned,
     )
 
-    plan = _coerce_action_plan_decision(_plan_actions(message, session))
+    if deps is not None and deps.planner is not None:
+        planned = deps.planner(message, session=session)
+        plan = (
+            _ActionPlanningDecision((), True, True, ("planner_unavailable",))
+            if planned is None
+            else _coerce_action_plan_decision(planned)
+        )
+    else:
+        plan = _coerce_action_plan_decision(_plan_actions(message, session))
+    plan = _enforce_plan_fail_closed_policy(plan)
     actions = list(plan.actions)
     has_unhandled_clause = plan.has_unhandled_clause
     denied = plan.denied
@@ -320,6 +378,7 @@ def execute_cli_actions_with_metrics(
         session=session,
         console=console,
         confirm_fn=confirm_fn,
+        dispatch_fn=deps.dispatch if deps is not None else None,
     )
     executed_entries = [
         item
@@ -354,6 +413,7 @@ def plan_terminal_tasks(message: str) -> list[str]:
 
 
 __all__ = [
+    "ActionExecutionDeps",
     "TerminalActionExecutionResult",
     "execute_cli_actions",
     "execute_cli_actions_with_metrics",
