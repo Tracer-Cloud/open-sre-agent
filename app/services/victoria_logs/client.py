@@ -12,6 +12,8 @@ implicitly, since that targets the default tenant on every request.
 
 from __future__ import annotations
 
+from pydantic import ValidationError
+
 import json
 import logging
 from typing import Any
@@ -20,7 +22,9 @@ import httpx
 from pydantic import field_validator
 
 from app.integrations.probes import ProbeResult
+from app.services._base import ServiceClientUnavailable
 from app.services._error_helpers import capture_service_error
+from app.utils.errors import report_exception
 from app.services._streaming import StreamingParseStats
 from app.strict_config import StrictConfigModel
 
@@ -202,5 +206,17 @@ def make_victoria_logs_client(
         return None
     try:
         return VictoriaLogsClient(VictoriaLogsConfig(base_url=url, tenant_id=tenant_id))
-    except Exception:
-        return None
+    except ValidationError:
+        raise
+    except Exception as exc:
+        report_exception(
+            exc,
+            logger=logger,
+            message="victoria_logs client construction failed",
+            tags={
+                "surface": "service_client",
+                "integration": "victoria_logs",
+                "event": "factory_failure",
+            },
+        )
+        raise ServiceClientUnavailable("victoria_logs", "client construction failed", exc) from exc

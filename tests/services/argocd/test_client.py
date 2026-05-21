@@ -84,7 +84,8 @@ def test_config_rejects_plain_http_except_loopback() -> None:
 
     ipv6_local = ArgoCDConfig(base_url="http://[::1]:8080", bearer_token="tok")
     assert ipv6_local.base_url == "http://[::1]:8080"
-    assert make_argocd_client("http://argocd.example.com", bearer_token="tok") is None
+    with pytest.raises(ValidationError):
+        make_argocd_client("http://argocd.example.com", bearer_token="tok")
 
 
 def test_config_rejects_ambiguous_auth_methods() -> None:
@@ -96,15 +97,13 @@ def test_config_rejects_ambiguous_auth_methods() -> None:
             password="pw",
         )
 
-    assert (
+    with pytest.raises(ValidationError):
         make_argocd_client(
             "https://argocd.example.com",
             bearer_token="tok_test",
             username="admin",
             password="pw",
         )
-        is None
-    )
 
 
 def test_config_only_strips_bearer_prefix_from_bearer_token() -> None:

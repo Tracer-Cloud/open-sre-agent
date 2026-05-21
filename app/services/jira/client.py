@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+from pydantic import ValidationError
+
 import logging
 from typing import Any
 
 import httpx
 
 from app.integrations.models import JiraIntegrationConfig
+from app.services._base import ServiceClientUnavailable
 from app.services._error_helpers import capture_service_error
+from app.utils.errors import report_exception
 
 logger = logging.getLogger(__name__)
 
@@ -297,5 +301,13 @@ def make_jira_client(
             project_key=(project_key or "").strip(),
         )
         return JiraClient(config)
-    except Exception:
-        return None
+    except ValidationError:
+        raise
+    except Exception as exc:
+        report_exception(
+            exc,
+            logger=logger,
+            message="jira client construction failed",
+            tags={"surface": "service_client", "integration": "jira", "event": "factory_failure"},
+        )
+        raise ServiceClientUnavailable("jira", "client construction failed", exc) from exc

@@ -6,6 +6,8 @@ Credentials come from the user's Vercel integration stored locally or via env va
 
 from __future__ import annotations
 
+from pydantic import ValidationError
+
 import json
 import logging
 import os
@@ -18,7 +20,9 @@ import httpx
 
 from app.integrations.config_models import VercelIntegrationConfig
 from app.integrations.probes import ProbeResult
+from app.services._base import ServiceClientUnavailable
 from app.services._error_helpers import capture_service_error
+from app.utils.errors import report_exception
 from app.services._streaming import StreamingParseStats
 
 logger = logging.getLogger(__name__)
@@ -589,5 +593,13 @@ def make_vercel_client(api_token: str | None, team_id: str | None = None) -> Ver
         return None
     try:
         return VercelClient(VercelConfig(api_token=token, team_id=team_id or ""))
-    except Exception:
-        return None
+    except ValidationError:
+        raise
+    except Exception as exc:
+        report_exception(
+            exc,
+            logger=logger,
+            message="vercel client construction failed",
+            tags={"surface": "service_client", "integration": "vercel", "event": "factory_failure"},
+        )
+        raise ServiceClientUnavailable("vercel", "client construction failed", exc) from exc

@@ -6,6 +6,8 @@ Credentials come from the user's OpsGenie integration stored locally or via env 
 
 from __future__ import annotations
 
+from pydantic import ValidationError
+
 import logging
 from typing import Any
 
@@ -13,7 +15,9 @@ import httpx
 
 from app.integrations.config_models import OpsGenieIntegrationConfig
 from app.integrations.probes import ProbeResult
+from app.services._base import ServiceClientUnavailable
 from app.services._error_helpers import capture_service_error
+from app.utils.errors import report_exception
 
 logger = logging.getLogger(__name__)
 
@@ -268,5 +272,17 @@ def make_opsgenie_client(api_key: str | None, region: str | None = None) -> OpsG
         return None
     try:
         return OpsGenieClient(OpsGenieConfig(api_key=token, region=region or "us"))
-    except Exception:
-        return None
+    except ValidationError:
+        raise
+    except Exception as exc:
+        report_exception(
+            exc,
+            logger=logger,
+            message="opsgenie client construction failed",
+            tags={
+                "surface": "service_client",
+                "integration": "opsgenie",
+                "event": "factory_failure",
+            },
+        )
+        raise ServiceClientUnavailable("opsgenie", "client construction failed", exc) from exc

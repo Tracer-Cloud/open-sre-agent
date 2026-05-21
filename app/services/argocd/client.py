@@ -7,6 +7,8 @@ from environment variables resolved by ``app.integrations.catalog``.
 
 from __future__ import annotations
 
+from pydantic import ValidationError
+
 import difflib
 import json
 import logging
@@ -18,7 +20,9 @@ import httpx
 
 from app.integrations.config_models import ArgoCDIntegrationConfig
 from app.integrations.probes import ProbeResult
+from app.services._base import ServiceClientUnavailable
 from app.services._error_helpers import capture_service_error
+from app.utils.errors import report_exception
 
 logger = logging.getLogger(__name__)
 
@@ -542,5 +546,13 @@ def make_argocd_client(
                 verify_ssl=_normalize_verify_ssl(verify_ssl),
             )
         )
-    except Exception:
-        return None
+    except ValidationError:
+        raise
+    except Exception as exc:
+        report_exception(
+            exc,
+            logger=logger,
+            message="argocd client construction failed",
+            tags={"surface": "service_client", "integration": "argocd", "event": "factory_failure"},
+        )
+        raise ServiceClientUnavailable("argocd", "client construction failed", exc) from exc

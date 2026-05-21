@@ -7,6 +7,8 @@ Credentials come from the user's Prefect integration stored locally or via env v
 
 from __future__ import annotations
 
+from pydantic import ValidationError
+
 import logging
 from typing import Any
 from urllib.parse import quote
@@ -14,7 +16,9 @@ from urllib.parse import quote
 import httpx
 from pydantic import field_validator
 
+from app.services._base import ServiceClientUnavailable
 from app.services._error_helpers import capture_service_error
+from app.utils.errors import report_exception
 from app.strict_config import StrictConfigModel
 
 logger = logging.getLogger(__name__)
@@ -348,5 +352,17 @@ def make_prefect_client(
                 workspace_id=workspace_id or "",
             )
         )
-    except Exception:
-        return None
+    except ValidationError:
+        raise
+    except Exception as exc:
+        report_exception(
+            exc,
+            logger=logger,
+            message="prefect client construction failed",
+            tags={
+                "surface": "service_client",
+                "integration": "prefect",
+                "event": "factory_failure",
+            },
+        )
+        raise ServiceClientUnavailable("prefect", "client construction failed", exc) from exc
