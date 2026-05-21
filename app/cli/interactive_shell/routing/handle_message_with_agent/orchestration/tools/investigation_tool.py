@@ -11,7 +11,6 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.e
     ExecutionTier,
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_registry import (
-    REGISTRY,
     ToolContext,
     ToolEntry,
     object_schema,
@@ -34,20 +33,21 @@ def execute_investigation_action(args: dict[str, Any], ctx: ToolContext) -> bool
     return True
 
 
-REGISTRY.register(
-    ToolEntry(
-        name="investigation_start",
-        description="Start an investigation with the provided alert text.",
-        input_schema=object_schema(
-            properties={
-                "alert_text": string_property(
-                    description="Alert text or incident details to investigate.",
-                    min_length=1,
-                )
-            },
-            required=("alert_text",),
-        ),
-        execution_tier=ExecutionTier.ELEVATED,
-        execute=execute_investigation_action,
-    )
+TOOL_ENTRY = ToolEntry(
+    name="investigation_start",
+    description="Start an investigation with the provided alert text.",
+    input_schema=object_schema(
+        properties={
+            "alert_text": string_property(
+                description="Alert text or incident details to investigate.",
+                min_length=1,
+            )
+        },
+        required=("alert_text",),
+    ),
+    execution_tier=ExecutionTier.ELEVATED,
+    execute=execute_investigation_action,
 )
+
+
+__all__ = ["TOOL_ENTRY", "execute_investigation_action"]

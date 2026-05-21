@@ -11,7 +11,6 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.e
     ExecutionTier,
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_registry import (
-    REGISTRY,
     ToolContext,
     ToolEntry,
     object_schema,
@@ -34,20 +33,21 @@ def execute_implementation_action(args: dict[str, Any], ctx: ToolContext) -> boo
     return True
 
 
-REGISTRY.register(
-    ToolEntry(
-        name="code_implement",
-        description="Run code implementation workflow using Claude Code.",
-        input_schema=object_schema(
-            properties={
-                "task": string_property(
-                    description="Implementation task to execute in the codebase.",
-                    min_length=1,
-                )
-            },
-            required=("task",),
-        ),
-        execution_tier=ExecutionTier.ELEVATED,
-        execute=execute_implementation_action,
-    )
+TOOL_ENTRY = ToolEntry(
+    name="code_implement",
+    description="Run code implementation workflow using Claude Code.",
+    input_schema=object_schema(
+        properties={
+            "task": string_property(
+                description="Implementation task to execute in the codebase.",
+                min_length=1,
+            )
+        },
+        required=("task",),
+    ),
+    execution_tier=ExecutionTier.ELEVATED,
+    execute=execute_implementation_action,
 )
+
+
+__all__ = ["TOOL_ENTRY", "execute_implementation_action"]

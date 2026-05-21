@@ -11,7 +11,6 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.e
     ExecutionTier,
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_registry import (
-    REGISTRY,
     ToolContext,
     ToolEntry,
     object_schema,
@@ -36,20 +35,21 @@ def execute_sample_alert_action(args: dict[str, Any], ctx: ToolContext) -> bool:
     return True
 
 
-REGISTRY.register(
-    ToolEntry(
-        name="alert_sample",
-        description="Run a sample alert template.",
-        input_schema=object_schema(
-            properties={
-                "template": string_property(
-                    description="Sample alert template name to run.",
-                    enum=_SAMPLE_ALERT_TEMPLATES,
-                )
-            },
-            required=("template",),
-        ),
-        execution_tier=ExecutionTier.ELEVATED,
-        execute=execute_sample_alert_action,
-    )
+TOOL_ENTRY = ToolEntry(
+    name="alert_sample",
+    description="Run a sample alert template.",
+    input_schema=object_schema(
+        properties={
+            "template": string_property(
+                description="Sample alert template name to run.",
+                enum=_SAMPLE_ALERT_TEMPLATES,
+            )
+        },
+        required=("template",),
+    ),
+    execution_tier=ExecutionTier.ELEVATED,
+    execute=execute_sample_alert_action,
 )
+
+
+__all__ = ["TOOL_ENTRY", "execute_sample_alert_action"]

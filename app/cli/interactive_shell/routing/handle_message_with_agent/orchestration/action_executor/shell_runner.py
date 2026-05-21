@@ -13,8 +13,8 @@ from rich.text import Text
 
 import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.intent_parser as _intent_parser
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
-    evaluate_shell_from_parsed,
     execution_allowed,
+    plan_shell_execution,
 )
 from app.cli.interactive_shell.runtime import ReplSession
 from app.cli.interactive_shell.shell import (
@@ -43,9 +43,9 @@ def run_shell_command(
     action_already_listed: bool = False,
 ) -> None:
     parsed = parse_shell_command(command, is_windows=_intent_parser.IS_WINDOWS)
-    policy = evaluate_shell_from_parsed(parsed)
+    plan = plan_shell_execution(parsed)
     if not execution_allowed(
-        policy,
+        plan.policy,
         session=session,
         console=console,
         action_summary=f"$ {command}",

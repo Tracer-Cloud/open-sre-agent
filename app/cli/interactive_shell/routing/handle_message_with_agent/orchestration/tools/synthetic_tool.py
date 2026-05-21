@@ -14,7 +14,6 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.s
     list_rds_postgres_scenarios,
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_registry import (
-    REGISTRY,
     ToolContext,
     ToolEntry,
     capability_not_explicitly_disabled,
@@ -39,27 +38,26 @@ def execute_synthetic_action(args: dict[str, Any], ctx: ToolContext) -> bool:
     return True
 
 
-REGISTRY.register(
-    ToolEntry(
-        name="synthetic_run",
-        description="Run a synthetic scenario in a suite.",
-        input_schema=object_schema(
-            properties={
-                "suite": string_property(
-                    description="Synthetic suite name.",
-                    enum=("rds_postgres",),
-                ),
-                "scenario": string_property(
-                    description="Synthetic scenario id within the selected suite or `all`.",
-                    enum=("all", *list_rds_postgres_scenarios()),
-                ),
-            },
-            required=("suite", "scenario"),
-        ),
-        execution_tier=ExecutionTier.ELEVATED,
-        execute=execute_synthetic_action,
-        is_available=lambda session: capability_not_explicitly_disabled(
-            session, "synthetic_suites"
-        ),
-    )
+TOOL_ENTRY = ToolEntry(
+    name="synthetic_run",
+    description="Run a synthetic scenario in a suite.",
+    input_schema=object_schema(
+        properties={
+            "suite": string_property(
+                description="Synthetic suite name.",
+                enum=("rds_postgres",),
+            ),
+            "scenario": string_property(
+                description="Synthetic scenario id within the selected suite or `all`.",
+                enum=("all", *list_rds_postgres_scenarios()),
+            ),
+        },
+        required=("suite", "scenario"),
+    ),
+    execution_tier=ExecutionTier.ELEVATED,
+    execute=execute_synthetic_action,
+    is_available=lambda session: capability_not_explicitly_disabled(session, "synthetic_suites"),
 )
+
+
+__all__ = ["TOOL_ENTRY", "execute_synthetic_action"]

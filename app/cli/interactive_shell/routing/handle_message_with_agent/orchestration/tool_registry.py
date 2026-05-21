@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import functools
-import importlib
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -145,15 +144,25 @@ ACTION_KIND_TO_TOOL: dict[ActionKind, str] = {
 
 REGISTRY = ActionToolRegistry()
 
-_ACTION_TOOLS_MODULE = (
-    "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tools"
-)
-
 
 @functools.cache
+def register_action_tools() -> tuple[str, ...]:
+    """Explicitly register all action tools from the composition root."""
+    from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tools.catalog import (
+        ACTION_TOOL_CATALOG,
+    )
+
+    for entry in ACTION_TOOL_CATALOG:
+        if not isinstance(entry, ToolEntry):
+            msg = f"action tool entry must be ToolEntry, got {type(entry)!r}"
+            raise TypeError(msg)
+        REGISTRY.register(entry)
+    return REGISTRY.names()
+
+
+register_action_tools()
+
+
 def ensure_action_tools_loaded() -> None:
-    """Import tool modules so ``REGISTRY`` side-effect registrations run."""
-    importlib.import_module(_ACTION_TOOLS_MODULE)
-
-
-ensure_action_tools_loaded()
+    """Backward-compatible no-op alias for callers/tests expecting this hook."""
+    register_action_tools()

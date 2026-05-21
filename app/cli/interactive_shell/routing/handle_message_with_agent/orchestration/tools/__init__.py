@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_registry import (
+    ToolEntry,
+)
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tools import (
     assistant_handoff_tool,
     cli_command_tool,
@@ -15,8 +18,19 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.t
     synthetic_tool,
     task_cancel_tool,
 )
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tools.catalog import (
+    ACTION_TOOL_CATALOG,
+)
+
+
+def action_tool_entries() -> tuple[ToolEntry, ...]:
+    """Return all tool entries in one explicit, deterministic order."""
+    return ACTION_TOOL_CATALOG
+
 
 __all__ = [
+    "ACTION_TOOL_CATALOG",
+    "action_tool_entries",
     "assistant_handoff_tool",
     "cli_command_tool",
     "implementation_tool",

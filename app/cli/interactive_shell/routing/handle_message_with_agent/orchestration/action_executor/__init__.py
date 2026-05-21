@@ -37,6 +37,12 @@ from .investigation_runner import run_sample_alert, run_text_investigation
 from .opensre_cli_runner import (
     _INTERACTIVE_OPENSRE_COMMAND_PATHS,
     _OPENSRE_BLOCKED_SUBCOMMANDS,
+    OpensreCommandClass,
+    OpensreExecutionMode,
+    OpensreExecutionPlan,
+    OpensreRunOutcome,
+    OpensreRunResult,
+    _build_opensre_execution_plan,
     _classify_opensre_command,
     _is_interactive_wizard,
     _opensre_confirmation_reason,
@@ -45,6 +51,7 @@ from .opensre_cli_runner import (
     _should_run_opensre_in_foreground,
     print_interactive_wizard_handoff,
     run_opensre_cli_command,
+    run_opensre_cli_command_result,
 )
 from .shell_runner import run_cd_command, run_pwd_command, run_shell_command
 from .synthetic_tasks import (
@@ -79,6 +86,11 @@ __all__ = [
     "CLAUDE_CODE_IMPLEMENTATION_TIMEOUT_SECONDS",
     "SHELL_COMMAND_TIMEOUT_SECONDS",
     "SYNTHETIC_TEST_TIMEOUT_SECONDS",
+    "OpensreCommandClass",
+    "OpensreExecutionMode",
+    "OpensreExecutionPlan",
+    "OpensreRunOutcome",
+    "OpensreRunResult",
     "_INTERACTIVE_OPENSRE_COMMAND_PATHS",
     "_MAX_COMMAND_OUTPUT_CHARS",
     "_MIN_SUBPROCESS_TERMINAL_WIDTH",
@@ -88,6 +100,7 @@ __all__ = [
     "_TASK_OUTPUT_JOIN_TIMEOUT_SECONDS",
     "_TASK_OUTPUT_PREFIX_WIDTH",
     "_classify_opensre_command",
+    "_build_opensre_execution_plan",
     "_console_file_is_tty",
     "_is_interactive_wizard",
     "_join_task_output_streams",
@@ -108,6 +121,7 @@ __all__ = [
     "run_claude_code_implementation",
     "run_cd_command",
     "run_opensre_cli_command",
+    "run_opensre_cli_command_result",
     "run_pwd_command",
     "run_sample_alert",
     "run_text_investigation",

@@ -9,15 +9,13 @@ from rich.markup import escape
 
 from app.cli.interactive_shell.commands import SLASH_COMMANDS, dispatch_slash
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
-    evaluate_slash_tier,
     execution_allowed,
-    resolve_slash_execution_tier,
+    plan_slash_execution,
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_tier import (
     ExecutionTier,
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_registry import (
-    REGISTRY,
     ToolContext,
     ToolEntry,
     object_schema,
@@ -81,10 +79,9 @@ def execute_task_cancel_action(args: dict[str, Any], ctx: ToolContext) -> bool:
         return True
     command = f"/cancel {task_id}"
     cmd = SLASH_COMMANDS["/cancel"]
-    tier = resolve_slash_execution_tier("/cancel", [task_id], cmd.execution_tier)
-    policy = evaluate_slash_tier(tier)
+    plan = plan_slash_execution("/cancel", [task_id], cmd.execution_tier)
     if not execution_allowed(
-        policy,
+        plan.policy,
         session=ctx.session,
         console=ctx.console,
         action_summary=command,
@@ -106,27 +103,28 @@ def execute_task_cancel_action(args: dict[str, Any], ctx: ToolContext) -> bool:
     return True
 
 
-REGISTRY.register(
-    ToolEntry(
-        name="task_cancel",
-        description="Cancel a running task by id or kind.",
-        input_schema=object_schema(
-            properties={
-                "target": {
-                    "oneOf": [
-                        {"type": "string", "enum": ["synthetic_test", "task"]},
-                        {"type": "string", "pattern": "^[A-Za-z0-9_-]{3,}$"},
-                    ],
-                    "description": (
-                        "Task selector: `synthetic_test` to cancel the one running synthetic task, "
-                        "`task` to cancel a single running task of any kind, or a task id/prefix "
-                        "for `/cancel <id>` resolution."
-                    ),
-                }
-            },
-            required=("target",),
-        ),
-        execution_tier=ExecutionTier.ELEVATED,
-        execute=execute_task_cancel_action,
-    )
+TOOL_ENTRY = ToolEntry(
+    name="task_cancel",
+    description="Cancel a running task by id or kind.",
+    input_schema=object_schema(
+        properties={
+            "target": {
+                "oneOf": [
+                    {"type": "string", "enum": ["synthetic_test", "task"]},
+                    {"type": "string", "pattern": "^[A-Za-z0-9_-]{3,}$"},
+                ],
+                "description": (
+                    "Task selector: `synthetic_test` to cancel the one running synthetic task, "
+                    "`task` to cancel a single running task of any kind, or a task id/prefix "
+                    "for `/cancel <id>` resolution."
+                ),
+            }
+        },
+        required=("target",),
+    ),
+    execution_tier=ExecutionTier.ELEVATED,
+    execute=execute_task_cancel_action,
 )
+
+
+__all__ = ["TOOL_ENTRY", "execute_task_cancel_action"]

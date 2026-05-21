@@ -15,7 +15,6 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.e
     ExecutionTier,
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_registry import (
-    REGISTRY,
     ToolContext,
     ToolEntry,
     object_schema,
@@ -74,15 +73,16 @@ def execute_llm_provider_action(args: dict[str, Any], ctx: ToolContext) -> bool:
     return True
 
 
-REGISTRY.register(
-    ToolEntry(
-        name="llm_set_provider",
-        description="Switch the active LLM provider or reasoning model.",
-        input_schema=object_schema(
-            properties={"target": _target_property_schema()},
-            required=("target",),
-        ),
-        execution_tier=ExecutionTier.ELEVATED,
-        execute=execute_llm_provider_action,
-    )
+TOOL_ENTRY = ToolEntry(
+    name="llm_set_provider",
+    description="Switch the active LLM provider or reasoning model.",
+    input_schema=object_schema(
+        properties={"target": _target_property_schema()},
+        required=("target",),
+    ),
+    execution_tier=ExecutionTier.ELEVATED,
+    execute=execute_llm_provider_action,
 )
+
+
+__all__ = ["TOOL_ENTRY", "execute_llm_provider_action"]

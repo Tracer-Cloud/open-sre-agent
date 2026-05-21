@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import Any
 
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.intent_parser import (
@@ -12,9 +12,14 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.i
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
     PlannedAction,
 )
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.slash_commands.deterministic_action_mapper import (
-    map_actions_with_unhandled,
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.policy_engine import (
+    TransformPhase,
+    apply_transform_phases,
 )
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.slash_commands.deterministic_action_mapper import (
+    map_actions_result,
+)
+from app.cli.interactive_shell.routing.policy_tags import PlannerPostprocessPolicyTag
 
 from .constants import (
     _HTTP_INCIDENT_PASTE_RE,
@@ -22,6 +27,28 @@ from .constants import (
     _LOCAL_LLAMA_CONNECT_RE,
     is_rich_pasted_incident,
 )
+
+
+class PlannerPolicyResult:
+    """Finalized planner output with an explicit policy trace."""
+
+    __slots__ = ("actions", "has_unhandled", "applied_policies")
+
+    def __init__(
+        self,
+        actions: list[PlannedAction],
+        has_unhandled: bool,
+        applied_policies: tuple[PlannerPostprocessPolicyTag, ...],
+    ) -> None:
+        self.actions = actions
+        self.has_unhandled = has_unhandled
+        self.applied_policies = applied_policies
+
+
+@dataclass(frozen=True)
+class _PlannerPostprocessState:
+    actions: list[PlannedAction]
+    has_unhandled: bool
 
 
 def _as_llm_sourced(actions: list[PlannedAction]) -> list[PlannedAction]:
@@ -44,7 +71,9 @@ def _reconcile_compound_actions(
     if actions and all(action.kind == "assistant_handoff" for action in actions):
         return actions, has_unhandled
 
-    det_actions, det_unhandled = map_actions_with_unhandled(message)
+    det_result = map_actions_result(message)
+    det_actions = list(det_result.actions)
+    det_unhandled = det_result.has_unhandled_clause
     if not det_actions or len(det_actions) <= len(actions):
         return actions, has_unhandled
     return _as_llm_sourced(det_actions), det_unhandled
@@ -144,19 +173,76 @@ def _finalize_planner_result(
     *,
     session: Any | None = None,
 ) -> tuple[list[PlannedAction], bool]:
-    early = _fail_closed_vague_local_model(message)
-    if early is not None:
-        return early
-
-    actions, has_unhandled = _fail_closed_unconfigured_integration_detail(
+    result = finalize_planner_result_with_trace(
         message,
-        session,
         actions,
         has_unhandled,
+        session=session,
     )
-    if not actions and has_unhandled:
-        return actions, has_unhandled
+    return result.actions, result.has_unhandled
 
-    actions, has_unhandled = _reconcile_compound_actions(message, actions, has_unhandled)
-    actions, has_unhandled = _upgrade_handoff_to_incident(message, actions, has_unhandled)
-    return _coerce_incident_paste_handoff(message, actions, has_unhandled)
+
+def finalize_planner_result_with_trace(
+    message: str,
+    actions: list[PlannedAction],
+    has_unhandled: bool,
+    *,
+    session: Any | None = None,
+) -> PlannerPolicyResult:
+    early = _fail_closed_vague_local_model(message)
+    if early is not None:
+        early_actions, early_unhandled = early
+        return PlannerPolicyResult(
+            early_actions,
+            early_unhandled,
+            (PlannerPostprocessPolicyTag.FAIL_CLOSED_VAGUE_LOCAL_MODEL,),
+        )
+
+    initial = _PlannerPostprocessState(actions=actions, has_unhandled=has_unhandled)
+    phases: tuple[TransformPhase[_PlannerPostprocessState, PlannerPostprocessPolicyTag], ...] = (
+        TransformPhase(
+            PlannerPostprocessPolicyTag.FAIL_CLOSED_UNCONFIGURED_INTEGRATION_DETAIL,
+            lambda state: _PlannerPostprocessState(
+                *_fail_closed_unconfigured_integration_detail(
+                    message,
+                    session,
+                    state.actions,
+                    state.has_unhandled,
+                )
+            ),
+        ),
+        TransformPhase(
+            PlannerPostprocessPolicyTag.RECONCILE_COMPOUND_WITH_DETERMINISTIC,
+            lambda state: _PlannerPostprocessState(
+                *_reconcile_compound_actions(message, state.actions, state.has_unhandled)
+            ),
+        ),
+        TransformPhase(
+            PlannerPostprocessPolicyTag.UPGRADE_HANDOFF_TO_INCIDENT,
+            lambda state: _PlannerPostprocessState(
+                *_upgrade_handoff_to_incident(message, state.actions, state.has_unhandled)
+            ),
+        ),
+        TransformPhase(
+            PlannerPostprocessPolicyTag.COERCE_INCIDENT_PASTE_HANDOFF,
+            lambda state: _PlannerPostprocessState(
+                *_coerce_incident_paste_handoff(message, state.actions, state.has_unhandled)
+            ),
+        ),
+    )
+    final_state, applied = apply_transform_phases(
+        initial,
+        phases,
+        changed=lambda prev, nxt: (
+            (prev.actions, prev.has_unhandled) != (nxt.actions, nxt.has_unhandled)
+        ),
+        stop_when=lambda state: not state.actions and state.has_unhandled,
+    )
+    applied_list = list(applied)
+    if not final_state.actions and final_state.has_unhandled:
+        applied_list.append(PlannerPostprocessPolicyTag.FAIL_CLOSED_AFTER_POLICY)
+    return PlannerPolicyResult(
+        final_state.actions,
+        final_state.has_unhandled,
+        tuple(applied_list),
+    )

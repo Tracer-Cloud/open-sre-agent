@@ -12,15 +12,13 @@ from app.cli.interactive_shell.command_registry.slash_catalog import (
 )
 from app.cli.interactive_shell.commands import SLASH_COMMANDS, dispatch_slash
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
-    evaluate_slash_tier,
     execution_allowed,
-    resolve_slash_execution_tier,
+    plan_slash_execution,
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_tier import (
     ExecutionTier,
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_registry import (
-    REGISTRY,
     ToolContext,
     ToolEntry,
     capability_not_explicitly_disabled,
@@ -59,10 +57,9 @@ def execute_slash_action(args: dict[str, Any], ctx: ToolContext) -> bool:
             )
         )
 
-    tier = resolve_slash_execution_tier(name, slash_args, cmd.execution_tier)
-    policy = evaluate_slash_tier(tier)
+    plan = plan_slash_execution(name, slash_args, cmd.execution_tier)
     if not execution_allowed(
-        policy,
+        plan.policy,
         session=ctx.session,
         console=ctx.console,
         action_summary=stripped,
@@ -86,13 +83,14 @@ def execute_slash_action(args: dict[str, Any], ctx: ToolContext) -> bool:
     )
 
 
-REGISTRY.register(
-    ToolEntry(
-        name="slash_invoke",
-        description=slash_invoke_tool_description(),
-        input_schema=slash_invoke_input_schema(),
-        execution_tier=ExecutionTier.SAFE,
-        execute=execute_slash_action,
-        is_available=lambda session: capability_not_explicitly_disabled(session, "slash_commands"),
-    )
+TOOL_ENTRY = ToolEntry(
+    name="slash_invoke",
+    description=slash_invoke_tool_description(),
+    input_schema=slash_invoke_input_schema(),
+    execution_tier=ExecutionTier.SAFE,
+    execute=execute_slash_action,
+    is_available=lambda session: capability_not_explicitly_disabled(session, "slash_commands"),
 )
+
+
+__all__ = ["TOOL_ENTRY", "execute_slash_action"]

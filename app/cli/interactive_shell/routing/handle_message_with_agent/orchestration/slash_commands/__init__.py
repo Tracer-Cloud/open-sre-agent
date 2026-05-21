@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.slash_commands.deterministic_action_mapper import (
-    map_actions,
+    DeterministicMapperPolicyTag,
+    DeterministicMappingResult,
+    map_actions_result,
     map_actions_with_unhandled,
     map_clause_actions,
     map_cli_actions,
@@ -11,7 +13,9 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.s
 )
 
 __all__ = [
-    "map_actions",
+    "DeterministicMapperPolicyTag",
+    "DeterministicMappingResult",
+    "map_actions_result",
     "map_actions_with_unhandled",
     "map_clause_actions",
     "map_cli_actions",

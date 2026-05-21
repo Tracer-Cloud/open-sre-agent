@@ -11,7 +11,6 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.e
     ExecutionTier,
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_registry import (
-    REGISTRY,
     ToolContext,
     ToolEntry,
     object_schema,
@@ -34,28 +33,29 @@ def execute_shell_action(args: dict[str, Any], ctx: ToolContext) -> bool:
     return True
 
 
-REGISTRY.register(
-    ToolEntry(
-        name="shell_run",
-        description=(
-            "Run a narrowly scoped local diagnostic shell command. Use for read-only inspection "
-            "or controlled operational steps already requested by the user; avoid destructive, "
-            "credential-exfiltrating, or unrelated commands."
-        ),
-        input_schema=object_schema(
-            properties={
-                "command": string_property(
-                    description=(
-                        "Exact shell command to execute. Prefer safe diagnostics (for example: "
-                        "`ls`, `pwd`, `git status`, `uv run python -m pytest ...`). Do not use "
-                        "commands that wipe data or alter unrelated system state."
-                    ),
-                    min_length=1,
-                )
-            },
-            required=("command",),
-        ),
-        execution_tier=ExecutionTier.ELEVATED,
-        execute=execute_shell_action,
-    )
+TOOL_ENTRY = ToolEntry(
+    name="shell_run",
+    description=(
+        "Run a narrowly scoped local diagnostic shell command. Use for read-only inspection "
+        "or controlled operational steps already requested by the user; avoid destructive, "
+        "credential-exfiltrating, or unrelated commands."
+    ),
+    input_schema=object_schema(
+        properties={
+            "command": string_property(
+                description=(
+                    "Exact shell command to execute. Prefer safe diagnostics (for example: "
+                    "`ls`, `pwd`, `git status`, `uv run python -m pytest ...`). Do not use "
+                    "commands that wipe data or alter unrelated system state."
+                ),
+                min_length=1,
+            )
+        },
+        required=("command",),
+    ),
+    execution_tier=ExecutionTier.ELEVATED,
+    execute=execute_shell_action,
 )
+
+
+__all__ = ["TOOL_ENTRY", "execute_shell_action"]

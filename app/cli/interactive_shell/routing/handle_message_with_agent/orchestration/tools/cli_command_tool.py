@@ -11,7 +11,6 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.e
     ExecutionTier,
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_registry import (
-    REGISTRY,
     ToolContext,
     ToolEntry,
     capability_not_explicitly_disabled,
@@ -34,29 +33,30 @@ def execute_cli_command_action(args: dict[str, Any], ctx: ToolContext) -> bool:
     return True
 
 
-REGISTRY.register(
-    ToolEntry(
-        name="cli_exec",
-        description=(
-            "Run an `opensre` CLI subcommand payload (without the leading `opensre ` prefix). "
-            "Prefer allowed operational families such as health/status/list/show/integrations/"
-            "synthetic checks; avoid unrelated or dangerous payloads."
-        ),
-        input_schema=object_schema(
-            properties={
-                "payload": string_property(
-                    description=(
-                        "CLI payload passed to `opensre` without the leading command prefix "
-                        "(for example: `integrations list`, `health`, `synthetic run ...`). "
-                        "Must not start with `opensre `."
-                    ),
-                    min_length=1,
-                )
-            },
-            required=("payload",),
-        ),
-        execution_tier=ExecutionTier.ELEVATED,
-        execute=execute_cli_command_action,
-        is_available=lambda session: capability_not_explicitly_disabled(session, "cli_commands"),
-    )
+TOOL_ENTRY = ToolEntry(
+    name="cli_exec",
+    description=(
+        "Run an `opensre` CLI subcommand payload (without the leading `opensre ` prefix). "
+        "Prefer allowed operational families such as health/status/list/show/integrations/"
+        "synthetic checks; avoid unrelated or dangerous payloads."
+    ),
+    input_schema=object_schema(
+        properties={
+            "payload": string_property(
+                description=(
+                    "CLI payload passed to `opensre` without the leading command prefix "
+                    "(for example: `integrations list`, `health`, `synthetic run ...`). "
+                    "Must not start with `opensre `."
+                ),
+                min_length=1,
+            )
+        },
+        required=("payload",),
+    ),
+    execution_tier=ExecutionTier.ELEVATED,
+    execute=execute_cli_command_action,
+    is_available=lambda session: capability_not_explicitly_disabled(session, "cli_commands"),
 )
+
+
+__all__ = ["TOOL_ENTRY", "execute_cli_command_action"]

@@ -22,7 +22,6 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.e
     ExecutionTier,
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_registry import (
-    REGISTRY,
     ToolContext,
     ToolEntry,
     object_schema,
@@ -36,33 +35,34 @@ def execute_mark_unhandled_action(args: dict[str, Any], ctx: ToolContext) -> boo
     return True
 
 
-REGISTRY.register(
-    ToolEntry(
-        name="mark_unhandled",
-        description=(
-            "Signal that part of the user's request could not be mapped to an "
-            "executable tool. Call this in addition to any matched tool calls "
-            "whenever the prompt contains a clause (joined by 'and', 'then', "
-            "etc.) that is nonsensical, ambiguous, or outside OpenSRE's scope. "
-            'MUST be called for partial-handling requests like "show me '
-            'connected services and sing a song" — emitting the matched '
-            "slash_invoke alone is treated as a fully-handled request and "
-            "silently drops the unmatched clause."
-        ),
-        input_schema=object_schema(
-            properties={
-                "reason": string_property(
-                    description=(
-                        "Brief description of which portion of the request "
-                        "was not mapped and why (e.g. \"'sing a song' is not "
-                        'an executable OpenSRE operation").'
-                    ),
-                    min_length=1,
-                )
-            },
-            required=("reason",),
-        ),
-        execution_tier=ExecutionTier.SAFE,
-        execute=execute_mark_unhandled_action,
-    )
+TOOL_ENTRY = ToolEntry(
+    name="mark_unhandled",
+    description=(
+        "Signal that part of the user's request could not be mapped to an "
+        "executable tool. Call this in addition to any matched tool calls "
+        "whenever the prompt contains a clause (joined by 'and', 'then', "
+        "etc.) that is nonsensical, ambiguous, or outside OpenSRE's scope. "
+        'MUST be called for partial-handling requests like "show me '
+        'connected services and sing a song" — emitting the matched '
+        "slash_invoke alone is treated as a fully-handled request and "
+        "silently drops the unmatched clause."
+    ),
+    input_schema=object_schema(
+        properties={
+            "reason": string_property(
+                description=(
+                    "Brief description of which portion of the request "
+                    "was not mapped and why (e.g. \"'sing a song' is not "
+                    'an executable OpenSRE operation").'
+                ),
+                min_length=1,
+            )
+        },
+        required=("reason",),
+    ),
+    execution_tier=ExecutionTier.SAFE,
+    execute=execute_mark_unhandled_action,
 )
+
+
+__all__ = ["TOOL_ENTRY", "execute_mark_unhandled_action"]
