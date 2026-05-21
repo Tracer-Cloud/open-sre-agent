@@ -97,6 +97,7 @@ Files to touch:
 - `app/tools/utils/` if the tool needs shared helper code.
 - `app/services/<vendor>/client.py` if the tool should reuse a dedicated API client instead of inlining requests.
 - `docs/<tool_name>.mdx` for user-facing usage, parameters, and examples.
+- `docs/docs.json` — add the page path (without `.mdx`) to the appropriate `pages` array so Mintlify navigation includes it.
 - `tests/tools/test_<tool_name>.py` for behavior and regression coverage.
 
 Steps:
@@ -139,6 +140,7 @@ Files to touch:
 - `app/services/<name>/client.py` when the integration needs a dedicated API client.
 - `app/tools/<Name>Tool/` or `app/tools/<tool_file>.py` for the user-facing tool layer.
 - `docs/<name>.mdx` for user-facing setup, usage, and verification docs.
+- `docs/docs.json` — add the page path (without `.mdx`) to the appropriate `pages` array so Mintlify navigation includes it.
 - `tests/integrations/test_<name>.py` for config, verification, and store coverage.
 - `tests/tools/test_<tool_name>.py` and any relevant `tests/e2e/` or `tests/synthetic/` files if the integration is exercised by tools or scenarios.
 
@@ -159,6 +161,7 @@ Basic steps:
 
 - If core agent or pipeline logic changes -> run `make test-cov` and `make typecheck`.
 - If a new feature is shipped (tool, CLI command, pipeline behavior, integration) -> add a `docs/` page or section covering usage, configuration, and examples before the PR is opened.
+- If a new `docs/` page is added or renamed -> register it in `docs/docs.json` under the correct `pages` array in the same PR (path without `.mdx`, e.g. `messaging/whatsapp` for `docs/messaging/whatsapp.mdx`).
 - If an existing feature changes behavior, flags, or config shape -> update the relevant `docs/` page in the same PR; docs and code must stay in sync.
 - If a tool's API or schema changes -> update docs in `docs/` and update the related unit tests, usually under `tests/tools/`.
 - If an integration changes -> update `tests/integrations/` and verify with `make verify-integrations`.
@@ -196,6 +199,7 @@ The fastest local loop is `make test-cov`, which exercises the non-live unit sui
 - CI-only tests: Some e2e tests, including Kubernetes, EKS, and chaos engineering paths, require live infrastructure and are excluded from `make test-cov`. Do not expect them to pass locally without that environment.
 - Legacy graph dev server: removed; use `make dev` for a local uvicorn hint or run investigations via the CLI.
 - Docker requirement: Several targets, including the Grafana local stack and Chaos Mesh workflows, require a running Docker daemon.
+- Docs navigation: Adding an `.mdx` file under `docs/` is not enough — Mintlify only shows pages listed in `docs/docs.json`. Forgetting the `pages` entry leaves the doc unreachable from the site sidebar.
 
 ## 6. New Integration Checklist
 
@@ -204,7 +208,7 @@ When adding a new integration, a PR is only ready when:
 - Integration code added under `app/integrations/<name>/`
 - Tool(s) added under `app/tools/` with proper typing
 - Unit/mock tests added under `tests/integrations/`
-- Docs added under `docs/`
+- Docs added under `docs/` and registered in `docs/docs.json` `pages`
 - Screenshot or demo GIF showing the integration working
 - E2E or synthetic test added
 - `make verify-integrations` passes
