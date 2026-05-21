@@ -677,6 +677,7 @@ def _format_anthropic_retry_error(err: Exception) -> str:
 # the failure mode is "fall through to a generic HTTP 400 message" (#1806).
 _OPENAI_INVALID_MODEL_IDENTIFIER_PHRASES = (
     "model identifier",  # OpenAI / LiteLLM
+    "invalid model id",  # OpenAI
     "invalid model name",  # OpenRouter
 )
 
@@ -756,6 +757,7 @@ class OpenAILLMClient:
         self,
         *,
         model: str,
+        model_fallback: str | None = None,
         max_tokens: int = 1024,
         temperature: float | None = None,
         base_url: str | None = None,
@@ -772,9 +774,26 @@ class OpenAILLMClient:
         self._provider_label = api_key_env.removesuffix("_API_KEY").replace("_", " ").title()
         self._client: OpenAI | None = None
         self._model = model
+        fallback = (model_fallback or "").strip()
+        self._model_fallback = fallback if fallback and fallback != model else None
         self._max_tokens = max_tokens
         self._temperature = temperature
         self._bound_tools: list[dict[str, Any]] = []
+
+    def _activate_model_fallback(self) -> bool:
+        """Switch to the configured fallback model once and report it."""
+        fallback = self._model_fallback
+        if not fallback or fallback == self._model:
+            return False
+        previous = self._model
+        self._model = fallback
+        logger.warning(
+            "%s model '%s' unavailable; falling back to toolcall model '%s'.",
+            self._provider_label,
+            previous,
+            fallback,
+        )
+        return True
 
     def _build_client(self, api_key: str) -> OpenAI:
         return OpenAI(
@@ -863,11 +882,17 @@ class OpenAILLMClient:
                     f"{self._provider_label} authentication failed. Check {self._api_key_env} in your environment, .env, or secure local keychain."
                 ) from err
             except OpenAINotFoundError as err:
+                if self._activate_model_fallback():
+                    kwargs = self._build_request_kwargs(prompt_or_messages)
+                    continue
                 raise RuntimeError(
                     f"{self._provider_label} model '{self._model}' was not found. "
                     "Check your configured model name or endpoint."
                 ) from err
             except OpenAIBadRequestError as err:
+                if _is_openai_invalid_model_identifier(err) and self._activate_model_fallback():
+                    kwargs = self._build_request_kwargs(prompt_or_messages)
+                    continue
                 if _is_openai_invalid_model_identifier(err):
                     raise RuntimeError(
                         f"{self._provider_label} model '{self._model}' was not found. "
@@ -984,11 +1009,21 @@ class OpenAILLMClient:
                     f"{self._provider_label} authentication failed. Check {self._api_key_env} in your environment, .env, or secure local keychain."
                 ) from err
             except OpenAINotFoundError as err:
+                if not emitted and self._activate_model_fallback():
+                    kwargs = self._build_request_kwargs(prompt_or_messages)
+                    continue
                 raise RuntimeError(
                     f"{self._provider_label} model '{self._model}' was not found. "
                     "Check your configured model name or endpoint."
                 ) from err
             except OpenAIBadRequestError as err:
+                if (
+                    not emitted
+                    and _is_openai_invalid_model_identifier(err)
+                    and self._activate_model_fallback()
+                ):
+                    kwargs = self._build_request_kwargs(prompt_or_messages)
+                    continue
                 if _is_openai_invalid_model_identifier(err):
                     raise RuntimeError(
                         f"{self._provider_label} model '{self._model}' was not found. "
@@ -1234,10 +1269,17 @@ def _create_llm_client(model_type: ModelType) -> _LLMClientType:
             raise RuntimeError(msg or str(exc)) from exc
         raise RuntimeError(str(exc)) from exc
     provider = settings.provider
+
+    def _fallback_model(provider_prefix: str) -> str | None:
+        if model_type == "toolcall":
+            return None
+        return _select_model(settings, provider_prefix, "toolcall")
+
     if provider == "openai":
         config = OPENAI_LLM_CONFIG
         return OpenAILLMClient(
             model=_select_model(settings, "openai", model_type),
+            model_fallback=_fallback_model("openai"),
             max_tokens=config.max_tokens,
         )
     elif provider == "openrouter":
@@ -1246,6 +1288,7 @@ def _create_llm_client(model_type: ModelType) -> _LLMClientType:
         config = OPENROUTER_LLM_CONFIG
         return OpenAILLMClient(
             model=_select_model(settings, "openrouter", model_type),
+            model_fallback=_fallback_model("openrouter"),
             max_tokens=config.max_tokens,
             base_url=OPENROUTER_BASE_URL,
             api_key_env="OPENROUTER_API_KEY",
@@ -1256,6 +1299,7 @@ def _create_llm_client(model_type: ModelType) -> _LLMClientType:
         config = GEMINI_LLM_CONFIG
         return OpenAILLMClient(
             model=_select_model(settings, "gemini", model_type),
+            model_fallback=_fallback_model("gemini"),
             max_tokens=config.max_tokens,
             base_url=GEMINI_BASE_URL,
             api_key_env="GEMINI_API_KEY",
@@ -1266,6 +1310,7 @@ def _create_llm_client(model_type: ModelType) -> _LLMClientType:
         config = NVIDIA_LLM_CONFIG
         return OpenAILLMClient(
             model=_select_model(settings, "nvidia", model_type),
+            model_fallback=_fallback_model("nvidia"),
             max_tokens=config.max_tokens,
             base_url=NVIDIA_BASE_URL,
             api_key_env="NVIDIA_API_KEY",
@@ -1276,6 +1321,7 @@ def _create_llm_client(model_type: ModelType) -> _LLMClientType:
         config = MINIMAX_LLM_CONFIG
         return OpenAILLMClient(
             model=_select_model(settings, "minimax", model_type),
+            model_fallback=_fallback_model("minimax"),
             max_tokens=config.max_tokens,
             base_url=MINIMAX_BASE_URL,
             api_key_env="MINIMAX_API_KEY",

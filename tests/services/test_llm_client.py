@@ -864,6 +864,94 @@ def test_openai_invoke_stream_invalid_model_identifier_raises_not_found(monkeypa
         list(client.invoke_stream("hello"))
 
 
+def test_openai_invoke_invalid_reasoning_model_falls_back_to_toolcall(monkeypatch) -> None:
+    calls: list[str] = []
+
+    class _Choice:
+        def __init__(self, content: str) -> None:
+            self.message = type("_Msg", (), {"content": content})()
+
+    class _Response:
+        def __init__(self, content: str) -> None:
+            self.choices = [_Choice(content)]
+
+    class _Completions:
+        def create(self, **kwargs):
+            calls.append(str(kwargs.get("model", "")))
+            if len(calls) == 1:
+                raise _make_fake_openai_bad_request_error(
+                    "Error code: 400 - {'error': {'message': 'invalid model ID'}}"
+                )
+            return _Response("fallback-ok")
+
+    class _Chat:
+        def __init__(self) -> None:
+            self.completions = _Completions()
+
+    class _OpenAI:
+        def __init__(self, **_kwargs) -> None:
+            self.chat = _Chat()
+
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "OpenAI", _OpenAI)
+
+    client = llm_client.OpenAILLMClient(
+        model="gpt-5.4 mini",
+        model_fallback="gpt-5.4-mini",
+    )
+    response = client.invoke("hello")
+
+    assert response.content == "fallback-ok"
+    assert calls == ["gpt-5.4 mini", "gpt-5.4-mini"]
+    assert client._model == "gpt-5.4-mini"
+
+
+def test_openai_invoke_stream_invalid_reasoning_model_falls_back_to_toolcall(monkeypatch) -> None:
+    calls: list[str] = []
+
+    class _Delta:
+        def __init__(self, content: str) -> None:
+            self.content = content
+
+    class _Choice:
+        def __init__(self, content: str) -> None:
+            self.delta = _Delta(content)
+
+    class _Chunk:
+        def __init__(self, content: str) -> None:
+            self.choices = [_Choice(content)]
+
+    class _Completions:
+        def create(self, **kwargs):
+            calls.append(str(kwargs.get("model", "")))
+            if len(calls) == 1:
+                raise _make_fake_openai_bad_request_error(
+                    "Error code: 400 - {'error': {'message': 'invalid model ID'}}"
+                )
+            return iter([_Chunk("fallback"), _Chunk("-ok")])
+
+    class _Chat:
+        def __init__(self) -> None:
+            self.completions = _Completions()
+
+    class _OpenAI:
+        def __init__(self, **_kwargs) -> None:
+            self.chat = _Chat()
+
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "OpenAI", _OpenAI)
+
+    client = llm_client.OpenAILLMClient(
+        model="gpt-5.4 mini",
+        model_fallback="gpt-5.4-mini",
+    )
+    chunks = list(client.invoke_stream("hello"))
+
+    assert chunks == ["fallback", "-ok"]
+    assert calls == ["gpt-5.4 mini", "gpt-5.4-mini"]
+    assert client._model == "gpt-5.4-mini"
+
+
 def test_openai_invoke_stream_yields_delta_content_chunks(monkeypatch) -> None:
     """invoke_stream() routes through the same builder and yields delta.content in order."""
     fake, captured = _make_capturing_openai(chunk_contents=["Hel", "lo, ", "world"])
@@ -1020,6 +1108,22 @@ def test_openai_invoke_stream_does_not_retry_after_yielding(monkeypatch) -> None
 # ---------------------------------------------------------------------------
 
 
+def test_create_llm_client_openai_reasoning_sets_toolcall_fallback(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("OPENAI_REASONING_MODEL", "gpt-5.4 mini")
+    monkeypatch.setenv("OPENAI_TOOLCALL_MODEL", "gpt-5.4-mini")
+    llm_client.reset_llm_singletons()
+    try:
+        client = llm_client._create_llm_client("reasoning")
+
+        assert isinstance(client, llm_client.OpenAILLMClient)
+        assert client._model == "gpt-5.4 mini"
+        assert client._model_fallback == "gpt-5.4-mini"
+    finally:
+        llm_client.reset_llm_singletons()
+
+
 def test_create_llm_client_claude_code_wires_cli_adapter(monkeypatch) -> None:
     """Investigation uses ``_create_llm_client`` → registry → ``CLIBackedLLMClient``."""
     monkeypatch.setenv("LLM_PROVIDER", "claude-code")
@@ -1085,7 +1189,6 @@ def test_create_llm_client_missing_api_key_raises_runtime_error(monkeypatch) -> 
     """Sentry #1678: missing API key must surface as RuntimeError, not pydantic.ValidationError."""
     monkeypatch.setenv("LLM_PROVIDER", "anthropic")
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.setattr("app.config.resolve_llm_api_key", lambda _env_var: "")
     llm_client.reset_llm_singletons()
     try:
         with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
@@ -1098,7 +1201,6 @@ def test_create_llm_client_missing_api_key_omits_pydantic_boilerplate(monkeypatc
     """Sentry #1815: the RuntimeError message must not include pydantic boilerplate."""
     monkeypatch.setenv("LLM_PROVIDER", "minimax")
     monkeypatch.delenv("MINIMAX_API_KEY", raising=False)
-    monkeypatch.setattr("app.config.resolve_llm_api_key", lambda _env_var: "")
     llm_client.reset_llm_singletons()
     try:
         with pytest.raises(RuntimeError) as exc_info:
