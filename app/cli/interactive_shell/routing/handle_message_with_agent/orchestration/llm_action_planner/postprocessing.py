@@ -246,3 +246,20 @@ def finalize_planner_result_with_trace(
         final_state.has_unhandled,
         tuple(applied_list),
     )
+
+
+def _finalize_planner_result_with_trace(
+    message: str,
+    actions: list[PlannedAction],
+    has_unhandled: bool,
+    *,
+    session: Any | None = None,
+) -> PlannerPolicyResult:
+    """Backward-compatible alias for legacy imports."""
+
+    return finalize_planner_result_with_trace(
+        message,
+        actions,
+        has_unhandled,
+        session=session,
+    )
