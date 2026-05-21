@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 import types
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -77,7 +77,9 @@ def test_bedrock_auth_error_message_references_aws_credentials(
     def raise_auth_error(**_: object) -> object:
         raise fake_anthropic.AuthenticationError("expired")
 
-    client._client = types.SimpleNamespace(messages=types.SimpleNamespace(create=raise_auth_error))
+    client._client = cast(Any, types.SimpleNamespace)(
+        messages=types.SimpleNamespace(create=raise_auth_error)
+    )
 
     with pytest.raises(RuntimeError) as exc:
         client.invoke(messages=[{"role": "user", "content": "hi"}])
@@ -101,7 +103,7 @@ def test_bedrock_permission_denied_is_not_retried_and_mentions_marketplace(
         calls += 1
         raise fake_anthropic.PermissionDeniedError("marketplace denied")
 
-    client._client = types.SimpleNamespace(
+    client._client = cast(Any, types.SimpleNamespace)(
         messages=types.SimpleNamespace(create=raise_permission_denied)
     )
 
@@ -133,7 +135,7 @@ def test_internal_server_error_with_model_billing_fails_fast(
         )
 
     client = AnthropicAgentClient(model="claude-opus-4-7")
-    client._client = types.SimpleNamespace(
+    client._client = cast(Any, types.SimpleNamespace)(
         messages=types.SimpleNamespace(create=raise_billing_error)
     )
 
@@ -161,7 +163,7 @@ def test_internal_server_error_without_model_data_is_retried(
         raise fake_anthropic.InternalServerError("Internal server error", body={})
 
     client = AnthropicAgentClient(model="claude-sonnet-4-6")
-    client._client = types.SimpleNamespace(
+    client._client = cast(Any, types.SimpleNamespace)(
         messages=types.SimpleNamespace(create=raise_transient_error)
     )
 
@@ -186,7 +188,9 @@ def test_anthropic_rate_limit_error_is_not_retried(
         raise fake_anthropic.RateLimitError("slow down")
 
     client = AnthropicAgentClient(model="claude-sonnet-4-6")
-    client._client = types.SimpleNamespace(messages=types.SimpleNamespace(create=raise_rate_limit))
+    client._client = cast(Any, types.SimpleNamespace)(
+        messages=types.SimpleNamespace(create=raise_rate_limit)
+    )
 
     with pytest.raises(RuntimeError, match="Anthropic rate limit exceeded"):
         client.invoke(messages=[{"role": "user", "content": "hi"}])
@@ -209,7 +213,9 @@ def test_bedrock_rate_limit_error_is_not_retried(
         raise fake_anthropic.RateLimitError("slow down")
 
     client = BedrockAgentClient(model="us.anthropic.claude-sonnet-4-6")
-    client._client = types.SimpleNamespace(messages=types.SimpleNamespace(create=raise_rate_limit))
+    client._client = cast(Any, types.SimpleNamespace)(
+        messages=types.SimpleNamespace(create=raise_rate_limit)
+    )
 
     with pytest.raises(RuntimeError, match="Bedrock rate limit exceeded"):
         client.invoke(messages=[{"role": "user", "content": "hi"}])
@@ -302,7 +308,7 @@ def test_openai_agent_client_invoke_sets_raw_content(
 
     client = OpenAIAgentClient.__new__(OpenAIAgentClient)
     fake_response = _make_fake_openai_response(content="hello")
-    client._client = types.SimpleNamespace(
+    client._client = cast(Any, types.SimpleNamespace)(
         chat=types.SimpleNamespace(
             completions=types.SimpleNamespace(create=lambda **_: fake_response)
         )
@@ -347,7 +353,7 @@ def test_openai_agent_client_invoke_raw_content_preserves_extra_fields(
     fake_response = _make_fake_openai_response(tool_calls=[fake_tc])
 
     client = OpenAIAgentClient.__new__(OpenAIAgentClient)
-    client._client = types.SimpleNamespace(
+    client._client = cast(Any, types.SimpleNamespace)(
         chat=types.SimpleNamespace(
             completions=types.SimpleNamespace(create=lambda **_: fake_response)
         )
@@ -376,7 +382,7 @@ def test_openai_o_series_uses_max_completion_tokens(
         return _make_fake_openai_response(content="ok")
 
     client = OpenAIAgentClient.__new__(OpenAIAgentClient)
-    client._client = types.SimpleNamespace(
+    client._client = cast(Any, types.SimpleNamespace)(
         chat=types.SimpleNamespace(completions=types.SimpleNamespace(create=capture_create))
     )
     client._max_tokens = 4096
@@ -414,7 +420,7 @@ def test_openai_standard_models_use_max_tokens(
         return _make_fake_openai_response(content="ok")
 
     client = OpenAIAgentClient.__new__(OpenAIAgentClient)
-    client._client = types.SimpleNamespace(
+    client._client = cast(Any, types.SimpleNamespace)(
         chat=types.SimpleNamespace(completions=types.SimpleNamespace(create=capture_create))
     )
     client._max_tokens = 4096
@@ -443,7 +449,7 @@ def test_openai_rate_limit_error_is_not_retried(
         raise fake_openai.RateLimitError("slow down")
 
     client = OpenAIAgentClient.__new__(OpenAIAgentClient)
-    client._client = types.SimpleNamespace(
+    client._client = cast(Any, types.SimpleNamespace)(
         chat=types.SimpleNamespace(completions=types.SimpleNamespace(create=raise_rate_limit))
     )
     client._model = "gpt-4o"
@@ -469,7 +475,7 @@ def test_openai_permission_denied_error_is_not_retried(
         raise fake_openai.PermissionDeniedError("forbidden")
 
     client = OpenAIAgentClient.__new__(OpenAIAgentClient)
-    client._client = types.SimpleNamespace(
+    client._client = cast(Any, types.SimpleNamespace)(
         chat=types.SimpleNamespace(
             completions=types.SimpleNamespace(create=raise_permission_denied)
         )
@@ -501,7 +507,7 @@ def test_sdk_type_error_for_missing_api_key_fails_fast(
         )
 
     client = AnthropicAgentClient(model="claude-sonnet-4-6")
-    client._client = types.SimpleNamespace(
+    client._client = cast(Any, types.SimpleNamespace)(
         messages=types.SimpleNamespace(create=raise_auth_type_error)
     )
 
@@ -529,7 +535,7 @@ def test_unrelated_type_error_is_retried_and_wrapped(
         raise TypeError("unexpected argument 'foo'")
 
     client = AnthropicAgentClient(model="claude-sonnet-4-6")
-    client._client = types.SimpleNamespace(
+    client._client = cast(Any, types.SimpleNamespace)(
         messages=types.SimpleNamespace(create=raise_unrelated_type_error)
     )
 
@@ -806,7 +812,9 @@ def test_bedrock_bad_request_cross_region_inference_gives_helpful_message(
     def raise_bad_request(**_: object) -> object:
         raise fake_anthropic.BadRequestError(bedrock_error_body)
 
-    client._client = types.SimpleNamespace(messages=types.SimpleNamespace(create=raise_bad_request))
+    client._client = cast(Any, types.SimpleNamespace)(
+        messages=types.SimpleNamespace(create=raise_bad_request)
+    )
 
     with pytest.raises(RuntimeError) as exc:
         client.invoke(messages=[{"role": "user", "content": "hi"}])
@@ -828,7 +836,9 @@ def test_bedrock_bad_request_generic_error_uses_default_message(
     def raise_bad_request(**_: object) -> object:
         raise fake_anthropic.BadRequestError("content policy violation")
 
-    client._client = types.SimpleNamespace(messages=types.SimpleNamespace(create=raise_bad_request))
+    client._client = cast(Any, types.SimpleNamespace)(
+        messages=types.SimpleNamespace(create=raise_bad_request)
+    )
 
     with pytest.raises(RuntimeError) as exc:
         client.invoke(messages=[{"role": "user", "content": "hi"}])
@@ -846,7 +856,7 @@ def test_openai_unexpected_response_type_raises_runtime_error(
     _install_fake_openai(monkeypatch)
 
     client = OpenAIAgentClient.__new__(OpenAIAgentClient)
-    client._client = types.SimpleNamespace(
+    client._client = cast(Any, types.SimpleNamespace)(
         chat=types.SimpleNamespace(
             completions=types.SimpleNamespace(create=lambda **_: "unexpected string response")
         )
@@ -866,7 +876,7 @@ def test_openai_empty_choices_raises_runtime_error(
     _install_fake_openai(monkeypatch)
 
     client = OpenAIAgentClient.__new__(OpenAIAgentClient)
-    client._client = types.SimpleNamespace(
+    client._client = cast(Any, types.SimpleNamespace)(
         chat=types.SimpleNamespace(
             completions=types.SimpleNamespace(create=lambda **_: types.SimpleNamespace(choices=[]))
         )
@@ -876,7 +886,6 @@ def test_openai_empty_choices_raises_runtime_error(
 
     with pytest.raises(RuntimeError, match="unexpected response"):
         client.invoke(messages=[{"role": "user", "content": "hi"}])
-
 
 
 # ─── BedrockConverseAgentClient tests ─────────────────────────────────────────
@@ -935,6 +944,7 @@ def _stub_boto3(
 
 def _make_client(model: str = _MISTRAL_MODEL):
     from app.services.agent_llm_client import BedrockConverseAgentClient
+
     return BedrockConverseAgentClient(model=model)
 
 
@@ -944,9 +954,7 @@ def _make_client(model: str = _MISTRAL_MODEL):
 def test_bedrock_converse_requires_region_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("AWS_REGION", raising=False)
     monkeypatch.delenv("AWS_DEFAULT_REGION", raising=False)
-    monkeypatch.setitem(
-        sys.modules, "boto3", types.SimpleNamespace(client=lambda *_a, **_kw: None)
-    )
+    monkeypatch.setitem(sys.modules, "boto3", types.SimpleNamespace(client=lambda *_a, **_kw: None))
 
     from app.services.agent_llm_client import BedrockConverseAgentClient
 
@@ -1041,7 +1049,10 @@ def test_bedrock_converse_invoke_text_only(monkeypatch: pytest.MonkeyPatch) -> N
 
 def _make_client_error(code: str, message: str):
     import botocore.exceptions
-    return botocore.exceptions.ClientError({"Error": {"Code": code, "Message": message}}, "Converse")
+
+    return botocore.exceptions.ClientError(
+        {"Error": {"Code": code, "Message": message}}, "Converse"
+    )
 
 
 def test_bedrock_converse_validation_error(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1049,7 +1060,9 @@ def test_bedrock_converse_validation_error(monkeypatch: pytest.MonkeyPatch) -> N
     _stub_boto3(monkeypatch, converse_side_effect=_make_client_error("ValidationException", "bad"))
 
     with pytest.raises(RuntimeError, match="request rejected"):
-        _make_client("bad-model-id").invoke(messages=[{"role": "user", "content": [{"text": "hi"}]}])
+        _make_client("bad-model-id").invoke(
+            messages=[{"role": "user", "content": [{"text": "hi"}]}]
+        )
 
 
 def test_bedrock_converse_access_denied(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1076,10 +1089,14 @@ def test_bedrock_converse_access_denied_payment(monkeypatch: pytest.MonkeyPatch)
 
 def test_bedrock_converse_resource_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AWS_REGION", "us-east-1")
-    _stub_boto3(monkeypatch, converse_side_effect=_make_client_error("ResourceNotFoundException", "x"))
+    _stub_boto3(
+        monkeypatch, converse_side_effect=_make_client_error("ResourceNotFoundException", "x")
+    )
 
     with pytest.raises(RuntimeError, match="was not found"):
-        _make_client("nonexistent.model").invoke(messages=[{"role": "user", "content": [{"text": "hi"}]}])
+        _make_client("nonexistent.model").invoke(
+            messages=[{"role": "user", "content": [{"text": "hi"}]}]
+        )
 
 
 def test_bedrock_converse_throttling_is_not_retried(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1096,7 +1113,9 @@ def test_bedrock_converse_throttling_is_not_retried(monkeypatch: pytest.MonkeyPa
     monkeypatch.setitem(
         sys.modules,
         "boto3",
-        types.SimpleNamespace(client=lambda *_a, **_kw: types.SimpleNamespace(converse=raise_throttle)),
+        types.SimpleNamespace(
+            client=lambda *_a, **_kw: types.SimpleNamespace(converse=raise_throttle)
+        ),
     )
 
     with pytest.raises(RuntimeError, match="rate limit exceeded"):
@@ -1111,7 +1130,9 @@ def test_bedrock_converse_build_tool_result_dict() -> None:
     from app.services.agent_llm_client import BedrockConverseAgentClient, ToolCall
 
     tc = ToolCall(id="tu_1", name="query_logs", input={"q": "error"})
-    msg = BedrockConverseAgentClient.build_tool_result_message([tc], [{"logs": ["line1"], "count": 1}])
+    msg = BedrockConverseAgentClient.build_tool_result_message(
+        [tc], [{"logs": ["line1"], "count": 1}]
+    )
 
     tr = msg["content"][0]["toolResult"]
     assert msg["role"] == "user"
@@ -1185,7 +1206,6 @@ def test_get_agent_llm_routes_non_anthropic_bedrock_to_converse(
 def test_get_agent_llm_routes_anthropic_bedrock_to_sdk(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from tests.services.test_agent_llm_client import _install_fake_anthropic
     _install_fake_anthropic(monkeypatch)
     monkeypatch.setenv("LLM_PROVIDER", "bedrock")
     monkeypatch.setenv("BEDROCK_REASONING_MODEL", "us.anthropic.claude-sonnet-4-6")

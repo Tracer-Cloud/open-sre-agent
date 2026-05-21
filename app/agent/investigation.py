@@ -381,8 +381,10 @@ def _build_seed_calls(state: dict[str, Any], tools: list[RegisteredTool]) -> lis
             injected = tool.extract_params(resolved)
         except Exception:
             injected = {}
+        import uuid
+
         calls.append(
-            ToolCall(id=f"seed_{tool.name}", name=tool.name, input=_public_tool_input(injected))
+            ToolCall(id=uuid.uuid4().hex[:9], name=tool.name, input=_public_tool_input(injected))
         )
 
     return calls

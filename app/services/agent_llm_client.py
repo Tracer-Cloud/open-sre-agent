@@ -13,7 +13,7 @@ import os
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -290,6 +290,13 @@ def _sanitize_converse_schema(schema: dict[str, Any]) -> dict[str, Any]:
             ]
         else:
             cleaned[key] = value
+
+    if "properties" in cleaned and "type" not in cleaned:
+        cleaned["type"] = "object"
+
+    if cleaned.get("type") == "array" and "items" not in cleaned:
+        cleaned["items"] = {"type": "string"}
+
     return cleaned
 
 
@@ -310,18 +317,25 @@ class BedrockConverseAgentClient:
         self._boto3_client = boto3.client("bedrock-runtime", region_name=region)
 
     def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
-        return [
-            {
-                "toolSpec": {
-                    "name": t.name,
-                    "description": t.description,
-                    "inputSchema": {
-                        "json": _sanitize_converse_schema(t.public_input_schema)
-                    },
+        schemas = []
+        for t in tools:
+            clean_schema = _sanitize_converse_schema(t.public_input_schema)
+            # Ensure top-level input schema is explicitly an object (Mistral requires this)
+            if "type" not in clean_schema:
+                clean_schema["type"] = "object"
+            if clean_schema.get("type") == "object" and "properties" not in clean_schema:
+                clean_schema["properties"] = {}
+
+            schemas.append(
+                {
+                    "toolSpec": {
+                        "name": t.name,
+                        "description": t.description,
+                        "inputSchema": {"json": clean_schema},
+                    }
                 }
-            }
-            for t in tools
-        ]
+            )
+        return schemas
 
     def invoke(
         self,
@@ -334,15 +348,31 @@ class BedrockConverseAgentClient:
 
         from app.guardrails.engine import GuardrailBlockedError
 
+        converted_messages = []
+        for m in messages:
+            content = m.get("content", "")
+            if isinstance(content, str):
+                converted_messages.append({"role": m["role"], "content": [{"text": content}]})
+            else:
+                converted_messages.append(m)
+
         kwargs: dict[str, Any] = {
             "modelId": self._model,
             "inferenceConfig": {"maxTokens": self._max_tokens},
-            "messages": messages,
+            "messages": converted_messages,
         }
         if system:
             kwargs["system"] = [{"text": system}]
         if tools:
             kwargs["toolConfig"] = {"tools": tools}
+
+        import json
+
+        try:
+            with open("/tmp/mistral_debug_kwargs.json", "w") as f:
+                json.dump(kwargs, f, indent=2)
+        except Exception:
+            pass
 
         backoff = _RETRY_INITIAL_BACKOFF_SEC
         last_err: Exception | None = None
@@ -355,6 +385,14 @@ class BedrockConverseAgentClient:
             except botocore.exceptions.ClientError as err:
                 code = err.response.get("Error", {}).get("Code", "")
                 if code == "ValidationException":
+                    try:
+                        import json
+
+                        with open("/tmp/mistral_crash_debug.txt", "w") as f:
+                            f.write(json.dumps(kwargs, indent=2))
+                    except Exception as e:
+                        with open("/tmp/mistral_crash_debug.txt", "w") as f:
+                            f.write(repr(kwargs) + "\n\nError dumping json: " + str(e))
                     raise RuntimeError(
                         f"{self.provider_name} request rejected (HTTP 400): {err.response.get('Error', {}).get('Message')}"
                     ) from err
@@ -414,9 +452,7 @@ class BedrockConverseAgentClient:
                 text_parts.append(block["text"])
             elif "toolUse" in block:
                 tu = block["toolUse"]
-                tool_calls.append(
-                    ToolCall(id=tu["toolUseId"], name=tu["name"], input=tu["input"])
-                )
+                tool_calls.append(ToolCall(id=tu["toolUseId"], name=tu["name"], input=tu["input"]))
 
         return AgentLLMResponse(
             content="".join(text_parts),
@@ -558,7 +594,8 @@ class OpenAIAgentClient:
         stop_reason = choice.finish_reason or "stop"
 
         tool_calls: list[ToolCall] = []
-        for tc in msg.tool_calls or []:
+        for tc_raw in msg.tool_calls or []:
+            tc = cast(Any, tc_raw)
             try:
                 input_dict = json.loads(tc.function.arguments)
             except json.JSONDecodeError:
@@ -768,7 +805,9 @@ def _try_parse_tool_call_json(text: str) -> dict[str, Any] | None:
     return None
 
 
-_AgentClientType = AnthropicAgentClient | OpenAIAgentClient | CLIBackedAgentClient | BedrockConverseAgentClient
+_AgentClientType = (
+    AnthropicAgentClient | OpenAIAgentClient | CLIBackedAgentClient | BedrockConverseAgentClient
+)
 _agent_client: _AgentClientType | None = None
 
 
