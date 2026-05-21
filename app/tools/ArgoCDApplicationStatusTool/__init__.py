@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.services._base import ServiceClientUnavailable
 from app.services.argocd import make_argocd_client
 from app.tools.base import BaseTool
 
@@ -88,15 +89,18 @@ class ArgoCDApplicationStatusTool(BaseTool):
         verify_ssl: bool = True,
         **_kwargs: Any,
     ) -> dict[str, Any]:
-        client = make_argocd_client(
-            base_url,
-            bearer_token,
-            username,
-            password,
-            project=project,
-            app_namespace=app_namespace,
-            verify_ssl=verify_ssl,
-        )
+        try:
+            client = make_argocd_client(
+                base_url,
+                bearer_token,
+                username,
+                password,
+                project=project,
+                app_namespace=app_namespace,
+                verify_ssl=verify_ssl,
+            )
+        except ServiceClientUnavailable:
+            client = None  # already reported to Sentry
         if client is None:
             return {
                 "source": "argocd",

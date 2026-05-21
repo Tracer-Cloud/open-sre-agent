@@ -11,12 +11,11 @@ Supports three auth modes:
 
 from __future__ import annotations
 
-from pydantic import ValidationError
-
 import logging
 from typing import Any
 
 import httpx
+from pydantic import ValidationError
 
 from app.integrations.config_models import AlertmanagerIntegrationConfig
 from app.integrations.probes import ProbeResult

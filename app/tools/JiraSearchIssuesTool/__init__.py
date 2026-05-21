@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.services._base import ServiceClientUnavailable
 from app.services.jira import make_jira_client
 from app.tools.base import BaseTool
 
@@ -80,7 +81,10 @@ class JiraSearchIssuesTool(BaseTool):
         max_results: int = 20,
         **_kwargs: Any,
     ) -> dict[str, Any]:
-        client = make_jira_client(base_url, email, api_token, project_key)
+        try:
+            client = make_jira_client(base_url, email, api_token, project_key)
+        except ServiceClientUnavailable:
+            client = None  # already reported to Sentry
         if client is None:
             return {
                 "source": "jira",

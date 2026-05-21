@@ -7,8 +7,6 @@ from environment variables resolved by ``app.integrations.catalog``.
 
 from __future__ import annotations
 
-from pydantic import ValidationError
-
 import difflib
 import json
 import logging
@@ -17,6 +15,7 @@ from typing import Any
 from urllib.parse import quote
 
 import httpx
+from pydantic import ValidationError
 
 from app.integrations.config_models import ArgoCDIntegrationConfig
 from app.integrations.probes import ProbeResult

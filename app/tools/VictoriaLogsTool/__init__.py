@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.services._base import ServiceClientUnavailable
 from app.services.victoria_logs import make_victoria_logs_client
 from app.tools.base import BaseTool
 
@@ -107,7 +108,10 @@ class VictoriaLogsTool(BaseTool):
         start: str = "-1h",
         **_kwargs: Any,
     ) -> dict[str, Any]:
-        client = make_victoria_logs_client(base_url, tenant_id=tenant_id)
+        try:
+            client = make_victoria_logs_client(base_url, tenant_id=tenant_id)
+        except ServiceClientUnavailable:
+            client = None  # already reported to Sentry
         if client is None:
             return {
                 "source": "victoria_logs",

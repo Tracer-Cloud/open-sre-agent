@@ -15,6 +15,7 @@ from app.integrations.models import (
     IncidentIoIntegrationConfig,
 )
 from app.integrations.sentry import build_sentry_config, validate_sentry_config
+from app.services._base import ServiceClientUnavailable
 from app.services.alertmanager import make_alertmanager_client
 from app.services.coralogix import CoralogixClient
 from app.services.datadog import DatadogClient, DatadogConfig
@@ -367,12 +368,15 @@ def validate_alertmanager_integration(
     """Validate Alertmanager connectivity via the /api/v2/status endpoint."""
     if not base_url:
         return IntegrationHealthResult(ok=False, detail="Alertmanager URL is required.")
-    client = make_alertmanager_client(
-        base_url=base_url,
-        bearer_token=bearer_token or None,
-        username=username or None,
-        password=password or None,
-    )
+    try:
+        client = make_alertmanager_client(
+            base_url=base_url,
+            bearer_token=bearer_token or None,
+            username=username or None,
+            password=password or None,
+        )
+    except ServiceClientUnavailable:
+        client = None  # already reported to Sentry
     if client is None:
         return IntegrationHealthResult(ok=False, detail="Invalid Alertmanager URL.")
     try:

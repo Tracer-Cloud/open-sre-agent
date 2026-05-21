@@ -6,12 +6,11 @@ Credentials come from the user's OpsGenie integration stored locally or via env 
 
 from __future__ import annotations
 
-from pydantic import ValidationError
-
 import logging
 from typing import Any
 
 import httpx
+from pydantic import ValidationError
 
 from app.integrations.config_models import OpsGenieIntegrationConfig
 from app.integrations.probes import ProbeResult

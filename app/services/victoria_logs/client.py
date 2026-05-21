@@ -12,21 +12,19 @@ implicitly, since that targets the default tenant on every request.
 
 from __future__ import annotations
 
-from pydantic import ValidationError
-
 import json
 import logging
 from typing import Any
 
 import httpx
-from pydantic import field_validator
+from pydantic import ValidationError, field_validator
 
 from app.integrations.probes import ProbeResult
 from app.services._base import ServiceClientUnavailable
 from app.services._error_helpers import capture_service_error
-from app.utils.errors import report_exception
 from app.services._streaming import StreamingParseStats
 from app.strict_config import StrictConfigModel
+from app.utils.errors import report_exception
 
 logger = logging.getLogger(__name__)
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.services._base import ServiceClientUnavailable
 from app.services.alertmanager import make_alertmanager_client
 from app.tools.base import BaseTool
 
@@ -83,7 +84,10 @@ class AlertmanagerSilencesTool(BaseTool):
         limit: int = 50,
         **_kwargs: Any,
     ) -> dict[str, Any]:
-        client = make_alertmanager_client(base_url, bearer_token, username, password)
+        try:
+            client = make_alertmanager_client(base_url, bearer_token, username, password)
+        except ServiceClientUnavailable:
+            client = None  # already reported to Sentry
         if client is None:
             return {
                 "source": "alertmanager_silences",

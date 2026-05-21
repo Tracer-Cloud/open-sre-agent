@@ -7,19 +7,17 @@ Credentials come from the user's Prefect integration stored locally or via env v
 
 from __future__ import annotations
 
-from pydantic import ValidationError
-
 import logging
 from typing import Any
 from urllib.parse import quote
 
 import httpx
-from pydantic import field_validator
+from pydantic import ValidationError, field_validator
 
 from app.services._base import ServiceClientUnavailable
 from app.services._error_helpers import capture_service_error
-from app.utils.errors import report_exception
 from app.strict_config import StrictConfigModel
+from app.utils.errors import report_exception
 
 logger = logging.getLogger(__name__)
 

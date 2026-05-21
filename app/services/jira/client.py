@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from pydantic import ValidationError
-
 import logging
 from typing import Any
 
 import httpx
+from pydantic import ValidationError
 
 from app.integrations.models import JiraIntegrationConfig
 from app.services._base import ServiceClientUnavailable

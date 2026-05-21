@@ -15,6 +15,7 @@ from urllib.parse import parse_qs, urlparse
 
 from app.integrations.verify import resolve_effective_integrations
 from app.remote.error_reporting import report_remote_exception
+from app.services._base import ServiceClientUnavailable
 from app.services.vercel import VercelClient, VercelConfig, make_vercel_client
 
 logger = logging.getLogger(__name__)
@@ -326,7 +327,10 @@ def resolve_vercel_config() -> VercelConfig | None:
 
 
 def _make_client_from_config(config: VercelConfig) -> VercelClient:
-    client = make_vercel_client(config.api_token, config.team_id)
+    try:
+        client = make_vercel_client(config.api_token, config.team_id)
+    except ServiceClientUnavailable:
+        client = None  # already reported to Sentry
     if client is None:
         raise VercelResolutionError("Vercel integration is not configured on this server.")
     return client

@@ -19,6 +19,7 @@ from app.remote.vercel_poller import (
     collect_vercel_candidates,
     resolve_vercel_config,
 )
+from app.services._base import ServiceClientUnavailable
 from app.services.vercel import make_vercel_client
 
 _INCIDENT_CACHE_DIR: Path = STORE_PATH.parent / "investigations" / "vercel"
@@ -231,7 +232,10 @@ def _load_projects() -> list[dict[str, Any]]:
             "Set Vercel credentials before browsing incidents."
         )
 
-    client = make_vercel_client(config.api_token, config.team_id)
+    try:
+        client = make_vercel_client(config.api_token, config.team_id)
+    except ServiceClientUnavailable:
+        client = None  # already reported to Sentry
     if client is None:
         raise VercelResolutionError("Vercel integration is not configured.")
 

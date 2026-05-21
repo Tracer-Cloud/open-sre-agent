@@ -6,8 +6,6 @@ Credentials come from the user's Vercel integration stored locally or via env va
 
 from __future__ import annotations
 
-from pydantic import ValidationError
-
 import json
 import logging
 import os
@@ -17,13 +15,14 @@ from typing import Any
 from urllib.parse import quote
 
 import httpx
+from pydantic import ValidationError
 
 from app.integrations.config_models import VercelIntegrationConfig
 from app.integrations.probes import ProbeResult
 from app.services._base import ServiceClientUnavailable
 from app.services._error_helpers import capture_service_error
-from app.utils.errors import report_exception
 from app.services._streaming import StreamingParseStats
+from app.utils.errors import report_exception
 
 logger = logging.getLogger(__name__)
 
