@@ -1085,6 +1085,7 @@ def test_create_llm_client_missing_api_key_raises_runtime_error(monkeypatch) -> 
     """Sentry #1678: missing API key must surface as RuntimeError, not pydantic.ValidationError."""
     monkeypatch.setenv("LLM_PROVIDER", "anthropic")
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setattr("app.config.resolve_llm_api_key", lambda _env_var: "")
     llm_client.reset_llm_singletons()
     try:
         with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
@@ -1097,6 +1098,7 @@ def test_create_llm_client_missing_api_key_omits_pydantic_boilerplate(monkeypatc
     """Sentry #1815: the RuntimeError message must not include pydantic boilerplate."""
     monkeypatch.setenv("LLM_PROVIDER", "minimax")
     monkeypatch.delenv("MINIMAX_API_KEY", raising=False)
+    monkeypatch.setattr("app.config.resolve_llm_api_key", lambda _env_var: "")
     llm_client.reset_llm_singletons()
     try:
         with pytest.raises(RuntimeError) as exc_info:

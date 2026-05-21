@@ -166,6 +166,7 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
     ),
     IntegrationSpec(
         service="rabbitmq",
+        aliases=("amqp",),
         verifier=_verify_rabbitmq,
         direct_effective=True,
         verify_order=17,
