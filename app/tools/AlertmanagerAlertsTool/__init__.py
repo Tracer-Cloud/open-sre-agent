@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import ValidationError
+
 from app.services._base import ServiceClientUnavailable
 from app.services.alertmanager import make_alertmanager_client
 from app.tools.base import BaseTool
@@ -120,7 +122,7 @@ class AlertmanagerAlertsTool(BaseTool):
     ) -> dict[str, Any]:
         try:
             client = make_alertmanager_client(base_url, bearer_token, username, password)
-        except ServiceClientUnavailable:
+        except (ServiceClientUnavailable, ValidationError):
             client = None  # already reported to Sentry
         if client is None:
             return {

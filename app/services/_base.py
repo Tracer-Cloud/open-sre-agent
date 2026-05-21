@@ -13,4 +13,3 @@ class ServiceClientUnavailable(RuntimeError):
         super().__init__(f"{integration}: {reason}")
         self.integration = integration
         self.reason = reason
-        self.__cause__ = original

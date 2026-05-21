@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import ValidationError
+
 from app.services._base import ServiceClientUnavailable
 from app.services.argocd import make_argocd_client
 from app.tools.base import BaseTool
@@ -96,7 +98,7 @@ class ArgoCDApplicationDiffTool(BaseTool):
                 app_namespace=app_namespace,
                 verify_ssl=verify_ssl,
             )
-        except ServiceClientUnavailable:
+        except (ServiceClientUnavailable, ValidationError):
             client = None  # already reported to Sentry
         if client is None:
             return {

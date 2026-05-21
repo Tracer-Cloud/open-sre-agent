@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Any, cast
 from urllib.parse import parse_qs, urlparse
 
+from pydantic import ValidationError
+
 from app.integrations.verify import resolve_effective_integrations
 from app.remote.error_reporting import report_remote_exception
 from app.services._base import ServiceClientUnavailable
@@ -329,8 +331,8 @@ def resolve_vercel_config() -> VercelConfig | None:
 def _make_client_from_config(config: VercelConfig) -> VercelClient:
     try:
         client = make_vercel_client(config.api_token, config.team_id)
-    except ServiceClientUnavailable:
-        client = None  # already reported to Sentry
+    except (ServiceClientUnavailable, ValidationError) as exc:
+        raise VercelResolutionError(f"Vercel integration failed to initialize: {exc}") from exc
     if client is None:
         raise VercelResolutionError("Vercel integration is not configured on this server.")
     return client

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from app.integrations.betterstack import build_betterstack_config, validate_betterstack_config
 from app.integrations.gitlab import build_gitlab_config, validate_gitlab_config
 from app.integrations.models import (
@@ -375,7 +377,7 @@ def validate_alertmanager_integration(
             username=username or None,
             password=password or None,
         )
-    except ServiceClientUnavailable:
+    except (ServiceClientUnavailable, ValidationError):
         client = None  # already reported to Sentry
     if client is None:
         return IntegrationHealthResult(ok=False, detail="Invalid Alertmanager URL.")

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import ValidationError
+
 from app.services._base import ServiceClientUnavailable
 from app.services.opsgenie import make_opsgenie_client
 from app.tools.base import BaseTool
@@ -77,7 +79,7 @@ class OpsGenieAlertsTool(BaseTool):
     ) -> dict[str, Any]:
         try:
             client = make_opsgenie_client(api_key, region)
-        except ServiceClientUnavailable:
+        except (ServiceClientUnavailable, ValidationError):
             client = None  # already reported to Sentry
         if client is None:
             return {

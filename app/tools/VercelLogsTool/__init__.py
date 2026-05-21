@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import ValidationError
+
 from app.services._base import ServiceClientUnavailable
 from app.services.vercel import make_vercel_client
 from app.tools.base import BaseTool
@@ -97,7 +99,7 @@ class VercelLogsTool(BaseTool):
             }
         try:
             client = make_vercel_client(api_token, team_id)
-        except ServiceClientUnavailable:
+        except (ServiceClientUnavailable, ValidationError):
             client = None  # already reported to Sentry
         if client is None:
             return {

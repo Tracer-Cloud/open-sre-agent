@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import questionary
+from pydantic import ValidationError
 
 from app.cli.investigation import run_investigation_cli, run_investigation_cli_streaming
 from app.cli.support.context import is_json_output
@@ -234,8 +235,8 @@ def _load_projects() -> list[dict[str, Any]]:
 
     try:
         client = make_vercel_client(config.api_token, config.team_id)
-    except ServiceClientUnavailable:
-        client = None  # already reported to Sentry
+    except (ServiceClientUnavailable, ValidationError) as exc:
+        raise VercelResolutionError(f"Vercel integration failed to initialize: {exc}") from exc
     if client is None:
         raise VercelResolutionError("Vercel integration is not configured.")
 

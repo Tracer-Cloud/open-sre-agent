@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import ValidationError
+
 from app.services._base import ServiceClientUnavailable
 from app.services.jira import make_jira_client
 from app.tools.base import BaseTool
@@ -100,7 +102,7 @@ class JiraCreateIssueTool(BaseTool):
     ) -> dict[str, Any]:
         try:
             client = make_jira_client(base_url, email, api_token, project_key)
-        except ServiceClientUnavailable:
+        except (ServiceClientUnavailable, ValidationError):
             client = None  # already reported to Sentry
         if client is None:
             return {
