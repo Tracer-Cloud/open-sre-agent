@@ -51,6 +51,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def write_json(data: Any, path: str | None) -> None:
     """Write JSON to file or stdout."""
     if path:
-        Path(path).write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        out = Path(path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     else:
         print(json.dumps(data, indent=2))
