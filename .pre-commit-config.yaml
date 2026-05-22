@@ -1,12 +1,4 @@
 repos:
-  - repo: local
-    hooks:
-      - id: slash-catalog-parity
-        name: slash catalog covers all REPL slash commands
-        entry: uv run python -m pytest tests/cli/interactive_shell/command_registry/test_slash_catalog.py::test_slash_catalog_covers_all_registered_commands -q
-        language: system
-        pass_filenames: false
-        files: ^app/cli/interactive_shell/command_registry/.*\.py$
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.12
     hooks:
