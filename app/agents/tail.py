@@ -99,14 +99,16 @@ def _resolve_linux_target(pid: int) -> _ResolvedTarget:
         raise AttachUnsupported("stdout is a pipe; live tail not supported")
     if target.startswith("anon_inode:"):
         raise AttachUnsupported(f"stdout is {target}; live tail not supported")
-    if not target.startswith("/"):
-        raise AttachUnsupported(f"stdout target {target!r} is not a filesystem path")
     if target.startswith(("/dev/pts/", "/dev/tty")):
         raise AttachUnsupported("stdout is on a terminal; live tail not supported")
     if target == "/dev/null":
         raise AttachUnsupported("stdout is /dev/null; nothing to tail")
 
-    return _ResolvedTarget(pid=pid, path=_check_regular_file(Path(target), what="stdout"))
+    target_path = Path(target)
+    if not target_path.is_absolute():
+        raise AttachUnsupported(f"stdout target {target!r} is not a filesystem path")
+
+    return _ResolvedTarget(pid=pid, path=_check_regular_file(target_path, what="stdout"))
 
 
 def _parse_lsof_fd1(stdout: str) -> tuple[str | None, str | None]:
