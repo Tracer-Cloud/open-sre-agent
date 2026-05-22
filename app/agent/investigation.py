@@ -126,7 +126,7 @@ class ConnectedInvestigationAgent:
         # Before the LLM loop: deterministically run the primary integration tools
         # based on the alert source. This guarantees the LLM always sees real data
         # from the right integration first, regardless of what it would have chosen.
-        seed_calls = _build_seed_calls(state, tools)
+        seed_calls = _build_seed_calls(state, tools, llm)
         if seed_calls:
             logger.debug("[agent] seeding %d primary tool calls before LLM loop", len(seed_calls))
             for tc in seed_calls:
@@ -356,7 +356,11 @@ def _build_connected_tool_context(
     }
 
 
-def _build_seed_calls(state: dict[str, Any], tools: list[RegisteredTool]) -> list[ToolCall]:
+def _build_seed_calls(
+    state: dict[str, Any],
+    tools: list[RegisteredTool],
+    llm: Any,
+) -> list[ToolCall]:
     """Return tool calls to run before the LLM loop based on the alert source.
 
     Picks all available tools whose source matches the alert's primary integration.
@@ -375,17 +379,18 @@ def _build_seed_calls(state: dict[str, Any], tools: list[RegisteredTool]) -> lis
     if not seed_tools:
         return []
 
+    from app.services.agent_llm_client import BedrockConverseAgentClient
     from app.services.bedrock_converse import new_tool_use_id
 
+    use_converse_ids = isinstance(llm, BedrockConverseAgentClient)
     calls: list[ToolCall] = []
     for tool in seed_tools:
         try:
             injected = tool.extract_params(resolved)
         except Exception:
             injected = {}
-        calls.append(
-            ToolCall(id=new_tool_use_id(), name=tool.name, input=_public_tool_input(injected))
-        )
+        tool_id = new_tool_use_id() if use_converse_ids else f"seed_{tool.name}"
+        calls.append(ToolCall(id=tool_id, name=tool.name, input=_public_tool_input(injected)))
 
     return calls
 

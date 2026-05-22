@@ -22,7 +22,6 @@ _UNSUPPORTED_SCHEMA_KEYS = frozenset(
         "$defs",
         "definitions",
         "$ref",
-        "allOf",
         "not",
         "nullable",  # OpenAPI nullable — Converse uses explicit types; anyOf/oneOf are flattened instead
     }
@@ -59,9 +58,45 @@ def _pick_non_null_schema_variant(variants: list[Any]) -> dict[str, Any] | None:
     return None
 
 
+def _merge_all_of_subschemas(variants: list[Any]) -> dict[str, Any]:
+    """Merge ``allOf`` branches (e.g. Pydantic constrained fields) into one schema dict."""
+    merged: dict[str, Any] = {}
+    for item in variants:
+        if not isinstance(item, dict):
+            continue
+        for key, value in item.items():
+            if key == "properties" and isinstance(value, dict):
+                props = merged.setdefault("properties", {})
+                if isinstance(props, dict):
+                    props.update(value)
+                else:
+                    merged["properties"] = dict(value)
+            elif key == "required" and isinstance(value, list):
+                required = merged.setdefault("required", [])
+                if isinstance(required, list):
+                    for name in value:
+                        if name not in required:
+                            required.append(name)
+            elif key not in merged:
+                merged[key] = value
+    return merged
+
+
 def _flatten_composite_keywords(schema: dict[str, Any]) -> dict[str, Any]:
-    """Resolve ``anyOf`` / ``oneOf`` (e.g. Optional) into explicit ``type`` fields."""
+    """Resolve ``allOf`` / ``anyOf`` / ``oneOf`` into explicit ``type`` fields."""
     flattened = dict(schema)
+    if "allOf" in flattened:
+        variants = flattened.pop("allOf")
+        if isinstance(variants, list):
+            for key, value in _merge_all_of_subschemas(variants).items():
+                if key == "properties" and isinstance(value, dict):
+                    existing = flattened.get("properties")
+                    if isinstance(existing, dict):
+                        existing.update(value)
+                    else:
+                        flattened["properties"] = dict(value)
+                elif key not in flattened:
+                    flattened[key] = value
     for composite in ("anyOf", "oneOf"):
         if composite not in flattened:
             continue
@@ -220,7 +255,7 @@ def build_assistant_tool_use_message(tool_calls: list[Any]) -> dict[str, Any]:
 def build_tool_result_message(tool_calls: list[Any], results: list[Any]) -> dict[str, Any]:
     """Build the Converse ``toolResult`` user message for one round of tool calls."""
     content: list[dict[str, Any]] = []
-    for tc, result in zip(tool_calls, results):
+    for tc, result in zip(tool_calls, results, strict=True):
         is_error = isinstance(result, dict) and "error" in result
         if isinstance(result, dict):
             sanitized = json.loads(json.dumps(result, default=str))

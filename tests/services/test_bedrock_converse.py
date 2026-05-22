@@ -82,6 +82,33 @@ def test_sanitize_resolves_anyof_optional_string() -> None:
     assert cleaned["type"] == "string"
 
 
+def test_sanitize_resolves_anyof_implicit_object() -> None:
+    cleaned = sanitize_converse_schema(
+        {
+            "anyOf": [
+                {"properties": {"name": {"type": "string"}}},
+                {"type": "null"},
+            ]
+        }
+    )
+    assert cleaned["type"] == "object"
+    assert cleaned["properties"]["name"]["type"] == "string"
+
+
+def test_sanitize_merges_allof_constraints() -> None:
+    cleaned = sanitize_converse_schema(
+        {
+            "allOf": [
+                {"type": "object", "properties": {"name": {"type": "string"}}},
+                {"properties": {"age": {"type": "integer"}}},
+            ]
+        }
+    )
+    assert cleaned["type"] == "object"
+    assert cleaned["properties"]["name"]["type"] == "string"
+    assert cleaned["properties"]["age"]["type"] == "integer"
+
+
 def test_sanitize_strips_nullable_keeps_type() -> None:
     cleaned = sanitize_converse_schema({"type": "string", "nullable": True})
     assert cleaned == {"type": "string"}
