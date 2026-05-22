@@ -1049,3 +1049,20 @@ def test_bedrock_converse_throttling_all_retries_exhausted_raises(
         BedrockConverseAgentClient(model=_MISTRAL_MODEL).invoke(
             messages=[{"role": "user", "content": [{"text": "hi"}]}]
         )
+
+
+def test_anthropic_unexpected_response_shape_raises_runtime_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When the Anthropic SDK returns something other than a Message (e.g. a bare string),
+    AnthropicAgentClient.invoke() should raise RuntimeError instead of AttributeError."""
+    _install_fake_anthropic(monkeypatch)
+    client = AnthropicAgentClient(
+        model="claude-opus-4-7",
+        client=types.SimpleNamespace(
+            messages=types.SimpleNamespace(create=lambda **_: "unexpected string response")
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="unexpected response"):
+        client.invoke(messages=[{"role": "user", "content": "hello"}])
