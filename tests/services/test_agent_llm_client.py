@@ -210,6 +210,7 @@ def test_anthropic_string_response_is_returned_as_text(
 
     assert response.content == "plain text response"
     assert response.tool_calls == []
+    assert response.raw_content == [{"type": "text", "text": "plain text response"}]
 
 
 def test_anthropic_string_content_is_returned_as_text(
@@ -232,7 +233,7 @@ def test_anthropic_string_content_is_returned_as_text(
     response = client.invoke(messages=[{"role": "user", "content": "hi"}])
 
     assert response.content == "plain content"
-    assert response.raw_content == "plain content"
+    assert response.raw_content == [{"type": "text", "text": "plain content"}]
 
 
 def test_bedrock_rate_limit_error_is_not_retried(

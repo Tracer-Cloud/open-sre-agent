@@ -177,7 +177,10 @@ class AnthropicAgentClient:
             raise RuntimeError(f"{self.provider_name} invocation failed") from last_err
 
         if isinstance(response, str):
-            return AgentLLMResponse(content=response)
+            return AgentLLMResponse(
+                content=response,
+                raw_content=[{"type": "text", "text": response}],
+            )
 
         if not hasattr(response, "content"):
             raise RuntimeError(
@@ -190,7 +193,7 @@ class AnthropicAgentClient:
             return AgentLLMResponse(
                 content=raw_content,
                 stop_reason=str(getattr(response, "stop_reason", "end_turn") or "end_turn"),
-                raw_content=raw_content,
+                raw_content=[{"type": "text", "text": raw_content}],
             )
         if not isinstance(raw_content, list):
             raise RuntimeError(
