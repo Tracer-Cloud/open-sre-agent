@@ -46,21 +46,10 @@ claude --output-format stream-json …
 Equals-form flags (e.g. `claude --resume=<session-id>`,
 `claude --print=<prompt>`) are accepted for any flag in the list above.
 
-The Claude Desktop GUI and its Electron helpers are filtered out
-cross-platform — `Claude.app/Contents/`, `Claude Helper (Renderer)`,
-`/snap/claude/`, `/usr/lib/claude-desktop`, AppImage mount points
-(`/.mount_Claude…`), and the Windows `Program Files\Claude\` /
-`AppData\Local\Programs\Claude\` install locations are recognized as
-desktop artifacts and never labeled as `claude-code`. The negative filter
-matches against `argv[0]` only, so a CLI installed under a Claude-flavored
-prefix (for example `/opt/Claude/claude`) is still surfaced.
-
 ### Loose mode (`--all`)
 
 `opensre agents scan --all` relaxes the argv requirements so that helper and
 broker processes whose argv contains agent-shaped tokens are also surfaced.
-The Claude Desktop / Electron negative filter is still applied — `--all`
-never mislabels desktop processes as `claude-code`.
 
 ### Registering discovered sessions
 
