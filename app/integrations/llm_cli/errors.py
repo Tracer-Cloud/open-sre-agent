@@ -25,6 +25,20 @@ class CLIAuthenticationRequired(RuntimeError):
         super().__init__(f"{provider} is not authenticated. {auth_hint} ({detail})")
 
 
+class CLIInvalidModelError(RuntimeError):
+    """CLI rejected the requested model identifier.
+
+    Raised by adapter ``explain_failure`` implementations when stderr/stdout
+    includes a known bad-model phrase, letting callers distinguish model config
+    mistakes from generic subprocess failures.
+    """
+
+    def __init__(self, *, provider: str, detail: str) -> None:
+        self.provider = provider
+        self.detail = detail
+        super().__init__(f"{provider} rejected the configured model. {detail}")
+
+
 class CLITransientError(RuntimeError):
     """CLI subprocess exited with a transient failure code (e.g. EX_TEMPFAIL = 75).
 
