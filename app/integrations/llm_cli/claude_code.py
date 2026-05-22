@@ -5,7 +5,7 @@ Env vars
 CLAUDE_CODE_BIN              Optional explicit path to the ``claude`` binary.
                              Blank or non-runnable paths are ignored; PATH + fallbacks apply.
 CLAUDE_CODE_MODEL            Optional model override (e.g. ``claude-opus-4-7``).
-                             Unset or empty → omit ``--model``; CLI default applies.
+                             Unset or empty -> omit ``--model``; CLI default applies.
 CLAUDE_CODE_TIMEOUT_SECONDS  Optional invocation timeout override in seconds for long prompts
                              (default: 120, min: 30, max: 600).
 
@@ -22,7 +22,7 @@ Binary resolution uses ``shutil.which`` with ``claude.cmd`` / ``claude.exe`` /
 ``.bat`` / ``.ps1`` on Windows, plus npm / Volta / pnpm style fallback dirs
 (see ``default_cli_fallback_paths``). Without the CLI binary, macOS Keychain
 may still hold OAuth credentials, so auth is reported as unclear until the
-binary runs; Linux and Windows without env or creds file → not authenticated.
+binary runs; Linux and Windows without env or creds file -> not authenticated.
 """
 
 from __future__ import annotations
@@ -48,6 +48,7 @@ from app.integrations.llm_cli.env_overrides import (
     ANTHROPIC_CLI_ENV_KEYS,
     nonempty_env_values,
 )
+from app.integrations.llm_cli.errors import CLIInvalidModelError
 from app.integrations.llm_cli.subprocess_env import build_cli_subprocess_env
 
 _CLAUDE_VERSION_RE = re.compile(r"(\d+\.\d+\.\d+)")
@@ -58,6 +59,12 @@ _AUTH_HINT = "Run: claude auth login or set ANTHROPIC_API_KEY."
 _DEFAULT_EXEC_TIMEOUT_SEC = 120.0
 _MIN_EXEC_TIMEOUT_SEC = 30.0
 _MAX_EXEC_TIMEOUT_SEC = 600.0
+_INVALID_MODEL_MARKERS = (
+    "model not found",
+    "no such model",
+    "unknown model",
+    "unsupported model",
+)
 
 
 def _resolve_exec_timeout_seconds() -> float:
@@ -122,7 +129,7 @@ def _auth_status_from_json_payload(data: dict) -> tuple[bool, str]:
         # also populates for env-supplied API keys regardless of the active
         # method and would mis-report the source.
         return True, f"Authenticated via {auth_method}{f' ({email})' if email else ''}."
-    # Older CLI versions may omit authMethod — fall back to legacy heuristic.
+    # Older CLI versions may omit authMethod - fall back to legacy heuristic.
     if api_key_source:
         return True, f"Authenticated via {api_key_source}."
     if email:
@@ -147,12 +154,12 @@ def _try_parse_auth_status_stdout(stdout: str) -> tuple[bool, str] | None:
 def _probe_cli_auth(binary_path: str) -> tuple[bool | None, str]:
     """Check Claude Code auth via `claude auth status` (local, no API call).
 
-    Returns ``(True, …)`` for any working auth (subscription or API key),
-    ``(False, …)`` when the CLI definitively reports the user as not logged
-    in, and ``(None, …)`` only when the probe itself failed (timeout, spawn
+    Returns ``(True, ...)`` for any working auth (subscription or API key),
+    ``(False, ...)`` when the CLI definitively reports the user as not logged
+    in, and ``(None, ...)`` only when the probe itself failed (timeout, spawn
     error, or unparseable output from an older CLI).
 
-    The CLI exits **non-zero** when ``loggedIn`` is false (CLI ≥ 2.x) while
+    The CLI exits non-zero when ``loggedIn`` is false (CLI >= 2.x) while
     still printing valid JSON, so we parse stdout first and only fall back to
     treating a non-zero exit as an opaque probe failure when the JSON is
     absent or unparseable. The previous behaviour of returning ``None`` on
@@ -173,7 +180,7 @@ def _probe_cli_auth(binary_path: str) -> tuple[bool | None, str]:
     except subprocess.TimeoutExpired:
         return (
             None,
-            f"claude auth status timed out after {_PROBE_TIMEOUT_SEC:.0f} s — auth state unknown.",
+            f"claude auth status timed out after {_PROBE_TIMEOUT_SEC:.0f} s - auth state unknown.",
         )
     except OSError as exc:
         return None, f"Could not spawn claude for auth probe: {exc}"
@@ -204,12 +211,12 @@ def _classify_claude_code_auth(binary_path: str | None = None) -> tuple[bool | N
     """Return (logged_in, detail) for Claude Code auth.
 
     Resolution order:
-    1. Binary available → `claude auth status` is the source of truth for all
+    1. Binary available -> `claude auth status` is the source of truth for all
        platforms; covers both subscription login and ANTHROPIC_API_KEY.
-    2. No binary, ANTHROPIC_API_KEY set → True (filesystem-independent fallback).
-    3. No binary, credentials file present → True (OAuth login).
-    4. No binary, macOS → None (Keychain may hold credentials; invocation will verify).
-    5. No binary, Linux/Windows → False.
+    2. No binary, ANTHROPIC_API_KEY set -> True (filesystem-independent fallback).
+    3. No binary, credentials file present -> True (OAuth login).
+    4. No binary, macOS -> None (Keychain may hold credentials; invocation will verify).
+    5. No binary, Linux/Windows -> False.
     """
     if binary_path:
         return _probe_cli_auth(binary_path)
@@ -223,7 +230,7 @@ def _classify_claude_code_auth(binary_path: str | None = None) -> tuple[bool | N
     except OSError:
         return None, "Could not read ~/.claude/.credentials.json; auth state unclear."
     if sys.platform == "darwin":
-        return None, (f"Auth state unclear — binary unavailable for verification. {_AUTH_HINT}")
+        return None, (f"Auth state unclear - binary unavailable for verification. {_AUTH_HINT}")
     return (
         False,
         f"Not authenticated. {_AUTH_HINT}",
@@ -232,6 +239,13 @@ def _classify_claude_code_auth(binary_path: str | None = None) -> tuple[bool | N
 
 def _fallback_claude_code_paths() -> list[str]:
     return _default_cli_fallback_paths("claude")
+
+
+def _raise_if_invalid_model(*, stdout: str, stderr: str) -> None:
+    text = f"{stderr}\n{stdout}".lower()
+    if any(marker in text for marker in _INVALID_MODEL_MARKERS):
+        detail = (stderr or stdout).strip()[:2000]
+        raise CLIInvalidModelError(provider="claude-code", detail=detail or "unknown model")
 
 
 class ClaudeCodeAdapter:
@@ -357,6 +371,7 @@ class ClaudeCodeAdapter:
         return (stdout or "").strip()
 
     def explain_failure(self, *, stdout: str, stderr: str, returncode: int) -> str:
+        _raise_if_invalid_model(stdout=stdout, stderr=stderr)
         err = (stderr or "").strip()
         out = (stdout or "").strip()
         bits = [f"claude -p exited with code {returncode}"]
