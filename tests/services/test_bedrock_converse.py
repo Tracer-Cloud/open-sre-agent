@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Generator
 from datetime import datetime
-from typing import Any
 
 import pytest
 
 from app.services.agent_llm_client import ToolCall
 from app.services.bedrock_converse import (
-    _UNSUPPORTED_SCHEMA_KEYS,
     apply_guardrails_to_converse_payload,
     build_assistant_tool_use_message,
     build_converse_tool_specs,
@@ -23,6 +20,8 @@ from app.services.bedrock_converse import (
     sanitize_converse_schema,
     to_converse_messages,
 )
+
+
 @pytest.fixture(autouse=True)
 def _reset_tool_registry() -> Generator[None]:
     from app.tools.registry import clear_tool_registry_cache
