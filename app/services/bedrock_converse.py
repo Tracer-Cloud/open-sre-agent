@@ -258,7 +258,7 @@ def build_tool_result_message(tool_calls: list[Any], results: list[Any]) -> dict
     """Build the Converse ``toolResult`` user message for one round of tool calls."""
     content: list[dict[str, Any]] = []
     for tc, result in zip(tool_calls, results, strict=True):
-        is_error = isinstance(result, dict) and "error" in result
+        is_error = isinstance(result, dict) and bool(result.get("error"))
         if isinstance(result, dict):
             sanitized = json.loads(json.dumps(result, default=str))
             result_content: list[dict[str, Any]] = [{"json": sanitized}]
