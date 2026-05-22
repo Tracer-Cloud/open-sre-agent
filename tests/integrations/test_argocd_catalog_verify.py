@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 
 from app.integrations.catalog import classify_integrations, resolve_effective_integrations
@@ -134,6 +136,19 @@ def test_resolve_effective_integrations_ignores_invalid_argocd_env(
     monkeypatch.setenv("ARGOCD_PASSWORD", "pw")
 
     assert "argocd" not in resolve_effective_integrations()
+
+
+def test_invalid_argocd_env_validation_is_not_reported_to_sentry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("app.integrations.catalog.load_integrations", lambda: [])
+    monkeypatch.setenv("ARGOCD_BASE_URL", "http://argocd.example.com")
+    monkeypatch.setenv("ARGOCD_AUTH_TOKEN", "tok_env")
+
+    with patch("app.integrations._catalog_impl.report_exception") as mock_report:
+        assert "argocd" not in resolve_effective_integrations()
+
+    mock_report.assert_not_called()
 
 
 def test_argocd_multi_instance_env_is_propagated(monkeypatch: pytest.MonkeyPatch) -> None:

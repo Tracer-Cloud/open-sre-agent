@@ -10,11 +10,13 @@ or ``logger.debug(..., exc_info=True)`` with no Sentry trace:
      openclaw, mariadb, rabbitmq, rds, betterstack, alertmanager,
      victoria_logs, supabase).
 
-After the fix every site routes through ``_report_classify_failure`` or
-``_report_env_loader_failure``, which call ``report_exception`` with
+After the fix every unexpected site routes through ``_report_classify_failure``
+or ``_report_env_loader_failure``, which call ``report_exception`` with
 ``surface=integration``, ``component=app.integrations._catalog_impl``,
-``event=classify_failed`` / ``event=env_loader_failed``, and the vendor
-tag — preserving the historic "skip the integration" caller contract.
+``event=classify_failed`` / ``event=env_loader_failed``, and the vendor tag.
+Expected pydantic env validation errors are skipped with a local warning,
+preserving the historic "skip the integration" caller contract without
+creating Sentry noise for user config.
 """
 
 from __future__ import annotations
@@ -24,6 +26,7 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
+from pydantic import BaseModel, ValidationError
 
 from app.integrations._catalog_impl import (
     _classify_service_instance,
@@ -72,6 +75,23 @@ def test_report_env_loader_failure_forwards_tags() -> None:
         "integration": "rabbitmq",
         "event": "env_loader_failed",
     }
+
+
+def test_report_env_loader_failure_skips_expected_validation_errors() -> None:
+    class _EnvConfig(BaseModel):
+        value: int
+
+    try:
+        _EnvConfig(value="not-an-int")
+    except ValidationError as exc:
+        validation_error = exc
+    else:  # pragma: no cover - pydantic should always reject this fixture
+        raise AssertionError("expected validation error")
+
+    with patch("app.integrations._catalog_impl.report_exception") as mock_report:
+        _report_env_loader_failure(validation_error, integration="argocd")
+
+    mock_report.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

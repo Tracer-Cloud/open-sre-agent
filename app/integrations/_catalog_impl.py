@@ -7,6 +7,8 @@ import logging
 import os
 from typing import Any
 
+from pydantic import ValidationError
+
 from app.config import get_tracer_base_url
 from app.integrations.airflow import (
     DEFAULT_AIRFLOW_BASE_URL,
@@ -95,10 +97,17 @@ def _report_env_loader_failure(exc: BaseException, *, integration: str) -> None:
     """Route a per-vendor env-loader failure to Sentry + warning log.
 
     Replaces ``except Exception: pass`` and ``logger.debug(..., exc_info=True)``
-    paths in ``load_env_integrations``: integration is still skipped, but the
-    misconfiguration reaches Sentry rather than being lost to debug output
-    (#1468).
+    paths in ``load_env_integrations``: integration is still skipped. Expected
+    Pydantic validation errors stay local to avoid paging on user config, while
+    unexpected loader exceptions still reach Sentry (#1468).
     """
+    if isinstance(exc, ValidationError):
+        logger.warning(
+            "env_loader_invalid: integration=%s validation_errors=%d",
+            integration,
+            exc.error_count(),
+        )
+        return
     report_exception(
         exc,
         logger=logger,
