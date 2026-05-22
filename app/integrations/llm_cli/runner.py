@@ -125,6 +125,10 @@ class CLIBackedLLMClient:
             reasoning_effort=get_active_reasoning_effort(),
         )
         merged_env = _build_subprocess_env(invocation.env)
+        logger.debug(
+            "cli_llm_spawn",
+            extra={"provider": self._adapter.name, "argv": list(invocation.argv)},
+        )
 
         backoff = _TEMPFAIL_BACKOFF_SEC
         for attempt in range(_TEMPFAIL_MAX_RETRIES + 1):
