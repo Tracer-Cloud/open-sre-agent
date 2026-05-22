@@ -176,7 +176,14 @@ class AnthropicAgentClient:
         else:
             raise RuntimeError(f"{self.provider_name} invocation failed") from last_err
 
-        content_blocks: list[Any] = getattr(response, "content", []) or []
+        raw_blocks = getattr(response, "content", None)
+        if not isinstance(raw_blocks, list):
+            logger.warning(
+                "AnthropicAgentClient.invoke: unexpected response type %s — expected Message with .content list",
+                type(response).__name__,
+            )
+            raw_blocks = []
+        content_blocks: list[Any] = raw_blocks
         text_parts: list[str] = []
         tool_calls: list[ToolCall] = []
         for block in content_blocks:
