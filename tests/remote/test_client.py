@@ -458,7 +458,7 @@ class TestPreflight:
         assert report.call_args.kwargs["event"] == "endpoint_probe_failed"
         assert report.call_args.kwargs["severity"] == "warning"
 
-    def test_preflight_reports_timeout(self) -> None:
+    def test_preflight_keeps_timeout_local(self) -> None:
         client = RemoteAgentClient("http://host:2024")
         with (
             patch.object(client, "health", side_effect=httpx.TimeoutException("timed out")),
@@ -468,12 +468,9 @@ class TestPreflight:
 
         assert result.ok is False
         assert result.error == "connection timed out"
-        report.assert_called_once()
-        assert report.call_args.kwargs["event"] == "preflight_timeout"
-        assert report.call_args.kwargs["severity"] == "warning"
-        assert report.call_args.kwargs["include_traceback"] is False
+        report.assert_not_called()
 
-    def test_preflight_reports_connection_refused_without_traceback(self) -> None:
+    def test_preflight_keeps_connection_refused_local(self) -> None:
         client = RemoteAgentClient("http://host:2024")
         with (
             patch.object(client, "health", side_effect=httpx.ConnectError("refused")),
@@ -483,10 +480,7 @@ class TestPreflight:
 
         assert result.ok is False
         assert "connection refused" in (result.error or "")
-        report.assert_called_once()
-        assert report.call_args.kwargs["event"] == "preflight_connection_refused"
-        assert report.call_args.kwargs["severity"] == "warning"
-        assert report.call_args.kwargs["include_traceback"] is False
+        report.assert_not_called()
 
     def test_preflight_reports_unexpected_failure(self) -> None:
         client = RemoteAgentClient("http://host:2024")

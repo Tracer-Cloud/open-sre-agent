@@ -290,28 +290,10 @@ class RemoteAgentClient:
                 system=system,
             )
         except httpx.TimeoutException as exc:
-            report_remote_exception(
-                exc,
-                logger=logger,
-                component="client",
-                event="preflight_timeout",
-                message="Remote preflight timed out",
-                severity="warning",
-                extras={"base_url": self.base_url},
-                include_traceback=False,
-            )
+            logger.warning("Remote preflight timed out for %s: %s", self.base_url, exc)
             return PreflightResult(ok=False, error="connection timed out")
         except httpx.ConnectError as exc:
-            report_remote_exception(
-                exc,
-                logger=logger,
-                component="client",
-                event="preflight_connection_refused",
-                message="Remote preflight connection failed",
-                severity="warning",
-                extras={"base_url": self.base_url},
-                include_traceback=False,
-            )
+            logger.warning("Remote preflight connection failed for %s: %s", self.base_url, exc)
             return PreflightResult(ok=False, error="connection refused")
         except httpx.HTTPStatusError as exc:
             report_remote_exception(

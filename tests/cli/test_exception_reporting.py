@@ -13,6 +13,7 @@ def test_should_not_report_unknown_command_usage_error() -> None:
 
 def test_should_not_report_expected_cli_errors() -> None:
     assert should_report_exception(click.UsageError("No such option: --bogus")) is False
+    assert should_report_exception(click.ClickException("remote is unavailable")) is False
     assert should_report_exception(OpenSREError("missing integration")) is False
     assert should_report_exception(KeyboardInterrupt()) is False
     assert should_report_exception(click.Abort()) is False
