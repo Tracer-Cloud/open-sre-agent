@@ -1972,6 +1972,7 @@ release-dist = [
 dev = [
     { name = "pre-commit" },
     { name = "pytest" },
+    { name = "pytest-asyncio" },
     { name = "pytest-cov" },
     { name = "types-psutil" },
 ]
@@ -2050,6 +2051,7 @@ provides-extras = ["dev", "release-dist", "release-binary", "release", "opensre-
 dev = [
     { name = "pre-commit", specifier = ">=4.0.0" },
     { name = "pytest", specifier = ">=9.0.3" },
+    { name = "pytest-asyncio", specifier = ">=1.3.0" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "types-psutil", specifier = ">=7.2.2.20260408" },
 ]
