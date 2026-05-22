@@ -993,3 +993,48 @@ def test_capture_coerces_invalid_property_values(
     invalid = [line for line in failure_lines if line.startswith("invalid_property")]
     assert any("drop_object" in line for line in invalid)
     assert all("drop_none" not in line for line in invalid)
+
+
+def test_worker_ssl_init_failure_drains_queue_and_logs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """SSLError during httpx.Client creation must be caught, logged, and drain the queue."""
+    monkeypatch.delenv("OPENSRE_ANALYTICS_DISABLED", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(provider, "_ANONYMOUS_ID_PATH", tmp_path / "anonymous_id")
+    monkeypatch.setattr(provider.atexit, "register", lambda _func: None)
+
+    ssl_error = Exception("SSLError: unknown error (_ssl.c:3134)")
+    # Gate used to ensure the item is in the queue before the worker tries to build the client.
+    item_enqueued = threading.Event()
+
+    class _BrokenClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            item_enqueued.wait(timeout=2.0)
+            raise ssl_error
+
+        def __enter__(self) -> _BrokenClient:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            pass
+
+    monkeypatch.setattr(provider.httpx, "Client", _BrokenClient)
+
+    failure_stages: list[str] = []
+    monkeypatch.setattr(
+        provider,
+        "_log_failure",
+        lambda stage, _exc, **_kw: failure_stages.append(stage),
+    )
+
+    analytics = provider.Analytics()
+    analytics.capture(Event.CLI_INVOKED)
+    item_enqueued.set()  # unblock the worker so it fails with item already in the queue
+    if analytics._worker is not None:
+        analytics._worker.join(timeout=3.0)
+
+    assert analytics._pending == 0
+    assert analytics._drained.is_set()
+    assert "posthog_worker" in failure_stages

@@ -771,27 +771,40 @@ class Analytics:
         self._worker = worker
 
     def _worker_loop(self) -> None:
-        with httpx.Client(timeout=_SEND_TIMEOUT, trust_env=False) as client:
-            while True:
-                item = self._queue.get()
-                if item is None:
-                    self._queue.task_done()
-                    break
-                try:
-                    self._send(client, item)
-                finally:
-                    self._queue.task_done()
-                    self._mark_done()
+        try:
+            with httpx.Client(timeout=_SEND_TIMEOUT, trust_env=False) as client:
+                while True:
+                    item = self._queue.get()
+                    if item is None:
+                        self._queue.task_done()
+                        break
+                    try:
+                        self._send(client, item)
+                    finally:
+                        self._queue.task_done()
+                        self._mark_done()
+                while True:
+                    try:
+                        item = self._queue.get_nowait()
+                    except queue.Empty:
+                        return
+                    try:
+                        if item is not None:
+                            self._send(client, item)
+                    finally:
+                        self._queue.task_done()
+                        self._mark_done()
+        except Exception as exc:
+            # SSL init failure or other fatal worker error — analytics is non-critical.
+            # Drain the queue so any callers blocked on _drained are unblocked.
+            _log_failure("posthog_worker", exc)
             while True:
                 try:
                     item = self._queue.get_nowait()
                 except queue.Empty:
-                    return
-                try:
-                    if item is not None:
-                        self._send(client, item)
-                finally:
-                    self._queue.task_done()
+                    break
+                self._queue.task_done()
+                if item is not None:
                     self._mark_done()
 
     def _send(self, client: httpx.Client, item: _Envelope) -> None:
