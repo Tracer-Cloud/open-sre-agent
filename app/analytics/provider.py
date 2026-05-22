@@ -732,6 +732,8 @@ class Analytics:
         try:
             self._ensure_worker()
             with self._pending_lock:
+                if self._disabled or self._shutdown:
+                    return
                 self._pending += 1
                 pending_registered = True
                 self._drained.clear()
@@ -816,8 +818,9 @@ class Analytics:
             # Telemetry transport setup failures are environmental. Disable
             # this in-process analytics worker and drain queued events so CLI
             # shutdown never hangs behind a dead background thread.
-            self._worker_alive = False
-            self._disabled = True
+            with self._pending_lock:
+                self._worker_alive = False
+                self._disabled = True
             _log_failure("posthog_worker_start", exc, event=item.event)
             self._discard_pending_worker_items()
             return None

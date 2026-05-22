@@ -593,6 +593,29 @@ def test_worker_client_start_ssl_error_drains_without_sentry(
     assert failures == [("posthog_worker_start", "SSLError", {"event": Event.CLI_INVOKED.value})]
 
 
+def test_capture_rechecks_disabled_after_worker_start(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.delenv("OPENSRE_ANALYTICS_DISABLED", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(provider, "_ANONYMOUS_ID_PATH", tmp_path / "anonymous_id")
+    monkeypatch.setattr(provider.atexit, "register", lambda _func: None)
+
+    analytics = provider.Analytics()
+
+    def _disable_during_worker_start() -> None:
+        analytics._disabled = True
+
+    monkeypatch.setattr(analytics, "_ensure_worker", _disable_during_worker_start)
+
+    analytics.capture(Event.CLI_INVOKED)
+
+    assert analytics._pending == 0
+    assert analytics._queue.qsize() == 0
+
+
 def test_get_or_create_anonymous_id_returns_uuid_when_write_fails(
     monkeypatch, tmp_path: Path
 ) -> None:
