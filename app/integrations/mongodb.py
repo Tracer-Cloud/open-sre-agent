@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from pydantic import Field, field_validator
+from pymongo.errors import OperationFailure, ServerSelectionTimeoutError
 
 from app.integrations._validation_helpers import report_validation_failure
 from app.strict_config import StrictConfigModel
@@ -122,6 +123,29 @@ def validate_mongodb_config(config: MongoDBConfig) -> MongoDBValidationResult:
             )
         finally:
             client.close()
+    except OperationFailure as err:
+        if getattr(err, "code", None) == 18:
+            logger.warning("[mongodb] validate_mongodb_config authentication failed")
+            return MongoDBValidationResult(
+                ok=False,
+                detail=(
+                    "MongoDB authentication failed. Check the username, password, "
+                    "authSource, and connection string."
+                ),
+            )
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mongodb",
+            method="validate_mongodb_config",
+        )
+        return MongoDBValidationResult(ok=False, detail=f"MongoDB connection failed: {err}")
+    except ServerSelectionTimeoutError as err:
+        logger.warning("[mongodb] validate_mongodb_config server selection failed: %s", err)
+        return MongoDBValidationResult(
+            ok=False,
+            detail=f"MongoDB server selection failed: {err}",
+        )
     except Exception as err:
         report_validation_failure(
             err,
