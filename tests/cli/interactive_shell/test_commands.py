@@ -1517,6 +1517,41 @@ class TestRunCliCommand:
         assert m.run_cli_command(console, ["update"], subprocess_timeout=30.0) is True
         assert "already up to date" in buf.getvalue()
 
+    def test_capture_output_replays_stdout_through_console_without_timeout(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from app.cli.interactive_shell.command_registry import cli_parity as m
+
+        def _fake_run(
+            cmd: list[str],
+            *,
+            check: bool,
+            timeout: float | None,
+            capture_output: bool,
+            text: bool,
+            encoding: str,
+            errors: str,
+        ) -> subprocess.CompletedProcess[str]:
+            del check, text, encoding, errors
+            assert timeout is None
+            assert capture_output is True
+            assert cmd[:3] == [sys.executable, "-m", "app.cli"]
+            assert cmd[3:] == ["guardrails"]
+            return subprocess.CompletedProcess(
+                cmd,
+                2,
+                stdout="Usage: opensre guardrails [OPTIONS] COMMAND [ARGS]...\n",
+                stderr="",
+            )
+
+        monkeypatch.setattr(m.subprocess, "run", _fake_run)
+        console, buf = _capture()
+        assert m.run_cli_command(console, ["guardrails"], capture_output=True) is True
+        output = buf.getvalue()
+        assert "Usage: opensre guardrails" in output
+        assert "non-zero code 2" in output
+
     def test_interactive_delegate_does_not_capture_output(
         self,
         monkeypatch: pytest.MonkeyPatch,
@@ -1641,6 +1676,28 @@ class TestCliDelegatedCommands:
         dispatch_slash("/onboard local_llm", session, console)
 
         assert captured == [["onboard", "local_llm"]]
+
+    def test_slash_guardrails_opts_into_output_capture(self, monkeypatch: object) -> None:
+        """Bare ``/guardrails`` must replay Click usage through the REPL console."""
+        from app.cli.interactive_shell.command_registry import cli_parity as m
+
+        captured: list[tuple[list[str], dict[str, object]]] = []
+
+        def _fake_run_cli_command(
+            _console: Console,
+            args: list[str],
+            **kwargs: object,
+        ) -> bool:
+            captured.append((args, kwargs))
+            return True
+
+        monkeypatch.setattr(m, "run_cli_command", _fake_run_cli_command)
+
+        session = ReplSession()
+        console, _ = _capture()
+        dispatch_slash("/guardrails", session, console)
+
+        assert captured == [(["guardrails"], {"capture_output": True})]
 
     def test_tests_run_subcommand_starts_background_task(self, monkeypatch: object) -> None:
         from app.cli.interactive_shell.command_registry import cli_parity as m
