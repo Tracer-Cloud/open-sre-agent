@@ -1699,6 +1699,28 @@ class TestCliDelegatedCommands:
 
         assert captured == [(["guardrails"], {"capture_output": True})]
 
+    def test_slash_config_opts_into_output_capture(self, monkeypatch: object) -> None:
+        """``/config`` output must not write over the pinned REPL prompt."""
+        from app.cli.interactive_shell.command_registry import cli_parity as m
+
+        captured: list[tuple[list[str], dict[str, object]]] = []
+
+        def _fake_run_cli_command(
+            _console: Console,
+            args: list[str],
+            **kwargs: object,
+        ) -> bool:
+            captured.append((args, kwargs))
+            return True
+
+        monkeypatch.setattr(m, "run_cli_command", _fake_run_cli_command)
+
+        session = ReplSession()
+        console, _ = _capture()
+        dispatch_slash("/config", session, console)
+
+        assert captured == [(["config"], {"capture_output": True})]
+
     def test_tests_run_subcommand_starts_background_task(self, monkeypatch: object) -> None:
         from app.cli.interactive_shell.command_registry import cli_parity as m
 
