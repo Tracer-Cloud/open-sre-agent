@@ -41,16 +41,17 @@ def run_cli_command(
     console: Console,
     args: list[str],
     *,
+    capture_output: bool = False,
     subprocess_timeout: float | None = None,
 ) -> bool:
     """Helper to delegate complex or interactive Click commands to a child process.
 
     ``subprocess_timeout`` caps how long ``subprocess.run`` waits before raising
-    :class:`~subprocess.TimeoutExpired`. Interactive flows use ``None`` so the
-    child can prompt as long as needed; callers that hit the network without a
-    TTY (like ``opensre update``) pass a bounded timeout. When a timeout is set,
-    stdout/stderr are captured and replayed through ``console`` so output survives
-    prompt-toolkit ``patch_stdout`` redraws in the REPL.
+    :class:`~subprocess.TimeoutExpired`. Interactive flows keep the default
+    passthrough behavior so the child can prompt as long as needed. Finite
+    output commands pass ``capture_output=True`` so stdout/stderr are replayed
+    through ``console`` and survive prompt-toolkit ``patch_stdout`` redraws in
+    the REPL. Timed commands are always captured for the same reason.
 
     Ctrl+C sends :exc:`KeyboardInterrupt`, which subclasses :exc:`BaseException`
     rather than :exc:`Exception`; it is handled here so the REPL survives and the
@@ -59,8 +60,8 @@ def run_cli_command(
     console.print()
     cmd = [sys.executable, "-m", "app.cli", *args]
     try:
-        if subprocess_timeout is not None:
-            timed_result = subprocess.run(
+        if capture_output or subprocess_timeout is not None:
+            captured_result = subprocess.run(
                 cmd,
                 check=False,
                 timeout=subprocess_timeout,
@@ -69,11 +70,11 @@ def run_cli_command(
                 encoding="utf-8",
                 errors="replace",
             )
-            print_command_output(console, timed_result.stdout or "")
-            print_command_output(console, timed_result.stderr or "", style=ERROR)
-            if timed_result.returncode != 0:
+            print_command_output(console, captured_result.stdout or "")
+            print_command_output(console, captured_result.stderr or "", style=ERROR)
+            if captured_result.returncode != 0:
                 console.print(
-                    f"[{ERROR}]CLI command exited with non-zero code {timed_result.returncode}[/]"
+                    f"[{ERROR}]CLI command exited with non-zero code {captured_result.returncode}[/]"
                 )
         else:
             interactive_result = subprocess.run(cmd, check=False)
@@ -201,7 +202,7 @@ def _cmd_tests(session: ReplSession, console: Console, args: list[str]) -> bool:
         return True
 
     if subcommand.startswith("-"):
-        return run_cli_command(console, ["tests", *args])
+        return run_cli_command(console, ["tests", *args], capture_output=True)
 
     if subcommand not in _TEST_SUBCOMMANDS:
         suggestion = closest_choice(subcommand, _TEST_SUBCOMMANDS)
@@ -219,11 +220,11 @@ def _cmd_tests(session: ReplSession, console: Console, args: list[str]) -> bool:
         session.mark_latest(ok=False, kind="slash")
         return True
 
-    return run_cli_command(console, ["tests", *args])
+    return run_cli_command(console, ["tests", *args], capture_output=True)
 
 
 def _cmd_guardrails(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    return run_cli_command(console, ["guardrails", *args])
+    return run_cli_command(console, ["guardrails", *args], capture_output=True)
 
 
 def _cmd_update(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
@@ -239,7 +240,7 @@ def _cmd_uninstall(session: ReplSession, console: Console, args: list[str]) -> b
 
 
 def _cmd_config(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    return run_cli_command(console, ["config", *args])
+    return run_cli_command(console, ["config", *args], capture_output=True)
 
 
 def _cmd_messaging(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001

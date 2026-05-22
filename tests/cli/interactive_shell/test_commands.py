@@ -1518,6 +1518,43 @@ class TestRunCliCommand:
         ]
         assert buf.getvalue() == "\n\n"
 
+    def test_captured_delegate_replays_output_without_timeout(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from app.cli.interactive_shell.command_registry import cli_parity as m
+
+        def _fake_run(
+            cmd: list[str],
+            *,
+            check: bool,
+            timeout: float | None,
+            capture_output: bool,
+            text: bool,
+            encoding: str,
+            errors: str,
+        ) -> subprocess.CompletedProcess[str]:
+            del check, text, encoding, errors
+            assert timeout is None
+            assert capture_output is True
+            assert cmd == [sys.executable, "-m", "app.cli", "tests", "list"]
+            return subprocess.CompletedProcess(
+                cmd,
+                2,
+                stdout="openclaw-synthetic\n",
+                stderr="Usage: python -m app.cli tests [OPTIONS]\n",
+            )
+
+        monkeypatch.setattr(m.subprocess, "run", _fake_run)
+        console, buf = _capture()
+
+        assert m.run_cli_command(console, ["tests", "list"], capture_output=True) is True
+
+        output = buf.getvalue()
+        assert "openclaw-synthetic" in output
+        assert "Usage: python -m app.cli tests" in output
+        assert "CLI command exited with non-zero code 2" in output
+
     def test_timeout_replays_decoded_partial_output(
         self,
         monkeypatch: pytest.MonkeyPatch,
@@ -1555,30 +1592,38 @@ class TestCliDelegatedCommands:
     """Coverage for commands that simply delegate to the underlying Click CLI."""
 
     @pytest.mark.parametrize(
-        "command,expected_args",
+        "command,expected_args,expected_kwargs",
         [
-            ("/config show", ["config", "show"]),
-            ("/remote health", ["remote", "health"]),
-            ("/tests list", ["tests", "list"]),
-            ("/guardrails audit", ["guardrails", "audit"]),
-            ("/update", ["update"]),
-            ("/uninstall", ["uninstall"]),
+            ("/config show", ["config", "show"], {"capture_output": True}),
+            ("/remote health", ["remote", "health"], {}),
+            ("/tests list", ["tests", "list"], {"capture_output": True}),
+            ("/guardrails", ["guardrails"], {"capture_output": True}),
+            ("/guardrails audit", ["guardrails", "audit"], {"capture_output": True}),
+            ("/update", ["update"], {"subprocess_timeout": 300}),
+            ("/uninstall", ["uninstall"], {}),
         ],
     )
     def test_command_delegation(
-        self, monkeypatch: object, command: str, expected_args: list[str]
+        self,
+        monkeypatch: object,
+        command: str,
+        expected_args: list[str],
+        expected_kwargs: dict[str, object],
     ) -> None:
         from app.cli.interactive_shell.command_registry import cli_parity as m
 
         captured: list[list[str]] = []
+        captured_kwargs: list[dict[str, object]] = []
 
         def _fake_run_cli_command(_console: Console, args: list[str], **kwargs: object) -> bool:
             captured.append(args)
+            captured_kwargs.append(kwargs)
             return True
 
         monkeypatch.setattr(m, "run_cli_command", _fake_run_cli_command)
         dispatch_slash(command, ReplSession(), Console())
         assert captured == [expected_args]
+        assert captured_kwargs == [expected_kwargs]
 
     def test_slash_onboard_delegates_to_run_cli_command(self, monkeypatch: object) -> None:
         """``/onboard`` must delegate to ``run_cli_command`` so the wizard runs
