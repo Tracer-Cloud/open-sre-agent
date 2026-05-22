@@ -76,6 +76,11 @@ def test_sanitize_nested_array_property() -> None:
     assert cleaned["properties"]["tags"]["items"] == {"type": "string"}
 
 
+def test_sanitize_resolves_anyof_optional_string() -> None:
+    cleaned = sanitize_converse_schema({"anyOf": [{"type": "string"}, {"type": "null"}]})
+    assert cleaned["type"] == "string"
+
+
 def test_sanitize_strips_unsupported_keys() -> None:
     schema = {
         "title": "Root",
@@ -190,7 +195,7 @@ def test_parse_converse_output_text_and_tool_use() -> None:
 
 def test_new_tool_use_id_is_short_alphanumeric() -> None:
     tool_id = new_tool_use_id()
-    assert 1 <= len(tool_id) <= 12
+    assert len(tool_id) == 10
     assert tool_id.isalnum()
 
 

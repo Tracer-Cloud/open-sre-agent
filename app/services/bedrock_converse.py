@@ -44,13 +44,42 @@ def require_aws_region() -> str:
 
 def new_tool_use_id() -> str:
     """Return a short alphanumeric id suitable for Converse ``toolUseId`` fields."""
-    return secrets.token_hex(5)[:9]
+    return secrets.token_hex(5)
+
+
+def _pick_non_null_schema_variant(variants: list[Any]) -> dict[str, Any] | None:
+    """Return the first ``anyOf`` / ``oneOf`` branch with a concrete non-null type."""
+    for item in variants:
+        if not isinstance(item, dict):
+            continue
+        branch_type = item.get("type")
+        if branch_type and branch_type != "null":
+            return item
+    return None
+
+
+def _flatten_composite_keywords(schema: dict[str, Any]) -> dict[str, Any]:
+    """Resolve ``anyOf`` / ``oneOf`` (e.g. Optional) into explicit ``type`` fields."""
+    flattened = dict(schema)
+    for composite in ("anyOf", "oneOf"):
+        if composite not in flattened:
+            continue
+        variants = flattened.pop(composite)
+        if not isinstance(variants, list):
+            continue
+        picked = _pick_non_null_schema_variant(variants)
+        if picked:
+            for key, value in picked.items():
+                flattened.setdefault(key, value)
+        elif "type" not in flattened:
+            flattened["type"] = "string"
+    return flattened
 
 
 def sanitize_converse_schema(schema: dict[str, Any]) -> dict[str, Any]:
     """Return a Converse-compatible copy of *schema* with required ``type`` / ``items`` filled in."""
     cleaned: dict[str, Any] = {}
-    for key, value in schema.items():
+    for key, value in _flatten_composite_keywords(schema).items():
         if key in _UNSUPPORTED_SCHEMA_KEYS:
             continue
         if isinstance(value, dict):
