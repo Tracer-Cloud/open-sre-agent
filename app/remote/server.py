@@ -657,13 +657,7 @@ def _imds_token() -> str | None:
             _mark_remote_recovered("imds_token_fetch_failed")
             return token
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        _report_remote_once(
-            exc,
-            component="server",
-            event="imds_token_fetch_failed",
-            message="IMDS token fetch failed",
-            severity="info",
-        )
+        logger.debug("IMDS token fetch unavailable: %s", exc)
         return None
 
 
@@ -677,14 +671,7 @@ def _imds_get(path: str, *, token: str | None) -> str | None:
             _mark_remote_recovered("imds_metadata_fetch_failed", extras)
             return value
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        _report_remote_once(
-            exc,
-            component="server",
-            event="imds_metadata_fetch_failed",
-            message=f"IMDS metadata fetch failed for {path}",
-            severity="info",
-            extras=extras,
-        )
+        logger.debug("IMDS metadata fetch unavailable for %s: %s", path, exc)
         return None
 
 

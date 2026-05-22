@@ -506,7 +506,9 @@ def test_imds_get_returns_none_on_url_error(monkeypatch: pytest.MonkeyPatch) -> 
     assert _imds_get("latest/meta-data/instance-id", token="test-token") is None
 
 
-def test_imds_token_reports_failure_once(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_imds_token_does_not_report_expected_probe_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     def _raise_url_error(*args: object, **kwargs: object) -> None:
         raise urllib.error.URLError("connection refused")
 
@@ -517,13 +519,12 @@ def test_imds_token_reports_failure_once(monkeypatch: pytest.MonkeyPatch) -> Non
         assert _imds_token() is None
         assert _imds_token() is None
 
-    report.assert_called_once()
-    assert report.call_args.kwargs["component"] == "server"
-    assert report.call_args.kwargs["event"] == "imds_token_fetch_failed"
-    assert report.call_args.kwargs["severity"] == "info"
+    report.assert_not_called()
 
 
-def test_imds_token_reports_again_after_success(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_imds_token_expected_probe_failure_stays_unreported_after_success(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     responses: list[object] = [
         urllib.error.URLError("connection refused"),
         urllib.error.URLError("connection refused"),
@@ -546,11 +547,12 @@ def test_imds_token_reports_again_after_success(monkeypatch: pytest.MonkeyPatch)
         assert _imds_token() == "test-token"
         assert _imds_token() is None
 
-    assert report.call_count == 2
-    assert report.call_args.kwargs["event"] == "imds_token_fetch_failed"
+    report.assert_not_called()
 
 
-def test_imds_get_reports_failure_once(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_imds_get_does_not_report_expected_probe_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     def _raise_url_error(*args: object, **kwargs: object) -> None:
         raise urllib.error.URLError("connection refused")
 
@@ -561,13 +563,12 @@ def test_imds_get_reports_failure_once(monkeypatch: pytest.MonkeyPatch) -> None:
         assert _imds_get("latest/meta-data/instance-id", token="test-token") is None
         assert _imds_get("latest/meta-data/instance-id", token="test-token") is None
 
-    report.assert_called_once()
-    assert report.call_args.kwargs["component"] == "server"
-    assert report.call_args.kwargs["event"] == "imds_metadata_fetch_failed"
-    assert report.call_args.kwargs["severity"] == "info"
+    report.assert_not_called()
 
 
-def test_imds_get_reports_again_after_success(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_imds_get_expected_probe_failure_stays_unreported_after_success(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     responses: list[object] = [
         urllib.error.URLError("connection refused"),
         urllib.error.URLError("connection refused"),
@@ -590,8 +591,7 @@ def test_imds_get_reports_again_after_success(monkeypatch: pytest.MonkeyPatch) -
         assert _imds_get("latest/meta-data/instance-id", token="test-token") == "i-123"
         assert _imds_get("latest/meta-data/instance-id", token="test-token") is None
 
-    assert report.call_count == 2
-    assert report.call_args.kwargs["event"] == "imds_metadata_fetch_failed"
+    report.assert_not_called()
 
 
 def test_check_llm_connectivity_reports_bedrock_failure(monkeypatch: pytest.MonkeyPatch) -> None:
