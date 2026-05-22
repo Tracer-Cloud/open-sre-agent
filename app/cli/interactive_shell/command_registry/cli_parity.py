@@ -59,7 +59,10 @@ def run_cli_command(
     """
     console.print()
     cmd = [sys.executable, "-m", "app.cli", *args]
-    should_capture_output = subprocess_timeout is not None if capture_output is None else capture_output
+    if capture_output is None:
+        should_capture_output = subprocess_timeout is not None
+    else:
+        should_capture_output = capture_output
     try:
         if should_capture_output:
             result = subprocess.run(
