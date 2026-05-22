@@ -245,7 +245,10 @@ def _raise_if_invalid_model(*, stdout: str, stderr: str) -> None:
     text = f"{stderr}\n{stdout}".lower()
     if any(marker in text for marker in _INVALID_MODEL_MARKERS):
         detail = (stderr or stdout).strip()[:2000]
-        raise CLIInvalidModelError(provider="claude-code", detail=detail or "unknown model")
+        raise CLIInvalidModelError(
+            provider="claude-code",
+            detail=detail or "unknown model",
+        )
 
 
 class ClaudeCodeAdapter:
