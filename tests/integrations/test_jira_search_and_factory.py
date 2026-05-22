@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
+from pydantic import BaseModel, ValidationError
 
 from app.integrations.models import JiraIntegrationConfig as JiraConfig
-from app.services.jira.client import JiraClient, make_jira_client
 from app.services._base import ServiceClientUnavailable
-from pydantic import BaseModel, ValidationError
+from app.services.jira.client import JiraClient, make_jira_client
 
 
 @pytest.fixture
