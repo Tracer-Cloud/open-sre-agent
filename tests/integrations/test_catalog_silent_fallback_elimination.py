@@ -133,11 +133,14 @@ def test_classify_failure_skips_integration_and_reports(
         raise RuntimeError(f"forced {integration} failure")
 
     monkeypatch.setattr(f"app.integrations._catalog_impl.{patch_symbol}", _boom)
+    credentials = {"endpoint": "https://x", "api_key": "k"}
+    if integration == "discord":
+        credentials["bot_token"] = "t"
 
     with patch("app.integrations._catalog_impl.report_exception") as mock_report:
         result = _classify_service_instance(
             integration,
-            {"endpoint": "https://x", "api_key": "k"},
+            credentials,
             record_id=f"rec-{integration}",
         )
 
@@ -153,6 +156,18 @@ def test_classify_failure_skips_integration_and_reports(
     assert tags["surface"] == "integration"
     assert mock_report.call_args.kwargs["severity"] == "warning"
     assert mock_report.call_args.kwargs["extras"]["record_id"] == f"rec-{integration}"
+
+
+def test_classify_discord_blank_token_skips_without_reporting() -> None:
+    with patch("app.integrations._catalog_impl.report_exception") as mock_report:
+        result = _classify_service_instance(
+            "discord",
+            {"bot_token": "   ", "application_id": "app-id"},
+            record_id="rec-discord-blank",
+        )
+
+    assert result == (None, None)
+    mock_report.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

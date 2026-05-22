@@ -507,10 +507,13 @@ def _classify_service_instance(
         return None, None
 
     if key == "discord":
+        bot_token = str(credentials.get("bot_token") or "").strip()
+        if not bot_token:
+            return None, None
         try:
             discord_config = DiscordBotConfig.model_validate(
                 {
-                    "bot_token": credentials.get("bot_token", ""),
+                    "bot_token": bot_token,
                     "application_id": credentials.get("application_id", ""),
                     "public_key": credentials.get("public_key", ""),
                     "default_channel_id": credentials.get("default_channel_id"),
