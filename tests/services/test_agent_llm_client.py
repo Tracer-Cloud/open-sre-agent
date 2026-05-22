@@ -194,6 +194,47 @@ def test_anthropic_rate_limit_error_is_not_retried(
     assert call_count == 1, "rate limit should not be retried"
 
 
+def test_anthropic_string_response_is_returned_as_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Provider shims may return bare text; keep it from surfacing as AttributeError."""
+    _install_fake_anthropic(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+    client = AnthropicAgentClient(model="claude-sonnet-4-6")
+    client._client = types.SimpleNamespace(
+        messages=types.SimpleNamespace(create=lambda **_: "plain text response")
+    )
+
+    response = client.invoke(messages=[{"role": "user", "content": "hi"}])
+
+    assert response.content == "plain text response"
+    assert response.tool_calls == []
+
+
+def test_anthropic_string_content_is_returned_as_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A string content payload should be accepted as final text."""
+    _install_fake_anthropic(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+    client = AnthropicAgentClient(model="claude-sonnet-4-6")
+    client._client = types.SimpleNamespace(
+        messages=types.SimpleNamespace(
+            create=lambda **_: types.SimpleNamespace(
+                content="plain content",
+                stop_reason="end_turn",
+            )
+        )
+    )
+
+    response = client.invoke(messages=[{"role": "user", "content": "hi"}])
+
+    assert response.content == "plain content"
+    assert response.raw_content == "plain content"
+
+
 def test_bedrock_rate_limit_error_is_not_retried(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -603,6 +644,56 @@ def test_cli_backed_agent_client_tool_call_parsing() -> None:
     assert result.tool_calls[0].name == "my_tool"
     assert result.tool_calls[0].input == {"x": 1}
     assert result.content == ""
+
+
+def test_cli_backed_agent_client_tool_schemas_use_public_schema() -> None:
+    """CLI-backed investigation prompts must not expose injected runtime parameters."""
+    import types as _types
+
+    from app.services.agent_llm_client import CLIBackedAgentClient
+
+    fake_adapter = _types.SimpleNamespace(
+        name="codex",
+        binary_env_key="CODEX_BIN",
+        install_hint="",
+        auth_hint="codex login",
+        default_exec_timeout_sec=30.0,
+        detect=lambda: _types.SimpleNamespace(
+            installed=True, bin_path="/usr/bin/codex", logged_in=True, detail=""
+        ),
+        build=lambda **_kw: _types.SimpleNamespace(
+            argv=("/usr/bin/codex",), stdin="", cwd="/", env=None, timeout_sec=30.0
+        ),
+        parse=lambda **_kw: "",
+        explain_failure=lambda **_kw: "",
+    )
+    tool = _types.SimpleNamespace(
+        name="query_logs",
+        description="Query logs",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "api_key": {"type": "string"},
+            },
+            "required": ["query", "api_key"],
+        },
+        public_input_schema={
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+        },
+    )
+
+    client = CLIBackedAgentClient(fake_adapter, model=None)
+
+    assert client.tool_schemas([tool]) == [
+        {
+            "name": "query_logs",
+            "description": "Query logs",
+            "input_schema": tool.public_input_schema,
+        }
+    ]
 
 
 def test_cli_backed_agent_client_build_assistant_message_includes_tool_json() -> None:

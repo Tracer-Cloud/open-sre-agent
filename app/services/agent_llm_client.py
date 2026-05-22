@@ -176,9 +176,34 @@ class AnthropicAgentClient:
         else:
             raise RuntimeError(f"{self.provider_name} invocation failed") from last_err
 
+        if isinstance(response, str):
+            return AgentLLMResponse(content=response)
+
+        if not hasattr(response, "content"):
+            raise RuntimeError(
+                f"{self.provider_name} API returned an unexpected response: "
+                f"{type(response).__name__}"
+            )
+
+        raw_content = response.content
+        if isinstance(raw_content, str):
+            return AgentLLMResponse(
+                content=raw_content,
+                stop_reason=str(getattr(response, "stop_reason", "end_turn") or "end_turn"),
+                raw_content=raw_content,
+            )
+        if not isinstance(raw_content, list):
+            raise RuntimeError(
+                f"{self.provider_name} API returned unexpected content: "
+                f"{type(raw_content).__name__}"
+            )
+
         text_parts: list[str] = []
         tool_calls: list[ToolCall] = []
-        for block in response.content:
+        for block in raw_content:
+            if isinstance(block, str):
+                text_parts.append(block)
+                continue
             block_type = getattr(block, "type", None)
             if block_type == "text":
                 text_parts.append(block.text)
@@ -188,8 +213,8 @@ class AnthropicAgentClient:
         return AgentLLMResponse(
             content="".join(text_parts),
             tool_calls=tool_calls,
-            stop_reason=str(response.stop_reason),
-            raw_content=response.content,
+            stop_reason=str(getattr(response, "stop_reason", "end_turn") or "end_turn"),
+            raw_content=raw_content,
         )
 
     @staticmethod
@@ -565,7 +590,7 @@ class CLIBackedAgentClient:
     def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
         # Return the same dicts — used only to pass back into invoke() below.
         return [
-            {"name": t.name, "description": t.description, "input_schema": t.input_schema}
+            {"name": t.name, "description": t.description, "input_schema": t.public_input_schema}
             for t in tools
         ]
 
