@@ -29,6 +29,50 @@ def test_health_command_runs() -> None:
     assert "aws" in result.output
 
 
+def test_health_command_missing_integrations_do_not_fail_fresh_install() -> None:
+    runner = CliRunner()
+
+    with patch("app.integrations.verify.verify_integrations") as mock_verify:
+        mock_verify.return_value = [
+            {
+                "service": "grafana",
+                "source": "-",
+                "status": "missing",
+                "detail": "Not configured in local store or env.",
+            }
+        ]
+
+        result = runner.invoke(cli, ["health"])
+
+    assert result.exit_code == 0
+    assert "Summary:" in result.output
+    assert "1 missing" in result.output
+    assert "grafana" in result.output
+    assert "MISSING" in result.output
+
+
+def test_health_command_failed_integrations_still_exit_nonzero() -> None:
+    runner = CliRunner()
+
+    with patch("app.integrations.verify.verify_integrations") as mock_verify:
+        mock_verify.return_value = [
+            {
+                "service": "grafana",
+                "source": "local store",
+                "status": "failed",
+                "detail": "HTTP 403: forbidden",
+            }
+        ]
+
+        result = runner.invoke(cli, ["health"])
+
+    assert result.exit_code == 1
+    assert "Summary:" in result.output
+    assert "1 failed" in result.output
+    assert "grafana" in result.output
+    assert "FAILED" in result.output
+
+
 def test_health_command_uses_real_datadog_verification_path(monkeypatch) -> None:
     runner = CliRunner()
     monkeypatch.setattr(
@@ -48,7 +92,7 @@ def test_health_command_uses_real_datadog_verification_path(monkeypatch) -> None
 
     result = runner.invoke(cli, ["health"])
 
-    assert result.exit_code == 1
+    assert result.exit_code == 0
     assert "Summary:" in result.output
     assert "datadog" in result.output
     assert "MISSING" in result.output
