@@ -6,7 +6,7 @@ description: "Deliver investigation findings to a Telegram chat or channel."
 OpenSRE's Telegram integration delivers investigation findings to any chat your bot has been added to — useful for mobile-first on-call rotations and personal alerting.
 
 <Note>
-Unlike Slack and Discord, Telegram is **not** included in the interactive `opensre onboard` wizard today. Configure it via environment variables or by editing `~/.config/opensre/integrations.json` directly. Tracked at [#1481](https://github.com/Tracer-Cloud/opensre/issues/1481).
+Telegram can be configured from the interactive `opensre onboard` wizard. Direct environment variables and `~/.config/opensre/integrations.json` entries remain supported for scripted deployments.
 </Note>
 
 ---
@@ -88,7 +88,19 @@ If `getUpdates` returns an empty array, post a fresh message in the chat and rel
 
 ## Step 4: Configure the integration
 
-Set two environment variables in your `.env` file:
+Run the setup wizard and select **Telegram**:
+
+```bash
+opensre onboard
+```
+
+When prompted, enter:
+- **Telegram bot token** - the HTTP API token from BotFather.
+- **Default chat ID** *(optional)* - the destination from Step 3. Delivery requires a chat ID unless each send call overrides it.
+
+The wizard validates the token with Telegram's `getMe` endpoint, saves the integration, and writes the default chat ID to `.env`.
+
+For scripted deployments, you can set the same values directly in `.env`:
 
 ```bash
 TELEGRAM_BOT_TOKEN=<numeric-id>:<token-secret>
@@ -98,7 +110,7 @@ TELEGRAM_DEFAULT_CHAT_ID=<chat-id>
 | Variable | Description |
 |---|---|
 | `TELEGRAM_BOT_TOKEN` | Bot HTTP API token from BotFather. Required. |
-| `TELEGRAM_DEFAULT_CHAT_ID` | Default delivery destination. Required for delivery to work. |
+| `TELEGRAM_DEFAULT_CHAT_ID` | Default delivery destination. Required for delivery to work unless each send call supplies a chat ID. |
 
 OpenSRE picks these up at startup and registers Telegram as an active integration.
 

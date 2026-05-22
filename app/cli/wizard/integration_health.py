@@ -24,6 +24,7 @@ from app.cli.wizard.integration_validators.http_probe_validators import (
     validate_jira_integration,
     validate_notion_integration,
     validate_slack_webhook,
+    validate_telegram_bot,
 )
 from app.cli.wizard.integration_validators.mcp_validators import (
     validate_github_mcp_integration,
@@ -53,5 +54,6 @@ __all__ = [
     "validate_sentry_integration",
     "validate_slack_webhook",
     "validate_splunk_integration",
+    "validate_telegram_bot",
     "validate_vercel_integration",
 ]

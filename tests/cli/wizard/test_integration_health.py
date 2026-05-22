@@ -19,6 +19,7 @@ from app.cli.wizard.integration_health import (
     validate_incident_io_integration,
     validate_sentry_integration,
     validate_slack_webhook,
+    validate_telegram_bot,
     validate_vercel_integration,
 )
 from app.integrations.betterstack import BetterStackValidationResult
@@ -50,6 +51,7 @@ def test_legacy_integration_health_import_surface_still_exports_validators() -> 
         "validate_sentry_integration",
         "validate_slack_webhook",
         "validate_splunk_integration",
+        "validate_telegram_bot",
         "validate_vercel_integration",
     }
 
@@ -499,6 +501,68 @@ def test_validate_discord_bot_network_error(monkeypatch: pytest.MonkeyPatch) -> 
 
     monkeypatch.setattr("httpx.get", _raise)
     result = validate_discord_bot(bot_token="some-token")
+    assert result.ok is False
+    assert "unreachable" in result.detail.lower()
+
+
+# ---------------------------------------------------------------------------
+# validate_telegram_bot
+# ---------------------------------------------------------------------------
+
+
+def test_validate_telegram_bot_succeeds(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "httpx.get",
+        lambda *_a, **_kw: types.SimpleNamespace(
+            status_code=200,
+            json=lambda: {"ok": True, "result": {"username": "opensre_bot"}},
+        ),
+    )
+    result = validate_telegram_bot(bot_token="123:token")
+    assert result.ok is True
+    assert "opensre_bot" in result.detail
+
+
+def test_validate_telegram_bot_rejects_empty_token() -> None:
+    result = validate_telegram_bot(bot_token="  ")
+    assert result.ok is False
+    assert "required" in result.detail.lower()
+
+
+def test_validate_telegram_bot_invalid_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "httpx.get",
+        lambda *_a, **_kw: types.SimpleNamespace(
+            status_code=401,
+            json=lambda: {"ok": False, "description": "Unauthorized"},
+        ),
+    )
+    result = validate_telegram_bot(bot_token="bad-token")
+    assert result.ok is False
+    assert "invalid or revoked" in result.detail.lower()
+
+
+def test_validate_telegram_bot_api_error_detail(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "httpx.get",
+        lambda *_a, **_kw: types.SimpleNamespace(
+            status_code=400,
+            json=lambda: {"ok": False, "description": "Bad Request: token malformed"},
+        ),
+    )
+    result = validate_telegram_bot(bot_token="bad-token")
+    assert result.ok is False
+    assert "token malformed" in result.detail
+
+
+def test_validate_telegram_bot_network_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    import httpx as _httpx
+
+    def _raise(*_a: object, **_kw: object) -> None:
+        raise _httpx.RequestError("connection refused")
+
+    monkeypatch.setattr("httpx.get", _raise)
+    result = validate_telegram_bot(bot_token="some-token")
     assert result.ok is False
     assert "unreachable" in result.detail.lower()
 

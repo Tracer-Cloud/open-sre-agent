@@ -11,7 +11,7 @@ OpenSRE can deliver investigation findings — and accept investigation triggers
 |---|---|---|---|---|
 | [**Slack**](/messaging/slack) | Teams already paged in Slack channels | ❌ delivery only (incoming webhook) | `opensre integrations setup slack` | ~5 min |
 | [**Discord**](/messaging/discord) | Communities and teams using Discord servers | ✅ `/investigate` slash command in any channel the bot is in | `opensre onboard` or `opensre integrations setup discord` | ~10 min |
-| [**Telegram**](/messaging/telegram) | Mobile-first and on-call rotations | ❌ delivery only | Environment variables (no wizard yet) | ~5 min |
+| [**Telegram**](/messaging/telegram) | Mobile-first and on-call rotations | ❌ delivery only | `opensre onboard` or environment variables | ~5 min |
 | [**WhatsApp**](/messaging/whatsapp) | Mobile alerting via Twilio WhatsApp | ❌ delivery only | `opensre integrations setup whatsapp` | ~5 min |
 | [**Twilio SMS**](/messaging/twilio-sms) | SMS paging via Twilio (separate from WhatsApp) | ❌ delivery only | `opensre integrations setup twilio` | ~5 min |
 
@@ -69,10 +69,10 @@ After editing `.env`, run `opensre integrations verify <service>` (e.g. `opensre
 
 ## Re-running the wizard
 
-You can re-run the Discord wizard at any time to update credentials:
+You can re-run the Discord or Telegram wizard at any time to update credentials:
 
 ```bash
 opensre onboard
 ```
 
-Existing values are pre-populated, so you can press Enter to keep what you have. Slack, WhatsApp, and Twilio SMS use `opensre integrations setup slack`, `opensre integrations setup whatsapp`, and `opensre integrations setup twilio`. Telegram does not currently have a wizard step that persists credentials — use `.env` for Telegram (see [#1481](https://github.com/Tracer-Cloud/opensre/issues/1481)).
+Existing values are pre-populated, so you can press Enter to keep what you have. Slack, WhatsApp, and Twilio SMS use `opensre integrations setup slack`, `opensre integrations setup whatsapp`, and `opensre integrations setup twilio`. Telegram can be configured from `opensre onboard`; direct `.env` values remain supported for scripted deployments.

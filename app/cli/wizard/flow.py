@@ -193,6 +193,12 @@ def validate_discord_bot(**kwargs):
     return _validate(**kwargs)
 
 
+def validate_telegram_bot(**kwargs):
+    from app.cli.wizard.integration_health import validate_telegram_bot as _validate
+
+    return _validate(**kwargs)
+
+
 def validate_openclaw_integration(**kwargs):
     from app.cli.wizard.integration_health import validate_openclaw_integration as _validate
 
@@ -1628,6 +1634,42 @@ def _configure_discord() -> tuple[str, str]:
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 
 
+def _configure_telegram() -> tuple[str, str]:
+    _, credentials = _integration_defaults("telegram")
+    _console.print(
+        "\n[bold]Telegram Integration[/bold]\n"
+        f"[{SECONDARY}]Create a bot with @BotFather, then add it to the target chat.[/]\n"
+    )
+    while True:
+        bot_token = _prompt_value(
+            "Telegram bot token",
+            default=_string_value(credentials.get("bot_token")),
+            secret=True,
+        )
+        default_chat_id = _prompt_value(
+            "Default chat ID (optional)",
+            default=_string_value(credentials.get("default_chat_id")),
+            allow_empty=True,
+        )
+        with _console.status("Validating Telegram bot token...", spinner="dots"):
+            result = validate_telegram_bot(bot_token=bot_token)
+        _render_integration_result("Telegram", result)
+        if result.ok:
+            upsert_integration(
+                "telegram",
+                {
+                    "credentials": {
+                        "bot_token": bot_token,
+                        "default_chat_id": default_chat_id,
+                    }
+                },
+            )
+            sync_env_secret("TELEGRAM_BOT_TOKEN", bot_token)
+            env_path = sync_env_values({"TELEGRAM_DEFAULT_CHAT_ID": default_chat_id})
+            return "Telegram", str(env_path)
+        _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
+
+
 def _configure_splunk() -> tuple[str, str]:
     _, credentials = _integration_defaults("splunk")
     while True:
@@ -1812,6 +1854,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
             label="Discord",
             hint="Trigger investigations via slash commands and post findings to threads",
         ),
+        Choice(value="telegram", label="Telegram", hint="Post findings to a Telegram chat"),
         Choice(value="aws", label="AWS", hint="Inspect CloudWatch, EKS, and account resources"),
         Choice(
             value="github", label="GitHub MCP", hint="Let the agent inspect repos, PRs, and issues"
@@ -1895,6 +1938,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "coralogix": _configure_coralogix,
         "slack": _configure_slack,
         "discord": _configure_discord,
+        "telegram": _configure_telegram,
         "aws": _configure_aws,
         "github": _configure_github_mcp,
         "sentry": _configure_sentry,
@@ -1919,6 +1963,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "coralogix": "coralogix",
         "slack": "slack",
         "discord": "discord",
+        "telegram": "telegram",
         "aws": "aws",
         "github": "github mcp",
         "sentry": "sentry",
