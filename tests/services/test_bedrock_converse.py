@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Generator
 from datetime import datetime
 from typing import Any
 
@@ -25,7 +26,7 @@ from app.tools.registry import clear_tool_registry_cache, get_registered_tools
 
 
 @pytest.fixture(autouse=True)
-def _reset_tool_registry() -> None:
+def _reset_tool_registry() -> Generator[None, None, None]:
     clear_tool_registry_cache()
     yield
     clear_tool_registry_cache()

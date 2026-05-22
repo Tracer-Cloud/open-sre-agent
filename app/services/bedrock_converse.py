@@ -14,7 +14,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# JSON Schema keys the Converse tool ``inputSchema.json`` rejects or cannot resolve.
+# Keys that Converse toolSpec.inputSchema.json rejects or cannot resolve.
 _UNSUPPORTED_SCHEMA_KEYS = frozenset(
     {
         "title",
@@ -24,14 +24,11 @@ _UNSUPPORTED_SCHEMA_KEYS = frozenset(
         "$ref",
         "allOf",
         "not",
-        # OpenAPI-style nullable; Converse uses explicit types — type is kept, flag removed.
-        "nullable",
+        "nullable",  # OpenAPI nullable — Converse uses explicit types; anyOf/oneOf are flattened instead
     }
 )
-# ``anyOf`` / ``oneOf`` are resolved in :func:`_flatten_composite_keywords`, not stripped.
 
-# Default element type when a tool exposes ``type: array`` without ``items`` (common for
-# inferred list params in :mod:`app.tools.registered_tool`).
+# Injected when a tool exposes ``type: array`` without ``items``.
 _DEFAULT_ARRAY_ITEMS: dict[str, str] = {"type": "string"}
 
 
@@ -199,7 +196,7 @@ def apply_guardrails_to_converse_payload(
                 blocks.append(block)
         guarded_messages.append({"role": role, "content": blocks})
 
-    guarded_system = engine.apply(system) if system else None
+    guarded_system = engine.apply(system) if system is not None else None
     return guarded_messages, guarded_system
 
 
@@ -319,5 +316,4 @@ def is_non_retryable_bedrock_code(code: str) -> bool:
         "ResourceNotFoundException",
         "AccessDeniedException",
         "UnauthorizedException",
-        "ThrottlingException",
     )

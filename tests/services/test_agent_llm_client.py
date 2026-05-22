@@ -979,3 +979,73 @@ def test_get_agent_llm_routes_anthropic_bedrock_to_sdk(monkeypatch: pytest.Monke
 
     reset_agent_client()
     assert isinstance(get_agent_llm(), BedrockAgentClient)
+
+
+def test_bedrock_converse_throttling_is_retried(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ThrottlingException must be retried, not hard-failed on first occurrence."""
+    import botocore.exceptions
+
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+    monkeypatch.setattr("time.sleep", lambda _: None)
+
+    throttle_err = botocore.exceptions.ClientError(
+        {"Error": {"Code": "ThrottlingException", "Message": "slow down"}},
+        "Converse",
+    )
+    call_count = 0
+
+    def converse(**_: object) -> dict[str, object]:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise throttle_err
+        return _make_converse_response(text="ok")
+
+    monkeypatch.setitem(
+        sys.modules,
+        "boto3",
+        types.SimpleNamespace(
+            client=lambda *_args, **_kwargs: types.SimpleNamespace(converse=converse)
+        ),
+    )
+
+    from app.services.agent_llm_client import BedrockConverseAgentClient
+
+    result = BedrockConverseAgentClient(model=_MISTRAL_MODEL).invoke(
+        messages=[{"role": "user", "content": [{"text": "hi"}]}]
+    )
+    assert result.content == "ok"
+    assert call_count == 2
+
+
+def test_bedrock_converse_throttling_all_retries_exhausted_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """After all retries are exhausted on ThrottlingException, a clear error is raised."""
+    import botocore.exceptions
+
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+    monkeypatch.setattr("time.sleep", lambda _: None)
+
+    throttle_err = botocore.exceptions.ClientError(
+        {"Error": {"Code": "ThrottlingException", "Message": "slow down"}},
+        "Converse",
+    )
+
+    def always_throttle(**_: object) -> dict[str, object]:
+        raise throttle_err
+
+    monkeypatch.setitem(
+        sys.modules,
+        "boto3",
+        types.SimpleNamespace(
+            client=lambda *_args, **_kwargs: types.SimpleNamespace(converse=always_throttle)
+        ),
+    )
+
+    from app.services.agent_llm_client import BedrockConverseAgentClient
+
+    with pytest.raises(RuntimeError, match="rate limit"):
+        BedrockConverseAgentClient(model=_MISTRAL_MODEL).invoke(
+            messages=[{"role": "user", "content": [{"text": "hi"}]}]
+        )

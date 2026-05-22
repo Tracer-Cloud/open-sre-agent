@@ -334,7 +334,7 @@ class BedrockConverseAgentClient:
                     raise map_bedrock_client_error(self._model, err) from err
                 last_err = err
                 if attempt == _RETRY_MAX_ATTEMPTS - 1:
-                    raise RuntimeError(f"Bedrock API request failed: {err}") from err
+                    raise map_bedrock_client_error(self._model, err) from err
                 time.sleep(backoff)
                 backoff *= 2
             except Exception as err:
@@ -343,8 +343,6 @@ class BedrockConverseAgentClient:
                     raise RuntimeError(f"Bedrock API request failed: {err}") from err
                 time.sleep(backoff)
                 backoff *= 2
-        else:
-            raise RuntimeError("Bedrock invocation failed without a concrete error") from last_err
 
         content, raw_tool_calls, stop_reason, raw_message = parse_converse_output(response)
         tool_calls = [
