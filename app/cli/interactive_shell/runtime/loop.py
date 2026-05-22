@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import errno
 import logging
 import os
 import re
@@ -316,6 +317,12 @@ async def run_interactive(
                         state.cancel_current_dispatch()
                         continue
                     return
+                except OSError as exc:
+                    if exc.errno == errno.EIO:
+                        if state.is_dispatch_running():
+                            state.cancel_current_dispatch()
+                        return
+                    raise
                 except KeyboardInterrupt:
                     if state.is_dispatch_running():
                         state.cancel_current_dispatch()

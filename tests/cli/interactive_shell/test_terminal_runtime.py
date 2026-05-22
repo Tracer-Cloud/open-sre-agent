@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import errno
 import io
 import re
 import threading
@@ -69,6 +71,40 @@ def test_strip_cpr_sequences_removes_terminal_cursor_replies(
     expected: str,
 ) -> None:
     assert loop_module._strip_cpr_sequences(text) == expected
+
+
+@pytest.mark.asyncio
+async def test_run_interactive_exits_cleanly_on_prompt_eio(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A closed stdin/TTY should exit the REPL like EOF, not leak an OSError traceback."""
+
+    class _FakeApp:
+        is_running = False
+
+        def invalidate(self) -> None:
+            return None
+
+        def exit(self) -> None:
+            return None
+
+    class _PromptSession:
+        app = _FakeApp()
+        history = InMemoryHistory()
+
+        async def prompt_async(self, *_args: object, **_kwargs: object) -> str:
+            raise OSError(errno.EIO, "Input/output error")
+
+    async def _sleep_forever() -> None:
+        await asyncio.Event().wait()
+
+    def _patch_stdout(*_args: object, **_kwargs: object) -> contextlib.AbstractContextManager[None]:
+        return contextlib.nullcontext()
+
+    monkeypatch.setattr(loop_module, "install_session_key_bindings", lambda *_args: None)
+    monkeypatch.setattr(loop_module, "patch_stdout", _patch_stdout)
+    monkeypatch.setattr(loop_module, "_drain_stale_cpr_bytes", lambda: None)
+    monkeypatch.setattr(loop_module, "start_sampler", lambda: asyncio.create_task(_sleep_forever()))
+
+    await loop_module.run_interactive(ReplSession(), pt_session=_PromptSession())  # type: ignore[arg-type]
 
 
 def test_repl_input_lexer_highlights_first_slash_token() -> None:
