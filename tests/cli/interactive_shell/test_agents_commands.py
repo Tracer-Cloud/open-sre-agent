@@ -181,6 +181,21 @@ class TestAgentsDispatch:
         assert "bus" in out
         assert "trace" in out
 
+    def test_bus_unavailable_prints_friendly_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def _raise_unavailable() -> None:
+            raise agents_mod.AgentBusUnavailableError("socket.AF_UNIX is unavailable")
+
+        monkeypatch.setattr(agents_mod, "subscribe", _raise_unavailable)
+
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents bus", session, console) is True
+
+        out = buf.getvalue()
+        assert "agent bus unavailable" in out.lower()
+        assert "socket.AF_UNIX" in out
+        assert session.history[-1]["ok"] is False
+
     def test_dollar_hr_cell_does_not_read_budget_from_agents_yaml(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

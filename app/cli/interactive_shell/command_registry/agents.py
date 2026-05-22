@@ -23,7 +23,7 @@ from rich.markup import escape
 from rich.text import Text
 from rich.tree import Tree
 
-from app.agents.bus import BusMessage, subscribe
+from app.agents.bus import AgentBusUnavailableError, BusMessage, subscribe
 from app.agents.config import (
     agents_config_path,
     load_agents_config,
@@ -152,7 +152,7 @@ def _format_bus_message(msg: BusMessage) -> str:
     return " ".join(parts)
 
 
-def _cmd_agents_bus(console: Console) -> bool:
+def _cmd_agents_bus(session: ReplSession, console: Console) -> bool:
     """Live-tail the cross-agent context bus until ``Ctrl-C`` or broker exit.
 
     Self-elects a broker if none is running, then streams each ``BusMessage``
@@ -169,9 +169,14 @@ def _cmd_agents_bus(console: Console) -> bool:
     except KeyboardInterrupt:
         console.print(f"[{DIM}](detached)[/]")
         return True
+    except AgentBusUnavailableError as exc:
+        console.print(f"[{ERROR}]agent bus unavailable:[/] {escape(str(exc))}")
+        session.mark_latest(ok=False, kind="slash")
+        return True
     except OSError as exc:
         console.print(f"[{ERROR}]bus error:[/] {escape(str(exc))}")
-        return False
+        session.mark_latest(ok=False, kind="slash")
+        return True
     # ``subscribe()`` returned cleanly — the broker closed our connection
     # (e.g. it stopped, or its host process exited). Surface that explicitly
     # so the user isn't left wondering why the prompt came back.
@@ -657,7 +662,7 @@ def _cmd_agents(session: ReplSession, console: Console, args: list[str]) -> bool
     if sub == "budget":
         return _cmd_agents_budget(session, console, args[1:])
     if sub == "bus":
-        return _cmd_agents_bus(console)
+        return _cmd_agents_bus(session, console)
     if sub == "conflicts":
         return _cmd_agents_conflicts(console)
 

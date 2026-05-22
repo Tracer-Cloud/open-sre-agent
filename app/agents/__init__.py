@@ -11,7 +11,7 @@ discovery — without it the ``app.agents.*`` subpackages would be
 silently omitted from the built wheel.
 """
 
-from app.agents.bus import BusMessage, publish, subscribe
+from app.agents.bus import AgentBusUnavailableError, BusMessage, publish, subscribe
 from app.agents.coordination import BranchClaim, BranchClaims
 from app.agents.discovery import ProcessRow, discover_agents, registered_and_discovered_agents
 from app.agents.lifecycle import TerminateResult, terminate
@@ -20,6 +20,7 @@ from app.agents.registry import AgentRecord, AgentRegistry
 
 __all__ = [
     "AgentRecord",
+    "AgentBusUnavailableError",
     "AgentRegistry",
     "BranchClaim",
     "BranchClaims",

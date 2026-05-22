@@ -28,6 +28,7 @@ from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
 from app.constants import OPENSRE_HOME_DIR
 
@@ -58,6 +59,25 @@ _MAX_FRAME_BYTES: int = 64 * 1024
 #: unresponsive and evicted, so one wedged client cannot stall fan-out for
 #: every other publisher's reader thread.
 _BROADCAST_WRITE_TIMEOUT_SECONDS: float = 0.2
+
+
+class AgentBusUnavailableError(OSError):
+    """Raised when this Python/platform cannot open the local agent bus."""
+
+
+def agent_bus_supported() -> bool:
+    """Return True when the runtime exposes Unix-domain socket support."""
+    return getattr(socket, "AF_UNIX", None) is not None
+
+
+def _unix_socket_family() -> socket.AddressFamily:
+    family = getattr(socket, "AF_UNIX", None)
+    if family is None:
+        raise AgentBusUnavailableError(
+            "agent bus requires Unix-domain sockets, but this Python build does not expose "
+            "socket.AF_UNIX"
+        )
+    return cast(socket.AddressFamily, family)
 
 
 @dataclass(frozen=True)
@@ -261,7 +281,7 @@ class BusServer:
         if self._running.is_set():
             return
         _ensure_parent_dir(self._path)
-        listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        listener = socket.socket(_unix_socket_family(), socket.SOCK_STREAM)
         try:
             listener.bind(str(self._path))
         except OSError:
@@ -548,7 +568,7 @@ def _ensure_broker(path: Path) -> BusServer | None:
 
 def _connect_client(path: Path, timeout: float) -> socket.socket:
     """Open a blocking UDS connection to the broker at ``path``."""
-    client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    client = socket.socket(_unix_socket_family(), socket.SOCK_STREAM)
     client.settimeout(timeout)
     try:
         client.connect(str(path))
@@ -767,10 +787,12 @@ def subscribe(
 
 
 __all__ = [
+    "AgentBusUnavailableError",
     "BUS_SCHEMA_VERSION",
     "BusMessage",
     "BusServer",
     "DEFAULT_BUS_SOCKET_PATH",
+    "agent_bus_supported",
     "publish",
     "subscribe",
 ]

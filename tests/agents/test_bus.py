@@ -19,13 +19,21 @@ _POSIX_FCNTL_AVAILABLE = importlib.util.find_spec("fcntl") is not None
 from app.agents import bus as bus_module
 from app.agents.bus import (
     BUS_SCHEMA_VERSION,
+    AgentBusUnavailableError,
     BusMessage,
     BusServer,
     _pid_file_for,
     _read_broker_pid,
     _socket_is_live,
+    agent_bus_supported,
     publish,
     subscribe,
+)
+
+_BUS_SOCKET_AVAILABLE = agent_bus_supported()
+_needs_bus_socket = pytest.mark.skipif(
+    not _BUS_SOCKET_AVAILABLE,
+    reason="agent bus requires socket.AF_UNIX",
 )
 
 
@@ -147,6 +155,27 @@ class TestBusMessage:
         assert msg.data["k"] == 1
 
 
+class TestBusPlatformSupport:
+    def test_agent_bus_supported_reflects_socket_af_unix(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delattr(socket, "AF_UNIX", raising=False)
+        assert not bus_module.agent_bus_supported()
+
+    def test_start_reports_unavailable_when_af_unix_missing(
+        self, sock_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delattr(socket, "AF_UNIX", raising=False)
+        server = BusServer(sock_path)
+
+        with pytest.raises(AgentBusUnavailableError, match="socket.AF_UNIX"):
+            server.start()
+
+        assert not server.is_running
+        assert not sock_path.exists()
+
+
+@_needs_bus_socket
 class TestBusServerLifecycle:
     def test_start_binds_socket_and_stop_unlinks(self, sock_path: Path) -> None:
         server = BusServer(sock_path)
@@ -223,6 +252,7 @@ class TestBusServerLifecycle:
             bus_module._ensure_broker(sock_path)
 
 
+@_needs_bus_socket
 class TestLivenessProbe:
     def test_socket_is_live_does_not_create_phantom_subscriber(self, sock_path: Path) -> None:
         # _socket_is_live used to make a real connection on every probe; under
@@ -252,6 +282,7 @@ class TestLivenessProbe:
         assert not _socket_is_live(sock_path)
 
 
+@_needs_bus_socket
 class TestPublisherCache:
     def test_burst_of_publishes_reuses_one_connection(self, sock_path: Path) -> None:
         # Each publish() previously opened a fresh UDS connection, which the
@@ -413,6 +444,7 @@ class TestPublisherCache:
         assert len(seen) == total, f"frame loss or corruption: got {len(seen)} unique of {total}"
 
 
+@_needs_bus_socket
 class TestPublishSubscribe:
     def test_round_trip_one_publisher_one_subscriber(self, sock_path: Path) -> None:
         received: queue.Queue[BusMessage] = queue.Queue()
@@ -677,6 +709,7 @@ class TestPublishSubscribe:
             server.stop()
 
 
+@_needs_bus_socket
 class TestBrokerElectionRace:
     def test_concurrent_cold_start_election_does_not_orphan_a_broker(self, sock_path: Path) -> None:
         # Cold-start race: two processes both observe ``_socket_is_live``
@@ -827,6 +860,7 @@ class TestBrokerElectionRace:
             child.wait(timeout=5.0)
 
 
+@_needs_bus_socket
 class TestBrokerSelfElection:
     def test_stale_socket_file_is_unlinked_and_rebound(self, sock_path: Path) -> None:
         sock_path.parent.mkdir(parents=True, exist_ok=True)
