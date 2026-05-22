@@ -52,6 +52,51 @@ def test_scenario_evidence_matches_available_evidence() -> None:
         )
 
 
+def test_topology_string_target_group_arn_normalizes_to_list() -> None:
+    fixture = load_scenario(SUITE_DIR / "015-mysql-ec2-load-attribution")
+
+    topology = fixture.metadata.topology or {}
+
+    assert topology["target_group_arn"] == (
+        "arn:aws:elasticloadbalancing:us-east-1:111122223333:targetgroup/orders-web-tg/def456"
+    )
+    assert topology["target_group_arns"] == [topology["target_group_arn"]]
+
+
+def test_topology_list_target_group_arn_normalizes_to_list() -> None:
+    real_dir = SUITE_DIR / "999-test-list-target-groups"
+    real_dir.mkdir(exist_ok=True)
+    try:
+        (real_dir / "scenario.yml").write_text(
+            textwrap.dedent("""\
+            base: 000-healthy
+            scenario_id: 999-test-list-target-groups
+            failure_mode: healthy
+            severity: info
+            topology:
+              target_group_arn:
+                - arn:aws:elasticloadbalancing:us-east-1:111122223333:targetgroup/acme/aaa111
+                - arn:aws:elasticloadbalancing:us-east-1:111122223333:targetgroup/bravo/bbb222
+                - arn:aws:elasticloadbalancing:us-east-1:111122223333:targetgroup/charlie/ccc333
+        """)
+        )
+        _write_minimal_answer_yml(real_dir)
+
+        fixture = load_scenario(real_dir)
+        topology = fixture.metadata.topology or {}
+
+        assert topology["target_group_arns"] == topology["target_group_arn"]
+        assert topology["target_group_arns"] == [
+            "arn:aws:elasticloadbalancing:us-east-1:111122223333:targetgroup/acme/aaa111",
+            "arn:aws:elasticloadbalancing:us-east-1:111122223333:targetgroup/bravo/bbb222",
+            "arn:aws:elasticloadbalancing:us-east-1:111122223333:targetgroup/charlie/ccc333",
+        ]
+    finally:
+        for f in real_dir.iterdir():
+            f.unlink()
+        real_dir.rmdir()
+
+
 def test_score_result_does_not_apply_failover_wording_to_storage_scenario() -> None:
     fixture = load_scenario(SUITE_DIR / "008-storage-full-missing-metric")
 

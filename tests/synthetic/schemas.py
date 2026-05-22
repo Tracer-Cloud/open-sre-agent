@@ -256,7 +256,8 @@ class TopologyMetadata(TypedDict, total=False):
 
     vpc_id: str
     load_balancer_arn: str
-    target_group_arn: str
+    target_group_arn: str | list[str]
+    target_group_arns: list[str]
     tiers: list[TopologyTier]
 
 
@@ -620,6 +621,8 @@ def validate_scenario_metadata(data: dict[str, Any]) -> ScenarioMetadataSchema:
             f"{ctx}: unknown evidence source(s) {unknown}; expected subset of {sorted(VALID_EVIDENCE_SOURCES)}"
         )
 
+    _normalize_topology_target_groups(data, ctx)
+
     return data  # type: ignore[return-value]
 
 
@@ -654,3 +657,30 @@ def _require_non_empty_str_list(
 
     if not all(isinstance(item, str) and item.strip() for item in value):
         raise ValueError(f"{ctx}: all '{key}' entries must be non-empty strings")
+
+
+def _normalize_topology_target_groups(data: dict[str, Any], ctx: str) -> None:
+    topology = data.get("topology")
+    if topology is None:
+        return
+    if not isinstance(topology, dict):
+        raise ValueError(f"{ctx}: 'topology' must be an object when present")
+
+    raw_arn = topology.get("target_group_arn")
+    if raw_arn is None:
+        topology["target_group_arns"] = []
+        return
+    if isinstance(raw_arn, str):
+        topology["target_group_arns"] = [raw_arn]
+        return
+    if isinstance(raw_arn, list):
+        if not all(isinstance(item, str) for item in raw_arn):
+            raise ValueError(
+                f"{ctx}: 'topology.target_group_arn' must contain only strings when it is a list"
+            )
+        topology["target_group_arns"] = list(raw_arn)
+        return
+
+    raise ValueError(
+        f"{ctx}: 'topology.target_group_arn' must be a string or list of strings when present"
+    )

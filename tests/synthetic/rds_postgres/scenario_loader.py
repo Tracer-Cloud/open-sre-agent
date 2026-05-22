@@ -41,6 +41,7 @@ class ScenarioMetadata:
     scenario_difficulty: int = 1
     adversarial_signals: list[str] = ()  # type: ignore[assignment]
     depends_on: str = ""
+    topology: dict[str, Any] | None = None
 
 
 TrajectoryMatching = Literal["strict", "lcs", "set"]
@@ -239,6 +240,7 @@ def _validated_metadata(raw: dict[str, Any]) -> ScenarioMetadata:
         scenario_difficulty=validated.get("scenario_difficulty", 1),  # type: ignore[arg-type]
         adversarial_signals=list(validated.get("adversarial_signals") or []),
         depends_on=validated.get("depends_on", ""),  # type: ignore[arg-type]
+        topology=dict(validated["topology"]) if "topology" in validated else None,
     )
 
 
