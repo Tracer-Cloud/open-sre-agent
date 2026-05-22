@@ -230,6 +230,13 @@ class DatadogClient:
                 "success": False,
                 "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
+        except httpx.TransportError as exc:
+            logger.warning(
+                "[datadog] list_monitors transport error type=%s detail=%s",
+                type(exc).__name__,
+                exc,
+            )
+            return {"success": False, "error": str(exc)}
         except Exception as exc:
             capture_service_error(
                 exc,

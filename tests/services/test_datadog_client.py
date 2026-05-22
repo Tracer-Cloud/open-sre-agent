@@ -170,6 +170,20 @@ def test_list_monitors_http_error(client, mock_httpx_client):
     assert "HTTP 403" in result["error"]
 
 
+def test_list_monitors_transport_error_is_not_reported(client, mock_httpx_client):
+    mock_instance = MagicMock()
+    mock_httpx_client.return_value = mock_instance
+    mock_instance.get.side_effect = httpx.ConnectError("dns failed")
+
+    with patch("app.services.datadog.client.capture_service_error") as capture:
+        result = client.list_monitors()
+
+    mock_instance.get.assert_called_once()
+    capture.assert_not_called()
+    assert result["success"] is False
+    assert result["error"] == "dns failed"
+
+
 def test_list_monitors_generic_exception(client, mock_httpx_client):
     mock_instance = MagicMock()
     mock_httpx_client.return_value = mock_instance
