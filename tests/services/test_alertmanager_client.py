@@ -6,14 +6,14 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from pydantic import BaseModel, ValidationError
 
 from app.integrations.config_models import AlertmanagerIntegrationConfig
+from app.services._base import ServiceClientUnavailable
 from app.services.alertmanager.client import (
     AlertmanagerClient,
     make_alertmanager_client,
 )
-from app.services._base import ServiceClientUnavailable
-from pydantic import BaseModel, ValidationError
 
 AlertmanagerConfig = AlertmanagerIntegrationConfig
 

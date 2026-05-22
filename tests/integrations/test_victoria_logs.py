@@ -18,14 +18,14 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
+from pydantic import BaseModel, ValidationError
 
 from app.integrations._catalog_impl import _classify_service_instance
 from app.integrations._verification_adapters import _verify_victoria_logs
 from app.integrations.catalog import load_env_integrations
 from app.integrations.config_models import VictoriaLogsIntegrationConfig
-from app.services.victoria_logs.client import make_victoria_logs_client
 from app.services._base import ServiceClientUnavailable
-from pydantic import BaseModel, ValidationError
+from app.services.victoria_logs.client import make_victoria_logs_client
 
 
 class TestVictoriaLogsIntegrationConfig:

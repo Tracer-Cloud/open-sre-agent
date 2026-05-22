@@ -5,7 +5,9 @@ from typing import Any
 
 import httpx
 import pytest
+from pydantic import BaseModel, ValidationError
 
+from app.services._base import ServiceClientUnavailable
 from app.services.vercel.client import (
     _MAX_VERCEL_PATH_SEGMENT_LEN,
     VercelClient,
@@ -15,8 +17,6 @@ from app.services.vercel.client import (
     _safe_vercel_path_segment,
     make_vercel_client,
 )
-from app.services._base import ServiceClientUnavailable
-from pydantic import BaseModel, ValidationError
 
 
 class _FakeResponse:
