@@ -679,6 +679,7 @@ _OPENAI_INVALID_MODEL_IDENTIFIER_PHRASES = (
     "model identifier",  # OpenAI / LiteLLM
     "invalid model id",  # OpenAI
     "invalid model name",  # OpenRouter
+    "supported api model names",  # OpenAI-compatible providers with allowlists
 )
 
 

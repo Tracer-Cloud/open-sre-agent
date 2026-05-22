@@ -864,6 +864,37 @@ def test_openai_invoke_stream_invalid_model_identifier_raises_not_found(monkeypa
         list(client.invoke_stream("hello"))
 
 
+def test_openai_invoke_stream_provider_model_allowlist_raises_not_found(
+    monkeypatch,
+) -> None:
+    class _Completions:
+        def create(self, **_kwargs):
+            raise _make_fake_openai_bad_request_error(
+                "Error code: 400 - {'error': {'message': "
+                "'The supported API model names are deepseek-v4-pro or deepseek-v4-flash, "
+                "but you passed gpt-5.4.'}}"
+            )
+
+    class _Chat:
+        def __init__(self) -> None:
+            self.completions = _Completions()
+
+    class _OpenAI:
+        def __init__(self, **_kwargs) -> None:
+            self.chat = _Chat()
+
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr(llm_client, "OpenAI", _OpenAI)
+
+    client = llm_client.OpenAILLMClient(model="gpt-5.4", api_key_env="DEEPSEEK_API_KEY")
+    with pytest.raises(RuntimeError) as excinfo:
+        list(client.invoke_stream("hello"))
+
+    rendered = str(excinfo.value)
+    assert "Deepseek model 'gpt-5.4' was not found" in rendered
+    assert "request rejected" not in rendered
+
+
 def test_openai_invoke_invalid_reasoning_model_falls_back_to_toolcall(monkeypatch) -> None:
     calls: list[str] = []
 
