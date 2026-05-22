@@ -109,6 +109,47 @@ def test_run_happy_path_queries_client_and_summarizes_series() -> None:
     assert mock_client.query_metrics.call_args.args == ("avg:system.cpu.user{*}",)
 
 
+def test_run_adds_wildcard_scope_to_aggregation_prefixed_metric() -> None:
+    mock_client = MagicMock()
+    mock_client.query_metrics.return_value = {"success": True, "series": [], "total_series": 0}
+
+    with patch("app.tools.DataDogMetricsTool.make_client", return_value=mock_client):
+        result = query_datadog_metrics(
+            metric_name="avg:system.cpu.user",
+            api_key="key",
+            app_key="app",
+        )
+
+    assert result["available"] is True
+    assert result["query"] == "avg:system.cpu.user{*}"
+    assert mock_client.query_metrics.call_args.args == ("avg:system.cpu.user{*}",)
+
+
+def test_run_summary_includes_null_delta_pct_when_first_value_is_zero() -> None:
+    mock_client = MagicMock()
+    mock_client.query_metrics.return_value = {
+        "success": True,
+        "total_series": 1,
+        "series": [
+            {
+                "metric": "custom.zero_start",
+                "point_count": 2,
+                "values": [0.0, 5.0],
+            }
+        ],
+    }
+
+    with patch("app.tools.DataDogMetricsTool.make_client", return_value=mock_client):
+        result = query_datadog_metrics(
+            metric_name="custom.zero_start",
+            api_key="key",
+            app_key="app",
+        )
+
+    assert result["available"] is True
+    assert result["metrics"][0]["summary"]["delta_pct"] is None
+
+
 def test_run_preserves_full_query_override() -> None:
     mock_client = MagicMock()
     mock_client.query_metrics.return_value = {"success": True, "series": [], "total_series": 0}

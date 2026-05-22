@@ -70,7 +70,9 @@ def _datadog_metric_query(metric_name: str, query: str | None) -> str:
     if not metric:
         return ""
     if metric.startswith(_AGGREGATION_PREFIXES):
-        return metric
+        if "{" in metric and "}" in metric:
+            return metric
+        return f"{metric}{{*}}"
     if "{" in metric and "}" in metric:
         return f"avg:{metric}"
     return f"avg:{metric}{{*}}"
@@ -108,6 +110,8 @@ def _summarize_values(values: Sequence[float]) -> dict[str, Any]:
     }
     if first != 0:
         summary["delta_pct"] = _round_metric_value(((latest - first) / abs(first)) * 100)
+    else:
+        summary["delta_pct"] = None
     return summary
 
 
