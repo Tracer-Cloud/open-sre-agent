@@ -101,6 +101,28 @@ def test_sanitize_strips_nullable_keeps_type() -> None:
     assert cleaned == {"type": "string"}
 
 
+def test_sanitize_strips_additional_properties_false() -> None:
+    cleaned = sanitize_converse_schema(
+        {"type": "object", "properties": {"x": {"type": "string"}}, "additionalProperties": False}
+    )
+    assert "additionalProperties" not in cleaned
+    assert cleaned["type"] == "object"
+
+
+def test_sanitize_strips_additional_properties_schema() -> None:
+    cleaned = sanitize_converse_schema(
+        {"type": "object", "properties": {}, "additionalProperties": {"type": "string"}}
+    )
+    assert "additionalProperties" not in cleaned
+
+
+def test_sanitize_strips_invalid_additional_properties_string() -> None:
+    cleaned = sanitize_converse_schema(
+        {"type": "object", "properties": {}, "additionalProperties": "string"}
+    )
+    assert "additionalProperties" not in cleaned
+
+
 def test_sanitize_strips_unsupported_keys() -> None:
     schema = {
         "title": "Root",

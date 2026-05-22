@@ -24,6 +24,10 @@ _UNSUPPORTED_SCHEMA_KEYS = frozenset(
         "$ref",
         "not",
         "nullable",  # OpenAPI nullable — Converse uses explicit types; anyOf/oneOf are flattened instead
+        # Non-Anthropic Bedrock models (Mistral, Llama, etc.) reject additionalProperties even
+        # when it carries a valid boolean value such as false.  Tool calling never relies on this
+        # constraint, so stripping it is safe and avoids HTTP 400 ValidationException errors.
+        "additionalProperties",
     }
 )
 
