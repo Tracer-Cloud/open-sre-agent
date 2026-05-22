@@ -818,9 +818,11 @@ class Analytics:
             _log_failure("posthog_send", exc, event=item.event)
         except httpx.HTTPStatusError as exc:
             _log_failure("posthog_send", exc, event=item.event)
-            # 4xx errors (e.g. 403 Forbidden) are operational/config issues on
-            # the PostHog side; only report 5xx server errors to Sentry.
-            if exc.response.status_code >= 500:
+            # 502/503/504 are transient gateway/overload errors — log only.
+            # Other 5xx (500, 501, …) indicate a real server-side problem.
+            _TRANSIENT_5XX = {502, 503, 504}
+            status = exc.response.status_code
+            if status >= 500 and status not in _TRANSIENT_5XX:
                 _capture_sentry_failure(exc)
         except Exception as exc:
             _log_failure("posthog_send", exc, event=item.event)
