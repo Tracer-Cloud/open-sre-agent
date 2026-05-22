@@ -31,6 +31,13 @@ execute_cli_actions_with_metrics = _agent_actions.execute_cli_actions_with_metri
 dispatch_slash = _commands.dispatch_slash
 
 
+def _suppress_prompt_spinner_for_progress(console: Console) -> None:
+    """Hide the REPL assistant spinner before a nested progress renderer starts."""
+    suppress = getattr(console, "suppress_prompt_spinner", None)
+    if callable(suppress):
+        suppress()
+
+
 def _build_cli_agent_empty_response_fallback(text: str, session: ReplSession) -> str:
     """Deterministic reply when the CLI-agent LLM returns an empty response."""
     condensed = " ".join(text.strip().split())
@@ -90,6 +97,7 @@ def run_new_alert(
             ),
             apply_reasoning_effort(session.reasoning_effort),
         ):
+            _suppress_prompt_spinner_for_progress(console)
             final_state = run_investigation_for_session(
                 alert_text=text,
                 context_overrides=session.accumulated_context or None,

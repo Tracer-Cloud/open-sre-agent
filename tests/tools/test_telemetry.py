@@ -952,6 +952,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "search_bitbucket_code",
         "search_github_code",
         "search_sentry_issues",
+        "twilio_notify",
         "vercel_deployment_logs",
         "vercel_deployment_status",
         "victoria_logs_query",

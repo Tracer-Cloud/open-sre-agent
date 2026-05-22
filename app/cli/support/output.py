@@ -16,7 +16,7 @@ import re
 import sys
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -205,6 +205,58 @@ def _elapsed_hms(seconds: float) -> str:
 
 _live_console: Console | None = None
 _active_display: _EventLogDisplay | None = None  # forward-declared below
+_stdin_watcher_suppression_depth = 0
+_stdin_watcher_lock = threading.Lock()
+_tool_detail_toggle_callbacks: list[Callable[[], None]] = []
+
+
+@contextlib.contextmanager
+def suppress_stdin_watchers() -> Iterator[None]:
+    """Temporarily prevent raw stdin watcher threads from starting.
+
+    The interactive REPL already has prompt-toolkit reading stdin. Starting a
+    second raw-mode reader while prompt-toolkit is active can split terminal
+    cursor-position replies, leaking fragments like ``[50;57R`` into the input
+    buffer. The REPL uses this guard while dispatching work and handles Ctrl+O
+    through its prompt key bindings instead.
+    """
+    global _stdin_watcher_suppression_depth
+    with _stdin_watcher_lock:
+        _stdin_watcher_suppression_depth += 1
+    try:
+        yield
+    finally:
+        with _stdin_watcher_lock:
+            _stdin_watcher_suppression_depth = max(0, _stdin_watcher_suppression_depth - 1)
+
+
+def _stdin_watchers_suppressed() -> bool:
+    with _stdin_watcher_lock:
+        return _stdin_watcher_suppression_depth > 0
+
+
+def register_tool_detail_toggle(callback: Callable[[], None]) -> Callable[[], None]:
+    """Register a process-local Ctrl+O handler for the active progress view."""
+    with _stdin_watcher_lock:
+        _tool_detail_toggle_callbacks.append(callback)
+
+    def _unregister() -> None:
+        with _stdin_watcher_lock, contextlib.suppress(ValueError):
+            _tool_detail_toggle_callbacks.remove(callback)
+
+    return _unregister
+
+
+def toggle_active_tool_details() -> bool:
+    """Toggle the newest registered tool-detail view, if one exists."""
+    with _stdin_watcher_lock:
+        callback = _tool_detail_toggle_callbacks[-1] if _tool_detail_toggle_callbacks else None
+    if callback is None:
+        return False
+    with contextlib.suppress(Exception):
+        callback()
+        return True
+    return False
 
 
 def _get_console() -> Console:
@@ -353,6 +405,8 @@ class CtrlOToggleWatcher:
         self._old_attrs: Any = None
 
     def start(self) -> None:
+        if _stdin_watchers_suppressed():
+            return
         if select is None or termios is None:
             return
         if not sys.stdin.isatty() or not sys.stdout.isatty():
@@ -847,8 +901,10 @@ class ProgressTracker:
         self._tool_summary_counts: dict[str, dict[str, int]] = {}
         self._tool_summary_order: list[tuple[str, str]] = []
         self._toggle_watcher: CtrlOToggleWatcher | None = None
+        self._toggle_unregister: Callable[[], None] | None = None
         if self._rich and not self._silent:
             self._display = _make_event_log_display(t0=self._t0)
+            self._toggle_unregister = register_tool_detail_toggle(self.toggle_tool_details)
             if not self._repl_append_only:
                 self._toggle_watcher = CtrlOToggleWatcher(self.toggle_tool_details)
                 self._toggle_watcher.start()
@@ -869,6 +925,9 @@ class ProgressTracker:
         if self._toggle_watcher is not None:
             self._toggle_watcher.stop()
             self._toggle_watcher = None
+        if self._toggle_unregister is not None:
+            self._toggle_unregister()
+            self._toggle_unregister = None
 
     def start(self, node_name: str, message: str | None = None) -> None:
         self._start_times[node_name] = time.monotonic()
@@ -1195,6 +1254,7 @@ def set_silent_tracker() -> None:
     _tracker._tool_summary_counts = {}
     _tracker._tool_summary_order = []
     _tracker._toggle_watcher = None
+    _tracker._toggle_unregister = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────

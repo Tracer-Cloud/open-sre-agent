@@ -120,7 +120,7 @@ def render_report(slack_message: str, root_cause_category: str | None = None) ->
 
     if not slack_message:
         if fmt == "rich":
-            Console().print(
+            Console(highlight=False, force_terminal=True).print(
                 Text.assemble(("  ● ", f"bold {WARNING}"), ("No report generated.", DIM))
             )
         else:
@@ -135,7 +135,7 @@ def render_report(slack_message: str, root_cause_category: str | None = None) ->
 
 def _render_rich_report(slack_message: str, root_cause_category: str | None = None) -> None:
     _ = root_cause_category
-    console = Console()
+    console = Console(highlight=False, force_terminal=True, color_system="truecolor")
     console.print()
 
     lines = slack_message.splitlines()

@@ -9,6 +9,7 @@ import re
 import select
 import sys
 import threading
+from collections.abc import Callable
 from typing import Any
 
 from prompt_toolkit import PromptSession
@@ -95,10 +96,18 @@ def _contains_cpr_sequence(text: str | None) -> bool:
 class StreamingConsole(Console):
     """Console adapter for streaming progress + cancellation checks."""
 
-    def __init__(self, spinner: SpinnerState, cancel_event: threading.Event, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        spinner: SpinnerState,
+        cancel_event: threading.Event,
+        *,
+        prompt_invalidator: Callable[[], None] | None = None,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(**kwargs)
         self._spinner = spinner
         self._cancel_event = cancel_event
+        self._prompt_invalidator = prompt_invalidator
 
     def update_streaming_progress(self, bytes_received: int) -> None:
         self._spinner.bytes_in = bytes_received
@@ -106,6 +115,14 @@ class StreamingConsole(Console):
     @property
     def cancel_requested(self) -> bool:
         return self._cancel_event.is_set()
+
+    def suppress_prompt_spinner(self) -> None:
+        """Stop the REPL spinner before another live renderer owns the footer."""
+        if not self._spinner.streaming:
+            return
+        self._spinner.stop()
+        if self._prompt_invalidator is not None:
+            self._prompt_invalidator()
 
     def print(self, *args: Any, **kwargs: Any) -> None:
         """Reset the TTY column before each print when not streaming.
@@ -155,6 +172,9 @@ async def run_interactive(
     main_loop = asyncio.get_running_loop()
     state.bind_loop(main_loop)
 
+    def _invalidate_prompt() -> None:
+        main_loop.call_soon_threadsafe(pt_app.invalidate)
+
     def _request_exit() -> None:
         state.request_exit()
 
@@ -177,6 +197,7 @@ async def run_interactive(
         console = StreamingConsole(
             spinner,
             dispatch_cancel,
+            prompt_invalidator=_invalidate_prompt,
             highlight=False,
             force_terminal=True,
             color_system="truecolor",

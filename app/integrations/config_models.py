@@ -714,7 +714,12 @@ class TelegramBotConfig(StrictConfigModel):
 
 
 class WhatsAppConfig(StrictConfigModel):
-    """Twilio WhatsApp runtime config."""
+    """Twilio WhatsApp runtime config.
+
+    WhatsApp delivery is owned entirely by the standalone ``whatsapp``
+    integration. The unified :class:`TwilioIntegrationConfig` adds SMS as a
+    separate channel and intentionally does NOT duplicate WhatsApp.
+    """
 
     account_sid: str
     auth_token: str
@@ -748,6 +753,72 @@ class WhatsAppConfig(StrictConfigModel):
         if not stripped:
             raise ValueError("from_number cannot be empty or just whitespace")
         return stripped
+
+
+class TwilioSMSChannelConfig(StrictConfigModel):
+    """SMS channel sub-config inside a unified Twilio integration.
+
+    Either ``from_number`` (a Twilio-provisioned phone number) OR
+    ``messaging_service_sid`` (a Twilio Messaging Service) must be set
+    for the channel to be considered configured.
+    """
+
+    enabled: bool = False
+    from_number: str = ""
+    default_to: str | None = None
+    messaging_service_sid: str = ""
+
+    _normalize_strs = field_validator("from_number", "messaging_service_sid", mode="before")(
+        normalize_str()
+    )
+    _normalize_enabled = field_validator("enabled", mode="before")(normalize_bool_str())
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.enabled and (self.from_number or self.messaging_service_sid))
+
+
+class TwilioIntegrationConfig(StrictConfigModel):
+    """Unified Twilio runtime config.
+
+    Adds SMS as a Twilio-backed outbound channel. WhatsApp is owned by the
+    standalone ``whatsapp`` integration and is intentionally not duplicated
+    here. Both can share the same Twilio account credentials.
+    """
+
+    account_sid: str
+    auth_token: str
+    sms: TwilioSMSChannelConfig = Field(default_factory=TwilioSMSChannelConfig)
+    integration_id: str = ""
+
+    @field_validator("account_sid", mode="before")
+    @classmethod
+    def _validate_account_sid(cls, value: object) -> str:
+        stripped = str(value or "").strip()
+        if not stripped:
+            raise ValueError("account_sid cannot be empty or just whitespace")
+        return stripped
+
+    @field_validator("auth_token", mode="before")
+    @classmethod
+    def _validate_auth_token(cls, value: object) -> str:
+        stripped = str(value or "").strip()
+        if not stripped:
+            raise ValueError("auth_token cannot be empty or just whitespace")
+        return stripped
+
+    @model_validator(mode="after")
+    def _require_sms_channel(self) -> TwilioIntegrationConfig:
+        if not self.sms.is_configured:
+            raise ValueError(
+                "Twilio integration requires the SMS channel configured "
+                "(enabled=true with a from_number or messaging_service_sid)."
+            )
+        return self
+
+    @property
+    def configured_channels(self) -> list[str]:
+        return ["sms"] if self.sms.is_configured else []
 
 
 class SlackBotConfig(StrictConfigModel):

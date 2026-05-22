@@ -13,21 +13,15 @@ from app.cli.investigation.payload import (
     resolve_alert_path,
 )
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
 
-
-def test_repo_root_demo_alert_exists() -> None:
-    path = REPO_ROOT / "alert.json"
+def test_bundled_demo_alert_fixture_exists() -> None:
+    path = bundled_demo_alert_path()
+    assert path is not None
     assert path.is_file()
+    assert path.parent.name == "fixtures"
     payload = json.loads(path.read_text(encoding="utf-8"))
     assert payload["pipeline_name"] == "payments_etl"
-
-
-def test_bundled_demo_alert_path_points_at_package_fixture() -> None:
-    bundled = bundled_demo_alert_path()
-    assert bundled is not None
-    assert bundled.name == "alert.json"
-    assert bundled.parent.name == "fixtures"
+    assert path.name == "alert.json"
 
 
 def test_resolve_alert_path_uses_bundled_demo_when_cwd_has_no_file(

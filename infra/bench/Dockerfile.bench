@@ -1,7 +1,7 @@
 # Container image for running Cloud-OpsBench on AWS Fargate.
 #
-# Build:
-#   docker build -f Dockerfile.bench -t <ecr-url>:<tag> --platform linux/amd64 .
+# Build (from repo root):
+#   docker build -f infra/bench/Dockerfile.bench -t <ecr-url>:<tag> --platform linux/amd64 .
 #
 # Push:
 #   aws ecr get-login-password --region us-east-1 \

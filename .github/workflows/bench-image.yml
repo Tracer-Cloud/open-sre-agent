@@ -1,6 +1,6 @@
 name: bench (build + push image)
 
-# Builds Dockerfile.bench and pushes the resulting image to ECR. Triggered
+# Builds infra/bench/Dockerfile.bench and pushes the resulting image to ECR. Triggered
 # automatically on changes to the bench code (or the Dockerfile itself) and
 # manually via workflow_dispatch.
 #
@@ -29,7 +29,8 @@ on:
     branches:
       - main
     paths:
-      - "Dockerfile.bench"
+      - "infra/bench/Dockerfile.bench"
+      - "infra/bench/Dockerfile.bench.dockerignore"
       - "pyproject.toml"
       - "uv.lock"
       - "app/**"
@@ -106,7 +107,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile.bench
+          file: infra/bench/Dockerfile.bench
           platforms: linux/amd64
           push: true
           tags: |

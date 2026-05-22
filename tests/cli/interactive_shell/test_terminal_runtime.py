@@ -374,6 +374,41 @@ def test_run_new_alert_tracks_cli_paste_source(monkeypatch: pytest.MonkeyPatch) 
     assert track_calls == [("cli_paste", "paste")]
 
 
+def test_run_new_alert_hides_prompt_spinner_before_progress(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed_streaming: list[bool] = []
+    invalidations: list[None] = []
+
+    def _fake_run(
+        *,
+        alert_text: str,
+        context_overrides: object = None,
+        cancel_requested: object = None,
+    ) -> dict[str, object]:
+        _ = (alert_text, context_overrides, cancel_requested)
+        observed_streaming.append(spinner.streaming)
+        return {"root_cause": "handled"}
+
+    monkeypatch.setattr("app.cli.investigation.run_investigation_for_session", _fake_run)
+
+    spinner = loop_state.SpinnerState()
+    spinner.start()
+    console = loop_module.StreamingConsole(
+        spinner,
+        threading.Event(),
+        prompt_invalidator=lambda: invalidations.append(None),
+        file=io.StringIO(),
+        force_terminal=False,
+        highlight=False,
+    )
+
+    loop_execution.run_new_alert("High CPU alert", ReplSession(), console)
+
+    assert observed_streaming == [False]
+    assert invalidations == [None]
+
+
 def test_run_new_alert_reports_unexpected_error(monkeypatch: pytest.MonkeyPatch) -> None:
     from rich.console import Console
 
@@ -1090,8 +1125,8 @@ class TestReplState:
 
 
 class TestBuildCancelKeyBindings:
-    """``_build_cancel_key_bindings`` returns a ``KeyBindings`` with two
-    handlers — Esc and Ctrl+L. The handlers are extracted out of the
+    """``_build_cancel_key_bindings`` returns prompt-level control
+    handlers. The handlers are extracted out of the
     prompt loop so they can be exercised without the full async
     machinery; this test instantiates the bindings and verifies they
     were registered for the right keys."""

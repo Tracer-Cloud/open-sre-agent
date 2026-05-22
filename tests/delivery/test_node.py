@@ -269,3 +269,109 @@ def test_whatsapp_delivery_uses_twilio_credentials(monkeypatch: pytest.MonkeyPat
             "to": "+1234567890",
         },
     )
+
+
+def test_twilio_sms_dispatched_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_generate_report_deps(monkeypatch)
+
+    mock_send_slack = MagicMock(return_value=(False, None))
+    mock_build_action_blocks = MagicMock(return_value=[])
+    mock_sms = MagicMock(return_value=(True, "", "SM-XYZ"))
+
+    with (
+        patch("app.utils.slack_delivery.send_slack_report", mock_send_slack),
+        patch("app.utils.slack_delivery.build_action_blocks", mock_build_action_blocks),
+        patch("app.utils.twilio_delivery.send_twilio_sms_report", mock_sms),
+    ):
+        from app.delivery.publish_findings.node import generate_report
+
+        generate_report(
+            _make_state(
+                resolved_integrations={
+                    "twilio": {
+                        "account_sid": "AC1",
+                        "auth_token": "tok",
+                        "sms": {
+                            "enabled": True,
+                            "from_number": "+14155551111",
+                            "default_to": "+14155550000",
+                            "messaging_service_sid": "",
+                        },
+                    }
+                }
+            )
+        )  # type: ignore[arg-type]
+
+    mock_sms.assert_called_once_with(
+        "whatsapp report text",
+        {
+            "account_sid": "AC1",
+            "auth_token": "tok",
+            "from_number": "+14155551111",
+            "messaging_service_sid": "",
+            "to": "+14155550000",
+        },
+    )
+
+
+def test_twilio_sms_skipped_when_channel_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_generate_report_deps(monkeypatch)
+
+    mock_send_slack = MagicMock(return_value=(False, None))
+    mock_build_action_blocks = MagicMock(return_value=[])
+    mock_sms = MagicMock(return_value=(True, "", "SM-X"))
+
+    with (
+        patch("app.utils.slack_delivery.send_slack_report", mock_send_slack),
+        patch("app.utils.slack_delivery.build_action_blocks", mock_build_action_blocks),
+        patch("app.utils.twilio_delivery.send_twilio_sms_report", mock_sms),
+    ):
+        from app.delivery.publish_findings.node import generate_report
+
+        generate_report(
+            _make_state(
+                resolved_integrations={
+                    "twilio": {
+                        "account_sid": "AC1",
+                        "auth_token": "tok",
+                        "sms": {"enabled": False, "from_number": "+14155551111"},
+                    }
+                }
+            )
+        )  # type: ignore[arg-type]
+
+    mock_sms.assert_not_called()
+
+
+def test_twilio_sms_skipped_without_recipient(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_generate_report_deps(monkeypatch)
+
+    mock_send_slack = MagicMock(return_value=(False, None))
+    mock_build_action_blocks = MagicMock(return_value=[])
+    mock_sms = MagicMock(return_value=(True, "", "SM-X"))
+
+    with (
+        patch("app.utils.slack_delivery.send_slack_report", mock_send_slack),
+        patch("app.utils.slack_delivery.build_action_blocks", mock_build_action_blocks),
+        patch("app.utils.twilio_delivery.send_twilio_sms_report", mock_sms),
+    ):
+        from app.delivery.publish_findings.node import generate_report
+
+        generate_report(
+            _make_state(
+                resolved_integrations={
+                    "twilio": {
+                        "account_sid": "AC1",
+                        "auth_token": "tok",
+                        "sms": {
+                            "enabled": True,
+                            "from_number": "+14155551111",
+                            "default_to": "",
+                            "messaging_service_sid": "",
+                        },
+                    }
+                }
+            )
+        )  # type: ignore[arg-type]
+
+    mock_sms.assert_not_called()

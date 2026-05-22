@@ -268,6 +268,10 @@ def run_investigation_cli_streaming(
         # runs and the async task is cancelled before we re-raise.
         events.close()
         raise
+
+    from app.cli.support.feedback import prompt_investigation_feedback
+
+    prompt_investigation_feedback(final_state)
     return {
         "report": final_state.get("slack_message", final_state.get("report", "")),
         "problem_md": final_state.get("problem_md", ""),

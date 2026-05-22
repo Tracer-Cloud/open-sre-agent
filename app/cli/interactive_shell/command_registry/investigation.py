@@ -115,6 +115,9 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
             ),
             apply_reasoning_effort(session.reasoning_effort),
         ):
+            suppress = getattr(console, "suppress_prompt_spinner", None)
+            if callable(suppress):
+                suppress()
             final_state = run_investigation_for_session(
                 alert_text=text,
                 context_overrides=session.accumulated_context or None,

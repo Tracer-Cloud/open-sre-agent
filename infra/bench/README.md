@@ -139,7 +139,7 @@ Live logs: `aws logs tail /ecs/opensre-bench --follow` (or via the AWS Console).
 
 ## Building and pushing the bench container image
 
-`Dockerfile.bench` at the repo root builds the bench container.
+`infra/bench/Dockerfile.bench` builds the bench container (context is the repo root).
 
 ```bash
 # From repo root
@@ -154,7 +154,7 @@ aws ecr get-login-password --region us-east-1 \
 # Build (linux/amd64 — Fargate runs amd64 unless you opt into ARM)
 docker buildx build \
   --platform linux/amd64 \
-  -f Dockerfile.bench \
+  -f infra/bench/Dockerfile.bench \
   -t "$ECR_URL:$TAG" \
   --load .
 

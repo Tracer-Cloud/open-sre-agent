@@ -1,4 +1,4 @@
-# Per-Dockerfile dockerignore for Dockerfile.bench (BuildKit feature).
+# Per-Dockerfile dockerignore for infra/bench/Dockerfile.bench (BuildKit feature).
 # Overrides the repo-root .dockerignore, which excludes `tests` entirely
 # (correct for the production Dockerfile, wrong for the bench Dockerfile).
 
@@ -70,4 +70,4 @@ tasks/
 app/memories/
 
 # ---- Self ---- #
-Dockerfile.bench.dockerignore
+infra/bench/Dockerfile.bench.dockerignore
