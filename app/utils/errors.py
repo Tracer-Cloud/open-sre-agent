@@ -40,6 +40,9 @@ def report_exception(
     # Some expected fallback paths (e.g. remote network probe timeouts) should
     # remain visible in logs without dumping a full traceback into the terminal UI.
     log_fn("%s", message, exc_info=exc if include_traceback else False)
+    # Info-severity reports are expected/graceful fallbacks; skip Sentry to avoid noise.
+    if severity == "info":
+        return
     combined: dict[str, Any] = {}
     if tags:
         combined.update({f"tag.{k}": v for k, v in tags.items()})

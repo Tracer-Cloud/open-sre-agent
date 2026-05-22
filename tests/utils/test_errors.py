@@ -45,6 +45,14 @@ class TestReportException:
         mock_log.warning.assert_called_once()
         mock_log.error.assert_not_called()
 
+    def test_info_severity_skips_sentry(self) -> None:
+        mock_log = _mock_logger()
+        exc = OSError("expected fallback")
+        with patch("app.utils.errors.capture_exception") as mock_cap:
+            report_exception(exc, logger=mock_log, message="handled", severity="info")
+        mock_log.info.assert_called_once()
+        mock_cap.assert_not_called()
+
     def test_tags_are_prefixed(self) -> None:
         mock_log = _mock_logger()
         exc = RuntimeError("boom")
