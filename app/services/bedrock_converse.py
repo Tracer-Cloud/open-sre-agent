@@ -215,9 +215,7 @@ def apply_guardrails_to_converse_payload(
         role = message["role"]
         content = message.get("content", "")
         if isinstance(content, str):
-            guarded_messages.append(
-                {"role": role, "content": [{"text": engine.apply(content)}]}
-            )
+            guarded_messages.append({"role": role, "content": [{"text": engine.apply(content)}]})
             continue
         if not isinstance(content, list):
             guarded_messages.append(message)
