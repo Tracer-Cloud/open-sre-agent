@@ -56,6 +56,9 @@ def _pick_non_null_schema_variant(variants: list[Any]) -> dict[str, Any] | None:
         branch_type = item.get("type")
         if branch_type and branch_type != "null":
             return item
+        # Accept an implicit object schema (properties present, no explicit type).
+        if "properties" in item:
+            return item
     return None
 
 
