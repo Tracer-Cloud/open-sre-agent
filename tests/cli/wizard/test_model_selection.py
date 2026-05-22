@@ -62,6 +62,23 @@ def test_choose_model_offers_full_curated_list(monkeypatch: pytest.MonkeyPatch) 
     assert captured["values"][-1] == flow._CUSTOM_MODEL_SENTINEL
 
 
+def test_api_provider_model_lists_include_current_curated_ids() -> None:
+    anthropic_values = {option.value for option in PROVIDER_BY_VALUE["anthropic"].models}
+    openai_values = {option.value for option in PROVIDER_BY_VALUE["openai"].models}
+    openrouter_values = {option.value for option in PROVIDER_BY_VALUE["openrouter"].models}
+
+    assert {"claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5"}.issubset(anthropic_values)
+    assert "claude-sonnet-4-20250514" not in anthropic_values
+    assert "gpt-5.2-codex" in openai_values
+    assert {
+        "anthropic/claude-opus-4.7",
+        "anthropic/claude-sonnet-4.6",
+        "anthropic/claude-haiku-4.5",
+    }.issubset(openrouter_values)
+    assert "anthropic/claude-opus-4.6" not in openrouter_values
+    assert "anthropic/claude-sonnet-4.5" not in openrouter_values
+
+
 def test_choose_model_preserves_saved_model_not_in_curated(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
