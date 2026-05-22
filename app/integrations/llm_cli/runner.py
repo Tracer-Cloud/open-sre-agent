@@ -56,7 +56,7 @@ def _sanitize_argv_for_debug(argv: tuple[str, ...], *, prompt: str) -> list[str]
             redacted.append(_REDACTED_PROMPT_ARG)
             continue
         if arg == prompt_equals_form:
-            redacted.append("--prompt=<redacted-prompt>")
+            redacted.append(f"--prompt={_REDACTED_PROMPT_ARG}")
             continue
         redacted.append(arg)
     return redacted
