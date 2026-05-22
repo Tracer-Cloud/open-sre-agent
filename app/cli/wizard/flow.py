@@ -26,7 +26,12 @@ from app.cli.interactive_shell.ui.theme import (
     TEXT,
     WARNING,
 )
-from app.cli.wizard.config import PROVIDER_BY_VALUE, SUPPORTED_PROVIDERS, ProviderOption
+from app.cli.wizard.config import (
+    PROJECT_ENV_PATH,
+    PROVIDER_BY_VALUE,
+    SUPPORTED_PROVIDERS,
+    ProviderOption,
+)
 from app.cli.wizard.env_sync import sync_env_secret, sync_env_values, sync_provider_env
 from app.cli.wizard.integration_health import IntegrationHealthResult
 from app.cli.wizard.probes import ProbeResult, probe_local_target, probe_remote_target
@@ -281,6 +286,18 @@ def _local_defaults() -> dict[str, str | bool | None]:
 def _integration_defaults(service: str) -> tuple[Mapping[str, object], Mapping[str, object]]:
     entry = _as_mapping(get_integration(service))
     return entry, _as_mapping(entry.get("credentials"))
+
+
+def _project_env_value(key: str) -> str:
+    try:
+        lines = PROJECT_ENV_PATH.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return ""
+    for line in lines:
+        name, sep, value = line.partition("=")
+        if sep and name.strip() == key:
+            return value.strip().strip("\"'")
+    return ""
 
 
 def _step(title: str) -> None:
@@ -1636,6 +1653,9 @@ def _configure_discord() -> tuple[str, str]:
 
 def _configure_telegram() -> tuple[str, str]:
     _, credentials = _integration_defaults("telegram")
+    default_chat_id_hint = _string_value(
+        credentials.get("default_chat_id"), _project_env_value("TELEGRAM_DEFAULT_CHAT_ID")
+    )
     _console.print(
         "\n[bold]Telegram Integration[/bold]\n"
         f"[{SECONDARY}]Create a bot with @BotFather, then add it to the target chat.[/]\n"
@@ -1648,7 +1668,7 @@ def _configure_telegram() -> tuple[str, str]:
         )
         default_chat_id = _prompt_value(
             "Default chat ID (optional)",
-            default=_string_value(credentials.get("default_chat_id")),
+            default=default_chat_id_hint,
             allow_empty=True,
         )
         with _console.status("Validating Telegram bot token...", spinner="dots"):
@@ -1665,7 +1685,8 @@ def _configure_telegram() -> tuple[str, str]:
                 },
             )
             sync_env_secret("TELEGRAM_BOT_TOKEN", bot_token)
-            env_path = sync_env_values({"TELEGRAM_DEFAULT_CHAT_ID": default_chat_id})
+            env_values = {"TELEGRAM_DEFAULT_CHAT_ID": default_chat_id} if default_chat_id else {}
+            env_path = sync_env_values(env_values)
             return "Telegram", str(env_path)
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 

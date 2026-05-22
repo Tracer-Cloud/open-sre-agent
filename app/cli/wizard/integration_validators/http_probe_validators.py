@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 
+import re
+
 import httpx
 
 from app.integrations.models import SlackWebhookConfig
 
 from .shared import IntegrationHealthResult
+
+_TELEGRAM_BOT_TOKEN_RE = re.compile(r"^\d+:[A-Za-z0-9_-]+$")
+
+
+def _redact_secret(text: str, secret: str) -> str:
+    return text.replace(secret, "<redacted>") if secret else text
 
 
 def validate_slack_webhook(*, webhook_url: str) -> IntegrationHealthResult:
@@ -144,11 +152,18 @@ def validate_telegram_bot(*, bot_token: str) -> IntegrationHealthResult:
     token = bot_token.strip()
     if not token:
         return IntegrationHealthResult(ok=False, detail="Telegram bot token is required.")
+    if not _TELEGRAM_BOT_TOKEN_RE.fullmatch(token):
+        return IntegrationHealthResult(
+            ok=False,
+            detail="Telegram bot token format is invalid; expected '<numeric-id>:<token>'.",
+        )
 
     try:
         resp = httpx.get(f"https://api.telegram.org/bot{token}/getMe", timeout=10)
     except httpx.RequestError as err:
-        return IntegrationHealthResult(ok=False, detail=f"Telegram API unreachable: {err}")
+        return IntegrationHealthResult(
+            ok=False, detail=f"Telegram API unreachable: {_redact_secret(str(err), token)}"
+        )
 
     description = ""
     payload: dict[str, object] = {}
@@ -159,6 +174,7 @@ def validate_telegram_bot(*, bot_token: str) -> IntegrationHealthResult:
         description = str(raw_description).strip() if raw_description else ""
     except ValueError:
         payload = {}
+        description = ""
 
     if resp.status_code == 200 and payload.get("ok") is True:
         user = payload.get("result")

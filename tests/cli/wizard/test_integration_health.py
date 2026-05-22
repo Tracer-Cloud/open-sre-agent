@@ -529,6 +529,20 @@ def test_validate_telegram_bot_rejects_empty_token() -> None:
     assert "required" in result.detail.lower()
 
 
+def test_validate_telegram_bot_rejects_malformed_token_without_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _unexpected_get(*_a: object, **_kw: object) -> None:
+        raise AssertionError("malformed tokens must not reach Telegram")
+
+    monkeypatch.setattr("httpx.get", _unexpected_get)
+
+    result = validate_telegram_bot(bot_token="123:bad?token")
+
+    assert result.ok is False
+    assert "format is invalid" in result.detail.lower()
+
+
 def test_validate_telegram_bot_invalid_token(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "httpx.get",
@@ -537,7 +551,7 @@ def test_validate_telegram_bot_invalid_token(monkeypatch: pytest.MonkeyPatch) ->
             json=lambda: {"ok": False, "description": "Unauthorized"},
         ),
     )
-    result = validate_telegram_bot(bot_token="bad-token")
+    result = validate_telegram_bot(bot_token="123:badtoken")
     assert result.ok is False
     assert "invalid or revoked" in result.detail.lower()
 
@@ -550,21 +564,27 @@ def test_validate_telegram_bot_api_error_detail(monkeypatch: pytest.MonkeyPatch)
             json=lambda: {"ok": False, "description": "Bad Request: token malformed"},
         ),
     )
-    result = validate_telegram_bot(bot_token="bad-token")
+    result = validate_telegram_bot(bot_token="123:bad_token")
     assert result.ok is False
     assert "token malformed" in result.detail
 
 
-def test_validate_telegram_bot_network_error(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_validate_telegram_bot_network_error_redacts_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     import httpx as _httpx
 
     def _raise(*_a: object, **_kw: object) -> None:
-        raise _httpx.RequestError("connection refused")
+        raise _httpx.RequestError(
+            "connection refused for https://api.telegram.org/bot123:some_token/getMe"
+        )
 
     monkeypatch.setattr("httpx.get", _raise)
-    result = validate_telegram_bot(bot_token="some-token")
+    result = validate_telegram_bot(bot_token="123:some_token")
     assert result.ok is False
     assert "unreachable" in result.detail.lower()
+    assert "123:some_token" not in result.detail
+    assert "<redacted>" in result.detail
 
 
 def test_validate_betterstack_integration_succeeds(monkeypatch) -> None:
