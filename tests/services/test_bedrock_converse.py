@@ -12,6 +12,7 @@ import pytest
 from app.services.agent_llm_client import ToolCall
 from app.services.bedrock_converse import (
     _UNSUPPORTED_SCHEMA_KEYS,
+    apply_guardrails_to_converse_payload,
     build_assistant_tool_use_message,
     build_converse_tool_specs,
     build_tool_result_message,
@@ -171,6 +172,23 @@ def test_build_converse_tool_specs_preserves_object_properties() -> None:
 def test_to_converse_messages_converts_string_content() -> None:
     converted = to_converse_messages([{"role": "user", "content": "hello"}])
     assert converted == [{"role": "user", "content": [{"text": "hello"}]}]
+
+
+def test_apply_guardrails_wraps_string_content_in_text_blocks() -> None:
+    from unittest.mock import MagicMock, patch
+
+    engine = MagicMock()
+    engine.is_active = True
+    engine.apply.side_effect = lambda text: f"guarded:{text}"
+
+    with patch("app.guardrails.engine.get_guardrail_engine", return_value=engine):
+        messages, system = apply_guardrails_to_converse_payload(
+            messages=[{"role": "user", "content": "hello"}],
+            system="sys",
+        )
+
+    assert messages == [{"role": "user", "content": [{"text": "guarded:hello"}]}]
+    assert system == "guarded:sys"
 
 
 def test_build_assistant_tool_use_message() -> None:
