@@ -3,6 +3,8 @@
 import os
 from unittest.mock import MagicMock, patch
 
+from pymongo.errors import OperationFailure, ServerSelectionTimeoutError
+
 from app.integrations.catalog import classify_integrations as _classify_integrations
 from app.integrations.mongodb import (
     MongoDBConfig,
@@ -108,6 +110,43 @@ class TestMongoDBValidation:
         result = validate_mongodb_config(config)
         assert result.ok is False
         assert "Conn error" in result.detail
+
+    @patch("app.integrations.mongodb._get_client")
+    @patch("app.integrations.mongodb.report_validation_failure")
+    def test_validate_auth_failure_returns_actionable_detail_without_sentry(
+        self, mock_report, mock_get_client
+    ):
+        mock_client = MagicMock()
+        mock_client.admin.command.side_effect = OperationFailure(
+            "Authentication failed.",
+            code=18,
+        )
+        mock_get_client.return_value = mock_client
+
+        config = MongoDBConfig(connection_string="mongodb://host")
+        result = validate_mongodb_config(config)
+
+        assert result.ok is False
+        assert "authentication failed" in result.detail.lower()
+        assert "authSource" in result.detail
+        mock_report.assert_not_called()
+        mock_client.close.assert_called_once()
+
+    @patch("app.integrations.mongodb._get_client")
+    @patch("app.integrations.mongodb.report_validation_failure")
+    def test_validate_server_selection_timeout_without_sentry(self, mock_report, mock_get_client):
+        mock_client = MagicMock()
+        mock_client.admin.command.side_effect = ServerSelectionTimeoutError("SSL handshake failed")
+        mock_get_client.return_value = mock_client
+
+        config = MongoDBConfig(connection_string="mongodb://host")
+        result = validate_mongodb_config(config)
+
+        assert result.ok is False
+        assert "server selection timed out" in result.detail
+        assert "TLS setting" in result.detail
+        mock_report.assert_not_called()
+        mock_client.close.assert_called_once()
 
 
 class TestMongoDBAdminUnauthorized:

@@ -13,6 +13,12 @@ from dataclasses import dataclass
 from typing import Any
 
 from pydantic import Field, field_validator
+from pymongo.errors import (
+    ConfigurationError,
+    ConnectionFailure,
+    OperationFailure,
+    ServerSelectionTimeoutError,
+)
 
 from app.integrations._validation_helpers import report_validation_failure
 from app.strict_config import StrictConfigModel
@@ -99,6 +105,27 @@ def _get_client(config: MongoDBConfig) -> Any:
     )
 
 
+def _expected_validation_error_detail(err: Exception) -> str | None:
+    if isinstance(err, OperationFailure):
+        if err.code == 18:
+            return "MongoDB authentication failed. Check the username, password, and authSource."
+        if err.code == 13:
+            return "MongoDB user is not authorized to run the validation ping."
+    if isinstance(err, ConfigurationError):
+        return f"MongoDB configuration is invalid: {err}"
+    if isinstance(err, ServerSelectionTimeoutError):
+        return (
+            "MongoDB server selection timed out. Check the host, TLS setting, "
+            "network/firewall access, and replica set reachability."
+        )
+    if isinstance(err, ConnectionFailure):
+        return (
+            "MongoDB connection failed. Check the host, TLS setting, "
+            "network/firewall access, and replica set reachability."
+        )
+    return None
+
+
 def validate_mongodb_config(config: MongoDBConfig) -> MongoDBValidationResult:
     """Validate MongoDB connectivity with a lightweight ping command."""
     if not config.connection_string:
@@ -123,6 +150,10 @@ def validate_mongodb_config(config: MongoDBConfig) -> MongoDBValidationResult:
         finally:
             client.close()
     except Exception as err:
+        expected_detail = _expected_validation_error_detail(err)
+        if expected_detail is not None:
+            logger.warning("[mongodb] validate_mongodb_config failed: %s", expected_detail)
+            return MongoDBValidationResult(ok=False, detail=expected_detail)
         report_validation_failure(
             err,
             logger=logger,
