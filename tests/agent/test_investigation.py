@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+import types
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -213,3 +215,30 @@ def test_run_parallel_handles_interpreter_shutdown() -> None:
     # The concurrent path raises RuntimeError; fallback sequential execution succeeds
     assert len(results) == 2
     assert all(r == {"result": "ok"} for r in results)
+
+
+def test_build_synthetic_assistant_msg_for_bedrock_converse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Seed assistant turn must use Converse toolUse blocks, not plain text fallback."""
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+    monkeypatch.setitem(
+        sys.modules,
+        "boto3",
+        types.SimpleNamespace(
+            client=lambda *_args, **_kwargs: types.SimpleNamespace(converse=lambda **_: {})
+        ),
+    )
+
+    from app.services.agent_llm_client import BedrockConverseAgentClient
+
+    llm = BedrockConverseAgentClient(model="mistral.mistral-large-3-675b-instruct")
+    calls = [
+        ToolCall(id="abc12def3", name="query_logs", input={"query": "error"}),
+    ]
+    msg = _build_synthetic_assistant_tool_call_msg(llm, calls)
+
+    assert msg["role"] == "assistant"
+    assert msg["content"][0]["toolUse"]["toolUseId"] == "abc12def3"
+    assert msg["content"][0]["toolUse"]["name"] == "query_logs"
+    assert "I will start by querying" not in str(msg)

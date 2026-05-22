@@ -876,3 +876,106 @@ def test_openai_empty_choices_raises_runtime_error(
 
     with pytest.raises(RuntimeError, match="unexpected response"):
         client.invoke(messages=[{"role": "user", "content": "hi"}])
+
+
+_MISTRAL_MODEL = "mistral.mistral-large-3-675b-instruct"
+
+
+def _make_converse_response(
+    *,
+    text: str = "",
+    tool_uses: list[dict[str, object]] | None = None,
+    stop_reason: str = "end_turn",
+) -> dict[str, object]:
+    content: list[dict[str, object]] = []
+    if text:
+        content.append({"text": text})
+    for tool_use in tool_uses or []:
+        content.append({"toolUse": tool_use})
+    return {
+        "output": {"message": {"role": "assistant", "content": content}},
+        "stopReason": stop_reason,
+    }
+
+
+def _stub_boto3_converse(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    converse_response: dict[str, object] | None = None,
+    converse_side_effect: Exception | None = None,
+) -> None:
+    def converse(**_: object) -> dict[str, object]:
+        if converse_side_effect is not None:
+            raise converse_side_effect
+        return converse_response or _make_converse_response(text="ok")
+
+    monkeypatch.setitem(
+        sys.modules,
+        "boto3",
+        types.SimpleNamespace(
+            client=lambda *_args, **_kwargs: types.SimpleNamespace(converse=converse)
+        ),
+    )
+
+
+def test_bedrock_converse_requires_region_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("AWS_REGION", raising=False)
+    monkeypatch.delenv("AWS_DEFAULT_REGION", raising=False)
+    _stub_boto3_converse(monkeypatch)
+
+    from app.services.agent_llm_client import BedrockConverseAgentClient
+
+    with pytest.raises(RuntimeError, match="Bedrock requires AWS_REGION or AWS_DEFAULT_REGION"):
+        BedrockConverseAgentClient(model=_MISTRAL_MODEL)
+
+
+def test_bedrock_converse_invoke_parses_tool_use(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+    _stub_boto3_converse(
+        monkeypatch,
+        converse_response=_make_converse_response(
+            text="Checking.",
+            tool_uses=[{"toolUseId": "tu1", "name": "query_logs", "input": {"q": "err"}}],
+            stop_reason="tool_use",
+        ),
+    )
+
+    from app.services.agent_llm_client import BedrockConverseAgentClient
+
+    result = BedrockConverseAgentClient(model=_MISTRAL_MODEL).invoke(
+        messages=[{"role": "user", "content": [{"text": "hi"}]}]
+    )
+    assert result.content == "Checking."
+    assert result.has_tool_calls
+    assert result.tool_calls[0].id == "tu1"
+    assert result.stop_reason == "tool_use"
+
+
+def test_get_agent_llm_routes_non_anthropic_bedrock_to_converse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "bedrock")
+    monkeypatch.setenv("BEDROCK_REASONING_MODEL", _MISTRAL_MODEL)
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+    _stub_boto3_converse(monkeypatch)
+
+    from app.services.agent_llm_client import (
+        BedrockConverseAgentClient,
+        get_agent_llm,
+        reset_agent_client,
+    )
+
+    reset_agent_client()
+    assert isinstance(get_agent_llm(), BedrockConverseAgentClient)
+
+
+def test_get_agent_llm_routes_anthropic_bedrock_to_sdk(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_fake_anthropic(monkeypatch)
+    monkeypatch.setenv("LLM_PROVIDER", "bedrock")
+    monkeypatch.setenv("BEDROCK_REASONING_MODEL", "us.anthropic.claude-sonnet-4-6")
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+
+    from app.services.agent_llm_client import BedrockAgentClient, get_agent_llm, reset_agent_client
+
+    reset_agent_client()
+    assert isinstance(get_agent_llm(), BedrockAgentClient)

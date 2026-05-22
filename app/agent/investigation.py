@@ -375,6 +375,8 @@ def _build_seed_calls(state: dict[str, Any], tools: list[RegisteredTool]) -> lis
     if not seed_tools:
         return []
 
+    from app.services.bedrock_converse import new_tool_use_id
+
     calls: list[ToolCall] = []
     for tool in seed_tools:
         try:
@@ -382,7 +384,7 @@ def _build_seed_calls(state: dict[str, Any], tools: list[RegisteredTool]) -> lis
         except Exception:
             injected = {}
         calls.append(
-            ToolCall(id=f"seed_{tool.name}", name=tool.name, input=_public_tool_input(injected))
+            ToolCall(id=new_tool_use_id(), name=tool.name, input=_public_tool_input(injected))
         )
 
     return calls
@@ -419,9 +421,15 @@ def _build_synthetic_assistant_tool_call_msg(
     """
     from app.services.agent_llm_client import (
         AnthropicAgentClient,
+        BedrockConverseAgentClient,
         CLIBackedAgentClient,
         OpenAIAgentClient,
     )
+
+    if isinstance(llm, BedrockConverseAgentClient):
+        from app.services.bedrock_converse import build_assistant_tool_use_message
+
+        return build_assistant_tool_use_message(tool_calls)
 
     if isinstance(llm, AnthropicAgentClient):
         content = [
@@ -587,9 +595,9 @@ def _merge_tool_evidence(
 
 
 def _build_assistant_msg(llm: Any, response: Any) -> dict[str, Any]:
-    from app.services.agent_llm_client import AnthropicAgentClient
+    from app.services.agent_llm_client import AnthropicAgentClient, BedrockConverseAgentClient
 
-    if isinstance(llm, AnthropicAgentClient):
+    if isinstance(llm, (AnthropicAgentClient, BedrockConverseAgentClient)):
         return llm.build_assistant_message(response.raw_content)
     # Use raw_content when set — preserves provider-specific fields such as
     # Gemini's thought_signature that must be echoed back in the next request.
