@@ -1966,6 +1966,39 @@ def test_bedrock_invoke_anthropic_permission_denied_raises_immediately(monkeypat
     assert sleeps == [], "non-transient errors must not be retried"
 
 
+def test_bedrock_invoke_anthropic_expired_security_token_is_credentials_error(
+    monkeypatch,
+) -> None:
+    """Expired AWS STS credentials should not be reported as model unavailability."""
+    monkeypatch.setattr(
+        "app.guardrails.engine.get_guardrail_engine",
+        _InactiveGuardrailEngine,
+    )
+    sleeps: list[float] = []
+    monkeypatch.setattr(llm_client.time, "sleep", lambda s: sleeps.append(s))
+
+    upstream_message = "The security token included in the request is expired"
+    resp = _make_anthropic_http_response(403, {"message": upstream_message})
+    err = PermissionDeniedError(
+        message=upstream_message,
+        response=resp,
+        body={"message": upstream_message},
+    )  # type: ignore[arg-type]
+    monkeypatch.setattr(
+        llm_client, "AnthropicBedrock", lambda **_: _make_bedrock_anthropic_client(err)
+    )
+
+    client = llm_client.BedrockLLMClient(model="anthropic.claude-opus-4-7")
+    with pytest.raises(RuntimeError) as excinfo:
+        client.invoke("hello")
+
+    rendered = str(excinfo.value)
+    assert "AWS credentials expired" in rendered
+    assert "AWS_SESSION_TOKEN" in rendered
+    assert "Marketplace" not in rendered
+    assert sleeps == [], "credential errors must not be retried"
+
+
 def test_bedrock_invoke_converse_validation_exception_raises_immediately(monkeypatch) -> None:
     """ValidationException from boto3 converse must raise RuntimeError without retrying."""
     monkeypatch.setattr(

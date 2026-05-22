@@ -350,6 +350,47 @@ def _is_anthropic_bedrock_model(model_id: str) -> bool:
     return False
 
 
+def _anthropic_error_message(err: Exception) -> str:
+    body = getattr(err, "body", None)
+    if isinstance(body, dict):
+        message = body.get("message")
+        if isinstance(message, str) and message.strip():
+            return message.strip()
+        error_obj = body.get("error")
+        if isinstance(error_obj, dict):
+            message = error_obj.get("message")
+            if isinstance(message, str) and message.strip():
+                return message.strip()
+    message = getattr(err, "message", "")
+    if isinstance(message, str) and message.strip():
+        return message.strip()
+    return str(err)
+
+
+def _format_bedrock_permission_denied(model: str, err: PermissionDeniedError) -> str:
+    upstream_message = _anthropic_error_message(err)
+    normalized = upstream_message.lower()
+    if "security token" in normalized and "expired" in normalized:
+        return (
+            f"Bedrock AWS credentials expired for model '{model}'. "
+            "Refresh your AWS session credentials or SSO login, including "
+            "AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_SESSION_TOKEN, then retry."
+        )
+    if "security token" in normalized and "invalid" in normalized:
+        return (
+            f"Bedrock AWS credentials were rejected for model '{model}'. "
+            "Check AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN, and region."
+        )
+
+    detail = upstream_message.strip().rstrip(".")
+    cause = f" Cause: {detail}." if detail else ""
+    return (
+        f"Bedrock model '{model}' is not available for your account.{cause} "
+        "Check your AWS Marketplace subscription and account permissions, "
+        "or update BEDROCK_REASONING_MODEL / BEDROCK_TOOLCALL_MODEL."
+    )
+
+
 class BedrockLLMClient:
     """LLM client for Amazon Bedrock (IAM auth, no API key).
 
@@ -451,11 +492,7 @@ class BedrockLLMClient:
                     "Update BEDROCK_REASONING_MODEL or BEDROCK_TOOLCALL_MODEL to a supported model."
                 ) from err
             except PermissionDeniedError as err:
-                raise RuntimeError(
-                    f"Bedrock model '{self._model}' is not available for your account. "
-                    "Check your AWS Marketplace subscription and account permissions, "
-                    "or update BEDROCK_REASONING_MODEL / BEDROCK_TOOLCALL_MODEL."
-                ) from err
+                raise RuntimeError(_format_bedrock_permission_denied(self._model, err)) from err
             except Exception as err:
                 last_err = err
                 if attempt == max_attempts - 1:
