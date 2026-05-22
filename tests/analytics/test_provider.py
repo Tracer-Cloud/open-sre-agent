@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import ssl
 import subprocess
 import sys
 import threading
@@ -555,6 +556,41 @@ def test_analytics_disabled_when_do_not_track_opt_out(monkeypatch, tmp_path: Pat
     assert analytics._pending == 0
     assert analytics._queue.qsize() == 0
     assert client_inits == 0
+
+
+def test_worker_client_start_ssl_error_drains_without_sentry(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.delenv("OPENSRE_ANALYTICS_DISABLED", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(provider, "_ANONYMOUS_ID_PATH", tmp_path / "anonymous_id")
+    monkeypatch.setattr(provider.atexit, "register", lambda _func: None)
+
+    class _FailingClient:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            raise ssl.SSLError("unknown error")
+
+    failures: list[tuple[str, str, dict[str, object]]] = []
+    sentry: list[BaseException] = []
+
+    def _record_failure(stage: str, error: BaseException, **extra: object) -> None:
+        failures.append((stage, type(error).__name__, extra))
+
+    monkeypatch.setattr(provider.httpx, "Client", _FailingClient)
+    monkeypatch.setattr(provider, "_log_failure", _record_failure)
+    monkeypatch.setattr(provider, "_capture_sentry_failure", lambda exc: sentry.append(exc))
+
+    analytics = provider.Analytics()
+    analytics.capture(Event.CLI_INVOKED)
+    analytics.shutdown(flush=True, timeout=2.0)
+
+    assert analytics._pending == 0
+    assert analytics._drained.is_set()
+    assert analytics._disabled is True
+    assert sentry == []
+    assert failures == [("posthog_worker_start", "SSLError", {"event": Event.CLI_INVOKED.value})]
 
 
 def test_get_or_create_anonymous_id_returns_uuid_when_write_fails(

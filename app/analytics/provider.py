@@ -10,6 +10,7 @@ import os
 import platform
 import queue
 import re
+import ssl
 import tempfile
 import threading
 import time
@@ -771,13 +772,18 @@ class Analytics:
         self._worker = worker
 
     def _worker_loop(self) -> None:
-        with httpx.Client(timeout=_SEND_TIMEOUT, trust_env=False) as client:
+        client: httpx.Client | None = None
+        try:
             while True:
                 item = self._queue.get()
                 if item is None:
                     self._queue.task_done()
                     break
                 try:
+                    if client is None:
+                        client = self._start_http_client(item)
+                    if client is None:
+                        return
                     self._send(client, item)
                 finally:
                     self._queue.task_done()
@@ -789,10 +795,44 @@ class Analytics:
                     return
                 try:
                     if item is not None:
+                        if client is None:
+                            client = self._start_http_client(item)
+                        if client is None:
+                            return
                         self._send(client, item)
                 finally:
                     self._queue.task_done()
                     self._mark_done()
+        finally:
+            if client is not None:
+                close = getattr(client, "close", None)
+                if callable(close):
+                    close()
+
+    def _start_http_client(self, item: _Envelope) -> httpx.Client | None:
+        try:
+            return httpx.Client(timeout=_SEND_TIMEOUT, trust_env=False)
+        except (httpx.TransportError, OSError, ssl.SSLError) as exc:
+            # Telemetry transport setup failures are environmental. Disable
+            # this in-process analytics worker and drain queued events so CLI
+            # shutdown never hangs behind a dead background thread.
+            self._worker_alive = False
+            self._disabled = True
+            _log_failure("posthog_worker_start", exc, event=item.event)
+            self._discard_pending_worker_items()
+            return None
+
+    def _discard_pending_worker_items(self) -> None:
+        while True:
+            try:
+                item = self._queue.get_nowait()
+            except queue.Empty:
+                return
+            try:
+                if item is not None:
+                    self._mark_done()
+            finally:
+                self._queue.task_done()
 
     def _send(self, client: httpx.Client, item: _Envelope) -> None:
         properties: Properties = {
