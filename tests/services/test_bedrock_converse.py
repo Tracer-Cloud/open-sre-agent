@@ -41,6 +41,7 @@ def _assert_converse_schema_node(node: Any, *, path: str) -> None:
         assert key not in _UNSUPPORTED_SCHEMA_KEYS, f"{path}: unsupported key {key!r}"
 
     schema_type = node.get("type")
+    assert not isinstance(schema_type, list), f"{path}: type must not be a list {schema_type!r}"
     if "properties" in node:
         assert schema_type == "object", f"{path}: properties without type object"
         properties = node["properties"]
@@ -94,6 +95,18 @@ def test_sanitize_resolves_anyof_implicit_object() -> None:
     )
     assert cleaned["type"] == "object"
     assert cleaned["properties"]["name"]["type"] == "string"
+
+
+def test_sanitize_collapses_type_union_list() -> None:
+    cleaned = sanitize_converse_schema(
+        {
+            "type": "object",
+            "properties": {
+                "credentials": {"type": ["object", "null"], "default": None},
+            },
+        }
+    )
+    assert cleaned["properties"]["credentials"]["type"] == "object"
 
 
 def test_sanitize_merges_allof_constraints() -> None:

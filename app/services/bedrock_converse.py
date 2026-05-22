@@ -131,12 +131,27 @@ def sanitize_converse_schema(schema: dict[str, Any]) -> dict[str, Any]:
     return cleaned
 
 
+def _coerce_schema_type(node: dict[str, Any]) -> str | None:
+    """Return a single Converse-compatible ``type`` string (Bedrock rejects ``type`` arrays)."""
+    schema_type = node.get("type")
+    if isinstance(schema_type, list):
+        for candidate in schema_type:
+            if isinstance(candidate, str) and candidate != "null":
+                node["type"] = candidate
+                return candidate
+        node["type"] = "string"
+        return "string"
+    if isinstance(schema_type, str):
+        return schema_type
+    return None
+
+
 def _ensure_schema_node(node: dict[str, Any]) -> None:
     """Mutate *node* so Bedrock's strict JSON Schema validation receives explicit types."""
     if "properties" in node and "type" not in node:
         node["type"] = "object"
 
-    schema_type = node.get("type")
+    schema_type = _coerce_schema_type(node)
     if schema_type == "object" and "properties" not in node:
         node["properties"] = {}
 
