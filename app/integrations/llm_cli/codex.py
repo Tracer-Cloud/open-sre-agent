@@ -25,14 +25,21 @@ from app.integrations.llm_cli.env_overrides import (
     OPENAI_PLATFORM_ENV_KEYS,
     nonempty_env_values,
 )
+from app.integrations.llm_cli.errors import CLIInvalidModelError
 
 _CODEX_VERSION_RE = re.compile(r"(\d+\.\d+\.\d+)")
 _PROBE_TIMEOUT_SEC = 3.0
 _READ_ONLY_SANDBOX = "read-only"
+_INVALID_MODEL_MARKERS = (
+    "invalid model",
+    "model not found",
+    "no such model",
+    "unknown model",
+)
 
 
 def _ver_tuple(version: str) -> tuple[int, int, int]:
-    # Extract all leading digit runs so "1.2.3-beta.4" → (1, 2, 3), "1.2a.3" → (1, 2, 3).
+    # Extract all leading digit runs so "1.2.3-beta.4" -> (1, 2, 3), "1.2a.3" -> (1, 2, 3).
     parts = [int(m) for m in re.findall(r"\d+", version)][:3]
     while len(parts) < 3:
         parts.append(0)
@@ -83,7 +90,7 @@ def _codex_workspace_and_skip_git() -> tuple[str, bool]:
         if proc.returncode == 0 and root:
             return root, False
     except (OSError, subprocess.TimeoutExpired):
-        # git missing, not a repo, or timed out — use cwd and let codex skip repo checks.
+        # git missing, not a repo, or timed out - use cwd and let codex skip repo checks.
         pass
     return os.getcwd(), True
 
@@ -94,6 +101,13 @@ def _fallback_codex_paths() -> list[str]:
 
 def _has_openai_api_key() -> bool:
     return bool(os.environ.get("OPENAI_API_KEY", "").strip())
+
+
+def _raise_if_invalid_model(*, stdout: str, stderr: str) -> None:
+    text = f"{stderr}\n{stdout}".lower()
+    if any(marker in text for marker in _INVALID_MODEL_MARKERS):
+        detail = (stderr or stdout).strip()[:2000]
+        raise CLIInvalidModelError(provider="codex", detail=detail or "invalid model")
 
 
 class CodexAdapter:
@@ -250,6 +264,7 @@ class CodexAdapter:
         return (stdout or "").strip()
 
     def explain_failure(self, *, stdout: str, stderr: str, returncode: int) -> str:
+        _raise_if_invalid_model(stdout=stdout, stderr=stderr)
         err = (stderr or "").strip()
         out = (stdout or "").strip()
         bits = [f"codex exec exited with code {returncode}"]
