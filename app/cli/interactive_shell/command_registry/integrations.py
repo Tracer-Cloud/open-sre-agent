@@ -8,10 +8,7 @@ from rich.markup import escape
 from app.cli.interactive_shell.command_registry import repl_data
 from app.cli.interactive_shell.command_registry.cli_parity import run_cli_command
 from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
-from app.cli.interactive_shell.config.tool_catalog import (
-    build_tool_catalog,
-    format_tool_catalog_text,
-)
+from app.cli.interactive_shell.config.tool_catalog import build_tool_catalog
 from app.cli.interactive_shell.runtime import ReplSession
 from app.cli.interactive_shell.ui import (
     BOLD_BRAND,
@@ -23,6 +20,7 @@ from app.cli.interactive_shell.ui import (
     render_integrations_table,
     render_mcp_table,
     render_models_table,
+    render_tools_table,
     repl_table,
 )
 from app.cli.interactive_shell.ui.choice_menu import (
@@ -120,12 +118,9 @@ def _interactive_list_menu(_session: ReplSession, console: Console) -> bool:
             render_integrations_table(console, results)
             render_mcp_table(console, results)
             render_models_table(console, repl_data.load_llm_settings())
+            render_tools_table(console, build_tool_catalog())
         elif sub == "tools":
-            catalog = build_tool_catalog()
-            if not catalog:
-                repl_print(console, "[dim]no tools registered.[/dim]")
-            else:
-                repl_print(console, format_tool_catalog_text(catalog), markup=False)
+            render_tools_table(console, build_tool_catalog())
         repl_section_break(console)
 
 
@@ -319,11 +314,7 @@ def _cmd_list(session: ReplSession, console: Console, args: list[str]) -> bool:
         return True
 
     if sub in ("tools", "tool"):
-        catalog = build_tool_catalog()
-        if not catalog:
-            console.print(f"[{DIM}]no tools registered.[/]")
-            return True
-        console.print(format_tool_catalog_text(catalog), markup=False)
+        render_tools_table(console, build_tool_catalog())
         return True
 
     if sub and sub not in ("", "all"):

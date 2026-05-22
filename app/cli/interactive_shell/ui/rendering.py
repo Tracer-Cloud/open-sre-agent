@@ -12,6 +12,7 @@ from rich.markup import escape
 from rich.table import Table
 from rich.text import Text
 
+from app.cli.interactive_shell.config.tool_catalog import ToolCatalogEntry
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
     PlannedAction,
 )
@@ -84,17 +85,43 @@ def _prepare_tty_for_rich(console: Console) -> int:
 
 def print_repl_table(console: Console, table: Table, *, width: int | None = None) -> None:
     """Print a Rich table using REPL-safe TTY width."""
+    from app.cli.interactive_shell.ui.choice_menu import repl_terminal_stdout, repl_tty_interactive
+
     width = width if width is not None else _prepare_tty_for_rich(console)
     if table.width is None:
         table.width = width
+    terminal = repl_terminal_stdout()
+    use_terminal = repl_tty_interactive() and console.file is not terminal
+    if use_terminal:
+        previous_file = console.file
+        console.file = terminal
+        try:
+            _console_print_prepared(console, table, width=width)
+        finally:
+            console.file = previous_file
+        return
     _console_print_prepared(console, table, width=width)
 
 
 def repl_print(console: Console, *objects: Any, **kwargs: Any) -> None:
     """Print via Rich after resetting the TTY column (inline-menu safe)."""
-    from app.cli.interactive_shell.ui.choice_menu import prepare_repl_output_line
+    from app.cli.interactive_shell.ui.choice_menu import (
+        prepare_repl_output_line,
+        repl_terminal_stdout,
+        repl_tty_interactive,
+    )
 
     prepare_repl_output_line()
+    terminal = repl_terminal_stdout()
+    use_terminal = repl_tty_interactive() and console.file is not terminal
+    if use_terminal:
+        previous_file = console.file
+        console.file = terminal
+        try:
+            _console_print_prepared(console, *objects, **kwargs)
+        finally:
+            console.file = previous_file
+        return
     _console_print_prepared(console, *objects, **kwargs)
 
 
@@ -157,15 +184,32 @@ def render_models_table(console: Console, settings: Any) -> None:
     provider = str(getattr(settings, "provider", "unknown"))
     reasoning_model, toolcall_model = resolve_provider_models(settings, provider)
     width = _prepare_tty_for_rich(console)
-    table = repl_table(
-        title="LLM connection", title_style=BOLD_BRAND, show_header=False, width=width
-    )
-    table.add_column("key", style="bold", no_wrap=True)
+    table = repl_table(title="LLM connection", title_style=BOLD_BRAND, width=width)
+    table.add_column("setting", style="bold", no_wrap=True)
     value_width = max(20, width - 24)
     table.add_column("value", overflow="fold", max_width=value_width)
     table.add_row("provider", provider)
     table.add_row("reasoning model", reasoning_model)
     table.add_row("toolcall model", toolcall_model)
+    print_repl_table(console, table, width=width)
+
+
+def render_tools_table(console: Console, catalog: list[ToolCatalogEntry]) -> None:
+    if not catalog:
+        repl_print(console, f"[{DIM}]no tools registered.[/]")
+        return
+    width = _prepare_tty_for_rich(console)
+    table = repl_table(title="Tools", title_style=BOLD_BRAND, width=width)
+    table.add_column("tool", style="bold", no_wrap=True)
+    table.add_column("surfaces", style=DIM, no_wrap=True)
+    desc_width = max(20, width - 56)
+    table.add_column("description", overflow="fold", max_width=desc_width)
+    for entry in catalog:
+        table.add_row(
+            escape(entry.name),
+            escape(", ".join(sorted(entry.surfaces))),
+            escape(entry.description),
+        )
     print_repl_table(console, table, width=width)
 
 
@@ -205,5 +249,6 @@ __all__ = [
     "render_integrations_table",
     "render_mcp_table",
     "render_models_table",
+    "render_tools_table",
     "status_style",
 ]

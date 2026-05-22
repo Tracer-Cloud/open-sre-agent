@@ -41,6 +41,23 @@ def repl_tty_interactive() -> bool:
     return bool(sys.stdin.isatty() and sys.stdout.isatty())
 
 
+def repl_terminal_stdout() -> Any:
+    """Return the real terminal stdout, bypassing ``StdoutProxy`` when patched.
+
+    ``prompt_toolkit.patch_stdout`` replaces ``sys.stdout`` with a buffered proxy
+    that flushes asynchronously on a worker thread. Rich tables rendered from a
+    dispatch worker thread can reach the terminal before a ``\\r`` reset queued on
+    the proxy, leaving the cursor on a high column and wrapping the first
+    character of each row to the far right. Post-menu output must write cursor
+    control sequences synchronously on the underlying terminal stream.
+    """
+    stdout = sys.stdout
+    original = getattr(stdout, "original_stdout", None)
+    if original is not None:
+        return original
+    return stdout
+
+
 def ensure_tty_column_zero() -> None:
     """Reset the cursor column before Rich output when a TTY is active."""
     if repl_tty_interactive():
@@ -50,8 +67,9 @@ def ensure_tty_column_zero() -> None:
 def prepare_repl_output_line() -> None:
     """Begin Rich output on a new line after inline menu I/O."""
     if repl_tty_interactive():
-        sys.stdout.write(_TERMINAL_NEWLINE)
-        reset_tty_column()
+        out = repl_terminal_stdout()
+        out.write("\n\x1b[0G")
+        out.flush()
 
 
 def repl_section_break(console: Console) -> None:
@@ -196,8 +214,9 @@ def reset_tty_column() -> None:
     high column. Rich output that follows must start at column zero or tables
     render as a diagonal block of leading whitespace.
     """
-    sys.stdout.write("\r")
-    sys.stdout.flush()
+    out = repl_terminal_stdout()
+    out.write("\x1b[0G")
+    out.flush()
 
 
 def erase_menu_lines(height: int) -> None:
@@ -331,6 +350,7 @@ __all__ = [
     "ensure_tty_column_zero",
     "prepare_repl_output_line",
     "repl_section_break",
+    "repl_terminal_stdout",
     "repl_tty_interactive",
     "reset_tty_column",
     "write_menu_line",

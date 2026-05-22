@@ -15,6 +15,7 @@ from app.cli.interactive_shell.ui.rendering import (
     render_integrations_table,
     render_mcp_table,
     render_models_table,
+    render_tools_table,
     repl_table,
 )
 from app.cli.interactive_shell.ui.streaming import (
@@ -65,6 +66,7 @@ __all__ = [
     "render_integrations_table",
     "render_mcp_table",
     "render_models_table",
+    "render_tools_table",
     "repl_choose_one",
     "repl_section_break",
     "repl_table",

@@ -131,10 +131,14 @@ class StreamingConsole(Console):
         high column. Rich output that follows (tables, follow-up status lines,
         section rules) must start at column zero or lines appear broken.
         """
+        use_terminal = False
+        previous_file = self.file
         if not self._spinner.streaming:
             from app.cli.interactive_shell.ui.choice_menu import (
                 ensure_tty_column_zero,
                 prepare_repl_output_line,
+                repl_terminal_stdout,
+                repl_tty_interactive,
             )
             from app.cli.interactive_shell.ui.rendering import (
                 _repl_output_already_prepared,
@@ -150,7 +154,15 @@ class StreamingConsole(Console):
                 prepare_repl_output_line()
             if sys.stdout.isatty() and "width" not in kwargs:
                 kwargs["width"] = _repl_table_width(self)
-        super().print(*args, **kwargs)
+            terminal = repl_terminal_stdout()
+            use_terminal = repl_tty_interactive() and self.file is not terminal
+            if use_terminal:
+                self.file = terminal
+        try:
+            super().print(*args, **kwargs)
+        finally:
+            if use_terminal:
+                self.file = previous_file
 
 
 async def run_interactive(

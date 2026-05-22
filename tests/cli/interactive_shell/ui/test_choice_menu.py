@@ -41,24 +41,42 @@ def test_draw_menu_uses_carriage_return_newlines(monkeypatch) -> None:
 
 
 def test_erase_menu_block_resets_to_column_zero(monkeypatch) -> None:
-    out = io.StringIO()
-    monkeypatch.setattr(sys, "stdout", out)
+    terminal = io.StringIO()
+    proxy = io.StringIO()
+    proxy.original_stdout = terminal  # type: ignore[attr-defined]
+    monkeypatch.setattr(sys, "stdout", proxy)
 
     choice_menu._erase_menu("crumb", ["one", "two"])
 
-    rendered = out.getvalue()
+    rendered = proxy.getvalue()
     assert rendered.startswith("\r\x1b[")
     assert "A\r\x1b[J" in rendered
-    assert rendered.endswith("\r")
+    assert terminal.getvalue() == "\x1b[0G"
 
 
 def test_reset_tty_column_writes_carriage_return(monkeypatch) -> None:
-    out = io.StringIO()
-    monkeypatch.setattr(sys, "stdout", out)
+    terminal = io.StringIO()
+    proxy = io.StringIO()
+    proxy.original_stdout = terminal  # type: ignore[attr-defined]
+    monkeypatch.setattr(sys, "stdout", proxy)
 
     choice_menu.reset_tty_column()
 
-    assert out.getvalue() == "\r"
+    assert proxy.getvalue() == ""
+    assert terminal.getvalue() == "\x1b[0G"
+
+
+def test_prepare_repl_output_line_writes_to_terminal_stdout(monkeypatch) -> None:
+    terminal = io.StringIO()
+    proxy = io.StringIO()
+    proxy.original_stdout = terminal  # type: ignore[attr-defined]
+    monkeypatch.setattr(sys, "stdout", proxy)
+    monkeypatch.setattr(choice_menu, "repl_tty_interactive", lambda: True)
+
+    choice_menu.prepare_repl_output_line()
+
+    assert proxy.getvalue() == ""
+    assert terminal.getvalue() == "\n\x1b[0G"
 
 
 def test_pick_ignores_unmapped_keys(monkeypatch) -> None:

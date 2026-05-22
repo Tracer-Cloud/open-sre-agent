@@ -401,6 +401,36 @@ class TestListCommand:
         dispatch_slash("/list models", ReplSession(), console)
         assert "LLM settings unavailable" in buf.getvalue()
 
+    def test_list_tools_renders_rich_table(self, monkeypatch: object) -> None:
+        from app.cli.interactive_shell.command_registry import integrations as m
+        from app.cli.interactive_shell.config.tool_catalog import ToolCatalogEntry
+
+        fake_catalog = [
+            ToolCatalogEntry(
+                name="DatadogMetricsTool",
+                surfaces=("investigation",),
+                description="Fetch Datadog metrics",
+                source_file="app/tools/datadog.py",
+                input_schema_summary="metric: string",
+            ),
+        ]
+        monkeypatch.setattr(m, "build_tool_catalog", lambda: fake_catalog)
+        console, buf = _capture()
+        dispatch_slash("/list tools", ReplSession(), console)
+        output = buf.getvalue()
+        assert "Tools" in output
+        assert "DatadogMetricsTool" in output
+        assert "investigation" in output
+        assert "Fetch Datadog metrics" in output
+
+    def test_list_tools_empty_shows_hint(self, monkeypatch: object) -> None:
+        from app.cli.interactive_shell.command_registry import integrations as m
+
+        monkeypatch.setattr(m, "build_tool_catalog", lambda: [])
+        console, buf = _capture()
+        dispatch_slash("/list tools", ReplSession(), console)
+        assert "no tools registered" in buf.getvalue()
+
     def test_list_default_shows_all_three_sections(self, monkeypatch: object) -> None:
         self._patch_verify(monkeypatch)
         self._patch_llm(monkeypatch)
