@@ -436,19 +436,25 @@ def test_verify_sentry_passes_with_valid_config(monkeypatch: pytest.MonkeyPatch)
     assert result["service"] == "sentry"
 
 
-def test_verification_exit_code_requires_core_success() -> None:
+def test_verification_exit_code_allows_aggregate_missing_without_core_success() -> None:
     assert (
         verification_exit_code(
             [
                 {
-                    "service": "slack",
-                    "source": "local env",
-                    "status": "configured",
-                    "detail": "Incoming webhook configured.",
+                    "service": "grafana",
+                    "source": "-",
+                    "status": "missing",
+                    "detail": "Not configured.",
+                },
+                {
+                    "service": "datadog",
+                    "source": "-",
+                    "status": "missing",
+                    "detail": "Not configured.",
                 }
             ]
         )
-        == 1
+        == 0
     )
 
     assert (
@@ -491,6 +497,25 @@ def test_verification_exit_code_requires_core_success() -> None:
         == 1
     )
 
+
+def test_verification_exit_code_requested_service_missing_is_nonzero() -> None:
+    assert (
+        verification_exit_code(
+            [
+                {
+                    "service": "grafana",
+                    "source": "-",
+                    "status": "missing",
+                    "detail": "Not configured.",
+                }
+            ],
+            requested_service="grafana",
+        )
+        == 1
+    )
+
+
+def test_verification_exit_code_requested_service_configured_is_zero() -> None:
     assert (
         verification_exit_code(
             [

@@ -18,7 +18,7 @@ from app.analytics.cli import (
 from app.analytics.source import EntrypointSource, TriggerMode
 from app.cli.support.constants import ALERT_TEMPLATE_CHOICES
 from app.cli.support.context import is_json_output, is_yes
-from app.cli.support.exit_codes import ERROR, SUCCESS
+from app.cli.support.exit_codes import SUCCESS
 from app.version import get_version
 
 
@@ -87,7 +87,7 @@ def health_command(watch: bool, rate: int) -> None:
     from app.cli.support.health_view import render_health_json, render_health_report
     from app.config import get_environment
     from app.integrations.store import STORE_PATH
-    from app.integrations.verify import verify_integrations
+    from app.integrations.verify import verification_exit_code, verify_integrations
 
     def _run_once() -> int:
         results = verify_integrations()
@@ -109,9 +109,7 @@ def health_command(watch: bool, rate: int) -> None:
                 results=results,
             )
 
-        if any(result.get("status") == "failed" for result in results):
-            return ERROR
-        return SUCCESS
+        return verification_exit_code(results)
 
     if not watch:
         raise SystemExit(_run_once())
