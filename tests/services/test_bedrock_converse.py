@@ -26,7 +26,7 @@ from app.tools.registry import clear_tool_registry_cache, get_registered_tools
 
 
 @pytest.fixture(autouse=True)
-def _reset_tool_registry() -> Generator[None, None, None]:
+def _reset_tool_registry() -> Generator[None]:
     clear_tool_registry_cache()
     yield
     clear_tool_registry_cache()
