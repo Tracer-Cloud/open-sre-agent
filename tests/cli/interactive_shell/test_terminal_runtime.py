@@ -107,6 +107,66 @@ async def test_run_interactive_exits_cleanly_on_prompt_eio(monkeypatch: pytest.M
     await loop_module.run_interactive(ReplSession(), pt_session=_PromptSession())  # type: ignore[arg-type]
 
 
+@pytest.mark.asyncio
+async def test_run_interactive_cancels_running_dispatch_on_prompt_eio(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If the TTY closes mid-turn, the active dispatch must receive cancellation."""
+
+    class _FakeApp:
+        is_running = False
+
+        def invalidate(self) -> None:
+            return None
+
+        def exit(self) -> None:
+            return None
+
+    class _PromptSession:
+        app = _FakeApp()
+        history = InMemoryHistory()
+        calls = 0
+
+        async def prompt_async(self, *_args: object, **_kwargs: object) -> str:
+            self.calls += 1
+            if self.calls == 1:
+                return "hello"
+            await asyncio.wait_for(asyncio.to_thread(dispatch_started.wait), timeout=2.0)
+            raise OSError(errno.EIO, "Input/output error")
+
+    dispatch_started = threading.Event()
+    dispatch_cancelled = threading.Event()
+
+    def _dispatch_one_turn(
+        _text: str,
+        _session: ReplSession,
+        console: loop_module.StreamingConsole,
+        **_kwargs: object,
+    ) -> None:
+        dispatch_started.set()
+        while not console.cancel_requested:
+            time.sleep(0.005)
+        dispatch_cancelled.set()
+
+    async def _sleep_forever() -> None:
+        await asyncio.Event().wait()
+
+    def _patch_stdout(*_args: object, **_kwargs: object) -> contextlib.AbstractContextManager[None]:
+        return contextlib.nullcontext()
+
+    monkeypatch.setattr(loop_module, "install_session_key_bindings", lambda *_args: None)
+    monkeypatch.setattr(loop_module, "patch_stdout", _patch_stdout)
+    monkeypatch.setattr(loop_module, "_drain_stale_cpr_bytes", lambda: None)
+    monkeypatch.setattr(loop_module, "start_sampler", lambda: asyncio.create_task(_sleep_forever()))
+    monkeypatch.setattr(loop_module, "dispatch_one_turn", _dispatch_one_turn)
+    monkeypatch.setattr(loop_module, "dispatch_needs_exclusive_stdin", lambda *_args: False)
+    monkeypatch.setattr(loop_module._prompt_surface, "render_submitted_prompt", lambda *_args: None)
+
+    await loop_module.run_interactive(ReplSession(), pt_session=_PromptSession())  # type: ignore[arg-type]
+
+    assert dispatch_cancelled.wait(timeout=2.0)
+
+
 def test_repl_input_lexer_highlights_first_slash_token() -> None:
     lexer = ReplInputLexer()
     get_line = lexer.lex_document(Document("/model show", len("/model")))
