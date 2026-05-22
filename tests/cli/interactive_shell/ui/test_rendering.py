@@ -23,6 +23,7 @@ from app.cli.interactive_shell.ui.rendering import (
 def test_repl_table_minimal_box() -> None:
     t = repl_table(title="T")
     assert t.title == "T"
+    assert t.title_justify == "left"
 
 
 def test_render_integrations_table_empty_shows_hint() -> None:

@@ -32,6 +32,7 @@ def repl_table(**kwargs: Any) -> Table:
         "box": box.MINIMAL_HEAVY_HEAD,
         "show_edge": False,
         "pad_edge": False,
+        "title_justify": "left",
     }
     opts.update(kwargs)
     return Table(**opts)
