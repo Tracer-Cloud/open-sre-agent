@@ -261,6 +261,94 @@ _ENV_LOADER_CASES: list[tuple[str, dict[str, str], str]] = [
         },
         "build_mongodb_atlas_config",
     ),
+    # Six blocks that PR #2191 missed — still called ``model_validate``
+    # unguarded, so one bad env var aborted discovery of every integration.
+    (
+        "grafana",
+        {"GRAFANA_INSTANCE_URL": "https://grafana.example", "GRAFANA_READ_TOKEN": "t"},
+        "GrafanaIntegrationConfig",
+    ),
+    (
+        "datadog",
+        {"DD_API_KEY": "k", "DD_APP_KEY": "a"},
+        "DatadogIntegrationConfig",
+    ),
+    (
+        "honeycomb",
+        {"HONEYCOMB_API_KEY": "k"},
+        "HoneycombIntegrationConfig",
+    ),
+    (
+        "coralogix",
+        {"CORALOGIX_API_KEY": "k"},
+        "CoralogixIntegrationConfig",
+    ),
+    (
+        "aws",
+        {"AWS_ROLE_ARN": "arn:aws:iam::123456789012:role/example"},
+        "AWSIntegrationConfig",
+    ),
+    (
+        "aws",
+        {"AWS_ACCESS_KEY_ID": "AKIA", "AWS_SECRET_ACCESS_KEY": "secret"},
+        "AWSIntegrationConfig",
+    ),
+    (
+        "whatsapp",
+        {
+            "TWILIO_ACCOUNT_SID": "sid",
+            "TWILIO_AUTH_TOKEN": "tok",
+            "TWILIO_WHATSAPP_FROM": "+15555550100",
+        },
+        "WhatsAppConfig",
+    ),
+]
+
+
+# Each newly-wrapped vendor paired with a survivor that loads *after* it in
+# ``load_env_integrations``, plus the env needed to enable that survivor. A bad
+# env var for the first must not abort discovery of the second.
+_ENV_LOADER_SURVIVOR_CASES: list[tuple[str, str, dict[str, str], str]] = [
+    (
+        "grafana",
+        "GrafanaIntegrationConfig",
+        {"DD_API_KEY": "k", "DD_APP_KEY": "a"},
+        "datadog",
+    ),
+    (
+        "datadog",
+        "DatadogIntegrationConfig",
+        {"HONEYCOMB_API_KEY": "k"},
+        "honeycomb",
+    ),
+    (
+        "honeycomb",
+        "HoneycombIntegrationConfig",
+        {"CORALOGIX_API_KEY": "k"},
+        "coralogix",
+    ),
+    (
+        "coralogix",
+        "CoralogixIntegrationConfig",
+        {"AWS_ROLE_ARN": "arn:aws:iam::123456789012:role/example"},
+        "aws",
+    ),
+    (
+        "aws",
+        "AWSIntegrationConfig",
+        {"VERCEL_API_TOKEN": "t"},
+        "vercel",
+    ),
+    (
+        "whatsapp",
+        "WhatsAppConfig",
+        {
+            "MONGODB_ATLAS_PUBLIC_KEY": "pub",
+            "MONGODB_ATLAS_PRIVATE_KEY": "priv",
+            "MONGODB_ATLAS_PROJECT_ID": "proj",
+        },
+        "mongodb_atlas",
+    ),
 ]
 
 
@@ -338,3 +426,57 @@ def test_one_failing_env_loader_does_not_abort_remaining_integrations(
         "incident_io was dropped — discovery aborted on the vercel failure instead of "
         "continuing past it (this is exactly the bug #2036 is about)"
     )
+
+
+@pytest.mark.parametrize(
+    ("integration", "patch_symbol", "survivor_env", "survivor"),
+    _ENV_LOADER_SURVIVOR_CASES,
+)
+def test_missed_env_loader_failure_does_not_abort_remaining_integrations(
+    integration: str,
+    patch_symbol: str,
+    survivor_env: dict[str, str],
+    survivor: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The six blocks PR #2191 missed (grafana, datadog, honeycomb, coralogix,
+    aws, whatsapp) called ``model_validate`` unguarded: a single bad env var
+    raised a raw exception that escaped ``load_env_integrations`` and aborted
+    discovery of every integration.
+
+    Enable both the failing vendor and a survivor that loads strictly after it;
+    the failing vendor must be skipped and reported, while the survivor still
+    loads. RED before the fix (the exception escapes the function), GREEN
+    after.
+    """
+    for var in list(os.environ):
+        monkeypatch.delenv(var, raising=False)
+    # Env to enable the failing vendor's loader path.
+    failing_env: dict[str, str] = next(
+        env for name, env, _ in _ENV_LOADER_CASES if name == integration
+    )
+    for var, value in {**failing_env, **survivor_env}.items():
+        monkeypatch.setenv(var, value)
+
+    def _boom(*_args: Any, **_kwargs: Any) -> None:
+        raise RuntimeError(f"forced {integration} failure")
+
+    monkeypatch.setattr(f"app.integrations._catalog_impl.{patch_symbol}", _boom)
+
+    with patch("app.integrations._catalog_impl.report_exception") as mock_report:
+        result = load_env_integrations()
+
+    services = {entry["service"] for entry in result}
+    assert integration not in services, f"{integration} must be skipped when its config is invalid"
+    assert survivor in services, (
+        f"{survivor} was dropped — discovery aborted on the {integration} failure "
+        "instead of degrading gracefully past it"
+    )
+
+    matching = [
+        call
+        for call in mock_report.call_args_list
+        if call.kwargs.get("tags", {}).get("integration") == integration
+    ]
+    assert matching, f"{integration} env-loader failure was swallowed silently"
+    assert matching[0].kwargs["tags"]["event"] == "env_loader_failed"
