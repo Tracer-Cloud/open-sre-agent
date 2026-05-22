@@ -22,12 +22,13 @@ _UNSUPPORTED_SCHEMA_KEYS = frozenset(
         "$defs",
         "definitions",
         "$ref",
-        "oneOf",
-        "anyOf",
         "allOf",
         "not",
+        # OpenAPI-style nullable; Converse uses explicit types — type is kept, flag removed.
+        "nullable",
     }
 )
+# ``anyOf`` / ``oneOf`` are resolved in :func:`_flatten_composite_keywords`, not stripped.
 
 # Default element type when a tool exposes ``type: array`` without ``items`` (common for
 # inferred list params in :mod:`app.tools.registered_tool`).

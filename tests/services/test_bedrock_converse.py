@@ -81,6 +81,11 @@ def test_sanitize_resolves_anyof_optional_string() -> None:
     assert cleaned["type"] == "string"
 
 
+def test_sanitize_strips_nullable_keeps_type() -> None:
+    cleaned = sanitize_converse_schema({"type": "string", "nullable": True})
+    assert cleaned == {"type": "string"}
+
+
 def test_sanitize_strips_unsupported_keys() -> None:
     schema = {
         "title": "Root",
