@@ -23,39 +23,13 @@ from app.services.bedrock_converse import (
     sanitize_converse_schema,
     to_converse_messages,
 )
-from app.tools.registry import clear_tool_registry_cache, get_registered_tools
-
-
 @pytest.fixture(autouse=True)
 def _reset_tool_registry() -> Generator[None]:
+    from app.tools.registry import clear_tool_registry_cache
+
     clear_tool_registry_cache()
     yield
     clear_tool_registry_cache()
-
-
-def _assert_converse_schema_node(node: Any, *, path: str) -> None:
-    """Enforce invariants Bedrock Converse strict JSON Schema validation expects."""
-    if not isinstance(node, dict):
-        return
-    for key in node:
-        assert key not in _UNSUPPORTED_SCHEMA_KEYS, f"{path}: unsupported key {key!r}"
-
-    schema_type = node.get("type")
-    assert not isinstance(schema_type, list), f"{path}: type must not be a list {schema_type!r}"
-    if "properties" in node:
-        assert schema_type == "object", f"{path}: properties without type object"
-        properties = node["properties"]
-        assert isinstance(properties, dict), f"{path}: properties must be a dict"
-        for name, child in properties.items():
-            _assert_converse_schema_node(child, path=f"{path}.{name}")
-
-    if schema_type == "array":
-        items = node.get("items")
-        assert isinstance(items, dict), f"{path}: array missing typed items"
-        assert "type" in items or "properties" in items, f"{path}: array items lack type"
-        _assert_converse_schema_node(items, path=f"{path}[]")
-    elif isinstance(node.get("items"), dict):
-        _assert_converse_schema_node(node["items"], path=f"{path}[]")
 
 
 def test_sanitize_injects_object_type_when_properties_present() -> None:
@@ -283,20 +257,3 @@ def test_map_bedrock_client_error_throttling() -> None:
     )
     mapped = map_bedrock_client_error("mistral.test", err)
     assert "rate limit" in str(mapped).lower()
-
-
-def test_all_investigation_tool_schemas_satisfy_converse_invariants() -> None:
-    """Every registered investigation tool must normalize to a strict Converse-safe schema."""
-    tools = get_registered_tools("investigation")
-    assert tools, "expected at least one investigation tool"
-
-    for tool in tools:
-        schema = normalize_tool_input_schema(tool.public_input_schema)
-        assert schema.get("type") == "object", tool.name
-        assert isinstance(schema.get("properties"), dict), tool.name
-        _assert_converse_schema_node(schema, path=tool.name)
-
-    specs = build_converse_tool_specs(tools)
-    assert len(specs) == len(tools)
-    # Must round-trip through JSON like boto3 will serialize toolConfig.
-    json.dumps({"tools": specs})

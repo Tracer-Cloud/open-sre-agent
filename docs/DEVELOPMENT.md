@@ -36,6 +36,10 @@ Before a PR, run at least `make lint`, `make format-check`, `make typecheck`, an
 
 Routing precedence, postprocessing transforms, compatibility seams, and the rule-extension checklist are documented in [`docs/routing-policy-architecture.md`](https://github.com/Tracer-Cloud/opensre/blob/main/docs/routing-policy-architecture.md).
 
+## Investigation tool calling
+
+Tool schemas, provider adapters (`agent_llm_client.py`), and investigation message shapes are documented in [`docs/investigation-tool-calling.md`](investigation-tool-calling.md) (all LLM providers, not vendor-specific).
+
 ## Interactive shell: REPL watchdog demo
 
 PR reviewers expect a **visible demo** (terminal log or screenshot) in the PR under **Demo/Screenshot**, not only tests. Copy the exact steps from this section into your PR description, then attach your terminal output or recording.
