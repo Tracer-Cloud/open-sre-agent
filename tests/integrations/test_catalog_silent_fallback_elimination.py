@@ -26,7 +26,7 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
 from app.integrations._catalog_impl import (
     _classify_service_instance,
@@ -34,6 +34,7 @@ from app.integrations._catalog_impl import (
     _report_env_loader_failure,
     load_env_integrations,
 )
+from app.integrations.config_models import ArgoCDIntegrationConfig
 
 
 @pytest.fixture(autouse=True)
@@ -78,11 +79,10 @@ def test_report_env_loader_failure_forwards_tags() -> None:
 
 
 def test_report_env_loader_failure_skips_expected_validation_errors() -> None:
-    class _EnvConfig(BaseModel):
-        value: int
-
     try:
-        _EnvConfig(value="not-an-int")
+        ArgoCDIntegrationConfig.model_validate(
+            {"base_url": "http://argocd.example.com", "bearer_token": "token"}
+        )
     except ValidationError as exc:
         validation_error = exc
     else:  # pragma: no cover - pydantic should always reject this fixture
@@ -92,6 +92,25 @@ def test_report_env_loader_failure_skips_expected_validation_errors() -> None:
         _report_env_loader_failure(validation_error, integration="argocd")
 
     mock_report.assert_not_called()
+
+
+def test_report_env_loader_failure_reports_unexpected_validation_errors() -> None:
+    class _UnexpectedConfig(ArgoCDIntegrationConfig):
+        pass
+
+    try:
+        _UnexpectedConfig.model_validate(
+            {"base_url": "http://argocd.example.com", "bearer_token": "token"}
+        )
+    except ValidationError as exc:
+        validation_error = exc
+    else:  # pragma: no cover - pydantic should always reject this fixture
+        raise AssertionError("expected validation error")
+
+    with patch("app.integrations._catalog_impl.report_exception") as mock_report:
+        _report_env_loader_failure(validation_error, integration="argocd")
+
+    mock_report.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

@@ -69,6 +69,26 @@ from app.utils.errors import report_exception
 
 logger = logging.getLogger(__name__)
 
+_EXPECTED_ENV_VALIDATION_TITLES: dict[str, frozenset[str]] = {
+    "alertmanager": frozenset({"AlertmanagerIntegrationConfig"}),
+    "argocd": frozenset({"ArgoCDIntegrationConfig"}),
+    "betterstack": frozenset({"BetterStackConfig"}),
+    "discord": frozenset({"DiscordBotConfig"}),
+    "helm": frozenset({"HelmIntegrationConfig"}),
+    "incident_io": frozenset({"IncidentIoIntegrationConfig"}),
+    "jira": frozenset({"JiraIntegrationConfig"}),
+    "mariadb": frozenset({"MariaDBConfig"}),
+    "mongodb_atlas": frozenset({"MongoDBAtlasConfig"}),
+    "openclaw": frozenset({"OpenClawConfig"}),
+    "opsgenie": frozenset({"OpsGenieIntegrationConfig"}),
+    "rabbitmq": frozenset({"RabbitMQConfig"}),
+    "rds": frozenset({"RDSConfig"}),
+    "supabase": frozenset({"SupabaseConfig"}),
+    "telegram": frozenset({"TelegramBotConfig"}),
+    "vercel": frozenset({"VercelConfig", "VercelIntegrationConfig"}),
+    "victoria_logs": frozenset({"VictoriaLogsIntegrationConfig"}),
+}
+
 
 def _report_classify_failure(exc: BaseException, *, integration: str, record_id: str) -> None:
     """Route a per-instance classify failure to Sentry + warning log.
@@ -101,7 +121,9 @@ def _report_env_loader_failure(exc: BaseException, *, integration: str) -> None:
     Pydantic validation errors stay local to avoid paging on user config, while
     unexpected loader exceptions still reach Sentry (#1468).
     """
-    if isinstance(exc, ValidationError):
+    expected_titles = _EXPECTED_ENV_VALIDATION_TITLES.get(integration, frozenset())
+    validation_title = getattr(exc, "title", "")
+    if isinstance(exc, ValidationError) and validation_title in expected_titles:
         logger.warning(
             "env_loader_invalid: integration=%s validation_errors=%d",
             integration,

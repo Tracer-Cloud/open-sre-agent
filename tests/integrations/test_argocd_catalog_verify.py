@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from unittest.mock import patch
 
 import pytest
@@ -141,6 +142,8 @@ def test_resolve_effective_integrations_ignores_invalid_argocd_env(
 def test_invalid_argocd_env_validation_is_not_reported_to_sentry(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    for name in list(os.environ):
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr("app.integrations.catalog.load_integrations", lambda: [])
     monkeypatch.setenv("ARGOCD_BASE_URL", "http://argocd.example.com")
     monkeypatch.setenv("ARGOCD_AUTH_TOKEN", "tok_env")
