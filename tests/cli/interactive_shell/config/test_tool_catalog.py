@@ -256,9 +256,10 @@ class TestListToolsSlashCommand:
         ):
             assert _cmd_list(session, console, ["tools"]) is True
         out = buf.getvalue()
+        assert "Tools" in out
         assert "search_github" in out
-        assert "## investigation" in out
-        assert "## chat" in out
+        assert "chat, investigation" in out
+        assert "Search GitHub code." in out
 
     def test_list_tools_disables_markup_for_plain_catalog_text(self) -> None:
         console, buf = self._capture()
