@@ -67,7 +67,7 @@ def test_config_rejects_blank_account_sid() -> None:
         TwilioIntegrationConfig(
             account_sid="   ",
             auth_token="tok",
-            sms=TwilioSMSChannelConfig(enabled=True, from_number="+1"),
+            sms=TwilioSMSChannelConfig(enabled=True, from_number="+14155550001"),
         )
 
 
@@ -76,7 +76,47 @@ def test_config_rejects_blank_auth_token() -> None:
         TwilioIntegrationConfig(
             account_sid="AC1",
             auth_token="  ",
-            sms=TwilioSMSChannelConfig(enabled=True, from_number="+1"),
+            sms=TwilioSMSChannelConfig(enabled=True, from_number="+14155550001"),
+        )
+
+
+def test_config_rejects_non_e164_sms_from_number() -> None:
+    with pytest.raises(ValueError, match="sms.from_number"):
+        TwilioIntegrationConfig(
+            account_sid="AC1",
+            auth_token="tok",
+            sms=TwilioSMSChannelConfig(enabled=True, from_number="4155551212"),
+        )
+
+
+def test_config_rejects_whatsapp_style_from_number_on_sms_channel() -> None:
+    with pytest.raises(ValueError, match="whatsapp"):
+        TwilioIntegrationConfig(
+            account_sid="AC1",
+            auth_token="tok",
+            sms=TwilioSMSChannelConfig(enabled=True, from_number="whatsapp:+14155550001"),
+        )
+
+
+def test_config_rejects_invalid_default_to() -> None:
+    with pytest.raises(ValueError, match="sms.default_to"):
+        TwilioIntegrationConfig(
+            account_sid="AC1",
+            auth_token="tok",
+            sms=TwilioSMSChannelConfig(
+                enabled=True,
+                from_number="+14155550001",
+                default_to="+abc",
+            ),
+        )
+
+
+def test_config_rejects_messaging_service_sid_bad_prefix() -> None:
+    with pytest.raises(ValueError, match="messaging_service_sid"):
+        TwilioIntegrationConfig(
+            account_sid="AC1",
+            auth_token="tok",
+            sms=TwilioSMSChannelConfig(enabled=True, messaging_service_sid="MSdeadbeefdeadbeefdeadbeefdeadbeef"),
         )
 
 
@@ -106,12 +146,16 @@ def test_verify_passed_when_sms_ready(monkeypatch: pytest.MonkeyPatch) -> None:
         {
             "account_sid": "AC1",
             "auth_token": "tok",
-            "sms": {"enabled": True, "from_number": "+14155551111"},
+            "sms": {
+                "enabled": True,
+                "from_number": "+14155551111",
+                "default_to": "+14155550000",
+            },
         },
     )
 
     assert result["status"] == "passed"
-    assert "sms" in result["detail"].lower()
+    assert "default_to" in result["detail"].lower()
 
 
 def test_verify_passed_with_messaging_service_sid(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -125,11 +169,58 @@ def test_verify_passed_with_messaging_service_sid(monkeypatch: pytest.MonkeyPatc
         {
             "account_sid": "AC1",
             "auth_token": "tok",
-            "sms": {"enabled": True, "messaging_service_sid": "MG1"},
+            "sms": {
+                "enabled": True,
+                "messaging_service_sid": "MG1",
+                "default_to": "+14155550000",
+            },
         },
     )
 
     assert result["status"] == "passed"
+
+
+def test_verify_failed_when_default_to_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "app.integrations._verification_adapters.requests.get",
+        lambda *_a, **_kw: _FakeResponse({"friendly_name": "Demo"}),
+    )
+
+    result = _verify_twilio(
+        "env",
+        {
+            "account_sid": "AC1",
+            "auth_token": "tok",
+            "sms": {"enabled": True, "from_number": "+14155551111"},
+        },
+    )
+
+    assert result["status"] == "failed"
+    assert "default_to" in result["detail"].lower()
+    assert "twilio_notify" in result["detail"].lower()
+
+
+def test_verify_failed_when_default_to_empty_string(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "app.integrations._verification_adapters.requests.get",
+        lambda *_a, **_kw: _FakeResponse({"friendly_name": "Demo"}),
+    )
+
+    result = _verify_twilio(
+        "env",
+        {
+            "account_sid": "AC1",
+            "auth_token": "tok",
+            "sms": {
+                "enabled": True,
+                "from_number": "+14155551111",
+                "default_to": "",
+            },
+        },
+    )
+
+    assert result["status"] == "failed"
+    assert "default_to" in result["detail"].lower()
 
 
 def test_verify_failed_when_sms_not_ready(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -212,6 +303,21 @@ def test_catalog_skips_twilio_without_sms_env(
     monkeypatch.setenv("TWILIO_ACCOUNT_SID", "AC1")
     monkeypatch.setenv("TWILIO_AUTH_TOKEN", "tok")
     monkeypatch.delenv("TWILIO_SMS_FROM", raising=False)
+    monkeypatch.delenv("TWILIO_SMS_MESSAGING_SERVICE_SID", raising=False)
+
+    from app.integrations.catalog import resolve_effective_integrations
+
+    effective = resolve_effective_integrations()
+
+    assert "twilio" not in effective
+
+
+def test_catalog_skips_twilio_when_sms_from_invalid_e164(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TWILIO_ACCOUNT_SID", "AC1")
+    monkeypatch.setenv("TWILIO_AUTH_TOKEN", "tok")
+    monkeypatch.setenv("TWILIO_SMS_FROM", "not-e164")
     monkeypatch.delenv("TWILIO_SMS_MESSAGING_SERVICE_SID", raising=False)
 
     from app.integrations.catalog import resolve_effective_integrations

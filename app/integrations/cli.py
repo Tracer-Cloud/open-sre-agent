@@ -581,7 +581,11 @@ def _setup_twilio() -> None:
                     "enabled": True,
                     "from_number": sms_from,
                     "messaging_service_sid": messaging_service_sid,
-                    "default_to": _p("Default SMS recipient (optional, E.164)") or None,
+                    "default_to": _p(
+                        "Default SMS recipient (E.164; required for auto-delivery after investigations; "
+                        "omit only if you will use twilio_notify with explicit `to` only)"
+                    )
+                    or None,
                 },
             }
         },

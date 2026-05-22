@@ -68,21 +68,40 @@ present. The legacy `whatsapp` record is bootstrapped independently from
 opensre integrations verify twilio
 ```
 
+This command performs **live** checks only: it calls the Twilio Account API with
+your credentials, then checks that the SMS channel has a sender and a
+`default_to` recipient for automatic end-of-investigation delivery. It does **not**
+send a test SMS, re-validate E.164 (that happens when config is loaded), or
+confirm that a Messaging Service exists in Twilio.
+
 A passing verification confirms:
 
 - The Twilio account credentials authenticate against the Twilio Account API.
 - The SMS channel is enabled and has a usable sender (`from_number` or
   `messaging_service_sid`).
+- `sms.default_to` is set so publish can deliver the RCA summary without a
+  per-run `twilio_sms_context.to` override.
 
 Sample passing output:
 
 ```
-twilio: passed — Connected to Twilio account My Company; SMS channel ready.
+twilio: passed — Connected to Twilio account My Company; SMS sender and default_to are set for auto-delivery. No test SMS was sent.
 ```
 
 If the account authenticates but the SMS channel has no sender,
 verification returns `failed` with a message telling you to set a
 `from_number` or `messaging_service_sid`.
+
+If the sender is set but `default_to` is missing, verification returns `failed`
+and notes that the `twilio_notify` tool can still send when each call supplies
+`to`.
+
+### Config load vs verify
+
+| Check | When |
+| --- | --- |
+| E.164 on `sms.from_number` / `sms.default_to`, `MG` prefix on `messaging_service_sid` | Wizard save, env bootstrap, catalog YAML — Pydantic models |
+| Account API auth, sender present, `default_to` present | `opensre integrations verify twilio` only |
 
 ---
 
@@ -128,12 +147,13 @@ via SMS and returns the Twilio Message SID for traceability.
 | `Missing auth_token` | `TWILIO_AUTH_TOKEN` is unset. |
 | `Twilio API check failed: 401` | The SID/token pair is invalid. |
 | `SMS channel is not ready` | No SMS sender — set `TWILIO_SMS_FROM` or `TWILIO_SMS_MESSAGING_SERVICE_SID`. |
+| `default_to` / `automatic delivery` | No default recipient — set `TWILIO_SMS_DEFAULT_TO` (or `sms.default_to` in saved config) for auto-delivery; `twilio_notify` can still work with explicit `to`. |
 
 ### SMS never arrives but verify passes
 
 - Confirm `TWILIO_SMS_FROM` (or the Messaging Service SID) is provisioned
   for the destination country.
-- Confirm the recipient is in E.164 format (`+14155550000`).
+- Confirm the recipient is in E.164 format (`+14155550000`); invalid formats are rejected at config load.
 - For trial accounts: the recipient must be a verified caller ID.
 - Inspect `Messages` in the Twilio Console for an error code; common
   failures (`30007`, `21610`, etc.) are documented at

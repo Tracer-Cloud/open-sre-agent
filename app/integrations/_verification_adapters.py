@@ -375,12 +375,12 @@ def _verify_whatsapp(source: str, config: dict[str, Any]) -> dict[str, str]:
 
 
 def _verify_twilio(source: str, config: dict[str, Any]) -> dict[str, str]:
-    """Verify the Twilio integration: account auth + SMS channel readiness.
+    """Live Twilio account check plus SMS readiness for auto-delivery.
 
-    A "passed" result confirms the account credentials authenticate and the
-    SMS channel has a usable sender (``from_number`` or
-    ``messaging_service_sid``). WhatsApp is verified separately via the
-    standalone ``whatsapp`` integration.
+    Confirms credentials against the Twilio Account API, that the SMS channel
+    has a sender, and that ``sms.default_to`` is set so end-of-investigation
+    publish can deliver. Phone number formats are validated at config load, not
+    here. Does not send a test SMS or look up Messaging Service records in Twilio.
     """
     account_sid = str(config.get("account_sid", "")).strip()
     auth_token = str(config.get("auth_token", "")).strip()
@@ -419,11 +419,28 @@ def _verify_twilio(source: str, config: dict[str, Any]) -> dict[str, str]:
             ),
         )
 
+    default_to = str(sms_cfg.get("default_to") or "").strip()
+    if not default_to:
+        return result(
+            "twilio",
+            source,
+            "failed",
+            (
+                "SMS has no default_to recipient, so automatic delivery at the end of an "
+                "investigation will not run. Set sms.default_to (e.g. TWILIO_SMS_DEFAULT_TO). "
+                "The twilio_notify tool can still send when each call supplies an explicit `to`. "
+                "No test SMS was sent."
+            ),
+        )
+
     return result(
         "twilio",
         source,
         "passed",
-        f"Connected to Twilio account {friendly_name}; SMS channel ready.",
+        (
+            f"Connected to Twilio account {friendly_name}; SMS sender and default_to are set "
+            "for auto-delivery. No test SMS was sent."
+        ),
     )
 
 

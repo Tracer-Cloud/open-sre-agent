@@ -755,6 +755,23 @@ class WhatsAppConfig(StrictConfigModel):
         return stripped
 
 
+_SMS_E164_PLAIN = re.compile(r"^\+[1-9]\d{1,14}$")
+
+
+def _validate_sms_e164_plain(value: str, field_label: str) -> str:
+    if not value:
+        return value
+    if value.lower().startswith("whatsapp:"):
+        raise ValueError(
+            f"{field_label} must be a plain SMS E.164 number (+digits), not a whatsapp: address"
+        )
+    if not _SMS_E164_PLAIN.fullmatch(value):
+        raise ValueError(
+            f"{field_label} must be E.164 (+ and country code, up to 15 digits total)"
+        )
+    return value
+
+
 class TwilioSMSChannelConfig(StrictConfigModel):
     """SMS channel sub-config inside a unified Twilio integration.
 
@@ -772,6 +789,33 @@ class TwilioSMSChannelConfig(StrictConfigModel):
         normalize_str()
     )
     _normalize_enabled = field_validator("enabled", mode="before")(normalize_bool_str())
+
+    @field_validator("default_to", mode="before")
+    @classmethod
+    def _normalize_default_to(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        stripped = str(value).strip()
+        return stripped or None
+
+    @field_validator("from_number", mode="after")
+    @classmethod
+    def _validate_from_number_sms(cls, value: str) -> str:
+        return _validate_sms_e164_plain(value, "sms.from_number") if value else value
+
+    @field_validator("default_to", mode="after")
+    @classmethod
+    def _validate_default_to_sms(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _validate_sms_e164_plain(value, "sms.default_to")
+
+    @field_validator("messaging_service_sid", mode="after")
+    @classmethod
+    def _validate_messaging_service_sid(cls, value: str) -> str:
+        if value and not value.upper().startswith("MG"):
+            raise ValueError("messaging_service_sid must start with MG when set")
+        return value
 
     @property
     def is_configured(self) -> bool:
