@@ -131,12 +131,14 @@ def _recent_points_and_values(
     item: dict[str, Any],
     *,
     max_points: int,
-) -> tuple[list[dict[str, Any]], list[float], int]:
+) -> tuple[list[dict[str, Any]], list[float], list[float], int]:
     raw_points = item.get("points") or []
     points = [point for point in raw_points if isinstance(point, dict)]
 
     raw_values = item.get("values") or []
     all_values = _numeric_values(raw_values)
+    if not all_values and points:
+        all_values = _numeric_values([point.get("value") for point in points])
     point_count = int(item.get("point_count", len(points) or len(all_values)) or 0)
     if point_count <= 0:
         point_count = max(len(points), len(all_values))
@@ -146,7 +148,7 @@ def _recent_points_and_values(
         recent_values = _numeric_values([point.get("value") for point in recent_points])
     else:
         recent_values = all_values[-max_points:] if len(all_values) > max_points else all_values
-    return recent_points, recent_values, point_count
+    return recent_points, recent_values, all_values, point_count
 
 
 def _format_metric_series(
@@ -160,21 +162,24 @@ def _format_metric_series(
         if not isinstance(item, dict):
             continue
 
-        points, values, point_count = _recent_points_and_values(
+        points, returned_values, all_values, point_count = _recent_points_and_values(
             item,
             max_points=max_points_per_series,
         )
         metric_name = str(item.get("metric") or fallback_metric_name)
+        returned_point_count = len(points) if points else len(returned_values)
         formatted = {
             "metric_name": metric_name,
             "scope": item.get("scope", ""),
             "tags": item.get("tags", []),
             "unit": item.get("unit"),
             "point_count": point_count,
+            "returned_point_count": returned_point_count,
             "points": points,
-            "summary": _summarize_values(values),
+            "summary": _summarize_values(all_values),
+            "summary_scope": "full_series",
         }
-        if points and point_count > len(points):
+        if point_count > returned_point_count:
             formatted["points_total"] = point_count
         metrics.append(formatted)
     return metrics

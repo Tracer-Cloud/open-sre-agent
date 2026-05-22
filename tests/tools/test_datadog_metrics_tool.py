@@ -92,6 +92,8 @@ def test_run_happy_path_queries_client_and_summarizes_series() -> None:
     assert result["total_series"] == 1
     assert result["metrics"][0]["metric_name"] == "system.cpu.user"
     assert "query" not in result["metrics"][0]
+    assert result["metrics"][0]["returned_point_count"] == 3
+    assert result["metrics"][0]["summary_scope"] == "full_series"
     assert result["metrics"][0]["summary"] == {
         "first": 10.0,
         "latest": 40.0,
@@ -210,18 +212,20 @@ def test_run_summarizes_returned_recent_datapoints_after_point_compaction() -> N
     metric = result["metrics"][0]
     assert len(metric["points"]) == 60
     assert metric["point_count"] == 100
+    assert metric["returned_point_count"] == 60
     assert metric["points_total"] == 100
     assert metric["points"][0]["value"] == 40.0
     assert metric["points"][-1]["value"] == 99.0
+    assert metric["summary_scope"] == "full_series"
     assert metric["summary"] == {
-        "first": 40.0,
+        "first": 0.0,
         "latest": 99.0,
-        "min": 40.0,
+        "min": 0.0,
         "max": 99.0,
-        "avg": 69.5,
-        "delta": 59.0,
+        "avg": 49.5,
+        "delta": 99.0,
         "trend": "increased",
-        "delta_pct": 147.5,
+        "delta_pct": None,
     }
 
 
