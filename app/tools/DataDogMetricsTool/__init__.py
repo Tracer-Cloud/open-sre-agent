@@ -11,7 +11,8 @@ from pydantic import BaseModel, Field
 from app.tools.DataDogLogsTool import _dd_creds
 from app.tools.DataDogLogsTool._client import make_client, unavailable
 from app.tools.tool_decorator import tool
-from app.tools.utils.compaction import compact_metrics
+from app.tools.utils.availability import datadog_available_or_backend
+from app.tools.utils.compaction import compact_metrics, summarize_counts
 
 _AGGREGATION_PREFIXES = ("avg:", "sum:", "min:", "max:", "count:")
 _MAX_SERIES = 20
@@ -40,13 +41,20 @@ class QueryDatadogMetricsOutput(BaseModel):
     time_range_minutes: int = Field(default=60, description="Lookback window used.")
     total_series: int = Field(default=0, description="Number of timeseries returned.")
     metrics: list[dict[str, Any]] = Field(default_factory=list, description="Returned metric data.")
+    truncation_note: str | None = Field(
+        default=None, description="Notice when returned series are compacted."
+    )
     window: dict[str, str] | None = Field(default=None, description="Query time window.")
     error: str | None = Field(default=None, description="Error details when unavailable.")
 
 
 def _metrics_is_available(sources: dict[str, dict]) -> bool:
+    if not datadog_available_or_backend(sources):
+        return False
+
     dd = sources.get("datadog", {})
     backend = dd.get("_backend")
+    # Real Datadog credentials can query metrics; fixture backends must expose the metrics API.
     return bool(dd.get("connection_verified") or hasattr(backend, "query_metrics"))
 
 
@@ -119,7 +127,6 @@ def _format_metric_series(
     series: list[dict[str, Any]],
     *,
     fallback_metric_name: str,
-    query: str,
 ) -> list[dict[str, Any]]:
     metrics: list[dict[str, Any]] = []
     for item in series:
@@ -132,7 +139,6 @@ def _format_metric_series(
         metrics.append(
             {
                 "metric_name": metric_name,
-                "query": query,
                 "scope": item.get("scope", ""),
                 "tags": item.get("tags", []),
                 "unit": item.get("unit"),
@@ -255,22 +261,27 @@ def query_datadog_metrics(
             }
         ]
 
-    metrics = _format_metric_series(series, fallback_metric_name=metric_name, query=query_to_run)
+    metrics = _format_metric_series(series, fallback_metric_name=metric_name)
     compacted_metrics = compact_metrics(
         metrics,
         limit=_MAX_SERIES,
         max_datapoints=_MAX_POINTS_PER_SERIES,
     )
-    return {
+    total_series = int(result.get("total_series", len(metrics)) or 0)
+    result_data: dict[str, Any] = {
         "source": "datadog_metrics",
         "available": True,
         "metric_name": metric_name,
         "time_range_minutes": time_range_minutes,
         "query": query_to_run,
         "metrics": compacted_metrics,
-        "total_series": int(result.get("total_series", len(metrics)) or 0),
+        "total_series": total_series,
         "window": {
             "from": start.isoformat().replace("+00:00", "Z"),
             "to": end.isoformat().replace("+00:00", "Z"),
         },
     }
+    summary = summarize_counts(total_series, len(compacted_metrics), "metric series")
+    if summary:
+        result_data["truncation_note"] = summary
+    return result_data

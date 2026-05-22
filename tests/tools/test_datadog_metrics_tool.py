@@ -91,6 +91,7 @@ def test_run_happy_path_queries_client_and_summarizes_series() -> None:
     assert result["query"] == "avg:system.cpu.user{*}"
     assert result["total_series"] == 1
     assert result["metrics"][0]["metric_name"] == "system.cpu.user"
+    assert "query" not in result["metrics"][0]
     assert result["metrics"][0]["summary"] == {
         "first": 10.0,
         "latest": 40.0,
@@ -148,6 +149,33 @@ def test_run_summary_includes_null_delta_pct_when_first_value_is_zero() -> None:
 
     assert result["available"] is True
     assert result["metrics"][0]["summary"]["delta_pct"] is None
+
+
+def test_run_includes_truncation_note_when_series_are_compacted() -> None:
+    mock_client = MagicMock()
+    mock_client.query_metrics.return_value = {
+        "success": True,
+        "total_series": 25,
+        "series": [
+            {
+                "metric": f"custom.metric.{index}",
+                "point_count": 1,
+                "values": [float(index)],
+            }
+            for index in range(25)
+        ],
+    }
+
+    with patch("app.tools.DataDogMetricsTool.make_client", return_value=mock_client):
+        result = query_datadog_metrics(
+            metric_name="custom.metric",
+            api_key="key",
+            app_key="app",
+        )
+
+    assert result["total_series"] == 25
+    assert len(result["metrics"]) == 20
+    assert result["truncation_note"] == "Showing 20 of 25 metric series"
 
 
 def test_run_preserves_full_query_override() -> None:
