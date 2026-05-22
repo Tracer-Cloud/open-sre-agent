@@ -178,6 +178,53 @@ def test_run_includes_truncation_note_when_series_are_compacted() -> None:
     assert result["truncation_note"] == "Showing 20 of 25 metric series"
 
 
+def test_run_summarizes_returned_recent_datapoints_after_point_compaction() -> None:
+    mock_client = MagicMock()
+    points = [
+        {
+            "timestamp": f"2026-05-22T{10 + index // 60:02d}:{index % 60:02d}:00Z",
+            "value": float(index),
+        }
+        for index in range(100)
+    ]
+    mock_client.query_metrics.return_value = {
+        "success": True,
+        "total_series": 1,
+        "series": [
+            {
+                "metric": "custom.long_window",
+                "point_count": 100,
+                "points": points,
+                "values": [float(index) for index in range(100)],
+            }
+        ],
+    }
+
+    with patch("app.tools.DataDogMetricsTool.make_client", return_value=mock_client):
+        result = query_datadog_metrics(
+            metric_name="custom.long_window",
+            api_key="key",
+            app_key="app",
+        )
+
+    metric = result["metrics"][0]
+    assert len(metric["points"]) == 60
+    assert metric["point_count"] == 100
+    assert metric["points_total"] == 100
+    assert metric["points"][0]["value"] == 40.0
+    assert metric["points"][-1]["value"] == 99.0
+    assert metric["summary"] == {
+        "first": 40.0,
+        "latest": 99.0,
+        "min": 40.0,
+        "max": 99.0,
+        "avg": 69.5,
+        "delta": 59.0,
+        "trend": "increased",
+        "delta_pct": 147.5,
+    }
+
+
 def test_run_preserves_full_query_override() -> None:
     mock_client = MagicMock()
     mock_client.query_metrics.return_value = {"success": True, "series": [], "total_series": 0}

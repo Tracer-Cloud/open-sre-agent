@@ -123,30 +123,60 @@ def _summarize_values(values: Sequence[float]) -> dict[str, Any]:
     return summary
 
 
+def _numeric_values(values: Sequence[Any]) -> list[float]:
+    return [float(value) for value in values if isinstance(value, int | float)]
+
+
+def _recent_points_and_values(
+    item: dict[str, Any],
+    *,
+    max_points: int,
+) -> tuple[list[dict[str, Any]], list[float], int]:
+    raw_points = item.get("points") or []
+    points = [point for point in raw_points if isinstance(point, dict)]
+
+    raw_values = item.get("values") or []
+    all_values = _numeric_values(raw_values)
+    point_count = int(item.get("point_count", len(points) or len(all_values)) or 0)
+    if point_count <= 0:
+        point_count = max(len(points), len(all_values))
+
+    recent_points = points[-max_points:] if len(points) > max_points else points
+    if recent_points:
+        recent_values = _numeric_values([point.get("value") for point in recent_points])
+    else:
+        recent_values = all_values[-max_points:] if len(all_values) > max_points else all_values
+    return recent_points, recent_values, point_count
+
+
 def _format_metric_series(
     series: list[dict[str, Any]],
     *,
     fallback_metric_name: str,
+    max_points_per_series: int,
 ) -> list[dict[str, Any]]:
     metrics: list[dict[str, Any]] = []
     for item in series:
         if not isinstance(item, dict):
             continue
 
-        raw_values = item.get("values") or []
-        values = [float(value) for value in raw_values if isinstance(value, int | float)]
-        metric_name = str(item.get("metric") or fallback_metric_name)
-        metrics.append(
-            {
-                "metric_name": metric_name,
-                "scope": item.get("scope", ""),
-                "tags": item.get("tags", []),
-                "unit": item.get("unit"),
-                "point_count": int(item.get("point_count", len(values)) or 0),
-                "points": item.get("points", []),
-                "summary": _summarize_values(values),
-            }
+        points, values, point_count = _recent_points_and_values(
+            item,
+            max_points=max_points_per_series,
         )
+        metric_name = str(item.get("metric") or fallback_metric_name)
+        formatted = {
+            "metric_name": metric_name,
+            "scope": item.get("scope", ""),
+            "tags": item.get("tags", []),
+            "unit": item.get("unit"),
+            "point_count": point_count,
+            "points": points,
+            "summary": _summarize_values(values),
+        }
+        if points and point_count > len(points):
+            formatted["points_total"] = point_count
+        metrics.append(formatted)
     return metrics
 
 
@@ -261,7 +291,11 @@ def query_datadog_metrics(
             }
         ]
 
-    metrics = _format_metric_series(series, fallback_metric_name=metric_name)
+    metrics = _format_metric_series(
+        series,
+        fallback_metric_name=metric_name,
+        max_points_per_series=_MAX_POINTS_PER_SERIES,
+    )
     compacted_metrics = compact_metrics(
         metrics,
         limit=_MAX_SERIES,
