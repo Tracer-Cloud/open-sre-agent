@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
 from app.integrations.models import JiraIntegrationConfig as JiraConfig
 from app.services._base import ServiceClientUnavailable
@@ -128,23 +128,14 @@ def test_make_jira_client_returns_none_all_none() -> None:
     assert make_jira_client(None, None, None) is None
 
 
-class _DummyModel(BaseModel):
-    x: int
-
-
-def _create_validation_error() -> ValidationError:
-    try:
-        _DummyModel(x="not an int")  # type: ignore[arg-type]
-    except ValidationError as e:
-        return e
-    raise RuntimeError("unreachable")
+from tests.utils.validation import create_validation_error
 
 
 def test_make_jira_client_raises_validation_error_on_invalid_config(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def _raise(*_args: Any, **_kwargs: Any) -> Any:
-        raise _create_validation_error()
+        raise create_validation_error()
 
     monkeypatch.setattr("app.services.jira.client.JiraIntegrationConfig", _raise)
     with pytest.raises(ValidationError):

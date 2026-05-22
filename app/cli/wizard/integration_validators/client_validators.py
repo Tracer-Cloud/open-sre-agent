@@ -377,7 +377,11 @@ def validate_alertmanager_integration(
             username=username or None,
             password=password or None,
         )
-    except (ServiceClientUnavailable, ValidationError):
+    except ValidationError as err:
+        return IntegrationHealthResult(
+            ok=False, detail=f"Alertmanager configuration is invalid: {err}"
+        )
+    except ServiceClientUnavailable:
         client = None  # already reported to Sentry
     if client is None:
         return IntegrationHealthResult(ok=False, detail="Invalid Alertmanager URL.")

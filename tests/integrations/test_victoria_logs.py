@@ -18,7 +18,7 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
 from app.integrations._catalog_impl import _classify_service_instance
 from app.integrations._verification_adapters import _verify_victoria_logs
@@ -208,16 +208,7 @@ class TestVictoriaLogsIntegrationCanonicalShape:
         assert SERVICE_KEY_MAP["victorialogs"] == "victoria_logs"
 
 
-class _DummyModel(BaseModel):
-    x: int
-
-
-def _create_validation_error() -> ValidationError:
-    try:
-        _DummyModel(x="not an int")  # type: ignore[arg-type]
-    except ValidationError as e:
-        return e
-    raise RuntimeError("unreachable")
+from tests.utils.validation import create_validation_error
 
 
 class TestMakeVictoriaLogsClient:
@@ -225,7 +216,7 @@ class TestMakeVictoriaLogsClient:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         def _raise(*_args: Any, **_kwargs: Any) -> Any:
-            raise _create_validation_error()
+            raise create_validation_error()
 
         monkeypatch.setattr("app.services.victoria_logs.client.VictoriaLogsConfig", _raise)
         with pytest.raises(ValidationError):

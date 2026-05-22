@@ -6,7 +6,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
 from app.integrations.config_models import AlertmanagerIntegrationConfig
 from app.services._base import ServiceClientUnavailable
@@ -481,23 +481,14 @@ def test_make_client_strips_whitespace() -> None:
     assert client.config.base_url == "https://alertmanager.example.com"
 
 
-class _DummyModel(BaseModel):
-    x: int
-
-
-def _create_validation_error() -> ValidationError:
-    try:
-        _DummyModel(x="not an int")  # type: ignore[arg-type]
-    except ValidationError as e:
-        return e
-    raise RuntimeError("unreachable")
+from tests.utils.validation import create_validation_error
 
 
 def test_make_client_raises_validation_error_on_invalid_config(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def _raise(*_args: Any, **_kwargs: Any) -> Any:
-        raise _create_validation_error()
+        raise create_validation_error()
 
     monkeypatch.setattr("app.services.alertmanager.client.AlertmanagerConfig", _raise)
     with pytest.raises(ValidationError):
