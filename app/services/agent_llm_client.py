@@ -176,9 +176,16 @@ class AnthropicAgentClient:
         else:
             raise RuntimeError(f"{self.provider_name} invocation failed") from last_err
 
+        content_blocks = getattr(response, "content", None)
+        if not isinstance(content_blocks, list):
+            raise RuntimeError(
+                f"{self.provider_name} returned an unexpected response type "
+                f"{type(response).__name__!r} (expected a Message with a content list). "
+                "Check Anthropic SDK version compatibility."
+            )
         text_parts: list[str] = []
         tool_calls: list[ToolCall] = []
-        for block in response.content:
+        for block in content_blocks:
             block_type = getattr(block, "type", None)
             if block_type == "text":
                 text_parts.append(block.text)
@@ -188,8 +195,8 @@ class AnthropicAgentClient:
         return AgentLLMResponse(
             content="".join(text_parts),
             tool_calls=tool_calls,
-            stop_reason=str(response.stop_reason),
-            raw_content=response.content,
+            stop_reason=str(getattr(response, "stop_reason", "end_turn")),
+            raw_content=content_blocks,
         )
 
     @staticmethod

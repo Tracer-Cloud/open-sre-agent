@@ -539,6 +539,22 @@ def test_unrelated_type_error_is_retried_and_wrapped(
     assert call_count == 3, "non-auth TypeError should be retried like a generic exception"
 
 
+def test_anthropic_unexpected_response_type_raises_clear_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_anthropic(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+    client = AnthropicAgentClient(model="claude-sonnet-4-6")
+    # Simulate the bug: messages.create() returns a plain string instead of a Message object
+    client._client = types.SimpleNamespace(
+        messages=types.SimpleNamespace(create=lambda **_: "some unexpected string")
+    )
+
+    with pytest.raises(RuntimeError, match="unexpected response type.*str"):
+        client.invoke(messages=[{"role": "user", "content": "hi"}])
+
+
 @pytest.mark.parametrize(
     "provider", ["codex", "opencode", "claude-code", "kimi", "cursor", "gemini-cli", "copilot"]
 )
