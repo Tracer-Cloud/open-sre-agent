@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import errno
 import logging
 import os
 import re
@@ -52,6 +53,11 @@ _CPR_SEQUENCE_RE = re.compile(
     r"|\d{1,4};\d{1,4}R"  # row;colR without ESC or [
     r"|\d{1,4}R(?=[\[\d])"  # trailing rowR before another CPR fragment
 )
+_PROMPT_IO_CLOSED_ERRNOS = frozenset({errno.EBADF, errno.EIO, errno.ENXIO})
+
+
+def _is_prompt_io_closed(exc: OSError) -> bool:
+    return exc.errno in _PROMPT_IO_CLOSED_ERRNOS
 
 
 def _drain_stale_cpr_bytes() -> None:
@@ -316,6 +322,13 @@ async def run_interactive(
                         state.cancel_current_dispatch()
                         continue
                     return
+                except OSError as exc:
+                    if _is_prompt_io_closed(exc):
+                        log.debug("Prompt input closed; exiting interactive shell", exc_info=True)
+                        if state.is_dispatch_running():
+                            state.cancel_current_dispatch()
+                        return
+                    raise
                 except KeyboardInterrupt:
                     if state.is_dispatch_running():
                         state.cancel_current_dispatch()

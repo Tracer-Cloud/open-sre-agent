@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import errno
 import io
 import re
 import threading
@@ -69,6 +71,52 @@ def test_strip_cpr_sequences_removes_terminal_cursor_replies(
     expected: str,
 ) -> None:
     assert loop_module._strip_cpr_sequences(text) == expected
+
+
+def test_prompt_io_closed_predicate_only_matches_closed_terminal_errors() -> None:
+    assert loop_module._is_prompt_io_closed(OSError(errno.EIO, "Input/output error")) is True
+    assert loop_module._is_prompt_io_closed(OSError(errno.EBADF, "Bad file descriptor")) is True
+    assert loop_module._is_prompt_io_closed(OSError(errno.EACCES, "Permission denied")) is False
+
+
+@pytest.mark.asyncio
+async def test_run_interactive_exits_when_prompt_io_closes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _idle_sampler() -> None:
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(
+        loop_module,
+        "start_sampler",
+        lambda: asyncio.create_task(_idle_sampler()),
+    )
+    monkeypatch.setattr(loop_module, "patch_stdout", lambda **_kwargs: contextlib.nullcontext())
+
+    class _PromptApp:
+        is_running = False
+
+        def invalidate(self) -> None:
+            return
+
+        def exit(self) -> None:
+            return
+
+    class _PromptSession:
+        app = _PromptApp()
+        history = InMemoryHistory()
+        key_bindings = None
+        calls = 0
+
+        async def prompt_async(self, *_args: object, **_kwargs: object) -> str:
+            self.calls += 1
+            raise OSError(errno.EIO, "Input/output error")
+
+    prompt = _PromptSession()
+
+    await loop_module.run_interactive(ReplSession(), pt_session=prompt)  # type: ignore[arg-type]
+
+    assert prompt.calls == 1
 
 
 def test_repl_input_lexer_highlights_first_slash_token() -> None:
