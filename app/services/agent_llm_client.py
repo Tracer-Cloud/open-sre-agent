@@ -321,6 +321,7 @@ class BedrockConverseAgentClient:
             kwargs["toolConfig"] = {"tools": tools}
 
         backoff = _RETRY_INITIAL_BACKOFF_SEC
+        response: dict[str, Any] | None = None
         last_err: Exception | None = None
         for attempt in range(_RETRY_MAX_ATTEMPTS):
             try:
@@ -332,19 +333,22 @@ class BedrockConverseAgentClient:
                 code = err.response.get("Error", {}).get("Code", "")
                 if is_non_retryable_bedrock_code(code):
                     raise map_bedrock_client_error(self._model, err) from err
-                last_err = err
                 if attempt == _RETRY_MAX_ATTEMPTS - 1:
                     raise map_bedrock_client_error(self._model, err) from err
+                last_err = err
                 time.sleep(backoff)
                 backoff *= 2
             except Exception as err:
-                last_err = err
                 if attempt == _RETRY_MAX_ATTEMPTS - 1:
                     raise RuntimeError(f"Bedrock API request failed: {err}") from err
+                last_err = err
                 time.sleep(backoff)
                 backoff *= 2
         else:
             raise RuntimeError("Bedrock invocation failed without a concrete error") from last_err
+
+        if response is None:
+            raise RuntimeError("Bedrock invocation failed without a response") from last_err
 
         content, raw_tool_calls, stop_reason, raw_message = parse_converse_output(response)
         tool_calls = [
