@@ -785,6 +785,10 @@ def test_before_send_filters_nested_lists_of_dicts() -> None:
             "Openai rate limit exceeded (HTTP 429) after multiple retries. Check your quota and billing details.",
         ),
         (
+            "RuntimeError",
+            "OpenAI rate limit exceeded: Error code: 429 - {'error': {'message': 'model busy'}}",
+        ),
+        (
             "BadRequestError",
             "Your credit balance is too low to access the Anthropic API.",
         ),
@@ -815,7 +819,19 @@ def test_before_send_filters_nested_lists_of_dicts() -> None:
         ),
         (
             "RuntimeError",
+            "OpenAI API request timed out. Check that the service is running and responsive at the configured endpoint.",
+        ),
+        (
+            "RuntimeError",
             "Minimax API request timed out. Check that the service is running and responsive at the configured endpoint.",
+        ),
+        (
+            "RuntimeError",
+            "OpenAI billing quota exceeded. Check your plan and billing details.",
+        ),
+        (
+            "RuntimeError",
+            "Cannot connect to OpenAI API. Check your network connection and that the endpoint URL is reachable.",
         ),
         # Anthropic account-level usage limit enforcement via HTTP 400 (issues #1883, #1885).
         (
@@ -839,6 +855,10 @@ def test_before_send_filters_nested_lists_of_dicts() -> None:
         (
             "RuntimeError",
             "OpenAI model 'llama3.2' not found.",
+        ),
+        (
+            "RuntimeError",
+            "Anthropic API failed after 3 attempts: Error code: 529 - {'error': {'type': 'overloaded_error', 'message': 'Overloaded'}}",
         ),
     ],
 )

@@ -63,7 +63,7 @@ _OPERATOR_ACTIONABLE_LLM_ERROR_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\bmissing\s+[A-Z0-9_]+_API_KEY\b", re.I),
     # Pydantic validation: "LLM provider 'minimax' requires MINIMAX_API_KEY to be set."
     re.compile(r"\brequires\s+[A-Z0-9_]+_API_KEY\s+to\s+be\s+set\b", re.I),
-    re.compile(r"\brate limit exceeded\b.*\b(?:quota|billing)\b", re.I),
+    re.compile(r"\brate limit exceeded\b", re.I),
     re.compile(r"\bcredit balance is too low\b", re.I),
     # llm_client.py uses "was not found"; agent_llm_client.py uses "not found" — cover both.
     re.compile(r"\bmodel\s+['\"][^'\"]+['\"]\s+(?:was )?not found\b", re.I),
@@ -76,6 +76,7 @@ _OPERATOR_ACTIONABLE_LLM_ERROR_PATTERNS: tuple[re.Pattern[str], ...] = (
     # Provider read timeout after retries — anchored to the suffix produced by
     # _format_openai_connection_error so generic non-LLM timeout messages are unaffected.
     re.compile(r"\bapi request timed out\. check that the service is running\b", re.I),
+    re.compile(r"\bapi failed after\s+\d+\s+attempts\b.*\boverloaded\b", re.I | re.DOTALL),
     # Anthropic / provider account-level usage-limit enforcement (HTTP 400).
     re.compile(r"\byou have reached your specified api usage limits\b", re.I),
     # Billing quota exhausted: catches the OpenAI ``insufficient_quota`` path

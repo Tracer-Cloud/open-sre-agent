@@ -411,6 +411,7 @@ class OpenAIAgentClient:
         self._client = OpenAI(api_key=api_key, base_url=base_url, timeout=_CLIENT_TIMEOUT_SEC)
         self._model = model
         self._max_tokens = max_tokens
+        self._api_key_env = api_key_env
 
     def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
         return [_openai_tool_schema(t) for t in tools]
@@ -423,6 +424,9 @@ class OpenAIAgentClient:
         tools: list[dict[str, Any]] | None = None,
     ) -> AgentLLMResponse:
         from openai import (
+            APIConnectionError,
+            APIStatusError,
+            APITimeoutError,
             AuthenticationError,
             BadRequestError,
             NotFoundError,
@@ -450,15 +454,44 @@ class OpenAIAgentClient:
                 response = self._client.chat.completions.create(**kwargs)
                 break
             except AuthenticationError as err:
-                raise RuntimeError("OpenAI authentication failed.") from err
+                raise RuntimeError(self._authentication_error_message()) from err
             except NotFoundError as err:
                 raise RuntimeError(f"OpenAI model '{self._model}' not found.") from err
             except BadRequestError as err:
-                raise RuntimeError(f"OpenAI request rejected: {err}") from err
+                raise RuntimeError(f"OpenAI request rejected (HTTP 400): {err}") from err
             except RateLimitError as err:
                 raise RuntimeError(f"OpenAI rate limit exceeded: {err}") from err
             except PermissionDeniedError as err:
                 raise RuntimeError(f"OpenAI request forbidden: {err}") from err
+            except APITimeoutError as err:
+                last_err = err
+                if attempt == _RETRY_MAX_ATTEMPTS - 1:
+                    raise RuntimeError(self._timeout_error_message()) from err
+                time.sleep(backoff)
+                backoff *= 2
+            except APIConnectionError as err:
+                last_err = err
+                if attempt == _RETRY_MAX_ATTEMPTS - 1:
+                    raise RuntimeError(self._connection_error_message()) from err
+                time.sleep(backoff)
+                backoff *= 2
+            except APIStatusError as err:
+                status_code = int(getattr(err, "status_code", 0) or 0)
+                if status_code == 402:
+                    raise RuntimeError(self._billing_error_message()) from err
+                if status_code == 429:
+                    raise RuntimeError(f"OpenAI rate limit exceeded: {err}") from err
+                if 400 <= status_code < 500:
+                    raise RuntimeError(
+                        f"OpenAI request rejected (HTTP {status_code}): {err}"
+                    ) from err
+                last_err = err
+                if attempt == _RETRY_MAX_ATTEMPTS - 1:
+                    raise RuntimeError(
+                        f"OpenAI API failed after {_RETRY_MAX_ATTEMPTS} attempts: {err}"
+                    ) from err
+                time.sleep(backoff)
+                backoff *= 2
             except Exception as err:
                 last_err = err
                 if attempt == _RETRY_MAX_ATTEMPTS - 1:
@@ -494,6 +527,31 @@ class OpenAIAgentClient:
             # exclude_none=True strips null fields (refusal, audio, function_call …)
             # that strict OpenAI-compatible endpoints may reject on replay.
             raw_content=msg.model_dump(exclude_none=True),
+        )
+
+    def _authentication_error_message(self) -> str:
+        api_key_env = getattr(self, "_api_key_env", "OPENAI_API_KEY")
+        return (
+            "OpenAI authentication failed. "
+            f"Check {api_key_env} in your environment, .env, or secure local keychain."
+        )
+
+    @staticmethod
+    def _billing_error_message() -> str:
+        return "OpenAI billing quota exceeded. Check your plan and billing details."
+
+    @staticmethod
+    def _timeout_error_message() -> str:
+        return (
+            "OpenAI API request timed out. "
+            "Check that the service is running and responsive at the configured endpoint."
+        )
+
+    @staticmethod
+    def _connection_error_message() -> str:
+        return (
+            "Cannot connect to OpenAI API. "
+            "Check your network connection and that the endpoint URL is reachable."
         )
 
     @staticmethod

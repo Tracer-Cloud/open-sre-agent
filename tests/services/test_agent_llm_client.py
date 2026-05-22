@@ -223,6 +223,18 @@ def _install_fake_openai(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespa
     class AuthenticationError(Exception):
         pass
 
+    class APIConnectionError(Exception):
+        pass
+
+    class APIStatusError(Exception):
+        def __init__(self, message: str, *, status_code: int, body: dict | None = None) -> None:
+            super().__init__(message)
+            self.status_code = status_code
+            self.body = body or {}
+
+    class APITimeoutError(Exception):
+        pass
+
     class BadRequestError(Exception):
         pass
 
@@ -242,6 +254,9 @@ def _install_fake_openai(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespa
             )
 
     fake_module.AuthenticationError = AuthenticationError
+    fake_module.APIConnectionError = APIConnectionError
+    fake_module.APIStatusError = APIStatusError
+    fake_module.APITimeoutError = APITimeoutError
     fake_module.BadRequestError = BadRequestError
     fake_module.NotFoundError = NotFoundError
     fake_module.RateLimitError = RateLimitError
@@ -453,6 +468,134 @@ def test_openai_rate_limit_error_is_not_retried(
         client.invoke(messages=[{"role": "user", "content": "hi"}])
 
     assert call_count == 1, "429 should not retry"
+
+
+def test_openai_authentication_error_includes_config_hint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_openai = _install_fake_openai(monkeypatch)
+
+    def raise_auth(**_: object) -> object:
+        raise fake_openai.AuthenticationError("bad key")
+
+    client = OpenAIAgentClient.__new__(OpenAIAgentClient)
+    client._client = types.SimpleNamespace(
+        chat=types.SimpleNamespace(completions=types.SimpleNamespace(create=raise_auth))
+    )
+    client._model = "gpt-4o"
+    client._max_tokens = 512
+    client._api_key_env = "OPENROUTER_API_KEY"
+
+    with pytest.raises(RuntimeError) as exc:
+        client.invoke(messages=[{"role": "user", "content": "hi"}])
+
+    message = str(exc.value)
+    assert "OpenAI authentication failed" in message
+    assert "OPENROUTER_API_KEY" in message
+
+
+def test_openai_billing_status_error_fails_fast(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_openai = _install_fake_openai(monkeypatch)
+    monkeypatch.setattr("app.services.agent_llm_client.time.sleep", lambda _: None)
+    call_count = 0
+
+    def raise_billing(**_: object) -> object:
+        nonlocal call_count
+        call_count += 1
+        raise fake_openai.APIStatusError("payment required", status_code=402)
+
+    client = OpenAIAgentClient.__new__(OpenAIAgentClient)
+    client._client = types.SimpleNamespace(
+        chat=types.SimpleNamespace(completions=types.SimpleNamespace(create=raise_billing))
+    )
+    client._model = "openrouter/gpt-4o"
+    client._max_tokens = 512
+
+    with pytest.raises(RuntimeError, match="billing quota exceeded"):
+        client.invoke(messages=[{"role": "user", "content": "hi"}])
+
+    assert call_count == 1
+
+
+def test_openai_timeout_error_retries_then_raises_actionable_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_openai = _install_fake_openai(monkeypatch)
+    monkeypatch.setattr("app.services.agent_llm_client.time.sleep", lambda _: None)
+    call_count = 0
+
+    def raise_timeout(**_: object) -> object:
+        nonlocal call_count
+        call_count += 1
+        raise fake_openai.APITimeoutError("request timed out")
+
+    client = OpenAIAgentClient.__new__(OpenAIAgentClient)
+    client._client = types.SimpleNamespace(
+        chat=types.SimpleNamespace(completions=types.SimpleNamespace(create=raise_timeout))
+    )
+    client._model = "gpt-4o"
+    client._max_tokens = 512
+
+    with pytest.raises(RuntimeError) as exc:
+        client.invoke(messages=[{"role": "user", "content": "hi"}])
+
+    assert call_count == 3
+    assert "API request timed out" in str(exc.value)
+    assert "configured endpoint" in str(exc.value)
+
+
+def test_openai_connection_error_retries_then_raises_actionable_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_openai = _install_fake_openai(monkeypatch)
+    monkeypatch.setattr("app.services.agent_llm_client.time.sleep", lambda _: None)
+    call_count = 0
+
+    def raise_connection(**_: object) -> object:
+        nonlocal call_count
+        call_count += 1
+        raise fake_openai.APIConnectionError("connection error")
+
+    client = OpenAIAgentClient.__new__(OpenAIAgentClient)
+    client._client = types.SimpleNamespace(
+        chat=types.SimpleNamespace(completions=types.SimpleNamespace(create=raise_connection))
+    )
+    client._model = "gpt-4o"
+    client._max_tokens = 512
+
+    with pytest.raises(RuntimeError) as exc:
+        client.invoke(messages=[{"role": "user", "content": "hi"}])
+
+    assert call_count == 3
+    assert "Cannot connect to OpenAI API" in str(exc.value)
+    assert "endpoint URL" in str(exc.value)
+
+
+def test_openai_server_status_error_is_retried(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_openai = _install_fake_openai(monkeypatch)
+    monkeypatch.setattr("app.services.agent_llm_client.time.sleep", lambda _: None)
+    call_count = 0
+
+    def raise_server_error(**_: object) -> object:
+        nonlocal call_count
+        call_count += 1
+        raise fake_openai.APIStatusError("bad gateway", status_code=502)
+
+    client = OpenAIAgentClient.__new__(OpenAIAgentClient)
+    client._client = types.SimpleNamespace(
+        chat=types.SimpleNamespace(completions=types.SimpleNamespace(create=raise_server_error))
+    )
+    client._model = "gpt-4o"
+    client._max_tokens = 512
+
+    with pytest.raises(RuntimeError, match="API failed after 3 attempts"):
+        client.invoke(messages=[{"role": "user", "content": "hi"}])
+
+    assert call_count == 3
 
 
 def test_openai_permission_denied_error_is_not_retried(
