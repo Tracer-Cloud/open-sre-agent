@@ -44,6 +44,7 @@ Before any push or PR creation, follow the mandatory checklist in [CI.md](CI.md)
 | `Makefile`            | Canonical local automation for install, test, verify, deploy, and cleanup targets.                 |
 | `README.md`           | Product overview, install, quick start, high-level capabilities, and links to deeper docs.         |
 | `docs/DEVELOPMENT.md` | Contributor workflows: CI parity commands, dev container, benchmark, deployment, telemetry detail. |
+| `docs/investigation-tool-calling.md` | Investigation ReAct tool schemas, LLM invoke payloads, and message shapes (all providers). |
 | `SETUP.md`            | Machine setup (all platforms, Windows, MCP/OpenClaw, troubleshooting).                             |
 | `CI.md`               | Mandatory pre-push checklist: lint, format, typecheck, tests — agents MUST follow before pushing. |
 | `CONTRIBUTING.md`     | Contribution workflow, branch/PR guidance, and quality expectations.                               |
@@ -163,7 +164,7 @@ Basic steps:
 - If a new feature is shipped (tool, CLI command, pipeline behavior, integration) -> add a `docs/` page or section covering usage, configuration, and examples before the PR is opened.
 - If a new `docs/` page is added or renamed -> register it in `docs/docs.json` under the correct `pages` array in the same PR (path without `.mdx`, e.g. `messaging/whatsapp` for `docs/messaging/whatsapp.mdx`).
 - If an existing feature changes behavior, flags, or config shape -> update the relevant `docs/` page in the same PR; docs and code must stay in sync.
-- If a tool's API or schema changes -> update docs in `docs/` and update the related unit tests, usually under `tests/tools/`.
+- If a tool's API or schema changes -> update docs in `docs/` and update the related unit tests, usually under `tests/tools/`. For investigation LLM tool-calling (any provider), follow [docs/investigation-tool-calling.md](docs/investigation-tool-calling.md).
 - If an integration changes -> update `tests/integrations/` and verify with `make verify-integrations`.
 - If adding a new integration -> follow the New Integration Checklist below before opening the PR for review.
 - If adding new tests -> always place them in `tests/`, never in `app/` (no inline tests).
@@ -200,6 +201,7 @@ The fastest local loop is `make test-cov`, which exercises the non-live unit sui
 - Legacy graph dev server: removed; use `make dev` for a local uvicorn hint or run investigations via the CLI.
 - Docker requirement: Several targets, including the Grafana local stack and Chaos Mesh workflows, require a running Docker daemon.
 - Docs navigation: Adding an `.mdx` file under `docs/` is not enough — Mintlify only shows pages listed in `docs/docs.json`. Forgetting the `pages` entry leaves the doc unreachable from the site sidebar.
+- Investigation tool schemas: draft-07 JSON Schema (e.g. `"type": ["object", "null"]`) can pass loose checks but fail the LLM API on first invoke because **all** available investigation tools are sent together. Normalize in the provider adapter and extend registry contract tests; see [docs/investigation-tool-calling.md](docs/investigation-tool-calling.md).
 
 ## 6. New Integration Checklist
 
