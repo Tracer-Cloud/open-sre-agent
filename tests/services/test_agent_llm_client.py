@@ -555,6 +555,28 @@ def test_anthropic_unexpected_response_type_raises_clear_error(
         client.invoke(messages=[{"role": "user", "content": "hi"}])
 
 
+def test_anthropic_missing_stop_reason_defaults_to_end_turn(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_anthropic(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+    client = AnthropicAgentClient(model="claude-sonnet-4-6")
+    # Response has a valid content list but no stop_reason attribute.
+    fake_response = types.SimpleNamespace(
+        content=[types.SimpleNamespace(type="text", text="hello")]
+        # stop_reason intentionally absent
+    )
+    client._client = types.SimpleNamespace(
+        messages=types.SimpleNamespace(create=lambda **_: fake_response)
+    )
+
+    result = client.invoke(messages=[{"role": "user", "content": "hi"}])
+
+    assert result.content == "hello"
+    assert result.stop_reason == "end_turn"
+
+
 @pytest.mark.parametrize(
     "provider", ["codex", "opencode", "claude-code", "kimi", "cursor", "gemini-cli", "copilot"]
 )
