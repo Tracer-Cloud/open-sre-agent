@@ -9,6 +9,8 @@ import pytest
 
 from app.integrations.models import JiraIntegrationConfig as JiraConfig
 from app.services.jira.client import JiraClient, make_jira_client
+from app.services._base import ServiceClientUnavailable
+from pydantic import BaseModel, ValidationError
 
 
 @pytest.fixture
@@ -123,3 +125,37 @@ def test_make_jira_client_returns_none_missing_token() -> None:
 
 def test_make_jira_client_returns_none_all_none() -> None:
     assert make_jira_client(None, None, None) is None
+
+
+class _DummyModel(BaseModel):
+    x: int
+
+
+def _create_validation_error() -> ValidationError:
+    try:
+        _DummyModel(x="not an int")  # type: ignore[arg-type]
+    except ValidationError as e:
+        return e
+    raise RuntimeError("unreachable")
+
+
+def test_make_jira_client_raises_validation_error_on_invalid_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _raise(*_args: Any, **_kwargs: Any) -> Any:
+        raise _create_validation_error()
+
+    monkeypatch.setattr("app.services.jira.client.JiraIntegrationConfig", _raise)
+    with pytest.raises(ValidationError):
+        make_jira_client("https://x.atlassian.net", "user@example.com", "token")
+
+
+def test_make_jira_client_raises_unavailable_on_other_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _raise(*_args: Any, **_kwargs: Any) -> Any:
+        raise ValueError("unexpected")
+
+    monkeypatch.setattr("app.services.jira.client.JiraIntegrationConfig", _raise)
+    with pytest.raises(ServiceClientUnavailable):
+        make_jira_client("https://x.atlassian.net", "user@example.com", "token")

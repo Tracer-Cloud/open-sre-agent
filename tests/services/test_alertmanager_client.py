@@ -12,6 +12,8 @@ from app.services.alertmanager.client import (
     AlertmanagerClient,
     make_alertmanager_client,
 )
+from app.services._base import ServiceClientUnavailable
+from pydantic import BaseModel, ValidationError
 
 AlertmanagerConfig = AlertmanagerIntegrationConfig
 
@@ -477,6 +479,40 @@ def test_make_client_strips_whitespace() -> None:
     )
     assert client is not None
     assert client.config.base_url == "https://alertmanager.example.com"
+
+
+class _DummyModel(BaseModel):
+    x: int
+
+
+def _create_validation_error() -> ValidationError:
+    try:
+        _DummyModel(x="not an int")  # type: ignore[arg-type]
+    except ValidationError as e:
+        return e
+    raise RuntimeError("unreachable")
+
+
+def test_make_client_raises_validation_error_on_invalid_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _raise(*_args: Any, **_kwargs: Any) -> Any:
+        raise _create_validation_error()
+
+    monkeypatch.setattr("app.services.alertmanager.client.AlertmanagerConfig", _raise)
+    with pytest.raises(ValidationError):
+        make_alertmanager_client("https://example.com", "token")
+
+
+def test_make_client_raises_unavailable_on_other_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _raise(*_args: Any, **_kwargs: Any) -> Any:
+        raise ValueError("unexpected")
+
+    monkeypatch.setattr("app.services.alertmanager.client.AlertmanagerConfig", _raise)
+    with pytest.raises(ServiceClientUnavailable):
+        make_alertmanager_client("https://example.com", "token")
 
 
 # --- Probe Access ---

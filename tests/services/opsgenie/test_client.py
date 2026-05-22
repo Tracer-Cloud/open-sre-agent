@@ -9,6 +9,8 @@ from app.services.opsgenie.client import (
     OpsGenieConfig,
     make_opsgenie_client,
 )
+from app.services._base import ServiceClientUnavailable
+from pydantic import BaseModel, ValidationError
 
 
 class _FakeResponse:
@@ -327,3 +329,37 @@ def test_make_client_forwards_region() -> None:
     client = make_opsgenie_client("test-key", "eu")
     assert client is not None
     assert client.config.region == "eu"
+
+
+class _DummyModel(BaseModel):
+    x: int
+
+
+def _create_validation_error() -> ValidationError:
+    try:
+        _DummyModel(x="not an int")  # type: ignore[arg-type]
+    except ValidationError as e:
+        return e
+    raise RuntimeError("unreachable")
+
+
+def test_make_client_raises_validation_error_on_invalid_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _raise(*_args: Any, **_kwargs: Any) -> Any:
+        raise _create_validation_error()
+
+    monkeypatch.setattr("app.services.opsgenie.client.OpsGenieConfig", _raise)
+    with pytest.raises(ValidationError):
+        make_opsgenie_client("test-key")
+
+
+def test_make_client_raises_unavailable_on_other_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _raise(*_args: Any, **_kwargs: Any) -> Any:
+        raise ValueError("unexpected")
+
+    monkeypatch.setattr("app.services.opsgenie.client.OpsGenieConfig", _raise)
+    with pytest.raises(ServiceClientUnavailable):
+        make_opsgenie_client("test-key")

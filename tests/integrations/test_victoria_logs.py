@@ -23,6 +23,9 @@ from app.integrations._catalog_impl import _classify_service_instance
 from app.integrations._verification_adapters import _verify_victoria_logs
 from app.integrations.catalog import load_env_integrations
 from app.integrations.config_models import VictoriaLogsIntegrationConfig
+from app.services.victoria_logs.client import make_victoria_logs_client
+from app.services._base import ServiceClientUnavailable
+from pydantic import BaseModel, ValidationError
 
 
 class TestVictoriaLogsIntegrationConfig:
@@ -203,3 +206,37 @@ class TestVictoriaLogsIntegrationCanonicalShape:
         # Alias map: both spellings normalize to the canonical service.
         assert SERVICE_KEY_MAP["victoria_logs"] == "victoria_logs"
         assert SERVICE_KEY_MAP["victorialogs"] == "victoria_logs"
+
+
+class _DummyModel(BaseModel):
+    x: int
+
+
+def _create_validation_error() -> ValidationError:
+    try:
+        _DummyModel(x="not an int")  # type: ignore[arg-type]
+    except ValidationError as e:
+        return e
+    raise RuntimeError("unreachable")
+
+
+class TestMakeVictoriaLogsClient:
+    def test_make_client_raises_validation_error_on_invalid_config(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def _raise(*_args: Any, **_kwargs: Any) -> Any:
+            raise _create_validation_error()
+
+        monkeypatch.setattr("app.services.victoria_logs.client.VictoriaLogsConfig", _raise)
+        with pytest.raises(ValidationError):
+            make_victoria_logs_client("http://vmlogs:9428")
+
+    def test_make_client_raises_unavailable_on_other_error(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def _raise(*_args: Any, **_kwargs: Any) -> Any:
+            raise ValueError("unexpected")
+
+        monkeypatch.setattr("app.services.victoria_logs.client.VictoriaLogsConfig", _raise)
+        with pytest.raises(ServiceClientUnavailable):
+            make_victoria_logs_client("http://vmlogs:9428")
