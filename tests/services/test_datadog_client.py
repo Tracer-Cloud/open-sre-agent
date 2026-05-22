@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -181,6 +182,110 @@ def test_list_monitors_generic_exception(client, mock_httpx_client):
 
     assert result["success"] is False
     assert result["error"] == "boom"
+
+
+# -------------------------
+# query_metrics
+# -------------------------
+
+
+def test_query_metrics_success_preserves_first_series_and_returns_all_series(
+    client,
+    mock_httpx_client,
+):
+    mock_instance = MagicMock()
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "series": [
+            {
+                "metric": "system.cpu.user",
+                "scope": "host:web-01",
+                "tag_set": ["host:web-01"],
+                "unit": [{"family": "percentage"}],
+                "pointlist": [
+                    [1779453600000, 10.0],
+                    [1779453660000, None],
+                    [1779453720000, "20.5"],
+                    ["bad-ts", 30.0],
+                ],
+            },
+            {
+                "metric": "system.mem.used",
+                "scope": "host:web-01",
+                "pointlist": [[1779453600000, 1024]],
+            },
+        ]
+    }
+    mock_instance.get.return_value = mock_response
+    mock_httpx_client.return_value = mock_instance
+
+    result = client.query_metrics(
+        "avg:system.cpu.user{*}",
+        start=datetime(2026, 5, 22, 10, 0, tzinfo=UTC),
+        end=datetime(2026, 5, 22, 10, 15, tzinfo=UTC),
+    )
+
+    mock_instance.get.assert_called_once()
+    assert result["success"] is True
+    assert result["timestamps"] == ["2026-05-22T12:40:00Z", "2026-05-22T12:42:00Z"]
+    assert result["values"] == [10.0, 20.5]
+    assert result["total_series"] == 2
+    assert result["series"][0]["metric"] == "system.cpu.user"
+    assert result["series"][0]["points"] == [
+        {"timestamp": "2026-05-22T12:40:00Z", "value": 10.0},
+        {"timestamp": "2026-05-22T12:42:00Z", "value": 20.5},
+    ]
+    assert result["series"][1]["values"] == [1024.0]
+
+
+def test_query_metrics_empty_series(client, mock_httpx_client):
+    mock_instance = MagicMock()
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"series": []}
+    mock_response.raise_for_status.return_value = None
+    mock_instance.get.return_value = mock_response
+    mock_httpx_client.return_value = mock_instance
+
+    result = client.query_metrics(
+        "avg:system.cpu.user{*}",
+        start=datetime(2026, 5, 22, 10, 0, tzinfo=UTC),
+        end=datetime(2026, 5, 22, 10, 15, tzinfo=UTC),
+    )
+
+    assert result == {
+        "success": True,
+        "timestamps": [],
+        "values": [],
+        "series": [],
+        "total_series": 0,
+    }
+
+
+def test_query_metrics_http_error(client, mock_httpx_client):
+    mock_instance = MagicMock()
+    mock_httpx_client.return_value = mock_instance
+
+    mock_response = MagicMock()
+    mock_response.status_code = 403
+    mock_response.text = "forbidden"
+
+    error = httpx.HTTPStatusError(
+        "error",
+        request=MagicMock(),
+        response=mock_response,
+    )
+
+    mock_response.raise_for_status.side_effect = error
+    mock_instance.get.return_value = mock_response
+
+    result = client.query_metrics(
+        "avg:system.cpu.user{*}",
+        start=datetime(2026, 5, 22, 10, 0, tzinfo=UTC),
+        end=datetime(2026, 5, 22, 10, 15, tzinfo=UTC),
+    )
+
+    assert result["success"] is False
+    assert "HTTP 403" in result["error"]
 
 
 # -------------------------

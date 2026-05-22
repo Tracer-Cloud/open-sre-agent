@@ -150,27 +150,60 @@ class DatadogClient:
             payload = resp.json()
             series_list = payload.get("series") or []
             if not isinstance(series_list, list) or not series_list:
-                return {"success": True, "timestamps": [], "values": []}
+                return {
+                    "success": True,
+                    "timestamps": [],
+                    "values": [],
+                    "series": [],
+                    "total_series": 0,
+                }
 
-            first = series_list[0] if isinstance(series_list[0], dict) else {}
-            pointlist = first.get("pointlist") or []
-
-            timestamps: list[str] = []
-            values: list[float] = []
-            for point in pointlist:
-                if not (isinstance(point, list | tuple) and len(point) >= 2):
-                    continue
-                ts_ms, value = point[0], point[1]
-                if value is None:
-                    continue
-                try:
-                    ts = datetime.fromtimestamp(float(ts_ms) / 1000.0, tz=UTC)
-                    timestamps.append(ts.isoformat().replace("+00:00", "Z"))
-                    values.append(float(value))
-                except Exception:
+            parsed_series: list[dict[str, Any]] = []
+            for raw_series in series_list:
+                if not isinstance(raw_series, dict):
                     continue
 
-            return {"success": True, "timestamps": timestamps, "values": values}
+                timestamps: list[str] = []
+                values: list[float] = []
+                points: list[dict[str, Any]] = []
+                pointlist = raw_series.get("pointlist") or []
+                for point in pointlist:
+                    if not (isinstance(point, list | tuple) and len(point) >= 2):
+                        continue
+                    ts_ms, value = point[0], point[1]
+                    if value is None:
+                        continue
+                    try:
+                        ts = datetime.fromtimestamp(float(ts_ms) / 1000.0, tz=UTC)
+                        timestamp = ts.isoformat().replace("+00:00", "Z")
+                        numeric_value = float(value)
+                    except Exception:
+                        continue
+                    timestamps.append(timestamp)
+                    values.append(numeric_value)
+                    points.append({"timestamp": timestamp, "value": numeric_value})
+
+                parsed_series.append(
+                    {
+                        "metric": raw_series.get("metric", ""),
+                        "scope": raw_series.get("scope", ""),
+                        "tags": raw_series.get("tag_set") or raw_series.get("tags") or [],
+                        "unit": raw_series.get("unit"),
+                        "point_count": len(points),
+                        "points": points,
+                        "timestamps": timestamps,
+                        "values": values,
+                    }
+                )
+
+            first_series = parsed_series[0] if parsed_series else {}
+            return {
+                "success": True,
+                "timestamps": first_series.get("timestamps", []),
+                "values": first_series.get("values", []),
+                "series": parsed_series,
+                "total_series": len(parsed_series),
+            }
         except httpx.HTTPStatusError as e:
             logger.warning(
                 "[datadog] Metrics query HTTP failure status=%s query=%r",
