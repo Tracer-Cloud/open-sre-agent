@@ -127,7 +127,7 @@ MINIMAX_TOOLCALL_MODEL = "MiniMax-M2.7-highspeed"
 
 # Base URLs for OpenAI-compatible providers
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+DEEPSEEK_BASE_URL = "https://api.deepseek.com"  # no /v1 — DeepSeek serves the OpenAI-compatible API at the root path
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
 MINIMAX_BASE_URL = "https://api.minimax.io/v1"
