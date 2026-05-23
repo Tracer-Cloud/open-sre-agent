@@ -16,6 +16,7 @@ from app.cli.interactive_shell.ui import (
     ERROR,
     HIGHLIGHT,
     WARNING,
+    print_repl_table,
     render_ready_box,
     repl_table,
     resolve_provider_models,
@@ -100,7 +101,7 @@ def _cmd_status(session: ReplSession, console: Console, _args: list[str]) -> boo
     acc = session.accumulated_context
     if acc:
         table.add_row("accumulated context", ", ".join(sorted(acc.keys())))
-    console.print(table)
+    print_repl_table(console, table)
     return True
 
 
@@ -118,7 +119,7 @@ def _cmd_cost(session: ReplSession, console: Console, _args: list[str]) -> bool:
     else:
         table.add_row("token usage", f"[{DIM}]not available (not wired yet)[/]")
 
-    console.print(table)
+    print_repl_table(console, table)
     return True
 
 
@@ -216,7 +217,7 @@ def _cmd_context(session: ReplSession, console: Console, _args: list[str]) -> bo
     table.add_column("value")
     for k, v in sorted(session.accumulated_context.items()):
         table.add_row(k, escape(str(v)))
-    console.print(table)
+    print_repl_table(console, table)
     return True
 
 

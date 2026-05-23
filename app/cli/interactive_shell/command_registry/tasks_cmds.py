@@ -17,6 +17,7 @@ from app.cli.interactive_shell.ui import (
     ERROR,
     HIGHLIGHT,
     WARNING,
+    print_repl_table,
     repl_table,
 )
 
@@ -124,7 +125,7 @@ def _cmd_history(_session: ReplSession, console: Console, _args: list[str]) -> b
 
     for i, entry in enumerate(entries, start=1):
         table.add_row(str(i), escape(entry))
-    console.print(table)
+    print_repl_table(console, table)
     return True
 
 
@@ -159,7 +160,7 @@ def _cmd_tasks(session: ReplSession, console: Console, _args: list[str]) -> bool
             _task_duration_label(task),
             escape(_task_detail_label(task)),
         )
-    console.print(table)
+    print_repl_table(console, table)
     return True
 
 

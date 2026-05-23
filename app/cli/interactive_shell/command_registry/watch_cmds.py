@@ -20,6 +20,7 @@ from app.cli.interactive_shell.ui import (
     ERROR,
     HIGHLIGHT,
     WARNING,
+    print_repl_table,
     repl_table,
 )
 from app.cli.support.errors import OpenSREError
@@ -267,7 +268,7 @@ def _cmd_watches(session: ReplSession, console: Console, _args: list[str]) -> bo
             escape(thresholds),
             escape(sample),
         )
-    console.print(table)
+    print_repl_table(console, table)
     return True
 
 

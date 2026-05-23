@@ -14,6 +14,7 @@ from app.cli.interactive_shell.ui import (
     ERROR,
     HIGHLIGHT,
     WARNING,
+    print_repl_table,
     repl_table,
 )
 
@@ -58,7 +59,7 @@ def _cmd_doctor(_session: ReplSession, console: Console, _args: list[str]) -> bo
         if status in ("warn", "error"):
             issues += 1
 
-    console.print(table)
+    print_repl_table(console, table)
     if issues:
         console.print(f"[{WARNING}]{issues} issue(s) found.[/]")
     else:
@@ -75,7 +76,7 @@ def _cmd_version(_session: ReplSession, console: Console, _args: list[str]) -> b
     table.add_row("opensre", get_version())
     table.add_row("python", platform.python_version())
     table.add_row("os", f"{platform.system().lower()} ({platform.machine()})")
-    console.print(table)
+    print_repl_table(console, table)
     return True
 
 
