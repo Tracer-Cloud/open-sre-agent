@@ -16,7 +16,7 @@ from app.cli.interactive_shell.ui import (
     ERROR,
     HIGHLIGHT,
     WARNING,
-    render_banner,
+    render_ready_box,
     repl_table,
     resolve_provider_models,
 )
@@ -36,7 +36,7 @@ from app.llm_reasoning_effort import (
 
 def _cmd_clear(_session: ReplSession, console: Console, _args: list[str]) -> bool:
     console.clear()
-    render_banner(console)
+    render_ready_box(console)
     return True
 
 
