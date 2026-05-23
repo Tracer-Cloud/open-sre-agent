@@ -69,22 +69,21 @@ def test_draw_menu_uses_carriage_return_newlines(monkeypatch) -> None:
 def test_erase_menu_block_resets_to_column_zero(monkeypatch) -> None:
     terminal = io.StringIO()
     proxy = _patch_stdout_proxy(monkeypatch, terminal)
-    monkeypatch.setattr(choice_menu, "repl_tty_interactive", lambda: False)
 
     choice_menu._erase_menu("crumb", ["one", "two"])
 
-    rendered = proxy.getvalue()
+    assert proxy.getvalue() == ""
+    rendered = terminal.getvalue()
     assert rendered.startswith("\r\x1b[")
     assert "A\r\x1b[J" in rendered
-    assert terminal.getvalue() == "\x1b[0G"
+    assert rendered.endswith("\x1b[0G")
 
 
-def test_erase_menu_block_writes_erase_to_terminal_when_interactive(
+def test_erase_menu_block_writes_erase_to_terminal_when_proxy_active(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     terminal = io.StringIO()
     _patch_stdout_proxy(monkeypatch, terminal)
-    monkeypatch.setattr(choice_menu, "repl_tty_interactive", lambda: True)
 
     choice_menu._erase_menu("crumb", ["one", "two"])
 

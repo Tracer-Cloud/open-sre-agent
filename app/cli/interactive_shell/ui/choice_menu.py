@@ -54,6 +54,9 @@ def repl_terminal_stdout() -> Any:
     the proxy, leaving the cursor on a high column and wrapping the first
     character of each row to the far right. Post-menu output must write cursor
     control sequences synchronously on the underlying terminal stream.
+
+    ``StdoutProxy.original_stdout`` is the supported escape hatch in
+    ``prompt_toolkit.patch_stdout`` for reaching the wrapped stream.
     """
     stdout = sys.stdout
     if isinstance(stdout, StdoutProxy):
@@ -231,7 +234,8 @@ def write_menu_line(text: str = "") -> None:
 
 
 def _erase_menu_block(height: int) -> None:
-    if repl_tty_interactive():
+    if isinstance(sys.stdout, StdoutProxy):
+        sys.stdout.flush()
         out = repl_terminal_stdout()
         if height:
             out.write(f"\r\x1b[{height}A\r\x1b[J")
