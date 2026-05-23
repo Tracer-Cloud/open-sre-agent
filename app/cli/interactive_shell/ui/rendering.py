@@ -145,6 +145,39 @@ def print_repl_table(console: Console, table: Table, *, width: int | None = None
         _console_print_prepared(console, table, width=width)
 
 
+def print_repl_json(console: Console, json_str: str) -> None:
+    """Print JSON via Rich using REPL-safe \\r\\n line endings.
+
+    Mirrors the buffered-write approach in :func:`print_repl_table` to prevent
+    the diagonal-render artifact under prompt_toolkit's patch_stdout: bare
+    ``\\n`` from Rich does not imply a carriage-return, so each JSON line would
+    start at the column where the previous one ended.  Rendering to a buffer
+    and normalising to ``\\r\\n`` ensures every line begins at column zero.
+    The leading blank is included in the same write call to avoid a stale CPR
+    sequence being left in stdin by a prompt_toolkit toolbar flush.
+    """
+    width = _prepare_tty_for_rich(console)
+    if console.file is sys.stdout and sys.stdout.isatty():
+        buf = io.StringIO()
+        buf_console = Console(
+            file=buf,
+            force_terminal=True,
+            highlight=False,
+            width=width,
+        )
+        buf_console.print_json(json_str)
+        rendered = buf.getvalue().replace("\r\n", "\n").replace("\n", "\r\n")
+        rendered = "\r\n" + rendered
+        token = _REPL_OUTPUT_PREPARED.set(True)
+        try:
+            sys.stdout.write(rendered)
+            sys.stdout.flush()
+        finally:
+            _REPL_OUTPUT_PREPARED.reset(token)
+    else:
+        console.print_json(json_str)
+
+
 def repl_print(console: Console, *objects: Any, **kwargs: Any) -> None:
     """Print via Rich after resetting the TTY column (inline-menu safe)."""
     from app.cli.interactive_shell.ui.choice_menu import prepare_repl_output_line
@@ -328,6 +361,7 @@ __all__ = [
     "_repl_table_width",
     "print_command_output",
     "print_planned_actions",
+    "print_repl_json",
     "print_repl_table",
     "render_table",
     "repl_print",

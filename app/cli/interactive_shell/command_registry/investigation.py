@@ -15,6 +15,7 @@ from app.cli.interactive_shell.ui import (
     ERROR,
     HIGHLIGHT,
     WARNING,
+    print_repl_json,
 )
 from app.cli.interactive_shell.ui.choice_menu import (
     repl_choose_one,
@@ -108,7 +109,7 @@ def _cmd_template(session: ReplSession, console: Console, args: list[str]) -> bo
         )
         return True
 
-    console.print_json(json.dumps(payload, indent=2))
+    print_repl_json(console, json.dumps(payload, indent=2))
     return True
 
 
