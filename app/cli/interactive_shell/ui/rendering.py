@@ -180,7 +180,7 @@ def render_table(
         fixed_budget = sum(14 for c in columns if not c.flex)
         flex_width = max(20, (width - fixed_budget) // flex_count)
 
-    table = repl_table(title=title, title_style=title_style, show_lines=show_lines)
+    table = repl_table(title=f"{title}\n", title_style=title_style, show_lines=show_lines)
     for col in columns:
         col_kwargs: dict[str, Any] = {
             "no_wrap": col.no_wrap,
