@@ -85,10 +85,14 @@ def _repl_table_width(console: Console) -> int:
 
 
 def _prepare_tty_for_rich(console: Console) -> int:
-    """Reset cursor column and return the width Rich should render at."""
-    from app.cli.interactive_shell.ui.choice_menu import prepare_repl_output_line
+    """Return the width Rich should render at.
 
-    prepare_repl_output_line()
+    prepare_repl_output_line() (which writes \\r\\n) is intentionally NOT called
+    here. Under patch_stdout(raw=True), that extra newline causes the bottom
+    toolbar text to flush into the output stream before the table renders. Slash
+    commands start after the user presses Enter, so the cursor is already on a
+    fresh line; no extra line-feed is needed.
+    """
     return _repl_table_width(console)
 
 
