@@ -81,6 +81,8 @@ def query_grafana_metrics(
     service_name: str | None = None,
     grafana_endpoint: str | None = None,
     grafana_api_key: str | None = None,
+    grafana_username: str = "",
+    grafana_password: str = "",
     grafana_backend: Any = None,
     **_kwargs: Any,
 ) -> dict:
@@ -97,7 +99,7 @@ def query_grafana_metrics(
             "service_name": service_name,
         }
 
-    client = _resolve_grafana_client(grafana_endpoint, grafana_api_key)
+    client = _resolve_grafana_client(grafana_endpoint, grafana_api_key, grafana_username, grafana_password)
     if not client or not client.is_configured:
         return {
             "source": "grafana_mimir",

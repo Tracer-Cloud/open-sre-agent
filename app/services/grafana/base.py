@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 from typing import Any
@@ -52,6 +53,8 @@ class GrafanaClientBase:
         self.account_id = config.account_id
         self.instance_url = config.instance_url
         self.read_token = config.read_token
+        self.username = config.username
+        self.password = config.password
         self.loki_datasource_uid = config.loki_datasource_uid
         self.tempo_datasource_uid = config.tempo_datasource_uid
         self.mimir_datasource_uid = config.mimir_datasource_uid
@@ -293,6 +296,9 @@ class GrafanaClientBase:
             return []
 
     def _get_auth_headers(self) -> dict[str, str]:
+        if self.username and self.password:
+            credentials = base64.b64encode(f"{self.username}:{self.password}".encode()).decode()
+            return {"Authorization": f"Basic {credentials}"}
         if not self.read_token:
             return {}
         return {"Authorization": f"Bearer {self.read_token}"}

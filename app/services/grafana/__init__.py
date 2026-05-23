@@ -41,6 +41,8 @@ def get_grafana_client_from_credentials(
     endpoint: str,
     api_key: str,
     account_id: str = "user_integration",
+    username: str = "",
+    password: str = "",
 ) -> GrafanaClient:
     """Create a Grafana client from integration credentials.
 
@@ -51,6 +53,8 @@ def get_grafana_client_from_credentials(
         endpoint: Grafana instance URL (e.g., https://myorg.grafana.net)
         api_key: Grafana service account token (glsa_...)
         account_id: Identifier for caching (default: "user_integration")
+        username: Username for basic auth (optional, used for localhost)
+        password: Password for basic auth (optional, used for localhost)
 
     Returns:
         GrafanaClient configured with discovered datasource UIDs
@@ -63,6 +67,8 @@ def get_grafana_client_from_credentials(
         account_id=account_id,
         instance_url=endpoint.rstrip("/"),
         read_token=api_key,
+        username=username,
+        password=password,
     )
     client = GrafanaClient(config=config)
 
@@ -73,6 +79,8 @@ def get_grafana_client_from_credentials(
             account_id=account_id,
             instance_url=endpoint.rstrip("/"),
             read_token=api_key,
+            username=username,
+            password=password,
             loki_datasource_uid=discovered.get("loki_uid", ""),
             tempo_datasource_uid=discovered.get("tempo_uid", ""),
             mimir_datasource_uid=discovered.get("mimir_uid", ""),

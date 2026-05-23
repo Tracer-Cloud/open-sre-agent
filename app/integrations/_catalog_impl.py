@@ -211,6 +211,8 @@ def _classify_service_instance(
                 {
                     "endpoint": credentials.get("endpoint", ""),
                     "api_key": credentials.get("api_key", ""),
+                    "username": credentials.get("username", ""),
+                    "password": credentials.get("password", ""),
                     "integration_id": record_id,
                 }
             )
@@ -223,6 +225,8 @@ def _classify_service_instance(
             return {
                 "endpoint": grafana_config.endpoint,
                 "api_key": "",
+                "username": grafana_config.username or "admin",
+                "password": grafana_config.password or "admin",
                 "integration_id": grafana_config.integration_id,
             }, "grafana_local"
         if grafana_config.api_key and grafana_config.api_key != "local":

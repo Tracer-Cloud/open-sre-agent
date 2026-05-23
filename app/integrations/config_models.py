@@ -40,6 +40,8 @@ class GrafanaIntegrationConfig(StrictConfigModel):
     endpoint: str
     api_key: str = ""
     integration_id: str = ""
+    username: str = ""
+    password: str = ""
 
     _normalize_endpoint = field_validator("endpoint", mode="before")(normalize_url())
 
