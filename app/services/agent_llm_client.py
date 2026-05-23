@@ -176,9 +176,17 @@ class AnthropicAgentClient:
         else:
             raise RuntimeError(f"{self.provider_name} invocation failed") from last_err
 
+        content_blocks = getattr(response, "content", None)
+        if not isinstance(content_blocks, list):
+            raise RuntimeError(
+                f"{self.provider_name} API returned an unexpected response format: "
+                f"expected 'content' to be a list of blocks, "
+                f"got {type(response).__name__!r} "
+                f"(content type: {type(content_blocks).__name__!r})"
+            )
         text_parts: list[str] = []
         tool_calls: list[ToolCall] = []
-        for block in response.content:
+        for block in content_blocks:
             block_type = getattr(block, "type", None)
             if block_type == "text":
                 text_parts.append(block.text)

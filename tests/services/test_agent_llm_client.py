@@ -116,6 +116,29 @@ def test_bedrock_permission_denied_is_not_retried_and_mentions_marketplace(
     assert "aws-marketplace:Subscribe" in message
 
 
+def test_anthropic_unexpected_response_format_raises_descriptive_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If the Anthropic SDK ever returns something without a list .content,
+    invoke() must raise a RuntimeError with a clear message rather than an
+    opaque AttributeError (Sentry PYTHON-8E / PYTHON-8F)."""
+    _install_fake_anthropic(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+    client = AnthropicAgentClient(model="claude-sonnet-4-6")
+    # Simulate a broken/proxy response that is just a plain string.
+    client._client = types.SimpleNamespace(
+        messages=types.SimpleNamespace(create=lambda **_: "unexpected string response")
+    )
+
+    with pytest.raises(RuntimeError) as exc:
+        client.invoke(messages=[{"role": "user", "content": "hi"}])
+
+    message = str(exc.value)
+    assert "unexpected response format" in message.lower()
+    assert "str" in message  # type name of the bad response should appear
+
+
 def test_internal_server_error_with_model_billing_fails_fast(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
