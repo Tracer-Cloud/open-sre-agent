@@ -39,7 +39,7 @@ def _show_history(console: Console) -> bool:
         console.print(f"[{DIM}]no history yet.[/]")
         return True
 
-    table = repl_table(title="Command history", title_style=BOLD_BRAND)
+    table = repl_table(title="Command history\n", title_style=BOLD_BRAND)
     table.add_column("#", style=DIM, justify="right")
     table.add_column("text", overflow="fold")
 
@@ -195,7 +195,7 @@ def _cmd_history(session: ReplSession, console: Console, args: list[str]) -> boo
 
 def _cmd_privacy(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     backend = session.prompt_history_backend
-    table = repl_table(title="Privacy settings", title_style=BOLD_BRAND, show_header=False)
+    table = repl_table(title="Privacy settings\n", title_style=BOLD_BRAND, show_header=False)
     table.add_column("setting", style="bold")
     table.add_column("value")
 

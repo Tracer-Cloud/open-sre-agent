@@ -238,7 +238,7 @@ def _cmd_watches(session: ReplSession, console: Console, _args: list[str]) -> bo
         console.print(f"[{DIM}]no watchdog tasks in this session.[/]")
         return True
 
-    table = repl_table(title="Watchdogs", title_style=BOLD_BRAND)
+    table = repl_table(title="Watchdogs\n", title_style=BOLD_BRAND)
     table.add_column("id", style="bold")
     table.add_column("pid", justify="right")
     table.add_column("kind")

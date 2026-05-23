@@ -17,7 +17,7 @@ def _cmd_alerts(_session: ReplSession, console: Console, _args: list[str]) -> bo
         console.print(f"[{WARNING}]alert listener is not active.[/]")
         return True
 
-    table = repl_table(title="Alert Inbox", title_style=BOLD_BRAND, show_header=False)
+    table = repl_table(title="Alert Inbox\n", title_style=BOLD_BRAND, show_header=False)
     table.add_column("key", style="bold")
     table.add_column("value")
     table.add_row("status", f"[{HIGHLIGHT}]listening[/]")

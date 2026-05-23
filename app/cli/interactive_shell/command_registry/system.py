@@ -45,7 +45,7 @@ def _cmd_doctor(_session: ReplSession, console: Console, _args: list[str]) -> bo
     from app.cli.commands.doctor import _CHECKS, _check
 
     status_styles: dict[str, str] = {"ok": HIGHLIGHT, "warn": WARNING, "error": ERROR}
-    table = repl_table(title="OpenSRE Doctor", title_style=BOLD_BRAND)
+    table = repl_table(title="OpenSRE Doctor\n", title_style=BOLD_BRAND)
     table.add_column("check", style="bold")
     table.add_column("status")
     table.add_column("detail", style=DIM, overflow="fold")
@@ -70,7 +70,7 @@ def _cmd_doctor(_session: ReplSession, console: Console, _args: list[str]) -> bo
 def _cmd_version(_session: ReplSession, console: Console, _args: list[str]) -> bool:
     from app.version import get_version
 
-    table = repl_table(title="Version info", title_style=BOLD_BRAND, show_header=False)
+    table = repl_table(title="Version info\n", title_style=BOLD_BRAND, show_header=False)
     table.add_column("key", style="bold")
     table.add_column("value")
     table.add_row("opensre", get_version())
