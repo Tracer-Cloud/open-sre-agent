@@ -175,7 +175,11 @@ def print_repl_json(console: Console, json_str: str) -> None:
         finally:
             _REPL_OUTPUT_PREPARED.reset(token)
     else:
-        console.print_json(json_str)
+        token = _REPL_OUTPUT_PREPARED.set(True)
+        try:
+            console.print_json(json_str)
+        finally:
+            _REPL_OUTPUT_PREPARED.reset(token)
 
 
 def repl_print(console: Console, *objects: Any, **kwargs: Any) -> None:
