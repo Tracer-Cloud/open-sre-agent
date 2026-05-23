@@ -156,52 +156,63 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
     if template_name not in ALERT_TEMPLATE_CHOICES:
         template_name = ""
 
-    path = resolve_alert_path(raw_target)
-    if not path.exists():
-        if template_name:
-            task = session.task_registry.create(
-                TaskKind.INVESTIGATION, command=f"/investigate {template_name}"
-            )
-            task.mark_running()
-            try:
-                with apply_reasoning_effort(session.reasoning_effort):
-                    suppress = getattr(console, "suppress_prompt_spinner", None)
-                    if callable(suppress):
-                        suppress()
-                    final_state = run_sample_alert_for_session(
-                        template_name=template_name,
-                        context_overrides=session.accumulated_context or None,
-                        cancel_requested=task.cancel_requested,
-                    )
-            except KeyboardInterrupt:
-                task.mark_cancelled()
-                console.print(f"[{WARNING}]investigation cancelled.[/]")
-                session.record("alert", f"/investigate {template_name}", ok=False)
-                session.mark_latest(ok=False, kind="slash")
-                return True
-            except OpenSREError as exc:
-                task.mark_failed(str(exc))
-                console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
-                if exc.suggestion:
-                    console.print(f"[{WARNING}]suggestion:[/] {escape(exc.suggestion)}")
-                session.record("alert", f"/investigate {template_name}", ok=False)
-                session.mark_latest(ok=False, kind="slash")
-                return True
-            except Exception as exc:
-                task.mark_failed(str(exc))
-                report_exception(exc, context="interactive_shell.investigate_template")
-                console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
-                session.record("alert", f"/investigate {template_name}", ok=False)
-                session.mark_latest(ok=False, kind="slash")
-                return True
-
-            root = final_state.get("root_cause")
-            task.mark_completed(result=str(root) if root is not None else "")
-            session.last_state = final_state
-            session.accumulate_from_state(final_state)
-            session.record("alert", f"/investigate {template_name}")
+    # Treat canonical template names as templates even if same-named files exist
+    # in the working directory. Users can still force file mode with an explicit
+    # path form (for example: ``/investigate ./generic``).
+    if template_name:
+        task = session.task_registry.create(
+            TaskKind.INVESTIGATION, command=f"/investigate {template_name}"
+        )
+        task.mark_running()
+        try:
+            with (
+                track_investigation(
+                    entrypoint=EntrypointSource.CLI_REPL_FILE,
+                    trigger_mode=TriggerMode.FILE,
+                    input_path=f"template:{template_name}",
+                    interactive=True,
+                ),
+                apply_reasoning_effort(session.reasoning_effort),
+            ):
+                suppress = getattr(console, "suppress_prompt_spinner", None)
+                if callable(suppress):
+                    suppress()
+                final_state = run_sample_alert_for_session(
+                    template_name=template_name,
+                    context_overrides=session.accumulated_context or None,
+                    cancel_requested=task.cancel_requested,
+                )
+        except KeyboardInterrupt:
+            task.mark_cancelled()
+            console.print(f"[{WARNING}]investigation cancelled.[/]")
+            session.record("alert", f"/investigate {template_name}", ok=False)
+            session.mark_latest(ok=False, kind="slash")
+            return True
+        except OpenSREError as exc:
+            task.mark_failed(str(exc))
+            console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
+            if exc.suggestion:
+                console.print(f"[{WARNING}]suggestion:[/] {escape(exc.suggestion)}")
+            session.record("alert", f"/investigate {template_name}", ok=False)
+            session.mark_latest(ok=False, kind="slash")
+            return True
+        except Exception as exc:
+            task.mark_failed(str(exc))
+            report_exception(exc, context="interactive_shell.investigate_template")
+            console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
+            session.record("alert", f"/investigate {template_name}", ok=False)
+            session.mark_latest(ok=False, kind="slash")
             return True
 
+        root = final_state.get("root_cause")
+        task.mark_completed(result=str(root) if root is not None else "")
+        session.last_state = final_state
+        session.accumulate_from_state(final_state)
+        session.record("alert", f"/investigate {template_name}")
+        return True
+
+    path = resolve_alert_path(raw_target)
+    if not path.exists():
         console.print(f"[{ERROR}]file not found:[/] {escape(str(path))}")
         session.mark_latest(ok=False, kind="slash")
         return True

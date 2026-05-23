@@ -1103,6 +1103,62 @@ class TestInvestigateFileCommand:
         assert captured == ["generic"]
         assert session.last_state == {"root_cause": "sample cause"}
 
+    def test_template_arg_tracks_cli_repl_file_source(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        track_calls: list[tuple[str, str, str | None]] = []
+
+        class _TrackContext:
+            def __enter__(self) -> None:
+                return None
+
+            def __exit__(self, exc_type, exc, tb) -> bool:
+                _ = (exc_type, exc, tb)
+                return False
+
+        def _fake_track(*, entrypoint, trigger_mode, input_path=None, **kwargs):  # type: ignore[no-untyped-def]
+            _ = kwargs
+            track_calls.append((entrypoint.value, trigger_mode.value, input_path))
+            return _TrackContext()
+
+        monkeypatch.setattr("app.analytics.cli.track_investigation", _fake_track)
+        monkeypatch.setattr(
+            "app.cli.investigation.run_sample_alert_for_session",
+            lambda **_kwargs: {"root_cause": "sample cause"},
+        )
+
+        session = ReplSession()
+        console, _ = _capture()
+        dispatch_slash("/investigate generic", session, console)
+
+        assert track_calls == [("cli_repl_file", "file", "template:generic")]
+
+    def test_template_name_takes_precedence_over_local_same_name_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        (tmp_path / "generic").write_text('{"alert_name": "local-file"}', encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
+        calls: list[str] = []
+
+        def _fake_sample(
+            *,
+            template_name: str,
+            context_overrides: object = None,
+            cancel_requested: object = None,
+        ) -> dict[str, str]:
+            _ = (context_overrides, cancel_requested)
+            calls.append(template_name)
+            return {"root_cause": "template-wins"}
+
+        monkeypatch.setattr("app.cli.investigation.run_sample_alert_for_session", _fake_sample)
+
+        session = ReplSession()
+        console, _ = _capture()
+        dispatch_slash("/investigate generic", session, console)
+
+        assert calls == ["generic"]
+        assert session.last_state == {"root_cause": "template-wins"}
+
     def test_missing_arg_in_tty_opens_interactive_menu(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
