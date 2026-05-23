@@ -55,6 +55,7 @@ def test_llm_settings_deepseek_provider_accepted() -> None:
     assert settings.provider == "deepseek"
     assert settings.deepseek_api_key == "ds-test-key"
     assert settings.deepseek_reasoning_model == "deepseek-v4-pro"
+    assert settings.deepseek_classification_model == "deepseek-v4-flash"
     assert settings.deepseek_toolcall_model == "deepseek-v4-flash"
 
 
