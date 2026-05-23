@@ -119,6 +119,15 @@ _CLASSIFY_PATCH_TARGETS: list[tuple[str, str]] = [
 ]
 
 
+# Discord and Telegram require a non-empty bot_token to reach the model_validate
+# call (empty token exits early without reporting). Supply one so the patched
+# constructor is reached and the Sentry-report path is exercised.
+_CLASSIFY_EXTRA_CREDS: dict[str, dict[str, str]] = {
+    "discord": {"bot_token": "test-discord-token"},
+    "telegram": {"bot_token": "test-telegram-token"},
+}
+
+
 @pytest.mark.parametrize(("integration", "patch_symbol"), _CLASSIFY_PATCH_TARGETS)
 def test_classify_failure_skips_integration_and_reports(
     integration: str,
@@ -134,10 +143,13 @@ def test_classify_failure_skips_integration_and_reports(
 
     monkeypatch.setattr(f"app.integrations._catalog_impl.{patch_symbol}", _boom)
 
+    base_creds = {"endpoint": "https://x", "api_key": "k"}
+    creds = {**base_creds, **_CLASSIFY_EXTRA_CREDS.get(integration, {})}
+
     with patch("app.integrations._catalog_impl.report_exception") as mock_report:
         result = _classify_service_instance(
             integration,
-            {"endpoint": "https://x", "api_key": "k"},
+            creds,
             record_id=f"rec-{integration}",
         )
 
@@ -153,6 +165,21 @@ def test_classify_failure_skips_integration_and_reports(
     assert tags["surface"] == "integration"
     assert mock_report.call_args.kwargs["severity"] == "warning"
     assert mock_report.call_args.kwargs["extras"]["record_id"] == f"rec-{integration}"
+
+
+@pytest.mark.parametrize("integration", ["discord", "telegram"])
+def test_classify_empty_bot_token_silent_skip(integration: str) -> None:
+    """Empty/missing bot_token must silently return (None, None) without a Sentry report.
+
+    An unconfigured integration is not a code bug — reporting it to Sentry creates
+    false alerts for operators (#2437).
+    """
+    with patch("app.integrations._catalog_impl.report_exception") as mock_report:
+        result = _classify_service_instance(integration, {}, record_id="rec")
+    assert result == (None, None)
+    assert mock_report.call_count == 0, (
+        f"{integration}: empty bot_token must not trigger a Sentry report"
+    )
 
 
 # ---------------------------------------------------------------------------
