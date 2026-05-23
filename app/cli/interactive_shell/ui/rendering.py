@@ -102,14 +102,15 @@ def print_repl_table(console: Console, table: Table, *, width: int | None = None
     a separate Rich write, and if the terminal or proxy does not convert \\n to
     \\r\\n, every row starts where the previous one ended instead of column zero.
 
-    When the console writes to a different file (e.g. a StringIO in tests),
-    the normal console.print path is used so callers can inspect the output
-    via their own buffer.
+    When the console writes to a non-TTY stdout (piped output) or to a
+    different file (e.g. a StringIO in tests), the normal console.print path
+    is used — preserving the caller's color_system and avoiding ANSI pollution
+    in piped output.
     """
     width = width if width is not None else _prepare_tty_for_rich(console)
-    if console.file is sys.stdout:
+    if console.file is sys.stdout and sys.stdout.isatty():
         buf = io.StringIO()
-        color_system = str(console.color_system) if console.color_system else "truecolor"
+        color_system = console.color_system or "truecolor"
         buf_console = Console(
             file=buf,
             force_terminal=True,
@@ -120,9 +121,10 @@ def print_repl_table(console: Console, table: Table, *, width: int | None = None
         buf_console.print(table)
         rendered = buf.getvalue()
         # Normalise to \r\n so each row starts at column zero even when ONLCR is
-        # disabled (raw-mode terminal under patch_stdout).
-        if "\r\n" not in rendered:
-            rendered = rendered.replace("\n", "\r\n")
+        # disabled (raw-mode terminal under patch_stdout). Strip pre-existing \r\n
+        # first so partial Windows line-endings in cell content don't prevent the
+        # remaining bare \n chars from being converted.
+        rendered = rendered.replace("\r\n", "\n").replace("\n", "\r\n")
         token = _REPL_OUTPUT_PREPARED.set(True)
         try:
             sys.stdout.write(rendered)
