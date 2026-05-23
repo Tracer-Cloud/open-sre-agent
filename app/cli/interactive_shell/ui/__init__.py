@@ -9,8 +9,8 @@ from app.cli.interactive_shell.ui.choice_menu import (
     repl_tty_interactive,
 )
 from app.cli.interactive_shell.ui.rendering import (
-    ColumnDef,
     MCP_INTEGRATION_SERVICES,
+    ColumnDef,
     print_command_output,
     print_planned_actions,
     print_repl_table,

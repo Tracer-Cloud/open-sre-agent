@@ -29,7 +29,7 @@ from app.agents.registry import AgentRecord
 from app.agents.token_rate import TOKEN_RATE_TRACKER
 from app.agents.token_sources import claude_code as claude_source_mod
 from app.agents.token_sources import codex as codex_source_mod
-from app.cli.interactive_shell.ui.agents_view import _build_agents_table, render_agents_table
+from app.cli.interactive_shell.ui.agents_view import _build_agents_table
 
 
 @pytest.fixture(autouse=True)

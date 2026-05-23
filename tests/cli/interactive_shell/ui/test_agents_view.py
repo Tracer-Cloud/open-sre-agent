@@ -21,7 +21,7 @@ from app.agents.probe import ProcessSnapshot
 from app.agents.registry import AgentRecord
 from app.agents.token_rate import TOKEN_RATE_TRACKER
 from app.cli.interactive_shell.ui import agents_view as agents_view_mod
-from app.cli.interactive_shell.ui.agents_view import _build_agents_table, render_agents_table
+from app.cli.interactive_shell.ui.agents_view import _build_agents_table
 
 
 @pytest.fixture(autouse=True)
