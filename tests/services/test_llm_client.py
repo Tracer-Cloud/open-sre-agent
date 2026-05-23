@@ -1124,6 +1124,24 @@ def test_create_llm_client_openai_reasoning_sets_toolcall_fallback(monkeypatch) 
         llm_client.reset_llm_singletons()
 
 
+def test_create_llm_client_deepseek_reasoning_sets_toolcall_fallback(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "deepseek")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "ds-test")
+    monkeypatch.setenv("DEEPSEEK_REASONING_MODEL", "deepseek-v4-pro")
+    monkeypatch.setenv("DEEPSEEK_TOOLCALL_MODEL", "deepseek-v4-flash")
+    llm_client.reset_llm_singletons()
+    try:
+        client = llm_client._create_llm_client("reasoning")
+
+        assert isinstance(client, llm_client.OpenAILLMClient)
+        assert client._model == "deepseek-v4-pro"
+        assert client._model_fallback == "deepseek-v4-flash"
+        assert client._base_url == "https://api.deepseek.com"
+        assert client._api_key_env == "DEEPSEEK_API_KEY"
+    finally:
+        llm_client.reset_llm_singletons()
+
+
 def test_create_llm_client_claude_code_wires_cli_adapter(monkeypatch) -> None:
     """Investigation uses ``_create_llm_client`` → registry → ``CLIBackedLLMClient``."""
     monkeypatch.setenv("LLM_PROVIDER", "claude-code")

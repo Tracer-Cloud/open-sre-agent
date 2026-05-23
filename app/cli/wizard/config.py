@@ -11,6 +11,7 @@ from typing import Literal
 from app.config import (
     ANTHROPIC_REASONING_MODEL,
     BEDROCK_REASONING_MODEL,
+    DEEPSEEK_REASONING_MODEL,
     DEFAULT_OLLAMA_HOST,
     DEFAULT_OLLAMA_MODEL,
     GEMINI_REASONING_MODEL,
@@ -120,6 +121,12 @@ OPENROUTER_MODELS = (
     ModelOption(value="minimax/minimax-m2", label="MiniMax M2 (via OpenRouter)"),
     ModelOption(value="deepseek/deepseek-v3.2", label="DeepSeek V3.2 (via OpenRouter)"),
     ModelOption(value="qwen/qwen-3.6-plus-preview", label="Qwen 3.6 Plus (via OpenRouter)"),
+)
+
+DEEPSEEK_MODELS = (
+    ModelOption(value=DEEPSEEK_REASONING_MODEL, label="DeepSeek V4 Pro"),
+    ModelOption(value="deepseek-v4-flash", label="DeepSeek V4 Flash"),
+    ModelOption(value="deepseek-chat", label="DeepSeek Chat (legacy alias)"),
 )
 
 GEMINI_MODELS = (
@@ -418,6 +425,19 @@ SUPPORTED_PROVIDERS = (
         legacy_model_env="OPENROUTER_MODEL",
         toolcall_model_env="OPENROUTER_TOOLCALL_MODEL",
         classification_model_env="OPENROUTER_CLASSIFICATION_MODEL",
+        allow_custom_models=True,
+    ),
+    ProviderOption(
+        value="deepseek",
+        label="DeepSeek",
+        group="Hosted providers",
+        api_key_env="DEEPSEEK_API_KEY",
+        model_env="DEEPSEEK_REASONING_MODEL",
+        default_model=DEEPSEEK_REASONING_MODEL,
+        models=DEEPSEEK_MODELS,
+        legacy_model_env="DEEPSEEK_MODEL",
+        toolcall_model_env="DEEPSEEK_TOOLCALL_MODEL",
+        classification_model_env="DEEPSEEK_CLASSIFICATION_MODEL",
         allow_custom_models=True,
     ),
     ProviderOption(

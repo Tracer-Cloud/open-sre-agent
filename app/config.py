@@ -101,6 +101,11 @@ OPENROUTER_REASONING_MODEL = "openrouter/auto"
 OPENROUTER_CLASSIFICATION_MODEL = "openrouter/auto"
 OPENROUTER_TOOLCALL_MODEL = "openrouter/auto"
 
+# DeepSeek model constants
+DEEPSEEK_REASONING_MODEL = "deepseek-v4-pro"
+DEEPSEEK_CLASSIFICATION_MODEL = "deepseek-v4-flash"
+DEEPSEEK_TOOLCALL_MODEL = "deepseek-v4-flash"
+
 # Gemini model constants (Google AI preview IDs; OpenAI-compatible endpoint)
 # UNVERIFIED PLACEHOLDER — gemini-3.1-pro-preview / gemini-3.1-flash-lite-preview are
 # forward-looking IDs that may not yet exist. Override via GEMINI_REASONING_MODEL env var.
@@ -122,6 +127,7 @@ MINIMAX_TOOLCALL_MODEL = "MiniMax-M2.7-highspeed"
 
 # Base URLs for OpenAI-compatible providers
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
 MINIMAX_BASE_URL = "https://api.minimax.io/v1"
@@ -139,6 +145,7 @@ LLMProvider = Literal[
     "anthropic",
     "openai",
     "openrouter",
+    "deepseek",
     "gemini",
     "nvidia",
     "ollama",
@@ -170,6 +177,7 @@ LLM_PROVIDER_API_KEY_ENVS = {
     "anthropic": "ANTHROPIC_API_KEY",
     "openai": "OPENAI_API_KEY",
     "openrouter": "OPENROUTER_API_KEY",
+    "deepseek": "DEEPSEEK_API_KEY",
     "gemini": "GEMINI_API_KEY",
     "nvidia": "NVIDIA_API_KEY",
     "minimax": "MINIMAX_API_KEY",
@@ -204,6 +212,7 @@ def _llm_settings_env_payload(provider: str) -> dict[str, object]:
         "anthropic_api_key": resolve_llm_api_key("ANTHROPIC_API_KEY"),
         "openai_api_key": resolve_llm_api_key("OPENAI_API_KEY"),
         "openrouter_api_key": resolve_llm_api_key("OPENROUTER_API_KEY"),
+        "deepseek_api_key": resolve_llm_api_key("DEEPSEEK_API_KEY"),
         "gemini_api_key": resolve_llm_api_key("GEMINI_API_KEY"),
         "nvidia_api_key": resolve_llm_api_key("NVIDIA_API_KEY"),
         "minimax_api_key": resolve_llm_api_key("MINIMAX_API_KEY"),
@@ -244,6 +253,21 @@ def _llm_settings_env_payload(provider: str) -> dict[str, object]:
             os.getenv("OPENROUTER_MODEL", OPENROUTER_TOOLCALL_MODEL),
         ).strip()
         or OPENROUTER_TOOLCALL_MODEL,
+        "deepseek_reasoning_model": os.getenv(
+            "DEEPSEEK_REASONING_MODEL",
+            os.getenv("DEEPSEEK_MODEL", DEEPSEEK_REASONING_MODEL),
+        ).strip()
+        or DEEPSEEK_REASONING_MODEL,
+        "deepseek_classification_model": os.getenv(
+            "DEEPSEEK_CLASSIFICATION_MODEL",
+            os.getenv("DEEPSEEK_MODEL", DEEPSEEK_CLASSIFICATION_MODEL),
+        ).strip()
+        or DEEPSEEK_CLASSIFICATION_MODEL,
+        "deepseek_toolcall_model": os.getenv(
+            "DEEPSEEK_TOOLCALL_MODEL",
+            os.getenv("DEEPSEEK_MODEL", DEEPSEEK_TOOLCALL_MODEL),
+        ).strip()
+        or DEEPSEEK_TOOLCALL_MODEL,
         "gemini_reasoning_model": os.getenv(
             "GEMINI_REASONING_MODEL",
             os.getenv("GEMINI_MODEL", GEMINI_REASONING_MODEL),
@@ -328,6 +352,7 @@ class LLMSettings(StrictConfigModel):
     anthropic_api_key: str = ""
     openai_api_key: str = ""
     openrouter_api_key: str = ""
+    deepseek_api_key: str = ""
     gemini_api_key: str = ""
     nvidia_api_key: str = ""
     minimax_api_key: str = ""
@@ -342,6 +367,9 @@ class LLMSettings(StrictConfigModel):
     openrouter_reasoning_model: str = OPENROUTER_REASONING_MODEL
     openrouter_classification_model: str = OPENROUTER_CLASSIFICATION_MODEL
     openrouter_toolcall_model: str = OPENROUTER_TOOLCALL_MODEL
+    deepseek_reasoning_model: str = DEEPSEEK_REASONING_MODEL
+    deepseek_classification_model: str = DEEPSEEK_CLASSIFICATION_MODEL
+    deepseek_toolcall_model: str = DEEPSEEK_TOOLCALL_MODEL
     gemini_reasoning_model: str = GEMINI_REASONING_MODEL
     gemini_classification_model: str = GEMINI_CLASSIFICATION_MODEL
     gemini_toolcall_model: str = GEMINI_TOOLCALL_MODEL
@@ -372,6 +400,7 @@ class LLMSettings(StrictConfigModel):
             "anthropic",
             "openai",
             "openrouter",
+            "deepseek",
             "gemini",
             "nvidia",
             "ollama",
@@ -404,6 +433,7 @@ class LLMSettings(StrictConfigModel):
             "anthropic": self.anthropic_api_key,
             "openai": self.openai_api_key,
             "openrouter": self.openrouter_api_key,
+            "deepseek": self.deepseek_api_key,
             "gemini": self.gemini_api_key,
             "nvidia": self.nvidia_api_key,
             "minimax": self.minimax_api_key,
@@ -499,6 +529,13 @@ OPENROUTER_LLM_CONFIG = LLMModelConfig(
     reasoning_model=OPENROUTER_REASONING_MODEL,
     classification_model=OPENROUTER_CLASSIFICATION_MODEL,
     toolcall_model=OPENROUTER_TOOLCALL_MODEL,
+    max_tokens=DEFAULT_MAX_TOKENS,
+)
+
+DEEPSEEK_LLM_CONFIG = LLMModelConfig(
+    reasoning_model=DEEPSEEK_REASONING_MODEL,
+    classification_model=DEEPSEEK_CLASSIFICATION_MODEL,
+    toolcall_model=DEEPSEEK_TOOLCALL_MODEL,
     max_tokens=DEFAULT_MAX_TOKENS,
 )
 

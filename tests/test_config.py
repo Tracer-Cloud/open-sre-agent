@@ -40,6 +40,38 @@ def test_llm_settings_require_minimax_api_key() -> None:
         LLMSettings.model_validate({"provider": "minimax"})
 
 
+def test_llm_settings_require_deepseek_api_key() -> None:
+    with pytest.raises(ValidationError, match="DEEPSEEK_API_KEY"):
+        LLMSettings.model_validate({"provider": "deepseek"})
+
+
+def test_llm_settings_deepseek_provider_accepted() -> None:
+    settings = LLMSettings.model_validate(
+        {
+            "provider": "deepseek",
+            "deepseek_api_key": "ds-test-key",
+        }
+    )
+    assert settings.provider == "deepseek"
+    assert settings.deepseek_api_key == "ds-test-key"
+    assert settings.deepseek_reasoning_model == "deepseek-v4-pro"
+    assert settings.deepseek_toolcall_model == "deepseek-v4-flash"
+
+
+def test_llm_settings_from_env_deepseek(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "deepseek")
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "app.config.resolve_llm_api_key",
+        lambda env_var: "ds-stored-key" if env_var == "DEEPSEEK_API_KEY" else "",
+    )
+
+    settings = LLMSettings.from_env()
+
+    assert settings.provider == "deepseek"
+    assert settings.deepseek_api_key == "ds-stored-key"
+
+
 def test_llm_settings_minimax_provider_accepted() -> None:
     settings = LLMSettings.model_validate(
         {

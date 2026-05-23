@@ -717,7 +717,7 @@ def get_agent_llm() -> _AgentClientType:
             model=settings.openai_reasoning_model,
             max_tokens=OPENAI_LLM_CONFIG.max_tokens,
         )
-    elif provider in ("openrouter", "gemini", "nvidia", "minimax", "ollama"):
+    elif provider in ("openrouter", "deepseek", "gemini", "nvidia", "minimax", "ollama"):
         # All OpenAI-compatible providers
         _agent_client = _create_openai_compat_client(settings, provider)
     elif provider == "bedrock":
@@ -752,6 +752,7 @@ def get_agent_llm() -> _AgentClientType:
 
 def _create_openai_compat_client(settings: Any, provider: str) -> OpenAIAgentClient:
     from app.config import (
+        DEEPSEEK_BASE_URL,
         GEMINI_BASE_URL,
         MINIMAX_BASE_URL,
         NVIDIA_BASE_URL,
@@ -764,6 +765,7 @@ def _create_openai_compat_client(settings: Any, provider: str) -> OpenAIAgentCli
             "OPENROUTER_API_KEY",
             settings.openrouter_reasoning_model,
         ),
+        "deepseek": (DEEPSEEK_BASE_URL, "DEEPSEEK_API_KEY", settings.deepseek_reasoning_model),
         "gemini": (GEMINI_BASE_URL, "GEMINI_API_KEY", settings.gemini_reasoning_model),
         "nvidia": (NVIDIA_BASE_URL, "NVIDIA_API_KEY", settings.nvidia_reasoning_model),
         "minimax": (MINIMAX_BASE_URL, "MINIMAX_API_KEY", settings.minimax_reasoning_model),

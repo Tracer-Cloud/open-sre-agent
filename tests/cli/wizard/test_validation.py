@@ -6,7 +6,7 @@ from anthropic import AuthenticationError as AnthropicAuthError
 from openai import AuthenticationError as OpenAIAuthError
 
 from app.cli.wizard.config import PROVIDER_BY_VALUE
-from app.cli.wizard.validation import validate_provider_credentials
+from app.cli.wizard.validation import _get_provider_base_url, validate_provider_credentials
 
 
 @pytest.fixture(autouse=True)
@@ -171,3 +171,7 @@ def test_validate_provider_credentials_returns_success_for_valid_openai_key(monk
     assert result.ok is True
     assert result.detail == "OpenAI API key validated."
     assert result.sample_response == "OpenSRE ready"
+
+
+def test_get_provider_base_url_deepseek() -> None:
+    assert _get_provider_base_url("deepseek") == "https://api.deepseek.com"

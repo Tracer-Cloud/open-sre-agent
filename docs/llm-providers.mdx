@@ -12,6 +12,7 @@ OpenSRE is provider-agnostic: bring your own model. Selection is controlled by t
 | Anthropic    | `anthropic`    | `ANTHROPIC_API_KEY`             | `claude-sonnet-4-6`                           | `claude-haiku-4-5-20251001`                     |
 | OpenAI       | `openai`       | `OPENAI_API_KEY`                | `gpt-5.4-mini`                                | `gpt-5.4-mini`                                  |
 | OpenRouter   | `openrouter`   | `OPENROUTER_API_KEY`            | `openrouter/auto`                             | `openrouter/auto`                               |
+| DeepSeek     | `deepseek`     | `DEEPSEEK_API_KEY`              | `deepseek-v4-pro`                             | `deepseek-v4-flash`                             |
 | Google Gemini| `gemini`       | `GEMINI_API_KEY`                | `gemini-3.1-pro-preview`                      | `gemini-3.1-flash-lite-preview`                 |
 | NVIDIA NIM   | `nvidia`       | `NVIDIA_API_KEY`                | `meta/llama-3.1-405b-instruct`                | `meta/llama-3.1-8b-instruct`                    |
 | MiniMax      | `minimax`      | `MINIMAX_API_KEY`               | `MiniMax-M2.7`                                | `MiniMax-M2.7-highspeed`                        |
@@ -43,7 +44,7 @@ opensre onboard
 
 In the interactive shell, `/model` shows curated quick-pick choices for common models. Providers
 with fast-changing or account-gated catalogs (OpenAI, OpenRouter, Gemini, NVIDIA, Bedrock, local
-CLIs, and Ollama) also accept custom model IDs:
+CLIs, Ollama, and DeepSeek) also accept custom model IDs:
 
 ```bash
 /model set openai gpt-5.5
@@ -98,6 +99,20 @@ export OPENROUTER_TOOLCALL_MODEL=openai/gpt-4o-mini
 ```
 
 OpenAI-compatible proxy — pick any model on [openrouter.ai/models](https://openrouter.ai/models). Base URL: `https://openrouter.ai/api/v1`.
+
+### DeepSeek
+
+```bash
+export LLM_PROVIDER=deepseek
+export DEEPSEEK_API_KEY=sk-...
+# Optional override (single value applies to all slots if set):
+export DEEPSEEK_MODEL=deepseek-v4-pro
+# Or per-slot:
+export DEEPSEEK_REASONING_MODEL=deepseek-v4-pro
+export DEEPSEEK_TOOLCALL_MODEL=deepseek-v4-flash
+```
+
+Uses DeepSeek's official OpenAI-compatible API endpoint at `https://api.deepseek.com`.
 
 ### Google Gemini
 

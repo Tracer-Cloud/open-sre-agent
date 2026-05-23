@@ -539,6 +539,47 @@ def test_unrelated_type_error_is_retried_and_wrapped(
     assert call_count == 3, "non-auth TypeError should be retried like a generic exception"
 
 
+def test_get_agent_llm_routes_deepseek_to_openai_compatible_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services import agent_llm_client as alc
+
+    captured: dict[str, object] = {}
+
+    class _FakeOpenAIAgentClient:
+        def __init__(
+            self,
+            model: str,
+            max_tokens: int = 4096,
+            base_url: str | None = None,
+            api_key_env: str = "OPENAI_API_KEY",
+            api_key_default: str = "",
+        ) -> None:
+            captured.update(
+                {
+                    "model": model,
+                    "max_tokens": max_tokens,
+                    "base_url": base_url,
+                    "api_key_env": api_key_env,
+                    "api_key_default": api_key_default,
+                }
+            )
+
+    monkeypatch.setattr(alc, "OpenAIAgentClient", _FakeOpenAIAgentClient)
+    monkeypatch.setenv("LLM_PROVIDER", "deepseek")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "ds-test")
+    monkeypatch.setenv("DEEPSEEK_REASONING_MODEL", "deepseek-v4-pro")
+    monkeypatch.setenv("DEEPSEEK_TOOLCALL_MODEL", "deepseek-v4-flash")
+
+    alc.reset_agent_client()
+    client = alc.get_agent_llm()
+
+    assert isinstance(client, _FakeOpenAIAgentClient)
+    assert captured["model"] == "deepseek-v4-pro"
+    assert captured["base_url"] == "https://api.deepseek.com"
+    assert captured["api_key_env"] == "DEEPSEEK_API_KEY"
+
+
 @pytest.mark.parametrize(
     "provider", ["codex", "opencode", "claude-code", "kimi", "cursor", "gemini-cli", "copilot"]
 )

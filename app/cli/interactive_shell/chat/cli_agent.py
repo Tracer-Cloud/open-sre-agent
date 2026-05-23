@@ -120,7 +120,7 @@ _ACTION_RULE = (
     "instructions when an allowed action can satisfy the request. Allowed "
     "action object schemas: "
     '`{"action":"switch_llm_provider","provider":"anthropic","model":"","toolcall_model":""}` '
-    "where provider is one of anthropic, openai, openrouter, gemini, nvidia, "
+    "where provider is one of anthropic, openai, openrouter, deepseek, gemini, nvidia, "
     "ollama, codex, claude-code, gemini-cli; both `model` (reasoning) and `toolcall_model` are optional; "
     '`{"action":"switch_toolcall_model","model":"claude-opus-4-7"}` '
     "to change ONLY the toolcall model on the currently active provider; "
