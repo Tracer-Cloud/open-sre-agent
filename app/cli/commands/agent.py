@@ -30,7 +30,8 @@ def agents() -> None:
 @agents.command(name="list")
 def list_agents() -> None:
     """List registered and auto-discovered local agents."""
-    Console().print(render_agents_table(registered_and_discovered_agents(AgentRegistry())))
+    console = Console()
+    render_agents_table(console, registered_and_discovered_agents(AgentRegistry()))
 
 
 @agents.command(name="register")

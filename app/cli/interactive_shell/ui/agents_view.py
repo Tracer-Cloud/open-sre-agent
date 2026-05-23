@@ -17,13 +17,14 @@ from __future__ import annotations
 from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 
-from rich.console import JustifyMethod
+from rich.console import Console, JustifyMethod
 from rich.markup import escape
 from rich.table import Table
 
 from app.agents.registry import AgentRecord
 from app.agents.sampler import get_snapshot, get_tokens_per_min, get_usd_per_hour
 from app.agents.status import Status, compute_status
+from app.cli.interactive_shell.ui.rendering import print_repl_table, repl_table
 from app.cli.interactive_shell.ui.theme import BOLD_BRAND
 
 _UNFILLED = "-"
@@ -86,9 +87,10 @@ def _format_status(status: Status, msg: str = "") -> str:
     return f"[{color}]{label}[/{color}]"
 
 
-def render_agents_table(records: Iterable[AgentRecord]) -> Table:
+def _build_agents_table(records: Iterable[AgentRecord]) -> Table:
+    """Build and return the agents dashboard Table without printing it."""
     materialized = list(records)
-    table = Table(
+    table = repl_table(
         title="agents",
         title_style=BOLD_BRAND,
         caption="no agents discovered or registered yet" if not materialized else None,
@@ -134,4 +136,9 @@ def render_agents_table(records: Iterable[AgentRecord]) -> Table:
     return table
 
 
-__all__ = ["render_agents_table"]
+def render_agents_table(console: Console, records: Iterable[AgentRecord]) -> None:
+    """Print the agents dashboard table to the REPL console with TTY-safe width."""
+    print_repl_table(console, _build_agents_table(records))
+
+
+__all__ = ["_build_agents_table", "render_agents_table"]

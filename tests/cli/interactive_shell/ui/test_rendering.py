@@ -102,8 +102,15 @@ def test_repl_print_streaming_console_prepares_tty_once_when_interactive(
     assert fake_stdout.writes == ["\r\n", "\r"]
 
 
-def test_render_integrations_table_resets_tty_before_print(monkeypatch) -> None:
-    """Regression: padded inline menus leave the cursor at a high column."""
+def test_render_integrations_table_resets_tty_before_print(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Regression: padded inline menus leave the cursor at a high column.
+
+    print_repl_table writes to sys.stdout directly (to guarantee \\r\\n
+    line endings under patch_stdout raw mode), so the content check uses
+    capsys rather than the console's file buffer.
+    """
     resets: list[bool] = []
 
     monkeypatch.setattr(
@@ -111,8 +118,7 @@ def test_render_integrations_table_resets_tty_before_print(monkeypatch) -> None:
         lambda: resets.append(True),
     )
 
-    buf = io.StringIO()
-    console = Console(file=buf, force_terminal=False, width=80)
+    console = Console(force_terminal=False, width=80)
     render_integrations_table(
         console,
         [
@@ -126,10 +132,12 @@ def test_render_integrations_table_resets_tty_before_print(monkeypatch) -> None:
     )
 
     assert len(resets) == 1
-    assert "grafana" in buf.getvalue()
+    assert "grafana" in capsys.readouterr().out
 
 
-def test_render_mcp_table_prepares_tty_once(monkeypatch) -> None:
+def test_render_mcp_table_prepares_tty_once(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     resets: list[bool] = []
 
     monkeypatch.setattr(
@@ -137,8 +145,7 @@ def test_render_mcp_table_prepares_tty_once(monkeypatch) -> None:
         lambda: resets.append(True),
     )
 
-    buf = io.StringIO()
-    console = Console(file=buf, force_terminal=False, width=80)
+    console = Console(force_terminal=False, width=80)
     render_mcp_table(
         console,
         [
@@ -152,7 +159,7 @@ def test_render_mcp_table_prepares_tty_once(monkeypatch) -> None:
     )
 
     assert len(resets) == 1
-    assert "github" in buf.getvalue()
+    assert "github" in capsys.readouterr().out
 
 
 def test_print_planned_actions_formats_kinds() -> None:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.cli.interactive_shell.ui.agents_view import render_agents_table
+from app.cli.interactive_shell.ui.agents_view import _build_agents_table, render_agents_table
 from app.cli.interactive_shell.ui.banner import render_banner, resolve_provider_models
 from app.cli.interactive_shell.ui.choice_menu import (
     print_valid_choice_list,
@@ -9,12 +9,17 @@ from app.cli.interactive_shell.ui.choice_menu import (
     repl_tty_interactive,
 )
 from app.cli.interactive_shell.ui.rendering import (
+    ColumnDef,
     MCP_INTEGRATION_SERVICES,
     print_command_output,
     print_planned_actions,
+    print_repl_table,
     render_integrations_table,
     render_mcp_table,
     render_models_table,
+    render_table,
+    render_tools_table,
+    repl_print,
     repl_table,
 )
 from app.cli.interactive_shell.ui.streaming import (
@@ -44,6 +49,7 @@ __all__ = [
     "ANSI_RESET",
     "BG",
     "BOLD_BRAND",
+    "ColumnDef",
     "DIM",
     "DIM_COUNTER_ANSI",
     "ERROR",
@@ -57,15 +63,20 @@ __all__ = [
     "STREAM_LABEL_ASSISTANT",
     "TEXT",
     "WARNING",
+    "_build_agents_table",
     "print_valid_choice_list",
     "print_command_output",
     "print_planned_actions",
+    "print_repl_table",
     "render_agents_table",
     "render_banner",
     "render_integrations_table",
     "render_mcp_table",
     "render_models_table",
+    "render_table",
+    "render_tools_table",
     "repl_choose_one",
+    "repl_print",
     "repl_section_break",
     "repl_table",
     "repl_tty_interactive",

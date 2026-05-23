@@ -29,7 +29,7 @@ from app.agents.registry import AgentRecord
 from app.agents.token_rate import TOKEN_RATE_TRACKER
 from app.agents.token_sources import claude_code as claude_source_mod
 from app.agents.token_sources import codex as codex_source_mod
-from app.cli.interactive_shell.ui.agents_view import render_agents_table
+from app.cli.interactive_shell.ui.agents_view import _build_agents_table, render_agents_table
 
 
 @pytest.fixture(autouse=True)
@@ -43,7 +43,7 @@ def _isolate_sampler_globals() -> None:
 
 
 def _render(records: list[AgentRecord]) -> str:
-    table = render_agents_table(records)
+    table = _build_agents_table(records)
     buf = io.StringIO()
     Console(file=buf, force_terminal=False, highlight=False, width=140).print(table)
     return buf.getvalue()
@@ -206,7 +206,7 @@ def test_claude_code_end_to_end_shows_dash_when_source_resolves_nothing(
     # Drive the real render and inspect the actual table cells rather
     # than substring-matching the printed form (which contains the
     # ``$/hr`` header literal).
-    table = render_agents_table([record])
+    table = _build_agents_table([record])
     assert table.row_count == 1
     rendered_cells = [list(col.cells)[0] for col in table.columns]
     # cells[0]=agent, [1]=pid, [2..6]=uptime/cpu/tokens/min/$/hr/status.

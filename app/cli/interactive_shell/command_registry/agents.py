@@ -50,6 +50,7 @@ from app.cli.interactive_shell.ui import (
     ERROR,
     HIGHLIGHT,
     WARNING,
+    print_repl_table,
     render_agents_table,
     repl_table,
 )
@@ -137,8 +138,7 @@ def _cmd_agents_list(console: Console) -> bool:
     Codex, Aider, and Gemini CLI sessions that the user never registered.
     """
     registry = AgentRegistry()
-    table = render_agents_table(registered_and_discovered_agents(registry))
-    console.print(table)
+    render_agents_table(console, registered_and_discovered_agents(registry))
     return True
 
 
@@ -297,7 +297,7 @@ def _cmd_agents_budget(session: ReplSession, console: Console, args: list[str]) 
                 str(budget.progress_minutes) if budget.progress_minutes is not None else "-",
                 f"{budget.error_rate_pct:.1f}" if budget.error_rate_pct is not None else "-",
             )
-        console.print(table)
+        print_repl_table(console, table)
         return True
 
     if len(args) != 2:
