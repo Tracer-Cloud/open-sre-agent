@@ -53,6 +53,22 @@ _EXCLUSIVE_STDIN_MENU_COMMANDS: frozenset[str] = frozenset(
         "/trust",
         "/verbose",
         "/?",
+        # Table-outputting commands: must complete before the next prompt_async()
+        # starts, otherwise patch_stdout redraws trigger ESC[6n DSR queries whose
+        # CPR responses land as literal keystrokes in the incoming prompt buffer.
+        "/doctor",
+        "/version",
+        "/status",
+        "/cost",
+        "/tasks",
+        "/watches",
+        "/alerts",
+        "/privacy",
+        "/context",
+        "/agents",
+        "/compact",
+        "/reset",
+        "/welcome",
     }
 )
 _EXCLUSIVE_STDIN_SUBCOMMANDS: frozenset[tuple[str, str]] = frozenset(

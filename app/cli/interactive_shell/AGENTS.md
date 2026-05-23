@@ -81,6 +81,21 @@ owning area rather than adding more logic to the caller.
   helpers. Do not bypass `execution_policy.py` for new commands.
 - Preserve non-TTY behavior: commands that require confirmation must fail closed
   when stdin is not interactive unless trust mode explicitly allows them.
+- **CPR / exclusive-stdin registration (required for table-outputting commands):**
+  Under `patch_stdout(raw=True)`, the REPL runs dispatch concurrently with the
+  next `prompt_async()`. When a command emits Rich table output, prompt_toolkit
+  redraws the prompt mid-flight, sending an `ESC[6n` DSR query; the terminal's
+  CPR response (`ESC[<row>;<col>R`) arrives as literal keystrokes in the incoming
+  prompt buffer, causing garbage like `^[[60;1R` to appear.
+  **Any command that calls `print_repl_table` (directly or via `render_table` /
+  `render_integrations_table` / `render_models_table` / etc.) must be added to
+  `_EXCLUSIVE_STDIN_MENU_COMMANDS` in `runtime/dispatch.py`.** That makes the main
+  loop call `await state.queue.join()`, blocking the next prompt until dispatch
+  completes and both drain cycles clean up stale CPR bytes before the next
+  `prompt_async()` starts.
+  - **How to check:** after adding a command, run it in the REPL and type a few
+    characters in the next prompt. If no `^[[…R` garbage appears, the registration
+    is correct.
 
 ## Routing and action execution
 
