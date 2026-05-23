@@ -53,7 +53,10 @@ class TestExecutor:
             chat_id="-100123",
         )
 
-        with patch("app.scheduler.executor.resolve_telegram_credentials") as mock_creds:
+        with (
+            patch("app.scheduler.executor.build_message", return_value="summary text"),
+            patch("app.scheduler.executor.resolve_telegram_credentials") as mock_creds,
+        ):
             mock_creds.return_value = {}
             result = execute_task(task, "2026-01-01T09:00")
 
