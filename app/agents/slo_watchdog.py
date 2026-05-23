@@ -191,9 +191,7 @@ async def _slo_watchdog_loop(
 
                 key = f"{agent.name}.{breach.slo_type}"
                 if not suppress_slo_alert(key, now):
-                    on_breach(
-                        agent.name, breach
-                    )  # TODO: wrap in asyncio.to_thread when investigation dispatch is added
+                    on_breach(agent.name, breach)
                     register_slo_alert(key, now)
             except Exception:
                 logger.debug(
@@ -205,7 +203,7 @@ async def _slo_watchdog_loop(
         await asyncio.sleep(interval)
 
 
-def start_slo_watchdog_loop(
+def start_slo_watchdog(
     on_breach: Callable[[str, SLOBreach], None], interval: float = 30.0
 ) -> asyncio.Task[None]:
     """Launch the background SLO watchdog and return the cancellable task."""

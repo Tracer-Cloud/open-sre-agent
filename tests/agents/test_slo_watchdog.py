@@ -14,7 +14,7 @@ from app.agents.slo_watchdog import (
     _alert_trigger_registry,
     check_slo_breach,
     register_slo_alert,
-    start_slo_watchdog_loop,
+    start_slo_watchdog,
     suppress_slo_alert,
 )
 
@@ -281,7 +281,7 @@ async def test_slo_watchdog_invokes_callback_on_breach(
     monkeypatch.setattr("app.agents.slo_watchdog.get_snapshot", lambda _pid: fake_snapshot)
     monkeypatch.setattr("app.agents.slo_watchdog._get_now", lambda _tz: now)
 
-    task = start_slo_watchdog_loop(on_breach=on_breach, interval=0.01)
+    task = start_slo_watchdog(on_breach=on_breach, interval=0.01)
     await asyncio.sleep(0.05)
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
@@ -318,7 +318,7 @@ async def test_slo_watchdog_does_not_invoke_callback_on_no_snapshot(
     monkeypatch.setattr("app.agents.slo_watchdog.get_snapshot", lambda _pid: None)
     monkeypatch.setattr("app.agents.slo_watchdog._get_now", lambda _tz: now)
 
-    task = start_slo_watchdog_loop(on_breach=on_breach, interval=0.01)
+    task = start_slo_watchdog(on_breach=on_breach, interval=0.01)
     await asyncio.sleep(0.05)
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
@@ -353,7 +353,7 @@ async def test_slo_watchdog_does_not_invoke_callback_on_no_budget(
     monkeypatch.setattr("app.agents.slo_watchdog.get_snapshot", lambda _pid: fake_snapshot)
     monkeypatch.setattr("app.agents.slo_watchdog._get_now", lambda _tz: now)
 
-    task = start_slo_watchdog_loop(on_breach=on_breach, interval=0.01)
+    task = start_slo_watchdog(on_breach=on_breach, interval=0.01)
     await asyncio.sleep(0.05)
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
@@ -375,7 +375,7 @@ async def test_slo_watchdog_does_not_crash_on_empty_registry(
     monkeypatch.setattr("app.agents.slo_watchdog.AgentRegistry", lambda: registry)
     monkeypatch.setattr("app.agents.slo_watchdog._get_now", lambda _tz: now)
 
-    task = start_slo_watchdog_loop(on_breach=on_breach, interval=0.01)
+    task = start_slo_watchdog(on_breach=on_breach, interval=0.01)
     await asyncio.sleep(0.05)
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
@@ -412,7 +412,7 @@ async def test_slo_watchdog_cooldown_suppression(
     monkeypatch.setattr("app.agents.slo_watchdog.get_snapshot", lambda _pid: fake_snapshot)
     monkeypatch.setattr("app.agents.slo_watchdog._get_now", lambda _tz: now)
 
-    task = start_slo_watchdog_loop(on_breach=on_breach, interval=0.01)
+    task = start_slo_watchdog(on_breach=on_breach, interval=0.01)
     await asyncio.sleep(0.05)
     task.cancel()
     with pytest.raises(asyncio.CancelledError):

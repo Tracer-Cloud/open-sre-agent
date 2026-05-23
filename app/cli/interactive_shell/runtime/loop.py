@@ -20,6 +20,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from app.agents.sampler import start_sampler
+from app.agents.slo_watchdog import SLOBreach, start_slo_watchdog
 from app.cli.interactive_shell import alert_inbox as _alert_inbox
 from app.cli.interactive_shell.alert_renderer import drain_and_render_incoming
 from app.cli.interactive_shell.prompting import prompt_surface as _prompt_surface
@@ -298,6 +299,13 @@ async def run_interactive(
     try:
         with patch_stdout(raw=True):
             echo_console = Console(highlight=False, force_terminal=True, color_system="truecolor")
+
+            def _on_slo_breach_callback(agent_name: str, breach: SLOBreach) -> None:
+                echo_console.print(f"[{WARNING}]\\[SLO breach][/] {agent_name}: {breach.detail}")
+                # TODO: wrap in asyncio.to_thread when investigation dispatch is added
+
+            watchdog_task = start_slo_watchdog(on_breach=_on_slo_breach_callback, interval=30.0)
+
             while True:
                 if state.exit_requested:
                     return
@@ -379,6 +387,11 @@ async def run_interactive(
             await sampler_task
         except asyncio.CancelledError:
             # Expected during shutdown after explicit task cancellation.
+            pass
+        watchdog_task.cancel()
+        try:  # noqa: SIM105
+            await watchdog_task
+        except (asyncio.CancelledError, Exception):
             pass
         processor_task.cancel()
         alert_watcher_task.cancel()
