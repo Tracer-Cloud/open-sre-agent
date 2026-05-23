@@ -137,7 +137,7 @@ def test_classify_failure_skips_integration_and_reports(
     with patch("app.integrations._catalog_impl.report_exception") as mock_report:
         result = _classify_service_instance(
             integration,
-            {"endpoint": "https://x", "api_key": "k"},
+            {"endpoint": "https://x", "api_key": "k", "bot_token": "fake-token"},
             record_id=f"rec-{integration}",
         )
 
@@ -153,6 +153,31 @@ def test_classify_failure_skips_integration_and_reports(
     assert tags["surface"] == "integration"
     assert mock_report.call_args.kwargs["severity"] == "warning"
     assert mock_report.call_args.kwargs["extras"]["record_id"] == f"rec-{integration}"
+
+
+@pytest.mark.parametrize("bot_token", ["", " ", None])
+@pytest.mark.parametrize("integration", ["discord", "telegram"])
+def test_classify_empty_bot_token_silently_skips(
+    integration: str,
+    bot_token: str | None,
+) -> None:
+    """Discord/Telegram records with empty bot_token are silently skipped without
+    reporting to Sentry — empty token means 'not configured', not misconfigured."""
+    credentials: dict[str, Any] = {"endpoint": "https://x"}
+    if bot_token is not None:
+        credentials["bot_token"] = bot_token
+
+    with patch("app.integrations._catalog_impl.report_exception") as mock_report:
+        result = _classify_service_instance(
+            integration,
+            credentials,
+            record_id="rec-test",
+        )
+
+    assert result == (None, None)
+    assert mock_report.call_count == 0, (
+        f"{integration} with empty bot_token should not report to Sentry"
+    )
 
 
 # ---------------------------------------------------------------------------

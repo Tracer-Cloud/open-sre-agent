@@ -507,6 +507,8 @@ def _classify_service_instance(
         return None, None
 
     if key == "discord":
+        if not (credentials.get("bot_token") or "").strip():
+            return None, None
         try:
             discord_config = DiscordBotConfig.model_validate(
                 {
@@ -519,11 +521,11 @@ def _classify_service_instance(
         except Exception as exc:
             _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
-        if discord_config.bot_token:
-            return discord_config.model_dump(), "discord"
-        return None, None
+        return discord_config.model_dump(), "discord"
 
     if key == "telegram":
+        if not (credentials.get("bot_token") or "").strip():
+            return None, None
         try:
             tg_config = TelegramBotConfig.model_validate(
                 {
@@ -534,9 +536,7 @@ def _classify_service_instance(
         except Exception as exc:
             _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
-        if tg_config.bot_token:
-            return tg_config.model_dump(), "telegram"
-        return None, None
+        return tg_config.model_dump(), "telegram"
 
     if key == "whatsapp":
         try:
