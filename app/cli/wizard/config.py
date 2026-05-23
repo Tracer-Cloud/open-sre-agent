@@ -126,7 +126,8 @@ OPENROUTER_MODELS = (
 DEEPSEEK_MODELS = (
     ModelOption(value=DEEPSEEK_REASONING_MODEL, label="DeepSeek V4 Pro"),
     ModelOption(value="deepseek-v4-flash", label="DeepSeek V4 Flash"),
-    ModelOption(value="deepseek-chat", label="DeepSeek Chat (legacy alias)"),
+    ModelOption(value="deepseek-chat", label="DeepSeek Chat (alias, non-thinking mode)"),
+    ModelOption(value="deepseek-reasoner", label="DeepSeek Reasoner (alias, thinking mode)"),
 )
 
 GEMINI_MODELS = (
