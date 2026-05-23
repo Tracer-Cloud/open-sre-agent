@@ -95,7 +95,12 @@ def test_deleted_pipeline_graph_module_is_not_referenced() -> None:
     deleted_modules = ("app.pipeline." + "graph", "app." + "graph_pipeline")
     offenders: list[str] = []
 
-    for path in _iter_repo_text_files():
+    for path in (ROOT / "app").rglob("*.py"):
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        if any(mod in text for mod in deleted_modules):
+            offenders.append(str(path.relative_to(ROOT)))
+
+    for path in (ROOT / "tests").rglob("*.py"):
         # Skip this test file itself — it intentionally names the deleted modules.
         if path.name == "test_removed_architecture_references.py":
             continue
