@@ -32,9 +32,11 @@ class TestExecutor:
         )
 
         with (
+            patch("app.scheduler.executor.build_message") as mock_build,
             patch("app.scheduler.executor.resolve_telegram_credentials") as mock_creds,
             patch("app.scheduler.executor._deliver_telegram") as mock_deliver,
         ):
+            mock_build.return_value = "<b>Daily summary</b>"
             mock_creds.return_value = {"bot_token": "fake_token"}
             mock_deliver.return_value = (True, "", "msg_42")
 
@@ -67,7 +69,11 @@ class TestExecutor:
             chat_id="C123456",
         )
 
-        with patch("app.scheduler.executor._deliver_slack") as mock_deliver:
+        with (
+            patch("app.scheduler.executor.build_message") as mock_build,
+            patch("app.scheduler.executor._deliver_slack") as mock_deliver,
+        ):
+            mock_build.return_value = "<b>Daily summary</b>"
             mock_deliver.return_value = (True, "", "ts_123")
             result = execute_task(task, "2026-01-01T09:00")
 
@@ -83,7 +89,11 @@ class TestExecutor:
             chat_id="123456789",
         )
 
-        with patch("app.scheduler.executor._deliver_discord") as mock_deliver:
+        with (
+            patch("app.scheduler.executor.build_message") as mock_build,
+            patch("app.scheduler.executor._deliver_discord") as mock_deliver,
+        ):
+            mock_build.return_value = "<b>Daily summary</b>"
             mock_deliver.return_value = (True, "", "msg_99")
             result = execute_task(task, "2026-01-01T09:00")
 
@@ -99,7 +109,11 @@ class TestExecutor:
             chat_id="-100123",
         )
 
-        with patch("app.scheduler.executor._deliver_telegram") as mock_deliver:
+        with (
+            patch("app.scheduler.executor.build_message") as mock_build,
+            patch("app.scheduler.executor._deliver_telegram") as mock_deliver,
+        ):
+            mock_build.return_value = "<b>Daily summary</b>"
             mock_deliver.return_value = (True, "", "msg_1")
 
             # First execution succeeds
