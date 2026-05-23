@@ -34,9 +34,9 @@ from app.llm_reasoning_effort import (
 )
 
 
-def _cmd_clear(_session: ReplSession, console: Console, _args: list[str]) -> bool:
+def _cmd_clear(session: ReplSession, console: Console, _args: list[str]) -> bool:
     console.clear()
-    render_ready_box(console)
+    render_ready_box(console, session=session)
     return True
 
 
