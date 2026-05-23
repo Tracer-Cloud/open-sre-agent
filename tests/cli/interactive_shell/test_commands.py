@@ -422,6 +422,7 @@ class TestListCommand:
         assert "DatadogMetricsTool" in output
         assert "investigation" in output
         assert "Fetch Datadog metrics" in output
+        assert "metric: string" in output
 
     def test_list_tools_empty_shows_hint(self, monkeypatch: object) -> None:
         from app.cli.interactive_shell.command_registry import integrations as m

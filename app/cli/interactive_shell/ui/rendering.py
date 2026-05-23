@@ -86,44 +86,25 @@ def _prepare_tty_for_rich(console: Console) -> int:
 
 def print_repl_table(console: Console, table: Table, *, width: int | None = None) -> None:
     """Print a Rich table using REPL-safe TTY width."""
-    from app.cli.interactive_shell.ui.choice_menu import repl_terminal_stdout, repl_tty_interactive
+    from app.cli.interactive_shell.ui.choice_menu import repl_terminal_console_file
 
     width = width if width is not None else _prepare_tty_for_rich(console)
     if table.width is None:
         table.width = width
-    terminal = repl_terminal_stdout()
-    use_terminal = repl_tty_interactive() and console.file is not terminal
-    if use_terminal:
-        previous_file = console.file
-        console.file = terminal
-        try:
-            _console_print_prepared(console, table, width=width)
-        finally:
-            console.file = previous_file
-        return
-    _console_print_prepared(console, table, width=width)
+    with repl_terminal_console_file(console):
+        _console_print_prepared(console, table, width=width)
 
 
 def repl_print(console: Console, *objects: Any, **kwargs: Any) -> None:
     """Print via Rich after resetting the TTY column (inline-menu safe)."""
     from app.cli.interactive_shell.ui.choice_menu import (
         prepare_repl_output_line,
-        repl_terminal_stdout,
-        repl_tty_interactive,
+        repl_terminal_console_file,
     )
 
     prepare_repl_output_line()
-    terminal = repl_terminal_stdout()
-    use_terminal = repl_tty_interactive() and console.file is not terminal
-    if use_terminal:
-        previous_file = console.file
-        console.file = terminal
-        try:
-            _console_print_prepared(console, *objects, **kwargs)
-        finally:
-            console.file = previous_file
-        return
-    _console_print_prepared(console, *objects, **kwargs)
+    with repl_terminal_console_file(console):
+        _console_print_prepared(console, *objects, **kwargs)
 
 
 def render_integrations_table(console: Console, results: list[dict[str, str]]) -> None:
@@ -203,12 +184,15 @@ def render_tools_table(console: Console, catalog: list[ToolCatalogEntry]) -> Non
     table = repl_table(title="Tools", title_style=BOLD_BRAND, width=width)
     table.add_column("tool", style="bold", no_wrap=True)
     table.add_column("surfaces", style=DIM, no_wrap=True)
-    desc_width = max(20, width - 56)
+    params_width = max(16, min(32, width // 4))
+    table.add_column("params", style=DIM, overflow="fold", max_width=params_width)
+    desc_width = max(20, width - 56 - params_width)
     table.add_column("description", overflow="fold", max_width=desc_width)
     for entry in catalog:
         table.add_row(
             escape(entry.name),
             escape(", ".join(sorted(entry.surfaces))),
+            escape(entry.input_schema_summary),
             escape(entry.description),
         )
     print_repl_table(console, table, width=width)

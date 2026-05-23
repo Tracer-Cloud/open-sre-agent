@@ -194,6 +194,7 @@ def test_render_tools_table_shows_tool_rows() -> None:
     assert "AnotherTool" in out
     assert "chat, investigation" in out
     assert "Does something useful" in out
+    assert "query: string" in out
 
 
 def test_render_tools_table_empty_shows_hint() -> None:

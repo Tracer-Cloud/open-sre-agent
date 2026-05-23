@@ -260,8 +260,9 @@ class TestListToolsSlashCommand:
         assert "search_github" in out
         assert "chat, investigation" in out
         assert "Search GitHub code." in out
+        assert "query: string" in out
 
-    def test_list_tools_disables_markup_for_plain_catalog_text(self) -> None:
+    def test_list_tools_escapes_markup_in_rich_table(self) -> None:
         console, buf = self._capture()
         session = ReplSession()
         fake = [

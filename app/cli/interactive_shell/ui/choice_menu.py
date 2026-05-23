@@ -14,8 +14,12 @@ import os
 import select
 import shutil
 import sys
+import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any, Literal, cast
 
+from prompt_toolkit.patch_stdout import StdoutProxy
 from rich.console import Console
 from rich.markup import escape
 
@@ -52,10 +56,35 @@ def repl_terminal_stdout() -> Any:
     control sequences synchronously on the underlying terminal stream.
     """
     stdout = sys.stdout
-    original = getattr(stdout, "original_stdout", None)
-    if original is not None:
-        return original
+    if isinstance(stdout, StdoutProxy):
+        return stdout.original_stdout or sys.__stdout__
     return stdout
+
+
+_TERMINAL_CONSOLE_FILE_LOCK = threading.RLock()
+
+
+@contextmanager
+def swap_console_file(console: Console, file: Any) -> Iterator[None]:
+    """Swap ``console.file`` under a lock for synchronous terminal rendering."""
+    with _TERMINAL_CONSOLE_FILE_LOCK:
+        previous_file = console.file
+        console.file = file
+        try:
+            yield
+        finally:
+            console.file = previous_file
+
+
+@contextmanager
+def repl_terminal_console_file(console: Console) -> Iterator[None]:
+    """Temporarily route Rich output through the real terminal stream."""
+    terminal = repl_terminal_stdout()
+    if repl_tty_interactive() and console.file is not terminal:
+        with swap_console_file(console, terminal):
+            yield
+        return
+    yield
 
 
 def ensure_tty_column_zero() -> None:
@@ -202,6 +231,13 @@ def write_menu_line(text: str = "") -> None:
 
 
 def _erase_menu_block(height: int) -> None:
+    if repl_tty_interactive():
+        out = repl_terminal_stdout()
+        if height:
+            out.write(f"\r\x1b[{height}A\r\x1b[J")
+        out.write("\x1b[0G")
+        out.flush()
+        return
     if height:
         sys.stdout.write(f"\r\x1b[{height}A\r\x1b[J")
     reset_tty_column()
@@ -350,7 +386,9 @@ __all__ = [
     "ensure_tty_column_zero",
     "prepare_repl_output_line",
     "repl_section_break",
+    "repl_terminal_console_file",
     "repl_terminal_stdout",
+    "swap_console_file",
     "repl_tty_interactive",
     "reset_tty_column",
     "write_menu_line",
