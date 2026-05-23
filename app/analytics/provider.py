@@ -771,28 +771,33 @@ class Analytics:
         self._worker = worker
 
     def _worker_loop(self) -> None:
-        with httpx.Client(timeout=_SEND_TIMEOUT, trust_env=False) as client:
-            while True:
-                item = self._queue.get()
-                if item is None:
-                    self._queue.task_done()
-                    break
-                try:
-                    self._send(client, item)
-                finally:
-                    self._queue.task_done()
-                    self._mark_done()
-            while True:
-                try:
-                    item = self._queue.get_nowait()
-                except queue.Empty:
-                    return
-                try:
-                    if item is not None:
+        try:
+            with httpx.Client(timeout=_SEND_TIMEOUT, trust_env=False) as client:
+                while True:
+                    item = self._queue.get()
+                    if item is None:
+                        self._queue.task_done()
+                        break
+                    try:
                         self._send(client, item)
-                finally:
-                    self._queue.task_done()
-                    self._mark_done()
+                    finally:
+                        self._queue.task_done()
+                        self._mark_done()
+                while True:
+                    try:
+                        item = self._queue.get_nowait()
+                    except queue.Empty:
+                        return
+                    try:
+                        if item is not None:
+                            self._send(client, item)
+                    finally:
+                        self._queue.task_done()
+                        self._mark_done()
+        except Exception as exc:
+            # SSL/TLS or other fatal client-init errors — log only so the daemon
+            # thread exits cleanly without surfacing infrastructure noise to Sentry.
+            _log_failure("worker_loop_fatal", exc)
 
     def _send(self, client: httpx.Client, item: _Envelope) -> None:
         properties: Properties = {
@@ -817,11 +822,9 @@ class Analytics:
             # transient infrastructure issues, not application bugs — log only.
             _log_failure("posthog_send", exc, event=item.event)
         except httpx.HTTPStatusError as exc:
+            # PostHog HTTP errors (4xx config issues, 5xx transient infra failures)
+            # are not application bugs — log only, do not surface to Sentry.
             _log_failure("posthog_send", exc, event=item.event)
-            # 4xx errors (e.g. 403 Forbidden) are operational/config issues on
-            # the PostHog side; only report 5xx server errors to Sentry.
-            if exc.response.status_code >= 500:
-                _capture_sentry_failure(exc)
         except Exception as exc:
             _log_failure("posthog_send", exc, event=item.event)
             _capture_sentry_failure(exc)
