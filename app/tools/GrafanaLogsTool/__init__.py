@@ -156,7 +156,9 @@ def query_grafana_logs(
             result_data["truncation_note"] = summary
         return result_data
 
-    client = _resolve_grafana_client(grafana_endpoint, grafana_api_key, grafana_username, grafana_password)
+    client = _resolve_grafana_client(
+        grafana_endpoint, grafana_api_key, grafana_username, grafana_password
+    )
     if not client or not client.is_configured:
         return {
             "source": "grafana_loki",

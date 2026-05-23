@@ -72,7 +72,13 @@ def _query_grafana_metrics_available(sources: dict[str, dict]) -> bool:
     anti_examples=["Use this tool for pod logs or deployment status."],
     input_model=QueryGrafanaMetricsInput,
     output_model=QueryGrafanaMetricsOutput,
-    injected_params=("grafana_endpoint", "grafana_api_key", "grafana_backend"),
+    injected_params=(
+        "grafana_endpoint",
+        "grafana_api_key",
+        "grafana_username",
+        "grafana_password",
+        "grafana_backend",
+    ),
     is_available=_query_grafana_metrics_available,
     extract_params=_query_grafana_metrics_extract_params,
 )
@@ -99,7 +105,9 @@ def query_grafana_metrics(
             "service_name": service_name,
         }
 
-    client = _resolve_grafana_client(grafana_endpoint, grafana_api_key, grafana_username, grafana_password)
+    client = _resolve_grafana_client(
+        grafana_endpoint, grafana_api_key, grafana_username, grafana_password
+    )
     if not client or not client.is_configured:
         return {
             "source": "grafana_mimir",
