@@ -110,11 +110,9 @@ def print_repl_table(console: Console, table: Table, *, width: int | None = None
     width = width if width is not None else _prepare_tty_for_rich(console)
     if console.file is sys.stdout and sys.stdout.isatty():
         buf = io.StringIO()
-        color_system = console.color_system or "truecolor"
         buf_console = Console(
             file=buf,
             force_terminal=True,
-            color_system=color_system,
             highlight=False,
             width=width,
         )
