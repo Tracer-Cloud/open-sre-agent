@@ -64,6 +64,18 @@ def repl_terminal_stdout() -> Any:
     return stdout
 
 
+def _menu_stdout() -> Any:
+    """Return the stream for synchronous inline menu draw/erase I/O.
+
+    When ``patch_stdout`` is active, menu bytes must bypass ``StdoutProxy`` so
+    draw and erase sequences reach the terminal in order without racing the
+    proxy's async write thread.
+    """
+    if isinstance(sys.stdout, StdoutProxy):
+        return repl_terminal_stdout()
+    return sys.stdout
+
+
 _TERMINAL_CONSOLE_FILE_LOCK = threading.RLock()
 
 
@@ -222,10 +234,11 @@ def _menu_height(crumb: str, labels: list[str]) -> int:
 
 def _write_menu_line(text: str = "") -> None:
     """Write a menu line at column zero even while the terminal is in raw mode."""
+    out = _menu_stdout()
     if text:
-        sys.stdout.write(f"\r{text}{_TERMINAL_NEWLINE}")
+        out.write(f"\r{text}{_TERMINAL_NEWLINE}")
         return
-    sys.stdout.write(_TERMINAL_NEWLINE)
+    out.write(_TERMINAL_NEWLINE)
 
 
 def write_menu_line(text: str = "") -> None:
@@ -234,17 +247,11 @@ def write_menu_line(text: str = "") -> None:
 
 
 def _erase_menu_block(height: int) -> None:
-    if isinstance(sys.stdout, StdoutProxy):
-        sys.stdout.flush()
-        out = repl_terminal_stdout()
-        if height:
-            out.write(f"\r\x1b[{height}A\r\x1b[J")
-        out.write("\x1b[0G")
-        out.flush()
-        return
+    out = _menu_stdout()
     if height:
-        sys.stdout.write(f"\r\x1b[{height}A\r\x1b[J")
-    reset_tty_column()
+        out.write(f"\r\x1b[{height}A\r\x1b[J")
+    out.write("\x1b[0G")
+    out.flush()
 
 
 def reset_tty_column() -> None:
@@ -272,7 +279,6 @@ def _draw_menu(
     index: int,
     erase_lines: int,
 ) -> None:
-    out = sys.stdout
     w = _cols()
     if erase_lines:
         _erase_menu_block(erase_lines)
@@ -297,14 +303,13 @@ def _draw_menu(
             _write_menu_line(f"{DIM_COUNTER_ANSI}{padded}{ANSI_RESET}")
     _write_menu_line()
     _write_menu_line(f"{DIM_COUNTER_ANSI}{_HINT}{ANSI_RESET}")
-    out.flush()
+    _menu_stdout().flush()
 
 
 def _erase_menu(crumb: str, labels: list[str]) -> None:
     """Move cursor up to the start of this menu block and wipe it."""
     height = _menu_height(crumb, labels)
     _erase_menu_block(height)
-    sys.stdout.flush()
 
 
 # ── picker loop ──────────────────────────────────────────────────────────────

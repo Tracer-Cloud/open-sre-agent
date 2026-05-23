@@ -237,7 +237,7 @@ class TestListToolsSlashCommand:
         buf = io.StringIO()
         return Console(file=buf, force_terminal=False, highlight=False), buf
 
-    def test_list_tools_prints_grouped_catalog(self) -> None:
+    def test_list_tools_renders_rich_table_via_slash_command(self) -> None:
         console, buf = self._capture()
         session = ReplSession()
         # Stub the catalog so the test stays decoupled from registry contents.

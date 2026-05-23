@@ -66,6 +66,23 @@ def test_draw_menu_uses_carriage_return_newlines(monkeypatch) -> None:
     assert "\r > /integrations list" in plain
 
 
+def test_draw_menu_writes_to_terminal_when_proxy_active(monkeypatch: pytest.MonkeyPatch) -> None:
+    terminal = io.StringIO()
+    proxy = _patch_stdout_proxy(monkeypatch, terminal)
+    monkeypatch.setattr(choice_menu, "_cols", lambda: 80)
+
+    choice_menu._draw_menu(
+        title="integrations",
+        crumb="/integrations",
+        labels=["/integrations list"],
+        index=0,
+        erase_lines=0,
+    )
+
+    assert proxy.getvalue() == ""
+    assert "integrations" in terminal.getvalue()
+
+
 def test_erase_menu_block_resets_to_column_zero(monkeypatch) -> None:
     terminal = io.StringIO()
     proxy = _patch_stdout_proxy(monkeypatch, terminal)
@@ -91,7 +108,7 @@ def test_erase_menu_block_writes_erase_to_terminal_when_proxy_active(
     assert terminal.getvalue().endswith("\x1b[0G")
 
 
-def test_reset_tty_column_writes_cursor_home_sequence(monkeypatch) -> None:
+def test_reset_tty_column_moves_cursor_to_column_zero(monkeypatch) -> None:
     terminal = io.StringIO()
     proxy = _patch_stdout_proxy(monkeypatch, terminal)
 
