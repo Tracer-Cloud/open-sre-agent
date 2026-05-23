@@ -111,7 +111,10 @@ def print_repl_table(console: Console, table: Table, *, width: int | None = None
     is used — preserving the caller's color_system and avoiding ANSI pollution
     in piped output.
     """
+    leading_blank = width is None
     width = width if width is not None else _prepare_tty_for_rich(console)
+    if leading_blank:
+        _console_print_prepared(console)
     if console.file is sys.stdout and sys.stdout.isatty():
         buf = io.StringIO()
         buf_console = Console(
