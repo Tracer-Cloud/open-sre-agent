@@ -53,7 +53,10 @@ class TestExecutor:
             chat_id="-100123",
         )
 
-        with patch("app.scheduler.executor.resolve_telegram_credentials") as mock_creds:
+        with (
+            patch("app.scheduler.executor.build_message", return_value="Scheduled report"),
+            patch("app.scheduler.executor.resolve_telegram_credentials") as mock_creds,
+        ):
             mock_creds.return_value = {}
             result = execute_task(task, "2026-01-01T09:00")
 
@@ -146,8 +149,12 @@ class TestExecutor:
             chat_id="-100123",
         )
 
-        with patch("app.scheduler.executor._deliver_telegram") as mock_deliver:
+        with (
+            patch("app.scheduler.executor.build_message", return_value="Scheduled report"),
+            patch("app.scheduler.executor._deliver_telegram") as mock_deliver,
+        ):
             mock_deliver.return_value = (False, "Connection refused", "")
             result = execute_task(task, "2026-01-01T09:00")
 
         assert result is False
+        mock_deliver.assert_called_once()
