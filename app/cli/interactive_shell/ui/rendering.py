@@ -113,8 +113,6 @@ def print_repl_table(console: Console, table: Table, *, width: int | None = None
     """
     leading_blank = width is None
     width = width if width is not None else _prepare_tty_for_rich(console)
-    if leading_blank:
-        _console_print_prepared(console)
     if console.file is sys.stdout and sys.stdout.isatty():
         buf = io.StringIO()
         buf_console = Console(
@@ -130,6 +128,11 @@ def print_repl_table(console: Console, table: Table, *, width: int | None = None
         # first so partial Windows line-endings in cell content don't prevent the
         # remaining bare \n chars from being converted.
         rendered = rendered.replace("\r\n", "\n").replace("\n", "\r\n")
+        # Prepend blank line as part of the same write to avoid a separate
+        # patch_stdout proxy flush that can trigger a toolbar DSR query and
+        # leave stale CPR bytes in stdin for the next prompt.
+        if leading_blank:
+            rendered = "\r\n" + rendered
         token = _REPL_OUTPUT_PREPARED.set(True)
         try:
             sys.stdout.write(rendered)
@@ -137,6 +140,8 @@ def print_repl_table(console: Console, table: Table, *, width: int | None = None
         finally:
             _REPL_OUTPUT_PREPARED.reset(token)
     else:
+        if leading_blank:
+            _console_print_prepared(console)
         _console_print_prepared(console, table, width=width)
 
 
