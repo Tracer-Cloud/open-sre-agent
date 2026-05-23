@@ -408,7 +408,15 @@ class OpenAIAgentClient:
         from app.llm_credentials import resolve_llm_api_key
 
         api_key = resolve_llm_api_key(api_key_env) or api_key_default
-        self._client = OpenAI(api_key=api_key, base_url=base_url, timeout=_CLIENT_TIMEOUT_SEC)
+        try:
+            self._client = OpenAI(api_key=api_key, base_url=base_url, timeout=_CLIENT_TIMEOUT_SEC)
+        except ImportError as err:
+            if "socksio" in str(err).lower():
+                raise RuntimeError(
+                    "Your environment uses a SOCKS proxy but the 'socksio' package is not "
+                    "installed. Run: pip install 'httpx[socks]'"
+                ) from err
+            raise
         self._model = model
         self._max_tokens = max_tokens
 

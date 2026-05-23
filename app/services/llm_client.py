@@ -796,12 +796,20 @@ class OpenAILLMClient:
         return True
 
     def _build_client(self, api_key: str) -> OpenAI:
-        return OpenAI(
-            api_key=api_key,
-            base_url=self._base_url,
-            timeout=_CLIENT_TIMEOUT_SEC,
-            default_headers=self._default_headers,
-        )
+        try:
+            return OpenAI(
+                api_key=api_key,
+                base_url=self._base_url,
+                timeout=_CLIENT_TIMEOUT_SEC,
+                default_headers=self._default_headers,
+            )
+        except ImportError as err:
+            if "socksio" in str(err).lower():
+                raise RuntimeError(
+                    "Your environment uses a SOCKS proxy but the 'socksio' package is not "
+                    "installed. Run: pip install 'httpx[socks]'"
+                ) from err
+            raise
 
     def with_config(self, **_kwargs) -> OpenAILLMClient:
         return self
