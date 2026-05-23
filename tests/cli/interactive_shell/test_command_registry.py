@@ -12,7 +12,10 @@ from app.cli.interactive_shell.command_registry.integrations import (
     _LIST_FIRST_ARGS,
     _MCP_FIRST_ARGS,
 )
-from app.cli.interactive_shell.command_registry.investigation import _TEMPLATE_FIRST_ARGS
+from app.cli.interactive_shell.command_registry.investigation import (
+    _INVESTIGATE_FIRST_ARGS,
+    _TEMPLATE_FIRST_ARGS,
+)
 from app.cli.interactive_shell.command_registry.model import _MODEL_FIRST_ARGS
 from app.cli.interactive_shell.command_registry.session_cmds import (
     _TRUST_FIRST_ARGS,
@@ -64,6 +67,7 @@ def test_registry_first_arg_completion_hints_co_located_with_handlers() -> None:
         "/list": _LIST_FIRST_ARGS,
         "/integrations": _INTEGRATIONS_FIRST_ARGS,
         "/mcp": _MCP_FIRST_ARGS,
+        "/investigate": _INVESTIGATE_FIRST_ARGS,
         "/template": _TEMPLATE_FIRST_ARGS,
         "/trust": _TRUST_FIRST_ARGS,
         "/verbose": _VERBOSE_FIRST_ARGS,

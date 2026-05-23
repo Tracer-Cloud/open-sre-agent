@@ -24,6 +24,7 @@ ALERT_TEMPLATE_CHOICES: tuple[str, ...] = (
     "grafana",
     "honeycomb",
     "coralogix",
+    "splunk",
 )
 
 SAMPLE_ALERT_OPTIONS: tuple[tuple[str, str], ...] = (
@@ -32,6 +33,7 @@ SAMPLE_ALERT_OPTIONS: tuple[tuple[str, str], ...] = (
     ("grafana", "Grafana - Pipeline failure rate high"),
     ("honeycomb", "Honeycomb - checkout-api latency regression"),
     ("coralogix", "Coralogix - payments worker errors"),
+    ("splunk", "Splunk - payments service error spike"),
 )
 
 SETUP_SERVICES: tuple[str, ...] = (

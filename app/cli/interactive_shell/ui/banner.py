@@ -259,7 +259,7 @@ _TIPS: tuple[str, ...] = (
     "Paste alert JSON or describe an incident",
     "Type /help to list slash commands",
     "Run /doctor for environment diagnostics",
-    "Use /investigate <file> for file alerts",
+    "Use /investigate for runnable demos/templates",
 )
 
 # Panel geometry. The body switches to a stacked layout on narrow terminals,

@@ -151,8 +151,9 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         ),
     ),
     "/investigate": _mcp(
-        "Run an RCA investigation from a local alert file path. Requires confirmation.",
+        "Run an RCA investigation from a local alert file path or a built-in sample template.",
         "User asks to investigate a file path or run RCA from a saved alert file",
+        "User asks to run one of the built-in sample alerts/templates",
         anti_examples=(
             "User pastes alert text inline (use investigation_start instead)",
             "User asks how investigations work (assistant_handoff)",
@@ -229,7 +230,7 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks to list running or recent tasks",
     ),
     "/template": _mcp(
-        "Print a starter alert JSON template (generic, datadog, grafana, honeycomb, coralogix).",
+        "Print a starter alert JSON template (generic, datadog, grafana, honeycomb, coralogix, splunk).",
         "User asks for an alert template or example payload format",
     ),
     "/tests": _mcp(

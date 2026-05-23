@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import re
@@ -207,7 +208,18 @@ async def run_interactive(
         if show_spinner:
             spinner.start()
         try:
-            with repl_safe_progress_scope():
+            # Commands that take exclusive stdin ownership (e.g. bare
+            # ``/investigate`` and other inline pickers) can safely use the
+            # full Rich Live investigation stream because prompt_toolkit is not
+            # actively reading input while we await ``state.queue.join()``.
+            # Keep the REPL-safe append-only renderer for non-exclusive turns
+            # to avoid Live redraw contention with the active prompt.
+            progress_scope = (
+                contextlib.nullcontext()
+                if dispatch_needs_exclusive_stdin(text, session)
+                else repl_safe_progress_scope()
+            )
+            with progress_scope:
                 await asyncio.to_thread(
                     dispatch_one_turn,
                     text,

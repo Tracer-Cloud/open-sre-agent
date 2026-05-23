@@ -191,6 +191,18 @@ class ShellCompleter(Completer):
             cmd_name = parts[0].lower()
             raw_arg = "" if trailing_space or len(parts) < 2 else parts[1]
             if cmd_name in ("/investigate", "/save"):
+                if cmd_name == "/investigate":
+                    entry = SLASH_COMMANDS.get(cmd_name)
+                    hints = entry.first_arg_completions if entry is not None else ()
+                    sub_prefix = raw_arg.lower()
+                    for sub, meta in hints:
+                        if sub.startswith(sub_prefix):
+                            yield Completion(
+                                sub,
+                                start_position=-len(raw_arg),
+                                display=sub,
+                                display_meta=meta,
+                            )
                 yield from PathCompleter(expanduser=True).get_completions(
                     Document(raw_arg, len(raw_arg)),
                     complete_event,

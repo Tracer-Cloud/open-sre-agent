@@ -318,6 +318,17 @@ def test_shell_completer_path_completion_honors_mixed_case_prefix(tmp_path: Path
     assert "RePoRtS" in joined
 
 
+def test_shell_completer_investigate_includes_template_hints() -> None:
+    completions = list(
+        ShellCompleter().get_completions(
+            Document("/investigate ", len("/investigate ")),
+            CompleteEvent(text_inserted=True),
+        )
+    )
+    assert any(c.text == "generic" for c in completions)
+    assert any(c.text == "splunk" for c in completions)
+
+
 def test_run_new_alert_marks_task_failed_on_opensre_error(monkeypatch: pytest.MonkeyPatch) -> None:
     from rich.console import Console
 
