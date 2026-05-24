@@ -125,12 +125,18 @@ MINIMAX_REASONING_MODEL = "MiniMax-M2.7"
 MINIMAX_CLASSIFICATION_MODEL = "MiniMax-M2.7-highspeed"
 MINIMAX_TOOLCALL_MODEL = "MiniMax-M2.7-highspeed"
 
+# Groq model constants
+GROQ_REASONING_MODEL = "llama-3.3-70b-versatile"
+GROQ_CLASSIFICATION_MODEL = "llama-3.3-70b-versatile"
+GROQ_TOOLCALL_MODEL = "llama-3.1-8b-instant"
+
 # Base URLs for OpenAI-compatible providers
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"  # no /v1 — DeepSeek serves the OpenAI-compatible API at the root path
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
 MINIMAX_BASE_URL = "https://api.minimax.io/v1"
+GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 
 # Amazon Bedrock model constants (US cross-region inference profile IDs)
 BEDROCK_REASONING_MODEL = "us.anthropic.claude-sonnet-4-6"
@@ -151,6 +157,7 @@ LLMProvider = Literal[
     "ollama",
     "bedrock",
     "minimax",
+    "groq",
     "codex",
     "cursor",
     "claude-code",
@@ -181,6 +188,7 @@ LLM_PROVIDER_API_KEY_ENVS = {
     "gemini": "GEMINI_API_KEY",
     "nvidia": "NVIDIA_API_KEY",
     "minimax": "MINIMAX_API_KEY",
+    "groq": "GROQ_API_KEY",
 }
 DEFAULT_LLM_RESOLUTION_FALLBACK_PROVIDERS: tuple[str, ...] = ("openai", "anthropic")
 
@@ -216,6 +224,7 @@ def _llm_settings_env_payload(provider: str) -> dict[str, object]:
         "gemini_api_key": resolve_llm_api_key("GEMINI_API_KEY"),
         "nvidia_api_key": resolve_llm_api_key("NVIDIA_API_KEY"),
         "minimax_api_key": resolve_llm_api_key("MINIMAX_API_KEY"),
+        "groq_api_key": resolve_llm_api_key("GROQ_API_KEY"),
         "anthropic_reasoning_model": os.getenv(
             "ANTHROPIC_REASONING_MODEL", ANTHROPIC_REASONING_MODEL
         ).strip()
@@ -313,6 +322,21 @@ def _llm_settings_env_payload(provider: str) -> dict[str, object]:
             os.getenv("MINIMAX_MODEL", MINIMAX_TOOLCALL_MODEL),
         ).strip()
         or MINIMAX_TOOLCALL_MODEL,
+        "groq_reasoning_model": os.getenv(
+            "GROQ_REASONING_MODEL",
+            os.getenv("GROQ_MODEL", GROQ_REASONING_MODEL),
+        ).strip()
+        or GROQ_REASONING_MODEL,
+        "groq_classification_model": os.getenv(
+            "GROQ_CLASSIFICATION_MODEL",
+            os.getenv("GROQ_MODEL", GROQ_CLASSIFICATION_MODEL),
+        ).strip()
+        or GROQ_CLASSIFICATION_MODEL,
+        "groq_toolcall_model": os.getenv(
+            "GROQ_TOOLCALL_MODEL",
+            os.getenv("GROQ_MODEL", GROQ_TOOLCALL_MODEL),
+        ).strip()
+        or GROQ_TOOLCALL_MODEL,
         "bedrock_reasoning_model": os.getenv(
             "BEDROCK_REASONING_MODEL", BEDROCK_REASONING_MODEL
         ).strip()
@@ -356,6 +380,7 @@ class LLMSettings(StrictConfigModel):
     gemini_api_key: str = ""
     nvidia_api_key: str = ""
     minimax_api_key: str = ""
+    groq_api_key: str = ""
     ollama_model: str = DEFAULT_OLLAMA_MODEL
     ollama_host: str = DEFAULT_OLLAMA_HOST
     anthropic_reasoning_model: str = ANTHROPIC_REASONING_MODEL
@@ -379,6 +404,9 @@ class LLMSettings(StrictConfigModel):
     minimax_reasoning_model: str = MINIMAX_REASONING_MODEL
     minimax_classification_model: str = MINIMAX_CLASSIFICATION_MODEL
     minimax_toolcall_model: str = MINIMAX_TOOLCALL_MODEL
+    groq_reasoning_model: str = GROQ_REASONING_MODEL
+    groq_classification_model: str = GROQ_CLASSIFICATION_MODEL
+    groq_toolcall_model: str = GROQ_TOOLCALL_MODEL
     bedrock_reasoning_model: str = BEDROCK_REASONING_MODEL
     bedrock_classification_model: str = BEDROCK_CLASSIFICATION_MODEL
     bedrock_toolcall_model: str = BEDROCK_TOOLCALL_MODEL
@@ -406,6 +434,7 @@ class LLMSettings(StrictConfigModel):
             "ollama",
             "bedrock",
             "minimax",
+            "groq",
             "codex",
             "cursor",
             "claude-code",
@@ -437,6 +466,7 @@ class LLMSettings(StrictConfigModel):
             "gemini": self.gemini_api_key,
             "nvidia": self.nvidia_api_key,
             "minimax": self.minimax_api_key,
+            "groq": self.groq_api_key,
         }
         if provider_to_key[self.provider]:
             return self

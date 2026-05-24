@@ -15,6 +15,7 @@ from app.config import (
     DEFAULT_OLLAMA_HOST,
     DEFAULT_OLLAMA_MODEL,
     GEMINI_REASONING_MODEL,
+    GROQ_REASONING_MODEL,
     NVIDIA_REASONING_MODEL,
     OPENAI_REASONING_MODEL,
     OPENROUTER_REASONING_MODEL,
@@ -142,6 +143,13 @@ NVIDIA_MODELS = (
         label="Nemotron 3 Super 120B (5x higher throughput for agentic AI)",
     ),
     ModelOption(value="nvidia/nemotron-3-nano-30b-a3b", label="Nemotron 3 Nano 30B"),
+)
+
+GROQ_MODELS = (
+    ModelOption(value=GROQ_REASONING_MODEL, label="Llama 3.3 70B Versatile"),
+    ModelOption(value="llama-3.1-8b-instant", label="Llama 3.1 8B Instant"),
+    ModelOption(value="mixtral-8x7b-32768", label="Mixtral 8x7B"),
+    ModelOption(value="gemma2-9b-it", label="Gemma 2 9B IT"),
 )
 
 BEDROCK_MODELS = (
@@ -484,6 +492,19 @@ SUPPORTED_PROVIDERS = (
         # credential_kind="none" causes flow.py to skip the credential prompt
         # entirely.  Region is picked up from AWS_DEFAULT_REGION / ~/.aws/config.
         credential_kind="none",
+        allow_custom_models=True,
+    ),
+    ProviderOption(
+        value="groq",
+        label="Groq",
+        group="Hosted providers",
+        api_key_env="GROQ_API_KEY",
+        model_env="GROQ_REASONING_MODEL",
+        default_model=GROQ_REASONING_MODEL,
+        models=GROQ_MODELS,
+        legacy_model_env="GROQ_MODEL",
+        toolcall_model_env="GROQ_TOOLCALL_MODEL",
+        classification_model_env="GROQ_CLASSIFICATION_MODEL",
         allow_custom_models=True,
     ),
     ProviderOption(

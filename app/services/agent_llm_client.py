@@ -727,7 +727,7 @@ def get_agent_llm() -> _AgentClientType:
             model=settings.openai_reasoning_model,
             max_tokens=OPENAI_LLM_CONFIG.max_tokens,
         )
-    elif provider in ("openrouter", "deepseek", "gemini", "nvidia", "minimax", "ollama"):
+    elif provider in ("openrouter", "deepseek", "gemini", "nvidia", "minimax", "groq", "ollama"):
         # All OpenAI-compatible providers
         _agent_client = _create_openai_compat_client(settings, provider)
     elif provider == "bedrock":
@@ -764,6 +764,7 @@ def _create_openai_compat_client(settings: Any, provider: str) -> OpenAIAgentCli
     from app.config import (
         DEEPSEEK_BASE_URL,
         GEMINI_BASE_URL,
+        GROQ_BASE_URL,
         MINIMAX_BASE_URL,
         NVIDIA_BASE_URL,
         OPENROUTER_BASE_URL,
@@ -779,6 +780,7 @@ def _create_openai_compat_client(settings: Any, provider: str) -> OpenAIAgentCli
         "gemini": (GEMINI_BASE_URL, "GEMINI_API_KEY", settings.gemini_reasoning_model),
         "nvidia": (NVIDIA_BASE_URL, "NVIDIA_API_KEY", settings.nvidia_reasoning_model),
         "minimax": (MINIMAX_BASE_URL, "MINIMAX_API_KEY", settings.minimax_reasoning_model),
+        "groq": (GROQ_BASE_URL, "GROQ_API_KEY", settings.groq_reasoning_model),
     }
     if provider == "ollama":
         host = settings.ollama_host.rstrip("/")
