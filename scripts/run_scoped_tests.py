@@ -40,8 +40,8 @@ _RULES: list[tuple[str, list[str], bool]] = [
     ("app/integrations/llm_cli/", ["tests/integrations/llm_cli/"], False),
     ("app/integrations/opensre/", ["tests/integrations/opensre/"], False),
     ("app/integrations/", ["tests/integrations/"], False),
-    ("app/agent/", ["tests/agent/"], False),
-    ("app/agents/", ["tests/agents/"], False),
+    ("app/agent/", ["tests/agent/", "tests/agents/"], False),
+    ("app/agents/", ["tests/agent/", "tests/agents/"], False),
     ("app/cli/", ["tests/cli/"], False),
     ("app/tools/", ["tests/tools/"], False),
     ("app/services/", ["tests/services/", "tests/tools/"], False),
@@ -62,6 +62,7 @@ _RULES: list[tuple[str, list[str], bool]] = [
     ("uv.lock", [], True),
     ("pytest.ini", [], True),
     ("Makefile", [], True),
+    ("scripts/", [], True),
 ]
 
 # Number of distinct app areas that triggers escalation to full test-cov.
@@ -125,6 +126,9 @@ def _classify(changed: list[str]) -> tuple[bool, list[str], list[str]]:
     # Filter targets to paths that actually exist (avoids pytest collection errors
     # when a directory was added in CI.md but hasn't been created yet).
     existing = [t for t in targets if Path(t).exists()]
+    dropped = [t for t in targets if t not in existing]
+    if dropped:
+        print(f"  (skipping non-existent targets: {', '.join(dropped)})", flush=True)
     return escalate, existing, areas
 
 
