@@ -46,7 +46,7 @@ _RULES: list[tuple[str, list[str], bool]] = [
     ("app/tools/", ["tests/tools/"], False),
     ("app/services/", ["tests/services/", "tests/tools/"], False),
     ("app/analytics/", ["tests/analytics/"], False),
-    ("app/guardrails/", ["tests/guardrails/"], False),
+    ("app/guardrails/", ["tests/test_guardrails/"], False),
     ("app/masking/", ["tests/masking/"], False),
     ("app/entrypoints/", ["tests/entrypoints/"], False),
     ("app/remote/", ["tests/remote/"], False),

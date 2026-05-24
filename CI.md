@@ -73,7 +73,7 @@ If you prefer to pick the command yourself, or need a focused `-k` filter:
 | `app/sandbox/` | `uv run pytest tests/sandbox/ -v` |
 | `app/deployment/` | `uv run pytest tests/deployment/ tests/app/deployment/ -v` |
 | `app/delivery/` | `uv run pytest tests/delivery/ -v` |
-| `app/guardrails/` | `uv run pytest tests/guardrails/ -v` |
+| `app/guardrails/` | `uv run pytest tests/test_guardrails/ -v` |
 | `app/masking/` | `uv run pytest tests/masking/ -v` |
 | `app/analytics/` | `uv run pytest tests/analytics/ -v` |
 | `app/auth/` | `uv run pytest tests/app/auth/ -v` |
