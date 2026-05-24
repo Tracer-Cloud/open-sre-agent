@@ -297,12 +297,18 @@ async def run_interactive(
     processor_task = asyncio.create_task(_processor())
     alert_watcher_task = asyncio.create_task(_alert_watcher())
     try:
+        watchdog_task = None
         with patch_stdout(raw=True):
             echo_console = Console(highlight=False, force_terminal=True, color_system="truecolor")
 
             def _on_slo_breach_callback(agent_name: str, breach: SLOBreach) -> None:
-                echo_console.print(f"[{WARNING}]\\[SLO breach][/] {agent_name}: {breach.detail}")
-                # TODO: wrap in asyncio.to_thread when investigation dispatch is added
+                echo_console.print(
+                    f"[{WARNING}]\\[SLO breach][/] {escape(agent_name)}: {escape(breach.detail)}"
+                )
+                # Investigation dispatch deferred: the agent_incident pipeline node
+                # (from PR #1709) was removed.
+                # Until a dedicated agent_incident node is re-implemented, the watchdog
+                # surfaces breaches as banners only — no automated RCA is triggered.
 
             watchdog_task = start_slo_watchdog(on_breach=_on_slo_breach_callback, interval=30.0)
 
@@ -388,11 +394,13 @@ async def run_interactive(
         except asyncio.CancelledError:
             # Expected during shutdown after explicit task cancellation.
             pass
-        watchdog_task.cancel()
-        try:  # noqa: SIM105
-            await watchdog_task
-        except (asyncio.CancelledError, Exception):
-            pass
+        if watchdog_task is not None:
+            watchdog_task.cancel()
+            try:  # noqa: SIM105
+                await watchdog_task
+            except (asyncio.CancelledError, Exception):
+                # Expected during shutdown after explicit task cancellation.
+                pass
         processor_task.cancel()
         alert_watcher_task.cancel()
         try:

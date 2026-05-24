@@ -255,6 +255,11 @@ def fake_snapshot() -> ProcessSnapshot:
     )
 
 
+@pytest.fixture(autouse=True)
+def clean_up_alert_trigger_registry() -> None:
+    _alert_trigger_registry.clear()
+
+
 @pytest.mark.asyncio
 async def test_slo_watchdog_invokes_callback_on_breach(
     monkeypatch: pytest.MonkeyPatch,
@@ -263,7 +268,7 @@ async def test_slo_watchdog_invokes_callback_on_breach(
     fake_snapshot: ProcessSnapshot,
 ) -> None:
     config.agents = {
-        "claude": AgentBudget(hourly_budget_usd=1, progress_minutes=2, error_rate_pct=3)
+        "claude": AgentBudget(hourly_budget_usd=5, progress_minutes=2, error_rate_pct=3)
     }
     registry.register(
         AgentRecord(
@@ -279,6 +284,7 @@ async def test_slo_watchdog_invokes_callback_on_breach(
     monkeypatch.setattr("app.agents.slo_watchdog.load_agents_config", lambda: config)
     monkeypatch.setattr("app.agents.slo_watchdog.AgentRegistry", lambda: registry)
     monkeypatch.setattr("app.agents.slo_watchdog.get_snapshot", lambda _pid: fake_snapshot)
+    monkeypatch.setattr("app.agents.slo_watchdog.get_usd_per_hour", lambda _pid: 2.0)
     monkeypatch.setattr("app.agents.slo_watchdog._get_now", lambda _tz: now)
 
     task = start_slo_watchdog(on_breach=on_breach, interval=0.01)
@@ -392,7 +398,7 @@ async def test_slo_watchdog_cooldown_suppression(
     fake_snapshot: ProcessSnapshot,
 ) -> None:
     config.agents = {
-        "codex": AgentBudget(hourly_budget_usd=1, progress_minutes=2, error_rate_pct=3)
+        "codex": AgentBudget(hourly_budget_usd=7, progress_minutes=2, error_rate_pct=3)
     }
     registry.register(
         AgentRecord(
@@ -402,14 +408,15 @@ async def test_slo_watchdog_cooldown_suppression(
             registered_at="2026-05-07T12:00:00+00:00",
         )
     )
-    now = datetime(2026, 5, 20, 12, 15, 0, tzinfo=UTC)
-    alert_at = datetime(2026, 5, 20, 12, 5, 0, tzinfo=UTC)
+    now = datetime(2026, 5, 23, 12, 15, 0, tzinfo=UTC)
+    alert_at = datetime(2026, 5, 23, 12, 5, 0, tzinfo=UTC)
     register_slo_alert("codex.progress_minutes", alert_at)
     on_breach = Mock()
 
     monkeypatch.setattr("app.agents.slo_watchdog.load_agents_config", lambda: config)
     monkeypatch.setattr("app.agents.slo_watchdog.AgentRegistry", lambda: registry)
     monkeypatch.setattr("app.agents.slo_watchdog.get_snapshot", lambda _pid: fake_snapshot)
+    monkeypatch.setattr("app.agents.slo_watchdog.get_usd_per_hour", lambda _pid: 2.0)
     monkeypatch.setattr("app.agents.slo_watchdog._get_now", lambda _tz: now)
 
     task = start_slo_watchdog(on_breach=on_breach, interval=0.01)

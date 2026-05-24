@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta, tzinfo
 
 from app.agents import AgentRegistry
 from app.agents.config import AgentBudget, load_agents_config
-from app.agents.sampler import get_snapshot
+from app.agents.sampler import get_snapshot, get_usd_per_hour
 
 logger = logging.getLogger(__name__)
 
@@ -89,9 +89,9 @@ def check_slo_breach(
     simultaneously, only the most actionable one fires; remaining
     breaches surface on subsequent watchdog cycles after cooldown.
 
-    ``hourly_spend_usd`` and ``error_rate_pct`` are optional observed
-    values from collectors that do not yet exist; passing ``None``
-    skips that check.  Similarly, a ``None`` threshold in ``budget``
+    ``error_rate_pct`` is an optional observed value from a collector
+    that do not yet exist; passing ``None`` skips that check.
+    Similarly, a ``None`` threshold in ``budget``
     means the user has not configured that SLO — the check is skipped
     regardless of the observed value.
     """
@@ -103,7 +103,7 @@ def check_slo_breach(
             "started_at must be timezone-aware (e.g. datetime.now(UTC)), got naive datetime"
         )
 
-    # last_output_at is optional, when not provided (collector does not exit), we fall back to using
+    # last_output_at is optional, when not provided (collector does not exist), we fall back to using
     # the process started_at datetime.
     if last_output_at is None:
         last_output_at = started_at
@@ -163,10 +163,21 @@ async def _slo_watchdog_loop(
     """
 
     while True:
-        budgets = load_agents_config().agents
-        registry = AgentRegistry()
+        try:
+            budgets = load_agents_config().agents
+        except Exception:
+            logger.warning("slo watchdog: failed to load agents config", exc_info=True)
+            await asyncio.sleep(interval)
+            continue
+        try:
+            registry = AgentRegistry()
+            agents = registry.list()
+        except Exception:
+            logger.warning("slo watchdog: failed to load agent registry", exc_info=True)
+            await asyncio.sleep(interval)
+            continue
         now = _get_now(UTC)
-        for agent in registry.list():
+        for agent in agents:
             try:
                 snapshot = get_snapshot(agent.pid)
                 if snapshot is None:
@@ -176,14 +187,14 @@ async def _slo_watchdog_loop(
                 if budget is None:
                     continue
 
-                # Stub: collectors for hourly_spend_usd, error_rate_pct, and
+                # Stub: collectors for error_rate_pct, and
                 # last_output_at do not exist yet — all passed as None.
                 breach = check_slo_breach(
                     budget,
                     started_at=snapshot.started_at,
                     now=now,
                     last_output_at=None,
-                    hourly_spend_usd=None,
+                    hourly_spend_usd=get_usd_per_hour(agent.pid),
                     error_rate_pct=None,
                 )
                 if breach is None:
@@ -191,8 +202,8 @@ async def _slo_watchdog_loop(
 
                 key = f"{agent.name}.{breach.slo_type}"
                 if not suppress_slo_alert(key, now):
-                    on_breach(agent.name, breach)
                     register_slo_alert(key, now)
+                    on_breach(agent.name, breach)
             except Exception:
                 logger.debug(
                     "slo check failed for agent %s with pid %d",
