@@ -355,6 +355,11 @@ test-full:
 test-cov:
 	$(PYTHON) -m pytest -n auto -v --cov=app --cov-report=term-missing --ignore=tests/e2e/kubernetes_local_alert_simulation --ignore=tests/synthetic -m "not synthetic"
 
+# Run only the tests relevant to files changed on this branch (local use only).
+# Pass ARGS=--dry-run to preview the command without executing it.
+test-scope:
+	$(PYTHON) scripts/run_scoped_tests.py --base main $(ARGS)
+
 # Run the CLI smoke suite against the installed opensre entrypoint.
 test-cli-smoke:
 	$(PYTHON) -m pytest -v tests/cli_smoke_test.py

@@ -41,22 +41,26 @@ Run all of these first:
 
 ## 2) Mandatory test harness (scope by touched modules)
 
-Do **module-scoped tests by default**.
-
-### A. Identify changed files
+**Recommended — run this instead of manually looking up the table below:**
 
 ```bash
-git diff --name-only $(git merge-base HEAD main)
+make test-scope
 ```
 
-(Use `git diff --name-only HEAD~1` only for quick single-commit checks.)
+`make test-scope` reads `git diff` against `main`, maps each changed path to
+its test target(s) using the rules below, and runs the minimal `pytest`
+invocation. It escalates automatically to `make test-cov` when shared/core
+code is touched or 3+ app areas change. Pass `ARGS=--dry-run` to preview
+without running.
 
-### B. Run matching tests for touched paths
+### Manual lookup (reference only)
+
+If you prefer to pick the command yourself, or need a focused `-k` filter:
 
 | Changed path | Run |
 |---|---|
 | `app/tools/` | `uv run pytest tests/tools/ -v` *(or `-k <keyword>` for focused runs)* |
-| `app/services/` | `uv run pytest tests/services/ tests/tools/ -v` *(or add `-k <service>`)* |
+| `app/services/` | `uv run pytest tests/services/ tests/tools/ -v` |
 | `app/integrations/` | `uv run pytest tests/integrations/ -v` |
 | `app/integrations/llm_cli/` | `uv run pytest tests/integrations/llm_cli/ -v` |
 | `app/integrations/opensre/` | `uv run pytest tests/integrations/opensre/ -v` |
@@ -67,13 +71,13 @@ git diff --name-only $(git merge-base HEAD main)
 | `app/entrypoints/` | `uv run pytest tests/entrypoints/ -v` |
 | `app/remote/` | `uv run pytest tests/remote/ -v` |
 | `app/sandbox/` | `uv run pytest tests/sandbox/ -v` |
-| `app/deployment/` | `uv run pytest tests/deployment/ tests/app/deployment/ -v` |
+| `app/deployment/` | `uv run pytest tests/deployment/ -v` |
 | `app/delivery/` | `uv run pytest tests/delivery/ -v` |
-| `app/guardrails/` | `uv run pytest tests/test_guardrails/ -v` |
+| `app/guardrails/` | `uv run pytest tests/guardrails/ -v` |
 | `app/masking/` | `uv run pytest tests/masking/ -v` |
 | `app/analytics/` | `uv run pytest tests/analytics/ -v` |
-| `app/auth/` | `uv run pytest tests/app/auth/ -v` |
-| `app/hermes/` | `uv run pytest tests/hermes/ tests/synthetic/hermes_rca/ -v` |
+| `app/auth/` | `uv run pytest tests/auth/ -v` |
+| `app/hermes/` | `uv run pytest tests/hermes/ -v` |
 | `app/watch_dog/` | `uv run pytest tests/watch_dog/ -v` |
 | `app/types/` | `make test-cov` |
 | `app/state/` | `make test-cov` |
