@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import TypedDict
 
@@ -114,7 +115,8 @@ def _actions_for_case(case: PlannerLiveCase) -> list[ExpectedAction]:
         return [{"kind": "slash", "content": decision.command_text or case["input"].strip()}]
 
     llm_plan = plan_actions_with_llm(case["input"])
-    assert llm_plan is not None, "Live LLM action planner did not return a parseable plan."
+    if llm_plan is None:
+        return []
     actions, has_unhandled = llm_plan
     if actions:
         return [_compact_action(action) for action in actions]
@@ -124,6 +126,25 @@ def _actions_for_case(case: PlannerLiveCase) -> list[ExpectedAction]:
         action for action in case["expected_actions"] if action["kind"] == "assistant_handoff"
     ]
     return case["expected_actions"]
+
+
+def _is_transient_llm_provider_failure(records: list[logging.LogRecord]) -> bool:
+    text = "\n".join(
+        record.getMessage()
+        for record in records
+        if record.name.endswith("orchestration.llm_action_planner.llm_client")
+    ).lower()
+    return any(
+        token in text
+        for token in (
+            "usage limit",
+            "rate limit",
+            "quota",
+            "billing",
+            "temporarily unavailable",
+            "service unavailable",
+        )
+    )
 
 
 def _normalize_for_assertion(actions: list[ExpectedAction]) -> list[ExpectedAction]:
@@ -148,8 +169,16 @@ def _normalize_for_assertion(actions: list[ExpectedAction]) -> list[ExpectedActi
 
 
 @pytest.mark.parametrize("case", _load_live_cases(), ids=lambda case: case["id"])
-def test_live_llm_planner_matches_prompt_contract(case: PlannerLiveCase) -> None:
+def test_live_llm_planner_matches_prompt_contract(
+    case: PlannerLiveCase,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     assert route_input(case["input"], ReplSession()).route_kind.value == case["expected_kind"]
+    caplog.clear()
     actual = _normalize_for_assertion(_actions_for_case(case))
+    if not actual and _is_transient_llm_provider_failure(caplog.records):
+        pytest.skip("Skipping live LLM planner case due to transient provider/billing limits.")
+    if not actual:
+        pytest.fail("Live LLM action planner did not return a parseable plan.")
     expected = _normalize_for_assertion(case["expected_actions"])
     assert actual == expected
