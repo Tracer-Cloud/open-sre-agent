@@ -241,9 +241,9 @@ def test_data_dirs_includes_legacy_config_opensre_path() -> None:
     path_strs = [str(p) for p in paths]
     assert any(".opensre" in s for s in path_strs), "main ~/.opensre path missing"
     assert any(".tracer" in s for s in path_strs), "legacy ~/.tracer path missing"
-    assert any(
-        ".config" in s and "opensre" in s for s in path_strs
-    ), "~/.config/opensre cleanup path missing"
+    assert any(".config" in s and "opensre" in s for s in path_strs), (
+        "~/.config/opensre cleanup path missing"
+    )
 
 
 def test_uninstall_help_describes_command() -> None:
