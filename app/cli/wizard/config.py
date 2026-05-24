@@ -148,6 +148,10 @@ NVIDIA_MODELS = (
 GROQ_MODELS = (
     ModelOption(value=GROQ_REASONING_MODEL, label="Llama 3.3 70B Versatile"),
     ModelOption(value="llama-3.1-8b-instant", label="Llama 3.1 8B Instant"),
+    ModelOption(value="openai/gpt-oss-120b", label="GPT-OSS 120B"),
+    ModelOption(value="openai/gpt-oss-20b", label="GPT-OSS 20B"),
+    ModelOption(value="qwen/qwen3-32b", label="Qwen3 32B"),
+    ModelOption(value="meta-llama/llama-4-scout-17b-16e-instruct", label="Llama 4 Scout 17B"),
 )
 
 BEDROCK_MODELS = (
