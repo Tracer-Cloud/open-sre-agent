@@ -569,6 +569,13 @@ DEEPSEEK_LLM_CONFIG = LLMModelConfig(
     max_tokens=DEFAULT_MAX_TOKENS,
 )
 
+GROQ_LLM_CONFIG = LLMModelConfig(
+    reasoning_model=GROQ_REASONING_MODEL,
+    classification_model=GROQ_CLASSIFICATION_MODEL,
+    toolcall_model=GROQ_TOOLCALL_MODEL,
+    max_tokens=DEFAULT_MAX_TOKENS,
+)
+
 GEMINI_LLM_CONFIG = LLMModelConfig(
     reasoning_model=GEMINI_REASONING_MODEL,
     classification_model=GEMINI_CLASSIFICATION_MODEL,

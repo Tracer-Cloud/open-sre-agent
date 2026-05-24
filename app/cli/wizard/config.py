@@ -148,8 +148,6 @@ NVIDIA_MODELS = (
 GROQ_MODELS = (
     ModelOption(value=GROQ_REASONING_MODEL, label="Llama 3.3 70B Versatile"),
     ModelOption(value="llama-3.1-8b-instant", label="Llama 3.1 8B Instant"),
-    ModelOption(value="mixtral-8x7b-32768", label="Mixtral 8x7B"),
-    ModelOption(value="gemma2-9b-it", label="Gemma 2 9B IT"),
 )
 
 BEDROCK_MODELS = (

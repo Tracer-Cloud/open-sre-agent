@@ -42,6 +42,7 @@ from app.config import (
     DEEPSEEK_BASE_URL,
     GEMINI_BASE_URL,
     GROQ_BASE_URL,
+    GROQ_LLM_CONFIG,
     MINIMAX_BASE_URL,
     NVIDIA_BASE_URL,
     OPENAI_LLM_CONFIG,
@@ -1341,7 +1342,7 @@ def _create_llm_client(model_type: ModelType) -> _LLMClientType:
             temperature=1.0,
         )
     elif provider == "groq":
-        config = OPENAI_LLM_CONFIG
+        config = GROQ_LLM_CONFIG
         return OpenAILLMClient(
             model=_select_model(settings, "groq", model_type),
             model_fallback=_fallback_model("groq"),
