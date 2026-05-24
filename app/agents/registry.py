@@ -59,7 +59,7 @@ class AgentRecord:
 class AgentRegistry:
     """JSONL-backed registry of locally running AI agent processes.
 
-    Persists to ``~/.config/opensre/agents.jsonl`` by default.  The file is
+    Persists to ``~/.opensre/agents.jsonl`` by default.  The file is
     append-only for ``register`` and fully rewritten on ``forget`` / ``clear``.
     """
 

@@ -1,4 +1,4 @@
-"""Per-agent SLO + pricing config loaded from ``~/.config/opensre/agents.yaml``.
+"""Per-agent SLO + pricing config loaded from ``~/.opensre/agents.yaml``.
 
 ``hourly_budget_usd`` is reserved for the future budget-alarm
 feature (the dashboard's ``$/hr`` column shows observed cost, not the
@@ -47,7 +47,7 @@ class AgentBudget(StrictConfigModel):
 
 
 class AgentsConfig(StrictConfigModel):
-    """Top-level shape of ``~/.config/opensre/agents.yaml``."""
+    """Top-level shape of ``~/.opensre/agents.yaml``."""
 
     agents: dict[str, AgentBudget] = Field(default_factory=dict)
 

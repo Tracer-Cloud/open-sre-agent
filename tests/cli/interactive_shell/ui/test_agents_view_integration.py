@@ -9,7 +9,7 @@ fixture on disk.
 
 The only stubs are :func:`app.agents.probe.cwd_for_pid` and
 :func:`started_at_for_pid` (no real PIDs in a unit test) and the
-``AgentRegistry`` lookup (no real ``~/.config/opensre/agents.jsonl``).
+``AgentRegistry`` lookup (no real ``~/.opensre/agents.jsonl``).
 Everything else exercises production code.
 """
 

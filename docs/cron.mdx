@@ -102,7 +102,7 @@ This ensures exactly-once delivery even when multiple scheduler instances run co
 
 Credentials are resolved lazily at delivery time in this priority order:
 
-1. **Integration store** — `~/.config/opensre/integrations.json` (configured via `opensre integrations`)
+1. **Integration store** — `~/.opensre/integrations.json` (configured via `opensre integrations`)
 2. **Environment variables** — `TELEGRAM_BOT_TOKEN`, `SLACK_BOT_TOKEN`, `DISCORD_BOT_TOKEN`
 3. **Task params** — credentials stored in the task definition (not recommended)
 
@@ -120,8 +120,8 @@ This means you don't need to pass credentials at `cron add` time — they're pic
 
 ## Persistence
 
-- **Task definitions** are stored in `~/.config/opensre/scheduler_tasks.json` (JSON + filelock)
-- **Execution history** is stored in `~/.config/opensre/scheduler.db` (SQLite with WAL mode)
+- **Task definitions** are stored in `~/.opensre/scheduler_tasks.json` (JSON + filelock)
+- **Execution history** is stored in `~/.opensre/scheduler.db` (SQLite with WAL mode)
 - Both survive process restarts — `opensre cron list` and `opensre cron logs` read from disk
 
 ## REPL

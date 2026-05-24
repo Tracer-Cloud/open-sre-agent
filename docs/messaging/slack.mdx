@@ -42,14 +42,14 @@ You have two equivalent paths:
     ```bash
     opensre integrations setup slack
     ```
-    Paste the webhook URL when prompted. The credentials are persisted to `~/.config/opensre/integrations.json`.
+    Paste the webhook URL when prompted. The credentials are persisted to `~/.opensre/integrations.json`.
   </Tab>
   <Tab title="Manual env var">
     Add to `.env`:
     ```bash
     SLACK_WEBHOOK_URL=https://hooks.slack.com/services/<workspace-id>/<binding-id>/<secret>
     ```
-    OpenSRE reads this at startup as a fallback when no Slack entry exists in `~/.config/opensre/integrations.json`. If you have previously run `opensre integrations setup slack`, remove that entry first (`opensre integrations remove slack`) or the env var will be ignored.
+    OpenSRE reads this at startup as a fallback when no Slack entry exists in `~/.opensre/integrations.json`. If you have previously run `opensre integrations setup slack`, remove that entry first (`opensre integrations remove slack`) or the env var will be ignored.
   </Tab>
   <Tab title="Onboarding wizard">
     ```bash

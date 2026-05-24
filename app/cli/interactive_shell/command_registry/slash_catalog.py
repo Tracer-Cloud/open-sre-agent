@@ -82,7 +82,7 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks to compact, trim, or free memory from session history",
     ),
     "/config": _mcp(
-        "Show or edit local OpenSRE configuration (~/.config/opensre/config.yml). "
+        "Show or edit local OpenSRE configuration (~/.opensre/config.yml). "
         "Subcommands: show, set <key> <value>.",
         "User asks to view or change OpenSRE config settings",
         anti_examples=("User asks how to configure an integration (may need assistant_handoff)",),

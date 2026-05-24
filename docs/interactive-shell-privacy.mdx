@@ -12,7 +12,7 @@ The OpenSRE interactive shell persists every line you type to a history file so 
 - caps how many entries are kept (oldest pruned)
 - offers a one-shot `/history clear` to wipe the file on demand
 
-The history file lives at `~/.config/opensre/interactive_history`.
+The history file lives at `~/.opensre/interactive_history`.
 
 ## Defaults
 
@@ -58,7 +58,7 @@ Redaction applies only to **persistent history**. The line you typed is still pa
 Settings resolve from (highest wins):
 
 1. Environment variables
-2. The `interactive.history` block in `~/.config/opensre/config.yml`
+2. The `interactive.history` block in `~/.opensre/config.yml`
 3. Built-in defaults
 
 ### Environment variables
@@ -81,7 +81,7 @@ interactive:
 
 ## Threat model
 
-The history file is **plain text on local disk** at `~/.config/opensre/interactive_history`, with the user's default file permissions. Built-in redaction targets common token shapes only — it is not a substitute for proper secret handling. Treat the file as confidential and be aware:
+The history file is **plain text on local disk** at `~/.opensre/interactive_history`, with the user's default file permissions. Built-in redaction targets common token shapes only — it is not a substitute for proper secret handling. Treat the file as confidential and be aware:
 
 - A determined attacker with read access to your home directory can still read pre-existing entries written before redaction was enabled.
 - Redaction cannot detect tokens that look like normal text (for example a natural-language password). Don't paste secrets you wouldn't be comfortable seeing in a system log.

@@ -24,16 +24,12 @@ import httpx
 
 from app.analytics.events import Event
 from app.cli.wizard.store import get_store_path
-from app.constants import LEGACY_OPENSRE_HOME_DIR
 from app.constants.posthog import POSTHOG_CAPTURE_API_KEY, POSTHOG_HOST
 from app.version import get_version
 
 _CONFIG_DIR = get_store_path().parent
 _ANONYMOUS_ID_PATH = _CONFIG_DIR / "anonymous_id"
 _FIRST_RUN_PATH = _CONFIG_DIR / "installed"
-_LEGACY_CONFIG_DIR = LEGACY_OPENSRE_HOME_DIR
-_LEGACY_ANONYMOUS_ID_PATH = _LEGACY_CONFIG_DIR / "anonymous_id"
-_LEGACY_FIRST_RUN_PATH = _LEGACY_CONFIG_DIR / "installed"
 
 _QUEUE_SIZE = 128
 _SEND_TIMEOUT = 2.0
@@ -117,12 +113,9 @@ def _is_existing_install(
     *,
     config_dir_existed: bool,
     install_marker_existed: bool,
-    legacy_config_dir_existed: bool,
-    legacy_install_marker_existed: bool,
 ) -> bool:
     return (
-        (config_dir_existed and install_marker_existed)
-        or (legacy_config_dir_existed and legacy_install_marker_existed)
+        config_dir_existed and install_marker_existed
     ) and not _first_run_marker_created_this_process
 
 
@@ -132,28 +125,20 @@ def _queue_user_id_load_failure(
     config_dir_existed: bool,
     install_marker_existed: bool,
     anonymous_id_path_existed: bool,
-    legacy_config_dir_existed: bool,
-    legacy_install_marker_existed: bool,
-    legacy_anonymous_id_path_existed: bool,
 ) -> None:
     if not _is_existing_install(
         config_dir_existed=config_dir_existed,
         install_marker_existed=install_marker_existed,
-        legacy_config_dir_existed=legacy_config_dir_existed,
-        legacy_install_marker_existed=legacy_install_marker_existed,
     ):
         return
     _pending_user_id_load_failures.append(
         {
             "reason": reason,
-            "config_dir": "~/.config/opensre",
-            "anonymous_id_path": "~/.config/opensre/anonymous_id",
+            "config_dir": "~/.opensre",
+            "anonymous_id_path": "~/.opensre/anonymous_id",
             "config_dir_existed": config_dir_existed,
             "install_marker_existed": install_marker_existed,
             "anonymous_id_path_existed": anonymous_id_path_existed,
-            "legacy_config_dir_existed": legacy_config_dir_existed,
-            "legacy_install_marker_existed": legacy_install_marker_existed,
-            "legacy_anonymous_id_path_existed": legacy_anonymous_id_path_existed,
             "anonymous_id_loaded": False,
         }
     )
@@ -177,18 +162,6 @@ def _valid_anonymous_id(value: str) -> str | None:
 
 def _read_persisted_anonymous_id(path: Path) -> str | None:
     return _valid_anonymous_id(path.read_text(encoding="utf-8"))
-
-
-def _load_legacy_anonymous_id() -> str | None:
-    if not _path_exists(_LEGACY_ANONYMOUS_ID_PATH):
-        return None
-    with contextlib.suppress(OSError):
-        legacy_id = _read_persisted_anonymous_id(_LEGACY_ANONYMOUS_ID_PATH)
-        if legacy_id is not None:
-            with contextlib.suppress(OSError):
-                _write_text_atomic(_ANONYMOUS_ID_PATH, legacy_id)
-            return legacy_id
-    return None
 
 
 def _fsync_parent_dir(path: Path) -> None:
@@ -270,9 +243,6 @@ def _write_new_anonymous_id(
 def _compute_anonymous_identity() -> _AnonymousIdentity:
     config_dir_existed = _path_exists(_CONFIG_DIR)
     install_marker_existed = _path_exists(_FIRST_RUN_PATH)
-    legacy_config_dir_existed = _path_exists(_LEGACY_CONFIG_DIR)
-    legacy_install_marker_existed = _path_exists(_LEGACY_FIRST_RUN_PATH)
-    legacy_anonymous_id_path_existed = _path_exists(_LEGACY_ANONYMOUS_ID_PATH)
     try:
         _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         anonymous_id_path_existed = _ANONYMOUS_ID_PATH.exists()
@@ -285,26 +255,16 @@ def _compute_anonymous_identity() -> _AnonymousIdentity:
                 config_dir_existed=config_dir_existed,
                 install_marker_existed=install_marker_existed,
                 anonymous_id_path_existed=anonymous_id_path_existed,
-                legacy_config_dir_existed=legacy_config_dir_existed,
-                legacy_install_marker_existed=legacy_install_marker_existed,
-                legacy_anonymous_id_path_existed=legacy_anonymous_id_path_existed,
             )
-        if legacy_id := _load_legacy_anonymous_id():
-            return _AnonymousIdentity(legacy_id, "disk")
         if _is_existing_install(
             config_dir_existed=config_dir_existed,
             install_marker_existed=install_marker_existed,
-            legacy_config_dir_existed=legacy_config_dir_existed,
-            legacy_install_marker_existed=legacy_install_marker_existed,
         ):
             _queue_user_id_load_failure(
                 "missing_anonymous_id",
                 config_dir_existed=config_dir_existed,
                 install_marker_existed=install_marker_existed,
                 anonymous_id_path_existed=anonymous_id_path_existed,
-                legacy_config_dir_existed=legacy_config_dir_existed,
-                legacy_install_marker_existed=legacy_install_marker_existed,
-                legacy_anonymous_id_path_existed=legacy_anonymous_id_path_existed,
             )
         new_id = str(uuid.uuid4())
         return _write_new_anonymous_id(
@@ -317,9 +277,6 @@ def _compute_anonymous_identity() -> _AnonymousIdentity:
             config_dir_existed=config_dir_existed,
             install_marker_existed=install_marker_existed,
             anonymous_id_path_existed=_path_exists(_ANONYMOUS_ID_PATH),
-            legacy_config_dir_existed=legacy_config_dir_existed,
-            legacy_install_marker_existed=legacy_install_marker_existed,
-            legacy_anonymous_id_path_existed=legacy_anonymous_id_path_existed,
         )
         return _AnonymousIdentity(str(uuid.uuid4()), "none")
 
@@ -459,7 +416,7 @@ def _event_log_path() -> Path:
     """Resolve the event log path lazily so tests can monkeypatch ``_CONFIG_DIR``.
 
     The log lives next to ``anonymous_id`` and ``analytics_errors.log`` under
-    ``~/.config/opensre/`` (or the equivalent on other platforms) rather than
+    ``~/.opensre/`` (or the equivalent on other platforms) rather than
     in the user's current working directory. This prevents a stray
     ``posthog_events.txt`` from showing up in every shell where the user runs
     ``opensre``, and keeps related telemetry artifacts in one place.

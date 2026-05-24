@@ -175,7 +175,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"    final_diagnosis.root_cause={run.final_diagnosis.get('root_cause')!r}")
             except Exception as exc:
                 print(f"  ✗ run_investigation failed: {exc}")
-                print("    Check: ~/.config/opensre/integrations.json + LLM API key")
+                print("    Check: ~/.opensre/integrations.json + LLM API key")
                 return 2
         else:
             run = _fake_run_result(case)

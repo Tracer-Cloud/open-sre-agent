@@ -28,7 +28,7 @@ from app.cli.interactive_shell.ui.agents_view import _build_agents_table
 def isolated_agents_yaml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     """Autouse: redirect ``agents_config_path`` to a per-test tmp file
     so the rendering tests don't read the developer's real
-    ``~/.config/opensre/agents.yaml`` (which would let real budgets
+    ``~/.opensre/agents.yaml`` (which would let real budgets
     leak into the placeholder assertions and create cross-machine
     flakes).
     """

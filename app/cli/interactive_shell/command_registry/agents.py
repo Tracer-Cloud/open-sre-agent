@@ -265,7 +265,7 @@ def _cmd_agents_release(session: ReplSession, console: Console, args: list[str])
 
 
 def _cmd_agents_budget(session: ReplSession, console: Console, args: list[str]) -> bool:
-    """View or edit per-agent budgets stored in ``~/.config/opensre/agents.yaml``.
+    """View or edit per-agent budgets stored in ``~/.opensre/agents.yaml``.
 
     No args -> render the current budgets as a table. Two args
     (``<agent> <usd>``) -> set ``hourly_budget_usd`` for that agent and

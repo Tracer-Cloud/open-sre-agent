@@ -1,6 +1,6 @@
 """Local integration credential store.
 
-Integrations are stored in ~/.config/opensre/integrations.json.
+Integrations are stored in ~/.opensre/integrations.json.
 
 File format (v2 — see ``_migrate_record_v1_to_v2`` for the v1 shape):
 {

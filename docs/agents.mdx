@@ -318,8 +318,8 @@ global FIFO ordering.
 
 ### Transport
 
-- **Socket**: Unix-domain stream socket at `~/.config/opensre/agents-bus.sock`.
-- **PID sidecar**: `~/.config/opensre/agents-bus.sock.pid` (mode `0600`). The
+- **Socket**: Unix-domain stream socket at `~/.opensre/agents-bus.sock`.
+- **PID sidecar**: `~/.opensre/agents-bus.sock.pid` (mode `0600`). The
   broker writes its PID here on `start()` and removes it on `stop()`. The
   liveness probe used by every `publish()` / `subscribe()` reads this file
   rather than connecting to the socket — connection probing would otherwise
@@ -396,7 +396,7 @@ Publishers without a Python dependency on OpenSRE can connect directly:
 python - <<'EOF'
 import json, os, socket, uuid, datetime
 sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-sock.connect(os.path.expanduser("~/.config/opensre/agents-bus.sock"))
+sock.connect(os.path.expanduser("~/.opensre/agents-bus.sock"))
 sock.sendall((json.dumps({
     "agent": "claude-code:8421",
     "topic": "finding",

@@ -120,7 +120,7 @@ opensre remote ops logs --follow
 
 Events are tagged with `entrypoint`, `opensre.runtime`, and `deployment_method`. Sensitive headers, paths, and secret-shaped keys are scrubbed before send.
 
-A random install ID is stored under `~/.config/opensre/anonymous_id`. PostHog `distinct_id` is scoped to that ID. Telemetry is off in GitHub Actions and pytest.
+A random install ID is stored under `~/.opensre/anonymous_id`. PostHog `distinct_id` is scoped to that ID. Telemetry is off in GitHub Actions and pytest.
 
 ### Kill-switch matrix
 
@@ -148,7 +148,7 @@ Set `OPENSRE_DEPLOYMENT_METHOD` to `railway`, `ec2`, `vercel`, or `local` (defau
 
 ### Local PostHog event log
 
-By default, outbound PostHog payloads are also appended to `~/.config/opensre/posthog_events.txt` (rotates at 1000 lines). Disable:
+By default, outbound PostHog payloads are also appended to `~/.opensre/posthog_events.txt` (rotates at 1000 lines). Disable:
 
 ```bash
 export OPENSRE_ANALYTICS_LOG_EVENTS=0

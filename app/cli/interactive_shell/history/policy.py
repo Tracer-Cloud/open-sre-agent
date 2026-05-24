@@ -3,7 +3,7 @@
 Built-in redaction patterns + a ``RedactingFileHistory`` that subclasses
 ``prompt_toolkit.FileHistory`` to apply redaction before each entry is
 persisted. Settings resolve from env vars and the ``interactive.history``
-section of ``~/.config/opensre/config.yml``; built-in defaults keep
+section of ``~/.opensre/config.yml``; built-in defaults keep
 redaction on, persistence on, and entries capped at 5000.
 """
 

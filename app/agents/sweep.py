@@ -2,7 +2,7 @@
 
 Run once at REPL boot. Idempotent — running twice in a row is a no-op
 the second time. Removes ``AgentRegistry`` entries whose PIDs no longer
-exist plus lockfiles in ``~/.config/opensre/agents/`` that correspond
+exist plus lockfiles in ``~/.opensre/agents/`` that correspond
 to dead PIDs.
 
 Liveness is checked via ``pid_exists`` rather than ``probe()``

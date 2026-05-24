@@ -137,7 +137,7 @@ def _capture_accepted_cli_invocation(ctx: click.Context) -> None:
     type=click.Choice(["classic", "pinned"]),
     default=None,
     help="Interactive-shell layout: 'classic' (scrolling) or 'pinned' (fixed "
-    "input bar). Overrides OPENSRE_LAYOUT env var and ~/.config/opensre/config.yml.",
+    "input bar). Overrides OPENSRE_LAYOUT env var and ~/.opensre/config.yml.",
 )
 @click.pass_context
 def cli(

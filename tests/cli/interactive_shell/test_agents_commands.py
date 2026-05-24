@@ -31,7 +31,7 @@ def _capture() -> tuple[Console, io.StringIO]:
 def _isolate_registry(monkeypatch: pytest.MonkeyPatch, path: Path) -> AgentRegistry:
     """Point the slash command's ``AgentRegistry()`` constructor at
     ``path`` so tests don't read the developer's real
-    ``~/.config/opensre/agents.jsonl``. Returns the registry instance
+    ``~/.opensre/agents.jsonl``. Returns the registry instance
     that the test can populate.
     """
     registry = AgentRegistry(path=path)
@@ -50,7 +50,7 @@ def isolated_agents_yaml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Pat
     """Autouse: redirect ``agents_config_path()`` to a per-test tmp path so
     ``/agents`` (which now reads ``agents.yaml`` for the ``$/hr`` cell)
     and ``/agents budget`` never touch the developer's real
-    ``~/.config/opensre/agents.yaml``.
+    ``~/.opensre/agents.yaml``.
     """
     target = tmp_path / "agents.yaml"
     monkeypatch.setattr(config_mod, "agents_config_path", lambda: target)

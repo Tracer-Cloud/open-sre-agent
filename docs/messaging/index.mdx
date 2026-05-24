@@ -38,7 +38,7 @@ Discord and Telegram credentials can also be set directly in `.env` instead of (
 
 ```bash
 # Slack — read as a fallback when no Slack entry exists in
-# ~/.config/opensre/integrations.json
+# ~/.opensre/integrations.json
 SLACK_WEBHOOK_URL=
 
 # Discord
@@ -63,7 +63,7 @@ TWILIO_SMS_MESSAGING_SERVICE_SID=
 TWILIO_SMS_DEFAULT_TO=
 ```
 
-After editing `.env`, run `opensre integrations verify <service>` (e.g. `opensre integrations verify telegram`, `opensre integrations verify whatsapp`, or `opensre integrations verify twilio`) to confirm the credentials work. Note that `opensre doctor` only inspects the integrations store (`~/.config/opensre/integrations.json`), so it does **not** detect env-var-only configurations like Telegram, WhatsApp, Twilio SMS, or Slack-via-`SLACK_WEBHOOK_URL`.
+After editing `.env`, run `opensre integrations verify <service>` (e.g. `opensre integrations verify telegram`, `opensre integrations verify whatsapp`, or `opensre integrations verify twilio`) to confirm the credentials work. Note that `opensre doctor` only inspects the integrations store (`~/.opensre/integrations.json`), so it does **not** detect env-var-only configurations like Telegram, WhatsApp, Twilio SMS, or Slack-via-`SLACK_WEBHOOK_URL`.
 
 ---
 

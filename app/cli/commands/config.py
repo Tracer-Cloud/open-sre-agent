@@ -1,4 +1,4 @@
-"""CLI commands for LLM/env config and local ~/.config/opensre/config.yml."""
+"""CLI commands for LLM/env config and local ~/.opensre/config.yml."""
 
 from __future__ import annotations
 
@@ -148,14 +148,14 @@ def _set_nested_key(data: dict[str, Any], dotted_key: str, value: Any) -> dict[s
 @click.group(name="config", invoke_without_command=True)
 @click.pass_context
 def config_command(ctx: click.Context) -> None:
-    """LLM/environment config by default; subcommands manage ~/.config/opensre/config.yml."""
+    """LLM/environment config by default; subcommands manage ~/.opensre/config.yml."""
     if ctx.invoked_subcommand is None:
         _emit_llm_config()
 
 
 @config_command.command(name="show")
 def config_show() -> None:
-    """Show local ~/.config/opensre/config.yml values."""
+    """Show local ~/.opensre/config.yml values."""
     from app.cli.support.context import is_json_output
 
     payload = _load_config()
@@ -175,7 +175,7 @@ def config_show() -> None:
 @click.argument("key")
 @click.argument("value")
 def config_set(key: str, value: str) -> None:
-    """Set one local config key in ~/.config/opensre/config.yml."""
+    """Set one local config key in ~/.opensre/config.yml."""
     key = key.strip()
     coerced = _coerce_value(key, value)
     data = _load_config()
