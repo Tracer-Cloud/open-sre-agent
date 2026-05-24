@@ -45,6 +45,7 @@ else:
 logger = logging.getLogger(__name__)
 
 DEFAULT_BUS_SOCKET_PATH: Path = OPENSRE_HOME_DIR / "agents-bus.sock"
+UNIX_SOCKET_AVAILABLE: bool = hasattr(socket, "AF_UNIX")
 
 #: Bus message wire-format version. Bump when ``BusMessage`` fields change shape.
 BUS_SCHEMA_VERSION: int = 1
@@ -58,6 +59,17 @@ _MAX_FRAME_BYTES: int = 64 * 1024
 #: unresponsive and evicted, so one wedged client cannot stall fan-out for
 #: every other publisher's reader thread.
 _BROADCAST_WRITE_TIMEOUT_SECONDS: float = 0.2
+
+
+def _unix_socket_family() -> int:
+    """Return the Unix-domain socket family or raise a clear platform error."""
+    family = getattr(socket, "AF_UNIX", None)
+    if family is None:
+        raise OSError(
+            getattr(errno, "EAFNOSUPPORT", errno.EINVAL),
+            "agent bus requires Unix-domain socket support (socket.AF_UNIX is unavailable)",
+        )
+    return int(family)
 
 
 @dataclass(frozen=True)
@@ -261,7 +273,7 @@ class BusServer:
         if self._running.is_set():
             return
         _ensure_parent_dir(self._path)
-        listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        listener = socket.socket(_unix_socket_family(), socket.SOCK_STREAM)
         try:
             listener.bind(str(self._path))
         except OSError:
@@ -548,7 +560,7 @@ def _ensure_broker(path: Path) -> BusServer | None:
 
 def _connect_client(path: Path, timeout: float) -> socket.socket:
     """Open a blocking UDS connection to the broker at ``path``."""
-    client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    client = socket.socket(_unix_socket_family(), socket.SOCK_STREAM)
     client.settimeout(timeout)
     try:
         client.connect(str(path))
