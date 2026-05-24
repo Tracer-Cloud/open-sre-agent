@@ -1,41 +1,8 @@
 ---
-description: Code style and conventions
+description: Pointer to portable style/quality rules
 alwaysApply: true
 ---
 
-# Code Style
+Follow repo-root `AGENTS.md` for universal code-style and quality requirements.
 
-## Formatting
-
-- 100-character line length (enforced by ruff and `.editorconfig`)
-- 4-space indentation for Python
-- 2-space indentation for YAML, JSON, TOML
-- Tabs for Makefiles
-
-## Python Conventions
-
-- Use `from __future__ import annotations` for forward references
-- Absolute imports only: `from app.tools.base import BaseTool`
-- Type hints on all function parameters and return types
-- `TypedDict` for graph state, Pydantic `StrictConfigModel` for configs
-- One clear purpose per file (separation of concerns)
-
-## Tooling
-
-- **Linter:** ruff (rules: E, W, F, I, B, C4, UP, ARG, SIM)
-- **Type checker:** mypy (Python 3.12 target, `warn_return_any`)
-- **Formatter:** ruff format (Black-compatible)
-- **Python version:** >=3.11, target 3.12
-
-## Quality Commands
-
-```bash
-make lint            # ruff check app/ tests/
-make format-check    # ruff format --check app/ tests/ (read-only; CI enforces this)
-make format          # ruff format app/ tests/ (write fixes locally)
-make typecheck       # mypy app/
-make test-cov        # pytest with coverage
-make check           # lint + format-check + typecheck + test-full
-```
-
-Before opening a PR, run `make format-check` (or `make check`) in addition to `make lint`.
+For path-specific conventions, also follow the nearest nested `AGENTS.md`.

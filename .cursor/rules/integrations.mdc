@@ -1,37 +1,9 @@
 ---
-description: Integration client patterns
+description: Pointer to portable integration rules
 globs:
   - app/integrations/**
 ---
 
-# Integration Clients
+Follow `app/integrations/AGENTS.md` for integration architecture and verification rules.
 
-## Directory Structure
-
-```
-app/services/
-├── grafana/          # Vendor-specific client packages
-├── datadog/
-├── s3_client.py      # Single-file clients
-└── vercel/
-
-app/integrations/
-├── clients/
-│   └── prefect/      # Legacy location — new clients go in app/services/
-├── opensre_mcp.py    # MCP server implementation
-└── ...
-```
-## Adding a New Integration
-
-1. Create a client under `app/services/<vendor>/`
-2. Implement connection, authentication, and API methods
-3. Create a tool under `app/tools/<VendorTool>/` that uses the client
-4. Wire availability into `resolve_integrations` node if the integration requires runtime discovery
-5. Add the vendor to `EvidenceSource` literal in `app/state.py` if it's a new source type
-
-## Conventions
-
-- Clients should be stateless or use context managers for connection lifecycle
-- Return `{"success": bool, "data": ..., "error": ...}` from client methods
-- Keep API-specific logic in the client; tool handles param extraction and result formatting
-- MCP tools are registered via `opensre-mcp` entry point in `pyproject.toml`
+Repo-root `AGENTS.md` still applies.

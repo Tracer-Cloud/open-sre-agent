@@ -1,4 +1,12 @@
-# Test Specification Principles
+# Tests area
+
+> **Scope:** `tests/**` when working on e2e RCA scenario specifications and investigation-grade fixtures.
+> **Parent:** repo-root `AGENTS.md` still applies.
+
+> **Audience note:** This file is intentionally centered on **e2e RCA specification principles** (real-failure, real-infra style tests).
+> For generic unit/integration pytest execution policy and push/PR readiness, follow `CI.md` and root `AGENTS.md`.
+
+## Test Specification Principles
 
 ## 1. Separation of Concerns: Pure Business Logic
 **Principle:** Pipeline business logic (`use_case.py`) must be completely isolated from test orchestration and observability code.

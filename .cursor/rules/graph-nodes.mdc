@@ -1,29 +1,12 @@
 ---
-description: Investigation pipeline architecture and stage development
+description: Pointer to portable pipeline/stage rules
 globs:
-    - app/pipeline/**
-    - app/agent/**
-    - app/state/**
-    - app/delivery/**
+  - app/pipeline/**
+  - app/agent/**
+  - app/state/**
+  - app/delivery/**
 ---
 
-# Investigation pipeline
+Follow `app/pipeline/AGENTS.md` for investigation pipeline and stage conventions.
 
-## Coordinator
-
-`app/pipeline/pipeline.py` runs **resolve integrations → extract alert → investigation agent → deliver**.
-
-`app/pipeline/runners.py` exposes `run_investigation`, `run_chat`, and async streaming helpers.
-
-## Key packages
-
-- `app/agent/context.py`, `extract.py`, `investigation.py`, `chat.py`
-- `app/delivery/` for publishing and integrations
-- `app/state/agent_state.py` for `AgentState` / `InvestigationState`
-
-## Conventions
-
-- Prefer `@traceable` from `app.utils.tracing` on externally-visible orchestration helpers.
-- Stages read full state and return **partial dict** updates.
-- Use `get_tracker()` for CLI progress when appropriate.
-- Keep new persisted keys in the state `TypedDict` and any matching validators.
+Repo-root `AGENTS.md` still applies.
