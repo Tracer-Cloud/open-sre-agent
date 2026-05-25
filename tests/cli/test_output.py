@@ -613,3 +613,18 @@ def test_finish_text_mode_survives_non_ascii_mark(
     monkeypatch.setattr("sys.stdout", buf)
     _safe_print("  ● diagnose_root_cause  1.2s")  # matches the _finish output format
     assert buf.getvalue()  # something was written, no exception raised
+
+
+def test_event_log_display_live_is_transient(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify that _EventLogDisplay initializes the Rich Live region with transient=True."""
+    from unittest.mock import patch
+
+    monkeypatch.setattr(output, "get_output_format", lambda: "rich")
+    monkeypatch.setattr(output, "_repl_progress_active", lambda: False)
+
+    with patch("rich.live.Live.start"), patch("rich.live.Live.stop"):
+        display = output._EventLogDisplay()
+        try:
+            assert display._live.transient is True
+        finally:
+            display.stop()
