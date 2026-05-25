@@ -213,12 +213,19 @@ class GeminiCLIAdapter:
             logged_in = True
             auth_detail = f"Authenticated via {auth_env_source} fallback."
 
+        # Gate the sunset notice on ``logged_in is not False`` so a user mid
+        # auth-failure isn't shown the migration ad next to the actual error
+        # they need to read. Authenticated (True) and ambiguous (None) probes
+        # still surface it — those are the cohorts whose CLI is operational
+        # today and who need to plan for 2026-06-18.
+        detail = auth_detail + _SUNSET_NOTE if logged_in is not False else auth_detail
+
         return CLIProbe(
             installed=True,
             version=version,
             logged_in=logged_in,
             bin_path=binary_path,
-            detail=auth_detail + _SUNSET_NOTE,
+            detail=detail,
         )
 
     def detect(self) -> CLIProbe:

@@ -267,7 +267,7 @@ GEMINI_CLI_MODELS = (
 ANTIGRAVITY_CLI_MODELS = (
     ModelOption(
         value="",
-        label="Auto (CLI selects; currently gemini-3.5-flash by default)",
+        label="Auto (CLI selects model server-side)",
     ),
 )
 
