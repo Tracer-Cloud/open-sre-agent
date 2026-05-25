@@ -260,6 +260,17 @@ GEMINI_CLI_MODELS = (
     ),
 )
 
+# Antigravity CLI (``agy``) auto-selects the model server-side (defaults to
+# gemini-3.5-flash); ``--model`` is not exposed in headless ``-p`` mode in
+# v1.0.1, so this tuple is informational only. ``ANTIGRAVITY_CLI_MODEL`` is
+# registered for forward-compat but currently no-op.
+ANTIGRAVITY_CLI_MODELS = (
+    ModelOption(
+        value="",
+        label="Auto (CLI selects; currently gemini-3.5-flash by default)",
+    ),
+)
+
 # Source: https://opencode.ai/docs/zen (verified 2026-05-21).
 # OpenCode routes models through OpenCode Zen using the ``opencode/`` prefix.
 # Curated subset of the full ~40-model catalog; the wizard's custom-ID escape
@@ -343,6 +354,12 @@ def _gemini_cli_adapter_factory() -> LLMCLIAdapter:
     from app.integrations.llm_cli.gemini_cli import GeminiCLIAdapter
 
     return GeminiCLIAdapter()
+
+
+def _antigravity_cli_adapter_factory() -> LLMCLIAdapter:
+    from app.integrations.llm_cli.antigravity_cli import AntigravityCLIAdapter
+
+    return AntigravityCLIAdapter()
 
 
 def _opencode_adapter_factory() -> LLMCLIAdapter:
@@ -537,6 +554,19 @@ SUPPORTED_PROVIDERS = (
         credential_secret=False,
         adapter_factory=_gemini_cli_adapter_factory,
         allow_custom_models=True,
+    ),
+    ProviderOption(
+        value="antigravity-cli",
+        label="Google Antigravity CLI (agy)",
+        group="Local CLI providers",
+        api_key_env="",
+        model_env="ANTIGRAVITY_CLI_MODEL",
+        default_model="",
+        models=ANTIGRAVITY_CLI_MODELS,
+        credential_kind="cli",
+        credential_secret=False,
+        adapter_factory=_antigravity_cli_adapter_factory,
+        allow_custom_models=False,
     ),
     ProviderOption(
         value="opencode",

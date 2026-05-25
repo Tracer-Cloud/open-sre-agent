@@ -999,6 +999,9 @@ class TestClassifyCommandProvider:
     def test_gemini_argv0(self) -> None:
         assert classify_command_provider("gemini chat") == "gemini-cli"
 
+    def test_agy_argv0(self) -> None:
+        assert classify_command_provider("agy -p hello") == "antigravity-cli"
+
     def test_unknown_command_returns_none(self) -> None:
         assert classify_command_provider("python -m app.worker") is None
 

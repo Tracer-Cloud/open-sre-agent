@@ -104,6 +104,7 @@ class TestSystemPromptTerminology:
         assert '"action":"switch_llm_provider"' in prompt
         assert "claude-code" in prompt
         assert "gemini-cli" in prompt
+        assert "antigravity-cli" in prompt
 
 
 class TestSystemPromptAgentsMdGrounding:

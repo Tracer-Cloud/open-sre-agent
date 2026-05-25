@@ -19,6 +19,7 @@ KNOWN_PROVIDERS: frozenset[str] = frozenset(
         "cursor",
         "aider",
         "gemini-cli",
+        "antigravity-cli",
         "opencode",
         "kimi",
         "copilot",

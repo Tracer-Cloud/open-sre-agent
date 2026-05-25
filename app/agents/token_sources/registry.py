@@ -17,6 +17,7 @@ TOKEN_SOURCE_REGISTRY: dict[str, TokenSource] = {
     "cursor": NullTokenSource(),
     "aider": NullTokenSource(),
     "gemini-cli": NullTokenSource(),
+    "antigravity-cli": NullTokenSource(),
     "opencode": NullTokenSource(),
     "kimi": NullTokenSource(),
     "copilot": NullTokenSource(),

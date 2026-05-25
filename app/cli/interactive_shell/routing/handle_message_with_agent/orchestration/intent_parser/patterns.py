@@ -165,8 +165,17 @@ _LLM_PROVIDER_NAMES = frozenset(
         "codex",
         "claude-code",
         "gemini-cli",
+        "antigravity-cli",
+        "antigravity",
+        "agy",
     }
 )
+# Surface-friendly synonyms that users naturally type — "switch to agy" maps to
+# the canonical provider id ``antigravity-cli`` before reaching the dispatcher.
+_LLM_PROVIDER_ALIASES: dict[str, str] = {
+    "agy": "antigravity-cli",
+    "antigravity": "antigravity-cli",
+}
 _LLM_PROVIDER_RE = re.compile(
     rf"\b(?P<provider>{'|'.join(sorted(_LLM_PROVIDER_NAMES, key=len, reverse=True))})\b",
     re.IGNORECASE,
@@ -239,6 +248,7 @@ __all__ = [
     "TASK_CANCEL_GENERIC_RE",
     "IMPLEMENTATION_RE",
     "_LLM_PROVIDER_NAMES",
+    "_LLM_PROVIDER_ALIASES",
     "_LLM_PROVIDER_RE",
     "_LLM_PROVIDER_SWITCH_RE",
     "INTEGRATION_DETAIL_RE",

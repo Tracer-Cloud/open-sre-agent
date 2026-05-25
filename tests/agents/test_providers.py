@@ -40,6 +40,9 @@ class TestNameSuffixHeuristic:
     def test_gemini_cli_with_pid_suffix(self) -> None:
         assert provider_for(_record(name="gemini-cli-101")) == "gemini-cli"
 
+    def test_antigravity_cli_with_pid_suffix(self) -> None:
+        assert provider_for(_record(name="antigravity-cli-202")) == "antigravity-cli"
+
     def test_bare_canonical_name(self) -> None:
         # Discovery emits bare names from cursor-terminal metadata.
         assert provider_for(_record(name="claude-code")) == "claude-code"

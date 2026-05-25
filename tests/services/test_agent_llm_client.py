@@ -581,7 +581,17 @@ def test_get_agent_llm_routes_deepseek_to_openai_compatible_client(
 
 
 @pytest.mark.parametrize(
-    "provider", ["codex", "opencode", "claude-code", "kimi", "cursor", "gemini-cli", "copilot"]
+    "provider",
+    [
+        "codex",
+        "opencode",
+        "claude-code",
+        "kimi",
+        "cursor",
+        "gemini-cli",
+        "antigravity-cli",
+        "copilot",
+    ],
 )
 def test_get_agent_llm_returns_cli_backed_client_for_cli_providers(
     provider: str, monkeypatch: pytest.MonkeyPatch

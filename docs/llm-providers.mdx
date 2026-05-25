@@ -21,6 +21,7 @@ OpenSRE is provider-agnostic: bring your own model. Selection is controlled by t
 | OpenAI Codex CLI| `codex`    | `codex login` (CLI)             | Codex CLI default                             | Codex CLI default                               |
 | Claude Code CLI| `claude-code`| `claude login` (CLI)            | Claude Code CLI default                       | Claude Code CLI default                         |
 | GitHub Copilot CLI| `copilot`| `copilot login` or `gh auth login` (CLI) | Copilot CLI default                           | Copilot CLI default                             |
+| Google Antigravity CLI| `antigravity-cli`| `agy` (browser OAuth, OS keyring) | Antigravity auto-select (`gemini-3.5-flash`)    | Antigravity auto-select (`gemini-3.5-flash`)    |
 
 OpenSRE distinguishes two model slots per provider:
 
@@ -238,6 +239,42 @@ export COPILOT_BIN=
 ```
 
 Requires the [GitHub Copilot CLI](https://docs.github.com/copilot/how-tos/use-copilot-agents/use-copilot-cli) (`npm i -g @github/copilot`). Login uses the interactive `/login` slash command or `copilot login`. OpenSRE detects auth in this order: (1) `COPILOT_GITHUB_TOKEN` / `GH_TOKEN` / `GITHUB_TOKEN` env, (2) [`gh auth status`](https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli#authenticating-with-github-cli) when `gh` is on `PATH` (including `✓ Logged in to github.com account …`, `- Active account: true`, or a supported `- Token:` prefix: `gho_`, `github_pat_`, `ghu_` per Copilot docs — not `ghp_`), with `gh auth status --hostname …` when `COPILOT_GH_HOST` or `GH_HOST` targets a non-`github.com` host. It does **not** read plaintext `$COPILOT_HOME/config.json` (keychain-backed installs may omit it; mis-parsing arbitrary JSON risks false positives). If nothing matches, detection reports `logged_in=None` and the runner verifies at invoke time. If `COPILOT_MODEL` is unset, OpenSRE omits `--model`. Invocations run as `copilot -p PROMPT --no-color --no-ask-user --silent` so they never block on user input. **BYOK / `COPILOT_OFFLINE`:** GitHub auth may be unnecessary; a `None` probe can still be fine if Copilot is configured for offline or external providers only.
+
+### Google Antigravity CLI
+
+```bash
+export LLM_PROVIDER=antigravity-cli
+# Authenticate the Antigravity CLI separately (browser OAuth on first run):
+agy                       # interactive launch triggers Google Sign-In; token cached by OS keyring
+# Stay current — 1.0.0 had OAuth hangs (fixed in 1.0.1):
+agy update
+# Optional overrides (all blank-by-default):
+export ANTIGRAVITY_CLI_BIN=
+export ANTIGRAVITY_CLI_TIMEOUT_SECONDS=120   # clamped 30–600; maps to `--print-timeout {N}s`
+# Note: ANTIGRAVITY_CLI_MODEL is registered for forward-compat but currently no-op
+# (agy v1 does not expose --model in headless `-p` mode; the CLI auto-selects the model,
+# currently gemini-3.5-flash by default). Switch interactively via `/models` inside `agy`.
+```
+
+Antigravity CLI (`agy`) is Google's successor to Gemini CLI. Install via
+`curl -fsSL https://antigravity.google/cli/install.sh | bash`, then run `agy install`
+to configure your shell `PATH`. The minimum tested version is **1.0.1** — older builds
+log a warning via the probe and direct you to `agy update`.
+
+**Why two Google providers?** Google's [transition announcement](https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli/)
+states that **on 2026-06-18** Gemini CLI stops serving Pro/Ultra and free users.
+Paid Gemini Code Assist licences keep Gemini CLI indefinitely. OpenSRE keeps both
+`gemini-cli` (deprecated alias with a probe-time notice) and `antigravity-cli` so
+either group can run without surprises.
+
+As a best-effort fallback, the probe treats explicit `GEMINI_API_KEY` /
+`GOOGLE_API_KEY` / `GOOGLE_APPLICATION_CREDENTIALS` env credentials as authenticated
+(mirroring the Gemini CLI adapter), so users migrating across the two CLIs can
+keep their existing env-var-based auth without re-running the browser flow.
+
+Invocations run as `agy -p PROMPT --print-timeout {N}s`. The adapter never passes
+`--continue` / `--conversation` / `--sandbox` / `--dangerously-skip-permissions`,
+keeping every opensre call ephemeral.
 
 See [`app/integrations/llm_cli/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/app/integrations/llm_cli/AGENTS.md) for the adapter pattern used to add new CLI providers.
 

@@ -7,6 +7,7 @@ import pytest
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.intent_parser import (
     SAMPLE_ALERT_RE,
     extract_implementation_request,
+    extract_llm_provider_switch,
     extract_quoted_investigation_request,
     extract_shell_command,
     normalize_shell_command,
@@ -38,6 +39,32 @@ def test_split_prompt_clauses_preserves_positions() -> None:
 
 def test_normalize_shell_command_rejects_multiline() -> None:
     assert normalize_shell_command("ls\npwd") is None
+
+
+@pytest.mark.parametrize(
+    "alias",
+    ["agy", "antigravity", "Antigravity", "AGY"],
+)
+def test_extract_llm_provider_switch_canonicalises_antigravity_alias(alias: str) -> None:
+    # Users following the new docs say "switch to agy"; the deterministic
+    # parser must canonicalise that to the registry id ``antigravity-cli``
+    # before the downstream dispatcher reads ``action.content``.
+    clause = PromptClause(text=f"switch provider to {alias}", position=0)
+
+    action = extract_llm_provider_switch(clause)
+
+    assert action is not None
+    assert action.kind == "llm_provider"
+    assert action.content == "antigravity-cli"
+
+
+def test_extract_llm_provider_switch_keeps_canonical_id_unchanged() -> None:
+    clause = PromptClause(text="switch provider to antigravity-cli", position=0)
+
+    action = extract_llm_provider_switch(clause)
+
+    assert action is not None
+    assert action.content == "antigravity-cli"
 
 
 def test_normalize_shell_command_strips_ticks() -> None:

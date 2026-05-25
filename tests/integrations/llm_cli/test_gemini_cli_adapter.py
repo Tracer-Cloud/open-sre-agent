@@ -51,6 +51,10 @@ def test_detect_logged_in(mock_which: MagicMock, mock_run: MagicMock) -> None:
     assert probe.logged_in is True
     assert probe.bin_path == "/usr/bin/gemini"
     assert probe.version == "0.1.2"
+    # The probe should always carry the 2026-06-18 sunset notice when installed,
+    # pointing users to antigravity-cli (additive — paid Code Assist exempt).
+    assert "2026-06-18" in probe.detail
+    assert "antigravity-cli" in probe.detail
 
 
 @patch("app.integrations.llm_cli.gemini_cli.subprocess.run")

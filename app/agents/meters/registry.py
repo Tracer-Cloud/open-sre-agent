@@ -16,6 +16,7 @@ TOKEN_METER_REGISTRY: dict[str, TokenMeter] = {
     "cursor": NullMeter(),
     "aider": NullMeter(),
     "gemini-cli": NullMeter(),
+    "antigravity-cli": NullMeter(),
     "opencode": NullMeter(),
     "kimi": NullMeter(),
     "copilot": NullMeter(),

@@ -41,6 +41,12 @@ def _gemini_cli_factory() -> LLMCLIAdapter:
     return GeminiCLIAdapter()
 
 
+def _antigravity_cli_factory() -> LLMCLIAdapter:
+    from app.integrations.llm_cli.antigravity_cli import AntigravityCLIAdapter
+
+    return AntigravityCLIAdapter()
+
+
 def _opencode_factory() -> LLMCLIAdapter:
     from app.integrations.llm_cli.opencode import OpenCodeAdapter
 
@@ -69,6 +75,9 @@ CLI_PROVIDER_REGISTRY: dict[str, CLIProviderRegistration] = {
     ),
     "gemini-cli": CLIProviderRegistration(
         adapter_factory=_gemini_cli_factory, model_env_key="GEMINI_CLI_MODEL"
+    ),
+    "antigravity-cli": CLIProviderRegistration(
+        adapter_factory=_antigravity_cli_factory, model_env_key="ANTIGRAVITY_CLI_MODEL"
     ),
     "opencode": CLIProviderRegistration(
         adapter_factory=_opencode_factory, model_env_key="OPENCODE_MODEL"

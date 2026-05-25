@@ -21,6 +21,7 @@ from .action_builders import (
 )
 from .patterns import (
     _EXPLICIT_SHELL_RE,
+    _LLM_PROVIDER_ALIASES,
     _LLM_PROVIDER_RE,
     _LLM_PROVIDER_SWITCH_RE,
     _NON_COMMAND_STARTS,
@@ -199,4 +200,5 @@ def extract_llm_provider_switch(clause: PromptClause) -> PlannedAction | None:
 
     target = provider_matches[-1]
     provider = target.group("provider").lower()
+    provider = _LLM_PROVIDER_ALIASES.get(provider, provider)
     return llm_provider_action(provider, clause.position + target.start("provider"))

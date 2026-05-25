@@ -43,6 +43,7 @@ _LOOSE_AGENT_SIGNATURES: tuple[tuple[str, str], ...] = (
     ("aider", "aider"),
     ("codex", "codex"),
     ("gemini", "gemini-cli"),
+    ("agy", "antigravity-cli"),
 )
 _CLAUDE_CODE_CLI_ARG_TOKENS: frozenset[str] = frozenset(
     {"--resume", "--prefill", "--print", "--continue", "-p", "-c", "-r"}
@@ -244,6 +245,8 @@ def classify_command_provider(command: str) -> str | None:
         return "aider"
     if executable == "gemini":
         return "gemini-cli"
+    if executable == "agy":
+        return "antigravity-cli"
     if _is_codex_cmdline(cmdline):
         return "codex"
     return None
@@ -451,6 +454,8 @@ def _agent_name_for_command(command: str) -> str | None:
         return "aider"
     if _has_command_token(lower, "gemini"):
         return "gemini-cli"
+    if _has_command_token(lower, "agy"):
+        return "antigravity-cli"
     return None
 
 
@@ -507,6 +512,8 @@ def _classify_agent(
         return "codex"
     if executable == "gemini":
         return "gemini-cli"
+    if executable == "agy":
+        return "antigravity-cli"
     if executable in {"cursor-agent", "cursor-agent-cli"}:
         return "cursor"
     if executable == "cursor" and _is_cursor_desktop_artifact(cmdline):

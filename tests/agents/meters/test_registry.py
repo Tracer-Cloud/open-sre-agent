@@ -22,7 +22,7 @@ def test_codex_resolves_to_real_meter() -> None:
 
 @pytest.mark.parametrize(
     "provider",
-    ["cursor", "aider", "gemini-cli", "opencode", "kimi", "copilot"],
+    ["cursor", "aider", "gemini-cli", "antigravity-cli", "opencode", "kimi", "copilot"],
 )
 def test_stub_providers_resolve_to_null_meter(provider: str) -> None:
     """Acceptance: stub providers exist in the registry and return 0.

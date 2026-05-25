@@ -29,8 +29,8 @@ shapes — no PID is registered until you ask for it with `--register`.
 ### Strict mode (default)
 
 Recognizes the typical CLI invocations for Claude Code, Cursor, Aider, Codex,
-and Gemini. For Claude Code specifically, all of the following process
-shapes are treated as a session:
+Gemini, and Antigravity (`agy`). For Claude Code specifically, all of the
+following process shapes are treated as a session:
 
 ```text
 claude
@@ -125,7 +125,7 @@ scaled to a per-minute figure. Three states:
   the last 60 s. Honest UX — distinguishes "idle session" from
   "not observable".
 - **`-`**: never observed. Either the provider has no meter yet
-  (cursor, aider, gemini-cli, opencode, kimi, copilot in this PR),
+  (cursor, aider, gemini-cli, antigravity-cli, opencode, kimi, copilot in this PR),
   the session log is unreadable (rare; macOS hardened-runtime
   processes can deny `psutil.cwd()`), or the interactive REPL is
   not running (non-interactive `opensre agents list` never starts
@@ -189,7 +189,7 @@ Model resolution order (highest to lowest):
 | --- | --- | --- |
 | `claude-code` | real | real |
 | `codex` | real | real |
-| `cursor`, `aider`, `gemini-cli`, `opencode`, `kimi`, `copilot` | `-` | `-` |
+| `cursor`, `aider`, `gemini-cli`, `antigravity-cli`, `opencode`, `kimi`, `copilot` | `-` | `-` |
 
 Adding a real meter for another provider is a self-contained
 follow-up PR: implement the `TokenMeter` and `TokenSource`
