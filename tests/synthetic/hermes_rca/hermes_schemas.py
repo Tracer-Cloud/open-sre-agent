@@ -32,6 +32,12 @@ VALID_HERMES_FAILURE_MODES = frozenset(
         "memory_unavailable",
         "memory_corruption",
         "memory_parse_failure",
+        # Part 4/5
+        "missing_determinism_control",
+        "missing_approval_gate",
+        "missing_audit_trail",
+        "missing_rbac",
+        "missing_credential_isolation",
     }
 )
 
@@ -49,6 +55,11 @@ VALID_HERMES_EVIDENCE_SOURCES = frozenset(
         "hermes_routing_decisions",
         "hermes_memory_state",
         "hermes_filesystem_state",
+        "hermes_audit_trail",
+        "hermes_approval_events",
+        "hermes_rbac_state",
+        "hermes_credential_state",
+        "hermes_workflow_run",
     }
 )
 
@@ -67,6 +78,11 @@ VALID_HERMES_TRAJECTORY_ACTIONS = frozenset(
         "get_hermes_routing_decisions",
         "get_hermes_memory_state",
         "get_hermes_filesystem_state",
+        "get_hermes_audit_trail",
+        "get_hermes_approval_events",
+        "get_hermes_rbac_state",
+        "get_hermes_credential_state",
+        "get_hermes_workflow_run",
     }
 )
 
@@ -219,6 +235,11 @@ class HermesScenarioEvidence:
     hermes_routing_decisions: dict[str, Any] | None
     hermes_memory_state: dict[str, Any] | None
     hermes_filesystem_state: dict[str, Any] | None
+    hermes_audit_trail: dict[str, Any] | None
+    hermes_approval_events: dict[str, Any] | None
+    hermes_rbac_state: dict[str, Any] | None
+    hermes_credential_state: dict[str, Any] | None
+    hermes_workflow_run: dict[str, Any] | None
 
     def as_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {}
@@ -594,6 +615,203 @@ def validate_hermes_filesystem_state(data: dict[str, Any]) -> dict[str, Any]:
     for field in ("backups_present", "vcs_present"):
         if not isinstance(data.get(field), bool):
             raise ValueError(f"{ctx}: '{field}' must be a boolean")
+
+    return data
+
+
+def validate_hermes_approval_events(data: dict[str, Any]) -> dict[str, Any]:
+    ctx = "hermes_approval_events.json"
+
+    _require_str(data, "session_id", ctx)
+
+    events = data.get("events")
+
+    if not isinstance(events, list):
+        raise ValueError(f"{ctx}: 'events' must be a list")
+
+    for index, event in enumerate(events):
+        ectx = f"{ctx}:events[{index}]"
+
+        for field in ("ts", "command", "approval_kind"):
+            _require_str(event, field, ectx)
+
+        approval_kind = event["approval_kind"]
+
+        if approval_kind not in {
+            "explicit_yes",
+            "explicit_no",
+            "never_prompted",
+        }:
+            raise ValueError(f"{ectx}: invalid approval_kind {approval_kind!r}")
+
+        approver = event.get("approver")
+
+        if approver is not None and not isinstance(approver, str):
+            raise ValueError(f"{ectx}: 'approver' must be string or null")
+
+    return data
+
+
+def validate_hermes_audit_trail(data: dict[str, Any]) -> dict[str, Any]:
+    ctx = "hermes_audit_trail.json"
+
+    policy = data.get("policy")
+    if not isinstance(policy, dict):
+        raise ValueError(f"{ctx}: 'policy' must be an object")
+
+    for field in ("signature_required", "hash_chain_required"):
+        if not isinstance(policy.get(field), bool):
+            raise ValueError(f"{ctx}:policy: '{field}' must be a boolean")
+
+    regulated_actions = policy.get("regulated_actions")
+    if not isinstance(regulated_actions, list) or not all(
+        isinstance(item, str) for item in regulated_actions
+    ):
+        raise ValueError(f"{ctx}:policy: 'regulated_actions' must be a list of strings")
+
+    events = data.get("events")
+    if not isinstance(events, list):
+        raise ValueError(f"{ctx}: 'events' must be a list")
+
+    for index, event in enumerate(events):
+        ectx = f"{ctx}:events[{index}]"
+        for field in ("ts", "action", "actor"):
+            _require_str(event, field, ectx)
+
+        for field in ("signature_present", "hash_chain_valid"):
+            if not isinstance(event.get(field), bool):
+                raise ValueError(f"{ectx}: '{field}' must be a boolean")
+
+        for field in ("previous_hash", "this_hash"):
+            value = event.get(field)
+            if value is not None and not isinstance(value, str):
+                raise ValueError(f"{ectx}: '{field}' must be string or null")
+
+    summary = data.get("summary")
+    if not isinstance(summary, dict):
+        raise ValueError(f"{ctx}: 'summary' must be an object")
+
+    for field in ("events_total", "events_signed", "chain_breaks"):
+        if not isinstance(summary.get(field), int):
+            raise ValueError(f"{ctx}:summary: '{field}' must be an integer")
+
+    return data
+
+
+def validate_hermes_rbac_state(data: dict[str, Any]) -> dict[str, Any]:
+    ctx = "hermes_rbac_state.json"
+
+    tenants = data.get("tenants")
+
+    if not isinstance(tenants, list):
+        raise ValueError(f"{ctx}: 'tenants' must be a list")
+
+    for index, tenant in enumerate(tenants):
+        tctx = f"{ctx}:tenants[{index}]"
+
+        _require_str(tenant, "tenant_id", tctx)
+
+        scopes = tenant.get("scopes")
+
+        if not isinstance(scopes, list) or not all(isinstance(item, str) for item in scopes):
+            raise ValueError(f"{tctx}: 'scopes' must be a list of strings")
+
+    observed_accesses = data.get("observed_accesses")
+
+    if not isinstance(observed_accesses, list):
+        raise ValueError(f"{ctx}: 'observed_accesses' must be a list")
+
+    for index, access in enumerate(observed_accesses):
+        actx = f"{ctx}:observed_accesses[{index}]"
+
+        for field in (
+            "ts",
+            "actor_tenant_id",
+            "resource_tenant_id",
+            "resource_kind",
+            "resource_id",
+        ):
+            _require_str(access, field, actx)
+
+        if not isinstance(access.get("scope_check_performed"), bool):
+            raise ValueError(f"{actx}: 'scope_check_performed' must be a boolean")
+
+    return data
+
+
+def validate_hermes_credential_state(data: dict[str, Any]) -> dict[str, Any]:
+    ctx = "hermes_credential_state.json"
+
+    mode = data.get("mode")
+
+    if mode not in {"in_process", "proxy_daemon", "kms"}:
+        raise ValueError(f"{ctx}: invalid mode {mode!r}")
+
+    if not isinstance(data.get("in_memory_credential_count"), int):
+        raise ValueError(f"{ctx}: 'in_memory_credential_count' must be an integer")
+
+    outbound_calls = data.get("outbound_calls")
+
+    if not isinstance(outbound_calls, list):
+        raise ValueError(f"{ctx}: 'outbound_calls' must be a list")
+
+    for index, call in enumerate(outbound_calls):
+        cctx = f"{ctx}:outbound_calls[{index}]"
+
+        for field in (
+            "ts",
+            "url",
+            "credential_kind",
+            "credential_source",
+            "credential_token_synthetic",
+        ):
+            _require_str(call, field, cctx)
+
+    return data
+
+
+def validate_hermes_workflow_run(data: dict[str, Any]) -> dict[str, Any]:
+    ctx = "hermes_workflow_run.json"
+
+    for field in ("workflow_id", "input_hash"):
+        _require_str(data, field, ctx)
+
+    runs = data.get("runs")
+
+    if not isinstance(runs, list):
+        raise ValueError(f"{ctx}: 'runs' must be a list")
+
+    for index, run in enumerate(runs):
+        rctx = f"{ctx}:runs[{index}]"
+
+        for field in ("run_id", "started_at", "final_output_hash"):
+            _require_str(run, field, rctx)
+
+        steps = run.get("steps")
+
+        if not isinstance(steps, list):
+            raise ValueError(f"{rctx}: 'steps' must be a list")
+
+        for step_index, step in enumerate(steps):
+            sctx = f"{rctx}:steps[{step_index}]"
+
+            _require_str(step, "name", sctx)
+            _require_str(step, "output_hash", sctx)
+
+            if not isinstance(step.get("is_deterministic"), bool):
+                raise ValueError(f"{sctx}: 'is_deterministic' must be a boolean")
+
+            non_determinism_reason = step.get("non_determinism_reason")
+
+            if non_determinism_reason is not None and not isinstance(non_determinism_reason, str):
+                raise ValueError(f"{sctx}: 'non_determinism_reason' must be string or null")
+
+    diverging_steps = data.get("diverging_steps")
+
+    if not isinstance(diverging_steps, list) or not all(
+        isinstance(item, str) for item in diverging_steps
+    ):
+        raise ValueError(f"{ctx}: 'diverging_steps' must be a list of strings")
 
     return data
 
