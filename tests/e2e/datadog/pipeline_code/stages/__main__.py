@@ -1,3 +1,3 @@
-from stages import main
+from . import main
 
 main()

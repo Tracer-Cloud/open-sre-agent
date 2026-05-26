@@ -3,9 +3,10 @@
 import json
 import os
 import sys
+from typing import cast
 
-from config import PIPELINE_NAME, PIPELINE_RUN_ID, REQUIRED_FIELDS
-from errors import ValidationError
+from ..config import PIPELINE_NAME, PIPELINE_RUN_ID, REQUIRED_FIELDS
+from ..errors import ValidationError
 
 _STAGING_PATH = "/tmp/staging"
 
@@ -17,12 +18,12 @@ def _load_records() -> list[dict]:
         if not records_env:
             raise FileNotFoundError(f"No staging file at {path} and no RECORDS_JSON env var")
         os.makedirs(_STAGING_PATH, exist_ok=True)
-        records = json.loads(records_env)
+        records = cast(list[dict], json.loads(records_env))
         with open(path, "w") as f:
             json.dump({"pipeline": PIPELINE_NAME, "run_id": PIPELINE_RUN_ID, "records": records}, f)
         return records
     with open(path) as f:
-        return json.load(f)["records"]
+        return cast(list[dict], json.load(f)["records"])
 
 
 def _validate(records: list[dict]) -> None:

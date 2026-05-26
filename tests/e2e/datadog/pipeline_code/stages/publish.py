@@ -2,7 +2,7 @@
 
 import json
 
-from config import PIPELINE_NAME, PIPELINE_RUN_ID
+from ..config import PIPELINE_NAME, PIPELINE_RUN_ID
 
 _STAGING_PATH = "/tmp/staging"
 

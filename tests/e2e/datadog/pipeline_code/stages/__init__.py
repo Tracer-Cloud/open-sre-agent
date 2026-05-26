@@ -1,18 +1,20 @@
 import sys
 
-from config import PIPELINE_STAGE
+from ..config import PIPELINE_STAGE
+from .ingest import main as run
 
 
 def main() -> None:
     stage = PIPELINE_STAGE.lower()
+
     if stage == "ingest":
-        from stages.ingest import main as run
+        from .ingest import main as run
     elif stage == "validate":
-        from stages.validate import main as run
+        from .validate import main as run
     elif stage == "publish":
-        from stages.publish import main as run
+        from .publish import main as run
     elif stage == "crashloop":
-        from stages.crashloop import main as run
+        from .crashloop import main as run
     else:
         print(f"PIPELINE_ERROR: unknown stage '{stage}'", file=sys.stderr)
         sys.exit(1)

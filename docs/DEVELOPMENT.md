@@ -24,7 +24,7 @@ From the repo root:
 ```bash
 make lint          # ruff check
 make format-check  # ruff format --check (CI-enforced)
-make typecheck     # mypy app/
+make typecheck     # python -m mypy app/ tests/e2e/datadog/pipeline_code/
 make test-cov      # pytest + coverage (default unit suite)
 ```
 

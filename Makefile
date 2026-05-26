@@ -439,7 +439,7 @@ format:
 
 # Type check
 typecheck:
-	$(PYTHON) -m mypy app/
+	$(PYTHON) -m mypy app/ tests/e2e/datadog/pipeline_code/
 
 # Run all checks (lint + format read-only check + types + full tests; mirrors CI quality gates)
 check: lint format-check typecheck test-full
