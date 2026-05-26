@@ -7,6 +7,7 @@ from openai import AuthenticationError as OpenAIAuthError
 
 from app.cli.wizard.config import PROVIDER_BY_VALUE
 from app.cli.wizard.validation import _get_provider_base_url, validate_provider_credentials
+from app.config import GROQ_BASE_URL
 
 
 @pytest.fixture(autouse=True)
@@ -178,4 +179,4 @@ def test_get_provider_base_url_deepseek() -> None:
 
 
 def test_get_provider_base_url_groq() -> None:
-    assert _get_provider_base_url("groq") == "https://api.groq.com/openai/v1"
+    assert _get_provider_base_url("groq") == GROQ_BASE_URL
