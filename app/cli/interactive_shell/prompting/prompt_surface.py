@@ -31,6 +31,7 @@ from app.cli.interactive_shell.ui import (
     PROMPT_ACCENT_ANSI,
     PROMPT_FRAME_ANSI,
     TEXT,
+    repl_tty_interactive,
 )
 
 _PROMPT_RULE_CHAR = "─"
@@ -190,6 +191,10 @@ class ShellCompleter(Completer):
         if len(parts) <= 2:
             cmd_name = parts[0].lower()
             raw_arg = "" if trailing_space or len(parts) < 2 else parts[1]
+
+            if _suppress_empty_arg_completions_for_inline_picker(cmd_name, raw_arg):
+                return
+
             if cmd_name in ("/investigate", "/save"):
                 if cmd_name == "/investigate":
                     entry = SLASH_COMMANDS.get(cmd_name)
@@ -304,6 +309,27 @@ def _build_prompt_style() -> Style:
 
 
 _PLACEHOLDER_ANSI = ANSI(f"{ANSI_DIM}Type a message, /command, or paste an alert{ANSI_RESET}")
+
+# Commands where bare invocation opens an inline picker in TTY mode.
+_INLINE_PICKER_COMMANDS: frozenset[str] = frozenset(
+    {
+        "/history",
+        "/integrations",
+        "/investigate",
+        "/list",
+        "/mcp",
+        "/model",
+        "/template",
+        "/tests",
+        "/trust",
+        "/verbose",
+    }
+)
+
+
+def _suppress_empty_arg_completions_for_inline_picker(cmd_name: str, raw_arg: str) -> bool:
+    """Hide first-arg autocomplete when bare slash command opens inline picker."""
+    return repl_tty_interactive() and not raw_arg and cmd_name in _INLINE_PICKER_COMMANDS
 
 
 def _build_prompt_session(_session: ReplSession | None = None) -> PromptSession[str]:

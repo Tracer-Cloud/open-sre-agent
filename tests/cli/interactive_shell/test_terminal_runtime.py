@@ -207,6 +207,36 @@ def test_shell_completer_suggests_subcommands_for_list() -> None:
     assert names == ["integrations", "mcp", "models", "tools"]
 
 
+def test_shell_completer_hides_inline_picker_autocomplete_in_tty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(prompt_surface, "repl_tty_interactive", lambda: True)
+
+    completions = list(
+        ShellCompleter().get_completions(
+            Document("/model "),
+            CompleteEvent(text_inserted=True),
+        )
+    )
+
+    assert completions == []
+
+
+def test_shell_completer_keeps_inline_picker_autocomplete_when_arg_started(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(prompt_surface, "repl_tty_interactive", lambda: True)
+
+    completions = list(
+        ShellCompleter().get_completions(
+            Document("/model s"),
+            CompleteEvent(text_inserted=True),
+        )
+    )
+
+    assert sorted({c.text for c in completions}) == ["set", "show"]
+
+
 def test_shell_completer_suggests_effort_levels() -> None:
     completions = list(
         ShellCompleter().get_completions(
