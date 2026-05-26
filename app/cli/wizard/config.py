@@ -260,15 +260,25 @@ GEMINI_CLI_MODELS = (
     ),
 )
 
-# Antigravity CLI (``agy``) auto-selects the model server-side (defaults to
-# gemini-3.5-flash); ``--model`` is not exposed in headless ``-p`` mode in
-# v1.0.1, so this tuple is informational only. ``ANTIGRAVITY_CLI_MODEL`` is
-# registered for forward-compat but currently no-op.
+# Source: ``agy`` ``/models`` (verified 2026-05-26 against agy 1.0.2).
+# Empty value means "no --model" so agy uses its currently configured model.
+# Note: agy 1.0.2 does not yet expose ``--model`` in headless ``-p`` mode
+# (verified locally), so the adapter ignores any value via ``del model`` in
+# ``build()``. Catalog is forward-compat: once Google ships ``--model`` in
+# headless, the wizard selection plus ``model_env_key="ANTIGRAVITY_CLI_MODEL"``
+# will route through to ``argv`` in a one-line change to ``antigravity_cli.py``.
+# Effort variants (Low/Medium/High/Thinking) shown in ``/models`` belong on
+# opensre's existing ``reasoning_effort`` knob, not here.
 ANTIGRAVITY_CLI_MODELS = (
     ModelOption(
         value="",
-        label="Auto (CLI selects model server-side)",
+        label="CLI default (no --model; use agy's currently configured model)",
     ),
+    ModelOption(value="gemini-3.5-flash", label="gemini-3.5-flash — fast"),
+    ModelOption(value="gemini-3.1-pro", label="gemini-3.1-pro — strongest Google reasoning"),
+    ModelOption(value="claude-sonnet-4.6", label="claude-sonnet-4.6 — Anthropic balanced"),
+    ModelOption(value="claude-opus-4.6", label="claude-opus-4.6 — Anthropic most capable"),
+    ModelOption(value="gpt-oss-120b", label="gpt-oss-120b — open-source"),
 )
 
 # Source: https://opencode.ai/docs/zen (verified 2026-05-21).
@@ -566,7 +576,7 @@ SUPPORTED_PROVIDERS = (
         credential_kind="cli",
         credential_secret=False,
         adapter_factory=_antigravity_cli_adapter_factory,
-        allow_custom_models=False,
+        allow_custom_models=True,
     ),
     ProviderOption(
         value="opencode",

@@ -9,9 +9,11 @@ ANTIGRAVITY_CLI_BIN              Optional explicit path to the ``agy`` binary.
 ANTIGRAVITY_CLI_TIMEOUT_SECONDS  Optional invocation timeout override (clamped 30–600s).
 
 ``ANTIGRAVITY_CLI_MODEL`` is registered for forward-compat on the registry but is
-**no-op** today: ``agy`` v1 does not expose ``--model`` in headless mode (verified
-against 1.0.1). The model is auto-selected server-side (currently gemini-3.5-flash);
-switch interactively via ``/models`` inside the REPL.
+**no-op** today: ``agy`` v1.0.2 does not expose ``--model`` in headless ``-p`` mode
+(verified locally). Each invocation uses whatever model is persisted in agy's
+local config; users change it interactively with ``/models`` inside the REPL.
+Once Google ships ``--model`` in headless, ``build()`` can forward the env var
+in a one-line change (see TODO near ``del model``).
 
 Auth
 ----
@@ -257,8 +259,13 @@ class AntigravityCLIAdapter:
         reasoning_effort: str | None = None,
     ) -> CLIInvocation:
         # ``model`` and ``reasoning_effort`` are accepted for protocol compatibility
-        # but ignored: agy 1.0.1 does not expose ``--model`` or reasoning knobs in
-        # headless ``-p`` mode (verified locally). The CLI auto-selects the model.
+        # but ignored: agy 1.0.2 does not expose ``--model`` or reasoning knobs in
+        # headless ``-p`` mode (verified locally). Each invocation uses whatever
+        # model is persisted in agy's local config; users change it via ``/models``
+        # inside the REPL.
+        # TODO(antigravity-cli): once agy supports ``--model`` in headless, replace
+        # the ``del`` with a conditional ``argv.extend(["--model", model])`` block
+        # and lock the catalog into ``app/cli/wizard/config.py:ANTIGRAVITY_CLI_MODELS``.
         del model, reasoning_effort
 
         binary = self._resolve_binary()

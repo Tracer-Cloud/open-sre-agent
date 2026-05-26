@@ -21,7 +21,7 @@ OpenSRE is provider-agnostic: bring your own model. Selection is controlled by t
 | OpenAI Codex CLI| `codex`    | `codex login` (CLI)             | Codex CLI default                             | Codex CLI default                               |
 | Claude Code CLI| `claude-code`| `claude login` (CLI)            | Claude Code CLI default                       | Claude Code CLI default                         |
 | GitHub Copilot CLI| `copilot`| `copilot login` or `gh auth login` (CLI) | Copilot CLI default                           | Copilot CLI default                             |
-| Google Antigravity CLI| `antigravity-cli`| `agy` (browser OAuth, OS keyring) | Antigravity auto-select (`gemini-3.5-flash`)    | Antigravity auto-select (`gemini-3.5-flash`)    |
+| Google Antigravity CLI| `antigravity-cli`| `agy` (browser OAuth, OS keyring) | Whatever the local `agy` config is set to (switch via `/models` inside agy) | same as reasoning model |
 
 OpenSRE distinguishes two model slots per provider:
 
@@ -252,29 +252,20 @@ agy update
 export ANTIGRAVITY_CLI_BIN=
 export ANTIGRAVITY_CLI_TIMEOUT_SECONDS=120   # clamped 30–600; maps to `--print-timeout {N}s`
 # Note: ANTIGRAVITY_CLI_MODEL is registered for forward-compat but currently no-op
-# (agy v1 does not expose --model in headless `-p` mode; the CLI auto-selects the model,
-# currently gemini-3.5-flash by default). Switch interactively via `/models` inside `agy`.
+# (agy v1.0.2 does not expose --model in headless `-p` mode). Each invocation uses
+# whatever model is persisted in agy's local config; switch it interactively with
+# `/models` inside the `agy` REPL. The wizard's model picker is a forward-compat
+# catalog: once Google ships `--model` in headless, picking a value here will start
+# being forwarded to agy via a one-line change in the adapter.
 ```
 
-Antigravity CLI (`agy`) is Google's successor to Gemini CLI. Install via
-`curl -fsSL https://antigravity.google/cli/install.sh | bash`, then run `agy install`
-to configure your shell `PATH`. The minimum tested version is **1.0.1** — older builds
-log a warning via the probe and direct you to `agy update`.
+Antigravity CLI (`agy`) is Google's successor to Gemini CLI. Install via `curl -fsSL https://antigravity.google/cli/install.sh | bash`, then run `agy install` to configure your shell `PATH`. The minimum tested version is **1.0.1** — older builds log a warning via the probe and direct you to `agy update`.
 
-**Why two Google providers?** Google's [transition announcement](https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli/)
-states that **on 2026-06-18** Gemini CLI stops serving Pro/Ultra and free users.
-Paid Gemini Code Assist licences keep Gemini CLI indefinitely. OpenSRE keeps both
-`gemini-cli` (deprecated alias with a probe-time notice) and `antigravity-cli` so
-either group can run without surprises.
+**Why two Google providers?** Google's [transition announcement](https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli/) states that **on 2026-06-18** Gemini CLI stops serving Pro/Ultra and free users. Paid Gemini Code Assist licences keep Gemini CLI indefinitely. OpenSRE keeps both `gemini-cli` (deprecated alias with a probe-time notice) and `antigravity-cli` so either group can run without surprises.
 
-As a best-effort fallback, the probe treats explicit `GEMINI_API_KEY` /
-`GOOGLE_API_KEY` / `GOOGLE_APPLICATION_CREDENTIALS` env credentials as authenticated
-(mirroring the Gemini CLI adapter), so users migrating across the two CLIs can
-keep their existing env-var-based auth without re-running the browser flow.
+As a best-effort fallback, the probe treats explicit `GEMINI_API_KEY` / `GOOGLE_API_KEY` / `GOOGLE_APPLICATION_CREDENTIALS` env credentials as authenticated (mirroring the Gemini CLI adapter), so users migrating across the two CLIs can keep their existing env-var-based auth without re-running the browser flow.
 
-Invocations run as `agy -p PROMPT --print-timeout {N}s`. The adapter never passes
-`--continue` / `--conversation` / `--sandbox` / `--dangerously-skip-permissions`,
-keeping every opensre call ephemeral.
+Invocations run as `agy -p PROMPT --print-timeout {N}s`. The adapter never passes `--continue` / `--conversation` / `--sandbox` / `--dangerously-skip-permissions`, keeping every opensre call ephemeral.
 
 See [`app/integrations/llm_cli/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/app/integrations/llm_cli/AGENTS.md) for the adapter pattern used to add new CLI providers.
 
