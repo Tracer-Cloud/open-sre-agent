@@ -30,14 +30,21 @@ from app.integrations.llm_cli.binary_resolver import (
 from app.integrations.llm_cli.binary_resolver import (
     resolve_cli_binary,
 )
+from app.integrations.llm_cli.constants import (
+    DEFAULT_EXEC_TIMEOUT_SEC as _DEFAULT_EXEC_TIMEOUT_SEC,
+)
+from app.integrations.llm_cli.constants import (
+    MAX_EXEC_TIMEOUT_SEC as _MAX_EXEC_TIMEOUT_SEC,
+)
+from app.integrations.llm_cli.constants import (
+    MIN_EXEC_TIMEOUT_SEC as _MIN_EXEC_TIMEOUT_SEC,
+)
 from app.integrations.llm_cli.subprocess_env import build_cli_subprocess_env
+from app.integrations.llm_cli.timeout_utils import resolve_timeout_from_env
 
 _GEMINI_VERSION_RE = re.compile(r"(\d+\.\d+\.\d+)")
 _PROBE_TIMEOUT_SEC = 20.0
 _AUTH_HINT = "Run: gemini (interactive login) or set GEMINI_API_KEY."
-_DEFAULT_EXEC_TIMEOUT_SEC = 120.0
-_MIN_EXEC_TIMEOUT_SEC = 30.0
-_MAX_EXEC_TIMEOUT_SEC = 600.0
 # Source: https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli/
 _SUNSET_NOTE = (
     " Note: Gemini CLI stops serving Pro/Ultra and free users on 2026-06-18; "
@@ -51,16 +58,12 @@ def _parse_semver(text: str) -> str | None:
 
 
 def _resolve_exec_timeout_seconds() -> float:
-    raw = os.environ.get("GEMINI_CLI_TIMEOUT_SECONDS", "").strip()
-    if not raw:
-        return _DEFAULT_EXEC_TIMEOUT_SEC
-    try:
-        value = float(raw)
-    except ValueError:
-        return _DEFAULT_EXEC_TIMEOUT_SEC
-    if value <= 0:
-        return _DEFAULT_EXEC_TIMEOUT_SEC
-    return max(_MIN_EXEC_TIMEOUT_SEC, min(value, _MAX_EXEC_TIMEOUT_SEC))
+    return resolve_timeout_from_env(
+        env_key="GEMINI_CLI_TIMEOUT_SECONDS",
+        default=_DEFAULT_EXEC_TIMEOUT_SEC,
+        minimum=_MIN_EXEC_TIMEOUT_SEC,
+        maximum=_MAX_EXEC_TIMEOUT_SEC,
+    )
 
 
 def _gemini_auth_env_overrides() -> dict[str, str]:

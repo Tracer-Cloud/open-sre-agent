@@ -13,6 +13,18 @@ from typing import Any
 from pydantic import BaseModel
 
 from app.integrations.llm_cli.base import CLIProbe, LLMCLIAdapter
+from app.integrations.llm_cli.constants import (
+    EX_TEMPFAIL as _EX_TEMPFAIL,
+)
+from app.integrations.llm_cli.constants import (
+    PROBE_CACHE_TTL_SEC as _PROBE_CACHE_TTL_SEC,
+)
+from app.integrations.llm_cli.constants import (
+    TEMPFAIL_BACKOFF_SEC as _TEMPFAIL_BACKOFF_SEC,
+)
+from app.integrations.llm_cli.constants import (
+    TEMPFAIL_MAX_RETRIES as _TEMPFAIL_MAX_RETRIES,
+)
 from app.integrations.llm_cli.errors import (
     CLIAuthenticationRequired,
     CLIInterruptedError,
@@ -27,14 +39,10 @@ logger = logging.getLogger(__name__)
 
 _ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
 _REDACTED_PROMPT_ARG = "<redacted-prompt>"
-# Avoid re-running `detect()` (two subprocess probes) on every invoke during long investigations.
-_PROBE_CACHE_TTL_SEC = 45.0
-
+# Avoid re-running `detect()` (two subprocess probes) on every invoke during long
+# investigations. Value is defined in shared constants.
 # POSIX EX_TEMPFAIL (75): the subprocess hit a transient error and can be retried.
 # kimi uses this when a session dies mid-flight ("To resume this session: kimi -r …").
-_EX_TEMPFAIL = 75
-_TEMPFAIL_MAX_RETRIES = 2
-_TEMPFAIL_BACKOFF_SEC = 2.0
 
 # Back-compat name for tests and imports that expect this symbol on runner.
 _build_subprocess_env = build_cli_subprocess_env

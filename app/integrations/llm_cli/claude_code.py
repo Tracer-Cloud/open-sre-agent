@@ -44,33 +44,36 @@ from app.integrations.llm_cli.binary_resolver import (
 from app.integrations.llm_cli.binary_resolver import (
     resolve_cli_binary,
 )
+from app.integrations.llm_cli.constants import (
+    DEFAULT_EXEC_TIMEOUT_SEC as _DEFAULT_EXEC_TIMEOUT_SEC,
+)
+from app.integrations.llm_cli.constants import (
+    MAX_EXEC_TIMEOUT_SEC as _MAX_EXEC_TIMEOUT_SEC,
+)
+from app.integrations.llm_cli.constants import (
+    MIN_EXEC_TIMEOUT_SEC as _MIN_EXEC_TIMEOUT_SEC,
+)
 from app.integrations.llm_cli.env_overrides import (
     ANTHROPIC_CLI_ENV_KEYS,
     nonempty_env_values,
 )
 from app.integrations.llm_cli.subprocess_env import build_cli_subprocess_env
+from app.integrations.llm_cli.timeout_utils import resolve_timeout_from_env
 
 _CLAUDE_VERSION_RE = re.compile(r"(\d+\.\d+\.\d+)")
 # Claude Code's `--version` does config/cache init that can spike past Codex's 3s
 # budget on cold starts or when another claude process holds shared state.
 _PROBE_TIMEOUT_SEC = 8.0
 _AUTH_HINT = "Run: claude auth login or set ANTHROPIC_API_KEY."
-_DEFAULT_EXEC_TIMEOUT_SEC = 120.0
-_MIN_EXEC_TIMEOUT_SEC = 30.0
-_MAX_EXEC_TIMEOUT_SEC = 600.0
 
 
 def _resolve_exec_timeout_seconds() -> float:
-    raw = os.environ.get("CLAUDE_CODE_TIMEOUT_SECONDS", "").strip()
-    if not raw:
-        return _DEFAULT_EXEC_TIMEOUT_SEC
-    try:
-        value = float(raw)
-    except ValueError:
-        return _DEFAULT_EXEC_TIMEOUT_SEC
-    if value <= 0:
-        return _DEFAULT_EXEC_TIMEOUT_SEC
-    return max(_MIN_EXEC_TIMEOUT_SEC, min(value, _MAX_EXEC_TIMEOUT_SEC))
+    return resolve_timeout_from_env(
+        env_key="CLAUDE_CODE_TIMEOUT_SECONDS",
+        default=_DEFAULT_EXEC_TIMEOUT_SEC,
+        minimum=_MIN_EXEC_TIMEOUT_SEC,
+        maximum=_MAX_EXEC_TIMEOUT_SEC,
+    )
 
 
 def _parse_semver(text: str) -> str | None:
