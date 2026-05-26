@@ -5,8 +5,8 @@ import os
 import sys
 from typing import cast
 
-from ..config import PIPELINE_NAME, PIPELINE_RUN_ID, REQUIRED_FIELDS
-from ..errors import ValidationError
+from config import PIPELINE_NAME, PIPELINE_RUN_ID, REQUIRED_FIELDS
+from errors import ValidationError
 
 _STAGING_PATH = "/tmp/staging"
 

@@ -9,7 +9,7 @@ BackoffLimitExceeded / CrashLoopBackOff visible in kubectl describe.
 import json
 import sys
 
-from ..config import PIPELINE_NAME, PIPELINE_RUN_ID
+from config import PIPELINE_NAME, PIPELINE_RUN_ID
 
 
 def main() -> None:
