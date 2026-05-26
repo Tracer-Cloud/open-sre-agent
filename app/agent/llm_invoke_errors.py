@@ -17,11 +17,15 @@ class LLMInvokeFailure:
 
 def _timeout_remediation() -> list[str]:
     return [
-        "CLI providers: raise the per-provider timeout env "
-        "(e.g. GEMINI_CLI_TIMEOUT_SECONDS, CLAUDE_CODE_TIMEOUT_SECONDS, "
-        "ANTIGRAVITY_CLI_TIMEOUT_SECONDS; clamped 30–600 where supported).",
-        "API providers (Anthropic, OpenAI, etc.): each ReAct turn is limited to "
-        "~90s per HTTP request; retry or switch to a faster model if turns time out.",
+        (
+            "CLI providers: raise the per-provider timeout env "
+            + "(e.g. GEMINI_CLI_TIMEOUT_SECONDS, CLAUDE_CODE_TIMEOUT_SECONDS, "
+            + "ANTIGRAVITY_CLI_TIMEOUT_SECONDS; clamped 30–600 where supported)."
+        ),
+        (
+            "API providers (Anthropic, OpenAI, etc.): each ReAct turn is limited to "
+            + "~90s per HTTP request; retry or switch to a faster model if turns time out."
+        ),
         "Investigation runs many LLM and tool steps — total wall time can be several minutes.",
     ]
 
@@ -119,8 +123,10 @@ def classify_llm_invoke_failure(exc: BaseException) -> LLMInvokeFailure | None:
                 or "Anthropic model was not found. Check your configured model name.",
                 tracker_message="Failed: Model not found",
                 remediation_steps=[
-                    "Verify your model name in ANTHROPIC_REASONING_MODEL or "
-                    "ANTHROPIC_TOOLCALL_MODEL environment variables.",
+                    (
+                        "Verify your model name in ANTHROPIC_REASONING_MODEL or "
+                        + "ANTHROPIC_TOOLCALL_MODEL environment variables."
+                    ),
                     "Confirm the model ID is valid for your Anthropic account.",
                 ],
             )
