@@ -1,7 +1,6 @@
 import sys
 
 from config import PIPELINE_STAGE
-from .ingest import main as run
 
 
 def main() -> None:
