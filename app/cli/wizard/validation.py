@@ -66,6 +66,10 @@ def _get_provider_base_url(provider_value: str) -> str | None:
         from app.config import NVIDIA_BASE_URL
 
         return NVIDIA_BASE_URL
+    if provider_value == "groq":
+        from app.config import GROQ_BASE_URL
+
+        return GROQ_BASE_URL
     return None
 
 
@@ -148,7 +152,7 @@ def validate_provider_credentials(
                 ok=True, detail="Anthropic API key validated.", sample_response=sample_text
             )
 
-        # All OpenAI-compatible providers (openai, openrouter, deepseek, gemini, nvidia)
+        # All OpenAI-compatible providers (openai, openrouter, deepseek, gemini, nvidia, groq)
         base_url = _get_provider_base_url(provider.value)
         openai_client = openai_client_cls(api_key=api_key, base_url=base_url, timeout=30.0)
         # Only native OpenAI reasoning models use max_completion_tokens; others use max_tokens

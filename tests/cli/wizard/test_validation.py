@@ -175,3 +175,7 @@ def test_validate_provider_credentials_returns_success_for_valid_openai_key(monk
 
 def test_get_provider_base_url_deepseek() -> None:
     assert _get_provider_base_url("deepseek") == "https://api.deepseek.com"
+
+
+def test_get_provider_base_url_groq() -> None:
+    assert _get_provider_base_url("groq") == "https://api.groq.com/openai/v1"
