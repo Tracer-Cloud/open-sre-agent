@@ -174,4 +174,17 @@ def test_validate_provider_credentials_returns_success_for_valid_openai_key(monk
 
 
 def test_get_provider_base_url_deepseek() -> None:
-    assert _get_provider_base_url("deepseek") == "https://api.deepseek.com"
+    from app.config import DEEPSEEK_BASE_URL
+
+    assert _get_provider_base_url("deepseek") == DEEPSEEK_BASE_URL
+
+
+def test_get_provider_base_url_groq() -> None:
+    from app.config import GROQ_BASE_URL
+
+    assert _get_provider_base_url("groq") == GROQ_BASE_URL
+
+
+def test_get_provider_base_url_openai_returns_none() -> None:
+    """Native OpenAI should return None (uses default base_url)."""
+    assert _get_provider_base_url("openai") is None

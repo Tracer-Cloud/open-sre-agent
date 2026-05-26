@@ -66,6 +66,10 @@ def _get_provider_base_url(provider_value: str) -> str | None:
         from app.config import NVIDIA_BASE_URL
 
         return NVIDIA_BASE_URL
+    if provider_value == "groq":
+        from app.config import GROQ_BASE_URL
+
+        return GROQ_BASE_URL
     return None
 
 
