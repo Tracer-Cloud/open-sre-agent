@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import os
 import pathlib
-import re
 import subprocess
 import sys
 import tomllib
@@ -19,24 +18,12 @@ from app.integrations.llm_cli.binary_resolver import (
     default_cli_fallback_paths as _default_cli_fallback_paths,
 )
 from app.integrations.llm_cli.binary_resolver import resolve_cli_binary
+from app.integrations.llm_cli.probe_utils import run_version_probe
+from app.integrations.llm_cli.semver_utils import parse_semver_three_part, semver_to_tuple
 
 logger = logging.getLogger(__name__)
 
-_KIMI_VERSION_RE = re.compile(r"(\d+\.\d+\.\d+)")
 _PROBE_TIMEOUT_SEC = 3.0
-
-
-def _ver_tuple(version: str) -> tuple[int, int, int]:
-    """Convert a semver string into a comparable (major, minor, patch) tuple."""
-    parts = [int(m) for m in re.findall(r"\d+", version)][:3]
-    while len(parts) < 3:
-        parts.append(0)
-    return parts[0], parts[1], parts[2]
-
-
-def _parse_semver(text: str) -> str | None:
-    m = _KIMI_VERSION_RE.search(text)
-    return m.group(1) if m else None
 
 
 def _classify_kimi_login_status(
@@ -154,38 +141,26 @@ class KimiAdapter:
         )
 
     def _probe_binary(self, binary_path: str) -> CLIProbe:
-        try:
-            ver_proc = subprocess.run(
-                [binary_path, "--version"],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=_PROBE_TIMEOUT_SEC,
-                check=False,
-            )
-        except (OSError, subprocess.TimeoutExpired) as exc:
+        version_output, version_error = run_version_probe(
+            binary_path,
+            timeout_sec=_PROBE_TIMEOUT_SEC,
+        )
+        if version_error:
             return CLIProbe(
                 installed=False,
                 version=None,
                 logged_in=None,
                 bin_path=None,
-                detail=f"Could not run `{binary_path} --version`: {exc}",
+                detail=version_error,
             )
 
-        if ver_proc.returncode != 0:
-            err = (ver_proc.stderr or ver_proc.stdout or "").strip()
-            return CLIProbe(
-                installed=False,
-                version=None,
-                logged_in=None,
-                bin_path=None,
-                detail=f"`{binary_path} --version` failed: {err or 'unknown error'}",
-            )
-
-        version = _parse_semver(ver_proc.stdout + ver_proc.stderr)
+        version = parse_semver_three_part(version_output or "")
         upgrade_note = ""
-        if self.min_version and version and _ver_tuple(version) < _ver_tuple(self.min_version):
+        if (
+            self.min_version
+            and version
+            and semver_to_tuple(version) < semver_to_tuple(self.min_version)
+        ):
             upgrade_note = (
                 f" Kimi Code CLI {version} is below tested minimum {self.min_version}; "
                 f"upgrade: uv tool upgrade kimi-cli"

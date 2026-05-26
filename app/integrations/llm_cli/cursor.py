@@ -15,6 +15,7 @@ from app.integrations.llm_cli.binary_resolver import (
 )
 from app.integrations.llm_cli.binary_resolver import resolve_cli_binary
 from app.integrations.llm_cli.env_overrides import CURSOR_CLI_ENV_KEYS, nonempty_env_values
+from app.integrations.llm_cli.probe_utils import run_version_probe
 
 _CURSOR_VERSION_RE = re.compile(r"(\d{4}\.\d{2}\.\d{2}-[a-zA-Z0-9]+|\d+\.\d+\.\d+)")
 # `agent status` often hits the network and prints a short spinner; ~4s locally is common,
@@ -90,37 +91,17 @@ class CursorAdapter:
                 ),
             )
 
-        try:
-            version_proc = subprocess.run(
-                [binary, "--version"],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=_PROBE_TIMEOUT_SEC,
-                check=False,
-            )
-        except (OSError, subprocess.TimeoutExpired) as exc:
+        version_output, version_error = run_version_probe(binary, timeout_sec=_PROBE_TIMEOUT_SEC)
+        if version_error:
             return CLIProbe(
                 installed=False,
                 version=None,
                 logged_in=None,
                 bin_path=None,
-                detail=f"Could not run `{binary} --version`: {exc}",
+                detail=version_error,
             )
 
-        if version_proc.returncode != 0:
-            err = (version_proc.stderr or version_proc.stdout or "").strip()
-            return CLIProbe(
-                installed=False,
-                version=None,
-                logged_in=None,
-                bin_path=None,
-                detail=f"`{binary} --version` failed: {err or 'unknown error'}",
-            )
-
-        version_output = version_proc.stdout + version_proc.stderr
-        version = _parse_version(version_output)
+        version = _parse_version(version_output or "")
 
         if not version:
             return CLIProbe(

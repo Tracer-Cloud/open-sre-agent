@@ -8,7 +8,6 @@ usage-based API key auth as well as ``codex login`` sessions.
 from __future__ import annotations
 
 import os
-import re
 import subprocess
 
 from app.integrations.llm_cli.base import CLIInvocation, CLIProbe
@@ -26,23 +25,10 @@ from app.integrations.llm_cli.env_overrides import (
     nonempty_env_values,
 )
 from app.integrations.llm_cli.probe_utils import run_version_probe
+from app.integrations.llm_cli.semver_utils import parse_semver_three_part, semver_to_tuple
 
-_CODEX_VERSION_RE = re.compile(r"(\d+\.\d+\.\d+)")
 _PROBE_TIMEOUT_SEC = 3.0
 _READ_ONLY_SANDBOX = "read-only"
-
-
-def _ver_tuple(version: str) -> tuple[int, int, int]:
-    # Extract all leading digit runs so "1.2.3-beta.4" → (1, 2, 3), "1.2a.3" → (1, 2, 3).
-    parts = [int(m) for m in re.findall(r"\d+", version)][:3]
-    while len(parts) < 3:
-        parts.append(0)
-    return parts[0], parts[1], parts[2]
-
-
-def _parse_semver(text: str) -> str | None:
-    m = _CODEX_VERSION_RE.search(text)
-    return m.group(1) if m else None
 
 
 def _classify_codex_auth(returncode: int, stdout: str, stderr: str) -> tuple[bool | None, str]:
@@ -128,9 +114,13 @@ class CodexAdapter:
                 detail=version_error,
             )
 
-        version = _parse_semver(version_output or "")
+        version = parse_semver_three_part(version_output or "")
         upgrade_note = ""
-        if self.min_version and version and _ver_tuple(version) < _ver_tuple(self.min_version):
+        if (
+            self.min_version
+            and version
+            and semver_to_tuple(version) < semver_to_tuple(self.min_version)
+        ):
             upgrade_note = (
                 f" Codex {version} is below tested minimum {self.min_version}; "
                 f"upgrade: {self.install_hint}@latest"

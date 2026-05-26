@@ -14,6 +14,7 @@ Use this package when adding a new **non-interactive** LLM that shells out to a 
 | `env_overrides.py` | Optional explicit HTTP/API keys merged into `CLIInvocation.env` when `build_cli_subprocess_env` would drop them (shared tuples + `nonempty_env_values`). |
 | `timeout_utils.py`   | Shared timeout env parsing (`resolve_timeout_from_env` for default + clamp behavior). |
 | `probe_utils.py`     | Shared subprocess probe helpers (currently `run_version_probe` for `<binary> --version`). |
+| `semver_utils.py`    | Shared semver helpers (`parse_semver_three_part`, `semver_to_tuple`). |
 | `binary_resolver.py` | Shared executable resolution helpers (`env -> PATH -> fallback paths`).                     |
 | `runner.py`          | `CLIBackedLLMClient`: guardrails, `detect()`, `subprocess.run`, ANSI strip, `LLMResponse`.  |
 | `text.py`            | `flatten_messages_to_prompt` for stdin from chat-style payloads.                            |

@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import subprocess
 
 from app.integrations.llm_cli.base import CLIInvocation, CLIProbe
@@ -40,10 +39,10 @@ from app.integrations.llm_cli.constants import (
     MIN_EXEC_TIMEOUT_SEC as _MIN_EXEC_TIMEOUT_SEC,
 )
 from app.integrations.llm_cli.probe_utils import run_version_probe
+from app.integrations.llm_cli.semver_utils import parse_semver_three_part
 from app.integrations.llm_cli.subprocess_env import build_cli_subprocess_env
 from app.integrations.llm_cli.timeout_utils import resolve_timeout_from_env
 
-_GEMINI_VERSION_RE = re.compile(r"(\d+\.\d+\.\d+)")
 _PROBE_TIMEOUT_SEC = 20.0
 _AUTH_HINT = "Run: gemini (interactive login) or set GEMINI_API_KEY."
 # Source: https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli/
@@ -51,11 +50,6 @@ _SUNSET_NOTE = (
     " Note: Gemini CLI stops serving Pro/Ultra and free users on 2026-06-18; "
     "paid Gemini Code Assist remains supported. Consider antigravity-cli (agy)."
 )
-
-
-def _parse_semver(text: str) -> str | None:
-    m = _GEMINI_VERSION_RE.search(text)
-    return m.group(1) if m else None
 
 
 def _resolve_exec_timeout_seconds() -> float:
@@ -170,7 +164,7 @@ class GeminiCLIAdapter:
                 detail=version_error,
             )
 
-        version = _parse_semver(version_output or "")
+        version = parse_semver_three_part(version_output or "")
         probe_env = build_cli_subprocess_env(_gemini_auth_env_overrides())
         try:
             auth_proc = subprocess.run(
