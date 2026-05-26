@@ -253,7 +253,7 @@ def test_build_basic_invocation(mock_which: MagicMock) -> None:
     assert inv.argv[0] == "/usr/bin/opencode"
     assert "run" in inv.argv
     assert inv.stdin == "explain this alert"
-    assert inv.timeout_sec == 120.0
+    assert inv.timeout_sec == 300.0
 
 
 @patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/opencode")

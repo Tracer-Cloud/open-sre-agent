@@ -192,6 +192,8 @@ Run any local model exposed by an [Ollama](https://ollama.com/) daemon. No API k
 
 CLI-backed providers shell out to a vendor CLI instead of an HTTP API. They authenticate via the vendor's own login command; OpenSRE detects the binary on `PATH` (or via an explicit env var) and reuses the existing session.
 
+**Investigation timeouts:** Each ReAct turn runs one full CLI subprocess with the system prompt, tool schemas, and conversation history. The shared default subprocess budget is **300 seconds** (Python adds a small buffer). Override per provider when needed, for example `GEMINI_CLI_TIMEOUT_SECONDS`, `CLAUDE_CODE_TIMEOUT_SECONDS`, or `ANTIGRAVITY_CLI_TIMEOUT_SECONDS` (clamped 30–600 where the adapter supports it).
+
 ### OpenAI Codex
 
 ```bash
@@ -250,7 +252,7 @@ agy                       # interactive launch triggers Google Sign-In; token ca
 agy update
 # Optional overrides (all blank-by-default):
 export ANTIGRAVITY_CLI_BIN=
-export ANTIGRAVITY_CLI_TIMEOUT_SECONDS=120   # clamped 30–600; maps to `--print-timeout {N}s`
+export ANTIGRAVITY_CLI_TIMEOUT_SECONDS=300   # default 300; clamped 30–600; maps to `--print-timeout {N}s`
 # Note: ANTIGRAVITY_CLI_MODEL is registered for forward-compat but currently no-op
 # (agy v1.0.2 does not expose --model in headless `-p` mode). Each invocation uses
 # whatever model is persisted in agy's local config; switch it interactively with

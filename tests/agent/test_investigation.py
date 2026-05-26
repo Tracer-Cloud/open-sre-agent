@@ -12,6 +12,7 @@ from app.agent.investigation import (
     _build_synthetic_assistant_tool_call_msg,
     _run_parallel,
 )
+from app.integrations.llm_cli.errors import CLITimeoutError
 from app.services.agent_llm_client import CLIBackedAgentClient, ToolCall
 
 
@@ -111,6 +112,65 @@ def test_run_re_raises_unmatched_runtime_error() -> None:
             agent.run(state)
 
     mock_tracker.error.assert_not_called()
+
+
+def test_run_gracefully_handles_cli_timeout() -> None:
+    mock_llm = MagicMock()
+    mock_llm.invoke.side_effect = CLITimeoutError("antigravity-cli CLI timed out after 300s.")
+    mock_llm.tool_schemas.return_value = []
+
+    mock_tracker = MagicMock()
+
+    with (
+        patch("app.agent.investigation.get_agent_llm", return_value=mock_llm),
+        patch("app.agent.investigation.get_tracker", return_value=mock_tracker),
+    ):
+        agent = ConnectedInvestigationAgent()
+        result = agent.run(
+            {
+                "alert_name": "Test alert",
+                "pipeline_name": "test-pipeline",
+                "severity": "critical",
+                "resolved_integrations": {},
+            }
+        )
+
+    mock_tracker.error.assert_called_once_with(
+        "investigation_agent", message="Failed: LLM timed out"
+    )
+    assert result["root_cause_category"] == "Investigation Error"
+    assert "timed out" in result["root_cause"].lower()
+    assert result["remediation_steps"]
+
+
+def test_run_gracefully_handles_api_timeout_runtime_error() -> None:
+    mock_llm = MagicMock()
+    mock_llm.invoke.side_effect = RuntimeError(
+        "Anthropic API failed after 3 attempts: Request timed out."
+    )
+    mock_llm.tool_schemas.return_value = []
+
+    mock_tracker = MagicMock()
+
+    with (
+        patch("app.agent.investigation.get_agent_llm", return_value=mock_llm),
+        patch("app.agent.investigation.get_tracker", return_value=mock_tracker),
+    ):
+        agent = ConnectedInvestigationAgent()
+        result = agent.run(
+            {
+                "alert_name": "Test alert",
+                "pipeline_name": "test-pipeline",
+                "severity": "critical",
+                "resolved_integrations": {},
+            }
+        )
+
+    mock_tracker.error.assert_called_once_with(
+        "investigation_agent", message="Failed: LLM timed out"
+    )
+    assert result["root_cause_category"] == "Investigation Error"
+    assert "timed out" in result["root_cause"].lower()
 
 
 @pytest.mark.parametrize(

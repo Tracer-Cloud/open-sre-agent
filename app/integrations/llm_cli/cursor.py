@@ -14,6 +14,7 @@ from app.integrations.llm_cli.binary_resolver import (
     default_cli_fallback_paths as _default_cli_fallback_paths,
 )
 from app.integrations.llm_cli.binary_resolver import resolve_cli_binary
+from app.integrations.llm_cli.constants import DEFAULT_EXEC_TIMEOUT_SEC
 from app.integrations.llm_cli.env_overrides import CURSOR_CLI_ENV_KEYS, nonempty_env_values
 from app.integrations.llm_cli.probe_utils import run_version_probe
 
@@ -68,7 +69,7 @@ class CursorAdapter:
     install_hint = "Install Cursor Agent with: curl https://cursor.com/install -fsS | bash"
     auth_hint = "Run: agent login."
     min_version: str | None = None
-    default_exec_timeout_sec = 300.0
+    default_exec_timeout_sec = DEFAULT_EXEC_TIMEOUT_SEC
 
     def _resolve_binary(self) -> str | None:
         return resolve_cli_binary(

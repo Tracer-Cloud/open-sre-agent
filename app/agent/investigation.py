@@ -9,6 +9,7 @@ from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from typing import Any
 
+from app.agent.llm_invoke_errors import LLMInvokeFailure, classify_llm_invoke_failure
 from app.agent.prompt import build_system_prompt, format_alert_context
 from app.agent.result import InvestigationResult, parse_diagnosis
 from app.cli.support.output import debug_print, get_tracker
@@ -167,58 +168,21 @@ class ConnectedInvestigationAgent:
             try:
                 response = llm.invoke(messages, system=system, tools=tool_schemas)
 
-            except RuntimeError as err:
-                err_msg = str(err).lower()
-                if ("model" in err_msg and "not found" in err_msg) or "404" in err_msg:
-                    error_msg = (
-                        "Error: The AI model was not found (404). "
-                        "If using a local LLM, verify the model name in your .env file."
-                    )
-                    remediation_steps = [
-                        "Check your .env configuration",
-                        "Verify the model name is correct",
-                        "Ensure the model is downloaded locally",
-                        "Confirm your provider supports this model",
-                    ]
-                    tracker.error("investigation_agent", message="Failed: Model not found")
-                elif "does not support tool" in err_msg or "only supports single tool" in err_msg:
-                    error_msg = (
-                        "Error: The configured model does not support tool calling. "
-                        "The investigation agent requires a model with native tool-calling support."
-                    )
-                    remediation_steps = [
-                        "Switch to a model that supports tool calling (e.g. claude-opus-4-7, gpt-4o)",
-                        "For Ollama: use llama3.1, qwen2.5, or another tool-call-capable model",
-                        "Check your LLM_MODEL or LLM_PROVIDER setting in .env",
-                    ]
-                    tracker.error(
-                        "investigation_agent", message="Failed: Model does not support tools"
-                    )
-                else:
+            except Exception as err:
+                failure = classify_llm_invoke_failure(err)
+                if failure is None:
                     raise
-                _emit(
-                    "agent_end",
-                    {
-                        "root_cause": error_msg,
-                        "validity_score": 0.0,
-                        "root_cause_category": "Configuration Error",
-                    },
+                updates = _degraded_investigation_from_llm_failure(
+                    failure,
+                    err=err,
+                    tracker=tracker,
+                    _emit=_emit,
+                    evidence=evidence,
+                    evidence_entries=evidence_entries,
+                    messages=messages,
+                    executed_hypotheses=executed_hypotheses,
+                    tool_context=tool_context,
                 )
-                updates = {
-                    "root_cause": error_msg,
-                    "root_cause_category": "Configuration Error",
-                    "causal_chain": [f"Model API returned error: {str(err)}"],
-                    "validated_claims": [],
-                    "non_validated_claims": [],
-                    "remediation_steps": remediation_steps,
-                    "validity_score": 0.0,
-                    "investigation_recommendations": [],
-                    "evidence": evidence,
-                    "evidence_entries": [e.model_dump() for e in evidence_entries],
-                    "agent_messages": messages,
-                    "executed_hypotheses": executed_hypotheses,
-                }
-                updates.update(tool_context)
                 return updates
 
             messages.append(_build_assistant_msg(llm, response))
@@ -295,6 +259,47 @@ class ConnectedInvestigationAgent:
 
 
 InvestigationAgent = ConnectedInvestigationAgent
+
+
+def _degraded_investigation_from_llm_failure(
+    failure: LLMInvokeFailure,
+    *,
+    err: BaseException,
+    tracker: Any,
+    _emit: Callable[[str, dict[str, Any]], None],
+    evidence: dict[str, Any],
+    evidence_entries: list[EvidenceEntry],
+    messages: list[dict[str, Any]],
+    executed_hypotheses: list[dict[str, Any]],
+    tool_context: dict[str, Any],
+) -> dict[str, Any]:
+    """Return a partial investigation state when an LLM invoke fails operatively."""
+    tracker.error("investigation_agent", message=failure.tracker_message)
+    error_msg = f"Error: {failure.user_message}"
+    _emit(
+        "agent_end",
+        {
+            "root_cause": error_msg,
+            "validity_score": 0.0,
+            "root_cause_category": failure.root_cause_category,
+        },
+    )
+    updates = {
+        "root_cause": error_msg,
+        "root_cause_category": failure.root_cause_category,
+        "causal_chain": [f"LLM invoke failed: {err!s}"],
+        "validated_claims": [],
+        "non_validated_claims": [],
+        "remediation_steps": failure.remediation_steps,
+        "validity_score": 0.0,
+        "investigation_recommendations": [],
+        "evidence": evidence,
+        "evidence_entries": [e.model_dump() for e in evidence_entries],
+        "agent_messages": messages,
+        "executed_hypotheses": executed_hypotheses,
+    }
+    updates.update(tool_context)
+    return updates
 
 
 def _get_available_tools(

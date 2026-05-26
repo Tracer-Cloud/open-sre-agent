@@ -198,13 +198,13 @@ def test_build_basic_invocation(_mock_which: MagicMock) -> None:
     assert "--output-format" in inv.argv
     assert "json" in inv.argv
     assert inv.stdin is None
-    assert inv.timeout_sec == 120.0
+    assert inv.timeout_sec == 300.0
 
 
 def test_resolve_exec_timeout_default() -> None:
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GEMINI_CLI_TIMEOUT_SECONDS", None)
-        assert _resolve_exec_timeout_seconds() == 120.0
+        assert _resolve_exec_timeout_seconds() == 300.0
 
 
 def test_resolve_exec_timeout_clamps_low_and_high() -> None:

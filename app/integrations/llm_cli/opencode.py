@@ -22,6 +22,7 @@ from app.integrations.llm_cli.binary_resolver import (
 from app.integrations.llm_cli.binary_resolver import (
     resolve_cli_binary,
 )
+from app.integrations.llm_cli.constants import DEFAULT_EXEC_TIMEOUT_SEC
 from app.integrations.llm_cli.env_overrides import (
     HTTP_LLM_PROVIDER_ENV_KEYS,
     nonempty_env_values,
@@ -125,7 +126,7 @@ class OpenCodeAdapter:
     )
     auth_hint = "Run: opencode auth login (interactive) or configure provider API keys / auth.json"
     min_version: str | None = None
-    default_exec_timeout_sec = 120.0
+    default_exec_timeout_sec = DEFAULT_EXEC_TIMEOUT_SEC
 
     def _resolve_binary(self) -> str | None:
         return resolve_cli_binary(

@@ -4,6 +4,7 @@ import pytest
 
 from app.cli.support.cli_error_mapping import reraise_cli_runtime_error
 from app.cli.support.errors import OpenSREError
+from app.integrations.llm_cli.errors import CLITimeoutError
 
 
 def test_anthropic_model_not_found_raises_opensre_error() -> None:
@@ -35,11 +36,15 @@ def test_anthropic_model_not_found_suggestion_guides_env_vars() -> None:
     assert "ANTHROPIC_TOOLCALL_MODEL" in exc_info.value.suggestion
 
 
-def test_non_anthropic_model_not_found_does_not_match() -> None:
-    """A 'model not found' error from a non-Anthropic provider must not trigger the Anthropic branch."""
+def test_non_anthropic_model_not_found_maps_to_generic_opensre_error() -> None:
+    """A 'model not found' error from a non-Anthropic provider uses the generic 404 guidance."""
     exc = RuntimeError("OpenAI model 'gpt-99' was not found. Check your configuration.")
-    with pytest.raises(RuntimeError):
+    with pytest.raises(OpenSREError) as exc_info:
         reraise_cli_runtime_error(exc)
+
+    assert "not found" in str(exc_info.value).lower()
+    assert exc_info.value.suggestion is not None
+    assert "ANTHROPIC_REASONING_MODEL" not in exc_info.value.suggestion
 
 
 def test_cli_not_found_still_maps_correctly() -> None:
@@ -49,6 +54,17 @@ def test_cli_not_found_still_maps_correctly() -> None:
         reraise_cli_runtime_error(exc)
 
     assert "CLI tool is not installed" in str(exc_info.value)
+
+
+def test_cli_timeout_maps_to_opensre_error() -> None:
+    exc = CLITimeoutError("gemini-cli CLI timed out after 300s.")
+    with pytest.raises(OpenSREError) as exc_info:
+        reraise_cli_runtime_error(exc)
+
+    err = exc_info.value
+    assert "timed out" in str(err).lower()
+    assert err.suggestion is not None
+    assert "GEMINI_CLI_TIMEOUT_SECONDS" in err.suggestion
 
 
 def test_bedrock_model_not_available_maps_to_opensre_error() -> None:

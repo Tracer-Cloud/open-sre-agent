@@ -113,6 +113,7 @@ Temporary Items
 **/.wrangler/
 
 # Project specific
+.antigravitycli/
 output/
 .cloudopsbench-results/
 .bench-results/

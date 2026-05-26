@@ -18,6 +18,7 @@ from app.integrations.llm_cli.binary_resolver import (
     default_cli_fallback_paths as _default_cli_fallback_paths,
 )
 from app.integrations.llm_cli.binary_resolver import resolve_cli_binary
+from app.integrations.llm_cli.constants import DEFAULT_EXEC_TIMEOUT_SEC
 from app.integrations.llm_cli.probe_utils import run_version_probe
 from app.integrations.llm_cli.semver_utils import parse_semver_three_part, semver_to_tuple
 
@@ -131,7 +132,7 @@ class KimiAdapter:
     install_hint = "uv tool install --python 3.13 kimi-cli"
     auth_hint = "Run: kimi login"
     min_version: str | None = "1.40.0"
-    default_exec_timeout_sec = 300.0
+    default_exec_timeout_sec = DEFAULT_EXEC_TIMEOUT_SEC
 
     def _resolve_binary(self) -> str | None:
         return resolve_cli_binary(

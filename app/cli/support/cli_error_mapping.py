@@ -7,6 +7,7 @@ from typing import NoReturn
 
 def reraise_cli_runtime_error(exc: BaseException) -> NoReturn:
     """Convert CLI auth/setup failures to structured CLI UX errors."""
+    from app.agent.llm_invoke_errors import classify_llm_invoke_failure
     from app.cli.support.errors import OpenSREError
     from app.integrations.llm_cli.errors import CLIAuthenticationRequired
 
@@ -15,6 +16,15 @@ def reraise_cli_runtime_error(exc: BaseException) -> NoReturn:
             f"{exc.provider} CLI is not authenticated.",
             suggestion=f"{exc.auth_hint} ({exc.detail})",
         ) from exc
+
+    classified = classify_llm_invoke_failure(exc)
+    if classified is not None:
+        suggestion = (
+            "\n".join(classified.remediation_steps)
+            if classified.remediation_steps
+            else None
+        )
+        raise OpenSREError(classified.user_message, suggestion=suggestion) from exc
 
     if isinstance(exc, RuntimeError):
         msg = str(exc).lower()

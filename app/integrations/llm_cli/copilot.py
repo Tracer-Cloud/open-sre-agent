@@ -65,6 +65,7 @@ from app.integrations.llm_cli.env_overrides import (
     COPILOT_CLI_ENV_KEYS,
     nonempty_env_values,
 )
+from app.integrations.llm_cli.constants import DEFAULT_EXEC_TIMEOUT_SEC
 from app.integrations.llm_cli.probe_utils import run_version_probe
 from app.integrations.llm_cli.semver_utils import parse_semver_three_part
 
@@ -212,7 +213,7 @@ class CopilotAdapter:
     install_hint = "npm i -g @github/copilot"
     auth_hint = _AUTH_HINT.removesuffix(".")
     min_version: str | None = None
-    default_exec_timeout_sec = 180.0
+    default_exec_timeout_sec = DEFAULT_EXEC_TIMEOUT_SEC
 
     def _resolve_binary(self) -> str | None:
         return resolve_cli_binary(

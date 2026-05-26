@@ -199,12 +199,12 @@ def test_build_basic_invocation(_mock_which: MagicMock) -> None:
     assert inv.argv[0] == "/usr/bin/agy"
     assert "-p" in inv.argv
     assert "--print-timeout" in inv.argv
-    # Default timeout: 120s
+    # Default timeout: shared DEFAULT_EXEC_TIMEOUT_SEC (300s)
     idx = inv.argv.index("--print-timeout")
-    assert inv.argv[idx + 1] == "120s"
+    assert inv.argv[idx + 1] == "300s"
     assert inv.stdin is None
     # subprocess timeout has +10s buffer over agy's own --print-timeout
-    assert inv.timeout_sec == 130.0
+    assert inv.timeout_sec == 310.0
 
 
 @patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/agy")
@@ -230,7 +230,7 @@ def test_build_omits_model_and_output_format_and_stateful_flags(
 def test_resolve_exec_timeout_default() -> None:
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("ANTIGRAVITY_CLI_TIMEOUT_SECONDS", None)
-        assert _resolve_exec_timeout_seconds() == 120.0
+        assert _resolve_exec_timeout_seconds() == 300.0
 
 
 def test_resolve_exec_timeout_clamps_low_and_high() -> None:
