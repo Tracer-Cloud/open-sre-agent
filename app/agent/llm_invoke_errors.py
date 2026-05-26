@@ -15,9 +15,8 @@ class LLMInvokeFailure:
     root_cause_category: str = "Configuration Error"
 
 
-def _timeout_remediation(detail: str) -> list[str]:
+def _timeout_remediation() -> list[str]:
     return [
-        detail,
         "CLI providers: raise the per-provider timeout env "
         "(e.g. GEMINI_CLI_TIMEOUT_SECONDS, CLAUDE_CODE_TIMEOUT_SECONDS, "
         "ANTIGRAVITY_CLI_TIMEOUT_SECONDS; clamped 30–600 where supported).",
@@ -28,20 +27,23 @@ def _timeout_remediation(detail: str) -> list[str]:
 
 
 def _looks_like_timeout(exc: BaseException) -> bool:
-    from anthropic import APITimeoutError
-
     if isinstance(exc, TimeoutError):
         return True
     try:
+        from anthropic import APITimeoutError as AnthropicTimeoutError
+    except ImportError:
+        pass
+    else:
+        if isinstance(exc, AnthropicTimeoutError):
+            return True
+
+    try:
         from openai import APITimeoutError as OpenAITimeoutError
     except ImportError:
-        OpenAITimeoutError = ()  # type: ignore[misc, assignment]
+        pass
     else:
         if isinstance(exc, OpenAITimeoutError):
             return True
-
-    if isinstance(exc, APITimeoutError):
-        return True
 
     text = str(exc).lower()
     if "timed out" in text or "timeout" in text:
@@ -84,7 +86,7 @@ def classify_llm_invoke_failure(exc: BaseException) -> LLMInvokeFailure | None:
         return LLMInvokeFailure(
             user_message=f"Investigation stopped: {detail}",
             tracker_message="Failed: LLM timed out",
-            remediation_steps=_timeout_remediation(detail),
+            remediation_steps=_timeout_remediation(),
             root_cause_category="Investigation Error",
         )
 
@@ -102,7 +104,7 @@ def classify_llm_invoke_failure(exc: BaseException) -> LLMInvokeFailure | None:
             return LLMInvokeFailure(
                 user_message=f"Investigation stopped: {detail}",
                 tracker_message="Failed: LLM timed out",
-                remediation_steps=_timeout_remediation(detail),
+                remediation_steps=_timeout_remediation(),
                 root_cause_category="Investigation Error",
             )
         return None
@@ -180,7 +182,7 @@ def classify_llm_invoke_failure(exc: BaseException) -> LLMInvokeFailure | None:
         return LLMInvokeFailure(
             user_message=f"Investigation stopped: {detail}",
             tracker_message="Failed: LLM timed out",
-            remediation_steps=_timeout_remediation(detail),
+            remediation_steps=_timeout_remediation(),
             root_cause_category="Investigation Error",
         )
 
