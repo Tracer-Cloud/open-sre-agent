@@ -13,6 +13,7 @@ Use this package when adding a new **non-interactive** LLM that shells out to a 
 | `subprocess_env.py` | Filtered `env` passed to CLI subprocesses (`build_cli_subprocess_env`). Extend `_SAFE_SUBPROCESS_ENV_PREFIXES` here when a CLI needs vendor-specific env prefixes. |
 | `env_overrides.py` | Optional explicit HTTP/API keys merged into `CLIInvocation.env` when `build_cli_subprocess_env` would drop them (shared tuples + `nonempty_env_values`). |
 | `timeout_utils.py`   | Shared timeout env parsing (`resolve_timeout_from_env` for default + clamp behavior). |
+| `probe_utils.py`     | Shared subprocess probe helpers (currently `run_version_probe` for `<binary> --version`). |
 | `binary_resolver.py` | Shared executable resolution helpers (`env -> PATH -> fallback paths`).                     |
 | `runner.py`          | `CLIBackedLLMClient`: guardrails, `detect()`, `subprocess.run`, ANSI strip, `LLMResponse`.  |
 | `text.py`            | `flatten_messages_to_prompt` for stdin from chat-style payloads.                            |

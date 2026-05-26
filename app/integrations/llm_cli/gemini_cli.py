@@ -39,6 +39,7 @@ from app.integrations.llm_cli.constants import (
 from app.integrations.llm_cli.constants import (
     MIN_EXEC_TIMEOUT_SEC as _MIN_EXEC_TIMEOUT_SEC,
 )
+from app.integrations.llm_cli.probe_utils import run_version_probe
 from app.integrations.llm_cli.subprocess_env import build_cli_subprocess_env
 from app.integrations.llm_cli.timeout_utils import resolve_timeout_from_env
 
@@ -156,36 +157,20 @@ class GeminiCLIAdapter:
         )
 
     def _probe_binary(self, binary_path: str) -> CLIProbe:
-        try:
-            ver_proc = subprocess.run(
-                [binary_path, "--version"],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=_PROBE_TIMEOUT_SEC,
-                check=False,
-            )
-        except (OSError, subprocess.TimeoutExpired) as exc:
+        version_output, version_error = run_version_probe(
+            binary_path,
+            timeout_sec=_PROBE_TIMEOUT_SEC,
+        )
+        if version_error:
             return CLIProbe(
                 installed=False,
                 version=None,
                 logged_in=None,
                 bin_path=None,
-                detail=f"Could not run `{binary_path} --version`: {exc}",
+                detail=version_error,
             )
 
-        if ver_proc.returncode != 0:
-            err = (ver_proc.stderr or ver_proc.stdout or "").strip()
-            return CLIProbe(
-                installed=False,
-                version=None,
-                logged_in=None,
-                bin_path=None,
-                detail=f"`{binary_path} --version` failed: {err or 'unknown error'}",
-            )
-
-        version = _parse_semver(ver_proc.stdout + ver_proc.stderr)
+        version = _parse_semver(version_output or "")
         probe_env = build_cli_subprocess_env(_gemini_auth_env_overrides())
         try:
             auth_proc = subprocess.run(
