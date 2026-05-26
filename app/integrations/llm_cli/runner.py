@@ -211,7 +211,7 @@ class CLIBackedLLMClient:
             # Exit code 75 is EX_TEMPFAIL (sysexits.h) — a transient failure
             # the caller should retry. Raise CLITimeoutError so it is treated as
             # an expected operational failure and not forwarded to Sentry.
-            if proc.returncode == 75:
+            if proc.returncode == _EX_TEMPFAIL:
                 hint = (
                     f"{self._adapter.name} reported a temporary failure (exit 75). "
                     "Retry the request or check network connectivity."

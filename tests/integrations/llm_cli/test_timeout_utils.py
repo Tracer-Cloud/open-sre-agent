@@ -23,6 +23,16 @@ def test_resolve_timeout_from_env_defaults_when_invalid(monkeypatch) -> None:
     ) == 120.0
 
 
+def test_resolve_timeout_from_env_defaults_when_non_positive(monkeypatch) -> None:
+    monkeypatch.setenv("X_TIMEOUT", "0")
+    assert resolve_timeout_from_env(
+        env_key="X_TIMEOUT",
+        default=120.0,
+        minimum=30.0,
+        maximum=600.0,
+    ) == 120.0
+
+
 def test_resolve_timeout_from_env_clamps(monkeypatch) -> None:
     monkeypatch.setenv("X_TIMEOUT", "1")
     assert resolve_timeout_from_env(
