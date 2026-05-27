@@ -62,59 +62,59 @@ DEFAULT_GITLAB_BASE_URL = "https://gitlab.com/api/v4"
 # at module load time so the attribute exists immediately, even in CI parallel
 # test workers where lazy imports inside the wrapper occasionally fail to
 # materialize on first access.
-def build_demo_action_response():
+def build_demo_action_response() -> dict:
     return _build_demo_action_response()
 
 
-def validate_grafana_integration(**kwargs):
+def validate_grafana_integration(**kwargs) -> IntegrationHealthResult:
     from app.cli.wizard.integration_health import validate_grafana_integration as _validate
 
     return _validate(**kwargs)
 
 
-def validate_datadog_integration(**kwargs):
+def validate_datadog_integration(**kwargs) -> IntegrationHealthResult:
     from app.cli.wizard.integration_health import validate_datadog_integration as _validate
 
     return _validate(**kwargs)
 
 
-def validate_honeycomb_integration(**kwargs):
+def validate_honeycomb_integration(**kwargs) -> IntegrationHealthResult:
     from app.cli.wizard.integration_health import validate_honeycomb_integration as _validate
 
     return _validate(**kwargs)
 
 
-def validate_coralogix_integration(**kwargs):
+def validate_coralogix_integration(**kwargs) -> IntegrationHealthResult:
     from app.cli.wizard.integration_health import validate_coralogix_integration as _validate
 
     return _validate(**kwargs)
 
 
-def validate_slack_webhook(**kwargs):
+def validate_slack_webhook(**kwargs) -> IntegrationHealthResult:
     from app.cli.wizard.integration_health import validate_slack_webhook as _validate
 
     return _validate(**kwargs)
 
 
-def validate_aws_integration(**kwargs):
+def validate_aws_integration(**kwargs) -> IntegrationHealthResult:
     from app.cli.wizard.integration_health import validate_aws_integration as _validate
 
     return _validate(**kwargs)
 
 
-def validate_github_mcp_integration(**kwargs):
+def validate_github_mcp_integration(**kwargs) -> IntegrationHealthResult:
     from app.cli.wizard.integration_health import validate_github_mcp_integration as _validate
 
     return _validate(**kwargs)
 
 
-def validate_gitlab_integration(**kwargs):
+def validate_gitlab_integration(**kwargs) -> IntegrationHealthResult:
     from app.cli.wizard.integration_health import validate_gitlab_integration as _validate
 
     return _validate(**kwargs)
 
 
-def validate_sentry_integration(**kwargs):
+def validate_sentry_integration(**kwargs) -> IntegrationHealthResult:
     from app.cli.wizard.integration_health import validate_sentry_integration as _validate
 
     return _validate(**kwargs)
@@ -133,85 +133,85 @@ def _looks_like_openclaw_control_ui_url(value: object) -> bool:
     return port == 18789 and parsed.path.rstrip("/") == ""
 
 
-def validate_notion_integration(**kwargs):
+def validate_notion_integration(**kwargs) -> IntegrationHealthResult:
     from app.cli.wizard.integration_health import validate_notion_integration as _validate
 
     return _validate(**kwargs)
 
 
-def validate_jira_integration(**kwargs):
+def validate_jira_integration(**kwargs) -> IntegrationHealthResult:
     from app.cli.wizard.integration_health import validate_jira_integration as _validate
 
     return _validate(**kwargs)
 
 
-def validate_google_docs_integration(**kwargs):
+def validate_google_docs_integration(**kwargs) -> IntegrationHealthResult:
     from app.cli.wizard.integration_health import validate_google_docs_integration as _validate
 
     return _validate(**kwargs)
 
 
-def validate_vercel_integration(**kwargs):
+def validate_vercel_integration(**kwargs) -> IntegrationHealthResult:
     from app.cli.wizard.integration_health import validate_vercel_integration as _validate
 
     return _validate(**kwargs)
 
 
-def validate_betterstack_integration(**kwargs):
+def validate_betterstack_integration(**kwargs) -> IntegrationHealthResult:
     from app.cli.wizard.integration_health import validate_betterstack_integration as _validate
 
     return _validate(**kwargs)
 
 
-def validate_alertmanager_integration(**kwargs):
+def validate_alertmanager_integration(**kwargs) -> IntegrationHealthResult:
     from app.cli.wizard.integration_health import validate_alertmanager_integration as _validate
 
     return _validate(**kwargs)
 
 
-def validate_opensearch_integration(**kwargs):
+def validate_opensearch_integration(**kwargs) -> IntegrationHealthResult:
     from app.cli.wizard.integration_health import validate_opensearch_integration as _validate
 
     return _validate(**kwargs)
 
 
-def validate_opsgenie_integration(**kwargs):
+def validate_opsgenie_integration(**kwargs) -> IntegrationHealthResult:
     from app.cli.wizard.integration_health import validate_opsgenie_integration as _validate
 
     return _validate(**kwargs)
 
 
-def validate_incident_io_integration(**kwargs):
+def validate_incident_io_integration(**kwargs) -> IntegrationHealthResult:
     from app.cli.wizard.integration_health import validate_incident_io_integration as _validate
 
     return _validate(**kwargs)
 
 
-def validate_discord_bot(**kwargs):
+def validate_discord_bot(**kwargs) -> IntegrationHealthResult:
     from app.cli.wizard.integration_health import validate_discord_bot as _validate
 
     return _validate(**kwargs)
 
 
-def validate_telegram_bot(**kwargs):
+def validate_telegram_bot(**kwargs) -> IntegrationHealthResult:
     from app.cli.wizard.integration_health import validate_telegram_bot as _validate
 
     return _validate(**kwargs)
 
 
-def validate_openclaw_integration(**kwargs):
+def validate_openclaw_integration(**kwargs) -> IntegrationHealthResult:
     from app.cli.wizard.integration_health import validate_openclaw_integration as _validate
 
     return _validate(**kwargs)
 
 
-def validate_splunk_integration(**kwargs):
+def validate_splunk_integration(**kwargs) -> IntegrationHealthResult:
     from app.cli.wizard.integration_health import validate_splunk_integration as _validate
 
     return _validate(**kwargs)
 
 
-def get_sentry_auth_recommendations():
+def get_sentry_auth_recommendations() -> dict[str, str]:
     from app.integrations.sentry import get_sentry_auth_recommendations as _get
 
     return _get()
