@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import subprocess
 
+import pytest
+
 # Bound every docker subprocess so a wedged daemon, slow pull, or blocking
 # module-level import in the container can't hang the test run indefinitely.
 # `docker image inspect` is local metadata and finishes in milliseconds, so a
@@ -26,6 +28,21 @@ def _inspect_image(image_tag: str) -> dict:
     return payload[0]
 
 
+@pytest.fixture(scope="session")
+def deploy_image_config(deploy_image_tag: str) -> dict:
+    """Run `docker image inspect` once per session and return the `Config` block.
+
+    Multiple tests assert on different fields of the same `Config` payload
+    (`Cmd`, `ExposedPorts`, `Healthcheck`). Caching the parsed result here
+    avoids spawning a separate inspect subprocess per test.
+    """
+    inspected = _inspect_image(deploy_image_tag)
+    assert "Config" in inspected, (
+        f"docker image inspect did not return a Config block for {deploy_image_tag!r}"
+    )
+    return inspected["Config"]
+
+
 def test_dockerfile_build_succeeds(deploy_image_tag: str) -> None:
     result = subprocess.run(
         ["docker", "image", "inspect", deploy_image_tag],
@@ -37,28 +54,25 @@ def test_dockerfile_build_succeeds(deploy_image_tag: str) -> None:
     assert result.returncode == 0, result.stderr
 
 
-def test_image_cmd_runs_uvicorn(deploy_image_tag: str) -> None:
+def test_image_cmd_runs_uvicorn(deploy_image_config: dict) -> None:
     """The image's CMD must launch uvicorn against `app.webapp:app`."""
-    config = _inspect_image(deploy_image_tag).get("Config", {})
-    cmd = config.get("Cmd") or []
+    cmd = deploy_image_config.get("Cmd") or []
     joined = " ".join(cmd)
 
     assert "uvicorn" in joined, f"expected uvicorn in image CMD, got: {cmd!r}"
     assert "app.webapp:app" in joined, f"expected app.webapp:app in image CMD, got: {cmd!r}"
 
 
-def test_image_exposes_port_8000(deploy_image_tag: str) -> None:
+def test_image_exposes_port_8000(deploy_image_config: dict) -> None:
     """The image must expose 8000/tcp so hosts can publish the FastAPI port."""
-    config = _inspect_image(deploy_image_tag).get("Config", {})
-    exposed = config.get("ExposedPorts") or {}
+    exposed = deploy_image_config.get("ExposedPorts") or {}
 
     assert "8000/tcp" in exposed, f"expected 8000/tcp in ExposedPorts, got: {sorted(exposed)!r}"
 
 
-def test_image_declares_healthcheck(deploy_image_tag: str) -> None:
+def test_image_declares_healthcheck(deploy_image_config: dict) -> None:
     """The image must declare a HEALTHCHECK that probes the /health endpoint."""
-    config = _inspect_image(deploy_image_tag).get("Config", {})
-    healthcheck = config.get("Healthcheck") or {}
+    healthcheck = deploy_image_config.get("Healthcheck") or {}
     test_cmd = healthcheck.get("Test") or []
     joined = " ".join(test_cmd)
 
