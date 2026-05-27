@@ -3,6 +3,14 @@ from __future__ import annotations
 import json
 import subprocess
 
+# Bound every docker subprocess so a wedged daemon, slow pull, or blocking
+# module-level import in the container can't hang the test run indefinitely.
+# `docker image inspect` is local metadata and finishes in milliseconds, so a
+# tight cap is fine; `docker run` does a one-shot container start, so it gets
+# a more generous cap to cover cold image-layer extraction on first use.
+_INSPECT_TIMEOUT_SEC = 30
+_RUN_TIMEOUT_SEC = 60
+
 
 def _inspect_image(image_tag: str) -> dict:
     """Return the parsed `docker image inspect` JSON object for `image_tag`."""
@@ -11,6 +19,7 @@ def _inspect_image(image_tag: str) -> dict:
         check=True,
         capture_output=True,
         text=True,
+        timeout=_INSPECT_TIMEOUT_SEC,
     )
     payload = json.loads(result.stdout)
     assert payload, f"docker image inspect returned no entries for {image_tag}"
@@ -23,6 +32,7 @@ def test_dockerfile_build_succeeds(deploy_image_tag: str) -> None:
         check=False,
         capture_output=True,
         text=True,
+        timeout=_INSPECT_TIMEOUT_SEC,
     )
     assert result.returncode == 0, result.stderr
 
@@ -72,6 +82,7 @@ def test_image_does_not_contain_dotenv(deploy_image_tag: str) -> None:
         check=False,
         capture_output=True,
         text=True,
+        timeout=_RUN_TIMEOUT_SEC,
     )
     assert result.returncode == 0, (
         "image contains /app/.env — secrets must not be baked into the build context"
@@ -99,6 +110,7 @@ def test_image_can_import_webapp(deploy_image_tag: str) -> None:
         check=False,
         capture_output=True,
         text=True,
+        timeout=_RUN_TIMEOUT_SEC,
     )
     assert result.returncode == 0, (
         f"importing app.webapp inside the image failed:\n"
