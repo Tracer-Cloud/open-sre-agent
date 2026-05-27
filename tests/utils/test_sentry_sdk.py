@@ -75,6 +75,11 @@ class TestScrubExceptionValue:
         result = _scrub_exception_value(text)
         assert "secret-token" not in result
 
+    def test_strips_short_input_form_from_pydantic_error(self) -> None:
+        text = "validation error: field required [input=secret-token, input_type=str]"
+        result = _scrub_exception_value(text)
+        assert "secret-token" not in result
+
     def test_returns_unchanged_text_without_input_value(self) -> None:
         text = "some generic error message"
         result = _scrub_exception_value(text)
