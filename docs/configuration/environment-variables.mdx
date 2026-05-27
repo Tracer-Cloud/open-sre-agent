@@ -9,7 +9,7 @@ All configuration options for OpenSRE can be set via environment variables. This
 
 | Variable | Default | Description | Module |
 |----------|---------|-------------|--------|
-| `LLM_PROVIDER` | `anthropic` | Primary LLM provider (`anthropic`, `openai`, `openrouter`, `deepseek`, `gemini`, `nvidia`, `minimax`, `groq`, `bedrock`, `ollama`) | `config` |
+| `LLM_PROVIDER` | `anthropic` | Primary LLM provider (`anthropic`, `openai`, `openrouter`, `deepseek`, `gemini`, `nvidia`, `minimax`, `groq`, `bedrock`, `ollama`, `codex`, `claude-code`, `cursor`, `gemini-cli`, `antigravity-cli`, `opencode`, `kimi`, `copilot`) | `config` |
 | `LLM_MAX_TOKENS` | Provider-specific | Maximum tokens for LLM responses | `config` |
 
 ### Anthropic
@@ -374,7 +374,7 @@ Many integrations support multi-instance configuration via JSON:
 | `AWS_INSTANCES` | JSON array of AWS accounts |
 | `ARGOCD_INSTANCES` | JSON array of Argo CD instances |
 
-See [multi-instance-integrations](/integrations/multi-instance-integrations) for detailed format.
+See [multi-instance-integrations](/multi-instance-integrations) for detailed format.
 
 ## LLM Classification Models
 
@@ -397,4 +397,4 @@ When not specified, classification models fall back to reasoning models or provi
 - Environment variables take precedence over `.env` file
 - Variables with empty values are typically treated as "not set"
 - Boolean values accept: `1`, `true`, `yes`, `on` (case-insensitive)
-- See [LLM Providers](/integrations/llm-providers) for detailed provider setup instructions
+- See [LLM Providers](/llm-providers) for detailed provider setup instructions
