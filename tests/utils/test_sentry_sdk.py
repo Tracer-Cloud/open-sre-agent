@@ -103,14 +103,21 @@ class TestScrubRequest:
 
 class TestBeforeBreadcrumb:
     def test_returns_non_http_crumb_unchanged(self) -> None:
-        crumb: dict = {"type": "log", "message": "something happened"}
+        crumb: dict = {"category": "log", "data": {"message": "something happened"}}
         result = _before_breadcrumb(crumb, {})
         assert result == crumb
 
-    def test_returns_dict_for_http_breadcrumb(self) -> None:
-        crumb: dict = {"type": "http", "data": {"url": "https://api.example.com/v1"}}
+    def test_strips_query_string_from_http_breadcrumb(self) -> None:
+        crumb: dict = {"category": "http", "data": {"url": "https://api.example.com/v1?token=secret"}}
         result = _before_breadcrumb(crumb, {})
         assert result is not None
+        assert result["data"]["url"] == "https://api.example.com/v1"
+
+    def test_scrubs_sensitive_header_from_http_breadcrumb(self) -> None:
+        crumb: dict = {"category": "http", "data": {"headers": {"Authorization": "Bearer secret"}}}
+        result = _before_breadcrumb(crumb, {})
+        assert result is not None
+        assert result["data"]["headers"]["Authorization"] == "[Filtered]"
 
     def test_handles_empty_crumb(self) -> None:
         result = _before_breadcrumb({}, {})
