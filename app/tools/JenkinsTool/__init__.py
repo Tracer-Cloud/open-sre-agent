@@ -7,7 +7,6 @@ from typing import Any
 from app.integrations.jenkins import get_jenkins_jobs
 from app.services.jenkins.client import JenkinsClient
 from app.tools.tool_decorator import tool
-from app.services.jenkins.client import JenkinsClient
 
 
 def _jenkins_available(sources: dict[str, dict]) -> bool:

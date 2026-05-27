@@ -113,16 +113,17 @@
           {
             "group": "Cloud, code, and collaboration",
             "expanded": true,
-            "pages": [
-              "aws",
-              "bitbucket",
-              "github",
-              "gitlab",
-              "google-docs",
-              "helm",
-              "jira",
-              "vercel"
-            ]
+           "pages": [
+  "aws",
+  "bitbucket",
+  "github",
+  "gitlab",
+  "google-docs",
+  "helm",
+  "jenkins",
+  "jira",
+  "vercel"
+]
           },
           {
             "group": "Messaging",

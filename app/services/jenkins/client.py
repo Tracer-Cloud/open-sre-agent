@@ -64,14 +64,14 @@ class JenkinsClient:
         return results
 
     def get_build_log(self, job_name: str, build_number: int) -> str:
-        """Fetch Jenkins build console log."""
-        response = httpx.get(
+      """Fetch Jenkins build console log."""
+      response = httpx.get(
             f"{self.base_url}/job/{job_name}/{build_number}/consoleText",
-            auth=self.auth,
-            timeout=30.0,
-        )
-        response.raise_for_status()
-        return response.text
+        auth=self.auth,
+        timeout=30.0,
+    )
+      response.raise_for_status()
+      return str(response.text)
 
     def list_running_builds(self) -> list[dict[str, Any]]:
         """List currently running Jenkins builds."""
@@ -91,3 +91,17 @@ class JenkinsClient:
                 )
 
         return running
+    def list_pipeline_stages(self, job_name: str, build_number: int) -> list[dict[str, Any]]:
+       """List Jenkins pipeline stages for a build."""
+       data = self._get(f"/job/{job_name}/{build_number}/wfapi/describe")
+       stages = data.get("stages", [])
+
+       return [
+        {
+            "name": stage.get("name"),
+            "status": stage.get("status"),
+            "startTimeMillis": stage.get("startTimeMillis"),
+            "durationMillis": stage.get("durationMillis"),
+        }
+        for stage in stages
+    ]

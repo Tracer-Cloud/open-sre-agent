@@ -1,6 +1,5 @@
 from unittest.mock import patch
 
-from app.integrations._verification_adapters import result
 from app.services.jenkins.client import JenkinsClient
 from app.tools.JenkinsTool import get_jenkins_build_log
 
@@ -78,14 +77,9 @@ def test_get_build_log(mock_get):
     log = client.get_build_log("deploy-api", 42)
 
     assert log == "Build succeeded"
-    from app.tools.JenkinsTool import (
-    get_jenkins_build_log,
-    list_jenkins_builds,
-)
 
 
 from app.tools.JenkinsTool import (
-    get_jenkins_build_log,
     list_jenkins_builds,
 )
 
@@ -150,3 +144,35 @@ def test_list_running_builds(mock_get):
 
     assert len(running) == 1
     assert running[0]["name"] == "deploy-api"
+@patch("app.services.jenkins.client.httpx.get")
+def test_list_pipeline_stages(mock_get):
+    mock_get.return_value.json.return_value = {
+        "stages": [
+            {
+                "name": "Build",
+                "status": "SUCCESS",
+                "startTimeMillis": 1710000000000,
+                "durationMillis": 5000,
+            },
+            {
+                "name": "Deploy",
+                "status": "FAILED",
+                "startTimeMillis": 1710000005000,
+                "durationMillis": 3000,
+            },
+        ]
+    }
+
+    mock_get.return_value.raise_for_status.return_value = None
+
+    client = JenkinsClient(
+        base_url="http://jenkins",
+        username="admin",
+        token="token",
+    )
+
+    stages = client.list_pipeline_stages("deploy-api", 42)
+
+    assert len(stages) == 2
+    assert stages[0]["name"] == "Build"
+    assert stages[1]["status"] == "FAILED"
