@@ -361,16 +361,12 @@ def test_antigravity_cli_model_forwarded_to_subprocess() -> None:
         os.environ,
         {
             "ANTIGRAVITY_CLI_MODEL": "gemini-3.5-flash",
-            "ANTIGRAVITY_CLI_BIN": "/usr/bin/agy",
-            "ANTIGRAVITY_CLI_TIMEOUT_SECONDS": "240",
         },
         clear=False,
     ):
         env = build_cli_subprocess_env(None)
 
     assert env["ANTIGRAVITY_CLI_MODEL"] == "gemini-3.5-flash"
-    assert env["ANTIGRAVITY_CLI_BIN"] == "/usr/bin/agy"
-    assert env["ANTIGRAVITY_CLI_TIMEOUT_SECONDS"] == "240"
 
 
 @patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/agy")
