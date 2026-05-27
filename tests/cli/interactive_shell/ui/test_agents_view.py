@@ -9,7 +9,7 @@ this function.
 from __future__ import annotations
 
 import io
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -197,6 +197,34 @@ def test_table_shows_live_probe_data_when_snapshot_exists(monkeypatch: pytest.Mo
     # in the view code, so ``compute_status`` returns STUCK with a
     # progress-time annotation (from the upstream status heuristic).
     assert rendered_cells[2:] == ["2h0m", "23.5", "-", "-", "[red]stuck (2h0m no progress)[/red]"]
+
+
+def test_recent_agent_output_keeps_status_active(monkeypatch: pytest.MonkeyPatch) -> None:
+    fixed_now = datetime(2026, 5, 10, 14, 0, 0, tzinfo=UTC)
+
+    class FrozenDatetime(datetime):
+        @classmethod
+        def now(cls, _tz=None):  # type: ignore[override]
+            return fixed_now
+
+    monkeypatch.setattr(agents_view_mod, "datetime", FrozenDatetime)
+
+    fake_snapshot = ProcessSnapshot(
+        pid=8421,
+        cpu_percent=23.5,
+        rss_mb=128.0,
+        num_fds=42,
+        num_connections=3,
+        status="running",
+        started_at=fixed_now - timedelta(hours=2),
+        last_output_at=fixed_now - timedelta(seconds=30),
+    )
+    monkeypatch.setattr(agents_view_mod, "get_snapshot", lambda _pid: fake_snapshot)
+
+    table, _ = _render([AgentRecord(name="cursor", pid=8444, command="cursor")])
+    rendered_cells = [list(col.cells)[0] for col in table.columns]
+
+    assert rendered_cells[6] == "[green]active[/green]"
 
 
 def test_table_shows_tokens_and_cost_when_tracker_has_data(
