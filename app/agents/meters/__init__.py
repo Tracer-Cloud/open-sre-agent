@@ -96,7 +96,7 @@ class TokenMeter(Protocol):
     """
 
     def parse_chunk(self, chunk: str, /) -> int:
-        """Return newly observed token count from ``chunk``; never mutate unrelated PID state."""
+        """Return newly observed token count from ``chunk``; must not mutate any per-PID parser state."""
         raise NotImplementedError
 
     def sample_chunk(self, chunk: str, /, *, pid: int | None = None) -> TokenSample:
