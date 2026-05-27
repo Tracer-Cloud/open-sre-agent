@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.state import AgentStateModel, make_chat_state, make_initial_state
+from app.state import AgentStateModel, make_agent_incident_state, make_chat_state, make_initial_state
 
 
 def test_make_initial_state_validates_and_sets_defaults() -> None:
@@ -211,3 +211,29 @@ def test_make_initial_state_preserves_float_pid() -> None:
 
     canonical = raw_alert["canonical_alert"]
     assert canonical["process"]["pid"] == 4242
+
+
+def test_make_initial_state_accepts_string_raw_alert() -> None:
+    state = make_initial_state(raw_alert="plain string alert")
+    assert state["mode"] == "investigation"
+    assert state["alert_name"] == "Incident"
+    assert state["pipeline_name"] == "unknown"
+    assert state["severity"] == "warning"
+    assert state["raw_alert"] == "plain string alert"
+
+
+def test_make_agent_incident_state_sets_context_and_defaults() -> None:
+    state = make_agent_incident_state(
+        agent_name="test-agent",
+        breach_reason="cpu threshold exceeded",
+        pid=1234,
+        stdout_tail="last line",
+        resource_snapshot={"cpu": 95.0},
+    )
+    assert state["mode"] == "agent_incident"
+    incident = state["context"]["agent_incident"]
+    assert incident["agent_name"] == "test-agent"
+    assert incident["breach_reason"] == "cpu threshold exceeded"
+    assert incident["pid"] == 1234
+    assert incident["stdout_tail"] == "last line"
+    assert incident["resource_snapshot"] == {"cpu": 95.0}
