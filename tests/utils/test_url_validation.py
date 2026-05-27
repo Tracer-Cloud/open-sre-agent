@@ -91,6 +91,7 @@ class TestValidateHttpsOrLoopbackHttpUrl:
             "ftp://example.com",
             "ws://example.com",
             "https://",  # missing netloc
+            "http://",   # missing netloc on http branch
         ],
     )
     def test_rejects_invalid_schemes_and_urls(self, value: str) -> None:
@@ -101,8 +102,14 @@ class TestValidateHttpsOrLoopbackHttpUrl:
         with pytest.raises(ValueError, match="MySvc"):
             validate_https_or_loopback_http_url("http://example.com", service_name="MySvc")
 
-    def test_custom_field_name(self) -> None:
+    def test_custom_field_name_success_path(self) -> None:
         result = validate_https_or_loopback_http_url(
             "https://example.com", service_name="test", field_name="endpoint"
         )
         assert result == "https://example.com"
+
+    def test_custom_field_name_appears_in_error(self) -> None:
+        with pytest.raises(ValueError, match="endpoint"):
+            validate_https_or_loopback_http_url(
+                "http://example.com", service_name="test", field_name="endpoint"
+            )
