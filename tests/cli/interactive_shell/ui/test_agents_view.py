@@ -193,9 +193,8 @@ def test_table_shows_live_probe_data_when_snapshot_exists(monkeypatch: pytest.Mo
     # tracker entry exists for this PID — the snapshot fixture covers
     # only the resource side. The full live-data case is covered by
     # ``test_table_shows_tokens_and_cost_when_tracker_has_data``.
-    # Status: started_at is 2 h ago and ``last_output_at`` is ``None``
-    # in the view code, so ``compute_status`` returns STUCK with a
-    # progress-time annotation (from the upstream status heuristic).
+    # Without recent output activity, the status heuristic falls back
+    # to the process start time and renders STUCK with a progress-time annotation.
     assert rendered_cells[2:] == ["2h0m", "23.5", "-", "-", "[red]stuck (2h0m no progress)[/red]"]
 
 

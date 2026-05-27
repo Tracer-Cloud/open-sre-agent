@@ -101,8 +101,8 @@ def _build_agents_table(records: Iterable[AgentRecord]) -> Table:
     for record in materialized:
         snapshot = get_snapshot(record.pid)
         if snapshot is not None:
-            # Use output freshness when a collector provides it; otherwise
-            # compute_status falls back to the snapshot start time.
+            # Use output freshness when available; otherwise the status
+            # heuristic falls back to the process start time.
             status = compute_status(
                 snapshot,
                 now,
@@ -112,7 +112,8 @@ def _build_agents_table(records: Iterable[AgentRecord]) -> Table:
             )
             status_msg = ""
             if status is Status.STUCK:
-                status_msg = f"{_format_uptime(now - snapshot.started_at)} no progress"
+                anchor = snapshot.last_output_at or snapshot.started_at
+                status_msg = f"{_format_uptime(now - anchor)} no progress"
 
             uptime_cell = _format_uptime(now - snapshot.started_at)
             cpu_cell = f"{snapshot.cpu_percent:.1f}"
