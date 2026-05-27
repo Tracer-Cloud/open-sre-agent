@@ -1,6 +1,20 @@
 from __future__ import annotations
 
+import json
 import subprocess
+
+
+def _inspect_image(image_tag: str) -> dict:
+    """Return the parsed `docker image inspect` JSON object for `image_tag`."""
+    result = subprocess.run(
+        ["docker", "image", "inspect", image_tag],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    payload = json.loads(result.stdout)
+    assert payload, f"docker image inspect returned no entries for {image_tag}"
+    return payload[0]
 
 
 def test_dockerfile_build_succeeds(deploy_image_tag: str) -> None:
@@ -11,3 +25,85 @@ def test_dockerfile_build_succeeds(deploy_image_tag: str) -> None:
         text=True,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_image_cmd_runs_uvicorn(deploy_image_tag: str) -> None:
+    """The image's CMD must launch uvicorn against `app.webapp:app`."""
+    config = _inspect_image(deploy_image_tag).get("Config", {})
+    cmd = config.get("Cmd") or []
+    joined = " ".join(cmd)
+
+    assert "uvicorn" in joined, f"expected uvicorn in image CMD, got: {cmd!r}"
+    assert "app.webapp:app" in joined, f"expected app.webapp:app in image CMD, got: {cmd!r}"
+
+
+def test_image_exposes_port_8000(deploy_image_tag: str) -> None:
+    """The image must expose 8000/tcp so hosts can publish the FastAPI port."""
+    config = _inspect_image(deploy_image_tag).get("Config", {})
+    exposed = config.get("ExposedPorts") or {}
+
+    assert "8000/tcp" in exposed, f"expected 8000/tcp in ExposedPorts, got: {sorted(exposed)!r}"
+
+
+def test_image_declares_healthcheck(deploy_image_tag: str) -> None:
+    """The image must declare a HEALTHCHECK that probes the /health endpoint."""
+    config = _inspect_image(deploy_image_tag).get("Config", {})
+    healthcheck = config.get("Healthcheck") or {}
+    test_cmd = healthcheck.get("Test") or []
+    joined = " ".join(test_cmd)
+
+    assert test_cmd, "expected the image to declare a HEALTHCHECK directive"
+    assert "/health" in joined, f"expected /health probe in HEALTHCHECK, got: {test_cmd!r}"
+
+
+def test_image_does_not_contain_dotenv(deploy_image_tag: str) -> None:
+    """The build context must not leak a `.env` file into the image."""
+    result = subprocess.run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--entrypoint",
+            "sh",
+            deploy_image_tag,
+            "-c",
+            "test ! -f /app/.env",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, (
+        "image contains /app/.env — secrets must not be baked into the build context"
+    )
+
+
+def test_image_can_import_webapp(deploy_image_tag: str) -> None:
+    """A one-shot container run must be able to import the FastAPI app module.
+
+    This validates that the install succeeded and every transitive dependency
+    resolves at runtime, without the flakiness of starting uvicorn and polling
+    a port.
+    """
+    result = subprocess.run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--entrypoint",
+            "python",
+            deploy_image_tag,
+            "-c",
+            "from app.webapp import app; print(type(app).__name__)",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, (
+        f"importing app.webapp inside the image failed:\n"
+        f"stdout: {result.stdout}\nstderr: {result.stderr}"
+    )
+    assert "FastAPI" in result.stdout, (
+        f"expected FastAPI app in container stdout, got: {result.stdout!r}"
+    )
