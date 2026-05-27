@@ -1080,3 +1080,27 @@ def build_github_code_search_query(owner: str, repo: str, query: str) -> str:
     if repo_qualifier in query:
         return query
     return f"{query} {repo_qualifier}".strip()
+
+
+def build_github_issues_search_query(
+    owner: str,
+    repo: str,
+    query: str,
+    *,
+    filter: str = "all",
+) -> str:
+    """Build a repo-scoped GitHub issues/PRs search query.
+
+    filter: "issues" restricts to issues, "prs" to pull requests, "all" includes both.
+    """
+    repo_qualifier = f"repo:{owner}/{repo}"
+    query = query.strip()
+
+    _FILTER_QUALIFIERS = {
+        "issues": "is:issue",
+        "prs": "is:pr",
+    }
+    type_qualifier = _FILTER_QUALIFIERS.get(filter, "")
+
+    parts = [p for p in [query, repo_qualifier, type_qualifier] if p]
+    return " ".join(parts)
