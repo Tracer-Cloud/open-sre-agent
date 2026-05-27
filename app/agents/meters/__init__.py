@@ -96,15 +96,19 @@ class TokenMeter(Protocol):
     """
 
     def parse_chunk(self, chunk: str, /) -> int:
+        """Return newly observed token count from ``chunk``; must not mutate any per-PID parser state."""
         raise NotImplementedError
 
     def sample_chunk(self, chunk: str, /, *, pid: int | None = None) -> TokenSample:
+        """Return parsed usage/model data for ``chunk`` and optional ``pid`` without negative counts."""
         raise NotImplementedError
 
     def forget(self, pid: int, /) -> None:
+        """Drop any parser state for ``pid`` so future samples start from a clean stream boundary."""
         raise NotImplementedError
 
     def known_pids(self) -> list[int]:
+        """Return PIDs with retained parser state; callers may use this for cleanup bookkeeping."""
         raise NotImplementedError
 
 

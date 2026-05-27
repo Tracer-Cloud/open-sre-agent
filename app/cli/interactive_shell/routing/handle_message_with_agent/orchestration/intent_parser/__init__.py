@@ -12,7 +12,7 @@ from __future__ import annotations
 # ``shutil`` is imported here so that tests can import it via
 # ``from intent_parser import shutil`` and monkeypatch ``shutil.which``
 # against the module singleton.
-import shutil  # noqa: F401
+import shutil
 
 from .action_builders import (
     cli_command_action,
@@ -106,6 +106,7 @@ __all__ = [
     "normalize_shell_command",
     "sample_alert_action",
     "shell_action",
+    "shutil",
     "slash_action",
     "split_prompt_clauses",
     "synthetic_test_action",

@@ -56,10 +56,12 @@ class RemoteOpsProvider(ABC):
 
     @abstractmethod
     def status(self, scope: RemoteServiceScope) -> ServiceStatus:
+        """Return normalized service status for ``scope`` without streaming provider output."""
         raise NotImplementedError
 
     @abstractmethod
     def logs(self, scope: RemoteServiceScope, *, lines: int, follow: bool) -> None:
+        """Stream the latest ``lines`` logs for ``scope`` and honor ``follow`` for interactive tails."""
         raise NotImplementedError
 
     @abstractmethod
@@ -74,6 +76,7 @@ class RemoteOpsProvider(ABC):
 
     @abstractmethod
     def restart(self, scope: RemoteServiceScope) -> RestartResult:
+        """Request a provider restart for ``scope`` and return a normalized acknowledgement."""
         raise NotImplementedError
 
 

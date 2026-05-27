@@ -209,6 +209,27 @@ _stdin_watcher_suppression_depth = 0
 _stdin_watcher_lock = threading.Lock()
 _tool_detail_toggle_callbacks: list[Callable[[], None]] = []
 
+# Snapshot of the live phase footer at the moment its display was torn down so
+# that ``render_completed_investigation_footer()`` can re-render it at the
+# absolute bottom of the final RCA report. Cleared once consumed.
+_completed_footer_snapshot: tuple[str, float, str, str] | None = None
+
+
+def _capture_footer_snapshot(display: Any) -> None:
+    """Record the phase footer fields visible the moment a live display stops."""
+    global _completed_footer_snapshot
+    if display is None:
+        return
+    t0 = getattr(display, "_t0", None)
+    if t0 is None:
+        return
+    _completed_footer_snapshot = (
+        getattr(display, "_current_phase", ""),
+        time.monotonic() - t0,
+        getattr(display, "_model", ""),
+        getattr(display, "_mode", "local"),
+    )
+
 
 @contextlib.contextmanager
 def suppress_stdin_watchers() -> Iterator[None]:
@@ -301,8 +322,20 @@ def render_divider(width: int = 80) -> None:
         _safe_print("─" * width)
 
 
-def render_footer(phase: str, elapsed: float, model: str, mode: str) -> None:
-    """Print the persistent status footer line."""
+def render_footer(
+    phase: str,
+    elapsed: float,
+    model: str,
+    mode: str,
+    *,
+    show_cancel: bool = True,
+) -> None:
+    """Print the persistent status footer line.
+
+    ``show_cancel=False`` is used by ``render_completed_investigation_footer()``
+    when the investigation has already finished, so "esc to cancel" no longer
+    applies.
+    """
     if _is_silent_output():
         return
     if get_output_format() == "rich":
@@ -313,10 +346,27 @@ def render_footer(phase: str, elapsed: float, model: str, mode: str) -> None:
         if model:
             t.append(f"{model}  ", style=SECONDARY)
         t.append(f"{mode}  ", style=SECONDARY)
-        t.append("esc to cancel", style=DIM)
+        if show_cancel:
+            t.append("esc to cancel", style=DIM)
         _get_console().print(t)
     else:
         _safe_print(f"● {phase}  {elapsed:.1f}s  {model}  {mode}")
+
+
+def render_completed_investigation_footer() -> None:
+    """Print the captured phase footer once, at the absolute bottom of the report.
+
+    Consumes the snapshot recorded when the investigation's live display was
+    torn down. A no-op if no snapshot exists (e.g. silent runs, cancelled
+    investigations with no report, or callers that have already rendered).
+    """
+    global _completed_footer_snapshot
+    snapshot, _completed_footer_snapshot = _completed_footer_snapshot, None
+    if snapshot is None or _is_silent_output():
+        return
+    phase, elapsed, model, mode = snapshot
+    render_divider()
+    render_footer(phase, elapsed, model, mode, show_cancel=False)
 
 
 def render_event(
@@ -655,6 +705,7 @@ class _EventLogDisplay:
 
     def stop(self) -> None:
         global _live_console, _active_display
+        _capture_footer_snapshot(self)
         if self._live.is_started:
             self._live.stop()
         if _live_console is self._console:
@@ -790,7 +841,7 @@ class _ReplEventLogDisplay:
         self._console = Console(highlight=False)
 
     def stop(self) -> None:
-        return
+        _capture_footer_snapshot(self)
 
     def _emit(self, line: Text | Any) -> None:
         from app.cli.interactive_shell.ui.choice_menu import prepare_repl_output_line

@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   trigger-alert:
+    if: github.repository == 'Tracer-Cloud/opensre'
     runs-on: ubuntu-latest
     env:
       AWS_REGION: us-east-1
