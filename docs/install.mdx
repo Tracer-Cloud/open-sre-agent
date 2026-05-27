@@ -25,7 +25,7 @@ pip install opensre
 git clone https://github.com/Tracer-Cloud/opensre.git
 cd opensre
 uv sync --frozen --extra dev
-uv run python -m app.analytics.install
+make install
 ```
 
 ### 2. Install via Homebrew (macOS/Linux)
@@ -44,8 +44,12 @@ docker run --rm -it tracercloud/opensre:latest opensre --version
 
 ### 4. Install via Shell/PowerShell Script
 
+
 **Unix/macOS:**
 ```bash
+# You can inspect the script before running it:
+curl -fsSL https://install.opensre.com | less
+# Then install:
 curl -fsSL https://install.opensre.com | bash
 # For latest main branch:
 curl -fsSL https://install.opensre.com | bash -s -- --main
@@ -110,4 +114,4 @@ opensre doctor
 
 ---
 
-For more help, see [SETUP.md](../../SETUP.md), [CONTRIBUTING.md](../../CONTRIBUTING.md), or join our [Discord](https://discord.gg/opensre).
+For more help, see [SETUP.md](../SETUP.md), [CONTRIBUTING.md](../CONTRIBUTING.md), or join our [Discord](https://discord.gg/opensre).
