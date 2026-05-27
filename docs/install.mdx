@@ -1,32 +1,34 @@
 ---
-title: "Install OpenSRE"
-description: "Choose the right OpenSRE installation path for local or enterprise environments"
+title: Install OpenSRE
+description: Choose the right OpenSRE installation path for local or enterprise environments
 ---
-
 
 Welcome to OpenSRE! This page guides you through all supported installation methods for local, on-prem, and enterprise environments.
 
----
-
 ## Installation Methods
 
-### 1. Install via pip/uv (Recommended for Python users)
+### 1. Install via pip/uv
 
 **Requirements:** Python 3.12+, [uv](https://docs.astral.sh/uv/getting-started/installation/) (recommended for speed)
 
 ```bash
 uv pip install opensre
-# or, with pip
+
+# or
 pip install opensre
 ```
 
-**For development:**
+### Install from source (Development)
+
 ```bash
 git clone https://github.com/Tracer-Cloud/opensre.git
 cd opensre
+
 uv sync --frozen --extra dev
 make install
 ```
+
+---
 
 ### 2. Install via Homebrew (macOS/Linux)
 
@@ -35,83 +37,222 @@ brew tap tracer-cloud/tap
 brew install tracer-cloud/tap/opensre
 ```
 
+---
+
 ### 3. Install via Docker
+
+> **Note:** The official Docker image is `tracercloud/opensre:latest`. Verify the image name/tag in the Docker guide if you encounter issues.
 
 ```bash
 docker pull tracercloud/opensre:latest
+
 docker run --rm -it tracercloud/opensre:latest opensre --version
 ```
 
+---
+
 ### 4. Install via Shell/PowerShell Script
 
+#### Unix/macOS
 
-**Unix/macOS:**
 ```bash
-# You can inspect the script before running it:
+# Inspect the script before running it
 curl -fsSL https://install.opensre.com | less
-# Then install:
+
+# Install stable release
 curl -fsSL https://install.opensre.com | bash
-# For latest main branch:
+
+# Install latest main branch
 curl -fsSL https://install.opensre.com | bash -s -- --main
 ```
 
-**Windows (PowerShell):**
+#### Windows (PowerShell)
+
 ```powershell
+# Inspect the script before running it
+(Invoke-WebRequest https://install.opensre.com).Content
+
+# Run installer
 irm https://install.opensre.com | iex
 ```
+
+> **Inspect before run:** Always review the PowerShell script content before executing it, just as you would on Unix systems.
 
 ---
 
 ## Verifying Your Installation
 
-Check your install and version:
+After installation, verify OpenSRE is working correctly:
 
 ```bash
 opensre --version
 opensre doctor
 ```
 
+Expected output should show:
+
+* installed OpenSRE version
+* environment diagnostics
+* dependency validation
+* configuration checks
+
 ---
 
 ## Platform Notes
 
-**macOS:** Homebrew and pip/uv are supported. For Apple Silicon, Homebrew installs to `/opt/homebrew/bin` by default.
+### macOS
 
-**Linux:** Use pip/uv, Homebrew, or Docker. Ensure Python 3.12+ is available.
+* Homebrew and pip/uv installations are fully supported
+* Apple Silicon installs Homebrew binaries under:
 
-**Windows:** Use PowerShell script or pip. For best results, use [Windows Terminal](https://aka.ms/terminal) and ensure Python is in your PATH. WSL2 is fully supported.
+```bash
+/opt/homebrew/bin
+```
 
-**WSL2:** Install as on Linux. If you encounter permission issues, ensure your user owns the install directory.
+* Ensure Homebrew binaries are included in your `PATH`
+
+### Linux
+
+* Use pip/uv, Docker, or Homebrew
+* Ensure Python 3.12+ is available:
+
+```bash
+python3 --version
+```
+
+* Some distributions may require installing:
+
+  * `python3-venv`
+  * `build-essential`
+
+### Windows
+
+* PowerShell installer and pip installs are supported
+* Recommended terminal:
+
+  * [Windows Terminal](https://aka.ms/terminal)
+
+If Python commands fail, verify Python is available in PATH:
+
+```powershell
+python --version
+```
+
+If you encounter execution policy issues:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+### WSL2
+
+* Install using Linux instructions
+* WSL2 is fully supported
+
+If permissions fail:
+
+```bash
+sudo chown -R $USER:$USER ~/.local
+```
 
 ---
 
 ## Common First-Run Errors & Fixes
 
-**Error:** `opensre: command not found`
-- Ensure your Python/Shell install directory is in your PATH. On Unix, add `~/.local/bin` or the Homebrew prefix to your PATH.
+### Error: `opensre: command not found`
 
-**Error:** `ModuleNotFoundError` or dependency errors
-- Run `uv pip install opensre --force-reinstall` or `make install` in the repo root.
+Your install directory may not be in PATH.
 
-**Error:** Permission denied
-- Try installing with `--user` or use a virtual environment.
+For Unix systems:
 
-**Windows:** If you see script execution errors, run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` in PowerShell.
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+For Homebrew users:
+
+```bash
+export PATH="/opt/homebrew/bin:$PATH"
+```
+
+---
+
+### Error: `ModuleNotFoundError`
+
+Try reinstalling dependencies:
+
+```bash
+uv pip install opensre --force-reinstall
+```
+
+Or from source:
+
+```bash
+make install
+```
+
+---
+
+### Error: Permission denied
+
+Try:
+
+* using a virtual environment
+* installing with `--user`
+* avoiding `sudo pip install`
+
+Example:
+
+```bash
+pip install --user opensre
+```
+
+---
+
+### Docker container exits immediately
+
+Verify Docker is installed and running:
+
+```bash
+docker --version
+docker ps
+```
+
+Then retry:
+
+```bash
+docker run --rm -it tracercloud/opensre:latest opensre doctor
+```
+
+---
+
+## Environment-Specific Guides
+
+For detailed platform-specific instructions, see:
+
+- [Local and on-prem setup](install-local)
+- [Enterprise setup](install-enterprise)
+- [macOS guide](environments/macos)
+- [Linux guide](environments/linux-local)
+- [Windows guide](environments/windows-local)
+- [Docker guide](environments/docker)
 
 ---
 
 ## Next Steps
 
-- [Quickstart](/quickstart)
-- [Investigations overview](/investigation-overview)
-- [Integrations overview](/integrations-overview)
-- [Local and on-prem setup](/install-local)
-- [Enterprise setup](/install-enterprise)
-- [macOS guide](/environments/macos)
-- [Linux guide](/environments/linux-local)
-- [Windows guide](/environments/windows-local)
-- [Docker guide](/environments/docker)
+After installation, continue with:
+
+- [Quickstart](quickstart)
+- [Investigations overview](investigation-overview)
+- [Integrations overview](integrations-overview)
 
 ---
 
-For more help, see [SETUP.md](../SETUP.md), [CONTRIBUTING.md](../CONTRIBUTING.md), or join our [Discord](https://discord.gg/opensre).
+## Additional Resources
+
+* [SETUP.md](https://github.com/Tracer-Cloud/opensre/blob/main/SETUP.md)
+* [CONTRIBUTING.md](https://github.com/Tracer-Cloud/opensre/blob/main/CONTRIBUTING.md)
+* [Discord](https://discord.gg/opensre)
+
+If you encounter issues not covered here, please open an issue on GitHub or ask in Discord.
