@@ -48,7 +48,19 @@ def test_safe_int_returns_coerced_value(value: Any, default: int, expected: int)
 def test_safe_int_returns_default_on_bad_input(value: Any) -> None:
     result = safe_int(value, 999)
     assert result == 999
-    assert type(result) is int
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        # float infinity raises OverflowError from int()
+        float("inf"),
+        float("-inf"),
+    ],
+)
+def test_safe_int_returns_default_on_overflow(value: Any) -> None:
+    result = safe_int(value, 999)
+    assert result == 999
 
 
 def test_safe_int_treats_bool_as_int_subclass() -> None:
@@ -76,3 +88,4 @@ def test_safe_int_exception_domain() -> None:
 
     assert safe_int(_Raises(TypeError("should get caught")), 111) == 111
     assert safe_int(_Raises(ValueError("should get caught")), 999) == 999
+    assert safe_int(_Raises(OverflowError("should get caught")), 333) == 333
