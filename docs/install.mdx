@@ -3,22 +3,111 @@ title: "Install OpenSRE"
 description: "Choose the right OpenSRE installation path for local or enterprise environments"
 ---
 
-Use the installation path that matches your runtime and organization setup.
 
-## Install options
+Welcome to OpenSRE! This page guides you through all supported installation methods for local, on-prem, and enterprise environments.
 
-- [Local and on-prem setup](/install-local)
-- [Enterprise setup](/install-enterprise)
+---
 
-## Local environment guides
+## Installation Methods
 
-- [macOS](/environments/macos)
-- [Linux (local)](/environments/linux-local)
-- [Windows (local)](/environments/windows-local)
-- [Docker](/environments/docker)
+### 1. Install via pip/uv (Recommended for Python users)
 
-## Next steps
+**Requirements:** Python 3.12+, [uv](https://docs.astral.sh/uv/getting-started/installation/) (recommended for speed)
+
+```bash
+uv pip install opensre
+# or, with pip
+pip install opensre
+```
+
+**For development:**
+```bash
+git clone https://github.com/Tracer-Cloud/opensre.git
+cd opensre
+uv sync --frozen --extra dev
+uv run python -m app.analytics.install
+```
+
+### 2. Install via Homebrew (macOS/Linux)
+
+```bash
+brew tap tracer-cloud/tap
+brew install tracer-cloud/tap/opensre
+```
+
+### 3. Install via Docker
+
+```bash
+docker pull tracercloud/opensre:latest
+docker run --rm -it tracercloud/opensre:latest opensre --version
+```
+
+### 4. Install via Shell/PowerShell Script
+
+**Unix/macOS:**
+```bash
+curl -fsSL https://install.opensre.com | bash
+# For latest main branch:
+curl -fsSL https://install.opensre.com | bash -s -- --main
+```
+
+**Windows (PowerShell):**
+```powershell
+irm https://install.opensre.com | iex
+```
+
+---
+
+## Verifying Your Installation
+
+Check your install and version:
+
+```bash
+opensre --version
+opensre doctor
+```
+
+---
+
+## Platform Notes
+
+**macOS:** Homebrew and pip/uv are supported. For Apple Silicon, Homebrew installs to `/opt/homebrew/bin` by default.
+
+**Linux:** Use pip/uv, Homebrew, or Docker. Ensure Python 3.12+ is available.
+
+**Windows:** Use PowerShell script or pip. For best results, use [Windows Terminal](https://aka.ms/terminal) and ensure Python is in your PATH. WSL2 is fully supported.
+
+**WSL2:** Install as on Linux. If you encounter permission issues, ensure your user owns the install directory.
+
+---
+
+## Common First-Run Errors & Fixes
+
+**Error:** `opensre: command not found`
+- Ensure your Python/Shell install directory is in your PATH. On Unix, add `~/.local/bin` or the Homebrew prefix to your PATH.
+
+**Error:** `ModuleNotFoundError` or dependency errors
+- Run `uv pip install opensre --force-reinstall` or `make install` in the repo root.
+
+**Error:** Permission denied
+- Try installing with `--user` or use a virtual environment.
+
+**Windows:** If you see script execution errors, run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` in PowerShell.
+
+---
+
+## Next Steps
 
 - [Quickstart](/quickstart)
 - [Investigations overview](/investigation-overview)
 - [Integrations overview](/integrations-overview)
+- [Local and on-prem setup](/install-local)
+- [Enterprise setup](/install-enterprise)
+- [macOS guide](/environments/macos)
+- [Linux guide](/environments/linux-local)
+- [Windows guide](/environments/windows-local)
+- [Docker guide](/environments/docker)
+
+---
+
+For more help, see [SETUP.md](../../SETUP.md), [CONTRIBUTING.md](../../CONTRIBUTING.md), or join our [Discord](https://discord.gg/opensre).
