@@ -43,6 +43,8 @@ def test_safe_int_returns_coerced_value(value: Any, default: int, expected: int)
         "some string",
         # wrong type entirely
         object(),
+        # decimal-shaped string
+        "3.14",
     ],
 )
 def test_safe_int_returns_default_on_bad_input(value: Any) -> None:
@@ -64,13 +66,23 @@ def test_safe_int_returns_default_on_overflow(value: Any) -> None:
 
 
 def test_safe_int_treats_bool_as_int_subclass() -> None:
-    assert safe_int(True, 999) == 1
-    assert safe_int(False, 999) == 0
+    true_result = safe_int(True, 999)
+    assert true_result == 1
+    assert type(true_result) is int
+
+    false_result = safe_int(False, 999)
+    assert false_result == 0
+    assert type(false_result) is int
 
 
 def test_safe_int_truncates_float_toward_zero() -> None:
-    assert safe_int(3.9, 0) == 3
-    assert safe_int(-3.9, 0) == -3
+    positive_result = safe_int(3.9, 0)
+    assert positive_result == 3
+    assert type(positive_result) is int
+
+    negative_result = safe_int(-3.9, 0)
+    assert negative_result == -3
+    assert type(negative_result) is int
 
 
 def test_safe_int_returns_default_unchanged_for_negative_value() -> None:
