@@ -109,3 +109,32 @@ def test_get_jenkins_build_log_tool(mock_get_log):
 
     assert result["source"] == "jenkins"
     assert result["log"] == "Build succeeded"
+@patch("app.services.jenkins.client.httpx.get")
+def test_list_running_builds(mock_get):
+    mock_get.return_value.json.return_value = {
+        "jobs": [
+            {
+                "name": "deploy-api",
+                "url": "http://jenkins/job/deploy-api/",
+                "color": "blue_anime",
+            },
+            {
+                "name": "nightly-build",
+                "url": "http://jenkins/job/nightly-build/",
+                "color": "blue",
+            },
+        ]
+    }
+
+    mock_get.return_value.raise_for_status.return_value = None
+
+    client = JenkinsClient(
+        base_url="http://jenkins",
+        username="admin",
+        token="token",
+    )
+
+    running = client.list_running_builds()
+
+    assert len(running) == 1
+    assert running[0]["name"] == "deploy-api"

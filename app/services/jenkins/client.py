@@ -61,3 +61,23 @@ class JenkinsClient:
         response.raise_for_status()
 
         return response.text
+    def list_running_builds(self) -> list[dict[str, Any]]:
+        """List currently running Jenkins builds."""
+
+        data = self._get("/api/json")
+
+        jobs = data.get("jobs", [])
+
+        running = []
+
+        for job in jobs:
+          if "anime" in str(job.get("color", "")):
+            running.append(
+                {
+                    "name": job.get("name"),
+                    "url": job.get("url"),
+                    "color": job.get("color"),
+                }
+            )
+
+        return running
