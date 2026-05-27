@@ -190,7 +190,11 @@ def _get_llm(*, with_tools: bool) -> Any:
             else ANTHROPIC_LLM_CONFIG.reasoning_model,
         )
     else:
-        raise ValueError(f"Unsupported chat model provider: {provider}")
+        raise UnsupportedChatProviderError(
+            f"Chat mode currently only supports 'anthropic' and 'openai' providers. "
+            f"You have LLM_PROVIDER={provider!r} set. "
+            f"Switch to LLM_PROVIDER=anthropic or LLM_PROVIDER=openai to use chat mode."
+        )
 
     cache_key = f"{provider}:{model}:{'tools' if with_tools else 'plain'}"
     if cache_key not in _llm_cache:
