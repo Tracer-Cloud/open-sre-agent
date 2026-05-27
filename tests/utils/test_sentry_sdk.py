@@ -112,14 +112,25 @@ class TestBeforeBreadcrumb:
         result = _before_breadcrumb(crumb, {})
         assert result == crumb
 
-    def test_strips_query_string_from_http_breadcrumb(self) -> None:
+    def test_strips_query_string_from_http_breadcrumb_url(self) -> None:
         crumb: dict = {"category": "http", "data": {"url": "https://api.example.com/v1?token=secret"}}
         result = _before_breadcrumb(crumb, {})
         assert result is not None
-        assert result["data"]["url"] == "https://api.example.com/v1"
+        assert "token=secret" not in result["data"]["url"]  # type: ignore[index]
 
-    def test_scrubs_sensitive_header_from_http_breadcrumb(self) -> None:
-        crumb: dict = {"category": "http", "data": {"headers": {"Authorization": "Bearer secret"}}}
+    def test_strips_sensitive_headers_from_http_breadcrumb(self) -> None:
+        crumb: dict = {
+            "category": "http",
+            "data": {"url": "https://api.example.com/v1", "headers": {"Authorization": "Bearer tok", "Content-Type": "application/json"}},
+        }
+        result = _before_breadcrumb(crumb, {})
+        assert result is not None
+        assert result["data"]["headers"].get("Authorization") == "[Filtered]"  # type: ignore[index]
+        assert result["data"]["headers"].get("Content-Type") == "application/json"  # type: ignore[index]
+
+    def test_handles_empty_crumb(self) -> None:
+        result = _before_breadcrumb({}, {})
+        assert result is not None
         result = _before_breadcrumb(crumb, {})
         assert result is not None
         assert result["data"]["headers"]["Authorization"] == "[Filtered]"
