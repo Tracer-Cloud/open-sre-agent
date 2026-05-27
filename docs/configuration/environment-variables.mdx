@@ -10,7 +10,7 @@ All configuration options for OpenSRE can be set via environment variables. This
 | Variable | Default | Description | Module |
 |----------|---------|-------------|--------|
 | `LLM_PROVIDER` | `anthropic` | Primary LLM provider (`anthropic`, `openai`, `openrouter`, `deepseek`, `gemini`, `nvidia`, `minimax`, `groq`, `bedrock`, `ollama`, `codex`, `claude-code`, `cursor`, `gemini-cli`, `antigravity-cli`, `opencode`, `kimi`, `copilot`) | `config` |
-| `LLM_MAX_TOKENS` | Provider-specific | Maximum tokens for LLM responses | `config` |
+| `LLM_MAX_TOKENS` | `4096` | Maximum tokens for LLM responses | `config` |
 
 ### Anthropic
 | Variable | Default | Description | Module |
@@ -305,6 +305,11 @@ All configuration options for OpenSRE can be set via environment variables. This
 | `BETTERSTACK_USERNAME` | | Better Stack username | `integrations/_catalog_impl` |
 | `BETTERSTACK_PASSWORD` | | Better Stack password | `integrations/_catalog_impl` |
 | `BETTERSTACK_SOURCES` | | Better Stack sources | `integrations/_catalog_impl` |
+| `KAFKA_BOOTSTRAP_SERVERS` | | Kafka broker addresses | `.env.example` |
+| `KAFKA_SECURITY_PROTOCOL` | `PLAINTEXT` | Kafka security protocol | `.env.example` |
+| `KAFKA_SASL_MECHANISM` | | Kafka SASL mechanism | `.env.example` |
+| `KAFKA_SASL_USERNAME` | | Kafka SASL username | `.env.example` |
+| `KAFKA_SASL_PASSWORD` | | Kafka SASL password | `.env.example` |
 
 ### Data & Search
 | Variable | Default | Description | Module |
@@ -323,6 +328,12 @@ All configuration options for OpenSRE can be set via environment variables. This
 | `OPENOBSERVE_MAX_RESULTS` | `100` | Max OpenObserve results | `integrations/_catalog_impl` |
 | `VICTORIA_LOGS_URL` | | VictoriaLogs instance URL | `integrations/_catalog_impl` |
 | `VICTORIA_LOGS_TENANT_ID` | | VictoriaLogs tenant ID | `integrations/_catalog_impl` |
+| `CLICKHOUSE_HOST` | | ClickHouse host | `.env.example` |
+| `CLICKHOUSE_PORT` | `8123` | ClickHouse port | `.env.example` |
+| `CLICKHOUSE_DATABASE` | `default` | ClickHouse database | `.env.example` |
+| `CLICKHOUSE_USER` | `default` | ClickHouse username | `.env.example` |
+| `CLICKHOUSE_PASSWORD` | | ClickHouse password | `.env.example` |
+| `CLICKHOUSE_SECURE` | `false` | Enable ClickHouse TLS | `.env.example` |
 | `SNOWFLAKE_ACCOUNT_IDENTIFIER` | | Snowflake account identifier | `integrations/_catalog_impl` |
 | `SNOWFLAKE_ACCOUNT` | | Snowflake account (alternative) | `integrations/_catalog_impl` |
 | `SNOWFLAKE_TOKEN` | | Snowflake token | `integrations/_catalog_impl` |
