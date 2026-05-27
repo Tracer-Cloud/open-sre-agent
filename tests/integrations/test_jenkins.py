@@ -32,7 +32,7 @@ def test_list_jobs(mock_get):
 
 @patch("app.services.jenkins.client.httpx.get")
 def test_list_builds(mock_get):
-    mock_get.return_value.json.return_value = {
+    job_response = {
         "builds": [
             {
                 "number": 42,
@@ -40,7 +40,17 @@ def test_list_builds(mock_get):
             }
         ]
     }
+
+    build_response = {
+        "number": 42,
+        "url": "http://jenkins/job/deploy-api/42/",
+        "result": "SUCCESS",
+        "timestamp": 1710000000000,
+        "building": False,
+    }
+
     mock_get.return_value.raise_for_status.return_value = None
+    mock_get.return_value.json.side_effect = [job_response, build_response]
 
     client = JenkinsClient(
         base_url="http://jenkins",
@@ -52,6 +62,8 @@ def test_list_builds(mock_get):
 
     assert len(builds) == 1
     assert builds[0]["number"] == 42
+    assert builds[0]["status"] == "SUCCESS"
+    assert builds[0]["timestamp"] == 1710000000000
 @patch("app.services.jenkins.client.httpx.get")
 def test_get_build_log(mock_get):
     mock_get.return_value.text = "Build succeeded"

@@ -38,46 +38,56 @@ class JenkinsClient:
         ]
 
     def list_builds(self, job_name: str) -> list[dict[str, Any]]:
-        """List recent builds for a Jenkins job."""
+        """List recent builds for a Jenkins job with status and timestamp."""
         data = self._get(f"/job/{job_name}/api/json")
         builds = data.get("builds", [])
 
-        return [
-            {
-                "number": build.get("number"),
-                "url": build.get("url"),
-            }
-            for build in builds
-        ]
+        results = []
+
+        for build in builds:
+            build_number = build.get("number")
+            if build_number is None:
+                continue
+
+            build_data = self._get(f"/job/{job_name}/{build_number}/api/json")
+
+            results.append(
+                {
+                    "number": build_data.get("number"),
+                    "url": build_data.get("url"),
+                    "status": build_data.get("result"),
+                    "timestamp": build_data.get("timestamp"),
+                    "building": build_data.get("building"),
+                }
+            )
+
+        return results
+
     def get_build_log(self, job_name: str, build_number: int) -> str:
         """Fetch Jenkins build console log."""
-
         response = httpx.get(
-          f"{self.base_url}/job/{job_name}/{build_number}/consoleText",
-        auth=self.auth,
-        timeout=30.0,
-    )
-
+            f"{self.base_url}/job/{job_name}/{build_number}/consoleText",
+            auth=self.auth,
+            timeout=30.0,
+        )
         response.raise_for_status()
-
         return response.text
+
     def list_running_builds(self) -> list[dict[str, Any]]:
         """List currently running Jenkins builds."""
-
         data = self._get("/api/json")
-
         jobs = data.get("jobs", [])
 
         running = []
 
         for job in jobs:
-          if "anime" in str(job.get("color", "")):
-            running.append(
-                {
-                    "name": job.get("name"),
-                    "url": job.get("url"),
-                    "color": job.get("color"),
-                }
-            )
+            if "anime" in str(job.get("color", "")):
+                running.append(
+                    {
+                        "name": job.get("name"),
+                        "url": job.get("url"),
+                        "color": job.get("color"),
+                    }
+                )
 
         return running
