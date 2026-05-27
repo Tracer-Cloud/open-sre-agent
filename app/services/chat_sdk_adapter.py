@@ -16,6 +16,7 @@ from app.llm_credentials import resolve_llm_api_key
 from app.tools.registered_tool import RegisteredTool
 from app.tools.registry import get_registered_tools
 from app.types.chat import AssistantTurn, BoundChatModel, ToolCallPayload
+SUPPORTED_CHAT_PROVIDERS: frozenset[str] = frozenset({"openai", "anthropic"})
 
 # ── Retry / timeout policy (mirror app/services/llm_client.py) ───────────────
 
@@ -619,15 +620,13 @@ class _AnthropicChatAdapter:
 # ── Public factory ────────────────────────────────────────────────────────────
 
 
-def build_bound_chat_model(
-    *,
-    provider: str,
-    model_name: str,
-    with_tools: bool,
-) -> BoundChatModel:
+def build_bound_chat_model(*, provider: str, model_name: str, with_tools: bool) -> BoundChatModel:
     """Construct a direct-SDK provider chat model behind ``BoundChatModel``."""
     if provider == "openai":
         return _OpenAIChatAdapter(model=model_name, with_tools=with_tools)
     if provider == "anthropic":
         return _AnthropicChatAdapter(model=model_name, with_tools=with_tools)
-    raise ValueError(f"Unsupported chat model provider: {provider}")
+    raise ValueError(
+        f"Unsupported chat model provider: {provider!r}. "
+        f"Supported providers: {', '.join(sorted(SUPPORTED_CHAT_PROVIDERS))}."
+    )

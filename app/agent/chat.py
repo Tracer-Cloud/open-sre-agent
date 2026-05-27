@@ -13,6 +13,8 @@ from app.services.chat_sdk_adapter import (
     _coerce_text_field,
     build_bound_chat_model,
     messages_to_invocation_dicts,
+    SUPPORTED_CHAT_PROVIDERS,
+
 )
 from app.state import AgentState
 from app.tools.registry import get_registered_tools
@@ -191,9 +193,9 @@ def _get_llm(*, with_tools: bool) -> Any:
         )
     else:
         raise UnsupportedChatProviderError(
-            f"Chat mode currently only supports 'anthropic' and 'openai' providers. "
+            f"Chat mode only supports {', '.join(sorted(SUPPORTED_CHAT_PROVIDERS))} providers. "
             f"You have LLM_PROVIDER={provider!r} set. "
-            f"Switch to LLM_PROVIDER=anthropic or LLM_PROVIDER=openai to use chat mode."
+            f"Switch to one of the supported providers to use chat mode."
         )
 
     cache_key = f"{provider}:{model}:{'tools' if with_tools else 'plain'}"
