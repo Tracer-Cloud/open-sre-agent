@@ -50,3 +50,17 @@ def test_list_builds(mock_get):
 
     assert len(builds) == 1
     assert builds[0]["number"] == 42
+@patch("app.services.jenkins.client.httpx.get")
+def test_get_build_log(mock_get):
+    mock_get.return_value.text = "Build succeeded"
+    mock_get.return_value.raise_for_status.return_value = None
+
+    client = JenkinsClient(
+        base_url="http://jenkins",
+        username="admin",
+        token="token",
+    )
+
+    log = client.get_build_log("deploy-api", 42)
+
+    assert log == "Build succeeded"

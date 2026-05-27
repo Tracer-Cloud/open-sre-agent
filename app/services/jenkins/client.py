@@ -49,3 +49,15 @@ class JenkinsClient:
             }
             for build in builds
         ]
+    def get_build_log(self, job_name: str, build_number: int) -> str:
+        """Fetch Jenkins build console log."""
+
+        response = httpx.get(
+          f"{self.base_url}/job/{job_name}/{build_number}/consoleText",
+        auth=self.auth,
+        timeout=30.0,
+    )
+
+        response.raise_for_status()
+
+        return response.text
