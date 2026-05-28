@@ -65,7 +65,7 @@ _ALERT_SOURCE_TO_TOOL_SOURCES: dict[str, list[str]] = {
     "datadog": ["datadog"],
     "cloudwatch": ["cloudwatch", "ec2", "rds"],
     "eks": ["eks", "ec2"],
-    "alertmanager": ["eks", "cloudwatch", "grafana"],
+    "alertmanager": ["alertmanager", "eks", "cloudwatch", "grafana"],
     "sentry": ["sentry"],
     "honeycomb": ["honeycomb"],
     "coralogix": ["coralogix"],

@@ -43,3 +43,21 @@ def test_alert_context_surfaces_v2_contract_hints_for_tool_selection() -> None:
     assert "source_id=aws_rds" in context
     assert "evidence=deployment_metadata" in context
     assert "avoid=Use this tool to inspect SQL query text or Postgres locks." in context
+
+
+def test_alertmanager_context_starts_with_alertmanager_tools() -> None:
+    context = format_alert_context(
+        {
+            "alert_name": "AppPostgresDown",
+            "alert_source": "alertmanager",
+            "pipeline_name": "backend",
+            "severity": "critical",
+            "resolved_integrations": {
+                "alertmanager": {"base_url": "http://localhost:9093"},
+            },
+        }
+    )
+
+    assert "Call these tools first (from: alertmanager" in context
+    assert "`alertmanager_alerts`" in context
+    assert "`alertmanager_silences`" in context

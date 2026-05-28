@@ -32,7 +32,7 @@ _ALERT_SOURCE_TO_TOOL_SOURCES: dict[str, list[str]] = {
     "datadog": ["datadog"],
     "cloudwatch": ["cloudwatch"],
     "eks": ["eks"],
-    "alertmanager": ["grafana", "cloudwatch"],
+    "alertmanager": ["alertmanager", "grafana", "cloudwatch"],
     "sentry": ["sentry"],
     "honeycomb": ["honeycomb"],
     "coralogix": ["coralogix"],
@@ -602,6 +602,18 @@ def _merge_tool_evidence(
 
     if tool_name == "query_grafana_service_names":
         evidence["grafana_service_names"] = output.get("service_names", [])
+        return
+
+    if tool_name == "alertmanager_alerts":
+        evidence["alertmanager_alerts"] = output.get("alerts", [])
+        evidence["alertmanager_firing_alerts"] = output.get("firing_alerts", [])
+        evidence["alertmanager_alerts_total"] = output.get("total", 0)
+        return
+
+    if tool_name == "alertmanager_silences":
+        evidence["alertmanager_silences"] = output.get("silences", [])
+        evidence["alertmanager_active_silences"] = output.get("active_silences", [])
+        evidence["alertmanager_silences_total"] = output.get("total", 0)
 
 
 def _build_assistant_msg(llm: Any, response: Any) -> dict[str, Any]:

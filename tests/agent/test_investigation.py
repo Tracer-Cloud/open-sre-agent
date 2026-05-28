@@ -9,7 +9,9 @@ import pytest
 from app.agent.investigation import (
     ConnectedInvestigationAgent,
     _availability_view,
+    _build_seed_calls,
     _build_synthetic_assistant_tool_call_msg,
+    _merge_tool_evidence,
     _run_parallel,
 )
 from app.integrations.llm_cli.errors import CLITimeoutError
@@ -54,6 +56,73 @@ def test_build_synthetic_assistant_json_for_cli_backed_client() -> None:
     assert '"tool_calls"' in msg["content"]
     assert "query_eks" in msg["content"]
     assert "seed_t" in msg["content"]
+
+
+def test_alertmanager_alert_seeds_alertmanager_tools_first() -> None:
+    alertmanager_tool = MagicMock()
+    alertmanager_tool.name = "alertmanager_alerts"
+    alertmanager_tool.source = "alertmanager"
+    alertmanager_tool.extract_params.return_value = {
+        "base_url": "http://localhost:9093",
+        "bearer_token": "secret",
+    }
+
+    grafana_tool = MagicMock()
+    grafana_tool.name = "query_grafana_logs"
+    grafana_tool.source = "grafana"
+    grafana_tool.extract_params.return_value = {"service_name": "api"}
+
+    state = {
+        "alert_source": "alertmanager",
+        "resolved_integrations": {
+            "alertmanager": {
+                "base_url": "http://localhost:9093",
+                "bearer_token": "secret",
+            },
+            "grafana": {"url": "http://localhost:3000"},
+        },
+    }
+
+    calls = _build_seed_calls(state, [alertmanager_tool, grafana_tool], object())
+
+    assert [call.name for call in calls] == ["alertmanager_alerts", "query_grafana_logs"]
+    assert calls[0].input == {"base_url": "http://localhost:9093"}
+    alertmanager_tool.extract_params.assert_called_once_with(state["resolved_integrations"])
+
+
+def test_alertmanager_tool_output_is_promoted_to_evidence_keys() -> None:
+    evidence: dict[str, object] = {}
+    output = {
+        "source": "alertmanager",
+        "available": True,
+        "alerts": [
+            {
+                "status": "active",
+                "labels": {"alertname": "AppPostgresDown", "namespace": "app"},
+                "annotations": {"description": "Postgres StatefulSet has 0 ready replicas."},
+            }
+        ],
+        "firing_alerts": [
+            {
+                "status": "active",
+                "labels": {"alertname": "AppPostgresDown", "namespace": "app"},
+            }
+        ],
+        "total": 1,
+    }
+
+    _merge_tool_evidence(evidence, "alertmanager_alerts", output, {"base_url": "http://am:9093"})
+
+    assert evidence["alertmanager_alerts"] == output["alerts"]
+    assert evidence["alertmanager_firing_alerts"] == output["firing_alerts"]
+    assert evidence["alertmanager_alerts_total"] == 1
+    assert evidence["tool_outputs"] == [
+        {
+            "tool_name": "alertmanager_alerts",
+            "tool_args": {"base_url": "http://am:9093"},
+            "data": output,
+        }
+    ]
 
 
 def test_run_gracefully_handles_model_not_found_runtime_error() -> None:
