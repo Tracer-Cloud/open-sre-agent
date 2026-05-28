@@ -316,7 +316,7 @@ jobs:
 
   should-run-thorough:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'Tracer-Cloud/opensre'
     outputs:
       thorough: ${{ steps.filter.outputs.thorough }}
     steps:
@@ -346,6 +346,7 @@ jobs:
     if: >-
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main' &&
+      github.repository == 'Tracer-Cloud/opensre' &&
       needs.should-run-thorough.outputs.thorough == 'true'
     timeout-minutes: 30
 
