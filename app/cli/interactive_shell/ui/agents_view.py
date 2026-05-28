@@ -101,19 +101,19 @@ def _build_agents_table(records: Iterable[AgentRecord]) -> Table:
     for record in materialized:
         snapshot = get_snapshot(record.pid)
         if snapshot is not None:
-            # last_output_at requires a background collector that tracks when each agent last wrote
-            # to stdout — not yet implemented. Until that lands, the fallback to snapshot.started_at
-            # means the heuristic overestimates silence duration for agents that are actively producing output.
+            # Use output freshness when available; otherwise the status
+            # heuristic falls back to the process start time.
             status = compute_status(
                 snapshot,
                 now,
-                last_output_at=None,
+                last_output_at=snapshot.last_output_at,
                 idle_after_s=120,
                 stuck_after_s=480,
             )
             status_msg = ""
             if status is Status.STUCK:
-                status_msg = f"{_format_uptime(now - snapshot.started_at)} no progress"
+                anchor = snapshot.last_output_at or snapshot.started_at
+                status_msg = f"{_format_uptime(now - anchor)} no progress"
 
             uptime_cell = _format_uptime(now - snapshot.started_at)
             cpu_cell = f"{snapshot.cpu_percent:.1f}"

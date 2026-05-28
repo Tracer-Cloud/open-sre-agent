@@ -7,8 +7,8 @@ import platform
 import shutil
 from typing import Final
 
-import keyring  # type: ignore[import-not-found,import-untyped]
-import keyring.errors  # type: ignore[import-not-found,import-untyped]
+import keyring
+import keyring.errors
 
 _KEYRING_SERVICE: Final = "opensre.llm"
 _DISABLED_VALUES: Final = frozenset({"1", "true", "yes", "on"})

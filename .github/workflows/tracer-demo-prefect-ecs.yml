@@ -8,6 +8,7 @@ permissions:
 
 jobs:
   tracer-demo-prefect-ecs:
+    if: github.repository == 'Tracer-Cloud/opensre'
     runs-on: ubuntu-latest
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

@@ -279,14 +279,15 @@ jobs:
     timeout-minutes: 15
 
     if: >-
-      github.event_name == 'push' ||
+      github.repository == 'Tracer-Cloud/opensre' &&
+      (github.event_name == 'push' ||
       (
         github.event_name == 'pull_request' &&
         (
           contains(github.event.pull_request.title, 'k8s') ||
           contains(github.event.pull_request.title, 'kubernetes')
         )
-      )
+      ))
 
     steps:
       - uses: actions/checkout@v5
@@ -316,7 +317,7 @@ jobs:
 
   should-run-thorough:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'Tracer-Cloud/opensre'
     outputs:
       thorough: ${{ steps.filter.outputs.thorough }}
     steps:
@@ -346,6 +347,7 @@ jobs:
     if: >-
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main' &&
+      github.repository == 'Tracer-Cloud/opensre' &&
       needs.should-run-thorough.outputs.thorough == 'true'
     timeout-minutes: 30
 

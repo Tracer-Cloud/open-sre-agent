@@ -58,6 +58,7 @@ env:
 
 jobs:
   build-and-push:
+    if: github.repository == 'Tracer-Cloud/opensre'
     name: build + push
     runs-on: ubuntu-latest
 

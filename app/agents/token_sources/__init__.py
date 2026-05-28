@@ -41,12 +41,15 @@ class TokenSource(Protocol):
     """
 
     def read_new_chunk(self, pid: int, /) -> str | None:
+        """Return new output bytes for ``pid``, ``""`` for idle, or ``None`` when unobservable."""
         raise NotImplementedError
 
     def forget(self, pid: int, /) -> None:
+        """Drop all read-position state for ``pid`` without affecting other active processes."""
         raise NotImplementedError
 
     def known_pids(self) -> list[int]:
+        """Return PIDs with retained source state so callers can reconcile stale processes."""
         raise NotImplementedError
 
 

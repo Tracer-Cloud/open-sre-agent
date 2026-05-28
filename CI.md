@@ -48,44 +48,17 @@ make test-scope
 ```
 
 `make test-scope` reads `git diff` against `main`, maps each changed path to
-its test target(s) using the rules below, and runs the minimal `pytest`
-invocation. It escalates automatically to `make test-cov` when shared/core
-code is touched or 3+ app areas change. Pass `ARGS=--dry-run` to preview
-without running.
+its test target(s) using [`infra/ci/test_scope_rules.py`](infra/ci/test_scope_rules.py),
+and runs the minimal `pytest` invocation. It escalates automatically to
+`make test-cov` when shared/core code is touched or 3+ app areas change.
+Pass `ARGS=--dry-run` to preview without running.
 
 ### Manual lookup (reference only)
 
-If you prefer to pick the command yourself, or need a focused `-k` filter:
-
-| Changed path | Run |
-|---|---|
-| `app/tools/` | `uv run pytest tests/tools/ -v` *(or `-k <keyword>` for focused runs)* |
-| `app/services/` | `uv run pytest tests/services/ tests/tools/ -v` |
-| `app/integrations/` | `uv run pytest tests/integrations/ -v` |
-| `app/integrations/llm_cli/` | `uv run pytest tests/integrations/llm_cli/ -v` |
-| `app/integrations/opensre/` | `uv run pytest tests/integrations/opensre/ -v` |
-| `app/pipeline/` | `make test-cov` |
-| `app/nodes/` | `make test-cov` |
-| `app/agent/` or `app/agents/` | `uv run pytest tests/agent/ tests/agents/ -v` |
-| `app/cli/` | `uv run pytest tests/cli/ -v` |
-| `app/entrypoints/` | `uv run pytest tests/entrypoints/ -v` |
-| `app/remote/` | `uv run pytest tests/remote/ -v` |
-| `app/sandbox/` | `uv run pytest tests/sandbox/ -v` |
-| `app/deployment/` | `uv run pytest tests/deployment/ tests/app/deployment/ -v` |
-| `app/delivery/` | `uv run pytest tests/delivery/ -v` |
-| `app/guardrails/` | `uv run pytest tests/test_guardrails/ -v` |
-| `app/masking/` | `uv run pytest tests/masking/ -v` |
-| `app/analytics/` | `uv run pytest tests/analytics/ -v` |
-| `app/auth/` | `uv run pytest tests/app/auth/ -v` |
-| `app/hermes/` | `uv run pytest tests/hermes/ -v` |
-| `app/watch_dog/` | `uv run pytest tests/watch_dog/ -v` |
-| `app/types/` | `make test-cov` |
-| `app/state/` | `make test-cov` |
-| `app/utils/` | `make test-cov` |
-| `app/webapp.py` | `uv run pytest tests/test_webapp.py -v` |
-| Other `app/` paths (no direct mapping above) | `make test-cov` |
-| `tests/...` only | Run the exact changed test files/directories |
-| `pyproject.toml`, `uv.lock`, `pytest.ini`, `Makefile` | `make test-cov` |
+If you prefer to pick the command yourself, or need a focused `-k` filter,
+see the `PathRule` entries in [`infra/ci/test_scope_rules.py`](infra/ci/test_scope_rules.py).
+Rules with `always_escalate=True` map to `make test-cov`; all others list their
+`test_targets` tuple. Changed files under `tests/` with no app rule run as-is.
 
 ## 3) Escalation rules (must run full unit CI suite)
 

@@ -20,6 +20,7 @@ from questionary.prompts.common import (
 from questionary.question import Question
 from questionary.styles import merge_styles_default
 
+from app.cli.interactive_shell.ui.theme import GLYPH_PROMPT
 from app.cli.support.prompt_support import _HardQuitInterrupt, _with_ctrl_c_double_exit
 
 
@@ -191,14 +192,14 @@ def select(
     ic = InquirerControl(
         choices,
         None,
-        pointer=">",
+        pointer="❯",
         initial_choice=default,
         show_description=False,
         use_arrow_keys=True,
     )
 
     def _tokens() -> list[tuple[str, str]]:
-        tokens = [("class:qmark", "?"), ("class:question", f" {message} ")]
+        tokens = [("class:qmark", GLYPH_PROMPT), ("class:question", f" {message} ")]
         if ic.is_answered:
             tokens.append(("class:answer", str(ic.get_pointed_at().title)))
         elif instruction:
@@ -252,7 +253,7 @@ def checkbox(
 
     ic = _CheckboxControl(
         choices,
-        pointer=">",
+        pointer="❯",
         initial_choice=initial_choice,
         show_description=False,
     )
@@ -263,7 +264,7 @@ def checkbox(
         ic.selected_options = [v for v in default if v in valid_values]
 
     def _tokens() -> list[tuple[str, str]]:
-        tokens = [("class:qmark", "?"), ("class:question", f" {message} ")]
+        tokens = [("class:qmark", GLYPH_PROMPT), ("class:question", f" {message} ")]
         if ic.is_answered:
             selected = len(ic.selected_options)
             suffix = "selection" if selected == 1 else "selections"
