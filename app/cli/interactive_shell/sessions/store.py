@@ -123,7 +123,9 @@ class SessionStore:
                     "duration_secs": end_record.get("duration_secs") if end_record else None,
                     "total_turns": end_record.get("total_turns") if end_record else None,
                     "chat_turns": end_record.get("chat_turns") if end_record else None,
-                    "investigation_turns": end_record.get("investigation_turns") if end_record else None,
+                    "investigation_turns": end_record.get("investigation_turns")
+                    if end_record
+                    else None,
                 }
                 results.append(entry)
 

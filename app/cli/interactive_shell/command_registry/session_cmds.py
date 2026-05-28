@@ -242,6 +242,7 @@ _EFFORT_FIRST_ARGS: tuple[tuple[str, str], ...] = (
     ("max", "alias for xhigh"),
 )
 
+
 def _cmd_sessions(_session: ReplSession, console: Console, _args: list[str]) -> bool:
     from datetime import datetime
 
