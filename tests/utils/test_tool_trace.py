@@ -85,7 +85,7 @@ def test_format_tool_trace_entry_populates_fields_and_collapses_previews() -> No
         "- `primary`"
     )
     assert format_tool_trace_entry({"key": "fallback"}).startswith("- `fallback`")
-    assert format_tool_trace_entry({}).startswith("- `tool`")
+    assert format_tool_trace_entry({}).startswith("- `tool` (iteration None)")
     assert format_tool_trace_entry({"loop_iteration": -1}).startswith("- `tool` (seed)")
     assert format_tool_trace_entry({"loop_iteration": 2}).startswith(
         "- `tool` (iteration 2)"
@@ -111,7 +111,7 @@ def test_format_tool_trace_entry_populates_fields_and_collapses_previews() -> No
 
 def test_format_tool_trace_entry_handles_empty_trace_record_and_output_limit() -> None:
     formatted = format_tool_trace_entry({})
-    assert formatted.startswith("- `tool`")
+    assert formatted.startswith("- `tool` (iteration None)")
     assert "\n  input: `{}`" in formatted
     assert "\n  output: `" in formatted
     assert formatted.count("\n") == 2
