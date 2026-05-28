@@ -63,7 +63,7 @@ def _parse_search_traces(payload: dict[str, Any]) -> list[dict[str, Any]]:
         if matched is None:
             matched = len(span_set.get("spans", []) or [])
         try:
-            duration_ms = round(int(trace.get("durationMs", 0)), 4)
+            duration_ms = round(float(trace.get("durationMs", 0)), 4)
         except (TypeError, ValueError):
             duration_ms = 0
         results.append(
