@@ -81,10 +81,9 @@ class SessionStore:
     def flush(session: ReplSession) -> None:
         """Write session_end and close the session file.
 
-        If no turns were recorded (the user opened and immediately quit),
-        the session file is deleted to avoid cluttering the sessions directory.
-        Called on REPL exit (entrypoint.py finally block) and /reset
-        (before session.clear() rotates the ID).
+        Idempotent: no-ops if session_end is already the last line, so
+        double-calling (e.g. /reset flow + entrypoint finally) is safe.
+        If no turns were recorded the file is deleted instead.
         """
         with contextlib.suppress(Exception):
             path = _session_path(session.session_id)
@@ -92,6 +91,12 @@ class SessionStore:
                 return
 
             lines = path.read_text(encoding="utf-8").splitlines()
+
+            # Idempotency guard — already finalized, nothing to do.
+            if lines:
+                with contextlib.suppress(json.JSONDecodeError):
+                    if json.loads(lines[-1]).get("type") == "session_end":
+                        return
 
             # Count stats from the turn records already on disk
             chat_turns = 0
@@ -142,8 +147,16 @@ class SessionStore:
         if not sessions_dir.exists():
             return []
 
+        # Sort by mtime descending so we only read the n most recent files
+        # instead of every file in the directory.
+        all_paths = sorted(
+            sessions_dir.glob("*.jsonl"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+
         results: list[dict[str, Any]] = []
-        for path in sessions_dir.glob("*.jsonl"):
+        for path in all_paths[: n * 2]:  # 2× buffer for skipped/malformed files
             with contextlib.suppress(Exception):
                 lines = path.read_text(encoding="utf-8").splitlines()
                 if not lines:

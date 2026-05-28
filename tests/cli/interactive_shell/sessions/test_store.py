@@ -127,6 +127,19 @@ def test_flush_noop_when_file_missing(tmp_path: Path) -> None:
         SessionStore.flush(session)  # no open_session called — must not raise
 
 
+def test_flush_is_idempotent(tmp_path: Path) -> None:
+    session = _make_session()
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        SessionStore.append_turn(session, "chat", "hi")
+        SessionStore.flush(session)
+        SessionStore.flush(session)  # second call must not append another session_end
+
+    records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
+    end_records = [r for r in records if r["type"] == "session_end"]
+    assert len(end_records) == 1, "flush() must be idempotent — only one session_end"
+
+
 # ── session.record() wiring ───────────────────────────────────────────────────
 
 

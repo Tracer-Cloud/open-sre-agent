@@ -16,6 +16,7 @@ from app.cli.interactive_shell.runtime.dispatch import run_initial_input
 from app.cli.interactive_shell.runtime.loop import run_interactive
 from app.cli.interactive_shell.runtime.session import ReplSession
 from app.cli.interactive_shell.runtime.tasks import TaskRegistry
+from app.cli.interactive_shell.sessions.store import SessionStore
 from app.cli.interactive_shell.ui import DIM, render_banner
 
 log = logging.getLogger(__name__)
@@ -32,8 +33,6 @@ async def repl_main(initial_input: str | None = None, _config: ReplConfig | None
         return run_initial_input(initial_input, session)
 
     # Open the session file now that we know this is an interactive REPL run.
-    from app.cli.interactive_shell.sessions.store import SessionStore
-
     SessionStore.open_session(session)
 
     alert_listener_handle: _alert_inbox.AlertListenerHandle | None = None
@@ -67,8 +66,6 @@ async def repl_main(initial_input: str | None = None, _config: ReplConfig | None
         if alert_listener_handle is not None:
             alert_listener_handle.stop()
             _alert_inbox.set_current_inbox(None)
-        from app.cli.interactive_shell.sessions.store import SessionStore
-
         SessionStore.flush(session)
 
 
