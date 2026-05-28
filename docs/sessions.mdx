@@ -1,0 +1,131 @@
+---
+title: 'Session History'
+description: 'How OpenSRE records your REPL sessions locally, what is stored, and how to view past sessions with /sessions'
+---
+
+## Overview
+
+Every time you start the OpenSRE interactive shell, a new session is created and recorded to disk. Each session captures:
+
+- When it started and how long it lasted
+- Every interaction — chats, investigations, slash commands, incoming alerts
+- Aggregate counts (total turns, investigations run)
+
+Sessions are stored as JSONL files under `~/.opensre/sessions/`. They are written **incrementally** — the file exists on disk from the moment the REPL starts, so `/sessions` always shows the current session alongside past ones.
+
+## Session lifecycle
+
+| Event | What happens |
+| --- | --- |
+| REPL starts | `session_start` record written immediately; file created at `~/.opensre/sessions/<session-id>.jsonl` |
+| Each interaction | One `turn` record appended to the open file |
+| `/reset` | Current session closed (`session_end` written); new session file opened with a fresh ID |
+| REPL exits | `session_end` written; file is deleted if no turns were recorded (empty session) |
+| REPL crash | File remains with all turns up to the crash but no `session_end` — stats computed from the turn records |
+
+## Session file format
+
+Each session is a JSONL file (one JSON object per line).
+
+**`session_start` — first line**
+
+```json
+{
+  "type": "session_start",
+  "session_id": "3f8a1c2d-...",
+  "started_at": "2024-01-15T10:00:00+00:00",
+  "opensre_version": "0.1"
+}
+```
+
+**`turn` — one per interaction**
+
+```json
+{
+  "type": "turn",
+  "kind": "chat",
+  "text": "why is CPU spiking on prod-api?"
+}
+```
+
+Turn `kind` values:
+
+| Kind | Description |
+| --- | --- |
+| `chat` | Free-text message routed to the LLM assistant |
+| `alert` | Investigation triggered by an alert payload |
+| `incoming_alert` | Alert received via the HTTP listener |
+| `slash` | Slash command (`/status`, `/reset`, etc.) |
+| `shell` | Shell command executed via the terminal runtime |
+
+Text is truncated to 200 characters. No response content is stored — only the prompt/input.
+
+**`session_end` — last line (when session closed cleanly)**
+
+```json
+{
+  "type": "session_end",
+  "ended_at": "2024-01-15T10:42:00+00:00",
+  "duration_secs": 2520,
+  "total_turns": 8,
+  "chat_turns": 5,
+  "investigation_turns": 2
+}
+```
+
+A session without a `session_end` record (crash or ongoing) is still valid — `/sessions` computes `total_turns`, `chat_turns`, and `investigation_turns` by scanning the `turn` records directly.
+
+## /sessions command
+
+Run `/sessions` inside the REPL to list recent sessions:
+
+```
+/sessions
+```
+
+```
+  Recent sessions
+
+   #  Session ID  Started            Duration  Turns  Investigations
+   ─────────────────────────────────────────────────────────────────
+   1  3f8a1c2d    2024-01-15 10:00   42m 0s    8      2
+      (current)
+   2  9b2e4f7a    2024-01-14 14:30   1h 5m     15     4
+   3  c1d3e8f2    2024-01-13 09:10   12m 3s    3      0
+```
+
+The current session is marked `(current)` with a live-updating elapsed time. Sessions without a `session_end` (crash or in-progress) show accurate turn counts computed from the file.
+
+Up to 20 sessions are shown, newest first.
+
+## Storage location
+
+```
+~/.opensre/sessions/
+  3f8a1c2d-ab12-....jsonl   ← current session (in progress)
+  9b2e4f7a-cd34-....jsonl   ← previous session
+  c1d3e8f2-ef56-....jsonl
+  ...
+```
+
+Each file is named after its UUID session ID. Files are plain text and human-readable.
+
+## What is NOT stored
+
+- LLM response content (stored separately in `~/.opensre/prompt_log.jsonl` if prompt logging is enabled)
+- Full alert payloads or investigation results (stored in `~/.opensre/investigations/`)
+- Secrets or credentials — session text is stored as typed; enable prompt log redaction if needed
+
+## Linking sessions to other data
+
+The `session_id` in each session file matches the `session_id` field in `~/.opensre/prompt_log.jsonl`. This means you can correlate a session's turn list with the full prompt/response pairs and token usage recorded in the prompt log.
+
+```bash
+# Find all prompt log entries for a given session
+grep '"session_id": "3f8a1c2d"' ~/.opensre/prompt_log.jsonl
+```
+
+## Related
+
+- [Interactive Shell Privacy](/interactive-shell-privacy) — command history redaction and persistence controls
+- [Prompt Logging](/configuration/environment-variables) — full prompt/response logging configuration
