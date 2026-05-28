@@ -1,7 +1,5 @@
 """Unit tests for the data_validation utilities."""
 
-import pytest
-
 from app.tools.utils.data_validation import MetricsValidator, validate_host_metrics
 
 
@@ -126,7 +124,6 @@ def test_class_list_structure_payload():
     assert result["data_quality_issues"][0]["field"] == "ram"
 
 
-@pytest.mark.xfail(reason="Known bug: wrapper fails to attach data_quality_issues for lists")
 def test_wrapper_list_structure_payload():
     """Test wrapper validation on lists (Currently expected to fail due to bug)."""
     payload = {

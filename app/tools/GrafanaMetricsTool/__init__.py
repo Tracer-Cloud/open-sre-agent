@@ -4,16 +4,41 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import BaseModel, Field
+
 from app.tools.GrafanaLogsTool import (
     _grafana_available,
     _grafana_creds,
+    _grafana_source,
     _resolve_grafana_client,
 )
 from app.tools.tool_decorator import tool
 
 
+class QueryGrafanaMetricsInput(BaseModel):
+    metric_name: str = Field(
+        description="Grafana Mimir metric query expression to execute.",
+        examples=["pipeline_runs_total", "sum(rate(http_requests_total[5m]))"],
+    )
+    service_name: str | None = Field(
+        default=None,
+        description="Optional service filter applied by Grafana helper query wrappers.",
+    )
+
+
+class QueryGrafanaMetricsOutput(BaseModel):
+    source: str = Field(description="Evidence source label.")
+    available: bool = Field(description="Whether Grafana query execution succeeded.")
+    metric_name: str = Field(description="Metric query string that was executed.")
+    service_name: str | None = Field(default=None, description="Service filter used for the query.")
+    total_series: int = Field(default=0, description="Number of timeseries returned.")
+    metrics: list[dict[str, Any]] = Field(default_factory=list, description="Raw metrics payload.")
+    error: str | None = Field(default=None, description="Error details when query fails.")
+    account_id: int | None = Field(default=None, description="Grafana account id when available.")
+
+
 def _query_grafana_metrics_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
-    grafana = sources.get("grafana", {})
+    grafana = _grafana_source(sources)
     return {
         "metric_name": "pipeline_runs_total",
         "service_name": grafana.get("service_name"),
@@ -28,6 +53,7 @@ def _query_grafana_metrics_available(sources: dict[str, dict]) -> bool:
 
 @tool(
     name="query_grafana_metrics",
+    display_name="Grafana Mimir",
     source="grafana",
     description="Query Grafana Cloud Mimir for pipeline metrics.",
     use_cases=[
@@ -36,16 +62,23 @@ def _query_grafana_metrics_available(sources: dict[str, dict]) -> bool:
         "Correlating metric anomalies with alert triggers",
     ],
     requires=["metric_name"],
-    input_schema={
-        "type": "object",
-        "properties": {
-            "metric_name": {"type": "string"},
-            "service_name": {"type": "string"},
-            "grafana_endpoint": {"type": "string"},
-            "grafana_api_key": {"type": "string"},
-        },
-        "required": ["metric_name"],
-    },
+    source_id="grafana_mimir",
+    evidence_type="metrics",
+    side_effect_level="read_only",
+    examples=[
+        "Query `pipeline_runs_total` to verify throughput drops.",
+        "Query HTTP error rate metric with a `service_name` filter.",
+    ],
+    anti_examples=["Use this tool for pod logs or deployment status."],
+    input_model=QueryGrafanaMetricsInput,
+    output_model=QueryGrafanaMetricsOutput,
+    injected_params=(
+        "grafana_endpoint",
+        "grafana_api_key",
+        "grafana_username",
+        "grafana_password",
+        "grafana_backend",
+    ),
     is_available=_query_grafana_metrics_available,
     extract_params=_query_grafana_metrics_extract_params,
 )
@@ -54,6 +87,8 @@ def query_grafana_metrics(
     service_name: str | None = None,
     grafana_endpoint: str | None = None,
     grafana_api_key: str | None = None,
+    grafana_username: str = "",
+    grafana_password: str = "",
     grafana_backend: Any = None,
     **_kwargs: Any,
 ) -> dict:
@@ -70,7 +105,9 @@ def query_grafana_metrics(
             "service_name": service_name,
         }
 
-    client = _resolve_grafana_client(grafana_endpoint, grafana_api_key)
+    client = _resolve_grafana_client(
+        grafana_endpoint, grafana_api_key, grafana_username, grafana_password
+    )
     if not client or not client.is_configured:
         return {
             "source": "grafana_mimir",

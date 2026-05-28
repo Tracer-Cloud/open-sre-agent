@@ -175,6 +175,26 @@ class TestGoogleDocsClient:
         assert result["folder_name"] == "Incident Reports"
         assert result["file_count"] == 2
 
+    def test_probe_access_success(self, tmp_path: Path) -> None:
+        """Test probe_access returns a passed probe result for a valid folder."""
+        creds_file = tmp_path / "credentials.json"
+        creds_file.write_text('{"test": "content"}')
+
+        config = GoogleDocsIntegrationConfig(
+            credentials_file=str(creds_file),
+            folder_id="folder123",
+        )
+        client = GoogleDocsClient(config)
+
+        with patch.object(
+            client, "validate_access", return_value={"success": True, "file_count": 2}
+        ):
+            result = client.probe_access()
+
+        assert result.status == "passed"
+        assert "folder123" in result.detail
+        assert "2 items" in result.detail
+
     def test_share_document_success(self, tmp_path: Path) -> None:
         """Test successful document sharing."""
         creds_file = tmp_path / "credentials.json"

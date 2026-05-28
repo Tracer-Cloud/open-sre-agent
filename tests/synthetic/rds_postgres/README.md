@@ -9,16 +9,16 @@ This suite benchmarks RDS PostgreSQL root-cause analysis against bundled telemet
 | ID  | Name                              | Difficulty | True root cause     | Adversarial element                             | Forbidden                     |
 | --- | --------------------------------- | ---------- | ------------------- | ----------------------------------------------- | ----------------------------- |
 | 000 | healthy                           | 1          | healthy             | none                                            | resource_exhaustion           |
-| 001 | replication-lag                   | 1          | resource_exhaustion | none                                            | —                             |
-| 002 | connection-exhaustion             | 1          | resource_exhaustion | none                                            | —                             |
-| 003 | storage-full                      | 1          | resource_exhaustion | none                                            | —                             |
-| 004 | cpu-saturation-bad-query          | 1          | resource_exhaustion | none                                            | —                             |
-| 005 | failover                          | 1          | infrastructure      | none                                            | —                             |
-| 006 | replication-lag-cpu-redherring    | 2          | resource_exhaustion | CPUUtilization elevated (analytics job)         | category: cpu_saturation      |
-| 007 | connection-pressure-noisy-healthy | 2          | healthy             | CPU/connections oscillating near-threshold      | category: resource_exhaustion |
-| 008 | storage-full-missing-metric       | 3          | resource_exhaustion | FreeStorageSpace absent from fixture            | —                             |
-| 009 | dual-fault-connection-cpu         | 4          | resource_exhaustion | connections + CPU both failing, causally linked | keywords: storage, replication |
-| 010 | replication-lag-missing-metric    | 3          | resource_exhaustion | ReplicaLag metric absent from fixture           | —                             |
+| 001 | replication-lag                   | 1          | replication_lag     | none                                            | —                             |
+| 002 | connection-exhaustion             | 1          | connection_exhaustion | none                                          | —                             |
+| 003 | storage-full                      | 1          | storage_exhaustion  | none                                            | —                             |
+| 004 | cpu-saturation-bad-query          | 1          | cpu_saturation      | none                                            | —                             |
+| 005 | failover                          | 1          | multi_az_failover_health_check | none                                     | —                             |
+| 006 | replication-lag-cpu-redherring    | 2          | replication_lag     | CPUUtilization elevated (analytics job)         | category: cpu_saturation      |
+| 007 | connection-pressure-noisy-healthy | 2          | healthy             | CPU/connections oscillating near-threshold      | category: connection_exhaustion |
+| 008 | storage-full-missing-metric       | 3          | storage_exhaustion  | FreeStorageSpace absent from fixture            | —                             |
+| 009 | dual-fault-connection-cpu         | 4          | connection_exhaustion | connections + CPU both failing, causally linked | keywords: storage, replication |
+| 010 | replication-lag-missing-metric    | 3          | replication_lag     | ReplicaLag metric absent from fixture           | —                             |
 
 ### Axis 2 — Reasoning (marker: `axis2`)
 
@@ -26,10 +26,10 @@ Axis 2 scenarios use `SelectiveGrafanaBackend`. The agent must ask for the right
 
 | ID  | Name                               | Difficulty | True root cause     | Red herring / adversarial element                                    | Must rule out                             |
 | --- | ---------------------------------- | ---------- | ------------------- | -------------------------------------------------------------------- | ----------------------------------------- |
-| 011 | cpu-storage-compositional          | 4          | resource_exhaustion | ReplicaLag elevation and connection spike as side effects            | connection_exhaustion, replication        |
-| 012 | replication-lag-misleading-events  | 3          | resource_exhaustion | Three historical infra events in event stream (none are root cause)  | infrastructure (failover as root cause)   |
+| 011 | cpu-storage-compositional          | 4          | dual_resource_exhaustion | ReplicaLag elevation and connection spike as side effects      | connection_exhaustion, replication        |
+| 012 | replication-lag-misleading-events  | 3          | replication_lag     | Three historical infra events in event stream (none are root cause)  | infrastructure (failover as root cause)   |
 | 013 | storage-recovery-false-alert       | 3          | healthy             | FreeStorageSpace spike + WriteLatency brief elevation                | resource_exhaustion (already recovered)   |
-| 014 | checkpoint-storm-cpu-saturation    | 4          | resource_exhaustion | CPU at 92% — alert fires on CPU but cause is VACUUM checkpoint storm | cpu_saturation (CPU is symptom, not root) |
+| 014 | checkpoint-storm-cpu-saturation    | 4          | checkpoint_io_storm | CPU at 92% — alert fires on CPU but cause is VACUUM checkpoint storm | cpu_saturation (CPU is symptom, not root) |
 
 ## Difficulty levels
 

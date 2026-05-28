@@ -26,10 +26,23 @@ VALID_FAILURE_MODES = frozenset(
         "cpu_saturation",
         "failover",
         "healthy",
+        "application_load_spike",
     }
 )
 VALID_EVIDENCE_SOURCES = frozenset(
-    {"aws_cloudwatch_metrics", "aws_rds_events", "aws_performance_insights"}
+    {
+        "aws_cloudwatch_metrics",
+        "aws_rds_events",
+        "aws_performance_insights",
+        "ec2_instances_by_tag",
+        "elb_target_health",
+        "k8s_events",
+        "k8s_pod_metrics",
+        "k8s_node_metrics",
+        "k8s_dns_metrics",
+        "k8s_mesh_metrics",
+        "k8s_rollout",
+    }
 )
 
 # ---------------------------------------------------------------------------
@@ -175,7 +188,15 @@ class PerformanceInsightsFixture(TypedDict):
 
 
 VALID_TRAJECTORY_ACTIONS = frozenset(
-    {"query_grafana_metrics", "query_grafana_logs", "query_grafana_alert_rules"}
+    {
+        "query_grafana_metrics",
+        "query_grafana_logs",
+        "query_grafana_alert_rules",
+        "describe_rds_instance",
+        "describe_rds_events",
+        "ec2_instances_by_tag",
+        "get_elb_target_health",
+    }
 )
 
 
@@ -183,6 +204,8 @@ class AnswerKeySchema(TypedDict):
     root_cause_category: str
     required_keywords: list[str]
     model_response: str
+    # Additional categories that pass the category gate alongside root_cause_category
+    equivalent_root_cause_categories: NotRequired[list[str]]
     # Optional adversarial constraints (level 2+ scenarios)
     forbidden_categories: NotRequired[list[str]]  # root_cause_category must NOT be any of these
     forbidden_keywords: NotRequired[list[str]]  # none of these may appear in evidence_text
@@ -199,11 +222,42 @@ class AnswerKeySchema(TypedDict):
     required_queries: NotRequired[
         list[str]
     ]  # metric names agent must have specifically requested via query_timeseries
+    golden_trajectory: NotRequired[GoldenTrajectorySchema]
+
+
+class GoldenTrajectorySchema(TypedDict, total=False):
+    ordered_actions: list[str]
+    matching: str
+    max_edit_distance: int
+    max_extra_actions: int
+    max_redundancy: int
+    max_loops: int
 
 
 # ---------------------------------------------------------------------------
 # Scenario metadata  (scenario.yml)
 # ---------------------------------------------------------------------------
+
+
+class TopologyTier(TypedDict):
+    """Application tier description for EC2/RDS topology fixtures."""
+
+    name: str
+    instance_ids: list[str]
+    asg: NotRequired[str]
+
+
+class TopologyMetadata(TypedDict, total=False):
+    """Optional EC2/RDS topology block for non-K8s scenarios.
+
+    Present in fixtures that exercise the DNS → LB → Target Group → EC2 → RDS
+    request path. Absent in legacy RDS-only scenarios (000–014).
+    """
+
+    vpc_id: str
+    load_balancer_arn: str
+    target_group_arn: str
+    tiers: list[TopologyTier]
 
 
 class ScenarioMetadataSchema(TypedDict):
@@ -221,11 +275,52 @@ class ScenarioMetadataSchema(TypedDict):
     scenario_difficulty: NotRequired[int]  # 1–4 curriculum level
     adversarial_signals: NotRequired[list[str]]  # metrics that are intentional confounders
     depends_on: NotRequired[str]  # e.g. "healthy_rca_state" — CI skip flag
+    topology: NotRequired[TopologyMetadata]
 
 
 # ---------------------------------------------------------------------------
 # Typed evidence container
 # ---------------------------------------------------------------------------
+
+
+class EC2Instance(TypedDict, total=False):
+    instance_id: str
+    tier: str
+    asg: str
+    private_ip: str
+    vpc_id: str
+    subnet_id: str
+    state: str
+    instance_type: str
+    security_groups: list[str]
+
+
+class EC2InstancesByTagFixture(TypedDict):
+    instances: list[EC2Instance]
+
+
+class ELBTargetHealthEntry(TypedDict, total=False):
+    target_group_arn: str
+    instance_id: str
+    port: int
+    state: str
+    reason: str
+    description: str
+
+
+class ELBTargetGroup(TypedDict, total=False):
+    TargetGroupArn: str
+    TargetGroupName: str
+    LoadBalancerArns: list[str]
+
+
+class ELBTargetHealthFixture(TypedDict):
+    target_groups: list[ELBTargetGroup]
+    targets: list[ELBTargetHealthEntry]
+
+
+class GenericEvidenceFixture(TypedDict, total=False):
+    """Flexible schema for suite-specific evidence not strongly typed here."""
 
 
 @dataclass(frozen=True)
@@ -239,6 +334,14 @@ class ScenarioEvidence:
     aws_cloudwatch_metrics: CloudWatchMetricsFixture | None
     aws_rds_events: list[RDSEvent] | None
     aws_performance_insights: PerformanceInsightsFixture | None
+    ec2_instances_by_tag: EC2InstancesByTagFixture | None = None
+    elb_target_health: ELBTargetHealthFixture | None = None
+    k8s_events: GenericEvidenceFixture | None = None
+    k8s_pod_metrics: GenericEvidenceFixture | None = None
+    k8s_node_metrics: GenericEvidenceFixture | None = None
+    k8s_dns_metrics: GenericEvidenceFixture | None = None
+    k8s_mesh_metrics: GenericEvidenceFixture | None = None
+    k8s_rollout: GenericEvidenceFixture | None = None
 
     def as_dict(self) -> dict[str, Any]:
         """Return only the non-None sources as a plain dict."""
@@ -249,6 +352,22 @@ class ScenarioEvidence:
             result["aws_rds_events"] = self.aws_rds_events
         if self.aws_performance_insights is not None:
             result["aws_performance_insights"] = self.aws_performance_insights
+        if self.ec2_instances_by_tag is not None:
+            result["ec2_instances_by_tag"] = self.ec2_instances_by_tag
+        if self.elb_target_health is not None:
+            result["elb_target_health"] = self.elb_target_health
+        if self.k8s_events is not None:
+            result["k8s_events"] = self.k8s_events
+        if self.k8s_pod_metrics is not None:
+            result["k8s_pod_metrics"] = self.k8s_pod_metrics
+        if self.k8s_node_metrics is not None:
+            result["k8s_node_metrics"] = self.k8s_node_metrics
+        if self.k8s_dns_metrics is not None:
+            result["k8s_dns_metrics"] = self.k8s_dns_metrics
+        if self.k8s_mesh_metrics is not None:
+            result["k8s_mesh_metrics"] = self.k8s_mesh_metrics
+        if self.k8s_rollout is not None:
+            result["k8s_rollout"] = self.k8s_rollout
         return result
 
     def get(self, key: str) -> Any:
@@ -340,6 +459,40 @@ def validate_performance_insights(data: dict[str, Any]) -> PerformanceInsightsFi
     return data  # type: ignore[return-value]
 
 
+def validate_ec2_instances_by_tag(data: dict[str, Any]) -> EC2InstancesByTagFixture:
+    ctx = "ec2_instances_by_tag.json"
+    instances = data.get("instances")
+    if not isinstance(instances, list):
+        raise ValueError(f"{ctx}: 'instances' must be a list")
+    for i, inst in enumerate(instances):
+        ictx = f"{ctx}:instances[{i}]"
+        if not isinstance(inst, dict):
+            raise ValueError(f"{ictx}: must be an object")
+        _require_str(inst, "instance_id", ctx=ictx)
+    return data  # type: ignore[return-value]
+
+
+def validate_elb_target_health(data: dict[str, Any]) -> ELBTargetHealthFixture:
+    ctx = "elb_target_health.json"
+    if not isinstance(data.get("target_groups"), list):
+        raise ValueError(f"{ctx}: 'target_groups' must be a list")
+    if not isinstance(data.get("targets"), list):
+        raise ValueError(f"{ctx}: 'targets' must be a list")
+    for i, target in enumerate(data["targets"]):
+        tctx = f"{ctx}:targets[{i}]"
+        if not isinstance(target, dict):
+            raise ValueError(f"{tctx}: must be an object")
+        _require_str(target, "instance_id", ctx=tctx)
+        _require_str(target, "state", ctx=tctx)
+    return data  # type: ignore[return-value]
+
+
+def validate_generic_evidence(data: dict[str, Any], *, filename: str) -> GenericEvidenceFixture:
+    if not isinstance(data, dict):
+        raise ValueError(f"{filename}: expected an object")
+    return data  # type: ignore[return-value]
+
+
 def validate_answer_key(data: dict[str, Any]) -> AnswerKeySchema:
     _require_str(data, "root_cause_category", ctx="answer.yml")
     _require_non_empty_str_list(data, "required_keywords", "answer.yml", required=True)
@@ -348,10 +501,33 @@ def validate_answer_key(data: dict[str, Any]) -> AnswerKeySchema:
         "forbidden_categories",
         "forbidden_keywords",
         "required_evidence_sources",
+        "equivalent_root_cause_categories",
     ):
         val = data.get(opt_list_field)
         if val is not None and not isinstance(val, list):
             raise ValueError(f"answer.yml: '{opt_list_field}' must be a list when present")
+    required_sources = data.get("required_evidence_sources")
+    if required_sources is not None and required_sources:
+        if not all(isinstance(item, str) and item.strip() for item in required_sources):
+            raise ValueError(
+                "answer.yml: 'required_evidence_sources' must contain only non-empty strings"
+            )
+        unknown_sources = [item for item in required_sources if item not in VALID_EVIDENCE_SOURCES]
+        if unknown_sources:
+            raise ValueError(
+                "answer.yml: unknown source(s) in required_evidence_sources "
+                f"{unknown_sources}; expected subset of {sorted(VALID_EVIDENCE_SOURCES)}"
+            )
+    equiv = data.get("equivalent_root_cause_categories")
+    if (
+        equiv is not None
+        and equiv
+        and not all(isinstance(item, str) and item.strip() for item in equiv)
+    ):
+        raise ValueError(
+            "answer.yml: 'equivalent_root_cause_categories' "
+            "must contain only non-empty strings when present"
+        )
     trajectory = data.get("optimal_trajectory")
     if trajectory is not None:
         if not isinstance(trajectory, list) or not trajectory:
@@ -371,6 +547,40 @@ def validate_answer_key(data: dict[str, Any]) -> AnswerKeySchema:
         )
     for axis2_list_field in ("ruling_out_keywords", "required_queries"):
         _require_non_empty_str_list(data, axis2_list_field, "answer.yml")
+    golden = data.get("golden_trajectory")
+    if golden is not None:
+        if not isinstance(golden, dict):
+            raise ValueError("answer.yml: 'golden_trajectory' must be an object when present")
+        ordered_actions = golden.get("ordered_actions")
+        if ordered_actions is not None:
+            if (
+                not isinstance(ordered_actions, list)
+                or not ordered_actions
+                or not all(isinstance(action, str) and action.strip() for action in ordered_actions)
+            ):
+                raise ValueError(
+                    "answer.yml: 'golden_trajectory.ordered_actions' must be a non-empty list "
+                    "of strings when present"
+                )
+            unknown_actions = [a for a in ordered_actions if a not in VALID_TRAJECTORY_ACTIONS]
+            if unknown_actions:
+                raise ValueError(
+                    "answer.yml: unknown action(s) in golden_trajectory.ordered_actions "
+                    f"{unknown_actions}; expected subset of {sorted(VALID_TRAJECTORY_ACTIONS)}"
+                )
+        matching = golden.get("matching")
+        if matching is not None and matching not in {"strict", "lcs", "set"}:
+            raise ValueError(
+                "answer.yml: 'golden_trajectory.matching' must be one of "
+                "'strict', 'lcs', or 'set' when present"
+            )
+        for int_field in ("max_edit_distance", "max_extra_actions", "max_redundancy", "max_loops"):
+            value = golden.get(int_field)
+            if value is not None and (not isinstance(value, int) or value < 0):
+                raise ValueError(
+                    f"answer.yml: 'golden_trajectory.{int_field}' must be a non-negative integer "
+                    "when present"
+                )
     return data  # type: ignore[return-value]
 
 

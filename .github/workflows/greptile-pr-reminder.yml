@@ -1,0 +1,46 @@
+name: Greptile PR reminder
+
+# One-time nudge when a PR is opened or reopened. Uses pull_request_target so the token can
+# comment on PRs from forks. Does not checkout the PR head — only posts a static reminder (see
+# SECURITY: pull_request_target guidance in GitHub Actions docs).
+on:
+  pull_request_target:
+    types: [opened, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  remind:
+    name: Post Greptile review reminder
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.user.type != 'Bot'
+    steps:
+      - name: Comment with Greptile guidance
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          base_ref="${BASE_REF}"
+          contributing_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/blob/${base_ref}/CONTRIBUTING.md#greptile-code-review"
+          pr="${PR_NUMBER}"
+          repo="${GITHUB_REPOSITORY}"
+          {
+            echo '### Greptile code review'
+            echo ''
+            echo "This repo uses **Greptile** for automated review. Before merge, aim for **Confidence Score: 5/5** with **zero unresolved** review threads — see [CONTRIBUTING.md](${contributing_url})."
+            echo ''
+            echo '**Run a review** — add a PR comment with:'
+            echo ''
+            echo '```'
+            echo '@greptile review'
+            echo '```'
+            echo ''
+            echo 'Give it **~5-10 minutes** (sometimes longer) for results, then fix feedback and re-trigger until you reach **Confidence Score: 5/5**.'
+            echo ''
+            echo '**Optional:** automate with the [greploop skill](https://skills.sh/greptileai/skills/greploop).'
+          } > comment.md
+          gh pr comment "$pr" --repo "$repo" --body-file comment.md

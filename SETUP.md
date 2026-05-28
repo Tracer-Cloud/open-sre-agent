@@ -1,201 +1,203 @@
-# Development Environment Setup
+# Development environment setup
 
 ## Prerequisites
 
-- Python 3.11 or later
+- **Python 3.12+** — required by [`pyproject.toml`](pyproject.toml) (`requires-python = ">=3.12"`). CI workflows use **Python 3.13** (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)). [`.tool-versions`](.tool-versions) pins Python **3.13**, **uv**, **ruff**, and **mypy** (versions aligned with [`uv.lock`](uv.lock) where applicable) plus Node/pnpm for mise/asdf-style managers — optional; normal flows install **ruff** and **mypy** into `.venv` via **`make install`** / **`uv sync`**.
 - Git
-- Make (standard on macOS/Linux; see Windows section below)
+- **[uv](https://docs.astral.sh/uv/getting-started/installation/)** — required for `make install` (locked deps from `uv.lock`)
+- **Make** — standard on macOS/Linux; Windows options below
 
-## Quick Setup (All Platforms)
+## Quick setup (all platforms)
 
-1. Fork and clone the repo:
-  ```bash
-   git clone https://github.com/YOUR_USERNAME/opensre.git
-   cd opensre
-  ```
-2. Create a virtual environment:
-  - (venv)
-  - (conda)
+1. Fork and clone:
+
+```bash
+git clone https://github.com/YOUR_USERNAME/opensre.git
+cd opensre
+```
+
+2. Install uv if needed:
+
+- **macOS/Linux:** `curl -LsSf https://astral.sh/uv/install.sh | sh` (or the [uv install guide](https://docs.astral.sh/uv/getting-started/installation/))
+- **Windows (PowerShell):** `irm https://astral.sh/uv/install.ps1 | iex`  
+  Or: `winget install --id astral-sh.uv -e`
+
 3. Install dependencies:
-  ```bash
-   pip install -e ".[dev]"
-  ```
-4. Verify setup by running checks:
-  ```bash
-   make lint && make typecheck && make test-cov
-  ```
 
-All three must pass before you're ready to develop.
+```bash
+make install
+```
+
+Without Make (equivalent to `make install`):
+
+```bash
+uv sync --frozen --extra dev
+uv run python -m app.analytics.install
+```
+
+4. Verify:
+
+```bash
+make lint && make format-check && make typecheck && make test-cov
+```
+
+`format-check` is what CI enforces for formatting; include it before opening a PR.
 
 ---
 
-## VS Code Dev Container Setup
-
-If you use VS Code, you can skip the manual Python setup and use the repo's devcontainer instead:
+## VS Code dev container
 
 1. Install the **Dev Containers** extension in VS Code.
-2. Start Docker Desktop, OrbStack, Colima, or another Docker-compatible runtime on your host machine.
-3. Open the repository in VS Code and run `Dev Containers: Reopen in Container`.
-4. Wait for the container's `postCreateCommand` to install `.[dev]`.
-5. Run the usual checks:
-  ```bash
-   make lint && make typecheck && make test-cov
-  ```
+2. Start Docker Desktop, OrbStack, Colima, or another Docker-compatible runtime on the host.
+3. Open the repository and run **Dev Containers: Reopen in Container**.
 
-The devcontainer uses Python 3.13 to match CI and `.tool-versions`. Manual host-based setup continues to work with any supported Python version (`>=3.11`).
+The image is built from [`.devcontainer/Dockerfile`](.devcontainer/Dockerfile) (**Python 3.13**). **`postCreateCommand`** creates `.venv-devcontainer` and runs **`pip install -e '.[dev]'`** (not `uv`). The interpreter VS Code uses is `.venv-devcontainer/bin/python`.
+
+On the host, most contributors use **`make install`** + **`uv run`** instead; both approaches are valid.
 
 ---
 
-## Windows-Specific Setup
+## Windows-specific setup
 
-Windows does not include `make` by default. Install it to use our development task runner.
+Windows does not ship **make**. Pick one path below.
 
-### Option A: Chocolatey (Recommended)
+### Option A: Chocolatey (recommended)
 
-1. Open PowerShell as Administrator
-  - Search "PowerShell" in Start Menu
-  - Right-click → "Run as administrator"
+1. Open PowerShell **as Administrator**.
 2. Install Chocolatey (review the script first):
-  ```powershell
-   Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
-  ```
+
+```powershell
+Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+```
+
 3. Install make:
-  ```powershell
-   choco install make
-  ```
-4. Restart your terminal and verify:
-  ```bash
-   make --version
-  ```
+
+```powershell
+choco install make
+```
+
+4. Restart the terminal and verify: `make --version`.
 
 ### Option B: winget
-
-If you prefer winget (Windows Package Manager):
 
 ```powershell
 winget install GnuWin32.Make
 ```
 
-Restart your terminal and verify:
+Restart the terminal, then `make --version`.
+
+### Option C: No Make
+
+Run equivalents from the repo root (same shell where `uv` is on `PATH`). Prefer **`make test-cov`** when possible — the full pytest line is in the [`Makefile`](Makefile) under the `test-cov` target (`pytest -n auto`, coverage, and ignores).
 
 ```bash
-make --version
-```
+uv sync --frozen --extra dev
+uv run python -m app.analytics.install
 
-### Option C: Manual Commands (No make required)
+uv run ruff check app/ tests/
+uv run ruff format --check app/ tests/
+uv run mypy app/
 
-If you can't install make, you can run these approximate equivalents directly instead (they are close to, but not always identical to, the Makefile targets; see comments for differences):
-
-```bash
-# Linting (rough equivalent of `make lint`; this also applies auto-fixes via --fix)
-python -m ruff check app/ tests/ --fix
-
-# Type checking (equivalent of `make typecheck`)
-mypy app/
-
-# Tests with coverage (rough equivalent of `make test-cov`; the Makefile version may add --cov-report/--ignore flags)
-pytest --cov=app tests/
+uv run pytest -n auto -v --cov=app --cov-report=term-missing \
+  --ignore=tests/e2e/kubernetes_local_alert_simulation \
+  --ignore=tests/synthetic \
+  -m "not synthetic"
 ```
 
 ---
 
 ## Troubleshooting
 
-### Virtual environment not activating
+### Commands not using the project environment
 
-- **macOS/Linux:** Make sure you ran `source .venv/bin/activate`
-- **Windows:** Use `.venv\Scripts\activate` instead
+- Prefer **`uv run <command>`** from the repo root.
+- Refresh deps: **`uv sync --frozen --extra dev`**.
 
 ### Command not found: python
 
-- Make sure Python 3.11+ is installed and in your PATH
-- Verify with: `python --version`
+- Install Python **3.12+** and ensure it is on `PATH` (`python --version`).
 
-### pip install fails
+### Command not found: uv
 
-- Update pip: `pip install --upgrade pip`
-- Try installing in the venv again: `pip install -e ".[dev]"`
+- Install uv (links above), then restart the terminal.
+
+### `make install` / `uv sync` fails
+
+- Run commands from the repository root; ensure **`uv.lock`** is present.
+- Upgrade uv: **`uv self update`**.
+- If the lockfile does not match **`pyproject.toml`**, run **`uv lock`** locally and commit the updated lockfile (or open a PR).
 
 ### make: command not found (Windows)
 
-- See Windows-Specific Setup section above
-- Or use Option C (manual commands)
+- Install make (above) or use Option C.
 
 ### Import errors when running code
 
-- Make sure you've activated the virtual environment
-- Reinstall dependencies: `pip install -e ".[dev]"`
+- Use **`uv run`** from the repo root.
+- Re-run **`uv sync --frozen --extra dev`**.
+
+### `opensre` does not pick up local code edits
+
+`make install` installs this repo in **editable** mode into `.venv`, but another **`opensre`** may appear earlier on **`PATH`** (installer binary, version manager, `~/.local/bin`, etc.).
+
+1. Prefer **`uv run opensre …`** from the repository root.
+2. Or run **`eval "$(./scripts/dev-path.sh)"`** then **`hash -r`** (see script for behavior).
+3. Or prepend the venv: `export PATH="$(pwd)/.venv/bin:$PATH"` (macOS/Linux), then **`hash -r`** / new shell, and confirm **`which opensre`** points at **`<repo>/.venv/bin/opensre`**.
 
 ---
 
-## Verify Your Setup
-
-Run this to confirm everything is working:
+## Verify your setup
 
 ```bash
-make lint && make typecheck && make test-cov
+make lint && make format-check && make typecheck && make test-cov
 ```
 
-If all three pass, you're ready to start developing! See `CONTRIBUTING.md` for the development workflow.
-
----
-
-## Running OpenSRE MCP Server
-
-You can start the MCP server with:
-
-```bash
-opensre-mcp
-```
-
-This exposes the `run_rca` tool for MCP clients.
+If those pass, you are ready to develop. Contribution flow: **[CONTRIBUTING.md](CONTRIBUTING.md)**. Deeper contributor topics (benchmark, deployment, telemetry detail): **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)**.
 
 ---
 
 ## Connecting OpenClaw
 
-Use OpenClaw to call OpenSRE's `run_rca` tool.
+OpenSRE no longer exposes a separate `opensre-mcp` server. Instead, OpenSRE connects to the OpenClaw bridge directly to read recent conversation context and write RCA findings back into OpenClaw.
 
-### 1. Add OpenSRE to OpenClaw
+### 1. Configure observability
 
-In OpenClaw, open **Settings → MCP Servers** and add:
-
-```json
-{
-  "mcpServers": {
-    "opensre": {
-      "command": "opensre-mcp",
-      "args": []
-    }
-  }
-}
-```
-
-If `opensre-mcp` is not on your `PATH`, use the full path:
-
-```json
-{ "command": "/path/to/venv/bin/opensre-mcp" }
-```
-
-### 2. Configure one observability integration
-
-Run the setup wizard once and connect Datadog, Grafana, Sentry, or another backend:
+Run the full wizard once (**recommended**):
 
 ```bash
-opensre integrations setup
+uv run opensre onboard
+```
+
+To add or reconfigure a **single** integration non-interactively:
+
+```bash
+uv run opensre integrations setup <service>
+```
+
+### 2. Configure the OpenClaw bridge
+
+Use the wizard or the direct setup flow:
+
+```bash
+uv run opensre integrations setup openclaw
+uv run opensre integrations verify openclaw
+```
+
+Recommended local settings:
+
+```bash
+OPENCLAW_MCP_MODE=stdio
+OPENCLAW_MCP_COMMAND=openclaw
+OPENCLAW_MCP_ARGS="mcp serve"
 ```
 
 ### 3. Run a test
 
-Run the fixture directly from the CLI:
-
 ```bash
-opensre investigate -i tests/fixtures/openclaw_test_alert.json
+uv run opensre investigate -i tests/fixtures/openclaw_test_alert.json
 ```
 
-### 4. Optional: let OpenSRE call OpenClaw
-
-If you want the OpenSRE investigation pipeline to query OpenClaw during RCA runs:
+### 4. Optional: OpenSRE calls OpenClaw during RCA
 
 ```bash
 export OPENCLAW_MCP_MODE=stdio
@@ -203,15 +205,8 @@ export OPENCLAW_MCP_COMMAND=openclaw
 export OPENCLAW_MCP_ARGS="mcp serve"
 ```
 
-Keep the OpenClaw Gateway running while you investigate:
-
-```bash
-openclaw gateway run
-```
-
-Verify:
+Keep the OpenClaw gateway running while you investigate, then verify:
 
 ```bash
 opensre integrations verify openclaw
 ```
-

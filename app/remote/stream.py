@@ -1,4 +1,4 @@
-"""SSE stream parser for LangGraph API streaming responses.
+"""SSE stream parser for remote investigation streaming responses.
 
 Supports both ``stream_mode: ["updates"]`` (node-level) and
 ``stream_mode: ["events"]`` (fine-grained tool/LLM/chain events).
@@ -17,18 +17,18 @@ import httpx
 
 @dataclass
 class StreamEvent:
-    """A parsed event from a LangGraph SSE stream.
+    """A parsed event from an SSE stream.
 
     Attributes:
         event_type: The SSE event type (e.g. "events", "metadata", "end",
             or legacy "updates").
-        node_name: The graph node that produced this event, if applicable.
+        node_name: The pipeline node that produced this event, if applicable.
         data: The parsed JSON payload.
         timestamp: Monotonic timestamp when this event was received.
-        kind: For ``events`` mode — the LangGraph callback kind
+        kind: For ``events`` mode — the callback kind
             (e.g. "on_tool_start", "on_chat_model_stream").
-        run_id: Run ID from LangGraph event metadata.
-        tags: Tags attached to the event by LangGraph.
+        run_id: Run ID from event metadata.
+        tags: Tags attached to the event payload.
     """
 
     event_type: str
@@ -41,9 +41,9 @@ class StreamEvent:
 
 
 def parse_sse_stream(response: httpx.Response) -> Iterator[StreamEvent]:
-    """Parse an SSE byte stream from a LangGraph ``/runs/stream`` response.
+    """Parse an SSE byte stream from a ``/runs/stream`` (or compatible) response.
 
-    LangGraph SSE format::
+    Expected frame shape::
 
         event: <type>
         data: <json>
@@ -92,10 +92,10 @@ def _build_event(event_type: str, raw_data: str) -> StreamEvent:
 
 
 def _extract_node_name(event_type: str, data: dict[str, Any]) -> str:
-    """Extract the graph node name from an event payload.
+    """Extract the pipeline node name from an event payload.
 
     ``updates`` events have the node name as the sole top-level key.
-    ``events`` events carry it in ``metadata.langgraph_node``.
+    ``events`` events carry it in ``metadata.pipeline_node``.
     """
     if event_type == "updates" and isinstance(data, dict):
         keys = [k for k in data if not k.startswith("__")]
@@ -104,8 +104,8 @@ def _extract_node_name(event_type: str, data: dict[str, Any]) -> str:
 
     if isinstance(data, dict):
         metadata = data.get("metadata", {})
-        if isinstance(metadata, dict) and "langgraph_node" in metadata:
-            return str(metadata["langgraph_node"])
+        if isinstance(metadata, dict) and "pipeline_node" in metadata:
+            return str(metadata["pipeline_node"])
         if "name" in data:
             return str(data["name"])
 

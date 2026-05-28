@@ -1,5 +1,6 @@
 """Root pytest configuration — loads .env for all test directories."""
 
+import os
 from pathlib import Path
 
 import pytest
@@ -15,15 +16,30 @@ def _load_env() -> None:
         load_env(_ENV_PATH, override=True)
 
 
+def _disable_sentry() -> None:
+    os.environ["OPENSRE_SENTRY_DISABLED"] = "1"
+
+
+def _mark_tests_for_analytics() -> None:
+    os.environ["OPENSRE_NO_TELEMETRY"] = "1"
+    os.environ["OPENSRE_INVESTIGATION_SOURCE"] = "test"
+
+
 _load_env()
+_disable_sentry()
+_mark_tests_for_analytics()
 
 
 @pytest.fixture(autouse=True)
-def _disable_system_keyring(monkeypatch) -> None:
+def _disable_system_keyring(request, monkeypatch) -> None:
     """Keep tests isolated from any real developer keychain entries."""
+    if request.node.get_closest_marker("live_llm") is not None:
+        return
     monkeypatch.setenv("OPENSRE_DISABLE_KEYRING", "1")
 
 
-def pytest_configure(config):  # noqa: ARG001
+def pytest_configure(config):
     """Pytest hook — keep env available for collection and execution."""
     _load_env()
+    _disable_sentry()
+    _mark_tests_for_analytics()

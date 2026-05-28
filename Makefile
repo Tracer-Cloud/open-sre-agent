@@ -1,7 +1,7 @@
 -include .env
 export
 
-.PHONY: install onboard benchmark benchmark-update-readme test test-full demo alert-template investigate-alert opensre-hub-fetch opensre-hub-export opensre-hub-investigate verify-integrations check-docker check-langgraph check-langsmith-api-key grafana-local-up grafana-local-down grafana-local-seed langgraph-build langgraph-deploy clean lint format deploy deploy-lambda deploy-prefect deploy-flink destroy destroy-lambda destroy-prefect destroy-flink prefect-local-test simulate-k8s-alert test-k8s-local test-k8s test-k8s-datadog chaos-mesh-up chaos-mesh-down chaos-engineering-apply chaos-engineering-delete chaos-lab-up chaos-lab-down chaos-experiment-list chaos-experiment-up chaos-experiment-down deploy-dd-monitors cleanup-dd-monitors deploy-eks destroy-eks test-k8s-eks datadog-demo crashloop-demo regen-trigger-config test-rca test-rca-grafana test-synthetic test-rds-synthetic test-cli-smoke deploy-langsmith destroy-langsmith test-langsmith deploy-vercel destroy-vercel test-vercel deploy-ec2 destroy-ec2 test-ec2 deploy-ec2-hello destroy-ec2-hello deploy-remote destroy-remote deploy-bedrock destroy-bedrock test-bedrock
+.PHONY: install onboard benchmark benchmark-update-readme test test-full demo alert-template investigate-alert opensre-hub-fetch opensre-hub-export opensre-hub-investigate verify-integrations check-docker grafana-local-up grafana-local-down grafana-local-seed clean lint format deploy deploy-lambda deploy-prefect deploy-flink destroy destroy-lambda destroy-prefect destroy-flink prefect-local-test simulate-k8s-alert test-k8s-local test-k8s test-k8s-datadog chaos-mesh-up chaos-mesh-down chaos-engineering-apply chaos-engineering-delete chaos-lab-up chaos-lab-down chaos-experiment-list chaos-experiment-up chaos-experiment-down deploy-dd-monitors cleanup-dd-monitors deploy-eks destroy-eks test-k8s-eks datadog-demo crashloop-demo regen-trigger-config test-rca test-rca-grafana test-synthetic test-rds-synthetic test-cli-smoke deploy-vercel destroy-vercel test-vercel deploy-ec2 destroy-ec2 test-ec2 deploy-ec2-hello destroy-ec2-hello deploy-remote destroy-remote deploy-bedrock destroy-bedrock test-bedrock download-cloudopsbench-hf validate-cloudopsbench test-openclaw test-openclaw-synthetic test-hermes test-hermes-synthetic
 
 
 ifneq ($(wildcard .venv/bin/python),)
@@ -9,8 +9,8 @@ ifneq ($(wildcard .venv/bin/python),)
     PIP = .venv/bin/python -m pip
 else ifeq ($(OS),Windows_NT)
     ifneq ($(wildcard .venv/Scripts/python.exe),)
-        PYTHON = .venv\\Scripts\\python.exe
-        PIP = .venv\\Scripts\\python.exe -m pip
+        PYTHON = .venv/Scripts/python.exe
+        PIP = .venv/Scripts/python.exe -m pip
     else
         PYTHON = python
         PIP = python -m pip
@@ -28,12 +28,10 @@ USER_BASE := $(shell $(PYTHON) -m site --user-base)
 USER_BIN := $(if $(filter Windows_NT,$(OS)),$(USER_BASE)/Scripts,$(USER_BASE)/bin)
 export PATH := $(if $(wildcard .venv/bin),$(CURDIR)/.venv/bin:,$(if $(wildcard .venv/Scripts),$(CURDIR)/.venv/Scripts:))$(USER_BIN):$(PATH)
 
-# Create venv and install dependencies
+# Create venv and install dependencies (requires https://docs.astral.sh/uv/)
 install:
-	$(PYTHON) -m venv .venv
-	$(PIP) install --upgrade pip
-	$(PIP) install $(PIP_INSTALL_FLAGS) -e ".[dev]"
-	$(PYTHON) -m app.analytics.install
+	uv sync --frozen --extra dev
+	uv run python -m app.analytics.install
 
 build:
 	$(PYTHON) -m build
@@ -71,14 +69,20 @@ OPENSRE_HUB_INDEX ?= 0
 # Extra flags for investigate, e.g. omit --evaluate: OPENSRE_INVESTIGATE_FLAGS=
 OPENSRE_INVESTIGATE_FLAGS ?= --evaluate
 
+CLOUDOPSBENCH_HF_DATASET_ID ?= tracer-cloud/cloud-ops-bench-dataset
+CLOUDOPSBENCH_DATASET_DIR ?= tests/benchmarks/cloudopsbench
+CLOUDOPSBENCH_BENCHMARK_DIR ?= $(CLOUDOPSBENCH_DATASET_DIR)/benchmark
+CLOUDOPSBENCH_HF_INCLUDE ?= benchmark/**
+CLOUDOPSBENCH_LIMIT ?=
+
 opensre-hub-fetch:
-	$(PYTHON) scripts/fetch_opensre_hub_alert.py --prefix "$(OPENSRE_QUERY_PREFIX)" --output "$(OPENSRE_HUB_ALERT)" --index $(OPENSRE_HUB_INDEX)
+	$(PYTHON) infra/opensre-dataset/fetch_opensre_hub_alert.py --prefix "$(OPENSRE_QUERY_PREFIX)" --output "$(OPENSRE_HUB_ALERT)" --index $(OPENSRE_HUB_INDEX)
 
 # Batch: OPENSRE_EXPORT_DIR=./bank_alerts OPENSRE_EXPORT_LIMIT=30 make opensre-hub-export
 opensre-hub-export:
 	@[ -n "$(OPENSRE_EXPORT_DIR)" ] || { echo "Set OPENSRE_EXPORT_DIR (e.g. ./hub_alerts) and OPENSRE_EXPORT_LIMIT"; exit 1; }
 	@[ -n "$(OPENSRE_EXPORT_LIMIT)" ] || { echo "Set OPENSRE_EXPORT_LIMIT (e.g. 25)"; exit 1; }
-	$(PYTHON) scripts/fetch_opensre_hub_alert.py --prefix "$(OPENSRE_QUERY_PREFIX)" --export-dir "$(OPENSRE_EXPORT_DIR)" --limit $(OPENSRE_EXPORT_LIMIT)
+	$(PYTHON) infra/opensre-dataset/fetch_opensre_hub_alert.py --prefix "$(OPENSRE_QUERY_PREFIX)" --export-dir "$(OPENSRE_EXPORT_DIR)" --limit $(OPENSRE_EXPORT_LIMIT)
 
 opensre-hub-investigate: opensre-hub-fetch
 	opensre investigate -i "$(OPENSRE_HUB_ALERT)" $(OPENSRE_INVESTIGATE_FLAGS)
@@ -90,12 +94,6 @@ check-docker:
 	@command -v docker >/dev/null 2>&1 || { echo "Docker is required for the live local Grafana stack. Install Docker Desktop or another Docker-compatible runtime, then rerun this target."; exit 1; }
 	@docker info >/dev/null 2>&1 || { echo "Docker is installed, but the Docker daemon is not running. Start Docker Desktop, OrbStack, or Colima, then rerun this target."; exit 1; }
 
-check-langgraph:
-	@command -v langgraph >/dev/null 2>&1 || { echo "The LangGraph CLI is required for this target. Install it with 'pip install langgraph-cli' and rerun."; exit 1; }
-
-check-langsmith-api-key:
-	@[ -n "$$LANGGRAPH_HOST_API_KEY" ] || [ -n "$$LANGSMITH_API_KEY" ] || [ -n "$$LANGCHAIN_API_KEY" ] || { echo "Set LANGSMITH_API_KEY (or LANGGRAPH_HOST_API_KEY / LANGCHAIN_API_KEY) in your environment or .env before deploying to LangGraph."; exit 1; }
-
 grafana-local-up: check-docker
 	docker compose -f app/cli/wizard/local_grafana_stack/docker-compose.yml up -d
 
@@ -104,12 +102,6 @@ grafana-local-down: check-docker
 
 grafana-local-seed:
 	$(PYTHON) -m app.cli.wizard.grafana_seed
-
-langgraph-build: check-langgraph check-docker
-	langgraph build
-
-langgraph-deploy: check-langgraph check-docker check-langsmith-api-key
-	langgraph deploy
 
 # Run CloudWatch demo
 cloudwatch-demo:
@@ -143,18 +135,27 @@ test-rds-synthetic:
 test-k8s-synthetic:
 	$(PYTHON) -m tests.synthetic.eks.run_suite $(if $(SCENARIO),--scenario $(SCENARIO),)
 
+# Run Cloud-OpsBench RCA benchmark suite via the OpenSRE runner
+test-cloudopsbench:
+	$(PYTHON) -m tests.benchmarks.cloudopsbench.run_suite --benchmark-dir "$(CLOUDOPSBENCH_BENCHMARK_DIR)" $(if $(SYSTEM),--system $(SYSTEM),) $(if $(FAULT),--fault-category $(FAULT),) $(if $(CASE),--case $(CASE),) $(if $(CLOUDOPSBENCH_LIMIT),--limit $(CLOUDOPSBENCH_LIMIT),$(if $(LIMIT),--limit $(LIMIT),))
+
+# Download Cloud-OpsBench benchmark data from Hugging Face.
+download-cloudopsbench-hf:
+	@command -v hf >/dev/null 2>&1 || { echo "Install the Hugging Face CLI with: pip install 'huggingface_hub[cli]'"; exit 1; }
+	hf download "$(CLOUDOPSBENCH_HF_DATASET_ID)" --repo-type dataset --local-dir "$(CLOUDOPSBENCH_DATASET_DIR)" --include "$(CLOUDOPSBENCH_HF_INCLUDE)"
+
+validate-cloudopsbench:
+	$(PYTHON) -m tests.benchmarks.cloudopsbench.run_suite --benchmark-dir "$(CLOUDOPSBENCH_BENCHMARK_DIR)" --validate-only
+
 # Boot local Grafana+Loki, seed deterministic test logs, then run the RCA pipeline
 # Requires GRAFANA_INSTANCE_URL + GRAFANA_READ_TOKEN in .env (see .env.example for local defaults)
 test-rca-grafana: grafana-local-up grafana-local-seed
 	$(PYTHON) -m tests.e2e.rca.run_rca_test grafana_pipeline_failure
 
-# Simulate a Datadog alert via local LangGraph server (full pipeline, real API calls)
+# Run Kubernetes local alert simulation against the in-process investigation API
 simulate-k8s-alert:
-	@echo "Starting LangGraph dev server..."
-	langgraph dev --no-browser >/tmp/langgraph-dev.log 2>&1 &
-	$(PYTHON) tests/e2e/kubernetes_local_alert_simulation/wait_for_server.py
 	$(PYTHON) -m pytest tests/e2e/kubernetes_local_alert_simulation/test_simulation.py -s; \
-	EXIT=$$?; kill %1 2>/dev/null; exit $$EXIT
+	EXIT=$$?; exit $$EXIT
 
 # Run Kubernetes local test (kind)
 test-k8s-local:
@@ -272,8 +273,8 @@ grafana-demo:
 run:
 	opensre investigate
 
-dev: 
-	langgraph dev
+dev:
+	@echo "Run the health app with: uv run uvicorn app.webapp:app --reload --host 0.0.0.0 --port 8000"
 
 docs-dev:
 	cd docs && mint dev
@@ -354,6 +355,11 @@ test-full:
 test-cov:
 	$(PYTHON) -m pytest -n auto -v --cov=app --cov-report=term-missing --ignore=tests/e2e/kubernetes_local_alert_simulation --ignore=tests/synthetic -m "not synthetic"
 
+# Run only the tests relevant to files changed on this branch (local use only).
+# Pass ARGS=--dry-run to preview the command without executing it.
+test-scope:
+	$(PYTHON) infra/ci/run_test_scope.py --base main $(ARGS)
+
 # Run the CLI smoke suite against the installed opensre entrypoint.
 test-cli-smoke:
 	$(PYTHON) -m pytest -v tests/cli_smoke_test.py
@@ -377,6 +383,22 @@ rabbitmq-local-up:
 
 rabbitmq-local-down:
 	docker compose -f infra/docker-compose.rabbitmq.yml down -v
+
+# Run OpenClaw integration + tool E2E tests (mocked transport, no live OpenClaw needed)
+test-openclaw:
+	$(PYTHON) -m pytest tests/e2e/openclaw/ tests/test_openclaw_integration.py tests/tools/test_openclaw_mcp_tool.py tests/utils/test_openclaw_delivery.py -v
+
+# Run synthetic OpenClaw investigation scenarios (FixtureOpenClawBackend, no live OpenClaw)
+test-openclaw-synthetic:
+	$(PYTHON) -m tests.synthetic.openclaw.run_suite
+
+# Run Hermes incident-identification suites: Hermes RCA synthetic tests + Hermes e2e.
+test-hermes:
+	$(PYTHON) -m pytest tests/synthetic/hermes_rca tests/e2e/hermes -v
+
+# Deterministic/no-key Hermes RCA synthetic checks only.
+test-hermes-synthetic:
+	$(PYTHON) -m pytest tests/synthetic/hermes_rca -v
 
 # Run the RabbitMQ integration + tool tests, then invoke the verify command
 # against the live broker.  Requires the rabbitmq-local-up stack to be running.
@@ -422,16 +444,6 @@ typecheck:
 # Run all checks (lint + format read-only check + types + full tests; mirrors CI quality gates)
 check: lint format-check typecheck test-full
 
-# ─── Deployment Tests (LangSmith) ────────────────────────────────────────────
-deploy-langsmith:
-	$(PYTHON) -m tests.deployment.langsmith.infrastructure_sdk.deploy
-
-destroy-langsmith:
-	$(PYTHON) -m tests.deployment.langsmith.infrastructure_sdk.destroy
-
-test-langsmith:
-	$(PYTHON) -m pytest tests/deployment/langsmith/ -v -s
-
 # ─── Deployment Tests (Vercel) ───────────────────────────────────────────────
 deploy-vercel:
 	$(PYTHON) -m tests.deployment.vercel.infrastructure_sdk.deploy
@@ -474,9 +486,6 @@ help:
 	@echo "  make deploy-bedrock    - Deploy Bedrock Agent stack"
 	@echo "  make destroy-bedrock   - Destroy Bedrock Agent stack"
 	@echo "  make test-bedrock      - Run Bedrock Agent deployment tests"
-	@echo "  make deploy-langsmith  - Deploy to LangSmith/LangGraph Cloud"
-	@echo "  make destroy-langsmith - Clean up local outputs (remote deployment persists)"
-	@echo "  make test-langsmith    - Run LangSmith deployment tests"
 	@echo "  make deploy-vercel     - Deploy health-check function to Vercel"
 	@echo "  make destroy-vercel    - Destroy Vercel deployment"
 	@echo "  make test-vercel       - Run Vercel deployment tests"
@@ -505,8 +514,6 @@ help:
 	@echo "  make alert-template TEMPLATE=datadog - Print a starter alert JSON template"
 	@echo "  make investigate-alert ALERT=/path/to/alert.json - Run RCA against your own alert payload"
 	@echo "  make verify-integrations - Check local store + .env integrations before running RCA"
-	@echo "  make langgraph-build - Build the LangGraph agent server image locally"
-	@echo "  make langgraph-deploy - Deploy the agent to LangGraph / LangSmith Deployments"
 	@echo "  make prefect-demo    - Run Prefect ECS Fargate E2E test (alias for demo)"
 	@echo "  make prefect-local-test - Run Prefect ECS local test (CLOUD=1 for ECS)"
 	@echo "  make flink-demo      - Run Apache Flink ECS E2E test"
@@ -551,6 +558,11 @@ help:
 	@echo "  make test-rca        - Run all RCA markdown alert tests in tests/e2e/rca/"
 	@echo "  make test-rca FILE=pipeline_error_in_logs - Run a single RCA alert test"
 	@echo "  make test-rds-synthetic - Run the synthetic RDS PostgreSQL RCA suite"
+	@echo "  make test-openclaw   - Run OpenClaw integration + e2e tests (skips when openclaw CLI absent)"
+	@echo "  make test-hermes     - Run Hermes synthetic + e2e suites"
+	@echo "  make test-hermes-synthetic - Run Hermes RCA synthetic suite only (no-key deterministic path)"
+	@echo "  make download-cloudopsbench-hf - Download Cloud-OpsBench from Hugging Face"
+	@echo "  make test-cloudopsbench - Run the Cloud-OpsBench synthetic RCA suite"
 	@echo "  make clean           - Clean up cache files"
 	@echo "  make lint            - Lint code with ruff"
 	@echo "  make format-check    - Check formatting with ruff (read-only)"

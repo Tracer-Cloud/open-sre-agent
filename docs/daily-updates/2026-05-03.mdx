@@ -1,0 +1,48 @@
+---
+title: "Daily Update — 2026-05-03"
+description: "OpenSRE engineering daily update for 2026-05-03 (Europe/London)"
+---
+
+Thanks to everyone who contributed yesterday:
+
+Aakash Kumar, aksKrWRef, Ankit Juneja, Ankit Juneja, Anwesh, Arjun, Ceren Camkiran, Devesh, Enoch, Isaac, Raj Gajjar, Thibault Jaigu, Umer Aamir, Vaibhav Upreti, and Yash Kumar Saini 🙏🚀
+
+## Main updates shipped (May 3, 2026)
+
+- feat(integrations): add VictoriaLogs integration (#126) — Yash Kumar Saini
+- feat: deprecate tracer path and migrate to opensre — Vaibhav Upreti
+- feat: add Requesty as LLM provider — Thibault Jaigu
+- eval: harden OpenSRE LLM judge JSON extraction — Ceren Camkiran
+- fix: live-probe macOS Keychain auth for Claude Code CLI onboarding (#1199) — Ankit Juneja
+- Fix detection of shell built-in commands (e.g. pwd) in interactive CLI — Aakash Kumar
+- Revert "Fix detection of shell built-in commands (e.g. pwd) in interactive CLI" — Anwesh
+- fix(tests): add default_headers param to _FakeOpenAI stub — Anwesh
+- fix(ci): restore CLI help sync + uninstall help text — Isaac
+- fix: move stdlib json import to module level in hot-path tracer + lambda functions — Enoch
+- feat: add release announcements workflow for Discord and X (Twitter) — Devesh
+- test: added direct unit tests for app/cli/local_llm/hardware.py — Umer Aamir
+- test: add unit tests for aws sdk service client — Arjun
+- test: add _check_memory_health missing and incomplete data tests — Raj Gajjar
+
+## Source pull requests
+
+- [#1144](https://github.com/Tracer-Cloud/opensre/pull/1144) feat(integrations): add VictoriaLogs integration (author: Yash Kumar Saini; contributors: Yash Kumar Saini; labels: _none_; files: `app/cli/support/constants.py`, `app/integrations/_catalog_impl.py`, `app/integrations/_verification_adapters.py`, `app/integrations/config_models.py`, `app/integrations/effective_models.py`, `app/integrations/models.py`, `app/integrations/registry.py`, `app/nodes/plan_actions/detect_sources.py`, `app/services/victoria_logs/__init__.py`, `app/services/victoria_logs/client.py`, and 9 more)
+- [#1231](https://github.com/Tracer-Cloud/opensre/pull/1231) fix(ci): restore CLI help sync + uninstall help text (author: Isaac; contributors: Isaac; labels: _none_; files: `app/cli/commands/general.py`, `tests/cli/test_command_help_sync.py`)
+- [#1212](https://github.com/Tracer-Cloud/opensre/pull/1212) test: add _check_memory_health missing and incomplete data tests (author: Raj Gajjar; contributors: Raj Gajjar; labels: _none_; files: `tests/remote/test_server.py`)
+- [#1240](https://github.com/Tracer-Cloud/opensre/pull/1240) test: add unit tests for aws sdk service client (author: Arjun; contributors: Arjun; labels: _none_; files: `tests/services/test_aws_sdk_client.py`)
+- [#1243](https://github.com/Tracer-Cloud/opensre/pull/1243) fix: move stdlib json import to module level in hot-path tracer + lambda functions (author: Enoch; contributors: Enoch; labels: _none_; files: `app/services/lambda_client.py`, `app/services/tracer_client/tracer_integrations.py`)
+- [#1245](https://github.com/Tracer-Cloud/opensre/pull/1245) feat: add Requesty as LLM provider (author: Thibault Jaigu; contributors: Thibault Jaigu; labels: _none_; files: `.env.example`, `app/cli/commands/doctor.py`, `app/cli/interactive_shell/agent_actions.py`, `app/cli/wizard/config.py`, `app/cli/wizard/validation.py`, `app/config.py`, `app/services/llm_client.py`)
+- [#1187](https://github.com/Tracer-Cloud/opensre/pull/1187) test: added direct unit tests for app/cli/local_llm/hardware.py (author: Umer Aamir; contributors: Umer Aamir; labels: _none_; files: `tests/cli/test_local_llm_hardware.py`, `tests/services/test_honeycomb_client.py`)
+- [#989](https://github.com/Tracer-Cloud/opensre/pull/989) eval: harden OpenSRE LLM judge JSON extraction (author: Ceren Camkiran; contributors: Ceren Camkiran; labels: _none_; files: `app/integrations/opensre/llm_eval_judge.py`, `tests/integrations/opensre/test_llm_eval_judge.py`)
+- [#1235](https://github.com/Tracer-Cloud/opensre/pull/1235) feat: add release announcements workflow for Discord and X (Twitter) (author: Devesh; contributors: Devesh; labels: _none_; files: `.github/workflows/release-announcements.yml`, `.gitignore`)
+- [#1217](https://github.com/Tracer-Cloud/opensre/pull/1217) fix: live-probe macOS Keychain auth for Claude Code CLI onboarding (#1199) (author: Ankit Juneja; contributors: Ankit Juneja and Ankit Juneja; labels: _none_; files: `app/integrations/llm_cli/claude_code.py`, `tests/integrations/llm_cli/test_claude_code_adapter.py`)
+- [#1251](https://github.com/Tracer-Cloud/opensre/pull/1251) fix(tests): add default_headers param to _FakeOpenAI stub (author: Anwesh; contributors: Anwesh; labels: _none_; files: `tests/services/test_llm_client.py`)
+- [#1252](https://github.com/Tracer-Cloud/opensre/pull/1252) Fix detection of shell built-in commands (e.g. pwd) in interactive CLI (author: Aakash Kumar; contributors: Aakash Kumar and aksKrWRef; labels: _none_; files: `app/cli/interactive_shell/agent_actions.py`)
+- [#1254](https://github.com/Tracer-Cloud/opensre/pull/1254) Revert "Fix detection of shell built-in commands (e.g. pwd) in interactive CLI" (author: Anwesh; contributors: Anwesh; labels: _none_; files: `app/cli/interactive_shell/agent_actions.py`)
+- [#1232](https://github.com/Tracer-Cloud/opensre/pull/1232) feat: deprecate tracer path and migrate to opensre (author: Vaibhav Upreti; contributors: Vaibhav Upreti; labels: _none_; files: `.env.example`, `app/cli/commands/general.py`, `app/cli/support/uninstall.py`, `app/cli/wizard/flow.py`, `app/constants/__init__.py`, `app/integrations/_catalog_impl.py`, `app/integrations/cli.py`, `app/integrations/store.py`, `app/integrations/verify.py`, `app/llm_credentials.py`, and 27 more)
+
+## Generation metadata
+
+- Generator version: `opensre 2026.4.5`
+- Fallback summary used: `no`
+- UTC window: `2026-05-02T23:00:00+00:00` to `2026-05-03T23:00:00+00:00`

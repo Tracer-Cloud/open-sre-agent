@@ -1,0 +1,49 @@
+id: 015-alias-status
+title: Status alias
+intent_class: deterministic
+risk_level: low
+input:
+  prompt: status
+  surface: interactive_cli
+session:
+  has_prior_state: false
+  remote_connected: false
+  configured_integrations: []
+available_capabilities:
+  slash_commands:
+  - /status
+  cli_commands: []
+  synthetic_suites: []
+notes: []
+
+route:
+  expected_kind: slash
+  expected_signals:
+  - bare_command_alias
+  expected_command_text: /status
+policy:
+  should_execute: true
+  has_unhandled_clause: false
+  fail_closed: false
+planned_actions:
+- kind: slash
+  source: deterministic
+  target_surface: slash
+  command: /status
+  args: []
+  content: /status
+executed_actions:
+- kind: slash
+  command: /status
+  args: []
+  content: /status
+response_contract:
+  must_contain_any:
+  - ran /status
+  must_not_contain: []
+history:
+  expected:
+  - type: slash
+    ok: true
+tier: critical
+runs: 1

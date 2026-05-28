@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from app.cli.args import parse_args, write_json
-from app.cli.constants import ALERT_TEMPLATE_CHOICES
+from app.cli.support.args import parse_args, write_json
+from app.cli.support.constants import ALERT_TEMPLATE_CHOICES
 
 
 def test_write_json_prints_to_stdout(capsys: pytest.CaptureFixture[str]) -> None:

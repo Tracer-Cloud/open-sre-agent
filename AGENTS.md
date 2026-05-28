@@ -2,8 +2,9 @@
 
 ## Build and Run commands
 
-- Build `make install`
-- Run `opensre`
+- Build `make install` (sets up the project environment via `uv sync` and installs this repo in editable mode)
+- Run **`uv run opensre …`** from the repo root while developing — preferred approach, uses this checkout even if another `opensre` is on your `PATH`.
+- Use **`uv run python …`** for any Python commands.
 
 ## Lint & Format
 
@@ -25,50 +26,53 @@
 
 ### Before Push
 
-1. Clean working tree
-2. `make test-cov` (or `make test-full`)
-3. `make lint`
-4. `make format-check` (run `make format` if it fails)
-5. `make typecheck`
+Before any push or PR creation, follow the mandatory checklist in [CI.md](CI.md).
+
+- `CI.md` is the source of truth for push/PR readiness.
+- Do not skip required checks.
 
 ## 1. Repo Map
 
-
-| Path              | What it does                                                                             |
-| ----------------- | ---------------------------------------------------------------------------------------- |
-| `app/`            | Core agent logic, CLI, tools, integrations, services, graph pipeline, and runtime state. |
-| `tests/`          | Unit, integration, synthetic, deployment, e2e, chaos engineering, and support tests.     |
-| `docs/`           | User-facing documentation, integration guides, and docs-site assets.                     |
-| `.github/`        | CI workflows, issue templates, pull request template, and repository automation.         |
-| `langgraph.json`  | LangGraph deployment configuration for the hosted agent runtime.                         |
-| `pyproject.toml`  | Python project metadata, dependency configuration, tooling, and package settings.        |
-| `Makefile`        | Canonical local automation for install, test, verify, deploy, and cleanup targets.       |
-| `README.md`       | Product overview, quick start, capabilities, integrations, and common workflows.         |
-| `CONTRIBUTING.md` | Contribution workflow, branch/PR guidance, and quality expectations.                     |
-
+| Path                  | What it does                                                                                       |
+| --------------------- | -------------------------------------------------------------------------------------------------- |
+| `app/`                | Core agent logic, CLI, tools, integrations, services, graph pipeline, and runtime state.           |
+| `tests/`              | Unit, integration, synthetic, deployment, e2e, chaos engineering, and support tests.               |
+| `docs/`               | User-facing documentation, integration guides, and docs-site assets.                               |
+| `.github/`            | CI workflows, issue templates, pull request template, and repository automation.                   |
+| `Dockerfile`         | Optional production container image (FastAPI health app via uvicorn).                         |
+| `pyproject.toml`      | Python project metadata, dependency configuration, tooling, and package settings.                  |
+| `Makefile`            | Canonical local automation for install, test, verify, deploy, and cleanup targets.                 |
+| `README.md`           | Product overview, install, quick start, high-level capabilities, and links to deeper docs.         |
+| `docs/DEVELOPMENT.md` | Contributor workflows: CI parity commands, dev container, benchmark, deployment, telemetry detail. |
+| `docs/investigation-tool-calling.md` | Investigation ReAct tool schemas, LLM invoke payloads, and message shapes (all providers). |
+| `SETUP.md`            | Machine setup (all platforms, Windows, MCP/OpenClaw, troubleshooting).                             |
+| `CI.md`               | Mandatory pre-push checklist: lint, format, typecheck, tests — agents MUST follow before pushing. |
+| `CONTRIBUTING.md`     | Contribution workflow, branch/PR guidance, and quality expectations.                               |
 
 `app/` one level deeper:
 
 - `app/analytics/` — Analytics event plumbing and install helpers used by the onboarding flow.
 - `app/auth/` — JWT and authentication helpers for local and hosted runtime access.
-- `app/cli/` — Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support.
+- `app/cli/` — Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support. Interactive terminal (TTY) loop: `app/cli/interactive_shell/`. REPL watchdog slash commands (`/watch`, `/watches`, `/unwatch`): PR demo steps live under **Interactive shell: REPL watchdog demo** in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#interactive-shell-repl-watchdog-demo).
 - `app/constants/` — Shared prompt and other static constants.
-- `app/deployment/` — Deployment configuration and health helpers for hosted runtimes.
+- `app/deployment/` — Single home for “deployment” code, split by concern:
+    - `app/deployment/methods/` — _How_ you ship (Railway CLI, etc.).
+    - `app/deployment/operations/` — _Runtime / infra_ around a deployment (health polling, EC2 output files, provider dry-run validation).
 - `app/entrypoints/` — SDK and MCP entrypoints exposed to external runtimes.
 - `app/guardrails/` — Guardrail rules, evaluation engine, audit helpers, and CLI bindings.
 - `app/integrations/` — Integration config normalization, verification, selectors, store, and catalog logic.
 - `app/integrations/llm_cli/` — Subprocess-backed LLM CLIs (e.g. Codex). Extension guide: `app/integrations/llm_cli/AGENTS.md`.
 - `app/masking/` — Masking utilities for redacting or normalizing sensitive content.
-- `app/nodes/` — LangGraph nodes for alert extraction, investigation, diagnosis, and publishing.
-- `app/pipeline/` — Graph assembly, routing, and runner helpers; `app/graph_pipeline.py` is the compatibility shim.
+- `app/pipeline/` — Investigation orchestration and runner helpers (`run_investigation`, `run_chat`).
 - `app/remote/` — Remote-hosted runtime operations and integration points.
 - `app/sandbox/` — Sandboxed execution helpers for controlled runtime actions.
-- `app/services/` — Reusable API clients and service adapters consumed by integrations and tools.
+- `app/services/` — Reusable clients and adapters for integrations/tools. LLM APIs: `app/services/AGENTS.md`.
 - `app/state/` — Shared agent and investigation state models plus state factories.
 - `app/tools/` — Tool registry, decorator, base classes, per-tool packages, shared utilities, and registry helpers.
 - `app/types/` — Shared typed contracts for evidence, retrieval, and tool-related payloads.
 - `app/utils/` — Cross-cutting utility helpers used across the app and test harnesses.
-- `app/main.py` and `app/webapp.py` — Application entrypoints for the CLI/runtime and web-facing surface.
+- `app/watch_dog/` — Watchdog feature: per-threshold Telegram alarm dispatch with cooldown, sitting on top of `app/utils/telegram_delivery.py`.
+- `app/webapp.py` — Web-facing application entrypoint; the `opensre` CLI is `app/cli/__main__.py`.
 
 `tests/` is organized by capability boundary rather than by framework:
 
@@ -93,6 +97,8 @@ Files to touch:
 - `app/tools/<ToolName>/__init__.py` for the tool implementation, or `app/tools/<tool_file>.py` for a lighter-weight function tool.
 - `app/tools/utils/` if the tool needs shared helper code.
 - `app/services/<vendor>/client.py` if the tool should reuse a dedicated API client instead of inlining requests.
+- `docs/<tool_name>.mdx` for user-facing usage, parameters, and examples.
+- `docs/docs.json` — add the page path (without `.mdx`) to the appropriate `pages` array so Mintlify navigation includes it.
 - `tests/tools/test_<tool_name>.py` for behavior and regression coverage.
 
 Steps:
@@ -103,27 +109,25 @@ Steps:
 4. If the tool should appear in both investigation and chat surfaces, set `surfaces=("investigation", "chat")`.
 5. Add tests that cover schema shape, availability, extraction, and the runtime behavior that the planner depends on.
 
-### Adding a Node
+### Changing the investigation pipeline
 
-The active graph is built in `app/pipeline/graph.py`, and routing decisions live in `app/pipeline/routing.py`.
+Investigations are coordinated in `app/pipeline/pipeline.py` and exposed via
+`app/pipeline/runners.py`. Agent logic lives under `app/agent/`; publishing
+under `app/delivery/`.
 
 Files to touch:
 
-- `app/nodes/<node_group>/node.py` for the node implementation.
-- `app/nodes/<node_group>/` helpers such as `processing/`, `execution/`, `models.py`, or `types.py` when the node needs local support code.
-- `app/nodes/__init__.py` if the node should be exported alongside the other graph nodes.
-- `app/pipeline/graph.py` to register the node and wire edges.
-- `app/pipeline/routing.py` if the node changes branching, loop control, or terminal conditions.
-- `app/state/*.py` if the node adds or changes state fields.
-- `tests/` coverage for the specific node or the affected graph path.
+- `app/pipeline/pipeline.py` for high-level stage ordering.
+- `app/agent/` for extract, context, investigation, or chat behavior.
+- `app/state/*.py` when adding or renaming persisted investigation fields.
+- `docs/` — update or add a page if the change introduces user-visible behavior or configuration.
+- `tests/` coverage for the affected CLI, synthetic, or integration paths.
 
 Steps:
 
-1. Implement the node in the appropriate package under `app/nodes/` and keep the node focused on one responsibility.
-2. Export it from `app/nodes/__init__.py` if the graph should import it from the package root.
-3. Register it in `app/pipeline/graph.py` with `graph.add_node(...)` and connect it with the right edge type.
-4. Update `app/pipeline/routing.py` if the node introduces a new branch or loop outcome.
-5. Extend tests for the graph path and any state transitions the new node relies on.
+1. Keep each stage focused on one responsibility.
+2. Extend state models when new fields cross stage boundaries.
+3. Update tests that exercise `run_investigation` / streaming entry points.
 
 ### Adding an Integration
 
@@ -137,6 +141,7 @@ Files to touch:
 - `app/services/<name>/client.py` when the integration needs a dedicated API client.
 - `app/tools/<Name>Tool/` or `app/tools/<tool_file>.py` for the user-facing tool layer.
 - `docs/<name>.mdx` for user-facing setup, usage, and verification docs.
+- `docs/docs.json` — add the page path (without `.mdx`) to the appropriate `pages` array so Mintlify navigation includes it.
 - `tests/integrations/test_<name>.py` for config, verification, and store coverage.
 - `tests/tools/test_<tool_name>.py` and any relevant `tests/e2e/` or `tests/synthetic/` files if the integration is exercised by tools or scenarios.
 
@@ -155,13 +160,17 @@ Basic steps:
 
 ## 3. Rules (if X -> do Y)
 
-- If core agent or graph logic changes -> run `make test-cov` and `make typecheck`.
-- If a tool's API or schema changes -> update docs in `docs/` and update the related unit tests, usually under `tests/tools/`.
+- If core agent or pipeline logic changes -> run `make test-cov` and `make typecheck`.
+- If a new feature is shipped (tool, CLI command, pipeline behavior, integration) -> add a `docs/` page or section covering usage, configuration, and examples before the PR is opened.
+- If a new `docs/` page is added or renamed -> register it in `docs/docs.json` under the correct `pages` array in the same PR (path without `.mdx`, e.g. `messaging/whatsapp` for `docs/messaging/whatsapp.mdx`).
+- If an existing feature changes behavior, flags, or config shape -> update the relevant `docs/` page in the same PR; docs and code must stay in sync.
+- If a tool's API or schema changes -> update docs in `docs/` and update the related unit tests, usually under `tests/tools/`. For investigation LLM tool-calling (any provider), follow [docs/investigation-tool-calling.md](docs/investigation-tool-calling.md).
 - If an integration changes -> update `tests/integrations/` and verify with `make verify-integrations`.
 - If adding a new integration -> follow the New Integration Checklist below before opening the PR for review.
 - If adding new tests -> always place them in `tests/`, never in `app/` (no inline tests).
 - If CI-only tests are added -> mark them with the right pytest marker or place them in the appropriate e2e/synthetic/chaos folder so they do not run in the default local suite.
-- If node branching or loop behavior changes -> update `app/pipeline/routing.py` and the graph tests for that path.
+- If investigation branching or loop behavior changes -> update `app/pipeline/pipeline.py` and the tests for that path.
+- If pushing or creating a PR -> follow the full pre-push checklist in [CI.md](CI.md).
 
 ## 4. Testing
 
@@ -174,6 +183,11 @@ Basic steps:
 - Single RCA test: `make test-rca FILE=<name>`
 - Lint: `make lint`
 - Type check: `make typecheck`
+- Routing live tests: always run with live coverage enabled by default. Do not use deselection
+  filters like `-k "not live_llm"` for routing scenario runs.
+- Do not make routing scenario tests pass by forcing deterministic shortcuts or bypassing live
+  planner behavior. Fix failures by improving planner/tool correctness or updating fixtures only
+  when behavior changes are explicitly intended and approved.
 
 ### Fast Local Testing
 
@@ -184,8 +198,10 @@ The fastest local loop is `make test-cov`, which exercises the non-live unit sui
 - Vendored deps: No obvious vendored third-party dependencies are present. Python dependencies are managed in `pyproject.toml`, and the docs site has its own `docs/package.json` and `docs/pnpm-lock.yaml`. Do not vendor new libraries unless there is a strong reason.
 - Secrets: Never commit `.env` - always use `.env.example` as the template. Use read-only credentials for production integrations.
 - CI-only tests: Some e2e tests, including Kubernetes, EKS, and chaos engineering paths, require live infrastructure and are excluded from `make test-cov`. Do not expect them to pass locally without that environment.
-- LangGraph dev server: `make simulate-k8s-alert` starts a background LangGraph server; kill it manually if it hangs.
-- Docker requirement: Several targets, including the Grafana local stack, LangGraph build/deploy, and Chaos Mesh workflows, require a running Docker daemon.
+- Legacy graph dev server: removed; use `make dev` for a local uvicorn hint or run investigations via the CLI.
+- Docker requirement: Several targets, including the Grafana local stack and Chaos Mesh workflows, require a running Docker daemon.
+- Docs navigation: Adding an `.mdx` file under `docs/` is not enough — Mintlify only shows pages listed in `docs/docs.json`. Forgetting the `pages` entry leaves the doc unreachable from the site sidebar.
+- Investigation tool schemas: draft-07 JSON Schema (e.g. `"type": ["object", "null"]`) can pass loose checks but fail the LLM API on first invoke because **all** available investigation tools are sent together. Normalize in the provider adapter and extend registry contract tests; see [docs/investigation-tool-calling.md](docs/investigation-tool-calling.md).
 
 ## 6. New Integration Checklist
 
@@ -194,7 +210,7 @@ When adding a new integration, a PR is only ready when:
 - Integration code added under `app/integrations/<name>/`
 - Tool(s) added under `app/tools/` with proper typing
 - Unit/mock tests added under `tests/integrations/`
-- Docs added under `docs/`
+- Docs added under `docs/` and registered in `docs/docs.json` `pages`
 - Screenshot or demo GIF showing the integration working
 - E2E or synthetic test added
 - `make verify-integrations` passes

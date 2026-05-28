@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from typing import cast
 
+import yaml
 from typing_extensions import TypedDict
 
 from app.cli.tests.catalog import TestCatalog, TestCatalogItem, TestRequirement
@@ -11,6 +13,9 @@ from app.cli.tests.catalog import TestCatalog, TestCatalogItem, TestRequirement
 REPO_ROOT = Path(__file__).resolve().parents[3]
 MAKEFILE_PATH = REPO_ROOT / "Makefile"
 RCA_DIR = REPO_ROOT / "tests" / "e2e" / "rca"
+SYNTHETIC_SCENARIOS_DIR = REPO_ROOT / "tests" / "synthetic" / "rds_postgres"
+OPENCLAW_SYNTHETIC_SCENARIOS_DIR = REPO_ROOT / "tests" / "synthetic" / "openclaw" / "scenarios"
+CLOUDOPSBENCH_DIR = REPO_ROOT / "tests" / "benchmarks" / "cloudopsbench"
 
 _TARGETS_TO_INDEX = (
     "test",
@@ -27,6 +32,8 @@ _TARGETS_TO_INDEX = (
     "test-k8s",
     "test-k8s-datadog",
     "test-k8s-eks",
+    "download-cloudopsbench-hf",
+    "test-cloudopsbench",
     "trigger-alert",
     "trigger-alert-verify",
     "prefect-local-test",
@@ -45,6 +52,8 @@ _TARGETS_TO_INDEX = (
     "cleanup-dd-monitors",
     "deploy-eks",
     "destroy-eks",
+    "test-openclaw",
+    "test-openclaw-synthetic",
 )
 
 
@@ -105,7 +114,7 @@ _TARGET_METADATA: dict[str, _TargetMetadata] = {
     "simulate-k8s-alert": {
         "display_name": "Simulate Kubernetes Alert",
         "tags": ("k8s", "datadog", "infra-heavy"),
-        "requirements": TestRequirement(notes=("LangGraph dev server", "Kubernetes context")),
+        "requirements": TestRequirement(notes=("Kubernetes context",)),
     },
     "test-k8s-local": {
         "display_name": "Kubernetes Local Test",
@@ -128,6 +137,16 @@ _TARGET_METADATA: dict[str, _TargetMetadata] = {
         "requirements": TestRequirement(
             env_vars=("DD_API_KEY", "DD_APP_KEY"), notes=("EKS cluster",)
         ),
+    },
+    "test-cloudopsbench": {
+        "display_name": "Cloud-OpsBench RCA Benchmark",
+        "tags": ("synthetic", "cloudopsbench", "k8s", "benchmark"),
+        "requirements": TestRequirement(env_vars=("ANTHROPIC_API_KEY",)),
+    },
+    "download-cloudopsbench-hf": {
+        "display_name": "Download Cloud-OpsBench Dataset",
+        "tags": ("cloudopsbench", "benchmark", "huggingface"),
+        "requirements": TestRequirement(notes=("Hugging Face CLI",)),
     },
     "trigger-alert": {
         "display_name": "Trigger K8s Alert",
@@ -219,6 +238,16 @@ _TARGET_METADATA: dict[str, _TargetMetadata] = {
         "tags": ("aws", "k8s", "destroy", "infra-heavy"),
         "requirements": TestRequirement(notes=("AWS credentials",)),
     },
+    "test-openclaw": {
+        "display_name": "OpenClaw Integration Tests",
+        "tags": ("ci-safe", "test", "openclaw"),
+        "requirements": TestRequirement(),
+    },
+    "test-openclaw-synthetic": {
+        "display_name": "OpenClaw Synthetic Scenario Suite",
+        "tags": ("ci-safe", "test", "openclaw", "synthetic"),
+        "requirements": TestRequirement(env_vars=("ANTHROPIC_API_KEY",)),
+    },
 }
 
 
@@ -248,12 +277,18 @@ def _comment_map_for_makefile(path: Path) -> dict[str, str]:
 
 
 def discover_make_targets() -> list[TestCatalogItem]:
+    if not MAKEFILE_PATH.is_file():
+        # PyInstaller-bundled builds ship only the ``app/`` tree (see
+        # ``packaging/opensre.spec``), so the Makefile is absent at runtime.
+        # Return an empty catalog slice so ``opensre tests`` still launches
+        # against whatever sources *are* bundled.
+        return []
     comment_map = _comment_map_for_makefile(MAKEFILE_PATH)
     makefile_text = MAKEFILE_PATH.read_text(encoding="utf-8")
     items: list[TestCatalogItem] = []
 
     for target in _TARGETS_TO_INDEX:
-        if f"\n{target}:" not in makefile_text:
+        if not re.search(rf"^{re.escape(target)}:", makefile_text, re.MULTILINE):
             continue
         metadata = _TARGET_METADATA.get(target, {})
         tags = cast(tuple[str, ...], metadata.get("tags") or ("make",))
@@ -276,11 +311,18 @@ def discover_make_targets() -> list[TestCatalogItem]:
 
 def discover_rca_files() -> list[TestCatalogItem]:
     items: list[TestCatalogItem] = []
+    if not RCA_DIR.is_dir():
+        # ``Path.glob`` on a missing parent returns an empty iterator on
+        # CPython, so this isn't a crash today — but the explicit guard
+        # documents the bundled-binary contract and matches the shape of
+        # the other ``discover_*`` helpers below.
+        return items
     for path in sorted(RCA_DIR.glob("*.md")):
         title = path.stem.replace("_", " ").title()
         first_line = path.read_text(encoding="utf-8").splitlines()[0].strip()
         if first_line.startswith("# "):
             title = first_line[2:].strip()
+        extra_tags: tuple[str, ...] = ("openclaw",) if path.stem.startswith("openclaw_") else ()
         items.append(
             TestCatalogItem(
                 id=f"rca:{path.stem}",
@@ -288,7 +330,7 @@ def discover_rca_files() -> list[TestCatalogItem]:
                 display_name=title,
                 description="Run a bundled markdown RCA alert fixture.",
                 command=("make", "test-rca", f"FILE={path.stem}"),
-                tags=("rca", "fixture"),
+                tags=("rca", "fixture") + extra_tags,
                 source_path=str(path),
                 requirements=TestRequirement(env_vars=("ANTHROPIC_API_KEY", "OPENAI_API_KEY")),
             )
@@ -297,11 +339,19 @@ def discover_rca_files() -> list[TestCatalogItem]:
 
 
 def _discover_rds_synthetic_scenarios() -> list[TestCatalogItem]:
-    """One catalog item per RDS synthetic scenario directory."""
-    scenarios_dir = REPO_ROOT / "tests" / "synthetic" / "rds_postgres"
+    """One catalog item per RDS synthetic scenario directory.
+
+    Bundled (PyInstaller) builds collect only ``app/`` data files (see
+    ``packaging/opensre.spec``), so ``tests/synthetic/rds_postgres`` is
+    absent at runtime and ``iterdir()`` would raise ``FileNotFoundError``.
+    Skip cleanly in that case — the synthetic-suite catalog entries are
+    only meaningful when the scenarios are on disk anyway.
+    """
     items: list[TestCatalogItem] = []
+    if not SYNTHETIC_SCENARIOS_DIR.is_dir():
+        return items
     req = TestRequirement(env_vars=("ANTHROPIC_API_KEY",))
-    for scenario_dir in sorted(scenarios_dir.iterdir()):
+    for scenario_dir in sorted(SYNTHETIC_SCENARIOS_DIR.iterdir()):
         if not scenario_dir.is_dir() or scenario_dir.name.startswith("_"):
             continue
         scenario_id = scenario_dir.name
@@ -310,13 +360,11 @@ def _discover_rds_synthetic_scenarios() -> list[TestCatalogItem]:
         scenario_yml = scenario_dir / "scenario.yml"
         if scenario_yml.exists():
             try:
-                import yaml  # type: ignore[import-untyped]
-
-                meta = yaml.safe_load(scenario_yml.read_text()) or {}
+                meta = yaml.safe_load(scenario_yml.read_text(encoding="utf-8")) or {}
                 failure_mode = meta.get("failure_mode", "")
                 if failure_mode:
                     display_name = f"{scenario_id}  [{failure_mode}]"
-            except Exception:  # noqa: BLE001 — best-effort enrichment; malformed YAML is fine
+            except (OSError, UnicodeDecodeError, yaml.YAMLError, TypeError, ValueError):
                 display_name = scenario_id
         items.append(
             TestCatalogItem(
@@ -333,9 +381,72 @@ def _discover_rds_synthetic_scenarios() -> list[TestCatalogItem]:
     return items
 
 
+def _discover_openclaw_synthetic_scenarios() -> list[TestCatalogItem]:
+    items: list[TestCatalogItem] = []
+    if not OPENCLAW_SYNTHETIC_SCENARIOS_DIR.is_dir():
+        return items
+
+    requirements = TestRequirement(notes=("Configured LLM provider",))
+    for scenario_dir in sorted(OPENCLAW_SYNTHETIC_SCENARIOS_DIR.iterdir()):
+        if not scenario_dir.is_dir() or scenario_dir.name.startswith("_"):
+            continue
+        scenario_id = scenario_dir.name
+        display_name = scenario_id.replace("_", " ")
+        description = "Run a synthetic OpenClaw-backed RCA scenario against the fixture bridge."
+
+        scenario_json = scenario_dir / "scenario.json"
+        if scenario_json.exists():
+            try:
+                meta = json.loads(scenario_json.read_text(encoding="utf-8"))
+                scenario_description = str(meta.get("description", "")).strip()
+                if scenario_description:
+                    display_name = scenario_description[:80]
+                    description = scenario_description
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
+                # Ignore unreadable/invalid metadata and keep default name/description.
+                pass
+
+        items.append(
+            TestCatalogItem(
+                id=f"openclaw-synthetic:{scenario_id}",
+                kind="cli_command",
+                display_name=display_name,
+                description=description,
+                command=("opensre", "tests", "openclaw-synthetic", "--scenario", scenario_id),
+                tags=("synthetic", "openclaw", "rca", "ci-safe"),
+                source_path=str(scenario_dir),
+                requirements=requirements,
+            )
+        )
+
+    return items
+
+
+def _discover_cloudopsbench_suite() -> list[TestCatalogItem]:
+    benchmark_dir = CLOUDOPSBENCH_DIR / "benchmark"
+    if not benchmark_dir.is_dir():
+        return []
+    return [
+        TestCatalogItem(
+            id="synthetic:cloudopsbench",
+            kind="cli_command",
+            display_name="Cloud-OpsBench RCA Benchmark",
+            description="Run the downloaded Cloud-OpsBench corpus through the OpenSRE runner.",
+            command=("opensre", "tests", "cloudopsbench"),
+            tags=("synthetic", "cloudopsbench", "k8s", "benchmark"),
+            source_path=str(CLOUDOPSBENCH_DIR),
+            requirements=TestRequirement(env_vars=("ANTHROPIC_API_KEY",)),
+        )
+    ]
+
+
 def discover_cli_commands() -> list[TestCatalogItem]:
     """Catalog entries for opensre sub-commands that have no Makefile equivalent."""
-    return _discover_rds_synthetic_scenarios()
+    return [
+        *_discover_rds_synthetic_scenarios(),
+        *_discover_openclaw_synthetic_scenarios(),
+        *_discover_cloudopsbench_suite(),
+    ]
 
 
 def load_test_catalog() -> TestCatalog:

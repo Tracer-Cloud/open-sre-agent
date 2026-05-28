@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "opensre"
-version = "2026.4.5"
+version = "0.1"
 description = "Open-source SRE agent for automated incident investigation and root cause analysis. Automatically analyzes alerts from Slack, Grafana, Datadog, and other tooling."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = { text = "Apache-2.0" }
 authors = [
-  { name = "Tracer Cloud", email = "support@tracer.cloud" },
+  { name = "OpenSRE", email = "support@opensre.com" },
 ]
 keywords = ["sre", "devops", "incident", "rca", "llm", "ai", "agent", "observability"]
 dependencies = [
@@ -18,20 +18,15 @@ dependencies = [
     "anthropic>=0.77.1",
     "mcp>=1.27.0",
     "openai>=2.0.0",
-    "langsmith>=0.7.30",
-    "langgraph>=1.1.6",
-    "langgraph-sdk",
-    "langchain-core>=0.3.0",
-    "langchain-anthropic>=0.3.0",
-    "langchain-openai>=0.3.0",
     # Data validation
     "pydantic>=2.12.5,<3",
     "pydantic-settings>=2.12.0,<3",
     "kubernetes>=28.1.0",
     # HTTP and async
-    "httpx>=0.27.0",
+    "httpx[socks]>=0.27.0",
     "aiohttp>=3.9.0",
     "fastapi>=0.135.3",
+    "uvicorn[standard]>=0.30.0",
     # Authentication
     "PyJWT>=2.8.0",
     "cryptography>=42.0.0",
@@ -43,7 +38,9 @@ dependencies = [
     "click>=8.1.0",
     "rich>=15.0.0",
     "questionary>=2.1.1",
+    "prompt_toolkit>=3.0.0",
     "PyYAML>=6.0",
+    "numpy>=1.26.0",
     "tzdata>=2026.1",
     # OpenTelemetry
     "opentelemetry-api>=1.41.0",
@@ -63,6 +60,14 @@ dependencies = [
     "PyNaCl>=1.5.0",
     # MariaDB
     "pymysql>=1.1.0,<2.0.0",
+    # ClickHouse (used by first-class SigNoz + ClickHouse integrations)
+    "clickhouse-connect>=0.15.1,<1.0.0",
+    "sentry-sdk>=2.59.0",
+    # File locking for atomic store operations
+    "filelock>=3.29.0",
+    "psutil>=5.9",
+    # Scheduler for cron-driven deliveries
+    "APScheduler>=3.10.0,<4.0.0",
 ]
 
 [project.urls]
@@ -73,10 +78,10 @@ Changelog = "https://github.com/Tracer-Cloud/opensre/releases"
 
 [project.scripts]
 opensre = "app.cli.__main__:main"
-opensre-mcp = "app.entrypoints.mcp:main"
 
 [project.optional-dependencies]
 dev = [
+    "pre-commit>=4.0.0",
     "pytest>=8.0.0",
     "pytest-asyncio>=1.3.0",
     "pytest-cov>=7.1.0",
@@ -87,9 +92,23 @@ dev = [
     "types-psycopg2",
     "types-PyMySQL",
     "types-PyYAML",
+    "types-psutil",
     "boto3-stubs[essential]",
     "huggingface_hub>=0.26.0",
     "datasets>=3.0.0",
+]
+release-dist = [
+    "build>=1.2.0",
+    "twine>=6.0.0",
+]
+release-binary = [
+    "pyinstaller>=6.3.0",
+]
+# Backward-compatible aggregate extra.
+release = [
+    "build>=1.2.0",
+    "twine>=6.0.0",
+    "pyinstaller>=6.3.0",
 ]
 opensre-hub = [
     "huggingface_hub>=0.26.0",
@@ -98,6 +117,7 @@ opensre-hub = [
 kafka = [
     "confluent-kafka>=2.14.0",
 ]
+# Backward-compatible no-op extra; ClickHouse is now a core dependency.
 clickhouse = [
     "clickhouse-connect>=0.15.1",
 ]
@@ -110,6 +130,9 @@ azure_sql = [
 
 [tool.setuptools.packages.find]
 include = ["app*", "tests*"]
+
+[tool.setuptools.package-data]
+"app.cli" = ["fixtures/*.json"]
 
 # With pytest-xdist (-n auto), each worker writes a fragment; put them under
 # .pytest_cache/ (already gitignored) instead of .coverage.<hostname>.* at repo root.
@@ -129,7 +152,6 @@ ignore_decorators = [
   "@*.callback",
   "@app.*",              # FastAPI routes
   "@*router.*",          # FastAPI sub-routers (discord_router etc.)
-  "@auth.on.*",          # LangGraph auth callbacks
   "@field_validator",    # Pydantic validators
   "@model_validator",
   "@validator",
@@ -143,8 +165,18 @@ ignore_names = [
   "shell_complete", "format_help", "show",        # Click overrides
   "_normalize_*",                                  # Pydantic field validators
   "_require_*",                                    # Pydantic model validators
-  "on_thread_*", "on_assistant_*", "on_cron_*",    # LangGraph auth handlers
+  "on_thread_*", "on_assistant_*", "on_cron_*",
   "discord_interactions", "health_check",
   "version_check", "deep_health_check",
   "investigate_stream",
+]
+
+# uv installs this PEP 735 group by default (`uv sync`; omit with `--no-dev`).
+# `pre-commit` is also under `[project.optional-dependencies] dev` for `pip install .[dev]`.
+[dependency-groups]
+dev = [
+    "pre-commit>=4.0.0",
+    "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
+    "types-psutil>=7.2.2.20260408",
 ]

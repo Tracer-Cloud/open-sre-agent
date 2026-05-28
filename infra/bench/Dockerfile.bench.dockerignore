@@ -1,0 +1,73 @@
+# Per-Dockerfile dockerignore for infra/bench/Dockerfile.bench (BuildKit feature).
+# Overrides the repo-root .dockerignore, which excludes `tests` entirely
+# (correct for the production Dockerfile, wrong for the bench Dockerfile).
+
+# ---- Standard junk to exclude from any build context -------------------- #
+.git
+.gitignore
+docker-compose.yml
+docker-compose.*.yml
+node_modules/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.tmp
+*.swp
+.DS_Store
+
+# ---- Local-only state --------------------------------------------------- #
+.env
+.env.*
+*.local
+.venv/
+.venv-devcontainer/
+.python-version
+*.egg-info/
+
+# ---- Build / test artifacts -------------------------------------------- #
+dist/
+build/
+.cache/
+.coverage*
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.terraform/
+
+# ---- IDE / editor ------------------------------------------------------- #
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# ---- Repo-level dirs not needed in the bench image --------------------- #
+infra/
+docs/
+packaging/
+.github/
+.claude/
+.aider*
+
+# ---- Tests: exclude everything EXCEPT bench-related -------------------- #
+# Order matters: blanket exclusion first, then negations.
+tests/*
+!tests/__init__.py
+!tests/benchmarks
+
+# Exclude the downloaded State Snapshot dataset (~2.7 GB). It is
+# git-ignored and downloaded from Hugging Face at task start. Without
+# this exclusion, the image bloats to ~3.75 GB.
+tests/benchmarks/cloudopsbench/benchmark/
+tests/benchmarks/cloudopsbench/.cache/
+
+# ---- Local dev artifacts ------------------------------------------------ #
+plans/
+tasks/
+.worktrees/
+app/memories/
+
+# ---- Self ---- #
+infra/bench/Dockerfile.bench.dockerignore

@@ -7,13 +7,17 @@ timeouts enforced, result sizes capped.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from typing import Any
 
 from pydantic import Field, field_validator
 
+from app.integrations._validation_helpers import report_validation_failure
 from app.strict_config import StrictConfigModel
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_MONGODB_AUTH_SOURCE = "admin"
 DEFAULT_MONGODB_TIMEOUT_MS = 5000
@@ -118,13 +122,19 @@ def validate_mongodb_config(config: MongoDBConfig) -> MongoDBValidationResult:
             )
         finally:
             client.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mongodb",
+            method="validate_mongodb_config",
+        )
         return MongoDBValidationResult(ok=False, detail=f"MongoDB connection failed: {err}")
 
 
 def mongodb_is_available(sources: dict[str, dict]) -> bool:
     """Check if MongoDB integration params are present in available sources."""
-    return bool(sources.get("mongodb", {}).get("connection_verified"))
+    return bool(sources.get("mongodb", {}).get("connection_string"))
 
 
 def mongodb_database_is_available(sources: dict[str, dict]) -> bool:
@@ -133,14 +143,14 @@ def mongodb_database_is_available(sources: dict[str, dict]) -> bool:
     Required for tools that operate on a specific database (profiler, collection stats).
     """
     mg = sources.get("mongodb", {})
-    return bool(mg.get("connection_verified") and mg.get("database"))
+    return bool(mg.get("connection_string") and mg.get("database"))
 
 
 def mongodb_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     """Extract MongoDB connection params from resolved integrations.
 
-    Credentials are resolved by detect_sources from the integration store,
-    so the LLM never needs to supply connection_string directly.
+    Credentials are resolved from the integration store or environment, so the
+    LLM never needs to supply connection_string directly.
     """
     mg = sources.get("mongodb", {})
     return {
@@ -182,7 +192,19 @@ def get_server_status(config: MongoDBConfig) -> dict[str, Any]:
             }
         finally:
             client.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
+        if getattr(err, "code", None) == 13:
+            return {
+                "source": "mongodb",
+                "available": False,
+                "error": "MongoDB user lacks admin privileges for serverStatus. Grant the 'clusterMonitor' role.",
+            }
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mongodb",
+            method="get_server_status",
+        )
         return {"source": "mongodb", "available": False, "error": str(err)}
 
 
@@ -231,7 +253,19 @@ def get_current_ops(
             }
         finally:
             client.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
+        if getattr(err, "code", None) == 13:
+            return {
+                "source": "mongodb",
+                "available": False,
+                "error": "MongoDB user lacks admin privileges for currentOp. Grant the 'clusterMonitor' role.",
+            }
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mongodb",
+            method="get_current_ops",
+        )
         return {"source": "mongodb", "available": False, "error": str(err)}
 
 
@@ -271,7 +305,7 @@ def get_rs_status(config: MongoDBConfig) -> dict[str, Any]:
             }
         finally:
             client.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         error_str = str(err)
         # Not a replica set is not an error per se
         if "not running with --replSet" in error_str or "NotYetInitialized" in error_str:
@@ -282,6 +316,18 @@ def get_rs_status(config: MongoDBConfig) -> dict[str, Any]:
                 "members": [],
                 "note": "Server is not part of a replica set.",
             }
+        if getattr(err, "code", None) == 13:
+            return {
+                "source": "mongodb",
+                "available": False,
+                "error": "MongoDB user lacks admin privileges for replSetGetStatus. Grant the 'clusterMonitor' role.",
+            }
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mongodb",
+            method="get_rs_status",
+        )
         return {"source": "mongodb", "available": False, "error": error_str}
 
 
@@ -357,7 +403,13 @@ def get_profiler_data(
             }
         finally:
             client.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mongodb",
+            method="get_profiler_data",
+        )
         return {"source": "mongodb", "available": False, "error": str(err)}
 
 
@@ -403,5 +455,11 @@ def get_collection_stats(
             }
         finally:
             client.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="mongodb",
+            method="get_collection_stats",
+        )
         return {"source": "mongodb", "available": False, "error": str(err)}

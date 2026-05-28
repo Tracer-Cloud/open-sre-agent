@@ -122,6 +122,22 @@ def save_named_remote(
     store_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
+def delete_named_remote(name: str, path: Path | None = None) -> None:
+    """Remove a named remote entry and clear the active URL if it was the active one."""
+    store_path = path or get_store_path()
+    data = _load_raw(store_path)
+    remote_section = data.get("remote", {})
+    remotes: dict[str, Any] = remote_section.get("remotes", {})
+    if name not in remotes:
+        return
+    removed_url = remotes.pop(name, {}).get("url")
+    if removed_url and remote_section.get("url") == removed_url:
+        remote_section.pop("url", None)
+        remote_section.pop("active_name", None)
+    store_path.parent.mkdir(parents=True, exist_ok=True)
+    store_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
 def set_active_remote(name: str, path: Path | None = None) -> str:
     """Switch the active remote to *name*. Returns the URL."""
     store_path = path or get_store_path()

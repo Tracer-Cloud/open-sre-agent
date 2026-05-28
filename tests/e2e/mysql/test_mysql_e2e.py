@@ -15,9 +15,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.integrations.catalog import classify_integrations as _classify_integrations
 from app.integrations.verify import verify_integrations
-from app.nodes.plan_actions.detect_sources import detect_sources
-from app.nodes.resolve_integrations.node import _classify_integrations
+from tests.e2e.source_helpers import resolve_available_tool_sources
 
 
 class TestMySQLIntegrationResolution:
@@ -85,17 +85,11 @@ class TestMySQLIntegrationResolution:
         assert resolved.get("mysql") is None
 
 
-class TestMySQLSourceDetection:
-    """Test MySQL source detection in investigation context."""
+class TestMySQLToolSourceAvailability:
+    """Test MySQL source availability in the tool-registry investigation path."""
 
-    def test_detect_mysql_source_from_alert(self):
-        """MySQL source detected from alert annotations."""
-        raw_alert = {
-            "commonAnnotations": {
-                "mysql_database": "application_db",
-                "mysql_table": "events",
-            }
-        }
+    def test_mysql_tool_source_available_from_resolved_integration(self):
+        """MySQL source is available when a configured integration exists."""
         resolved_integrations = {
             "mysql": {
                 "host": "localhost",
@@ -107,18 +101,14 @@ class TestMySQLSourceDetection:
             }
         }
 
-        sources = detect_sources(raw_alert, {}, resolved_integrations)
+        sources = resolve_available_tool_sources(resolved_integrations)
 
         assert "mysql" in sources
         assert sources["mysql"]["host"] == "localhost"
         assert sources["mysql"]["database"] == "application_db"
-        assert sources["mysql"]["table"] == "events"
 
-    def test_detect_mysql_source_fallback_to_config(self):
-        """MySQL source falls back to configured database if not in alert."""
-        raw_alert = {
-            "commonAnnotations": {},
-        }
+    def test_mysql_tool_source_uses_configured_database(self):
+        """MySQL tool params come from the resolved integration config."""
         resolved_integrations = {
             "mysql": {
                 "host": "localhost",
@@ -130,17 +120,16 @@ class TestMySQLSourceDetection:
             }
         }
 
-        sources = detect_sources(raw_alert, {}, resolved_integrations)
+        sources = resolve_available_tool_sources(resolved_integrations)
 
         assert "mysql" in sources
         assert sources["mysql"]["database"] == "default_db"
 
-    def test_mysql_source_not_detected_if_unconfigured(self):
+    def test_mysql_tool_source_unavailable_if_unconfigured(self):
         """MySQL source is not included if not configured."""
-        raw_alert = {"commonAnnotations": {}}
         resolved_integrations = {}
 
-        sources = detect_sources(raw_alert, {}, resolved_integrations)
+        sources = resolve_available_tool_sources(resolved_integrations)
 
         assert "mysql" not in sources
 

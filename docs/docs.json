@@ -39,22 +39,38 @@
             "group": "First steps",
             "pages": [
               "quickstart",
+              "deployment",
               "faq"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/environment-variables"
             ]
           }
         ]
       },
       {
-        "tab": "Install",
+        "tab": "Installation",
         "icon": "download",
         "groups": [
           {
-            "group": "Investigation workflow",
+            "group": "Overview",
             "pages": [
-              "investigation-overview",
-              "remote-runtime-investigation",
-              "masking",
-              "multi-instance-integrations"
+              "install"
+            ]
+          },
+          {
+            "group": "Local",
+            "pages": [
+              "install-local"
+            ]
+          },
+          {
+            "group": "Enterprise",
+            "pages": [
+              "install-enterprise"
             ]
           }
         ]
@@ -66,7 +82,19 @@
           {
             "group": "Overview",
             "pages": [
-              "integrations-overview"
+              "integrations-overview",
+              "remote-runtime-investigation",
+              "masking",
+              "interactive-shell-privacy",
+              "agents",
+              "cron",
+              "multi-instance-integrations"
+            ]
+          },
+          {
+            "group": "LLM providers",
+            "pages": [
+              "llm-providers"
             ]
           },
           {
@@ -79,9 +107,13 @@
               "coralogix",
               "datadog",
               "grafana",
+              "hermes",
               "honeycomb",
+              "incident_io",
               "opsgenie",
-              "sentry"
+              "sentry",
+              "signoz",
+              "splunk"
             ]
           },
           {
@@ -90,13 +122,24 @@
             "pages": [
               "aws",
               "bitbucket",
-              "discord",
               "github",
               "gitlab",
               "google-docs",
+              "helm",
               "jira",
-              "slack",
               "vercel"
+            ]
+          },
+          {
+            "group": "Messaging",
+            "expanded": true,
+            "pages": [
+              "messaging/index",
+              "messaging/slack",
+              "messaging/discord",
+              "messaging/telegram",
+              "messaging/whatsapp",
+              "messaging/twilio-sms"
             ]
           },
           {
@@ -108,9 +151,11 @@
               "mongodb",
               "mysql",
               "openclaw",
+              "opensearch",
               "postgresql",
               "prefect",
-              "rabbitmq"
+              "rabbitmq",
+              "rds"
             ]
           }
         ]
@@ -123,7 +168,8 @@
             "group": "Getting started",
             "pages": [
               "introduction-monitoring",
-              "quickstart-monitoring"
+              "quickstart-monitoring",
+              "tracer-faq"
             ]
           },
           {
@@ -148,7 +194,7 @@
           {
             "group": "Frameworks",
             "pages": [
-              "integrations/overview",
+              "integrations/integration-workflow",
               "integrations/nextflow",
               "integrations/wdl",
               "integrations/bash",
@@ -295,12 +341,18 @@
       "hjsv": "6"
     }
   },
+  "redirects": [
+    {
+      "source": "/messaging/twilio",
+      "destination": "/messaging/twilio-sms"
+    }
+  ],
   "seo": {
     "indexing": "all",
     "metatags": {}
   },
   "logo": {
-    "light": "/images/logo/tracer/opensre-docs-logo-dark.svg",
-    "dark": "/images/logo/tracer/opensre-docs-logo-light.svg"
+    "light": "/images/opensre-logo-black.svg",
+    "dark": "/images/opensre-logo-white.svg"
   }
 }

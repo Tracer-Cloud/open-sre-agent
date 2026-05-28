@@ -19,6 +19,7 @@ def _extract_guidance_params(sources: dict[str, dict[str, Any]]) -> dict[str, An
 
 @tool(
     name="get_sre_guidance",
+    display_name="SRE runbook",
     source="knowledge",
     description="Retrieve SRE best practices for data pipeline incidents.",
     use_cases=[
@@ -35,7 +36,7 @@ def _extract_guidance_params(sources: dict[str, dict[str, Any]]) -> dict[str, An
         "properties": {
             "topic": {
                 "type": "string",
-                "description": "Specific topic: pipeline_types, slo_freshness, slo_correctness, failure_delayed_data, failure_corrupt_data, hotspotting, thundering_herd, monitoring_pipelines, dependency_failure, recovery_remediation, resource_planning, pipeline_documentation, workflow_patterns",
+                "description": "Specific topic: pipeline_types, slo_freshness, slo_correctness, failure_delayed_data, failure_corrupt_data, hotspotting, thundering_herd, monitoring_pipelines, dependency_failure, recovery_remediation, resource_planning, pipeline_documentation, playbooks_overview, workflow_patterns",
             },
             "keywords": {
                 "type": "array",

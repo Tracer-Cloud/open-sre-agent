@@ -11,7 +11,6 @@ No Airflow triggering - using S3 events instead.
 import json
 import logging
 import os
-import time
 from contextlib import contextmanager
 from datetime import datetime
 from typing import Any

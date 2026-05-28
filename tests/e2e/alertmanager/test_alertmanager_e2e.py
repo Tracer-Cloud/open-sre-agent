@@ -14,8 +14,13 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-from app.nodes.plan_actions.detect_sources import detect_sources
-from app.nodes.resolve_integrations.node import _classify_integrations
+from app.integrations.catalog import (
+    classify_integrations as _classify_integrations,
+)
+from app.integrations.catalog import (
+    load_env_integrations as _load_env_integrations,
+)
+from tests.e2e.source_helpers import resolve_available_tool_sources
 
 
 class TestAlertmanagerIntegrationResolution:
@@ -137,8 +142,6 @@ class TestAlertmanagerEnvResolution:
         """Alertmanager integration resolved from ALERTMANAGER_URL env var."""
         monkeypatch.setenv("ALERTMANAGER_URL", "http://alertmanager.monitoring.svc:9093")
 
-        from app.nodes.resolve_integrations.node import _load_env_integrations
-
         env_integrations = _load_env_integrations()
         alertmanager_records = [i for i in env_integrations if i["service"] == "alertmanager"]
 
@@ -151,8 +154,6 @@ class TestAlertmanagerEnvResolution:
         monkeypatch.setenv("ALERTMANAGER_URL", "https://alertmanager.example.com")
         monkeypatch.setenv("ALERTMANAGER_BEARER_TOKEN", "env-token-123")
 
-        from app.nodes.resolve_integrations.node import _load_env_integrations
-
         env_integrations = _load_env_integrations()
         alertmanager_records = [i for i in env_integrations if i["service"] == "alertmanager"]
 
@@ -163,23 +164,17 @@ class TestAlertmanagerEnvResolution:
         """Alertmanager integration is not loaded from env when ALERTMANAGER_URL is unset."""
         monkeypatch.delenv("ALERTMANAGER_URL", raising=False)
 
-        from app.nodes.resolve_integrations.node import _load_env_integrations
-
         env_integrations = _load_env_integrations()
         alertmanager_records = [i for i in env_integrations if i["service"] == "alertmanager"]
 
         assert len(alertmanager_records) == 0
 
 
-class TestAlertmanagerSourceDetection:
-    """Test Alertmanager source detection in investigation context."""
+class TestAlertmanagerToolSourceAvailability:
+    """Test Alertmanager source availability in the tool-registry investigation path."""
 
     def test_alertmanager_detected_when_configured(self):
-        """Alertmanager source is detected when integration is configured."""
-        raw_alert = {
-            "commonLabels": {"alertname": "HighErrorRate", "job": "api-server"},
-            "commonAnnotations": {"summary": "High error rate"},
-        }
+        """Alertmanager source is available when integration is configured."""
         resolved_integrations = {
             "alertmanager": {
                 "base_url": "http://alertmanager.monitoring.svc:9093",
@@ -189,48 +184,42 @@ class TestAlertmanagerSourceDetection:
             }
         }
 
-        sources = detect_sources(raw_alert, {}, resolved_integrations)
+        sources = resolve_available_tool_sources(resolved_integrations)
 
         assert "alertmanager" in sources
         assert sources["alertmanager"]["base_url"] == "http://alertmanager.monitoring.svc:9093"
-        assert sources["alertmanager"]["connection_verified"] is True
 
-    def test_alertmanager_filter_labels_populated_from_alertname(self):
-        """Alertmanager source carries alertname label filter extracted from alert."""
-        raw_alert = {
-            "commonLabels": {"alertname": "HighErrorRate"},
-            "commonAnnotations": {},
-        }
+    def test_alertmanager_source_preserves_configured_filter_labels(self):
+        """Alertmanager tool params preserve filter labels from resolved config."""
         resolved_integrations = {
             "alertmanager": {
                 "base_url": "http://alertmanager.monitoring.svc:9093",
+                "filter_labels": ['alertname="HighErrorRate"'],
             }
         }
 
-        sources = detect_sources(raw_alert, {}, resolved_integrations)
+        sources = resolve_available_tool_sources(resolved_integrations)
 
         assert "alertmanager" in sources
         assert 'alertname="HighErrorRate"' in sources["alertmanager"]["filter_labels"]
 
     def test_alertmanager_not_detected_when_unconfigured(self):
         """Alertmanager source is not included when integration is not configured."""
-        raw_alert = {"commonLabels": {"alertname": "HighErrorRate"}}
         resolved_integrations = {}
 
-        sources = detect_sources(raw_alert, {}, resolved_integrations)
+        sources = resolve_available_tool_sources(resolved_integrations)
 
         assert "alertmanager" not in sources
 
     def test_alertmanager_not_detected_when_base_url_empty(self):
         """Alertmanager source is not included when base_url is empty."""
-        raw_alert = {"commonLabels": {}}
         resolved_integrations = {
             "alertmanager": {
                 "base_url": "",
             }
         }
 
-        sources = detect_sources(raw_alert, {}, resolved_integrations)
+        sources = resolve_available_tool_sources(resolved_integrations)
 
         assert "alertmanager" not in sources
 

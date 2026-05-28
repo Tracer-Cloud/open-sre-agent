@@ -9,10 +9,7 @@ discord = os.environ["DISCORD_INVITE_URL"]
 contributor = os.environ["CONTRIBUTOR_LOGIN"]
 
 templates: list[str] = [
-    (
-        f"🎉 **MERGED!** @{contributor} just shipped something. "
-        "The diff gods are pleased. 🙌"
-    ),
+    (f"🎉 **MERGED!** @{contributor} just shipped something. The diff gods are pleased. 🙌"),
     (
         f"🚀 **Houston, we have a merge.** @{contributor} your PR is in orbit. "
         "Thanks for launching this one!"
@@ -26,7 +23,7 @@ templates: list[str] = [
         "survived CI, and shipped. Respect. 🤝"
     ),
     (
-        f"🔥 **Another one.** @{contributor} said \"here's a PR\" and maintainers said "
+        f'🔥 **Another one.** @{contributor} said "here\'s a PR" and maintainers said '
         "\"ship it\". That's how it's done."
     ),
     (
@@ -41,10 +38,66 @@ templates: list[str] = [
         f"⚡ **LGTM → Merged.** @{contributor}, your work is in. "
         "Every commit counts — thank you for this one."
     ),
+    # new additions
+    (
+        f'😤 **@{contributor} said "I will fix this" and then actually fixed it.** '
+        "Legendary behavior."
+    ),
+    (
+        f"🍕 **@{contributor}'s PR:** crispy edges, no unnecessary toppings, delivered on time. "
+        "Understood the assignment. 🔥"
+    ),
+    (f"🌊 **Merged.** @{contributor} is now permanently woven into git history. No take-backs. 😄"),
+    (
+        f"🤖 **CI passed. Linter didn't scream. Reviewer typed LGTM.** "
+        f"@{contributor}, every machine in this pipeline just slow-clapped. 🖥️✨"
+    ),
+    (f"🧠 **@{contributor} opened a PR.** Maintainers feared them. CI genuflected. It merged. 🚨"),
+    (
+        f"😭 **Clear commit message. Green tests. Kind review.** "
+        f"@{contributor}, stop making the rest of us look bad."
+    ),
+    (
+        f"🐸 **Rebase? Handled. Conflicts? Squashed. CI? Vibing.** "
+        f"@{contributor} touched the untouchable and lived. 🫡"
+    ),
+    (
+        f"🏆 **@{contributor} did not come to play.** "
+        "PR opened. Review survived. Merged clean. Retire the jersey. 🎽"
+    ),
+    (
+        f"🎲 **Researchers are baffled.** @{contributor} opened a PR, got it reviewed without drama, "
+        "and merged clean. This violates known laws of open source. 🔬"
+    ),
+    (
+        f"🌮 **@{contributor}'s PR:** showed up unannounced, improved everything, left zero bugs. "
+        "Just like a perfect taco. 🌮"
+    ),
+    (
+        f"🐉 **Legend says** enough merged PRs and you ascend. "
+        f"@{contributor} is dangerously close. 🌤️"
+    ),
+    (
+        f"🛸 **Aliens watching our repo** just upgraded @{contributor}'s threat level to: "
+        "*do not engage — too competent*. 👽"
+    ),
+    (
+        f'🎻 **"The diff was clean, the tests did pass, the reviewer wept."** '
+        f"That poem was about @{contributor}'s PR. 🥹"
+    ),
+    (f"🍵 **@{contributor} made tea, opened a PR, and merged before it cooled.** No notes. ☕"),
+    (
+        f"🏄 **Some PRs rot in review for six weeks.** "
+        f'@{contributor}\'s said "not today" and merged like it owned the place. 🌊'
+    ),
+    (
+        f"💼 **Interviewer:** describe a time you shipped something impactful.\n\n"
+        f"**@{contributor}:** *points at this PR*\n\n"
+        "**Interviewer:** you're hired. 🤝"
+    ),
 ]
 
 # GIFs are repo-hosted under .github/assets/celebrations/ so GitHub's own CDN serves them.
-# Two empty slots keep ~22% of merges emoji-only (avoids GIF fatigue).
 _base = "https://raw.githubusercontent.com/Tracer-Cloud/opensre/main/.github/assets/celebrations"
 gif_blocks: list[str] = [
     f"\n\n![]({_base}/party.gif)",
@@ -53,6 +106,10 @@ gif_blocks: list[str] = [
     f"\n\n![]({_base}/shipped.gif)",
     f"\n\n![]({_base}/fireworks.gif)",
     f"\n\n![]({_base}/woohoo.gif)",
+    f"\n\n![]({_base}/office-celebrate.gif)",
+    f"\n\n![]({_base}/merge-celebrate-1.gif)",
+    f"\n\n![]({_base}/merge-celebrate-2.gif)",
+    f"\n\n![]({_base}/merge-celebrate-3.gif)",
 ]
 
 head = random.choice(templates) + random.choice(gif_blocks)

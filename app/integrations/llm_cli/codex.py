@@ -1,13 +1,16 @@
-"""OpenAI Codex CLI adapter (`codex exec`, non-interactive)."""
+"""OpenAI Codex CLI adapter (`codex exec`, non-interactive).
+
+OpenAI Platform env vars (``OPENAI_API_KEY``, ``OPENAI_ORG_ID``, ``OPENAI_PROJECT_ID``,
+``OPENAI_BASE_URL``) are forwarded on invoke when set, so Codex runs work with
+usage-based API key auth as well as ``codex login`` sessions.
+"""
 
 from __future__ import annotations
 
 import os
-import re
-import shutil
 import subprocess
 
-from app.integrations.llm_cli.base import CLIInvocation, CLIProbe, PromptDelivery
+from app.integrations.llm_cli.base import CLIInvocation, CLIProbe
 from app.integrations.llm_cli.binary_resolver import (
     candidate_binary_names as _candidate_binary_names,
 )
@@ -15,27 +18,18 @@ from app.integrations.llm_cli.binary_resolver import (
     default_cli_fallback_paths as _default_cli_fallback_paths,
 )
 from app.integrations.llm_cli.binary_resolver import (
-    is_runnable_binary as _is_runnable_binary,
-)
-from app.integrations.llm_cli.binary_resolver import (
     resolve_cli_binary,
 )
+from app.integrations.llm_cli.constants import DEFAULT_EXEC_TIMEOUT_SEC
+from app.integrations.llm_cli.env_overrides import (
+    OPENAI_PLATFORM_ENV_KEYS,
+    nonempty_env_values,
+)
+from app.integrations.llm_cli.probe_utils import run_version_probe
+from app.integrations.llm_cli.semver_utils import parse_semver_three_part, semver_to_tuple
 
-_CODEX_VERSION_RE = re.compile(r"(\d+\.\d+\.\d+)")
 _PROBE_TIMEOUT_SEC = 3.0
 _READ_ONLY_SANDBOX = "read-only"
-
-
-def _ver_tuple(version: str) -> tuple[int, int, int]:
-    parts = [int(p) for p in version.split(".") if p.isdigit()]
-    while len(parts) < 3:
-        parts.append(0)
-    return parts[0], parts[1], parts[2]
-
-
-def _parse_semver(text: str) -> str | None:
-    m = _CODEX_VERSION_RE.search(text)
-    return m.group(1) if m else None
 
 
 def _classify_codex_auth(returncode: int, stdout: str, stderr: str) -> tuple[bool | None, str]:
@@ -68,6 +62,8 @@ def _codex_workspace_and_skip_git() -> tuple[str, bool]:
             ["git", "rev-parse", "--show-toplevel"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=5.0,
             check=False,
         )
@@ -84,6 +80,10 @@ def _fallback_codex_paths() -> list[str]:
     return _default_cli_fallback_paths("codex")
 
 
+def _has_openai_api_key() -> bool:
+    return bool(os.environ.get("OPENAI_API_KEY", "").strip())
+
+
 class CodexAdapter:
     """Non-interactive Codex CLI (`codex exec` with read-only sandbox)."""
 
@@ -92,49 +92,36 @@ class CodexAdapter:
     install_hint = "npm i -g @openai/codex"
     auth_hint = "Run: codex login"
     min_version: str | None = None
-    default_exec_timeout_sec = 120.0
-    prompt_delivery: PromptDelivery = "stdin"
+    default_exec_timeout_sec = DEFAULT_EXEC_TIMEOUT_SEC
 
     def _resolve_binary(self) -> str | None:
         return resolve_cli_binary(
             explicit_env_key="CODEX_BIN",
             binary_names=_candidate_binary_names("codex"),
             fallback_paths=_fallback_codex_paths,
-            which_resolver=shutil.which,
-            runnable_check=_is_runnable_binary,
         )
 
     def _probe_binary(self, binary_path: str) -> CLIProbe:
-        try:
-            ver_proc = subprocess.run(
-                [binary_path, "--version"],
-                capture_output=True,
-                text=True,
-                timeout=_PROBE_TIMEOUT_SEC,
-                check=False,
-            )
-        except (OSError, subprocess.TimeoutExpired) as exc:
+        version_output, version_error = run_version_probe(
+            binary_path,
+            timeout_sec=_PROBE_TIMEOUT_SEC,
+        )
+        if version_error:
             return CLIProbe(
                 installed=False,
                 version=None,
                 logged_in=None,
                 bin_path=None,
-                detail=f"Could not run `{binary_path} --version`: {exc}",
+                detail=version_error,
             )
 
-        if ver_proc.returncode != 0:
-            err = (ver_proc.stderr or ver_proc.stdout or "").strip()
-            return CLIProbe(
-                installed=False,
-                version=None,
-                logged_in=None,
-                bin_path=None,
-                detail=f"`{binary_path} --version` failed: {err or 'unknown error'}",
-            )
-
-        version = _parse_semver(ver_proc.stdout + ver_proc.stderr)
+        version = parse_semver_three_part(version_output or "")
         upgrade_note = ""
-        if self.min_version and version and _ver_tuple(version) < _ver_tuple(self.min_version):
+        if (
+            self.min_version
+            and version
+            and semver_to_tuple(version) < semver_to_tuple(self.min_version)
+        ):
             upgrade_note = (
                 f" Codex {version} is below tested minimum {self.min_version}; "
                 f"upgrade: {self.install_hint}@latest"
@@ -145,6 +132,8 @@ class CodexAdapter:
                 [binary_path, "login", "status"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=_PROBE_TIMEOUT_SEC,
                 check=False,
             )
@@ -155,6 +144,11 @@ class CodexAdapter:
             logged_in, auth_detail = _classify_codex_auth(
                 auth_proc.returncode, auth_proc.stdout, auth_proc.stderr
             )
+
+        if logged_in is not True and _has_openai_api_key():
+            # Allow API-key auth when ChatGPT/session login is absent or unclear.
+            logged_in = True
+            auth_detail = "Authenticated via OPENAI_API_KEY fallback."
 
         detail = auth_detail + upgrade_note
         return CLIProbe(
@@ -177,7 +171,14 @@ class CodexAdapter:
             )
         return self._probe_binary(binary)
 
-    def build(self, *, prompt: str, model: str | None, workspace: str) -> CLIInvocation:
+    def build(
+        self,
+        *,
+        prompt: str,
+        model: str | None,
+        workspace: str,
+        reasoning_effort: str | None = None,
+    ) -> CLIInvocation:
         binary = self._resolve_binary()
         if not binary:
             raise RuntimeError(
@@ -205,14 +206,17 @@ class CodexAdapter:
         resolved_model = (model or "").strip()
         if resolved_model:
             argv.extend(["-m", resolved_model])
+        if reasoning_effort:
+            argv.extend(["-c", f'model_reasoning_effort="{reasoning_effort}"'])
 
         argv.append("-")
 
+        oai = nonempty_env_values(OPENAI_PLATFORM_ENV_KEYS)
         return CLIInvocation(
             argv=tuple(argv),
             stdin=prompt,
             cwd=ws,
-            env=None,
+            env=oai or None,
             timeout_sec=self.default_exec_timeout_sec,
         )
 

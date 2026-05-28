@@ -3,13 +3,13 @@
 import os
 from unittest.mock import MagicMock, patch
 
+from app.integrations.catalog import classify_integrations as _classify_integrations
 from app.integrations.mongodb_atlas import (
     MongoDBAtlasConfig,
     build_mongodb_atlas_config,
     mongodb_atlas_config_from_env,
     validate_mongodb_atlas_config,
 )
-from app.nodes.resolve_integrations.node import _classify_integrations
 
 
 class TestMongoDBAtlasConfig:

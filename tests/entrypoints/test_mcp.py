@@ -69,10 +69,13 @@ def test_run_rca_happy_path(monkeypatch: MonkeyPatch) -> None:
 
 
 def test_run_rca_unexpected_exception_includes_error_type(monkeypatch: MonkeyPatch) -> None:
+    captured_errors: list[BaseException] = []
+
     def fake_run_cli(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
         raise RuntimeError("something went wrong")
 
     monkeypatch.setattr("app.entrypoints.mcp._run_cli", fake_run_cli)
+    monkeypatch.setattr("app.entrypoints.mcp.capture_exception", captured_errors.append)
 
     payload: dict[str, Any] = {"title": "test", "state": "firing", "alert_source": "grafana"}
     result = run_rca(alert_payload=payload)
@@ -81,6 +84,8 @@ def test_run_rca_unexpected_exception_includes_error_type(monkeypatch: MonkeyPat
     assert result["error"] == "something went wrong"
     assert result["error_type"] == "RuntimeError"
     assert result["result"] is None
+    assert len(captured_errors) == 1
+    assert isinstance(captured_errors[0], RuntimeError)
 
 
 def test_run_rca_error_type_reflects_actual_exception_class(monkeypatch: MonkeyPatch) -> None:
@@ -128,3 +133,29 @@ def test_run_rca_output_model_has_error_type_field() -> None:
 def test_run_rca_output_model_error_type_defaults_to_none() -> None:
     out = RunRCAOutput(ok=True)
     assert out.error_type is None
+
+
+def test_run_rca_tracks_investigation_source(monkeypatch: MonkeyPatch) -> None:
+    track_calls: list[tuple[str, str]] = []
+
+    class _TrackContext:
+        def __enter__(self) -> None:
+            return None
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            _ = (exc_type, exc, tb)
+            return False
+
+    def fake_track_investigation(*, entrypoint, trigger_mode, **kwargs):  # type: ignore[no-untyped-def]
+        _ = kwargs
+        track_calls.append((entrypoint.value, trigger_mode.value))
+        return _TrackContext()
+
+    monkeypatch.setattr("app.entrypoints.mcp.track_investigation", fake_track_investigation)
+    monkeypatch.setattr("app.entrypoints.mcp.run_investigation_cli", lambda **_kwargs: {"ok": True})
+
+    payload: dict[str, Any] = {"title": "test", "state": "firing", "alert_source": "grafana"}
+    result = run_rca(alert_payload=payload)
+
+    assert result["ok"] is True
+    assert track_calls == [("mcp", "service_runtime")]

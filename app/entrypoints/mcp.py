@@ -1,11 +1,20 @@
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
+from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, Field, ValidationError
 
-from app.cli.investigate import run_investigation_cli
+from app.analytics.cli import track_investigation
+from app.analytics.source import EntrypointSource, TriggerMode
+from app.cli.investigation import run_investigation_cli
+from app.cli.support.errors import OpenSREError
+from app.utils.sentry_sdk import capture_exception, init_sentry
+
+load_dotenv(override=False)
+init_sentry(entrypoint="mcp")
 
 
 class RunRCAInput(BaseModel):
@@ -20,6 +29,7 @@ class RunRCAOutput(BaseModel):
     result: dict[str, Any] | None = None
     error: str | None = None
     error_type: str | None = None
+    suggestion: str | None = None
 
 
 mcp = FastMCP("opensre")
@@ -50,12 +60,12 @@ def _run_cli(
     pipeline_name: str | None = None,
     severity: str | None = None,
 ) -> dict[str, Any]:
-    return run_investigation_cli(
-        raw_alert=payload,
-        alert_name=alert_name,
-        pipeline_name=pipeline_name,
-        severity=severity,
-    )
+    _ = (alert_name, pipeline_name, severity)
+    with track_investigation(
+        entrypoint=EntrypointSource.MCP,
+        trigger_mode=TriggerMode.SERVICE_RUNTIME,
+    ):
+        return run_investigation_cli(raw_alert=payload)
 
 
 @mcp.tool(name="run_rca")
@@ -85,13 +95,35 @@ def run_rca(
 
         return RunRCAOutput(ok=True, result=result).model_dump()
     except ValidationError as err:
-        return RunRCAOutput(ok=False, error=str(err), error_type=type(err).__name__).model_dump()
-    except Exception as err:  # noqa: BLE001
-        return RunRCAOutput(ok=False, error=str(err), error_type=type(err).__name__).model_dump()
+        return RunRCAOutput(
+            ok=False,
+            error=str(err),
+            error_type=type(err).__name__,
+        ).model_dump()
+
+    except OpenSREError as err:
+        return RunRCAOutput(
+            ok=False,
+            error=str(err),
+            error_type=type(err).__name__,
+            suggestion=err.suggestion,
+        ).model_dump()
+
+    except Exception as err:
+        capture_exception(err)
+        return RunRCAOutput(
+            ok=False,
+            error=str(err),
+            error_type=type(err).__name__,
+        ).model_dump()
 
 
 def main() -> None:
-    mcp.run()
+    # anyio.run() (called inside mcp.run()) unwraps single-item ExceptionGroups at the
+    # sync boundary, so BrokenPipeError / ConnectionResetError arrive as bare exceptions
+    # here even though they originate inside an anyio TaskGroup.
+    with contextlib.suppress(BrokenPipeError, ConnectionResetError):
+        mcp.run()
 
 
 if __name__ == "__main__":

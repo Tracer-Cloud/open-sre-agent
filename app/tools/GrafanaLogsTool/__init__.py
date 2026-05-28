@@ -18,29 +18,45 @@ def _map_pipeline_to_service_name(pipeline_name: str) -> str:
 def _resolve_grafana_client(
     grafana_endpoint: str | None = None,
     grafana_api_key: str | None = None,
+    grafana_username: str = "",
+    grafana_password: str = "",
 ):
     if not grafana_endpoint:
         return None
     return get_grafana_client_from_credentials(
         endpoint=grafana_endpoint,
         api_key=grafana_api_key or "",
+        username=grafana_username,
+        password=grafana_password,
     )
 
 
 def _grafana_creds(grafana: dict) -> dict:
     return {
-        "grafana_endpoint": grafana.get("grafana_endpoint"),
-        "grafana_api_key": grafana.get("grafana_api_key"),
+        "grafana_endpoint": grafana.get("grafana_endpoint") or grafana.get("endpoint"),
+        "grafana_api_key": grafana.get("grafana_api_key") or grafana.get("api_key"),
+        "grafana_username": grafana.get("username", ""),
+        "grafana_password": grafana.get("password", ""),
     }
 
 
+def _grafana_source(sources: dict) -> dict:
+    grafana = sources.get("grafana") or sources.get("grafana_local") or {}
+    return grafana if isinstance(grafana, dict) else {}
+
+
 def _grafana_available(sources: dict) -> bool:
-    grafana = sources.get("grafana", {})
-    return bool(grafana.get("connection_verified") or grafana.get("_backend"))
+    grafana = _grafana_source(sources)
+    return bool(
+        grafana.get("connection_verified")
+        or grafana.get("_backend")
+        or grafana.get("grafana_endpoint")
+        or grafana.get("endpoint")
+    )
 
 
 def _query_grafana_logs_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
-    grafana = sources["grafana"]
+    grafana = _grafana_source(sources)
     return {
         "service_name": grafana.get("service_name", ""),
         "pipeline_name": grafana.get("pipeline_name"),
@@ -58,6 +74,7 @@ def _query_grafana_logs_available(sources: dict[str, dict]) -> bool:
 
 @tool(
     name="query_grafana_logs",
+    display_name="Grafana Loki",
     source="grafana",
     description="Query Grafana Loki for pipeline logs.",
     use_cases=[
@@ -75,6 +92,8 @@ def _query_grafana_logs_available(sources: dict[str, dict]) -> bool:
             "limit": {"type": "integer", "default": 100},
             "grafana_endpoint": {"type": "string"},
             "grafana_api_key": {"type": "string"},
+            "grafana_username": {"type": "string"},
+            "grafana_password": {"type": "string"},
             "pipeline_name": {"type": "string"},
         },
         "required": ["service_name"],
@@ -89,6 +108,8 @@ def query_grafana_logs(
     limit: int = 100,
     grafana_endpoint: str | None = None,
     grafana_api_key: str | None = None,
+    grafana_username: str = "",
+    grafana_password: str = "",
     pipeline_name: str | None = None,
     grafana_backend: Any = None,
     **_kwargs: Any,
@@ -135,7 +156,9 @@ def query_grafana_logs(
             result_data["truncation_note"] = summary
         return result_data
 
-    client = _resolve_grafana_client(grafana_endpoint, grafana_api_key)
+    client = _resolve_grafana_client(
+        grafana_endpoint, grafana_api_key, grafana_username, grafana_password
+    )
     if not client or not client.is_configured:
         return {
             "source": "grafana_loki",

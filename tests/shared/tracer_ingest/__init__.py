@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import requests
@@ -36,11 +36,7 @@ def _redact_token(token: str) -> str:
 
 def _utc_now_iso() -> str:
     """UTC timestamp in ISO-8601 with milliseconds and Z suffix."""
-    return (
-        datetime.now(timezone.utc)  # noqa: UP017 - use timezone.utc for broad compatibility
-        .isoformat(timespec="milliseconds")
-        .replace("+00:00", "Z")
-    )
+    return datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def _tracer_context_metadata() -> dict[str, Any]:

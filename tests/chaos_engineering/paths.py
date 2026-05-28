@@ -84,7 +84,7 @@ def infer_chaos_kind(chaos_yaml: Path) -> str | None:
         for doc in yaml.safe_load_all(text):
             if isinstance(doc, dict) and doc.get("kind"):
                 return str(doc["kind"])
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None
     return None
 

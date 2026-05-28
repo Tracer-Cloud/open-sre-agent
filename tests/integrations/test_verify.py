@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import pytest
@@ -13,6 +14,7 @@ from app.integrations.verify import (
     _verify_honeycomb,
     _verify_sentry,
     _verify_snowflake,
+    _verify_telegram,
     _verify_tracer,
     _verify_vercel,
     resolve_effective_integrations,
@@ -118,6 +120,110 @@ def test_resolve_effective_integrations_keeps_incomplete_datadog_store_record(
     assert effective["datadog"]["config"]["api_key"] == ""
 
 
+def test_resolve_effective_integrations_drops_unrecognised_keys_with_warning(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Unknown catalog keys must not crash EffectiveIntegrations (extra=forbid)."""
+    from app.integrations import _catalog_impl as catalog_impl
+
+    monkeypatch.setattr("app.integrations.catalog.load_integrations", lambda: [])
+    fake_service = "zzz_unknown_effective_key"
+    orig_direct = catalog_impl.DIRECT_CLASSIFIED_EFFECTIVE_SERVICES
+    monkeypatch.setattr(
+        catalog_impl,
+        "DIRECT_CLASSIFIED_EFFECTIVE_SERVICES",
+        (*orig_direct, fake_service),
+    )
+    real_classify = catalog_impl.classify_integrations
+
+    def classify_with_unknown(merged: list[dict[str, Any]]) -> dict[str, Any]:
+        out = dict(real_classify(merged))
+        out[fake_service] = {
+            "id": "stub",
+            "service": fake_service,
+            "credentials": {},
+        }
+        return out
+
+    monkeypatch.setattr(catalog_impl, "classify_integrations", classify_with_unknown)
+
+    with caplog.at_level(logging.WARNING, logger="app.integrations._catalog_impl"):
+        effective = resolve_effective_integrations()
+
+    assert fake_service not in effective
+    assert any("unrecognised integration key" in record.message for record in caplog.records), (
+        caplog.text
+    )
+    assert fake_service in caplog.text
+
+
+def test_verify_telegram_passes_with_get_me(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _fake_requests_get(url: str, *_args: Any, **_kwargs: Any) -> _FakeResponse:
+        assert "getMe" in url
+        return _FakeResponse({"ok": True, "result": {"username": "opensre_bot"}})
+
+    monkeypatch.setattr(
+        "app.integrations._verification_adapters.requests.get",
+        _fake_requests_get,
+    )
+    result = _verify_telegram(
+        "local store",
+        {"bot_token": "123:ABC", "default_chat_id": "-100123"},
+    )
+    assert result["status"] == "passed"
+    assert "opensre_bot" in result["detail"]
+
+
+def test_verify_telegram_missing_token() -> None:
+    result = _verify_telegram("local env", {"bot_token": ""})
+    assert result["status"] == "missing"
+    assert "bot_token" in result["detail"].lower()
+
+
+def test_verify_telegram_api_not_ok(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "app.integrations._verification_adapters.requests.get",
+        lambda *_a, **_kw: _FakeResponse({"ok": False, "description": "Unauthorized"}),
+    )
+    result = _verify_telegram("local store", {"bot_token": "bad"})
+    assert result["status"] == "failed"
+    assert "unauthorized" in result["detail"].lower()
+
+
+def test_verify_slack_uses_v2_store_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "app.integrations.catalog.load_integrations",
+        lambda: [
+            {
+                "id": "slack-local",
+                "service": "slack",
+                "status": "active",
+                "instances": [
+                    {
+                        "name": "default",
+                        "tags": {},
+                        "credentials": {
+                            "webhook_url": "https://hooks.slack.com/services/T000/B000/test"
+                        },
+                    }
+                ],
+            }
+        ],
+    )
+    monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
+
+    results = verify_integrations("slack")
+
+    assert results == [
+        {
+            "service": "slack",
+            "source": "local store",
+            "status": "passed",
+            "detail": "Configured. Use --send-slack-test to validate delivery.",
+        }
+    ]
+
+
 def test_verify_grafana_passes_with_supported_datasource(monkeypatch: pytest.MonkeyPatch) -> None:
     def _fake_requests_get(*_args: Any, **_kwargs: Any) -> _FakeResponse:
         return _FakeResponse(
@@ -128,7 +234,7 @@ def test_verify_grafana_passes_with_supported_datasource(monkeypatch: pytest.Mon
         )
 
     monkeypatch.setattr(
-        "app.integrations.verify.requests.get",
+        "app.integrations._verification_adapters.requests.get",
         _fake_requests_get,
     )
 
@@ -143,12 +249,13 @@ def test_verify_grafana_passes_with_supported_datasource(monkeypatch: pytest.Mon
 
 
 def test_verify_datadog_reports_api_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _fake_list_monitors(_self: Any) -> dict[str, Any]:
-        return {"success": False, "error": "HTTP 403: forbidden"}
+    from app.integrations.probes import ProbeResult
+    from app.services.datadog.client import DatadogClient
 
     monkeypatch.setattr(
-        "app.integrations.verify.DatadogClient.list_monitors",
-        _fake_list_monitors,
+        DatadogClient,
+        "probe_access",
+        lambda _self: ProbeResult.failed("HTTP 403: forbidden"),
     )
 
     result = _verify_datadog(
@@ -191,13 +298,15 @@ def test_verify_snowflake_requires_token() -> None:
 
 
 def test_verify_honeycomb_uses_auth_and_query(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.integrations.probes import ProbeResult
+    from app.services.honeycomb import HoneycombClient
+
     monkeypatch.setattr(
-        "app.integrations.verify.HoneycombClient.validate_access",
-        lambda _self: {"success": True, "environment": {"slug": "prod"}},
-    )
-    monkeypatch.setattr(
-        "app.integrations.verify.HoneycombClient.run_query",
-        lambda _self, *_args, **_kwargs: {"success": True, "results": [{}]},
+        HoneycombClient,
+        "probe_access",
+        lambda _self: ProbeResult.passed(
+            "Connected to Honeycomb dataset prod-api.", dataset="prod-api"
+        ),
     )
 
     result = _verify_honeycomb(
@@ -210,9 +319,13 @@ def test_verify_honeycomb_uses_auth_and_query(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_verify_coralogix_reports_api_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.integrations.probes import ProbeResult
+    from app.services.coralogix import CoralogixClient
+
     monkeypatch.setattr(
-        "app.integrations.verify.CoralogixClient.validate_access",
-        lambda _self: {"success": False, "error": "HTTP 401: unauthorized"},
+        CoralogixClient,
+        "probe_access",
+        lambda _self: ProbeResult.failed("HTTP 401: unauthorized"),
     )
 
     result = _verify_coralogix(
@@ -255,7 +368,7 @@ def test_verify_aws_assume_role_passes(monkeypatch: pytest.MonkeyPatch) -> None:
             return _AssumedSTSClient()
         return _BaseSTSClient()
 
-    monkeypatch.setattr("app.integrations.verify.boto3.client", _fake_boto3_client)
+    monkeypatch.setattr("app.integrations._verification_adapters.boto3.client", _fake_boto3_client)
 
     result = _verify_aws(
         "local store",
@@ -281,8 +394,14 @@ def test_verify_tracer_passes_with_env_jwt(monkeypatch: pytest.MonkeyPatch) -> N
         def get_all_integrations(self) -> list[dict[str, str]]:
             return [{"id": "int-1"}, {"id": "int-2"}]
 
-    monkeypatch.setattr("app.integrations.verify.extract_org_id_from_jwt", lambda _token: "org_123")
-    monkeypatch.setattr("app.integrations.verify.TracerClient", _FakeTracerClient)
+    monkeypatch.setattr(
+        "app.integrations._verification_adapters.extract_org_id_from_jwt",
+        lambda _token: "org_123",
+    )
+    monkeypatch.setattr(
+        "app.integrations._verification_adapters.TracerClient",
+        _FakeTracerClient,
+    )
 
     result = _verify_tracer(
         "local env",
@@ -294,10 +413,20 @@ def test_verify_tracer_passes_with_env_jwt(monkeypatch: pytest.MonkeyPatch) -> N
     assert "2 integrations" in result["detail"]
 
 
-def test_verify_github_uses_shared_validator(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_verify_github_passes_with_valid_streamable_http_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.integrations._verification_adapters as _adapters
+
     monkeypatch.setattr(
-        "app.integrations.verify.validate_github_mcp_config",
-        lambda _config: type("Result", (), {"ok": True, "detail": "GitHub MCP ok"})(),
+        _adapters,
+        "_verify_with_validation_result",
+        lambda service, source, _config, **_kw: {
+            "service": service,
+            "source": source,
+            "status": "passed",
+            "detail": "GitHub MCP ok",
+        },
     )
 
     result = _verify_github(
@@ -305,18 +434,26 @@ def test_verify_github_uses_shared_validator(monkeypatch: pytest.MonkeyPatch) ->
         {
             "url": "https://api.githubcopilot.com/mcp/",
             "mode": "streamable-http",
-            "auth_token": "ghp",
+            "auth_token": "ghp_test",
         },
     )
 
     assert result["status"] == "passed"
-    assert result["detail"] == "GitHub MCP ok"
+    assert result["service"] == "github"
 
 
-def test_verify_sentry_uses_shared_validator(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_verify_sentry_passes_with_valid_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.integrations._verification_adapters as _adapters
+
     monkeypatch.setattr(
-        "app.integrations.verify.validate_sentry_config",
-        lambda _config: type("Result", (), {"ok": True, "detail": "Sentry ok"})(),
+        _adapters,
+        "_verify_with_validation_result",
+        lambda service, source, _config, **_kw: {
+            "service": service,
+            "source": source,
+            "status": "passed",
+            "detail": "Sentry ok",
+        },
     )
 
     result = _verify_sentry(
@@ -324,13 +461,13 @@ def test_verify_sentry_uses_shared_validator(monkeypatch: pytest.MonkeyPatch) ->
         {
             "base_url": "https://sentry.io",
             "organization_slug": "demo-org",
-            "auth_token": "sntrys",
+            "auth_token": "sntrys_test",
             "project_slug": "payments",
         },
     )
 
     assert result["status"] == "passed"
-    assert result["detail"] == "Sentry ok"
+    assert result["service"] == "sentry"
 
 
 def test_verification_exit_code_requires_core_success() -> None:
@@ -405,20 +542,16 @@ def test_verification_exit_code_requires_core_success() -> None:
 
 
 def test_verify_vercel_passes_with_valid_token(monkeypatch: pytest.MonkeyPatch) -> None:
-    class _FakeVercelClient:
-        def __init__(self, config: Any) -> None:
-            pass
+    from app.integrations.probes import ProbeResult
+    from app.services.vercel.client import VercelClient
 
-        def __enter__(self) -> _FakeVercelClient:
-            return self
-
-        def __exit__(self, *_: object) -> None:
-            pass
-
-        def list_projects(self) -> dict[str, Any]:
-            return {"success": True, "projects": [{"id": "p1"}, {"id": "p2"}], "total": 2}
-
-    monkeypatch.setattr("app.integrations.verify.VercelClient", _FakeVercelClient)
+    monkeypatch.setattr(
+        VercelClient,
+        "probe_access",
+        lambda _self: ProbeResult.passed(
+            "Connected to Vercel API and listed 2 project(s).", total=2
+        ),
+    )
 
     result = _verify_vercel("local env", {"api_token": "tok_test", "team_id": ""})
 
@@ -427,20 +560,14 @@ def test_verify_vercel_passes_with_valid_token(monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_verify_vercel_fails_on_api_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    class _FakeVercelClient:
-        def __init__(self, config: Any) -> None:
-            pass
+    from app.integrations.probes import ProbeResult
+    from app.services.vercel.client import VercelClient
 
-        def __enter__(self) -> _FakeVercelClient:
-            return self
-
-        def __exit__(self, *_: object) -> None:
-            pass
-
-        def list_projects(self) -> dict[str, Any]:
-            return {"success": False, "error": "HTTP 401: unauthorized"}
-
-    monkeypatch.setattr("app.integrations.verify.VercelClient", _FakeVercelClient)
+    monkeypatch.setattr(
+        VercelClient,
+        "probe_access",
+        lambda _self: ProbeResult.failed("HTTP 401: unauthorized"),
+    )
 
     result = _verify_vercel("local env", {"api_token": "bad_token", "team_id": ""})
 
@@ -454,20 +581,16 @@ def test_verify_vercel_missing_token() -> None:
 
 
 def test_verify_integrations_dispatches_to_vercel(monkeypatch: pytest.MonkeyPatch) -> None:
-    class _FakeVercelClient:
-        def __init__(self, config: Any) -> None:
-            pass
+    from app.integrations.probes import ProbeResult
+    from app.services.vercel.client import VercelClient
 
-        def __enter__(self) -> _FakeVercelClient:
-            return self
-
-        def __exit__(self, *_: object) -> None:
-            pass
-
-        def list_projects(self) -> dict[str, Any]:
-            return {"success": True, "projects": [], "total": 0}
-
-    monkeypatch.setattr("app.integrations.verify.VercelClient", _FakeVercelClient)
+    monkeypatch.setattr(
+        VercelClient,
+        "probe_access",
+        lambda _self: ProbeResult.passed(
+            "Connected to Vercel API and listed 0 project(s).", total=0
+        ),
+    )
     monkeypatch.setattr(
         "app.integrations.catalog.load_integrations",
         lambda: [
@@ -524,3 +647,47 @@ def test_resolve_effective_integrations_includes_vercel_from_env(
     assert vercel is not None
     assert vercel["config"]["api_token"] == "tok_env"
     assert vercel["source"] == "local env"
+
+
+def test_resolve_effective_integrations_skips_invalid_slack_env_url(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A non-Slack SLACK_WEBHOOK_URL must not crash resolve_effective_integrations (Sentry #1987)."""
+    monkeypatch.setattr("app.integrations.catalog.load_integrations", lambda: [])
+    monkeypatch.setenv("SLACK_WEBHOOK_URL", "https://example.com/not-slack")
+
+    with caplog.at_level(logging.WARNING):
+        effective = resolve_effective_integrations()
+
+    assert "slack" not in effective
+    assert any("SLACK_WEBHOOK_URL" in r.message for r in caplog.records)
+
+
+def test_resolve_effective_integrations_skips_invalid_slack_store_url(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """An invalid webhook_url in the store must not crash resolve_effective_integrations."""
+    monkeypatch.setattr(
+        "app.integrations.catalog.load_integrations",
+        lambda: [
+            {
+                "id": "slack-local",
+                "service": "slack",
+                "status": "active",
+                "instances": [
+                    {
+                        "name": "default",
+                        "tags": {},
+                        "credentials": {"webhook_url": "https://example.com/not-slack"},
+                    }
+                ],
+            }
+        ],
+    )
+    monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
+
+    with caplog.at_level(logging.WARNING):
+        effective = resolve_effective_integrations()
+
+    assert "slack" not in effective
+    assert any("Slack webhook" in r.message for r in caplog.records)

@@ -1,4 +1,4 @@
-"""Map LangGraph streaming events to human-readable reasoning steps.
+"""Map remote streaming events to human-readable reasoning steps.
 
 Translates fine-grained ``events``-mode callbacks (tool calls, LLM
 reasoning, chain transitions) into short status strings suitable for
@@ -9,14 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.output import _ACTION_DISPLAY
-
-TOOL_DISPLAY: dict[str, str] = {
-    **_ACTION_DISPLAY,
-    "query_kubernetes_logs": "Kubernetes logs",
-    "query_elasticsearch": "Elasticsearch",
-    "get_deployment_status": "deployment status",
-}
+from app.tools.registry import resolve_tool_display_name
 
 _NODE_VERB: dict[str, str] = {
     "extract_alert": "parsing",
@@ -32,11 +25,11 @@ _NODE_VERB: dict[str, str] = {
 
 def tool_display_name(tool_name: str) -> str:
     """Return a human-friendly label for a tool, falling back to de-snaking."""
-    return TOOL_DISPLAY.get(tool_name, tool_name.replace("_", " "))
+    return resolve_tool_display_name(tool_name)
 
 
 def reasoning_text(kind: str, data: dict[str, Any], node_name: str) -> str | None:
-    """Derive a short reasoning string from a LangGraph events-mode payload.
+    """Derive a short reasoning string from a events-mode payload.
 
     Returns ``None`` when the event doesn't warrant a visible status update
     (e.g. internal chain scaffolding, empty chunks).
@@ -59,7 +52,8 @@ def _on_tool_start(data: dict[str, Any]) -> str:
 
 
 def _on_tool_end(data: dict[str, Any], _node_name: str) -> str | None:
-    output = data.get("data", {}).get("output", "")
+    payload = data.get("data")
+    output = payload.get("output", "") if isinstance(payload, dict) else ""
     if isinstance(output, str) and len(output) > 120:
         output = output[:117] + "..."
     name = data.get("name", "")

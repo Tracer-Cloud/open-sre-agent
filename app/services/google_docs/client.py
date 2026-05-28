@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from app.integrations.models import GoogleDocsIntegrationConfig
+from app.integrations.probes import ProbeResult
 
 logger = logging.getLogger(__name__)
 
@@ -282,6 +283,27 @@ class GoogleDocsClient:
             }
         except Exception as exc:
             return _handle_google_api_error(exc, "validating access")
+
+    def probe_access(self) -> ProbeResult:
+        """Validate Google Docs credentials and configured folder access."""
+        if not self.config.credentials_file or not self.config.folder_id:
+            return ProbeResult.missing("Missing credentials_file or folder_id.")
+
+        if not self.is_configured:
+            return ProbeResult.failed(f"Credentials file not found: {self.config.credentials_file}")
+
+        result = self.validate_access()
+        if not result.get("success"):
+            return ProbeResult.failed(
+                f"Folder access check failed: {result.get('error', 'unknown error')}"
+            )
+
+        file_count = int(result.get("file_count", 0) or 0)
+        return ProbeResult.passed(
+            (f"Connected to Drive folder {self.config.folder_id} ({file_count} items in folder)."),
+            file_count=file_count,
+            folder_id=self.config.folder_id,
+        )
 
     def create_incident_report(
         self,

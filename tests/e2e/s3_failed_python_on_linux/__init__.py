@@ -1,1 +1,0 @@
-"""Tracer demo test case."""

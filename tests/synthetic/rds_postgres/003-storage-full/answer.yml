@@ -1,4 +1,4 @@
-root_cause_category: resource_exhaustion
+root_cause_category: storage_exhaustion
 required_keywords:
   - storage
   - FreeStorageSpace
@@ -8,10 +8,12 @@ optimal_trajectory:
   - query_grafana_metrics
   - query_grafana_logs
   - query_grafana_alert_rules
+  - describe_rds_instance
+  - describe_rds_events
 max_investigation_loops: 4
 model_response: |
   ROOT_CAUSE: The RDS instance ran out of storage space during a bulk INSERT archival job. FreeStorageSpace collapsed from 15 GB to 0 in 15 minutes driven by elevated WriteIOPS. The RDS control plane confirmed the outage with a "DB instance ran out of storage space" event.
-  ROOT_CAUSE_CATEGORY: resource_exhaustion
+  ROOT_CAUSE_CATEGORY: storage_exhaustion
 
   VALIDATED_CLAIMS:
   - FreeStorageSpace on orders-prod dropped monotonically from ~15 GB to ~500 MB over 15 minutes. [evidence: aws_cloudwatch_metrics]

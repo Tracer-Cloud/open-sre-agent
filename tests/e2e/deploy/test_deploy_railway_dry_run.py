@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.deployment.provider_config import (
+from app.deployment.operations.provider_config import (
     dry_run_provider_validation,
     validate_railway_deploy_config,
 )

@@ -1,4 +1,6 @@
-root_cause_category: resource_exhaustion
+root_cause_category: replication_lag
+equivalent_root_cause_categories:
+  - replication_lag_wal_volume
 required_keywords:
   - replication
   - replication lag
@@ -6,7 +8,6 @@ required_keywords:
   - replica
   - UPDATE
   - SELECT
-  - causally independent
 forbidden_keywords:
   - cpu_saturation
   - two root causes
@@ -19,10 +20,12 @@ optimal_trajectory:
   - query_grafana_metrics
   - query_grafana_logs
   - query_grafana_alert_rules
+  - describe_rds_instance
+  - describe_rds_events
 max_investigation_loops: 4
 model_response: |
   ROOT_CAUSE: Replication lag on analytics-prod-replica-1 caused by a write-heavy batch UPDATE job generating WAL faster than the replica could replay. The CPUUtilization elevation (70-85%) is a confounder from an unrelated analytics SELECT query running concurrently — it is not the root cause.
-  ROOT_CAUSE_CATEGORY: resource_exhaustion
+  ROOT_CAUSE_CATEGORY: replication_lag_wal_volume
 
   VALIDATED_CLAIMS:
   - ReplicaLag grew monotonically from 15 seconds to 1,248 seconds over 20 minutes. [evidence: aws_cloudwatch_metrics]

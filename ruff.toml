@@ -38,8 +38,9 @@ ignore = [
 
 # Per-file ignores for legitimate patterns
 [lint.per-file-ignores]
-# Test files can have unused imports for fixtures and sys.path modifications before imports
-"tests/**/*.py" = ["F401", "ARG001", "E402"]
+# Tests: pytest fixtures/parameters often appear unused — keep ignoring those.
+# F401 is enforced so unused imports surface in lint (and CI) like in app/.
+"tests/**/*.py" = ["ARG001", "E402"]
 
 # Pydantic models have fields that appear unused but are accessed dynamically
 "app/ingest.py" = ["ARG002"]
@@ -48,5 +49,9 @@ ignore = [
 "app/tracer/client.py" = ["ARG002"]
 
 # CLI entry points
-"app/main.py" = ["ARG001"]
+"app/cli/__main__.py" = ["ARG001"]
+
+# stderr buffer outlives the function — closed in a watcher thread's `finally`,
+# so a `with` block at the call site would close it before the subprocess runs.
+"app/cli/interactive_shell/routing/handle_message_with_agent/orchestration/action_executor/synthetic_tasks.py" = ["SIM115"]
 

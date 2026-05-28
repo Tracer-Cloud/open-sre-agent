@@ -10,7 +10,6 @@ Follows Senior/Staff-level refactoring principles:
 """
 
 import json
-import time
 from contextlib import contextmanager
 
 from .adapters.alerting import fire_pipeline_alert

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 
 from app.cli.tests import interactive
@@ -62,17 +63,28 @@ def test_choose_interactive_item_prompts_when_multiple_matches_exist(monkeypatch
     assert "make:test-cov" in selected_item_ids[0]
 
 
-def test_choose_interactive_item_raises_on_empty_filter(monkeypatch) -> None:
-    catalog = Catalog(items=())
+def test_choose_interactive_item_retries_after_empty_filter(monkeypatch) -> None:
+    catalog = Catalog(
+        items=(
+            CatalogItem(
+                id="make:test-cov",
+                kind="make_target",
+                display_name="Coverage Suite",
+                description="Run the coverage suite.",
+                command=("make", "test-cov"),
+                tags=("ci-safe",),
+            ),
+        )
+    )
 
-    monkeypatch.setattr(interactive, "_choose_category", lambda: "rca")
+    category_choices = iter(["rca", "ci-safe"])
 
-    try:
-        interactive.choose_interactive_item(catalog)
-    except ValueError as exc:
-        assert "No tests matched the selected category." in str(exc)
-    else:
-        raise AssertionError("Expected choose_interactive_item to reject empty categories")
+    monkeypatch.setattr(interactive, "_choose_category", lambda: next(category_choices))
+
+    item, auto_selected = interactive.choose_interactive_item(catalog)
+
+    assert item.id == "make:test-cov"
+    assert auto_selected is True
 
 
 def test_choose_interactive_item_reselects_category_after_escape(monkeypatch) -> None:
@@ -277,7 +289,7 @@ def test_run_interactive_picker_returns_zero_on_escape(monkeypatch) -> None:
         interactive,
         "choose_interactive_item",
         lambda _catalog: (_ for _ in ()).throw(KeyboardInterrupt()),
-    )  # noqa: E501
+    )
 
     assert interactive.run_interactive_picker(catalog) == 0
 
@@ -324,6 +336,40 @@ def test_run_interactive_picker_returns_to_selection_after_escape_from_confirm(m
     assert interactive.run_interactive_picker(Catalog(items=(first, second))) == 7
 
 
+def test_run_interactive_picker_writes_selection_for_background_mode(monkeypatch, tmp_path) -> None:
+    item = CatalogItem(
+        id="synthetic:001-replication-lag",
+        kind="cli_command",
+        display_name="001-replication-lag",
+        description="Run synthetic scenario.",
+        command=("opensre", "tests", "synthetic", "--scenario", "001-replication-lag"),
+        tags=("synthetic",),
+    )
+    selection_file = tmp_path / "selection.json"
+
+    monkeypatch.setenv("OPENSRE_TEST_PICKER_SELECTION_FILE", str(selection_file))
+    monkeypatch.setattr(interactive, "_require_interactive_dependencies", lambda: None)
+    monkeypatch.setattr(interactive.sys, "stdin", SimpleNamespace(isatty=lambda: True))
+    monkeypatch.setattr(interactive.sys, "stdout", SimpleNamespace(isatty=lambda: True))
+    monkeypatch.setattr(interactive, "choose_interactive_item", lambda _catalog: (item, False))
+    monkeypatch.setattr(interactive, "_confirm_run", lambda _item: True)
+    monkeypatch.setattr(
+        interactive,
+        "run_catalog_item",
+        lambda _item: (_ for _ in ()).throw(AssertionError("should not run inline")),
+    )
+
+    assert interactive.run_interactive_picker(Catalog(items=(item,))) == 0
+    assert json.loads(selection_file.read_text(encoding="utf-8")) == [
+        {
+            "id": "synthetic:001-replication-lag",
+            "display_name": "001-replication-lag",
+            "command": ["opensre", "tests", "synthetic", "--scenario", "001-replication-lag"],
+            "command_display": "opensre tests synthetic --scenario 001-replication-lag",
+        }
+    ]
+
+
 def test_run_catalog_items_skips_non_runnable_items() -> None:
     runnable = CatalogItem(
         id="make:test-cov",
@@ -343,3 +389,31 @@ def test_run_catalog_items_skips_non_runnable_items() -> None:
     )
 
     assert interactive.run_catalog_items([suite, runnable], dry_run=True) == 0
+
+
+def test_confirm_run_prints_openclaw_preflight_messages(monkeypatch, capsys) -> None:
+    item = CatalogItem(
+        id="rca:openclaw_gateway_crashed",
+        kind="rca_file",
+        display_name="OpenClaw Gateway Crashed",
+        description="Run a bundled markdown RCA alert fixture.",
+        command=("make", "test-rca", "FILE=openclaw_gateway_crashed"),
+        tags=("rca", "fixture", "openclaw"),
+    )
+
+    monkeypatch.setattr(
+        interactive,
+        "get_preflight_messages",
+        lambda _item: ("OpenClaw preflight: unavailable.", "Fix: verify openclaw."),
+    )
+    monkeypatch.setattr(interactive, "_QuestionaryChoice", lambda *, title, value: (title, value))
+    monkeypatch.setattr(
+        interactive,
+        "_select_prompt",
+        lambda *_args, **_kwargs: SimpleNamespace(ask=lambda: True),
+    )
+
+    assert interactive._confirm_run(item) is True
+    output = capsys.readouterr().out
+    assert "OpenClaw preflight: unavailable." in output
+    assert "Fix: verify openclaw." in output

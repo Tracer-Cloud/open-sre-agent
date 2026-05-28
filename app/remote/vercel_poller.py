@@ -14,6 +14,7 @@ from typing import Any, cast
 from urllib.parse import parse_qs, urlparse
 
 from app.integrations.verify import resolve_effective_integrations
+from app.remote.error_reporting import report_remote_exception
 from app.services.vercel import VercelClient, VercelConfig, make_vercel_client
 
 logger = logging.getLogger(__name__)
@@ -260,7 +261,8 @@ def parse_vercel_url(vercel_url: str) -> ParsedVercelUrl:
     parsed = urlparse(cleaned)
     if not cleaned:
         raise VercelResolutionError("Vercel URL is required.")
-    if "vercel.com" not in parsed.netloc.lower():
+    hostname = (parsed.hostname or "").lower()
+    if hostname != "vercel.com" and not hostname.endswith(".vercel.com"):
         raise VercelResolutionError(f"Unsupported Vercel URL host: {parsed.netloc or '<empty>'}")
 
     parts = [part for part in parsed.path.split("/") if part]
@@ -311,8 +313,15 @@ def resolve_vercel_config() -> VercelConfig | None:
         return None
     try:
         return VercelConfig.model_validate(config)
-    except Exception as exc:  # pragma: no cover - defensive validation wrapper
-        logger.warning("Failed to resolve Vercel config: %s", exc)
+    except Exception as exc:
+        report_remote_exception(
+            exc,
+            logger=logger,
+            component="vercel_poller",
+            event="config_resolve_failed",
+            message=f"Failed to resolve Vercel config: {exc}",
+            severity="error",
+        )
         return None
 
 
@@ -834,14 +843,24 @@ class VercelPoller:
             try:
                 candidates = await asyncio.to_thread(self.collect_candidates)
                 for candidate in candidates:
+                    was_processed = False
                     try:
                         was_processed = await handle_candidate(candidate)
-                    except Exception:
-                        logger.exception(
-                            "Background RCA for Vercel deployment %s failed",
-                            candidate.dedupe_key,
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as exc:
+                        report_remote_exception(
+                            exc,
+                            logger=logger,
+                            component="vercel_poller",
+                            event="candidate_handler_failed",
+                            message=(
+                                "Background RCA for Vercel deployment "
+                                f"{candidate.dedupe_key} failed"
+                            ),
+                            severity="error",
+                            tags={"candidate_id": candidate.dedupe_key},
                         )
-                        was_processed = False
                     if was_processed:
                         await asyncio.to_thread(
                             self.state_store.mark_processed,
@@ -850,8 +869,15 @@ class VercelPoller:
                         )
             except asyncio.CancelledError:
                 raise
-            except Exception:
-                logger.exception("Vercel poller iteration failed")
+            except Exception as exc:
+                report_remote_exception(
+                    exc,
+                    logger=logger,
+                    component="vercel_poller",
+                    event="poller_iteration_failed",
+                    message="Vercel poller iteration failed",
+                    severity="error",
+                )
 
             await asyncio.sleep(self.settings.interval_seconds)
 

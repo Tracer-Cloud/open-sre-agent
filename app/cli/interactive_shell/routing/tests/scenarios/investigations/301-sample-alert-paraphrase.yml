@@ -1,0 +1,46 @@
+id: 301-sample-alert-paraphrase
+title: Sample alert phrased as "try"
+intent_class: investigation
+risk_level: medium
+input:
+  prompt: try a sample alert
+  surface: interactive_cli
+session:
+  has_prior_state: false
+  remote_connected: false
+  configured_integrations: []
+available_capabilities:
+  slash_commands: []
+  cli_commands: []
+  synthetic_suites: []
+notes: []
+route:
+  expected_kind: cli_agent
+  expected_signals: []
+  expected_command_text: null
+policy:
+  should_execute: true
+  has_unhandled_clause: false
+  fail_closed: false
+planned_actions:
+- kind: sample_alert
+  content: generic
+  source: llm
+  target_surface: investigation
+  template: generic
+executed_actions:
+- kind: sample_alert
+  template: generic
+  content: generic
+response_contract:
+  must_contain_any:
+  - sample alert generic
+  must_not_contain: []
+history:
+  expected:
+  - type: cli_agent
+    ok: true
+  - type: alert
+    ok: true
+tier: full
+runs: 1

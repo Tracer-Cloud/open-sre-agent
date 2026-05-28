@@ -10,6 +10,24 @@ from rich.console import Console
 import app.integrations.github_mcp as github_mcp_module
 
 
+def test_run_async_closes_coroutine_when_runner_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _noop() -> None:
+        return None
+
+    def _fail_before_awaiting(_coro: Any) -> None:
+        raise RuntimeError("asyncio.run cannot be called from a running event loop")
+
+    monkeypatch.setattr(github_mcp_module.asyncio, "run", _fail_before_awaiting)
+
+    coro = _noop()
+    with pytest.raises(RuntimeError):
+        github_mcp_module._run_async(coro)
+
+    assert coro.cr_frame is None
+
+
 def _minimal_toolset_for_validation() -> list[dict[str, Any]]:
     """Tool names required by validate_github_mcp_config plus list_repositories."""
 
@@ -439,7 +457,7 @@ def test_connectivity_failure_detail_unwraps_taskgroup_exception_group() -> None
     """TaskGroup often wraps the real error; users should see the inner exception."""
     inner = ConnectionError("Connection refused")
     group = ExceptionGroup("unhandled errors in a TaskGroup (1 sub-exception)", [inner])
-    msg = github_mcp_module._connectivity_failure_detail(group)  # noqa: SLF001
+    msg = github_mcp_module._connectivity_failure_detail(group)
     assert "ConnectionError" in msg
     assert "Connection refused" in msg
     assert "Check: outbound HTTPS" in msg

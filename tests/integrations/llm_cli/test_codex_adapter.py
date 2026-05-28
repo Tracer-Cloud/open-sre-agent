@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 import os
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from app.integrations.llm_cli.binary_resolver import npm_prefix_bin_dirs
+import pytest
+
+from app.integrations.llm_cli.binary_resolver import diagnose_binary_path, npm_prefix_bin_dirs
 from app.integrations.llm_cli.codex import CodexAdapter, _fallback_codex_paths
 from app.integrations.llm_cli.text import flatten_messages_to_prompt
+from tests.integrations.llm_cli.testing_helpers import write_fake_runnable_cli_bin
 
 
 def _posix_path_set(paths: list[str]) -> set[str]:
@@ -46,7 +51,7 @@ def _login_ok_proc() -> MagicMock:
 
 
 @patch("app.integrations.llm_cli.codex.subprocess.run")
-@patch("app.integrations.llm_cli.codex.shutil.which")
+@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_path_binary_logged_in(mock_which: MagicMock, mock_run: MagicMock) -> None:
     mock_which.return_value = "/usr/bin/codex"
 
@@ -66,8 +71,13 @@ def test_detect_path_binary_logged_in(mock_which: MagicMock, mock_run: MagicMock
 
 
 @patch("app.integrations.llm_cli.codex.subprocess.run")
-@patch("app.integrations.llm_cli.codex.shutil.which")
-def test_detect_not_logged_in(mock_which: MagicMock, mock_run: MagicMock) -> None:
+@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+def test_detect_not_logged_in(
+    mock_which: MagicMock, mock_run: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Strip OPENAI_API_KEY so the dev's shell or .env can't trigger
+    # the API-key fallback and flip logged_in to True.
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     mock_which.return_value = "/usr/bin/codex"
 
     def side_effect(args: list[str], **kwargs: object) -> MagicMock:
@@ -88,9 +98,40 @@ def test_detect_not_logged_in(mock_which: MagicMock, mock_run: MagicMock) -> Non
 
 
 @patch("app.integrations.llm_cli.codex.subprocess.run")
-@patch("app.integrations.llm_cli.codex.shutil.which")
-def test_detect_not_logged_in_exit_zero(mock_which: MagicMock, mock_run: MagicMock) -> None:
+@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+def test_detect_not_logged_in_uses_openai_api_key_fallback(
+    mock_which: MagicMock, mock_run: MagicMock
+) -> None:
+    mock_which.return_value = "/usr/bin/codex"
+
+    def side_effect(args: list[str], **kwargs: object) -> MagicMock:
+        if len(args) >= 2 and args[1] == "--version":
+            return _version_proc()
+        if len(args) >= 3 and args[1] == "login":
+            m = MagicMock()
+            m.returncode = 1
+            m.stdout = ""
+            m.stderr = "Not logged in\n"
+            return m
+        raise AssertionError(args)
+
+    mock_run.side_effect = side_effect
+    with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-fallback"}, clear=False):
+        probe = CodexAdapter().detect()
+    assert probe.installed is True
+    assert probe.logged_in is True
+    assert "OPENAI_API_KEY fallback" in probe.detail
+
+
+@patch("app.integrations.llm_cli.codex.subprocess.run")
+@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+def test_detect_not_logged_in_exit_zero(
+    mock_which: MagicMock, mock_run: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Some Codex versions may exit 0 while printing 'Not logged in' — must not match 'logged in'."""
+    # Strip OPENAI_API_KEY so the dev's shell or .env can't trigger
+    # the API-key fallback and flip logged_in to True.
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     mock_which.return_value = "/usr/bin/codex"
 
     def side_effect(args: list[str], **kwargs: object) -> MagicMock:
@@ -110,7 +151,65 @@ def test_detect_not_logged_in_exit_zero(mock_which: MagicMock, mock_run: MagicMo
     assert probe.logged_in is False
 
 
-@patch("app.integrations.llm_cli.codex.shutil.which", return_value="/usr/bin/codex")
+@patch("app.integrations.llm_cli.codex.subprocess.run")
+@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+def test_detect_unclear_auth_uses_openai_api_key_fallback(
+    mock_which: MagicMock, mock_run: MagicMock
+) -> None:
+    mock_which.return_value = "/usr/bin/codex"
+
+    def side_effect(args: list[str], **kwargs: object) -> MagicMock:
+        if len(args) >= 2 and args[1] == "--version":
+            return _version_proc()
+        if len(args) >= 3 and args[1] == "login":
+            m = MagicMock()
+            m.returncode = 2
+            m.stdout = ""
+            m.stderr = "network unreachable"
+            return m
+        raise AssertionError(args)
+
+    mock_run.side_effect = side_effect
+    with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-fallback"}, clear=False):
+        probe = CodexAdapter().detect()
+    assert probe.installed is True
+    assert probe.logged_in is True
+    assert "OPENAI_API_KEY fallback" in probe.detail
+
+
+@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/codex")
+def test_build_forwards_openai_platform_env(mock_which: MagicMock) -> None:
+    with patch.dict(
+        os.environ,
+        {
+            "OPENAI_API_KEY": "sk-test",
+            "OPENAI_ORG_ID": "org-x",
+            "OPENAI_PROJECT_ID": "proj-y",
+            "OPENAI_BASE_URL": "https://example.invalid/v1",
+        },
+        clear=False,
+    ):
+        inv = CodexAdapter().build(prompt="p", model=None, workspace="")
+
+    mock_which.assert_called()
+    assert inv.env is not None
+    assert inv.env["OPENAI_API_KEY"] == "sk-test"
+    assert inv.env["OPENAI_ORG_ID"] == "org-x"
+    assert inv.env["OPENAI_PROJECT_ID"] == "proj-y"
+    assert inv.env["OPENAI_BASE_URL"] == "https://example.invalid/v1"
+
+
+@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/codex")
+def test_build_omits_env_without_openai_platform_vars(mock_which: MagicMock) -> None:
+    """Strip OPENAI_* so build() does not attach env overrides from the real shell."""
+    base = {k: v for k, v in os.environ.items() if not k.startswith("OPENAI_")}
+    with patch.dict(os.environ, base, clear=True):
+        inv = CodexAdapter().build(prompt="p", model=None, workspace="")
+    mock_which.assert_called()
+    assert inv.env is None
+
+
+@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/codex")
 def test_build_adds_model_flag_when_not_default(mock_which: MagicMock) -> None:
     inv = CodexAdapter().build(prompt="p", model="o3", workspace="")
     assert inv.stdin == "p"
@@ -118,6 +217,16 @@ def test_build_adds_model_flag_when_not_default(mock_which: MagicMock) -> None:
     assert inv.argv[-1] == "-"
     idx = inv.argv.index("-m")
     assert inv.argv[idx + 1] == "o3"
+    mock_which.assert_called()
+
+
+@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/codex")
+def test_build_adds_reasoning_effort_override(mock_which: MagicMock) -> None:
+    inv = CodexAdapter().build(prompt="p", model=None, workspace="", reasoning_effort="xhigh")
+
+    assert "-c" in inv.argv
+    idx = inv.argv.index("-c")
+    assert inv.argv[idx + 1] == 'model_reasoning_effort="xhigh"'
     mock_which.assert_called()
 
 
@@ -172,6 +281,86 @@ def test_cli_backed_client_invoke(mock_run: MagicMock) -> None:
 
 
 @patch("app.integrations.llm_cli.runner.subprocess.run")
+def test_cli_backed_client_passes_reasoning_effort_to_adapter(mock_run: MagicMock) -> None:
+    from app.integrations.llm_cli.runner import CLIBackedLLMClient
+
+    mock_adapter = MagicMock()
+    mock_adapter.name = "codex"
+    mock_adapter.detect.return_value = MagicMock(
+        installed=True,
+        bin_path="/usr/bin/codex",
+        logged_in=True,
+        detail="ok",
+    )
+    mock_adapter.build.return_value = MagicMock(
+        argv=["/usr/bin/codex", "exec", "-"],
+        stdin="hello",
+        cwd="/tmp",
+        env=None,
+        timeout_sec=30.0,
+    )
+    mock_adapter.parse.return_value = "answer"
+    mock_adapter.explain_failure.return_value = "fail"
+    mock_run.return_value = MagicMock(returncode=0, stdout="answer\n", stderr="")
+
+    with (
+        patch("app.guardrails.engine.get_guardrail_engine") as gr,
+        patch.dict(os.environ, {"OPENSRE_REASONING_EFFORT": "high"}, clear=False),
+    ):
+        gr.return_value.is_active = False
+        client = CLIBackedLLMClient(mock_adapter, model="codex", max_tokens=256)
+        client.invoke("hello")
+
+    mock_adapter.build.assert_called_once_with(
+        prompt="hello",
+        model="codex",
+        workspace="",
+        reasoning_effort="high",
+    )
+
+
+@patch("app.integrations.llm_cli.runner.subprocess.run")
+@patch.object(CodexAdapter, "_probe_binary")
+@patch.object(CodexAdapter, "_resolve_binary", return_value="/usr/bin/codex")
+def test_cli_backed_client_codex_merge_openai_platform_env(
+    _mock_resolve: MagicMock,
+    mock_probe_binary: MagicMock,
+    mock_run: MagicMock,
+) -> None:
+    """Codex invoke merges OPENAI_* from the adapter into the filtered subprocess env."""
+    from app.integrations.llm_cli.runner import CLIBackedLLMClient
+
+    mock_probe_binary.return_value = MagicMock(
+        installed=True,
+        bin_path="/usr/bin/codex",
+        logged_in=True,
+        detail="ok",
+    )
+    mock_run.return_value = MagicMock(returncode=0, stdout="ok\n", stderr="")
+
+    with (
+        patch("app.guardrails.engine.get_guardrail_engine") as gr,
+        patch.dict(
+            os.environ,
+            {
+                "OPENAI_API_KEY": "sk-from-env",
+                "OPENAI_BASE_URL": "https://proxy.example/v1",
+                "PATH": "/usr/bin",
+            },
+            clear=False,
+        ),
+    ):
+        gr.return_value.is_active = False
+        client = CLIBackedLLMClient(CodexAdapter(), model=None, max_tokens=256)
+        client.invoke("hello")
+
+    merged = mock_run.call_args.kwargs["env"]
+    assert merged["OPENAI_API_KEY"] == "sk-from-env"
+    assert merged["OPENAI_BASE_URL"] == "https://proxy.example/v1"
+    assert "ANTHROPIC_API_KEY" not in merged
+
+
+@patch("app.integrations.llm_cli.runner.subprocess.run")
 def test_cli_backed_client_caches_probe_between_invokes(mock_run: MagicMock) -> None:
     from app.integrations.llm_cli.runner import CLIBackedLLMClient
 
@@ -206,10 +395,116 @@ def test_cli_backed_client_caches_probe_between_invokes(mock_run: MagicMock) -> 
     assert mock_run.call_count == 2
 
 
+@patch("app.integrations.llm_cli.runner.subprocess.run")
+def test_cli_backed_client_failure_mentions_unclear_auth_probe(mock_run: MagicMock) -> None:
+    from app.integrations.llm_cli.runner import CLIBackedLLMClient
+
+    mock_adapter = MagicMock()
+    mock_adapter.name = "claude-code"
+    mock_adapter.auth_hint = "Run: claude auth login"
+    mock_adapter.binary_env_key = "CLAUDE_CODE_BIN"
+    mock_adapter.install_hint = "npm i -g @anthropic-ai/claude-code"
+    mock_adapter.detect.return_value = MagicMock(
+        installed=True,
+        bin_path="/usr/bin/claude",
+        logged_in=None,
+        detail="claude auth status failed: unknown command",
+    )
+    mock_adapter.build.return_value = MagicMock(
+        argv=["/usr/bin/claude", "-p"],
+        stdin="hello",
+        cwd="/tmp",
+        env=None,
+        timeout_sec=30.0,
+    )
+    mock_adapter.explain_failure.return_value = "claude -p exited with code 1"
+
+    mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="unauthorized")
+
+    with patch("app.guardrails.engine.get_guardrail_engine") as gr:
+        gr.return_value.is_active = False
+        client = CLIBackedLLMClient(mock_adapter, model="claude-code", max_tokens=256)
+        import pytest
+
+        with pytest.raises(RuntimeError, match="Auth status could not be verified"):
+            client.invoke("hello")
+
+
+@patch("app.integrations.llm_cli.runner.subprocess.run")
+def test_cli_backed_client_invoke_raises_cli_authentication_required_when_logged_out(
+    mock_run: MagicMock,
+) -> None:
+    import pytest
+
+    from app.integrations.llm_cli.errors import CLIAuthenticationRequired
+    from app.integrations.llm_cli.runner import CLIBackedLLMClient
+
+    mock_adapter = MagicMock()
+    mock_adapter.name = "cursor"
+    mock_adapter.auth_hint = "Run: agent login."
+    mock_adapter.binary_env_key = "CURSOR_BIN"
+    mock_adapter.install_hint = "install cursor"
+    mock_adapter.detect.return_value = MagicMock(
+        installed=True,
+        bin_path="/usr/bin/agent",
+        logged_in=False,
+        detail="Not logged in.",
+    )
+
+    with patch("app.guardrails.engine.get_guardrail_engine") as gr:
+        gr.return_value.is_active = False
+        client = CLIBackedLLMClient(mock_adapter, model=None, max_tokens=256)
+        with pytest.raises(CLIAuthenticationRequired, match="not authenticated"):
+            client.invoke("hello")
+
+    mock_run.assert_not_called()
+
+
+@patch("app.integrations.llm_cli.runner.subprocess.run")
+def test_cli_backed_client_unclear_auth_no_double_period_when_explain_failure_trailing_period(
+    mock_run: MagicMock,
+) -> None:
+    """When explain_failure ends with '.', avoid composing '..'."""
+    from app.integrations.llm_cli.runner import CLIBackedLLMClient
+
+    mock_adapter = MagicMock()
+    mock_adapter.name = "claude-code"
+    mock_adapter.auth_hint = "Run: claude auth login"
+    mock_adapter.binary_env_key = "CLAUDE_CODE_BIN"
+    mock_adapter.install_hint = "npm i -g @anthropic-ai/claude-code"
+    mock_adapter.detect.return_value = MagicMock(
+        installed=True,
+        bin_path="/usr/bin/claude",
+        logged_in=None,
+        detail="probe unclear",
+    )
+    mock_adapter.build.return_value = MagicMock(
+        argv=["/usr/bin/claude", "-p"],
+        stdin="hello",
+        cwd="/tmp",
+        env=None,
+        timeout_sec=30.0,
+    )
+    mock_adapter.explain_failure.return_value = "claude -p exited with code 1."
+
+    mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="unauthorized")
+
+    with patch("app.guardrails.engine.get_guardrail_engine") as gr:
+        gr.return_value.is_active = False
+        client = CLIBackedLLMClient(mock_adapter, model="claude-code", max_tokens=256)
+        import pytest
+
+        with pytest.raises(RuntimeError) as exc_info:
+            client.invoke("hello")
+
+    msg = str(exc_info.value)
+    assert ".." not in msg
+    assert "code 1." in msg
+    assert "Auth status could not be verified" in msg
+
+
 def test_detect_uses_codex_bin_env_file(tmp_path) -> None:
-    fake_bin = tmp_path / "my-codex"
-    fake_bin.write_bytes(b"")
-    os.chmod(fake_bin, 0o700)
+    fake_bin = write_fake_runnable_cli_bin(tmp_path, "my-codex")
 
     with (
         patch.dict(os.environ, {"CODEX_BIN": str(fake_bin)}, clear=False),
@@ -232,7 +527,7 @@ def test_detect_uses_codex_bin_env_file(tmp_path) -> None:
 
 
 @patch("app.integrations.llm_cli.codex.subprocess.run")
-@patch("app.integrations.llm_cli.codex.shutil.which", return_value="/usr/bin/codex")
+@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/codex")
 def test_detect_falls_back_when_codex_bin_invalid(
     mock_which: MagicMock, mock_run: MagicMock
 ) -> None:
@@ -255,11 +550,11 @@ def test_detect_falls_back_when_codex_bin_invalid(
 
 
 @patch("app.integrations.llm_cli.codex.subprocess.run")
-@patch("app.integrations.llm_cli.codex.shutil.which", return_value=None)
+@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value=None)
 @patch(
     "app.integrations.llm_cli.codex._fallback_codex_paths", return_value=["/x/codex", "/y/codex"]
 )
-@patch("app.integrations.llm_cli.codex._is_runnable_binary")
+@patch("app.integrations.llm_cli.binary_resolver.is_runnable_binary")
 def test_detect_uses_first_runnable_fallback_path(
     mock_is_runnable: MagicMock,
     mock_fallback: MagicMock,
@@ -366,9 +661,75 @@ def test_npm_prefix_bin_dirs_unix_uses_prefix_bin() -> None:
     assert tuple(Path(d).as_posix() for d in dirs) == ("/opt/npm/bin",)
 
 
-@patch("app.integrations.llm_cli.codex.shutil.which", return_value="/usr/bin/codex")
+@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/codex")
 def test_codex_default_exec_timeout_is_shorter(mock_which) -> None:
     """Default timeout is asserted without requiring a real codex binary on CI PATH."""
     inv = CodexAdapter().build(prompt="p", model=None, workspace="")
-    assert inv.timeout_sec == 120.0
+    assert inv.timeout_sec == 300.0
     mock_which.assert_called()
+
+
+def test_diagnose_binary_path_missing_file(tmp_path: Path) -> None:
+    result = diagnose_binary_path(str(tmp_path / "no-such-binary"))
+    assert result is not None
+    assert "does not exist" in result
+
+
+def test_diagnose_binary_path_valid_executable(tmp_path: Path) -> None:
+    exe = write_fake_runnable_cli_bin(tmp_path, "my-bin")
+    assert diagnose_binary_path(str(exe)) is None
+
+
+def test_diagnose_binary_path_not_executable(tmp_path: Path) -> None:
+    f = tmp_path / "not-executable"
+    f.write_bytes(b"")
+    os.chmod(f, 0o600)
+    result = diagnose_binary_path(str(f))
+    if sys.platform != "win32":
+        assert result is not None
+        assert "not executable" in result
+
+
+def test_diagnose_binary_path_broken_symlink_windows_skip(tmp_path: Path) -> None:
+    """Skip gracefully on Windows hosts where symlink creation requires elevation."""
+    link = tmp_path / "broken-link-win"
+    try:
+        link.symlink_to(tmp_path / "ghost")
+    except (OSError, NotImplementedError):
+        return  # symlinks not available on this runner; skip
+    result = diagnose_binary_path(str(link))
+    assert result is not None
+    assert "broken symlink" in result
+
+
+def test_resolve_cli_binary_warns_on_broken_symlink(tmp_path: Path, caplog) -> None:
+    from app.integrations.llm_cli.binary_resolver import resolve_cli_binary
+
+    link = tmp_path / "broken-codex"
+    try:
+        link.symlink_to(tmp_path / "ghost")
+    except (OSError, NotImplementedError):
+        return  # symlinks not available on this runner; skip
+
+    with (
+        patch.dict(os.environ, {"CODEX_BIN": str(link)}, clear=False),
+        patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value=None),
+        caplog.at_level(logging.WARNING, logger="app.integrations.llm_cli.binary_resolver"),
+    ):
+        result = resolve_cli_binary(
+            explicit_env_key="CODEX_BIN",
+            binary_names=("codex",),
+            fallback_paths=[],
+        )
+
+    assert result is None
+    assert any("broken symlink" in r.message for r in caplog.records)
+
+
+def test_codex_cli_registry_entry() -> None:
+    from app.integrations.llm_cli.registry import get_cli_provider_registration
+
+    reg = get_cli_provider_registration("codex")
+    assert reg is not None
+    assert reg.model_env_key == "CODEX_MODEL"
+    assert reg.adapter_factory().name == "codex"

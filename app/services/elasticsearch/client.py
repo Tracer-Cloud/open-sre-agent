@@ -1,18 +1,32 @@
-"""Elasticsearch REST API client.
+"""Elasticsearch / OpenSearch REST API client.
 
 Uses the ES HTTP API directly via httpx (no elasticsearch-py SDK).
-Supports clusters with security disabled (no credentials) and
-clusters requiring API key authentication.
+Supports three authentication modes, in order of precedence:
+
+1. No authentication — clusters with security disabled.
+2. API key authentication — emits ``Authorization: ApiKey <key>``.
+   Native to Elasticsearch and to OpenSearch deployments that have
+   added API key support.
+3. HTTP Basic authentication — emits ``Authorization: Basic <base64>``.
+   This is the default and primary authentication method for most
+   self-hosted OpenSearch deployments, where API keys are not natively
+   available (see opensearch-project/security#4009).
+
+When both ``api_key`` and (``username``, ``password``) are configured,
+the API key takes precedence.
 """
 
 from __future__ import annotations
 
+import base64
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
+
+from app.services._error_helpers import capture_service_error
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +37,8 @@ _DEFAULT_TIMEOUT = 30
 class ElasticsearchConfig:
     url: str
     api_key: str | None = None
+    username: str | None = None
+    password: str | None = None
     index_pattern: str = field(default="*")
 
     @property
@@ -33,7 +49,14 @@ class ElasticsearchConfig:
     def headers(self) -> dict[str, str]:
         h: dict[str, str] = {"Content-Type": "application/json"}
         if self.api_key:
+            # Preferred: API key (native to Elasticsearch; supported by
+            # some OpenSearch deployments).
             h["Authorization"] = f"ApiKey {self.api_key}"
+        elif self.username and self.password:
+            # Fallback: HTTP Basic Auth (primary method for most
+            # self-hosted OpenSearch clusters).
+            credentials = base64.b64encode(f"{self.username}:{self.password}".encode()).decode()
+            h["Authorization"] = f"Basic {credentials}"
         return h
 
 
@@ -80,13 +103,11 @@ class ElasticsearchClient:
                     "error": f"Unexpected status {resp.status_code} from /_cluster/health",
                 }
             return {"success": True, "security_enabled": security_enabled}
-        except Exception as e:
-            logger.warning(
-                "[elasticsearch] check_security error type=%s detail=%s",
-                type(e).__name__,
-                e,
+        except Exception as exc:
+            capture_service_error(
+                exc, logger=logger, integration="elasticsearch", method="check_security"
             )
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": str(exc)}
 
     def list_indices(self) -> dict[str, Any]:
         """List all indices via GET /_cat/indices?format=json."""
@@ -105,20 +126,19 @@ class ElasticsearchClient:
                 for idx in raw
             ]
             return {"success": True, "indices": indices, "total": len(indices)}
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "[elasticsearch] list_indices HTTP failure status=%s",
-                e.response.status_code,
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc, logger=logger, integration="elasticsearch", method="list_indices"
             )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning(
-                "[elasticsearch] list_indices error type=%s detail=%s", type(e).__name__, e
+        except Exception as exc:
+            capture_service_error(
+                exc, logger=logger, integration="elasticsearch", method="list_indices"
             )
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": str(exc)}
 
     def list_data_streams(self) -> dict[str, Any]:
         """List all data streams via GET /_data_stream."""
@@ -136,20 +156,19 @@ class ElasticsearchClient:
                 for s in streams
             ]
             return {"success": True, "data_streams": results, "total": len(results)}
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "[elasticsearch] list_data_streams HTTP failure status=%s",
-                e.response.status_code,
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc, logger=logger, integration="elasticsearch", method="list_data_streams"
             )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning(
-                "[elasticsearch] list_data_streams error type=%s detail=%s", type(e).__name__, e
+        except Exception as exc:
+            capture_service_error(
+                exc, logger=logger, integration="elasticsearch", method="list_data_streams"
             )
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": str(exc)}
 
     def search_logs(
         self,
@@ -214,22 +233,27 @@ class ElasticsearchClient:
                 for src in [hit.get("_source", {})]
             ]
             return {"success": True, "logs": logs, "total": len(logs), "query": query}
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "[elasticsearch] search_logs HTTP failure status=%s query=%r window=%sm",
-                e.response.status_code,
-                query,
-                time_range_minutes,
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="elasticsearch",
+                method="search_logs",
+                extras={"query": query, "time_range_minutes": time_range_minutes},
             )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning(
-                "[elasticsearch] search_logs error type=%s detail=%s", type(e).__name__, e
+        except Exception as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="elasticsearch",
+                method="search_logs",
+                extras={"query": query, "time_range_minutes": time_range_minutes},
             )
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": str(exc)}
 
     def get_cluster_health(self) -> dict[str, Any]:
         """GET /_cluster/health — returns cluster name, status, and shard counts."""
@@ -247,17 +271,16 @@ class ElasticsearchClient:
                 "active_shards": data.get("active_shards", 0),
                 "unassigned_shards": data.get("unassigned_shards", 0),
             }
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "[elasticsearch] get_cluster_health HTTP failure status=%s",
-                e.response.status_code,
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc, logger=logger, integration="elasticsearch", method="get_cluster_health"
             )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning(
-                "[elasticsearch] get_cluster_health error type=%s detail=%s", type(e).__name__, e
+        except Exception as exc:
+            capture_service_error(
+                exc, logger=logger, integration="elasticsearch", method="get_cluster_health"
             )
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": str(exc)}

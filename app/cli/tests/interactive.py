@@ -1,13 +1,21 @@
 from __future__ import annotations
 
 import importlib
+import json
+import os
 import sys
 from typing import Any
 
 from rich.console import Console
 
+from app.cli.interactive_shell.ui.theme import BRAND, DIM, HIGHLIGHT, WARNING
 from app.cli.tests.catalog import TestCatalog, TestCatalogItem
-from app.cli.tests.runner import format_command, run_catalog_item, run_catalog_items
+from app.cli.tests.runner import (
+    format_command,
+    get_preflight_messages,
+    run_catalog_item,
+    run_catalog_items,
+)
 
 _questionary_module: Any
 _questionary_choice: Any
@@ -34,6 +42,7 @@ _console = Console()
 _BACK = object()
 _EXIT = object()
 _RUN_ALL = object()
+_BACKGROUND_SELECTION_FILE_ENV = "OPENSRE_TEST_PICKER_SELECTION_FILE"
 
 
 class _GoBack(Exception):
@@ -43,14 +52,14 @@ class _GoBack(Exception):
 _STYLE = (
     _QuestionaryStyle(
         [
-            ("qmark", "fg:cyan bold"),
+            ("qmark", f"fg:{BRAND} bold"),
             ("question", "bold"),
-            ("answer", "fg:cyan bold"),
-            ("pointer", "fg:cyan bold"),
-            ("highlighted", "fg:cyan bold"),
-            ("selected", "fg:green"),
-            ("separator", "fg:cyan"),
-            ("instruction", "fg:#858585 italic"),
+            ("answer", f"fg:{BRAND} bold"),
+            ("pointer", f"fg:{BRAND} bold"),
+            ("highlighted", f"fg:{BRAND} bold"),
+            ("selected", f"fg:{HIGHLIGHT}"),
+            ("separator", f"fg:{BRAND}"),
+            ("instruction", f"fg:{DIM} italic"),
         ]
     )
     if _QuestionaryStyle is not None
@@ -61,6 +70,7 @@ _CATEGORY_OPTIONS: list[tuple[str, str]] = [
     ("all", "All"),
     ("rca", "RCA"),
     ("synthetic", "Synthetics"),
+    ("openclaw", "OpenClaw"),
     ("demo", "Demos"),
     ("infra-heavy", "Infra-heavy"),
     ("ci-safe", "CI-safe"),
@@ -179,15 +189,17 @@ def _confirm_run(item: TestCatalogItem) -> bool:
     _console.print(f"\n[bold]{item.display_name}[/]")
     _console.print(item.description)
     if item.source_path:
-        _console.print(f"[dim]Source: {item.source_path}[/]")
+        _console.print(f"[{DIM}]Source: {item.source_path}[/]")
     if item.tags:
-        _console.print(f"[dim]Tags: {', '.join(item.tags)}[/]")
+        _console.print(f"[{DIM}]Tags: {', '.join(item.tags)}[/]")
     if item.requirements.env_vars:
-        _console.print(f"[dim]Env vars: {', '.join(item.requirements.env_vars)}[/]")
+        _console.print(f"[{DIM}]Env vars: {', '.join(item.requirements.env_vars)}[/]")
     if item.requirements.notes:
-        _console.print(f"[dim]Notes: {', '.join(item.requirements.notes)}[/]")
+        _console.print(f"[{DIM}]Notes: {', '.join(item.requirements.notes)}[/]")
+    for message in get_preflight_messages(item):
+        _console.print(f"[{WARNING}]{message}[/]")
     if item.command:
-        _console.print(f"[cyan]Command:[/] {format_command(item)}")
+        _console.print(f"[{BRAND}]Command:[/] {format_command(item)}")
 
     result = _select_prompt(
         "Run this test?",
@@ -246,7 +258,8 @@ def choose_interactive_item(
         search = ""
         filtered = catalog.filter(category=category, search=search)
         if not filtered:
-            raise ValueError("No tests matched the selected category.")
+            _console.print(f"[{WARNING}]No tests matched the selected category. Choose another.[/]")
+            continue
 
         while True:
             try:
@@ -298,6 +311,25 @@ def _confirm_run_all(items: list[TestCatalogItem]) -> bool:
     return bool(result)
 
 
+def _write_background_selection(items: list[TestCatalogItem]) -> bool:
+    path = os.environ.get(_BACKGROUND_SELECTION_FILE_ENV)
+    if not path:
+        return False
+    payload = [
+        {
+            "id": item.id,
+            "display_name": item.display_name,
+            "command": list(item.command),
+            "command_display": format_command(item),
+        }
+        for item in items
+        if item.command
+    ]
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(payload, handle)
+    return True
+
+
 def run_interactive_picker(catalog: TestCatalog) -> int:
     _require_interactive_dependencies()
     if not sys.stdin.isatty() or not sys.stdout.isatty():
@@ -311,22 +343,28 @@ def run_interactive_picker(catalog: TestCatalog) -> int:
 
             if isinstance(selection, list):
                 if not selection:
-                    _console.print("[yellow]No runnable tests in this selection.[/]")
+                    _console.print(f"[{WARNING}]No runnable tests in this selection.[/]")
                     continue
                 try:
                     if not _confirm_run_all(selection):
                         return 0
                 except _GoBack:
                     continue
+                if _write_background_selection(selection):
+                    return 0
                 return run_catalog_items(selection)
 
             if auto_selected:
+                if _write_background_selection([selection]):
+                    return 0
                 return run_catalog_item(selection)
             try:
                 if not _confirm_run(selection):
                     return 0
             except _GoBack:
                 continue
+            if _write_background_selection([selection]):
+                return 0
             return run_catalog_item(selection)
     except KeyboardInterrupt:
         return 0

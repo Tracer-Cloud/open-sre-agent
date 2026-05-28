@@ -22,7 +22,7 @@ def main(test_name: str = "demo-pipeline-empty-file-error") -> int:
 
     try:
         result = use_case.main()
-        print(f"✓ {result['pipeline_name']} succeeded: {result['rows_processed']} rows")
+        print(f"{result['pipeline_name']} succeeded: {result['rows_processed']} rows")
         return 0
 
     except Exception as e:
@@ -37,7 +37,13 @@ def main(test_name: str = "demo-pipeline-empty-file-error") -> int:
             test_name=test_name,
             region=region,
         )
-        print(f"✓ Logged to CloudWatch: {cloudwatch_context['log_group']}")
+        if cloudwatch_context["logs_written"]:
+            print(f"Logged to CloudWatch: {cloudwatch_context['log_group']}")
+        else:
+            print(
+                f"CloudWatch write skipped (missing IAM write permissions): "
+                f"{cloudwatch_context['log_group']}"
+            )
         print(f"  {cloudwatch_context['cloudwatch_url']}\n")
 
         raw_alert = create_alert(
@@ -55,9 +61,8 @@ def main(test_name: str = "demo-pipeline-empty-file-error") -> int:
             },
         )
 
-        from langsmith import traceable
-
-        from app.cli.investigate import run_investigation_cli
+        from app.cli.investigation import run_investigation_cli
+        from app.utils.tracing import traceable
 
         print("Running investigation...")
 
@@ -73,16 +78,11 @@ def main(test_name: str = "demo-pipeline-empty-file-error") -> int:
             },
         )
         def run_with_alert_id():
-            return run_investigation_cli(
-                alert_name=f"Pipeline failure: {pipeline_name}",
-                pipeline_name=pipeline_name,
-                severity="critical",
-                raw_alert=raw_alert,
-            )
+            return run_investigation_cli(raw_alert=raw_alert)
 
         run_with_alert_id()
 
-        print(f"\n✓ CloudWatch logs: {cloudwatch_context['cloudwatch_url']}")
+        print(f"\nCloudWatch logs: {cloudwatch_context['cloudwatch_url']}")
         return 0
 
 

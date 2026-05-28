@@ -20,6 +20,9 @@ from questionary.prompts.common import (
 from questionary.question import Question
 from questionary.styles import merge_styles_default
 
+from app.cli.interactive_shell.ui.theme import GLYPH_PROMPT
+from app.cli.support.prompt_support import _HardQuitInterrupt, _with_ctrl_c_double_exit
+
 
 class _CheckboxControl(InquirerControl):
     """Render checked items neutrally unless they are the active row."""
@@ -104,8 +107,15 @@ def _base_bindings(
     bindings = KeyBindings()
 
     @bindings.add(Keys.ControlQ, eager=True)
+    def _quit(event: Any) -> None:
+        # ControlQ is an intentional hard-quit; use _HardQuitInterrupt so the
+        # Ctrl+C double-exit retry loop does not swallow this as a first press.
+        event.app.exit(exception=_HardQuitInterrupt(), style="class:aborting")
+
     @bindings.add(Keys.ControlC, eager=True)
-    def _abort(event: Any) -> None:
+    def _ctrl_c(event: Any) -> None:
+        # Raise KeyboardInterrupt so the double-exit logic in _with_ctrl_c_double_exit
+        # can implement hint-on-first / exit-on-second behavior via the retry loop.
         event.app.exit(exception=KeyboardInterrupt, style="class:aborting")
 
     def _move_down(_event: Any) -> None:
@@ -182,14 +192,14 @@ def select(
     ic = InquirerControl(
         choices,
         None,
-        pointer=">",
+        pointer="❯",
         initial_choice=default,
         show_description=False,
         use_arrow_keys=True,
     )
 
     def _tokens() -> list[tuple[str, str]]:
-        tokens = [("class:qmark", "?"), ("class:question", f" {message} ")]
+        tokens = [("class:qmark", GLYPH_PROMPT), ("class:question", f" {message} ")]
         if ic.is_answered:
             tokens.append(("class:answer", str(ic.get_pointed_at().title)))
         elif instruction:
@@ -207,17 +217,19 @@ def select(
         ic.is_answered = True
         event.app.exit(result=ic.get_pointed_at().value)
 
-    return Question(
-        Application(
-            layout=common.create_inquirer_layout(
-                ic,
-                _tokens,
-                **_layout_kwargs(input=input, output=output),
-            ),
-            key_bindings=bindings,
-            style=merge_styles_default([style]),
-            input=input,
-            output=output,
+    return _with_ctrl_c_double_exit(
+        Question(
+            Application(
+                layout=common.create_inquirer_layout(
+                    ic,
+                    _tokens,
+                    **_layout_kwargs(input=input, output=output),
+                ),
+                key_bindings=bindings,
+                style=merge_styles_default([style]),
+                input=input,
+                output=output,
+            )
         )
     )
 
@@ -241,7 +253,7 @@ def checkbox(
 
     ic = _CheckboxControl(
         choices,
-        pointer=">",
+        pointer="❯",
         initial_choice=initial_choice,
         show_description=False,
     )
@@ -252,7 +264,7 @@ def checkbox(
         ic.selected_options = [v for v in default if v in valid_values]
 
     def _tokens() -> list[tuple[str, str]]:
-        tokens = [("class:qmark", "?"), ("class:question", f" {message} ")]
+        tokens = [("class:qmark", GLYPH_PROMPT), ("class:question", f" {message} ")]
         if ic.is_answered:
             selected = len(ic.selected_options)
             suffix = "selection" if selected == 1 else "selections"
@@ -272,16 +284,18 @@ def checkbox(
         ic.is_answered = True
         event.app.exit(result=[choice.value for choice in ic.get_selected_values()])
 
-    return Question(
-        Application(
-            layout=common.create_inquirer_layout(
-                ic,
-                _tokens,
-                **_layout_kwargs(input=input, output=output),
-            ),
-            key_bindings=bindings,
-            style=merge_styles_default([style]),
-            input=input,
-            output=output,
+    return _with_ctrl_c_double_exit(
+        Question(
+            Application(
+                layout=common.create_inquirer_layout(
+                    ic,
+                    _tokens,
+                    **_layout_kwargs(input=input, output=output),
+                ),
+                key_bindings=bindings,
+                style=merge_styles_default([style]),
+                input=input,
+                output=output,
+            )
         )
     )

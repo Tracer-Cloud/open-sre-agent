@@ -7,7 +7,7 @@ within regression limits on noisy fixtures.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, TypeVar
+from typing import Any
 
 # Default limits for high-volume tools
 DEFAULT_LOG_LIMIT = 50
@@ -17,10 +17,7 @@ DEFAULT_METRICS_LIMIT = 50
 DEFAULT_MESSAGE_CHARS = 1000  # Max characters per log message
 
 
-T = TypeVar("T")
-
-
-def truncate_list(  # noqa: UP047
+def truncate_list[T](
     items: Sequence[T],
     limit: int | None = None,
     default_limit: int = DEFAULT_LOG_LIMIT,

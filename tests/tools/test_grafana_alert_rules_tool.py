@@ -29,10 +29,27 @@ def test_extract_params_maps_fields() -> None:
 
 def test_run_with_backend() -> None:
     mock_backend = MagicMock()
-    mock_backend.query_alert_rules.return_value = {"groups": [{"name": "my-group"}]}
+    mock_backend.query_alert_rules.return_value = {
+        "groups": [
+            {
+                "name": "my-group",
+                "rules": [
+                    {
+                        "name": "RDSFreeStorageSpaceLow",
+                        "state": "firing",
+                        "labels": {"service": "rds"},
+                        "annotations": {"summary": "storage low"},
+                    }
+                ],
+            }
+        ]
+    }
     result = query_grafana_alert_rules(grafana_backend=mock_backend)
     assert result["available"] is True
     assert "raw" in result
+    assert result["total_rules"] == 1
+    assert result["rules"][0]["rule_name"] == "RDSFreeStorageSpaceLow"
+    assert result["rules"][0]["group"] == "my-group"
 
 
 def test_run_no_client() -> None:

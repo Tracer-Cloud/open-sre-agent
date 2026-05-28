@@ -1,0 +1,58 @@
+---
+title: "Daily Update — 2026-04-30"
+description: "OpenSRE engineering daily update for 2026-04-30 (Europe/London)"
+---
+
+Thanks to everyone who contributed yesterday:
+
+Aarush Sharma, Aarush Sharma, Aaryan, Abhishek Marathe, Anwesh, Bhavarth Bhangdia, Hariswar, Kevin Espiñeira, Mayank Bharati, Michael Emefienem, Prakhar Jain, Vaibhav Upreti, wen, Yajush Srivastava, and Zeeshan 🙏🚀
+
+## Main updates shipped (April 30, 2026)
+
+- Issue/319 splunk integration — Abhishek Marathe
+- fix(discord,slack): harden delivery against non-JSON failures and token leakage (#865) — Kevin Espiñeira
+- fix(cli): `opensre tests` crashes with FileNotFoundError in bundled binary (#1078) — Mayank Bharati
+- fix(llm-cli): address post-review issues in CLI integration — Anwesh
+- fix: Ctrl+C double-exit in interactive shell — wen
+- Fix: attach data_quality_issues for list payloads in wrapper validation — Michael Emefienem
+- Issue 1127 harden remote tool end payloads — Yajush Srivastava
+- fix(extract): prevent health checks with state=normal from being marked as noise — Aarush Sharma
+- ci(github): split default CI and label-triggered optional checks — Anwesh
+- Add registry regression test for duplicate tool names across modules — Aaryan
+- Feat/add registry import failure test — Aaryan
+- Fix/check disk health tests — Bhavarth Bhangdia
+- test: add unit tests for parse_vercel_url to extract log and deployme… — Zeeshan
+- test(cli): skip install.sh tests on Windows runner (#1099) — Mayank Bharati
+- ci(github): split Windows and k8s label workflows — Anwesh
+- fix(github): disambiguate contributors workflow push refspec — Anwesh
+- Tighten OpenClaw docs with verify/fail-fast section (#1132) — Hariswar
+- docs: add troubleshooting block to quickstart — Prakhar Jain
+- docs(agents): add LLM API provider guide in app/services — Anwesh
+
+## Source pull requests
+
+- [#1096](https://github.com/Tracer-Cloud/opensre/pull/1096) fix(extract): prevent health checks with state=normal from being marked as noise (author: Aarush Sharma; contributors: Aarush Sharma and Aarush Sharma; labels: _none_; files: `app/nodes/extract_alert/extract.py`)
+- [#1090](https://github.com/Tracer-Cloud/opensre/pull/1090) fix(cli): `opensre tests` crashes with FileNotFoundError in bundled binary (#1078) (author: Mayank Bharati; contributors: Mayank Bharati; labels: _none_; files: `app/cli/commands/deploy.py`, `app/cli/commands/tests.py`, `app/cli/tests/discover.py`, `tests/cli/test_cli_inventory.py`, `tests/cli/test_discover.py`)
+- [#1100](https://github.com/Tracer-Cloud/opensre/pull/1100) ci(github): split default CI and label-triggered optional checks (author: Anwesh; contributors: Anwesh; labels: `ci:windows`; files: `.github/workflows/ci-labels.yml`, `.github/workflows/ci.yml`)
+- [#1101](https://github.com/Tracer-Cloud/opensre/pull/1101) test(cli): skip install.sh tests on Windows runner (#1099) (author: Mayank Bharati; contributors: Mayank Bharati; labels: `ci:windows`; files: `tests/cli/test_install_sh_path.py`, `tests/cli/test_install_sh_resolution.py`)
+- [#1103](https://github.com/Tracer-Cloud/opensre/pull/1103) ci(github): split Windows and k8s label workflows (author: Anwesh; contributors: Anwesh; labels: _none_; files: `.github/workflows/ci-labels-windows.yml`, `.github/workflows/ci.yml`)
+- [#1097](https://github.com/Tracer-Cloud/opensre/pull/1097) fix(llm-cli): address post-review issues in CLI integration (author: Anwesh; contributors: Anwesh; labels: _none_; files: `app/cli/wizard/config.py`, `app/cli/wizard/flow.py`, `app/integrations/llm_cli/AGENTS.md`, `app/integrations/llm_cli/base.py`, `app/integrations/llm_cli/binary_resolver.py`, `app/integrations/llm_cli/codex.py`, `app/integrations/llm_cli/registry.py`, `app/integrations/llm_cli/runner.py`, `app/services/llm_client.py`, `tests/cli/wizard/test_flow.py`, and 1 more)
+- [#1105](https://github.com/Tracer-Cloud/opensre/pull/1105) fix: Ctrl+C double-exit in interactive shell (author: wen; contributors: wen; labels: _none_; files: `app/cli/__main__.py`, `app/cli/prompt_support.py`, `app/cli/wizard/prompts.py`, `tests/cli/test_prompt_support.py`, `tests/cli_smoke_test.py`)
+- [#1137](https://github.com/Tracer-Cloud/opensre/pull/1137) fix(github): disambiguate contributors workflow push refspec (author: Anwesh; contributors: Anwesh; labels: _none_; files: `.github/workflows/contributors.yml`)
+- [#1135](https://github.com/Tracer-Cloud/opensre/pull/1135) docs(agents): add LLM API provider guide in app/services (author: Anwesh; contributors: Anwesh; labels: _none_; files: `AGENTS.md`, `app/services/AGENTS.md`)
+- [#1140](https://github.com/Tracer-Cloud/opensre/pull/1140) Issue 1127 harden remote tool end payloads (author: Yajush Srivastava; contributors: Yajush Srivastava; labels: _none_; files: `app/remote/reasoning.py`, `tests/app/remote/test_reasoning.py`)
+- [#1141](https://github.com/Tracer-Cloud/opensre/pull/1141) Add registry regression test for duplicate tool names across modules (author: Aaryan; contributors: Aaryan and Vaibhav Upreti; labels: _none_; files: `tests/tools/test_registry.py`)
+- [#1147](https://github.com/Tracer-Cloud/opensre/pull/1147) Tighten OpenClaw docs with verify/fail-fast section (#1132) (author: Hariswar; contributors: Hariswar; labels: _none_; files: `docs/openclaw.mdx`)
+- [#791](https://github.com/Tracer-Cloud/opensre/pull/791) Issue/319 splunk integration (author: Abhishek Marathe; contributors: Abhishek Marathe; labels: _none_; files: `app/cli/alert_templates.py`, `app/cli/wizard/flow.py`, `app/cli/wizard/integration_health.py`, `app/cli/wizard/integration_validators/client_validators.py`, `app/integrations/catalog.py`, `app/integrations/models.py`, `app/integrations/verify.py`, `app/nodes/plan_actions/build_prompt.py`, `app/nodes/plan_actions/detect_sources.py`, `app/services/splunk/__init__.py`, and 13 more)
+- [#1148](https://github.com/Tracer-Cloud/opensre/pull/1148) test: add unit tests for parse_vercel_url to extract log and deployme… (author: Zeeshan; contributors: Zeeshan; labels: _none_; files: `tests/app/remote/test_vercel_poller.py`)
+- [#1138](https://github.com/Tracer-Cloud/opensre/pull/1138) fix(discord,slack): harden delivery against non-JSON failures and token leakage (#865) (author: Kevin Espiñeira; contributors: Kevin Espiñeira; labels: _none_; files: `app/utils/discord_delivery.py`, `app/utils/slack_delivery.py`, `tests/utils/test_discord_delivery.py`, `tests/utils/test_slack_delivery.py`)
+- [#1142](https://github.com/Tracer-Cloud/opensre/pull/1142) Feat/add registry import failure test (author: Aaryan; contributors: Aaryan; labels: _none_; files: `app/tools/registry.py`, `tests/tools/test_registry.py`)
+- [#1152](https://github.com/Tracer-Cloud/opensre/pull/1152) docs: add troubleshooting block to quickstart (author: Prakhar Jain; contributors: Prakhar Jain; labels: _none_; files: `docs/quickstart.mdx`)
+- [#1155](https://github.com/Tracer-Cloud/opensre/pull/1155) Fix/check disk health tests (author: Bhavarth Bhangdia; contributors: Bhavarth Bhangdia; labels: _none_; files: `tests/app/remote/test_server.py`)
+- [#1151](https://github.com/Tracer-Cloud/opensre/pull/1151) Fix: attach data_quality_issues for list payloads in wrapper validation (author: Michael Emefienem; contributors: Michael Emefienem; labels: _none_; files: `app/tools/utils/data_validation.py`, `tests/tools/utils/test_data_validation.py`)
+
+## Generation metadata
+
+- Generator version: `opensre 2026.4.5`
+- Fallback summary used: `no`
+- UTC window: `2026-04-29T23:00:00+00:00` to `2026-04-30T23:00:00+00:00`

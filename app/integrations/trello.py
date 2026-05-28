@@ -1,9 +1,14 @@
+import logging
 import os
 from dataclasses import dataclass
 from typing import Any
 
 import httpx
 from pydantic import BaseModel, Field, field_validator
+
+from app.integrations._validation_helpers import report_validation_failure
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_TRELLO_BASE_URL = "https://api.trello.com/1"
 
@@ -114,7 +119,13 @@ def validate_trello_config(config: TrelloConfig) -> TrelloValidationResult:
     except httpx.HTTPStatusError as err:
         detail = err.response.text.strip() or str(err)
         return TrelloValidationResult(ok=False, detail=f"Trello validation failed: {detail}")
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="trello",
+            method="validate_trello_config",
+        )
         return TrelloValidationResult(ok=False, detail=f"Trello validation failed: {err}")
 
 

@@ -1,4 +1,4 @@
-"""CloudWatch client for metrics and logs - LangChain tool implementation."""
+"""CloudWatch client for metrics and logs."""
 
 from typing import Any
 
@@ -171,8 +171,8 @@ def get_log_events(
         return {"success": False, "error": str(e)}
 
 
-# Create LangChain tools from the functions
-# These can be used in LangGraph agents while the functions above remain callable
+# Create tool wrappers from the functions
+# These can be used in agents while the functions above remain callable
 get_metric_statistics_tool = tool(get_metric_statistics)
 filter_log_events_tool = tool(filter_log_events)
 get_log_events_tool = tool(get_log_events)

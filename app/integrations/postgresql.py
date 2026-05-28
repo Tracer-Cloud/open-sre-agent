@@ -7,13 +7,22 @@ timeouts enforced, result sizes capped.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from typing import Any
 
 from pydantic import Field, field_validator
 
-from app.strict_config import StrictConfigModel
+from app.integrations._relational import (
+    RelationalConfigBase,
+    env_int,
+    env_str,
+    resolve_stored_or_env_config,
+)
+from app.integrations._validation_helpers import report_validation_failure
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_POSTGRESQL_PORT = 5432
 DEFAULT_POSTGRESQL_USER = "postgres"
@@ -22,7 +31,7 @@ DEFAULT_POSTGRESQL_TIMEOUT_SECONDS = 10.0
 DEFAULT_POSTGRESQL_MAX_RESULTS = 50
 
 
-class PostgreSQLConfig(StrictConfigModel):
+class PostgreSQLConfig(RelationalConfigBase):
     """Normalized PostgreSQL connection settings."""
 
     host: str = ""
@@ -35,19 +44,9 @@ class PostgreSQLConfig(StrictConfigModel):
     max_results: int = Field(default=DEFAULT_POSTGRESQL_MAX_RESULTS, gt=0, le=200)
     integration_id: str = ""
 
-    @field_validator("host", mode="before")
-    @classmethod
-    def _normalize_host(cls, value: Any) -> str:
-        return str(value or "").strip()
-
-    @field_validator("database", mode="before")
-    @classmethod
-    def _normalize_database(cls, value: Any) -> str:
-        return str(value or "").strip()
-
     @field_validator("username", mode="before")
     @classmethod
-    def _normalize_username(cls, value: Any) -> str:
+    def _normalize_username(cls, value: Any) -> str:  # type: ignore[override]
         normalized = str(value or DEFAULT_POSTGRESQL_USER).strip()
         return normalized or DEFAULT_POSTGRESQL_USER
 
@@ -77,20 +76,18 @@ def build_postgresql_config(raw: dict[str, Any] | None) -> PostgreSQLConfig:
 
 def postgresql_config_from_env() -> PostgreSQLConfig | None:
     """Load a PostgreSQL config from env vars."""
-    host = os.getenv("POSTGRESQL_HOST", "").strip()
-    database = os.getenv("POSTGRESQL_DATABASE", "").strip()
+    host = env_str("POSTGRESQL_HOST")
+    database = env_str("POSTGRESQL_DATABASE")
     if not host or not database:
         return None
     return build_postgresql_config(
         {
             "host": host,
-            "port": int(_pg_port)
-            if (_pg_port := os.getenv("POSTGRESQL_PORT", "").strip()).isdigit()
-            else DEFAULT_POSTGRESQL_PORT,
+            "port": env_int("POSTGRESQL_PORT", DEFAULT_POSTGRESQL_PORT),
             "database": database,
-            "username": os.getenv("POSTGRESQL_USERNAME", DEFAULT_POSTGRESQL_USER).strip(),
+            "username": env_str("POSTGRESQL_USERNAME", DEFAULT_POSTGRESQL_USER),
             "password": os.getenv("POSTGRESQL_PASSWORD", ""),
-            "ssl_mode": os.getenv("POSTGRESQL_SSL_MODE", DEFAULT_POSTGRESQL_SSL_MODE).strip(),
+            "ssl_mode": env_str("POSTGRESQL_SSL_MODE", DEFAULT_POSTGRESQL_SSL_MODE),
         }
     )
 
@@ -104,41 +101,34 @@ def resolve_postgresql_config(
     Credentials (username, password, ssl_mode) are resolved from the stored
     integration or environment variables so they never appear in tool signatures.
     """
-    from app.integrations.store import get_integration
-
-    stored = get_integration("postgresql")
-    if stored:
-        creds = stored.get("credentials", {})
-        return build_postgresql_config(
-            {
-                "host": host,
-                "port": creds.get("port", port),
-                "database": database,
-                "username": creds.get("username", DEFAULT_POSTGRESQL_USER),
-                "password": creds.get("password", ""),
-                "ssl_mode": creds.get("ssl_mode", DEFAULT_POSTGRESQL_SSL_MODE),
-            }
-        )
-
-    env_cfg = postgresql_config_from_env()
-    if env_cfg:
-        return build_postgresql_config(
-            {
-                "host": host,
-                "port": port,
-                "database": database,
-                "username": env_cfg.username,
-                "password": env_cfg.password,
-                "ssl_mode": env_cfg.ssl_mode,
-            }
-        )
-
-    return build_postgresql_config({"host": host, "port": port, "database": database})
+    return resolve_stored_or_env_config(
+        "postgresql",
+        host=host,
+        database=database,
+        port=port,
+        build_config=build_postgresql_config,
+        env_loader=postgresql_config_from_env,
+        extra_from_credentials=lambda credentials: {
+            "username": credentials.get("username", DEFAULT_POSTGRESQL_USER),
+            "password": credentials.get("password", ""),
+            "ssl_mode": credentials.get("ssl_mode", DEFAULT_POSTGRESQL_SSL_MODE),
+        },
+        extra_from_env=lambda config: {
+            "username": config.username,
+            "password": config.password,
+            "ssl_mode": config.ssl_mode,
+        },
+    )
 
 
 def _get_connection(config: PostgreSQLConfig) -> Any:
     """Create a psycopg2 connection from config. Caller must close."""
-    import psycopg2  # type: ignore[import-untyped]
+    try:
+        import psycopg2  # type: ignore[import-untyped]
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "psycopg2 is not installed. Install it with: pip install psycopg2-binary"
+        ) from exc
 
     return psycopg2.connect(
         host=config.host,
@@ -177,7 +167,13 @@ def validate_postgresql_config(config: PostgreSQLConfig) -> PostgreSQLValidation
             )
         finally:
             conn.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="postgresql",
+            method="validate_postgresql_config",
+        )
         return PostgreSQLValidationResult(ok=False, detail=f"PostgreSQL connection failed: {err}")
 
 
@@ -286,7 +282,13 @@ def get_server_status(config: PostgreSQLConfig) -> dict[str, Any]:
             }
         finally:
             conn.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="postgresql",
+            method="get_server_status",
+        )
         return {"source": "postgresql", "available": False, "error": str(err)}
 
 
@@ -358,7 +360,13 @@ def get_current_queries(
             }
         finally:
             conn.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="postgresql",
+            method="get_current_queries",
+        )
         return {"source": "postgresql", "available": False, "error": str(err)}
 
 
@@ -457,7 +465,7 @@ def get_replication_status(config: PostgreSQLConfig) -> dict[str, Any]:
             }
         finally:
             conn.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         error_str = str(err)
         # Check if this might be a replica server
         if "recovery" in error_str.lower() or "read-only" in error_str.lower():
@@ -468,6 +476,12 @@ def get_replication_status(config: PostgreSQLConfig) -> dict[str, Any]:
                 "replicas": [],
                 "note": "Server appears to be a replica, not a primary.",
             }
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="postgresql",
+            method="get_replication_status",
+        )
         return {"source": "postgresql", "available": False, "error": error_str}
 
 
@@ -560,7 +574,13 @@ def get_slow_queries(
             }
         finally:
             conn.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="postgresql",
+            method="get_slow_queries",
+        )
         return {"source": "postgresql", "available": False, "error": str(err)}
 
 
@@ -661,5 +681,11 @@ def get_table_stats(
             }
         finally:
             conn.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="postgresql",
+            method="get_table_stats",
+        )
         return {"source": "postgresql", "available": False, "error": str(err)}

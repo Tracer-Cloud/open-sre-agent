@@ -143,6 +143,16 @@ def mock_agent_state(overrides: dict | None = None) -> dict[str, Any]:
             "password": "test123",
             "ssl_mode": "preferred",
         },
+        "splunk": {
+            "connection_verified": True,
+            "base_url": "https://splunk.test.corp.com:8089",
+            "token": "splunk_test_bearer_token",
+            "index": "main",
+            "verify_ssl": False,
+            "ca_bundle": "/etc/ssl/certs/corp-ca.pem",
+            "default_query": 'index=main "NullPointerException" | head 50',
+            "time_range_minutes": 60,
+        },
     }
     if overrides:
         for key, value in overrides.items():
@@ -170,6 +180,39 @@ def mock_http_response(status: int, json_body: Any) -> MagicMock:
     response.json.return_value = json_body
     response.text = str(json_body)
     return response
+
+
+class MockHttpxResponse:
+    """Typed stand-in for an httpx.Response — only the surface tests touch.
+
+    Lets a single helper cover both response shapes the tools must handle:
+    a successful JSON body returned via ``json()``, OR an HTTP error raised
+    inside ``raise_for_status()`` (the tools wrap the call in ``try/except``
+    and treat both as the same failure path).
+
+    Use this from any tool test that mocks ``httpx.post``:
+
+        def _fake_post(url, headers, json, timeout):
+            return MockHttpxResponse({"data": []})
+
+        monkeypatch.setattr("app.tools.MyTool.httpx.post", _fake_post)
+    """
+
+    def __init__(
+        self,
+        payload: Any,
+        *,
+        raise_for_status_error: Exception | None = None,
+    ) -> None:
+        self._payload = payload
+        self._error = raise_for_status_error
+
+    def raise_for_status(self) -> None:
+        if self._error is not None:
+            raise self._error
+
+    def json(self) -> Any:
+        return self._payload
 
 
 # ---------------------------------------------------------------------------

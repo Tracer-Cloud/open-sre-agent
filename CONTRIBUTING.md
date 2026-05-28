@@ -5,11 +5,12 @@ Welcome to OpenSRE
 ## Quick Links
 
 - **GitHub:** [https://github.com/Tracer-Cloud/opensre](https://github.com/Tracer-Cloud/opensre)
-- **Vision:** `[VISION.md](VISION.md)`
 - **Discord:** [https://discord.gg/opensre](https://discord.gg/opensre)
-- **X/Twitter:** §[@open_sre](https://x.com/open_sre)
+- **X/Twitter:** [@open_sre](https://x.com/open_sre)
 
 ## How to Contribute
+
+Looking for a safe first contribution? See [Good First Issues](docs/good-first-issues/README.md).
 
 Use the path that matches the kind of contribution you want to make:
 
@@ -23,16 +24,17 @@ Use the path that matches the kind of contribution you want to make:
 
 ### Environment Setup
 
-See **[SETUP.md](SETUP.md)** for detailed setup instructions including Windows-specific guidance.
+See **[SETUP.md](SETUP.md)** for detailed setup instructions including Windows-specific guidance. For benchmark, deployment detail, and telemetry reference, see **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)**.
 
 **Quick start:**
 
-1. Clone the repo and create a virtual environment
-2. Install dependencies: `pip install -e ".[dev]"`
+1. Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and clone the repository (see [SETUP.md](SETUP.md) for Windows and alternatives)
+2. Install dependencies: `make install`
 3. Run checks: `make lint && make format-check && make typecheck && make test-cov`
+    - When invoking the CLI from your checkout, prefer **`uv run opensre …`** (see `SETUP.md` troubleshooting if another `opensre` shadows `.venv`).
 4. Build release artifacts when needed: `make build`
 
-If you prefer VS Code, you can use the repo's devcontainer at `[.devcontainer/devcontainer.json](.devcontainer/devcontainer.json)` instead of setting up Python manually.
+If you prefer VS Code, use the devcontainer at [.devcontainer/devcontainer.json](.devcontainer/devcontainer.json). Details: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#vs-code-dev-container).
 
 ---
 
@@ -101,6 +103,25 @@ Notes:
 - New features should have corresponding tests
 - Aim for >80% code coverage (run `make test-cov` to check)
 
+#### Tests under `tests/synthetic/` need an explicit `pytest.mark.synthetic` marker
+
+The synthetic test tree has its own Make target (`make test-synthetic`) and is excluded from `make test-cov`. The two targets use marker filters:
+
+- `make test-cov` runs `pytest --ignore=tests/synthetic -m "not synthetic"`, so the whole `tests/synthetic/` tree is excluded.
+- `make test-synthetic` runs `pytest -m synthetic`, so a file without `pytest.mark.synthetic` is collected but skipped.
+
+If you add a new test file under `tests/synthetic/`, declare the marker at module level so the file runs under `make test-synthetic`:
+
+```python
+import pytest
+
+pytestmark = pytest.mark.synthetic
+```
+
+Without this marker the new file silently runs in **zero** standard CI configurations. The pattern is already in `tests/synthetic/rds_postgres/test_suite.py`; new files in the same tree should follow it.
+
+See [#1671](https://github.com/Tracer-Cloud/opensre/issues/1671) for the meta-issue tracking this discoverability gap.
+
 ### 4. Run Local Checks (Required Before PR)
 
 ```bash
@@ -111,6 +132,17 @@ make test-cov      # pytest: run tests with coverage report
 ```
 
 All four must pass. **CI will block merging if any fail.**
+
+### Run one focused test
+
+Replace the placeholders with your actual file or test name:
+
+```bash
+pytest tests/cli/test_.py                                       # single file
+pytest tests/cli/test_.py::test_                                # single function
+pytest tests/tools/ -k "test_registry"                          # tools example
+pytest tests/synthetic/ -k "test_scenario"                      # no live infra needed
+```
 
 ### 5. Open a Pull Request
 
@@ -137,6 +169,20 @@ Use the **[PR template](.github/PULL_REQUEST_TEMPLATE.md)** (automatically provi
 - Code follows project style (see **Code Quality** section below)
 - Self-reviewed your own code first
 - Considered edge cases
+
+### Greptile Code Review
+
+We use [Greptile](https://greptile.com) for automated code review. Before a PR can be merged it must reach a **5/5 confidence score** with zero unresolved comments.
+
+**Trigger a review** by posting this comment on your PR:
+
+```
+@greptile review
+```
+
+Wait 30–60 seconds for the review to appear, then address each comment and re-trigger until you hit 5/5.
+
+> **Automate the loop** — the [greploop skill](https://skills.sh/greptileai/skills/greploop) handles triggering, waiting, fixing, and re-reviewing automatically until 5/5 is reached.
 
 ### If Your PR Includes Screenshots or Logs
 

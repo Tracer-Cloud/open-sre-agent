@@ -3,76 +3,71 @@
 from __future__ import annotations
 
 import logging
-import os
 import re
 import subprocess
 import threading
 import time
+from collections.abc import Iterator
 from typing import Any
 
 from pydantic import BaseModel
 
 from app.integrations.llm_cli.base import CLIProbe, LLMCLIAdapter
+from app.integrations.llm_cli.constants import (
+    EX_TEMPFAIL as _EX_TEMPFAIL,
+)
+from app.integrations.llm_cli.constants import (
+    PROBE_CACHE_TTL_SEC as _PROBE_CACHE_TTL_SEC,
+)
+from app.integrations.llm_cli.constants import (
+    TEMPFAIL_BACKOFF_SEC as _TEMPFAIL_BACKOFF_SEC,
+)
+from app.integrations.llm_cli.constants import (
+    TEMPFAIL_MAX_RETRIES as _TEMPFAIL_MAX_RETRIES,
+)
+from app.integrations.llm_cli.errors import (
+    CLIAuthenticationRequired,
+    CLIInterruptedError,
+    CLITimeoutError,
+)
+from app.integrations.llm_cli.subprocess_env import build_cli_subprocess_env
 from app.integrations.llm_cli.text import flatten_messages_to_prompt
+from app.llm_reasoning_effort import get_active_reasoning_effort
 from app.services.llm_client import LLMResponse
 
 logger = logging.getLogger(__name__)
 
 _ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
-# Avoid re-running `detect()` (two subprocess probes) on every invoke during long investigations.
-_PROBE_CACHE_TTL_SEC = 45.0
-_SAFE_SUBPROCESS_ENV_KEYS = frozenset(
-    {
-        "HOME",
-        "USERPROFILE",
-        "APPDATA",
-        "LOCALAPPDATA",
-        "PATH",
-        "PATHEXT",
-        "SYSTEMROOT",
-        "WINDIR",
-        "COMSPEC",
-        "SHELL",
-        "TMP",
-        "TEMP",
-        "TMPDIR",
-        "LANG",
-        "TERM",
-        "TZ",
-        "NO_PROXY",
-        "HTTP_PROXY",
-        "HTTPS_PROXY",
-        "ALL_PROXY",
-        "SSL_CERT_FILE",
-        "SSL_CERT_DIR",
-        "REQUESTS_CA_BUNDLE",
-        "CURL_CA_BUNDLE",
-        "NO_COLOR",
-        "FORCE_COLOR",
-        "COLORTERM",
-        "XDG_CONFIG_HOME",
-        "XDG_CACHE_HOME",
-        "XDG_DATA_HOME",
-        "XDG_STATE_HOME",
-    }
-)
-_SAFE_SUBPROCESS_ENV_PREFIXES = ("LC_", "CODEX_")
+_REDACTED_PROMPT_ARG = "<redacted-prompt>"
+# Avoid re-running `detect()` (two subprocess probes) on every invoke during long
+# investigations. Value is defined in shared constants.
+# POSIX EX_TEMPFAIL (75): the subprocess hit a transient error and can be retried.
+# kimi uses this when a session dies mid-flight ("To resume this session: kimi -r …").
+
+# Back-compat name for tests and imports that expect this symbol on runner.
+_build_subprocess_env = build_cli_subprocess_env
 
 
 def _strip_ansi(text: str) -> str:
     return _ANSI_ESCAPE.sub("", text)
 
 
-def _build_subprocess_env(overrides: dict[str, str] | None) -> dict[str, str]:
-    env: dict[str, str] = {}
-    for key, value in os.environ.items():
-        if key in _SAFE_SUBPROCESS_ENV_KEYS or any(
-            key.startswith(prefix) for prefix in _SAFE_SUBPROCESS_ENV_PREFIXES
-        ):
-            env[key] = value
-    if overrides:
-        env.update(overrides)
-    return env
+def _sanitize_argv_for_debug(argv: tuple[str, ...], *, prompt: str) -> list[str]:
+    """Redact prompt text from debug argv logs when passed as a CLI argument."""
+    if not prompt:
+        return list(argv)
+
+    redacted: list[str] = []
+    prompt_equals_form = f"--prompt={prompt}"
+    for arg in argv:
+        if arg == prompt:
+            redacted.append(_REDACTED_PROMPT_ARG)
+            continue
+        if arg == prompt_equals_form:
+            redacted.append(f"--prompt={_REDACTED_PROMPT_ARG}")
+            continue
+        redacted.append(arg)
+    return redacted
 
 
 class CLIBackedLLMClient:
@@ -143,44 +138,139 @@ class CLIBackedLLMClient:
                 f"({probe.detail})"
             )
         if probe.logged_in is False:
-            raise RuntimeError(
-                f"{self._adapter.name} is not authenticated. {self._adapter.auth_hint} "
-                f"({probe.detail})"
+            raise CLIAuthenticationRequired(
+                provider=self._adapter.name,
+                auth_hint=self._adapter.auth_hint,
+                detail=probe.detail,
             )
+        auth_probe_unclear = probe.logged_in is None
 
-        invocation = self._adapter.build(prompt=flat, model=self._model, workspace="")
+        invocation = self._adapter.build(
+            prompt=flat,
+            model=self._model,
+            workspace="",
+            reasoning_effort=get_active_reasoning_effort(),
+        )
         merged_env = _build_subprocess_env(invocation.env)
+        logger.debug(
+            "cli_llm_spawn",
+            extra={
+                "provider": self._adapter.name,
+                "argv": _sanitize_argv_for_debug(invocation.argv, prompt=flat),
+            },
+        )
 
-        try:
-            proc = subprocess.run(
-                list(invocation.argv),
-                input=invocation.stdin,
-                capture_output=True,
-                text=True,
-                cwd=invocation.cwd,
-                env=merged_env,
-                timeout=invocation.timeout_sec,
-                check=False,
-            )
-        except subprocess.TimeoutExpired as exc:
-            raise RuntimeError(
-                f"{self._adapter.name} CLI timed out after {invocation.timeout_sec:.0f}s."
-            ) from exc
-        except OSError as exc:
-            raise RuntimeError(f"Failed to spawn {self._adapter.name} CLI: {exc}") from exc
+        backoff = _TEMPFAIL_BACKOFF_SEC
+        for attempt in range(_TEMPFAIL_MAX_RETRIES + 1):
+            try:
+                proc = subprocess.run(
+                    list(invocation.argv),
+                    input=invocation.stdin,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    cwd=invocation.cwd,
+                    env=merged_env,
+                    timeout=invocation.timeout_sec,
+                    check=False,
+                )
+            except subprocess.TimeoutExpired as exc:
+                raise CLITimeoutError(
+                    f"{self._adapter.name} CLI timed out after {invocation.timeout_sec:.0f}s."
+                ) from exc
+            except OSError as exc:
+                raise RuntimeError(f"Failed to spawn {self._adapter.name} CLI: {exc}") from exc
+
+            if proc.returncode == _EX_TEMPFAIL and attempt < _TEMPFAIL_MAX_RETRIES:
+                logger.warning(
+                    "cli_llm_tempfail_retry",
+                    extra={
+                        "provider": self._adapter.name,
+                        "attempt": attempt + 1,
+                        "backoff_sec": backoff,
+                    },
+                )
+                time.sleep(backoff)
+                backoff *= 2
+                continue
+            break
 
         out = _strip_ansi(proc.stdout or "")
         err = _strip_ansi(proc.stderr or "")
 
         if proc.returncode != 0:
-            raise RuntimeError(
-                self._adapter.explain_failure(stdout=out, stderr=err, returncode=proc.returncode)
-            )
+            # Exit code 130 = subprocess terminated by SIGINT (Ctrl+C); raise
+            # CLIInterruptedError so callers using `try/except Exception` still
+            # observe the failure (KeyboardInterrupt inherits from BaseException
+            # and would bypass those handlers). Sentry's `ignore_errors` config
+            # filters this type so user-initiated cancellations are not reported
+            # as bugs.
+            if proc.returncode == 130:
+                raise CLIInterruptedError(f"{self._adapter.name} CLI subprocess interrupted.")
+            # Exit code 75 is EX_TEMPFAIL (sysexits.h) — a transient failure
+            # the caller should retry. Raise CLITimeoutError so it is treated as
+            # an expected operational failure and not forwarded to Sentry.
+            if proc.returncode == _EX_TEMPFAIL:
+                hint = (
+                    f"{self._adapter.name} reported a temporary failure (exit 75). "
+                    "Retry the request or check network connectivity."
+                )
+                if err:
+                    hint = f"{hint} {err[:200]}"
+                raise CLITimeoutError(hint)
+            base = self._adapter.explain_failure(
+                stdout=out, stderr=err, returncode=proc.returncode
+            ).strip()
+            # When the failure message signals an auth problem raise
+            # CLIAuthenticationRequired so callers (reraise_cli_runtime_error,
+            # server endpoints) get structured, actionable handling instead of
+            # a bare RuntimeError that lands in Sentry as a spurious bug.
+            # Patterns cover all current adapters:
+            #   kimi        → "not logged in", "api key invalid", "re-authenticate"
+            #   cursor      → "not logged in"
+            #   opencode    → "authentication failed", "not authenticated"
+            #   claude/gemini/codex pass raw stderr which may contain these phrases too
+            _base_lower = base.lower()
+            if (
+                "not logged in" in _base_lower
+                or "api key invalid" in _base_lower
+                or "re-authenticate" in _base_lower
+                or "authentication failed" in _base_lower
+                or "not authenticated" in _base_lower
+            ):
+                raise CLIAuthenticationRequired(
+                    provider=self._adapter.name,
+                    auth_hint=self._adapter.auth_hint,
+                    detail=base,
+                )
+            if auth_probe_unclear:
+                message = (
+                    f"{base}\n\n"
+                    f"Auth status could not be verified before invocation. "
+                    f"{self._adapter.auth_hint} ({probe.detail})"
+                )
+            else:
+                message = base
+            raise RuntimeError(message)
 
         content = self._adapter.parse(stdout=out, stderr=err, returncode=proc.returncode)
         content = _strip_ansi(content).strip()
+        if err:
+            logger.debug(
+                "cli_llm_stderr",
+                extra={"provider": self._adapter.name, "stderr": err[:500]},
+            )
         logger.debug(
             "cli_llm_invoke",
             extra={"provider": self._adapter.name, "cli_cost_unknown": True},
         )
         return LLMResponse(content=content)
+
+    def invoke_stream(self, prompt_or_messages: Any) -> Iterator[str]:
+        """Yield the full response as one chunk; real streaming is a follow-up.
+
+        Subprocess CLI adapters ``subprocess.run`` to completion, so this
+        satisfies the protocol contract without faking progressive output.
+        """
+        yield self.invoke(prompt_or_messages).content

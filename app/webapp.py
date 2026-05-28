@@ -1,13 +1,33 @@
 from __future__ import annotations
 
+<<<<<<< HEAD
 import os
 from pydantic import BaseModel
 from fastapi import FastAPI, Header, HTTPException
 from app.integrations.telegram import send_message
+=======
+from fastapi import FastAPI, Response, status
+from pydantic import BaseModel, ValidationError
+
+from app.config import LLMSettings, get_environment
+from app.utils.sentry_sdk import init_sentry
+from app.version import get_version
+
+init_sentry(entrypoint="webapp")
+
+
+class HealthResponse(BaseModel):
+    ok: bool
+    version: str
+    llm_configured: bool
+    env: str
+
+>>>>>>> upstream/main
 
 app = FastAPI()
 
 
+<<<<<<< HEAD
 class Alert(BaseModel):
     service: str
     severity: str
@@ -60,3 +80,33 @@ def health() -> dict:
         "status": "ok",
         "service": "opensre",
     }
+=======
+def _llm_configured() -> bool:
+    try:
+        LLMSettings.from_env()
+    except ValidationError:
+        return False
+    return True
+
+
+def get_health_response() -> HealthResponse:
+    llm_configured = _llm_configured()
+
+    return HealthResponse(
+        ok=llm_configured,
+        version=get_version(),
+        llm_configured=llm_configured,
+        env=get_environment().value,
+    )
+
+
+@app.get("/", response_model=HealthResponse)
+@app.get("/health", response_model=HealthResponse)
+@app.get("/ok", response_model=HealthResponse)
+def health(response: Response) -> HealthResponse:
+    health_response = get_health_response()
+    response.status_code = (
+        status.HTTP_200_OK if health_response.ok else status.HTTP_503_SERVICE_UNAVAILABLE
+    )
+    return health_response
+>>>>>>> upstream/main

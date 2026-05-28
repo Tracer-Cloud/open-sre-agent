@@ -82,20 +82,32 @@ def test_fetch_thread_returns_error_on_http_failure() -> None:
     mock_resp = MagicMock()
     mock_resp.status_code = 403
 
-    with patch(
-        "app.remote.slack_context.httpx.get",
-        side_effect=httpx.HTTPStatusError("err", request=MagicMock(), response=mock_resp),
+    exc = httpx.HTTPStatusError("err", request=MagicMock(), response=mock_resp)
+    with (
+        patch("app.remote.slack_context.httpx.get", side_effect=exc),
+        patch("app.remote.slack_context.report_remote_exception") as report,
     ):
         result = fetch_slack_thread("C01234", "1712345.000001", "xoxb-fake")
 
     assert result == {"error": "HTTP 403"}
+    report.assert_called_once()
+    assert report.call_args.kwargs["component"] == "slack_context"
+    assert report.call_args.kwargs["event"] == "thread_fetch_http_error"
+    assert report.call_args.kwargs["severity"] == "warning"
 
 
 def test_fetch_thread_returns_error_on_unexpected_exception() -> None:
-    with patch("app.remote.slack_context.httpx.get", side_effect=RuntimeError("boom")):
+    with (
+        patch("app.remote.slack_context.httpx.get", side_effect=RuntimeError("boom")),
+        patch("app.remote.slack_context.report_remote_exception") as report,
+    ):
         result = fetch_slack_thread("C01234", "1712345.000001", "xoxb-fake")
 
     assert result == {"error": "boom"}
+    report.assert_called_once()
+    assert report.call_args.kwargs["component"] == "slack_context"
+    assert report.call_args.kwargs["event"] == "thread_fetch_error"
+    assert report.call_args.kwargs["severity"] == "warning"
 
 
 def test_fetch_thread_caps_limit_at_100() -> None:

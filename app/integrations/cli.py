@@ -1,4 +1,4 @@
-"""Interactive CLI for managing local integrations (~/.tracer/integrations.json).
+"""Interactive CLI for managing local integrations (~/.opensre/integrations.json).
 
 Usage:
     python -m app.integrations setup <service>
@@ -6,8 +6,6 @@ Usage:
     python -m app.integrations show <service>
     python -m app.integrations remove <service>
     python -m app.integrations verify [service] [--send-slack-test]
-
-Supported services: alertmanager, aws, azure_sql, coralogix, datadog, grafana, honeycomb, mariadb, discord, mongodb, mongodb_atlas, postgresql, slack, opensearch, rds, tracer, github, sentry, vercel
 """
 
 from __future__ import annotations
@@ -18,10 +16,14 @@ from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import questionary
 
+from app.cli.interactive_shell.ui.theme import ANSI_BOLD, ANSI_RESET
+
 if TYPE_CHECKING:
     from app.integrations.github_mcp import GitHubMcpDisplayDetailLevel
 
 from app.integrations.gitlab import DEFAULT_GITLAB_BASE_URL
+from app.integrations.openclaw import build_openclaw_config, validate_openclaw_config
+from app.integrations.registry import SUPPORTED_SETUP_SERVICES
 from app.integrations.store import (
     STORE_PATH,
     get_integration,
@@ -36,8 +38,8 @@ from app.integrations.verify import (
     verify_integrations,
 )
 
-_B = "\033[1m"
-_R = "\033[0m"
+_B = ANSI_BOLD
+_R = ANSI_RESET
 
 
 def _json_echo(data: Any) -> None:
@@ -237,24 +239,34 @@ def _setup_slack() -> None:
 
 
 def _setup_opensearch() -> None:
-    endpoint = _p("Endpoint (e.g. https://my-cluster.us-east-1.es.amazonaws.com)")
-    creds: dict[str, Any] = {"endpoint": endpoint}
+    url = _p("URL (e.g. https://my-cluster.us-east-1.es.amazonaws.com)")
+    if not url:
+        _die("url is required.")
+    creds: dict[str, Any] = {"url": url}
     auth_choice = questionary.select(
         "OpenSearch authentication method:",
         choices=[
-            questionary.Choice("Username + Password", value="1"),
-            questionary.Choice("API key", value="2"),
+            questionary.Choice("Username + Password (HTTP Basic Auth)", value="basic"),
+            questionary.Choice("API key", value="api_key"),
+            questionary.Choice("None (security disabled)", value="none"),
         ],
         instruction="(use arrow keys)",
     ).ask()
     if auth_choice is None:
         print("\nAborted.")
         sys.exit(1)
-    if auth_choice == "2":
-        creds["api_key"] = _p("API key", secret=True)
-    else:
-        creds["username"] = _p("Username", default="admin")
-        creds["password"] = _p("Password", secret=True)
+    if auth_choice == "api_key":
+        api_key = _p("API key", secret=True)
+        if not api_key:
+            _die("api_key is required.")
+        creds["api_key"] = api_key
+    elif auth_choice == "basic":
+        username = _p("Username", default="admin")
+        password = _p("Password", secret=True)
+        if not username or not password:
+            _die("username and password are required for basic auth.")
+        creds["username"] = username
+        creds["password"] = password
     upsert_integration("opensearch", {"credentials": creds})
 
 
@@ -316,6 +328,22 @@ def _setup_betterstack() -> None:
                 "username": username,
                 "password": password,
                 "sources": sources,
+            }
+        },
+    )
+
+
+def _setup_incident_io() -> None:
+    api_key = _p("incident.io API key", secret=True)
+    base_url = _p("API base URL override (optional)")
+    if not api_key:
+        _die("api_key is required.")
+    upsert_integration(
+        "incident_io",
+        {
+            "credentials": {
+                "api_key": api_key,
+                "base_url": base_url,
             }
         },
     )
@@ -504,6 +532,125 @@ def _setup_discord() -> None:
     _register_discord_slash_command(application_id, bot_token)
 
 
+def _setup_telegram() -> None:
+    from app.cli.wizard.integration_health import validate_telegram_bot
+
+    bot_token = _p("Telegram bot token", secret=True)
+    if not bot_token:
+        _die("bot_token is required.")
+    default_chat_id = _p("Default chat ID (optional)")
+    print("\n  Validating Telegram bot token...")
+    result = validate_telegram_bot(bot_token=bot_token)
+    if not result.ok:
+        _die(result.detail)
+    print(f"  {result.detail}")
+    upsert_integration(
+        "telegram",
+        {
+            "credentials": {
+                "bot_token": bot_token,
+                "default_chat_id": default_chat_id or None,
+            }
+        },
+    )
+    print("  Next:")
+    print("    - opensre integrations verify telegram")
+
+
+def _setup_whatsapp() -> None:
+    account_sid = _p("Twilio Account SID (starts with AC...)")
+    auth_token = _p("Twilio Auth Token", secret=True)
+    from_number = _p("Twilio WhatsApp From number (e.g. whatsapp:+14155238886)")
+    default_to = _p("Default recipient phone number (optional, e.g. +1234567890)")
+    if not account_sid or not auth_token or not from_number:
+        _die("account_sid, auth_token, and from_number are required.")
+    upsert_integration(
+        "whatsapp",
+        {
+            "credentials": {
+                "account_sid": account_sid,
+                "auth_token": auth_token,
+                "from_number": from_number,
+                "default_to": default_to,
+            }
+        },
+    )
+
+
+def _setup_twilio() -> None:
+    """Wizard for the Twilio SMS integration.
+
+    WhatsApp delivery is configured separately via ``setup whatsapp``.
+    """
+    account_sid = _p("Twilio Account SID (starts with AC...)")
+    auth_token = _p("Twilio Auth Token", secret=True)
+    if not account_sid or not auth_token:
+        _die("account_sid and auth_token are required.")
+
+    sms_from = _p(
+        "Twilio SMS From number (E.164, e.g. +14155551234; leave blank to use a Messaging Service SID)"
+    )
+    messaging_service_sid = ""
+    if not sms_from:
+        messaging_service_sid = _p("Twilio Messaging Service SID (starts with MG...)")
+        if not messaging_service_sid:
+            _die("SMS requires either a from_number or a messaging_service_sid.")
+
+    upsert_integration(
+        "twilio",
+        {
+            "credentials": {
+                "account_sid": account_sid,
+                "auth_token": auth_token,
+                "sms": {
+                    "enabled": True,
+                    "from_number": sms_from,
+                    "messaging_service_sid": messaging_service_sid,
+                    "default_to": _p("Default SMS recipient (optional, E.164)") or None,
+                },
+            }
+        },
+    )
+
+
+def _setup_openclaw() -> None:
+    print("  1) stdio (recommended)  2) Streamable HTTP  3) SSE")
+    choice = _p("Choice", default="1")
+    mode = {"1": "stdio", "2": "streamable-http", "3": "sse"}.get(choice, "stdio")
+
+    credentials: dict[str, Any] = {"mode": mode}
+    if mode == "stdio":
+        command = _p("OpenClaw bridge command", default="openclaw")
+        args = _p("OpenClaw bridge args", default="mcp serve")
+        if not command:
+            _die("command is required for stdio mode.")
+        credentials["command"] = command
+        credentials["args"] = [part for part in args.split() if part]
+        credentials["url"] = ""
+        credentials["auth_token"] = ""
+    else:
+        url = _p("OpenClaw bridge URL")
+        if not url:
+            _die("url is required for remote MCP modes.")
+        credentials["url"] = url
+        credentials["command"] = ""
+        credentials["args"] = []
+        credentials["auth_token"] = _p("OpenClaw auth token (optional)", secret=True)
+
+    print("\n  Validating OpenClaw bridge...")
+    config = build_openclaw_config(credentials)
+    result = validate_openclaw_config(config)
+    print(f"  {result.detail}")
+    if not result.ok:
+        sys.exit(1)
+
+    upsert_integration("openclaw", {"credentials": credentials})
+    print("  Next:")
+    print("    - opensre integrations verify openclaw")
+    print("    - uv run opensre investigate -i tests/fixtures/openclaw_test_alert.json")
+    print("    - for accurate RCA, also configure Grafana/Datadog and GitHub")
+
+
 def _setup_postgresql() -> None:
     host = _p("Host (e.g. localhost or postgres.example.com)")
     database = _p("Database name")
@@ -664,6 +811,24 @@ def _setup_alertmanager() -> None:
     upsert_integration("alertmanager", {"credentials": credentials})
 
 
+def _setup_signoz() -> None:
+    url = _p("SigNoz URL (e.g. http://localhost:8080 for local Docker)")
+    api_key = _p("SigNoz API key (service account key)", secret=True)
+
+    if not (url and api_key):
+        _die("SigNoz URL and API key are required.")
+
+    upsert_integration(
+        "signoz",
+        {
+            "credentials": {
+                "url": url,
+                "api_key": api_key,
+            }
+        },
+    )
+
+
 _HANDLERS: dict[str, Any] = {
     "alertmanager": _setup_alertmanager,
     "aws": _setup_aws,
@@ -672,6 +837,7 @@ _HANDLERS: dict[str, Any] = {
     "datadog": _setup_datadog,
     "grafana": _setup_grafana,
     "honeycomb": _setup_honeycomb,
+    "incident_io": _setup_incident_io,
     "mariadb": _setup_mariadb,
     "mongodb_atlas": _setup_mongodb_atlas,
     "slack": _setup_slack,
@@ -684,8 +850,13 @@ _HANDLERS: dict[str, Any] = {
     "sentry": _setup_sentry,
     "mongodb": _setup_mongodb,
     "discord": _setup_discord,
+    "telegram": _setup_telegram,
+    "whatsapp": _setup_whatsapp,
+    "twilio": _setup_twilio,
+    "openclaw": _setup_openclaw,
     "postgresql": _setup_postgresql,
     "mysql": _setup_mysql,
+    "signoz": _setup_signoz,
 }
 
 
@@ -728,8 +899,10 @@ def _setup_azure_sql() -> None:
 
 _HANDLERS["azure_sql"] = _setup_azure_sql
 
+_SETUP_SERVICES = tuple(service for service in SUPPORTED_SETUP_SERVICES if service in _HANDLERS)
 
-SUPPORTED = ", ".join(_HANDLERS)
+
+SUPPORTED = ", ".join(_SETUP_SERVICES)
 SUPPORTED_VERIFY = ", ".join(SUPPORTED_VERIFY_SERVICES)
 
 
@@ -738,13 +911,13 @@ def cmd_setup(service: str | None) -> str:
         try:
             service = questionary.select(
                 "Which service would you like to set up?",
-                choices=sorted(_HANDLERS),
+                choices=list(_SETUP_SERVICES),
                 instruction="(use arrow keys)",
             ).ask()
         except (EOFError, KeyboardInterrupt):
             print("\nAborted.")
             sys.exit(1)
-    if not service or service not in _HANDLERS:
+    if not service or service not in _SETUP_SERVICES:
         _die(f"Usage: setup <service>. Supported: {SUPPORTED}")
     print(f"\n  Setting up {_B}{service}{_R}\n")
     _HANDLERS[service]()
@@ -753,7 +926,7 @@ def cmd_setup(service: str | None) -> str:
 
 
 def cmd_list() -> None:
-    from app.cli.context import is_json_output
+    from app.cli.support.context import is_json_output
 
     items = list_integrations()
 
@@ -762,7 +935,10 @@ def cmd_list() -> None:
         return
 
     if not items:
-        print("  No integrations. Run: python -m app.integrations setup <service>")
+        print(
+            "  No integrations. Run: opensre integrations setup <service>, "
+            "or opensre onboard for the guided wizard."
+        )
         return
     print(f"\n  {_B}{'SERVICE':<14}STATUS    ID{_R}")
     for i in items:
@@ -782,7 +958,7 @@ def cmd_show(service: str | None) -> None:
 
 
 def cmd_remove(service: str | None) -> None:
-    from app.cli.context import is_yes
+    from app.cli.support.context import is_yes
 
     if not service:
         _die("Usage: remove <service>")
@@ -802,7 +978,7 @@ def cmd_remove(service: str | None) -> None:
 
 
 def cmd_verify(service: str | None, *, send_slack_test: bool = False) -> int:
-    from app.cli.context import is_json_output
+    from app.cli.support.context import is_json_output
 
     if service and service not in SUPPORTED_VERIFY_SERVICES:
         _die(f"Usage: verify [service]. Supported: {SUPPORTED_VERIFY}")

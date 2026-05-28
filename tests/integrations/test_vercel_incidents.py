@@ -66,7 +66,7 @@ def test_cmd_vercel_incidents_json_outputs_incidents(monkeypatch, capsys) -> Non
         "app.integrations.vercel_incidents.collect_vercel_candidates",
         lambda **_kwargs: [_candidate()],
     )
-    monkeypatch.setattr("app.cli.context._root_obj", lambda: {"json": True})
+    monkeypatch.setattr("app.cli.support.context._root_obj", lambda: {"json": True})
 
     vercel_incidents.cmd_vercel_incidents(limit=5)
 
@@ -88,7 +88,7 @@ def test_cmd_vercel_incidents_exits_on_api_error(monkeypatch, capsys) -> None:
             VercelResolutionError("Failed to list Vercel projects: HTTP 403: invalidToken")
         ),
     )
-    monkeypatch.setattr("app.cli.context._root_obj", lambda: {"json": False})
+    monkeypatch.setattr("app.cli.support.context._root_obj", lambda: {"json": False})
     monkeypatch.setattr(
         vercel_incidents.questionary,
         "select",
@@ -136,7 +136,7 @@ def test_project_label_formats_epoch_milliseconds() -> None:
 def test_cmd_vercel_incidents_scopes_to_selected_project(monkeypatch) -> None:
     answers: list[object] = ["proj_123", "_exit"]
     captured: dict[str, Any] = {}
-    monkeypatch.setattr("app.cli.context._root_obj", lambda: {"json": False})
+    monkeypatch.setattr("app.cli.support.context._root_obj", lambda: {"json": False})
     monkeypatch.setattr(
         vercel_incidents,
         "_load_projects",

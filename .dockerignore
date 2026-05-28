@@ -1,19 +1,42 @@
-.git
-.cursor
+# Ignore node_modules and other dependency directories
+node_modules
+bower_components
+vendor
+
+# Ignore logs and temporary files
+*.log
+*.tmp
+*.swp
+
+# Ignore .env files and other environment files
 .env
-.DS_Store
-**/.DS_Store
-**/__pycache__
-**/.pytest_cache
-**/.mypy_cache
-**/.ruff_cache
-**/.venv
-**/.venv-devcontainer
-**/node_modules
-**/cdk.out
-tests/test_case_upstream_lambda/pipeline_code/api_ingester/certifi
-tests/test_case_upstream_lambda/pipeline_code/api_ingester/charset_normalizer
-tests/test_case_upstream_lambda/pipeline_code/api_ingester/idna
-tests/test_case_upstream_lambda/pipeline_code/api_ingester/requests
-tests/test_case_upstream_lambda/pipeline_code/api_ingester/urllib3
-tests/test_case_upstream_lambda/pipeline_code/api_ingester/*.dist-info
+.env.*
+*.local
+
+# Ignore git-related files
+.git
+.gitignore
+
+# Ignore Docker-related files and configs
+.dockerignore
+docker-compose.yml
+
+# Ignore build and cache directories
+dist
+build
+.cache
+__pycache__
+
+# Ignore IDE and editor configurations
+.vscode
+.idea
+*.sublime-project
+*.sublime-workspace
+.DS_Store  # macOS-specific
+
+# Ignore test and coverage files
+coverage
+*.coverage
+*.test.js
+*.spec.js
+tests

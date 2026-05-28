@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 import requests
 
-from app.deployment.health import poll_deployment_health
+from app.deployment.operations.health import poll_deployment_health
 
 
 class _Resp:

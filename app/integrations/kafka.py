@@ -7,13 +7,17 @@ consumer group lag, and broker health. No produce or consume operations.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from typing import Any
 
 from pydantic import Field, field_validator
 
+from app.integrations._validation_helpers import report_validation_failure
 from app.strict_config import StrictConfigModel
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_KAFKA_SECURITY_PROTOCOL = "PLAINTEXT"
 DEFAULT_KAFKA_TIMEOUT_SECONDS = 10.0
@@ -64,8 +68,8 @@ def kafka_is_available(sources: dict[str, dict]) -> bool:
 def kafka_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     """Extract Kafka connection params from resolved integrations.
 
-    Credentials are resolved by detect_sources from the integration store,
-    so the LLM never needs to supply bootstrap_servers or SASL credentials directly.
+    Credentials are resolved from the integration store or environment, so the
+    LLM never needs to supply bootstrap_servers or SASL credentials directly.
     """
     kf = sources.get("kafka", {})
     return {
@@ -160,7 +164,13 @@ def validate_kafka_config(config: KafkaConfig) -> KafkaValidationResult:
                 f"and {topic_count} topic(s)."
             ),
         )
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="kafka",
+            method="validate_kafka_config",
+        )
         return KafkaValidationResult(ok=False, detail=f"Kafka connection failed: {err}")
 
 
@@ -217,7 +227,13 @@ def get_topic_health(
             "cluster_topic_count": len(metadata.topics),
             "topics": topics,
         }
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="kafka",
+            method="get_topic_health",
+        )
         return {"source": "kafka", "available": False, "error": str(err)}
 
 
@@ -281,5 +297,11 @@ def get_consumer_group_lag(
             }
         finally:
             consumer.close()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="kafka",
+            method="get_consumer_group_lag",
+        )
         return {"source": "kafka", "available": False, "error": str(err)}

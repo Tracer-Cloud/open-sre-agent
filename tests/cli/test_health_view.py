@@ -5,7 +5,8 @@ from unittest.mock import MagicMock, patch
 
 from rich.console import Console
 
-from app.cli.health_view import (
+from app.cli.interactive_shell.ui.theme import ERROR, HIGHLIGHT, WARNING
+from app.cli.support.health_view import (
     _summary_counts,
     render_health_json,
     render_health_report,
@@ -18,24 +19,24 @@ def test_status_badge() -> None:
     for s in ["passed", "pass", "ok", "healthy", " PASSED "]:
         badge = status_badge(s)
         assert badge.plain == "PASSED"
-        assert badge.style == "bold green"
+        assert badge.style == f"bold {HIGHLIGHT}"
 
     # Test warn statuses
     for s in ["warn", "warning", "degraded", "outdated"]:
         badge = status_badge(s)
         assert badge.plain == "WARN"
-        assert badge.style == "bold yellow"
+        assert badge.style == f"bold {WARNING}"
 
     # Test missing status
     badge = status_badge("missing")
     assert badge.plain == "MISSING"
-    assert badge.style == "bold yellow"
+    assert badge.style == f"bold {WARNING}"
 
     # Test failed statuses
     for s in ["failed", "fail", "error", "unhealthy"]:
         badge = status_badge(s)
         assert badge.plain == "FAILED"
-        assert badge.style == "bold red"
+        assert badge.style == f"bold {ERROR}"
 
     # Test unknown status
     badge = status_badge("unknown_status")
@@ -55,19 +56,52 @@ def test_summary_counts() -> None:
         {"status": "missing"},
         {"status": "failed"},
         {"status": "unknown"},
-        {"status": "error"},  # This should be 'other' according to current implementation
+        {"status": "error"},
     ]
-    # Note: _summary_counts only matches "passed", "missing", "failed" exactly (after lower/strip)
-    # "error" or "unhealthy" are mapped to "other" in _summary_counts logic even if status_badge handles them.
-    # Looking at health_view.py:
-    # if status in counts: counts[status] += 1 else: counts["other"] += 1
-    # where counts = {"passed": 0, "missing": 0, "failed": 0, "other": 0}
-
     counts = _summary_counts(results)
     assert counts["passed"] == 2
     assert counts["missing"] == 1
-    assert counts["failed"] == 1
-    assert counts["other"] == 2  # 'unknown' and 'error'
+    assert counts["failed"] == 2
+    assert counts["other"] == 1
+
+
+def test_summary_counts_normalizes_failure_aliases() -> None:
+    results = [
+        {"status": "failed"},
+        {"status": "fail"},
+        {"status": "error"},
+        {"status": "unhealthy"},
+        {"status": "FAILED"},
+    ]
+    counts = _summary_counts(results)
+    assert counts["failed"] == 5
+    assert counts["other"] == 0
+
+
+def test_summary_counts_normalizes_passed_aliases() -> None:
+    results = [
+        {"status": "passed"},
+        {"status": "pass"},
+        {"status": "ok"},
+        {"status": "healthy"},
+    ]
+    counts = _summary_counts(results)
+    assert counts["passed"] == 4
+    assert counts["other"] == 0
+
+
+def test_summary_counts_unknown_stays_other() -> None:
+    results = [
+        {"status": "warn"},
+        {"status": "degraded"},
+        {"status": "weird"},
+        {"status": ""},
+    ]
+    counts = _summary_counts(results)
+    assert counts["other"] == 4
+    assert counts["passed"] == 0
+    assert counts["failed"] == 0
+    assert counts["missing"] == 0
 
 
 def test_render_health_json(capsys) -> None:

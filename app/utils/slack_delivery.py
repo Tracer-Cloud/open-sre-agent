@@ -4,13 +4,39 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from typing import Any
 
+from app.cli.support.output import debug_print
 from app.config import SLACK_CHANNEL
-from app.output import debug_print
 from app.utils.delivery_transport import post_json
 
 logger = logging.getLogger(__name__)
+
+_ACCESS_TOKEN_RE = re.compile(r"(xox[baprs]-)[A-Za-z0-9-]+")
+
+
+def _redact_token(text: str, access_token: str) -> str:
+    """Replace ``access_token`` with ``<redacted>`` to prevent accidental log/error leakage."""
+    redacted = text
+    if access_token and access_token in text:
+        redacted = text.replace(access_token, "<redacted>")
+    return _ACCESS_TOKEN_RE.sub(r"\1<redacted>", redacted)
+
+
+def _extract_error(data: dict[str, Any], status_code: int, text: str) -> str:
+    """Return a human-readable error string from a Slack API response.
+
+    Tries ``data["error"]`` first, then falls back to the raw response body
+    or the HTTP status code so non-JSON failure bodies (HTML, plain text)
+    never cause a crash.
+    """
+    error = data.get("error")
+    if error:
+        return str(error)
+    if text:
+        return text[:500]
+    return f"HTTP {status_code}"
 
 
 def _slack_bearer_headers(token: str) -> dict[str, str]:
@@ -38,7 +64,8 @@ def _call_reactions_api(method: str, token: str, channel: str, timestamp: str, e
         timeout=8.0,
     )
     if not response.ok:
-        logger.warning("[slack] %s(%s) exception: %s", method, emoji, response.error)
+        safe_error = _redact_token(response.error, token)
+        logger.warning("[slack] %s(%s) exception: %s", method, emoji, safe_error)
         return False
     if not response.data.get("ok"):
         error = response.data.get("error", "unknown")
@@ -144,6 +171,23 @@ def _merge_payload(
     return payload
 
 
+def _configured_webhook_url() -> str:
+    """Return the standalone Slack webhook from env or the local integration store."""
+    env_webhook_url = os.getenv("SLACK_WEBHOOK_URL", "").strip()
+    if env_webhook_url:
+        return env_webhook_url
+
+    try:
+        from app.integrations.catalog import resolve_effective_integrations
+
+        slack_integration = resolve_effective_integrations().get("slack") or {}
+        config = slack_integration.get("config") if isinstance(slack_integration, dict) else {}
+        return str(config.get("webhook_url", "") if isinstance(config, dict) else "").strip()
+    except Exception:
+        logger.debug("Failed to resolve Slack webhook from integration store", exc_info=True)
+        return ""
+
+
 def send_slack_report(
     slack_message: str,
     channel: str | None = None,
@@ -157,7 +201,8 @@ def send_slack_report(
 
     When thread context is available, prefers a thread reply to avoid creating
     loops for inbound Slack-triggered investigations. For standalone CLI or
-    local investigations, falls back to SLACK_WEBHOOK_URL if configured.
+    local investigations, falls back to SLACK_WEBHOOK_URL or the local Slack
+    integration store if configured.
 
     Args:
         slack_message: The formatted RCA report text.
@@ -171,7 +216,7 @@ def send_slack_report(
         (success, error_detail) — success is True if posted, error_detail is non-empty on failure.
     """
     if not thread_ts:
-        webhook_url = os.getenv("SLACK_WEBHOOK_URL", "").strip()
+        webhook_url = _configured_webhook_url()
         if webhook_url:
             webhook_ok = _post_via_incoming_webhook(
                 slack_message,
@@ -181,7 +226,7 @@ def send_slack_report(
             )
             return (True, "") if webhook_ok else (False, "webhook=failed")
         logger.debug("[slack] Delivery skipped: no thread_ts (channel=%s)", channel)
-        debug_print("Slack delivery skipped: no thread_ts and no SLACK_WEBHOOK_URL configured.")
+        debug_print("Slack delivery skipped: no thread_ts and no Slack webhook configured.")
         return False, "no_thread_ts"
 
     if access_token and channel:
@@ -189,12 +234,13 @@ def send_slack_report(
             slack_message, channel, thread_ts, access_token, blocks=blocks, **extra
         )
         if not success:
+            safe_error = _redact_token(direct_error, access_token)
             logger.info(
-                "[slack] Direct post failed (%s), falling back to webapp delivery", direct_error
+                "[slack] Direct post failed (%s), falling back to webapp delivery", safe_error
             )
             webapp_ok = _post_via_webapp(slack_message, channel, thread_ts, blocks=blocks, **extra)
             if not webapp_ok:
-                return False, f"direct={direct_error}, webapp=failed"
+                return False, f"direct={safe_error}, webapp=failed"
             return True, ""
         return True, ""
     else:
@@ -222,26 +268,30 @@ def _post_direct(
         headers=_slack_bearer_headers(token),
     )
     if not response.ok:
+        safe_error = _redact_token(response.error, token)
         logger.error(
             "[slack] Direct post exception type=%s channel=%s thread_ts=%s detail=%s "
             "(caller may attempt fallback)",
             response.exc_type or "Exception",
             channel,
             thread_ts,
-            response.error,
+            safe_error,
         )
-        return False, f"exception={response.error}"
-    if not response.data.get("ok"):
-        error = response.data.get("error", "unknown")
+        return False, f"exception={safe_error}"
+    if response.data.get("ok") is not True:
+        error = response.data.get("error")
+        if not error:
+            error = _extract_error(dict(response.data), response.status_code, response.text)
+        safe_error = _redact_token(str(error), token)
         response_meta = response.data.get("response_metadata", {})
         logger.error(
             "[slack] Direct post FAILED: error=%s, metadata=%s (channel=%s, thread_ts=%s)",
-            error,
+            safe_error,
             response_meta,
             channel,
             thread_ts,
         )
-        return False, f"slack_error={error}"
+        return False, f"slack_error={safe_error}"
     warnings = response.data.get("response_metadata", {}).get("warnings", [])
     if warnings:
         logger.warning("[slack] Reply posted with warnings: %s", warnings)

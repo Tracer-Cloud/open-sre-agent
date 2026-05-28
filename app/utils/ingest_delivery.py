@@ -90,6 +90,15 @@ def build_ingest_payload(state: InvestigationState) -> dict[str, Any]:
     return {"investigation_output": investigation_output, "metadata": metadata}
 
 
+def get_investigation_url(org_slug: str | None = None, investigation_id: str | None = None) -> str:
+    """Build investigation URL using the organization slug and optional investigation ID."""
+    base = get_tracer_base_url()
+    prefix = f"{base}/{org_slug}" if org_slug else base
+    if investigation_id:
+        return f"{prefix}/investigations/{investigation_id}"
+    return f"{prefix}/investigations"
+
+
 def send_ingest(state: InvestigationState) -> str | None:
     """Deliver investigation to the ingest API.
 
@@ -123,7 +132,7 @@ def send_ingest(state: InvestigationState) -> str | None:
             investigation_id,
         )
         return investigation_id
-    except httpx.HTTPStatusError as exc:  # noqa: BLE001
+    except httpx.HTTPStatusError as exc:
         detail = exc.response.text[:200] if exc.response is not None else str(exc)
         logger.warning(
             "[ingest] Delivery HTTP failure status=%s thread_id=%s url=%s response_snippet=%s",
@@ -132,6 +141,48 @@ def send_ingest(state: InvestigationState) -> str | None:
             api_url,
             detail,
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("[ingest] Delivery failed: %s", exc)
     return None
+
+
+def create_investigation_and_attach_url(
+    state: InvestigationState,
+    slack_message: str,
+    summary: str | None,
+) -> tuple[str | None, str]:
+    """
+    Create an investigation via ingest, then attach investigation_url.
+
+    Returns:
+        (investigation_id, investigation_url)
+        investigation_url always falls back to investigations list page.
+    """
+    state_with_report = {
+        **state,
+        "problem_report": {"report_md": slack_message},
+        "summary": summary,
+    }
+
+    # First ingest: create investigation
+    investigation_id = send_ingest(state_with_report)  # type: ignore[arg-type]
+
+    # Always compute URL (falls back to investigations list page when ID is None)
+    investigation_url = get_investigation_url(
+        state.get("organization_slug"),
+        investigation_id,
+    )
+
+    # Second ingest: attach URL only if investigation was created
+    if investigation_id:
+        state_with_url = {
+            **state,
+            "problem_report": {
+                "report_md": slack_message,
+                "investigation_url": investigation_url,
+            },
+            "summary": summary,
+        }
+        send_ingest(state_with_url)  # type: ignore[arg-type]
+
+    return investigation_id, investigation_url

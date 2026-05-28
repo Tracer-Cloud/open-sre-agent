@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from typing import Any
@@ -10,7 +11,10 @@ from urllib.parse import quote
 import httpx
 from pydantic import Field, field_validator
 
+from app.integrations._validation_helpers import report_validation_failure
 from app.strict_config import StrictConfigModel
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_GITLAB_BASE_URL = "https://gitlab.com/api/v4"
 
@@ -103,7 +107,13 @@ def validate_gitlab_config(config: GitlabConfig) -> GitlabValidationResult:
     except httpx.HTTPStatusError as err:
         detail = err.response.text.strip() or str(err)
         return GitlabValidationResult(ok=False, detail=f"Gitlab validation failed: {detail}")
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="gitlab",
+            method="validate_gitlab_config",
+        )
         return GitlabValidationResult(ok=False, detail=f"Gitlab validation failed: {err}")
 
 

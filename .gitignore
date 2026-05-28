@@ -1,8 +1,12 @@
-# Environment variables
+# Environment variables 
 *.env
 .env
 .env.local
 .env.*.local
+.env.backup*
+.env.bak
+.env.bench
+.secrets
 
 # Python
 __pycache__/
@@ -52,6 +56,7 @@ nosetests.xml
 coverage.xml
 *.cover
 *.log
+!tests/synthetic/hermes/**/*.log
 
 # Jupyter Notebook
 .ipynb_checkpoints
@@ -59,8 +64,7 @@ coverage.xml
 # pyenv
 .python-version
 
-# uv
-uv.lock
+# uv (uv.lock is committed)
 
 # mypy
 .mypy_cache/
@@ -105,9 +109,16 @@ Temporary Items
 *.sublime-workspace
 *.code-workspace
 
+# Wrangler local state
+**/.wrangler/
+
 # Project specific
+.antigravitycli/
 output/
-.langgraph_api/
+.cloudopsbench-results/
+.bench-results/
+tests/benchmarks/cloudopsbench/benchmark/
+tests/benchmarks/cloudopsbench/.cache/
 
 # Vendorized packages in api_ingester
 tests/test_case_upstream_downstream_pipeline/pipeline_code/api_ingester/certifi/
@@ -126,6 +137,19 @@ tests/test_case_upstream_downstream_pipeline/pipeline_code/api_ingester/bin/
 **/cdk.out/
 
 CLAUDE_PERSONAL.md
+
+# Local planning notes (not tracked)
+plans/
+
 tasks/
 app/memories
 .aider*
+.worktrees/
+.claude/worktrees/
+
+# Node dev tooling
+node_modules/
+package-lock.json
+
+# Synthetic test run observations (generated test output, not source)
+tests/synthetic/rds_postgres/_observations/

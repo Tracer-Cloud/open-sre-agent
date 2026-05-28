@@ -17,6 +17,8 @@ def test_is_available_requires_grafana_creds() -> None:
     rt = query_grafana_logs.__opensre_registered_tool__
     assert rt.is_available({"grafana": {"connection_verified": True}}) is True
     assert rt.is_available({"grafana": {"_backend": MagicMock()}}) is True
+    assert rt.is_available({"grafana": {"endpoint": "https://grafana.example.com"}}) is True
+    assert rt.is_available({"grafana_local": {"endpoint": "http://localhost:3000"}}) is True
     assert rt.is_available({"grafana": {}}) is False
     assert rt.is_available({}) is False
 
@@ -27,6 +29,22 @@ def test_extract_params_maps_fields() -> None:
     params = rt.extract_params(sources)
     assert params["service_name"] == "my-service"
     assert params["grafana_endpoint"] == "https://grafana.example.com"
+
+
+def test_extract_params_accepts_catalog_grafana_shape() -> None:
+    rt = query_grafana_logs.__opensre_registered_tool__
+    params = rt.extract_params(
+        {
+            "grafana": {
+                "endpoint": "https://grafana.example.com",
+                "api_key": "glsa_test",
+                "service_name": "api",
+            }
+        }
+    )
+    assert params["service_name"] == "api"
+    assert params["grafana_endpoint"] == "https://grafana.example.com"
+    assert params["grafana_api_key"] == "glsa_test"
 
 
 def test_run_with_backend_returns_logs() -> None:

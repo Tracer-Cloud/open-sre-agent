@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.cli.errors import OpenSREError
-from app.deployment.health import HealthPollStatus
+from app.cli.support.errors import OpenSREError
+from app.deployment.operations.health import HealthPollStatus
 from app.remote.ops import RemoteOpsError, ServiceStatus
 from app.remote.runtime_alert import build_runtime_alert_payload
 

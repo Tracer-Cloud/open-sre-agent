@@ -8,6 +8,7 @@ from app.version import get_version
 
 def test_version_subcommand(monkeypatch, capsys) -> None:
     monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
     monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
 
     rc = main(["version"])

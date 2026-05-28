@@ -6,7 +6,7 @@ This directory holds Kubernetes manifests (`chaos-demo.yaml`, `pod-kill-demo.yam
 
 ## Quick start (recommended)
 
-From **repo root**: Docker, `kind`, `kubectl`, `helm`, and a venv with the repo installed (`pip install -e ".[dev]"`).
+From **repo root**: Docker, `kind`, `kubectl`, `helm`, and the project deps installed via `uv` (`make install`).
 
 ```bash
 export DD_API_KEY='your-api-key'   # omit if using CHAOS_LAB_FLAGS=--skip-datadog

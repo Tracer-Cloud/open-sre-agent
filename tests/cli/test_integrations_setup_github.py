@@ -185,7 +185,14 @@ def test_cmd_setup_github_prints_saved_after_success(
 
 def test_integrations_setup_github_cli_invokes_cmd_setup() -> None:
     runner = CliRunner()
-    with patch("app.integrations.cli.cmd_setup") as mock_cmd:
+    with (
+        patch("app.cli.commands.integrations.capture_integration_setup_started"),
+        patch("app.cli.commands.integrations.capture_integration_setup_completed"),
+        patch("app.cli.commands.integrations.capture_integration_verified"),
+        patch("app.integrations.cli.cmd_setup") as mock_cmd,
+        patch("app.integrations.cli.cmd_verify", return_value=0),
+    ):
+        mock_cmd.return_value = "github"
         result = runner.invoke(cli, ["integrations", "setup", "github"])
     assert result.exit_code == 0
     mock_cmd.assert_called_once_with("github")

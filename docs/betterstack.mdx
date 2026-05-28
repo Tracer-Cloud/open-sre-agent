@@ -42,7 +42,7 @@ BETTERSTACK_SOURCES=t123456_myapp,t123456_gateway
 
 ### Option 3: Persistent store
 
-Credentials are persisted to `~/.tracer/integrations.json` with `0o600` permissions:
+Credentials are persisted to `~/.opensre/integrations.json` with `0o600` permissions:
 
 ```json
 {
@@ -135,7 +135,7 @@ The verify step issues a cheap probe (`SELECT 1 FORMAT JSONEachRow`) against the
 ## Security best practices
 
 - Use a **dedicated ClickHouse HTTP client credential** for OpenSRE — not your personal dashboard login.
-- Keep the credential pair out of source control — use `.env` or the persistent store (`~/.tracer/integrations.json`).
+- Keep the credential pair out of source control — use `.env` or the persistent store (`~/.opensre/integrations.json`).
 - The integration is **read-only**: OpenSRE only issues `SELECT` statements against `remote(...)` and `s3Cluster(...)` table functions.
 - Source identifiers are allowlisted against `^[A-Za-z0-9_]+$` before being interpolated into SQL, preventing identifier-injection attacks from the alert payload.
 - Rotate credentials periodically via the Better Stack dashboard.

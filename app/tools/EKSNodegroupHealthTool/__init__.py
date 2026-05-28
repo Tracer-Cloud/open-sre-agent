@@ -7,6 +7,7 @@ from typing import Any
 from botocore.exceptions import ClientError
 
 from app.services.eks.eks_client import EKSClient
+from app.tools._telemetry import report_run_error
 from app.tools.EKSListClustersTool import _eks_available, _eks_creds
 from app.tools.tool_decorator import tool
 
@@ -55,6 +56,11 @@ def get_eks_nodegroup_health(
     **_kwargs: Any,
 ) -> dict[str, Any]:
     """Get EKS node group health — instance types, scaling config, AMI version, health issues."""
+    # Track which nodegroup is being processed so a mid-loop failure can be
+    # tagged with the actual failing name rather than the (possibly None)
+    # caller-supplied input — matches the per-resource extras used by the
+    # other migrated EKS tools (e.g. ``addon_name``, ``pod_name``).
+    current_nodegroup: str | None = nodegroup_name
     try:
         client = EKSClient(
             role_arn=role_arn,
@@ -65,6 +71,7 @@ def get_eks_nodegroup_health(
         nodegroups = [nodegroup_name] if nodegroup_name else client.list_nodegroups(cluster_name)
         results = []
         for ng in nodegroups:
+            current_nodegroup = ng
             ng_data = client.describe_nodegroup(cluster_name, ng)
             results.append(
                 {
@@ -87,6 +94,31 @@ def get_eks_nodegroup_health(
             "error": None,
         }
     except ClientError as e:
+        report_run_error(
+            e,
+            tool_name="get_eks_nodegroup_health",
+            source="eks",
+            component="app.tools.EKSNodegroupHealthTool",
+            method="EKSClient.describe_nodegroup",
+            severity="warning",
+            extras={
+                "cluster_name": cluster_name,
+                "region": region,
+                "nodegroup_name": current_nodegroup,
+            },
+        )
         return {"source": "eks", "available": False, "cluster_name": cluster_name, "error": str(e)}
     except Exception as e:
+        report_run_error(
+            e,
+            tool_name="get_eks_nodegroup_health",
+            source="eks",
+            component="app.tools.EKSNodegroupHealthTool",
+            method="EKSClient.describe_nodegroup",
+            extras={
+                "cluster_name": cluster_name,
+                "region": region,
+                "nodegroup_name": current_nodegroup,
+            },
+        )
         return {"source": "eks", "available": False, "cluster_name": cluster_name, "error": str(e)}

@@ -6,21 +6,12 @@ import logging
 from typing import Any, cast
 
 from app.services.eks.eks_k8s_client import build_k8s_clients
-from app.tools.EKSListClustersTool import _eks_creds
+from app.tools._telemetry import report_run_error
 from app.tools.tool_decorator import tool
 from app.tools.utils.availability import eks_available_or_backend
+from app.tools.utils.eks_workload_helper import extract_workload_params
 
 logger = logging.getLogger(__name__)
-
-
-def _list_deployments_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
-    eks = sources["eks"]
-    return {
-        "cluster_name": eks.get("cluster_name", ""),
-        "namespace": eks.get("namespace") or "all",
-        "eks_backend": eks.get("_backend"),
-        **_eks_creds(eks),
-    }
 
 
 @tool(
@@ -45,7 +36,7 @@ def _list_deployments_extract_params(sources: dict[str, dict]) -> dict[str, Any]
         "required": ["cluster_name", "namespace", "role_arn"],
     },
     is_available=eks_available_or_backend,
-    extract_params=_list_deployments_extract_params,
+    extract_params=extract_workload_params,
 )
 def list_eks_deployments(
     cluster_name: str,
@@ -110,5 +101,13 @@ def list_eks_deployments(
             "error": None,
         }
     except Exception as e:
-        logger.error("[eks] list_eks_deployments FAILED: %s", e, exc_info=True)
+        report_run_error(
+            e,
+            tool_name="list_eks_deployments",
+            source="eks",
+            component="app.tools.EKSListDeploymentsTool",
+            method="apps_v1.list_namespaced_deployment",
+            logger=logger,
+            extras={"cluster_name": cluster_name, "namespace": namespace},
+        )
         return {"source": "eks", "available": False, "namespace": namespace, "error": str(e)}

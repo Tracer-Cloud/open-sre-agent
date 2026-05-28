@@ -3,54 +3,81 @@ title: "Quickstart"
 slug: "quickstart"
 ---
 
-### Install
+<Steps>
+  <Step title="Install OpenSRE">
+    <Tabs>
+      <Tab title="macOS / Linux">
+        Choose one install method:
 
-Choose your platform:
+        ```bash
+        brew tap tracer-cloud/tap
+        brew install tracer-cloud/tap/opensre
+        ```
 
-**macOS (Homebrew)**
+        ```bash
+        curl -fsSL https://install.opensre.com | bash
+        ```
+      </Tab>
+      <Tab title="Windows">
+        ```powershell
+        irm https://install.opensre.com | iex
+        ```
+      </Tab>
+    </Tabs>
+
+  </Step>
+
+  <Step title="Onboard">
+    Run the onboarding wizard to configure your LLM provider and connect your integrations (Grafana, Datadog, Honeycomb, Coralogix, Slack, AWS, GitHub MCP, Sentry):
+
+    ```bash
+    opensre onboard
+    ```
+
+  </Step>
+
+  <Step title="Run an investigation">
+    Choose either path — both use the same local `opensre` binary:
+
+    **Interactive prompt shell** — start OpenSRE with no arguments (TTY) to type incidents in plain language and use slash commands (`/help`, `/status`, `/effort`, `/exit`, …):
+
+    ```bash
+    opensre
+    ```
+
+    **Direct investigation** — one-shot run from your shell with an alert file:
+
+    ```bash
+    opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
+    ```
+
+    For file-based runs, OpenSRE fetches alert context, reasons across connected systems, and generates a structured root-cause report.
+
+  </Step>
+
+  <Step title="Keep up to date">
+    ```bash
+    opensre update
+    ```
+  </Step>
+</Steps>
+
+## Uninstall
+
+To remove opensre and all its local data from your machine:
 
 ```bash
-brew install Tracer-Cloud/opensre/opensre
+opensre uninstall
 ```
 
-**Linux / macOS (curl)**
+Pass `--yes` to skip the confirmation prompt:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Tracer-Cloud/opensre/main/install.sh | bash
+opensre uninstall --yes
 ```
 
-**Windows (PowerShell)**
+## Troubleshooting
 
-```powershell
-irm https://raw.githubusercontent.com/Tracer-Cloud/opensre/main/install.ps1 | iex
-```
-
----
-
-### Onboard
-
-Run the onboarding wizard to configure your LLM provider and connect your integrations (Grafana, Datadog, Honeycomb, Coralogix, Slack, AWS, GitHub MCP, Sentry):
-
-```bash
-opensre onboard
-```
-
----
-
-### Run Your First Investigation
-
-Trigger an investigation by passing in an alert file:
-
-```bash
-opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
-```
-
-OpenSRE will automatically fetch alert context, reason across your connected systems, and generate a structured root-cause report — optionally posting a summary to Slack or PagerDuty.
-
----
-
-### Keep Up to Date
-
-```bash
-opensre update
-```
+- **Docker is not running**: Start Docker Desktop, OrbStack, or Colima before running setup.
+- **`make` is missing**: Install it via your package manager (`brew install make` on macOS, `choco install make` on Windows).
+- **No local LLM provider is configured**: Run `opensre onboard` to select and configure your LLM credentials.

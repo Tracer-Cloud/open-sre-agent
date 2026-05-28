@@ -7,6 +7,7 @@ from typing import Any
 from app.tools.GrafanaLogsTool import (
     _grafana_available,
     _grafana_creds,
+    _grafana_source,
     _resolve_grafana_client,
 )
 from app.tools.tool_decorator import tool
@@ -29,7 +30,7 @@ def _extract_pipeline_spans(traces: list[dict[str, Any]]) -> list[dict[str, Any]
 
 
 def _query_grafana_traces_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
-    grafana = sources["grafana"]
+    grafana = _grafana_source(sources)
     return {
         "service_name": grafana.get("service_name", ""),
         "execution_run_id": grafana.get("execution_run_id"),
@@ -40,11 +41,20 @@ def _query_grafana_traces_extract_params(sources: dict[str, dict]) -> dict[str, 
 
 
 def _query_grafana_traces_available(sources: dict[str, dict]) -> bool:
+    # `no_traces` is set for RDS/database resource-threshold alerts (storage,
+    # CPU, connections, IOPS) where Tempo contains no useful data. Removing the
+    # action from the planner's choice set is more reliable than the soft prompt
+    # prohibition — the LLM was observed picking traces anyway and burning the
+    # trajectory_budget gate (see scenario
+    # 008-storage-full-missing-metric).
+    if _grafana_source(sources).get("no_traces"):
+        return False
     return _grafana_available(sources)
 
 
 @tool(
     name="query_grafana_traces",
+    display_name="Grafana Tempo",
     source="grafana",
     description="Query Grafana Cloud Tempo for pipeline traces.",
     use_cases=[

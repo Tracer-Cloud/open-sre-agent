@@ -14,7 +14,7 @@ from app.tools.tool_decorator import tool
     is_available=lambda _: False,
     description=(
         "Execute a Python snippet in a restricted sandbox for targeted diagnostics. "
-        "Network access and filesystem writes outside /tmp are blocked. "
+        "Network access and filesystem writes outside /tmp/opensre are blocked. "
         f"Execution is capped at {MAX_TIMEOUT} seconds. "
         "Use this to compute metrics, parse collected evidence, or run targeted "
         "analysis during investigations."

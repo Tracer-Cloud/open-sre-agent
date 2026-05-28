@@ -7,7 +7,11 @@ class DummyTracerClient(TracerLogsMixin):
     """Dummy client to isolate and test the TracerLogsMixin."""
 
     def __init__(self):
-        self.org_id = "test_org_123"
+        super().__init__(
+            base_url="https://tracer.example",
+            org_id="test_org_123",
+            jwt_token="test-token",
+        )
         self._get = MagicMock(return_value={"success": True, "data": []})
 
 

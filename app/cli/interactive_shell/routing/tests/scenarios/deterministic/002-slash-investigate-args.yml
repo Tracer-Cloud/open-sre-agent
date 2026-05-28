@@ -1,0 +1,53 @@
+id: 002-slash-investigate-args
+title: Slash /investigate with args
+intent_class: deterministic
+risk_level: medium
+input:
+  prompt: /investigate alert.json
+  surface: interactive_cli
+session:
+  has_prior_state: false
+  remote_connected: false
+  configured_integrations: []
+available_capabilities:
+  slash_commands:
+  - /investigate
+  cli_commands: []
+  synthetic_suites: []
+notes: []
+
+route:
+  expected_kind: slash
+  expected_signals:
+  - slash_prefix
+  expected_command_text: /investigate alert.json
+policy:
+  should_execute: true
+  has_unhandled_clause: false
+  fail_closed: false
+planned_actions:
+- kind: slash
+  source: deterministic
+  target_surface: slash
+  command: /investigate
+  args:
+  - alert.json
+  content: /investigate alert.json
+executed_actions:
+- kind: slash
+  command: /investigate
+  args:
+  - alert.json
+  content: /investigate alert.json
+response_contract:
+  must_contain_any:
+  - ran /investigate alert.json
+  must_not_contain:
+  - "Proceed?"
+  - "Confirm:"
+history:
+  expected:
+  - type: slash
+    ok: true
+tier: critical
+runs: 1
