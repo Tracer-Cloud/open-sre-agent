@@ -260,16 +260,123 @@ def render_splash(console: Console | None = None, *, first_run: bool | None = No
 
 # ── Agent ready-state box ─────────────────────────────────────────────────────
 
-# Static copy for the right column. Keep entries terse — they must read as a
-# scannable list, not paragraphs, and fit within ``_RIGHT_COL_WIDTH`` characters
-# (the column truncates with `…` past that width). Update _WHATS_NEW with each
-# user-visible change worth surfacing on launch.
+# Static copy for the right column (first-run only). Keep entries terse.
 _TIPS: tuple[str, ...] = (
     "Paste alert JSON or describe an incident",
     "Type /help to list slash commands",
     "Run /doctor for environment diagnostics",
     "Use /investigate for runnable demos/templates",
 )
+
+# Display-name overrides for known integration service slugs.
+_SERVICE_DISPLAY_NAMES: dict[str, str] = {
+    "grafana": "Grafana",
+    "datadog": "Datadog",
+    "honeycomb": "Honeycomb",
+    "coralogix": "Coralogix",
+    "aws": "AWS",
+    "github": "GitHub",
+    "sentry": "Sentry",
+    "prometheus": "Prometheus",
+    "loki": "Loki",
+    "elasticsearch": "Elasticsearch",
+    "bigquery": "BigQuery",
+    "pagerduty": "PagerDuty",
+    "slack": "Slack",
+    "telegram": "Telegram",
+    "signoz": "SigNoz",
+    "jira": "Jira",
+    "gitlab": "GitLab",
+    "vercel": "Vercel",
+    "mongodb": "MongoDB",
+    "postgresql": "PostgreSQL",
+    "mysql": "MySQL",
+    "redis": "Redis",
+    "kafka": "Kafka",
+    "rabbitmq": "RabbitMQ",
+    "clickhouse": "ClickHouse",
+    "mariadb": "MariaDB",
+    "kubernetes": "Kubernetes",
+    "betterstack": "Better Stack",
+    "snowflake": "Snowflake",
+    "newrelic": "New Relic",
+    "opsgenie": "OpsGenie",
+    "linear": "Linear",
+    "supabase": "Supabase",
+}
+
+
+def _load_configured_integrations() -> list[str]:
+    """Return display names for integrations currently configured via env vars. Never raises."""
+    try:
+        from app.integrations.catalog import load_env_integrations  # lazy — avoids circular deps
+
+        records = load_env_integrations()
+        names: list[str] = []
+        for record in records:
+            service = str(record.get("service", "")).strip().lower()
+            if service:
+                names.append(_SERVICE_DISPLAY_NAMES.get(service, service.title()))
+        return list(dict.fromkeys(names))  # deduplicate, preserve order
+    except Exception:
+        return []
+
+
+def _is_alert_listener_active() -> bool:
+    """Return True if the alert listener is enabled in config. Never raises."""
+    try:
+        from app.cli.interactive_shell.config import ReplConfig
+
+        return ReplConfig.load().alert_listener_enabled
+    except Exception:
+        return False
+
+
+def _build_ambient_right_column(session: object = None) -> Text:
+    """Right column for returning users: live integration status and alert listener state."""
+    parts: list[Text] = []
+
+    # Integrations
+    parts.append(Text("Integrations", style=f"bold {BRAND}"))
+    names = _load_configured_integrations()
+    if names:
+        _MAX_SHOWN = 6
+        shown = names[:_MAX_SHOWN]
+        overflow = len(names) - len(shown)
+        name_line = Text(overflow="fold")
+        for idx, name in enumerate(shown):
+            if idx:
+                name_line.append("  ·  ", style=DIM)
+            name_line.append(name, style=SECONDARY)
+        if overflow:
+            name_line.append(f"  +{overflow}", style=DIM)
+        parts.append(name_line)
+    else:
+        parts.append(Text("run /onboard to connect tools", style=DIM))
+
+    parts.append(Text("───", style=DIM))
+
+    # Alert listener
+    parts.append(Text("Alert listener", style=f"bold {BRAND}"))
+    if _is_alert_listener_active():
+        listener_line = Text()
+        listener_line.append("● ", style=f"bold {HIGHLIGHT}")
+        listener_line.append("active", style=SECONDARY)
+        parts.append(listener_line)
+    else:
+        parts.append(Text("○  not configured", style=DIM))
+
+    # Session summary — only shown when /clear is used mid-session with history
+    if session is not None:
+        history: list[object] = getattr(session, "history", [])
+        if history:
+            parts.append(Text("───", style=DIM))
+            parts.append(Text("This session", style=f"bold {BRAND}"))
+            count = len(history)
+            noun = "interaction" if count == 1 else "interactions"
+            parts.append(Text(f"{count} {noun}", style=SECONDARY))
+
+    return Text("\n").join(parts)
 
 # Panel geometry. The body switches to a stacked layout on narrow terminals,
 # and otherwise expands to fill the full console width while keeping the left
@@ -394,13 +501,16 @@ def build_ready_panel(
     panel_title.append(f"v{version} ", style=BRAND)
 
     left = _build_identity_block(provider, model, trust_mode=trust_mode)
-    right = Text("\n").join(
-        [
-            _build_notes_block("Tips for getting started", _TIPS),
-            Text("───", style=DIM),
-            _build_notes_block("What's new", WHATS_NEW),
-        ]
-    )
+    if _is_first_run():
+        right = Text("\n").join(
+            [
+                _build_notes_block("Tips for getting started", _TIPS),
+                Text("───", style=DIM),
+                _build_notes_block("What's new", WHATS_NEW),
+            ]
+        )
+    else:
+        right = _build_ambient_right_column(session=session)
 
     body: Group | Table
     if console.width - _PANEL_FRAME_WIDTH >= _MIN_TWO_COLUMN_CONTENT_WIDTH:
