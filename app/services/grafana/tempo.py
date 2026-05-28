@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import requests
 
+from app.services.otlp_trace import extract_span_attributes, parse_otlp_trace
 from app.utils.errors import report_exception
 
 if TYPE_CHECKING:
@@ -114,24 +115,7 @@ class TempoMixin:
             )
 
             if response.status_code == 200:
-                trace_data = response.json()
-                spans = []
-
-                if "batches" in trace_data:
-                    for batch in trace_data["batches"]:
-                        if "scopeSpans" in batch:
-                            for scope in batch["scopeSpans"]:
-                                if "spans" in scope:
-                                    for span in scope["spans"]:
-                                        attributes = self._extract_span_attributes(span)  # type: ignore[attr-defined]
-                                        spans.append(
-                                            {
-                                                "name": span.get("name", "unknown"),
-                                                "attributes": attributes,
-                                            }
-                                        )
-
-                return {"spans": spans}
+                return {"spans": parse_otlp_trace(response.json())}
         except Exception as exc:
             report_exception(
                 exc,
@@ -153,26 +137,5 @@ class TempoMixin:
         self: GrafanaClientBase,
         span: dict[str, Any],
     ) -> dict[str, Any]:
-        """Extract attributes from a span.
-
-        Args:
-            span: Span data dictionary
-
-        Returns:
-            Dictionary of attribute key-value pairs
-        """
-        attributes: dict[str, Any] = {}
-
-        if "attributes" in span:
-            for attr in span["attributes"]:
-                key = attr.get("key", "")
-                if not key:
-                    continue
-                value = attr.get("value", {})
-
-                if "stringValue" in value:
-                    attributes[key] = value["stringValue"]
-                elif "intValue" in value:
-                    attributes[key] = value["intValue"]
-
-        return attributes
+        """Extract attributes from a span (delegates to the shared OTLP parser)."""
+        return extract_span_attributes(span)

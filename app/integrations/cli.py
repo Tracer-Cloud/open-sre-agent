@@ -829,6 +829,23 @@ def _setup_signoz() -> None:
     )
 
 
+def _setup_tempo() -> None:
+    url = _p("Tempo URL (e.g. http://localhost:3200 for local Docker)")
+    if not url:
+        _die("Tempo URL is required.")
+
+    api_key = _p("Tempo bearer token (optional, leave blank if none)", secret=True)
+    org_id = _p("Tempo tenant / X-Scope-OrgID (optional, leave blank if single-tenant)")
+
+    credentials: dict[str, str] = {"url": url}
+    if api_key:
+        credentials["api_key"] = api_key
+    if org_id:
+        credentials["org_id"] = org_id
+
+    upsert_integration("tempo", {"credentials": credentials})
+
+
 _HANDLERS: dict[str, Any] = {
     "alertmanager": _setup_alertmanager,
     "aws": _setup_aws,
@@ -857,6 +874,7 @@ _HANDLERS: dict[str, Any] = {
     "postgresql": _setup_postgresql,
     "mysql": _setup_mysql,
     "signoz": _setup_signoz,
+    "tempo": _setup_tempo,
 }
 
 

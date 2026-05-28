@@ -60,6 +60,7 @@ from app.integrations.sentry import build_sentry_config
 from app.integrations.signoz import build_signoz_config, signoz_config_from_env
 from app.integrations.store import _STRUCTURAL_RECORD_FIELDS, load_integrations
 from app.integrations.supabase import build_supabase_config
+from app.integrations.tempo import build_tempo_config, tempo_config_from_env
 from app.llm_credentials import resolve_env_credential
 from app.services.vercel import VercelConfig
 from app.utils.coercion import safe_int
@@ -948,6 +949,24 @@ def _classify_service_instance(
             return None, None
         if signoz_config.is_configured:
             return signoz_config.model_dump(), "signoz"
+        return None, None
+
+    if key == "tempo":
+        try:
+            tempo_config = build_tempo_config(
+                {
+                    "url": credentials.get("url", ""),
+                    "api_key": credentials.get("api_key", ""),
+                    "username": credentials.get("username", ""),
+                    "password": credentials.get("password", ""),
+                    "org_id": credentials.get("org_id", ""),
+                    "integration_id": record_id,
+                }
+            )
+        except Exception:
+            return None, None
+        if tempo_config.is_configured:
+            return tempo_config.model_dump(), "tempo"
         return None, None
 
     # Fallback for unknown services: pass through credentials + record id.
@@ -1870,6 +1889,18 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
     except Exception:
         logger.debug("Failed to load SigNoz config from env", exc_info=True)
+
+    try:
+        tempo_config = tempo_config_from_env()
+        if tempo_config is not None and tempo_config.is_configured:
+            integrations.append(
+                _active_env_record(
+                    "tempo",
+                    tempo_config.model_dump(exclude={"integration_id"}),
+                )
+            )
+    except Exception:
+        logger.debug("Failed to load Tempo config from env", exc_info=True)
 
     return integrations
 

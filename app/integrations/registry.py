@@ -42,6 +42,7 @@ from app.integrations._verification_adapters import (
     _verify_splunk,
     _verify_supabase,
     _verify_telegram,
+    _verify_tempo,
     _verify_tracer,
     _verify_twilio,
     _verify_vercel,
@@ -357,6 +358,13 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         direct_effective=True,
         setup_order=23,
         verify_order=35,
+    ),
+    IntegrationSpec(
+        service="tempo",
+        verifier=_verify_tempo,
+        direct_effective=True,
+        setup_order=24,
+        verify_order=36,
     ),
 )
 

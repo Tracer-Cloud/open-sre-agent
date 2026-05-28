@@ -1,0 +1,105 @@
+# Grafana Tempo Integration
+
+Query distributed traces from a standalone [Grafana Tempo](https://grafana.com/oss/tempo/)
+backend via its HTTP API.
+
+This integration talks to Tempo **directly** (its own URL and auth) — it does not
+require a Grafana instance or datasource proxy. If you run the full Grafana stack,
+the [Grafana](/grafana) integration already surfaces Tempo through the datasource
+proxy; use this integration when you run Tempo on its own (alongside Loki/Mimir or
+any OpenTelemetry pipeline).
+
+OpenSRE exposes a single tool, `query_tempo`, with an `action` parameter:
+
+| action | Tempo endpoint | What it does |
+| --- | --- | --- |
+| `search` (default) | `GET /api/search` | Search traces by service, span name, duration, and tags (TraceQL) |
+| `get_trace` | `GET /api/traces/{id}` | Fetch a full trace by ID and flatten its spans |
+| `list_services` | `GET /api/v2/search/tag/resource.service.name/values` | List services registered in Tempo |
+| `list_span_names` | `GET /api/v2/search/tag/name/values` | List span names registered in Tempo |
+
+## Quick Start
+
+### 1. Configure environment variables
+
+Tempo commonly runs without auth behind a gateway, so a URL alone is enough.
+Add a bearer token, basic-auth tenant credentials, or a multi-tenant org ID only
+if your deployment requires them.
+
+```bash
+export TEMPO_URL="http://localhost:3200"     # required
+export TEMPO_API_KEY="<bearer-token>"        # optional
+export TEMPO_USERNAME="<tenant-id>"          # optional (basic auth)
+export TEMPO_PASSWORD="<token>"              # optional (basic auth)
+export TEMPO_ORG_ID="<tenant>"               # optional (X-Scope-OrgID)
+```
+
+Or configure it interactively:
+
+```bash
+uv run opensre integrations setup tempo
+```
+
+### 2. Verify connectivity
+
+```bash
+uv run opensre integrations verify tempo
+```
+
+This calls `GET /api/search/tags` and confirms the API is reachable (and that auth
+passes, if configured).
+
+## Usage examples
+
+The agent selects the tool and action automatically during an investigation. The
+underlying calls map to:
+
+```text
+# Search recent error-ish traces for a service, slower than 500ms
+query_tempo(action="search", service="checkout-service", min_duration_ms=500)
+
+# Filter by a span attribute (applied as span.<key>)
+query_tempo(action="search", tags={"http.status_code": "500"})
+
+# Inspect one trace end to end
+query_tempo(action="get_trace", trace_id="4f8c...e21")
+
+# Discover what is instrumented
+query_tempo(action="list_services")
+query_tempo(action="list_span_names")
+```
+
+`search` accepts `service`, `span_name`, `min_duration_ms`, `max_duration_ms`,
+`tags`, `time_range_minutes` (default 60), and `limit` (default 20). String filters
+are compiled into a TraceQL expression, e.g.
+`{ resource.service.name = "checkout-service" && duration > 500ms }`.
+
+## Output shape
+
+`get_trace` returns flattened spans (shared OTLP parser):
+
+```json
+{
+  "source": "tempo",
+  "action": "get_trace",
+  "available": true,
+  "trace_id": "4f8c...e21",
+  "total_spans": 2,
+  "spans": [
+    {
+      "name": "POST /checkout",
+      "span_id": "span-1",
+      "parent_span_id": "",
+      "service_name": "checkout-service",
+      "duration_ms": 2400.0,
+      "status_code": 2,
+      "status_message": "upstream timeout",
+      "attributes": {"http.status_code": "504"}
+    }
+  ]
+}
+```
+
+`search` returns one summary row per trace (`trace_id`, `root_service_name`,
+`root_trace_name`, `duration_ms`, `matched_spans`). `list_services` /
+`list_span_names` return a flat list under `services` / `span_names`.

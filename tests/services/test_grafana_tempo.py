@@ -158,7 +158,8 @@ class TestTempoMixin:
             "attributes": [
                 {"key": "valid_string", "value": {"stringValue": "test"}},
                 {"key": "valid_int", "value": {"intValue": 42}},
-                {"key": "unsupported_type", "value": {"boolValue": True}},
+                {"key": "valid_bool", "value": {"boolValue": True}},
+                {"key": "valid_double", "value": {"doubleValue": 1.5}},
                 {"key": "empty_value", "value": {}},
                 {"value": {"stringValue": "missing_key"}},  # Should be skipped!
             ]
@@ -168,7 +169,8 @@ class TestTempoMixin:
 
         assert attributes.get("valid_string") == "test"
         assert attributes.get("valid_int") == 42
-        assert "unsupported_type" not in attributes
+        assert attributes.get("valid_bool") is True
+        assert attributes.get("valid_double") == 1.5
         assert "empty_value" not in attributes
         assert "" not in attributes
 

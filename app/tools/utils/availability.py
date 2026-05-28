@@ -68,6 +68,18 @@ def signoz_available_or_backend(sources: dict[str, dict]) -> bool:
     return bool(signoz.get("connection_verified") and signoz.get("url") and signoz.get("api_key"))
 
 
+def tempo_available_or_backend(sources: dict[str, dict]) -> bool:
+    """Available when a real Tempo URL is present OR a fixture backend is injected.
+
+    Used by the Tempo tool wrapper whose ``extract_params`` can delegate to a
+    mock ``tempo_backend`` for synthetic tests.
+    """
+    tempo = sources.get("tempo", {})
+    if tempo.get("_backend"):
+        return True
+    return bool(tempo.get("connection_verified") and tempo.get("url"))
+
+
 def hermes_available_or_backend(sources: dict[str, dict]) -> bool:
     """Available when Hermes integration is connected or a fixture backend is injected."""
     hermes = sources.get("hermes", {})

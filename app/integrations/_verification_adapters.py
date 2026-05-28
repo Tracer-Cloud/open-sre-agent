@@ -35,6 +35,7 @@ from app.integrations.rabbitmq import build_rabbitmq_config, validate_rabbitmq_c
 from app.integrations.sentry import build_sentry_config, validate_sentry_config
 from app.integrations.signoz import build_signoz_config, validate_signoz_config
 from app.integrations.supabase import build_supabase_config, validate_supabase_config
+from app.integrations.tempo import build_tempo_config, validate_tempo_config
 from app.services.alertmanager import AlertmanagerClient, AlertmanagerConfig
 from app.services.argocd import ArgoCDClient, ArgoCDConfig
 from app.services.coralogix import CoralogixClient
@@ -543,6 +544,11 @@ _verify_signoz = build_validation_verifier(
     build_config=build_signoz_config,
     validate_config=validate_signoz_config,
 )
+_verify_tempo = build_validation_verifier(
+    "tempo",
+    build_config=build_tempo_config,
+    validate_config=validate_tempo_config,
+)
 
 
 def _build_kafka_config(raw: dict[str, Any]) -> Any:
@@ -705,6 +711,7 @@ __all__ = [
     "_verify_rabbitmq",
     "_verify_sentry",
     "_verify_signoz",
+    "_verify_tempo",
     "_verify_slack",
     "_verify_slack_without_test",
     "_verify_snowflake",

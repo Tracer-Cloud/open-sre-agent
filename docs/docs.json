@@ -113,6 +113,7 @@
               "opsgenie",
               "sentry",
               "signoz",
+              "tempo",
               "splunk"
             ]
           },
