@@ -115,7 +115,9 @@ def load_interactive() -> dict[str, Any]:
             if not isinstance(parsed_candidate, dict):
                 raise SystemExit("Alert payload from interactive input must be a JSON object.")
             if not parsed_candidate:
-                raise SystemExit("Alert payload from interactive input must be a non-empty JSON object.")
+                raise SystemExit(
+                    "Alert payload from interactive input must be a non-empty JSON object."
+                )
             return parsed_candidate
         raw_text = "\n".join(lines)
     if not raw_text.strip():
@@ -178,10 +180,7 @@ def _choose_guided_target() -> str:
 
         selected = questionary.select(
             "Choose an investigation input source:",
-            choices=[
-                questionary.Choice(label, value=target)
-                for target, label in choices
-            ],
+            choices=[questionary.Choice(label, value=target) for target, label in choices],
         ).ask()
         if selected is None:
             raise SystemExit(0)
