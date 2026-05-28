@@ -30,11 +30,24 @@ def _capture() -> tuple[Console, io.StringIO]:
 
 
 class TestDispatchSlash:
-    def test_exit_returns_false(self) -> None:
-        session = ReplSession()
-        console, _ = _capture()
-        assert dispatch_slash("/exit", session, console) is False
-        assert dispatch_slash("/quit", session, console) is False
+    def test_exit_returns_false(self, repl_harness) -> None:
+        assert (
+            dispatch_slash(
+                "/exit",
+                repl_harness.session,
+                repl_harness.console,
+            )
+            is False
+        )
+
+        assert (
+            dispatch_slash(
+                "/quit",
+                repl_harness.session,
+                repl_harness.console,
+            )
+            is False
+        )
 
     def test_help_lists_all_commands(self) -> None:
         session = ReplSession()

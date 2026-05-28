@@ -3,8 +3,49 @@
 from __future__ import annotations
 
 import sys
+from dataclasses import dataclass
+from io import StringIO
 
 import pytest
+from rich.console import Console
+
+from app.cli.interactive_shell.runtime.session import ReplSession
+
+
+@dataclass
+class ReplTestHarness:
+    session: ReplSession
+    console: Console
+    output: StringIO
+
+    def run(self, cmd_fn, args=()) -> bool:
+        return cmd_fn(
+            self.session,
+            self.console,
+            list(args),
+        )
+
+    def printed(self) -> str:
+        return self.output.getvalue()
+
+
+@pytest.fixture
+def repl_harness() -> ReplTestHarness:
+    output = StringIO()
+
+    console = Console(
+        file=output,
+        force_terminal=False,
+        highlight=False,
+    )
+
+    session = ReplSession()
+
+    return ReplTestHarness(
+        session=session,
+        console=console,
+        output=output,
+    )
 
 
 @pytest.fixture(autouse=True)
