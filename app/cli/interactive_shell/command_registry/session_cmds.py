@@ -44,8 +44,9 @@ def _cmd_clear(session: ReplSession, console: Console, _args: list[str]) -> bool
 def _cmd_reset(session: ReplSession, console: Console, _args: list[str]) -> bool:
     from app.cli.interactive_shell.sessions.store import SessionStore
 
-    SessionStore.flush(session)
-    session.clear()
+    SessionStore.flush(session)  # close current session file
+    session.clear()  # rotate session_id + started_at
+    SessionStore.open_session(session)  # open new session file immediately
     console.print(f"[{DIM}]session state cleared — new session started.[/]")
     return True
 
@@ -243,8 +244,8 @@ _EFFORT_FIRST_ARGS: tuple[tuple[str, str], ...] = (
 )
 
 
-def _cmd_sessions(_session: ReplSession, console: Console, _args: list[str]) -> bool:
-    from datetime import datetime
+def _cmd_sessions(session: ReplSession, console: Console, _args: list[str]) -> bool:
+    from datetime import UTC, datetime
 
     from app.cli.interactive_shell.sessions.store import SessionStore
 
@@ -264,6 +265,7 @@ def _cmd_sessions(_session: ReplSession, console: Console, _args: list[str]) -> 
     for i, entry in enumerate(entries, start=1):
         sid = entry["session_id"]
         short_id = sid[:8] if len(sid) >= 8 else sid
+        is_current = sid == session.session_id
 
         started_raw = entry.get("started_at") or ""
         try:
@@ -273,6 +275,17 @@ def _cmd_sessions(_session: ReplSession, console: Console, _args: list[str]) -> 
             started_str = started_raw[:16] if started_raw else "—"
 
         duration_secs = entry.get("duration_secs")
+        if is_current:
+            try:
+                elapsed = int(
+                    (
+                        datetime.now(UTC) - datetime.fromtimestamp(session.started_at, tz=UTC)
+                    ).total_seconds()
+                )
+                duration_secs = elapsed
+            except Exception:
+                pass
+
         if duration_secs is None:
             duration_str = "—"
         elif duration_secs < 60:
@@ -286,10 +299,11 @@ def _cmd_sessions(_session: ReplSession, console: Console, _args: list[str]) -> 
 
         total = entry.get("total_turns")
         investigations = entry.get("investigation_turns")
+        sid_col = f"{short_id} [{HIGHLIGHT}](current)[/]" if is_current else short_id
 
         table.add_row(
             str(i),
-            short_id,
+            sid_col,
             started_str,
             duration_str,
             str(total) if total is not None else "—",

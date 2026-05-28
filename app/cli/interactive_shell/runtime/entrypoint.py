@@ -31,6 +31,11 @@ async def repl_main(initial_input: str | None = None, _config: ReplConfig | None
     if initial_input:
         return run_initial_input(initial_input, session)
 
+    # Open the session file now that we know this is an interactive REPL run.
+    from app.cli.interactive_shell.sessions.store import SessionStore
+
+    SessionStore.open_session(session)
+
     alert_listener_handle: _alert_inbox.AlertListenerHandle | None = None
     inbox: _alert_inbox.AlertInbox | None = None
     if cfg.alert_listener_enabled:

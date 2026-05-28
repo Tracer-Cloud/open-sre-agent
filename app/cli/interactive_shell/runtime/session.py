@@ -152,6 +152,9 @@ class ReplSession:
         For "incoming_alert", use record_incoming_alert() instead to preserve metadata.
         """
         self.history.append({"type": kind, "text": text, "ok": ok})
+        from app.cli.interactive_shell.sessions.store import SessionStore
+
+        SessionStore.append_turn(self, kind, text)
 
     def record_incoming_alert(self, alert: IncomingAlert) -> None:
         """Append a full IncomingAlert with all metadata to session history.
@@ -162,6 +165,9 @@ class ReplSession:
         """
         # Record to history with alert text
         self.history.append({"type": "incoming_alert", "text": alert.text, "ok": True})
+        from app.cli.interactive_shell.sessions.store import SessionStore
+
+        SessionStore.append_turn(self, "incoming_alert", alert.text)
 
         # Store the full alert object to preserve all metadata
         self.incoming_alerts.append(alert)
