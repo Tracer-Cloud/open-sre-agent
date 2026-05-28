@@ -16,6 +16,7 @@ from pydantic import ValidationError
 from app.integrations.dagster import (
     DagsterConfig,
     DagsterValidationResult,
+    _compute_run_durations,
     _extract_step_failures,
     build_dagster_config,
     dagster_extract_params,
@@ -23,6 +24,7 @@ from app.integrations.dagster import (
     get_run_logs,
     list_assets_with_materialization,
     list_runs,
+    list_schedule_ticks,
     list_sensor_ticks,
     validate_dagster_config,
 )
@@ -594,6 +596,99 @@ class TestExtractStepFailures:
         assert "summary" not in result
 
 
+# --- TestComputeRunDurations -----------------------------------------------
+
+
+class TestComputeRunDurations:
+    """The integration adds ``duration_seconds`` per run row so the agent does
+    not have to derive it from ``startTime``/``endTime`` itself."""
+
+    def test_completed_run_yields_finite_duration(self) -> None:
+        result = {
+            "data": {
+                "runsOrError": {
+                    "__typename": "Runs",
+                    "results": [
+                        {"runId": "r1", "startTime": 100.0, "endTime": 142.5},
+                    ],
+                }
+            }
+        }
+        enriched = _compute_run_durations(result)
+        assert enriched["data"]["runsOrError"]["results"][0]["duration_seconds"] == 42.5
+
+    def test_in_flight_run_yields_null_duration(self) -> None:
+        result = {
+            "data": {
+                "runsOrError": {
+                    "__typename": "Runs",
+                    "results": [
+                        {"runId": "r2", "startTime": 100.0, "endTime": None},
+                    ],
+                }
+            }
+        }
+        enriched = _compute_run_durations(result)
+        assert enriched["data"]["runsOrError"]["results"][0]["duration_seconds"] is None
+
+    def test_queued_run_with_no_timestamps_yields_null(self) -> None:
+        result = {
+            "data": {
+                "runsOrError": {
+                    "__typename": "Runs",
+                    "results": [
+                        {"runId": "r3", "startTime": None, "endTime": None},
+                    ],
+                }
+            }
+        }
+        enriched = _compute_run_durations(result)
+        assert enriched["data"]["runsOrError"]["results"][0]["duration_seconds"] is None
+
+    def test_error_union_member_skipped(self) -> None:
+        """``InvalidPipelineRunsFilterError`` and ``PythonError`` have no
+        ``results`` array; the enrichment is a no-op."""
+        result = {
+            "data": {
+                "runsOrError": {
+                    "__typename": "InvalidPipelineRunsFilterError",
+                    "message": "bad filter",
+                }
+            }
+        }
+        enriched = _compute_run_durations(result)
+        assert enriched == result
+
+    def test_python_error_union_member_is_no_op(self) -> None:
+        result = {
+            "data": {
+                "runsOrError": {
+                    "__typename": "PythonError",
+                    "message": "internal failure",
+                }
+            }
+        }
+        enriched = _compute_run_durations(result)
+        assert enriched == result
+
+    def test_multi_row_response_enriches_every_row(self) -> None:
+        result = {
+            "data": {
+                "runsOrError": {
+                    "__typename": "Runs",
+                    "results": [
+                        {"runId": "r1", "startTime": 100.0, "endTime": 150.0},
+                        {"runId": "r2", "startTime": 200.0, "endTime": None},
+                        {"runId": "r3", "startTime": 300.0, "endTime": 305.5},
+                    ],
+                }
+            }
+        }
+        enriched = _compute_run_durations(result)
+        durations = [r["duration_seconds"] for r in enriched["data"]["runsOrError"]["results"]]
+        assert durations == [50.0, None, 5.5]
+
+
 # --- TestListAssetsWithMaterialization -------------------------------------
 
 
@@ -658,6 +753,90 @@ class TestListSensorTicks:
             "sensorName": "my_sensor",
         }
         assert variables["limit"] == 3
+
+    def test_sensor_not_found_union_member_propagates(self) -> None:
+        client = DagsterClient(
+            endpoint="http://x",
+            http_client=_mock_client(
+                responses=[
+                    {
+                        "data": {
+                            "sensorOrError": {
+                                "__typename": "SensorNotFoundError",
+                                "message": "Sensor not found",
+                            }
+                        }
+                    }
+                ]
+            ),
+        )
+        result = client.list_sensor_ticks(
+            repository_name="r",
+            repository_location_name="l",
+            sensor_name="missing",
+        )
+        assert result["data"]["sensorOrError"]["__typename"] == "SensorNotFoundError"
+
+
+# --- TestListScheduleTicks -------------------------------------------------
+
+
+class TestListScheduleTicks:
+    def test_sends_schedule_selector_with_all_three_coordinates(self) -> None:
+        captured: list[dict[str, Any]] = []
+
+        def _handler(request: httpx.Request) -> httpx.Response:
+            captured.append(_read_request_body(request))
+            return httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "scheduleOrError": {
+                            "__typename": "Schedule",
+                            "name": "my_schedule",
+                            "scheduleState": {"ticks": []},
+                        }
+                    }
+                },
+            )
+
+        client = DagsterClient(endpoint="http://x", http_client=_mock_client(handler=_handler))
+        client.list_schedule_ticks(
+            repository_name="repo_x",
+            repository_location_name="loc_y",
+            schedule_name="my_schedule",
+            limit=4,
+        )
+        variables = captured[0]["variables"]
+        assert variables["scheduleSelector"] == {
+            "repositoryName": "repo_x",
+            "repositoryLocationName": "loc_y",
+            "scheduleName": "my_schedule",
+        }
+        assert variables["limit"] == 4
+
+    def test_schedule_not_found_union_member_propagates(self) -> None:
+        client = DagsterClient(
+            endpoint="http://x",
+            http_client=_mock_client(
+                responses=[
+                    {
+                        "data": {
+                            "scheduleOrError": {
+                                "__typename": "ScheduleNotFoundError",
+                                "message": "Schedule not found",
+                            }
+                        }
+                    }
+                ]
+            ),
+        )
+        result = client.list_schedule_ticks(
+            repository_name="r",
+            repository_location_name="l",
+            schedule_name="missing",
+        )
+        assert result["data"]["scheduleOrError"]["__typename"] == "ScheduleNotFoundError"
 
 
 # --- TestValidateDagsterConfig ---------------------------------------------
@@ -834,6 +1013,45 @@ class TestIntegrationHelpers:
                 "repository_name": "r",
                 "repository_location_name": "loc",
                 "sensor_name": "s",
+                "limit": 2,
+            }
+        ]
+        assert result == {"data": {"routed": True}}
+
+    def test_list_schedule_ticks_routes_to_client(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        calls: list[dict[str, Any]] = []
+
+        def fake(
+            self: DagsterClient,
+            *,
+            repository_name: str,
+            repository_location_name: str,
+            schedule_name: str,
+            limit: int = 25,
+        ) -> dict[str, Any]:
+            calls.append(
+                {
+                    "repository_name": repository_name,
+                    "repository_location_name": repository_location_name,
+                    "schedule_name": schedule_name,
+                    "limit": limit,
+                }
+            )
+            return {"data": {"routed": True}}
+
+        monkeypatch.setattr(DagsterClient, "list_schedule_ticks", fake)
+        result = list_schedule_ticks(
+            DagsterConfig(endpoint="http://x"),
+            repository_name="r",
+            repository_location_name="loc",
+            schedule_name="s",
+            limit=2,
+        )
+        assert calls == [
+            {
+                "repository_name": "r",
+                "repository_location_name": "loc",
+                "schedule_name": "s",
                 "limit": 2,
             }
         ]

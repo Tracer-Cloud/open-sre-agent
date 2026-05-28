@@ -15,6 +15,7 @@ from app.services.dagster.queries import (
     GET_RUN_LOGS,
     LIST_ASSETS,
     LIST_RUNS,
+    LIST_SCHEDULE_TICKS,
     LIST_SENSOR_TICKS,
 )
 
@@ -146,4 +147,23 @@ class DagsterClient:
         return self._post(
             LIST_SENSOR_TICKS,
             {"sensorSelector": sensor_selector, "limit": limit},
+        )
+
+    def list_schedule_ticks(
+        self,
+        *,
+        repository_name: str,
+        repository_location_name: str,
+        schedule_name: str,
+        limit: int = 25,
+    ) -> dict[str, Any]:
+        """Issue the ScheduleTicks query for a fully-qualified schedule coordinate."""
+        schedule_selector = {
+            "repositoryName": repository_name,
+            "repositoryLocationName": repository_location_name,
+            "scheduleName": schedule_name,
+        }
+        return self._post(
+            LIST_SCHEDULE_TICKS,
+            {"scheduleSelector": schedule_selector, "limit": limit},
         )

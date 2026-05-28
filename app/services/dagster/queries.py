@@ -161,3 +161,34 @@ query SensorTicks($sensorSelector: SensorSelector!, $limit: Int) {
   }
 }
 """
+
+LIST_SCHEDULE_TICKS = """
+query ScheduleTicks($scheduleSelector: ScheduleSelector!, $limit: Int) {
+  scheduleOrError(scheduleSelector: $scheduleSelector) {
+    __typename
+    ... on Schedule {
+      name
+      scheduleState {
+        ticks(limit: $limit) {
+          id
+          status
+          timestamp
+          endTimestamp
+          runIds
+          skipReason
+          error {
+            message
+            stack
+          }
+        }
+      }
+    }
+    ... on ScheduleNotFoundError {
+      message
+    }
+    ... on PythonError {
+      message
+    }
+  }
+}
+"""

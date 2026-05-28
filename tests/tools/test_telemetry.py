@@ -922,6 +922,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "list_bitbucket_commits",
         "list_dagster_assets",
         "list_dagster_runs",
+        "list_dagster_schedule_ticks",
         "list_dagster_sensor_ticks",
         "list_github_commits",
         "list_gitlab_commits",

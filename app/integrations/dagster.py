@@ -90,6 +90,22 @@ def _client(config: DagsterConfig) -> DagsterClient:
     )
 
 
+def _compute_run_durations(runs_result: dict[str, Any]) -> dict[str, Any]:
+    """Mutate ``runs_result`` to add ``duration_seconds`` per row (``None`` for runs
+    still in flight); returns the same dict for chainability. No-op on non-``Runs``
+    union members (``InvalidPipelineRunsFilterError``, ``PythonError``).
+    """
+    data = runs_result.get("data") or {}
+    runs_or_error = data.get("runsOrError") or {}
+    if runs_or_error.get("__typename") != "Runs":
+        return runs_result
+    for run in runs_or_error.get("results") or []:
+        start = run.get("startTime")
+        end = run.get("endTime")
+        run["duration_seconds"] = end - start if start is not None and end is not None else None
+    return runs_result
+
+
 def list_runs(
     config: DagsterConfig,
     *,
@@ -99,7 +115,8 @@ def list_runs(
 ) -> dict[str, Any]:
     """List recent Dagster runs, optionally filtered by ``status`` and/or ``job_name``."""
     with _client(config) as c:
-        return c.list_runs(limit=limit, status=status, job_name=job_name)
+        result = c.list_runs(limit=limit, status=status, job_name=job_name)
+    return _compute_run_durations(result)
 
 
 def _extract_step_failures(logs_for_run: dict[str, Any]) -> dict[str, Any]:
@@ -164,5 +181,23 @@ def list_sensor_ticks(
             repository_name=repository_name,
             repository_location_name=repository_location_name,
             sensor_name=sensor_name,
+            limit=limit,
+        )
+
+
+def list_schedule_ticks(
+    config: DagsterConfig,
+    *,
+    repository_name: str,
+    repository_location_name: str,
+    schedule_name: str,
+    limit: int = DEFAULT_DAGSTER_MAX_RESULTS,
+) -> dict[str, Any]:
+    """Fetch recent tick history for a Dagster schedule."""
+    with _client(config) as c:
+        return c.list_schedule_ticks(
+            repository_name=repository_name,
+            repository_location_name=repository_location_name,
+            schedule_name=schedule_name,
             limit=limit,
         )
