@@ -106,11 +106,11 @@ def _safe_print(text: str) -> None:
 
 # (padded_label, text_color)  — all labels are 6 chars wide
 _BADGE_STYLES: dict[str, tuple[str, str]] = {
-    "READ":   ("READ  ", HIGHLIGHT),
-    "PLAN":   ("PLAN  ", BRAND),
+    "READ": ("READ  ", HIGHLIGHT),
+    "PLAN": ("PLAN  ", BRAND),
     "INVEST": ("INVEST", WARNING),
-    "DIAG":   ("DIAG  ", TEXT),
-    "MERGE":  ("MERGE ", SECONDARY),
+    "DIAG": ("DIAG  ", TEXT),
+    "MERGE": ("MERGE ", SECONDARY),
 }
 
 _NODE_EVENT_TYPE: dict[str, str] = {

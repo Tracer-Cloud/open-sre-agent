@@ -377,6 +377,7 @@ def _build_ambient_right_column(session: object = None) -> Text:
 
     return Text("\n").join(parts)
 
+
 # Panel geometry. The body switches to a stacked layout on narrow terminals,
 # and otherwise expands to fill the full console width while keeping the left
 # identity column readable and the right notes column roomy.
