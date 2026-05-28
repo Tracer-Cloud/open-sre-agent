@@ -204,10 +204,11 @@ async def run_interactive(
             color_system="truecolor",
             legacy_windows=False,
         )
+        from app.cli.support.output import set_prompt_suppress_fn  # lazy — avoids circular import
+
         show_spinner = dispatch_should_show_spinner(text, session)
         if show_spinner:
             spinner.start()
-            from app.cli.support.output import set_prompt_suppress_fn  # lazy — avoids circular import
             set_prompt_suppress_fn(console.suppress_prompt_spinner)
         try:
             # Commands that take exclusive stdin ownership (e.g. bare
@@ -239,7 +240,6 @@ async def run_interactive(
             report_exception(exc, context="interactive_shell.dispatch_async")
             console.print(f"[{ERROR}]dispatch error:[/] {escape(str(exc))}")
         finally:
-            from app.cli.support.output import set_prompt_suppress_fn  # lazy — avoids circular import
             set_prompt_suppress_fn(None)
             if show_spinner:
                 spinner.stop()
@@ -416,10 +416,8 @@ async def run_interactive(
             pass
         except Exception as exc:
             log.debug("Alert watcher shutdown raised exception: %s", exc)
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await spinner_ticker_task
-        except asyncio.CancelledError:
-            pass
 
 
 __all__ = ["StreamingConsole", "run_interactive"]

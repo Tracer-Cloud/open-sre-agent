@@ -5,7 +5,7 @@ import re
 from rich.console import Console
 from rich.text import Text
 
-from app.cli.interactive_shell.ui.theme import BRAND, DIM, HIGHLIGHT, TEXT, WARNING
+from app.cli.interactive_shell.ui.theme import BRAND, DIM, HIGHLIGHT, WARNING
 from app.cli.support.output import get_output_format
 
 # ─────────────────────────────────────────────────────────────────────────────
