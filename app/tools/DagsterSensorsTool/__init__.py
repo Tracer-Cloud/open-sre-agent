@@ -25,10 +25,11 @@ from app.tools.tool_decorator import tool
 )
 def list_dagster_sensor_ticks(
     endpoint: str,
+    *,
     api_token: str = "",
-    repository_name: str = "",
-    repository_location_name: str = "",
-    sensor_name: str = "",
+    repository_name: str,
+    repository_location_name: str,
+    sensor_name: str,
     limit: int = 25,
 ) -> dict[str, Any]:
     """Return the most recent ticks for the named sensor with status and error."""

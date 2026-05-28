@@ -47,12 +47,12 @@ def validate_dagster_config(config: DagsterConfig) -> DagsterValidationResult:
     if not config.endpoint:
         return DagsterValidationResult(ok=False, detail="Dagster endpoint is required.")
 
-    client = DagsterClient(
+    with DagsterClient(
         endpoint=config.endpoint,
         api_token=config.api_token,
         timeout_s=DEFAULT_DAGSTER_TIMEOUT_S,
-    )
-    probe = client.ping()
+    ) as client:
+        probe = client.ping()
     if "error" in probe:
         return DagsterValidationResult(
             ok=False, detail=f"Dagster GraphQL probe failed: {probe['error']}"
@@ -98,7 +98,8 @@ def list_runs(
     job_name: str | None = None,
 ) -> dict[str, Any]:
     """List recent Dagster runs, optionally filtered by ``status`` and/or ``job_name``."""
-    return _client(config).list_runs(limit=limit, status=status, job_name=job_name)
+    with _client(config) as c:
+        return c.list_runs(limit=limit, status=status, job_name=job_name)
 
 
 def _extract_step_failures(logs_for_run: dict[str, Any]) -> dict[str, Any]:
@@ -132,7 +133,8 @@ def get_run_logs(config: DagsterConfig, *, run_id: str) -> dict[str, Any]:
     """Fetch event logs for a run; enriches the response with a ``summary`` field
     pre-counting step failures (see ``_extract_step_failures``).
     """
-    result = _client(config).get_run_logs(run_id=run_id)
+    with _client(config) as c:
+        result = c.get_run_logs(run_id=run_id)
     data = result.get("data") or {}
     logs_for_run = data.get("logsForRun") or {}
     if logs_for_run.get("__typename") == "EventConnection":
@@ -144,7 +146,8 @@ def list_assets_with_materialization(
     config: DagsterConfig, *, limit: int = DEFAULT_DAGSTER_MAX_RESULTS
 ) -> dict[str, Any]:
     """List Dagster assets and their latest materialization status."""
-    return _client(config).list_assets_with_materialization(limit=limit)
+    with _client(config) as c:
+        return c.list_assets_with_materialization(limit=limit)
 
 
 def list_sensor_ticks(
@@ -156,9 +159,10 @@ def list_sensor_ticks(
     limit: int = DEFAULT_DAGSTER_MAX_RESULTS,
 ) -> dict[str, Any]:
     """Fetch recent tick history for a Dagster sensor."""
-    return _client(config).list_sensor_ticks(
-        repository_name=repository_name,
-        repository_location_name=repository_location_name,
-        sensor_name=sensor_name,
-        limit=limit,
-    )
+    with _client(config) as c:
+        return c.list_sensor_ticks(
+            repository_name=repository_name,
+            repository_location_name=repository_location_name,
+            sensor_name=sensor_name,
+            limit=limit,
+        )

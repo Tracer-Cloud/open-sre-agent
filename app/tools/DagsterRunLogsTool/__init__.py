@@ -32,8 +32,9 @@ from app.tools.tool_decorator import tool
 )
 def get_dagster_run_logs(
     endpoint: str,
+    *,
     api_token: str = "",
-    run_id: str = "",
+    run_id: str,
 ) -> dict[str, Any]:
     """Return event logs and any failure error message for the given run id."""
     config = DagsterConfig(endpoint=endpoint, api_token=api_token)

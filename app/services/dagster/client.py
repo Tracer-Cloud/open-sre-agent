@@ -62,6 +62,15 @@ class DagsterClient:
             headers[_API_TOKEN_HEADER] = self.api_token
         return headers
 
+    def close(self) -> None:
+        self._client.close()
+
+    def __enter__(self) -> DagsterClient:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
+
     def _post(self, query: str, variables: dict[str, Any]) -> dict[str, Any]:
         """POST a GraphQL query and return either ``{"data": ...}`` or ``{"error": ...}``."""
         try:
