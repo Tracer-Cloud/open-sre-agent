@@ -109,9 +109,27 @@ def test_load_payload_interactive_tty_multiline_json(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("app.cli.investigation.payload.sys.stdin.isatty", lambda: True)
-    answers = iter(['{"alert_name":"x",', '"severity":"critical"}', ""])
-    monkeypatch.setattr("builtins.input", lambda _prompt="": next(answers))
+    answers = iter(['{"alert_name":"x",', '"severity":"critical"}'])
+
+    def _fake_input(_prompt: str = "") -> str:
+        try:
+            return next(answers)
+        except StopIteration as exc:  # pragma: no cover - defensive guard
+            raise AssertionError("interactive parser requested an unexpected extra line") from exc
+
+    monkeypatch.setattr("builtins.input", _fake_input)
 
     payload = load_payload(input_path=None, input_json=None, interactive=True)
 
     assert payload == {"alert_name": "x", "severity": "critical"}
+
+
+def test_load_payload_interactive_tty_empty_object_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("app.cli.investigation.payload.sys.stdin.isatty", lambda: True)
+    answers = iter(["{}"])
+    monkeypatch.setattr("builtins.input", lambda _prompt="": next(answers))
+
+    with pytest.raises(SystemExit, match="non-empty JSON object"):
+        load_payload(input_path=None, input_json=None, interactive=True)

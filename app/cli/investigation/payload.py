@@ -93,7 +93,7 @@ def load_interactive() -> dict[str, Any]:
         raw_text = sys.stdin.read()
     else:
         print(
-            "Paste the alert JSON payload. Press Enter on an empty line when finished.",
+            "Paste the alert JSON payload. It auto-submits once valid JSON is complete.",
             file=sys.stderr,
         )
         lines: list[str] = []
@@ -107,6 +107,16 @@ def load_interactive() -> dict[str, Any]:
             if not line.strip():
                 break
             lines.append(line)
+            candidate = "\n".join(lines)
+            try:
+                parsed_candidate: Any = json.loads(candidate)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(parsed_candidate, dict):
+                raise SystemExit("Alert payload from interactive input must be a JSON object.")
+            if not parsed_candidate:
+                raise SystemExit("Alert payload from interactive input must be a non-empty JSON object.")
+            return parsed_candidate
         raw_text = "\n".join(lines)
     if not raw_text.strip():
         raise SystemExit("No alert JSON was provided in interactive mode.")
@@ -214,6 +224,8 @@ def _choose_guided_payload() -> dict[str, Any]:
         if target == "cancel":
             raise SystemExit(0)
         raise SystemExit("No alert input selected.")
+
+
 def load_payload(
     input_path: str | None,
     input_json: str | None,
