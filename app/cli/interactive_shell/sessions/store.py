@@ -148,12 +148,14 @@ class SessionStore:
             return []
 
         # Sort by mtime descending so we only read the n most recent files
-        # instead of every file in the directory.
-        all_paths = sorted(
-            sessions_dir.glob("*.jsonl"),
-            key=lambda p: p.stat().st_mtime,
-            reverse=True,
-        )
+        # instead of every file in the directory. Guard against files that
+        # disappear between the glob and the stat call (concurrent delete).
+        def _mtime(p: Path) -> float:
+            with contextlib.suppress(OSError):
+                return p.stat().st_mtime
+            return 0.0
+
+        all_paths = sorted(sessions_dir.glob("*.jsonl"), key=_mtime, reverse=True)
 
         results: list[dict[str, Any]] = []
         for path in all_paths[: n * 2]:  # 2× buffer for skipped/malformed files
