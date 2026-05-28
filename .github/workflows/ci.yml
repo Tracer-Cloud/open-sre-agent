@@ -279,14 +279,15 @@ jobs:
     timeout-minutes: 15
 
     if: >-
-      github.event_name == 'push' ||
+      github.repository == 'Tracer-Cloud/opensre' &&
+      (github.event_name == 'push' ||
       (
         github.event_name == 'pull_request' &&
         (
           contains(github.event.pull_request.title, 'k8s') ||
           contains(github.event.pull_request.title, 'kubernetes')
         )
-      )
+      ))
 
     steps:
       - uses: actions/checkout@v5
