@@ -62,6 +62,9 @@ async def repl_main(initial_input: str | None = None, _config: ReplConfig | None
         if alert_listener_handle is not None:
             alert_listener_handle.stop()
             _alert_inbox.set_current_inbox(None)
+        from app.cli.interactive_shell.sessions.store import SessionStore
+
+        SessionStore.flush(session)
 
 
 def run_repl(initial_input: str | None = None, config: ReplConfig | None = None) -> int:

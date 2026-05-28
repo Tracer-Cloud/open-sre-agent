@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+import uuid
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -39,6 +41,12 @@ class ReplSession:
     questions), accumulated infra context (service names, clusters observed),
     trust mode flag, and a short interaction history for /status.
     """
+
+    session_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    """Stable UUID for this session. Rotated on /reset so each logical session gets its own ID."""
+
+    started_at: float = field(default_factory=time.time)
+    """Unix timestamp of when this session (or post-reset sub-session) began."""
 
     history: list[dict[str, Any]] = field(default_factory=list)
     """Each entry has type, text, and ok fields for shell, slash, alert, and chat turns."""
@@ -219,6 +227,9 @@ class ReplSession:
         self.pending_prompt_default = None
         self.last_synthetic_observation_path = None
         # trust_mode and reasoning_effort are intentionally preserved across /reset
+        # Rotate session identity so the new post-reset session gets its own ID and file.
+        self.session_id = str(uuid.uuid4())
+        self.started_at = time.time()
 
     def record_intervention(self, kind: InterventionKind) -> None:
         """Increment the per-kind intervention counter (Ctrl-C or correction)."""

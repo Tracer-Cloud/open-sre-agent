@@ -144,9 +144,12 @@ def _sanitize_text(text: str, *, config: PromptLogConfig) -> str:
 
 
 def _session_id(session: Any) -> str:
-    value = getattr(session, "_prompt_log_session_id", None)
-    if isinstance(value, str) and value:
-        return value
-    session_id = str(uuid.uuid4())
-    session._prompt_log_session_id = session_id
-    return session_id
+    # Prefer the stable first-class field set at ReplSession construction.
+    # Fall back to the legacy side-channel for non-ReplSession callers.
+    sid = getattr(session, "session_id", None) or getattr(session, "_prompt_log_session_id", None)
+    if isinstance(sid, str) and sid:
+        return sid
+    sid = str(uuid.uuid4())
+    with contextlib.suppress(AttributeError):
+        session._prompt_log_session_id = sid
+    return sid

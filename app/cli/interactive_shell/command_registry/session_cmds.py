@@ -42,8 +42,11 @@ def _cmd_clear(session: ReplSession, console: Console, _args: list[str]) -> bool
 
 
 def _cmd_reset(session: ReplSession, console: Console, _args: list[str]) -> bool:
+    from app.cli.interactive_shell.sessions.store import SessionStore
+
+    SessionStore.flush(session)
     session.clear()
-    console.print(f"[{DIM}]session state cleared.[/]")
+    console.print(f"[{DIM}]session state cleared — new session started.[/]")
     return True
 
 
@@ -239,6 +242,63 @@ _EFFORT_FIRST_ARGS: tuple[tuple[str, str], ...] = (
     ("max", "alias for xhigh"),
 )
 
+def _cmd_sessions(_session: ReplSession, console: Console, _args: list[str]) -> bool:
+    from datetime import datetime
+
+    from app.cli.interactive_shell.sessions.store import SessionStore
+
+    entries = SessionStore.load_recent(20)
+    if not entries:
+        console.print(f"[{DIM}]No sessions recorded yet.[/]")
+        return True
+
+    table = repl_table(title="Recent sessions\n", title_style=BOLD_BRAND)
+    table.add_column("#", style="bold", justify="right")
+    table.add_column("Session ID", style="bold")
+    table.add_column("Started")
+    table.add_column("Duration")
+    table.add_column("Turns", justify="right")
+    table.add_column("Investigations", justify="right")
+
+    for i, entry in enumerate(entries, start=1):
+        sid = entry["session_id"]
+        short_id = sid[:8] if len(sid) >= 8 else sid
+
+        started_raw = entry.get("started_at") or ""
+        try:
+            started_dt = datetime.fromisoformat(started_raw)
+            started_str = started_dt.astimezone().strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            started_str = started_raw[:16] if started_raw else "—"
+
+        duration_secs = entry.get("duration_secs")
+        if duration_secs is None:
+            duration_str = "—"
+        elif duration_secs < 60:
+            duration_str = f"{duration_secs}s"
+        elif duration_secs < 3600:
+            duration_str = f"{duration_secs // 60}m {duration_secs % 60}s"
+        else:
+            h = duration_secs // 3600
+            m = (duration_secs % 3600) // 60
+            duration_str = f"{h}h {m}m"
+
+        total = entry.get("total_turns")
+        investigations = entry.get("investigation_turns")
+
+        table.add_row(
+            str(i),
+            short_id,
+            started_str,
+            duration_str,
+            str(total) if total is not None else "—",
+            str(investigations) if investigations is not None else "—",
+        )
+
+    print_repl_table(console, table)
+    return True
+
+
 COMMANDS: list[SlashCommand] = [
     SlashCommand("/clear", "Clear the screen and re-render the banner.", _cmd_clear),
     SlashCommand("/reset", "Clear session state.", _cmd_reset, notes=("Trust mode is preserved.",)),
@@ -270,6 +330,7 @@ COMMANDS: list[SlashCommand] = [
         first_arg_completions=_VERBOSE_FIRST_ARGS,
     ),
     SlashCommand("/compact", "Trim old session history to free memory.", _cmd_compact),
+    SlashCommand("/sessions", "List recent REPL sessions.", _cmd_sessions),
 ]
 
 __all__ = ["COMMANDS"]
