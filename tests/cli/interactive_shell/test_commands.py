@@ -18,7 +18,6 @@ from app.cli.interactive_shell.command_registry.investigation import (
     _validate_investigate_args,
     _validate_save_args,
 )
-
 from app.cli.interactive_shell.command_registry.tasks_cmds import _validate_cancel_args
 from app.cli.interactive_shell.commands import SLASH_COMMANDS, dispatch_slash
 from app.cli.interactive_shell.runtime.session import ReplSession
@@ -53,8 +52,9 @@ class TestDispatchSlash:
     def test_status_with_harness_run(self, repl_harness) -> None:
         cmd = SLASH_COMMANDS["/status"]
 
-        repl_harness.run(cmd.handler)
+        result = repl_harness.run(cmd.handler)
 
+        assert result is True
         assert "Session status" in repl_harness.printed()
 
     def test_help_lists_all_commands(self) -> None:
