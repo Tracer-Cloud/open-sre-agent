@@ -83,7 +83,7 @@ def test_alertmanager_alert_seeds_alertmanager_tools_first() -> None:
         },
     }
 
-    calls = _build_seed_calls(state, [alertmanager_tool, grafana_tool], object())
+    calls = _build_seed_calls(state, [grafana_tool, alertmanager_tool], object())
 
     assert [call.name for call in calls] == ["alertmanager_alerts", "query_grafana_logs"]
     assert calls[0].input == {"base_url": "http://localhost:9093"}

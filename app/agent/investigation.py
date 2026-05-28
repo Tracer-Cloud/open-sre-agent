@@ -375,12 +375,16 @@ def _build_seed_calls(
     if not alert_source:
         return []
 
-    target_sources = set(_ALERT_SOURCE_TO_TOOL_SOURCES.get(alert_source, []))
+    target_sources = _ALERT_SOURCE_TO_TOOL_SOURCES.get(alert_source, [])
     if not target_sources:
         return []
 
     resolved = state.get("resolved_integrations") or {}
-    seed_tools = [t for t in tools if str(t.source) in target_sources]
+    source_priority = {source: index for index, source in enumerate(target_sources)}
+    seed_tools = sorted(
+        (t for t in tools if str(t.source) in source_priority),
+        key=lambda item: source_priority[str(item.source)],
+    )
     if not seed_tools:
         return []
 
@@ -614,6 +618,7 @@ def _merge_tool_evidence(
         evidence["alertmanager_silences"] = output.get("silences", [])
         evidence["alertmanager_active_silences"] = output.get("active_silences", [])
         evidence["alertmanager_silences_total"] = output.get("total", 0)
+        return
 
 
 def _build_assistant_msg(llm: Any, response: Any) -> dict[str, Any]:
