@@ -57,7 +57,8 @@ def test_load_payload_tty_guided_menu_cancel_exits_zero(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("app.cli.investigation.payload.sys.stdin.isatty", lambda: True)
-    answers = iter(["10"])
+    cancel_index = str(1 + len(SAMPLE_ALERT_OPTIONS) + 3)
+    answers = iter([cancel_index])
     monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
 
     with pytest.raises(SystemExit) as exc_info:
