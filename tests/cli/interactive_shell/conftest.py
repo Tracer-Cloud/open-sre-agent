@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from io import StringIO
 
@@ -18,7 +19,11 @@ class ReplTestHarness:
     console: Console
     output: StringIO
 
-    def run(self, cmd_fn, args=()) -> bool:
+    def run(
+    self,
+    cmd_fn: Callable[[ReplSession, Console, list[str]], bool],
+    args: tuple[str, ...] = (),
+    ) -> bool:
         return cmd_fn(
             self.session,
             self.console,
