@@ -9,6 +9,8 @@ def test_traceable_returns_identity_decorator() -> None:
     def traced_function() -> str:
         return "ok"
 
+    # Identity check is intentional: traceable() is a no-op and must
+    # return the original function unchanged, not a functools.wraps wrapper
     assert traceable()(traced_function) is traced_function
     assert traceable("investigation-step", extra="x")(traced_function) is traced_function
 
