@@ -26,6 +26,7 @@ concurrency:
 
 jobs:
   routing-live:
+    if: github.repository == 'Tracer-Cloud/opensre'
     name: routing-live shard ${{ matrix.shard_index }}
     runs-on: ubuntu-latest
     timeout-minutes: 20

@@ -53,9 +53,8 @@ from app.config import LLMSettings
 from app.version import get_version
 
 # ── Splash art ───────────────────────────────────────────────────────────────
-# Pre-rendered by oh-my-logo (devDependency, see package.json) at build time.
+# Pre-rendered during development and checked into this module as a static string.
 # Colour codes are stripped; HIGHLIGHT is re-applied at render time.
-# Regenerate with: npm run regen-splash  (or: node scripts/regen_splash.js)
 #
 # SPLASH_ART         block font, 59 cols, solid ██ fills
 # SPLASH_ART_NARROW  simpleBlock font, 72 cols, pure ASCII fallback
@@ -95,7 +94,7 @@ def _render_art(console_width: int = 80) -> str:
     custom_font = os.getenv("OPENSRE_FIGLET_FONT")
     if custom_font:
         try:
-            import pyfiglet  # type: ignore[import-untyped,import-not-found]
+            import pyfiglet
 
             rendered: str = pyfiglet.figlet_format("OpenSRE", font=custom_font).rstrip()
             if rendered and all(len(ln) <= console_width - 2 for ln in rendered.splitlines()):

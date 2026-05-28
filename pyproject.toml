@@ -30,7 +30,7 @@ dependencies = [
     # Authentication
     "PyJWT>=2.8.0",
     "cryptography>=42.0.0",
-    "keyring",
+    "keyring>=23.0.1",
     # AWS
     "boto3>=1.42.88",
     # Utilities
