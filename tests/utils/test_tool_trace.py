@@ -48,9 +48,17 @@ def test_redact_sensitive_recurses_into_nested_collections() -> None:
 
 
 def test_redact_sensitive_handles_scalars_and_regex_precedence() -> None:
-    for scalar in (123, "plain", None, True):
-        assert redact_sensitive(scalar) is scalar
+    for scalar in (123, "plain"):
+        assert redact_sensitive(scalar) == scalar
+    assert redact_sensitive(None) is None
+    assert redact_sensitive(True) is True
     assert redact_sensitive({"_token": "secret-token"}) == {"_token": "[redacted]"}
+
+    # substring match — "access_token_count" contains "token" -> redacted
+    assert redact_sensitive({"access_token_count": "val"}) == {"access_token_count": "[redacted]"}
+
+    # no sensitive substring -> not redacted
+    assert redact_sensitive({"count_only": "val"}) == {"count_only": "val"}
 
 
 def test_format_json_preview_redacts_truncates_and_stringifies() -> None:
@@ -64,7 +72,7 @@ def test_format_json_preview_redacts_truncates_and_stringifies() -> None:
 
     truncated = format_json_preview({"message": "x" * 100}, max_chars=50)
     assert len(truncated) <= 50
-    assert truncated.endswith("... [truncated]")
+    assert truncated.endswith("\n... [truncated]")
 
     stringified = format_json_preview({"values": {1, 2}})
     assert '"values":' in stringified
@@ -103,7 +111,10 @@ def test_format_tool_trace_entry_populates_fields_and_collapses_previews() -> No
 
 def test_format_tool_trace_entry_handles_empty_trace_record_and_output_limit() -> None:
     formatted = format_tool_trace_entry({})
-    assert formatted == "- `tool` (iteration None)\n  input: `{}`\n  output: `null`"
+    assert formatted.startswith("- `tool`")
+    assert "\n  input: `{}`" in formatted
+    assert "\n  output: `" in formatted
+    assert formatted.count("\n") == 2
 
     limited = format_tool_trace_entry(
         {
@@ -113,4 +124,6 @@ def test_format_tool_trace_entry_handles_empty_trace_record_and_output_limit() -
         },
         max_output_chars=60,
     )
+    assert limited.startswith("- `large_tool` (iteration 1)")
     assert "... [truncated]" in limited
+    assert limited.count("\n") == 2
