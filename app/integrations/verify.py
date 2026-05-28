@@ -22,6 +22,7 @@ _verify_betterstack = _adapters._verify_betterstack
 _verify_bitbucket = _adapters._verify_bitbucket
 _verify_clickhouse = _adapters._verify_clickhouse
 _verify_coralogix = _adapters._verify_coralogix
+_verify_dagster = _adapters._verify_dagster
 _verify_datadog = _adapters._verify_datadog
 _verify_discord = _adapters._verify_discord
 _verify_github = _adapters._verify_github
@@ -167,6 +168,7 @@ __all__ = [
     "_verify_bitbucket",
     "_verify_clickhouse",
     "_verify_coralogix",
+    "_verify_dagster",
     "_verify_datadog",
     "_verify_discord",
     "_verify_github",

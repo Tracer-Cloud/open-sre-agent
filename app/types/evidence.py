@@ -12,6 +12,7 @@ EvidenceSource = Literal[
     "aws_sdk",
     "knowledge",
     "grafana",
+    "dagster",
     "datadog",
     "honeycomb",
     "coralogix",

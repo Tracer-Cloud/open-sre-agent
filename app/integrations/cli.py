@@ -860,6 +860,31 @@ _HANDLERS: dict[str, Any] = {
 }
 
 
+def _setup_dagster() -> None:
+    endpoint = _p(
+        "Dagster GraphQL endpoint "
+        "(e.g. http://localhost:3000 or https://<org>.dagster.plus/<deployment>)"
+    )
+    if not endpoint:
+        _die("endpoint is required.")
+    api_token = _p(
+        "Dagster Cloud API token (leave empty for local OSS Dagster with no auth)",
+        secret=True,
+    )
+    upsert_integration(
+        "dagster",
+        {
+            "credentials": {
+                "endpoint": endpoint,
+                "api_token": api_token,
+            }
+        },
+    )
+
+
+_HANDLERS["dagster"] = _setup_dagster
+
+
 def _setup_azure_sql() -> None:
     server = _p("Server (e.g. myserver.database.windows.net)")
     database = _p("Database name")

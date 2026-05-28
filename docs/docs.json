@@ -147,6 +147,7 @@
             "group": "Data and workflow systems",
             "pages": [
               "clickhouse",
+              "dagster",
               "kafka",
               "mariadb",
               "mongodb",

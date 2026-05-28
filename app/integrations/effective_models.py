@@ -56,6 +56,7 @@ class EffectiveIntegrations(StrictConfigModel):
     datadog: EffectiveIntegrationEntry | None = None
     honeycomb: EffectiveIntegrationEntry | None = None
     coralogix: EffectiveIntegrationEntry | None = None
+    dagster: EffectiveIntegrationEntry | None = None
     aws: EffectiveIntegrationEntry | None = None
     slack: EffectiveIntegrationEntry | None = None
     tracer: EffectiveIntegrationEntry | None = None

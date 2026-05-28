@@ -16,6 +16,7 @@ from app.integrations._verification_adapters import (
     _verify_bitbucket,
     _verify_clickhouse,
     _verify_coralogix,
+    _verify_dagster,
     _verify_datadog,
     _verify_discord,
     _verify_github,
@@ -171,6 +172,13 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         verifier=_verify_rabbitmq,
         direct_effective=True,
         verify_order=17,
+    ),
+    IntegrationSpec(
+        service="dagster",
+        verifier=_verify_dagster,
+        direct_effective=True,
+        setup_order=24,
+        verify_order=36,
     ),
     IntegrationSpec(
         service="betterstack",
