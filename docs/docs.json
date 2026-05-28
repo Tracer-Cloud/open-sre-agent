@@ -117,6 +117,7 @@
               "aws",
               "bitbucket",
               "github",
+              "integrations/github-actions",
               "gitlab",
               "google-docs",
               "helm",
