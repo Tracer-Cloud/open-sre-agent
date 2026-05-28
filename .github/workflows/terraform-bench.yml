@@ -27,6 +27,7 @@ concurrency:
 jobs:
   plan:
     name: terraform plan
+    if: github.repository == 'Tracer-Cloud/opensre'
     runs-on: ubuntu-latest
 
     defaults:
