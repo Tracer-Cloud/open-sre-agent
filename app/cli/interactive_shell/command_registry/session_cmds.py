@@ -408,6 +408,14 @@ def _apply_resume_data(data: dict, session: ReplSession, console: Console) -> bo
             "they will be replaced by the resumed context.[/]"
         )
 
+    # Rotate to a fresh continuation session so the resumed context has a clean
+    # home and /sessions shows a clear chain.  Flush the current session first
+    # (preserving its own history on disk); empty sessions are deleted by flush().
+    from app.cli.interactive_shell.sessions.store import SessionStore
+
+    SessionStore.flush(session)
+    session.clear()
+
     # Restore LLM conversation thread so the next prompt has full prior context.
     session.cli_agent_messages = list(messages)
 
@@ -421,6 +429,8 @@ def _apply_resume_data(data: dict, session: ReplSession, console: Console) -> bo
     # Store the resumed session's name so /sessions can display it for the current
     # session before it has accumulated its own first turn.
     session.resumed_from_name = name
+
+    SessionStore.open_session(session)
 
     # ── Print full conversation so the user knows what context was loaded ──────
     # Merge turn_detail records (all recorded turns, full text) with
@@ -456,13 +466,23 @@ def _apply_resume_data(data: dict, session: ReplSession, console: Console) -> bo
         f"[{HIGHLIGHT}]resumed session {short_id}{name_str}[/] "
         f"[{DIM}]({len(messages)} messages in context from {source})[/]"
     )
+
+    # Display conversation history in the same REPL format used for new turns so
+    # the user sees a continuous flow: `❯ prompt` / `● assistant` for each pair.
     if display_pairs:
+        from rich.markdown import Markdown
+
+        from app.cli.interactive_shell.ui.streaming import render_response_header
+        from app.cli.interactive_shell.ui.theme import MARKDOWN_THEME
+
         console.print(f"[{DIM}]─── conversation history ─────────────────────────────────[/]")
         for role, text in display_pairs:
             if role == "user":
-                console.print(f"[{HIGHLIGHT}]you[/]  {escape(text)}")
+                console.print(f"[bold {HIGHLIGHT}]❯[/] {escape(text)}")
             else:
-                console.print(f"[{DIM}]sre[/]  {escape(text)}")
+                render_response_header(console, "assistant")
+                with console.use_theme(MARKDOWN_THEME):
+                    console.print(Markdown(text, code_theme="ansi_dark"))
         console.print(f"[{DIM}]─────────────────────────────────────────────────────────[/]")
 
     if context:
@@ -470,9 +490,6 @@ def _apply_resume_data(data: dict, session: ReplSession, console: Console) -> bo
             f"[{DIM}]accumulated context restored:[/] "
             + ", ".join(f"{escape(k)}={escape(str(v))}" for k, v in sorted(context.items()))
         )
-    console.print(
-        f"[{DIM}]tip: type[/] [{HIGHLIGHT}]/new[/] [{DIM}]to start a clean session that continues this context.[/]"
-    )
     return True
 
 
