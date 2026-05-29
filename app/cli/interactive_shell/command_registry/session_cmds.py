@@ -462,15 +462,16 @@ def _render_resumed_session_history(
         console.print(f"[{DIM}]─────────────────────────────────────────────────────────[/]")
         return
 
-    seen_prompts: set[str] = set()
+    has_pending_user = False
     for role, text in messages:
-        if role == "user" and text not in seen_prompts:
+        if role == "user":
             console.print(f"[bold {HIGHLIGHT}]❯[/] {escape(text)}")
-            seen_prompts.add(text)
-        elif role == "assistant":
+            has_pending_user = True
+        elif role == "assistant" and has_pending_user:
             render_response_header(console, "assistant")
             with console.use_theme(MARKDOWN_THEME):
                 console.print(Markdown(text, code_theme="ansi_dark"))
+            has_pending_user = False
     console.print(f"[{DIM}]─────────────────────────────────────────────────────────[/]")
 
 

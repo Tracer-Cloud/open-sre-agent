@@ -1474,6 +1474,37 @@ class TestResumeCommand:
         assert "what is opensre?" in output
         assert "OpenSRE is a tool" in output
 
+    def test_apply_resume_no_history_keeps_user_assistant_pairs_with_duplicate_prompts(
+        self,
+    ) -> None:
+        """No-history rendering should not emit orphaned assistant blocks."""
+        from app.cli.interactive_shell.command_registry.session_cmds import _apply_resume_data
+
+        data = {
+            "session_id": "display-no-history-abc123",
+            "name": "No History",
+            "cli_agent_messages": [
+                ("user", "repeat"),
+                ("assistant", "first answer"),
+                ("user", "repeat"),
+                ("assistant", "second answer"),
+            ],
+            "accumulated_context": {},
+            "history": [],
+            "turn_details": [],
+            "has_snapshot": True,
+        }
+
+        session = ReplSession()
+        console, buf = _capture()
+        _apply_resume_data(data, session, console)
+
+        output = buf.getvalue()
+        assert output.count("❯ repeat") == 2
+        assert output.count("assistant") == 2
+        assert "first answer" in output
+        assert "second answer" in output
+
     def test_planner_llm_error_persisted_to_cli_agent_messages(self) -> None:
         """PlannerLLMError must be added to cli_agent_messages so /resume can show it."""
         from unittest.mock import patch

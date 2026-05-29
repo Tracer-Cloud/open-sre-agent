@@ -319,15 +319,16 @@ def test_load_recent_counts_turns_for_in_progress_session(tmp_path: Path) -> Non
     session = _make_session()
     with _patch_dir(tmp_path):
         SessionStore.open_session(session)
-        SessionStore.append_turn(session, "chat", "hi")
+        SessionStore.append_turn(session, "cli_agent", "hi")
+        SessionStore.append_turn(session, "chat", "follow-up")
         SessionStore.append_turn(session, "alert", "OOM")
         # No flush — session still in progress
 
         results = SessionStore.load_recent()
 
     assert len(results) == 1
-    assert results[0]["total_turns"] == 2
-    assert results[0]["chat_turns"] == 1
+    assert results[0]["total_turns"] == 3
+    assert results[0]["chat_turns"] == 2
     assert results[0]["investigation_turns"] == 1
     assert results[0]["duration_secs"] is None
     assert results[0]["is_ended"] is False

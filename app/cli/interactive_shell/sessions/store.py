@@ -356,7 +356,7 @@ class SessionStore:
                                 continue
                             total_turns += 1
                             kind = rec.get("kind", "")
-                            if kind == "chat":
+                            if kind in _CHAT_KINDS:
                                 chat_turns += 1
                             elif kind in ("alert", "incoming_alert"):
                                 investigation_turns += 1
