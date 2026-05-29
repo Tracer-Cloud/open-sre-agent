@@ -27,8 +27,8 @@ Design notes:
 - os.pty creates a master/slave pair; slave is given to opensre as its
   stdin/stdout/stderr so prompt_toolkit sees a real TTY.
 - select() drains output non-blockingly so we never block forever.
-- ANSI escape codes are stripped before storing in self._output so
-  assertions work on plain text.
+- ANSI escape codes are stripped lazily via the `text` property from
+  self._raw, so assertions always work on plain text.
 - .env is loaded from the repo root so live LLM providers work.
 - startup_wait=6.0 covers banner rendering + async event-loop startup.
   Increase it if tests are flaky on slow CI machines.
@@ -52,6 +52,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from dotenv import dotenv_values
+
 _ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 _REPO_ROOT = Path(__file__).parent.parent.parent
 
@@ -60,14 +62,8 @@ def _load_env() -> dict[str, str]:
     """Merge .env into a copy of the current environment."""
     env = dict(os.environ)
     env_file = _REPO_ROOT / ".env"
-    if not env_file.exists():
-        return env
-    for line in env_file.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, val = line.partition("=")
-        env[key.strip()] = val.strip()
+    if env_file.exists():
+        env.update({k: v for k, v in dotenv_values(env_file).items() if v is not None})
     return env
 
 
@@ -92,15 +88,17 @@ class ReplDriver:
         """Start the REPL process and wait for the banner to render."""
         master, slave = pty.openpty()
         self._master = master
-        self._proc = subprocess.Popen(
-            ["uv", "run", "opensre"],
-            stdin=slave,
-            stdout=slave,
-            stderr=slave,
-            env=_load_env(),
-            cwd=self._cwd,
-        )
-        os.close(slave)
+        try:
+            self._proc = subprocess.Popen(
+                ["uv", "run", "opensre"],
+                stdin=slave,
+                stdout=slave,
+                stderr=slave,
+                env=_load_env(),
+                cwd=self._cwd,
+            )
+        finally:
+            os.close(slave)
         self._drain(startup_wait if startup_wait is not None else self._startup_wait)
 
     def close(self, exit_wait: float = 3.0) -> None:
@@ -173,6 +171,8 @@ class ReplDriver:
             if r:
                 try:
                     chunk = os.read(self._master, 8192)
+                    if not chunk:
+                        break
                     self._raw += chunk
                 except OSError:
                     break
