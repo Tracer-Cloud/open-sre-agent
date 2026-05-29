@@ -432,19 +432,47 @@ def _apply_resume_data(data: dict, session: ReplSession, console: Console) -> bo
     session.resumed_from_name = name
 
     # ── Print full conversation so the user knows what context was loaded ──────
+    # Merge turn_detail records (all recorded turns, full text) with
+    # cli_agent_messages from the snapshot (captures turns that may not have a
+    # matching turn_detail — e.g. processed before enrichment, or Codex path).
+    # Result: the user sees every exchange that happened in the session.
+    turn_details = data.get("turn_details") or []
+    display_pairs: list[tuple[str, str]] = []
+    seen_prompts: set[str] = set()
+
+    for td in turn_details:
+        if td.get("kind") in ("chat", "cli_agent", "cli_help", "follow_up", "alert"):
+            prompt = td.get("prompt") or ""
+            response = td.get("response") or ""
+            if prompt:
+                display_pairs.append(("user", prompt))
+                seen_prompts.add(prompt)
+            if response:
+                display_pairs.append(("assistant", response))
+
+    # Append any snapshot messages not already covered by turn_detail records.
+    for role, text in messages:
+        if role == "user" and text not in seen_prompts:
+            display_pairs.append(("user", text))
+            seen_prompts.add(text)
+        elif role == "assistant" and display_pairs and display_pairs[-1][0] == "user":
+            # Only append assistant reply if the preceding user turn was just added.
+            display_pairs.append(("assistant", text))
+
     source = "snapshot" if has_snapshot else "turn records"
     name_str = f" · {escape(name)}" if name else ""
     console.print(
         f"[{HIGHLIGHT}]resumed session {short_id}{name_str}[/] "
-        f"[{DIM}]({len(messages)} messages from {source})[/]"
+        f"[{DIM}]({len(messages)} messages in context from {source})[/]"
     )
-    console.print(f"[{DIM}]─── conversation history ────────────────────────────────────[/]")
-    for role, text in messages:
-        if role == "user":
-            console.print(f"[{HIGHLIGHT}]you[/]  {escape(text)}")
-        else:
-            console.print(f"[{DIM}]sre[/]  {escape(text)}")
-    console.print(f"[{DIM}]─────────────────────────────────────────────────────────────[/]")
+    if display_pairs:
+        console.print(f"[{DIM}]─── conversation history ─────────────────────────────────[/]")
+        for role, text in display_pairs:
+            if role == "user":
+                console.print(f"[{HIGHLIGHT}]you[/]  {escape(text)}")
+            else:
+                console.print(f"[{DIM}]sre[/]  {escape(text)}")
+        console.print(f"[{DIM}]─────────────────────────────────────────────────────────[/]")
 
     if context:
         console.print(
