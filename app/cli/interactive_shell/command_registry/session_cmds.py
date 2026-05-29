@@ -314,6 +314,71 @@ def _cmd_sessions(session: ReplSession, console: Console, _args: list[str]) -> b
     return True
 
 
+def _cmd_resume(session: ReplSession, console: Console, args: list[str]) -> bool:
+    from app.cli.interactive_shell.sessions.store import SessionStore
+
+    if not args:
+        console.print(f"[{DIM}]usage: /resume <session-id-prefix>[/]")
+        console.print(f"[{DIM}]run /sessions to list session IDs.[/]")
+        return True
+
+    prefix = args[0].strip()
+    data = SessionStore.load_session(prefix)
+
+    if data is None:
+        # Check whether prefix is ambiguous (multiple matches)
+        sessions_dir = None
+        try:
+            from app.constants import OPENSRE_HOME_DIR
+
+            sessions_dir = OPENSRE_HOME_DIR / "sessions"
+        except Exception:
+            pass
+        if sessions_dir and sessions_dir.exists():
+            matches = [p for p in sessions_dir.glob("*.jsonl") if p.stem.startswith(prefix)]
+            if len(matches) > 1:
+                console.print(
+                    f"[{WARNING}]ambiguous prefix '{escape(prefix)}' matches {len(matches)} sessions — "
+                    "use more characters.[/]"
+                )
+                return True
+        console.print(f"[{ERROR}]session '{escape(prefix)}' not found.[/]")
+        return True
+
+    messages = data.get("cli_agent_messages") or []
+    context = data.get("accumulated_context") or {}
+    has_snapshot = data.get("has_snapshot", False)
+    sid = data.get("session_id", prefix)
+    short_id = sid[:8] if len(sid) >= 8 else sid
+
+    if not messages and not context:
+        console.print(
+            f"[{DIM}]session {short_id} has no conversation to resume "
+            "(no chat turns or context found).[/]"
+        )
+        return True
+
+    # Restore conversation context into the current session.
+    session.cli_agent_messages = list(messages)
+    session.accumulated_context = dict(context)
+
+    source = "snapshot" if has_snapshot else "turn records"
+    console.print(
+        f"[{HIGHLIGHT}]resumed session {short_id}[/] "
+        f"[{DIM}]({len(messages)} messages from {source})[/]"
+    )
+    if context:
+        console.print(
+            f"[{DIM}]accumulated context restored:[/] "
+            + ", ".join(f"{k}={escape(str(v))}" for k, v in sorted(context.items()))
+        )
+    console.print(f"[{DIM}]conversation context loaded — continue asking questions.[/]")
+    return True
+
+
+_RESUME_FIRST_ARGS: tuple[tuple[str, str], ...] = ()  # dynamic — session ID prefixes
+
+
 COMMANDS: list[SlashCommand] = [
     SlashCommand("/clear", "Clear the screen and re-render the banner.", _cmd_clear),
     SlashCommand("/reset", "Clear session state.", _cmd_reset, notes=("Trust mode is preserved.",)),
@@ -346,6 +411,17 @@ COMMANDS: list[SlashCommand] = [
     ),
     SlashCommand("/compact", "Trim old session history to free memory.", _cmd_compact),
     SlashCommand("/sessions", "List recent REPL sessions.", _cmd_sessions),
+    SlashCommand(
+        "/resume",
+        "Resume a previous session by restoring its conversation context.",
+        _cmd_resume,
+        usage=("/resume <session-id-prefix>",),
+        notes=(
+            "Restores cli_agent_messages and accumulated infra context from the chosen session.",
+            "The first 8 characters of a session ID (shown by /sessions) are enough.",
+            "Does not replace turns already in the current session.",
+        ),
+    ),
 ]
 
 __all__ = ["COMMANDS"]

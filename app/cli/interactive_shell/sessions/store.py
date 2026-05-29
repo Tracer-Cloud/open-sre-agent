@@ -1,10 +1,13 @@
 """Per-session persistence: one JSONL file per session under ~/.opensre/sessions/.
 
 Design: incremental writes.
-- open_session()  — writes session_start immediately when the REPL starts
-- append_turn()   — appends one turn record on every session.record() call
-- flush()         — writes session_end on REPL exit or /reset;
-                    deletes the file if no turns were recorded (empty session)
+- open_session()       — writes session_start immediately when the REPL starts
+- append_turn()        — appends a turn stub (kind + text) for stats counting
+- append_turn_detail() — appends a full turn record (prompt + response) for /resume
+- flush()              — writes conversation_snapshot + session_end on exit or /reset;
+                         deletes the file if no turns were recorded (empty session)
+- load_recent()        — returns up to n session summaries for /sessions display
+- load_session()       — reads a full session file and extracts conversation for /resume
 
 This means the current session file always exists on disk while the REPL is
 running, so /sessions shows it without any synthetic in-memory tricks, and
@@ -23,8 +26,6 @@ from app.version import get_version
 
 if TYPE_CHECKING:
     from app.cli.interactive_shell.runtime.session import ReplSession
-
-_MAX_PROMPT_CHARS = 200
 
 
 def _sessions_dir() -> Path:
@@ -59,11 +60,11 @@ class SessionStore:
 
     @staticmethod
     def append_turn(session: ReplSession, kind: str, text: str) -> None:
-        """Append one turn record to the open session file.
+        """Append a turn stub to the session file for stats counting.
 
-        Called by ReplSession.record() and record_incoming_alert() on every
-        interaction. No-ops silently if the file does not exist (e.g. the
-        non-interactive initial_input path that never calls open_session).
+        Called by ReplSession.record() on every interaction. Stubs carry kind
+        and the full input text (no truncation). No-ops silently if the file
+        does not exist (e.g. the non-interactive initial_input path).
         """
         with contextlib.suppress(Exception):
             path = _session_path(session.session_id)
@@ -72,18 +73,62 @@ class SessionStore:
             record = {
                 "type": "turn",
                 "kind": kind,
-                "text": text[:_MAX_PROMPT_CHARS],
+                "text": text,
             }
             with path.open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     @staticmethod
+    def append_turn_detail(
+        session_id: str,
+        kind: str,
+        prompt: str,
+        *,
+        response: str | None = None,
+        turn_id: str | None = None,
+        model: str | None = None,
+        provider: str | None = None,
+        latency_ms: int | None = None,
+    ) -> None:
+        """Append a full turn record (prompt + response) for /resume reconstruction.
+
+        Called by PromptRecorder.flush() after each LLM turn completes.
+        These records make session files self-contained: /resume can rebuild
+        cli_agent_messages from turn_detail records when no conversation_snapshot
+        is present (e.g. old files or crash before flush).
+        No-ops silently if the session file does not exist.
+        """
+        with contextlib.suppress(Exception):
+            path = _session_path(session_id)
+            if not path.exists():
+                return
+            record: dict[str, Any] = {
+                "type": "turn_detail",
+                "kind": kind,
+                "prompt": prompt,
+            }
+            if response is not None:
+                record["response"] = response
+            if turn_id is not None:
+                record["turn_id"] = turn_id
+            if model is not None:
+                record["model"] = model
+            if provider is not None:
+                record["provider"] = provider
+            if latency_ms is not None:
+                record["latency_ms"] = latency_ms
+            with path.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    @staticmethod
     def flush(session: ReplSession) -> None:
-        """Write session_end and close the session file.
+        """Write conversation_snapshot + session_end and close the session file.
 
         Idempotent: no-ops if session_end is already the last line, so
         double-calling (e.g. /reset flow + entrypoint finally) is safe.
         If no turns were recorded the file is deleted instead.
+        Writes a conversation_snapshot record before session_end so /resume
+        can restore cli_agent_messages and accumulated_context exactly.
         """
         with contextlib.suppress(Exception):
             path = _session_path(session.session_id)
@@ -98,23 +143,26 @@ class SessionStore:
                     if json.loads(lines[-1]).get("type") == "session_end":
                         return
 
-            # Count stats from the turn records already on disk
+            # Count stats from turn stub records.
             chat_turns = 0
             investigation_turns = 0
             total_turns = 0
+            detail_turns = 0
             for line in lines:
                 with contextlib.suppress(json.JSONDecodeError):
                     rec = json.loads(line)
-                    if rec.get("type") != "turn":
-                        continue
-                    total_turns += 1
-                    kind = rec.get("kind", "")
-                    if kind == "chat":
-                        chat_turns += 1
-                    elif kind in ("alert", "incoming_alert"):
-                        investigation_turns += 1
+                    rec_type = rec.get("type")
+                    if rec_type == "turn":
+                        total_turns += 1
+                        kind = rec.get("kind", "")
+                        if kind == "chat":
+                            chat_turns += 1
+                        elif kind in ("alert", "incoming_alert"):
+                            investigation_turns += 1
+                    elif rec_type == "turn_detail":
+                        detail_turns += 1
 
-            if total_turns == 0:
+            if total_turns == 0 and detail_turns == 0:
                 # Empty session — nothing useful happened; remove the file.
                 path.unlink(missing_ok=True)
                 return
@@ -122,6 +170,16 @@ class SessionStore:
             now = datetime.now(UTC)
             started_at = datetime.fromtimestamp(session.started_at, tz=UTC)
             duration_secs = max(0, int((now - started_at).total_seconds()))
+
+            # Write conversation snapshot so /resume can restore exact LLM context.
+            if session.cli_agent_messages or session.accumulated_context:
+                snapshot: dict[str, Any] = {"type": "conversation_snapshot"}
+                if session.cli_agent_messages:
+                    snapshot["cli_agent_messages"] = [list(m) for m in session.cli_agent_messages]
+                if session.accumulated_context:
+                    snapshot["accumulated_context"] = dict(session.accumulated_context)
+                with path.open("a", encoding="utf-8") as fh:
+                    fh.write(json.dumps(snapshot, ensure_ascii=False) + "\n")
 
             record = {
                 "type": "session_end",
@@ -171,12 +229,18 @@ class SessionStore:
                 if start_record is None or start_record.get("type") != "session_start":
                     continue
 
-                # Check if the last line is a session_end
                 end_record: dict[str, Any] | None = None
+                has_snapshot = False
                 with contextlib.suppress(json.JSONDecodeError):
                     last = json.loads(lines[-1])
                     if last.get("type") == "session_end":
                         end_record = last
+
+                for line in lines:
+                    with contextlib.suppress(json.JSONDecodeError):
+                        if json.loads(line).get("type") == "conversation_snapshot":
+                            has_snapshot = True
+                            break
 
                 if end_record is not None:
                     total_turns = end_record.get("total_turns")
@@ -211,8 +275,99 @@ class SessionStore:
                         "chat_turns": chat_turns,
                         "investigation_turns": investigation_turns,
                         "is_ended": end_record is not None,
+                        "has_snapshot": has_snapshot,
                     }
                 )
 
         results.sort(key=lambda x: x.get("started_at") or "", reverse=True)
         return results[:n]
+
+    @staticmethod
+    def load_session(session_id_prefix: str) -> dict[str, Any] | None:
+        """Load a session file and extract conversation data for /resume.
+
+        Accepts a prefix of the session ID (e.g. the first 8 chars shown by
+        /sessions). Returns None if no match found or the prefix is ambiguous.
+
+        Resolution order for cli_agent_messages:
+        1. conversation_snapshot (written at clean exit) — exact fidelity
+        2. turn_detail records (written per-turn by PromptRecorder) — fallback
+           for old files pre-enrichment or sessions that crashed before flush
+
+        Returned dict keys:
+          session_id, started_at, cli_agent_messages (list[tuple[str,str]]),
+          accumulated_context, history (turn stubs), turn_details, has_snapshot
+        """
+        sessions_dir = _sessions_dir()
+        if not sessions_dir.exists():
+            return None
+
+        target_path: Path | None = None
+        for path in sessions_dir.glob("*.jsonl"):
+            if path.stem.startswith(session_id_prefix):
+                if target_path is not None:
+                    return None  # ambiguous prefix — caller should ask for more chars
+                target_path = path
+
+        if target_path is None:
+            return None
+
+        with contextlib.suppress(Exception):
+            lines = target_path.read_text(encoding="utf-8").splitlines()
+            if not lines:
+                return None
+
+            start_record: dict[str, Any] | None = None
+            with contextlib.suppress(json.JSONDecodeError):
+                start_record = json.loads(lines[0])
+
+            if start_record is None or start_record.get("type") != "session_start":
+                return None
+
+            cli_agent_messages: list[tuple[str, str]] = []
+            accumulated_context: dict[str, Any] = {}
+            history: list[dict[str, Any]] = []
+            turn_details: list[dict[str, Any]] = []
+            has_snapshot = False
+
+            for line in lines[1:]:
+                with contextlib.suppress(json.JSONDecodeError):
+                    rec = json.loads(line)
+                    rec_type = rec.get("type")
+                    if rec_type == "turn":
+                        history.append(rec)
+                    elif rec_type == "turn_detail":
+                        turn_details.append(rec)
+                    elif rec_type == "conversation_snapshot":
+                        has_snapshot = True
+                        msgs = rec.get("cli_agent_messages")
+                        if msgs:
+                            cli_agent_messages = [
+                                (str(m[0]), str(m[1])) for m in msgs if len(m) >= 2
+                            ]
+                        ctx = rec.get("accumulated_context")
+                        if ctx and isinstance(ctx, dict):
+                            accumulated_context = ctx
+
+            # Fall back to turn_detail reconstruction when no snapshot exists.
+            if not cli_agent_messages and turn_details:
+                for td in turn_details:
+                    if td.get("kind") in ("chat", "follow_up"):
+                        prompt = td.get("prompt") or ""
+                        response = td.get("response") or ""
+                        if prompt:
+                            cli_agent_messages.append(("user", prompt))
+                        if response:
+                            cli_agent_messages.append(("assistant", response))
+
+            return {
+                "session_id": start_record.get("session_id", target_path.stem),
+                "started_at": start_record.get("started_at"),
+                "cli_agent_messages": cli_agent_messages,
+                "accumulated_context": accumulated_context,
+                "history": history,
+                "turn_details": turn_details,
+                "has_snapshot": has_snapshot,
+            }
+
+        return None

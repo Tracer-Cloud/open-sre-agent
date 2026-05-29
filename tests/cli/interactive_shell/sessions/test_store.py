@@ -74,15 +74,16 @@ def test_append_turn_adds_record_to_existing_file(tmp_path: Path) -> None:
     assert turns[1] == {"type": "turn", "kind": "alert", "text": "HighCPU on prod"}
 
 
-def test_append_turn_truncates_long_text(tmp_path: Path) -> None:
+def test_append_turn_stores_full_text_without_truncation(tmp_path: Path) -> None:
     session = _make_session()
+    long_text = "x" * 500
     with _patch_dir(tmp_path):
         SessionStore.open_session(session)
-        SessionStore.append_turn(session, "chat", "x" * 500)
+        SessionStore.append_turn(session, "chat", long_text)
 
     records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
     turn = next(r for r in records if r["type"] == "turn")
-    assert len(turn["text"]) == 200
+    assert len(turn["text"]) == 500
 
 
 def test_append_turn_noop_when_file_missing(tmp_path: Path) -> None:
@@ -91,6 +92,54 @@ def test_append_turn_noop_when_file_missing(tmp_path: Path) -> None:
         # Do NOT call open_session — file doesn't exist
         SessionStore.append_turn(session, "chat", "hello")
     assert not list(tmp_path.glob("*.jsonl")), "no file should be created"
+
+
+# ── append_turn_detail ────────────────────────────────────────────────────────
+
+
+def test_append_turn_detail_writes_full_prompt_and_response(tmp_path: Path) -> None:
+    session = _make_session()
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        SessionStore.append_turn_detail(
+            session.session_id,
+            "chat",
+            "how do I debug high CPU?",
+            response="Root cause is a memory leak.",
+            turn_id="abc-123",
+            model="claude-3-5",
+            provider="anthropic",
+            latency_ms=1500,
+        )
+
+    records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
+    detail = next(r for r in records if r["type"] == "turn_detail")
+    assert detail["kind"] == "chat"
+    assert detail["prompt"] == "how do I debug high CPU?"
+    assert detail["response"] == "Root cause is a memory leak."
+    assert detail["turn_id"] == "abc-123"
+    assert detail["model"] == "claude-3-5"
+    assert detail["provider"] == "anthropic"
+    assert detail["latency_ms"] == 1500
+
+
+def test_append_turn_detail_omits_none_fields(tmp_path: Path) -> None:
+    session = _make_session()
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        SessionStore.append_turn_detail(session.session_id, "chat", "hi")
+
+    records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
+    detail = next(r for r in records if r["type"] == "turn_detail")
+    assert "response" not in detail
+    assert "turn_id" not in detail
+    assert "model" not in detail
+
+
+def test_append_turn_detail_noop_when_file_missing(tmp_path: Path) -> None:
+    with _patch_dir(tmp_path):
+        SessionStore.append_turn_detail("nonexistent-id", "chat", "hi")
+    assert not list(tmp_path.glob("*.jsonl"))
 
 
 # ── flush ─────────────────────────────────────────────────────────────────────
@@ -112,6 +161,36 @@ def test_flush_writes_session_end(tmp_path: Path) -> None:
     assert end["investigation_turns"] == 1
 
 
+def test_flush_writes_conversation_snapshot_when_messages_present(tmp_path: Path) -> None:
+    session = _make_session()
+    session.cli_agent_messages = [("user", "hello"), ("assistant", "hi there")]
+    session.accumulated_context = {"service": "api", "cluster": "prod"}
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        SessionStore.append_turn(session, "chat", "hello")
+        SessionStore.flush(session)
+
+    records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
+    snapshot = next((r for r in records if r["type"] == "conversation_snapshot"), None)
+    assert snapshot is not None
+    assert snapshot["cli_agent_messages"] == [["user", "hello"], ["assistant", "hi there"]]
+    assert snapshot["accumulated_context"] == {"service": "api", "cluster": "prod"}
+    # snapshot must come before session_end
+    types = [r["type"] for r in records]
+    assert types.index("conversation_snapshot") < types.index("session_end")
+
+
+def test_flush_skips_snapshot_when_no_messages(tmp_path: Path) -> None:
+    session = _make_session()
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        SessionStore.append_turn(session, "chat", "hi")
+        SessionStore.flush(session)
+
+    records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
+    assert not any(r["type"] == "conversation_snapshot" for r in records)
+
+
 def test_flush_deletes_file_when_no_turns(tmp_path: Path) -> None:
     session = _make_session()
     with _patch_dir(tmp_path):
@@ -119,6 +198,17 @@ def test_flush_deletes_file_when_no_turns(tmp_path: Path) -> None:
         SessionStore.flush(session)
 
     assert not (tmp_path / f"{session.session_id}.jsonl").exists()
+
+
+def test_flush_keeps_file_when_only_turn_details(tmp_path: Path) -> None:
+    session = _make_session()
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        # turn_detail only (no stub) — should NOT delete the file
+        SessionStore.append_turn_detail(session.session_id, "chat", "hello", response="hi")
+        SessionStore.flush(session)
+
+    assert (tmp_path / f"{session.session_id}.jsonl").exists()
 
 
 def test_flush_noop_when_file_missing(tmp_path: Path) -> None:
@@ -197,6 +287,31 @@ def test_load_recent_uses_session_end_stats_when_available(tmp_path: Path) -> No
     assert results[0]["duration_secs"] is not None
 
 
+def test_load_recent_reports_has_snapshot_true(tmp_path: Path) -> None:
+    session = _make_session()
+    session.cli_agent_messages = [("user", "hi"), ("assistant", "hello")]
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        SessionStore.append_turn(session, "chat", "hi")
+        SessionStore.flush(session)
+
+        results = SessionStore.load_recent()
+
+    assert results[0]["has_snapshot"] is True
+
+
+def test_load_recent_reports_has_snapshot_false_without_conversation(tmp_path: Path) -> None:
+    session = _make_session()
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        SessionStore.append_turn(session, "chat", "hi")
+        SessionStore.flush(session)
+
+        results = SessionStore.load_recent()
+
+    assert results[0]["has_snapshot"] is False
+
+
 def test_load_recent_returns_newest_first(tmp_path: Path) -> None:
     for started in ["2024-01-01T10:00:00+00:00", "2024-01-02T10:00:00+00:00"]:
         sid = str(uuid.uuid4())
@@ -252,6 +367,107 @@ def test_load_recent_respects_n_limit(tmp_path: Path) -> None:
 
     with _patch_dir(tmp_path):
         assert len(SessionStore.load_recent(n=3)) == 3
+
+
+# ── load_session ──────────────────────────────────────────────────────────────
+
+
+def test_load_session_returns_none_for_missing_prefix(tmp_path: Path) -> None:
+    with _patch_dir(tmp_path):
+        assert SessionStore.load_session("nonexistent") is None
+
+
+def test_load_session_returns_none_when_no_dir(tmp_path: Path) -> None:
+    with _patch_dir(tmp_path / "missing"):
+        assert SessionStore.load_session("abc") is None
+
+
+def test_load_session_restores_from_conversation_snapshot(tmp_path: Path) -> None:
+    session = _make_session()
+    session.cli_agent_messages = [("user", "how is prod?"), ("assistant", "prod is healthy")]
+    session.accumulated_context = {"service": "api"}
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        SessionStore.append_turn(session, "chat", "how is prod?")
+        SessionStore.flush(session)
+
+        data = SessionStore.load_session(session.session_id[:8])
+
+    assert data is not None
+    assert data["has_snapshot"] is True
+    assert data["cli_agent_messages"] == [
+        ("user", "how is prod?"),
+        ("assistant", "prod is healthy"),
+    ]
+    assert data["accumulated_context"] == {"service": "api"}
+
+
+def test_load_session_fallback_to_turn_details_when_no_snapshot(tmp_path: Path) -> None:
+    session = _make_session()
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        SessionStore.append_turn_detail(
+            session.session_id, "chat", "debug high CPU", response="It's a leak"
+        )
+        # Flush without cli_agent_messages — no snapshot written
+        SessionStore.flush(session)
+
+        data = SessionStore.load_session(session.session_id[:8])
+
+    assert data is not None
+    assert data["has_snapshot"] is False
+    messages = data["cli_agent_messages"]
+    assert ("user", "debug high CPU") in messages
+    assert ("assistant", "It's a leak") in messages
+
+
+def test_load_session_ambiguous_prefix_returns_none(tmp_path: Path) -> None:
+    # Two sessions sharing the same prefix
+    for _ in range(2):
+        sid = "aaaabbbb" + str(uuid.uuid4())[8:]
+        (tmp_path / f"{sid}.jsonl").write_text(
+            json.dumps(
+                {
+                    "type": "session_start",
+                    "session_id": sid,
+                    "started_at": "2024-01-01T10:00:00+00:00",
+                }
+            )
+            + "\n"
+        )
+    with _patch_dir(tmp_path):
+        result = SessionStore.load_session("aaaa")
+    assert result is None
+
+
+def test_load_session_includes_history_and_turn_details(tmp_path: Path) -> None:
+    session = _make_session()
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        SessionStore.append_turn(session, "chat", "hello")
+        SessionStore.append_turn_detail(session.session_id, "chat", "hello", response="hi")
+        SessionStore.flush(session)
+
+        data = SessionStore.load_session(session.session_id)
+
+    assert data is not None
+    assert len(data["history"]) == 1
+    assert data["history"][0]["kind"] == "chat"
+    assert len(data["turn_details"]) == 1
+    assert data["turn_details"][0]["response"] == "hi"
+
+
+def test_load_session_matches_full_id(tmp_path: Path) -> None:
+    session = _make_session()
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        SessionStore.append_turn(session, "chat", "hi")
+        SessionStore.flush(session)
+
+        data = SessionStore.load_session(session.session_id)
+
+    assert data is not None
+    assert data["session_id"] == session.session_id
 
 
 # ── /reset lifecycle ──────────────────────────────────────────────────────────

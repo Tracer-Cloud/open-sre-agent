@@ -207,6 +207,16 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks about remote deployment status, health, or operations",
         anti_examples=("Vague connect to X without remote/hosted context (assistant_handoff)",),
     ),
+    "/resume": _mcp(
+        "Restore the conversation context from a previous session. "
+        "Pass the first 8+ characters of the session ID shown by /sessions.",
+        "User asks to resume or continue a previous session by session ID",
+        "User wants to pick up where they left off in an earlier REPL session",
+        anti_examples=(
+            "User asks to list sessions (use /sessions)",
+            "User asks to reset the current session (use /reset)",
+        ),
+    ),
     "/reset": _mcp(
         "Clear session state while preserving trust mode.",
         "User asks to reset session state or start fresh in the REPL",

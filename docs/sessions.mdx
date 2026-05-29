@@ -1,6 +1,6 @@
 ---
 title: 'Session History'
-description: 'How OpenSRE records your REPL sessions locally, what is stored, and how to view past sessions with /sessions'
+description: 'How OpenSRE records your REPL sessions locally, what is stored, and how to resume past sessions with /sessions and /resume'
 ---
 
 ## Overview
@@ -9,6 +9,7 @@ Every time you start the OpenSRE interactive shell, a new session is created and
 
 - When it started and how long it lasted
 - Every interaction — chats, investigations, slash commands, incoming alerts
+- Full prompt and response text for each LLM turn (for `/resume`)
 - Aggregate counts (total turns, investigations run)
 
 Sessions are stored as JSONL files under `~/.opensre/sessions/`. They are written **incrementally** — the file exists on disk from the moment the REPL starts, so `/sessions` always shows the current session alongside past ones.
@@ -18,10 +19,11 @@ Sessions are stored as JSONL files under `~/.opensre/sessions/`. They are writte
 | Event | What happens |
 | --- | --- |
 | REPL starts | `session_start` record written immediately; file created at `~/.opensre/sessions/<session-id>.jsonl` |
-| Each interaction | One `turn` record appended to the open file |
-| `/reset` | Current session closed (`session_end` written); new session file opened with a fresh ID |
-| REPL exits | `session_end` written; file is deleted if no turns were recorded (empty session) |
-| REPL crash | File remains with all turns up to the crash but no `session_end` — stats computed from the turn records |
+| Each interaction | One `turn` stub appended for stats |
+| Each LLM reply | One `turn_detail` record appended with full prompt + response |
+| `/reset` | Current session closed (`conversation_snapshot` + `session_end` written); new session file opened with a fresh ID |
+| REPL exits | `conversation_snapshot` + `session_end` written; file deleted if no turns were recorded |
+| REPL crash | File remains with all turns up to the crash but no `session_end` — stats computed from turn records; `/resume` falls back to `turn_detail` records |
 
 ## Session file format
 
@@ -38,7 +40,7 @@ Each session is a JSONL file (one JSON object per line).
 }
 ```
 
-**`turn` — one per interaction**
+**`turn` — one per interaction (stats stub)**
 
 ```json
 {
@@ -58,7 +60,41 @@ Turn `kind` values:
 | `slash` | Slash command (`/status`, `/reset`, etc.) |
 | `shell` | Shell command executed via the terminal runtime |
 
-Text is truncated to 200 characters. No response content is stored — only the prompt/input.
+**`turn_detail` — full prompt + response (written after each LLM turn)**
+
+```json
+{
+  "type": "turn_detail",
+  "kind": "chat",
+  "turn_id": "9f1e2a3b-...",
+  "prompt": "why is CPU spiking on prod-api?",
+  "response": "Root cause: the JVM heap is exhausted due to a connection pool leak...",
+  "model": "claude-3-5-sonnet",
+  "provider": "anthropic",
+  "latency_ms": 2341
+}
+```
+
+`turn_detail` kind values mirror `turn` kinds: `chat`, `alert`, `follow_up`.
+These records make session files self-contained — `/resume` can restore conversation context from them even without a `conversation_snapshot`.
+
+**`conversation_snapshot` — written at clean exit or `/reset`**
+
+```json
+{
+  "type": "conversation_snapshot",
+  "cli_agent_messages": [
+    ["user", "why is CPU spiking?"],
+    ["assistant", "Root cause: ..."]
+  ],
+  "accumulated_context": {
+    "service": "prod-api",
+    "cluster": "us-east-1"
+  }
+}
+```
+
+This record captures the exact LLM conversation thread and accumulated infra context for `/resume`. It is the preferred source for restoration — more reliable than reconstructing from `turn_detail` records.
 
 **`session_end` — last line (when session closed cleanly)**
 
@@ -73,7 +109,7 @@ Text is truncated to 200 characters. No response content is stored — only the 
 }
 ```
 
-A session without a `session_end` record (crash or ongoing) is still valid — `/sessions` computes `total_turns`, `chat_turns`, and `investigation_turns` by scanning the `turn` records directly.
+A session without a `session_end` record (crash or ongoing) is still valid — `/sessions` computes stats by scanning the `turn` records directly, and `/resume` falls back to `turn_detail` reconstruction.
 
 ## /sessions command
 
@@ -98,6 +134,41 @@ The current session is marked `(current)` with a live-updating elapsed time. Ses
 
 Up to 20 sessions are shown, newest first.
 
+## /resume command
+
+Restore the conversation context from a past session into the current REPL:
+
+```
+/resume <session-id-prefix>
+```
+
+The first 8 characters of a session ID (shown by `/sessions`) are enough:
+
+```
+/resume 9b2e4f7a
+```
+
+```
+resumed session 9b2e4f7a (14 messages from snapshot)
+accumulated context restored: cluster=us-east-1, service=prod-api
+conversation context loaded — continue asking questions.
+```
+
+**What `/resume` restores:**
+
+| Field | Restored |
+| --- | --- |
+| LLM conversation thread (`cli_agent_messages`) | Yes — from `conversation_snapshot` or `turn_detail` fallback |
+| Accumulated infra context (service, cluster, region) | Yes — from `conversation_snapshot` |
+| Turn history (`/status` display) | No — current session keeps its own history |
+| Trust mode, reasoning effort | No — these are session preferences, not conversation state |
+
+**Restoration order:**
+1. `conversation_snapshot` record — written at clean exit, exact fidelity
+2. `turn_detail` records — fallback for old files or sessions that crashed before flush
+
+If the prefix matches multiple sessions, `/resume` asks for more characters. If the session has no conversation content (slash-command-only session), a warning is shown.
+
 ## Storage location
 
 ```
@@ -112,13 +183,13 @@ Each file is named after its UUID session ID. Files are plain text and human-rea
 
 ## What is NOT stored
 
-- LLM response content (stored separately in `~/.opensre/prompt_log.jsonl` if prompt logging is enabled)
-- Full alert payloads or investigation results (stored in `~/.opensre/investigations/`)
 - Secrets or credentials — session text is stored as typed; enable prompt log redaction if needed
+- Full investigation results (stored in `~/.opensre/investigations/`)
+- Token counts — tracked in `~/.opensre/prompt_log.jsonl` (prompt logging must be enabled)
 
 ## Linking sessions to other data
 
-The `session_id` in each session file matches the `session_id` field in `~/.opensre/prompt_log.jsonl`. This means you can correlate a session's turn list with the full prompt/response pairs and token usage recorded in the prompt log.
+The `session_id` in each session file matches the `session_id` field in `~/.opensre/prompt_log.jsonl`. This means you can correlate a session's turn list with token usage and latency recorded in the prompt log.
 
 ```bash
 # Find all prompt log entries for a given session
