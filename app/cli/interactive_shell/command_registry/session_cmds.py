@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+from collections import deque
 
 from rich.console import Console
 from rich.markup import escape
@@ -432,13 +433,13 @@ def _render_resumed_session_history(
     console.print(f"[{DIM}]─── conversation history ─────────────────────────────────[/]")
 
     if history:
-        assistant_by_user: dict[str, str] = {}
+        assistant_by_user: dict[str, deque[str]] = {}
         pending_user: str | None = None
         for role, text in messages:
             if role == "user":
                 pending_user = text
             elif role == "assistant" and pending_user is not None:
-                assistant_by_user.setdefault(pending_user, text)
+                assistant_by_user.setdefault(pending_user, deque()).append(text)
                 pending_user = None
 
         for rec in history:
@@ -450,7 +451,10 @@ def _render_resumed_session_history(
             if kind not in _HISTORY_DISPLAY_CHAT_KINDS or not text:
                 continue
             console.print(f"[bold {HIGHLIGHT}]❯[/] {escape(text)}")
-            response = _response_for_prompt(turn_details, text) or assistant_by_user.get(text, "")
+            response = _response_for_prompt(turn_details, text)
+            if not response:
+                queued = assistant_by_user.get(text)
+                response = queued.popleft() if queued else ""
             if response:
                 render_response_header(console, "assistant")
                 with console.use_theme(MARKDOWN_THEME):
@@ -495,6 +499,8 @@ def _apply_resume_data(
             console.print(
                 f"[{DIM}]tip: turn_detail records are only written when prompt logging is enabled.[/]"
             )
+        if slash_command:
+            session.record("slash", slash_command, ok=False)
         return True
 
     existing = session.cli_agent_messages
