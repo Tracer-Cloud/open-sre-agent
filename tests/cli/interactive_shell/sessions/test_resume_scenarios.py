@@ -106,12 +106,16 @@ class TestResumeScenarioMatrix:
             )
 
         target_turns = _read_turns(isolated_sessions / f"{target_id}.jsonl")
-        assert any(t.get("kind") == "slash" and t.get("text", "").startswith("/resume") for t in target_turns)
+        assert any(
+            t.get("kind") == "slash" and t.get("text", "").startswith("/resume")
+            for t in target_turns
+        )
         assert session.cli_agent_messages[0] == ("user", "why is redis slow?")
         assert session.accumulated_context == {"service": "redis"}
 
     def test_scenario_post_resume_slash_and_chat_append_to_target(
-        self, isolated_sessions: Path,
+        self,
+        isolated_sessions: Path,
     ) -> None:
         """After /resume, further slash commands and chat turns land on the same file."""
         target_id = "bbbb2222-3333-4444-5555-666677778888"
@@ -130,10 +134,14 @@ class TestResumeScenarioMatrix:
         assert "slash" in kinds
         assert kinds.count("slash") >= 2
         assert "chat" in kinds
-        assert target_path.read_text(encoding="utf-8").strip().splitlines()[-1].find("session_end") == -1
+        assert (
+            target_path.read_text(encoding="utf-8").strip().splitlines()[-1].find("session_end")
+            == -1
+        )
 
     def test_scenario_empty_starter_session_removed_on_resume(
-        self, isolated_sessions: Path,
+        self,
+        isolated_sessions: Path,
     ) -> None:
         """A brand-new REPL with no turns should not leave a junk file after /resume."""
         target_id = "cccc3333-4444-5555-6666-777788889999"
@@ -166,7 +174,8 @@ class TestResumeScenarioMatrix:
         assert any(t.get("text") == "/resume OOM" for t in target_turns)
 
     def test_scenario_resume_not_found_records_on_current(
-        self, isolated_sessions: Path,
+        self,
+        isolated_sessions: Path,
     ) -> None:
         session = ReplSession()
         current_id = session.session_id
@@ -183,7 +192,8 @@ class TestResumeScenarioMatrix:
         assert session.history[-1]["ok"] is False
 
     def test_scenario_resume_current_session_guard(
-        self, isolated_sessions: Path,
+        self,
+        isolated_sessions: Path,
     ) -> None:
         session = ReplSession()
         _open_current(session)
@@ -198,7 +208,8 @@ class TestResumeScenarioMatrix:
         assert any(t.get("text", "").startswith("/resume") for t in turns)
 
     def test_scenario_resume_empty_target_does_not_switch(
-        self, isolated_sessions: Path,
+        self,
+        isolated_sessions: Path,
     ) -> None:
         empty_id = "eeee5555-6666-7777-8888-999900001111"
         path = isolated_sessions / f"{empty_id}.jsonl"
@@ -227,7 +238,8 @@ class TestResumeScenarioMatrix:
         assert "no conversation to resume" in buf.getvalue()
 
     def test_scenario_chain_resume_two_targets(
-        self, isolated_sessions: Path,
+        self,
+        isolated_sessions: Path,
     ) -> None:
         """Resume session A, then resume session B — each gets its own /resume slash turn."""
         id_a = "ffff6666-7777-8888-9999-000011112222"
@@ -252,7 +264,8 @@ class TestResumeScenarioMatrix:
         assert session.cli_agent_messages[0] == ("user", "session B question")
 
     def test_scenario_active_session_with_turns_flushed_without_resume_slash(
-        self, isolated_sessions: Path,
+        self,
+        isolated_sessions: Path,
     ) -> None:
         """Switching away from a session that had real turns preserves them without /resume."""
         target_id = "22228888-9999-0000-1111-222233334444"
@@ -269,7 +282,9 @@ class TestResumeScenarioMatrix:
         old_turns = _read_turns(isolated_sessions / f"{current_id}.jsonl")
         assert any(t["kind"] == "chat" for t in old_turns)
         assert not any(t.get("kind") == "slash" for t in old_turns)
-        assert (isolated_sessions / f"{current_id}.jsonl").read_text(encoding="utf-8").find("session_end") != -1
+        assert (isolated_sessions / f"{current_id}.jsonl").read_text(encoding="utf-8").find(
+            "session_end"
+        ) != -1
 
 
 @pytest.mark.integration

@@ -1474,7 +1474,6 @@ class TestResumeCommand:
         assert "what is opensre?" in output
         assert "OpenSRE is a tool" in output
 
-
     def test_planner_llm_error_persisted_to_cli_agent_messages(self) -> None:
         """PlannerLLMError must be added to cli_agent_messages so /resume can show it."""
         from unittest.mock import patch

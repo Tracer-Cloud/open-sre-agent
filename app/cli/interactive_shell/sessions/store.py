@@ -104,7 +104,8 @@ class SessionStore:
             if not lines:
                 return False
             with contextlib.suppress(json.JSONDecodeError):
-                return json.loads(lines[-1]).get("type") == "session_end"
+                record = json.loads(lines[-1])
+                return isinstance(record, dict) and record.get("type") == "session_end"
         return False
 
     @staticmethod
