@@ -6,30 +6,12 @@
 - Run **`uv run opensre …`** from the repo root while developing — preferred approach, uses this checkout even if another `opensre` is on your `PATH`.
 - Use **`uv run python …`** for any Python commands.
 
-## Lint & Format
-
-- Lint: `make lint` (or fix: `ruff check app/ tests/ --fix`)
-- Format check: `make format-check`
-- Auto-format locally: `make format`
-- Type check: `make typecheck`
-- One-shot quality gate: `make check`
-
-## Testing
-
-- Test: `make test-cov`
-- Test real alerts: `make test-rca`
-
 ## Code Style
 
 - Use strict typing, follow DRY principle
 - One clear purpose per file (separation of concerns)
 
-### Before Push
-
-Before any push or PR creation, follow the mandatory checklist in [CI.md](CI.md).
-
-- `CI.md` is the source of truth for push/PR readiness.
-- Do not skip required checks.
+Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typecheck, and test commands all live there.
 
 ## 1. Repo Map
 
@@ -47,7 +29,7 @@ Before any push or PR creation, follow the mandatory checklist in [CI.md](CI.md)
 | `docs/investigation-tool-calling.md` | Investigation ReAct tool schemas, LLM invoke payloads, and message shapes (all providers). |
 | `SETUP.md`            | Machine setup (all platforms, Windows, MCP/OpenClaw, troubleshooting).                             |
 | `CI.md`               | Mandatory pre-push checklist: lint, format, typecheck, tests — agents MUST follow before pushing. |
-| `TESTING.md`          | Full testing guide: commands, test layout, `ReplDriver` for live REPL verification.               |
+| `TESTING.md`          | Test layout, `ReplDriver` for live REPL verification, routing rules, and CI-only path notes.      |
 | `CONTRIBUTING.md`     | Contribution workflow, branch/PR guidance, and quality expectations.                               |
 
 `app/` one level deeper:
@@ -188,5 +170,4 @@ When adding a new integration, a PR is only ready when:
 - Docs added under `docs/` and registered in `docs/docs.json` `pages`
 - Screenshot or demo GIF showing the integration working
 - E2E or synthetic test added
-- `make verify-integrations` passes
-- `make lint` and `make typecheck` pass
+- CI checks pass (see [CI.md](CI.md))
