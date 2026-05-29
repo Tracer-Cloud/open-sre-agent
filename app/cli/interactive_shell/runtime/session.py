@@ -49,6 +49,10 @@ class ReplSession:
     started_at: float = field(default_factory=time.time)
     """Unix timestamp of when this session (or post-reset sub-session) began."""
 
+    resumed_from_name: str = ""
+    """Name of the most recently resumed session. Used by /sessions to display a
+    fallback name for the current session before it has its own first turn."""
+
     history: list[dict[str, Any]] = field(default_factory=list)
     """Each entry has type, text, and ok fields for shell, slash, alert, and chat turns."""
 
@@ -200,6 +204,7 @@ class ReplSession:
         """Reset the session to a fresh state (used by /reset)."""
         self.history_generation += 1
         self.history.clear()
+        self.resumed_from_name = ""
         self.last_state = None
         self.last_route_decision = None
         self.last_assistant_intent = None

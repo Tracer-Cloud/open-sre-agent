@@ -45,9 +45,40 @@ def _cmd_reset(session: ReplSession, console: Console, _args: list[str]) -> bool
     from app.cli.interactive_shell.sessions.store import SessionStore
 
     SessionStore.flush(session)  # close current session file
-    session.clear()  # rotate session_id + started_at
+    session.clear()  # rotate session_id + started_at, clears all context
     SessionStore.open_session(session)  # open new session file immediately
     console.print(f"[{DIM}]session state cleared — new session started.[/]")
+    return True
+
+
+def _cmd_new(session: ReplSession, console: Console, _args: list[str]) -> bool:
+    """Start a new session while preserving the current LLM conversation context.
+
+    Unlike /reset (which clears everything), /new keeps cli_agent_messages and
+    accumulated_context so a resumed or in-progress conversation continues
+    seamlessly in a fresh session file with a new session ID.
+    """
+    from app.cli.interactive_shell.sessions.store import SessionStore
+
+    # Snapshot what we want to carry forward before clear() wipes it.
+    saved_messages = list(session.cli_agent_messages)
+    saved_context = dict(session.accumulated_context)
+    saved_resumed_name = session.resumed_from_name
+
+    SessionStore.flush(session)  # close current session file
+    session.clear()  # rotate session_id + started_at, clear all state
+
+    # Re-inject the preserved context into the new session.
+    session.cli_agent_messages = saved_messages
+    session.accumulated_context = saved_context
+    session.resumed_from_name = saved_resumed_name
+
+    SessionStore.open_session(session)  # open new session file
+    console.print(
+        f"[{DIM}]new session started[/] [{HIGHLIGHT}]—[/] [{DIM}]conversation context carried forward.[/]"
+    )
+    if saved_messages:
+        console.print(f"[{DIM}]  {len(saved_messages)} messages in context · type to continue[/]")
     return True
 
 
@@ -281,6 +312,10 @@ def _cmd_sessions(session: ReplSession, console: Console, _args: list[str]) -> b
         is_current = sid == session.session_id
 
         name = entry.get("name") or ""
+        # For the current session with no own turns yet, fall back to the name
+        # of the most recently resumed session so the user has context.
+        if is_current and not name and session.resumed_from_name:
+            name = f"↩ {session.resumed_from_name}"
         if is_current:
             name_col = f"[{DIM}](current)[/]" if not name else f"{escape(name)} [{DIM}](current)[/]"
         else:
@@ -392,18 +427,33 @@ def _apply_resume_data(data: dict, session: ReplSession, console: Console) -> bo
     if history:
         session.history = list(history) + session.history
 
+    # Store the resumed session's name so /sessions can display it for the current
+    # session before it has accumulated its own first turn.
+    session.resumed_from_name = name
+
+    # ── Print full conversation so the user knows what context was loaded ──────
     source = "snapshot" if has_snapshot else "turn records"
     name_str = f" · {escape(name)}" if name else ""
     console.print(
         f"[{HIGHLIGHT}]resumed session {short_id}{name_str}[/] "
         f"[{DIM}]({len(messages)} messages from {source})[/]"
     )
+    console.print(f"[{DIM}]─── conversation history ────────────────────────────────────[/]")
+    for role, text in messages:
+        if role == "user":
+            console.print(f"[{HIGHLIGHT}]you[/]  {escape(text)}")
+        else:
+            console.print(f"[{DIM}]sre[/]  {escape(text)}")
+    console.print(f"[{DIM}]─────────────────────────────────────────────────────────────[/]")
+
     if context:
         console.print(
             f"[{DIM}]accumulated context restored:[/] "
             + ", ".join(f"{escape(k)}={escape(str(v))}" for k, v in sorted(context.items()))
         )
-    console.print(f"[{DIM}]conversation context loaded — continue asking questions.[/]")
+    console.print(
+        f"[{DIM}]tip: type[/] [{HIGHLIGHT}]/new[/] [{DIM}]to start a clean session that continues this context.[/]"
+    )
     return True
 
 
@@ -435,6 +485,15 @@ def _cmd_resume(session: ReplSession, console: Console, args: list[str]) -> bool
         return True
 
     prefix = args[0].strip()
+
+    # Guard: resuming the active session onto itself is a no-op at best.
+    if session.session_id.startswith(prefix):
+        console.print(
+            f"[{DIM}]session {prefix[:8]} is the current session — "
+            "run /sessions to pick a previous one.[/]"
+        )
+        return True
+
     data = None
 
     # Try ID prefix first, then fall back to name substring match
@@ -514,6 +573,15 @@ COMMANDS: list[SlashCommand] = [
             "Bare /resume opens an interactive session picker in a TTY.",
             "Accepts a session ID prefix or a name substring (e.g. /resume redis).",
             "Replaces the current session's LLM conversation context; warns if messages exist.",
+        ),
+    ),
+    SlashCommand(
+        "/new",
+        "Start a new session while keeping the current conversation context.",
+        _cmd_new,
+        notes=(
+            "Unlike /reset, /new preserves cli_agent_messages and accumulated infra context.",
+            "Use after /resume to continue a conversation in a clean session file.",
         ),
     ),
 ]

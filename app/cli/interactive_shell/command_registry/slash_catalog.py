@@ -207,6 +207,17 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks about remote deployment status, health, or operations",
         anti_examples=("Vague connect to X without remote/hosted context (assistant_handoff)",),
     ),
+    "/new": _mcp(
+        "Start a new session while preserving the current LLM conversation context and "
+        "accumulated infra context. Unlike /reset (which clears everything), /new keeps "
+        "the conversation thread so you can continue seamlessly in a fresh session file.",
+        "User wants to continue a conversation in a new session after /resume",
+        "User asks to start a new session without losing their current conversation",
+        anti_examples=(
+            "User wants to clear everything and start fresh (use /reset)",
+            "User asks to list sessions (use /sessions)",
+        ),
+    ),
     "/resume": _mcp(
         "Restore the conversation context from a previous session. "
         "Bare /resume opens an interactive numbered picker. "
