@@ -87,9 +87,7 @@ def test_format_tool_trace_entry_populates_fields_and_collapses_previews() -> No
     assert format_tool_trace_entry({"key": "fallback"}).startswith("- `fallback`")
     assert format_tool_trace_entry({}).startswith("- `tool` (iteration None)")
     assert format_tool_trace_entry({"loop_iteration": -1}).startswith("- `tool` (seed)")
-    assert format_tool_trace_entry({"loop_iteration": 2}).startswith(
-        "- `tool` (iteration 2)"
-    )
+    assert format_tool_trace_entry({"loop_iteration": 2}).startswith("- `tool` (iteration 2)")
 
     entry = {
         "tool_name": "kubernetes_logs",
