@@ -104,11 +104,9 @@ class ReplDriver:
     def close(self, exit_wait: float = 3.0) -> None:
         """Send /exit and wait for the process to finish."""
         if self._master is not None and self._proc is not None:
-            try:
+            with contextlib.suppress(OSError):
                 os.write(self._master, b"/exit\n")
                 self._drain(exit_wait)
-            except OSError:
-                pass
         if self._proc is not None:
             try:
                 self._proc.wait(timeout=5)
