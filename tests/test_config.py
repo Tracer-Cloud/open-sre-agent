@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.config import LLMSettings, has_credentials_for_active_llm_provider
+from app.config import LLMSettings, has_credentials_for_active_llm_provider, resolve_llm_settings
 
 
 def test_llm_settings_reject_provider_typos_with_suggestion() -> None:
@@ -40,6 +40,39 @@ def test_llm_settings_require_minimax_api_key() -> None:
         LLMSettings.model_validate({"provider": "minimax"})
 
 
+def test_llm_settings_require_deepseek_api_key() -> None:
+    with pytest.raises(ValidationError, match="DEEPSEEK_API_KEY"):
+        LLMSettings.model_validate({"provider": "deepseek"})
+
+
+def test_llm_settings_deepseek_provider_accepted() -> None:
+    settings = LLMSettings.model_validate(
+        {
+            "provider": "deepseek",
+            "deepseek_api_key": "ds-test-key",
+        }
+    )
+    assert settings.provider == "deepseek"
+    assert settings.deepseek_api_key == "ds-test-key"
+    assert settings.deepseek_reasoning_model == "deepseek-v4-pro"
+    assert settings.deepseek_classification_model == "deepseek-v4-flash"
+    assert settings.deepseek_toolcall_model == "deepseek-v4-flash"
+
+
+def test_llm_settings_from_env_deepseek(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "deepseek")
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "app.config.resolve_llm_api_key",
+        lambda env_var: "ds-stored-key" if env_var == "DEEPSEEK_API_KEY" else "",
+    )
+
+    settings = LLMSettings.from_env()
+
+    assert settings.provider == "deepseek"
+    assert settings.deepseek_api_key == "ds-stored-key"
+
+
 def test_llm_settings_minimax_provider_accepted() -> None:
     settings = LLMSettings.model_validate(
         {
@@ -65,6 +98,21 @@ def test_llm_settings_from_env_minimax(monkeypatch) -> None:
 
     assert settings.provider == "minimax"
     assert settings.minimax_api_key == "mm-stored-key"
+
+
+@pytest.mark.parametrize(
+    "raw_host, expected",
+    [
+        ("localhost:11434", "http://localhost:11434"),
+        ("192.168.1.5:11434", "http://192.168.1.5:11434"),
+        ("my-server:11434", "http://my-server:11434"),
+        ("http://localhost:11434", "http://localhost:11434"),
+        ("https://ollama.internal", "https://ollama.internal"),
+    ],
+)
+def test_llm_settings_ollama_host_protocol_normalized(raw_host: str, expected: str) -> None:
+    settings = LLMSettings.model_validate({"provider": "ollama", "ollama_host": raw_host})
+    assert settings.ollama_host == expected
 
 
 def test_llm_settings_from_env_max_tokens_override(monkeypatch) -> None:
@@ -141,6 +189,23 @@ def test_has_credentials_for_active_llm_provider_missing_key(monkeypatch) -> Non
     monkeypatch.setattr("app.config.resolve_llm_api_key", lambda _: "")
 
     assert has_credentials_for_active_llm_provider() is False
+
+
+def test_resolve_llm_settings_falls_back_to_openai_when_default_anthropic_key_missing(
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "app.config.resolve_llm_api_key",
+        lambda env_var: "sk-openai" if env_var == "OPENAI_API_KEY" else "",
+    )
+
+    settings = resolve_llm_settings()
+
+    assert settings.provider == "openai"
+    assert settings.openai_api_key == "sk-openai"
+    assert has_credentials_for_active_llm_provider() is True
 
 
 def test_has_credentials_for_active_llm_provider_with_key(monkeypatch) -> None:

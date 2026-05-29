@@ -5,13 +5,13 @@ from __future__ import annotations
 import time
 from typing import Any, cast
 
-from app.alerts import normalize_alert_payload
 from app.integrations.opensre.hf_remote import (
     extract_openrca_scoring_points,
     strip_scoring_points_from_alert,
 )
 from app.state.agent_state import AgentState, AgentStateModel
 from app.state.types import ChatMessage
+from app.utils.alert_normalization import normalize_alert_payload
 
 STATE_DEFAULTS: dict[str, Any] = {
     "mode": "chat",
@@ -46,6 +46,8 @@ STATE_DEFAULTS: dict[str, Any] = {
     "slack_context": {},
     "discord_context": {},
     "telegram_context": {},
+    "whatsapp_context": {},
+    "twilio_sms_context": {},
     "openclaw_context": {},
     "thread_id": "",
     "run_id": "",

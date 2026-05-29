@@ -53,9 +53,8 @@ from app.config import LLMSettings
 from app.version import get_version
 
 # ── Splash art ───────────────────────────────────────────────────────────────
-# Pre-rendered by oh-my-logo (devDependency, see package.json) at build time.
+# Pre-rendered during development and checked into this module as a static string.
 # Colour codes are stripped; HIGHLIGHT is re-applied at render time.
-# Regenerate with: npm run regen-splash  (or: node scripts/regen_splash.js)
 #
 # SPLASH_ART         block font, 59 cols, solid ██ fills
 # SPLASH_ART_NARROW  simpleBlock font, 72 cols, pure ASCII fallback
@@ -95,7 +94,7 @@ def _render_art(console_width: int = 80) -> str:
     custom_font = os.getenv("OPENSRE_FIGLET_FONT")
     if custom_font:
         try:
-            import pyfiglet  # type: ignore[import-untyped,import-not-found]
+            import pyfiglet
 
             rendered: str = pyfiglet.figlet_format("OpenSRE", font=custom_font).rstrip()
             if rendered and all(len(ln) <= console_width - 2 for ln in rendered.splitlines()):
@@ -122,11 +121,20 @@ def _render_art(console_width: int = 80) -> str:
 
 def resolve_provider_models(settings: object, provider: str) -> tuple[str, str]:
     """Return the active (reasoning_model, toolcall_model) for a provider."""
-    if provider in {"codex", "claude-code", "gemini-cli", "cursor", "kimi", "opencode"}:
+    if provider in {
+        "codex",
+        "claude-code",
+        "gemini-cli",
+        "antigravity-cli",
+        "cursor",
+        "kimi",
+        "opencode",
+    }:
         env_key = {
             "codex": "CODEX_MODEL",
             "claude-code": "CLAUDE_CODE_MODEL",
             "gemini-cli": "GEMINI_CLI_MODEL",
+            "antigravity-cli": "ANTIGRAVITY_CLI_MODEL",
             "cursor": "CURSOR_MODEL",
             "kimi": "KIMI_MODEL",
             "opencode": "OPENCODE_MODEL",
@@ -251,16 +259,124 @@ def render_splash(console: Console | None = None, *, first_run: bool | None = No
 
 # ── Agent ready-state box ─────────────────────────────────────────────────────
 
-# Static copy for the right column. Keep entries terse — they must read as a
-# scannable list, not paragraphs, and fit within ``_RIGHT_COL_WIDTH`` characters
-# (the column truncates with `…` past that width). Update _WHATS_NEW with each
-# user-visible change worth surfacing on launch.
+# Static copy for the right column (first-run only). Keep entries terse.
 _TIPS: tuple[str, ...] = (
     "Paste alert JSON or describe an incident",
     "Type /help to list slash commands",
     "Run /doctor for environment diagnostics",
-    "Use /investigate <file> for file alerts",
+    "Use /investigate for runnable demos/templates",
 )
+
+# Display-name overrides for known integration service slugs.
+_SERVICE_DISPLAY_NAMES: dict[str, str] = {
+    "grafana": "Grafana",
+    "datadog": "Datadog",
+    "honeycomb": "Honeycomb",
+    "coralogix": "Coralogix",
+    "aws": "AWS",
+    "github": "GitHub",
+    "sentry": "Sentry",
+    "prometheus": "Prometheus",
+    "loki": "Loki",
+    "elasticsearch": "Elasticsearch",
+    "bigquery": "BigQuery",
+    "pagerduty": "PagerDuty",
+    "slack": "Slack",
+    "telegram": "Telegram",
+    "signoz": "SigNoz",
+    "jira": "Jira",
+    "gitlab": "GitLab",
+    "vercel": "Vercel",
+    "mongodb": "MongoDB",
+    "postgresql": "PostgreSQL",
+    "mysql": "MySQL",
+    "redis": "Redis",
+    "kafka": "Kafka",
+    "rabbitmq": "RabbitMQ",
+    "clickhouse": "ClickHouse",
+    "mariadb": "MariaDB",
+    "kubernetes": "Kubernetes",
+    "betterstack": "Better Stack",
+    "snowflake": "Snowflake",
+    "newrelic": "New Relic",
+    "opsgenie": "OpsGenie",
+    "linear": "Linear",
+    "supabase": "Supabase",
+}
+
+
+def _load_configured_integrations() -> list[str]:
+    """Return display names for integrations currently configured via env vars. Never raises."""
+    try:
+        from app.integrations.catalog import load_env_integrations  # lazy — avoids circular deps
+
+        records = load_env_integrations()
+        names: list[str] = []
+        for record in records:
+            service = str(record.get("service", "")).strip().lower()
+            if service:
+                names.append(_SERVICE_DISPLAY_NAMES.get(service, service.title()))
+        return list(dict.fromkeys(names))  # deduplicate, preserve order
+    except Exception:
+        return []
+
+
+def _is_alert_listener_active() -> bool:
+    """Return True if the alert listener is enabled in config. Never raises."""
+    try:
+        from app.cli.interactive_shell.config import ReplConfig
+
+        return ReplConfig.load().alert_listener_enabled
+    except Exception:
+        return False
+
+
+def _build_ambient_right_column(session: object = None) -> Text:
+    """Right column for returning users: live integration status and alert listener state."""
+    parts: list[Text] = []
+
+    # Integrations
+    parts.append(Text("Integrations", style=f"bold {BRAND}"))
+    names = _load_configured_integrations()
+    if names:
+        _MAX_SHOWN = 6
+        shown = names[:_MAX_SHOWN]
+        overflow = len(names) - len(shown)
+        name_line = Text(overflow="fold")
+        for idx, name in enumerate(shown):
+            if idx:
+                name_line.append("  ·  ", style=DIM)
+            name_line.append(name, style=SECONDARY)
+        if overflow:
+            name_line.append(f"  +{overflow}", style=DIM)
+        parts.append(name_line)
+    else:
+        parts.append(Text("run /onboard to connect tools", style=DIM))
+
+    parts.append(Text("───", style=DIM))
+
+    # Alert listener
+    parts.append(Text("Alert listener", style=f"bold {BRAND}"))
+    if _is_alert_listener_active():
+        listener_line = Text()
+        listener_line.append("● ", style=f"bold {HIGHLIGHT}")
+        listener_line.append("active", style=SECONDARY)
+        parts.append(listener_line)
+    else:
+        parts.append(Text("○  not configured", style=DIM))
+
+    # Session summary — only shown when /clear is used mid-session with history
+    if session is not None:
+        history: list[object] = getattr(session, "history", [])
+        if history:
+            parts.append(Text("───", style=DIM))
+            parts.append(Text("This session", style=f"bold {BRAND}"))
+            count = len(history)
+            noun = "interaction" if count == 1 else "interactions"
+            parts.append(Text(f"{count} {noun}", style=SECONDARY))
+
+    return Text("\n").join(parts)
+
 
 # Panel geometry. The body switches to a stacked layout on narrow terminals,
 # and otherwise expands to fill the full console width while keeping the left
@@ -385,13 +501,16 @@ def build_ready_panel(
     panel_title.append(f"v{version} ", style=BRAND)
 
     left = _build_identity_block(provider, model, trust_mode=trust_mode)
-    right = Text("\n").join(
-        [
-            _build_notes_block("Tips for getting started", _TIPS),
-            Text("───", style=DIM),
-            _build_notes_block("What's new", WHATS_NEW),
-        ]
-    )
+    if _is_first_run():
+        right = Text("\n").join(
+            [
+                _build_notes_block("Tips for getting started", _TIPS),
+                Text("───", style=DIM),
+                _build_notes_block("What's new", WHATS_NEW),
+            ]
+        )
+    else:
+        right = _build_ambient_right_column(session=session)
 
     body: Group | Table
     if console.width - _PANEL_FRAME_WIDTH >= _MIN_TWO_COLUMN_CONTENT_WIDTH:
@@ -462,7 +581,7 @@ def render_ready_box(
 def render_banner(console: Console | None = None) -> None:
     """Render splash + ready-state box in one call (legacy entry point).
 
-    Existing callers (loop.py _repl_main) continue to work unchanged.
+    Existing callers (runtime.entrypoint.repl_main) continue to work unchanged.
     """
     _console = console or Console(
         highlight=False,

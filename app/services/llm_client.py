@@ -11,7 +11,7 @@ import logging
 import os
 import re
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
@@ -39,12 +39,15 @@ from pydantic import BaseModel, ValidationError
 
 from app.config import (
     ANTHROPIC_LLM_CONFIG,
+    DEEPSEEK_BASE_URL,
     GEMINI_BASE_URL,
+    GROQ_BASE_URL,
+    GROQ_LLM_CONFIG,
     MINIMAX_BASE_URL,
     NVIDIA_BASE_URL,
     OPENAI_LLM_CONFIG,
     OPENROUTER_BASE_URL,
-    LLMSettings,
+    resolve_llm_settings,
 )
 from app.llm_credentials import resolve_llm_api_key
 from app.llm_reasoning_effort import get_active_reasoning_effort
@@ -83,6 +86,61 @@ _RETRY_MAX_ATTEMPTS = 3
 _CLIENT_TIMEOUT_SEC = 60.0
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Usage hook — pluggable observer for cost / token accounting
+# ─────────────────────────────────────────────────────────────────────────────
+# Production stays at None (zero overhead). The benchmark framework registers
+# CostTracker.add so per-cell token usage feeds aggregate cost numbers and
+# the hard-cap budget can halt overruns. The hook must be thread-safe — the
+# framework's parallel cells share one tracker. Streaming (invoke_stream) is
+# not hooked in v1: totals only arrive on the stream's final event and no
+# parallel-cell path streams today.
+
+# Return type is ``object`` (not ``None``) so callables that return a value —
+# e.g. CostTracker.add which returns the per-call cost in USD — can be
+# registered directly without wrapping. The return value is discarded.
+UsageHook = Callable[[str, int, int], object]
+_usage_hook: UsageHook | None = None
+
+
+def set_usage_hook(hook: UsageHook | None) -> None:
+    """Register (or clear with None) the observer fired after each successful invoke.
+
+    The callback receives (model_id, tokens_in, tokens_out). Exceptions
+    propagate — e.g. CostBudgetExceeded from CostTracker cleanly bubbles
+    out of the calling invoke() so the framework can halt the run.
+
+    The hook is a **process-wide singleton** by design — it's the simplest
+    shape that fits the bench runner's pattern (set once before workers,
+    clear in `finally`). To prevent silent shared state when two callers
+    accidentally compete for it, registering a non-None hook over an
+    already-registered hook is rejected.
+
+    If you genuinely need concurrent observation (e.g. two `BenchmarkRunner`
+    instances in the same process), refactor to a per-context registry
+    (contextvars or a list-of-hooks) — out of scope for v1.
+    """
+    global _usage_hook
+    if hook is not None and _usage_hook is not None:
+        raise RuntimeError(
+            "A usage hook is already registered. Either the previous owner "
+            "failed to clear it (call set_usage_hook(None) in a finally), or "
+            "two concurrent users of llm_client are conflicting. See the "
+            "set_usage_hook docstring for the contract."
+        )
+    _usage_hook = hook
+
+
+def _emit_usage(model: str, tokens_in: int | None, tokens_out: int | None) -> None:
+    """Notify the registered hook (if any). No-op when no hook or token counts missing."""
+    hook = _usage_hook
+    if hook is None:
+        return
+    if tokens_in is None and tokens_out is None:
+        return
+    hook(model, int(tokens_in or 0), int(tokens_out or 0))
+
+
 @dataclass(frozen=True)
 class RootCauseResult:
     root_cause: str
@@ -108,6 +166,7 @@ class LLMClient:
         self._model = model
         self._max_tokens = max_tokens
         self._temperature = temperature
+        self._bound_tools: list[dict[str, Any]] = []
 
     def with_config(self, **_kwargs) -> LLMClient:
         return self
@@ -115,7 +174,8 @@ class LLMClient:
     def with_structured_output(self, model: type[BaseModel]) -> StructuredOutputClient:
         return StructuredOutputClient(self, model)
 
-    def bind_tools(self, _tools: list) -> LLMClient:
+    def bind_tools(self, tools: list[dict[str, Any]]) -> LLMClient:
+        self._bound_tools = [dict(item) for item in tools]
         return self
 
     def _ensure_client(self) -> None:
@@ -155,6 +215,8 @@ class LLMClient:
             kwargs["system"] = system
         if self._temperature is not None:
             kwargs["temperature"] = self._temperature
+        if self._bound_tools:
+            kwargs["tools"] = self._bound_tools
         return kwargs
 
     def invoke(self, prompt_or_messages: Any) -> LLMResponse:
@@ -191,7 +253,33 @@ class LLMClient:
         else:
             raise RuntimeError("LLM invocation failed without a concrete error") from last_err
 
-        content = _extract_text(response)
+        if self._bound_tools:
+            tool_calls: list[dict[str, Any]] = []
+            text_parts: list[str] = []
+            for block in getattr(response, "content", []):
+                block_type = getattr(block, "type", None)
+                if block_type == "text":
+                    text_parts.append(str(getattr(block, "text", "")))
+                elif block_type == "tool_use":
+                    tool_calls.append(
+                        {
+                            "name": str(getattr(block, "name", "")),
+                            "arguments": getattr(block, "input", {}),
+                        }
+                    )
+            if tool_calls:
+                payload = {"tool_calls": tool_calls, "text": "".join(text_parts).strip()}
+                content = json.dumps(payload, ensure_ascii=True)
+            else:
+                content = "".join(text_parts).strip() or _extract_text(response)
+        else:
+            content = _extract_text(response)
+        usage = getattr(response, "usage", None)
+        _emit_usage(
+            self._model,
+            getattr(usage, "input_tokens", None) if usage else None,
+            getattr(usage, "output_tokens", None) if usage else None,
+        )
         return LLMResponse(content=content)
 
     def invoke_stream(self, prompt_or_messages: Any) -> Iterator[str]:
@@ -279,6 +367,7 @@ class BedrockLLMClient:
         self._model = model
         self._max_tokens = max_tokens
         self._temperature = temperature
+        self._bound_tools: list[dict[str, Any]] = []
         self._use_anthropic = _is_anthropic_bedrock_model(model)
         self._aws_region = os.getenv("AWS_REGION", os.getenv("AWS_DEFAULT_REGION", "us-east-1"))
 
@@ -297,7 +386,8 @@ class BedrockLLMClient:
     def with_structured_output(self, model: type[BaseModel]) -> StructuredOutputClient:
         return StructuredOutputClient(self, model)
 
-    def bind_tools(self, _tools: list[Any]) -> BedrockLLMClient:
+    def bind_tools(self, tools: list[dict[str, Any]]) -> BedrockLLMClient:
+        self._bound_tools = [dict(item) for item in tools]
         return self
 
     def _invoke_anthropic(self, prompt_or_messages: Any) -> LLMResponse:
@@ -323,6 +413,8 @@ class BedrockLLMClient:
             kwargs["system"] = system
         if self._temperature is not None:
             kwargs["temperature"] = self._temperature
+        if self._bound_tools:
+            kwargs["tools"] = self._bound_tools
 
         backoff_seconds = _RETRY_INITIAL_BACKOFF_SEC
         max_attempts = _RETRY_MAX_ATTEMPTS
@@ -378,7 +470,33 @@ class BedrockLLMClient:
         else:
             raise RuntimeError("Bedrock invocation failed without a concrete error") from last_err
 
-        content = _extract_text(response)
+        if self._bound_tools:
+            tool_calls: list[dict[str, Any]] = []
+            text_parts: list[str] = []
+            for block in getattr(response, "content", []):
+                block_type = getattr(block, "type", None)
+                if block_type == "text":
+                    text_parts.append(str(getattr(block, "text", "")))
+                elif block_type == "tool_use":
+                    tool_calls.append(
+                        {
+                            "name": str(getattr(block, "name", "")),
+                            "arguments": getattr(block, "input", {}),
+                        }
+                    )
+            if tool_calls:
+                payload = {"tool_calls": tool_calls, "text": "".join(text_parts).strip()}
+                content = json.dumps(payload, ensure_ascii=True)
+            else:
+                content = "".join(text_parts).strip() or _extract_text(response)
+        else:
+            content = _extract_text(response)
+        usage = getattr(response, "usage", None)
+        _emit_usage(
+            self._model,
+            getattr(usage, "input_tokens", None) if usage else None,
+            getattr(usage, "output_tokens", None) if usage else None,
+        )
         return LLMResponse(content=content)
 
     def _invoke_converse(self, prompt_or_messages: Any) -> LLMResponse:
@@ -495,6 +613,13 @@ class BedrockLLMClient:
             raise RuntimeError(
                 f"Bedrock converse returned no text content (stopReason={stop_reason!r})"
             )
+        usage_dict = response.get("usage") if isinstance(response, dict) else None
+        if isinstance(usage_dict, dict):
+            _emit_usage(
+                self._model,
+                usage_dict.get("inputTokens"),
+                usage_dict.get("outputTokens"),
+            )
         return LLMResponse(content=content)
 
     def invoke(self, prompt_or_messages: Any) -> LLMResponse:
@@ -547,19 +672,23 @@ def _format_anthropic_retry_error(err: Exception) -> str:
     return f"Anthropic API request failed after multiple retries: {error_name}."
 
 
-# LiteLLM/Anthropic surfaces an unrecognized model ID as an HTTP 400 with a
-# message containing "The provided model identifier is invalid." (note: the
-# OpenAI-compatible 404 code-path is preferred, but LiteLLM relays 400 here).
-# Detection is intentionally a substring match because there is no stable error
-# code for this case across LiteLLM/Anthropic. Update this constant if upstream
-# rewords the message — the failure mode is "fall through to a generic HTTP 400
-# message that is not Sentry-filtered" (see issue #1806).
-_OPENAI_INVALID_MODEL_IDENTIFIER_PHRASE = "model identifier"
+# Substrings that signal an unknown/invalid model name in a 400 response.
+# OpenAI:    "The provided model identifier is invalid."
+# OpenRouter: "Invalid model name passed in model=<name>. Call `/v1/models`…"
+# Detection is an any-match because there is no stable error code across
+# providers. Add phrases here when a new provider uses different wording —
+# the failure mode is "fall through to a generic HTTP 400 message" (#1806).
+_OPENAI_INVALID_MODEL_IDENTIFIER_PHRASES = (
+    "model identifier",  # OpenAI / LiteLLM
+    "invalid model id",  # OpenAI
+    "invalid model name",  # OpenRouter
+)
 
 
 def _is_openai_invalid_model_identifier(err: OpenAIBadRequestError) -> bool:
     """True if the OpenAIBadRequestError message indicates an unknown model id."""
-    return _OPENAI_INVALID_MODEL_IDENTIFIER_PHRASE in (err.message or "").lower()
+    msg = (err.message or "").lower()
+    return any(phrase in msg for phrase in _OPENAI_INVALID_MODEL_IDENTIFIER_PHRASES)
 
 
 def _format_openai_connection_error(err: Exception, provider_label: str) -> str:
@@ -631,6 +760,7 @@ class OpenAILLMClient:
         self,
         *,
         model: str,
+        model_fallback: str | None = None,
         max_tokens: int = 1024,
         temperature: float | None = None,
         base_url: str | None = None,
@@ -647,8 +777,26 @@ class OpenAILLMClient:
         self._provider_label = api_key_env.removesuffix("_API_KEY").replace("_", " ").title()
         self._client: OpenAI | None = None
         self._model = model
+        fallback = (model_fallback or "").strip()
+        self._model_fallback = fallback if fallback and fallback != model else None
         self._max_tokens = max_tokens
         self._temperature = temperature
+        self._bound_tools: list[dict[str, Any]] = []
+
+    def _activate_model_fallback(self) -> bool:
+        """Switch to the configured fallback model once and report it."""
+        fallback = self._model_fallback
+        if not fallback or fallback == self._model:
+            return False
+        previous = self._model
+        self._model = fallback
+        logger.warning(
+            "%s model '%s' unavailable; falling back to toolcall model '%s'.",
+            self._provider_label,
+            previous,
+            fallback,
+        )
+        return True
 
     def _build_client(self, api_key: str) -> OpenAI:
         return OpenAI(
@@ -664,7 +812,8 @@ class OpenAILLMClient:
     def with_structured_output(self, model: type[BaseModel]) -> StructuredOutputClient:
         return StructuredOutputClient(self, model)
 
-    def bind_tools(self, _tools: list) -> OpenAILLMClient:
+    def bind_tools(self, tools: list[dict[str, Any]]) -> OpenAILLMClient:
+        self._bound_tools = [dict(item) for item in tools]
         return self
 
     def _ensure_client(self) -> OpenAI:
@@ -710,6 +859,9 @@ class OpenAILLMClient:
             kwargs["reasoning_effort"] = reasoning_effort
         if self._temperature is not None:
             kwargs["temperature"] = self._temperature
+        if self._bound_tools:
+            kwargs["tools"] = self._bound_tools
+            kwargs["tool_choice"] = "auto"
         return kwargs
 
     def invoke(self, prompt_or_messages: Any) -> LLMResponse:
@@ -733,11 +885,17 @@ class OpenAILLMClient:
                     f"{self._provider_label} authentication failed. Check {self._api_key_env} in your environment, .env, or secure local keychain."
                 ) from err
             except OpenAINotFoundError as err:
+                if self._activate_model_fallback():
+                    kwargs = self._build_request_kwargs(prompt_or_messages)
+                    continue
                 raise RuntimeError(
                     f"{self._provider_label} model '{self._model}' was not found. "
                     "Check your configured model name or endpoint."
                 ) from err
             except OpenAIBadRequestError as err:
+                if _is_openai_invalid_model_identifier(err) and self._activate_model_fallback():
+                    kwargs = self._build_request_kwargs(prompt_or_messages)
+                    continue
                 if _is_openai_invalid_model_identifier(err):
                     raise RuntimeError(
                         f"{self._provider_label} model '{self._model}' was not found. "
@@ -792,7 +950,32 @@ class OpenAILLMClient:
 
         if not response.choices:
             raise RuntimeError("OpenAI API returned an empty choices list")
-        content = response.choices[0].message.content or ""
+        message = response.choices[0].message
+        if self._bound_tools:
+            tool_calls_raw = getattr(message, "tool_calls", None) or []
+            if tool_calls_raw:
+                tool_calls: list[dict[str, Any]] = []
+                for call in tool_calls_raw:
+                    function = getattr(call, "function", None)
+                    name = str(getattr(function, "name", ""))
+                    raw_args = str(getattr(function, "arguments", "") or "")
+                    try:
+                        parsed_args = json.loads(raw_args) if raw_args else {}
+                    except (json.JSONDecodeError, ValueError):
+                        parsed_args = {}
+                    tool_calls.append({"name": name, "arguments": parsed_args})
+                payload = {"tool_calls": tool_calls, "text": (message.content or "").strip()}
+                content = json.dumps(payload, ensure_ascii=True)
+            else:
+                content = (message.content or "").strip()
+        else:
+            content = message.content or ""
+        usage = getattr(response, "usage", None)
+        _emit_usage(
+            self._model,
+            getattr(usage, "prompt_tokens", None) if usage else None,
+            getattr(usage, "completion_tokens", None) if usage else None,
+        )
         return LLMResponse(content=content.strip())
 
     def invoke_stream(self, prompt_or_messages: Any) -> Iterator[str]:
@@ -829,11 +1012,21 @@ class OpenAILLMClient:
                     f"{self._provider_label} authentication failed. Check {self._api_key_env} in your environment, .env, or secure local keychain."
                 ) from err
             except OpenAINotFoundError as err:
+                if not emitted and self._activate_model_fallback():
+                    kwargs = self._build_request_kwargs(prompt_or_messages)
+                    continue
                 raise RuntimeError(
                     f"{self._provider_label} model '{self._model}' was not found. "
                     "Check your configured model name or endpoint."
                 ) from err
             except OpenAIBadRequestError as err:
+                if (
+                    not emitted
+                    and _is_openai_invalid_model_identifier(err)
+                    and self._activate_model_fallback()
+                ):
+                    kwargs = self._build_request_kwargs(prompt_or_messages)
+                    continue
                 if _is_openai_invalid_model_identifier(err):
                     raise RuntimeError(
                         f"{self._provider_label} model '{self._model}' was not found. "
@@ -1071,7 +1264,7 @@ def _select_model(settings: Any, provider_prefix: str, model_type: ModelType) ->
 
 def _create_llm_client(model_type: ModelType) -> _LLMClientType:
     try:
-        settings = LLMSettings.from_env()
+        settings = resolve_llm_settings()
     except ValidationError as exc:
         errors = exc.errors()
         if len(errors) == 1:
@@ -1079,10 +1272,17 @@ def _create_llm_client(model_type: ModelType) -> _LLMClientType:
             raise RuntimeError(msg or str(exc)) from exc
         raise RuntimeError(str(exc)) from exc
     provider = settings.provider
+
+    def _fallback_model(provider_prefix: str) -> str | None:
+        if model_type == "toolcall":
+            return None
+        return _select_model(settings, provider_prefix, "toolcall")
+
     if provider == "openai":
         config = OPENAI_LLM_CONFIG
         return OpenAILLMClient(
             model=_select_model(settings, "openai", model_type),
+            model_fallback=_fallback_model("openai"),
             max_tokens=config.max_tokens,
         )
     elif provider == "openrouter":
@@ -1091,20 +1291,21 @@ def _create_llm_client(model_type: ModelType) -> _LLMClientType:
         config = OPENROUTER_LLM_CONFIG
         return OpenAILLMClient(
             model=_select_model(settings, "openrouter", model_type),
+            model_fallback=_fallback_model("openrouter"),
             max_tokens=config.max_tokens,
             base_url=OPENROUTER_BASE_URL,
             api_key_env="OPENROUTER_API_KEY",
         )
-    elif provider == "requesty":
-        from app.config import REQUESTY_BASE_URL, REQUESTY_LLM_CONFIG
+    elif provider == "deepseek":
+        from app.config import DEEPSEEK_LLM_CONFIG
 
-        config = REQUESTY_LLM_CONFIG
+        config = DEEPSEEK_LLM_CONFIG
         return OpenAILLMClient(
-            model=_select_model(settings, "requesty", model_type),
+            model=_select_model(settings, "deepseek", model_type),
+            model_fallback=_fallback_model("deepseek"),
             max_tokens=config.max_tokens,
-            base_url=REQUESTY_BASE_URL,
-            api_key_env="REQUESTY_API_KEY",
-            default_headers={"X-Title": "OpenSRE"},
+            base_url=DEEPSEEK_BASE_URL,
+            api_key_env="DEEPSEEK_API_KEY",
         )
     elif provider == "gemini":
         from app.config import GEMINI_LLM_CONFIG
@@ -1112,6 +1313,7 @@ def _create_llm_client(model_type: ModelType) -> _LLMClientType:
         config = GEMINI_LLM_CONFIG
         return OpenAILLMClient(
             model=_select_model(settings, "gemini", model_type),
+            model_fallback=_fallback_model("gemini"),
             max_tokens=config.max_tokens,
             base_url=GEMINI_BASE_URL,
             api_key_env="GEMINI_API_KEY",
@@ -1122,6 +1324,7 @@ def _create_llm_client(model_type: ModelType) -> _LLMClientType:
         config = NVIDIA_LLM_CONFIG
         return OpenAILLMClient(
             model=_select_model(settings, "nvidia", model_type),
+            model_fallback=_fallback_model("nvidia"),
             max_tokens=config.max_tokens,
             base_url=NVIDIA_BASE_URL,
             api_key_env="NVIDIA_API_KEY",
@@ -1132,10 +1335,20 @@ def _create_llm_client(model_type: ModelType) -> _LLMClientType:
         config = MINIMAX_LLM_CONFIG
         return OpenAILLMClient(
             model=_select_model(settings, "minimax", model_type),
+            model_fallback=_fallback_model("minimax"),
             max_tokens=config.max_tokens,
             base_url=MINIMAX_BASE_URL,
             api_key_env="MINIMAX_API_KEY",
             temperature=1.0,
+        )
+    elif provider == "groq":
+        config = GROQ_LLM_CONFIG
+        return OpenAILLMClient(
+            model=_select_model(settings, "groq", model_type),
+            model_fallback=_fallback_model("groq"),
+            max_tokens=config.max_tokens,
+            base_url=GROQ_BASE_URL,
+            api_key_env="GROQ_API_KEY",
         )
     elif provider == "ollama":
         from app.config import OLLAMA_LLM_CONFIG
@@ -1198,8 +1411,8 @@ def get_llm_for_classification() -> _LLMClientType:
     """
     Get or create the LLM client singleton for the mid-tier classification tier.
 
-    Uses a Sonnet-class model (Claude Sonnet for Anthropic/Bedrock/Requesty,
-    Gemini Flash for Gemini, GPT-5 mini for OpenAI). Heavier and slower than
+    Uses a Sonnet-class model (Claude Sonnet for Anthropic/Bedrock, Gemini
+    Flash for Gemini, GPT-5 mini for OpenAI). Heavier and slower than
     the toolcall tier but markedly more capable on tasks that need real
     instruction-following — e.g. interactive-shell intent classification —
     while still being substantially cheaper than the reasoning tier.
@@ -1249,8 +1462,16 @@ def parse_root_cause(response: str) -> RootCauseResult:
             after = parts[1]
             for line in after.split("\n"):
                 candidate = line.strip().lower()
-                if candidate and candidate in VALID_ROOT_CAUSE_CATEGORIES:
+                if not candidate:
+                    continue
+                if candidate in VALID_ROOT_CAUSE_CATEGORIES:
                     root_cause_category = candidate
+                    break
+                for token in re.findall(r"[a-z_][a-z0-9_]*", candidate):
+                    if token in VALID_ROOT_CAUSE_CATEGORIES:
+                        root_cause_category = token
+                        break
+                if root_cause_category != "unknown":
                     break
 
     if "ROOT_CAUSE:" in response:

@@ -549,6 +549,20 @@ class TestStreamRendererDiagnoseStreaming:
         assert renderer.final_state.get("validity_score") == 0.85
         assert renderer.stream_completed is True
 
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
+    def test_diagnose_skips_rich_live_when_repl_safe(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from app.cli.support import output
+
+        monkeypatch.setattr(output, "_repl_progress_active", lambda: True)
+        renderer = StreamRenderer(local=True)
+        renderer.render_stream(_diagnose_streaming_events())
+
+        assert renderer._diagnose._live is None
+        assert renderer._toggle_watcher is None
+
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "text"})
     def test_diagnose_text_mode_replays_buffer_at_finish(self, capfd) -> None:
         """In text mode the buffered token text is printed when the node ends."""

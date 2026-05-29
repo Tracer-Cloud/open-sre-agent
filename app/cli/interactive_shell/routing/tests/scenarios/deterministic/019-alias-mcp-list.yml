@@ -1,0 +1,51 @@
+id: 019-alias-mcp-list
+title: MCP list alias
+intent_class: deterministic
+risk_level: low
+input:
+  prompt: mcp list
+  surface: interactive_cli
+session:
+  has_prior_state: false
+  remote_connected: false
+  configured_integrations: []
+available_capabilities:
+  slash_commands:
+  - /mcp
+  cli_commands: []
+  synthetic_suites: []
+notes: []
+
+route:
+  expected_kind: slash
+  expected_signals:
+  - bare_command_alias
+  expected_command_text: /mcp list
+policy:
+  should_execute: true
+  has_unhandled_clause: false
+  fail_closed: false
+planned_actions:
+- kind: slash
+  source: deterministic
+  target_surface: slash
+  command: /mcp
+  args:
+  - list
+  content: /mcp list
+executed_actions:
+- kind: slash
+  command: /mcp
+  args:
+  - list
+  content: /mcp list
+response_contract:
+  must_contain_any:
+  - ran /mcp list
+  must_not_contain: []
+history:
+  expected:
+  - type: slash
+    ok: true
+tier: critical
+runs: 1

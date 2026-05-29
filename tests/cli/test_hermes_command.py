@@ -42,6 +42,14 @@ def _patch_agent_to_capture_sink():
     return patch("app.cli.commands.hermes.HermesAgent.__init__", _capture)
 
 
+def test_bare_hermes_prints_help_and_exits_zero() -> None:
+    runner = CliRunner()
+    result = runner.invoke(hermes_command, [])
+    assert result.exit_code == 0
+    assert "Usage:" in result.output
+    assert "watch" in result.output
+
+
 def test_watch_help_shows_correlator_flags() -> None:
     runner = CliRunner()
     result = runner.invoke(hermes_command, ["watch", "--help"])

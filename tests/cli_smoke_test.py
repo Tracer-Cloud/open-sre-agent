@@ -51,9 +51,16 @@ _CLEARED_ENV_KEYS = (
     "NVIDIA_API_KEY",
     "OPENAI_API_KEY",
     "OPENROUTER_API_KEY",
+    "OPENCLAW_MCP_ARGS",
+    "OPENCLAW_MCP_AUTH_TOKEN",
+    "OPENCLAW_MCP_COMMAND",
+    "OPENCLAW_MCP_MODE",
+    "OPENCLAW_MCP_URL",
     "OPENSRE_PROJECT_ENV_PATH",
     "OPENSRE_RELEASES_API_URL",
     "SLACK_WEBHOOK_URL",
+    "TELEGRAM_BOT_TOKEN",
+    "TELEGRAM_DEFAULT_CHAT_ID",
     "TRACER_API_URL",
     "TRACER_WEB_APP_URL",
 )
@@ -86,11 +93,11 @@ class CliSandbox:
 
     @property
     def integration_store_path(self) -> Path:
-        return self.home / ".config" / "opensre" / "integrations.json"
+        return self.home / ".opensre" / "integrations.json"
 
     @property
     def wizard_store_path(self) -> Path:
-        return self.home / ".config" / "opensre" / "opensre.json"
+        return self.home / ".opensre" / "opensre.json"
 
     def seed_integrations(self, integrations: list[dict[str, object]]) -> None:
         self.integration_store_path.parent.mkdir(parents=True, exist_ok=True)
@@ -154,8 +161,10 @@ def _is_python_script(path: Path) -> bool:
 
 def _cli_env(home: Path, project_env_path: Path) -> dict[str, str]:
     env = os.environ.copy()
+    # Blank values block ``load_dotenv(override=False)`` from re-importing the repo
+    # ``.env`` when subprocesses run with ``cwd=REPO_ROOT``.
     for key in _CLEARED_ENV_KEYS:
-        env.pop(key, None)
+        env[key] = ""
 
     existing_pythonpath = env.get("PYTHONPATH", "")
     pythonpath_parts = [str(REPO_ROOT)]
@@ -407,7 +416,7 @@ def test_health_smoke_uses_real_datadog_store_config(cli_sandbox: CliSandbox) ->
 
     result = _run_cli(cli_sandbox, "health")
 
-    assert result.exit_code == 1
+    assert result.exit_code == 0
     assert "OpenSRE Health" in result.stdout
     assert "datadog" in result.stdout
     assert "Missing API key or application key." in result.stdout
@@ -504,8 +513,8 @@ def test_tests_inventory_commands_smoke(cli_sandbox: CliSandbox) -> None:
 def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
     # One `j` per keypress (burst writes are not separate keys). The select list wraps;
     # from the first option, len(choices)-1 steps reach "Skip for now" without wrapping past it.
-    # 22 integrations + "Skip for now" = 23 choices. OpenSearch is at index 21;
-    # 22 j's lands on the new "Skip for now" position at index 22.
+    # 23 integrations + "Skip for now" = 24 choices. OpenSearch is at index 22;
+    # 23 j's lands on "Skip for now" at index 23.
     result = _run_cli_pty(
         cli_sandbox,
         "onboard",
@@ -513,10 +522,11 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
             PtyAction(expect="How do you want to get started?", send=b"\r"),
             PtyAction(expect="Choose your LLM provider", send=b"\r"),
             PtyAction(expect="Anthropic API key", send=b"smoke-test-key\r"),
+            PtyAction(expect="Choose Anthropic model", send=b"\r"),
             PtyAction(
                 expect="Choose an integration to configure",
                 send=b"\r",
-                stagger_j=22,
+                stagger_j=23,
             ),
         ],
         timeout=30.0,
@@ -535,11 +545,11 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
 
 
 @pytest.mark.parametrize(
-    ("_cli_binary", "stagger_j", "provider_label", "pty_timeout"),
+    ("_cli_binary", "provider_key", "provider_label", "pty_timeout"),
     [
         pytest.param(
             "codex",
-            7,
+            "codex",
             "OpenAI Codex CLI",
             60.0,
             marks=pytest.mark.skipif(
@@ -549,7 +559,7 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
         ),
         pytest.param(
             "opencode",
-            11,
+            "opencode",
             "OpenCode CLI",
             120.0,
             marks=pytest.mark.skipif(
@@ -563,20 +573,32 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
 def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
     cli_sandbox: CliSandbox,
     _cli_binary: str,
-    stagger_j: int,
+    provider_key: str,
     provider_label: str,
     pty_timeout: float,
 ) -> None:
     """PTY: quickstart → local CLI LLM → repick when unauthenticated, then finish as Anthropic.
 
-    Navigates from the default provider with ``stagger_j`` ``j`` presses (0-based index in
-    ``SUPPORTED_PROVIDERS``, e.g. codex=7 after Bedrock). Fresh HOME has no CLI auth, so either ``requires login`` or
-    ``Could not verify … login`` is accepted before choosing repick. Skips when the CLI binary
-    for each parametrized case is not on PATH.
+    Navigates from the default provider using the current runtime provider list order.
+    Fresh HOME has no CLI auth, so either ``requires login`` or ``Could not verify … login``
+    is accepted before choosing repick. Skips when the CLI binary for each parametrized
+    case is not on PATH.
     """
+    from app.cli.wizard.config import SUPPORTED_PROVIDERS
+
+    stagger_j = next(
+        (i for i, provider in enumerate(SUPPORTED_PROVIDERS) if provider.value == provider_key),
+        -1,
+    )
+    assert stagger_j >= 0, f"Provider '{provider_key}' missing from SUPPORTED_PROVIDERS"
+
     login_prompt: tuple[str, ...] = (
         f"{provider_label} requires login. What next?",
         f"Could not verify {provider_label} login. What next?",
+    )
+    model_prompt: tuple[str, ...] = (
+        f"Choose {provider_label} model",
+        "Model",
     )
     try:
         result = _run_cli_pty(
@@ -585,6 +607,7 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
             actions=[
                 PtyAction(expect="How do you want to get started?", send=b"\r"),
                 PtyAction(expect="Choose your LLM provider", send=b"\r", stagger_j=stagger_j),
+                PtyAction(expect=model_prompt, send=b"\r", timeout=30.0),
                 PtyAction(
                     expect=login_prompt,
                     send=b"\r",
@@ -593,10 +616,11 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
                 ),
                 PtyAction(expect="Choose your LLM provider", send=b"\r"),
                 PtyAction(expect="Anthropic API key", send=b"smoke-test-key\r"),
+                PtyAction(expect="Choose Anthropic model", send=b"\r"),
                 PtyAction(
                     expect="Choose an integration to configure",
                     send=b"\r",
-                    stagger_j=22,
+                    stagger_j=23,
                 ),
             ],
             timeout=pty_timeout,
@@ -609,6 +633,14 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
         )
     except AssertionError as exc:
         msg = str(exc)
+        if (
+            _cli_binary == "codex"
+            and "Choose OpenAI Codex CLI model" in msg
+            and "requires login" in msg
+        ):
+            pytest.skip(
+                "OpenAI Codex CLI appears already authenticated; unauth repick flow skipped"
+            )
         if (
             _cli_binary == "opencode"
             and "environment provider key(s)" in msg

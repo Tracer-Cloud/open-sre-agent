@@ -132,7 +132,7 @@ def _openai_tool_schema(tool: RegisteredTool) -> dict[str, Any]:
         "function": {
             "name": tool.name,
             "description": tool.description,
-            "parameters": tool.input_schema,
+            "parameters": tool.public_input_schema,
         },
     }
 
@@ -141,7 +141,7 @@ def _anthropic_tool_schema(tool: RegisteredTool) -> dict[str, Any]:
     return {
         "name": tool.name,
         "description": tool.description,
-        "input_schema": tool.input_schema,
+        "input_schema": tool.public_input_schema,
     }
 
 

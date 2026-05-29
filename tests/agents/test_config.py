@@ -21,7 +21,7 @@ from app.agents.config import (
 @pytest.fixture(autouse=True)
 def isolated_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     """Autouse: redirect ``agents_config_path`` at a per-test tmp file so
-    tests never touch the developer's real ``~/.config/opensre/agents.yaml``.
+    tests never touch the developer's real ``~/.opensre/agents.yaml``.
     Tests that need the path itself can still request it by name.
     """
     target = tmp_path / "agents.yaml"

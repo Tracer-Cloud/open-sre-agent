@@ -1,4 +1,4 @@
-"""Interactive CLI for managing local integrations (~/.config/opensre/integrations.json).
+"""Interactive CLI for managing local integrations (~/.opensre/integrations.json).
 
 Usage:
     python -m app.integrations setup <service>
@@ -532,6 +532,87 @@ def _setup_discord() -> None:
     _register_discord_slash_command(application_id, bot_token)
 
 
+def _setup_telegram() -> None:
+    from app.cli.wizard.integration_health import validate_telegram_bot
+
+    bot_token = _p("Telegram bot token", secret=True)
+    if not bot_token:
+        _die("bot_token is required.")
+    default_chat_id = _p("Default chat ID (optional)")
+    print("\n  Validating Telegram bot token...")
+    result = validate_telegram_bot(bot_token=bot_token)
+    if not result.ok:
+        _die(result.detail)
+    print(f"  {result.detail}")
+    upsert_integration(
+        "telegram",
+        {
+            "credentials": {
+                "bot_token": bot_token,
+                "default_chat_id": default_chat_id or None,
+            }
+        },
+    )
+    print("  Next:")
+    print("    - opensre integrations verify telegram")
+
+
+def _setup_whatsapp() -> None:
+    account_sid = _p("Twilio Account SID (starts with AC...)")
+    auth_token = _p("Twilio Auth Token", secret=True)
+    from_number = _p("Twilio WhatsApp From number (e.g. whatsapp:+14155238886)")
+    default_to = _p("Default recipient phone number (optional, e.g. +1234567890)")
+    if not account_sid or not auth_token or not from_number:
+        _die("account_sid, auth_token, and from_number are required.")
+    upsert_integration(
+        "whatsapp",
+        {
+            "credentials": {
+                "account_sid": account_sid,
+                "auth_token": auth_token,
+                "from_number": from_number,
+                "default_to": default_to,
+            }
+        },
+    )
+
+
+def _setup_twilio() -> None:
+    """Wizard for the Twilio SMS integration.
+
+    WhatsApp delivery is configured separately via ``setup whatsapp``.
+    """
+    account_sid = _p("Twilio Account SID (starts with AC...)")
+    auth_token = _p("Twilio Auth Token", secret=True)
+    if not account_sid or not auth_token:
+        _die("account_sid and auth_token are required.")
+
+    sms_from = _p(
+        "Twilio SMS From number (E.164, e.g. +14155551234; leave blank to use a Messaging Service SID)"
+    )
+    messaging_service_sid = ""
+    if not sms_from:
+        messaging_service_sid = _p("Twilio Messaging Service SID (starts with MG...)")
+        if not messaging_service_sid:
+            _die("SMS requires either a from_number or a messaging_service_sid.")
+
+    upsert_integration(
+        "twilio",
+        {
+            "credentials": {
+                "account_sid": account_sid,
+                "auth_token": auth_token,
+                "sms": {
+                    "enabled": True,
+                    "from_number": sms_from,
+                    "messaging_service_sid": messaging_service_sid,
+                    "default_to": _p("Default SMS recipient (optional, E.164)") or None,
+                },
+            }
+        },
+    )
+
+
 def _setup_openclaw() -> None:
     print("  1) stdio (recommended)  2) Streamable HTTP  3) SSE")
     choice = _p("Choice", default="1")
@@ -730,6 +811,24 @@ def _setup_alertmanager() -> None:
     upsert_integration("alertmanager", {"credentials": credentials})
 
 
+def _setup_signoz() -> None:
+    url = _p("SigNoz URL (e.g. http://localhost:8080 for local Docker)")
+    api_key = _p("SigNoz API key (service account key)", secret=True)
+
+    if not (url and api_key):
+        _die("SigNoz URL and API key are required.")
+
+    upsert_integration(
+        "signoz",
+        {
+            "credentials": {
+                "url": url,
+                "api_key": api_key,
+            }
+        },
+    )
+
+
 _HANDLERS: dict[str, Any] = {
     "alertmanager": _setup_alertmanager,
     "aws": _setup_aws,
@@ -751,9 +850,13 @@ _HANDLERS: dict[str, Any] = {
     "sentry": _setup_sentry,
     "mongodb": _setup_mongodb,
     "discord": _setup_discord,
+    "telegram": _setup_telegram,
+    "whatsapp": _setup_whatsapp,
+    "twilio": _setup_twilio,
     "openclaw": _setup_openclaw,
     "postgresql": _setup_postgresql,
     "mysql": _setup_mysql,
+    "signoz": _setup_signoz,
 }
 
 

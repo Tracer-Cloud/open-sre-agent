@@ -36,14 +36,17 @@ from app.integrations._verification_adapters import (
     _verify_postgresql,
     _verify_rabbitmq,
     _verify_sentry,
+    _verify_signoz,
     _verify_slack_without_test,
     _verify_snowflake,
     _verify_splunk,
     _verify_supabase,
     _verify_telegram,
     _verify_tracer,
+    _verify_twilio,
     _verify_vercel,
     _verify_victoria_logs,
+    _verify_whatsapp,
 )
 
 
@@ -164,6 +167,7 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
     ),
     IntegrationSpec(
         service="rabbitmq",
+        aliases=("amqp",),
         verifier=_verify_rabbitmq,
         direct_effective=True,
         verify_order=17,
@@ -214,7 +218,22 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         service="telegram",
         verifier=_verify_telegram,
         direct_effective=True,
+        setup_order=19,
         verify_order=26,
+    ),
+    IntegrationSpec(
+        service="whatsapp",
+        verifier=_verify_whatsapp,
+        direct_effective=True,
+        setup_order=19,
+        verify_order=27,
+    ),
+    IntegrationSpec(
+        service="twilio",
+        verifier=_verify_twilio,
+        direct_effective=True,
+        setup_order=20,
+        verify_order=28,
     ),
     IntegrationSpec(
         service="openclaw",
@@ -331,6 +350,13 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         service="supabase",
         verifier=_verify_supabase,
         verify_order=99,
+    ),
+    IntegrationSpec(
+        service="signoz",
+        verifier=_verify_signoz,
+        direct_effective=True,
+        setup_order=23,
+        verify_order=35,
     ),
 )
 

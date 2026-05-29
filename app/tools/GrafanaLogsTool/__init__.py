@@ -18,12 +18,16 @@ def _map_pipeline_to_service_name(pipeline_name: str) -> str:
 def _resolve_grafana_client(
     grafana_endpoint: str | None = None,
     grafana_api_key: str | None = None,
+    grafana_username: str = "",
+    grafana_password: str = "",
 ):
     if not grafana_endpoint:
         return None
     return get_grafana_client_from_credentials(
         endpoint=grafana_endpoint,
         api_key=grafana_api_key or "",
+        username=grafana_username,
+        password=grafana_password,
     )
 
 
@@ -31,6 +35,8 @@ def _grafana_creds(grafana: dict) -> dict:
     return {
         "grafana_endpoint": grafana.get("grafana_endpoint") or grafana.get("endpoint"),
         "grafana_api_key": grafana.get("grafana_api_key") or grafana.get("api_key"),
+        "grafana_username": grafana.get("username", ""),
+        "grafana_password": grafana.get("password", ""),
     }
 
 
@@ -86,6 +92,8 @@ def _query_grafana_logs_available(sources: dict[str, dict]) -> bool:
             "limit": {"type": "integer", "default": 100},
             "grafana_endpoint": {"type": "string"},
             "grafana_api_key": {"type": "string"},
+            "grafana_username": {"type": "string"},
+            "grafana_password": {"type": "string"},
             "pipeline_name": {"type": "string"},
         },
         "required": ["service_name"],
@@ -100,6 +108,8 @@ def query_grafana_logs(
     limit: int = 100,
     grafana_endpoint: str | None = None,
     grafana_api_key: str | None = None,
+    grafana_username: str = "",
+    grafana_password: str = "",
     pipeline_name: str | None = None,
     grafana_backend: Any = None,
     **_kwargs: Any,
@@ -146,7 +156,9 @@ def query_grafana_logs(
             result_data["truncation_note"] = summary
         return result_data
 
-    client = _resolve_grafana_client(grafana_endpoint, grafana_api_key)
+    client = _resolve_grafana_client(
+        grafana_endpoint, grafana_api_key, grafana_username, grafana_password
+    )
     if not client or not client.is_configured:
         return {
             "source": "grafana_loki",

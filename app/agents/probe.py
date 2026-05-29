@@ -1,14 +1,13 @@
-"""Per-PID resource snapshot for the monitor-local-agents fleet view.
+"""Per-PID process helpers for the monitor-local-agents fleet view.
 
-Pure collector: one function, one PID, one snapshot. No background
-loop, no caching, no UI wiring. The wiring layer (#1490) batches calls
-in a REPL background task; the registry layer (#1487) decides which
-PIDs to ask about.
+Pure collectors: no background loop, no caching, no UI wiring. The
+wiring layer (#1490) batches calls in a REPL background task; the
+registry layer (#1487) decides which PIDs to ask about.
 
-The acceptance criterion for the parent issue (#1489) requires that
-``psutil`` stay confined to this module so the dependency surface
-remains explicit. ``app/agents/__init__.py`` reaches into here only via
-explicit import.
+``psutil`` is intentionally confined to this module. The helpers
+exposed here (:func:`cwd_for_pid`, :func:`started_at_for_pid`,
+:func:`env_value_for_pid`) let other layers query process state
+without importing psutil themselves.
 """
 
 from __future__ import annotations
@@ -16,6 +15,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 
 import psutil
 
@@ -50,6 +50,7 @@ class ProcessSnapshot:
     num_connections: int | None
     status: str
     started_at: datetime
+    last_output_at: datetime | None = None
 
 
 def pid_exists(pid: int) -> bool:
@@ -82,6 +83,30 @@ def process(pid: int) -> psutil.Process:
 def process_iter(attrs: Iterable[str]) -> Iterator[psutil.Process]:
     """Yield process handles with preloaded attrs from the local probe module."""
     return psutil.process_iter(list(attrs))
+
+
+def process_has_open_codex_rollout(pid: int) -> bool:
+    """Return whether ``pid`` has an open Codex ``rollout-*.jsonl`` file."""
+    try:
+        proc = psutil.Process(pid)
+        open_files = proc.open_files()
+    # The stdlib exceptions cover invalid/raced PIDs and platform-specific
+    # ``open_files()`` failures that psutil may surface directly.
+    except PROCESS_ERROR + (
+        ProcessLookupError,
+        OSError,
+        ValueError,
+        OverflowError,
+    ):
+        return False
+
+    for open_file in open_files:
+        path = getattr(open_file, "path", None)
+        if isinstance(path, str):
+            name = Path(path).name
+            if name.startswith("rollout-") and name.endswith(".jsonl"):
+                return True
+    return False
 
 
 def probe(pid: int, *, cpu_interval: float = 0.1) -> ProcessSnapshot | None:
@@ -130,6 +155,63 @@ def probe(pid: int, *, cpu_interval: float = 0.1) -> ProcessSnapshot | None:
         status=status,
         started_at=started_at,
     )
+
+
+def cwd_for_pid(pid: int) -> Path | None:
+    """Return the cwd of ``pid``, or ``None`` on any psutil failure.
+
+    macOS hardened-runtime processes can deny ``cwd()`` even
+    cross-user-same-user. Callers treat ``None`` as "unobservable
+    this tick" and retry next tick rather than poison a cache.
+    """
+    try:
+        proc = psutil.Process(pid)
+        return Path(proc.cwd())
+    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, OSError):
+        return None
+
+
+def started_at_for_pid(pid: int) -> float | None:
+    """Return the POSIX-epoch start time of ``pid``, or ``None``."""
+    try:
+        proc = psutil.Process(pid)
+        return float(proc.create_time())
+    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, OSError):
+        return None
+
+
+def env_value_for_pid(pid: int, key: str) -> str | None:
+    """Return env var ``key`` for ``pid``, or ``None``.
+
+    ``environ()`` denies on macOS hardened-runtime processes even for
+    the same user; callers must accept ``None`` and fall back to
+    other resolution sources.
+    """
+    try:
+        proc = psutil.Process(pid)
+        environ = proc.environ()
+    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, OSError):
+        return None
+    value = environ.get(key)
+    if isinstance(value, str) and value:
+        return value
+    return None
+
+
+def open_files_for_pid(pid: int) -> tuple[Path, ...]:
+    """Return open file paths for ``pid``, or an empty tuple on psutil failure."""
+    try:
+        proc = psutil.Process(pid)
+        files = proc.open_files()
+    except (
+        psutil.NoSuchProcess,
+        psutil.AccessDenied,
+        psutil.ZombieProcess,
+        OSError,
+        ValueError,
+    ):
+        return ()
+    return tuple(Path(item.path) for item in files if item.path)
 
 
 def _safe_num_fds(proc: psutil.Process) -> int | None:

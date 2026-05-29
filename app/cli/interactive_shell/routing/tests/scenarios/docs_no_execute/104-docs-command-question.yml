@@ -1,0 +1,45 @@
+id: 104-docs-command-question
+title: What command to use
+intent_class: docs_no_execute
+risk_level: low
+input:
+  prompt: what command do I use?
+  surface: interactive_cli
+session:
+  has_prior_state: false
+  remote_connected: false
+  configured_integrations: []
+available_capabilities:
+  slash_commands: []
+  cli_commands: []
+  synthetic_suites: []
+notes: []
+route:
+  expected_kind: cli_agent
+  expected_signals: []
+  expected_command_text: null
+policy:
+  should_execute: false
+  has_unhandled_clause: true
+  fail_closed: true
+planned_actions:
+- kind: assistant_handoff
+  content: docs:command_selection
+  source: llm
+executed_actions: []
+response_contract:
+  must_contain_any:
+  - which command to use
+  - what command do i use
+  - without specifying
+  - which command
+  - specify
+  - command
+  must_not_contain:
+  - $ /
+history:
+  expected:
+  - type: cli_agent
+    ok: true
+tier: critical
+runs: 3

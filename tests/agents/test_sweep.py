@@ -20,7 +20,7 @@ _DEAD_PID = 2**31 - 1
 @pytest.fixture
 def isolated_registry(tmp_path: Path) -> AgentRegistry:
     """An ``AgentRegistry`` writing to a tmp dir so tests don't touch
-    the developer's real ``~/.config/opensre/agents.jsonl``."""
+    the developer's real ``~/.opensre/agents.jsonl``."""
     return AgentRegistry(path=tmp_path / "agents.jsonl")
 
 

@@ -32,6 +32,14 @@ One-shot (includes heavier `test-full`): `make check`.
 
 Before a PR, run at least `make lint`, `make format-check`, `make typecheck`, and `make test-cov` (see [CONTRIBUTING.md](https://github.com/Tracer-Cloud/opensre/blob/main/CONTRIBUTING.md)).
 
+## Routing policy architecture
+
+Routing precedence, postprocessing transforms, compatibility seams, and the rule-extension checklist are documented in [`docs/routing-policy-architecture.md`](https://github.com/Tracer-Cloud/opensre/blob/main/docs/routing-policy-architecture.md).
+
+## Investigation tool calling
+
+Tool schemas, provider adapters (`agent_llm_client.py`), and investigation message shapes are documented in [`docs/investigation-tool-calling.md`](investigation-tool-calling.md) (all LLM providers, not vendor-specific).
+
 ## Interactive shell: REPL watchdog demo
 
 PR reviewers expect a **visible demo** (terminal log or screenshot) in the PR under **Demo/Screenshot**, not only tests. Copy the exact steps from this section into your PR description, then attach your terminal output or recording.
@@ -46,7 +54,7 @@ PR reviewers expect a **visible demo** (terminal log or screenshot) in the PR un
 Automated equivalent (runs in `make test-cov`):  
 `uv run pytest tests/cli/interactive_shell/test_watchdog_repl_e2e_demo.py -v --tb=short`
 
-Longer transcript (optional): [tests/cli/interactive_shell/repl_watchdog_demo.md](../tests/cli/interactive_shell/repl_watchdog_demo.md).
+Longer transcript (optional): [tests/cli/interactive_shell/repl_watchdog_demo.md](https://github.com/Tracer-Cloud/opensre/blob/main/tests/cli/interactive_shell/repl_watchdog_demo.md).
 
 ## VS Code dev container
 
@@ -112,7 +120,7 @@ opensre remote ops logs --follow
 
 Events are tagged with `entrypoint`, `opensre.runtime`, and `deployment_method`. Sensitive headers, paths, and secret-shaped keys are scrubbed before send.
 
-A random install ID is stored under `~/.config/opensre/anonymous_id`. PostHog `distinct_id` is scoped to that ID. Telemetry is off in GitHub Actions and pytest.
+A random install ID is stored under `~/.opensre/anonymous_id`. PostHog `distinct_id` is scoped to that ID. Telemetry is off in GitHub Actions and pytest.
 
 ### Kill-switch matrix
 
@@ -122,6 +130,7 @@ A random install ID is stored under `~/.config/opensre/anonymous_id`. PostHog `d
 | `DO_NOT_TRACK=1`               | disabled   | disabled   |
 | `OPENSRE_ANALYTICS_DISABLED=1` | disabled   | unaffected |
 | `OPENSRE_SENTRY_DISABLED=1`    | unaffected | disabled   |
+| `OPENSRE_SENTRY_LOGGING_DISABLED=1` | unaffected | disables `logger.error`/`logger.exception` forwarding to Sentry; `capture_exception` unaffected |
 
 Full opt-out:
 
@@ -139,7 +148,7 @@ Set `OPENSRE_DEPLOYMENT_METHOD` to `railway`, `ec2`, `vercel`, or `local` (defau
 
 ### Local PostHog event log
 
-By default, outbound PostHog payloads are also appended to `~/.config/opensre/posthog_events.txt` (rotates at 1000 lines). Disable:
+By default, outbound PostHog payloads are also appended to `~/.opensre/posthog_events.txt` (rotates at 1000 lines). Disable:
 
 ```bash
 export OPENSRE_ANALYTICS_LOG_EVENTS=0

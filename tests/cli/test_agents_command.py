@@ -83,6 +83,45 @@ def test_agents_register_list_and_forget(isolated_registry_path: Path) -> None:
     assert AgentRegistry(path=isolated_registry_path).list() == []
 
 
+def test_agents_register_persists_provider_for_node_launched_codex(
+    isolated_registry_path: Path,
+) -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli,
+        [
+            "agents",
+            "register",
+            "9001",
+            "my-bot",
+            "--command",
+            "node /usr/local/bin/codex.js exec --model gpt-5-codex",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    records = AgentRegistry(path=isolated_registry_path).list()
+    assert [(record.pid, record.name, record.provider) for record in records] == [
+        (9001, "my-bot", "codex")
+    ]
+
+
+def test_agents_register_persists_provider_none_for_unknown_command(
+    isolated_registry_path: Path,
+) -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli,
+        ["agents", "register", "9002", "my-bot", "--command", "python -m worker"],
+    )
+
+    assert result.exit_code == 0, result.output
+    records = AgentRegistry(path=isolated_registry_path).list()
+    assert records[0].provider is None
+
+
 def test_agents_scan_can_register_discovered_processes(
     isolated_registry_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

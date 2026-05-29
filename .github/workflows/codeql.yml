@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   analyze:
+    if: github.repository == 'Tracer-Cloud/opensre'
     name: Analyze (python)
     runs-on: ubuntu-latest
 

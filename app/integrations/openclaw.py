@@ -218,6 +218,8 @@ def _openclaw_cli_preflight_output(command: str) -> str:
             [command, "--help"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=5,
             check=False,
         )
@@ -416,6 +418,10 @@ async def _open_openclaw_session(config: OpenClawConfig) -> AsyncIterator[Client
                 args=list(config.args),
                 env={
                     **os.environ,
+                    # Suppress terminal control codes so the MCP server's stdout
+                    # stays clean JSON-RPC (mirrors github_mcp.py mitigation).
+                    "NO_COLOR": "1",
+                    "TERM": "dumb",
                     **({"OPENCLAW_AUTH_TOKEN": config.auth_token} if config.auth_token else {}),
                 },
             )

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.types.root_cause_categories import HERMES_ROOT_CAUSE_CATEGORIES, render_prompt_taxonomy
+
 _INVESTIGATION_SYSTEM = """You are Tracer, an AI SRE performing a live production incident investigation.
 
 Your task: investigate the alert below and produce a clear, evidence-backed root cause analysis.
@@ -28,7 +30,7 @@ Your task: investigate the alert below and produce a clear, evidence-backed root
 
 When you are done investigating (no more tool calls), write a diagnosis that includes:
 - **Root cause**: What failed and why (2-3 sentences, specific)
-- **Root cause category**: One of database / infrastructure / code_bug / configuration / network / performance / healthy / unknown
+- **Root cause category**: {root_cause_category_instruction}
 - **Evidence**: Which tool results support your conclusion
 - **Validated claims**: Specific facts confirmed by evidence (e.g. "Error rate spiked to 47% at 14:32 UTC per Grafana logs")
 - **Non-validated claims**: Hypotheses you could not confirm
@@ -87,10 +89,16 @@ _ALERT_SOURCE_TO_TOOL_SOURCES: dict[str, list[str]] = {
     "bitbucket": ["bitbucket"],
     "argocd": ["eks"],
     "splunk": ["splunk"],
+    "signoz": ["signoz"],
 }
 
 # Generic fallback sources — always secondary, never primary.
 _SECONDARY_SOURCES = {"knowledge", "openclaw", "google_docs"}
+
+_DEFAULT_ROOT_CAUSE_CATEGORY_INSTRUCTION = (
+    "One of database / infrastructure / code_bug / configuration / network / performance / "
+    "healthy / unknown"
+)
 
 
 def _build_runbook_section(matched_runbook: dict[str, Any] | None) -> str:
@@ -118,8 +126,23 @@ def _build_runbook_section(matched_runbook: dict[str, Any] | None) -> str:
     )
 
 
-def build_system_prompt(_state: dict[str, Any]) -> str:
-    return _INVESTIGATION_SYSTEM
+def build_system_prompt(state: dict[str, Any]) -> str:
+    alert_source = _get_alert_source(state)
+    root_cause_category_instruction = _DEFAULT_ROOT_CAUSE_CATEGORY_INSTRUCTION
+
+    if alert_source == "hermes":
+        taxonomy = render_prompt_taxonomy(
+            HERMES_ROOT_CAUSE_CATEGORIES | {"healthy", "unknown"}
+        ).strip()
+        root_cause_category_instruction = (
+            "Use exactly one category name from the Hermes taxonomy below\n\n"
+            "## Hermes root cause category taxonomy (single source of truth)\n"
+            f"{taxonomy}"
+        )
+
+    return _INVESTIGATION_SYSTEM.format(
+        root_cause_category_instruction=root_cause_category_instruction
+    )
 
 
 def format_alert_context(state: dict[str, Any]) -> str:
@@ -277,7 +300,30 @@ def _format_tools_by_source(tools_by_source: dict[str, list[Any]]) -> str:
     )
     for source in ordered_sources:
         tools = tools_by_source[source]
-        tool_lines = [f"  - `{t.name}`: {t.description}" for t in tools]
+        tool_lines = []
+        for tool in tools:
+            details: list[str] = []
+            if getattr(tool, "source_id", None):
+                details.append(f"source_id={tool.source_id}")
+            if getattr(tool, "evidence_type", None):
+                details.append(f"evidence={tool.evidence_type}")
+            if getattr(tool, "side_effect_level", None):
+                details.append(f"side_effect={tool.side_effect_level}")
+            examples = getattr(tool, "examples", None) or []
+            anti_examples = getattr(tool, "anti_examples", None) or []
+            output_schema = getattr(tool, "output_schema", None)
+            if isinstance(output_schema, dict):
+                output_props = output_schema.get("properties")
+                if isinstance(output_props, dict) and output_props:
+                    output_keys = ", ".join(sorted(str(key) for key in output_props)[:6])
+                    details.append(f"outputs={output_keys}")
+            if examples:
+                details.append(f"example={examples[0]}")
+            if anti_examples:
+                details.append(f"avoid={anti_examples[0]}")
+
+            suffix = f" ({'; '.join(details)})" if details else ""
+            tool_lines.append(f"  - `{tool.name}`: {tool.description}{suffix}")
         sections.append(f"**{source}**:\n" + "\n".join(tool_lines))
 
     return "\n\n".join(sections)

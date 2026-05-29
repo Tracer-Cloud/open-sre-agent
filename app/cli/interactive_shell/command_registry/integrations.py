@@ -8,10 +8,7 @@ from rich.markup import escape
 from app.cli.interactive_shell.command_registry import repl_data
 from app.cli.interactive_shell.command_registry.cli_parity import run_cli_command
 from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
-from app.cli.interactive_shell.config.tool_catalog import (
-    build_tool_catalog,
-    format_tool_catalog_text,
-)
+from app.cli.interactive_shell.config.tool_catalog import build_tool_catalog
 from app.cli.interactive_shell.runtime import ReplSession
 from app.cli.interactive_shell.ui import (
     BOLD_BRAND,
@@ -23,13 +20,20 @@ from app.cli.interactive_shell.ui import (
     render_integrations_table,
     render_mcp_table,
     render_models_table,
+    render_tools_table,
     repl_table,
 )
 from app.cli.interactive_shell.ui.choice_menu import (
     CRUMB_SEP,
+    prepare_repl_output_line,
     repl_choose_one,
     repl_section_break,
     repl_tty_interactive,
+)
+from app.cli.interactive_shell.ui.rendering import (
+    _repl_table_width,
+    print_repl_table,
+    repl_print,
 )
 
 _ROOT_LIST = "/list"
@@ -37,18 +41,52 @@ _ROOT_INTEGRATIONS = "/integrations"
 _ROOT_MCP = "/mcp"
 
 
-def _verified_service_choices() -> list[tuple[str, str]]:
-    rows = repl_data.load_verified_integrations()
-    names = sorted({str(r.get("service", "")) for r in rows if r.get("service")})
-    return [(n, n) for n in names]
+def _configured_service_choices() -> list[tuple[str, str]]:
+    """Build picker choices from configured integrations (no live verification)."""
+    return [(name, name) for name in repl_data.configured_integration_names()]
 
 
 def _mcp_service_choices() -> list[tuple[str, str]]:
-    rows = repl_data.load_verified_integrations()
-    names = sorted(
-        {str(r.get("service", "")) for r in rows if r.get("service") in MCP_INTEGRATION_SERVICES}
+    names = [
+        name
+        for name in repl_data.configured_integration_names()
+        if name in MCP_INTEGRATION_SERVICES
+    ]
+    return [(name, name) for name in names]
+
+
+def _render_integration_show(console: Console, service: str) -> bool:
+    """Verify and print one integration. Returns False when the service is unknown."""
+    normalized = service.strip().lower()
+    configured = set(repl_data.configured_integration_names())
+    if normalized not in configured:
+        repl_print(console, f"[{ERROR}]service not found:[/] {escape(normalized)}")
+        return False
+
+    prepare_repl_output_line()
+    with console.status(
+        f"[{DIM}]Verifying {escape(normalized)}…[/]",
+        spinner="dots",
+    ):
+        match = repl_data.verify_integration(normalized)
+    if match is None:
+        repl_print(console, f"[{ERROR}]service not found:[/] {escape(normalized)}")
+        return False
+
+    width = _repl_table_width(console)
+    table = repl_table(
+        title=f"Integration: {normalized}",
+        title_style=BOLD_BRAND,
+        show_header=False,
+        width=width,
     )
-    return [(n, n) for n in names if n]
+    table.add_column("key", style="bold", no_wrap=True)
+    value_width = max(20, width - 20)
+    table.add_column("value", overflow="fold", max_width=value_width)
+    for key, value in match.items():
+        table.add_row(escape(key), escape(str(value)))
+    print_repl_table(console, table)
+    return True
 
 
 def _interactive_list_menu(_session: ReplSession, console: Console) -> bool:
@@ -81,11 +119,7 @@ def _interactive_list_menu(_session: ReplSession, console: Console) -> bool:
             render_mcp_table(console, results)
             render_models_table(console, repl_data.load_llm_settings())
         elif sub == "tools":
-            catalog = build_tool_catalog()
-            if not catalog:
-                console.print("[dim]no tools registered.[/dim]")
-            else:
-                console.print(format_tool_catalog_text(catalog), markup=False)
+            render_tools_table(console, build_tool_catalog())
         repl_section_break(console)
 
 
@@ -96,17 +130,22 @@ def _cmd_integrations(session: ReplSession, console: Console, args: list[str]) -
     sub = (args[0].lower() if args else "list").strip()
 
     if sub in ("list", "ls"):
-        render_integrations_table(console, repl_data.load_verified_integrations())
+        prepare_repl_output_line()
+        with console.status(f"[{DIM}]Verifying integrations…[/]", spinner="dots"):
+            results = repl_data.load_verified_integrations()
+        render_integrations_table(console, results)
         return True
 
     if sub == "verify":
-        results = repl_data.load_verified_integrations()
+        prepare_repl_output_line()
+        with console.status(f"[{DIM}]Verifying integrations…[/]", spinner="dots"):
+            results = repl_data.load_verified_integrations()
         render_integrations_table(console, results)
         failed = [r for r in results if r.get("status") in ("failed", "missing")]
         if failed:
-            console.print(f"[{WARNING}]{len(failed)} integration(s) need attention.[/]")
+            repl_print(console, f"[{WARNING}]{len(failed)} integration(s) need attention.[/]")
         else:
-            console.print(f"[{HIGHLIGHT}]all integrations ok.[/]")
+            repl_print(console, f"[{HIGHLIGHT}]all integrations ok.[/]")
         return True
 
     if sub == "setup":
@@ -117,32 +156,18 @@ def _cmd_integrations(session: ReplSession, console: Console, args: list[str]) -
 
     if sub == "show":
         if len(args) < 2:
-            console.print(f"[{DIM}]usage:[/] /integrations show <service>")
+            repl_print(console, f"[{DIM}]usage:[/] /integrations show <service>")
             session.mark_latest(ok=False, kind="slash")
             return True
-        service = args[1].lower()
-        results = repl_data.load_verified_integrations()
-        match = next((r for r in results if r.get("service") == service), None)
-        if match is None:
-            console.print(f"[{ERROR}]service not found:[/] {escape(service)}")
+        if not _render_integration_show(console, args[1]):
             session.mark_latest(ok=False, kind="slash")
-            return True
-        table = repl_table(
-            title=f"Integration: {service}",
-            title_style=BOLD_BRAND,
-            show_header=False,
-        )
-        table.add_column("key", style="bold")
-        table.add_column("value")
-        for k, v in match.items():
-            table.add_row(k, str(v))
-        console.print(table)
         return True
 
-    console.print(
+    repl_print(
+        console,
         f"[{ERROR}]unknown subcommand:[/] {escape(sub)}  "
         "(try [bold]/integrations list[/bold], [bold]/integrations verify[/bold], "
-        "or [bold]/integrations show <service>[/bold])"
+        "or [bold]/integrations show <service>[/bold])",
     )
     session.mark_latest(ok=False, kind="slash")
     return True
@@ -176,9 +201,9 @@ def _interactive_integrations_menu(session: ReplSession, console: Console) -> bo
             _cmd_integrations(session, console, ["setup"])
             show_section_break = True
         elif sub == "show":
-            choices = _verified_service_choices()
+            choices = _configured_service_choices()
             if not choices:
-                console.print("[dim]no integrations in store to show.[/dim]")
+                repl_print(console, f"[{DIM}]no integrations in store to show.[/]")
                 show_section_break = True
             else:
                 svc = repl_choose_one(
@@ -186,13 +211,12 @@ def _interactive_integrations_menu(session: ReplSession, console: Console) -> bo
                     breadcrumb=f"{root}{CRUMB_SEP}show",
                     choices=choices,
                 )
-                if svc:
-                    _cmd_integrations(session, console, ["show", svc])
+                if svc and _render_integration_show(console, svc):
                     show_section_break = True
         elif sub == "remove":
-            choices = _verified_service_choices()
+            choices = _configured_service_choices()
             if not choices:
-                console.print("[dim]no integrations in store to remove.[/dim]")
+                repl_print(console, f"[{DIM}]no integrations in store to remove.[/]")
                 show_section_break = True
             else:
                 svc = repl_choose_one(
@@ -255,7 +279,7 @@ def _interactive_mcp_menu(session: ReplSession, console: Console) -> bool:
         elif sub == "disconnect":
             choices = _mcp_service_choices()
             if not choices:
-                console.print("[dim]no MCP servers configured.[/dim]")
+                repl_print(console, f"[{DIM}]no MCP servers configured.[/]")
                 show_section_break = True
             else:
                 svc = repl_choose_one(
@@ -289,11 +313,7 @@ def _cmd_list(session: ReplSession, console: Console, args: list[str]) -> bool:
         return True
 
     if sub in ("tools", "tool"):
-        catalog = build_tool_catalog()
-        if not catalog:
-            console.print(f"[{DIM}]no tools registered.[/]")
-            return True
-        console.print(format_tool_catalog_text(catalog), markup=False)
+        render_tools_table(console, build_tool_catalog())
         return True
 
     if sub and sub not in ("", "all"):
@@ -333,25 +353,33 @@ _MCP_FIRST_ARGS: tuple[tuple[str, str], ...] = (
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
         "/list",
-        "list integrations, MCP, tools, LLM (TTY: bare '/list' opens inline menu; "
-        "else '/list integrations', '/list models', '/list mcp', '/list tools')",
+        "Browse integrations, MCP servers, models, and tools.",
         _cmd_list,
+        usage=("/list", "/list integrations", "/list models", "/list mcp", "/list tools"),
+        notes=("In a TTY, bare /list opens an interactive menu.",),
         first_arg_completions=_LIST_FIRST_ARGS,
         execution_tier=ExecutionTier.SAFE,
     ),
     SlashCommand(
         "/integrations",
-        "manage integrations (TTY: bare '/integrations' opens menu; else "
-        "'/integrations list', '/integrations verify', '/integrations show <service>')",
+        "Manage integrations.",
         _cmd_integrations,
+        usage=(
+            "/integrations",
+            "/integrations list",
+            "/integrations verify",
+            "/integrations show <service>",
+        ),
+        notes=("In a TTY, bare /integrations opens an interactive menu.",),
         first_arg_completions=_INTEGRATIONS_FIRST_ARGS,
         execution_tier=ExecutionTier.SAFE,
     ),
     SlashCommand(
         "/mcp",
-        "manage MCP servers (TTY: bare '/mcp' opens menu; else "
-        "'/mcp list', '/mcp connect', '/mcp disconnect')",
+        "Manage MCP servers.",
         _cmd_mcp,
+        usage=("/mcp", "/mcp list", "/mcp connect", "/mcp disconnect"),
+        notes=("In a TTY, bare /mcp opens an interactive menu.",),
         first_arg_completions=_MCP_FIRST_ARGS,
         execution_tier=ExecutionTier.SAFE,
     ),

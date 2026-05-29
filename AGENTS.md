@@ -26,11 +26,10 @@
 
 ### Before Push
 
-1. Clean working tree
-2. `make test-cov` (or `make test-full`)
-3. `make lint`
-4. `make format-check` (run `make format` if it fails)
-5. `make typecheck`
+Before any push or PR creation, follow the mandatory checklist in [CI.md](CI.md).
+
+- `CI.md` is the source of truth for push/PR readiness.
+- Do not skip required checks.
 
 ## 1. Repo Map
 
@@ -45,7 +44,9 @@
 | `Makefile`            | Canonical local automation for install, test, verify, deploy, and cleanup targets.                 |
 | `README.md`           | Product overview, install, quick start, high-level capabilities, and links to deeper docs.         |
 | `docs/DEVELOPMENT.md` | Contributor workflows: CI parity commands, dev container, benchmark, deployment, telemetry detail. |
+| `docs/investigation-tool-calling.md` | Investigation ReAct tool schemas, LLM invoke payloads, and message shapes (all providers). |
 | `SETUP.md`            | Machine setup (all platforms, Windows, MCP/OpenClaw, troubleshooting).                             |
+| `CI.md`               | Mandatory pre-push checklist: lint, format, typecheck, tests — agents MUST follow before pushing. |
 | `CONTRIBUTING.md`     | Contribution workflow, branch/PR guidance, and quality expectations.                               |
 
 `app/` one level deeper:
@@ -97,6 +98,7 @@ Files to touch:
 - `app/tools/utils/` if the tool needs shared helper code.
 - `app/services/<vendor>/client.py` if the tool should reuse a dedicated API client instead of inlining requests.
 - `docs/<tool_name>.mdx` for user-facing usage, parameters, and examples.
+- `docs/docs.json` — add the page path (without `.mdx`) to the appropriate `pages` array so Mintlify navigation includes it.
 - `tests/tools/test_<tool_name>.py` for behavior and regression coverage.
 
 Steps:
@@ -139,6 +141,7 @@ Files to touch:
 - `app/services/<name>/client.py` when the integration needs a dedicated API client.
 - `app/tools/<Name>Tool/` or `app/tools/<tool_file>.py` for the user-facing tool layer.
 - `docs/<name>.mdx` for user-facing setup, usage, and verification docs.
+- `docs/docs.json` — add the page path (without `.mdx`) to the appropriate `pages` array so Mintlify navigation includes it.
 - `tests/integrations/test_<name>.py` for config, verification, and store coverage.
 - `tests/tools/test_<tool_name>.py` and any relevant `tests/e2e/` or `tests/synthetic/` files if the integration is exercised by tools or scenarios.
 
@@ -159,13 +162,15 @@ Basic steps:
 
 - If core agent or pipeline logic changes -> run `make test-cov` and `make typecheck`.
 - If a new feature is shipped (tool, CLI command, pipeline behavior, integration) -> add a `docs/` page or section covering usage, configuration, and examples before the PR is opened.
+- If a new `docs/` page is added or renamed -> register it in `docs/docs.json` under the correct `pages` array in the same PR (path without `.mdx`, e.g. `messaging/whatsapp` for `docs/messaging/whatsapp.mdx`).
 - If an existing feature changes behavior, flags, or config shape -> update the relevant `docs/` page in the same PR; docs and code must stay in sync.
-- If a tool's API or schema changes -> update docs in `docs/` and update the related unit tests, usually under `tests/tools/`.
+- If a tool's API or schema changes -> update docs in `docs/` and update the related unit tests, usually under `tests/tools/`. For investigation LLM tool-calling (any provider), follow [docs/investigation-tool-calling.md](docs/investigation-tool-calling.md).
 - If an integration changes -> update `tests/integrations/` and verify with `make verify-integrations`.
 - If adding a new integration -> follow the New Integration Checklist below before opening the PR for review.
 - If adding new tests -> always place them in `tests/`, never in `app/` (no inline tests).
 - If CI-only tests are added -> mark them with the right pytest marker or place them in the appropriate e2e/synthetic/chaos folder so they do not run in the default local suite.
 - If investigation branching or loop behavior changes -> update `app/pipeline/pipeline.py` and the tests for that path.
+- If pushing or creating a PR -> follow the full pre-push checklist in [CI.md](CI.md).
 
 ## 4. Testing
 
@@ -178,6 +183,11 @@ Basic steps:
 - Single RCA test: `make test-rca FILE=<name>`
 - Lint: `make lint`
 - Type check: `make typecheck`
+- Routing live tests: always run with live coverage enabled by default. Do not use deselection
+  filters like `-k "not live_llm"` for routing scenario runs.
+- Do not make routing scenario tests pass by forcing deterministic shortcuts or bypassing live
+  planner behavior. Fix failures by improving planner/tool correctness or updating fixtures only
+  when behavior changes are explicitly intended and approved.
 
 ### Fast Local Testing
 
@@ -190,6 +200,8 @@ The fastest local loop is `make test-cov`, which exercises the non-live unit sui
 - CI-only tests: Some e2e tests, including Kubernetes, EKS, and chaos engineering paths, require live infrastructure and are excluded from `make test-cov`. Do not expect them to pass locally without that environment.
 - Legacy graph dev server: removed; use `make dev` for a local uvicorn hint or run investigations via the CLI.
 - Docker requirement: Several targets, including the Grafana local stack and Chaos Mesh workflows, require a running Docker daemon.
+- Docs navigation: Adding an `.mdx` file under `docs/` is not enough — Mintlify only shows pages listed in `docs/docs.json`. Forgetting the `pages` entry leaves the doc unreachable from the site sidebar.
+- Investigation tool schemas: draft-07 JSON Schema (e.g. `"type": ["object", "null"]`) can pass loose checks but fail the LLM API on first invoke because **all** available investigation tools are sent together. Normalize in the provider adapter and extend registry contract tests; see [docs/investigation-tool-calling.md](docs/investigation-tool-calling.md).
 
 ## 6. New Integration Checklist
 
@@ -198,7 +210,7 @@ When adding a new integration, a PR is only ready when:
 - Integration code added under `app/integrations/<name>/`
 - Tool(s) added under `app/tools/` with proper typing
 - Unit/mock tests added under `tests/integrations/`
-- Docs added under `docs/`
+- Docs added under `docs/` and registered in `docs/docs.json` `pages`
 - Screenshot or demo GIF showing the integration working
 - E2E or synthetic test added
 - `make verify-integrations` passes

@@ -33,6 +33,7 @@ from app.integrations.openclaw import build_openclaw_config, validate_openclaw_c
 from app.integrations.postgresql import build_postgresql_config, validate_postgresql_config
 from app.integrations.rabbitmq import build_rabbitmq_config, validate_rabbitmq_config
 from app.integrations.sentry import build_sentry_config, validate_sentry_config
+from app.integrations.signoz import build_signoz_config, validate_signoz_config
 from app.integrations.supabase import build_supabase_config, validate_supabase_config
 from app.services.alertmanager import AlertmanagerClient, AlertmanagerConfig
 from app.services.argocd import ArgoCDClient, ArgoCDConfig
@@ -345,6 +346,87 @@ def _verify_telegram(source: str, config: dict[str, Any]) -> dict[str, str]:
     )
 
 
+def _verify_whatsapp(source: str, config: dict[str, Any]) -> dict[str, str]:
+    account_sid = str(config.get("account_sid", "")).strip()
+    auth_token = str(config.get("auth_token", "")).strip()
+    if not account_sid:
+        return result("whatsapp", source, "missing", "Missing account_sid.")
+    if not auth_token:
+        return result("whatsapp", source, "missing", "Missing auth_token.")
+
+    try:
+        response = requests.get(
+            f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}.json",
+            auth=(account_sid, auth_token),
+            timeout=10,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except Exception as exc:
+        return result("whatsapp", source, "failed", f"Twilio API check failed: {exc}")
+
+    friendly_name = str(payload.get("friendly_name", "")).strip()
+    return result(
+        "whatsapp",
+        source,
+        "passed",
+        f"Connected to Twilio account {friendly_name or account_sid}.",
+    )
+
+
+def _verify_twilio(source: str, config: dict[str, Any]) -> dict[str, str]:
+    """Verify the Twilio integration: account auth + SMS channel readiness.
+
+    A "passed" result confirms the account credentials authenticate and the
+    SMS channel has a usable sender (``from_number`` or
+    ``messaging_service_sid``). WhatsApp is verified separately via the
+    standalone ``whatsapp`` integration.
+    """
+    account_sid = str(config.get("account_sid", "")).strip()
+    auth_token = str(config.get("auth_token", "")).strip()
+    if not account_sid:
+        return result("twilio", source, "missing", "Missing account_sid.")
+    if not auth_token:
+        return result("twilio", source, "missing", "Missing auth_token.")
+
+    try:
+        response = requests.get(
+            f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}.json",
+            auth=(account_sid, auth_token),
+            timeout=10,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except Exception as exc:
+        return result("twilio", source, "failed", f"Twilio API check failed: {exc}")
+
+    friendly_name = str(payload.get("friendly_name", "")).strip() or account_sid
+
+    sms_cfg = config.get("sms") or {}
+    sms_ready = bool(sms_cfg.get("enabled")) and bool(
+        str(sms_cfg.get("from_number") or "").strip()
+        or str(sms_cfg.get("messaging_service_sid") or "").strip()
+    )
+
+    if not sms_ready:
+        return result(
+            "twilio",
+            source,
+            "failed",
+            (
+                f"Connected to Twilio account {friendly_name} but the SMS channel "
+                "is not ready. Enable SMS and set a from_number or messaging_service_sid."
+            ),
+        )
+
+    return result(
+        "twilio",
+        source,
+        "passed",
+        f"Connected to Twilio account {friendly_name}; SMS channel ready.",
+    )
+
+
 def _verify_snowflake(source: str, config: dict[str, Any]) -> dict[str, str]:
     account_identifier = str(config.get("account_identifier", "")).strip()
     token = str(config.get("token", "")).strip()
@@ -455,6 +537,11 @@ _verify_openclaw = build_validation_verifier(
     "openclaw",
     build_config=build_openclaw_config,
     validate_config=validate_openclaw_config,
+)
+_verify_signoz = build_validation_verifier(
+    "signoz",
+    build_config=build_signoz_config,
+    validate_config=validate_signoz_config,
 )
 
 
@@ -617,6 +704,7 @@ __all__ = [
     "_verify_postgresql",
     "_verify_rabbitmq",
     "_verify_sentry",
+    "_verify_signoz",
     "_verify_slack",
     "_verify_slack_without_test",
     "_verify_snowflake",
@@ -624,8 +712,10 @@ __all__ = [
     "_verify_supabase",
     "_verify_telegram",
     "_verify_tracer",
+    "_verify_twilio",
     "_verify_vercel",
     "_verify_victoria_logs",
+    "_verify_whatsapp",
     "build_probe_verifier",
     "build_validation_verifier",
     "result",

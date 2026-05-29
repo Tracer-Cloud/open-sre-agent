@@ -7,6 +7,7 @@ import tempfile
 from pathlib import Path
 
 from app.constants.investigation import MAX_EXPANSIONS, MAX_INVESTIGATION_LOOPS
+from app.constants.opensre import DEFAULT_RELEASE_VERSION
 from app.constants.posthog import (
     DEFAULT_POSTHOG_BOUNCE_THRESHOLD,
     DEFAULT_POSTHOG_BOUNCE_WINDOW,
@@ -23,8 +24,7 @@ from app.constants.sentry import (
     SENTRY_TRACES_SAMPLE_RATE,
 )
 
-OPENSRE_HOME_DIR: Path = Path.home() / ".config" / "opensre"
-LEGACY_OPENSRE_HOME_DIR: Path = Path.home() / ".opensre"
+OPENSRE_HOME_DIR: Path = Path.home() / ".opensre"
 LEGACY_TRACER_HOME_DIR: Path = Path.home() / ".tracer"
 INTEGRATIONS_STORE_PATH: Path = OPENSRE_HOME_DIR / "integrations.json"
 LEGACY_INTEGRATIONS_STORE_PATH: Path = LEGACY_TRACER_HOME_DIR / "integrations.json"
@@ -40,6 +40,7 @@ def ensure_opensre_tmp_dir() -> Path:
 
 
 __all__ = [
+    "DEFAULT_RELEASE_VERSION",
     "MAX_EXPANSIONS",
     "MAX_INVESTIGATION_LOOPS",
     "DEFAULT_POSTHOG_BOUNCE_THRESHOLD",
@@ -47,7 +48,6 @@ __all__ = [
     "DEFAULT_POSTHOG_TIMEOUT_SECONDS",
     "DEFAULT_POSTHOG_URL",
     "INTEGRATIONS_STORE_PATH",
-    "LEGACY_OPENSRE_HOME_DIR",
     "LEGACY_INTEGRATIONS_STORE_PATH",
     "LEGACY_TRACER_HOME_DIR",
     "ensure_opensre_tmp_dir",

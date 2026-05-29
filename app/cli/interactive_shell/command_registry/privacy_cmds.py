@@ -5,7 +5,6 @@ from __future__ import annotations
 from prompt_toolkit.history import FileHistory, InMemoryHistory
 from rich.console import Console
 from rich.markup import escape
-from rich.table import Table
 
 from app.cli.interactive_shell.command_registry.types import SlashCommand
 from app.cli.interactive_shell.history import (
@@ -18,7 +17,14 @@ from app.cli.interactive_shell.history.policy import (
     RedactingFileHistory,
 )
 from app.cli.interactive_shell.runtime import ReplSession
-from app.cli.interactive_shell.ui import BOLD_BRAND, DIM, ERROR, HIGHLIGHT
+from app.cli.interactive_shell.ui import (
+    BOLD_BRAND,
+    DIM,
+    ERROR,
+    HIGHLIGHT,
+    print_repl_table,
+    repl_table,
+)
 from app.cli.interactive_shell.ui.choice_menu import (
     CRUMB_SEP,
     repl_choose_one,
@@ -33,13 +39,13 @@ def _show_history(console: Console) -> bool:
         console.print(f"[{DIM}]no history yet.[/]")
         return True
 
-    table = Table(title="Command history", title_style=BOLD_BRAND)
+    table = repl_table(title="Command history\n", title_style=BOLD_BRAND)
     table.add_column("#", style=DIM, justify="right")
     table.add_column("text", overflow="fold")
 
     for i, entry in enumerate(entries, start=1):
         table.add_row(str(i), escape(entry))
-    console.print(table)
+    print_repl_table(console, table)
     return True
 
 
@@ -189,7 +195,7 @@ def _cmd_history(session: ReplSession, console: Console, args: list[str]) -> boo
 
 def _cmd_privacy(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     backend = session.prompt_history_backend
-    table = Table(title="Privacy settings", title_style=BOLD_BRAND, show_header=False)
+    table = repl_table(title="Privacy settings\n", title_style=BOLD_BRAND, show_header=False)
     table.add_column("setting", style="bold")
     table.add_column("value")
 
@@ -215,7 +221,7 @@ def _cmd_privacy(session: ReplSession, console: Console, args: list[str]) -> boo
     table.add_row("retention cap", retention)
     table.add_row("file", str(prompt_history_path()))
     table.add_row("built-in patterns", str(len(DEFAULT_REDACTION_RULES)))
-    console.print(table)
+    print_repl_table(console, table)
     console.print(
         f"[{DIM}]threat model: prompt history is stored unencrypted on disk. "
         f"Use[/] [{HIGHLIGHT}]/history clear[/] [{DIM}]after sharing your machine, "
@@ -235,13 +241,21 @@ _HISTORY_FIRST_ARGS: tuple[tuple[str, str], ...] = (
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
         "/history",
-        "command history (TTY: bare '/history' opens menu; else clear | off | on | retention <N>)",
+        "Manage command history.",
         _cmd_history,
+        usage=(
+            "/history",
+            "/history clear",
+            "/history off",
+            "/history on",
+            "/history retention <N>",
+        ),
+        notes=("In a TTY, bare /history opens an interactive menu.",),
         first_arg_completions=_HISTORY_FIRST_ARGS,
     ),
     SlashCommand(
         "/privacy",
-        "show history persistence + redaction status and threat model",
+        "Show history persistence, redaction status, and threat model.",
         _cmd_privacy,
     ),
 ]

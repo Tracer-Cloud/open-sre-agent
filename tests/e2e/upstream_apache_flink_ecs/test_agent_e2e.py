@@ -19,6 +19,11 @@ import requests
 
 from app.cli.investigation import run_investigation_cli
 from app.utils.tracing import traceable
+from tests.shared.e2e_rca_checks import (
+    audit_key_mentioned,
+    investigation_text_blob,
+    s3_key_mentioned,
+)
 from tests.shared.stack_config import get_flink_config
 from tests.utils.alert_factory import create_alert
 
@@ -196,7 +201,7 @@ def test_agent_investigation(failure_data: dict):
         "Schema change detected": False,
     }
 
-    investigation_text = json.dumps(result).lower()
+    investigation_text = investigation_text_blob(result)
 
     if (
         "cloudwatch" in investigation_text
@@ -205,12 +210,11 @@ def test_agent_investigation(failure_data: dict):
     ):
         success_checks["Flink logs retrieved"] = True
 
-    if failure_data["s3_key"] in investigation_text or "ingested/" in investigation_text:
+    if s3_key_mentioned(investigation_text, failure_data["s3_key"]):
         success_checks["S3 input data inspected"] = True
 
-    if failure_data.get("audit_key") and (
-        failure_data["audit_key"] in investigation_text or "audit/" in investigation_text
-    ):
+    audit_key = (failure_data.get("audit_key") or "").strip()
+    if audit_key_mentioned(investigation_text, audit_key):
         success_checks["Audit trail traced"] = True
 
     if (

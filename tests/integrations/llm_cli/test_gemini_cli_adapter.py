@@ -51,6 +51,10 @@ def test_detect_logged_in(mock_which: MagicMock, mock_run: MagicMock) -> None:
     assert probe.logged_in is True
     assert probe.bin_path == "/usr/bin/gemini"
     assert probe.version == "0.1.2"
+    # The probe should always carry the 2026-06-18 sunset notice when installed,
+    # pointing users to antigravity-cli (additive — paid Code Assist exempt).
+    assert "2026-06-18" in probe.detail
+    assert "antigravity-cli" in probe.detail
 
 
 @patch("app.integrations.llm_cli.gemini_cli.subprocess.run")
@@ -68,6 +72,10 @@ def test_detect_not_authenticated(mock_which: MagicMock, mock_run: MagicMock) ->
 
     assert probe.installed is True
     assert probe.logged_in is False
+    # The sunset notice is suppressed on confirmed auth failures so users
+    # debugging "Not authenticated" don't read it next to the actual error.
+    assert "2026-06-18" not in probe.detail
+    assert "antigravity-cli" not in probe.detail
 
 
 @patch("app.integrations.llm_cli.gemini_cli.subprocess.run")
@@ -133,6 +141,9 @@ def test_detect_unclear_auth(mock_which: MagicMock, mock_run: MagicMock) -> None
     assert probe.installed is True
     assert probe.logged_in is None
     assert "Network error" in probe.detail
+    # Ambiguous auth (network blip, timeout) still surfaces the sunset note —
+    # the user's CLI is presumed operational; they need the migration warning.
+    assert "2026-06-18" in probe.detail
 
 
 @patch("app.integrations.llm_cli.gemini_cli.subprocess.run")
@@ -187,13 +198,13 @@ def test_build_basic_invocation(_mock_which: MagicMock) -> None:
     assert "--output-format" in inv.argv
     assert "json" in inv.argv
     assert inv.stdin is None
-    assert inv.timeout_sec == 120.0
+    assert inv.timeout_sec == 300.0
 
 
 def test_resolve_exec_timeout_default() -> None:
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("GEMINI_CLI_TIMEOUT_SECONDS", None)
-        assert _resolve_exec_timeout_seconds() == 120.0
+        assert _resolve_exec_timeout_seconds() == 300.0
 
 
 def test_resolve_exec_timeout_clamps_low_and_high() -> None:

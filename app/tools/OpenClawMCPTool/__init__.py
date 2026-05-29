@@ -16,6 +16,7 @@ from app.integrations.openclaw import (
 from app.integrations.openclaw import (
     list_openclaw_tools as list_openclaw_mcp_tools,
 )
+from app.tools._telemetry import report_run_error
 from app.tools.tool_decorator import tool
 
 OpenClawParams = dict[str, object]
@@ -170,10 +171,26 @@ def _normalize_named_bridge_call(
     *,
     tool_name: str,
     arguments: OpenClawParams,
+    surface_tool_name: str,
 ) -> OpenClawBridgeResponse:
+    """Invoke a named MCP tool and normalise its result.
+
+    ``tool_name`` is the MCP-side tool identifier (e.g. ``conversations_get``);
+    ``surface_tool_name`` is the OpenSRE registered tool name that this call
+    is running on behalf of (e.g. ``get_openclaw_conversation``) so the Sentry
+    ``tool_name`` tag matches the tool's declared metadata.
+    """
     try:
         result = invoke_openclaw_mcp_tool(config, tool_name, arguments)
     except Exception as err:
+        report_run_error(
+            err,
+            tool_name=surface_tool_name,
+            source="openclaw",
+            component="app.tools.OpenClawMCPTool",
+            method=f"invoke_openclaw_mcp_tool('{tool_name}')",
+            extras={"mcp_tool": tool_name, "transport": config.mode},
+        )
         return _openclaw_unavailable_response(
             describe_openclaw_error(err, config),
             tool_name=tool_name,
@@ -240,6 +257,14 @@ def list_openclaw_bridge_tools(
     try:
         tools = list_openclaw_mcp_tools(config)
     except Exception as err:
+        report_run_error(
+            err,
+            tool_name="list_openclaw_tools",
+            source="openclaw",
+            component="app.tools.OpenClawMCPTool",
+            method="list_openclaw_mcp_tools",
+            extras={"transport": config.mode},
+        )
         payload = _openclaw_unavailable_response(describe_openclaw_error(err, config))
         payload["tools"] = []
         return payload
@@ -318,6 +343,14 @@ def search_openclaw_conversations(
     try:
         result = invoke_openclaw_mcp_tool(config, "conversations_list", arguments)
     except Exception as err:
+        report_run_error(
+            err,
+            tool_name="search_openclaw_conversations",
+            source="openclaw",
+            component="app.tools.OpenClawMCPTool",
+            method="invoke_openclaw_mcp_tool('conversations_list')",
+            extras={"transport": config.mode},
+        )
         payload = _openclaw_unavailable_response(describe_openclaw_error(err, config))
         payload["conversations"] = []
         return payload
@@ -385,6 +418,7 @@ def get_openclaw_conversation(
         config,
         tool_name="conversations_get",
         arguments={"conversationId": normalized_conversation_id},
+        surface_tool_name="get_openclaw_conversation",
     )
 
 
@@ -450,6 +484,7 @@ def send_openclaw_message(
         config,
         tool_name="message_send",
         arguments={"conversationId": normalized_conversation_id, "content": normalized_content},
+        surface_tool_name="send_openclaw_message",
     )
 
 
@@ -522,6 +557,14 @@ def call_openclaw_bridge_tool(
     try:
         result = invoke_openclaw_mcp_tool(config, normalized_tool_name, arguments or {})
     except Exception as err:
+        report_run_error(
+            err,
+            tool_name="call_openclaw_tool",
+            source="openclaw",
+            component="app.tools.OpenClawMCPTool",
+            method="invoke_openclaw_mcp_tool",
+            extras={"mcp_tool": normalized_tool_name, "transport": config.mode},
+        )
         return _openclaw_unavailable_response(
             describe_openclaw_error(err, config),
             tool_name=normalized_tool_name,

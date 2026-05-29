@@ -43,6 +43,7 @@ EvidenceSource = Literal[
     "openobserve",
     "opensearch",
     "alertmanager",
+    "signoz",
     "splunk",
     "supabase",
     "airflow",
@@ -52,4 +53,5 @@ EvidenceSource = Literal[
     "rds",
     "ec2",
     "hermes",
+    "twilio",
 ]

@@ -168,7 +168,7 @@ def _interactive_shell_slash_hints() -> str:
         "",
     ]
     for cmd in SLASH_COMMANDS.values():
-        lines.append(f"  {cmd.name} - {cmd.help_text}")
+        lines.append(f"  {cmd.name} - {cmd.description}")
     lines.extend(
         [
             "",

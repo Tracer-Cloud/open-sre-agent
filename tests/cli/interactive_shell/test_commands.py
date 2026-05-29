@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import subprocess
 import sys
 from pathlib import Path
 
@@ -42,6 +43,8 @@ class TestDispatchSlash:
         output = buf.getvalue()
         for name in SLASH_COMMANDS:
             assert name in output
+        assert "Use /help <command> for usage." in output
+        assert "/model set <provider>" not in output
 
     def test_question_mark_shortcut_runs_help(self) -> None:
         """`/?` is the canonical shortcut for `/help` (vim / less convention)."""
@@ -52,6 +55,42 @@ class TestDispatchSlash:
         # Any slash command name suffices as proof the help table rendered.
         assert "/help" in output
         assert "/list" in output
+
+    def test_help_command_detail_shows_usage(self) -> None:
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/help /model", session, console) is True
+        output = buf.getvalue()
+        assert "Show or change active LLM settings." in output
+        assert "/model set <provider>" in output
+        assert "In a TTY, bare /model opens an interactive menu." in output
+
+    def test_help_category_shows_compact_section(self) -> None:
+        session = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/help tasks", session, console) is True
+        output = buf.getvalue()
+        assert "Tasks commands" in output
+        assert "/tasks" in output
+        assert "/cancel <task_id>" not in output
+
+    def test_tty_help_dispatch_uses_interactive_picker(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.cli.interactive_shell.command_registry import help as help_cmd
+
+        session = ReplSession()
+        console, buf = _capture()
+        picker_called: list[bool] = []
+        monkeypatch.setattr(help_cmd, "repl_tty_interactive", lambda: True)
+        monkeypatch.setattr(
+            help_cmd, "choose_help_command", lambda _sections: picker_called.append(True)
+        )
+
+        assert dispatch_slash("/help", session, console) is True
+
+        assert picker_called == [True]
+        assert buf.getvalue() == ""
 
     def test_bare_slash_previews_all_commands(self) -> None:
         session = ReplSession()
@@ -159,14 +198,33 @@ class TestDispatchSlash:
         assert "/local-llm" not in SLASH_COMMANDS
         assert "/local_llm" not in SLASH_COMMANDS
 
+    def test_hermes_slash_command_delegates_to_bare_cli(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.cli.interactive_shell.command_registry import cli_parity
+
+        calls: list[list[str]] = []
+
+        def _fake_run_cli_command(_console: Console, args: list[str]) -> bool:
+            calls.append(args)
+            return True
+
+        monkeypatch.setattr(cli_parity, "run_cli_command", _fake_run_cli_command)
+
+        session = ReplSession()
+        console, _ = _capture()
+
+        assert dispatch_slash("/hermes", session, console) is True
+        assert calls == [["hermes"]]
+
     def test_slash_commands_proxy_reads_current_registry(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        command = command_types.SlashCommand("/hot", "hot reload test", lambda *_args: True)
-        monkeypatch.setattr(registry_module, "SLASH_COMMANDS", {"/hot": command})
+        command = command_types.SlashCommand("/demo", "demo command", lambda *_args: True)
+        monkeypatch.setattr(registry_module, "SLASH_COMMANDS", {"/demo": command})
 
-        assert SLASH_COMMANDS.get("/hot") is command
-        assert list(SLASH_COMMANDS) == ["/hot"]
+        assert SLASH_COMMANDS.get("/demo") is command
+        assert list(SLASH_COMMANDS) == ["/demo"]
 
     def test_dispatch_slash_proxy_calls_current_registry(
         self, monkeypatch: pytest.MonkeyPatch
@@ -423,13 +481,30 @@ class TestIntegrationsCommand:
         assert "all integrations ok" in buf.getvalue()
 
     def test_show_known_service(self, monkeypatch: object) -> None:
-        self._patch(monkeypatch)
+        verified: list[str | None] = []
+
+        def _verify_one(service: str) -> dict[str, str]:
+            verified.append(service)
+            return {
+                "service": service,
+                "source": "env",
+                "status": "ok",
+                "detail": "ok",
+            }
+
+        monkeypatch.setattr(
+            repl_data_module,
+            "configured_integration_names",
+            lambda: ["datadog"],
+        )
+        monkeypatch.setattr(repl_data_module, "verify_integration", _verify_one)
         console, buf = _capture()
         dispatch_slash("/integrations show datadog", ReplSession(), console)
+        assert verified == ["datadog"]
         assert "datadog" in buf.getvalue()
 
     def test_show_unknown_service(self, monkeypatch: object) -> None:
-        self._patch(monkeypatch)
+        monkeypatch.setattr(repl_data_module, "configured_integration_names", lambda: ["datadog"])
         session = ReplSession()
         session.record("slash", "/integrations show bogus")
         console, buf = _capture()
@@ -693,7 +768,7 @@ class TestModelCommand:
         assert not env_path.exists()
         assert session.history[-1]["ok"] is False
 
-    def test_set_unknown_reasoning_model_is_rejected_for_openai(
+    def test_set_custom_reasoning_model_is_accepted_for_openai(
         self,
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
@@ -706,13 +781,56 @@ class TestModelCommand:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
 
         console, buf = _capture()
-        dispatch_slash("/model set openai not-a-real-model-xyz", ReplSession(), console)
+        dispatch_slash("/model set openai gpt-5.5", ReplSession(), console)
 
         output = buf.getvalue()
-        assert "unknown model for openai" in output
-        assert "not-a-real-model-xyz" in output
-        assert "switched LLM provider" not in output
-        assert not env_path.exists()
+        assert "switched LLM provider" in output
+        assert "gpt-5.5" in output
+        contents = env_path.read_text(encoding="utf-8")
+        assert "LLM_PROVIDER=openai" in contents
+        assert "OPENAI_REASONING_MODEL=gpt-5.5" in contents
+        assert "OPENAI_MODEL=gpt-5.5" in contents
+
+    def test_set_bare_model_updates_active_provider_reasoning_model(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        self._patch_llm(monkeypatch)
+        import app.cli.wizard.env_sync as env_sync
+
+        env_path = tmp_path / ".env"
+        monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setenv("LLM_PROVIDER", "openai")
+
+        console, buf = _capture()
+        dispatch_slash("/model set gpt-5.5", ReplSession(), console)
+
+        output = buf.getvalue()
+        assert "reasoning model set to" in output
+        assert "gpt-5.5" in output
+        contents = env_path.read_text(encoding="utf-8")
+        assert "LLM_PROVIDER=" not in contents
+        assert "OPENAI_REASONING_MODEL=gpt-5.5" in contents
+        assert "OPENAI_MODEL=gpt-5.5" in contents
+
+    def test_set_bare_gpt_words_normalizes_to_model_id(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        self._patch_llm(monkeypatch)
+        import app.cli.wizard.env_sync as env_sync
+
+        env_path = tmp_path / ".env"
+        monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setenv("LLM_PROVIDER", "openai")
+
+        dispatch_slash("/model set gpt 5.5", ReplSession(), _capture()[0])
+
+        contents = env_path.read_text(encoding="utf-8")
+        assert "OPENAI_REASONING_MODEL=gpt-5.5" in contents
+        assert "OPENAI_MODEL=gpt-5.5" in contents
 
     def test_set_unknown_toolcall_model_is_rejected(
         self,
@@ -931,6 +1049,7 @@ class TestInvestigateFileCommand:
         console, buf = _capture()
         dispatch_slash("/investigate", ReplSession(), console)
         assert "usage" in buf.getvalue()
+        assert "/investigate <file|template>" in buf.getvalue()
 
     def test_missing_file_prints_error(self) -> None:
         session = ReplSession()
@@ -961,6 +1080,150 @@ class TestInvestigateFileCommand:
         dispatch_slash(f"/investigate {alert_file}", session, console)
         assert session.last_state == {"root_cause": "test cause"}
         assert '{"alert_name": "test"}' in captured[0]
+
+    def test_template_arg_runs_sample_alert(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        captured: list[str] = []
+
+        def _fake_sample(
+            *,
+            template_name: str,
+            context_overrides: object = None,
+            cancel_requested: object = None,
+        ) -> dict[str, str]:
+            _ = (context_overrides, cancel_requested)
+            captured.append(template_name)
+            return {"root_cause": "sample cause"}
+
+        monkeypatch.setattr("app.cli.investigation.run_sample_alert_for_session", _fake_sample)
+
+        session = ReplSession()
+        console, _ = _capture()
+        dispatch_slash("/investigate generic", session, console)
+
+        assert captured == ["generic"]
+        assert session.last_state == {"root_cause": "sample cause"}
+
+    def test_template_arg_tracks_cli_repl_file_source(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        track_calls: list[tuple[str, str, str | None]] = []
+
+        class _TrackContext:
+            def __enter__(self) -> None:
+                return None
+
+            def __exit__(self, exc_type, exc, tb) -> bool:
+                _ = (exc_type, exc, tb)
+                return False
+
+        def _fake_track(*, entrypoint, trigger_mode, input_path=None, **kwargs):  # type: ignore[no-untyped-def]
+            _ = kwargs
+            track_calls.append((entrypoint.value, trigger_mode.value, input_path))
+            return _TrackContext()
+
+        monkeypatch.setattr("app.analytics.cli.track_investigation", _fake_track)
+        monkeypatch.setattr(
+            "app.cli.investigation.run_sample_alert_for_session",
+            lambda **_kwargs: {"root_cause": "sample cause"},
+        )
+
+        session = ReplSession()
+        console, _ = _capture()
+        dispatch_slash("/investigate generic", session, console)
+
+        assert track_calls == [("cli_repl_file", "file", "template:generic")]
+
+    def test_template_name_takes_precedence_over_local_same_name_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        (tmp_path / "generic").write_text('{"alert_name": "local-file"}', encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
+        calls: list[str] = []
+
+        def _fake_sample(
+            *,
+            template_name: str,
+            context_overrides: object = None,
+            cancel_requested: object = None,
+        ) -> dict[str, str]:
+            _ = (context_overrides, cancel_requested)
+            calls.append(template_name)
+            return {"root_cause": "template-wins"}
+
+        monkeypatch.setattr("app.cli.investigation.run_sample_alert_for_session", _fake_sample)
+
+        session = ReplSession()
+        console, _ = _capture()
+        dispatch_slash("/investigate generic", session, console)
+
+        assert calls == ["generic"]
+        assert session.last_state == {"root_cause": "template-wins"}
+
+    def test_missing_arg_in_tty_opens_interactive_menu(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.cli.interactive_shell.command_registry import investigation as investigation_cmd
+
+        picks = iter(["generic", "done"])
+        captured: list[str] = []
+
+        def _fake_sample(
+            *,
+            template_name: str,
+            context_overrides: object = None,
+            cancel_requested: object = None,
+        ) -> dict[str, str]:
+            _ = (context_overrides, cancel_requested)
+            captured.append(template_name)
+            return {"root_cause": "sample from menu"}
+
+        monkeypatch.setattr(investigation_cmd, "repl_tty_interactive", lambda: True)
+        monkeypatch.setattr(investigation_cmd, "repl_choose_one", lambda **_: next(picks))
+        monkeypatch.setattr("app.cli.investigation.run_sample_alert_for_session", _fake_sample)
+
+        session = ReplSession()
+        console, buf = _capture()
+        dispatch_slash("/investigate", session, console)
+
+        assert captured == ["generic"]
+        assert session.last_state == {"root_cause": "sample from menu"}
+        assert "usage" not in buf.getvalue().lower()
+
+    def test_tty_investigate_menu_browse_path_runs_custom_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.cli.interactive_shell.command_registry import investigation as investigation_cmd
+
+        alert_file = tmp_path / "custom_alert.json"
+        alert_file.write_text('{"alert_name": "custom"}', encoding="utf-8")
+
+        picks = iter(["__browse__", "done"])
+        captured: list[str] = []
+
+        def _fake(
+            alert_text: str,
+            context_overrides: object = None,
+            cancel_requested: object = None,
+        ) -> dict[str, str]:
+            _ = (context_overrides, cancel_requested)
+            captured.append(alert_text)
+            return {"root_cause": "custom path run"}
+
+        monkeypatch.setattr(investigation_cmd, "repl_tty_interactive", lambda: True)
+        monkeypatch.setattr(investigation_cmd, "repl_choose_one", lambda **_: next(picks))
+        monkeypatch.setattr(
+            investigation_cmd,
+            "_prompt_investigate_path",
+            lambda _console: str(alert_file),
+        )
+        monkeypatch.setattr("app.cli.investigation.run_investigation_for_session", _fake)
+
+        session = ReplSession()
+        console, _ = _capture()
+        dispatch_slash("/investigate", session, console)
+
+        assert session.last_state == {"root_cause": "custom path run"}
+        assert '"alert_name": "custom"' in captured[0]
 
     def test_investigate_file_tracks_cli_repl_file_source(
         self, tmp_path: object, monkeypatch: object
@@ -999,7 +1262,7 @@ class TestInvestigateFileCommand:
         self, tmp_path: object, monkeypatch: object
     ) -> None:
         """Regression for Greptile P1 (PR #591): /investigate previously skipped
-        the context-accumulation step that `loop._run_new_alert` does after a
+        the context-accumulation step that `execution.run_new_alert` does after a
         free-text investigation, so subsequent follow-up alerts lost the infra
         hints (service / cluster / region) that /investigate just discovered."""
 
@@ -1269,7 +1532,7 @@ class TestPrePolicyValidation:
     @pytest.mark.parametrize(
         "command,expected_usage_fragment",
         [
-            ("/investigate", "/investigate <file>"),
+            ("/investigate", "/investigate <file|template>"),
             ("/save", "/save <path>"),
             ("/cancel", "/cancel <task_id>"),
         ],
@@ -1306,11 +1569,11 @@ class TestPrePolicyValidation:
         console, buf = _capture()
         dispatch_slash("/investigate", session, console, confirm_fn=_confirm, is_tty=True)
 
-        assert "/investigate <file>" in buf.getvalue()
+        assert "/investigate <file|template>" in buf.getvalue()
         assert confirm_calls == [], "trust mode must not skip arg validation"
 
-    def test_valid_arg_still_fires_policy_prompt(self, tmp_path: Path) -> None:
-        """The fix must not accidentally remove the policy gate entirely."""
+    def test_investigate_with_valid_arg_skips_policy_prompt(self, tmp_path: Path) -> None:
+        """RCA from a file is the primary REPL action — no Proceed? gate."""
         alert_file = tmp_path / "alert.json"
         alert_file.write_text('{"alert_name": "test"}', encoding="utf-8")
 
@@ -1318,10 +1581,10 @@ class TestPrePolicyValidation:
 
         def _confirm(prompt: str) -> str:
             confirm_calls.append(prompt)
-            return "n"  # decline so we don't run a real investigation
+            return "n"
 
         session = ReplSession()
-        console, _ = _capture()
+        console, buf = _capture()
         dispatch_slash(
             f"/investigate {alert_file}",
             session,
@@ -1330,7 +1593,8 @@ class TestPrePolicyValidation:
             is_tty=True,
         )
 
-        assert len(confirm_calls) == 1, "policy prompt must still fire for valid args"
+        assert confirm_calls == []
+        assert "Proceed?" not in buf.getvalue()
 
 
 class TestSlashValidatorFunctions:
@@ -1339,7 +1603,7 @@ class TestSlashValidatorFunctions:
     @pytest.mark.parametrize(
         "validator,expected_usage_fragment",
         [
-            (_validate_investigate_args, "/investigate <file>"),
+            (_validate_investigate_args, "/investigate <file|template>"),
             (_validate_save_args, "/save <path>"),
             (_validate_cancel_args, "/cancel <task_id>"),
         ],
@@ -1361,6 +1625,142 @@ class TestSlashValidatorFunctions:
     )
     def test_returns_none_when_args_present(self, validator: object, args: list[str]) -> None:
         assert validator(args) is None  # type: ignore[operator]
+
+
+class TestRunCliCommand:
+    """Regression: captured subprocess output must survive REPL prompt redraw."""
+
+    def test_timed_delegate_replays_stdout_through_console(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from app.cli.interactive_shell.command_registry import cli_parity as m
+
+        def _fake_run(
+            cmd: list[str],
+            *,
+            check: bool,
+            timeout: float | None,
+            capture_output: bool,
+            text: bool,
+            encoding: str,
+            errors: str,
+        ) -> subprocess.CompletedProcess[str]:
+            del check, timeout, text, encoding, errors
+            assert capture_output is True
+            assert cmd[:3] == [sys.executable, "-m", "app.cli"]
+            assert cmd[3:] == ["update"]
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="  opensre 1.0.0 is already up to date.\n",
+                stderr="",
+            )
+
+        monkeypatch.setattr(m.subprocess, "run", _fake_run)
+        console, buf = _capture()
+        assert m.run_cli_command(console, ["update"], subprocess_timeout=30.0) is True
+        assert "already up to date" in buf.getvalue()
+
+    def test_config_delegate_captures_output(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from app.cli.interactive_shell.command_registry import cli_parity as m
+
+        def _fake_run(
+            cmd: list[str],
+            *,
+            check: bool,
+            timeout: float | None,
+            capture_output: bool,
+            text: bool,
+            encoding: str,
+            errors: str,
+        ) -> subprocess.CompletedProcess[str]:
+            del check, timeout, text, encoding, errors
+            assert capture_output is True
+            assert cmd[:3] == [sys.executable, "-m", "app.cli"]
+            assert cmd[3:] == ["config", "show"]
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="Provider : cursor\n",
+                stderr="",
+            )
+
+        monkeypatch.setattr(m.subprocess, "run", _fake_run)
+        console, buf = _capture()
+        assert m._cmd_config(ReplSession(), console, ["show"]) is True
+        assert "Provider : cursor" in buf.getvalue()
+
+    def test_capture_output_replays_stdout_through_console_without_timeout(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """``capture_output=True`` must route child stdout through ``console`` even
+        when no timeout is set, so non-interactive slash commands like ``/tests
+        list`` do not lose their output to the parent stdout FD.
+        """
+        from app.cli.interactive_shell.command_registry import cli_parity as m
+
+        def _fake_run(
+            cmd: list[str],
+            *,
+            check: bool,
+            timeout: float | None,
+            capture_output: bool,
+            text: bool,
+            encoding: str,
+            errors: str,
+        ) -> subprocess.CompletedProcess[str]:
+            del check, text, encoding, errors
+            assert capture_output is True
+            assert timeout is None
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="catalog row one\ncatalog row two\n",
+                stderr="",
+            )
+
+        monkeypatch.setattr(m.subprocess, "run", _fake_run)
+        console, buf = _capture()
+        assert m.run_cli_command(console, ["tests", "list"], capture_output=True) is True
+        assert "catalog row one" in buf.getvalue()
+        assert "catalog row two" in buf.getvalue()
+
+    def test_timeout_replays_decoded_partial_output(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from app.cli.interactive_shell.command_registry import cli_parity as m
+
+        replayed: list[tuple[str, str | None]] = []
+
+        def _fake_print_command_output(
+            _console: Console,
+            output: str,
+            *,
+            style: str | None = None,
+        ) -> None:
+            replayed.append((output, style))
+
+        def _fake_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+            raise subprocess.TimeoutExpired(
+                cmd=[sys.executable, "-m", "app.cli", "update"],
+                timeout=30.0,
+                output=b"partial stdout\n",
+                stderr=b"partial stderr\n",
+            )
+
+        monkeypatch.setattr(m, "print_command_output", _fake_print_command_output)
+        monkeypatch.setattr(m.subprocess, "run", _fake_run)
+
+        console, buf = _capture()
+        assert m.run_cli_command(console, ["update"], subprocess_timeout=30.0) is True
+        assert replayed == [("partial stdout\n", None), ("partial stderr\n", m.ERROR)]
+        assert "timed out" in buf.getvalue()
 
 
 class TestCliDelegatedCommands:
@@ -1392,11 +1792,12 @@ class TestCliDelegatedCommands:
         dispatch_slash(command, ReplSession(), Console())
         assert captured == [expected_args]
 
-    def test_slash_onboard_refuses_with_helpful_message(self, monkeypatch: object) -> None:
-        """``/onboard`` must NOT spawn the onboarding subprocess from inside
-        the REPL — the wizard's prompt_toolkit Application fights the
-        shell's active one and produces a stacked-widget rendering bug.
-        Refuse with a clear pointer to the right invocation instead.
+    def test_slash_onboard_delegates_to_run_cli_command(self, monkeypatch: object) -> None:
+        """``/onboard`` must delegate to ``run_cli_command`` so the wizard runs
+        with inherited stdin. The REPL loop guarantees exclusive stdin for
+        ``/onboard`` via ``_WAIT_FOR_COMPLETION_COMMANDS`` in dispatch.py, so
+        the wizard's prompt_toolkit Application no longer conflicts with the
+        shell's active one.
         """
         from app.cli.interactive_shell.command_registry import cli_parity as m
 
@@ -1410,29 +1811,62 @@ class TestCliDelegatedCommands:
 
         session = ReplSession()
         buf = io.StringIO()
-        # Width >80 so the multi-line warning doesn't wrap mid-substring.
         console = Console(file=buf, force_terminal=False, width=200)
         dispatch_slash("/onboard", session, console)
 
-        assert captured == [], "subprocess delegate must not be called"
-        out = buf.getvalue()
-        assert "needs a full terminal" in out
-        assert "opensre onboard" in out
-        # Mirrors the LLM-classified path: refused-attempt is recorded so
-        # session history captures the user's intent regardless of entry
-        # point.
-        assert session.history[-1] == {
-            "type": "cli_command",
-            "text": "opensre onboard",
-            "ok": False,
-        }
+        assert captured == [["onboard"]], "run_cli_command must be called with onboard args"
 
-    def test_slash_onboard_with_args_forwards_them_in_hint(self, monkeypatch: object) -> None:
-        """Refusal message should preserve user-supplied args so
-        the user can copy-paste the suggested ``opensre onboard …``
-        invocation without re-typing. The session record also keeps
-        the args so the assistant sees the full attempted command.
+    @pytest.mark.parametrize("slash_input", ["/tests list", "/tests --help"])
+    def test_slash_tests_subcommand_opts_into_output_capture(
+        self, monkeypatch: object, slash_input: str
+    ) -> None:
+        """Both the known-subcommand fall-through (e.g. ``/tests list``) and
+        the flag-style branch (e.g. ``/tests --help``) must call
+        ``run_cli_command`` with ``capture_output=True`` so the delegated CLI
+        output is replayed through the REPL console instead of vanishing onto
+        the parent process's stdout FD.
         """
+        from app.cli.interactive_shell.command_registry import cli_parity as m
+
+        captured_kwargs: list[dict[str, object]] = []
+
+        def _fake_run_cli_command(_console: Console, _args: list[str], **kwargs: object) -> bool:
+            captured_kwargs.append(kwargs)
+            return True
+
+        monkeypatch.setattr(m, "run_cli_command", _fake_run_cli_command)
+        dispatch_slash(slash_input, ReplSession(), Console())
+
+        assert captured_kwargs == [{"capture_output": True}]
+
+    @pytest.mark.parametrize(
+        "slash_input",
+        ["/guardrails", "/guardrails rules", "/guardrails --help"],
+    )
+    def test_slash_guardrails_opts_into_output_capture(
+        self, monkeypatch: object, slash_input: str
+    ) -> None:
+        """Bare ``/guardrails`` (no subcommand), known subcommands, and flag-style
+        invocations must all call ``run_cli_command`` with
+        ``capture_output=True``. Without this, Click's usage block (printed for
+        the no-subcommand case) and subcommand output bypass ``console.print``
+        and never reach the REPL buffer — see issue #2388.
+        """
+        from app.cli.interactive_shell.command_registry import cli_parity as m
+
+        captured_kwargs: list[dict[str, object]] = []
+
+        def _fake_run_cli_command(_console: Console, _args: list[str], **kwargs: object) -> bool:
+            captured_kwargs.append(kwargs)
+            return True
+
+        monkeypatch.setattr(m, "run_cli_command", _fake_run_cli_command)
+        dispatch_slash(slash_input, ReplSession(), Console())
+
+        assert captured_kwargs == [{"capture_output": True}]
+
+    def test_slash_onboard_with_args_forwards_them_to_subprocess(self, monkeypatch: object) -> None:
+        """Args passed to ``/onboard`` must be forwarded to the subprocess."""
         from app.cli.interactive_shell.command_registry import cli_parity as m
 
         captured: list[list[str]] = []
@@ -1445,18 +1879,10 @@ class TestCliDelegatedCommands:
 
         session = ReplSession()
         buf = io.StringIO()
-        # Width >80 so the multi-line warning doesn't wrap mid-substring.
         console = Console(file=buf, force_terminal=False, width=200)
         dispatch_slash("/onboard local_llm", session, console)
 
-        assert captured == []
-        out = buf.getvalue()
-        assert "opensre onboard local_llm" in out
-        assert session.history[-1] == {
-            "type": "cli_command",
-            "text": "opensre onboard local_llm",
-            "ok": False,
-        }
+        assert captured == [["onboard", "local_llm"]]
 
     def test_tests_run_subcommand_starts_background_task(self, monkeypatch: object) -> None:
         from app.cli.interactive_shell.command_registry import cli_parity as m

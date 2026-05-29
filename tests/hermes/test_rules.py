@@ -34,6 +34,16 @@ def _rec(
     )
 
 
+def _message_variants(message: str) -> tuple[str, ...]:
+    """Benign transforms that should not change rule match outcomes."""
+    return (
+        message,
+        message.upper(),
+        f"[ingest] {message}",
+        f"{message} [trace_id=abc123]",
+    )
+
+
 @pytest.mark.parametrize(
     "rule_name,message",
     [
@@ -62,6 +72,29 @@ def test_default_pattern_rules_match_expected_messages(rule_name: str, message: 
     assert incident.rule == rule_name
 
 
+@pytest.mark.parametrize(
+    "rule_name,message",
+    [
+        ("oom_killed", "MemoryError: out of memory while allocating buffer"),
+        ("context_window_exceeded", "context_length_exceeded: 65798 tokens > 32768"),
+        ("auth_failure", "401 Unauthorized: invalid api_key"),
+        ("rate_limit", "429 Too Many Requests"),
+        ("database_wal_growth", "WAL backlog growing: 1284 MB"),
+        ("deadlock", "deadlock detected, transaction rolled back"),
+        ("disk_full", "no space left on device"),
+    ],
+)
+def test_default_pattern_rules_match_metamorphic_message_variants(
+    rule_name: str, message: str
+) -> None:
+    rules = {r.name: r for r in default_pattern_rules()}
+    rule = rules[rule_name]
+    for variant in _message_variants(message):
+        incident = rule.evaluate(_rec(variant))
+        assert incident is not None, f"rule={rule_name} failed for variant={variant!r}"
+        assert incident.rule == rule_name
+
+
 def test_pattern_rules_respect_min_level() -> None:
     rules = {r.name: r for r in default_pattern_rules()}
     rule = rules["oom_killed"]
@@ -74,6 +107,31 @@ def test_pattern_rules_ignore_continuation_lines() -> None:
     rules = {r.name: r for r in default_pattern_rules()}
     rule = rules["oom_killed"]
     record = _rec("MemoryError", is_continuation=True)
+    assert rule.evaluate(record) is None
+
+
+def test_pattern_rule_does_not_match_logger_name_in_raw_line() -> None:
+    """Regression: rule keywords appearing only in the logger prefix must
+    not fire — patterns scan ``record.message`` exclusively.
+
+    ``oom_killer_watcher`` contains ``oom_killer`` which *does* match the
+    ``\\boom[- _]killer`` pattern when ``record.raw`` is searched, so this
+    test would fail if the old ``or pattern.search(record.raw)`` guard
+    were re-introduced.
+    """
+    rules = {r.name: r for r in default_pattern_rules()}
+    rule = rules["oom_killed"]
+    record = _rec(
+        "heartbeat ok",
+        level=LogLevel.ERROR,
+        logger_name="oom_killer_watcher",
+    )
+    # Confirm the raw line actually triggers the pattern — ensures the
+    # test is a genuine regression guard, not vacuously green. Looked
+    # up by pattern source so reordering the tuple can't silently make
+    # this assertion test the wrong pattern.
+    oom_killer_pat = next(p for p in rule.patterns if r"oom[- _]killer" in p.pattern)
+    assert oom_killer_pat.search(record.raw) is not None
     assert rule.evaluate(record) is None
 
 
@@ -108,6 +166,33 @@ def test_repeat_rule_window_ages_out_old_hits() -> None:
     crash.evaluate(_rec("agent restarting", level=LogLevel.WARNING, seconds=10))
     # 200s later — first two have aged out, this is hit #1
     assert crash.evaluate(_rec("agent restarting", level=LogLevel.WARNING, seconds=200)) is None
+
+
+def test_repeat_rule_does_not_match_logger_name_in_raw_line() -> None:
+    """Regression: a keyword appearing only in ``record.raw`` (not the
+    message) must not count toward the RepeatRule threshold.
+
+    ``service restart`` as a logger name produces a raw line that matches
+    ``(?:service)\\s+(?:re)?start`` — the crash-loop pattern. This test
+    confirms that 5 such records with a benign message never fire an
+    incident, and would fail if raw-matching were re-introduced.
+    """
+    crash = next(r for r in default_pattern_rules() if r.name == "crash_loop")
+    assert isinstance(crash, RepeatRule)
+    for i in range(5):
+        record = LogRecord(
+            timestamp=datetime(2026, 5, 12, 12, 0, 0) + timedelta(seconds=i * 5),
+            level=LogLevel.WARNING,
+            logger="service restart",
+            message="heartbeat ok",
+            raw="WARNING service restart: heartbeat ok",
+        )
+        # Confirm the raw line actually triggers the pattern. Looked up
+        # by pattern source so reordering the tuple can't silently make
+        # this assertion test the wrong pattern.
+        restart_pat = next(p for p in crash.patterns if "start" in p.pattern)
+        assert restart_pat.search(record.raw) is not None
+        assert crash.evaluate(record) is None
 
 
 def test_classifier_picks_up_default_pattern_rules() -> None:

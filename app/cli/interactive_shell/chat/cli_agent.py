@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import re
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -10,6 +12,8 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.markup import escape
 
+from app.cli.interactive_shell.prompt_logging import LlmRunInfo
+from app.cli.interactive_shell.prompting.follow_up import _summarize_last_state
 from app.cli.interactive_shell.prompting.prompt_rules import (
     CLI_ASSISTANT_MARKDOWN_RULE,
     INTERACTIVE_SHELL_TERMINOLOGY_RULE,
@@ -34,6 +38,7 @@ from app.cli.interactive_shell.ui import (
     ERROR,
     MARKDOWN_THEME,
     STREAM_LABEL_ASSISTANT,
+    WARNING,
     stream_to_console,
 )
 from app.cli.support.exception_reporting import report_exception
@@ -43,6 +48,18 @@ from app.integrations.llm_cli.errors import CLITimeoutError
 _MAX_CLI_AGENT_TURNS = 12
 
 _MAX_SYNTHETIC_OBSERVATION_PROMPT_CHARS = 120_000
+
+_COMMAND_SELECTION_EXACT_PROMPTS = frozenset(
+    {
+        "what command do i use",
+        "which command do i use",
+        "what command should i use",
+        "which command should i use",
+        "which command",
+    }
+)
+
+_TRAILING_PUNCTUATION_RE = re.compile(r"[\s?.!]+$")
 
 
 def _user_message_requests_synthetic_failure_explanation(message: str) -> bool:
@@ -73,6 +90,27 @@ def _load_synthetic_observation_text(
     return raw
 
 
+def _normalize_short_prompt(message: str) -> str:
+    lowered = " ".join(message.strip().casefold().split())
+    return _TRAILING_PUNCTUATION_RE.sub("", lowered)
+
+
+def _is_command_selection_prompt(message: str) -> bool:
+    normalized = _normalize_short_prompt(message)
+    if normalized in _COMMAND_SELECTION_EXACT_PROMPTS:
+        return True
+    return normalized.startswith("which command ") and "use" in normalized
+
+
+def _command_selection_response() -> str:
+    return (
+        "If you're asking which command to use, start with `opensre investigate` "
+        "for incidents and paste alert text, JSON, or a concrete incident "
+        "description into this interactive shell.\n\n"
+        "If you want a full command list, run `opensre --help`."
+    )
+
+
 _TERMINOLOGY_RULE = INTERACTIVE_SHELL_TERMINOLOGY_RULE
 _MARKDOWN_RULE = CLI_ASSISTANT_MARKDOWN_RULE
 
@@ -82,15 +120,17 @@ _ACTION_RULE = (
     "instructions when an allowed action can satisfy the request. Allowed "
     "action object schemas: "
     '`{"action":"switch_llm_provider","provider":"anthropic","model":"","toolcall_model":""}` '
-    "where provider is one of anthropic, openai, openrouter, gemini, nvidia, "
-    "ollama, codex, claude-code, gemini-cli; both `model` (reasoning) and `toolcall_model` are optional; "
+    "where provider is one of anthropic, openai, openrouter, deepseek, gemini, nvidia, "
+    "ollama, codex, claude-code, gemini-cli, antigravity-cli; both `model` (reasoning) and `toolcall_model` are optional; "
     '`{"action":"switch_toolcall_model","model":"claude-opus-4-7"}` '
     "to change ONLY the toolcall model on the currently active provider; "
     '`{"action":"slash","command":"/model show"}` where command is one of '
     "/model show, /list models, /health, /doctor, /version; "
     '`{"action":"run_cli_command","args":"<subcommand> <flags>"}` '
     "to run any opensre subcommand (agent is blocked). For ordinary "
-    "questions, return normal Markdown."
+    "questions, return normal Markdown. Do not return action JSON for vague "
+    "local model requests such as `connect to local llama`; answer with a brief "
+    "clarification or mention `/model set ollama` as an option instead."
 )
 
 _ALLOWED_SLASH_ACTIONS = frozenset(
@@ -102,6 +142,14 @@ _ALLOWED_SLASH_ACTIONS = frozenset(
         "/version",
     }
 )
+
+
+def _opensre_integration_command_blocked(payload: str, session: ReplSession) -> bool:
+    """Block integration-management CLI runs when the session has none configured."""
+    if not session.configured_integrations_known or session.configured_integrations:
+        return False
+    lowered = payload.strip().lower()
+    return lowered.startswith("integrations") or "integration" in lowered
 
 
 def _format_history_for_prompt(session: ReplSession) -> str:
@@ -119,6 +167,7 @@ def _build_system_prompt(
     history: str,
     agents_md: str = "",
     investigation_flow: str = "",
+    prior_investigation: str = "",
 ) -> str:
     """Build the system prompt for one assistant turn.
 
@@ -133,6 +182,11 @@ def _build_system_prompt(
     investigation_flow_block = (
         f"--- Investigation flow reference ---\n{investigation_flow}\n\n"
         if investigation_flow
+        else ""
+    )
+    prior_investigation_block = (
+        f"--- Prior investigation in this session ---\n{prior_investigation}\n\n"
+        if prior_investigation
         else ""
     )
     return (
@@ -153,10 +207,14 @@ def _build_system_prompt(
         "Be brief and friendly. Ground CLI facts in the reference below; do "
         "not invent subcommands. For investigation-flow questions, use the "
         "investigation flow reference below and do not claim the pipeline "
-        "definition is unavailable.\n\n"
+        "definition is unavailable.\n"
+        "For vague operational questions (for example why a database is slow) "
+        "with no pasted alert, restate the user's question in your reply and "
+        "ask for the target system, service, or alert context.\n\n"
         f"{_TERMINOLOGY_RULE}\n{_MARKDOWN_RULE}\n{_ACTION_RULE}\n\n"
         f"--- CLI reference ---\n{reference}\n\n"
         f"{investigation_flow_block}"
+        f"{prior_investigation_block}"
         f"{repo_map_block}"
         f"--- Recent CLI conversation ---\n{history}\n"
     )
@@ -228,7 +286,7 @@ def _execute_action_plan(
         switch_llm_provider,
         switch_toolcall_model,
     )
-    from app.cli.interactive_shell.orchestration.execution_policy import (
+    from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
         evaluate_llm_runtime_switch,
         evaluate_slash_tier,
         execution_allowed,
@@ -369,7 +427,13 @@ def _execute_action_plan(
             if not args:
                 console.print(f"[{ERROR}]missing args for run_cli_command action[/]")
                 continue
-            from app.cli.interactive_shell.orchestration.action_executor import (
+            if _opensre_integration_command_blocked(args, session):
+                console.print(
+                    f"[{WARNING}]integration command blocked: no integrations are configured "
+                    "in this session.[/]"
+                )
+                continue
+            from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor import (
                 run_opensre_cli_command,
             )
 
@@ -401,7 +465,7 @@ def answer_cli_agent(
     console: Console,
     *,
     confirm_fn: Callable[[str], str] | None = None,
-) -> None:
+) -> LlmRunInfo | None:
     """Run one turn of the terminal assistant (guidance only; no investigation run).
 
     For documentation-grounded procedural Q&A use :func:`answer_cli_help`, which
@@ -412,23 +476,49 @@ def answer_cli_agent(
     through its active prompt_toolkit input instead of the stdlib
     ``input()`` (which deadlocks against the running ``prompt_async``).
     """
+    if _is_command_selection_prompt(message):
+        deterministic_response = _command_selection_response()
+        stream_to_console(
+            console,
+            label=STREAM_LABEL_ASSISTANT,
+            chunks=iter((deterministic_response,)),
+        )
+        _record_cli_agent_turn(session, message, deterministic_response)
+        return LlmRunInfo(
+            model="deterministic_command_selection",
+            provider="local",
+            latency_ms=0,
+            response_text=deterministic_response,
+        )
+
     try:
         from app.services.llm_client import get_llm_for_reasoning
     except Exception as exc:
         report_exception(exc, context="interactive_shell.cli_agent.import")
         console.print(f"[{ERROR}]LLM client unavailable:[/] {escape(str(exc))}")
-        return
+        return None
 
     reference = build_cli_reference_text()
     agents_md = build_agents_md_reference_text()
     investigation_flow = build_investigation_flow_reference_text()
     log_grounding_cache_diagnostics("cli_agent_grounding")
     history = _format_history_for_prompt(session)
+    prior_investigation = (
+        _summarize_last_state(session.last_state) if session.last_state is not None else ""
+    )
+    integration_guard = ""
+    if session.configured_integrations_known and not session.configured_integrations:
+        integration_guard = (
+            "No integrations are configured in this session. Do not emit run_cli_command "
+            "or slash actions for integration setup/show/verify/remove; answer with guidance "
+            "only.\n\n"
+        )
     system = _build_system_prompt(
         reference,
         history,
         agents_md=agents_md,
         investigation_flow=investigation_flow,
+        prior_investigation=prior_investigation,
     )
     user_block = f"--- User message ---\n{message}"
     synthetic_block = ""
@@ -444,10 +534,11 @@ def answer_cli_agent(
                 "that you lack context — the run completed and this file was written.\n\n"
                 f"--- observation_json ---\n{obs_text}\n\n"
             )
-    prompt = f"{system}\n{synthetic_block}{user_block}"
+    prompt = f"{system}\n{integration_guard}{synthetic_block}{user_block}"
 
     try:
         client = get_llm_for_reasoning()
+        started = time.monotonic()
         text_str = stream_to_console(
             console,
             label=STREAM_LABEL_ASSISTANT,
@@ -459,7 +550,7 @@ def answer_cli_agent(
         )
     except KeyboardInterrupt:
         console.print(f"[{DIM}]· cancelled[/]")
-        return
+        return None
     except Exception as exc:
         report_exception(
             exc,
@@ -467,12 +558,19 @@ def answer_cli_agent(
             expected=isinstance(exc, CLITimeoutError),
         )
         console.print(f"[{ERROR}]assistant failed:[/] {escape(str(exc))}")
-        return
+        return None
+
+    run_info = LlmRunInfo(
+        model=_resolve_model_name(client),
+        provider=_resolve_provider_name(client),
+        latency_ms=int((time.monotonic() - started) * 1000),
+        response_text=text_str,
+    )
 
     actions = _parse_action_plan(text_str)
     if _execute_action_plan(actions, session, console, confirm_fn=confirm_fn):
         _record_cli_agent_turn(session, message, text_str)
-        return
+        return run_info
 
     _record_cli_agent_turn(session, message, text_str)
 
@@ -485,6 +583,28 @@ def answer_cli_agent(
         with console.use_theme(MARKDOWN_THEME):
             console.print(Markdown(text_str, code_theme="ansi_dark"))
         console.print()
+    return run_info
+
+
+def _resolve_model_name(client: object) -> str | None:
+    value = getattr(client, "_model", None)
+    return value if isinstance(value, str) and value else None
+
+
+def _resolve_provider_name(client: object) -> str | None:
+    provider_label = getattr(client, "_provider_label", None)
+    if isinstance(provider_label, str) and provider_label:
+        return provider_label.strip().lower().replace(" ", "_")
+    name = type(client).__name__.lower()
+    if "openai" in name:
+        return "openai"
+    if "bedrock" in name:
+        return "bedrock"
+    if "cli" in name:
+        return "cli"
+    if "anthropic" in name or "llmclient" in name:
+        return "anthropic"
+    return None
 
 
 __all__ = ["answer_cli_agent"]

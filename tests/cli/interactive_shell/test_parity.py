@@ -28,10 +28,9 @@ def test_cli_slash_command_parity():
 
 
 def test_slash_command_help_parity():
-    """Ensure slash command help strings are descriptive."""
+    """Ensure slash command descriptions are concise and usage is structured."""
     for name, cmd in SLASH_COMMANDS.items():
-        assert len(cmd.help_text) > 10, f"Help text for {name} is too short or missing."
+        assert len(cmd.description) > 10, f"Description for {name} is too short or missing."
+        assert "(" not in cmd.description, f"Description for {name} should not contain usage."
         if name in {"/integrations", "/remote", "/tests", "/guardrails"}:
-            assert "(" in cmd.help_text, (
-                f"Help text for {name} should list common subcommands in parentheses."
-            )
+            assert cmd.usage, f"Usage for {name} should list common subcommands."

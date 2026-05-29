@@ -27,10 +27,6 @@ def _reset_anonymous_id_cache(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
     provider._pending_user_id_load_failures.clear()
     monkeypatch.setattr(provider, "_event_log_state", provider._EventLogState())
     monkeypatch.setattr(provider, "_FIRST_RUN_PATH", tmp_path / "installed")
-    legacy_dir = tmp_path / "legacy-opensre"
-    monkeypatch.setattr(provider, "_LEGACY_CONFIG_DIR", legacy_dir)
-    monkeypatch.setattr(provider, "_LEGACY_ANONYMOUS_ID_PATH", legacy_dir / "anonymous_id")
-    monkeypatch.setattr(provider, "_LEGACY_FIRST_RUN_PATH", legacy_dir / "installed")
     yield
     provider.shutdown_analytics(flush=False)
     provider._instance = None
@@ -294,11 +290,6 @@ def test_existing_install_missing_anonymous_id_captures_posthog_error(
     monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
     monkeypatch.setattr(provider, "_ANONYMOUS_ID_PATH", tmp_path / "anonymous_id")
     monkeypatch.setattr(provider, "_FIRST_RUN_PATH", tmp_path / "installed")
-    monkeypatch.setattr(provider, "_LEGACY_CONFIG_DIR", tmp_path / ".opensre")
-    monkeypatch.setattr(
-        provider, "_LEGACY_ANONYMOUS_ID_PATH", tmp_path / ".opensre" / "anonymous_id"
-    )
-    monkeypatch.setattr(provider, "_LEGACY_FIRST_RUN_PATH", tmp_path / ".opensre" / "installed")
     monkeypatch.setattr(provider.atexit, "register", lambda _func: None)
     (tmp_path / "installed").touch()
     posted_payloads = _stub_httpx_client(monkeypatch)
@@ -314,8 +305,8 @@ def test_existing_install_missing_anonymous_id_captures_posthog_error(
     assert len(user_id_errors) == 1
     properties = user_id_errors[0]["properties"]
     assert properties["reason"] == "missing_anonymous_id"
-    assert properties["config_dir"] == "~/.config/opensre"
-    assert properties["anonymous_id_path"] == "~/.config/opensre/anonymous_id"
+    assert properties["config_dir"] == "~/.opensre"
+    assert properties["anonymous_id_path"] == "~/.opensre/anonymous_id"
     assert properties["config_dir_existed"] is True
     assert properties["install_marker_existed"] is True
     assert properties["anonymous_id_path_existed"] is False
@@ -342,27 +333,6 @@ def test_first_run_missing_anonymous_id_does_not_capture_posthog_error(
         for payload in posted_payloads
         if payload["json"].get("event") == Event.USER_ID_LOAD_FAILED.value
     ] == []
-
-
-def test_legacy_anonymous_id_is_loaded_into_config_path(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    config_dir = tmp_path / ".config" / "opensre"
-    legacy_dir = tmp_path / ".opensre"
-    legacy_id = "11111111-2222-3333-4444-555555555555"
-    legacy_dir.mkdir()
-    (legacy_dir / "installed").touch()
-    (legacy_dir / "anonymous_id").write_text(legacy_id, encoding="utf-8")
-    monkeypatch.setattr(provider, "_CONFIG_DIR", config_dir)
-    monkeypatch.setattr(provider, "_ANONYMOUS_ID_PATH", config_dir / "anonymous_id")
-    monkeypatch.setattr(provider, "_FIRST_RUN_PATH", config_dir / "installed")
-    monkeypatch.setattr(provider, "_LEGACY_CONFIG_DIR", legacy_dir)
-    monkeypatch.setattr(provider, "_LEGACY_ANONYMOUS_ID_PATH", legacy_dir / "anonymous_id")
-    monkeypatch.setattr(provider, "_LEGACY_FIRST_RUN_PATH", legacy_dir / "installed")
-
-    assert provider._get_or_create_anonymous_id() == legacy_id
-    assert (config_dir / "anonymous_id").read_text(encoding="utf-8") == legacy_id
-    assert provider._pending_user_id_load_failures == []
 
 
 def test_anonymous_id_replaces_non_uuid_persisted_file(
@@ -887,7 +857,7 @@ def test_event_log_writes_to_config_dir_not_cwd(monkeypatch, tmp_path: Path) -> 
 
 def test_event_log_creates_config_dir_on_first_write(monkeypatch, tmp_path: Path) -> None:
     """``_CONFIG_DIR`` may not exist on a fresh install — first write must mkdir it."""
-    config_dir = tmp_path / "fresh-install" / ".config" / "opensre"
+    config_dir = tmp_path / "fresh-install" / ".opensre"
     assert not config_dir.exists()
 
     monkeypatch.setenv("OPENSRE_ANALYTICS_LOG_EVENTS", "1")

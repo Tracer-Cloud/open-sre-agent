@@ -109,7 +109,7 @@ def health_command(watch: bool, rate: int) -> None:
                 results=results,
             )
 
-        if any(result.get("status") in {"missing", "failed"} for result in results):
+        if any(result.get("status") == "failed" for result in results):
             return ERROR
         return SUCCESS
 

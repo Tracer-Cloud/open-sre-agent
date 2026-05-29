@@ -40,7 +40,7 @@ def _pip_uninstall() -> int:
 
 
 def _data_dirs() -> list[Path]:
-    return [OPENSRE_HOME_DIR, LEGACY_TRACER_HOME_DIR]
+    return [OPENSRE_HOME_DIR, LEGACY_TRACER_HOME_DIR, Path.home() / ".config" / "opensre"]
 
 
 def run_uninstall(*, yes: bool = False) -> int:

@@ -137,3 +137,34 @@ def validate_discord_bot(*, bot_token: str) -> IntegrationHealthResult:
     return IntegrationHealthResult(
         ok=False, detail=f"Discord API returned unexpected HTTP {resp.status_code}."
     )
+
+
+def validate_telegram_bot(*, bot_token: str) -> IntegrationHealthResult:
+    """Validate a Telegram bot token by calling the Bot API getMe endpoint."""
+    token = bot_token.strip()
+    if not token:
+        return IntegrationHealthResult(ok=False, detail="Missing bot_token.")
+
+    try:
+        resp = httpx.get(f"https://api.telegram.org/bot{token}/getMe", timeout=10)
+    except httpx.RequestError as err:
+        return IntegrationHealthResult(ok=False, detail=f"Telegram API unreachable: {err}")
+    except Exception as err:
+        return IntegrationHealthResult(ok=False, detail=f"Telegram API check failed: {err}")
+
+    try:
+        payload = resp.json()
+    except Exception as err:
+        return IntegrationHealthResult(
+            ok=False,
+            detail=f"Telegram API check failed: HTTP {resp.status_code} ({err}).",
+        )
+
+    if not payload.get("ok"):
+        description = payload.get("description", "unknown error")
+        return IntegrationHealthResult(ok=False, detail=f"Telegram API check failed: {description}")
+
+    user = payload.get("result", {})
+    username = str(user.get("username", "")).strip()
+    label = f"@{username}" if username else "unknown"
+    return IntegrationHealthResult(ok=True, detail=f"Connected to Telegram bot {label}.")

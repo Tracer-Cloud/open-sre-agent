@@ -6,7 +6,7 @@ import io
 
 from rich.console import Console
 
-from app.cli.interactive_shell.orchestration.execution_policy import (
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
     evaluate_investigation_launch,
     evaluate_shell_command,
     evaluate_slash_tier,
@@ -14,7 +14,9 @@ from app.cli.interactive_shell.orchestration.execution_policy import (
     execution_allowed,
     resolve_slash_execution_tier,
 )
-from app.cli.interactive_shell.orchestration.execution_tier import ExecutionTier
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_tier import (
+    ExecutionTier,
+)
 from app.cli.interactive_shell.runtime.session import ReplSession
 
 

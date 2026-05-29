@@ -5,7 +5,7 @@ from unittest.mock import patch
 from click.testing import CliRunner
 
 from app.cli.__main__ import cli
-from app.cli.support.constants import VERIFY_SERVICES
+from app.cli.support.constants import SETUP_SERVICES, VERIFY_SERVICES
 from app.integrations.cli import _HANDLERS, _setup_openclaw, _setup_vercel
 
 
@@ -147,6 +147,60 @@ def test_setup_openclaw_saves_credentials(monkeypatch) -> None:
     ]
 
 
+def test_integrations_setup_accepts_telegram() -> None:
+    runner = CliRunner()
+
+    with (
+        patch("app.cli.commands.integrations.capture_integration_setup_started"),
+        patch("app.cli.commands.integrations.capture_integration_setup_completed"),
+        patch("app.cli.commands.integrations.capture_integration_verified"),
+        patch("app.integrations.cli.cmd_setup") as mock_setup,
+        patch("app.integrations.cli.cmd_verify", return_value=0) as mock_verify,
+    ):
+        mock_setup.return_value = "telegram"
+        result = runner.invoke(cli, ["integrations", "setup", "telegram"])
+
+    assert result.exit_code == 0
+    mock_setup.assert_called_once_with("telegram")
+    mock_verify.assert_called_once_with("telegram")
+
+
+def test_integrations_setup_accepts_whatsapp() -> None:
+    runner = CliRunner()
+
+    with (
+        patch("app.cli.commands.integrations.capture_integration_setup_started"),
+        patch("app.cli.commands.integrations.capture_integration_setup_completed"),
+        patch("app.cli.commands.integrations.capture_integration_verified"),
+        patch("app.integrations.cli.cmd_setup") as mock_setup,
+        patch("app.integrations.cli.cmd_verify", return_value=0) as mock_verify,
+    ):
+        mock_setup.return_value = "whatsapp"
+        result = runner.invoke(cli, ["integrations", "setup", "whatsapp"])
+
+    assert result.exit_code == 0
+    mock_setup.assert_called_once_with("whatsapp")
+    mock_verify.assert_called_once_with("whatsapp")
+
+
+def test_integrations_setup_accepts_twilio() -> None:
+    runner = CliRunner()
+
+    with (
+        patch("app.cli.commands.integrations.capture_integration_setup_started"),
+        patch("app.cli.commands.integrations.capture_integration_setup_completed"),
+        patch("app.cli.commands.integrations.capture_integration_verified"),
+        patch("app.integrations.cli.cmd_setup") as mock_setup,
+        patch("app.integrations.cli.cmd_verify", return_value=0) as mock_verify,
+    ):
+        mock_setup.return_value = "twilio"
+        result = runner.invoke(cli, ["integrations", "setup", "twilio"])
+
+    assert result.exit_code == 0
+    mock_setup.assert_called_once_with("twilio")
+    mock_verify.assert_called_once_with("twilio")
+
+
 def test_integrations_setup_skips_auto_verify_for_unverifiable_service() -> None:
     runner = CliRunner()
 
@@ -256,3 +310,12 @@ def test_verify_services_includes_previously_missing_integrations() -> None:
         "supabase",
     }
     assert previously_missing <= set(VERIFY_SERVICES)
+
+
+def test_setup_services_includes_previously_missing_integrations() -> None:
+    # #2537: telegram, whatsapp and twilio had handlers and registry entries
+    # but were rejected by Click because the CLI's hardcoded SETUP_SERVICES
+    # tuple had drifted. Anchor them here so a revert to a hardcoded tuple —
+    # or accidental removal from the registry — fails this test loudly.
+    previously_missing = {"telegram", "twilio", "whatsapp"}
+    assert previously_missing <= set(SETUP_SERVICES)

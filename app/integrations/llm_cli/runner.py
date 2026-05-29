@@ -13,8 +13,21 @@ from typing import Any
 from pydantic import BaseModel
 
 from app.integrations.llm_cli.base import CLIProbe, LLMCLIAdapter
+from app.integrations.llm_cli.constants import (
+    EX_TEMPFAIL as _EX_TEMPFAIL,
+)
+from app.integrations.llm_cli.constants import (
+    PROBE_CACHE_TTL_SEC as _PROBE_CACHE_TTL_SEC,
+)
+from app.integrations.llm_cli.constants import (
+    TEMPFAIL_BACKOFF_SEC as _TEMPFAIL_BACKOFF_SEC,
+)
+from app.integrations.llm_cli.constants import (
+    TEMPFAIL_MAX_RETRIES as _TEMPFAIL_MAX_RETRIES,
+)
 from app.integrations.llm_cli.errors import (
     CLIAuthenticationRequired,
+    CLIInterruptedError,
     CLITimeoutError,
 )
 from app.integrations.llm_cli.subprocess_env import build_cli_subprocess_env
@@ -25,14 +38,11 @@ from app.services.llm_client import LLMResponse
 logger = logging.getLogger(__name__)
 
 _ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
-# Avoid re-running `detect()` (two subprocess probes) on every invoke during long investigations.
-_PROBE_CACHE_TTL_SEC = 45.0
-
+_REDACTED_PROMPT_ARG = "<redacted-prompt>"
+# Avoid re-running `detect()` (two subprocess probes) on every invoke during long
+# investigations. Value is defined in shared constants.
 # POSIX EX_TEMPFAIL (75): the subprocess hit a transient error and can be retried.
 # kimi uses this when a session dies mid-flight ("To resume this session: kimi -r …").
-_EX_TEMPFAIL = 75
-_TEMPFAIL_MAX_RETRIES = 2
-_TEMPFAIL_BACKOFF_SEC = 2.0
 
 # Back-compat name for tests and imports that expect this symbol on runner.
 _build_subprocess_env = build_cli_subprocess_env
@@ -40,6 +50,24 @@ _build_subprocess_env = build_cli_subprocess_env
 
 def _strip_ansi(text: str) -> str:
     return _ANSI_ESCAPE.sub("", text)
+
+
+def _sanitize_argv_for_debug(argv: tuple[str, ...], *, prompt: str) -> list[str]:
+    """Redact prompt text from debug argv logs when passed as a CLI argument."""
+    if not prompt:
+        return list(argv)
+
+    redacted: list[str] = []
+    prompt_equals_form = f"--prompt={prompt}"
+    for arg in argv:
+        if arg == prompt:
+            redacted.append(_REDACTED_PROMPT_ARG)
+            continue
+        if arg == prompt_equals_form:
+            redacted.append(f"--prompt={_REDACTED_PROMPT_ARG}")
+            continue
+        redacted.append(arg)
+    return redacted
 
 
 class CLIBackedLLMClient:
@@ -124,6 +152,13 @@ class CLIBackedLLMClient:
             reasoning_effort=get_active_reasoning_effort(),
         )
         merged_env = _build_subprocess_env(invocation.env)
+        logger.debug(
+            "cli_llm_spawn",
+            extra={
+                "provider": self._adapter.name,
+                "argv": _sanitize_argv_for_debug(invocation.argv, prompt=flat),
+            },
+        )
 
         backoff = _TEMPFAIL_BACKOFF_SEC
         for attempt in range(_TEMPFAIL_MAX_RETRIES + 1):
@@ -165,10 +200,18 @@ class CLIBackedLLMClient:
         err = _strip_ansi(proc.stderr or "")
 
         if proc.returncode != 0:
+            # Exit code 130 = subprocess terminated by SIGINT (Ctrl+C); raise
+            # CLIInterruptedError so callers using `try/except Exception` still
+            # observe the failure (KeyboardInterrupt inherits from BaseException
+            # and would bypass those handlers). Sentry's `ignore_errors` config
+            # filters this type so user-initiated cancellations are not reported
+            # as bugs.
+            if proc.returncode == 130:
+                raise CLIInterruptedError(f"{self._adapter.name} CLI subprocess interrupted.")
             # Exit code 75 is EX_TEMPFAIL (sysexits.h) — a transient failure
             # the caller should retry. Raise CLITimeoutError so it is treated as
             # an expected operational failure and not forwarded to Sentry.
-            if proc.returncode == 75:
+            if proc.returncode == _EX_TEMPFAIL:
                 hint = (
                     f"{self._adapter.name} reported a temporary failure (exit 75). "
                     "Retry the request or check network connectivity."

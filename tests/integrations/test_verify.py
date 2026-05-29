@@ -14,6 +14,7 @@ from app.integrations.verify import (
     _verify_honeycomb,
     _verify_sentry,
     _verify_snowflake,
+    _verify_telegram,
     _verify_tracer,
     _verify_vercel,
     resolve_effective_integrations,
@@ -154,6 +155,39 @@ def test_resolve_effective_integrations_drops_unrecognised_keys_with_warning(
         caplog.text
     )
     assert fake_service in caplog.text
+
+
+def test_verify_telegram_passes_with_get_me(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _fake_requests_get(url: str, *_args: Any, **_kwargs: Any) -> _FakeResponse:
+        assert "getMe" in url
+        return _FakeResponse({"ok": True, "result": {"username": "opensre_bot"}})
+
+    monkeypatch.setattr(
+        "app.integrations._verification_adapters.requests.get",
+        _fake_requests_get,
+    )
+    result = _verify_telegram(
+        "local store",
+        {"bot_token": "123:ABC", "default_chat_id": "-100123"},
+    )
+    assert result["status"] == "passed"
+    assert "opensre_bot" in result["detail"]
+
+
+def test_verify_telegram_missing_token() -> None:
+    result = _verify_telegram("local env", {"bot_token": ""})
+    assert result["status"] == "missing"
+    assert "bot_token" in result["detail"].lower()
+
+
+def test_verify_telegram_api_not_ok(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "app.integrations._verification_adapters.requests.get",
+        lambda *_a, **_kw: _FakeResponse({"ok": False, "description": "Unauthorized"}),
+    )
+    result = _verify_telegram("local store", {"bot_token": "bad"})
+    assert result["status"] == "failed"
+    assert "unauthorized" in result["detail"].lower()
 
 
 def test_verify_slack_uses_v2_store_credentials(monkeypatch: pytest.MonkeyPatch) -> None:

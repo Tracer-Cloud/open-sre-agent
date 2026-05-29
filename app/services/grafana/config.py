@@ -19,6 +19,8 @@ class GrafanaAccountConfig(StrictConfigModel):
     tempo_datasource_uid: str = ""
     mimir_datasource_uid: str = ""
     description: str = ""
+    username: str = ""
+    password: str = ""
 
     @field_validator("instance_url", mode="before")
     @classmethod

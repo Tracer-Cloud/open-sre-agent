@@ -17,7 +17,7 @@ OpenSRE runs the **Helm 3** command-line client on the machine where the agent e
 
 ## Setup
 
-Configure Helm like other local integrations: environment variables and/or `~/.config/opensre/integrations.json`.
+Configure Helm like other local integrations: environment variables and/or `~/.opensre/integrations.json`.
 
 ### Option 1: Environment variables
 
@@ -52,7 +52,7 @@ HELM_MANIFEST_MAX_CHARS=600000
 
 ### Option 2: Persistent store
 
-Add an active `helm` record to `~/.config/opensre/integrations.json`:
+Add an active `helm` record to `~/.opensre/integrations.json`:
 
 ```json
 {

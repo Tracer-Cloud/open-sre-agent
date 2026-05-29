@@ -10,9 +10,9 @@ OpenSRE is provider-agnostic: bring your own model. Selection is controlled by t
 | Provider     | `LLM_PROVIDER` | Auth                            | Reasoning model default                       | Toolcall model default                          |
 | ------------ | -------------- | ------------------------------- | --------------------------------------------- | ----------------------------------------------- |
 | Anthropic    | `anthropic`    | `ANTHROPIC_API_KEY`             | `claude-sonnet-4-6`                           | `claude-haiku-4-5-20251001`                     |
-| OpenAI       | `openai`       | `OPENAI_API_KEY`                | `gpt-5.4`                                     | `gpt-5.4-mini`                                  |
+| OpenAI       | `openai`       | `OPENAI_API_KEY`                | `gpt-5.4-mini`                                | `gpt-5.4-mini`                                  |
 | OpenRouter   | `openrouter`   | `OPENROUTER_API_KEY`            | `openrouter/auto`                             | `openrouter/auto`                               |
-| Requesty     | `requesty`     | `REQUESTY_API_KEY`              | `anthropic/claude-sonnet-4-6`                 | `anthropic/claude-sonnet-4-6`                   |
+| DeepSeek     | `deepseek`     | `DEEPSEEK_API_KEY`              | `deepseek-v4-pro`                             | `deepseek-v4-flash`                             |
 | Google Gemini| `gemini`       | `GEMINI_API_KEY`                | `gemini-3.1-pro-preview`                      | `gemini-3.1-flash-lite-preview`                 |
 | NVIDIA NIM   | `nvidia`       | `NVIDIA_API_KEY`                | `meta/llama-3.1-405b-instruct`                | `meta/llama-3.1-8b-instruct`                    |
 | MiniMax      | `minimax`      | `MINIMAX_API_KEY`               | `MiniMax-M2.7`                                | `MiniMax-M2.7-highspeed`                        |
@@ -21,6 +21,7 @@ OpenSRE is provider-agnostic: bring your own model. Selection is controlled by t
 | OpenAI Codex CLI| `codex`    | `codex login` (CLI)             | Codex CLI default                             | Codex CLI default                               |
 | Claude Code CLI| `claude-code`| `claude login` (CLI)            | Claude Code CLI default                       | Claude Code CLI default                         |
 | GitHub Copilot CLI| `copilot`| `copilot login` or `gh auth login` (CLI) | Copilot CLI default                           | Copilot CLI default                             |
+| Google Antigravity CLI| `antigravity-cli`| `agy` (browser OAuth, OS keyring) | Whatever the local `agy` config is set to (switch via `/models` inside agy) | same as reasoning model |
 
 OpenSRE distinguishes two model slots per provider:
 
@@ -42,10 +43,19 @@ Or run the onboarding wizard, which writes the same values to `.env`:
 opensre onboard
 ```
 
+In the interactive shell, `/model` shows curated quick-pick choices for common models. Providers
+with fast-changing or account-gated catalogs (OpenAI, OpenRouter, Gemini, NVIDIA, Bedrock, local
+CLIs, Ollama, and DeepSeek) also accept custom model IDs:
+
+```bash
+/model set openai gpt-5.5
+/model set openai gpt-5.5 --toolcall-model gpt-5.4-mini
+```
+
 Override the default model for a slot via env vars:
 
 ```bash
-export OPENAI_REASONING_MODEL=gpt-5.4
+export OPENAI_REASONING_MODEL=gpt-5.4-mini
 export OPENAI_TOOLCALL_MODEL=gpt-5.4-mini
 ```
 
@@ -71,7 +81,7 @@ The default. Uses the Anthropic Python SDK directly. Get an API key at [console.
 export LLM_PROVIDER=openai
 export OPENAI_API_KEY=sk-...
 # Optional overrides:
-export OPENAI_REASONING_MODEL=gpt-5.4
+export OPENAI_REASONING_MODEL=gpt-5.4-mini
 export OPENAI_TOOLCALL_MODEL=gpt-5.4-mini
 ```
 
@@ -91,19 +101,19 @@ export OPENROUTER_TOOLCALL_MODEL=openai/gpt-4o-mini
 
 OpenAI-compatible proxy — pick any model on [openrouter.ai/models](https://openrouter.ai/models). Base URL: `https://openrouter.ai/api/v1`.
 
-### Requesty
+### DeepSeek
 
 ```bash
-export LLM_PROVIDER=requesty
-export REQUESTY_API_KEY=...
-# Optional override (single value applies to both slots if set):
-export REQUESTY_MODEL=anthropic/claude-sonnet-4-6
+export LLM_PROVIDER=deepseek
+export DEEPSEEK_API_KEY=sk-...
+# Optional override (single value applies to all slots if set):
+export DEEPSEEK_MODEL=deepseek-v4-pro
 # Or per-slot:
-export REQUESTY_REASONING_MODEL=anthropic/claude-sonnet-4-6
-export REQUESTY_TOOLCALL_MODEL=anthropic/claude-sonnet-4-6
+export DEEPSEEK_REASONING_MODEL=deepseek-v4-pro
+export DEEPSEEK_TOOLCALL_MODEL=deepseek-v4-flash
 ```
 
-OpenAI-compatible gateway at `https://router.requesty.ai/v1`. Sends an `X-Title: OpenSRE` header for usage attribution. Browse models on [requesty.ai](https://requesty.ai/).
+Uses DeepSeek's official OpenAI-compatible API endpoint at `https://api.deepseek.com`.
 
 ### Google Gemini
 
@@ -182,6 +192,8 @@ Run any local model exposed by an [Ollama](https://ollama.com/) daemon. No API k
 
 CLI-backed providers shell out to a vendor CLI instead of an HTTP API. They authenticate via the vendor's own login command; OpenSRE detects the binary on `PATH` (or via an explicit env var) and reuses the existing session.
 
+**Investigation timeouts:** Each ReAct turn runs one full CLI subprocess with the system prompt, tool schemas, and conversation history. The shared default subprocess budget is **300 seconds** (Python adds a small buffer). Override per provider when needed, for example `GEMINI_CLI_TIMEOUT_SECONDS`, `CLAUDE_CODE_TIMEOUT_SECONDS`, or `ANTIGRAVITY_CLI_TIMEOUT_SECONDS` (clamped 30–600 where the adapter supports it).
+
 ### OpenAI Codex
 
 ```bash
@@ -229,6 +241,33 @@ export COPILOT_BIN=
 ```
 
 Requires the [GitHub Copilot CLI](https://docs.github.com/copilot/how-tos/use-copilot-agents/use-copilot-cli) (`npm i -g @github/copilot`). Login uses the interactive `/login` slash command or `copilot login`. OpenSRE detects auth in this order: (1) `COPILOT_GITHUB_TOKEN` / `GH_TOKEN` / `GITHUB_TOKEN` env, (2) [`gh auth status`](https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli#authenticating-with-github-cli) when `gh` is on `PATH` (including `✓ Logged in to github.com account …`, `- Active account: true`, or a supported `- Token:` prefix: `gho_`, `github_pat_`, `ghu_` per Copilot docs — not `ghp_`), with `gh auth status --hostname …` when `COPILOT_GH_HOST` or `GH_HOST` targets a non-`github.com` host. It does **not** read plaintext `$COPILOT_HOME/config.json` (keychain-backed installs may omit it; mis-parsing arbitrary JSON risks false positives). If nothing matches, detection reports `logged_in=None` and the runner verifies at invoke time. If `COPILOT_MODEL` is unset, OpenSRE omits `--model`. Invocations run as `copilot -p PROMPT --no-color --no-ask-user --silent` so they never block on user input. **BYOK / `COPILOT_OFFLINE`:** GitHub auth may be unnecessary; a `None` probe can still be fine if Copilot is configured for offline or external providers only.
+
+### Google Antigravity CLI
+
+```bash
+export LLM_PROVIDER=antigravity-cli
+# Authenticate the Antigravity CLI separately (browser OAuth on first run):
+agy                       # interactive launch triggers Google Sign-In; token cached by OS keyring
+# Stay current — 1.0.0 had OAuth hangs (fixed in 1.0.1):
+agy update
+# Optional overrides (all blank-by-default):
+export ANTIGRAVITY_CLI_BIN=
+export ANTIGRAVITY_CLI_TIMEOUT_SECONDS=300   # default 300; clamped 30–600; maps to `--print-timeout {N}s`
+# Note: ANTIGRAVITY_CLI_MODEL is registered for forward-compat but currently no-op
+# (agy v1.0.2 does not expose --model in headless `-p` mode). Each invocation uses
+# whatever model is persisted in agy's local config; switch it interactively with
+# `/models` inside the `agy` REPL. The wizard's model picker is a forward-compat
+# catalog: once Google ships `--model` in headless, picking a value here will start
+# being forwarded to agy via a one-line change in the adapter.
+```
+
+Antigravity CLI (`agy`) is Google's successor to Gemini CLI. Install via `curl -fsSL https://antigravity.google/cli/install.sh | bash`, then run `agy install` to configure your shell `PATH`. The minimum tested version is **1.0.1** — older builds log a warning via the probe and direct you to `agy update`.
+
+**Why two Google providers?** Google's [transition announcement](https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli/) states that **on 2026-06-18** Gemini CLI stops serving Pro/Ultra and free users. Paid Gemini Code Assist licences keep Gemini CLI indefinitely. OpenSRE keeps both `gemini-cli` (deprecated alias with a probe-time notice) and `antigravity-cli` so either group can run without surprises.
+
+As a best-effort fallback, the probe treats explicit `GEMINI_API_KEY` / `GOOGLE_API_KEY` / `GOOGLE_APPLICATION_CREDENTIALS` env credentials as authenticated (mirroring the Gemini CLI adapter), so users migrating across the two CLIs can keep their existing env-var-based auth without re-running the browser flow.
+
+Invocations run as `agy -p PROMPT --print-timeout {N}s`. The adapter never passes `--continue` / `--conversation` / `--sandbox` / `--dangerously-skip-permissions`, keeping every opensre call ephemeral.
 
 See [`app/integrations/llm_cli/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/app/integrations/llm_cli/AGENTS.md) for the adapter pattern used to add new CLI providers.
 

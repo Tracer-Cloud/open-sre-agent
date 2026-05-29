@@ -7,6 +7,9 @@ from app.integrations.catalog import classify_integrations as _classify_integrat
 from app.integrations.mongodb import (
     MongoDBConfig,
     build_mongodb_config,
+    get_current_ops,
+    get_rs_status,
+    get_server_status,
     mongodb_config_from_env,
     validate_mongodb_config,
 )
@@ -105,6 +108,53 @@ class TestMongoDBValidation:
         result = validate_mongodb_config(config)
         assert result.ok is False
         assert "Conn error" in result.detail
+
+
+class TestMongoDBAdminUnauthorized:
+    """Admin commands should return graceful errors without Sentry reports when unauthorized."""
+
+    def _make_unauthorized(self) -> Exception:
+        err = Exception("not authorized on admin to execute command")
+        err.code = 13  # type: ignore[attr-defined]
+        return err
+
+    def _config(self) -> MongoDBConfig:
+        return MongoDBConfig(connection_string="mongodb://host")
+
+    @patch("app.integrations.mongodb._get_client")
+    @patch("app.integrations.mongodb.report_validation_failure")
+    def test_get_server_status_unauthorized_no_sentry(self, mock_report, mock_client):
+        mock_client.return_value.admin.command.side_effect = self._make_unauthorized()
+        result = get_server_status(self._config())
+        assert result["available"] is False
+        assert "clusterMonitor" in result["error"]
+        mock_report.assert_not_called()
+
+    @patch("app.integrations.mongodb._get_client")
+    @patch("app.integrations.mongodb.report_validation_failure")
+    def test_get_current_ops_unauthorized_no_sentry(self, mock_report, mock_client):
+        mock_client.return_value.admin.command.side_effect = self._make_unauthorized()
+        result = get_current_ops(self._config())
+        assert result["available"] is False
+        assert "clusterMonitor" in result["error"]
+        mock_report.assert_not_called()
+
+    @patch("app.integrations.mongodb._get_client")
+    @patch("app.integrations.mongodb.report_validation_failure")
+    def test_get_rs_status_unauthorized_no_sentry(self, mock_report, mock_client):
+        mock_client.return_value.admin.command.side_effect = self._make_unauthorized()
+        result = get_rs_status(self._config())
+        assert result["available"] is False
+        assert "clusterMonitor" in result["error"]
+        mock_report.assert_not_called()
+
+    @patch("app.integrations.mongodb._get_client")
+    @patch("app.integrations.mongodb.report_validation_failure")
+    def test_get_server_status_other_error_reports_sentry(self, mock_report, mock_client):
+        mock_client.return_value.admin.command.side_effect = Exception("connection timeout")
+        result = get_server_status(self._config())
+        assert result["available"] is False
+        mock_report.assert_called_once()
 
 
 class TestResolveIntegrations:

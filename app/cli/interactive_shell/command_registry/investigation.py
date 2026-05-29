@@ -15,6 +15,7 @@ from app.cli.interactive_shell.ui import (
     ERROR,
     HIGHLIGHT,
     WARNING,
+    print_repl_json,
 )
 from app.cli.interactive_shell.ui.choice_menu import (
     repl_choose_one,
@@ -44,6 +45,47 @@ def _interactive_template_menu(session: ReplSession, console: Console) -> bool:
         repl_section_break(console)
 
 
+def _interactive_investigate_menu(session: ReplSession, console: Console) -> bool:
+    from app.cli.support.constants import SAMPLE_ALERT_OPTIONS
+
+    root = "/investigate"
+    choices: list[tuple[str, str]] = [
+        ("alert.json", "alert.json (bundled demo alert file)"),
+    ]
+    choices.extend(SAMPLE_ALERT_OPTIONS)
+    choices.append(("__browse__", "custom file path…"))
+    choices.append(("done", "done"))
+
+    while True:
+        target = repl_choose_one(
+            title="investigate",
+            breadcrumb=root,
+            choices=choices,
+        )
+        if target is None or target == "done":
+            return True
+        if target == "__browse__":
+            custom_path = _prompt_investigate_path(console)
+            if custom_path is None:
+                continue
+            target = custom_path
+        _cmd_investigate_file(session, console, [target])
+        repl_section_break(console)
+
+
+def _prompt_investigate_path(console: Console) -> str | None:
+    """Prompt for a user-supplied alert path from the investigate picker."""
+    console.print()
+    console.print(
+        f"[{DIM}]Enter a local alert file path (.json/.md/.txt). Use absolute or relative path.[/]"
+    )
+    try:
+        value = console.input(f"[{HIGHLIGHT}]file path> [/]").strip()
+    except (EOFError, KeyboardInterrupt):
+        return None
+    return value if value else None
+
+
 def _cmd_template(session: ReplSession, console: Console, args: list[str]) -> bool:
     from app.cli.investigation.alert_templates import build_alert_template
     from app.cli.support.constants import ALERT_TEMPLATE_CHOICES
@@ -67,13 +109,18 @@ def _cmd_template(session: ReplSession, console: Console, args: list[str]) -> bo
         )
         return True
 
-    console.print_json(json.dumps(payload, indent=2))
+    print_repl_json(console, json.dumps(payload, indent=2))
     return True
 
 
 def _validate_investigate_args(args: list[str]) -> str | None:
+    if not args and repl_tty_interactive():
+        return None
     if not args:
-        return f"[{DIM}]usage:[/] /investigate <file>"
+        return (
+            f"[{DIM}]usage:[/] /investigate <file|template>  "
+            f"(e.g. /investigate alert.json or /investigate generic)"
+        )
     return None
 
 
@@ -86,9 +133,86 @@ def _validate_save_args(args: list[str]) -> str | None:
 def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str]) -> bool:
     from app.analytics.cli import track_investigation
     from app.analytics.source import EntrypointSource, TriggerMode
-    from app.cli.investigation import run_investigation_for_session
+    from app.cli.investigation import run_investigation_for_session, run_sample_alert_for_session
+    from app.cli.investigation.payload import resolve_alert_path
+    from app.cli.support.constants import ALERT_TEMPLATE_CHOICES
 
-    path = Path(args[0])
+    if not args and repl_tty_interactive():
+        return _interactive_investigate_menu(session, console)
+    if not args:
+        console.print(
+            f"[{DIM}]usage:[/] /investigate <file|template>  "
+            f"(e.g. /investigate alert.json or /investigate generic)"
+        )
+        session.mark_latest(ok=False, kind="slash")
+        return True
+
+    raw_target = args[0]
+    normalized_target = raw_target.strip().lower()
+    template_name = normalized_target
+    for prefix in ("sample:", "template:"):
+        if template_name.startswith(prefix):
+            template_name = template_name[len(prefix) :].strip()
+            break
+    if template_name not in ALERT_TEMPLATE_CHOICES:
+        template_name = ""
+
+    # Treat canonical template names as templates even if same-named files exist
+    # in the working directory. Users can still force file mode with an explicit
+    # path form (for example: ``/investigate ./generic``).
+    if template_name:
+        task = session.task_registry.create(
+            TaskKind.INVESTIGATION, command=f"/investigate {template_name}"
+        )
+        task.mark_running()
+        try:
+            with (
+                track_investigation(
+                    entrypoint=EntrypointSource.CLI_REPL_FILE,
+                    trigger_mode=TriggerMode.FILE,
+                    input_path=f"template:{template_name}",
+                    interactive=True,
+                ),
+                apply_reasoning_effort(session.reasoning_effort),
+            ):
+                suppress = getattr(console, "suppress_prompt_spinner", None)
+                if callable(suppress):
+                    suppress()
+                final_state = run_sample_alert_for_session(
+                    template_name=template_name,
+                    context_overrides=session.accumulated_context or None,
+                    cancel_requested=task.cancel_requested,
+                )
+        except KeyboardInterrupt:
+            task.mark_cancelled()
+            console.print(f"[{WARNING}]investigation cancelled.[/]")
+            session.record("alert", f"/investigate {template_name}", ok=False)
+            session.mark_latest(ok=False, kind="slash")
+            return True
+        except OpenSREError as exc:
+            task.mark_failed(str(exc))
+            console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
+            if exc.suggestion:
+                console.print(f"[{WARNING}]suggestion:[/] {escape(exc.suggestion)}")
+            session.record("alert", f"/investigate {template_name}", ok=False)
+            session.mark_latest(ok=False, kind="slash")
+            return True
+        except Exception as exc:
+            task.mark_failed(str(exc))
+            report_exception(exc, context="interactive_shell.investigate_template")
+            console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
+            session.record("alert", f"/investigate {template_name}", ok=False)
+            session.mark_latest(ok=False, kind="slash")
+            return True
+
+        root = final_state.get("root_cause")
+        task.mark_completed(result=str(root) if root is not None else "")
+        session.last_state = final_state
+        session.accumulate_from_state(final_state)
+        session.record("alert", f"/investigate {template_name}")
+        return True
+
+    path = resolve_alert_path(raw_target)
     if not path.exists():
         console.print(f"[{ERROR}]file not found:[/] {escape(str(path))}")
         session.mark_latest(ok=False, kind="slash")
@@ -114,6 +238,9 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
             ),
             apply_reasoning_effort(session.reasoning_effort),
         ):
+            suppress = getattr(console, "suppress_prompt_spinner", None)
+            if callable(suppress):
+                suppress()
             final_state = run_investigation_for_session(
                 alert_text=text,
                 context_overrides=session.accumulated_context or None,
@@ -144,10 +271,10 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
     root = final_state.get("root_cause")
     task.mark_completed(result=str(root) if root is not None else "")
     session.last_state = final_state
-    # Match `_run_new_alert` in loop.py: inherit service / cluster / region
+    # Match `run_new_alert` in runtime/execution.py: inherit service / cluster / region
     # across subsequent investigations in the same REPL session.
     session.accumulate_from_state(final_state)
-    session.record("alert", f"/investigate {args[0]}")
+    session.record("alert", f"/investigate {raw_target}")
     return True
 
 
@@ -212,34 +339,62 @@ _TEMPLATE_FIRST_ARGS: tuple[tuple[str, str], ...] = (
     ("grafana", "Grafana alert template"),
     ("honeycomb", "Honeycomb trigger template"),
     ("coralogix", "Coralogix alert template"),
+    ("splunk", "Splunk alert template"),
+)
+
+_INVESTIGATE_FIRST_ARGS: tuple[tuple[str, str], ...] = (
+    ("alert.json", "run bundled demo alert file"),
+    ("generic", "run generic sample alert"),
+    ("datadog", "run Datadog sample alert"),
+    ("grafana", "run Grafana sample alert"),
+    ("honeycomb", "run Honeycomb sample alert"),
+    ("coralogix", "run Coralogix sample alert"),
+    ("splunk", "run Splunk sample alert"),
 )
 
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
         "/template",
-        "print a starter alert JSON template (TTY: bare '/template' opens menu; "
-        "else '/template generic|datadog|grafana|honeycomb|coralogix')",
+        "Print a starter alert JSON template.",
         _cmd_template,
+        usage=(
+            "/template",
+            "/template generic",
+            "/template datadog",
+            "/template grafana",
+            "/template honeycomb",
+            "/template coralogix",
+            "/template splunk",
+        ),
+        notes=("In a TTY, bare /template opens an interactive menu.",),
         first_arg_completions=_TEMPLATE_FIRST_ARGS,
         execution_tier=ExecutionTier.SAFE,
     ),
     SlashCommand(
         "/investigate",
-        "run an RCA investigation from a file ('/investigate <file>')",
+        "Run an RCA investigation from a file or sample template.",
         _cmd_investigate_file,
-        execution_tier=ExecutionTier.ELEVATED,
+        usage=(
+            "/investigate <file|template>",
+            "/investigate alert.json",
+            "/investigate generic",
+        ),
+        notes=("In a TTY, bare /investigate opens runnable demo/template options.",),
+        first_arg_completions=_INVESTIGATE_FIRST_ARGS,
+        execution_tier=ExecutionTier.SAFE,
         validate_args=_validate_investigate_args,
     ),
     SlashCommand(
         "/last",
-        "reprint the most recent investigation report",
+        "Reprint the most recent investigation report.",
         _cmd_last,
         execution_tier=ExecutionTier.SAFE,
     ),
     SlashCommand(
         "/save",
-        "save last investigation to a file ('/save <path>')",
+        "Save the last investigation to a file.",
         _cmd_save,
+        usage=("/save <path>",),
         execution_tier=ExecutionTier.ELEVATED,
         validate_args=_validate_save_args,
     ),

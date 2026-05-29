@@ -17,6 +17,7 @@ from app.cli.interactive_shell.ui import (
     ERROR,
     HIGHLIGHT,
     WARNING,
+    print_repl_table,
     repl_table,
 )
 
@@ -118,13 +119,13 @@ def _cmd_history(_session: ReplSession, console: Console, _args: list[str]) -> b
         console.print(f"[{DIM}]no history yet.[/]")
         return True
 
-    table = repl_table(title="Command history", title_style=BOLD_BRAND)
+    table = repl_table(title="Command history\n", title_style=BOLD_BRAND)
     table.add_column("#", style=DIM, justify="right")
     table.add_column("text", overflow="fold")
 
     for i, entry in enumerate(entries, start=1):
         table.add_row(str(i), escape(entry))
-    console.print(table)
+    print_repl_table(console, table)
     return True
 
 
@@ -134,7 +135,7 @@ def _cmd_tasks(session: ReplSession, console: Console, _args: list[str]) -> bool
         console.print(f"[{DIM}]no tasks recorded this session.[/]")
         return True
 
-    table = repl_table(title="Tasks", title_style=BOLD_BRAND)
+    table = repl_table(title="Tasks\n", title_style=BOLD_BRAND)
     table.add_column("id", style="bold")
     table.add_column("kind")
     table.add_column("status")
@@ -159,7 +160,7 @@ def _cmd_tasks(session: ReplSession, console: Console, _args: list[str]) -> bool
             _task_duration_label(task),
             escape(_task_detail_label(task)),
         )
-    console.print(table)
+    print_repl_table(console, table)
     return True
 
 
@@ -215,18 +216,20 @@ def _cmd_cancel(session: ReplSession, console: Console, args: list[str]) -> bool
 
 
 COMMANDS: list[SlashCommand] = [
-    SlashCommand("/history", "show persisted command history", _cmd_history),
-    SlashCommand("/tasks", "list recent and in-flight shell tasks", _cmd_tasks),
+    SlashCommand("/history", "Show persisted command history.", _cmd_history),
+    SlashCommand("/tasks", "List recent and in-flight shell tasks.", _cmd_tasks),
     SlashCommand(
         "/cancel",
-        "cancel a running task by id ('/cancel <task_id>' — see /tasks)",
+        "Cancel a running task by id.",
         _cmd_cancel,
+        usage=("/cancel <task_id>",),
+        notes=("Use /tasks to list task ids.",),
         execution_tier=ExecutionTier.ELEVATED,
         validate_args=_validate_cancel_args,
     ),
     SlashCommand(
         "/stop",
-        "hints for stopping in-flight investigations and background tasks",
+        "Show how to stop in-flight investigations and background tasks.",
         _cmd_stop,
     ),
 ]

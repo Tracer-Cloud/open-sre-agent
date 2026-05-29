@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.services.cloudwatch_client import get_metric_statistics
+from app.tools._telemetry import report_run_error
 from app.tools.tool_decorator import tool
 from app.tools.utils.availability import cloudwatch_is_available
 from app.tools.utils.compaction import truncate_list
@@ -84,4 +85,12 @@ def get_cloudwatch_batch_metrics(
                 "job_queue": job_queue,
             }
     except Exception as e:
+        report_run_error(
+            e,
+            tool_name="get_cloudwatch_batch_metrics",
+            source="cloudwatch",
+            component="app.tools.CloudWatchBatchMetricsTool",
+            method="get_metric_statistics",
+            extras={"job_queue": job_queue, "metric_type": metric_type},
+        )
         return {"error": f"CloudWatch not available: {str(e)}"}

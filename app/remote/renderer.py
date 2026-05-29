@@ -13,7 +13,7 @@ import math
 import re
 import sys
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Any
 
 from rich.console import Console
@@ -39,7 +39,9 @@ from app.cli.interactive_shell.ui.theme import (
 from app.cli.support.output import (
     CtrlOToggleWatcher,
     ProgressTracker,
+    _repl_progress_active,
     get_output_format,
+    register_tool_detail_toggle,
     set_live_console,
     stop_display,
     unregister_live_console,
@@ -144,6 +146,9 @@ class _DiagnoseStreamRenderer:
         # user sees something rendered as soon as tokens arrive.
         self._last_render = 0.0
 
+        if _repl_progress_active():
+            return
+
         if get_output_format() != "rich":
             sys.stdout.write(f"  … {_DIAGNOSE_NODE}\n")
             sys.stdout.flush()
@@ -204,6 +209,11 @@ class _DiagnoseStreamRenderer:
                 },
             )
         if self._live is None:
+            if _repl_progress_active() and self._tracker is not None:
+                preview = "".join(self.buffer)
+                if len(preview) > 80:
+                    preview = "…" + preview[-77:]
+                self._tracker.update_subtext(_DIAGNOSE_NODE, preview, duration=30.0)
             return
         # Throttle Markdown re-parse to once per refresh window; the final
         # flush in :meth:`finish` guarantees the latest buffer is rendered
@@ -344,6 +354,7 @@ class StreamRenderer:
         self._tool_summary_counts: dict[str, dict[str, int]] = {}
         self._tool_summary_order: list[tuple[str, str]] = []
         self._toggle_watcher: CtrlOToggleWatcher | None = None
+        self._toggle_unregister: Callable[[], None] | None = None
 
     def _print_above_renderable(self, renderable: Any) -> None:
         """Print a rich renderable permanently above the active live region (even during diagnose)."""
@@ -375,8 +386,9 @@ class StreamRenderer:
             self._node_names_seen.append(canonical)
 
     def _start_toggle_watcher(self) -> None:
-        if get_output_format() != "rich":
+        if get_output_format() != "rich" or _repl_progress_active():
             return
+        self._toggle_unregister = register_tool_detail_toggle(self._toggle_tool_details)
         self._toggle_watcher = CtrlOToggleWatcher(self._toggle_tool_details)
         self._toggle_watcher.start()
 
@@ -384,6 +396,9 @@ class StreamRenderer:
         if self._toggle_watcher is not None:
             self._toggle_watcher.stop()
             self._toggle_watcher = None
+        if self._toggle_unregister is not None:
+            self._toggle_unregister()
+            self._toggle_unregister = None
 
     def _toggle_tool_details(self) -> None:
         self._tool_details_visible = not self._tool_details_visible
@@ -436,6 +451,7 @@ class StreamRenderer:
             # report the user has been watching stream live would be
             # silently discarded before the exception propagates.
             self._finish_active_node()
+            self._tracker.stop()
             if not _interrupted:
                 self._print_report()
         return dict(self._final_state)

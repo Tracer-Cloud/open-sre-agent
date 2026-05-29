@@ -6,6 +6,7 @@ import logging
 from typing import Any, cast
 
 from app.services.eks.eks_k8s_client import build_k8s_clients
+from app.tools._telemetry import report_run_error
 from app.tools.EKSListClustersTool import _eks_creds
 from app.tools.tool_decorator import tool
 from app.tools.utils.availability import eks_available_or_backend
@@ -100,11 +101,17 @@ def get_eks_pod_logs(
             "error": None,
         }
     except Exception as e:
-        logger.error(
-            "[eks] get_eks_pod_logs failed cluster=%s pod=%s error=%s",
-            cluster_name,
-            pod_name,
+        report_run_error(
             e,
-            exc_info=True,
+            tool_name="get_eks_pod_logs",
+            source="eks",
+            component="app.tools.EKSPodLogsTool",
+            method="core_v1.read_namespaced_pod_log",
+            logger=logger,
+            extras={
+                "cluster_name": cluster_name,
+                "namespace": namespace,
+                "pod_name": pod_name,
+            },
         )
         return {"source": "eks", "available": False, "pod_name": pod_name, "error": str(e)}

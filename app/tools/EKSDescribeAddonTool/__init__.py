@@ -7,6 +7,7 @@ from typing import Any
 from botocore.exceptions import ClientError
 
 from app.services.eks.eks_client import EKSClient
+from app.tools._telemetry import report_run_error
 from app.tools.EKSListClustersTool import _eks_available, _eks_creds
 from app.tools.tool_decorator import tool
 
@@ -75,6 +76,19 @@ def describe_eks_addon(
             "error": None,
         }
     except ClientError as e:
+        report_run_error(
+            e,
+            tool_name="describe_eks_addon",
+            source="eks",
+            component="app.tools.EKSDescribeAddonTool",
+            method="EKSClient.describe_addon",
+            severity="warning",
+            extras={
+                "cluster_name": cluster_name,
+                "addon_name": addon_name,
+                "region": region,
+            },
+        )
         return {
             "source": "eks",
             "available": False,
@@ -83,6 +97,18 @@ def describe_eks_addon(
             "error": str(e),
         }
     except Exception as e:
+        report_run_error(
+            e,
+            tool_name="describe_eks_addon",
+            source="eks",
+            component="app.tools.EKSDescribeAddonTool",
+            method="EKSClient.describe_addon",
+            extras={
+                "cluster_name": cluster_name,
+                "addon_name": addon_name,
+                "region": region,
+            },
+        )
         return {
             "source": "eks",
             "available": False,

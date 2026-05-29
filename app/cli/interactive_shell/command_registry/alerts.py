@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from rich.console import Console
-from rich.table import Table
 
 from app.cli.interactive_shell.alert_inbox import get_current_inbox
 from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
 from app.cli.interactive_shell.runtime import ReplSession
+from app.cli.interactive_shell.ui import print_repl_table, repl_table
 from app.cli.interactive_shell.ui.theme import BOLD_BRAND, DIM, HIGHLIGHT, WARNING
 
 
@@ -17,7 +17,7 @@ def _cmd_alerts(_session: ReplSession, console: Console, _args: list[str]) -> bo
         console.print(f"[{WARNING}]alert listener is not active.[/]")
         return True
 
-    table = Table(title="Alert Inbox", title_style=BOLD_BRAND, show_header=False)
+    table = repl_table(title="Alert Inbox\n", title_style=BOLD_BRAND, show_header=False)
     table.add_column("key", style="bold")
     table.add_column("value")
     table.add_row("status", f"[{HIGHLIGHT}]listening[/]")
@@ -27,13 +27,13 @@ def _cmd_alerts(_session: ReplSession, console: Console, _args: list[str]) -> bo
     for alert in inbox.peek_last(5):
         table.add_row(f"[{DIM}]recent[/]", f"{alert.alert_name or 'untitled'} — {alert.text[:80]}")
 
-    console.print(table)
+    print_repl_table(console, table)
     return True
 
 
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
-        "/alerts", "show alert listener status", _cmd_alerts, execution_tier=ExecutionTier.SAFE
+        "/alerts", "Show alert listener status.", _cmd_alerts, execution_tier=ExecutionTier.SAFE
     ),
 ]
 

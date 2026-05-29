@@ -8,6 +8,7 @@ from typing import Any
 from botocore.exceptions import ClientError
 
 from app.services.eks.eks_client import EKSClient
+from app.tools._telemetry import report_run_error
 from app.tools.tool_decorator import tool
 from app.tools.utils.eks_workload_helper import extract_cluster_params
 
@@ -72,6 +73,23 @@ def list_eks_clusters(
             clusters = [c for c in clusters if c in cluster_names]
         return {"source": "eks", "available": True, "clusters": clusters, "error": None}
     except ClientError as e:
+        report_run_error(
+            e,
+            tool_name="list_eks_clusters",
+            source="eks",
+            component="app.tools.EKSListClustersTool",
+            method="EKSClient.list_clusters",
+            severity="warning",
+            extras={"role_arn": role_arn, "region": region},
+        )
         return {"source": "eks", "available": False, "clusters": [], "error": str(e)}
     except Exception as e:
+        report_run_error(
+            e,
+            tool_name="list_eks_clusters",
+            source="eks",
+            component="app.tools.EKSListClustersTool",
+            method="EKSClient.list_clusters",
+            extras={"role_arn": role_arn, "region": region},
+        )
         return {"source": "eks", "available": False, "clusters": [], "error": str(e)}

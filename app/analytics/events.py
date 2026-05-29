@@ -24,6 +24,7 @@ class Event(StrEnum):
     INVESTIGATION_FAILED = "investigation_failed"
     INVESTIGATION_FIRST_HYPOTHESIS_RENDERED = "investigation_first_hypothesis_rendered"
     INVESTIGATION_ABANDONED = "investigation_abandoned"
+    INVESTIGATION_FEEDBACK_SUBMITTED = "investigation_feedback_submitted"
     INTERACTIVE_SHELL_ROUTE_DECISION = "interactive_shell_route_decision"
 
     # Integrations
@@ -54,6 +55,7 @@ class Event(StrEnum):
     TERMINAL_ACTIONS_PLANNED = "terminal_actions_planned"
     TERMINAL_ACTIONS_EXECUTED = "terminal_actions_executed"
     TERMINAL_TURN_SUMMARIZED = "terminal_turn_summarized"
+    AI_GENERATION = "$ai_generation"
 
     # Update
     UPDATE_STARTED = "update_started"
@@ -69,3 +71,8 @@ class Event(StrEnum):
     AGENT_SECRET_DETECTED = "agent_secret_detected"
     AGENT_KILLED = "agent_killed"
     AGENT_KILL_FAILED = "agent_kill_failed"
+
+    # Scheduled deliveries
+    SCHEDULED_TASK_STARTED = "scheduled_task_started"
+    SCHEDULED_TASK_COMPLETED = "scheduled_task_completed"
+    SCHEDULED_TASK_FAILED = "scheduled_task_failed"

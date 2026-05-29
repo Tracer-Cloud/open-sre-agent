@@ -23,7 +23,7 @@ def runbook() -> None:
 @runbook.command("add")
 @click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 def runbook_add(path: Path) -> None:
-    """Copy a markdown runbook into ~/.config/opensre/runbooks/."""
+    """Copy a markdown runbook into ~/.opensre/runbooks/."""
     try:
         stored = save(path)
     except RunbookValidationError as exc:

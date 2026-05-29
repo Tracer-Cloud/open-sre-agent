@@ -1,0 +1,43 @@
+id: 600-follow-up-why-failed
+title: Follow-up why failed
+intent_class: follow_up
+risk_level: medium
+input:
+  prompt: why did it fail?
+  surface: interactive_cli
+session:
+  has_prior_state: true
+  remote_connected: false
+  configured_integrations: []
+available_capabilities:
+  slash_commands: []
+  cli_commands: []
+  synthetic_suites: []
+notes: []
+
+route:
+  expected_kind: cli_agent
+  expected_signals: []
+  expected_command_text: null
+policy:
+  should_execute: false
+  has_unhandled_clause: true
+  fail_closed: true
+planned_actions:
+- kind: assistant_handoff
+  content: follow_up:last_failure
+  source: llm
+executed_actions: []
+response_contract:
+  must_contain_any:
+  - why did it fail
+  - follow-up
+  - alert text
+  must_not_contain:
+  - $ /
+history:
+  expected:
+  - type: cli_agent
+    ok: true
+tier: full
+runs: 3

@@ -31,9 +31,13 @@ from app.hermes.sinks import TelegramSink
 from app.watch_dog.alarms import AlarmDispatcher, load_credentials_from_env
 
 
-@click.group(name="hermes")
-def hermes_command() -> None:
+@click.group(name="hermes", invoke_without_command=True)
+@click.pass_context
+def hermes_command(ctx: click.Context) -> None:
     """Live-tail Hermes logs and route detected incidents to Telegram."""
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
+        ctx.exit(0)
 
 
 @hermes_command.command(name="watch")
@@ -106,7 +110,7 @@ def hermes_command() -> None:
 )
 @click.option(
     "--escalation-threshold",
-    type=int,
+    type=click.IntRange(min=2),
     default=3,
     show_default=True,
     help=(

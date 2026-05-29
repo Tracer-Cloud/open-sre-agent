@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from app.agents.discovery import (
+    classify_command_provider,
     discover_agent_processes,
     display_command,
     process_command,
@@ -29,7 +30,8 @@ def agents() -> None:
 @agents.command(name="list")
 def list_agents() -> None:
     """List registered and auto-discovered local agents."""
-    Console().print(render_agents_table(registered_and_discovered_agents(AgentRegistry())))
+    console = Console()
+    render_agents_table(console, registered_and_discovered_agents(AgentRegistry()))
 
 
 @agents.command(name="register")
@@ -43,7 +45,14 @@ def register_agent(pid: int, name: str | None, command_override: str | None) -> 
 
     agent_name = name or f"agent-{pid}"
     command = command_override or process_command(pid) or agent_name
-    AgentRegistry().register(AgentRecord(name=agent_name, pid=pid, command=command))
+    AgentRegistry().register(
+        AgentRecord(
+            name=agent_name,
+            pid=pid,
+            command=command,
+            provider=classify_command_provider(command),
+        )
+    )
     click.echo(f"registered {agent_name} (pid {pid})")
 
 

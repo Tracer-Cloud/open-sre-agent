@@ -1,0 +1,49 @@
+id: 020-alias-remote-deploy
+title: Remote deploy alias
+intent_class: deterministic
+risk_level: low
+input:
+  prompt: deploy
+  surface: interactive_cli
+session:
+  has_prior_state: false
+  remote_connected: false
+  configured_integrations: []
+available_capabilities:
+  slash_commands:
+  - /remote
+  cli_commands: []
+  synthetic_suites: []
+notes: []
+
+route:
+  expected_kind: slash
+  expected_signals:
+  - bare_command_alias
+  expected_command_text: /remote
+policy:
+  should_execute: true
+  has_unhandled_clause: false
+  fail_closed: false
+planned_actions:
+- kind: slash
+  source: deterministic
+  target_surface: slash
+  command: /remote
+  args: []
+  content: /remote
+executed_actions:
+- kind: slash
+  command: /remote
+  args: []
+  content: /remote
+response_contract:
+  must_contain_any:
+  - ran /remote
+  must_not_contain: []
+history:
+  expected:
+  - type: slash
+    ok: true
+tier: critical
+runs: 1

@@ -16,7 +16,8 @@ from app.cli.interactive_shell.ui import (
     ERROR,
     HIGHLIGHT,
     WARNING,
-    render_banner,
+    print_repl_table,
+    render_ready_box,
     repl_table,
     resolve_provider_models,
 )
@@ -34,15 +35,19 @@ from app.llm_reasoning_effort import (
 )
 
 
-def _cmd_clear(_session: ReplSession, console: Console, _args: list[str]) -> bool:
+def _cmd_clear(session: ReplSession, console: Console, _args: list[str]) -> bool:
     console.clear()
-    render_banner(console)
+    render_ready_box(console, session=session)
     return True
 
 
 def _cmd_reset(session: ReplSession, console: Console, _args: list[str]) -> bool:
-    session.clear()
-    console.print(f"[{DIM}]session state cleared.[/]")
+    from app.cli.interactive_shell.sessions.store import SessionStore
+
+    SessionStore.flush(session)  # close current session file
+    session.clear()  # rotate session_id + started_at
+    SessionStore.open_session(session)  # open new session file immediately
+    console.print(f"[{DIM}]session state cleared — new session started.[/]")
     return True
 
 
@@ -75,7 +80,7 @@ def _cmd_trust(session: ReplSession, console: Console, args: list[str]) -> bool:
 def _cmd_status(session: ReplSession, console: Console, _args: list[str]) -> bool:
     from app.cli.interactive_shell.references.grounding_diagnostics import iter_grounding_sources
 
-    table = repl_table(title="Session status", title_style=BOLD_BRAND, show_header=False)
+    table = repl_table(title="Session status\n", title_style=BOLD_BRAND, show_header=False)
     table.add_column("key", style="bold")
     table.add_column("value")
     table.add_row("interactions", str(len(session.history)))
@@ -100,12 +105,12 @@ def _cmd_status(session: ReplSession, console: Console, _args: list[str]) -> boo
     acc = session.accumulated_context
     if acc:
         table.add_row("accumulated context", ", ".join(sorted(acc.keys())))
-    console.print(table)
+    print_repl_table(console, table)
     return True
 
 
 def _cmd_cost(session: ReplSession, console: Console, _args: list[str]) -> bool:
-    table = repl_table(title="Session cost", title_style=BOLD_BRAND, show_header=False)
+    table = repl_table(title="Session cost\n", title_style=BOLD_BRAND, show_header=False)
     table.add_column("key", style="bold")
     table.add_column("value")
     table.add_row("interactions", str(len(session.history)))
@@ -118,7 +123,7 @@ def _cmd_cost(session: ReplSession, console: Console, _args: list[str]) -> bool:
     else:
         table.add_row("token usage", f"[{DIM}]not available (not wired yet)[/]")
 
-    console.print(table)
+    print_repl_table(console, table)
     return True
 
 
@@ -211,12 +216,12 @@ def _cmd_context(session: ReplSession, console: Console, _args: list[str]) -> bo
         console.print(f"[{DIM}]no infra context accumulated yet.[/]")
         return True
 
-    table = repl_table(title="Accumulated context", title_style=BOLD_BRAND, show_header=False)
+    table = repl_table(title="Accumulated context\n", title_style=BOLD_BRAND, show_header=False)
     table.add_column("key", style="bold")
     table.add_column("value")
     for k, v in sorted(session.accumulated_context.items()):
         table.add_row(k, escape(str(v)))
-    console.print(table)
+    print_repl_table(console, table)
     return True
 
 
@@ -238,32 +243,109 @@ _EFFORT_FIRST_ARGS: tuple[tuple[str, str], ...] = (
     ("max", "alias for xhigh"),
 )
 
+
+def _cmd_sessions(session: ReplSession, console: Console, _args: list[str]) -> bool:
+    from datetime import UTC, datetime
+
+    from app.cli.interactive_shell.sessions.store import SessionStore
+
+    entries = SessionStore.load_recent(20)
+    if not entries:
+        console.print(f"[{DIM}]No sessions recorded yet.[/]")
+        return True
+
+    table = repl_table(title="Recent sessions\n", title_style=BOLD_BRAND)
+    table.add_column("#", style="bold", justify="right")
+    table.add_column("Session ID", style="bold")
+    table.add_column("Started")
+    table.add_column("Duration")
+    table.add_column("Turns", justify="right")
+    table.add_column("Investigations", justify="right")
+
+    for i, entry in enumerate(entries, start=1):
+        sid = entry["session_id"]
+        short_id = sid[:8] if len(sid) >= 8 else sid
+        is_current = sid == session.session_id
+
+        started_raw = entry.get("started_at") or ""
+        try:
+            started_dt = datetime.fromisoformat(started_raw)
+            started_str = started_dt.astimezone().strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            started_str = started_raw[:16] if started_raw else "—"
+
+        duration_secs = entry.get("duration_secs")
+        if is_current:
+            try:
+                elapsed = int(
+                    (
+                        datetime.now(UTC) - datetime.fromtimestamp(session.started_at, tz=UTC)
+                    ).total_seconds()
+                )
+                duration_secs = elapsed
+            except Exception:
+                pass
+
+        if duration_secs is None:
+            duration_str = "—"
+        elif duration_secs < 60:
+            duration_str = f"{duration_secs}s"
+        elif duration_secs < 3600:
+            duration_str = f"{duration_secs // 60}m {duration_secs % 60}s"
+        else:
+            h = duration_secs // 3600
+            m = (duration_secs % 3600) // 60
+            duration_str = f"{h}h {m}m"
+
+        total = entry.get("total_turns")
+        investigations = entry.get("investigation_turns")
+        sid_col = f"{short_id} [{HIGHLIGHT}](current)[/]" if is_current else short_id
+
+        table.add_row(
+            str(i),
+            sid_col,
+            started_str,
+            duration_str,
+            str(total) if total is not None else "—",
+            str(investigations) if investigations is not None else "—",
+        )
+
+    print_repl_table(console, table)
+    return True
+
+
 COMMANDS: list[SlashCommand] = [
-    SlashCommand("/clear", "clear the screen and re-render the banner", _cmd_clear),
-    SlashCommand("/reset", "clear session state (keeps trust mode)", _cmd_reset),
+    SlashCommand("/clear", "Clear the screen and re-render the banner.", _cmd_clear),
+    SlashCommand("/reset", "Clear session state.", _cmd_reset, notes=("Trust mode is preserved.",)),
     SlashCommand(
         "/trust",
-        "toggle trust mode (TTY: bare '/trust' opens menu; else '/trust off')",
+        "Manage trust mode.",
         _cmd_trust,
+        usage=("/trust", "/trust on", "/trust off"),
+        notes=("In a TTY, bare /trust opens an interactive menu.",),
         first_arg_completions=_TRUST_FIRST_ARGS,
         execution_tier=ExecutionTier.EXEMPT,
     ),
-    SlashCommand("/status", "show session status", _cmd_status),
-    SlashCommand("/context", "show accumulated infra context", _cmd_context),
-    SlashCommand("/cost", "show token usage and session cost", _cmd_cost),
+    SlashCommand("/status", "Show session status.", _cmd_status),
+    SlashCommand("/context", "Show accumulated infra context.", _cmd_context),
+    SlashCommand("/cost", "Show token usage and session cost.", _cmd_cost),
     SlashCommand(
         "/effort",
-        "set REPL reasoning effort ('/effort low|medium|high|xhigh|max')",
+        "Set REPL reasoning effort.",
         _cmd_effort,
+        usage=("/effort <low|medium|high|xhigh|max>",),
         first_arg_completions=_EFFORT_FIRST_ARGS,
     ),
     SlashCommand(
         "/verbose",
-        "toggle verbose logging (TTY: bare '/verbose' opens menu; else '/verbose off')",
+        "Manage verbose logging.",
         _cmd_verbose,
+        usage=("/verbose", "/verbose on", "/verbose off"),
+        notes=("In a TTY, bare /verbose opens an interactive menu.",),
         first_arg_completions=_VERBOSE_FIRST_ARGS,
     ),
-    SlashCommand("/compact", "trim old session history to free memory", _cmd_compact),
+    SlashCommand("/compact", "Trim old session history to free memory.", _cmd_compact),
+    SlashCommand("/sessions", "List recent REPL sessions.", _cmd_sessions),
 ]
 
 __all__ = ["COMMANDS"]

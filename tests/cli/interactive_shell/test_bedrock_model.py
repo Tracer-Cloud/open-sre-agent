@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import pytest
 
 from app.cli.interactive_shell.command_registry.model import (
-    _is_model_supported,
+    _is_model_allowed,
     _prompt_custom_model_id,
     _reasoning_model_menu_choices,
     _toolcall_model_menu_choices,
@@ -24,10 +24,11 @@ class _FakeModelOption:
 class _FakeProvider:
     value: str
     models: tuple[_FakeModelOption, ...] = ()
+    allow_custom_models: bool = False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# _is_model_supported — Bedrock bypass
+# _is_model_allowed — custom model bypass
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -35,33 +36,45 @@ class TestIsModelSupportedBedrock:
     """Bedrock must accept any non-empty model string (ARNs, regional prefixes, etc.)."""
 
     def test_bedrock_accepts_inference_profile_id(self) -> None:
-        assert _is_model_supported("bedrock", "us.anthropic.claude-sonnet-4-6", ()) is True
+        provider = _FakeProvider(value="bedrock", allow_custom_models=True)
+        assert _is_model_allowed(provider, "us.anthropic.claude-sonnet-4-6") is True
 
     def test_bedrock_accepts_eu_prefix(self) -> None:
-        assert _is_model_supported("bedrock", "eu.anthropic.claude-sonnet-4-6", ()) is True
+        provider = _FakeProvider(value="bedrock", allow_custom_models=True)
+        assert _is_model_allowed(provider, "eu.anthropic.claude-sonnet-4-6") is True
 
     def test_bedrock_accepts_global_prefix(self) -> None:
-        assert _is_model_supported("bedrock", "global.anthropic.claude-opus-4-7", ()) is True
+        provider = _FakeProvider(value="bedrock", allow_custom_models=True)
+        assert _is_model_allowed(provider, "global.anthropic.claude-opus-4-7") is True
 
     def test_bedrock_accepts_on_demand_model(self) -> None:
-        assert _is_model_supported("bedrock", "mistral.mistral-large-3-675b-instruct", ()) is True
+        provider = _FakeProvider(value="bedrock", allow_custom_models=True)
+        assert _is_model_allowed(provider, "mistral.mistral-large-3-675b-instruct") is True
 
     def test_bedrock_accepts_full_arn(self) -> None:
         arn = "arn:aws:bedrock:us-east-1:123456789012:inference-profile/my-profile"
-        assert _is_model_supported("bedrock", arn, ()) is True
+        provider = _FakeProvider(value="bedrock", allow_custom_models=True)
+        assert _is_model_allowed(provider, arn) is True
 
     def test_bedrock_rejects_empty_string(self) -> None:
-        assert _is_model_supported("bedrock", "", ()) is False
+        provider = _FakeProvider(value="bedrock", allow_custom_models=True)
+        assert _is_model_allowed(provider, "") is False
 
     def test_ollama_also_accepts_any_model(self) -> None:
         """Ollama shares the same bypass pattern — verify it still works."""
-        assert _is_model_supported("ollama", "llama3.2", ()) is True
+        provider = _FakeProvider(value="ollama", allow_custom_models=True)
+        assert _is_model_allowed(provider, "llama3.2") is True
 
     def test_other_provider_requires_match(self) -> None:
         """Non-bypass providers must match the curated model list."""
         models = (_FakeModelOption(value="gpt-5.4"),)
-        assert _is_model_supported("openai", "gpt-5.4", models) is True
-        assert _is_model_supported("openai", "gpt-unknown", models) is False
+        provider = _FakeProvider(value="anthropic", models=models)
+        assert _is_model_allowed(provider, "gpt-5.4") is True
+        assert _is_model_allowed(provider, "gpt-unknown") is False
+
+    def test_custom_provider_accepts_unknown_non_empty_model(self) -> None:
+        provider = _FakeProvider(value="openai", allow_custom_models=True)
+        assert _is_model_allowed(provider, "gpt-5.5") is True
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -74,7 +87,9 @@ class TestMenuChoicesCustomOption:
 
     def test_reasoning_menu_includes_custom_for_bedrock(self) -> None:
         provider = _FakeProvider(
-            value="bedrock", models=(_FakeModelOption(value="us.anthropic.claude-sonnet-4-6"),)
+            value="bedrock",
+            models=(_FakeModelOption(value="us.anthropic.claude-sonnet-4-6"),),
+            allow_custom_models=True,
         )
         choices = _reasoning_model_menu_choices(provider)
         values = [v for v, _ in choices]
@@ -82,23 +97,33 @@ class TestMenuChoicesCustomOption:
 
     def test_toolcall_menu_includes_custom_for_bedrock(self) -> None:
         provider = _FakeProvider(
-            value="bedrock", models=(_FakeModelOption(value="us.anthropic.claude-sonnet-4-6"),)
+            value="bedrock",
+            models=(_FakeModelOption(value="us.anthropic.claude-sonnet-4-6"),),
+            allow_custom_models=True,
         )
         choices = _toolcall_model_menu_choices(provider)
         values = [v for v, _ in choices]
         assert "__custom__" in values
 
-    def test_reasoning_menu_no_custom_for_openai(self) -> None:
-        provider = _FakeProvider(value="openai", models=(_FakeModelOption(value="gpt-5.4"),))
+    def test_reasoning_menu_includes_custom_for_openai(self) -> None:
+        provider = _FakeProvider(
+            value="openai",
+            models=(_FakeModelOption(value="gpt-5.4"),),
+            allow_custom_models=True,
+        )
         choices = _reasoning_model_menu_choices(provider)
         values = [v for v, _ in choices]
-        assert "__custom__" not in values
+        assert "__custom__" in values
 
-    def test_toolcall_menu_no_custom_for_openai(self) -> None:
-        provider = _FakeProvider(value="openai", models=(_FakeModelOption(value="gpt-5.4"),))
+    def test_toolcall_menu_includes_custom_for_openai(self) -> None:
+        provider = _FakeProvider(
+            value="openai",
+            models=(_FakeModelOption(value="gpt-5.4"),),
+            allow_custom_models=True,
+        )
         choices = _toolcall_model_menu_choices(provider)
         values = [v for v, _ in choices]
-        assert "__custom__" not in values
+        assert "__custom__" in values
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -239,7 +264,7 @@ class TestInteractiveSetToolcallCustom:
         # First call: pick provider "bedrock"; second call: pick "__custom__"
         choose_returns = iter(["bedrock", "__custom__"])
         monkeypatch.setattr(model_mod, "repl_choose_one", lambda **_kw: next(choose_returns))
-        monkeypatch.setattr(model_mod, "_prompt_custom_model_id", lambda _c: custom_id)
+        monkeypatch.setattr(model_mod, "_prompt_custom_model_id", lambda *_args: custom_id)
 
         with patch.object(model_mod, "switch_toolcall_model", return_value=True) as mock_switch:
             result = model_mod._interactive_set_toolcall(console)
@@ -257,7 +282,7 @@ class TestInteractiveSetToolcallCustom:
 
         choose_returns = iter(["bedrock", "__custom__"])
         monkeypatch.setattr(model_mod, "repl_choose_one", lambda **_kw: next(choose_returns))
-        monkeypatch.setattr(model_mod, "_prompt_custom_model_id", lambda _c: None)
+        monkeypatch.setattr(model_mod, "_prompt_custom_model_id", lambda *_args: None)
 
         result = model_mod._interactive_set_toolcall(console)
         assert result is None

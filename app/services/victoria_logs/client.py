@@ -20,6 +20,7 @@ import httpx
 from pydantic import field_validator
 
 from app.integrations.probes import ProbeResult
+from app.services._error_helpers import capture_service_error
 from app.services._streaming import StreamingParseStats
 from app.strict_config import StrictConfigModel
 
@@ -138,18 +139,27 @@ class VictoriaLogsClient:
             resp.raise_for_status()
             rows = _parse_ndjson(resp.text, limit=limit)
             return {"success": True, "rows": rows, "total": len(rows)}
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "[victoria_logs] Query HTTP failure status=%s",
-                e.response.status_code,
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="victoria_logs",
+                method="query_logs",
+                extras={"query": query},
             )
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
             }
-        except Exception as e:
-            logger.warning("[victoria_logs] Query error: %s", e)
-            return {"success": False, "error": str(e)}
+        except Exception as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="victoria_logs",
+                method="query_logs",
+                extras={"query": query},
+            )
+            return {"success": False, "error": str(exc)}
 
 
 def _parse_ndjson(text: str, *, limit: int) -> list[dict[str, Any]]:

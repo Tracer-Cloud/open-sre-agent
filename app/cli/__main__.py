@@ -137,13 +137,7 @@ def _capture_accepted_cli_invocation(ctx: click.Context) -> None:
     type=click.Choice(["classic", "pinned"]),
     default=None,
     help="Interactive-shell layout: 'classic' (scrolling) or 'pinned' (fixed "
-    "input bar). Overrides OPENSRE_LAYOUT env var and ~/.config/opensre/config.yml.",
-)
-@click.option(
-    "--reload/--no-reload",
-    "reload_enabled",
-    default=None,
-    help="Enable or disable interactive-shell hot reload. Defaults to enabled.",
+    "input bar). Overrides OPENSRE_LAYOUT env var and ~/.opensre/config.yml.",
 )
 @click.pass_context
 def cli(
@@ -154,7 +148,6 @@ def cli(
     yes: bool,
     interactive: bool,
     layout: str | None,
-    reload_enabled: bool | None,
 ) -> None:
     """OpenSRE - open-source SRE agent for automated incident investigation and root cause analysis."""
     ctx.ensure_object(dict)
@@ -177,7 +170,6 @@ def cli(
             config = ReplConfig.load(
                 cli_enabled=interactive,
                 cli_layout=layout,
-                cli_reload=reload_enabled,
             )
             if config.enabled:
                 raise SystemExit(run_repl(config=config))
@@ -208,6 +200,13 @@ def _is_update_invocation(argv: list[str]) -> bool:
     return bool(command_parts) and command_parts[0] == "update"
 
 
+def _sentry_entrypoint_for_invocation(argv: list[str]) -> str:
+    command_parts = _resolve_command_parts(cli, argv)
+    if command_parts and command_parts[0] == "debug":
+        return "debug"
+    return "cli"
+
+
 def _should_capture_cli_exception(exc: click.ClickException) -> bool:
     """Return whether a Click error represents an unexpected internal failure."""
     return should_report_exception(exc)
@@ -219,7 +218,7 @@ def main(argv: list[str] | None = None) -> int:
     load_dotenv(override=False)
     cli_argv = list(sys.argv[1:] if argv is None else argv)
     try:
-        init_sentry(entrypoint="cli")
+        init_sentry(entrypoint=_sentry_entrypoint_for_invocation(cli_argv))
     except ModuleNotFoundError as exc:
         if exc.name != "sentry_sdk" or not _is_update_invocation(cli_argv):
             raise

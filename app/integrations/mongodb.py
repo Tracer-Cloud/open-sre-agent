@@ -193,6 +193,12 @@ def get_server_status(config: MongoDBConfig) -> dict[str, Any]:
         finally:
             client.close()
     except Exception as err:
+        if getattr(err, "code", None) == 13:
+            return {
+                "source": "mongodb",
+                "available": False,
+                "error": "MongoDB user lacks admin privileges for serverStatus. Grant the 'clusterMonitor' role.",
+            }
         report_validation_failure(
             err,
             logger=logger,
@@ -248,6 +254,12 @@ def get_current_ops(
         finally:
             client.close()
     except Exception as err:
+        if getattr(err, "code", None) == 13:
+            return {
+                "source": "mongodb",
+                "available": False,
+                "error": "MongoDB user lacks admin privileges for currentOp. Grant the 'clusterMonitor' role.",
+            }
         report_validation_failure(
             err,
             logger=logger,
@@ -303,6 +315,12 @@ def get_rs_status(config: MongoDBConfig) -> dict[str, Any]:
                 "set_name": "",
                 "members": [],
                 "note": "Server is not part of a replica set.",
+            }
+        if getattr(err, "code", None) == 13:
+            return {
+                "source": "mongodb",
+                "available": False,
+                "error": "MongoDB user lacks admin privileges for replSetGetStatus. Grant the 'clusterMonitor' role.",
             }
         report_validation_failure(
             err,

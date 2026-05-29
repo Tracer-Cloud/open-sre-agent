@@ -1,8 +1,11 @@
-# Environment variables
+# Environment variables 
 *.env
 .env
 .env.local
 .env.*.local
+.env.backup*
+.env.bak
+.env.bench
 .secrets
 
 # Python
@@ -110,8 +113,10 @@ Temporary Items
 **/.wrangler/
 
 # Project specific
+.antigravitycli/
 output/
 .cloudopsbench-results/
+.bench-results/
 tests/benchmarks/cloudopsbench/benchmark/
 tests/benchmarks/cloudopsbench/.cache/
 
@@ -140,6 +145,7 @@ tasks/
 app/memories
 .aider*
 .worktrees/
+.claude/worktrees/
 
 # Node dev tooling
 node_modules/

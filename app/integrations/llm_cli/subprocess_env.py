@@ -55,6 +55,13 @@ _SAFE_SUBPROCESS_ENV_PREFIXES = (
     "CLAUDE_",
     "GEMINI_",
     "GOOGLE_",
+    # ``ANTIGRAVITY_*`` currently only carries non-secret config
+    # (``ANTIGRAVITY_CLI_BIN`` path, ``ANTIGRAVITY_CLI_TIMEOUT_SECONDS``
+    # numeric). If Google ever ships a secret-bearing env (e.g.
+    # ``ANTIGRAVITY_API_KEY``), revisit this — a blanket prefix would
+    # leak the secret into every other CLI subprocess. Mirror the
+    # COPILOT_ pattern below if that happens.
+    "ANTIGRAVITY_",
     "OPENCODE_",
     "KIMI_",
     # NOTE: deliberately NO ``COPILOT_`` entry. ``COPILOT_GITHUB_TOKEN`` is a

@@ -1,0 +1,102 @@
+# Container image for running Cloud-OpsBench on AWS Fargate.
+#
+# Build (from repo root):
+#   docker build -f infra/bench/Dockerfile.bench -t <ecr-url>:<tag> --platform linux/amd64 .
+#
+# Push:
+#   aws ecr get-login-password --region us-east-1 \
+#     | docker login --username AWS --password-stdin <acct>.dkr.ecr.us-east-1.amazonaws.com
+#   docker push <ecr-url>:<tag>
+#
+# Pin the resulting image tag (or digest) in the bench pre-registration YAML.
+# ECR is configured with IMMUTABLE tags - a tag pushed once cannot be
+# overwritten. Use a unique tag per build (semver, git SHA, or build ID).
+#
+# Two-stage build:
+#   - `builder` installs deps with build-essential available, compiling any
+#     source-only wheels into the project venv at /app/.venv.
+#   - `bench` (final) starts from a clean python:3.12-slim, COPYs only the
+#     /app/.venv + source code from builder, and installs ca-certificates
+#     for outbound HTTPS to LLM APIs. No build-essential in the runtime
+#     image -- saves ~330 MB.
+
+# --------------------------------------------------------------------------- #
+# Stage 1: builder                                                            #
+# --------------------------------------------------------------------------- #
+
+FROM python:3.12-slim AS builder
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    UV_LINK_MODE=copy \
+    UV_NO_CACHE=1
+
+WORKDIR /app
+
+# Build deps - dropped before the final image. `apt-get upgrade` pulls
+# the latest patched versions of base-image packages (libcap2, libsystemd0,
+# etc.) -- the python:3.12-slim base tag tracks behind Debian's security
+# patches, so without this step the image inherits known HIGH CVEs.
+RUN apt-get update \
+    && apt-get -y upgrade \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        ca-certificates \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# uv from official image
+COPY --from=ghcr.io/astral-sh/uv:0.5.18 /uv /uvx /usr/local/bin/
+
+# Dependency layer - separate from source so source changes don't bust
+# the (slow) dep install cache.
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
+
+# Source - only what the bench needs.
+COPY app/ ./app/
+COPY tests/__init__.py ./tests/__init__.py
+COPY tests/benchmarks/ ./tests/benchmarks/
+
+# Install the project itself now that source is in place
+RUN uv sync --frozen --no-dev
+
+# --------------------------------------------------------------------------- #
+# Stage 2: bench (runtime)                                                    #
+# --------------------------------------------------------------------------- #
+
+FROM python:3.12-slim AS bench
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/app/.venv/bin:${PATH}"
+
+WORKDIR /app
+
+# Runtime deps: only ca-certificates (for TLS to LLM provider APIs +
+# Hugging Face Hub API calls). No build-essential, no curl, no compilers.
+# `apt-get upgrade` pulls latest patched base-image packages (libcap2,
+# libsystemd0, etc.) -- same reason as in the builder stage.
+RUN apt-get update \
+    && apt-get -y upgrade \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Hugging Face Hub is consumed via HTTPS API per call -- no local dataset
+# cache baked into the image. If a task needs to control HF cache location
+# at runtime, set HF_HOME via the ECS task definition env, not here.
+
+# Copy the prepared venv + source from the builder stage in one go.
+# The venv at /app/.venv has the project installed and all deps available.
+# PATH (set above) makes /app/.venv/bin take precedence over system python.
+COPY --from=builder /app /app
+
+# Bench framework CLI lives at tests/benchmarks/_framework/cli.py.
+# Invoke via the venv's python directly (PATH = /app/.venv/bin first).
+ENTRYPOINT ["python", "-m", "tests.benchmarks._framework.cli"]
+
+# Default args - show CLI help if no subcommand passed. Override via ECS
+# task `command` for actual runs.
+CMD ["--help"]

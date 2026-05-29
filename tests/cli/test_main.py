@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -10,7 +11,7 @@ import pytest
 
 from app.analytics import provider
 from app.analytics.events import Event
-from app.cli.__main__ import main
+from app.cli.__main__ import _sentry_entrypoint_for_invocation, main
 from app.cli.interactive_shell.config import ReplConfig
 
 
@@ -315,6 +316,93 @@ def test_main_captures_command_metadata_for_nested_remote_ops(monkeypatch, capsy
     assert properties["command_leaf"] == "status"
 
 
+def test_main_debug_sentry_sends_synthetic_event(monkeypatch, capsys) -> None:
+    debug_module = importlib.import_module("app.cli.commands.debug")
+    captured: list[tuple[tuple[object, ...], dict[str, object]]] = []
+    root_init_entrypoints: list[str | None] = []
+    flush_calls: list[int] = []
+
+    monkeypatch.setattr(
+        "app.cli.__main__.init_sentry",
+        lambda entrypoint=None: root_init_entrypoints.append(entrypoint),
+    )
+    monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr(debug_module, "sentry_transport_enabled", lambda: True)
+    monkeypatch.setattr(debug_module, "resolved_sentry_dsn_host", lambda: "sentry.example.test")
+
+    def capture_stub(*args: object, **kwargs: object) -> str:
+        captured.append((args, kwargs))
+        return "event-123"
+
+    monkeypatch.setattr(debug_module, "capture_exception", capture_stub)
+    monkeypatch.setitem(
+        sys.modules,
+        "sentry_sdk",
+        SimpleNamespace(flush=lambda timeout: flush_calls.append(timeout)),
+    )
+
+    exit_code = main(["debug", "sentry"])
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "Sentry DSN host: sentry.example.test" in output
+    assert "Sentry event ID: event-123" in output
+    assert "Sentry flush sent: yes" in output
+    assert root_init_entrypoints == ["debug"]
+    assert flush_calls == [5]
+    assert captured[0][1]["context"] == "debug.sentry"
+    assert captured[0][1]["tags"] == {"debug": "true", "surface": "debug"}
+
+
+def test_sentry_entrypoint_uses_debug_for_debug_group_invocations() -> None:
+    assert _sentry_entrypoint_for_invocation(["debug", "future-check"]) == "debug"
+
+
+def test_main_debug_sentry_exits_nonzero_when_disabled(monkeypatch, capsys) -> None:
+    debug_module = importlib.import_module("app.cli.commands.debug")
+    monkeypatch.setattr("app.cli.__main__.init_sentry", lambda **_kw: None)
+    monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr(debug_module, "sentry_transport_enabled", lambda: False)
+    monkeypatch.setattr(debug_module, "resolved_sentry_dsn_host", lambda: "")
+
+    exit_code = main(["debug", "sentry"])
+
+    assert exit_code == 1
+    assert "Sentry is disabled or no DSN is configured." in capsys.readouterr().err
+
+
+def test_main_debug_sentry_exits_nonzero_when_flush_fails(monkeypatch, capsys) -> None:
+    debug_module = importlib.import_module("app.cli.commands.debug")
+    monkeypatch.setattr("app.cli.__main__.init_sentry", lambda **_kw: None)
+    monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr(debug_module, "sentry_transport_enabled", lambda: True)
+    monkeypatch.setattr(debug_module, "resolved_sentry_dsn_host", lambda: "sentry.example.test")
+    monkeypatch.setattr(debug_module, "capture_exception", lambda *_args, **_kw: "event-123")
+
+    def flush_stub(*, timeout: int) -> bool:
+        assert timeout == 5
+        return False
+
+    monkeypatch.setitem(
+        sys.modules,
+        "sentry_sdk",
+        SimpleNamespace(flush=flush_stub),
+    )
+
+    exit_code = main(["debug", "sentry"])
+
+    assert exit_code == 1
+    output = capsys.readouterr().out
+    assert "Sentry event ID: event-123" in output
+    assert "Sentry flush sent: no" in output
+
+
 def test_main_emits_first_run_install_before_cli_invoked(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys
 ) -> None:
@@ -492,7 +580,7 @@ def test_default_no_args_enters_repl(monkeypatch) -> None:
 
     with (
         patch("app.cli.interactive_shell.run_repl", return_value=0),
-        patch("app.cli.interactive_shell.loop.run_repl", return_value=0),
+        patch("app.cli.interactive_shell.runtime.entrypoint.run_repl", return_value=0),
     ):
         exit_code = main([])
 
@@ -501,35 +589,5 @@ def test_default_no_args_enters_repl(monkeypatch) -> None:
     assert load_calls[0].get("cli_enabled") is True, (
         f"default no-args run must pass cli_enabled=True, got {load_calls[0]}"
     )
-    assert load_calls[0].get("cli_reload") is None, (
-        f"default no-args run must leave reload env/config overridable, got {load_calls[0]}"
-    )
+    assert load_calls[0].get("cli_layout") is None
     assert landing_calls == [], "REPL should run, not landing page"
-
-
-def test_no_reload_flag_passes_reload_disabled(monkeypatch) -> None:
-    monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
-    monkeypatch.setattr("app.cli.__main__.sys.stdin.isatty", lambda: True)
-    monkeypatch.setattr("app.cli.__main__.sys.stdout.isatty", lambda: True)
-
-    load_calls: list[dict] = []
-
-    @classmethod  # type: ignore[misc]
-    def spy_load(_cls, **kw):  # type: ignore[no-untyped-def]
-        load_calls.append(kw)
-        return ReplConfig(enabled=True, layout="classic", reload=False)
-
-    monkeypatch.setattr("app.cli.interactive_shell.config.ReplConfig.load", spy_load)
-
-    with (
-        patch("app.cli.interactive_shell.run_repl", return_value=0),
-        patch("app.cli.interactive_shell.loop.run_repl", return_value=0),
-    ):
-        exit_code = main(["--no-reload"])
-
-    assert exit_code == 0
-    assert load_calls == [
-        {"cli_enabled": True, "cli_layout": None, "cli_reload": False},
-    ]

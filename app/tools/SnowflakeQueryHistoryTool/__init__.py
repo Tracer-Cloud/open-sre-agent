@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 
+from app.tools._telemetry import report_run_error
 from app.tools.tool_decorator import tool
 
 _DEFAULT_MAX_RESULTS = 50
@@ -179,6 +180,14 @@ def query_snowflake_history(
         response.raise_for_status()
         body = response.json()
     except Exception as err:
+        report_run_error(
+            err,
+            tool_name="query_snowflake_history",
+            source="snowflake",
+            component="app.tools.SnowflakeQueryHistoryTool",
+            method="httpx.post",
+            extras={"account_identifier": account, "integration_id": integration_id},
+        )
         return {"source": "snowflake", "available": False, "error": str(err), "rows": []}
 
     rows = _normalize_rows(body)[:effective_limit]

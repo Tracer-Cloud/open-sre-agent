@@ -19,10 +19,9 @@ should be predictable, interruptible, explainable, and safe by default.
 | --- | --- | --- |
 | `loop.py` / `commands.py` | top-level REPL wiring and compatibility shims | feature-specific business logic |
 | `command_registry/` | slash-command definitions, argument validation, command dispatch | long-running implementation details better placed in services/runtime modules |
-| `runtime/` | `ReplSession`, background tasks, hot reload, lifecycle state | UI rendering and prompt text |
-| `intent/` | deterministic parsing and interaction models | LLM calls and command side effects |
-| `routing/` | route selection/classification and fallback behavior | direct action execution |
-| `orchestration/` | action planning, execution policy, action executor | raw UI formatting and provider-specific clients |
+| `runtime/` | `ReplSession`, background tasks, lifecycle state | UI rendering and prompt text |
+| `routing/` | route selection/classification, LLM intent classifier, and fallback behavior | direct action execution |
+| `orchestration/` | action planning, execution policy, action executor, deterministic parsing, and interaction models | LLM classification and raw UI formatting |
 | `shell/` | shell command parsing, allow/deny policy, subprocess execution | slash-command routing |
 | `chat/` | assistant/help answer surfaces | direct mutation of runtime state outside the action executor |
 | `prompting/` | reusable prompt rules and follow-up wording | docs/source retrieval |
@@ -55,6 +54,21 @@ owning area rather than adding more logic to the caller.
 
 - Add commands as `SlashCommand` entries in the relevant `command_registry/*`
   module. Keep handlers small: parse args, call focused helpers, render result.
+- **REPL + CLI parity (required):** Every command in `SLASH_COMMANDS` must have a
+  matching `_MCP_BY_COMMAND` entry in
+  `command_registry/slash_catalog.py`. That catalog feeds LLM routing (`slash_invoke`),
+  planner tool specs, and compact help text. Without it, CI fails
+  (`test_slash_catalog_covers_all_registered_commands`).
+  - **New REPL-only slash command:** add `SlashCommand` in the owning
+    `command_registry/*` module **and** `_mcp(...)` in `slash_catalog.py` (keep
+    keys sorted alphabetically in `_MCP_BY_COMMAND`).
+  - **New CLI with REPL parity:** add the Click command under `app/cli/commands/`,
+    register a `SlashCommand` in `command_registry/cli_parity.py` (subprocess to
+    `opensre …`), **and** add `_MCP_BY_COMMAND` in `slash_catalog.py` with
+    `llm_description`, `use_cases`, and `anti_examples` aligned to the command’s
+    `usage` tuple.
+  - **Verify before push:**
+    `uv run python -m pytest tests/cli/interactive_shell/command_registry/test_slash_catalog.py -q`
 - Always assign the correct `ExecutionTier`:
   - `EXEMPT`: only meta commands that must never prompt, such as exit/trust
     controls.
@@ -67,10 +81,25 @@ owning area rather than adding more logic to the caller.
   helpers. Do not bypass `execution_policy.py` for new commands.
 - Preserve non-TTY behavior: commands that require confirmation must fail closed
   when stdin is not interactive unless trust mode explicitly allows them.
+- **CPR / exclusive-stdin registration (required for table-outputting commands):**
+  Under `patch_stdout(raw=True)`, the REPL runs dispatch concurrently with the
+  next `prompt_async()`. When a command emits Rich table output, prompt_toolkit
+  redraws the prompt mid-flight, sending an `ESC[6n` DSR query; the terminal's
+  CPR response (`ESC[<row>;<col>R`) arrives as literal keystrokes in the incoming
+  prompt buffer, causing garbage like `^[[60;1R` to appear.
+  **Any command that calls `print_repl_table` (directly or via `render_table` /
+  `render_integrations_table` / `render_models_table` / etc.) must be added to
+  `_EXCLUSIVE_STDIN_MENU_COMMANDS` in `runtime/dispatch.py`.** That makes the main
+  loop call `await state.queue.join()`, blocking the next prompt until dispatch
+  completes and both drain cycles clean up stale CPR bytes before the next
+  `prompt_async()` starts.
+  - **How to check:** after adding a command, run it in the REPL and type a few
+    characters in the next prompt. If no `^[[…R` garbage appears, the registration
+    is correct.
 
-## Routing, intent, and action execution
+## Routing and action execution
 
-- Keep deterministic parsing in `intent/`; use LLM classification only where the
+- Keep deterministic parsing in `orchestration/`; use LLM classification only where the
   deterministic rules cannot reasonably decide.
 - Route uncertainty to a safe surface: help/chat or a clarification, not direct
   mutation or shell execution.
@@ -191,3 +220,5 @@ Before considering an interactive-shell change complete, check:
 4. Are external inputs bounded, escaped, redacted, and timeout-protected?
 5. Do background resources shut down deterministically?
 6. Are focused tests added or updated under `tests/cli/interactive_shell/`?
+7. If `SLASH_COMMANDS` changed, does `slash_catalog.py` include every command
+   (REPL and `cli_parity`)? Run `test_slash_catalog.py`.

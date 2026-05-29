@@ -1,0 +1,51 @@
+id: 200-show-connected-integrations
+title: Show connected integrations
+intent_class: local_execution
+risk_level: medium
+input:
+  prompt: show me connected integrations
+  surface: interactive_cli
+session:
+  has_prior_state: false
+  remote_connected: false
+  configured_integrations: []
+available_capabilities:
+  slash_commands:
+  - /list
+  cli_commands: []
+  synthetic_suites: []
+notes: []
+route:
+  expected_kind: cli_agent
+  expected_signals: []
+  expected_command_text: null
+policy:
+  should_execute: true
+  has_unhandled_clause: false
+  fail_closed: false
+planned_actions:
+- kind: slash
+  content: /list integrations
+  source: llm
+  target_surface: slash
+  command: /list
+  args:
+  - integrations
+executed_actions:
+- kind: slash
+  command: /list
+  args:
+  - integrations
+  content: /list integrations
+response_contract:
+  must_contain_any:
+  - ran /list integrations
+  must_not_contain: []
+history:
+  expected:
+  - type: cli_agent
+    ok: true
+  - type: slash
+    ok: true
+tier: critical
+runs: 1

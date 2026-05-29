@@ -14,7 +14,7 @@ import re
 from collections.abc import Generator, Mapping
 from contextlib import contextmanager, suppress
 from functools import cache
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urlsplit, urlunsplit
 
 from app.analytics.events import Event
@@ -27,6 +27,20 @@ from app.constants import (
 )
 
 _HOME_PATH_RE: re.Pattern[str] = re.compile(r"/(?:Users|home)/[^/\s]+")
+# Pydantic V2 ValidationError messages render ``input_value=<repr>`` (or
+# ``input=<repr>``) for each failing field. When the failing field is e.g.
+# ``api_token`` or ``password``, the raw secret lands in the rendered text
+# and reaches Sentry through ``exception.values[].value`` — a layer the
+# existing key-based scrubbers do not walk. Strip the value up to the next
+# pydantic field separator, which is always ``, input_type=``. ``\Z`` is the
+# end-of-string fallback so a truncated message (no ``, input_type=`` after
+# the secret) still gets scrubbed instead of silently leaking. The placeholder
+# left behind (``input_value=[Filtered]``) has no ``, input_type=`` immediately
+# after the bracket, so re-applying the scrub is a no-op (idempotent).
+_PYDANTIC_INPUT_RE: re.Pattern[str] = re.compile(
+    r"input(?:_value)?=.*?(?=,\s*input_type=|\Z)",
+    flags=re.DOTALL,
+)
 _SENSITIVE_KEY_SUFFIXES: tuple[str, ...] = ("_token", "_key", "_secret", "_password")
 _SENSITIVE_KEY_SUBSTRINGS: tuple[str, ...] = (
     "prompt",
@@ -51,7 +65,8 @@ _OPERATOR_ACTIONABLE_LLM_ERROR_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\brequires\s+[A-Z0-9_]+_API_KEY\s+to\s+be\s+set\b", re.I),
     re.compile(r"\brate limit exceeded\b.*\b(?:quota|billing)\b", re.I),
     re.compile(r"\bcredit balance is too low\b", re.I),
-    re.compile(r"\bmodel\s+['\"][^'\"]+['\"]\s+was not found\b", re.I),
+    # llm_client.py uses "was not found"; agent_llm_client.py uses "not found" — cover both.
+    re.compile(r"\bmodel\s+['\"][^'\"]+['\"]\s+(?:was )?not found\b", re.I),
     re.compile(r"\bcheck your configured model name or endpoint\b", re.I),
     # Relay/proxy forwarding an invalid model group to Anthropic.
     re.compile(r"\bprovided model identifier is invalid\b", re.I),
@@ -67,6 +82,13 @@ _OPERATOR_ACTIONABLE_LLM_ERROR_PATTERNS: tuple[re.Pattern[str], ...] = (
     # (``"<provider> billing quota exceeded. ..."``) and the Bedrock Anthropic
     # ``usage limits`` path (``"Anthropic billing quota exceeded for Bedrock model ..."``).
     re.compile(r"\bbilling quota exceeded\b", re.I),
+    # Bedrock account/model access failures are operator-actionable: the AWS
+    # account, Marketplace subscription/payment setup, region model access, or
+    # IAM policy needs to change before retrying can succeed.
+    re.compile(r"\bBedrock model\s+['\"][^'\"]+['\"]\s+is not available for your account\b", re.I),
+    # Bedrock cross-region inference profile misconfiguration (HTTP 400 "on-demand throughput
+    # isn't supported") — user must add the 'us.' prefix to their model ID.
+    re.compile(r"\brequires a cross-region inference profile\b", re.I),
 )
 
 
@@ -101,6 +123,19 @@ def _sample_rate_from_env(env_var: str, default: float) -> float:
 def _resolved_dsn() -> str:
     """Allow env overrides while keeping the bundled DSN as the default."""
     return os.getenv("OPENSRE_SENTRY_DSN") or os.getenv("SENTRY_DSN") or SENTRY_DSN
+
+
+def resolved_sentry_dsn_host() -> str:
+    """Return the resolved Sentry DSN host without exposing credentials."""
+    dsn = _resolved_dsn()
+    if not dsn:
+        return ""
+    return urlsplit(dsn).hostname or ""
+
+
+def sentry_transport_enabled() -> bool:
+    """Return whether Sentry events are expected to be sent."""
+    return bool(_resolved_dsn()) and not _is_sentry_disabled()
 
 
 def _scrub_string(value: object) -> object:
@@ -195,6 +230,20 @@ def _scrub_stacktrace_frames(frames: list[dict[str, Any]]) -> None:
                     local_vars[key] = _scrub_string(value)
 
 
+def _scrub_exception_value(text: str) -> str:
+    """Strip rendered field values from an exception message string.
+
+    Pydantic V2 ``ValidationError`` is the main offender — the renderer
+    embeds ``input_value=<repr>`` for each failing field, which leaks the
+    raw value (often a secret) into ``exception.values[].value`` where the
+    existing key-based scrubbers do not reach. ``_HOME_PATH_RE`` is also
+    applied so home-directory paths in arbitrary messages get the same
+    treatment they do elsewhere.
+    """
+    scrubbed = _PYDANTIC_INPUT_RE.sub("input_value=[Filtered]", text)
+    return _HOME_PATH_RE.sub("~", scrubbed)
+
+
 def _scrub_event_in_place(event: dict[str, Any]) -> None:
     request = event.get("request")
     if isinstance(request, dict):
@@ -207,7 +256,12 @@ def _scrub_event_in_place(event: dict[str, Any]) -> None:
     exception = event.get("exception")
     if isinstance(exception, dict):
         for entry in exception.get("values", []) or []:
-            stacktrace = entry.get("stacktrace") if isinstance(entry, dict) else None
+            if not isinstance(entry, dict):
+                continue
+            value = entry.get("value")
+            if isinstance(value, str):
+                entry["value"] = _scrub_exception_value(value)
+            stacktrace = entry.get("stacktrace")
             if isinstance(stacktrace, dict):
                 frames = stacktrace.get("frames")
                 if isinstance(frames, list):
@@ -244,6 +298,21 @@ def _event_has_operator_actionable_llm_error(event: dict[str, Any]) -> bool:
     return any(pattern.search(combined) for pattern in _OPERATOR_ACTIONABLE_LLM_ERROR_PATTERNS)
 
 
+def _apply_fingerprint_rules(event: dict[str, Any]) -> None:
+    tags = event.get("tags")
+    if not isinstance(tags, dict):
+        return
+
+    tool_name = tags.get("tool")
+    if isinstance(tool_name, str) and tool_name:
+        event["fingerprint"] = ["tool-error", tool_name, "{{ default }}"]
+        return
+
+    node_name = tags.get("node")
+    if isinstance(node_name, str) and node_name:
+        event["fingerprint"] = ["node-error", node_name, "{{ default }}"]
+
+
 def _before_send(event: Any, _hint: dict[str, Any]) -> Any:
     """Drop or scrub a Sentry event before transport.
 
@@ -259,6 +328,7 @@ def _before_send(event: Any, _hint: dict[str, Any]) -> Any:
         return event
     if _event_has_operator_actionable_llm_error(event):
         return None
+    _apply_fingerprint_rules(event)
     try:
         _scrub_event_in_place(event)
     except Exception:
@@ -319,16 +389,22 @@ def _build_sentry_integrations() -> list[Any]:
     ModuleNotFoundError`` guard to keep ``opensre update`` working when the
     SDK is missing — that guard only fires if the import happens inside
     ``init_sentry``, not at top-level module load.
+
+    Set ``OPENSRE_SENTRY_LOGGING_DISABLED=1`` to disable the
+    ``LoggingIntegration`` without affecting ``capture_exception``.
     """
     from sentry_sdk.integrations.asyncio import AsyncioIntegration
     from sentry_sdk.integrations.httpx import HttpxIntegration
     from sentry_sdk.integrations.logging import LoggingIntegration
 
-    return [
-        LoggingIntegration(level=logging.INFO, event_level=logging.ERROR),
-        AsyncioIntegration(),
-        HttpxIntegration(),
-    ]
+    integrations: list[Any] = []
+
+    if os.getenv("OPENSRE_SENTRY_LOGGING_DISABLED", "0") != "1":
+        integrations.append(LoggingIntegration(level=logging.INFO, event_level=logging.ERROR))
+
+    integrations.append(AsyncioIntegration())
+    integrations.append(HttpxIntegration())
+    return integrations
 
 
 @cache
@@ -351,6 +427,7 @@ def _init_sentry_once(
 
     from app.integrations.llm_cli.errors import (
         CLIAuthenticationRequired,
+        CLIInterruptedError,
         CLITimeoutError,
         CLITransientError,
     )
@@ -372,6 +449,7 @@ def _init_sentry_once(
         ignore_errors=[
             KeyboardInterrupt,
             CLIAuthenticationRequired,
+            CLIInterruptedError,
             CLITimeoutError,
             CLITransientError,
         ],
@@ -420,6 +498,9 @@ def init_sentry(entrypoint: str | None = None) -> None:
     env var, then the bundled constant. Set ``OPENSRE_NO_TELEMETRY=1`` or
     ``DO_NOT_TRACK=1`` to disable both Sentry and PostHog product analytics.
     ``OPENSRE_SENTRY_DISABLED=1`` disables Sentry only;
+    ``OPENSRE_SENTRY_LOGGING_DISABLED=1`` disables automatic forwarding of
+    ``logger.error`` and ``logger.exception`` calls to Sentry as events,
+    without affecting ``capture_exception``.
     ``OPENSRE_ANALYTICS_DISABLED=1`` disables PostHog only.
 
     ``entrypoint`` identifies the calling surface (``cli``, ``webapp``,
@@ -467,23 +548,27 @@ def capture_exception(
     *,
     context: str | None = None,
     extra: Mapping[str, Any] | None = None,
-) -> None:
+    tags: Mapping[str, str] | None = None,
+) -> str | None:
     """Best-effort capture for exceptions swallowed by boundary adapters."""
     if _is_sentry_disabled():
-        return
+        return None
     with suppress(Exception):
         import sentry_sdk
 
-        if context is None and not extra:
-            sentry_sdk.capture_exception(exc)
-            return
+        if context is None and not extra and not tags:
+            return cast("str | None", sentry_sdk.capture_exception(exc))
         with sentry_sdk.push_scope() as scope:
             if context is not None:
                 scope.set_tag("opensre.context", context)
+            if tags:
+                for key, value in tags.items():
+                    scope.set_tag(key, value)
             if extra:
                 for key, value in extra.items():
                     scope.set_extra(key, value)
-            sentry_sdk.capture_exception(exc)
+            return cast("str | None", sentry_sdk.capture_exception(exc))
+    return None
 
 
 @contextmanager

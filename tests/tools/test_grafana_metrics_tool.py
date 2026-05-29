@@ -31,6 +31,20 @@ def test_extract_params_maps_fields() -> None:
     assert params["grafana_endpoint"] == "https://grafana.example.com"
 
 
+def test_extract_params_includes_basic_auth_fields() -> None:
+    rt = query_grafana_metrics.__opensre_registered_tool__
+    sources = mock_agent_state({"grafana": {"username": "local-user", "password": "local-pass"}})
+    params = rt.extract_params(sources)
+    assert params["grafana_username"] == "local-user"
+    assert params["grafana_password"] == "local-pass"
+
+
+def test_injected_params_include_basic_auth_fields() -> None:
+    rt = query_grafana_metrics.__opensre_registered_tool__
+    assert "grafana_username" in rt.injected_params
+    assert "grafana_password" in rt.injected_params
+
+
 def test_run_with_backend() -> None:
     mock_backend = MagicMock()
     mock_backend.query_timeseries.return_value = {

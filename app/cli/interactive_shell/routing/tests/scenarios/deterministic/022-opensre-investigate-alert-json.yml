@@ -1,0 +1,58 @@
+id: 022-opensre-investigate-alert-json
+title: opensre investigate -i alert.json routes to /investigate without LLM planner
+intent_class: deterministic
+risk_level: medium
+input:
+  prompt: opensre investigate -i alert.json
+  surface: interactive_cli
+session:
+  has_prior_state: false
+  remote_connected: false
+  configured_integrations: []
+available_capabilities:
+  slash_commands:
+  - /investigate
+  cli_commands: []
+  synthetic_suites: []
+notes:
+- Quick-start demo command must resolve deterministically (not cli_agent fail-closed).
+- Execution uses /investigate (SAFE tier) so no Proceed? confirmation prompt.
+
+route:
+  expected_kind: slash
+  expected_signals:
+  - opensre_investigate
+  expected_command_text: /investigate alert.json
+policy:
+  should_execute: true
+  has_unhandled_clause: false
+  fail_closed: false
+planned_actions:
+- kind: slash
+  source: deterministic
+  target_surface: slash
+  command: /investigate
+  args:
+  - alert.json
+  content: /investigate alert.json
+executed_actions:
+- kind: slash
+  command: /investigate
+  args:
+  - alert.json
+  content: /investigate alert.json
+response_contract:
+  must_contain_any:
+  - ran /investigate alert.json
+  must_not_contain:
+  - "Proceed?"
+  - "Confirm:"
+  - "couldn't safely decide actions"
+  - ";57R"
+  - "ctrl+o tool details"
+history:
+  expected:
+  - type: slash
+    ok: true
+tier: critical
+runs: 1

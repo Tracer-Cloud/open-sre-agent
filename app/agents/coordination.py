@@ -47,7 +47,7 @@ class BranchClaim:
 class BranchClaims:
     """JSONL-backed registry of branch ownership claims by local AI agents.
 
-    Persists to ``~/.config/opensre/branch_claims.jsonl`` by default.
+    Persists to ``~/.opensre/branch_claims.jsonl`` by default.
     The file is fully rewritten on both claim (to avoid duplicates on re-claim)
     and release operations.
     """

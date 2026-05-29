@@ -22,20 +22,17 @@ from app.integrations.llm_cli.binary_resolver import (
 from app.integrations.llm_cli.binary_resolver import (
     resolve_cli_binary,
 )
+from app.integrations.llm_cli.constants import DEFAULT_EXEC_TIMEOUT_SEC
 from app.integrations.llm_cli.env_overrides import (
     HTTP_LLM_PROVIDER_ENV_KEYS,
     nonempty_env_values,
 )
+from app.integrations.llm_cli.probe_utils import run_version_probe
+from app.integrations.llm_cli.semver_utils import parse_semver_three_part
 
-_OPENCODE_VERSION_RE = re.compile(r"(\d+\.\d+\.\d+)")
 _ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
 _PROBE_TIMEOUT_SEC = 8.0
 _AUTH_LIST_TIMEOUT_SEC = 25.0
-
-
-def _parse_semver(text: str) -> str | None:
-    m = _OPENCODE_VERSION_RE.search(text)
-    return m.group(1) if m else None
 
 
 def _strip_ansi(text: str) -> str:
@@ -92,6 +89,8 @@ def _probe_opencode_auth_via_cli(binary_path: str) -> tuple[bool | None, str]:
             [binary_path, "auth", "list"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=_AUTH_LIST_TIMEOUT_SEC,
             check=False,
             env=env,
@@ -127,7 +126,7 @@ class OpenCodeAdapter:
     )
     auth_hint = "Run: opencode auth login (interactive) or configure provider API keys / auth.json"
     min_version: str | None = None
-    default_exec_timeout_sec = 120.0
+    default_exec_timeout_sec = DEFAULT_EXEC_TIMEOUT_SEC
 
     def _resolve_binary(self) -> str | None:
         return resolve_cli_binary(
@@ -137,34 +136,20 @@ class OpenCodeAdapter:
         )
 
     def _probe_binary(self, binary_path: str) -> CLIProbe:
-        try:
-            ver_proc = subprocess.run(
-                [binary_path, "--version"],
-                capture_output=True,
-                text=True,
-                timeout=_PROBE_TIMEOUT_SEC,
-                check=False,
-            )
-        except (OSError, subprocess.TimeoutExpired) as exc:
+        version_output, version_error = run_version_probe(
+            binary_path,
+            timeout_sec=_PROBE_TIMEOUT_SEC,
+        )
+        if version_error:
             return CLIProbe(
                 installed=False,
                 version=None,
                 logged_in=None,
                 bin_path=None,
-                detail=f"Could not run `{binary_path} --version`: {exc}",
+                detail=version_error,
             )
 
-        if ver_proc.returncode != 0:
-            err = (ver_proc.stderr or ver_proc.stdout or "").strip()
-            return CLIProbe(
-                installed=False,
-                version=None,
-                logged_in=None,
-                bin_path=None,
-                detail=f"`{binary_path} --version` failed: {err or 'unknown error'}",
-            )
-
-        version = _parse_semver(ver_proc.stdout + ver_proc.stderr)
+        version = parse_semver_three_part(version_output or "")
         logged_in, auth_detail = _probe_opencode_auth_via_cli(binary_path)
 
         return CLIProbe(
@@ -249,7 +234,7 @@ class OpenCodeAdapter:
             bits.append("Authentication failed. Run: opencode auth login")
         elif "model" in combined and ("not found" in combined or "invalid" in combined):
             bits.append(
-                "Model not found. Check OPENCODE_MODEL format: provider/model (e.g., openai/gpt-5.4)"
+                "Model not found. Check OPENCODE_MODEL format: provider/model (e.g., openai/gpt-5.4-mini)"
             )
         elif "rate limit" in combined or "quota" in combined:
             bits.append(

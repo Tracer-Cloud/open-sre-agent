@@ -10,7 +10,7 @@ from collections.abc import Generator, Iterator
 from typing import TYPE_CHECKING, Any, NoReturn
 
 from app.cli.support.cli_error_mapping import reraise_cli_runtime_error
-from app.config import LLMSettings
+from app.config import resolve_llm_settings
 from app.utils.tracing import traceable
 
 if TYPE_CHECKING:
@@ -34,7 +34,7 @@ def _check_llm_settings() -> None:
     from app.cli.support.errors import OpenSREError
 
     try:
-        LLMSettings.from_env()
+        resolve_llm_settings()
     except ValidationError as exc:
         errors = exc.errors()
         if errors:
@@ -268,6 +268,10 @@ def run_investigation_cli_streaming(
         # runs and the async task is cancelled before we re-raise.
         events.close()
         raise
+
+    from app.cli.support.feedback import prompt_investigation_feedback
+
+    prompt_investigation_feedback(final_state)
     return {
         "report": final_state.get("slack_message", final_state.get("report", "")),
         "problem_md": final_state.get("problem_md", ""),

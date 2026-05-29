@@ -16,7 +16,7 @@ import re
 import sys
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -32,6 +32,7 @@ from app.cli.interactive_shell.ui.theme import (
     TEXT,
     WARNING,
 )
+from app.cli.support.repl_progress import repl_safe_progress_requested
 from app.tools.registry import get_registered_tool_map, resolve_tool_display_name
 from app.utils.tool_trace import format_json_preview
 
@@ -68,6 +69,22 @@ def get_output_format() -> str:
 def _is_silent_output() -> bool:
     """Return whether output rendering is explicitly disabled."""
     return get_output_format() == "none"
+
+
+def _repl_progress_active() -> bool:
+    """True when investigation progress must not use Rich Live.
+
+    Rich ``Live`` progress redraws fight ``prompt_toolkit.patch_stdout`` and leak
+    CPR escape sequences (``ESC[row;colR``) into the input field. Use append-only
+    progress lines instead.
+    """
+    if repl_safe_progress_requested():
+        return True
+    try:
+        from prompt_toolkit.application.current import get_app_or_none
+    except ImportError:  # pragma: no cover - optional in minimal installs
+        return False
+    return get_app_or_none() is not None
 
 
 def _safe_print(text: str) -> None:
@@ -188,6 +205,89 @@ def _elapsed_hms(seconds: float) -> str:
 
 _live_console: Console | None = None
 _active_display: _EventLogDisplay | None = None  # forward-declared below
+_stdin_watcher_suppression_depth = 0
+_stdin_watcher_lock = threading.Lock()
+_tool_detail_toggle_callbacks: list[Callable[[], None]] = []
+
+# Snapshot of the live phase footer at the moment its display was torn down so
+# that ``render_completed_investigation_footer()`` can re-render it at the
+# absolute bottom of the final RCA report. Cleared once consumed.
+_completed_footer_snapshot: tuple[str, float, str, str] | None = None
+
+# Callback registered by the REPL dispatch loop so the investigation display
+# can suppress the prompt-level braille spinner once it takes over rendering.
+_prompt_suppress_fn: Callable[[], None] | None = None
+
+
+def set_prompt_suppress_fn(fn: Callable[[], None] | None) -> None:
+    """Register (or clear) the callback that hides the REPL prompt spinner."""
+    global _prompt_suppress_fn
+    _prompt_suppress_fn = fn
+
+
+def _capture_footer_snapshot(display: Any) -> None:
+    """Record the phase footer fields visible the moment a live display stops."""
+    global _completed_footer_snapshot
+    if display is None:
+        return
+    t0 = getattr(display, "_t0", None)
+    if t0 is None:
+        return
+    _completed_footer_snapshot = (
+        getattr(display, "_current_phase", ""),
+        time.monotonic() - t0,
+        getattr(display, "_model", ""),
+        getattr(display, "_mode", "local"),
+    )
+
+
+@contextlib.contextmanager
+def suppress_stdin_watchers() -> Iterator[None]:
+    """Temporarily prevent raw stdin watcher threads from starting.
+
+    The interactive REPL already has prompt-toolkit reading stdin. Starting a
+    second raw-mode reader while prompt-toolkit is active can split terminal
+    cursor-position replies, leaking fragments like ``[50;57R`` into the input
+    buffer. The REPL uses this guard while dispatching work and handles Ctrl+O
+    through its prompt key bindings instead.
+    """
+    global _stdin_watcher_suppression_depth
+    with _stdin_watcher_lock:
+        _stdin_watcher_suppression_depth += 1
+    try:
+        yield
+    finally:
+        with _stdin_watcher_lock:
+            _stdin_watcher_suppression_depth = max(0, _stdin_watcher_suppression_depth - 1)
+
+
+def _stdin_watchers_suppressed() -> bool:
+    with _stdin_watcher_lock:
+        return _stdin_watcher_suppression_depth > 0
+
+
+def register_tool_detail_toggle(callback: Callable[[], None]) -> Callable[[], None]:
+    """Register a process-local Ctrl+O handler for the active progress view."""
+    with _stdin_watcher_lock:
+        _tool_detail_toggle_callbacks.append(callback)
+
+    def _unregister() -> None:
+        with _stdin_watcher_lock, contextlib.suppress(ValueError):
+            _tool_detail_toggle_callbacks.remove(callback)
+
+    return _unregister
+
+
+def toggle_active_tool_details() -> bool:
+    """Toggle the newest registered tool-detail view, if one exists."""
+    with _stdin_watcher_lock:
+        callback = _tool_detail_toggle_callbacks[-1] if _tool_detail_toggle_callbacks else None
+    if callback is None:
+        return False
+    with contextlib.suppress(Exception):
+        callback()
+        return True
+    return False
 
 
 def _get_console() -> Console:
@@ -232,8 +332,20 @@ def render_divider(width: int = 80) -> None:
         _safe_print("─" * width)
 
 
-def render_footer(phase: str, elapsed: float, model: str, mode: str) -> None:
-    """Print the persistent status footer line."""
+def render_footer(
+    phase: str,
+    elapsed: float,
+    model: str,
+    mode: str,
+    *,
+    show_cancel: bool = True,
+) -> None:
+    """Print the persistent status footer line.
+
+    ``show_cancel=False`` is used by ``render_completed_investigation_footer()``
+    when the investigation has already finished, so "esc to cancel" no longer
+    applies.
+    """
     if _is_silent_output():
         return
     if get_output_format() == "rich":
@@ -244,10 +356,27 @@ def render_footer(phase: str, elapsed: float, model: str, mode: str) -> None:
         if model:
             t.append(f"{model}  ", style=SECONDARY)
         t.append(f"{mode}  ", style=SECONDARY)
-        t.append("esc to cancel", style=DIM)
+        if show_cancel:
+            t.append("esc to cancel", style=DIM)
         _get_console().print(t)
     else:
         _safe_print(f"● {phase}  {elapsed:.1f}s  {model}  {mode}")
+
+
+def render_completed_investigation_footer() -> None:
+    """Print the captured phase footer once, at the absolute bottom of the report.
+
+    Consumes the snapshot recorded when the investigation's live display was
+    torn down. A no-op if no snapshot exists (e.g. silent runs, cancelled
+    investigations with no report, or callers that have already rendered).
+    """
+    global _completed_footer_snapshot
+    snapshot, _completed_footer_snapshot = _completed_footer_snapshot, None
+    if snapshot is None or _is_silent_output():
+        return
+    phase, elapsed, model, mode = snapshot
+    render_divider()
+    render_footer(phase, elapsed, model, mode, show_cancel=False)
 
 
 def render_event(
@@ -277,8 +406,8 @@ def render_event(
         else:
             t.append(f"{glyph}  ", style=f"bold {HIGHLIGHT}")
             msg_style = TEXT
-        t.append(f"[{badge_label}]", style=f"bold {badge_color}")
-        t.append("  ")
+        t.append(badge_label, style=f"bold {badge_color}")
+        t.append("  ·  ", style=DIM)
         t.append(message, style=msg_style)
         if insight:
             t.append(f"  ↳ {insight}", style=BRAND)
@@ -295,7 +424,7 @@ def render_event(
 # Live event-log display
 # ─────────────────────────────────────────────────────────────────────────────
 
-_SPINNER_FRAMES = ("◐", "◓", "◑", "◒")
+_SPINNER_FRAMES = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
 _FRAME_SECS = 0.10
 _TOOL_DETAIL_TOGGLE_BYTES = {b"\x0f", b"\x00"}  # ctrl+o; ctrl+0/space on some terminals
 
@@ -336,6 +465,8 @@ class CtrlOToggleWatcher:
         self._old_attrs: Any = None
 
     def start(self) -> None:
+        if _stdin_watchers_suppressed():
+            return
         if select is None or termios is None:
             return
         if not sys.stdin.isatty() or not sys.stdout.isatty():
@@ -467,12 +598,12 @@ class _LiveRenderable:
                 t = Text()
                 t.append(f"{_elapsed_hms(elapsed_total)}  ", style=SECONDARY)
                 t.append(f"{frame}  ", style=SECONDARY)
-                t.append(f"[{badge_label}]", style=f"bold {badge_color}")
-                t.append("  ")
+                t.append(badge_label, style=f"bold {badge_color}")
+                t.append("  ·  ", style=DIM)
                 t.append(label, style=f"bold {TEXT}")
                 if subtext:
                     t.append(f"  ↳ {subtext}", style=BRAND)
-                t.append(f"  {_fmt_timing(int(elapsed_step * 1000))}", style=WARNING)
+                t.append(f"  {_fmt_timing(int(elapsed_step * 1000))}", style=SECONDARY)
                 yield t
 
             # Divider + footer.
@@ -573,6 +704,7 @@ class _EventLogDisplay:
             console=self._console,
             refresh_per_second=10,
             auto_refresh=True,
+            transient=True,
             # Clip the live area to the terminal height so Rich never tries to
             # scroll back past more lines than it rendered.
             vertical_overflow="ellipsis",
@@ -583,6 +715,7 @@ class _EventLogDisplay:
 
     def stop(self) -> None:
         global _live_console, _active_display
+        _capture_footer_snapshot(self)
         if self._live.is_started:
             self._live.stop()
         if _live_console is self._console:
@@ -632,8 +765,8 @@ class _EventLogDisplay:
             t = Text()
             t.append(f"{_elapsed_hms(elapsed_total)}  ", style=SECONDARY)
             t.append("✗  " if err else "✓  ", style=f"bold {ERROR if err else HIGHLIGHT}")
-            t.append(f"[{badge_label}]", style=f"bold {badge_color}")
-            t.append("  ")
+            t.append(badge_label, style=f"bold {badge_color}")
+            t.append("  ·  ", style=DIM)
             t.append(label, style=f"bold {TEXT}")
             if msg:
                 t.append(f"  {msg}", style=BRAND)
@@ -673,6 +806,134 @@ class _EventLogDisplay:
         self._live.console.print(renderable)
 
 
+def _build_progress_step_text(
+    *,
+    node_name: str,
+    elapsed_total: float,
+    elapsed_step_ms: int | None = None,
+    status: str = "active",
+    message: str | None = None,
+) -> Text:
+    """Shared Rich ``Text`` for one investigation progress line."""
+    ev_type = _node_event_type(node_name)
+    badge_label, badge_color = _BADGE_STYLES.get(ev_type, ("DIAG  ", WARNING))
+    label = _node_label(node_name)
+    err = status == "error"
+    timing = _fmt_timing(elapsed_step_ms) if elapsed_step_ms is not None else ""
+
+    t = Text()
+    t.append(f"{_elapsed_hms(elapsed_total)}  ", style=SECONDARY)
+    if status == "active":
+        t.append("◐  ", style=SECONDARY)
+    else:
+        t.append("✗  " if err else "✓  ", style=f"bold {ERROR if err else HIGHLIGHT}")
+    t.append(badge_label, style=f"bold {badge_color}")
+    t.append("  ·  ", style=DIM)
+    t.append(label, style=f"bold {TEXT}")
+    msg = _humanise_message(message or "")
+    if msg:
+        t.append(f"  {msg}", style=BRAND)
+    if timing:
+        t.append(f"  {timing}", style=SECONDARY)
+    return t
+
+
+class _ReplEventLogDisplay:
+    """Append-only investigation progress for the interactive REPL (no Rich Live)."""
+
+    def __init__(self, model: str = "", mode: str = "local", t0: float | None = None) -> None:
+        self._model = model
+        self._mode = mode
+        self._t0 = t0 if t0 is not None else time.monotonic()
+        self._active_steps: dict[str, dict[str, Any]] = {}
+        self._current_phase = "LOAD"
+        self._lock = threading.Lock()
+        self._console = Console(highlight=False)
+        self._prompt_suppressed = False
+
+    def stop(self) -> None:
+        _capture_footer_snapshot(self)
+
+    def _emit(self, line: Text | Any) -> None:
+        from app.cli.interactive_shell.ui.choice_menu import prepare_repl_output_line
+
+        prepare_repl_output_line()
+        self._console.print(line)
+
+    def step_start(self, node_name: str) -> None:
+        if not self._prompt_suppressed and _prompt_suppress_fn is not None:
+            self._prompt_suppressed = True
+            _prompt_suppress_fn()
+        with self._lock:
+            self._active_steps[node_name] = {
+                "t0": time.monotonic(),
+                "subtext": None,
+                "subtext_until": 0.0,
+            }
+            self._current_phase = _node_phase_label(node_name)
+        elapsed_total = time.monotonic() - self._t0
+        self._emit(
+            _build_progress_step_text(
+                node_name=node_name,
+                elapsed_total=elapsed_total,
+                status="active",
+            )
+        )
+
+    def set_tool_details(
+        self,
+        *,
+        visible: bool,
+        records: list[dict[str, Any]],
+        summary: str,
+        clear: bool = False,
+    ) -> None:
+        pass
+
+    def step_complete(self, node_name: str, event: ProgressEvent) -> None:
+        with self._lock:
+            info = self._active_steps.pop(node_name, {})
+            subtext = info.get("subtext")
+        elapsed_total = time.monotonic() - self._t0
+        line = _build_progress_step_text(
+            node_name=node_name,
+            elapsed_total=elapsed_total,
+            elapsed_step_ms=event.elapsed_ms,
+            status=event.status,
+            message=event.message,
+        )
+        if subtext:
+            line.append(f"  ↳ {subtext}", style=BRAND)
+        self._emit(line)
+
+    def step_subtext(self, node_name: str, text: str, duration: float = 4.0) -> None:
+        if not text.strip():
+            return
+        with self._lock:
+            if node_name in self._active_steps:
+                self._active_steps[node_name]["subtext"] = text
+                self._active_steps[node_name]["subtext_until"] = time.monotonic() + duration
+
+    def print_above(self, text: str) -> None:
+        if not text.strip():
+            return
+        from rich.markdown import Markdown
+
+        from app.cli.interactive_shell.ui.theme import MARKDOWN_THEME
+
+        with self._console.use_theme(MARKDOWN_THEME):
+            self._emit(Markdown(text, code_theme="ansi_dark"))
+
+    def print_above_renderable(self, renderable: Any) -> None:
+        self._emit(renderable)
+
+
+def _make_event_log_display(*, t0: float) -> _EventLogDisplay | _ReplEventLogDisplay:
+    if _repl_progress_active():
+        return _ReplEventLogDisplay(t0=t0)
+    return _EventLogDisplay(t0=t0)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Progress event + tracker
 # ─────────────────────────────────────────────────────────────────────────────
@@ -696,7 +957,8 @@ class ProgressTracker:
         self._t0: float = time.monotonic()
         self._silent = _is_silent_output()
         self._rich = get_output_format() == "rich"
-        self._display: _EventLogDisplay | None = None
+        self._repl_append_only = _repl_progress_active()
+        self._display: _EventLogDisplay | _ReplEventLogDisplay | None = None
         self._tool_start_times: dict[str, float] = {}
         self._tool_inputs: dict[str, Any] = {}
         self._tool_details_visible = False
@@ -705,10 +967,13 @@ class ProgressTracker:
         self._tool_summary_counts: dict[str, dict[str, int]] = {}
         self._tool_summary_order: list[tuple[str, str]] = []
         self._toggle_watcher: CtrlOToggleWatcher | None = None
+        self._toggle_unregister: Callable[[], None] | None = None
         if self._rich and not self._silent:
-            self._display = _EventLogDisplay(t0=self._t0)
-            self._toggle_watcher = CtrlOToggleWatcher(self.toggle_tool_details)
-            self._toggle_watcher.start()
+            self._display = _make_event_log_display(t0=self._t0)
+            self._toggle_unregister = register_tool_detail_toggle(self.toggle_tool_details)
+            if not self._repl_append_only:
+                self._toggle_watcher = CtrlOToggleWatcher(self.toggle_tool_details)
+                self._toggle_watcher.start()
 
     @property
     def has_active_display(self) -> bool:
@@ -726,6 +991,9 @@ class ProgressTracker:
         if self._toggle_watcher is not None:
             self._toggle_watcher.stop()
             self._toggle_watcher = None
+        if self._toggle_unregister is not None:
+            self._toggle_unregister()
+            self._toggle_unregister = None
 
     def start(self, node_name: str, message: str | None = None) -> None:
         self._start_times[node_name] = time.monotonic()
@@ -743,7 +1011,7 @@ class ProgressTracker:
                     self._display = None
             else:
                 if self._display is None:
-                    self._display = _EventLogDisplay(t0=self._t0)
+                    self._display = _make_event_log_display(t0=self._t0)
                 self._display.step_start(node_name)
         else:
             _safe_print(f"  … {_node_label(node_name)}")
@@ -768,15 +1036,29 @@ class ProgressTracker:
         if self._display:
             self._display.print_above(text)
         elif text.strip():
-            for line in text.strip().splitlines():
-                print(f"  {line}")
+            import os
+            import textwrap as _tw
+
+            # Wrap long lines so the parent's pump thread can prefix each one.
+            # COLUMNS is set by _subprocess_env_with_aligned_width to
+            # (user_terminal_width - prefix_width), so wrapping here keeps each
+            # emitted line short enough that the parent can prepend the task
+            # prefix without causing Rich to word-wrap the combined line into
+            # unlabelled continuation runs.
+            _cols = max(40, int(os.getenv("COLUMNS", "80")))
+            for para in text.strip().splitlines():
+                if not para.strip():
+                    print()  # preserve paragraph spacing (filtered by pump thread)
+                else:
+                    # -2 to leave room for the "  " indent prefix below
+                    for chunk in _tw.wrap(para, width=max(40, _cols - 2)) or [para]:
+                        print(f"  {chunk}")
 
     def print_above_renderable(self, renderable: Any) -> None:
         """Print a rich renderable permanently above the active live region, or to console."""
         if self._display:
             self._display.print_above_renderable(renderable)
         else:
-            _get_console().print()
             _get_console().print(renderable)
 
     def set_tool_detail_view(
@@ -841,16 +1123,27 @@ class ProgressTracker:
         if self._silent:
             return
         self._tool_details_visible = not self._tool_details_visible
-        if self._rich and self._display:
-            self._sync_tool_detail_view(clear=True)
-            return
+        if self._rich and self._display is not None:
+            if isinstance(self._display, _ReplEventLogDisplay):
+                label = "shown" if self._tool_details_visible else "hidden"
+                _safe_print(f"  Tool details {label} (ctrl+o)")
+                if self._tool_details_visible:
+                    self._flush_tool_details()
+                return
+            if hasattr(self._display, "set_tool_details"):
+                self._sync_tool_detail_view(clear=True)
+                return
         label = "shown" if self._tool_details_visible else "hidden"
         _safe_print(f"  Tool details {label} (ctrl+o)")
         if self._tool_details_visible:
             self._flush_tool_details()
 
     def _sync_tool_detail_view(self, *, clear: bool = False) -> None:
-        if self._rich and self._display:
+        if (
+            self._rich
+            and self._display is not None
+            and not isinstance(self._display, _ReplEventLogDisplay)
+        ):
             self.set_tool_detail_view(
                 visible=self._tool_details_visible,
                 records=self._tool_detail_records,
@@ -906,7 +1199,11 @@ class ProgressTracker:
         }
         self._tool_detail_records.append(record)
         if self._tool_details_visible:
-            if self._rich and self._display:
+            if (
+                self._rich
+                and self._display is not None
+                and not isinstance(self._display, _ReplEventLogDisplay)
+            ):
                 self._sync_tool_detail_view()
             else:
                 self._print_tool_detail(record)
@@ -1023,6 +1320,7 @@ def set_silent_tracker() -> None:
     _tracker._tool_summary_counts = {}
     _tracker._tool_summary_order = []
     _tracker._toggle_watcher = None
+    _tracker._toggle_unregister = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1035,18 +1333,24 @@ def render_investigation_header(
 ) -> None:
     sev_color = ERROR if severity.lower() == "critical" else WARNING
     fields = [
-        ("  Alert      ", alert_name, f"bold {TEXT}"),
-        ("  Pipeline   ", pipeline_name, BRAND),
-        ("  Severity   ", severity, f"bold {sev_color}"),
+        ("Alert     ", alert_name, f"bold {TEXT}"),
+        ("Pipeline  ", pipeline_name, BRAND),
+        ("Severity  ", severity, f"bold {sev_color}"),
     ]
     if alert_id:
-        fields.append(("  Alert ID   ", alert_id, SECONDARY))
+        fields.append(("Alert ID  ", alert_id, SECONDARY))
 
     if get_output_format() == "rich":
         console = _get_console()
         console.print()
         for label, value, style in fields:
-            console.print(Text.assemble((label, SECONDARY), (value, style)))
+            console.print(
+                Text.assemble(
+                    ("  ┃  ", f"bold {BRAND}"),
+                    (label, SECONDARY),
+                    (value, style),
+                )
+            )
         console.print()
     else:
         print()

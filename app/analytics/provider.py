@@ -24,16 +24,12 @@ import httpx
 
 from app.analytics.events import Event
 from app.cli.wizard.store import get_store_path
-from app.constants import LEGACY_OPENSRE_HOME_DIR
 from app.constants.posthog import POSTHOG_CAPTURE_API_KEY, POSTHOG_HOST
 from app.version import get_version
 
 _CONFIG_DIR = get_store_path().parent
 _ANONYMOUS_ID_PATH = _CONFIG_DIR / "anonymous_id"
 _FIRST_RUN_PATH = _CONFIG_DIR / "installed"
-_LEGACY_CONFIG_DIR = LEGACY_OPENSRE_HOME_DIR
-_LEGACY_ANONYMOUS_ID_PATH = _LEGACY_CONFIG_DIR / "anonymous_id"
-_LEGACY_FIRST_RUN_PATH = _LEGACY_CONFIG_DIR / "installed"
 
 _QUEUE_SIZE = 128
 _SEND_TIMEOUT = 2.0
@@ -66,8 +62,10 @@ _CI_FINGERPRINT_ENV_KEYS: Final[tuple[str, ...]] = (
     "JOB_NAME",
 )
 
-type PropertyValue = str | bool | int | float
-type Properties = dict[str, PropertyValue]
+type JsonScalar = str | bool | int | float
+type JsonValue = JsonScalar | list["JsonValue"] | dict[str, "JsonValue"]
+type PropertyValue = JsonValue
+type Properties = dict[str, JsonValue]
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,12 +113,9 @@ def _is_existing_install(
     *,
     config_dir_existed: bool,
     install_marker_existed: bool,
-    legacy_config_dir_existed: bool,
-    legacy_install_marker_existed: bool,
 ) -> bool:
     return (
-        (config_dir_existed and install_marker_existed)
-        or (legacy_config_dir_existed and legacy_install_marker_existed)
+        config_dir_existed and install_marker_existed
     ) and not _first_run_marker_created_this_process
 
 
@@ -130,28 +125,20 @@ def _queue_user_id_load_failure(
     config_dir_existed: bool,
     install_marker_existed: bool,
     anonymous_id_path_existed: bool,
-    legacy_config_dir_existed: bool,
-    legacy_install_marker_existed: bool,
-    legacy_anonymous_id_path_existed: bool,
 ) -> None:
     if not _is_existing_install(
         config_dir_existed=config_dir_existed,
         install_marker_existed=install_marker_existed,
-        legacy_config_dir_existed=legacy_config_dir_existed,
-        legacy_install_marker_existed=legacy_install_marker_existed,
     ):
         return
     _pending_user_id_load_failures.append(
         {
             "reason": reason,
-            "config_dir": "~/.config/opensre",
-            "anonymous_id_path": "~/.config/opensre/anonymous_id",
+            "config_dir": "~/.opensre",
+            "anonymous_id_path": "~/.opensre/anonymous_id",
             "config_dir_existed": config_dir_existed,
             "install_marker_existed": install_marker_existed,
             "anonymous_id_path_existed": anonymous_id_path_existed,
-            "legacy_config_dir_existed": legacy_config_dir_existed,
-            "legacy_install_marker_existed": legacy_install_marker_existed,
-            "legacy_anonymous_id_path_existed": legacy_anonymous_id_path_existed,
             "anonymous_id_loaded": False,
         }
     )
@@ -175,18 +162,6 @@ def _valid_anonymous_id(value: str) -> str | None:
 
 def _read_persisted_anonymous_id(path: Path) -> str | None:
     return _valid_anonymous_id(path.read_text(encoding="utf-8"))
-
-
-def _load_legacy_anonymous_id() -> str | None:
-    if not _path_exists(_LEGACY_ANONYMOUS_ID_PATH):
-        return None
-    with contextlib.suppress(OSError):
-        legacy_id = _read_persisted_anonymous_id(_LEGACY_ANONYMOUS_ID_PATH)
-        if legacy_id is not None:
-            with contextlib.suppress(OSError):
-                _write_text_atomic(_ANONYMOUS_ID_PATH, legacy_id)
-            return legacy_id
-    return None
 
 
 def _fsync_parent_dir(path: Path) -> None:
@@ -268,9 +243,6 @@ def _write_new_anonymous_id(
 def _compute_anonymous_identity() -> _AnonymousIdentity:
     config_dir_existed = _path_exists(_CONFIG_DIR)
     install_marker_existed = _path_exists(_FIRST_RUN_PATH)
-    legacy_config_dir_existed = _path_exists(_LEGACY_CONFIG_DIR)
-    legacy_install_marker_existed = _path_exists(_LEGACY_FIRST_RUN_PATH)
-    legacy_anonymous_id_path_existed = _path_exists(_LEGACY_ANONYMOUS_ID_PATH)
     try:
         _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         anonymous_id_path_existed = _ANONYMOUS_ID_PATH.exists()
@@ -283,26 +255,16 @@ def _compute_anonymous_identity() -> _AnonymousIdentity:
                 config_dir_existed=config_dir_existed,
                 install_marker_existed=install_marker_existed,
                 anonymous_id_path_existed=anonymous_id_path_existed,
-                legacy_config_dir_existed=legacy_config_dir_existed,
-                legacy_install_marker_existed=legacy_install_marker_existed,
-                legacy_anonymous_id_path_existed=legacy_anonymous_id_path_existed,
             )
-        if legacy_id := _load_legacy_anonymous_id():
-            return _AnonymousIdentity(legacy_id, "disk")
         if _is_existing_install(
             config_dir_existed=config_dir_existed,
             install_marker_existed=install_marker_existed,
-            legacy_config_dir_existed=legacy_config_dir_existed,
-            legacy_install_marker_existed=legacy_install_marker_existed,
         ):
             _queue_user_id_load_failure(
                 "missing_anonymous_id",
                 config_dir_existed=config_dir_existed,
                 install_marker_existed=install_marker_existed,
                 anonymous_id_path_existed=anonymous_id_path_existed,
-                legacy_config_dir_existed=legacy_config_dir_existed,
-                legacy_install_marker_existed=legacy_install_marker_existed,
-                legacy_anonymous_id_path_existed=legacy_anonymous_id_path_existed,
             )
         new_id = str(uuid.uuid4())
         return _write_new_anonymous_id(
@@ -315,9 +277,6 @@ def _compute_anonymous_identity() -> _AnonymousIdentity:
             config_dir_existed=config_dir_existed,
             install_marker_existed=install_marker_existed,
             anonymous_id_path_existed=_path_exists(_ANONYMOUS_ID_PATH),
-            legacy_config_dir_existed=legacy_config_dir_existed,
-            legacy_install_marker_existed=legacy_install_marker_existed,
-            legacy_anonymous_id_path_existed=legacy_anonymous_id_path_existed,
         )
         return _AnonymousIdentity(str(uuid.uuid4()), "none")
 
@@ -435,11 +394,11 @@ def _event_logging_enabled() -> bool:
     return os.getenv(_EVENT_LOG_ENV_VAR, "1") != "0"
 
 
-def _format_property(key: str, value: PropertyValue) -> str:
+def _format_property(key: str, value: JsonValue) -> str:
     if isinstance(value, bool):
         rendered = "true" if value else "false"
     else:
-        rendered = json.dumps(value, ensure_ascii=False)
+        rendered = json.dumps(value, ensure_ascii=False, default=str)
     return f"{key}={rendered}"
 
 
@@ -457,7 +416,7 @@ def _event_log_path() -> Path:
     """Resolve the event log path lazily so tests can monkeypatch ``_CONFIG_DIR``.
 
     The log lives next to ``anonymous_id`` and ``analytics_errors.log`` under
-    ``~/.config/opensre/`` (or the equivalent on other platforms) rather than
+    ``~/.opensre/`` (or the equivalent on other platforms) rather than
     in the user's current working directory. This prevents a stray
     ``posthog_events.txt`` from showing up in every shell where the user runs
     ``opensre``, and keeps related telemetry artifacts in one place.
@@ -551,7 +510,7 @@ def _scrub_error_message(message: str) -> str:
     return scrubbed
 
 
-def _format_failure_extra(value: object) -> PropertyValue:
+def _format_failure_extra(value: object) -> JsonValue:
     if isinstance(value, bool):
         return value
     return str(value)
@@ -660,6 +619,8 @@ def _coerce_properties(
             continue
         elif isinstance(value, int | float):
             coerced[key] = str(value)
+        elif _is_json_value(value):
+            coerced[key] = value
         else:
             _log_failure(
                 "invalid_property",
@@ -671,6 +632,16 @@ def _coerce_properties(
                 value_type=type(value).__name__,
             )
     return coerced
+
+
+def _is_json_value(value: object) -> bool:
+    if isinstance(value, bool | str | int | float):
+        return True
+    if isinstance(value, list):
+        return all(_is_json_value(item) for item in value)
+    if isinstance(value, dict):
+        return all(isinstance(k, str) and _is_json_value(v) for k, v in value.items())
+    return False
 
 
 _COMPOSITE_FINGERPRINT = _build_composite_fingerprint()
@@ -757,28 +728,33 @@ class Analytics:
         self._worker = worker
 
     def _worker_loop(self) -> None:
-        with httpx.Client(timeout=_SEND_TIMEOUT, trust_env=False) as client:
-            while True:
-                item = self._queue.get()
-                if item is None:
-                    self._queue.task_done()
-                    break
-                try:
-                    self._send(client, item)
-                finally:
-                    self._queue.task_done()
-                    self._mark_done()
-            while True:
-                try:
-                    item = self._queue.get_nowait()
-                except queue.Empty:
-                    return
-                try:
-                    if item is not None:
+        try:
+            with httpx.Client(timeout=_SEND_TIMEOUT, trust_env=False) as client:
+                while True:
+                    item = self._queue.get()
+                    if item is None:
+                        self._queue.task_done()
+                        break
+                    try:
                         self._send(client, item)
-                finally:
-                    self._queue.task_done()
-                    self._mark_done()
+                    finally:
+                        self._queue.task_done()
+                        self._mark_done()
+                while True:
+                    try:
+                        item = self._queue.get_nowait()
+                    except queue.Empty:
+                        return
+                    try:
+                        if item is not None:
+                            self._send(client, item)
+                    finally:
+                        self._queue.task_done()
+                        self._mark_done()
+        except Exception as exc:
+            # SSL/TLS or other fatal client-init errors — log only so the daemon
+            # thread exits cleanly without surfacing infrastructure noise to Sentry.
+            _log_failure("worker_loop_fatal", exc)
 
     def _send(self, client: httpx.Client, item: _Envelope) -> None:
         properties: Properties = {
@@ -803,11 +779,9 @@ class Analytics:
             # transient infrastructure issues, not application bugs — log only.
             _log_failure("posthog_send", exc, event=item.event)
         except httpx.HTTPStatusError as exc:
+            # PostHog HTTP errors (4xx config issues, 5xx transient infra failures)
+            # are not application bugs — log only, do not surface to Sentry.
             _log_failure("posthog_send", exc, event=item.event)
-            # 4xx errors (e.g. 403 Forbidden) are operational/config issues on
-            # the PostHog side; only report 5xx server errors to Sentry.
-            if exc.response.status_code >= 500:
-                _capture_sentry_failure(exc)
         except Exception as exc:
             _log_failure("posthog_send", exc, event=item.event)
             _capture_sentry_failure(exc)

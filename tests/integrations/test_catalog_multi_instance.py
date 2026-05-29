@@ -176,6 +176,25 @@ def test_local_and_cloud_grafana_share_all_grafana_instances_bucket() -> None:
     assert set(names) == {"local", "prod"}
 
 
+def test_local_grafana_without_basic_auth_keeps_credentials_empty() -> None:
+    """Regression for Greptile: localhost Grafana without credentials should
+    remain anonymous (no injected admin:admin fallback)."""
+    local_only = {
+        "id": "env-grafana",
+        "service": "grafana",
+        "status": "active",
+        "credentials": {
+            "endpoint": "http://localhost:3000",
+            "api_key": "local",
+        },
+    }
+
+    resolved = classify_integrations([local_only])
+    assert resolved["grafana_local"]["endpoint"] == "http://localhost:3000"
+    assert resolved["grafana_local"]["username"] == ""
+    assert resolved["grafana_local"]["password"] == ""
+
+
 def test_classify_inactive_record_is_skipped() -> None:
     inactive = {
         "id": "g1",

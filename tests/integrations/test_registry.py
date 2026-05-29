@@ -42,6 +42,15 @@ def test_registry_supported_lists_are_derived_from_specs() -> None:
     assert set(VERIFIER_REGISTRY) == set(SUPPORTED_VERIFY_SERVICES)
 
 
+def test_every_setup_spec_has_handler() -> None:
+    # #2537: a spec with `setup_order` but no matching `_HANDLERS` entry lets
+    # Click accept a service that cmd_setup cannot dispatch. Anchor the
+    # inverse-drift here.
+    from app.integrations.cli import _HANDLERS
+
+    assert set(SUPPORTED_SETUP_SERVICES) <= set(_HANDLERS)
+
+
 def test_registry_preserves_aliases_and_special_case_buckets() -> None:
     assert service_key("github_mcp") == "github"
     assert service_key("carologix") == "coralogix"

@@ -42,6 +42,12 @@
               "deployment",
               "faq"
             ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/environment-variables"
+            ]
           }
         ]
       },
@@ -80,7 +86,9 @@
               "remote-runtime-investigation",
               "masking",
               "interactive-shell-privacy",
+              "sessions",
               "agents",
+              "cron",
               "multi-instance-integrations"
             ]
           },
@@ -105,6 +113,7 @@
               "incident_io",
               "opsgenie",
               "sentry",
+              "signoz",
               "splunk"
             ]
           },
@@ -129,7 +138,9 @@
               "messaging/index",
               "messaging/slack",
               "messaging/discord",
-              "messaging/telegram"
+              "messaging/telegram",
+              "messaging/whatsapp",
+              "messaging/twilio-sms"
             ]
           },
           {
@@ -331,6 +342,12 @@
       "hjsv": "6"
     }
   },
+  "redirects": [
+    {
+      "source": "/messaging/twilio",
+      "destination": "/messaging/twilio-sms"
+    }
+  ],
   "seo": {
     "indexing": "all",
     "metatags": {}

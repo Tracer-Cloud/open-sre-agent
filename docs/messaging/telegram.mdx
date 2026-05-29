@@ -5,10 +5,6 @@ description: "Deliver investigation findings to a Telegram chat or channel."
 
 OpenSRE's Telegram integration delivers investigation findings to any chat your bot has been added to — useful for mobile-first on-call rotations and personal alerting.
 
-<Note>
-Unlike Slack and Discord, Telegram is **not** included in the interactive `opensre onboard` wizard today. Configure it via environment variables or by editing `~/.config/opensre/integrations.json` directly. Tracked at [#1481](https://github.com/Tracer-Cloud/opensre/issues/1481).
-</Note>
-
 ---
 
 ## Prerequisites
@@ -88,7 +84,28 @@ If `getUpdates` returns an empty array, post a fresh message in the chat and rel
 
 ## Step 4: Configure the integration
 
-Set two environment variables in your `.env` file:
+### Option A: Onboarding wizard (recommended)
+
+```bash
+opensre onboard
+```
+
+Choose **Telegram** from the integration list. The wizard prompts for:
+
+- **Bot token** — stored in the system keyring (not plain `.env`)
+- **Default chat ID** — written to `.env` as `TELEGRAM_DEFAULT_CHAT_ID`
+
+Credentials are also saved to `~/.opensre/integrations.json` via `upsert_integration("telegram", ...)`.
+
+Non-interactive setup:
+
+```bash
+opensre integrations setup telegram
+```
+
+### Option B: Environment variables
+
+Set in `.env` (bot token can also live in the keyring after wizard setup):
 
 ```bash
 TELEGRAM_BOT_TOKEN=<numeric-id>:<token-secret>

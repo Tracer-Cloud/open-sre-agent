@@ -31,8 +31,10 @@ _mark_tests_for_analytics()
 
 
 @pytest.fixture(autouse=True)
-def _disable_system_keyring(monkeypatch) -> None:
+def _disable_system_keyring(request, monkeypatch) -> None:
     """Keep tests isolated from any real developer keychain entries."""
+    if request.node.get_closest_marker("live_llm") is not None:
+        return
     monkeypatch.setenv("OPENSRE_DISABLE_KEYRING", "1")
 
 

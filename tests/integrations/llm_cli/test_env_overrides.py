@@ -31,3 +31,7 @@ def test_openai_platform_keys_stable_tuple() -> None:
         "OPENAI_PROJECT_ID",
         "OPENAI_BASE_URL",
     )
+
+
+def test_http_llm_provider_keys_include_deepseek_api_key() -> None:
+    assert "DEEPSEEK_API_KEY" in env_overrides.HTTP_LLM_PROVIDER_ENV_KEYS

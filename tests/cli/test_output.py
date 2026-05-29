@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 from typing import Any
 
@@ -14,6 +15,8 @@ from app.cli.support.output import (
     get_output_format,
     get_tracker,
     reset_tracker,
+    suppress_stdin_watchers,
+    toggle_active_tool_details,
 )
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
@@ -31,6 +34,8 @@ def _isolate_output_state(monkeypatch: pytest.MonkeyPatch) -> None:
     # The module-level ``_tracker`` is a session-scoped singleton; without resetting it
     # a tracker created in an earlier test would leak its ``_rich`` flag into later ones.
     monkeypatch.setattr(output, "_tracker", None)
+    monkeypatch.setattr(output, "_stdin_watcher_suppression_depth", 0)
+    monkeypatch.setattr(output, "_tool_detail_toggle_callbacks", [])
 
 
 @pytest.fixture
@@ -164,6 +169,62 @@ def test_fmt_timing(elapsed_ms: int, expected: str) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # ProgressTracker — text mode
 # ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_tracker_uses_repl_append_display_when_prompt_app_active(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(output, "get_output_format", lambda: "rich")
+    monkeypatch.setattr(output, "_repl_progress_active", lambda: True)
+    tracker = ProgressTracker()
+    assert isinstance(tracker._display, output._ReplEventLogDisplay)
+    assert tracker._toggle_watcher is None
+
+
+def test_tracker_uses_repl_append_display_under_repl_safe_scope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(output, "get_output_format", lambda: "rich")
+    from app.cli.support.repl_progress import repl_safe_progress_scope
+
+    with repl_safe_progress_scope():
+        tracker = ProgressTracker()
+    assert isinstance(tracker._display, output._ReplEventLogDisplay)
+    assert tracker._toggle_watcher is None
+
+
+def test_repl_display_buffers_subtext_until_step_complete(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(output, "get_output_format", lambda: "rich")
+    monkeypatch.setattr(output, "_repl_progress_active", lambda: True)
+    display = output._ReplEventLogDisplay()
+    display.step_start("investigate")
+    out_after_start = _strip_ansi(capsys.readouterr().out)
+    assert "Gathering evidence" in out_after_start
+    assert "↳" not in out_after_start
+
+    display.step_subtext("investigate", "Hermes: log poll")
+    display.step_subtext("investigate", "Hermes: log poll x2")
+    assert "↳" not in _strip_ansi(capsys.readouterr().out)
+
+    display.step_complete(
+        "investigate",
+        output.ProgressEvent(node_name="investigate", elapsed_ms=1200, status="completed"),
+    )
+    out = _strip_ansi(capsys.readouterr().out)
+    assert out.count("↳") == 1
+    assert "Hermes: log poll x2" in out
+    assert "Hermes: log poll\n" not in out
+
+
+@pytest.mark.asyncio
+async def test_repl_safe_progress_scope_propagates_to_asyncio_thread() -> None:
+    from app.cli.support.repl_progress import repl_safe_progress_scope
+
+    with repl_safe_progress_scope():
+        assert await asyncio.to_thread(output._repl_progress_active) is True
 
 
 @pytest.mark.usefixtures("force_text_mode")
@@ -415,6 +476,51 @@ def test_ctrl_o_watcher_disables_terminal_output_discard(
     assert attrs[3] & _Termios.ECHO == 0
     assert attrs[3] & _Termios.IEXTEN == 0
     assert attrs[6][_Termios.VDISCARD] == b"\x00"
+
+
+def test_suppressed_stdin_watchers_do_not_touch_terminal_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _TTY:
+        def isatty(self) -> bool:
+            return True
+
+        def fileno(self) -> int:
+            return 99
+
+    class _Termios:
+        @staticmethod
+        def tcgetattr(_fd: int) -> list[Any]:
+            raise AssertionError("suppressed watcher should not query terminal state")
+
+    monkeypatch.setattr(output.sys, "stdin", _TTY())
+    monkeypatch.setattr(output.sys, "stdout", _TTY())
+    monkeypatch.setattr(output, "termios", _Termios)
+
+    watcher = output.CtrlOToggleWatcher(lambda: None)
+    with suppress_stdin_watchers():
+        watcher.start()
+
+    assert watcher._thread is None
+    assert watcher._fd is None
+
+
+def test_active_tool_detail_toggle_uses_newest_registered_callback() -> None:
+    calls: list[str] = []
+    unregister_base = output.register_tool_detail_toggle(lambda: calls.append("base"))
+    unregister_top = output.register_tool_detail_toggle(lambda: calls.append("top"))
+
+    try:
+        assert toggle_active_tool_details() is True
+        unregister_top()
+        assert toggle_active_tool_details() is True
+        unregister_base()
+        assert toggle_active_tool_details() is False
+    finally:
+        unregister_top()
+        unregister_base()
+
+    assert calls == ["top", "base"]
 
 
 # ─────────────────────────────────────────────────────────────────────────────

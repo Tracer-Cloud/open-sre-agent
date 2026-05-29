@@ -1,18 +1,15 @@
 """Rich-table rendering for the ``/agents`` slash-command dashboard.
 
-Produces the structural shape of the dashboard with the columns
-documented in #1486's preview (``agent``, ``pid``, ``uptime``,
-``cpu%``, ``tokens/min``, ``$/hr``, ``status``). The ``$/hr`` cell
-reads from ``agents.yaml`` via :func:`app.agents.config.load_agents_config`;
-``cpu%`` / ``uptime`` / ``status`` are populated from the per-PID
-sampler. The ``tokens/min`` column still renders as ``-``
-until the token-meter consumer lands in a future issue.
+Columns: ``agent``, ``pid``, ``uptime``, ``cpu%``, ``tokens/min``,
+``$/hr``, ``status``. Every metric cell falls back to ``-`` when its
+sampler accessor returns ``None``. ``0`` versus ``-`` is meaningful
+in ``tokens/min``: ``0`` is observed-but-idle, ``-`` is unobservable
+(no meter for this provider, or the JSONL is unreadable, or the
+sampler task is not running — e.g. non-interactive
+``opensre agents list``).
 
-This module lives outside ``app/agents/`` deliberately: the agents
-package is for *collectors* (probe, registry, sweep, meters) and
-must not depend on Rich (a UI library), or non-CLI consumers of the
-collectors would pull it in transitively. The slash command in
-``command_registry/agents.py`` is the one and only consumer.
+This module lives outside ``app/agents/`` so collectors don't pull
+in Rich.
 """
 
 from __future__ import annotations
@@ -20,23 +17,20 @@ from __future__ import annotations
 from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 
-from pydantic import ValidationError
-from rich.console import JustifyMethod
+from rich.console import Console, JustifyMethod
 from rich.markup import escape
 from rich.table import Table
 
-from app.agents.config import load_agents_config
 from app.agents.registry import AgentRecord
-from app.agents.sampler import get_snapshot
+from app.agents.sampler import get_snapshot, get_tokens_per_min, get_usd_per_hour
+from app.agents.status import Status, compute_status
+from app.cli.interactive_shell.ui.rendering import print_repl_table, repl_table
 from app.cli.interactive_shell.ui.theme import BOLD_BRAND
 
-# Placeholder for columns without a live data source (currently only tokens/min).
 _UNFILLED = "-"
 
-#: Columns the dashboard ships with. Order matches the user-facing table.
-#: Re-using Rich's own ``JustifyMethod`` type alias rather than a
-#: hand-maintained Literal so column-justify options stay in lockstep
-#: with the library if Rich ever expands them.
+# Re-using Rich's own ``JustifyMethod`` so column-justify options
+# stay in lockstep with the library.
 _COLUMNS: tuple[tuple[str, JustifyMethod], ...] = (
     ("agent", "left"),
     ("pid", "right"),
@@ -47,9 +41,14 @@ _COLUMNS: tuple[tuple[str, JustifyMethod], ...] = (
     ("status", "left"),
 )
 
+_STATUS_COLORS: dict[Status, str] = {
+    Status.ACTIVE: "green",
+    Status.IDLE: "yellow",
+    Status.STUCK: "red",
+}
+
 
 def _format_uptime(delta: timedelta) -> str:
-    """Format a timedelta as a compact human-readable duration string."""
     total_seconds = int(delta.total_seconds())
     if total_seconds < 60:
         return f"{total_seconds}s"
@@ -64,65 +63,82 @@ def _format_uptime(delta: timedelta) -> str:
     return f"{days}d{remaining_hours}h"
 
 
-def render_agents_table(records: Iterable[AgentRecord]) -> Table:
-    """Return a Rich ``Table`` for the registered ``AgentRecord`` set.
+def _format_tokens_per_min(value: float | None) -> str:
+    if value is None:
+        return _UNFILLED
+    # Round-then-compare so ``999.6`` doesn't render as 4-digit ``"1000"``
+    # next to its 3-digit neighbors.
+    rounded = int(round(value))
+    if rounded < 1000:
+        return f"{rounded}"
+    return f"{value / 1000:.1f}k"
 
-    The returned table always has the full column structure, even
-    when no records exist; the caller passes it to ``console.print()``.
-    An empty record list produces a table with no body rows and an
-    explanatory caption.
 
-    The ``$/hr`` cell reads ``hourly_budget_usd`` from ``agents.yaml``
-    when configured. The ``uptime``, ``cpu%``,``status`` are read
-    from the background sampler's probe snapshots. ``tokens/min`` is still
-    pending a future token-meter consumer.
-    """
+def _format_usd_per_hour(value: float | None) -> str:
+    if value is None:
+        return _UNFILLED
+    return f"${value:.2f}"
+
+
+def _format_status(status: Status, msg: str = "") -> str:
+    """Return a Rich-markup-colorized status cell for the /agents table."""
+    color = _STATUS_COLORS.get(status, "default")
+    label = f"{status.value} ({msg})" if msg else status.value
+    return f"[{color}]{label}[/{color}]"
+
+
+def _build_agents_table(records: Iterable[AgentRecord]) -> Table:
+    """Build and return the agents dashboard Table without printing it."""
     materialized = list(records)
-    table = Table(
+    table = repl_table(
         title="agents",
         title_style=BOLD_BRAND,
         caption="no agents discovered or registered yet" if not materialized else None,
     )
     for header, justify in _COLUMNS:
         table.add_column(header, justify=justify)
-    # Load once per render: agents.yaml is small and the dashboard is
-    # invoked interactively, so a single read per ``/agents`` invocation
-    # is cheaper than caching with invalidation. A schema-invalid file
-    # falls back to empty budgets here (``$/hr`` cells render as ``-``)
-    # rather than crashing the dashboard with a raw traceback — the
-    # same hand-edit surfaces a friendly error in ``/agents budget``,
-    # which is the surface that exists to fix it.
-    try:
-        budgets = load_agents_config().agents
-    except ValidationError:
-        budgets = {}
     now = datetime.now(UTC)
     for record in materialized:
-        budget = budgets.get(record.name)
-        hourly_cell = (
-            f"${budget.hourly_budget_usd:.2f}"
-            if budget is not None and budget.hourly_budget_usd is not None
-            else _UNFILLED
-        )
         snapshot = get_snapshot(record.pid)
         if snapshot is not None:
+            # Use output freshness when available; otherwise the status
+            # heuristic falls back to the process start time.
+            status = compute_status(
+                snapshot,
+                now,
+                last_output_at=snapshot.last_output_at,
+                idle_after_s=120,
+                stuck_after_s=480,
+            )
+            status_msg = ""
+            if status is Status.STUCK:
+                anchor = snapshot.last_output_at or snapshot.started_at
+                status_msg = f"{_format_uptime(now - anchor)} no progress"
+
             uptime_cell = _format_uptime(now - snapshot.started_at)
             cpu_cell = f"{snapshot.cpu_percent:.1f}"
-            status_cell = snapshot.status
+            status_cell = _format_status(status, status_msg)
         else:
             uptime_cell = _UNFILLED
             cpu_cell = _UNFILLED
             status_cell = _UNFILLED
+        tokens_cell = _format_tokens_per_min(get_tokens_per_min(record.pid))
+        hourly_cell = _format_usd_per_hour(get_usd_per_hour(record.pid))
         table.add_row(
             escape(record.name),
             str(record.pid),
-            uptime_cell,  # uptime
-            cpu_cell,  # cpu%
-            _UNFILLED,  # tokens/min
+            uptime_cell,
+            cpu_cell,
+            tokens_cell,
             hourly_cell,
             status_cell,
         )
     return table
 
 
-__all__ = ["render_agents_table"]
+def render_agents_table(console: Console, records: Iterable[AgentRecord]) -> None:
+    """Print the agents dashboard table to the REPL console with TTY-safe width."""
+    print_repl_table(console, _build_agents_table(records))
+
+
+__all__ = ["_build_agents_table", "render_agents_table"]

@@ -48,8 +48,53 @@ def test_health_command_uses_real_datadog_verification_path(monkeypatch) -> None
 
     result = runner.invoke(cli, ["health"])
 
-    assert result.exit_code == 1
+    assert result.exit_code == 0
     assert "Summary:" in result.output
     assert "datadog" in result.output
     assert "MISSING" in result.output
     assert "Missing API key or application key." in result.output
+
+
+def test_health_command_exits_zero_when_all_integrations_missing() -> None:
+    runner = CliRunner()
+
+    with patch("app.integrations.verify.verify_integrations") as mock_verify:
+        mock_verify.return_value = [
+            {
+                "service": svc,
+                "source": "-",
+                "status": "missing",
+                "detail": "Not configured in local store or env.",
+            }
+            for svc in ("aws", "datadog", "grafana", "slack")
+        ]
+
+        result = runner.invoke(cli, ["health"])
+
+    assert result.exit_code == 0
+    assert "4 missing" in result.output
+
+
+def test_health_command_exits_one_when_any_integration_failed() -> None:
+    runner = CliRunner()
+
+    with patch("app.integrations.verify.verify_integrations") as mock_verify:
+        mock_verify.return_value = [
+            {
+                "service": "aws",
+                "source": "local store",
+                "status": "passed",
+                "detail": "ok",
+            },
+            {
+                "service": "datadog",
+                "source": "local store",
+                "status": "failed",
+                "detail": "401 Unauthorized",
+            },
+        ]
+
+        result = runner.invoke(cli, ["health"])
+
+    assert result.exit_code == 1
+    assert "1 failed" in result.output

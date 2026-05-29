@@ -1,0 +1,49 @@
+id: 303-synthetic-storage-full
+title: Synthetic storage full
+intent_class: investigation
+risk_level: medium
+input:
+  prompt: run synthetic test 003-storage-full
+  surface: interactive_cli
+session:
+  has_prior_state: false
+  remote_connected: false
+  configured_integrations: []
+available_capabilities:
+  slash_commands: []
+  cli_commands: []
+  synthetic_suites:
+  - rds_postgres
+notes: []
+route:
+  expected_kind: cli_agent
+  expected_signals: []
+  expected_command_text: null
+policy:
+  should_execute: true
+  has_unhandled_clause: false
+  fail_closed: false
+planned_actions:
+- kind: synthetic_test
+  source: llm
+  target_surface: investigation
+  suite: rds_postgres
+  scenario: 003-storage-full
+  content: rds_postgres:003-storage-full
+executed_actions:
+- kind: synthetic_test
+  suite: rds_postgres
+  scenario: 003-storage-full
+  content: rds_postgres:003-storage-full
+response_contract:
+  must_contain_any:
+  - synthetic test rds_postgres:003-storage-full
+  must_not_contain: []
+history:
+  expected:
+  - type: cli_agent
+    ok: true
+  - type: synthetic_test
+    ok: true
+tier: full
+runs: 1

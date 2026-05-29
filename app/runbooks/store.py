@@ -1,7 +1,7 @@
 """Disk-backed store for user-authored markdown runbooks.
 
 A runbook is a Markdown file with YAML frontmatter that declares the alert
-shapes it applies to.  Files live under ``~/.config/opensre/runbooks/`` and are
+shapes it applies to.  Files live under ``~/.opensre/runbooks/`` and are
 loaded lazily by the planner during an investigation.
 
 Required frontmatter keys:

@@ -59,6 +59,7 @@ jobs:
   # this workflow's sole job is the OpenClaw e2e suite. If you reach
   # this workflow, your PR has already cleared the quality gates.
   openclaw-test:
+    if: github.repository == 'Tracer-Cloud/opensre'
     name: openclaw test
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -82,6 +83,14 @@ jobs:
         with:
           node-version-file: ".nvmrc"
 
+      - name: Cache npm downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-openclaw-npm-${{ hashFiles('.nvmrc') }}
+          restore-keys: |
+            ${{ runner.os }}-openclaw-npm-
+
       - name: Install OpenClaw CLI
         # ``continue-on-error: true`` so an npm-registry hiccup, a package-name
         # rename on OpenClaw's side, or a network blip does not kill the whole
@@ -90,7 +99,7 @@ jobs:
         # explanation rather than crashing.
         continue-on-error: true
         id: install_openclaw
-        run: npm install -g openclaw
+        run: npm install -g openclaw --prefer-offline --no-audit
 
       - name: Probe OpenClaw availability
         # Whether or not ``npm install`` succeeded, check if ``openclaw`` is

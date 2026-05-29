@@ -27,7 +27,7 @@ from app.cli.interactive_shell.ui.theme import (
     WARNING,
 )
 from app.cli.wizard.config import PROVIDER_BY_VALUE, SUPPORTED_PROVIDERS, ProviderOption
-from app.cli.wizard.env_sync import sync_env_values, sync_provider_env
+from app.cli.wizard.env_sync import sync_env_secret, sync_env_values, sync_provider_env
 from app.cli.wizard.integration_health import IntegrationHealthResult
 from app.cli.wizard.probes import ProbeResult, probe_local_target, probe_remote_target
 from app.cli.wizard.prompts import select as select_prompt
@@ -193,6 +193,12 @@ def validate_discord_bot(**kwargs):
     return _validate(**kwargs)
 
 
+def validate_telegram_bot(**kwargs):
+    from app.cli.wizard.integration_health import validate_telegram_bot as _validate
+
+    return _validate(**kwargs)
+
+
 def validate_openclaw_integration(**kwargs):
     from app.cli.wizard.integration_health import validate_openclaw_integration as _validate
 
@@ -292,16 +298,18 @@ def _step_header(n: int, total: int, title: str) -> None:
 
     Rendered output (colour roles):
       ─────────────────────────────────────────  [DIM rule]
-      Step 2/4  —  LLM Provider                  [SECONDARY "Step N/N"] [TEXT title]
+      ●●○○  LLM Provider  2/4                   [BRAND dots] [TEXT title] [SECONDARY counter]
       ─────────────────────────────────────────  [DIM rule]
     """
+    dots = "●" * n + "○" * (total - n)
     _console.print()
     _console.print(Rule(style=DIM))
     header = Text()
     header.append("  ")
-    header.append(f"Step {n}/{total}", style=f"bold {SECONDARY}")
-    header.append("  —  ", style=DIM)
+    header.append(dots, style=f"bold {BRAND}")
+    header.append("  ", style=DIM)
     header.append(title, style=f"bold {TEXT}")
+    header.append(f"  {n}/{total}", style=SECONDARY)
     _console.print(header)
     _console.print(Rule(style=DIM))
 
@@ -321,6 +329,59 @@ def _questionary_choice(choice: Choice) -> questionary.Choice:
         title=_choice_title(choice),
         value=choice.value,
         description=_choice_description(choice),
+    )
+
+
+_CUSTOM_MODEL_SENTINEL = "__custom__"
+
+
+def _choose_model(provider: ProviderOption, *, default: str | None) -> str:
+    """Prompt the user to pick a model from ``provider.models``.
+
+    Choices come from the curated config in ``app/cli/wizard/config.py``.
+    A saved model that isn't in the curated list is preserved as ``current``
+    so re-running the wizard never silently drops a user's prior pick, and an
+    "Enter custom model ID" escape hatch is always available.
+    """
+    resolved_default = (default or "").strip()
+    if not provider.models:
+        return resolved_default or provider.default_model
+
+    _step("Model")
+
+    curated_values = {option.value for option in provider.models}
+    curated_choices: list[Choice] = [
+        Choice(value=option.value, label=option.label) for option in provider.models
+    ]
+
+    extra_choices: list[Choice] = []
+    if resolved_default and resolved_default not in curated_values:
+        extra_choices.append(Choice(value=resolved_default, label=resolved_default, hint="current"))
+
+    custom_choice = Choice(
+        value=_CUSTOM_MODEL_SENTINEL,
+        label="Enter custom model ID",
+        hint="type any model identifier",
+    )
+
+    choices = curated_choices + extra_choices + [custom_choice]
+    default_value = resolved_default or provider.default_model
+    if default_value and not any(c.value == default_value for c in choices):
+        default_value = curated_choices[0].value if curated_choices else _CUSTOM_MODEL_SENTINEL
+
+    selection = _choose(
+        f"Choose {provider.label} model",
+        choices,
+        default=default_value or None,
+    )
+
+    if selection != _CUSTOM_MODEL_SENTINEL:
+        return selection
+
+    return _prompt_value(
+        f"Custom {provider.label} model ID ({provider.model_env})",
+        default=resolved_default,
+        allow_empty=False,
     )
 
 
@@ -1129,11 +1190,11 @@ def _configure_openclaw() -> tuple[str, str]:
                 "args": args,
             }
             upsert_integration("openclaw", {"credentials": credentials_dict})
+            sync_env_secret("OPENCLAW_MCP_AUTH_TOKEN", auth_token)
             env_path = sync_env_values(
                 {
                     "OPENCLAW_MCP_URL": url,
                     "OPENCLAW_MCP_MODE": mode,
-                    "OPENCLAW_MCP_AUTH_TOKEN": auth_token,
                     "OPENCLAW_MCP_COMMAND": command,
                     "OPENCLAW_MCP_ARGS": " ".join(args),
                 }
@@ -1173,10 +1234,10 @@ def _configure_gitlab() -> tuple[str, str]:
         if result.ok:
             credentials = {"base_url": base_url, "auth_token": auth_token}
             upsert_integration("gitlab", {"credentials": credentials})
+            sync_env_secret("GITLAB_ACCESS_TOKEN", auth_token)
             env_path = sync_env_values(
                 {
                     "GITLAB_BASE_URL": base_url,
-                    "GITLAB_ACCESS_TOKEN": auth_token,
                 }
             )
             return "Gitlab", str(env_path)
@@ -1510,9 +1571,9 @@ def _configure_incident_io() -> tuple[str, str]:
                 "base_url": base_url,
             }
             upsert_integration("incident_io", {"credentials": credentials_payload})
+            sync_env_secret("INCIDENT_IO_API_KEY", api_key)
             env_path = sync_env_values(
                 {
-                    "INCIDENT_IO_API_KEY": api_key,
                     "INCIDENT_IO_BASE_URL": base_url,
                 }
             )
@@ -1563,15 +1624,60 @@ def _configure_discord() -> tuple[str, str]:
             from app.integrations.cli import _register_discord_slash_command
 
             _register_discord_slash_command(application_id, bot_token)
+            sync_env_secret("DISCORD_BOT_TOKEN", bot_token)
             env_path = sync_env_values(
                 {
-                    "DISCORD_BOT_TOKEN": bot_token,
                     "DISCORD_APPLICATION_ID": application_id,
                     "DISCORD_PUBLIC_KEY": public_key,
                     "DISCORD_DEFAULT_CHANNEL_ID": default_channel_id,
                 }
             )
             return "Discord", str(env_path)
+        _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
+
+
+def _configure_telegram() -> tuple[str, str]:
+    _, credentials = _integration_defaults("telegram")
+    _console.print(
+        "\n[bold]Telegram Integration[/bold]\n"
+        f"[{SECONDARY}]Create a bot with @BotFather, add it to your chat, then find "
+        "chat_id via getUpdates. See docs/messaging/telegram for details.[/]\n"
+    )
+    while True:
+        bot_token = _prompt_value(
+            "Telegram bot token",
+            default=_string_value(credentials.get("bot_token")),
+            secret=True,
+        )
+        default_chat_id = _prompt_value(
+            "Default chat ID (recommended for delivery)",
+            default=_string_value(credentials.get("default_chat_id")),
+            allow_empty=True,
+        )
+        with _console.status("Validating Telegram bot token...", spinner="dots"):
+            result = validate_telegram_bot(bot_token=bot_token)
+        _render_integration_result("Telegram", result)
+        if result.ok:
+            upsert_integration(
+                "telegram",
+                {
+                    "credentials": {
+                        "bot_token": bot_token,
+                        "default_chat_id": default_chat_id or None,
+                    }
+                },
+            )
+            sync_env_secret("TELEGRAM_BOT_TOKEN", bot_token)
+            env_values: dict[str, str] = {}
+            if default_chat_id:
+                env_values["TELEGRAM_DEFAULT_CHAT_ID"] = default_chat_id
+            env_path = sync_env_values(env_values)
+            if not default_chat_id:
+                _console.print(
+                    f"[{WARNING}]No default chat ID set — Hermes, watchdog, and scheduled "
+                    "deliveries need TELEGRAM_DEFAULT_CHAT_ID to send messages.[/]"
+                )
+            return "Telegram", str(env_path)
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 
 
@@ -1723,10 +1829,10 @@ def _configure_opensearch() -> tuple[str, str]:
                 "OPENSEARCH_URL": url,
             }
             if api_key:
-                env_values["OPENSEARCH_API_KEY"] = api_key
+                sync_env_secret("OPENSEARCH_API_KEY", api_key)
             if username:
                 env_values["OPENSEARCH_USERNAME"] = username
-                env_values["OPENSEARCH_PASSWORD"] = password
+                sync_env_secret("OPENSEARCH_PASSWORD", password)
             env_path = sync_env_values(env_values)
             return "OpenSearch", str(env_path)
         _console.print(f"[{DIM}]Try again or press Ctrl+C to cancel.[/]")
@@ -1758,6 +1864,11 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
             value="discord",
             label="Discord",
             hint="Trigger investigations via slash commands and post findings to threads",
+        ),
+        Choice(
+            value="telegram",
+            label="Telegram",
+            hint="Post findings to a Telegram chat",
         ),
         Choice(value="aws", label="AWS", hint="Inspect CloudWatch, EKS, and account resources"),
         Choice(
@@ -1842,6 +1953,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "coralogix": _configure_coralogix,
         "slack": _configure_slack,
         "discord": _configure_discord,
+        "telegram": _configure_telegram,
         "aws": _configure_aws,
         "github": _configure_github_mcp,
         "sentry": _configure_sentry,
@@ -1866,6 +1978,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "coralogix": "coralogix",
         "slack": "slack",
         "discord": "discord",
+        "telegram": "telegram",
         "aws": "aws",
         "github": "github mcp",
         "sentry": "sentry",
@@ -2157,6 +2270,14 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                         return 1
                     if not _persist_llm_api_key(provider.api_key_env, api_key):
                         return 1
+
+        if change_provider:
+            model = _choose_model(provider, default=model)
+        elif provider.models:
+            current_display = model or "CLI default"
+            _console.print(f"[{SECONDARY}]current model  {current_display}[/]")
+            if _confirm("Change model?", default=False):
+                model = _choose_model(provider, default=model)
 
         if provider.credential_kind == "cli":
             cli_out = _run_cli_llm_onboarding(provider)

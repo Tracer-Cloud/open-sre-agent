@@ -7,6 +7,7 @@ endpoint degrades gracefully on any platform.
 
 from __future__ import annotations
 
+import logging
 import os
 import platform
 import shutil
@@ -17,7 +18,10 @@ import time
 from pathlib import Path
 from typing import Any
 
-from app.utils.sentry_sdk import report_silent
+from app.remote.error_reporting import report_remote_exception
+
+logger = logging.getLogger(__name__)
+_REPORTED_METRIC_EVENTS: set[str] = set()
 
 _resource: Any | None
 
@@ -25,6 +29,21 @@ try:
     import resource as _resource
 except ModuleNotFoundError:
     _resource = None
+
+
+def _report_metric_failure(exc: BaseException, *, event: str, message: str) -> None:
+    """Report noisy metric collection failures once per process."""
+    if event in _REPORTED_METRIC_EVENTS:
+        return
+    _REPORTED_METRIC_EVENTS.add(event)
+    report_remote_exception(
+        exc,
+        logger=logger,
+        component="system_metrics",
+        event=event,
+        message=message,
+        severity="info",
+    )
 
 
 def collect_system_metrics() -> dict[str, Any]:
@@ -77,7 +96,12 @@ def _collect_cpu() -> dict[str, Any] | None:
             "load_avg_15m": round(load15, 2),
             "core_count": os.cpu_count() or 1,
         }
-    except OSError:
+    except OSError as exc:
+        _report_metric_failure(
+            exc,
+            event="cpu_collection_failed",
+            message="CPU metrics collection failed",
+        )
         return None
 
 
@@ -87,11 +111,18 @@ def _collect_cpu() -> dict[str, Any] | None:
 
 
 def _collect_memory() -> dict[str, Any] | None:
-    with report_silent("system_metrics.memory"):
+    try:
         if sys.platform == "linux":
             return _memory_linux()
         if sys.platform == "darwin":
             return _memory_darwin()
+    except Exception as exc:
+        _report_metric_failure(
+            exc,
+            event="memory_collection_failed",
+            message="Memory metrics collection failed",
+        )
+        return None
     return None
 
 
@@ -123,8 +154,16 @@ def _memory_linux() -> dict[str, Any] | None:
 
 
 def _memory_darwin() -> dict[str, Any] | None:
-    total_bytes = int(subprocess.check_output(["sysctl", "-n", "hw.memsize"], text=True).strip())
-    user_bytes = int(subprocess.check_output(["sysctl", "-n", "hw.usermem"], text=True).strip())
+    total_bytes = int(
+        subprocess.check_output(
+            ["sysctl", "-n", "hw.memsize"], text=True, encoding="utf-8", errors="replace"
+        ).strip()
+    )
+    user_bytes = int(
+        subprocess.check_output(
+            ["sysctl", "-n", "hw.usermem"], text=True, encoding="utf-8", errors="replace"
+        ).strip()
+    )
     total_gb = round(total_bytes / (1024**3), 1)
     available_gb = round(user_bytes / (1024**3), 1)
     used_gb = round((total_bytes - user_bytes) / (1024**3), 1)
@@ -156,7 +195,12 @@ def _collect_disk() -> dict[str, Any] | None:
             "free_gb": free_gb,
             "percent": percent,
         }
-    except OSError:
+    except OSError as exc:
+        _report_metric_failure(
+            exc,
+            event="disk_collection_failed",
+            message="Disk metrics collection failed",
+        )
         return None
 
 
@@ -166,11 +210,18 @@ def _collect_disk() -> dict[str, Any] | None:
 
 
 def _collect_uptime() -> dict[str, Any] | None:
-    with report_silent("system_metrics.uptime"):
+    try:
         if sys.platform == "linux":
             return _uptime_linux()
         if sys.platform == "darwin":
             return _uptime_darwin()
+    except Exception as exc:
+        _report_metric_failure(
+            exc,
+            event="uptime_collection_failed",
+            message="Uptime metrics collection failed",
+        )
+        return None
     return None
 
 
@@ -181,7 +232,9 @@ def _uptime_linux() -> dict[str, Any] | None:
 
 
 def _uptime_darwin() -> dict[str, Any] | None:
-    raw = subprocess.check_output(["sysctl", "-n", "kern.boottime"], text=True).strip()
+    raw = subprocess.check_output(
+        ["sysctl", "-n", "kern.boottime"], text=True, encoding="utf-8", errors="replace"
+    ).strip()
     # Format: "{ sec = 1712345678, usec = 123456 } ..."
     sec_part = raw.split("sec =")[1].split(",")[0].strip()
     boot_ts = int(sec_part)
@@ -231,7 +284,7 @@ def _collect_process() -> dict[str, Any] | None:
     if getrusage is None or rusage_self is None:
         return None
 
-    with report_silent("system_metrics.process"):
+    try:
         usage = getrusage(rusage_self)
         # maxrss is in kB on Linux, bytes on macOS
         rss_kb = usage.ru_maxrss if sys.platform == "linux" else usage.ru_maxrss // 1024
@@ -242,4 +295,10 @@ def _collect_process() -> dict[str, Any] | None:
             result["open_fds"] = len(list(fd_dir.iterdir()))
 
         return result
-    return None
+    except Exception as exc:
+        _report_metric_failure(
+            exc,
+            event="process_collection_failed",
+            message="Process metrics collection failed",
+        )
+        return None
