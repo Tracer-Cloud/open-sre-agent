@@ -8,6 +8,10 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
+pytestmark = pytest.mark.synthetic
+
 from app.agent.investigation import _ALERT_SOURCE_TO_TOOL_SOURCES
 from app.tools.TempoTool import query_tempo
 

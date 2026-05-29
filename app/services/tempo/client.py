@@ -10,6 +10,7 @@ Read-only access to a standalone Tempo backend via its HTTP API:
 from __future__ import annotations
 
 import logging
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -26,6 +27,9 @@ _NOT_CONFIGURED_ERROR = "Tempo not configured. Set TEMPO_URL."
 # Scoped tag names used by Tempo's tag-values endpoint.
 _SERVICE_NAME_TAG = "resource.service.name"
 _SPAN_NAME_TAG = "name"
+
+
+_VALID_TAG_KEY_RE = re.compile(r"^[A-Za-z0-9_.:-]+$")
 
 
 def _escape_traceql_value(value: str) -> str:
@@ -235,7 +239,7 @@ class TempoClient:
         if max_duration_ms is not None and max_duration_ms > 0:
             parts.append(f"duration < {max_duration_ms}ms")
         for key, value in (tags or {}).items():
-            if not key:
+            if not key or not _VALID_TAG_KEY_RE.match(key):
                 continue
             parts.append(f'span.{key} = "{_escape_traceql_value(str(value))}"')
         if not parts:

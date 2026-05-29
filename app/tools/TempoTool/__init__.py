@@ -13,9 +13,7 @@ _VALID_ACTIONS = ("search", "get_trace", "list_services", "list_span_names")
 
 
 def _tempo_is_available(sources: dict[str, dict]) -> bool:
-    if tempo_available_or_backend(sources):
-        return True
-    return bool(sources.get("tempo", {}).get("url"))
+    return tempo_available_or_backend(sources)
 
 
 def _tempo_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
