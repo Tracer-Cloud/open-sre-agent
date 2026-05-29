@@ -215,6 +215,12 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "Save the last investigation report to a file path. Requires confirmation.",
         "User asks to export or save the last investigation to disk",
     ),
+    "/sessions": _mcp(
+        "List recent REPL sessions stored on disk. Shows session ID, start time, duration, "
+        "total turns, and investigation count for each session.",
+        "User asks to see past sessions, session history, or what was run in previous sessions",
+        anti_examples=("User asks for the current session status (use /status)",),
+    ),
     "/status": _mcp(
         "Show REPL session status: provider, models, trust mode, and active flags.",
         "User asks for session status",

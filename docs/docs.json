@@ -86,6 +86,7 @@
               "remote-runtime-investigation",
               "masking",
               "interactive-shell-privacy",
+              "sessions",
               "agents",
               "cron",
               "multi-instance-integrations"

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+import uuid
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -11,6 +13,7 @@ if TYPE_CHECKING:
     from app.cli.interactive_shell.alert_inbox import IncomingAlert
 
 from app.cli.interactive_shell.runtime.tasks import TaskRegistry
+from app.cli.interactive_shell.sessions.store import SessionStore
 from app.llm_reasoning_effort import ReasoningEffortChoice
 
 InterventionKind = Literal["ctrl_c", "correction"]
@@ -39,6 +42,12 @@ class ReplSession:
     questions), accumulated infra context (service names, clusters observed),
     trust mode flag, and a short interaction history for /status.
     """
+
+    session_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    """Stable UUID for this session. Rotated on /reset so each logical session gets its own ID."""
+
+    started_at: float = field(default_factory=time.time)
+    """Unix timestamp of when this session (or post-reset sub-session) began."""
 
     history: list[dict[str, Any]] = field(default_factory=list)
     """Each entry has type, text, and ok fields for shell, slash, alert, and chat turns."""
@@ -144,6 +153,7 @@ class ReplSession:
         For "incoming_alert", use record_incoming_alert() instead to preserve metadata.
         """
         self.history.append({"type": kind, "text": text, "ok": ok})
+        SessionStore.append_turn(self, kind, text)
 
     def record_incoming_alert(self, alert: IncomingAlert) -> None:
         """Append a full IncomingAlert with all metadata to session history.
@@ -154,6 +164,7 @@ class ReplSession:
         """
         # Record to history with alert text
         self.history.append({"type": "incoming_alert", "text": alert.text, "ok": True})
+        SessionStore.append_turn(self, "incoming_alert", alert.text)
 
         # Store the full alert object to preserve all metadata
         self.incoming_alerts.append(alert)
@@ -219,6 +230,9 @@ class ReplSession:
         self.pending_prompt_default = None
         self.last_synthetic_observation_path = None
         # trust_mode and reasoning_effort are intentionally preserved across /reset
+        # Rotate session identity so the new post-reset session gets its own ID and file.
+        self.session_id = str(uuid.uuid4())
+        self.started_at = time.time()
 
     def record_intervention(self, kind: InterventionKind) -> None:
         """Increment the per-kind intervention counter (Ctrl-C or correction)."""

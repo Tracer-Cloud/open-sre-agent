@@ -204,9 +204,12 @@ async def run_interactive(
             color_system="truecolor",
             legacy_windows=False,
         )
+        from app.cli.support.output import set_prompt_suppress_fn  # lazy — avoids circular import
+
         show_spinner = dispatch_should_show_spinner(text, session)
         if show_spinner:
             spinner.start()
+            set_prompt_suppress_fn(console.suppress_prompt_spinner)
         try:
             # Commands that take exclusive stdin ownership (e.g. bare
             # ``/investigate`` and other inline pickers) can safely use the
@@ -237,6 +240,7 @@ async def run_interactive(
             report_exception(exc, context="interactive_shell.dispatch_async")
             console.print(f"[{ERROR}]dispatch error:[/] {escape(str(exc))}")
         finally:
+            set_prompt_suppress_fn(None)
             if show_spinner:
                 spinner.stop()
             state.finish_dispatch(dispatch_cancel)
@@ -293,8 +297,23 @@ async def run_interactive(
         prefix = spinner.inline_spinner_ansi() or spinner.idle_hint_ansi()
         return ANSI(f"{prefix}\n{base}")
 
+    async def _spinner_ticker() -> None:
+        # prompt_async's refresh_interval alone is not guaranteed to drive
+        # visible prompt redraws while patch_stdout(raw=True) is active and
+        # the LLM stream is writing rapidly.  This task explicitly invalidates
+        # the prompt at 100 ms intervals so the braille glyph cycles smoothly.
+        _TICK = 0.1
+        while not state.exit_requested:
+            try:
+                await asyncio.sleep(_TICK)
+            except asyncio.CancelledError:
+                return
+            if spinner.streaming:
+                _invalidate_prompt()
+
     processor_task = asyncio.create_task(_processor())
     alert_watcher_task = asyncio.create_task(_alert_watcher())
+    spinner_ticker_task = asyncio.create_task(_spinner_ticker())
     try:
         with patch_stdout(raw=True):
             echo_console = Console(highlight=False, force_terminal=True, color_system="truecolor")
@@ -382,6 +401,7 @@ async def run_interactive(
             pass
         processor_task.cancel()
         alert_watcher_task.cancel()
+        spinner_ticker_task.cancel()
         try:
             await processor_task
         except asyncio.CancelledError:
@@ -396,6 +416,8 @@ async def run_interactive(
             pass
         except Exception as exc:
             log.debug("Alert watcher shutdown raised exception: %s", exc)
+        with contextlib.suppress(asyncio.CancelledError):
+            await spinner_ticker_task
 
 
 __all__ = ["StreamingConsole", "run_interactive"]
