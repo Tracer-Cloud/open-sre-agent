@@ -112,6 +112,7 @@ class ReplDriver:
                 self._proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 self._proc.kill()
+                self._proc.wait()
         if self._master is not None:
             with contextlib.suppress(OSError):
                 os.close(self._master)
