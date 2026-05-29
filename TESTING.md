@@ -6,16 +6,7 @@ See [AGENTS.md](AGENTS.md) for the full repo map and contribution rules.
 
 ---
 
-## Commands
-
-| Goal | Command |
-| --- | --- |
-| Full unit suite + coverage | `make test-cov` |
-| Single RCA scenario | `make test-rca FILE=<fixture>` |
-| All E2E scenarios | `make test-rca` or `make test-full` |
-| Synthetic (no live infra) | `make test-synthetic` |
-
-`make test-cov` is the default local loop — skips live-infra paths (Kubernetes, EKS, chaos) that only run in CI. For pre-push checks (lint, format, typecheck, scoped tests), see [CI.md](CI.md).
+For all test and push commands, see [CI.md](CI.md).
 
 ---
 

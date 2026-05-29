@@ -166,14 +166,7 @@ Basic steps:
 
 ## 4. Testing
 
-Full testing guide: **[TESTING.md](TESTING.md)** — commands, test layout, live REPL testing with `ReplDriver`, routing rules, and CI-only paths.
-
-Quick reference:
-
-- Local unit suite: `make test-cov`
-- E2E / RCA: `make test-rca FILE=<name>`
-- Live REPL behavior (slash commands, session display): use `ReplDriver` — see [TESTING.md § Live REPL Testing](TESTING.md#live-repl-testing--repldriver)
-- Pre-push (lint, format, typecheck, scoped tests): see [CI.md](CI.md)
+Test commands and push checklist: **[CI.md](CI.md)**. Test layout, `ReplDriver` for live REPL verification, routing rules, and CI-only paths: **[TESTING.md](TESTING.md)**.
 
 ## 5. Footguns (common mistakes to avoid)
 
