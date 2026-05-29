@@ -353,3 +353,41 @@ def test_detect_auth_probe_uses_filtered_subprocess_env(
     assert env["GOOGLE_CLOUD_PROJECT"] == "proj-x"
     assert env["GEMINI_API_KEY"] == "gk-test"
     assert "RANDOM_SECRET" not in env
+
+
+def test_antigravity_cli_model_forwarded_to_subprocess() -> None:
+    """ANTIGRAVITY_CLI_MODEL must reach CLI subprocesses via the safe-prefix allowlist."""
+    with patch.dict(
+        os.environ,
+        {
+            "ANTIGRAVITY_CLI_MODEL": "gemini-3.5-flash",
+        },
+        clear=False,
+    ):
+        env = build_cli_subprocess_env(None)
+
+    assert env["ANTIGRAVITY_CLI_MODEL"] == "gemini-3.5-flash"
+
+
+@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/agy")
+def test_antigravity_build_absent_env_uses_defaults(_mock_which: MagicMock) -> None:
+    """When ANTIGRAVITY_CLI_BIN, _MODEL, and _TIMEOUT_SECONDS are all absent, build()
+    resolves the binary via PATH and uses the default 300s timeout."""
+    env_strip = {k: v for k, v in os.environ.items() if not k.startswith("ANTIGRAVITY_CLI_")}
+    with patch.dict(os.environ, env_strip, clear=True):
+        inv = AntigravityCLIAdapter().build(prompt="test prompt", model=None, workspace="")
+
+    assert inv.argv[0] == "/usr/bin/agy"
+    idx = inv.argv.index("--print-timeout")
+    assert inv.argv[idx + 1] == "300s"
+    assert inv.timeout_sec == 310.0
+
+
+@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/agy")
+def test_antigravity_empty_model_env_treated_as_absent(_mock_which: MagicMock) -> None:
+    """An empty ANTIGRAVITY_CLI_MODEL must not produce a --model flag in argv,
+    consistent with how other CLI providers treat empty model env vars."""
+    with patch.dict(os.environ, {"ANTIGRAVITY_CLI_MODEL": ""}, clear=False):
+        inv = AntigravityCLIAdapter().build(prompt="p", model="", workspace="")
+
+    assert "--model" not in inv.argv

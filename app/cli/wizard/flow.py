@@ -298,16 +298,18 @@ def _step_header(n: int, total: int, title: str) -> None:
 
     Rendered output (colour roles):
       ─────────────────────────────────────────  [DIM rule]
-      Step 2/4  —  LLM Provider                  [SECONDARY "Step N/N"] [TEXT title]
+      ●●○○  LLM Provider  2/4                   [BRAND dots] [TEXT title] [SECONDARY counter]
       ─────────────────────────────────────────  [DIM rule]
     """
+    dots = "●" * n + "○" * (total - n)
     _console.print()
     _console.print(Rule(style=DIM))
     header = Text()
     header.append("  ")
-    header.append(f"Step {n}/{total}", style=f"bold {SECONDARY}")
-    header.append("  —  ", style=DIM)
+    header.append(dots, style=f"bold {BRAND}")
+    header.append("  ", style=DIM)
     header.append(title, style=f"bold {TEXT}")
+    header.append(f"  {n}/{total}", style=SECONDARY)
     _console.print(header)
     _console.print(Rule(style=DIM))
 

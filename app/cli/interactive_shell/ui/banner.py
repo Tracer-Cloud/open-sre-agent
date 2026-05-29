@@ -95,7 +95,7 @@ def _render_art(console_width: int = 80) -> str:
     custom_font = os.getenv("OPENSRE_FIGLET_FONT")
     if custom_font:
         try:
-            import pyfiglet  # type: ignore[import-untyped,import-not-found]
+            import pyfiglet
 
             rendered: str = pyfiglet.figlet_format("OpenSRE", font=custom_font).rstrip()
             if rendered and all(len(ln) <= console_width - 2 for ln in rendered.splitlines()):

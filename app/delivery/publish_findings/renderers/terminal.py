@@ -113,7 +113,7 @@ def _render_rich_evidence_item(console: Console, line: str) -> None:
 
 def render_report(slack_message: str, root_cause_category: str | None = None) -> None:
     """Render the final RCA report to terminal."""
-    from app.cli.support.output import stop_display
+    from app.cli.support.output import render_completed_investigation_footer, stop_display
 
     stop_display()
     fmt = get_output_format()
@@ -131,6 +131,10 @@ def render_report(slack_message: str, root_cause_category: str | None = None) ->
         _render_rich_report(slack_message, root_cause_category=root_cause_category)
     else:
         _render_plain_report(slack_message, root_cause_category=root_cause_category)
+
+    # Print the investigation phase footer at the absolute bottom of the
+    # RCA report (without "esc to cancel" — the investigation is complete).
+    render_completed_investigation_footer()
 
 
 def _render_rich_report(slack_message: str, root_cause_category: str | None = None) -> None:

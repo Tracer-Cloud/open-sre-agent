@@ -50,6 +50,7 @@ class ProcessSnapshot:
     num_connections: int | None
     status: str
     started_at: datetime
+    last_output_at: datetime | None = None
 
 
 def pid_exists(pid: int) -> bool:

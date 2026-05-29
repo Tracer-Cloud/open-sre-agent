@@ -38,6 +38,7 @@ concurrency:
 
 jobs:
   prepare:
+    if: github.repository == 'Tracer-Cloud/opensre'
     runs-on: ubuntu-latest
     outputs:
       channel: ${{ steps.meta.outputs.channel }}

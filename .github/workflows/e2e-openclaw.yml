@@ -59,6 +59,7 @@ jobs:
   # this workflow's sole job is the OpenClaw e2e suite. If you reach
   # this workflow, your PR has already cleared the quality gates.
   openclaw-test:
+    if: github.repository == 'Tracer-Cloud/opensre'
     name: openclaw test
     runs-on: ubuntu-latest
     timeout-minutes: 25

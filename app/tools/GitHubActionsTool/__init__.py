@@ -150,7 +150,6 @@ def _normalize_run(run: dict[str, Any]) -> dict[str, Any]:
         "head_branch": run.get("head_branch", ""),
         "head_sha": run.get("head_sha", ""),
         "event": run.get("event", ""),
-        "trigger": run.get("event", ""),
         "status": run.get("status", ""),
         "conclusion": run.get("conclusion", ""),
         "run_number": run.get("run_number"),

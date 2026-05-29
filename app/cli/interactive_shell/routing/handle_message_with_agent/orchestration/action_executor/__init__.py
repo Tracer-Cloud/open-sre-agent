@@ -16,20 +16,20 @@ from __future__ import annotations
 # ``"…action_executor.os.chdir"``, ``"…action_executor.subprocess.Popen"``,
 # ``"…action_executor.threading.Thread"``, ``"…action_executor.time.sleep"``,
 # ``"…action_executor.Path.cwd"``.
-import os  # noqa: F401
-import subprocess  # noqa: F401
-import threading  # noqa: F401
-import time  # noqa: F401
-from pathlib import Path  # noqa: F401
+import os
+import subprocess
+import threading
+import time
+from pathlib import Path
 
 # execute_shell_command is imported here so that the monkeypatch path
 # ``"…action_executor.execute_shell_command"`` resolves in tests. The
 # actual call site in shell_runner.py uses ``_ae_resolve`` to pick up any patch.
-from app.cli.interactive_shell.shell import execute_shell_command  # noqa: F401
+from app.cli.interactive_shell.shell import execute_shell_command
 
 # ClaudeCodeAdapter is imported here so that the monkeypatch path
 # ``"…action_executor.ClaudeCodeAdapter"`` resolves in tests.
-from app.integrations.llm_cli.claude_code import ClaudeCodeAdapter  # noqa: F401
+from app.integrations.llm_cli.claude_code import ClaudeCodeAdapter
 
 from .background_tasks import start_background_cli_task
 from .implementation_runner import run_claude_code_implementation
@@ -86,11 +86,13 @@ __all__ = [
     "CLAUDE_CODE_IMPLEMENTATION_TIMEOUT_SECONDS",
     "SHELL_COMMAND_TIMEOUT_SECONDS",
     "SYNTHETIC_TEST_TIMEOUT_SECONDS",
+    "ClaudeCodeAdapter",
     "OpensreCommandClass",
     "OpensreExecutionMode",
     "OpensreExecutionPlan",
     "OpensreRunOutcome",
     "OpensreRunResult",
+    "Path",
     "_INTERACTIVE_OPENSRE_COMMAND_PATHS",
     "_MAX_COMMAND_OUTPUT_CHARS",
     "_MIN_SUBPROCESS_TERMINAL_WIDTH",
@@ -116,6 +118,8 @@ __all__ = [
     "_start_task_output_streams",
     "_subprocess_env_with_aligned_width",
     "_try_bind_synthetic_observation",
+    "execute_shell_command",
+    "os",
     "print_interactive_wizard_handoff",
     "read_diag",
     "run_claude_code_implementation",
@@ -128,6 +132,9 @@ __all__ = [
     "run_shell_command",
     "run_synthetic_test",
     "start_background_cli_task",
+    "subprocess",
     "terminate_child_process",
+    "threading",
+    "time",
     "watch_synthetic_subprocess",
 ]

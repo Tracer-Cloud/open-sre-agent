@@ -358,7 +358,7 @@ test-cov:
 # Run only the tests relevant to files changed on this branch (local use only).
 # Pass ARGS=--dry-run to preview the command without executing it.
 test-scope:
-	$(PYTHON) scripts/run_scoped_tests.py --base main $(ARGS)
+	$(PYTHON) infra/ci/run_test_scope.py --base main $(ARGS)
 
 # Run the CLI smoke suite against the installed opensre entrypoint.
 test-cli-smoke:

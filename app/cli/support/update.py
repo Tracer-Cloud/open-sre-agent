@@ -130,7 +130,7 @@ def run_update(*, check_only: bool = False, yes: bool = False) -> int:
 
     print(f"  current: {current}")
     print(f"  latest:  {latest}")
-    print(f"  release: {_RELEASE_URL.format(latest)}")
+    print("  release: " + _RELEASE_URL.format(latest))
 
     if check_only:
         return 1
@@ -155,7 +155,7 @@ def run_update(*, check_only: bool = False, yes: bool = False) -> int:
     rc = _upgrade_via_install_script(latest)
     if rc == 0:
         print(f"  updated: {current} -> {latest}")
-        print(f"  release notes: {_RELEASE_URL.format(latest)}")
+        print("  release notes: " + _RELEASE_URL.format(latest))
     else:
         print(f"  install script failed (exit {rc}).", file=sys.stderr)
         if _is_windows():

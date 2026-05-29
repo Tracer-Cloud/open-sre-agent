@@ -46,7 +46,7 @@ def _call_llm(sanitised_text: str, session: Any) -> str | None:
         )
         return None
 
-    prompt = f"{_system_prompt()}\n\n{_USER_TEMPLATE.format(text=sanitised_text)}"
+    prompt = _system_prompt() + "\n\n" + _USER_TEMPLATE.format(text=sanitised_text)
     try:
         client = get_llm_for_classification().bind_tools(_tool_specs_for_provider(session))
         response = client.invoke(prompt)

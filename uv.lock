@@ -2017,7 +2017,7 @@ requires-dist = [
     { name = "httpx", extras = ["socks"], specifier = ">=0.27.0" },
     { name = "huggingface-hub", marker = "extra == 'dev'", specifier = ">=0.26.0" },
     { name = "huggingface-hub", marker = "extra == 'opensre-hub'", specifier = ">=0.26.0" },
-    { name = "keyring" },
+    { name = "keyring", specifier = ">=23.0.1" },
     { name = "kubernetes", specifier = ">=28.1.0" },
     { name = "mcp", specifier = ">=1.27.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10.0" },
