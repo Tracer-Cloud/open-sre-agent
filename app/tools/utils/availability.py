@@ -77,7 +77,7 @@ def tempo_available_or_backend(sources: dict[str, dict]) -> bool:
     tempo = sources.get("tempo", {})
     if tempo.get("_backend"):
         return True
-    return bool(tempo.get("connection_verified") and tempo.get("url"))
+    return bool(tempo.get("url"))
 
 
 def hermes_available_or_backend(sources: dict[str, dict]) -> bool:
