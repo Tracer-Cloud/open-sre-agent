@@ -86,6 +86,20 @@ make verify-integrations
 
 You may run `make check` as a final pass, but it is heavier (`test-full`) than the required harness.
 
+## 6) Routing tests
+
+Routing live tests always run with live coverage enabled. Do not use deselection filters like `-k "not live_llm"`. Fix failures by improving planner/tool correctness or updating fixtures only when behavior changes are explicitly approved.
+
+## 7) CI-only tests
+
+Some paths require live infrastructure and are excluded from `make test-cov`:
+
+- Kubernetes / EKS scenarios (`tests/e2e/`)
+- Chaos Mesh workflows (`tests/chaos_engineering/`)
+- Docker-dependent Grafana stack tests
+
+Mark CI-only tests with the appropriate pytest marker or place them in the correct folder so they do not run locally by default.
+
 ## Precedence
 
 If readiness instructions conflict across docs, **this file wins** for push/PR checks.

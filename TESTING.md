@@ -1,40 +1,14 @@
-# Testing Guide
-
-Reference for the opensre test suite: what to run, where tests live, and how to verify interactive REPL behavior.
-
-See [AGENTS.md](AGENTS.md) for the full repo map and contribution rules.
-
----
-
-For all test and push commands, see [CI.md](CI.md).
-
----
-
-## Test Layout
-
-Tests are organized by capability boundary, not by framework:
-
-| Path | What it covers |
-| --- | --- |
-| `tests/cli/` | CLI behavior, REPL commands, smoke tests |
-| `tests/cli/interactive_shell/sessions/` | Session store, `/sessions`, `/resume` |
-| `tests/tools/` | Tool behavior, registry, schema validation |
-| `tests/integrations/` | Integration config, verification, store, selectors |
-| `tests/e2e/` | Live end-to-end scenarios against real services |
-| `tests/synthetic/` | Fixture-driven RCA with no live infrastructure |
-| `tests/deployment/` | Deployment validation and lifecycle |
-| `tests/chaos_engineering/` | Chaos experiments |
-| `tests/utils/` | Shared test utilities and fixtures |
-
----
-
-## Live REPL Testing — `ReplDriver`
+# Live REPL Testing — `ReplDriver`
 
 Some interactive shell behavior cannot be covered by unit tests with mocked consoles: rendered table layout, slash command output, session display, `/resume` confirmation messages. Use `ReplDriver` for these.
 
 **Location:** `tests/utils/repl_driver.py`
 
-### How it works
+For test commands and CI checks, see [CI.md](CI.md).
+
+---
+
+## How it works
 
 `ReplDriver` uses Python's built-in `pty` module to create a pseudo-terminal. The REPL process sees a real TTY (so `prompt_toolkit` starts normally and `sys.stdin.isatty()` passes), while the test controls the master end — writing commands and reading rendered output.
 
@@ -45,7 +19,7 @@ test ◀──read───  master fd  ◀──  opensre renders via prompt_to
 
 ANSI escape codes are stripped before storing output, so assertions work on plain text.
 
-### Basic usage
+## Basic usage
 
 ```python
 from tests.utils.repl_driver import ReplDriver
@@ -62,7 +36,7 @@ def test_resume_restores_context():
 
 `ReplDriver` sends `/exit` automatically on `__exit__`.
 
-### API
+## API
 
 | Method / Property | Description |
 | --- | --- |
@@ -75,26 +49,26 @@ def test_resume_restores_context():
 | `lines()` | Non-empty visible lines from `text` |
 | `reset_output()` | Clear captured output between test phases |
 
-### Choosing wait times
+## Choosing wait times
 
 | Command type | `wait` |
 | --- | --- |
 | Slash commands (`/sessions`, `/resume`, `/status`) | `2.0–3.0s` |
 | LLM-backed commands (avoid in automated tests) | `15–25s` |
 
-### When to use ReplDriver
+## When to use
 
 ✅ Adding or changing a slash command → verify rendered output  
 ✅ Session management (`/sessions`, `/resume`, `/reset`) → verify display  
 ✅ Banner or prompt formatting changes → screenshot / string check  
 
-### When NOT to use ReplDriver
+## When NOT to use
 
 ❌ Logic testable with a mocked `Console` — keep those in `tests/cli/`  
 ❌ Storage / state correctness — use `tmp_path` + `SessionStore` directly  
 ❌ Tests that need a real LLM response — latency makes pty timing unreliable; use `make test-rca` instead  
 
-### Two-phase pattern
+## Two-phase pattern
 
 For features that touch both storage and display, test each layer separately:
 
@@ -114,26 +88,8 @@ with ReplDriver() as repl:
     assert repl.contains("conversation context loaded")
 ```
 
-### Limitations
+## Limitations
 
 - `prompt_toolkit` may drop characters typed before the input loop is ready. The default `startup_wait=6.0s` covers normal startup; increase on slow machines.
 - ANSI stripping is regex-based — exotic escape sequences may leave artifacts. Check `repl.text` if an assertion unexpectedly fails.
 - The driver shares the host's `~/.opensre/sessions/` directory. Use a patched `_sessions_dir` in storage tests to avoid cross-test contamination.
-
----
-
-## Routing Tests
-
-Routing live tests always run with live coverage enabled. Do not use deselection filters like `-k "not live_llm"`. Fix failures by improving planner/tool correctness or updating fixtures only when behavior changes are explicitly approved.
-
----
-
-## CI-Only Tests
-
-Some paths require live infrastructure and are excluded from `make test-cov`:
-
-- Kubernetes / EKS scenarios (`tests/e2e/`)
-- Chaos Mesh workflows (`tests/chaos_engineering/`)
-- Docker-dependent Grafana stack tests
-
-Mark CI-only tests with the appropriate pytest marker or place them in the correct folder so they do not run locally by default.

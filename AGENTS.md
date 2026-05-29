@@ -29,7 +29,7 @@ Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typec
 | `docs/investigation-tool-calling.md` | Investigation ReAct tool schemas, LLM invoke payloads, and message shapes (all providers). |
 | `SETUP.md`            | Machine setup (all platforms, Windows, MCP/OpenClaw, troubleshooting).                             |
 | `CI.md`               | Mandatory pre-push checklist: lint, format, typecheck, tests — agents MUST follow before pushing. |
-| `TESTING.md`          | Test layout, `ReplDriver` for live REPL verification, routing rules, and CI-only path notes.      |
+| `TESTING.md`          | `ReplDriver` reference: API, usage patterns, wait-time guide, and limitations.                    |
 | `CONTRIBUTING.md`     | Contribution workflow, branch/PR guidance, and quality expectations.                               |
 
 `app/` one level deeper:
@@ -146,7 +146,7 @@ Basic steps:
 
 ## 4. Testing
 
-Test commands and push checklist: **[CI.md](CI.md)**. Test layout, `ReplDriver` for live REPL verification, routing rules, and CI-only paths: **[TESTING.md](TESTING.md)**.
+Test commands, routing rules, CI-only paths: **[CI.md](CI.md)**. Live REPL testing with `ReplDriver`: **[TESTING.md](TESTING.md)**.
 
 ## 5. Footguns (common mistakes to avoid)
 
