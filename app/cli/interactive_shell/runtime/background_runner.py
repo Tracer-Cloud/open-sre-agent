@@ -94,13 +94,13 @@ def _start_background_investigation(
 ) -> str:
     task = session.task_registry.create(TaskKind.INVESTIGATION, command=display_command)
     task.mark_running()
-    session.background_investigations[task.task_id] = _build_record(
+    record = _build_record(
         task_id=task.task_id,
         command=display_command,
     )
+    session.background_investigations[task.task_id] = record
 
     def _worker() -> None:
-        record = session.background_investigations[task.task_id]
         try:
             final_state = run_fn(cancel_requested=task.cancel_requested, **kwargs)
             root = str(final_state.get("root_cause") or "")
