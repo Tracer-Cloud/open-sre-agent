@@ -354,26 +354,13 @@ def _interactive_resume_menu(session: ReplSession, console: Console) -> bool:
     return _do_resume(picked, session, console)
 
 
-def _do_resume(prefix: str, session: ReplSession, console: Console) -> bool:
-    """Load session by ID prefix and restore context into the running session."""
-    from app.cli.interactive_shell.sessions.store import SessionStore
-
-    data = SessionStore.load_session(prefix)
-    if data is None:
-        n = SessionStore.count_prefix_matches(prefix)
-        if n > 1:
-            console.print(
-                f"[{WARNING}]ambiguous prefix '{escape(prefix)}' matches {n} sessions — "
-                "use more characters.[/]"
-            )
-        else:
-            console.print(f"[{ERROR}]session '{escape(prefix)}' not found.[/]")
-        return True
-
+def _apply_resume_data(data: dict, session: ReplSession, console: Console) -> bool:
+    """Apply loaded session data into the running session and print a summary."""
     messages = data.get("cli_agent_messages") or []
     context = data.get("accumulated_context") or {}
+    history = data.get("history") or []
     has_snapshot = data.get("has_snapshot", False)
-    sid = data.get("session_id", prefix)
+    sid = data.get("session_id", "")
     short_id = sid[:8] if len(sid) >= 8 else sid
     name = data.get("name") or ""
 
@@ -395,8 +382,15 @@ def _do_resume(prefix: str, session: ReplSession, console: Console) -> bool:
             "they will be replaced by the resumed context.[/]"
         )
 
+    # Restore LLM conversation thread so the next prompt has full prior context.
     session.cli_agent_messages = list(messages)
+
+    # Restore infra context (service, cluster, region) accumulated in old session.
     session.accumulated_context = dict(context)
+
+    # Restore turn stubs into history so /status shows prior interaction count.
+    if history:
+        session.history = list(history) + session.history
 
     source = "snapshot" if has_snapshot else "turn records"
     name_str = f" · {escape(name)}" if name else ""
@@ -411,6 +405,24 @@ def _do_resume(prefix: str, session: ReplSession, console: Console) -> bool:
         )
     console.print(f"[{DIM}]conversation context loaded — continue asking questions.[/]")
     return True
+
+
+def _do_resume(prefix: str, session: ReplSession, console: Console) -> bool:
+    """Load session by ID prefix and restore context into the running session."""
+    from app.cli.interactive_shell.sessions.store import SessionStore
+
+    data = SessionStore.load_session(prefix)
+    if data is None:
+        n = SessionStore.count_prefix_matches(prefix)
+        if n > 1:
+            console.print(
+                f"[{WARNING}]ambiguous prefix '{escape(prefix)}' matches {n} sessions — "
+                "use more characters.[/]"
+            )
+        else:
+            console.print(f"[{ERROR}]session '{escape(prefix)}' not found.[/]")
+        return True
+    return _apply_resume_data(data, session, console)
 
 
 def _cmd_resume(session: ReplSession, console: Console, args: list[str]) -> bool:
@@ -457,48 +469,7 @@ def _cmd_resume(session: ReplSession, console: Console, args: list[str]) -> bool
             console.print(f"[{ERROR}]session '{escape(prefix)}' not found.[/]")
         return True
 
-    # Restore the loaded session into the current session.
-    messages = data.get("cli_agent_messages") or []
-    context = data.get("accumulated_context") or {}
-    has_snapshot = data.get("has_snapshot", False)
-    sid = data.get("session_id", prefix)
-    short_id = sid[:8] if len(sid) >= 8 else sid
-    name = data.get("name") or ""
-
-    if not messages and not context:
-        console.print(
-            f"[{DIM}]session {short_id} has no conversation to resume "
-            "(no chat turns or context found).[/]"
-        )
-        if not data.get("turn_details") and not has_snapshot:
-            console.print(
-                f"[{DIM}]tip: turn_detail records are only written when prompt logging is enabled.[/]"
-            )
-        return True
-
-    existing = session.cli_agent_messages
-    if existing:
-        console.print(
-            f"[{WARNING}]current session has {len(existing)} messages — "
-            "they will be replaced by the resumed context.[/]"
-        )
-
-    session.cli_agent_messages = list(messages)
-    session.accumulated_context = dict(context)
-
-    source = "snapshot" if has_snapshot else "turn records"
-    name_str = f" · {escape(name)}" if name else ""
-    console.print(
-        f"[{HIGHLIGHT}]resumed session {short_id}{name_str}[/] "
-        f"[{DIM}]({len(messages)} messages from {source})[/]"
-    )
-    if context:
-        console.print(
-            f"[{DIM}]accumulated context restored:[/] "
-            + ", ".join(f"{escape(k)}={escape(str(v))}" for k, v in sorted(context.items()))
-        )
-    console.print(f"[{DIM}]conversation context loaded — continue asking questions.[/]")
-    return True
+    return _apply_resume_data(data, session, console)
 
 
 COMMANDS: list[SlashCommand] = [

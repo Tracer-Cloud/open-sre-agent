@@ -30,6 +30,11 @@ if TYPE_CHECKING:
 
 _NAME_MAX_CHARS = 50
 
+# Turn kinds that represent user-initiated chat messages.  session.record() is
+# called with the route kind, not a normalised "chat" label, so this set must
+# cover all routes that produce conversational turns.
+_CHAT_KINDS: frozenset[str] = frozenset({"chat", "cli_agent", "cli_help", "follow_up"})
+
 
 def _sessions_dir() -> Path:
     from app.constants import OPENSRE_HOME_DIR
@@ -51,19 +56,18 @@ def _derive_name(lines: list[str]) -> str:
     for line in lines[1:]:
         with contextlib.suppress(json.JSONDecodeError):
             rec = json.loads(line)
-            if rec.get("type") == "turn_detail" and rec.get("kind") in (
-                "chat",
-                "alert",
-                "follow_up",
-            ):
+            if rec.get("type") == "turn_detail" and rec.get("kind") in _CHAT_KINDS | {"alert"}:
                 text = (rec.get("prompt") or "").strip().replace("\n", " ")
                 if text:
                     return text[:_NAME_MAX_CHARS] + ("…" if len(text) > _NAME_MAX_CHARS else "")
-    # Fall back to turn stub text
+    # Fall back to turn stub text (covers cli_agent/cli_help/follow_up/alert kinds)
     for line in lines[1:]:
         with contextlib.suppress(json.JSONDecodeError):
             rec = json.loads(line)
-            if rec.get("type") == "turn" and rec.get("kind") in ("chat", "alert", "incoming_alert"):
+            if rec.get("type") == "turn" and rec.get("kind") in _CHAT_KINDS | {
+                "alert",
+                "incoming_alert",
+            }:
                 text = (rec.get("text") or "").strip().replace("\n", " ")
                 if text:
                     return text[:_NAME_MAX_CHARS] + ("…" if len(text) > _NAME_MAX_CHARS else "")
@@ -187,7 +191,7 @@ class SessionStore:
                     if rec_type == "turn":
                         total_turns += 1
                         kind = rec.get("kind", "")
-                        if kind == "chat":
+                        if kind in _CHAT_KINDS:
                             chat_turns += 1
                         elif kind in ("alert", "incoming_alert"):
                             investigation_turns += 1

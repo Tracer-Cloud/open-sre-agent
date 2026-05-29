@@ -161,6 +161,22 @@ def test_flush_writes_session_end(tmp_path: Path) -> None:
     assert end["investigation_turns"] == 1
 
 
+def test_flush_counts_cli_agent_turns_as_chat(tmp_path: Path) -> None:
+    """execution.py records kind='cli_agent' for chat turns — must count as chat_turns."""
+    session = _make_session()
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        SessionStore.append_turn(session, "cli_agent", "why is redis slow?")
+        SessionStore.append_turn(session, "cli_help", "how do I use /resume?")
+        SessionStore.append_turn(session, "follow_up", "what else?")
+        SessionStore.flush(session)
+
+    records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
+    end = records[-1]
+    assert end["chat_turns"] == 3
+    assert end["investigation_turns"] == 0
+
+
 def test_flush_writes_conversation_snapshot_when_messages_present(tmp_path: Path) -> None:
     session = _make_session()
     session.cli_agent_messages = [("user", "hello"), ("assistant", "hi there")]
@@ -472,6 +488,18 @@ def test_load_recent_derives_name_from_turn_detail(tmp_path: Path) -> None:
         results = SessionStore.load_recent()
 
     assert results[0]["name"] == "why is redis slow?"
+
+
+def test_load_recent_derives_name_from_cli_agent_turn(tmp_path: Path) -> None:
+    """execution.py calls session.record('cli_agent', text) for real chat turns."""
+    session = _make_session()
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        SessionStore.append_turn(session, "cli_agent", "debug the OOM killer on prod")
+
+        results = SessionStore.load_recent()
+
+    assert results[0]["name"] == "debug the OOM killer on prod"
 
 
 def test_load_recent_derives_name_from_turn_stub_when_no_detail(tmp_path: Path) -> None:
