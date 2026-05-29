@@ -1327,9 +1327,7 @@ class TestInvestigateFileCommand:
 class TestResumeCommand:
     """Tests for /resume command — session rotation and context restoration."""
 
-    def test_apply_resume_rotates_session_and_restores_context(
-        self, tmp_path: Path
-    ) -> None:
+    def test_apply_resume_rotates_session_and_restores_context(self, tmp_path: Path) -> None:
         """_apply_resume_data must flush the current session, rotate to a new one,
         and restore cli_agent_messages + accumulated_context from the old session."""
         import json
@@ -1404,9 +1402,7 @@ class TestResumeCommand:
         assert session.session_id == old_id
         assert "no conversation to resume" in buf.getvalue()
 
-    def test_apply_resume_displays_history_in_repl_format(
-        self, tmp_path: Path
-    ) -> None:
+    def test_apply_resume_displays_history_in_repl_format(self, tmp_path: Path) -> None:
         """History display must use `❯ user` / `● assistant` REPL format rather
         than the old `you / sre` compact text format."""
         from unittest.mock import patch
