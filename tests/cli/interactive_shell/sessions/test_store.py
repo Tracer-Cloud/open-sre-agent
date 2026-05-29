@@ -593,6 +593,30 @@ def test_load_session_matches_full_id(tmp_path: Path) -> None:
     assert data["session_id"] == session.session_id
 
 
+# ── flush resilience ─────────────────────────────────────────────────────────
+
+
+def test_flush_writes_session_end_even_when_snapshot_serialization_fails(
+    tmp_path: Path,
+) -> None:
+    """P1: a snapshot serialization failure must not prevent session_end from being written."""
+    session = _make_session()
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        session.record("chat", "hello")
+        # Inject a non-JSON-serializable value into accumulated_context so
+        # json.dumps(snapshot) raises TypeError inside the inner suppress block.
+        session.accumulated_context["bad"] = object()  # type: ignore[assignment]
+
+        SessionStore.flush(session)
+
+    records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
+    types = [r["type"] for r in records]
+    # snapshot may be absent (serialization failed), but session_end must be present.
+    assert "session_end" in types
+    assert records[-1]["type"] == "session_end"
+
+
 # ── /new lifecycle ────────────────────────────────────────────────────────────
 
 
