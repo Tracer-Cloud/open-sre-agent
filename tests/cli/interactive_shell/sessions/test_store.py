@@ -457,6 +457,74 @@ def test_load_session_includes_history_and_turn_details(tmp_path: Path) -> None:
     assert data["turn_details"][0]["response"] == "hi"
 
 
+# ── session name derivation ───────────────────────────────────────────────────
+
+
+def test_load_recent_derives_name_from_turn_detail(tmp_path: Path) -> None:
+    session = _make_session()
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        SessionStore.append_turn(session, "chat", "why is redis slow?")
+        SessionStore.append_turn_detail(
+            session.session_id, "chat", "why is redis slow?", response="It's a memory issue"
+        )
+
+        results = SessionStore.load_recent()
+
+    assert results[0]["name"] == "why is redis slow?"
+
+
+def test_load_recent_derives_name_from_turn_stub_when_no_detail(tmp_path: Path) -> None:
+    session = _make_session()
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        SessionStore.append_turn(session, "alert", "HighCPU on prod-api-1")
+
+        results = SessionStore.load_recent()
+
+    assert results[0]["name"] == "HighCPU on prod-api-1"
+
+
+def test_load_recent_name_truncated_at_50_chars(tmp_path: Path) -> None:
+    session = _make_session()
+    long_prompt = "a" * 60
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        SessionStore.append_turn(session, "chat", long_prompt)
+
+        results = SessionStore.load_recent()
+
+    assert results[0]["name"] == "a" * 50 + "…"
+
+
+def test_load_recent_name_empty_for_slash_only_session(tmp_path: Path) -> None:
+    sid = str(uuid.uuid4())
+    (tmp_path / f"{sid}.jsonl").write_text(
+        json.dumps(
+            {"type": "session_start", "session_id": sid, "started_at": "2024-01-01T10:00:00+00:00"}
+        )
+        + "\n"
+        + json.dumps({"type": "turn", "kind": "slash", "text": "/status"})
+        + "\n"
+    )
+    with _patch_dir(tmp_path):
+        results = SessionStore.load_recent()
+    assert results[0]["name"] == ""
+
+
+def test_load_session_includes_name(tmp_path: Path) -> None:
+    session = _make_session()
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        SessionStore.append_turn(session, "chat", "debug the OOM killer")
+        SessionStore.flush(session)
+
+        data = SessionStore.load_session(session.session_id[:8])
+
+    assert data is not None
+    assert data["name"] == "debug the OOM killer"
+
+
 def test_count_prefix_matches_returns_correct_count(tmp_path: Path) -> None:
     for _ in range(3):
         sid = str(uuid.uuid4())

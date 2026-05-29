@@ -244,6 +244,18 @@ _EFFORT_FIRST_ARGS: tuple[tuple[str, str], ...] = (
 )
 
 
+def _format_duration(duration_secs: int | None) -> str:
+    if duration_secs is None:
+        return "—"
+    if duration_secs < 60:
+        return f"{duration_secs}s"
+    if duration_secs < 3600:
+        return f"{duration_secs // 60}m {duration_secs % 60}s"
+    h = duration_secs // 3600
+    m = (duration_secs % 3600) // 60
+    return f"{h}h {m}m"
+
+
 def _cmd_sessions(session: ReplSession, console: Console, _args: list[str]) -> bool:
     from datetime import UTC, datetime
 
@@ -257,6 +269,7 @@ def _cmd_sessions(session: ReplSession, console: Console, _args: list[str]) -> b
     table = repl_table(title="Recent sessions\n", title_style=BOLD_BRAND)
     table.add_column("#", style="bold", justify="right")
     table.add_column("Session ID", style="bold")
+    table.add_column("Name")
     table.add_column("Started")
     table.add_column("Duration")
     table.add_column("Turns", justify="right")
@@ -266,6 +279,12 @@ def _cmd_sessions(session: ReplSession, console: Console, _args: list[str]) -> b
         sid = entry["session_id"]
         short_id = sid[:8] if len(sid) >= 8 else sid
         is_current = sid == session.session_id
+
+        name = entry.get("name") or ""
+        if is_current:
+            name_col = f"[{DIM}](current)[/]" if not name else f"{escape(name)} [{DIM}](current)[/]"
+        else:
+            name_col = escape(name) if name else f"[{DIM}]—[/]"
 
         started_raw = entry.get("started_at") or ""
         try:
@@ -286,26 +305,15 @@ def _cmd_sessions(session: ReplSession, console: Console, _args: list[str]) -> b
             except Exception:
                 pass
 
-        if duration_secs is None:
-            duration_str = "—"
-        elif duration_secs < 60:
-            duration_str = f"{duration_secs}s"
-        elif duration_secs < 3600:
-            duration_str = f"{duration_secs // 60}m {duration_secs % 60}s"
-        else:
-            h = duration_secs // 3600
-            m = (duration_secs % 3600) // 60
-            duration_str = f"{h}h {m}m"
-
         total = entry.get("total_turns")
         investigations = entry.get("investigation_turns")
-        sid_col = f"{short_id} [{HIGHLIGHT}](current)[/]" if is_current else short_id
 
         table.add_row(
             str(i),
-            sid_col,
+            short_id,
+            name_col,
             started_str,
-            duration_str,
+            _format_duration(duration_secs),
             str(total) if total is not None else "—",
             str(investigations) if investigations is not None else "—",
         )
@@ -314,19 +322,44 @@ def _cmd_sessions(session: ReplSession, console: Console, _args: list[str]) -> b
     return True
 
 
-def _cmd_resume(session: ReplSession, console: Console, args: list[str]) -> bool:
+def _interactive_resume_menu(session: ReplSession, console: Console) -> bool:
+    """Show a numbered list of recent sessions and resume the selected one."""
+    from datetime import datetime
+
     from app.cli.interactive_shell.sessions.store import SessionStore
 
-    if not args:
-        console.print(f"[{DIM}]usage: /resume <session-id-prefix>[/]")
-        console.print(f"[{DIM}]run /sessions to list session IDs.[/]")
+    entries = [e for e in SessionStore.load_recent(10) if e["session_id"] != session.session_id]
+    if not entries:
+        console.print(f"[{DIM}]No previous sessions to resume.[/]")
         return True
 
-    prefix = args[0].strip()
-    data = SessionStore.load_session(prefix)
+    choices: list[tuple[str, str]] = []
+    for entry in entries:
+        sid = entry["session_id"]
+        short_id = sid[:8]
+        name = entry.get("name") or f"[{short_id}]"
+        started_raw = entry.get("started_at") or ""
+        try:
+            started_str = datetime.fromisoformat(started_raw).astimezone().strftime("%m-%d %H:%M")
+        except Exception:
+            started_str = "—"
+        label = f"{name[:40]:<40}  {short_id}  {started_str}"
+        choices.append((sid, label))
+    choices.append(("done", "done"))
 
+    picked = repl_choose_one(title="resume session", breadcrumb="/resume", choices=choices)
+    if picked is None or picked == "done":
+        return True
+
+    return _do_resume(picked, session, console)
+
+
+def _do_resume(prefix: str, session: ReplSession, console: Console) -> bool:
+    """Load session by ID prefix and restore context into the running session."""
+    from app.cli.interactive_shell.sessions.store import SessionStore
+
+    data = SessionStore.load_session(prefix)
     if data is None:
-        # Distinguish "not found" from "ambiguous prefix" using a single store query.
         n = SessionStore.count_prefix_matches(prefix)
         if n > 1:
             console.print(
@@ -342,6 +375,7 @@ def _cmd_resume(session: ReplSession, console: Console, args: list[str]) -> bool
     has_snapshot = data.get("has_snapshot", False)
     sid = data.get("session_id", prefix)
     short_id = sid[:8] if len(sid) >= 8 else sid
+    name = data.get("name") or ""
 
     if not messages and not context:
         console.print(
@@ -354,7 +388,6 @@ def _cmd_resume(session: ReplSession, console: Console, args: list[str]) -> bool
             )
         return True
 
-    # Warn if replacing an active conversation — cli_agent_messages is fully replaced.
     existing = session.cli_agent_messages
     if existing:
         console.print(
@@ -366,14 +399,103 @@ def _cmd_resume(session: ReplSession, console: Console, args: list[str]) -> bool
     session.accumulated_context = dict(context)
 
     source = "snapshot" if has_snapshot else "turn records"
+    name_str = f" · {escape(name)}" if name else ""
     console.print(
-        f"[{HIGHLIGHT}]resumed session {short_id}[/] "
+        f"[{HIGHLIGHT}]resumed session {short_id}{name_str}[/] "
         f"[{DIM}]({len(messages)} messages from {source})[/]"
     )
     if context:
         console.print(
             f"[{DIM}]accumulated context restored:[/] "
-            + ", ".join(f"{k}={escape(str(v))}" for k, v in sorted(context.items()))
+            + ", ".join(f"{escape(k)}={escape(str(v))}" for k, v in sorted(context.items()))
+        )
+    console.print(f"[{DIM}]conversation context loaded — continue asking questions.[/]")
+    return True
+
+
+def _cmd_resume(session: ReplSession, console: Console, args: list[str]) -> bool:
+    if not args and repl_tty_interactive():
+        return _interactive_resume_menu(session, console)
+
+    if not args:
+        console.print(f"[{DIM}]usage: /resume <session-id-prefix>[/]")
+        console.print(f"[{DIM}]run /sessions to list session IDs.[/]")
+        return True
+
+    prefix = args[0].strip()
+    data = None
+
+    # Try ID prefix first, then fall back to name substring match
+    from app.cli.interactive_shell.sessions.store import SessionStore
+
+    data = SessionStore.load_session(prefix)
+    if data is None and len(prefix) >= 3:
+        # Name substring match — find sessions whose derived name contains the query
+        candidates = [
+            e
+            for e in SessionStore.load_recent(20)
+            if prefix.lower() in (e.get("name") or "").lower()
+            and e["session_id"] != session.session_id
+        ]
+        if len(candidates) == 1:
+            data = SessionStore.load_session(candidates[0]["session_id"])
+        elif len(candidates) > 1:
+            console.print(
+                f"[{WARNING}]'{escape(prefix)}' matches {len(candidates)} sessions by name — "
+                "use a session ID prefix or be more specific.[/]"
+            )
+            return True
+
+    if data is None:
+        n = SessionStore.count_prefix_matches(prefix)
+        if n > 1:
+            console.print(
+                f"[{WARNING}]ambiguous prefix '{escape(prefix)}' matches {n} sessions — "
+                "use more characters.[/]"
+            )
+        else:
+            console.print(f"[{ERROR}]session '{escape(prefix)}' not found.[/]")
+        return True
+
+    # Restore the loaded session into the current session.
+    messages = data.get("cli_agent_messages") or []
+    context = data.get("accumulated_context") or {}
+    has_snapshot = data.get("has_snapshot", False)
+    sid = data.get("session_id", prefix)
+    short_id = sid[:8] if len(sid) >= 8 else sid
+    name = data.get("name") or ""
+
+    if not messages and not context:
+        console.print(
+            f"[{DIM}]session {short_id} has no conversation to resume "
+            "(no chat turns or context found).[/]"
+        )
+        if not data.get("turn_details") and not has_snapshot:
+            console.print(
+                f"[{DIM}]tip: turn_detail records are only written when prompt logging is enabled.[/]"
+            )
+        return True
+
+    existing = session.cli_agent_messages
+    if existing:
+        console.print(
+            f"[{WARNING}]current session has {len(existing)} messages — "
+            "they will be replaced by the resumed context.[/]"
+        )
+
+    session.cli_agent_messages = list(messages)
+    session.accumulated_context = dict(context)
+
+    source = "snapshot" if has_snapshot else "turn records"
+    name_str = f" · {escape(name)}" if name else ""
+    console.print(
+        f"[{HIGHLIGHT}]resumed session {short_id}{name_str}[/] "
+        f"[{DIM}]({len(messages)} messages from {source})[/]"
+    )
+    if context:
+        console.print(
+            f"[{DIM}]accumulated context restored:[/] "
+            + ", ".join(f"{escape(k)}={escape(str(v))}" for k, v in sorted(context.items()))
         )
     console.print(f"[{DIM}]conversation context loaded — continue asking questions.[/]")
     return True
@@ -418,7 +540,8 @@ COMMANDS: list[SlashCommand] = [
         usage=("/resume <session-id-prefix>",),
         notes=(
             "Restores cli_agent_messages and accumulated infra context from the chosen session.",
-            "The first 8 characters of a session ID (shown by /sessions) are enough.",
+            "Bare /resume opens an interactive session picker in a TTY.",
+            "Accepts a session ID prefix or a name substring (e.g. /resume redis).",
             "Replaces the current session's LLM conversation context; warns if messages exist.",
         ),
     ),

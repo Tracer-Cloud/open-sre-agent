@@ -28,6 +28,9 @@ if TYPE_CHECKING:
     from app.cli.interactive_shell.runtime.session import ReplSession
 
 
+_NAME_MAX_CHARS = 50
+
+
 def _sessions_dir() -> Path:
     from app.constants import OPENSRE_HOME_DIR
 
@@ -36,6 +39,35 @@ def _sessions_dir() -> Path:
 
 def _session_path(session_id: str) -> Path:
     return _sessions_dir() / f"{session_id}.jsonl"
+
+
+def _derive_name(lines: list[str]) -> str:
+    """Derive a human-readable session name from the first substantive turn.
+
+    Prefers turn_detail.prompt (full text) over the turn stub. Falls back
+    to the session ID stem if no usable turn exists.
+    """
+    # Prefer first turn_detail (has full prompt, no truncation)
+    for line in lines[1:]:
+        with contextlib.suppress(json.JSONDecodeError):
+            rec = json.loads(line)
+            if rec.get("type") == "turn_detail" and rec.get("kind") in (
+                "chat",
+                "alert",
+                "follow_up",
+            ):
+                text = (rec.get("prompt") or "").strip().replace("\n", " ")
+                if text:
+                    return text[:_NAME_MAX_CHARS] + ("…" if len(text) > _NAME_MAX_CHARS else "")
+    # Fall back to turn stub text
+    for line in lines[1:]:
+        with contextlib.suppress(json.JSONDecodeError):
+            rec = json.loads(line)
+            if rec.get("type") == "turn" and rec.get("kind") in ("chat", "alert", "incoming_alert"):
+                text = (rec.get("text") or "").strip().replace("\n", " ")
+                if text:
+                    return text[:_NAME_MAX_CHARS] + ("…" if len(text) > _NAME_MAX_CHARS else "")
+    return ""
 
 
 class SessionStore:
@@ -268,6 +300,7 @@ class SessionStore:
                 results.append(
                     {
                         "session_id": start_record.get("session_id", path.stem),
+                        "name": _derive_name(lines),
                         "started_at": start_record.get("started_at"),
                         "opensre_version": start_record.get("opensre_version"),
                         "duration_secs": duration_secs,
@@ -300,8 +333,8 @@ class SessionStore:
     def load_session(session_id_prefix: str) -> dict[str, Any] | None:
         """Load a session file and extract conversation data for /resume.
 
-        Accepts a prefix of the session ID (e.g. the first 8 chars shown by
-        /sessions). Returns None if no match found or the prefix is ambiguous.
+        Accepts a session ID prefix (e.g. the first 8 chars shown by /sessions).
+        Returns None if no match found or the prefix is ambiguous.
 
         Resolution order for cli_agent_messages:
         1. conversation_snapshot (written at clean exit) — exact fidelity
@@ -309,7 +342,7 @@ class SessionStore:
            for old files pre-enrichment or sessions that crashed before flush
 
         Returned dict keys:
-          session_id, started_at, cli_agent_messages (list[tuple[str,str]]),
+          session_id, name, started_at, cli_agent_messages (list[tuple[str,str]]),
           accumulated_context, history (turn stubs), turn_details, has_snapshot
         """
         sessions_dir = _sessions_dir()
@@ -376,6 +409,7 @@ class SessionStore:
 
             return {
                 "session_id": start_record.get("session_id", target_path.stem),
+                "name": _derive_name(lines),
                 "started_at": start_record.get("started_at"),
                 "cli_agent_messages": cli_agent_messages,
                 "accumulated_context": accumulated_context,
