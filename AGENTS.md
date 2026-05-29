@@ -47,6 +47,7 @@ Before any push or PR creation, follow the mandatory checklist in [CI.md](CI.md)
 | `docs/investigation-tool-calling.md` | Investigation ReAct tool schemas, LLM invoke payloads, and message shapes (all providers). |
 | `SETUP.md`            | Machine setup (all platforms, Windows, MCP/OpenClaw, troubleshooting).                             |
 | `CI.md`               | Mandatory pre-push checklist: lint, format, typecheck, tests — agents MUST follow before pushing. |
+| `TESTING.md`          | Full testing guide: commands, test layout, `ReplDriver` for live REPL verification.               |
 | `CONTRIBUTING.md`     | Contribution workflow, branch/PR guidance, and quality expectations.                               |
 
 `app/` one level deeper:
@@ -170,28 +171,20 @@ Basic steps:
 - If adding new tests -> always place them in `tests/`, never in `app/` (no inline tests).
 - If CI-only tests are added -> mark them with the right pytest marker or place them in the appropriate e2e/synthetic/chaos folder so they do not run in the default local suite.
 - If investigation branching or loop behavior changes -> update `app/pipeline/pipeline.py` and the tests for that path.
+- If adding or changing interactive REPL behavior (slash commands, session management, display output) -> use `ReplDriver` from `tests/utils/repl_driver.py` for live verification alongside unit tests; see [TESTING.md](TESTING.md).
 - If pushing or creating a PR -> follow the full pre-push checklist in [CI.md](CI.md).
 
 ## 4. Testing
 
-### Commands
+Full testing guide: **[TESTING.md](TESTING.md)** — commands, test layout, live REPL testing with `ReplDriver`, routing rules, and CI-only paths.
+
+Quick reference:
 
 - Unit tests: `make test-cov`
 - Integration tests: `make verify-integrations`
-- E2E tests: `make test-rca` or `make test-full`
-- Synthetic (no live infra): `make test-synthetic`
-- Single RCA test: `make test-rca FILE=<name>`
-- Lint: `make lint`
-- Type check: `make typecheck`
-- Routing live tests: always run with live coverage enabled by default. Do not use deselection
-  filters like `-k "not live_llm"` for routing scenario runs.
-- Do not make routing scenario tests pass by forcing deterministic shortcuts or bypassing live
-  planner behavior. Fix failures by improving planner/tool correctness or updating fixtures only
-  when behavior changes are explicitly intended and approved.
-
-### Fast Local Testing
-
-The fastest local loop is `make test-cov`, which exercises the non-live unit suite and skips the heavier live-infra paths. When you need a specific RCA scenario, use `make test-rca FILE=<fixture>` with one of the bundled alert fixtures under `tests/e2e/rca/`.
+- E2E / RCA: `make test-rca FILE=<name>`
+- Lint + typecheck: `make check`
+- Live REPL behavior (slash commands, session display): use `ReplDriver` — see [TESTING.md § Live REPL Testing](TESTING.md#live-repl-testing--repldriver)
 
 ## 5. Footguns (common mistakes to avoid)
 
