@@ -450,6 +450,40 @@ def test_run_new_alert_hides_prompt_spinner_before_progress(
     assert invalidations == [None]
 
 
+def test_run_new_alert_uses_background_launcher_when_mode_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from rich.console import Console
+
+    launches: list[tuple[str, str]] = []
+
+    def _fake_start_background_text_investigation(
+        *,
+        alert_text: str,
+        session: ReplSession,
+        console: Console,
+        display_command: str,
+    ) -> str:
+        _ = (session, console)
+        launches.append((alert_text, display_command))
+        return "bg123"
+
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.runtime.background_runner.start_background_text_investigation",
+        _fake_start_background_text_investigation,
+    )
+
+    session = ReplSession()
+    session.background_mode_enabled = True
+    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
+
+    result = loop_execution.run_new_alert("High CPU alert", session, console)
+
+    assert result == "Background investigation started: bg123"
+    assert launches == [("High CPU alert", "background free-text investigation")]
+    assert session.task_registry.list_recent(10) == []
+
+
 def test_run_new_alert_reports_unexpected_error(monkeypatch: pytest.MonkeyPatch) -> None:
     from rich.console import Console
 

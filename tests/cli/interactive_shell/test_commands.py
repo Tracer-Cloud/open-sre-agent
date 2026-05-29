@@ -20,6 +20,7 @@ from app.cli.interactive_shell.command_registry.investigation import (
 )
 from app.cli.interactive_shell.command_registry.tasks_cmds import _validate_cancel_args
 from app.cli.interactive_shell.commands import SLASH_COMMANDS, dispatch_slash
+from app.cli.interactive_shell.runtime.background import BackgroundInvestigationRecord
 from app.cli.interactive_shell.runtime.session import ReplSession
 from app.cli.interactive_shell.runtime.tasks import TaskKind, TaskStatus
 
@@ -178,6 +179,66 @@ class TestDispatchSlash:
         assert "trust mode" in output
         assert "grounding cli cache" in output
         assert "grounding docs cache" in output
+
+    def test_background_toggle_and_status(self) -> None:
+        session = ReplSession()
+        console, buf = _capture()
+
+        assert dispatch_slash("/background on", session, console) is True
+        assert session.background_mode_enabled is True
+
+        assert dispatch_slash("/background status", session, console) is True
+        output = buf.getvalue()
+        assert "Background mode" in output
+        assert "notify channels" in output
+        assert "email" in output
+
+    def test_background_list_empty_message(self) -> None:
+        session = ReplSession()
+        console, buf = _capture()
+
+        assert dispatch_slash("/background list", session, console) is True
+        assert "no background investigations" in buf.getvalue().lower()
+
+    def test_background_show_and_use_completed_record(self) -> None:
+        session = ReplSession()
+        session.background_investigations["bg123"] = BackgroundInvestigationRecord(
+            task_id="bg123",
+            status="completed",
+            command="free-text investigation",
+            root_cause="database connection pool exhausted",
+            top_analysis=("rds cpu saturation",),
+            next_steps=("scale the connection pool",),
+            final_state={"root_cause": "database connection pool exhausted", "service": "api"},
+        )
+        console, buf = _capture()
+
+        assert dispatch_slash("/background show bg123", session, console) is True
+        assert "database connection pool exhausted" in buf.getvalue()
+
+        assert dispatch_slash("/background use bg123", session, console) is True
+        assert session.last_state == {
+            "root_cause": "database connection pool exhausted",
+            "service": "api",
+        }
+        assert session.accumulated_context["service"] == "api"
+
+    def test_background_notify_set_rejects_invalid_channel(self) -> None:
+        session = ReplSession()
+        console, buf = _capture()
+
+        assert dispatch_slash("/background notify set pagerduty", session, console) is True
+        output = buf.getvalue()
+        assert "invalid channel" in output
+        assert session.background_notification_preferences.channels == ("email",)
+
+    def test_background_notify_set_updates_channels(self) -> None:
+        session = ReplSession()
+        console, buf = _capture()
+
+        assert dispatch_slash("/background notify set email", session, console)
+        assert session.background_notification_preferences.channels == ("email",)
+        assert "background notify channels set" in buf.getvalue().lower()
 
     def test_unknown_command_does_not_exit(self) -> None:
         session = ReplSession()
@@ -1103,6 +1164,35 @@ class TestInvestigateFileCommand:
         assert captured == ["generic"]
         assert session.last_state == {"root_cause": "sample cause"}
 
+    def test_template_arg_uses_background_launcher_when_mode_enabled(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        launches: list[str] = []
+
+        def _fake_start_background_template_investigation(
+            *,
+            template_name: str,
+            session: ReplSession,
+            console: Console,
+            display_command: str,
+        ) -> str:
+            _ = (session, console, display_command)
+            launches.append(template_name)
+            return "bg123"
+
+        monkeypatch.setattr(
+            "app.cli.interactive_shell.command_registry.investigation.start_background_template_investigation",
+            _fake_start_background_template_investigation,
+        )
+
+        session = ReplSession()
+        session.background_mode_enabled = True
+        console, _ = _capture()
+        dispatch_slash("/investigate generic", session, console)
+
+        assert launches == ["generic"]
+        assert session.last_state is None
+
     def test_template_arg_tracks_cli_repl_file_source(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -1293,6 +1383,39 @@ class TestInvestigateFileCommand:
             "cluster_name": "prod-us-east",
             "region": "us-east-1",
         }
+
+    def test_investigate_file_uses_background_launcher_when_mode_enabled(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        alert_file = tmp_path / "alert.json"
+        alert_file.write_text('{"alert_name": "test"}', encoding="utf-8")
+        launches: list[tuple[str, str]] = []
+
+        def _fake_start_background_text_investigation(
+            *,
+            alert_text: str,
+            session: ReplSession,
+            console: Console,
+            display_command: str,
+        ) -> str:
+            _ = (session, console)
+            launches.append((alert_text, display_command))
+            return "bg123"
+
+        monkeypatch.setattr(
+            "app.cli.interactive_shell.command_registry.investigation.start_background_text_investigation",
+            _fake_start_background_text_investigation,
+        )
+
+        session = ReplSession()
+        session.background_mode_enabled = True
+        console, _ = _capture()
+        dispatch_slash(f"/investigate {alert_file}", session, console)
+
+        assert len(launches) == 1
+        assert '"alert_name": "test"' in launches[0][0]
+        assert launches[0][1] == f"/investigate {alert_file}"
+        assert session.last_state is None
 
     def test_investigate_opensre_error_marks_task_failed(
         self, tmp_path: object, monkeypatch: object

@@ -68,6 +68,13 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks about the alert inbox, listener, or queued alerts",
         anti_examples=("User wants to investigate an alert body (use investigation_start)",),
     ),
+    "/background": _mcp(
+        "Manage session-local background investigation mode and completed RCA summaries. "
+        "Subcommands: on, off, status, list, show <task_id>, use <task_id>, notify list, notify set.",
+        "User asks to enable or disable background investigation mode",
+        "User asks to list or inspect completed background RCAs",
+        "User asks to configure background RCA notification channels",
+    ),
     "/cancel": _mcp(
         "Cancel a running background task by task id. Requires confirmation in non-trust mode.",
         "User asks to cancel a specific task when they provide or imply a task id",

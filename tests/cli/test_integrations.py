@@ -6,7 +6,7 @@ from click.testing import CliRunner
 
 from app.cli.__main__ import cli
 from app.cli.support.constants import SETUP_SERVICES, VERIFY_SERVICES
-from app.integrations.cli import _HANDLERS, _setup_openclaw, _setup_vercel
+from app.integrations.cli import _HANDLERS, _setup_openclaw, _setup_smtp, _setup_vercel
 
 
 def test_integrations_show_redacts_api_token() -> None:
@@ -199,6 +199,68 @@ def test_integrations_setup_accepts_twilio() -> None:
     assert result.exit_code == 0
     mock_setup.assert_called_once_with("twilio")
     mock_verify.assert_called_once_with("twilio")
+
+
+def test_integrations_setup_accepts_smtp() -> None:
+    runner = CliRunner()
+
+    with (
+        patch("app.cli.commands.integrations.capture_integration_setup_started"),
+        patch("app.cli.commands.integrations.capture_integration_setup_completed"),
+        patch("app.cli.commands.integrations.capture_integration_verified"),
+        patch("app.integrations.cli.cmd_setup") as mock_setup,
+        patch("app.integrations.cli.cmd_verify", return_value=0) as mock_verify,
+    ):
+        mock_setup.return_value = "smtp"
+        result = runner.invoke(cli, ["integrations", "setup", "smtp"])
+
+    assert result.exit_code == 0
+    mock_setup.assert_called_once_with("smtp")
+    mock_verify.assert_called_once_with("smtp")
+
+
+def test_setup_smtp_saves_credentials(monkeypatch) -> None:
+    answers = iter(
+        [
+            "smtp.example.com",
+            "opensre@example.com",
+            "587",
+            "starttls",
+            "mailer",
+            "secret",
+            "team@example.com",
+        ]
+    )
+
+    def fake_p(_label: str, default: str = "", secret: bool = False) -> str:
+        return next(answers)
+
+    saved: list[tuple[str, dict[str, object]]] = []
+    monkeypatch.setattr("app.integrations.cli._p", fake_p)
+    monkeypatch.setattr(
+        "app.integrations.cli.upsert_integration",
+        lambda service, entry: saved.append((service, entry)),
+    )
+
+    _setup_smtp()
+
+    assert _HANDLERS["smtp"] is _setup_smtp
+    assert saved == [
+        (
+            "smtp",
+            {
+                "credentials": {
+                    "host": "smtp.example.com",
+                    "port": 587,
+                    "security": "starttls",
+                    "username": "mailer",
+                    "password": "secret",
+                    "from_address": "opensre@example.com",
+                    "default_to": "team@example.com",
+                }
+            },
+        )
+    ]
 
 
 def test_integrations_setup_skips_auto_verify_for_unverifiable_service() -> None:

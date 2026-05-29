@@ -84,6 +84,7 @@
             "pages": [
               "integrations-overview",
               "remote-runtime-investigation",
+              "background-investigations",
               "masking",
               "interactive-shell-privacy",
               "sessions",
@@ -136,6 +137,7 @@
             "expanded": true,
             "pages": [
               "messaging/index",
+              "smtp",
               "messaging/slack",
               "messaging/discord",
               "messaging/telegram",

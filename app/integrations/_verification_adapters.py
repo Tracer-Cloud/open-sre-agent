@@ -22,6 +22,7 @@ from app.integrations.config_models import (
     HoneycombIntegrationConfig,
     IncidentIoIntegrationConfig,
     SlackWebhookConfig,
+    SMTPIntegrationConfig,
     TracerIntegrationConfig,
 )
 from app.integrations.github_mcp import build_github_mcp_config, validate_github_mcp_config
@@ -344,6 +345,18 @@ def _verify_telegram(source: str, config: dict[str, Any]) -> dict[str, str]:
         "passed",
         f"Connected to Telegram bot @{username or 'unknown'}.",
     )
+
+
+def _verify_smtp(source: str, config: dict[str, Any]) -> dict[str, str]:
+    try:
+        smtp_config = SMTPIntegrationConfig.model_validate(config)
+    except Exception as err:
+        return result("smtp", source, "missing", str(err))
+
+    from app.utils.smtp_delivery import verify_smtp_connection
+
+    ok, detail = verify_smtp_connection(smtp_config.model_dump())
+    return result("smtp", source, "passed" if ok else "failed", detail)
 
 
 def _verify_whatsapp(source: str, config: dict[str, Any]) -> dict[str, str]:
@@ -707,6 +720,7 @@ __all__ = [
     "_verify_signoz",
     "_verify_slack",
     "_verify_slack_without_test",
+    "_verify_smtp",
     "_verify_snowflake",
     "_verify_splunk",
     "_verify_supabase",

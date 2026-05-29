@@ -29,6 +29,7 @@ from app.integrations.config_models import (
     JiraIntegrationConfig,
     OpsGenieIntegrationConfig,
     SlackWebhookConfig,
+    SMTPIntegrationConfig,
     SplunkIntegrationConfig,
     TelegramBotConfig,
     TwilioIntegrationConfig,
@@ -541,6 +542,24 @@ def _classify_service_instance(
             _report_classify_failure(exc, integration=key, record_id=record_id)
             return None, None
         return tg_config.model_dump(), "telegram"
+
+    if key == "smtp":
+        try:
+            smtp_config = SMTPIntegrationConfig.model_validate(
+                {
+                    "host": credentials.get("host", ""),
+                    "port": credentials.get("port", 587),
+                    "security": credentials.get("security", "starttls"),
+                    "username": credentials.get("username", ""),
+                    "password": credentials.get("password", ""),
+                    "from_address": credentials.get("from_address", ""),
+                    "default_to": credentials.get("default_to"),
+                }
+            )
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
+            return None, None
+        return smtp_config.model_dump(), "smtp"
 
     if key == "whatsapp":
         try:
@@ -1449,6 +1468,25 @@ def load_env_integrations() -> list[dict[str, Any]]:
             _report_env_loader_failure(exc, integration="telegram")
         else:
             integrations.append(_active_env_record("telegram", tg_config.model_dump()))
+
+    smtp_host = os.getenv("SMTP_HOST", "").strip()
+    if smtp_host:
+        try:
+            smtp_config = SMTPIntegrationConfig.model_validate(
+                {
+                    "host": smtp_host,
+                    "port": os.getenv("SMTP_PORT", "").strip() or 587,
+                    "security": os.getenv("SMTP_SECURITY", "").strip() or "starttls",
+                    "username": os.getenv("SMTP_USERNAME", "").strip(),
+                    "password": resolve_env_credential("SMTP_PASSWORD"),
+                    "from_address": os.getenv("SMTP_FROM_ADDRESS", "").strip(),
+                    "default_to": os.getenv("SMTP_DEFAULT_TO", "").strip() or None,
+                }
+            )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="smtp")
+        else:
+            integrations.append(_active_env_record("smtp", smtp_config.model_dump()))
 
     # Shared Twilio account credentials — consumed by both the WhatsApp and
     # the SMS env-bootstrap blocks below.

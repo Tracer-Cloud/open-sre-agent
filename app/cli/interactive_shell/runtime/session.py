@@ -12,6 +12,10 @@ if TYPE_CHECKING:
 
     from app.cli.interactive_shell.alert_inbox import IncomingAlert
 
+from app.cli.interactive_shell.runtime.background import (
+    BackgroundInvestigationRecord,
+    BackgroundNotificationPreferences,
+)
 from app.cli.interactive_shell.runtime.tasks import TaskRegistry
 from app.cli.interactive_shell.sessions.store import SessionStore
 from app.llm_reasoning_effort import ReasoningEffortChoice
@@ -99,6 +103,19 @@ class ReplSession:
 
     task_registry: TaskRegistry = field(default_factory=TaskRegistry)
     """Recent in-flight and completed shell tasks for /tasks and /cancel."""
+
+    background_mode_enabled: bool = False
+    """Whether new investigations should run as session-local background tasks."""
+
+    background_investigations: dict[str, BackgroundInvestigationRecord] = field(
+        default_factory=dict
+    )
+    """Completed or in-flight background RCA summaries, keyed by task id."""
+
+    background_notification_preferences: BackgroundNotificationPreferences = field(
+        default_factory=BackgroundNotificationPreferences
+    )
+    """Preferred notification channels for background RCA completion events."""
 
     history_generation: int = 0
     """Incremented on /reset so background synthetic watchers can skip stale history writes."""
@@ -229,6 +246,8 @@ class ReplSession:
         self.correction_intervention_count = 0
         self.pending_prompt_default = None
         self.last_synthetic_observation_path = None
+        self.background_mode_enabled = False
+        self.background_investigations.clear()
         # trust_mode and reasoning_effort are intentionally preserved across /reset
         # Rotate session identity so the new post-reset session gets its own ID and file.
         self.session_id = str(uuid.uuid4())

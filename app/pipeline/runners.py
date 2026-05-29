@@ -130,6 +130,7 @@ async def astream_investigation(
     *,
     opensre_evaluate: bool = False,
     investigation_metadata: tuple[str, str, str] | None = None,
+    suppress_editor: bool = False,
 ) -> AsyncIterator[Any]:
     """Stream investigation events in real time.
 
@@ -303,8 +304,11 @@ async def astream_investigation(
             with _render_report_patch_lock:
                 _orig_terminal_render = _term_mod.render_report
                 _orig_node_render = _publish_node.render_report
+                _orig_open_in_editor = _publish_node.open_in_editor
                 _term_mod.render_report = lambda *_a, **_kw: None  # type: ignore[assignment]
                 _publish_node.render_report = lambda *_a, **_kw: None  # type: ignore[assignment]
+                if suppress_editor:
+                    _publish_node.open_in_editor = lambda *_a, **_kw: None  # type: ignore[assignment]
                 try:
                     _merge(
                         state_any,
@@ -313,6 +317,7 @@ async def astream_investigation(
                 finally:
                     _term_mod.render_report = _orig_terminal_render  # type: ignore[assignment]
                     _publish_node.render_report = _orig_node_render  # type: ignore[assignment]
+                    _publish_node.open_in_editor = _orig_open_in_editor  # type: ignore[assignment]
 
             _put(
                 _make_node_event(

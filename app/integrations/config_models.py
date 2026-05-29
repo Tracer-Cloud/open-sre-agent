@@ -852,6 +852,59 @@ class SlackBotConfig(StrictConfigModel):
         return stripped
 
 
+class SMTPIntegrationConfig(StrictConfigModel):
+    """SMTP runtime config for RCA email delivery."""
+
+    host: str
+    port: int = 587
+    security: str = "starttls"
+    username: str = ""
+    password: str = ""
+    from_address: str
+    default_to: str | None = None
+
+    _normalize_host = field_validator("host", mode="before")(normalize_str())
+    _normalize_security = field_validator("security", mode="before")(
+        normalize_with_default("starttls")
+    )
+    _normalize_username = field_validator("username", mode="before")(normalize_str())
+    _normalize_password = field_validator("password", mode="before")(normalize_str())
+    _normalize_from_address = field_validator("from_address", mode="before")(normalize_str())
+    _normalize_default_to = field_validator("default_to", mode="before")(normalize_str())
+
+    @field_validator("port", mode="before")
+    @classmethod
+    def _normalize_port(cls, value: object) -> int:
+        if isinstance(value, int):
+            port = value
+        elif isinstance(value, str):
+            stripped = value.strip()
+            port = int(stripped) if stripped else 587
+        else:
+            port = 587
+        if port <= 0 or port > 65535:
+            raise ValueError("port must be between 1 and 65535")
+        return port
+
+    @field_validator("security", mode="after")
+    @classmethod
+    def _validate_security(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"starttls", "ssl", "none"}:
+            raise ValueError("security must be one of: starttls, ssl, none")
+        return normalized
+
+    @model_validator(mode="after")
+    def _validate_auth_pair(self) -> SMTPIntegrationConfig:
+        if bool(self.username) != bool(self.password):
+            raise ValueError("username and password must both be set, or both be empty")
+        if "@" not in self.from_address:
+            raise ValueError("from_address must look like an email address")
+        if self.default_to and "@" not in self.default_to:
+            raise ValueError("default_to must look like an email address")
+        return self
+
+
 # ---------------------------------------------------------------------------
 # Tracer internal
 # ---------------------------------------------------------------------------

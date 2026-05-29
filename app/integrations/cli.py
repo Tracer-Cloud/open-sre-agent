@@ -557,6 +557,35 @@ def _setup_telegram() -> None:
     print("    - opensre integrations verify telegram")
 
 
+def _setup_smtp() -> None:
+    host = _p("SMTP host (e.g. smtp.gmail.com)")
+    from_address = _p("From email address")
+    if not host or not from_address:
+        _die("host and from_address are required.")
+
+    port = _parse_port(_p("SMTP port", default="587"), default=587)
+    security = (_p("Security mode (starttls/ssl/none)", default="starttls") or "starttls").strip()
+    username = _p("Username (optional)")
+    password = _p("Password (optional; leave blank when username is blank)", secret=True)
+    if bool(username) != bool(password):
+        _die("username and password must both be set, or both be empty.")
+
+    upsert_integration(
+        "smtp",
+        {
+            "credentials": {
+                "host": host,
+                "port": port,
+                "security": security,
+                "username": username,
+                "password": password,
+                "from_address": from_address,
+                "default_to": _p("Default recipient email (optional)") or None,
+            }
+        },
+    )
+
+
 def _setup_whatsapp() -> None:
     account_sid = _p("Twilio Account SID (starts with AC...)")
     auth_token = _p("Twilio Auth Token", secret=True)
@@ -851,6 +880,7 @@ _HANDLERS: dict[str, Any] = {
     "mongodb": _setup_mongodb,
     "discord": _setup_discord,
     "telegram": _setup_telegram,
+    "smtp": _setup_smtp,
     "whatsapp": _setup_whatsapp,
     "twilio": _setup_twilio,
     "openclaw": _setup_openclaw,

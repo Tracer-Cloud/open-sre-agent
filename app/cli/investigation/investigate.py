@@ -286,6 +286,7 @@ def _run_session_alert_payload(
     raw_alert: dict[str, Any],
     context_overrides: dict[str, Any] | None = None,
     cancel_requested: threading.Event | None = None,
+    render: bool = True,
 ) -> dict[str, Any]:
     """Run a streaming investigation from an already-structured session alert."""
     import queue
@@ -309,6 +310,7 @@ def _run_session_alert_payload(
             async def _pump() -> None:
                 async for evt in astream_investigation(
                     raw_alert=raw_alert,
+                    suppress_editor=not render,
                 ):
                     event_queue.put(evt)
 
@@ -355,22 +357,53 @@ def _run_session_alert_payload(
         finally:
             _cancel_pump()
 
-    renderer = StreamRenderer(local=True)
+    if render:
+        renderer = StreamRenderer(local=True)
+        try:
+            rendered_state = renderer.render_stream(_events())
+        except KeyboardInterrupt:
+            _cancel_pump()
+            raise
+        finally:
+            # Always join so unexpected exceptions from render_stream don't leak
+            # the daemon thread and leave an orphaned LLM call running.
+            thread.join(timeout=5)
+            if thread.is_alive():
+                _logger.warning(
+                    "investigation thread did not terminate within 5s after cancellation; "
+                    "an LLM call may still be in flight"
+                )
+        return dict(rendered_state)
+
+    final_state: dict[str, Any] = {}
     try:
-        final_state = renderer.render_stream(_events())
+        for event in _events():
+            if event.event_type == "updates":
+                payload = event.data if isinstance(event.data, dict) else {}
+                final_state.update(payload)
+                continue
+            if event.event_type != "events":
+                continue
+            if event.kind == "on_chain_start":
+                input_payload = event.data.get("data", {}).get("input", {})
+                if isinstance(input_payload, dict):
+                    final_state.update(input_payload)
+                continue
+            if event.kind == "on_chain_end":
+                output_payload = event.data.get("data", {}).get("output", {})
+                if isinstance(output_payload, dict):
+                    final_state.update(output_payload)
     except KeyboardInterrupt:
         _cancel_pump()
         raise
     finally:
-        # Always join so unexpected exceptions from render_stream don't leak
-        # the daemon thread and leave an orphaned LLM call running.
         thread.join(timeout=5)
         if thread.is_alive():
             _logger.warning(
                 "investigation thread did not terminate within 5s after cancellation; "
                 "an LLM call may still be in flight"
             )
-    return dict(final_state)
+    return final_state
 
 
 def run_investigation_for_session(
@@ -401,6 +434,7 @@ def run_investigation_for_session(
         raw_alert=raw_alert,
         context_overrides=context_overrides,
         cancel_requested=cancel_requested,
+        render=True,
     )
 
 
@@ -417,4 +451,38 @@ def run_sample_alert_for_session(
         raw_alert=build_alert_template(template_name),
         context_overrides=context_overrides,
         cancel_requested=cancel_requested,
+        render=True,
+    )
+
+
+def run_investigation_for_session_background(
+    *,
+    alert_text: str,
+    context_overrides: dict[str, Any] | None = None,
+    cancel_requested: threading.Event | None = None,
+) -> dict[str, Any]:
+    """Run a non-rendering investigation for session-local background tasks."""
+    raw_alert: dict[str, Any] = {"alert_name": "Interactive session", "message": alert_text}
+    return _run_session_alert_payload(
+        raw_alert=raw_alert,
+        context_overrides=context_overrides,
+        cancel_requested=cancel_requested,
+        render=False,
+    )
+
+
+def run_sample_alert_for_session_background(
+    *,
+    template_name: str = "generic",
+    context_overrides: dict[str, Any] | None = None,
+    cancel_requested: threading.Event | None = None,
+) -> dict[str, Any]:
+    """Run a non-rendering sample-alert investigation for background tasks."""
+    from app.cli.investigation.alert_templates import build_alert_template
+
+    return _run_session_alert_payload(
+        raw_alert=build_alert_template(template_name),
+        context_overrides=context_overrides,
+        cancel_requested=cancel_requested,
+        render=False,
     )

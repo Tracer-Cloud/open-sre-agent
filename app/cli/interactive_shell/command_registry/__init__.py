@@ -11,6 +11,9 @@ from rich.markup import escape
 
 from app.cli.interactive_shell.command_registry.agents import COMMANDS as AGENTS_COMMANDS
 from app.cli.interactive_shell.command_registry.alerts import COMMANDS as ALERTS_COMMANDS
+from app.cli.interactive_shell.command_registry.background_cmds import (
+    COMMANDS as BACKGROUND_COMMANDS,
+)
 from app.cli.interactive_shell.command_registry.cli_parity import (
     COMMANDS as PARITY_COMMANDS,
 )
@@ -50,6 +53,7 @@ _MERGED_SEQUENCE = tuple(
     chain(
         HELP_COMMANDS,
         SESSION_COMMANDS,
+        BACKGROUND_COMMANDS,
         INTEGRATIONS_COMMANDS,
         MODEL_COMMANDS,
         INVESTIGATION_COMMANDS,

@@ -71,6 +71,9 @@ def run_new_alert(
         evaluate_investigation_launch,
         execution_allowed,
     )
+    from app.cli.interactive_shell.runtime.background_runner import (
+        start_background_text_investigation,
+    )
     from app.cli.interactive_shell.runtime.tasks import TaskKind
     from app.cli.investigation import run_investigation_for_session
 
@@ -85,6 +88,16 @@ def run_new_alert(
     ):
         session.record("alert", text, ok=False)
         return None
+
+    if session.background_mode_enabled:
+        task_id = start_background_text_investigation(
+            alert_text=text,
+            session=session,
+            console=console,
+            display_command="background free-text investigation",
+        )
+        session.record("alert", text)
+        return f"Background investigation started: {task_id}"
 
     task = session.task_registry.create(TaskKind.INVESTIGATION, command="free-text investigation")
     task.mark_running()
