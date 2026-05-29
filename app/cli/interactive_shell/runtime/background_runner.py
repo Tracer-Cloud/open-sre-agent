@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable
+from contextlib import nullcontext
 from typing import Any
 
+from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
 from rich.markup import escape
 
@@ -22,6 +24,13 @@ from app.cli.support.errors import OpenSREError
 from app.cli.support.exception_reporting import report_exception
 
 BackgroundRunFn = Callable[..., dict[str, Any]]
+
+
+def _safe_console_print(console: Console, message: str) -> None:
+    isatty = getattr(console.file, "isatty", None)
+    stdout_context = patch_stdout(raw=True) if callable(isatty) and isatty() else nullcontext()
+    with stdout_context:
+        console.print(message)
 
 
 def _build_record(
@@ -106,32 +115,36 @@ def _start_background_investigation(
                 channels=session.background_notification_preferences.channels,
             )
             task.mark_completed(result=root)
-            console.print(
+            _safe_console_print(
+                console,
                 f"[{HIGHLIGHT}]background investigation complete[/] "
                 f"[{DIM}]— task {escape(task.task_id)} ready; "
-                f"use[/] [{HIGHLIGHT}]/background show {escape(task.task_id)}[/]"
+                f"use[/] [{HIGHLIGHT}]/background show {escape(task.task_id)}[/]",
             )
         except KeyboardInterrupt:
             record.status = "cancelled"
             task.mark_cancelled()
-            console.print(
+            _safe_console_print(
+                console,
                 f"[{WARNING}]background investigation cancelled[/] "
-                f"[{DIM}]for task {escape(task.task_id)}.[/]"
+                f"[{DIM}]for task {escape(task.task_id)}.[/]",
             )
         except OpenSREError as exc:
             record.status = "failed"
             task.mark_failed(str(exc))
-            console.print(
+            _safe_console_print(
+                console,
                 f"[{ERROR}]background investigation failed[/] "
-                f"[{DIM}]for task {escape(task.task_id)}:[/] {escape(str(exc))}"
+                f"[{DIM}]for task {escape(task.task_id)}:[/] {escape(str(exc))}",
             )
         except Exception as exc:  # noqa: BLE001
             record.status = "failed"
             task.mark_failed(str(exc))
             report_exception(exc, context="interactive_shell.background_investigation")
-            console.print(
+            _safe_console_print(
+                console,
                 f"[{ERROR}]background investigation failed[/] "
-                f"[{DIM}]for task {escape(task.task_id)}:[/] {escape(str(exc))}"
+                f"[{DIM}]for task {escape(task.task_id)}:[/] {escape(str(exc))}",
             )
 
     thread = threading.Thread(
@@ -140,10 +153,11 @@ def _start_background_investigation(
         name=f"background-investigation-{task.task_id}",
     )
     thread.start()
-    console.print(
+    _safe_console_print(
+        console,
         f"[{DIM}]background investigation started — task[/] [bold]{escape(task.task_id)}[/bold]. "
         f"[{HIGHLIGHT}]/background list[/] [{DIM}]to monitor, "
-        f"[/][{HIGHLIGHT}]/cancel {escape(task.task_id)}[/] [{DIM}]to stop.[/]"
+        f"[/][{HIGHLIGHT}]/cancel {escape(task.task_id)}[/] [{DIM}]to stop.[/]",
     )
     return task.task_id
 

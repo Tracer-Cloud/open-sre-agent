@@ -22,7 +22,12 @@ from app.utils.tracing import traceable
 logger = logging.getLogger(__name__)
 
 
-def generate_report(state: InvestigationState) -> dict:
+def generate_report(
+    state: InvestigationState,
+    *,
+    render_to_terminal: bool = True,
+    open_report_in_editor: bool = True,
+) -> dict:
     """Generate and publish the final RCA report."""
     from app.utils.slack_delivery import build_action_blocks, send_slack_report
 
@@ -48,8 +53,10 @@ def generate_report(state: InvestigationState) -> dict:
 
     all_blocks = build_slack_blocks(ctx) + build_action_blocks(investigation_url, investigation_id)
     all_blocks = masking_ctx.unmask_value(all_blocks)
-    render_report(slack_message, root_cause_category=state.get("root_cause_category"))
-    open_in_editor(slack_message)
+    if render_to_terminal:
+        render_report(slack_message, root_cause_category=state.get("root_cause_category"))
+    if open_report_in_editor:
+        open_in_editor(slack_message)
 
     slack_ctx = state.get("slack_context", {})
     thread_ts = slack_ctx.get("thread_ts") or slack_ctx.get("ts")

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import smtplib
+from contextlib import suppress
 from email.message import EmailMessage
 from typing import Any
 
@@ -64,13 +65,17 @@ def _connect_client(config: dict[str, Any]) -> smtplib.SMTP:
         client: smtplib.SMTP = smtplib.SMTP_SSL(host, port, timeout=15)
     else:
         client = smtplib.SMTP(host, port, timeout=15)
-
-    client.ehlo()
-    if security == "starttls":
-        client.starttls()
+    try:
         client.ehlo()
-    if username and password:
-        client.login(username, password)
+        if security == "starttls":
+            client.starttls()
+            client.ehlo()
+        if username and password:
+            client.login(username, password)
+    except Exception:
+        with suppress(Exception):
+            client.close()
+        raise
     return client
 
 

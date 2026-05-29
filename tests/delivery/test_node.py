@@ -202,6 +202,34 @@ def test_gitlab_writeback_failure_does_not_raise(monkeypatch: pytest.MonkeyPatch
     assert "slack_message" in result  # report returned despite write-back failure
 
 
+def test_generate_report_can_skip_terminal_render_and_editor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_generate_report_deps(monkeypatch)
+
+    mock_send_slack = MagicMock(return_value=(False, None))
+    mock_build_action_blocks = MagicMock(return_value=[])
+    mock_render_report = MagicMock()
+    mock_open_in_editor = MagicMock()
+
+    with (
+        patch("app.utils.slack_delivery.send_slack_report", mock_send_slack),
+        patch("app.utils.slack_delivery.build_action_blocks", mock_build_action_blocks),
+        patch("app.delivery.publish_findings.node.render_report", mock_render_report),
+        patch("app.delivery.publish_findings.node.open_in_editor", mock_open_in_editor),
+    ):
+        from app.delivery.publish_findings.node import generate_report
+
+        generate_report(
+            _make_state(),  # type: ignore[arg-type]
+            render_to_terminal=False,
+            open_report_in_editor=False,
+        )
+
+    mock_render_report.assert_not_called()
+    mock_open_in_editor.assert_not_called()
+
+
 def test_openclaw_writeback_calls_delivery_when_configured(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

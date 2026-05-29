@@ -45,6 +45,12 @@ class _FakeSMTP:
         self.quit_called = True
 
 
+class _FailingLoginSMTP(_FakeSMTP):
+    def login(self, username: str, password: str) -> None:
+        self.logged_in = (username, password)
+        raise RuntimeError("auth failed")
+
+
 def _return_fake_client(fake_client: _FakeSMTP):
     def _factory(*_args: object, **_kwargs: object) -> _FakeSMTP:
         return fake_client
@@ -125,3 +131,24 @@ def test_send_smtp_report_requires_recipient() -> None:
     )
     assert ok is False
     assert "recipient" in error.lower()
+
+
+def test_verify_smtp_connection_closes_client_when_setup_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_client = _FailingLoginSMTP("smtp.example.com", 587, 15)
+    monkeypatch.setattr("app.utils.smtp_delivery.smtplib.SMTP", _return_fake_client(fake_client))
+
+    ok, detail = verify_smtp_connection(
+        {
+            "host": "smtp.example.com",
+            "port": 587,
+            "security": "none",
+            "username": "mailer",
+            "password": "secret",
+        }
+    )
+
+    assert ok is False
+    assert "auth failed" in detail
+    assert fake_client.quit_called is True

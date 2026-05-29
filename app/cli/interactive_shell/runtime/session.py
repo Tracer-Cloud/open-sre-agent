@@ -248,6 +248,7 @@ class ReplSession:
         self.last_synthetic_observation_path = None
         self.background_mode_enabled = False
         self.background_investigations.clear()
+        self.background_notification_preferences = BackgroundNotificationPreferences()
         # trust_mode and reasoning_effort are intentionally preserved across /reset
         # Rotate session identity so the new post-reset session gets its own ID and file.
         self.session_id = str(uuid.uuid4())
