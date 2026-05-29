@@ -70,6 +70,8 @@ _EXCLUSIVE_STDIN_MENU_COMMANDS: frozenset[str] = frozenset(
         "/compact",
         "/reset",
         "/welcome",
+        "/sessions",
+        "/resume",
     }
 )
 _EXCLUSIVE_STDIN_SUBCOMMANDS: frozenset[tuple[str, str]] = frozenset(
