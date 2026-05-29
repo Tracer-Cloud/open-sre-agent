@@ -292,3 +292,30 @@ line 2
     )
     assert result["step_name"] == "ungrouped"
     assert "Process completed with exit code 1." in result["log_text"]
+
+
+def test_extract_step_log_preserves_ungrouped_lines_around_groups() -> None:
+    result = extract_step_log(
+        """runner setup before groups
+##[group]Checkout
+line 1
+##[endgroup]
+annotation between groups
+##[group]Deploy
+line 2
+##[endgroup]
+final runner summary
+"""
+    )
+
+    assert result["sections"] == [
+        {"name": "ungrouped", "chars": len("runner setup before groups")},
+        {"name": "Checkout", "chars": len("line 1")},
+        {"name": "ungrouped", "chars": len("annotation between groups")},
+        {"name": "Deploy", "chars": len("line 2")},
+        {"name": "ungrouped", "chars": len("final runner summary")},
+    ]
+
+    assert result["step_name"] == "ungrouped"
+    assert result["log_text"] == "final runner summary"
+

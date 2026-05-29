@@ -165,42 +165,36 @@ def _normalize_run(run: dict[str, Any]) -> dict[str, Any]:
 UNGROUPED_SECTION_NAME = "ungrouped"
 
 
+def _append_log_section(sections: list[dict[str, str]], name: str, lines: list[str]) -> None:
+    """Append a non-empty log section preserving original ordering."""
+    text = "\n".join(lines).strip()
+    if text:
+        sections.append({"name": name, "text": text})
+
+
 def _extract_log_sections(log_text: str) -> list[dict[str, str]]:
     """Extract sections from GitHub Actions log output (marked by ##[group]/##[endgroup])."""
     sections: list[dict[str, str]] = []
-    current_name = ""
+    current_name: str | None = None
     current_lines: list[str] = []
-    trailing_lines: list[str] = []
     saw_group = False
 
     for line in log_text.splitlines():
         if line.startswith("##[group]"):
             saw_group = True
-            trailing_lines = []
-            if current_name or current_lines:
-                sections.append(
-                    {"name": current_name or "step", "text": "\n".join(current_lines).strip()}
-                )
+            _append_log_section(sections, current_name or UNGROUPED_SECTION_NAME, current_lines)
             current_name = line[len("##[group]") :].strip()
             current_lines = []
             continue
         if line.startswith("##[endgroup]"):
-            if current_name or current_lines:
-                sections.append(
-                    {"name": current_name or "step", "text": "\n".join(current_lines).strip()}
-                )
-            current_name = ""
+            _append_log_section(sections, current_name or UNGROUPED_SECTION_NAME, current_lines)
+            current_name = None
             current_lines = []
             continue
-        if current_name:
-            current_lines.append(line)
-        elif saw_group:
-            trailing_lines.append(line)
+        current_lines.append(line)
 
-    if current_name or current_lines:
-        sections.append({"name": current_name or "step", "text": "\n".join(current_lines).strip()})
-    if saw_group and trailing_lines:
-        sections.append({"name": UNGROUPED_SECTION_NAME, "text": "\n".join(trailing_lines).strip()})
+    if saw_group:
+        _append_log_section(sections, current_name or UNGROUPED_SECTION_NAME, current_lines)
 
     if not saw_group:
         return [{"name": "full-log", "text": log_text.strip()}]
