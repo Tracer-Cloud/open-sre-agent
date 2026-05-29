@@ -120,8 +120,18 @@ def _mcp_response(_config: object, tool: str, arguments: dict[str, Any]) -> dict
                         "status": "completed",
                         "conclusion": "failure",
                         "steps": [
-                            {"name": "Checkout", "status": "completed", "conclusion": "success", "number": 1},
-                            {"name": "Deploy", "status": "completed", "conclusion": "failure", "number": 2},
+                            {
+                                "name": "Checkout",
+                                "status": "completed",
+                                "conclusion": "success",
+                                "number": 1,
+                            },
+                            {
+                                "name": "Deploy",
+                                "status": "completed",
+                                "conclusion": "failure",
+                                "number": 2,
+                            },
                         ],
                     }
                 ],
@@ -142,7 +152,12 @@ def _mcp_response(_config: object, tool: str, arguments: dict[str, Any]) -> dict
                 "status": "completed",
                 "conclusion": "failure",
                 "steps": [
-                    {"name": "Checkout", "status": "completed", "conclusion": "success", "number": 1},
+                    {
+                        "name": "Checkout",
+                        "status": "completed",
+                        "conclusion": "success",
+                        "number": 1,
+                    },
                     {"name": "Deploy", "status": "completed", "conclusion": "failure", "number": 2},
                 ],
             },
@@ -178,7 +193,9 @@ Error: secret rotation broke production deploy
 
 def test_is_available_requires_github_source_owner_and_repo() -> None:
     rt = _registered_tool(list_github_actions_workflow_runs)
-    assert rt.is_available({"github": {"connection_verified": True, "owner": "org", "repo": "repo"}})
+    assert rt.is_available(
+        {"github": {"connection_verified": True, "owner": "org", "repo": "repo"}}
+    )
     assert rt.is_available({"github": {"connection_verified": True}}) is False
     assert rt.is_available({}) is False
 
@@ -233,7 +250,14 @@ def test_get_step_log_happy_path() -> None:
         patch("app.tools.GitHubActionsTool._resolve_config", return_value=object()),
         patch("app.tools.GitHubActionsTool.call_github_mcp_tool", side_effect=_mcp_response),
     ):
-        result = log_tool(owner="org", repo="repo", run_id=101, job_id=9001, step_name="Deploy", github_token="tok")
+        result = log_tool(
+            owner="org",
+            repo="repo",
+            run_id=101,
+            job_id=9001,
+            step_name="Deploy",
+            github_token="tok",
+        )
     assert result["available"] is True
     assert result["step_name"] == "Deploy"
     assert "kubectl apply" in result["log_text"]
@@ -249,11 +273,7 @@ line 1
         + ("A" * 7000)
         + "\n##[endgroup]\n",
         step_name="Deploy",
-        max_chars=100,
     )
     assert result["match_strategy"] == "step_name"
-    assert result["truncated"] is True
     assert result["step_name"] == "Deploy"
-    assert result["log_text"].endswith("...")
-
-
+    assert "A" * 1000 in result["log_text"]

@@ -123,15 +123,18 @@ def _normalize_job(job: dict[str, Any]) -> dict[str, Any]:
 
 def _normalize_run(run: dict[str, Any]) -> dict[str, Any]:
     """Normalize workflow run data."""
-    actor = run.get("actor") if isinstance(run.get("actor"), dict) else {}
-    triggering_actor = run.get("triggering_actor") if isinstance(run.get("triggering_actor"), dict) else {}
+    actor_raw = run.get("actor")
+    actor = actor_raw if isinstance(actor_raw, dict) else {}
+    triggering_actor_raw = run.get("triggering_actor")
+    triggering_actor = triggering_actor_raw if isinstance(triggering_actor_raw, dict) else {}
 
     pull_requests_raw = run.get("pull_requests")
     pull_requests: list[dict[str, Any]] = []
     if isinstance(pull_requests_raw, list):
         for item in pull_requests_raw:
             if isinstance(item, dict):
-                head = item.get("head") if isinstance(item.get("head"), dict) else {}
+                head_raw = item.get("head")
+                head = head_raw if isinstance(head_raw, dict) else {}
                 pull_requests.append(
                     {
                         "number": item.get("number"),
@@ -156,7 +159,9 @@ def _normalize_run(run: dict[str, Any]) -> dict[str, Any]:
         "created_at": run.get("created_at", ""),
         "updated_at": run.get("updated_at", ""),
         "actor": actor.get("login", "") if isinstance(actor, dict) else "",
-        "triggering_actor": triggering_actor.get("login", "") if isinstance(triggering_actor, dict) else "",
+        "triggering_actor": triggering_actor.get("login", "")
+        if isinstance(triggering_actor, dict)
+        else "",
         "pull_requests": pull_requests,
     }
 
@@ -172,13 +177,17 @@ def _extract_log_sections(log_text: str) -> list[dict[str, str]]:
         if line.startswith("##[group]"):
             saw_group = True
             if current_name or current_lines:
-                sections.append({"name": current_name or "step", "text": "\n".join(current_lines).strip()})
+                sections.append(
+                    {"name": current_name or "step", "text": "\n".join(current_lines).strip()}
+                )
             current_name = line[len("##[group]") :].strip()
             current_lines = []
             continue
         if line.startswith("##[endgroup]"):
             if current_name or current_lines:
-                sections.append({"name": current_name or "step", "text": "\n".join(current_lines).strip()})
+                sections.append(
+                    {"name": current_name or "step", "text": "\n".join(current_lines).strip()}
+                )
             current_name = ""
             current_lines = []
             continue
@@ -198,7 +207,6 @@ def extract_step_log(
     *,
     step_name: str = "",
     step_number: int | None = None,
-    max_chars: int = 6000,
 ) -> dict[str, Any]:
     """Extract a likely step log from a full GitHub Actions job log dump."""
     sections = _extract_log_sections(log_text)
@@ -221,15 +229,10 @@ def extract_step_log(
         selected = sections[0] if sections else {"name": "full-log", "text": log_text.strip()}
 
     text = selected.get("text", "")
-    truncated = False
-    if len(text) > max_chars:
-        text = text[: max(0, max_chars - 3)].rstrip() + "..."
-        truncated = True
 
     return {
         "step_name": selected.get("name", ""),
         "match_strategy": match_strategy,
-        "truncated": truncated,
         "log_text": text,
         "sections": [
             {"name": section.get("name", ""), "chars": len(section.get("text", ""))}
@@ -334,6 +337,7 @@ def list_github_actions_workflow_runs(
 
     result = call_github_mcp_tool(config, "actions_list", arguments)
     payload = _normalize_tool_result(result)
+    assert isinstance(payload, dict), "payload must be dict from _normalize_tool_result"
 
     if payload.get("available"):
         workflow_runs_raw = _extract_list(result, ("workflow_runs", "runs"))
@@ -424,7 +428,11 @@ def list_github_actions_active_runs(
 
     # Check for errors
     if queued_result.get("is_error") or in_progress_result.get("is_error"):
-        error_msg = queued_result.get("text") or in_progress_result.get("text") or "Failed to list active runs"
+        error_msg = (
+            queued_result.get("text")
+            or in_progress_result.get("text")
+            or "Failed to list active runs"
+        )
         return code_host_unavailable_payload(
             source="github",
             integration_name="GitHub Actions",
@@ -512,6 +520,7 @@ def list_github_actions_run_jobs(
         },
     )
     payload = _normalize_tool_result(result)
+    assert isinstance(payload, dict), "payload must be dict from _normalize_tool_result"
 
     if payload.get("available"):
         jobs_raw = _extract_list(result, ("jobs", "workflow_jobs"))
@@ -545,7 +554,7 @@ def list_github_actions_run_jobs(
             "job_id": {"type": "integer"},
             "step_name": {"type": "string", "default": ""},
             "step_number": {"type": "integer"},
-            "max_chars": {"type": "integer", "default": 6000},
+            "tail_lines": {"type": "integer", "default": 500},
             "github_url": {"type": "string"},
             "github_mode": {"type": "string"},
             "github_token": {"type": "string"},
@@ -562,7 +571,7 @@ def get_github_actions_step_log(
     job_id: int,
     step_name: str = "",
     step_number: int | None = None,
-    max_chars: int = 6000,
+    tail_lines: int = 500,
     github_url: str | None = None,
     github_mode: str | None = None,
     github_token: str | None = None,
@@ -611,6 +620,7 @@ def get_github_actions_step_log(
             "repo": repo,
             "job_id": job_id,
             "return_content": True,
+            "tail_lines": tail_lines,
         },
     )
 
@@ -640,7 +650,6 @@ def get_github_actions_step_log(
         str(log_text),
         step_name=step_name or failed_step,
         step_number=step_number,
-        max_chars=max_chars,
     )
     extracted.update(
         {
