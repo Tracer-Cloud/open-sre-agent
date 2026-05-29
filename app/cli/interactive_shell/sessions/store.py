@@ -213,7 +213,9 @@ class SessionStore:
                 if session.cli_agent_messages or session.accumulated_context:
                     snapshot: dict[str, Any] = {"type": "conversation_snapshot"}
                     if session.cli_agent_messages:
-                        snapshot["cli_agent_messages"] = [list(m) for m in session.cli_agent_messages]
+                        snapshot["cli_agent_messages"] = [
+                            list(m) for m in session.cli_agent_messages
+                        ]
                     if session.accumulated_context:
                         snapshot["accumulated_context"] = dict(session.accumulated_context)
                     with path.open("a", encoding="utf-8") as fh:
