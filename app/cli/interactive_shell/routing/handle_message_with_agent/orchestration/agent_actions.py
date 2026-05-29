@@ -7,7 +7,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from rich.console import Console
+from rich.markup import escape
 
+from app.cli.interactive_shell.routing.handle_message_with_agent.errors import PlannerLLMError
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
     PlannedAction,
 )
@@ -162,6 +164,12 @@ def _render_plan_denied(console: Console) -> None:
     )
 
 
+def _render_planner_llm_error(console: Console, message: str) -> None:
+    console.print()
+    render_response_header(console, "assistant")
+    console.print(f"[yellow]{escape(message)}[/]")
+
+
 def _tool_args_for_action(action: PlannedAction) -> dict[str, Any]:
     if action.args:
         return dict(action.args)
@@ -276,7 +284,12 @@ def execute_cli_actions(
             else _coerce_action_plan_decision(planned)
         )
     else:
-        plan = _coerce_action_plan_decision(_plan_actions(message, session))
+        try:
+            plan = _coerce_action_plan_decision(_plan_actions(message, session))
+        except PlannerLLMError as exc:
+            _render_planner_llm_error(console, str(exc))
+            session.record("cli_agent", message, ok=False)
+            return True
     plan = _enforce_plan_fail_closed_policy(plan)
     actions = list(plan.actions)
     has_unhandled_clause = plan.has_unhandled_clause
@@ -328,7 +341,23 @@ def execute_cli_actions_with_metrics(
             else _coerce_action_plan_decision(planned)
         )
     else:
-        plan = _coerce_action_plan_decision(_plan_actions(message, session))
+        try:
+            plan = _coerce_action_plan_decision(_plan_actions(message, session))
+        except PlannerLLMError as exc:
+            _render_planner_llm_error(console, str(exc))
+            session.record("cli_agent", message, ok=False)
+            capture_terminal_actions_executed(
+                planned_count=0,
+                executed_count=0,
+                executed_success_count=0,
+            )
+            return TerminalActionExecutionResult(
+                planned_count=0,
+                executed_count=0,
+                executed_success_count=0,
+                has_unhandled_clause=True,
+                handled=True,
+            )
     plan = _enforce_plan_fail_closed_policy(plan)
     actions = list(plan.actions)
     has_unhandled_clause = plan.has_unhandled_clause

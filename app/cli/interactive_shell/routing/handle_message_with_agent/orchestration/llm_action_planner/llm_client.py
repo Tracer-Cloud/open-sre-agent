@@ -52,9 +52,15 @@ def _call_llm(sanitised_text: str, session: Any) -> str | None:
         response = client.invoke(prompt)
         return response.content.strip()
     except Exception as exc:
-        logger.warning(
+        logger.debug(
             "llm_action_planner: LLM call failed (%s): %s",
             type(exc).__name__,
             exc,
         )
-        return None
+        # Raise a typed error so the caller can surface the reason in the
+        # assistant block instead of printing a raw log warning above it.
+        from app.cli.interactive_shell.routing.handle_message_with_agent.errors import (
+            PlannerLLMError,
+        )
+
+        raise PlannerLLMError(str(exc)) from exc

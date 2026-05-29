@@ -27,8 +27,18 @@ class PlannerUnavailable(RoutingDegradeError):
     reason_tag = "routing_degrade.planner_unavailable"
 
 
+class PlannerLLMError(Exception):
+    """LLM call inside the action planner failed.
+
+    Carries a user-friendly message (already enriched by the failure
+    classifier) so the caller can display it inside the assistant block
+    instead of emitting a raw log warning above the response.
+    """
+
+
 __all__ = [
     "ParseError",
+    "PlannerLLMError",
     "PlannerUnavailable",
     "PolicyError",
     "RoutingDegradeError",
